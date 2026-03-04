@@ -1,7 +1,6 @@
 import logging
-from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, String, Text
+from sqlalchemy import Boolean, Column, String, Text
 
 from shared.database.base import Base, UUIDMixin
 

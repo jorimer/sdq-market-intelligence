@@ -21,7 +21,6 @@ from modules.banking_score.scoring.engine import (
     calculate_deterministic_score,
 )
 from modules.banking_score.scoring.rating_scale import map_rating_tier
-from modules.banking_score.scoring.weights import FEATURE_ORDER
 
 logger = logging.getLogger("sdq.api.model")
 

@@ -1,7 +1,6 @@
 """Tests for PASO 5 — ML Pipeline, SIB Client, and Features."""
 import os
 import sys
-import tempfile
 
 import numpy as np
 import pytest
@@ -27,12 +26,8 @@ if PROJECT_ROOT not in sys.path:
 
 from modules.banking_score.scoring.engine import (
     BankingDataInput,
-    calculate_all_indicators,
-    calculate_sub_components,
-    calculate_deterministic_score,
     run_scoring,
 )
-from modules.banking_score.scoring.rating_scale import map_rating_tier
 from modules.banking_score.scoring.weights import FEATURE_ORDER
 from modules.banking_score.ml.features import (
     extract_feature_vector,
@@ -41,7 +36,6 @@ from modules.banking_score.ml.features import (
 from modules.banking_score.ml.xgboost_model import SDQXGBoostModel, TIER_MIDPOINTS
 from modules.banking_score.external.sib_client import (
     SuperintendenciaBancosClient,
-    DEFAULT_BENCHMARKS,
 )
 
 
