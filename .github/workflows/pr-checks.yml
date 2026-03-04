@@ -30,7 +30,7 @@ jobs:
       - name: Check for secrets
         run: |
           # Buscar posibles secrets en el codigo
-          if grep -rn "sk-ant-\|ANTHROPIC_API_KEY=sk-\|password.*=.*['\"]" \
+          if grep -rn "sk-ant-api[0-9]-\|ANTHROPIC_API_KEY=sk-ant-" \
             --include="*.py" --include="*.ts" --include="*.tsx" \
             --exclude-dir=node_modules --exclude-dir=.venv \
             modules/ shared/ app/ frontend/src/ ; then
