@@ -6,7 +6,7 @@ Persistence and event publishing happen in the API layer or a service wrapper.
 """
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from modules.banking_score.scoring.rating_scale import (
     map_rating_tier,

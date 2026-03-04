@@ -77,7 +77,7 @@ def auth_headers(token: str) -> dict:
 
 def seed_test_bank(db_session):
     """Insert a test bank + one period of data directly into the DB."""
-    from modules.banking_score.models.models import Bank, BankingData, BankType, DataSource
+    from modules.banking_score.models.models import BankType, DataSource
     from datetime import date
 
     bank = Bank(

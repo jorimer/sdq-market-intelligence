@@ -11,7 +11,6 @@ import pytest
 
 from modules.banking_score.scoring.rating_scale import (
     RATING_SCALE,
-    TIER_COLORS,
     check_boundary_proximity,
     get_all_tiers,
     get_tier_color,

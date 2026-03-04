@@ -6,8 +6,8 @@ Extracted from monolith router_banking_scoring.py.
 import csv
 import io
 import logging
-from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from datetime import date
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse

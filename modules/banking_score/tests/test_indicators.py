@@ -28,7 +28,6 @@ from modules.banking_score.scoring.engine import (
     calc_castigos_pct,
     calc_exposicion_re,
     calc_migracion,
-    calc_composite_calidad,
     calc_roa,
     calc_roe,
     calc_margen_financiero,
@@ -38,7 +37,6 @@ from modules.banking_score.scoring.engine import (
     calc_liquidez_ajustada,
     calc_hhi_ingresos,
 )
-from modules.banking_score.scoring.rating_scale import map_rating_tier
 
 
 # ─── Fixtures ────────────────────────────────────────────────────

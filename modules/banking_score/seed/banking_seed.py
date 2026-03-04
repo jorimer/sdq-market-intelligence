@@ -413,7 +413,7 @@ def seed_banks(verbose: bool = True) -> Dict:
 
         return result
 
-    except Exception as e:
+    except Exception:
         session.rollback()
         raise
     finally:
