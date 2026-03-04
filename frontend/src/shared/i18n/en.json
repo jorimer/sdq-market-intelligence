@@ -1,0 +1,171 @@
+{
+  "app": {
+    "title": "SDQ Market Intelligence",
+    "loading": "Loading..."
+  },
+  "auth": {
+    "subtitle": "Market Intelligence Platform",
+    "email": "Email",
+    "password": "Password",
+    "login": "Log In",
+    "loggingIn": "Logging in...",
+    "logout": "Log Out",
+    "loginError": "Invalid credentials. Please try again."
+  },
+  "nav": {
+    "bankingScore": "Banking Score",
+    "dashboard": "Dashboard",
+    "scoring": "Scoring",
+    "rankings": "Rankings",
+    "reports": "Reports",
+    "data": "Data",
+    "model": "ML Model",
+    "scenarios": "Scenarios",
+    "compare": "Compare"
+  },
+  "dashboard": {
+    "title": "Dashboard - Banking Score",
+    "sectorStats": "Sector Statistics",
+    "topBanks": "Top 5 Banks",
+    "recentActions": "Recent Actions",
+    "totalBanks": "Rated Banks",
+    "avgScore": "Avg. Score",
+    "latestPeriod": "Latest Period",
+    "totalRecords": "Total Records"
+  },
+  "scoring": {
+    "title": "Bank Scoring",
+    "selectBank": "Select Bank",
+    "runScoring": "Run Scoring",
+    "running": "Calculating...",
+    "overallScore": "Overall Score",
+    "ratingTier": "Rating",
+    "subComponents": "Sub-components",
+    "indicators": "Financial Indicators",
+    "noResults": "Select a bank and run scoring to see results."
+  },
+  "rankings": {
+    "title": "Rankings",
+    "period": "Period",
+    "rank": "Rank",
+    "bank": "Bank",
+    "score": "Score",
+    "tier": "Rating",
+    "change": "Change",
+    "noData": "No ranking data for the selected period."
+  },
+  "reports": {
+    "title": "Reports",
+    "generate": "Generate Report",
+    "generating": "Generating...",
+    "download": "Download",
+    "type": "Type",
+    "bank": "Bank",
+    "period": "Period",
+    "date": "Date",
+    "history": "Report History",
+    "noHistory": "No reports generated yet.",
+    "types": {
+      "full_rating": "Full Rating",
+      "scorecard": "Scorecard",
+      "communique": "Press Release",
+      "datawatch": "DataWatch",
+      "wire": "Wire",
+      "criteria": "Rating Criteria",
+      "sector_outlook": "Sector Outlook"
+    }
+  },
+  "data": {
+    "title": "Data Management",
+    "upload": "Upload CSV",
+    "uploading": "Uploading...",
+    "dropzone": "Drag a CSV file here or click to select",
+    "records": "Records",
+    "banks": "Banks",
+    "periods": "Periods",
+    "sibSync": "SIB Sync",
+    "lastSync": "Last sync",
+    "rawData": "Raw Data"
+  },
+  "model": {
+    "title": "ML Model",
+    "status": "Model Status",
+    "available": "Available",
+    "unavailable": "Unavailable",
+    "type": "Type",
+    "version": "Version",
+    "accuracy": "Accuracy",
+    "kappa": "Kappa",
+    "trainingSamples": "Training Samples",
+    "totalRatings": "Total Ratings",
+    "train": "Train Model",
+    "training": "Training...",
+    "minRecords": "Minimum 30 records required for training"
+  },
+  "scenarios": {
+    "title": "What-If Scenarios",
+    "adjustSliders": "Adjust sub-components to simulate scenarios",
+    "reset": "Reset",
+    "presets": "Preset Scenarios",
+    "optimistic": "Optimistic",
+    "pessimistic": "Pessimistic",
+    "baseline": "Baseline",
+    "stressTest": "Stress Test",
+    "simulatedScore": "Simulated Score",
+    "simulatedTier": "Simulated Rating",
+    "currentVsSimulated": "Current vs. Simulated"
+  },
+  "compare": {
+    "title": "Bank Comparison",
+    "selectBanks": "Select 2-4 banks to compare",
+    "addBank": "Add Bank",
+    "remove": "Remove",
+    "runComparison": "Compare",
+    "comparing": "Comparing...",
+    "noSelection": "Select at least 2 banks to compare."
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search...",
+    "noData": "No data available",
+    "error": "Error",
+    "success": "Success",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "of": "of"
+  },
+  "sub": {
+    "solidez": "Financial Strength",
+    "calidad": "Asset Quality",
+    "eficiencia": "Efficiency & Profitability",
+    "liquidez": "Liquidity",
+    "diversificacion": "Diversification"
+  },
+  "indicators": {
+    "solvencia": "Solvency (CAR)",
+    "capital_primario": "Primary Capital",
+    "apalancamiento": "Leverage",
+    "capital_tier1": "Tier 1 Capital",
+    "cobertura_contingentes": "Contingent Coverage",
+    "morosidad": "Non-Performing Loans (NPL)",
+    "cobertura_provisiones": "Provision Coverage",
+    "concentracion_top10": "Top 10 Concentration",
+    "hhi_sectorial": "Sectoral HHI",
+    "castigos_cartera": "Write-offs / Portfolio",
+    "concentracion_re": "RE Concentration",
+    "calidad_cartera_a": "A-rated Portfolio Quality",
+    "roa": "ROA",
+    "roe": "ROE",
+    "nim": "Net Interest Margin (NIM)",
+    "eficiencia_operativa": "Operating Efficiency",
+    "liquidez_inmediata": "Immediate Liquidity",
+    "cartera_depositos": "Loans / Deposits",
+    "cobertura_liquidez": "Liquidity Coverage",
+    "activos_liquidos": "Liquid Assets / Liabilities",
+    "hhi_ingresos": "Revenue HHI"
+  }
+}

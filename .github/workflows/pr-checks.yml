@@ -1,0 +1,40 @@
+name: PR Quality Checks
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  pr-size-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        run: |
+          CHANGES=$(git diff --stat origin/main...HEAD | tail -1)
+          echo "PR Changes: $CHANGES"
+          # Warn if PR is too large (>500 lines)
+          LINES=$(git diff origin/main...HEAD --numstat | awk '{s+=$1+$2} END {print s}')
+          if [ "$LINES" -gt 500 ]; then
+            echo "⚠️ PR grande: $LINES lineas cambiadas. Considerar dividir."
+          fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for secrets
+        run: |
+          # Buscar posibles secrets en el codigo
+          if grep -rn "sk-ant-\|ANTHROPIC_API_KEY=sk-\|password.*=.*['\"]" \
+            --include="*.py" --include="*.ts" --include="*.tsx" \
+            --exclude-dir=node_modules --exclude-dir=.venv \
+            modules/ shared/ app/ frontend/src/ ; then
+            echo "❌ Posibles secrets encontrados en el codigo"
+            exit 1
+          fi
+          echo "✅ No se encontraron secrets expuestos"

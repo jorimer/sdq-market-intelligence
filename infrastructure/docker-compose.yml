@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=postgresql://sdq:sdq_secret@db:5432/sdq_market_intel
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - app_data:/app/data
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sdq
+      POSTGRES_PASSWORD: sdq_secret
+      POSTGRES_DB: sdq_market_intel
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sdq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:
+  app_data:

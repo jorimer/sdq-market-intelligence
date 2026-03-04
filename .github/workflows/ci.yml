@@ -1,0 +1,117 @@
+name: SDQ Market Intelligence CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # ─── Backend Tests ───
+  backend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: "sqlite:///./test.db"
+          JWT_SECRET_KEY: "test-secret-key-ci"
+          ANTHROPIC_API_KEY: "sk-test-dummy"
+          ENVIRONMENT: "test"
+        run: |
+          pytest modules/banking_score/tests/ \
+            --cov=modules --cov=shared \
+            --cov-report=xml --cov-report=term -v
+          # Fail if coverage < 80%
+          python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          rate = float(tree.getroot().attrib['line-rate'])
+          print(f'Coverage: {rate*100:.1f}%')
+          assert rate >= 0.80, f'Coverage {rate*100:.1f}% < 80%'
+          "
+
+      - name: Lint with ruff
+        run: |
+          pip install ruff
+          ruff check modules/ shared/ app/
+
+  # ─── Frontend Build ───
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & Build
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: TypeScript strict check
+        run: |
+          cd frontend
+          npx tsc --noEmit
+
+  # ─── Docker Build ───
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -f infrastructure/Dockerfile -t sdq-market-intelligence:test .
+
+      - name: Smoke test container
+        run: |
+          docker run -d --name smoke-test \
+            -e DATABASE_URL=sqlite:///./test.db \
+            -e JWT_SECRET_KEY=test-secret \
+            -e ANTHROPIC_API_KEY=sk-test \
+            -e ENVIRONMENT=test \
+            -p 8000:8000 \
+            sdq-market-intelligence:test
+          sleep 5
+          curl -f http://localhost:8000/api/v1/health || exit 1
+          docker stop smoke-test
+
+  # ─── Deploy to Railway (solo en push a main) ───
+  deploy-railway:
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --detach

@@ -1,0 +1,171 @@
+{
+  "app": {
+    "title": "SDQ Market Intelligence",
+    "loading": "Cargando..."
+  },
+  "auth": {
+    "subtitle": "Plataforma de Inteligencia de Mercado",
+    "email": "Correo electr\u00f3nico",
+    "password": "Contrase\u00f1a",
+    "login": "Iniciar Sesi\u00f3n",
+    "loggingIn": "Iniciando...",
+    "logout": "Cerrar Sesi\u00f3n",
+    "loginError": "Credenciales inv\u00e1lidas. Intente de nuevo."
+  },
+  "nav": {
+    "bankingScore": "Banking Score",
+    "dashboard": "Dashboard",
+    "scoring": "Scoring",
+    "rankings": "Rankings",
+    "reports": "Reportes",
+    "data": "Datos",
+    "model": "Modelo ML",
+    "scenarios": "Escenarios",
+    "compare": "Comparar"
+  },
+  "dashboard": {
+    "title": "Dashboard - Banking Score",
+    "sectorStats": "Estad\u00edsticas del Sector",
+    "topBanks": "Top 5 Bancos",
+    "recentActions": "Acciones Recientes",
+    "totalBanks": "Bancos Calificados",
+    "avgScore": "Score Promedio",
+    "latestPeriod": "\u00daltimo Per\u00edodo",
+    "totalRecords": "Registros Totales"
+  },
+  "scoring": {
+    "title": "Scoring Bancario",
+    "selectBank": "Seleccionar Banco",
+    "runScoring": "Ejecutar Scoring",
+    "running": "Calculando...",
+    "overallScore": "Score General",
+    "ratingTier": "Calificaci\u00f3n",
+    "subComponents": "Sub-componentes",
+    "indicators": "Indicadores Financieros",
+    "noResults": "Seleccione un banco y ejecute el scoring para ver resultados."
+  },
+  "rankings": {
+    "title": "Rankings",
+    "period": "Per\u00edodo",
+    "rank": "Pos.",
+    "bank": "Banco",
+    "score": "Score",
+    "tier": "Calificaci\u00f3n",
+    "change": "Cambio",
+    "noData": "No hay datos de rankings para el per\u00edodo seleccionado."
+  },
+  "reports": {
+    "title": "Reportes",
+    "generate": "Generar Reporte",
+    "generating": "Generando...",
+    "download": "Descargar",
+    "type": "Tipo",
+    "bank": "Banco",
+    "period": "Per\u00edodo",
+    "date": "Fecha",
+    "history": "Historial de Reportes",
+    "noHistory": "No hay reportes generados a\u00fan.",
+    "types": {
+      "full_rating": "Calificaci\u00f3n Completa",
+      "scorecard": "Scorecard",
+      "communique": "Comunicado",
+      "datawatch": "DataWatch",
+      "wire": "Wire",
+      "criteria": "Criterios",
+      "sector_outlook": "Perspectiva Sectorial"
+    }
+  },
+  "data": {
+    "title": "Gesti\u00f3n de Datos",
+    "upload": "Subir CSV",
+    "uploading": "Subiendo...",
+    "dropzone": "Arrastre un archivo CSV aqu\u00ed o haga clic para seleccionar",
+    "records": "Registros",
+    "banks": "Bancos",
+    "periods": "Per\u00edodos",
+    "sibSync": "Sincronizaci\u00f3n SIB",
+    "lastSync": "\u00daltima sincronizaci\u00f3n",
+    "rawData": "Datos Crudos"
+  },
+  "model": {
+    "title": "Modelo ML",
+    "status": "Estado del Modelo",
+    "available": "Disponible",
+    "unavailable": "No Disponible",
+    "type": "Tipo",
+    "version": "Versi\u00f3n",
+    "accuracy": "Precisi\u00f3n",
+    "kappa": "Kappa",
+    "trainingSamples": "Muestras de Entrenamiento",
+    "totalRatings": "Ratings Totales",
+    "train": "Entrenar Modelo",
+    "training": "Entrenando...",
+    "minRecords": "M\u00ednimo 30 registros para entrenar"
+  },
+  "scenarios": {
+    "title": "Escenarios What-If",
+    "adjustSliders": "Ajuste los sub-componentes para simular escenarios",
+    "reset": "Resetear",
+    "presets": "Escenarios Predefinidos",
+    "optimistic": "Optimista",
+    "pessimistic": "Pesimista",
+    "baseline": "Base",
+    "stressTest": "Stress Test",
+    "simulatedScore": "Score Simulado",
+    "simulatedTier": "Calificaci\u00f3n Simulada",
+    "currentVsSimulated": "Actual vs. Simulado"
+  },
+  "compare": {
+    "title": "Comparaci\u00f3n de Bancos",
+    "selectBanks": "Seleccione 2-4 bancos para comparar",
+    "addBank": "Agregar Banco",
+    "remove": "Quitar",
+    "runComparison": "Comparar",
+    "comparing": "Comparando...",
+    "noSelection": "Seleccione al menos 2 bancos para comparar."
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "search": "Buscar...",
+    "noData": "Sin datos disponibles",
+    "error": "Error",
+    "success": "\u00c9xito",
+    "confirm": "Confirmar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "of": "de"
+  },
+  "sub": {
+    "solidez": "Solidez Financiera",
+    "calidad": "Calidad de Activos",
+    "eficiencia": "Eficiencia y Rentabilidad",
+    "liquidez": "Liquidez",
+    "diversificacion": "Diversificaci\u00f3n"
+  },
+  "indicators": {
+    "solvencia": "Solvencia (CAR)",
+    "capital_primario": "Capital Primario",
+    "apalancamiento": "Apalancamiento",
+    "capital_tier1": "Capital Tier 1",
+    "cobertura_contingentes": "Cobertura Contingentes",
+    "morosidad": "Morosidad (NPL)",
+    "cobertura_provisiones": "Cobertura de Provisiones",
+    "concentracion_top10": "Concentraci\u00f3n Top 10",
+    "hhi_sectorial": "HHI Sectorial",
+    "castigos_cartera": "Castigos / Cartera",
+    "concentracion_re": "Concentraci\u00f3n RE",
+    "calidad_cartera_a": "Calidad Cartera A",
+    "roa": "ROA",
+    "roe": "ROE",
+    "nim": "Margen de Intermediaci\u00f3n (NIM)",
+    "eficiencia_operativa": "Eficiencia Operativa",
+    "liquidez_inmediata": "Liquidez Inmediata",
+    "cartera_depositos": "Cartera / Dep\u00f3sitos",
+    "cobertura_liquidez": "Cobertura de Liquidez",
+    "activos_liquidos": "Activos L\u00edquidos / Pasivos",
+    "hhi_ingresos": "HHI Ingresos"
+  }
+}
