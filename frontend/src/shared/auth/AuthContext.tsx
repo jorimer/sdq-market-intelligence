@@ -53,7 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     localStorage.setItem("access_token", data.access_token);
     localStorage.setItem("refresh_token", data.refresh_token);
-    setUser(data.user);
+    setUser({
+      id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role,
+      is_active: true,
+    });
   };
 
   const logout = () => {

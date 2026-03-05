@@ -108,7 +108,7 @@ export interface ComparisonBank {
 /* ── Auth types ───────────────────────────────────────────────── */
 
 export interface User {
-  id: number;
+  id: string;
   email: string;
   full_name: string;
   role: string;
@@ -119,7 +119,10 @@ export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
-  user: User;
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: string;
 }
 
 /* ── API response wrappers ────────────────────────────────────── */
