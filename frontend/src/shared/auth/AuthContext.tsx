@@ -47,14 +47,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser]);
 
   const login = async (email: string, password: string) => {
-  const { data } = await client.post<LoginResponse>("/auth/login", {
-    email,
-    password,
-  });
-  localStorage.setItem("access_token", data.access_token);
-  localStorage.setItem("refresh_token", data.refresh_token);
-  setUser(data.user);
-};
+    const { data } = await client.post<LoginResponse>("/auth/login", {
+      email,
+      password,
+    });
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("refresh_token", data.refresh_token);
+    setUser(data.user);
+  };
+
+  const logout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    setUser(null);
+  };
 
   const hasRole = (role: string) => user?.role === role;
 
