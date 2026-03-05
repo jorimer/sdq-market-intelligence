@@ -47,11 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser]);
 
   const login = async (email: string, password: string) => {
-    const form = new URLSearchParams();
-    form.append("username", email);
-    form.append("password", password);
-    const { data } = await client.post<LoginResponse>("/auth/login", form, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    const { data } = await client.post<LoginResponse>("/auth/login", {
+      email,
+      password,
     });
     localStorage.setItem("access_token", data.access_token);
     localStorage.setItem("refresh_token", data.refresh_token);
