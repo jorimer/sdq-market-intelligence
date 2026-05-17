@@ -58,3 +58,6 @@ docker-compose.override.yml
 
 # Claude Code
 .claude/
+
+# Personal task tracking — see ~/.claude/CLAUDE.md
+tasks/
