@@ -51,7 +51,7 @@ async def weights(current_user: User = Depends(get_current_user)) -> Dict[str, A
     description="Índice multidimensional por entidad (región/grupo) con distribución; publica 'social.updated'.",
 )
 async def index(
-    payload: Dict[str, Any] = Body(..., example=_EXAMPLE),
+    payload: Dict[str, Any] = Body(..., examples=[_EXAMPLE]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:

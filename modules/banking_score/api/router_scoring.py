@@ -64,7 +64,7 @@ async def get_weights(
 async def simulate_scenario(
     body: Dict[str, Any] = Body(
         ...,
-        example={"sub_components": {"solidez": 80, "calidad": 70, "eficiencia": 60, "liquidez": 65, "diversificacion": 55}, "entity_type": "banca_multiple"},
+        examples=[{"sub_components": {"solidez": 80, "calidad": 70, "eficiencia": 60, "liquidez": 65, "diversificacion": 55}, "entity_type": "banca_multiple"}],
     ),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:

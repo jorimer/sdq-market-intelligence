@@ -51,7 +51,7 @@ async def weights(current_user: User = Depends(get_current_user)) -> Dict[str, A
     description="Exposición + materialidad por sector; publica 'esg.updated'.",
 )
 async def score(
-    payload: Dict[str, Any] = Body(..., example=_EXAMPLE),
+    payload: Dict[str, Any] = Body(..., examples=[_EXAMPLE]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -67,7 +67,7 @@ async def score(
 
 @router.post("/exposure", summary="Calcular exposición de un sector (sin persistir)")
 async def exposure_one(
-    payload: Dict[str, Any] = Body(..., example={"sector_key": "turismo", "dataset": _EXAMPLE["dataset"]}),
+    payload: Dict[str, Any] = Body(..., examples=[{"sector_key": "turismo", "dataset": _EXAMPLE["dataset"]}]),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     sector_key = payload.get("sector_key")
