@@ -17,6 +17,8 @@ import { ComparePage } from "@/modules/banking-score/pages/ComparePage";
 
 // Macro Monitor (Eje 2) — new canonical pattern
 import { MacroMonitorPage } from "@/modules/macro-monitor/pages/MacroMonitorPage";
+// Macro-Political Risk (Eje 4)
+import { MacroPoliticalRiskPage } from "@/modules/macro-political-risk/pages/MacroPoliticalRiskPage";
 
 export default function App() {
   return (
@@ -55,17 +57,7 @@ export default function App() {
               />
             }
           />
-          <Route
-            path="/macro-political-risk"
-            element={
-              <PlaceholderPage
-                eyebrow="WGI · BCRD · SIB"
-                title="Regulatorio & político"
-                sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo."
-                api="/api/v1/macro-political-risk"
-              />
-            }
-          />
+          <Route path="/macro-political-risk" element={<MacroPoliticalRiskPage />} />
           <Route
             path="/social-dev"
             element={
