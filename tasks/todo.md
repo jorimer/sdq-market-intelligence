@@ -198,17 +198,20 @@ Fuente de verdad: `frontend/DESIGN_SYSTEM.md` + prototipo `ui_kits/sdqmip-app/`.
 Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pantalla
 (cargando/vacío/error/sin permiso), cifras tabulares, charts theme-aware, UI en español.
 
-- [ ] **Armazón** primero: sidebar de 3 grupos + topbar + breadcrumbs + tema claro/oscuro persistente (`darkMode: 'class'`)
-- [ ] Completar aplicación del design system (verificar `index.css`/`tailwind`/fuentes ya tocados)
-- [ ] Por cada eje, patrón canónico: **índice/score · desglose explicable · listado/ranking · detalle**
-  - [ ] `frontend/src/modules/macro-political-risk/`
-  - [ ] `frontend/src/modules/macro-monitor/`
-  - [ ] `frontend/src/modules/sector-intel/`
-  - [ ] `frontend/src/modules/social-dev/`
-  - [ ] `frontend/src/modules/esg-climate/`
-  - [ ] `frontend/src/modules/trade-intel/`
-- [ ] Rutas en `App.tsx` + entradas i18n (`es.json`/`en.json`)
-- [ ] **Verificación**: `npm run build` + recorrido con preview tools (4 estados por pantalla)
+### 6.1 Armazón + primitivas + eje ejemplar  ✅ 2026-06-06 (PR #14)
+- [x] **Armazón**: Sidebar de 3 grupos (Ejes/Herramientas/Plataforma) + Topbar (breadcrumbs · período · ámbito · tema · perfil) + tema claro/oscuro **persistente** (`AppContext`, localStorage)
+- [x] Primitivas en `shared/ui/primitives.tsx`: Card, CardHead (cabecera a una línea), PageHead, Eyebrow, Chip, BandBadge, Delta, StatTile, Gauge (SVG, token colors), Tabs, Skeleton, **StateBlock (4 estados + "en construcción")**
+- [x] `shared/lib/bands.ts` (bandFor/riskBandFor/tonos) + `format.ts` (cifras tabulares)
+- [x] Eje ejemplar **macro-monitor** conectado a la API real (`/indicators`, `/signals`, `/refresh`): KPIs + tabla momentum + señales, 4 estados
+- [x] Rutas en `App.tsx` para los 7 ejes + herramientas/plataforma; ejes 3-7 con `PlaceholderPage` (estado honesto "en construcción")
+- [x] **Verificado con preview**: shell en claro/oscuro, datos reales (login usuario Claude), navegación/breadcrumbs/estado; `npm run build` OK; tsc limpio; sin errores de consola
+
+### 6.2 Pendiente (próximos PRs) — UI canónica por eje
+- [ ] `macro-political-risk` (IRMP: gauge + desglose + histórico)
+- [ ] `sector-intel` (IAI/SGPS) · `social-dev` (distribución) · `trade-intel` (HHI/treemap) · `esg-climate` (materialidad)
+- [ ] Rediseñar `banking-score` (legacy) al patrón canónico + migrar alias de tokens deprecados
+- [ ] charts theme-aware en `shared/charts/` (gauge ya hecho; faltan heatmap/treemap/scenario-fan/driver-bars)
+- [ ] i18n EN (`en.json`) para las nuevas cadenas; ⌘K; responsive rail/drawer fino
 
 ---
 

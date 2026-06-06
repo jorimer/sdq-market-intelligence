@@ -1,34 +1,51 @@
 /** @type {import('tailwindcss').Config} */
+// SDQ·MIP — dirección "Claro & Vivo". Colores mapeados a CSS vars (ver src/index.css)
+// para que el modo claro/oscuro funcione sin tocar el marcado.
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  darkMode: "class",
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Plus Jakarta Sans", "Inter", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+      },
       colors: {
-        primary: {
-          DEFAULT: "#1A365D",
-          light: "#2B6CB0",
-          dark: "#0F2440",
+        canvas: "var(--canvas)",
+        surface: "var(--surface)",
+        surface2: "var(--surface-2)",
+        ink: "var(--ink)",
+        body: "var(--body)",
+        muted: "var(--muted)",
+        faint: "var(--faint)",
+        line: "var(--border)",
+        linestrong: "var(--border-strong)",
+        accent: {
+          DEFAULT: "var(--accent)",
+          soft: "var(--accent-soft)",
+          hover: "var(--accent-hover)",
+          ink: "var(--accent-ink)",
         },
-        success: {
-          DEFAULT: "#38A169",
-          light: "#48BB78",
-        },
-        danger: {
-          DEFAULT: "#E53E3E",
-          light: "#FC8181",
-        },
-        warning: {
-          DEFAULT: "#DD6B20",
-          light: "#F6AD55",
-        },
-        gray: {
-          50: "#F7FAFC",
-          100: "#EDF2F7",
-          200: "#E2E8F0",
-          500: "#718096",
-          700: "#4A5568",
-          900: "#1A202C",
-        },
+        teal: { DEFAULT: "var(--teal)", soft: "var(--teal-soft)" },
+        ok: { DEFAULT: "var(--ok)", soft: "var(--ok-soft)" },
+        warn: { DEFAULT: "var(--warn)", soft: "var(--warn-soft)" },
+        alert: { DEFAULT: "var(--alert)", soft: "var(--alert-soft)" },
+        // data-viz
+        c1: "var(--c1)", c2: "var(--c2)", c3: "var(--c3)",
+        c4: "var(--c4)", c5: "var(--c5)", c6: "var(--c6)",
+
+        // ── Alias LEGACY (DEPRECADOS) — solo para no romper banking-score.
+        //    Migrar a tokens y eliminar (ver frontend/CLAUDE.md §migración).
+        primary: { DEFAULT: "var(--ink)", light: "var(--accent)", dark: "var(--ink)" },
+        success: { DEFAULT: "var(--ok)", light: "var(--ok)" },
+        danger:  { DEFAULT: "var(--alert)", light: "var(--alert)" },
+        warning: { DEFAULT: "var(--warn)", light: "var(--warn)" },
+      },
+      borderRadius: { xl: "12px", "2xl": "16px" },
+      boxShadow: {
+        card: "var(--shadow-card)",
+        pop: "var(--shadow-pop)",
       },
     },
   },
