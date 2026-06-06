@@ -21,6 +21,8 @@ import { MacroMonitorPage } from "@/modules/macro-monitor/pages/MacroMonitorPage
 import { MacroPoliticalRiskPage } from "@/modules/macro-political-risk/pages/MacroPoliticalRiskPage";
 // Sector Intel (Eje 3)
 import { SectorIntelPage } from "@/modules/sector-intel/pages/SectorIntelPage";
+// Social Dev (Eje 5)
+import { SocialDevPage } from "@/modules/social-dev/pages/SocialDevPage";
 
 export default function App() {
   return (
@@ -50,17 +52,7 @@ export default function App() {
           {/* Ejes 3-7 — UI en construcción (backend disponible) */}
           <Route path="/sector-intel" element={<SectorIntelPage />} />
           <Route path="/macro-political-risk" element={<MacroPoliticalRiskPage />} />
-          <Route
-            path="/social-dev"
-            element={
-              <PlaceholderPage
-                eyebrow="ONE"
-                title="Social & desarrollo"
-                sub="Índice multidimensional de desarrollo; distribución, no solo promedio."
-                api="/api/v1/social-dev"
-              />
-            }
-          />
+          <Route path="/social-dev" element={<SocialDevPage />} />
           <Route
             path="/trade-intel"
             element={
