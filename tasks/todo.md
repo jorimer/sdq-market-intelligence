@@ -160,20 +160,22 @@ ya implementa el pipeline; solo está acoplado al IRMP por imports a su `weights
 
 ---
 
-## FASE 4 — `social_dev` (Eje 5) + `esg_climate` (Eje 7)
+## FASE 4 — `social_dev` (Eje 5) + `esg_climate` (Eje 7)  ✅ 2026-06-06
 
 ### `social_dev`
-- [ ] Modelos: `SocialIndicator` (con desagregación), `DevelopmentScore` + Alembic
-- [ ] `one_client` (demografía, social, género, ODS, ENHOGAR, ENCFT) + Findex/SB
-- [ ] Índices multidimensionales (Sen/Deaton/de Soto/Piketty); reportar **distribución, no solo promedio**; foco informalidad
-- [ ] API `/api/v1/social-dev`: `GET /indicators` · `GET /index?dimension=` · `GET /sdg`; publicar `social.updated`
-- [ ] Tests + manejo de periodicidad censal/huecos ≥80%
+- [x] Modelos: `SocialIndicator` (desagregación/linaje), `DevelopmentScore` + migración `388f90002acf`
+- [x] Índice multidimensional vía `shared/indices` + doctrina `social.yaml` (salud/educación/nivel de vida/inclusión); **reporta distribución (mean/min/max/spread/CV), no solo promedio**; informalidad como variable risk-increasing
+- [x] API `/api/v1/social-dev`: `GET /weights` · `POST /index` · `GET /indicators` · `GET /sdg`; publica `social.updated`
+- [x] Tests índice/distribución/persistencia/eventos
 
 ### `esg_climate`
-- [ ] Modelos: `EnvIndicator`, `ESGScore` (exposición + materialidad) + Alembic
-- [ ] Fuentes ONE ambiental + marcos TCFD/ISSB/SASB; Nordhaus/Stern/Dasgupta; ajuste Caribe
-- [ ] API `/api/v1/esg-climate`: `GET /indicators` · `GET /exposure?sector=` · `GET /score`; publicar `esg.updated`
-- [ ] Tests exposición/materialidad ≥80%
+- [x] Modelos: `EnvIndicator`, `ESGScore` (exposición + materialidad) + migración `388f90002acf`
+- [x] Índice de resiliencia ESG/clima vía `shared/indices` + doctrina `esg.yaml` (físico/transición/adaptación/gobernanza); **materialidad** (alta/media/baja) + watch de greenwashing; ajuste Caribe (huracanes/costa)
+- [x] API `/api/v1/esg-climate`: `GET /weights` · `POST /score` · `POST /exposure` · `GET /indicators`; publica `esg.updated`
+- [x] Tests exposición/materialidad/persistencia/eventos
+
+**Verificación Fase 4**: 288 tests, cobertura 88%; E2E ampliado → 33/33 (Fase 0/1A/1B/2/3/4/5).
+Nota: ingesta real `one_client` (ONE/censos) y Findex pendiente; datos hoy provistos. Los 7 ejes del backend existen.
 
 ---
 

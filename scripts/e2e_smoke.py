@@ -185,6 +185,38 @@ def run() -> int:
     r = c.get("/api/v1/sector-intel/turismo/latest")
     check("sector /turismo/latest 200", r.status_code == 200 and r.json().get("has_score") is True)
 
+    # ── Fase 4: social_dev + esg_climate ───────────────────────────
+    print("\nFase 4 — social_dev + esg_climate")
+    social = {
+        "nacional": {"life_expectancy": 74, "child_mortality": 28, "literacy_rate": 94,
+                     "schooling_years": 9, "income_per_capita": 9000, "poverty_rate": 23,
+                     "financial_inclusion": 56, "informality_rate": 55},
+        "santo_domingo": {"life_expectancy": 76, "child_mortality": 22, "literacy_rate": 96,
+                          "schooling_years": 11, "income_per_capita": 12000, "poverty_rate": 18,
+                          "financial_inclusion": 65, "informality_rate": 48},
+    }
+    r = c.post("/api/v1/social-dev/index", json={"period": "2025", "dataset": social})
+    check("social /index 200 (persiste + publica social.updated)", r.status_code == 200,
+          f"status={r.status_code}")
+    if r.status_code == 200:
+        check("social distribución reporta spread", r.json()["distribution"].get("spread") is not None)
+    r = c.get("/api/v1/social-dev/indicators")
+    check("social /indicators ≥1", r.status_code == 200 and r.json().get("count", 0) >= 1)
+
+    esg = {
+        "turismo": {"hurricane_exposure": 80, "coastal_exposure": 90, "carbon_intensity": 40,
+                    "fossil_dependence": 55, "adaptation_investment": 45, "diversification": 50,
+                    "disclosure_quality": 40, "emissions_targets": 35},
+        "energia": {"hurricane_exposure": 50, "coastal_exposure": 40, "carbon_intensity": 85,
+                    "fossil_dependence": 80, "adaptation_investment": 55, "diversification": 45,
+                    "disclosure_quality": 60, "emissions_targets": 55},
+    }
+    r = c.post("/api/v1/esg-climate/score", json={"period": "2025", "dataset": esg})
+    check("esg /score 200 (persiste + publica esg.updated)", r.status_code == 200,
+          f"status={r.status_code}")
+    r = c.get("/api/v1/esg-climate/indicators")
+    check("esg /indicators ≥1 (con materialidad)", r.status_code == 200 and r.json().get("count", 0) >= 1)
+
     return _summary()
 
 
@@ -193,7 +225,7 @@ def _summary() -> int:
     if _FAIL:
         print("Fallidas: " + ", ".join(_FAIL))
         return 1
-    print("E2E OK — Fase 0, 1A, 1B, 2, 3 y 5 verificadas.")
+    print("E2E OK — Fase 0, 1A, 1B, 2, 3, 4 y 5 verificadas.")
     return 0
 
 

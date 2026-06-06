@@ -29,6 +29,12 @@ from modules.trade_intel.models.models import (  # noqa: F401
 from modules.sector_intel.models.models import (  # noqa: F401
     Sector, SectorVariable, SectorScore,
 )
+from modules.social_dev.models.models import (  # noqa: F401
+    SocialIndicator, DevelopmentScore,
+)
+from modules.esg_climate.models.models import (  # noqa: F401
+    EnvIndicator, ESGScore,
+)
 
 config = context.config
 
