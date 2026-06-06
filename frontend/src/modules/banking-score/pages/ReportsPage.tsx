@@ -1,140 +1,154 @@
-import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { FileText } from "lucide-react";
-import client from "@/shared/api/client";
+import { useEffect, useState, useCallback } from "react";
+import { FileText, Download } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
-import { ReportCard } from "../components/ReportCard";
-import type { ReportEntry } from "@/types";
+import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
+import {
+  listPeriods,
+  listReports,
+  generateReport,
+  downloadReport,
+  ReportItem,
+} from "../api";
 
 const REPORT_TYPES = [
-  "full_rating",
-  "scorecard",
-  "communique",
-  "datawatch",
-  "wire",
-  "criteria",
-  "sector_outlook",
+  { value: "full_rating", label: "Rating completo" },
+  { value: "scorecard", label: "Scorecard" },
+  { value: "communique", label: "Comunicado" },
 ];
 
+const STATUS_TONE: Record<string, "ok" | "warn" | "alert" | "muted"> = {
+  completed: "ok",
+  generating: "warn",
+  error: "alert",
+};
+
 export function ReportsPage() {
-  const { t } = useTranslation();
-  const [bank, setBank] = useState("");
+  const [bankId, setBankId] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [periods, setPeriods] = useState<string[]>([]);
   const [period, setPeriod] = useState("");
   const [reportType, setReportType] = useState("full_rating");
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [history, setHistory] = useState<ReportEntry[]>([]);
-
-  const fetchHistory = () => {
-    client
-      .get<ReportEntry[]>("/banking-score/reports/history")
-      .then((r) => setHistory(r.data))
-      .catch(() => {});
-  };
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    fetchHistory();
+    listPeriods().then((p) => {
+      setPeriods(p);
+      if (p.length) setPeriod(p[0]);
+    });
   }, []);
 
-  const generate = async () => {
-    if (!bank) return;
-    setGenerating(true);
-    try {
-      const endpoint =
-        reportType === "communique"
-          ? "/banking-score/reports/communique"
-          : reportType === "wire"
-            ? "/banking-score/reports/wire"
-            : reportType === "datawatch"
-              ? "/banking-score/reports/datawatch"
-              : reportType === "criteria"
-                ? "/banking-score/reports/criteria"
-                : reportType === "sector_outlook"
-                  ? "/banking-score/reports/sector-outlook"
-                  : "/banking-score/reports/generate";
+  const loadReports = useCallback((id: string) => {
+    if (!id) return;
+    setLoading(true);
+    listReports(id)
+      .then(setReports)
+      .catch(() => setReports([]))
+      .finally(() => setLoading(false));
+  }, []);
 
-      await client.post(endpoint, null, {
-        params: { bank_name: bank, period: period || undefined, report_type: reportType },
-      });
-      fetchHistory();
-    } catch (err) {
-      console.error("Generate failed:", err);
+  useEffect(() => {
+    if (bankId) loadReports(bankId);
+  }, [bankId, loadReports]);
+
+  const generate = async () => {
+    if (!bankId || !period) return;
+    setGenerating(true);
+    setMsg(null);
+    try {
+      await generateReport(bankId, period, reportType);
+      setMsg({ ok: true, text: "Reporte generado." });
+      loadReports(bankId);
+    } catch (err: any) {
+      setMsg({ ok: false, text: err?.response?.data?.detail || "No se pudo generar el reporte." });
     } finally {
       setGenerating(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-bold text-ink">{t("reports.title")}</h2>
+    <div>
+      <PageHead
+        eyebrow="SIB · reportes"
+        title="Reportes"
+        sub="Genera y descarga reportes de rating por entidad (full rating, scorecard, comunicado)."
+      />
 
-      <div className="card">
-        <div className="flex flex-wrap items-end gap-4">
+      <Card className="mb-5">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="w-64">
-            <label className="block text-sm font-medium text-body mb-1">
-              {t("reports.bank")}
-            </label>
-            <BankSelector value={bank} onChange={setBank} />
+            <label className="block text-xs font-medium text-muted mb-1">Entidad</label>
+            <BankSelector value={bankId} onChange={(id, name) => { setBankId(id); setBankName(name); }} />
           </div>
           <div className="w-40">
-            <label className="block text-sm font-medium text-body mb-1">
-              {t("reports.period")}
-            </label>
-            <input
-              type="text"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              placeholder="2024-Q4"
-              className="field"
-            />
-          </div>
-          <div className="w-52">
-            <label className="block text-sm font-medium text-body mb-1">
-              {t("reports.type")}
-            </label>
-            <select
-              value={reportType}
-              onChange={(e) => setReportType(e.target.value)}
-              className="field"
-            >
-              {REPORT_TYPES.map((rt) => (
-                <option key={rt} value={rt}>
-                  {t(`reports.types.${rt}`)}
-                </option>
-              ))}
+            <label className="block text-xs font-medium text-muted mb-1">Período</label>
+            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
+              {periods.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-          <button
-            onClick={generate}
-            disabled={!bank || generating}
-            className="btn-primary flex items-center gap-2"
-          >
+          <div className="w-48">
+            <label className="block text-xs font-medium text-muted mb-1">Tipo</label>
+            <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="field">
+              {REPORT_TYPES.map((rt) => <option key={rt.value} value={rt.value}>{rt.label}</option>)}
+            </select>
+          </div>
+          <button onClick={generate} disabled={!bankId || generating} className="btn btn-primary">
             <FileText className="w-4 h-4" />
-            {generating ? t("reports.generating") : t("reports.generate")}
+            {generating ? "Generando…" : "Generar"}
           </button>
         </div>
-      </div>
-
-      <div>
-        <h3 className="font-semibold text-ink mb-4">{t("reports.history")}</h3>
-        {history.length === 0 ? (
-          <div className="card text-center py-8 text-faint">
-            <p>{t("reports.noHistory")}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {history.map((r) => (
-              <ReportCard
-                key={r.id}
-                reportType={r.report_type}
-                bankName={r.bank_name}
-                period={r.period}
-                createdAt={r.created_at}
-                filePath={r.file_path}
-              />
-            ))}
+        {msg && (
+          <div className={`mt-3 text-sm p-3 rounded-[10px] ${msg.ok ? "bg-ok-soft text-ok" : "bg-alert-soft text-alert"}`}>
+            {msg.text}
           </div>
         )}
-      </div>
+      </Card>
+
+      <Card>
+        <CardHead icon={FileText} title="Reportes generados" subtitle={bankName || "Selecciona una entidad"} />
+        {!bankId ? (
+          <StateBlock kind="empty" message="Selecciona una entidad para ver y generar sus reportes." />
+        ) : loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
+          </div>
+        ) : reports.length === 0 ? (
+          <p className="text-sm text-muted py-6 text-center">Aún no hay reportes para esta entidad.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted border-b border-line">
+                <th className="py-2 px-2 font-medium">Tipo</th>
+                <th className="py-2 px-2 font-medium">Período</th>
+                <th className="py-2 px-2 font-medium">Estado</th>
+                <th className="py-2 px-2 font-medium text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reports.map((r) => (
+                <tr key={r.id} className="border-b border-line/60 last:border-0">
+                  <td className="py-2.5 px-2 text-ink">{r.report_type}</td>
+                  <td className="py-2.5 px-2 mono text-body">{r.period_end ?? "—"}</td>
+                  <td className="py-2.5 px-2">
+                    <Chip tone={STATUS_TONE[r.status ?? ""] ?? "muted"}>{r.status ?? "—"}</Chip>
+                  </td>
+                  <td className="py-2.5 px-2 text-right">
+                    <button
+                      onClick={() => downloadReport(r.id)}
+                      disabled={r.status !== "completed"}
+                      className="btn btn-ghost !py-1 !px-2.5 text-xs"
+                    >
+                      <Download className="w-3.5 h-3.5" /> PDF
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
     </div>
   );
 }

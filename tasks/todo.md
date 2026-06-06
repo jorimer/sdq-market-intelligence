@@ -225,10 +225,19 @@ Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pa
 - [x] Rankings rediseñado + **selector de período** (endpoint backend `GET /banking-score/periods`) + filtro por `entity_type`
 - [x] Corrige mismatch de rutas/shapes frontend↔backend (rankings/stats); verificado con datos sembrados + scoring
 
-### 6.4 Pendiente (polish, no bloqueante)
-- [ ] Rediseño estructural de las demás pantallas banking (Scoring/Data/Model/Scenarios/Compare/Reports) al patrón canónico (hoy token-migradas)
+### 6.4 Rediseño pantallas banking restantes  ✅ 2026-06-06 (PRs #21, #22)
+- [x] **6.4a** (PR #21): Scoring/Scenarios/Compare al patrón canónico + integración API
+  (módulo `api.ts`, `BankSelector` id+nombre, endpoints `GET /banks`, `POST /simulate-scenario`)
+- [x] **6.4b** (PR #22): Data/Model/Reports al patrón canónico + rutas/shapes corregidas
+  (`getStats`/`listPeriods`, reports por `bank_id` con list/generate/download); `ReportCard` huérfano eliminado
+- [x] Todas las pantallas banking verificadas en preview con datos reales (scoring, simulación, comparación, generación de reportes, modelo, datos)
+
+**Fase 6.4 cerrada — las 8 pantallas de banking-score siguen el patrón canónico y funcionan contra la API.**
+
+### 6.5 Pendiente (polish, no bloqueante)
 - [ ] charts a medida en `shared/charts/` (heatmap/treemap/scenario-fan)
 - [ ] i18n EN (`en.json`); ⌘K; responsive rail/drawer fino; pantallas de Plataforma/Herramientas
+- [ ] unificar selector de período global (topbar) ↔ por-eje
 
 ---
 
