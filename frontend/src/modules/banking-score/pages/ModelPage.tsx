@@ -42,7 +42,7 @@ export function ModelPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <h2 className="text-xl font-bold text-gray-900">{t("model.title")}</h2>
+        <h2 className="text-xl font-bold text-ink">{t("model.title")}</h2>
         <div className="card">
           <LoadingSkeleton rows={6} />
         </div>
@@ -52,27 +52,27 @@ export function ModelPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">{t("model.title")}</h2>
+      <h2 className="text-xl font-bold text-ink">{t("model.title")}</h2>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Model Status */}
         <div className="card space-y-5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Brain className="w-5 h-5 text-primary" />
+            <div className="w-10 h-10 rounded-lg bg-accent-soft flex items-center justify-center">
+              <Brain className="w-5 h-5 text-ink" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">{t("model.status")}</h3>
+              <h3 className="font-semibold text-ink">{t("model.status")}</h3>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {status?.ml_available ? (
                   <>
-                    <CheckCircle className="w-4 h-4 text-success" />
-                    <span className="text-sm text-success font-medium">{t("model.available")}</span>
+                    <CheckCircle className="w-4 h-4 text-ok" />
+                    <span className="text-sm text-ok font-medium">{t("model.available")}</span>
                   </>
                 ) : (
                   <>
-                    <XCircle className="w-4 h-4 text-danger" />
-                    <span className="text-sm text-danger font-medium">{t("model.unavailable")}</span>
+                    <XCircle className="w-4 h-4 text-alert" />
+                    <span className="text-sm text-alert font-medium">{t("model.unavailable")}</span>
                   </>
                 )}
               </div>
@@ -81,53 +81,53 @@ export function ModelPage() {
 
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">{t("model.type")}</span>
-              <span className="font-medium text-gray-900">{status?.model_type ?? "—"}</span>
+              <span className="text-muted">{t("model.type")}</span>
+              <span className="font-medium text-ink">{status?.model_type ?? "—"}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">{t("model.version")}</span>
-              <span className="font-medium text-gray-900">{status?.model_version ?? "—"}</span>
+              <span className="text-muted">{t("model.version")}</span>
+              <span className="font-medium text-ink">{status?.model_version ?? "—"}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">{t("model.trainingSamples")}</span>
-              <span className="font-medium text-gray-900">{status?.training_records ?? 0}</span>
+              <span className="text-muted">{t("model.trainingSamples")}</span>
+              <span className="font-medium text-ink">{status?.training_records ?? 0}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">{t("model.totalRatings")}</span>
-              <span className="font-medium text-gray-900">{status?.total_ratings ?? 0}</span>
+              <span className="text-muted">{t("model.totalRatings")}</span>
+              <span className="font-medium text-ink">{status?.total_ratings ?? 0}</span>
             </div>
           </div>
         </div>
 
         {/* Metrics */}
         <div className="card space-y-5">
-          <h3 className="font-semibold text-gray-900">Metricas del Modelo</h3>
+          <h3 className="font-semibold text-ink">Metricas del Modelo</h3>
 
           {status?.model_metrics ? (
             <div className="grid grid-cols-2 gap-4">
               <MetricCard
                 label={t("model.accuracy")}
                 value={`${(status.model_metrics.accuracy * 100).toFixed(1)}%`}
-                color="text-success"
+                color="text-ok"
               />
               <MetricCard
                 label={t("model.kappa")}
                 value={status.model_metrics.kappa.toFixed(3)}
-                color="text-primary"
+                color="text-ink"
               />
               <MetricCard
                 label="N Train"
                 value={String(status.model_metrics.n_train)}
-                color="text-gray-700"
+                color="text-body"
               />
               <MetricCard
                 label="N Test"
                 value={String(status.model_metrics.n_test)}
-                color="text-gray-700"
+                color="text-body"
               />
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-400">
+            <div className="text-center py-8 text-faint">
               <Brain className="w-10 h-10 mx-auto mb-2 opacity-30" />
               <p className="text-sm">No hay metricas disponibles. Entrene el modelo primero.</p>
             </div>
@@ -139,8 +139,8 @@ export function ModelPage() {
       <div className="card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h3 className="font-semibold text-gray-900">{t("model.train")}</h3>
-            <p className="text-sm text-gray-500 mt-1">{t("model.minRecords")}</p>
+            <h3 className="font-semibold text-ink">{t("model.train")}</h3>
+            <p className="text-sm text-muted mt-1">{t("model.minRecords")}</p>
           </div>
           <button
             onClick={train}
@@ -153,14 +153,14 @@ export function ModelPage() {
         </div>
 
         {!status?.can_train && !training && (
-          <div className="mt-3 text-sm text-warning bg-warning/10 px-3 py-2 rounded-lg">
+          <div className="mt-3 text-sm text-warn bg-warn-soft px-3 py-2 rounded-lg">
             Se necesitan al menos {status?.min_records_for_training ?? 30} registros para entrenar.
             Actualmente: {status?.training_records ?? 0}.
           </div>
         )}
 
         {trainResult && (
-          <div className={`mt-3 text-sm p-3 rounded-lg ${trainResult.ok ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
+          <div className={`mt-3 text-sm p-3 rounded-lg ${trainResult.ok ? "bg-ok-soft text-ok" : "bg-alert-soft text-alert"}`}>
             {trainResult.text}
           </div>
         )}
@@ -171,8 +171,8 @@ export function ModelPage() {
 
 function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="bg-gray-50 rounded-lg p-4 text-center">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
+    <div className="bg-surface2 rounded-lg p-4 text-center">
+      <p className="text-xs text-muted mb-1">{label}</p>
       <p className={`text-2xl font-bold ${color}`}>{value}</p>
     </div>
   );

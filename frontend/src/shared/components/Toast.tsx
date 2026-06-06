@@ -41,7 +41,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white text-sm ${
-              t.type === "success" ? "bg-success" : "bg-danger"
+              t.type === "success" ? "bg-ok" : "bg-alert"
             }`}
           >
             {t.type === "success" ? (

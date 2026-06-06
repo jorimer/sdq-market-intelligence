@@ -27,13 +27,13 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="min-h-screen flex items-center justify-center bg-surface2">
           <div className="card max-w-md text-center">
-            <AlertTriangle className="w-12 h-12 text-warning mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
+            <AlertTriangle className="w-12 h-12 text-warn mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-ink mb-2">
               Algo sali&oacute; mal
             </h2>
-            <p className="text-gray-500 mb-4 text-sm">
+            <p className="text-muted mb-4 text-sm">
               {this.state.error?.message}
             </p>
             <button

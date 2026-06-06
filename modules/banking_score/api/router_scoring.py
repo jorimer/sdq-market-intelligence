@@ -376,6 +376,27 @@ async def get_rankings(
     return {"rankings": rankings, "count": len(rankings), "period_end": period_end or "latest"}
 
 
+# ─── Periods ─────────────────────────────────────────────────────
+
+@router.get(
+    "/periods",
+    summary="Períodos disponibles",
+    description="Lista de períodos (period_end) con datos bancarios, más reciente primero.",
+)
+async def get_periods(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(BankingData.period_end)
+        .distinct()
+        .order_by(BankingData.period_end.desc())
+        .all()
+    )
+    periods = [str(r[0]) for r in rows]
+    return {"periods": periods, "count": len(periods)}
+
+
 # ─── Stats ───────────────────────────────────────────────────────
 
 @router.get(

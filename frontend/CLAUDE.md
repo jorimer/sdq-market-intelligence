@@ -5,13 +5,13 @@
 > prototipo de alta fidelidad recreado en HTML/React (proyecto de diseño,
 > `ui_kits/sdqmip-app/`). Recrea ese diseño dentro de este stack — no copies el HTML.
 
-## ⚠️ Migración pendiente (legacy → tokens) — primera tarea de UI
-El frontend `banking-score` se construyó con la paleta vieja. Hay **alias temporales
-deprecados** para que no se rompa: en `tailwind.config.js` (`primary`, `success`, `danger`,
-`warning`) y `.btn-secondary` en `index.css`. **Migrar a tokens y eliminar los alias:**
-`bg-primary`/`text-primary` → `ink` o `accent` · `primary-light` → `accent` ·
-`bg-success` → `ok` · `bg-danger` → `alert` · `bg-warning` → `warn` · `btn-secondary` → `btn-ghost`.
-Después, rediseñar las pantallas de banking-score según el patrón canónico de eje.
+## ✅ Migración legacy → tokens (completada 2026-06-06)
+`banking-score` ya está migrado a tokens; los alias deprecados (`primary`/`success`/
+`danger`/`warning` en `tailwind.config.js` y `.btn-secondary` en `index.css`) fueron
+**eliminados**. No reintroducir colores legacy ni hex hardcodeados: todo vía tokens.
+Dashboard y Rankings ya siguen el patrón canónico de eje; las demás pantallas de
+banking-score (Scoring/Data/Model/Scenarios/Compare/Reports) están token-migradas y
+quedan pendientes de rediseño estructural al patrón canónico.
 
 ## Stack
 React 18 · Vite · TypeScript (strict) · Tailwind 3 (`darkMode: 'class'`) · Recharts · lucide-react · react-router-dom · react-i18next · axios.

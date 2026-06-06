@@ -1,15 +1,14 @@
-const TIER_COLORS: Record<string, string> = {
-  "SDQ-AAA": "#047857",
-  "SDQ-AA+": "#059669",
-  "SDQ-AA": "#10B981",
-  "SDQ-A+": "#3B82F6",
-  "SDQ-A": "#2563EB",
-  "SDQ-BBB": "#F59E0B",
-  "SDQ-BB": "#D97706",
-  "SDQ-B": "#EA580C",
-  "SDQ-CCC": "#DC2626",
-  "SDQ-D": "#991B1B",
-};
+import { Tone, toneVar } from "@/shared/lib/bands";
+
+// Derive a semantic tone from any SDQ rating tier (green → blue → amber → red),
+// robust to +/- variants (SDQ-AA-, SDQ-A+, SDQ-BBB-, …).
+function tierTone(tier: string): Tone {
+  const g = tier.replace(/^SDQ-/, "").replace(/[+-]/g, "").toUpperCase();
+  if (g.startsWith("AAA") || g.startsWith("AA")) return "ok";
+  if (g === "A") return "accent";
+  if (g.startsWith("BBB") || g.startsWith("BB")) return "warn";
+  return "alert"; // B, CCC, CC, C, D
+}
 
 interface Props {
   tier: string;
@@ -17,7 +16,7 @@ interface Props {
 }
 
 export function RatingBadge({ tier, size = "md" }: Props) {
-  const color = TIER_COLORS[tier] ?? "#718096";
+  const color = toneVar(tierTone(tier));
 
   const sizeClasses = {
     sm: "px-2 py-0.5 text-xs",
@@ -27,7 +26,7 @@ export function RatingBadge({ tier, size = "md" }: Props) {
 
   return (
     <span
-      className={`inline-flex items-center font-bold rounded-full text-white ${sizeClasses[size]}`}
+      className={`inline-flex items-center font-bold rounded-full text-white mono ${sizeClasses[size]}`}
       style={{ backgroundColor: color }}
     >
       {tier}

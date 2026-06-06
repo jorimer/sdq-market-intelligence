@@ -67,11 +67,11 @@ export function ComparePage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">{t("compare.title")}</h2>
+      <h2 className="text-xl font-bold text-ink">{t("compare.title")}</h2>
 
       {/* Selection panel */}
       <div className="card space-y-4">
-        <p className="text-sm text-gray-500">{t("compare.selectBanks")}</p>
+        <p className="text-sm text-muted">{t("compare.selectBanks")}</p>
 
         <div className="space-y-3">
           {selected.map((bank, idx) => (
@@ -82,7 +82,7 @@ export function ComparePage() {
               {selected.length > 1 && (
                 <button
                   onClick={() => removeBank(idx)}
-                  className="text-gray-400 hover:text-danger"
+                  className="text-faint hover:text-alert"
                   title={t("compare.remove")}
                 >
                   <X className="w-4 h-4" />
@@ -96,7 +96,7 @@ export function ComparePage() {
           {selected.length < MAX_BANKS && (
             <button
               onClick={addBank}
-              className="text-sm text-primary hover:underline flex items-center gap-1"
+              className="text-sm text-ink hover:underline flex items-center gap-1"
             >
               <Plus className="w-3.5 h-3.5" />
               {t("compare.addBank")}
@@ -104,7 +104,7 @@ export function ComparePage() {
           )}
 
           <div className="w-40">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-body mb-1">
               {t("rankings.period")}
             </label>
             <input
@@ -112,7 +112,7 @@ export function ComparePage() {
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               placeholder="2024-Q4"
-              className="input-field"
+              className="field"
             />
           </div>
 
@@ -129,7 +129,7 @@ export function ComparePage() {
 
       {/* Results */}
       {results.length === 0 && !loading && (
-        <div className="card text-center py-12 text-gray-400">
+        <div className="card text-center py-12 text-faint">
           <GitCompare className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p>{t("compare.noSelection")}</p>
         </div>
@@ -144,7 +144,7 @@ export function ComparePage() {
           }`}>
             {results.map((r) => (
               <div key={r.bank_name} className="card flex flex-col items-center">
-                <p className="text-sm font-medium text-gray-700 mb-2">{r.bank_name}</p>
+                <p className="text-sm font-medium text-body mb-2">{r.bank_name}</p>
                 <ScoreGauge score={r.scoring_result.overall_score} size={100} />
                 <div className="mt-2">
                   <RatingBadge tier={r.scoring_result.rating_tier} size="sm" />
@@ -156,25 +156,25 @@ export function ComparePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Overall score bar comparison */}
             <div className="card">
-              <h3 className="font-semibold text-gray-900 mb-4">Score General</h3>
+              <h3 className="font-semibold text-ink mb-4">Score General</h3>
               <PeerBar data={barData} highlightBank={results[0]?.bank_name} />
             </div>
 
             {/* Radar overlay — first two banks */}
             <div className="card">
-              <h3 className="font-semibold text-gray-900 mb-4">Sub-componentes</h3>
+              <h3 className="font-semibold text-ink mb-4">Sub-componentes</h3>
               <RadarChart
                 data={results[0].scoring_result.sub_components}
                 comparisonData={results.length > 1 ? results[1].scoring_result.sub_components : undefined}
               />
               {results.length > 1 && (
-                <div className="flex items-center justify-center gap-6 mt-3 text-xs text-gray-500">
+                <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-primary" />
+                    <div className="w-3 h-3 rounded-full bg-ink" />
                     {results[0].bank_name}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-danger" />
+                    <div className="w-3 h-3 rounded-full bg-alert" />
                     {results[1].bank_name}
                   </div>
                 </div>
@@ -184,14 +184,14 @@ export function ComparePage() {
 
           {/* Sub-component comparison table */}
           <div className="card">
-            <h3 className="font-semibold text-gray-900 mb-4">Detalle por Sub-componente</h3>
+            <h3 className="font-semibold text-ink mb-4">Detalle por Sub-componente</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-3 font-medium text-gray-500">Sub-componente</th>
+                  <tr className="border-b border-line">
+                    <th className="text-left py-2 px-3 font-medium text-muted">Sub-componente</th>
                     {results.map((r) => (
-                      <th key={r.bank_name} className="text-right py-2 px-3 font-medium text-gray-500">
+                      <th key={r.bank_name} className="text-right py-2 px-3 font-medium text-muted">
                         {r.bank_name}
                       </th>
                     ))}
@@ -200,16 +200,16 @@ export function ComparePage() {
                 <tbody>
                   {(["solidez", "calidad", "eficiencia", "liquidez", "diversificacion"] as const).map(
                     (key) => (
-                      <tr key={key} className="border-b border-gray-100">
-                        <td className="py-2 px-3 text-gray-600">{t(`sub.${key}`, key)}</td>
+                      <tr key={key} className="border-b border-line">
+                        <td className="py-2 px-3 text-body">{t(`sub.${key}`, key)}</td>
                         {results.map((r) => {
                           const val = r.scoring_result.sub_components[key];
                           return (
                             <td key={r.bank_name} className="py-2 px-3 text-right font-semibold">
                               <span className={
-                                val >= 70 ? "text-success" :
-                                val >= 50 ? "text-primary" :
-                                "text-danger"
+                                val >= 70 ? "text-ok" :
+                                val >= 50 ? "text-ink" :
+                                "text-alert"
                               }>
                                 {val.toFixed(1)}
                               </span>
@@ -219,10 +219,10 @@ export function ComparePage() {
                       </tr>
                     )
                   )}
-                  <tr className="border-t-2 border-gray-200">
-                    <td className="py-2 px-3 font-semibold text-gray-900">Score General</td>
+                  <tr className="border-t-2 border-line">
+                    <td className="py-2 px-3 font-semibold text-ink">Score General</td>
                     {results.map((r) => (
-                      <td key={r.bank_name} className="py-2 px-3 text-right font-bold text-gray-900">
+                      <td key={r.bank_name} className="py-2 px-3 text-right font-bold text-ink">
                         {r.scoring_result.overall_score.toFixed(1)}
                       </td>
                     ))}

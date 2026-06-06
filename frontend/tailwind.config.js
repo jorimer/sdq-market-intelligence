@@ -34,13 +34,6 @@ export default {
         // data-viz
         c1: "var(--c1)", c2: "var(--c2)", c3: "var(--c3)",
         c4: "var(--c4)", c5: "var(--c5)", c6: "var(--c6)",
-
-        // ── Alias LEGACY (DEPRECADOS) — solo para no romper banking-score.
-        //    Migrar a tokens y eliminar (ver frontend/CLAUDE.md §migración).
-        primary: { DEFAULT: "var(--ink)", light: "var(--accent)", dark: "var(--ink)" },
-        success: { DEFAULT: "var(--ok)", light: "var(--ok)" },
-        danger:  { DEFAULT: "var(--alert)", light: "var(--alert)" },
-        warning: { DEFAULT: "var(--warn)", light: "var(--warn)" },
       },
       borderRadius: { xl: "12px", "2xl": "16px" },
       boxShadow: {

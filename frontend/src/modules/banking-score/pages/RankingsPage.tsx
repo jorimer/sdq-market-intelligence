@@ -1,108 +1,133 @@
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Trophy, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
-import { LoadingSkeleton } from "@/shared/components/LoadingSkeleton";
-import type { RankingEntry } from "@/types";
+import { PageHead, Card, StateBlock, Skeleton } from "@/shared/ui/primitives";
+import { fmtNum } from "@/shared/lib/format";
+
+const ENTITY_TYPES = [
+  { value: "", label: "Todos los tipos" },
+  { value: "banca_multiple", label: "Banca múltiple" },
+  { value: "aap", label: "AAyP" },
+  { value: "banco_ahorro_credito", label: "Ahorro y crédito" },
+  { value: "corporacion_credito", label: "Corp. de crédito" },
+  { value: "cambiaria", label: "Cambiaria" },
+  { value: "fiduciaria", label: "Fiduciaria" },
+];
+
+interface Rank {
+  rank: number;
+  bank_name: string;
+  bank_type: string | null;
+  overall_score: number;
+  rating_tier: string;
+  period_end: string;
+}
 
 export function RankingsPage() {
-  const { t } = useTranslation();
-  const [rankings, setRankings] = useState<RankingEntry[]>([]);
-  const [period, setPeriod] = useState("");
+  const [rankings, setRankings] = useState<Rank[]>([]);
+  const [entityType, setEntityType] = useState("");
   const [periods, setPeriods] = useState<string[]>([]);
+  const [period, setPeriod] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     client
-      .get("/banking-score/data/stats")
+      .get<{ periods: string[] }>("/banking-score/periods")
       .then((r) => {
-        const p = r.data.periods ?? [];
-        setPeriods(p);
-        if (p.length > 0) setPeriod(p[p.length - 1]);
+        setPeriods(r.data.periods ?? []);
+        if (r.data.periods?.length) setPeriod(r.data.periods[0]);
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!period) return;
     setLoading(true);
     client
-      .get<RankingEntry[]>("/banking-score/scoring/rankings", {
-        params: { period },
+      .get<{ rankings: Rank[] }>("/banking-score/rankings", {
+        params: {
+          ...(period ? { period_end: period } : {}),
+          ...(entityType ? { entity_type: entityType } : {}),
+        },
       })
-      .then((r) => setRankings(r.data))
+      .then((r) => setRankings(r.data.rankings ?? []))
       .catch(() => setRankings([]))
       .finally(() => setLoading(false));
-  }, [period]);
-
-  const ChangeIcon = ({ change }: { change: number }) => {
-    if (change > 0) return <ArrowUp className="w-3.5 h-3.5 text-success" />;
-    if (change < 0) return <ArrowDown className="w-3.5 h-3.5 text-danger" />;
-    return <Minus className="w-3.5 h-3.5 text-gray-400" />;
-  };
+  }, [entityType, period]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900">{t("rankings.title")}</h2>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="input-field w-40"
-        >
-          {periods.map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="card">
-        {loading ? (
-          <LoadingSkeleton rows={8} />
-        ) : rankings.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>{t("rankings.noData")}</p>
+    <div>
+      <PageHead
+        eyebrow="SIB"
+        title="Ranking de entidades"
+        sub="Entidades financieras ordenadas por score SDQ. Filtra por tipo de entidad supervisada."
+        right={
+          <div className="flex gap-2">
+            <select
+              value={entityType}
+              onChange={(e) => setEntityType(e.target.value)}
+              className="field !w-auto"
+              title="Tipo de entidad"
+            >
+              {ENTITY_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="field !w-auto mono"
+              title="Período"
+            >
+              {periods.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
           </div>
-        ) : (
+        }
+      />
+
+      {loading ? (
+        <Card>
+          <div className="space-y-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-9" />
+            ))}
+          </div>
+        </Card>
+      ) : rankings.length === 0 ? (
+        <StateBlock kind="empty" message="No hay ratings para este tipo de entidad." />
+      ) : (
+        <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-3 font-medium text-gray-500">{t("rankings.rank")}</th>
-                  <th className="text-left py-3 px-3 font-medium text-gray-500">{t("rankings.bank")}</th>
-                  <th className="text-right py-3 px-3 font-medium text-gray-500">{t("rankings.score")}</th>
-                  <th className="text-center py-3 px-3 font-medium text-gray-500">{t("rankings.tier")}</th>
-                  <th className="text-center py-3 px-3 font-medium text-gray-500">{t("rankings.change")}</th>
+                <tr className="text-left text-xs text-muted border-b border-line">
+                  <th className="py-2 px-2 font-medium">#</th>
+                  <th className="py-2 px-2 font-medium">Entidad</th>
+                  <th className="py-2 px-2 font-medium text-right">Score</th>
+                  <th className="py-2 px-2 font-medium text-center">Rating</th>
+                  <th className="py-2 px-2 font-medium text-right">Período</th>
                 </tr>
               </thead>
               <tbody>
                 {rankings.map((r) => (
-                  <tr key={r.bank_name} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-3 font-bold text-gray-400">#{r.rank}</td>
-                    <td className="py-3 px-3 font-medium text-gray-900">{r.bank_name}</td>
-                    <td className="py-3 px-3 text-right font-semibold">{r.overall_score.toFixed(1)}</td>
-                    <td className="py-3 px-3 text-center">
+                  <tr key={r.bank_name} className="border-b border-line/60 last:border-0 hover:bg-surface2">
+                    <td className="py-2.5 px-2 mono text-faint">{r.rank}</td>
+                    <td className="py-2.5 px-2 text-ink truncate">{r.bank_name}</td>
+                    <td className="py-2.5 px-2 text-right mono font-semibold text-ink">
+                      {fmtNum(r.overall_score, 1)}
+                    </td>
+                    <td className="py-2.5 px-2 text-center">
                       <RatingBadge tier={r.rating_tier} size="sm" />
                     </td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="inline-flex items-center gap-1">
-                        <ChangeIcon change={r.change} />
-                        {r.change !== 0 && (
-                          <span className={`text-xs font-medium ${r.change > 0 ? "text-success" : "text-danger"}`}>
-                            {Math.abs(r.change)}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                    <td className="py-2.5 px-2 text-right mono text-xs text-muted">{r.period_end}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -206,12 +206,29 @@ Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pa
 - [x] Rutas en `App.tsx` para los 7 ejes + herramientas/plataforma; ejes 3-7 con `PlaceholderPage` (estado honesto "en construcción")
 - [x] **Verificado con preview**: shell en claro/oscuro, datos reales (login usuario Claude), navegación/breadcrumbs/estado; `npm run build` OK; tsc limpio; sin errores de consola
 
-### 6.2 Pendiente (próximos PRs) — UI canónica por eje
-- [ ] `macro-political-risk` (IRMP: gauge + desglose + histórico)
-- [ ] `sector-intel` (IAI/SGPS) · `social-dev` (distribución) · `trade-intel` (HHI/treemap) · `esg-climate` (materialidad)
-- [ ] Rediseñar `banking-score` (legacy) al patrón canónico + migrar alias de tokens deprecados
-- [ ] charts theme-aware en `shared/charts/` (gauge ya hecho; faltan heatmap/treemap/scenario-fan/driver-bars)
-- [ ] i18n EN (`en.json`) para las nuevas cadenas; ⌘K; responsive rail/drawer fino
+### 6.2 UI canónica por eje  ✅ 2026-06-06 (PRs #15-#19)
+- [x] `macro-political-risk` (IRMP): gauge + desglose ponderado + ranking + pesos + guardar snapshot (PR #15)
+- [x] `sector-intel` (IAI/SGPS): gauge + desglose + ranking + **pestaña Aceleración** (integración de eventos en vivo) (PR #16)
+- [x] `social-dev` (IDM): gauge + **distribución** (dot plot + CV) + desglose + ranking (PR #17)
+- [x] `trade-intel`: gauge resiliencia + HHI/concentración por producto + guardar snapshot (PR #18)
+- [x] `esg-climate`: gauge exposición + **materialidad** + greenwashing watch + ranking (PR #19)
+- [x] Componente reutilizable `DimensionBreakdown` (driver/dim meters) usado por los 4 índices
+- [x] Cada eje verificado en preview (claro/oscuro, datos reales con usuario Claude, build, consola)
+
+**Los 7 ejes tienen UI canónica** (6 nuevas + macro-monitor de 6.1; banking-score sigue legacy funcional).
+
+### 6.3 banking-score → tokens + canónico  ✅ 2026-06-06 (PR pendiente de merge)
+- [x] Migración legacy → tokens en TODO el frontend (banking + shared); **alias deprecados eliminados** (`tailwind.config.js` + `.btn-secondary`)
+- [x] Charts banking theme-aware (ScoreGauge/RatingBadge/TrendChart/RadarChart/PeerBar vía vars/tonos)
+- [x] `input-field` indefinido unificado a `.field`; `Navbar` legacy eliminado
+- [x] Dashboard rediseñada al patrón canónico (PageHead + StatTile + Top + distribución por rating)
+- [x] Rankings rediseñado + **selector de período** (endpoint backend `GET /banking-score/periods`) + filtro por `entity_type`
+- [x] Corrige mismatch de rutas/shapes frontend↔backend (rankings/stats); verificado con datos sembrados + scoring
+
+### 6.4 Pendiente (polish, no bloqueante)
+- [ ] Rediseño estructural de las demás pantallas banking (Scoring/Data/Model/Scenarios/Compare/Reports) al patrón canónico (hoy token-migradas)
+- [ ] charts a medida en `shared/charts/` (heatmap/treemap/scenario-fan)
+- [ ] i18n EN (`en.json`); ⌘K; responsive rail/drawer fino; pantallas de Plataforma/Herramientas
 
 ---
 

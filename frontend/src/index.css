@@ -88,15 +88,3 @@ body {
     background: var(--surface);
   }
 }
-
-/* ── LEGACY (DEPRECADO) — puente para banking-score; migrar a .btn-ghost y tokens.
-   Ver frontend/CLAUDE.md §migración. Eliminar tras migrar. */
-@layer components {
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 font-semibold text-sm rounded-[10px] px-[15px] py-[9px] cursor-pointer transition-all whitespace-nowrap;
-    background: transparent;
-    color: var(--body);
-    border: 1px solid var(--border-strong);
-  }
-  .btn-secondary:hover { background: var(--surface-2); color: var(--ink); }
-}
