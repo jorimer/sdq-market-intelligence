@@ -34,3 +34,18 @@ export async function getSignals(): Promise<MacroSignal[]> {
 export async function refresh(): Promise<void> {
   await client.post("/macro-monitor/refresh");
 }
+
+export interface SeriesDetail {
+  series_code: string;
+  observations: { period: string; value: number | null }[];
+  momentum: {
+    latest_value: number | null;
+    change: number | null;
+    uncertainty_band: [number, number] | null;
+  } | null;
+}
+
+export async function getSeries(code: string): Promise<SeriesDetail> {
+  const { data } = await client.get(`/macro-monitor/series/${code}`);
+  return data;
+}

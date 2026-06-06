@@ -14,6 +14,7 @@ from shared.database.session import get_db
 from modules.macro_monitor.service import (
     build_snapshot,
     get_indicators,
+    get_series,
     get_snapshot,
     ingest_series,
 )
@@ -51,6 +52,19 @@ async def indicators(
 ) -> Dict[str, Any]:
     items = get_indicators(db)
     return {"indicators": items, "count": len(items)}
+
+
+@router.get(
+    "/series/{series_code}",
+    summary="Histórico de una serie + momentum",
+    description="Observaciones (período-ordenadas) de una serie y su lectura de momentum (para la proyección).",
+)
+async def series_detail(
+    series_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return get_series(db, series_code)
 
 
 @router.get(
