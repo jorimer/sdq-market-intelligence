@@ -30,19 +30,19 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="input-field flex items-center gap-2 text-left"
+        className="field flex items-center gap-2 text-left"
       >
-        <Building2 className="w-4 h-4 text-gray-400" />
-        <span className={value ? "text-gray-900" : "text-gray-400"}>
+        <Building2 className="w-4 h-4 text-faint" />
+        <span className={value ? "text-ink" : "text-faint"}>
           {value || placeholder || t("scoring.selectBank")}
         </span>
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-hidden">
-          <div className="p-2 border-b border-gray-100">
+        <div className="absolute z-20 mt-1 w-full bg-surface rounded-lg shadow-lg border border-line max-h-60 overflow-hidden">
+          <div className="p-2 border-b border-line">
             <div className="flex items-center gap-2 px-2">
-              <Search className="w-4 h-4 text-gray-400" />
+              <Search className="w-4 h-4 text-faint" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -61,8 +61,8 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
                     setOpen(false);
                     setSearch("");
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                    bank === value ? "bg-primary/5 text-primary font-medium" : ""
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-surface2 ${
+                    bank === value ? "bg-accent-soft text-ink font-medium" : ""
                   }`}
                 >
                   {bank}
@@ -70,7 +70,7 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
               </li>
             ))}
             {filtered.length === 0 && (
-              <li className="px-4 py-3 text-sm text-gray-400 text-center">
+              <li className="px-4 py-3 text-sm text-faint text-center">
                 {t("common.noData")}
               </li>
             )}

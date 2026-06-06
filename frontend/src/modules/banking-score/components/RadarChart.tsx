@@ -36,21 +36,21 @@ export function RadarChart({ data, comparisonData, comparisonLabel }: Props) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ReRadarChart data={chartData}>
-        <PolarGrid stroke="#E2E8F0" />
+        <PolarGrid stroke="var(--grid)" />
         <PolarAngleAxis
           dataKey="axis"
-          tick={{ fontSize: 11, fill: "#4A5568" }}
+          tick={{ fontSize: 11, fill: "var(--muted)" }}
         />
         <PolarRadiusAxis
           angle={90}
           domain={[0, 100]}
-          tick={{ fontSize: 10 }}
+          tick={{ fontSize: 10, fill: "var(--faint)" }}
         />
         <Radar
           name="Score"
           dataKey="value"
-          stroke="#2B6CB0"
-          fill="#2B6CB0"
+          stroke="var(--c1)"
+          fill="var(--c1)"
           fillOpacity={0.25}
           strokeWidth={2}
         />
@@ -58,8 +58,8 @@ export function RadarChart({ data, comparisonData, comparisonLabel }: Props) {
           <Radar
             name={comparisonLabel ?? "Comparison"}
             dataKey="comparison"
-            stroke="#E53E3E"
-            fill="#E53E3E"
+            stroke="var(--c5)"
+            fill="var(--c5)"
             fillOpacity={0.1}
             strokeWidth={2}
             strokeDasharray="4 4"

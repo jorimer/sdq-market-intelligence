@@ -37,18 +37,18 @@ export function ScoringPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">{t("scoring.title")}</h2>
+      <h2 className="text-xl font-bold text-ink">{t("scoring.title")}</h2>
 
       <div className="card">
         <div className="flex flex-wrap items-end gap-4">
           <div className="w-64">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-body mb-1">
               {t("scoring.selectBank")}
             </label>
             <BankSelector value={bank} onChange={setBank} />
           </div>
           <div className="w-40">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-body mb-1">
               {t("rankings.period")}
             </label>
             <input
@@ -56,7 +56,7 @@ export function ScoringPage() {
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               placeholder="2024-Q4"
-              className="input-field"
+              className="field"
             />
           </div>
           <button
@@ -71,7 +71,7 @@ export function ScoringPage() {
       </div>
 
       {!result && !loading && (
-        <div className="card text-center py-12 text-gray-400">
+        <div className="card text-center py-12 text-faint">
           <Calculator className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p>{t("scoring.noResults")}</p>
         </div>
@@ -83,33 +83,33 @@ export function ScoringPage() {
             <div className="relative">
               <ScoreGauge score={result.overall_score} size={160} />
             </div>
-            <p className="text-sm text-gray-500 mt-2">{t("scoring.overallScore")}</p>
+            <p className="text-sm text-muted mt-2">{t("scoring.overallScore")}</p>
             <div className="mt-2">
               <RatingBadge tier={result.rating_tier} size="lg" />
             </div>
           </div>
 
           <div className="card">
-            <h3 className="font-semibold text-gray-900 mb-4">
+            <h3 className="font-semibold text-ink mb-4">
               {t("scoring.subComponents")}
             </h3>
             <RadarChart data={result.sub_components} />
           </div>
 
           <div className="card lg:col-span-1">
-            <h3 className="font-semibold text-gray-900 mb-4">
+            <h3 className="font-semibold text-ink mb-4">
               {t("scoring.subComponents")}
             </h3>
             <div className="space-y-3">
               {Object.entries(result.sub_components).map(([key, val]) => (
                 <div key={key} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-body">
                     {t(`sub.${key}`, key)}
                   </span>
                   <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="w-24 h-2 bg-surface2 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-primary-light rounded-full transition-all"
+                        className="h-full bg-accent rounded-full transition-all"
                         style={{ width: `${val}%` }}
                       />
                     </div>
@@ -123,7 +123,7 @@ export function ScoringPage() {
           </div>
 
           <div className="card lg:col-span-3">
-            <h3 className="font-semibold text-gray-900 mb-4">
+            <h3 className="font-semibold text-ink mb-4">
               {t("scoring.indicators")}
             </h3>
             <IndicatorTable indicators={result.indicators} />

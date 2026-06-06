@@ -1,110 +1,142 @@
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Building2, TrendingUp, Calendar, Database } from "lucide-react";
+import { Trophy, PieChart } from "lucide-react";
 import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
-import { CardSkeleton } from "@/shared/components/LoadingSkeleton";
-import type { DataStats, RankingEntry, RatingAction } from "@/types";
+import {
+  PageHead,
+  Card,
+  CardHead,
+  StatTile,
+  StateBlock,
+  LoadingGrid,
+} from "@/shared/ui/primitives";
+import { fmtNum } from "@/shared/lib/format";
+
+type Status = "loading" | "error" | "ready";
+
+interface Stats {
+  total_records: number;
+  total_entities: number;
+  total_ratings: number;
+  period_end: string | null;
+}
+interface Rank {
+  rank: number;
+  bank_name: string;
+  overall_score: number;
+  rating_tier: string;
+}
 
 export function DashboardPage() {
-  const { t } = useTranslation();
-  const [stats, setStats] = useState<DataStats | null>(null);
-  const [topBanks, setTopBanks] = useState<RankingEntry[]>([]);
-  const [actions, setActions] = useState<RatingAction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [rankings, setRankings] = useState<Rank[]>([]);
+  const [status, setStatus] = useState<Status>("loading");
 
   useEffect(() => {
     Promise.all([
-      client.get<DataStats>("/banking-score/data/stats"),
-      client.get<RankingEntry[]>("/banking-score/scoring/rankings"),
-      client.get<RatingAction[]>("/banking-score/scoring/actions"),
+      client.get<Stats>("/banking-score/stats"),
+      client.get<{ rankings: Rank[] }>("/banking-score/rankings"),
     ])
-      .then(([statsR, rankR, actR]) => {
-        setStats(statsR.data);
-        setTopBanks(rankR.data.slice(0, 5));
-        setActions(actR.data.slice(0, 5));
+      .then(([s, r]) => {
+        setStats(s.data);
+        setRankings(r.data.rankings ?? []);
+        setStatus("ready");
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => setStatus("error"));
   }, []);
 
-  if (loading) {
+  const head = (
+    <PageHead
+      eyebrow="SIB · SIMBAD"
+      title="Financiero"
+      sub="Score de entidad financiera explicable y auditable para el universo supervisado por la SIB (Financial Entity Score)."
+    />
+  );
+
+  if (status === "loading") return <div>{head}<LoadingGrid /></div>;
+  if (status === "error")
     return (
-      <div className="space-y-6">
-        <h2 className="text-xl font-bold text-gray-900">{t("dashboard.title")}</h2>
-        <div className="grid grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => <CardSkeleton key={i} />)}
-        </div>
+      <div>
+        {head}
+        <StateBlock kind="error" message="No se pudieron cargar los datos del sector. Reintenta." />
       </div>
     );
-  }
 
-  const statCards = [
-    { icon: Building2, label: t("dashboard.totalBanks"), value: stats?.total_banks ?? 0 },
-    { icon: TrendingUp, label: t("dashboard.avgScore"), value: topBanks.length ? (topBanks.reduce((s, b) => s + b.overall_score, 0) / topBanks.length).toFixed(1) : "—" },
-    { icon: Calendar, label: t("dashboard.latestPeriod"), value: stats?.latest_period ?? "—" },
-    { icon: Database, label: t("dashboard.totalRecords"), value: stats?.total_records ?? 0 },
-  ];
+  const top = rankings.slice(0, 5);
+  const avg = rankings.length
+    ? rankings.reduce((s, b) => s + b.overall_score, 0) / rankings.length
+    : null;
+
+  // Rating-tier distribution from the full ranking.
+  const tierCounts = rankings.reduce<Record<string, number>>((acc, r) => {
+    acc[r.rating_tier] = (acc[r.rating_tier] ?? 0) + 1;
+    return acc;
+  }, {});
+  const tiers = Object.entries(tierCounts).sort((a, b) => b[1] - a[1]);
+  const maxTier = Math.max(...tiers.map(([, c]) => c), 1);
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">{t("dashboard.title")}</h2>
+    <div>
+      {head}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map(({ icon: Icon, label, value }) => (
-          <div key={label} className="card flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Icon className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{label}</p>
-              <p className="text-xl font-bold text-gray-900">{value}</p>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+        <StatTile label="Entidades" value={stats?.total_entities ?? 0} />
+        <StatTile label="Score promedio" value={fmtNum(avg, 1)} />
+        <StatTile label="Ratings calculados" value={stats?.total_ratings ?? 0} />
+        <StatTile label="Último período" value={stats?.period_end ?? "—"} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h3 className="font-semibold text-gray-900 mb-4">{t("dashboard.topBanks")}</h3>
-          {topBanks.length === 0 ? (
-            <p className="text-gray-400 text-sm">{t("common.noData")}</p>
+      <div className="grid lg:grid-cols-2 gap-5">
+        <Card>
+          <CardHead icon={Trophy} title="Top entidades" subtitle="Por score SDQ" />
+          {top.length === 0 ? (
+            <p className="text-sm text-muted py-4 text-center">Sin ratings calculados.</p>
           ) : (
-            <div className="space-y-3">
-              {topBanks.map((bank, i) => (
-                <div key={bank.bank_name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="w-6 text-sm font-bold text-gray-400">#{i + 1}</span>
-                    <span className="text-sm font-medium text-gray-700">{bank.bank_name}</span>
+            <div className="space-y-1">
+              {top.map((bank) => (
+                <div
+                  key={bank.bank_name}
+                  className="flex items-center justify-between gap-3 py-2 border-b border-line/60 last:border-0"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-6 shrink-0 mono text-sm text-faint">{bank.rank}</span>
+                    <span className="text-sm text-ink truncate">{bank.bank_name}</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold">{bank.overall_score.toFixed(1)}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="mono text-sm font-semibold text-ink">
+                      {fmtNum(bank.overall_score, 1)}
+                    </span>
                     <RatingBadge tier={bank.rating_tier} size="sm" />
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
-        <div className="card">
-          <h3 className="font-semibold text-gray-900 mb-4">{t("dashboard.recentActions")}</h3>
-          {actions.length === 0 ? (
-            <p className="text-gray-400 text-sm">{t("common.noData")}</p>
+        <Card>
+          <CardHead icon={PieChart} title="Distribución por rating" subtitle="Entidades por nivel SDQ" />
+          {tiers.length === 0 ? (
+            <p className="text-sm text-muted py-4 text-center">Sin datos.</p>
           ) : (
-            <div className="space-y-3">
-              {actions.map((a) => (
-                <div key={a.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <span className="font-medium text-gray-700">{a.bank_name}</span>
-                    <span className="text-gray-400 ml-2">{a.period}</span>
+            <div className="space-y-2.5">
+              {tiers.map(([tier, count]) => (
+                <div key={tier} className="flex items-center gap-3">
+                  <div className="w-20 shrink-0">
+                    <RatingBadge tier={tier} size="sm" />
                   </div>
-                  <RatingBadge tier={a.rating_tier} size="sm" />
+                  <div className="flex-1 h-2 rounded-full bg-surface2 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-accent"
+                      style={{ width: `${(count / maxTier) * 100}%` }}
+                    />
+                  </div>
+                  <span className="shrink-0 mono text-sm text-body w-6 text-right">{count}</span>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

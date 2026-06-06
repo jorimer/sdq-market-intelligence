@@ -39,14 +39,14 @@ export function ReportCard({
 
   return (
     <div className="card flex items-center gap-4">
-      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-        <FileText className="w-5 h-5 text-primary" />
+      <div className="w-10 h-10 rounded-lg bg-accent-soft flex items-center justify-center flex-shrink-0">
+        <FileText className="w-5 h-5 text-ink" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-900 truncate">
+        <p className="font-medium text-ink truncate">
           {t(`reports.types.${reportType}`, reportType)}
         </p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           {bankName} &middot; {period} &middot;{" "}
           {new Date(createdAt).toLocaleDateString()}
         </p>
@@ -54,7 +54,7 @@ export function ReportCard({
       {filePath && (
         <button
           onClick={handleDownload}
-          className="btn-secondary flex items-center gap-1 text-xs"
+          className="btn-ghost flex items-center gap-1 text-xs"
         >
           <Download className="w-3.5 h-3.5" />
           {t("reports.download")}

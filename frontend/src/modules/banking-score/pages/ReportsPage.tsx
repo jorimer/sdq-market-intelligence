@@ -65,18 +65,18 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">{t("reports.title")}</h2>
+      <h2 className="text-xl font-bold text-ink">{t("reports.title")}</h2>
 
       <div className="card">
         <div className="flex flex-wrap items-end gap-4">
           <div className="w-64">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-body mb-1">
               {t("reports.bank")}
             </label>
             <BankSelector value={bank} onChange={setBank} />
           </div>
           <div className="w-40">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-body mb-1">
               {t("reports.period")}
             </label>
             <input
@@ -84,17 +84,17 @@ export function ReportsPage() {
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               placeholder="2024-Q4"
-              className="input-field"
+              className="field"
             />
           </div>
           <div className="w-52">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-body mb-1">
               {t("reports.type")}
             </label>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value)}
-              className="input-field"
+              className="field"
             >
               {REPORT_TYPES.map((rt) => (
                 <option key={rt} value={rt}>
@@ -115,9 +115,9 @@ export function ReportsPage() {
       </div>
 
       <div>
-        <h3 className="font-semibold text-gray-900 mb-4">{t("reports.history")}</h3>
+        <h3 className="font-semibold text-ink mb-4">{t("reports.history")}</h3>
         {history.length === 0 ? (
-          <div className="card text-center py-8 text-gray-400">
+          <div className="card text-center py-8 text-faint">
             <p>{t("reports.noHistory")}</p>
           </div>
         ) : (

@@ -86,19 +86,19 @@ export function ScenariosPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">{t("scenarios.title")}</h2>
+      <h2 className="text-xl font-bold text-ink">{t("scenarios.title")}</h2>
 
       {/* Bank selector + load baseline */}
       <div className="card">
         <div className="flex flex-wrap items-end gap-4">
           <div className="w-64">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-body mb-1">
               {t("scoring.selectBank")}
             </label>
             <BankSelector value={bank} onChange={setBank} />
           </div>
           <div className="w-40">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-body mb-1">
               {t("rankings.period")}
             </label>
             <input
@@ -106,7 +106,7 @@ export function ScenariosPage() {
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               placeholder="2024-Q4"
-              className="input-field"
+              className="field"
             />
           </div>
           <button
@@ -124,12 +124,12 @@ export function ScenariosPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Sliders panel */}
           <div className="card space-y-5">
-            <h3 className="font-semibold text-gray-900">{t("scenarios.adjustSliders")}</h3>
+            <h3 className="font-semibold text-ink">{t("scenarios.adjustSliders")}</h3>
 
             {SUB_KEYS.map((key) => (
               <div key={key}>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">{t(`sub.${key}`, key)}</span>
+                  <span className="text-body">{t(`sub.${key}`, key)}</span>
                   <span className="font-semibold">{sliders[key].toFixed(1)}</span>
                 </div>
                 <input
@@ -146,13 +146,13 @@ export function ScenariosPage() {
 
             {/* Presets */}
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-2">{t("scenarios.presets")}</p>
+              <p className="text-xs font-medium text-muted mb-2">{t("scenarios.presets")}</p>
               <div className="grid grid-cols-2 gap-2">
                 {(["optimistic", "pessimistic", "baseline", "stressTest"] as const).map((p) => (
                   <button
                     key={p}
                     onClick={() => applyPreset(p)}
-                    className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700"
+                    className="text-xs px-2 py-1.5 rounded-lg border border-line hover:bg-surface2 text-body"
                   >
                     {t(`scenarios.${p}`)}
                   </button>
@@ -182,17 +182,17 @@ export function ScenariosPage() {
                     setSimResult(null);
                   }
                 }}
-                className="px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+                className="px-3 py-2 rounded-lg border border-line hover:bg-surface2"
                 title={t("scenarios.reset")}
               >
-                <RotateCcw className="w-4 h-4 text-gray-500" />
+                <RotateCcw className="w-4 h-4 text-muted" />
               </button>
             </div>
           </div>
 
           {/* Radar chart: current vs simulated */}
           <div className="card">
-            <h3 className="font-semibold text-gray-900 mb-4">
+            <h3 className="font-semibold text-ink mb-4">
               {t("scenarios.currentVsSimulated")}
             </h3>
             <RadarChart
@@ -204,7 +204,7 @@ export function ScenariosPage() {
           {/* Score gauges */}
           <div className="card space-y-6">
             <div>
-              <p className="text-sm text-gray-500 mb-2">{t("scenarios.baseline")}</p>
+              <p className="text-sm text-muted mb-2">{t("scenarios.baseline")}</p>
               <div className="flex flex-col items-center">
                 <ScoreGauge score={baseResult.overall_score} size={120} />
                 <div className="mt-2">
@@ -214,8 +214,8 @@ export function ScenariosPage() {
             </div>
 
             {simResult && (
-              <div className="border-t border-gray-100 pt-5">
-                <p className="text-sm text-gray-500 mb-2">{t("scenarios.simulatedScore")}</p>
+              <div className="border-t border-line pt-5">
+                <p className="text-sm text-muted mb-2">{t("scenarios.simulatedScore")}</p>
                 <div className="flex flex-col items-center">
                   <ScoreGauge score={simResult.overall_score} size={120} />
                   <div className="mt-2">
@@ -227,10 +227,10 @@ export function ScenariosPage() {
                 <div className="mt-4 text-center">
                   <span className={`text-lg font-bold ${
                     simResult.overall_score > baseResult.overall_score
-                      ? "text-success"
+                      ? "text-ok"
                       : simResult.overall_score < baseResult.overall_score
-                        ? "text-danger"
-                        : "text-gray-500"
+                        ? "text-alert"
+                        : "text-muted"
                   }`}>
                     {simResult.overall_score > baseResult.overall_score ? "+" : ""}
                     {(simResult.overall_score - baseResult.overall_score).toFixed(1)}
@@ -243,7 +243,7 @@ export function ScenariosPage() {
       )}
 
       {!baseResult && !loading && (
-        <div className="card text-center py-12 text-gray-400">
+        <div className="card text-center py-12 text-faint">
           <Sliders className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p>Seleccione un banco y cargue la base para iniciar la simulacion.</p>
         </div>
