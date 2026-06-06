@@ -1,0 +1,44 @@
+# House doctrine — Eje 3: Sectorial (IAI · Investment Attractiveness Index)
+# Pesos BASE recalibrables por sector (la matriz por sector de spec v2 se
+# superpone aquí cuando esté disponible). Fuente de verdad de pesos.
+#
+# IAI: 0-100, MAYOR = MAYOR ATRACTIVO de inversión.
+version: "1.0"
+name: IAI
+direction: "mayor score = mayor atractivo"
+
+# Pesos base del SPEC (deben sumar 1.0)
+dimension_weights:
+  macro: 0.25        # Entorno macroeconómico
+  business: 0.25     # Clima de negocios
+  talent: 0.20       # Talento / capital humano
+  regulation: 0.15   # Calidad regulatoria
+  sector: 0.15       # Dinámica propia del sector
+
+dimension_variables:
+  macro:
+    - gdp_growth            # crecimiento (%)            mayor = mejor
+    - inflation_stability   # estabilidad de precios 0-100 mayor = mejor
+  business:
+    - ease_of_business      # facilidad de hacer negocios 0-100 mayor = mejor
+    - operating_cost        # costo operativo (índice)    mayor = peor
+  talent:
+    - labor_availability    # disponibilidad de mano de obra 0-100 mayor = mejor
+    - skills_index          # nivel de competencias 0-100 mayor = mejor
+  regulation:
+    - regulatory_quality    # calidad regulatoria 0-100   mayor = mejor
+    - regulatory_volatility # volatilidad regulatoria     mayor = peor
+  sector:
+    - sector_growth         # crecimiento del sector (%)  mayor = mejor
+    - sector_size           # tamaño relativo del sector  mayor = mejor
+
+# Variables donde MAYOR valor = MENOR atractivo → se invierten.
+risk_increasing:
+  - operating_cost
+  - regulatory_volatility
+
+# Bandas de atractivo (descendentes por 'lower', cobertura 0-100).
+bands:
+  - {name: Alto,  lower: 70.0, color: "#047857"}
+  - {name: Medio, lower: 40.0, color: "#F59E0B"}
+  - {name: Bajo,  lower: 0.0,  color: "#991B1B"}

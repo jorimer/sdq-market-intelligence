@@ -146,16 +146,17 @@ ya implementa el pipeline; solo está acoplado al IRMP por imports a su `weights
 
 ---
 
-## FASE 3 — `sector_intel` (Eje 3)
+## FASE 3 — `sector_intel` (Eje 3)  ✅ 2026-06-06
 
-- [ ] Modelos: `Sector`, `SectorScore` (IAI/SGPS + breakdown), `SectorVariable` + Alembic
-- [ ] **IAI** (Macro 25 · Negocios 25 · Talento 20 · Regulación 15 · Sector 15), pesos por sector
-- [ ] **SGPS** (Histórico 40 · Estructural 35 · Aceleración 25); Aceleración consume `macro.updated` + `irmp.updated`
-- [ ] Marcos: Porter (HHI/cinco fuerzas), Hausmann-Hidalgo (complejidad), Christensen
-- [ ] Arrancar con 2–3 sectores ancla (Turismo, Energía/Construcción) antes de los 16
-- [ ] Consumir `macro.updated` `irmp.updated` `trade.updated`; publicar `sector.updated`
-- [ ] API `/api/v1/sector-intel`: `GET /sectors` · `POST /iai` · `POST /sgps` · `GET /weights`
-- [ ] Tests por sector ancla + sensibilidad de pesos ≥80%
+- [x] Modelos: `Sector`, `SectorVariable`, `SectorScore` (IAI/SGPS + breakdown) + migración `1ce789e4ec2c`
+- [x] **IAI** vía `shared/indices` con doctrina `sectoral.yaml` (Macro 25·Negocios 25·Talento 20·Regulación 15·Sector 15); pesos por sector = extensión futura (recalibrables)
+- [x] **SGPS** (Histórico 40·Estructural 35·Aceleración 25); la Aceleración consume `macro/irmp/trade.updated` vía `AccelerationContext` suscrito al `event_bus`
+- [x] Consume `macro.updated` `irmp.updated` `trade.updated` (solo contrato string, sin importar otros módulos); publica `sector.updated`
+- [x] Sectores ancla: Turismo + Energía + Zonas Francas (seed)
+- [x] API `/api/v1/sector-intel`: `GET /sectors` · `GET /weights` · `POST /iai` · `POST /snapshot` · `GET /{sector}/latest`
+- [x] Tests IAI/SGPS/aceleración/servicio + wiring de eventos (18); cobertura módulo ~100%, total 88% (278 tests)
+- [x] E2E ampliado (Fase 3) → 28/28, valida integración de eventos en vivo
+- [ ] Pendiente (futuro): matriz de pesos por sector (spec v2), Porter/Hausmann/Christensen explícitos, abrir los 16 sectores
 
 ---
 

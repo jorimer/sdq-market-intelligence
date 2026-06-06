@@ -39,6 +39,8 @@ from modules.banking_score.api.router_model import router as model_router
 from modules.macro_political_risk.api.router_scoring import router as mpr_scoring_router
 from modules.macro_monitor.api.router import router as macro_monitor_router
 from modules.trade_intel.api.router import router as trade_intel_router
+from modules.sector_intel.api.router import router as sector_intel_router
+from modules.sector_intel.events import register_subscribers as register_sector_subscribers
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(scoring_router, prefix="/api/v1/banking-score", tags=["Banking Score"])
@@ -48,6 +50,10 @@ app.include_router(model_router, prefix="/api/v1/banking-score/model", tags=["ML
 app.include_router(mpr_scoring_router, prefix="/api/v1/macro-political-risk", tags=["Macro-Political Risk"])
 app.include_router(macro_monitor_router, prefix="/api/v1/macro-monitor", tags=["Macro Monitor"])
 app.include_router(trade_intel_router, prefix="/api/v1/trade-intel", tags=["Trade Intel"])
+app.include_router(sector_intel_router, prefix="/api/v1/sector-intel", tags=["Sector Intel"])
+
+# sector_intel consumes macro/irmp/trade .updated to feed the SGPS acceleration factor
+register_sector_subscribers()
 
 # Serve frontend in production
 if os.path.exists("frontend/dist"):

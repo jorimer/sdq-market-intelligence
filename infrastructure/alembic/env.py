@@ -26,6 +26,9 @@ from modules.macro_monitor.models.models import (  # noqa: F401
 from modules.trade_intel.models.models import (  # noqa: F401
     TradeFlow, TradeScore,
 )
+from modules.sector_intel.models.models import (  # noqa: F401
+    Sector, SectorVariable, SectorScore,
+)
 
 config = context.config
 
