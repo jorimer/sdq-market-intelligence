@@ -3,6 +3,7 @@ import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
 import { PageHead, Card, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
+import { useApp, periodToDate } from "@/shared/context/AppContext";
 
 const ENTITY_TYPES = [
   { value: "", label: "Todos los tipos" },
@@ -24,35 +25,25 @@ interface Rank {
 }
 
 export function RankingsPage() {
+  const { period } = useApp();
+  const periodEnd = periodToDate(period);
   const [rankings, setRankings] = useState<Rank[]>([]);
   const [entityType, setEntityType] = useState("");
-  const [periods, setPeriods] = useState<string[]>([]);
-  const [period, setPeriod] = useState("");
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    client
-      .get<{ periods: string[] }>("/banking-score/periods")
-      .then((r) => {
-        setPeriods(r.data.periods ?? []);
-        if (r.data.periods?.length) setPeriod(r.data.periods[0]);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     setLoading(true);
     client
       .get<{ rankings: Rank[] }>("/banking-score/rankings", {
         params: {
-          ...(period ? { period_end: period } : {}),
+          period_end: periodEnd,
           ...(entityType ? { entity_type: entityType } : {}),
         },
       })
       .then((r) => setRankings(r.data.rankings ?? []))
       .catch(() => setRankings([]))
       .finally(() => setLoading(false));
-  }, [entityType, period]);
+  }, [entityType, periodEnd]);
 
   return (
     <div>
@@ -61,28 +52,16 @@ export function RankingsPage() {
         title="Ranking de entidades"
         sub="Entidades financieras ordenadas por score SDQ. Filtra por tipo de entidad supervisada."
         right={
-          <div className="flex gap-2">
-            <select
-              value={entityType}
-              onChange={(e) => setEntityType(e.target.value)}
-              className="field !w-auto"
-              title="Tipo de entidad"
-            >
-              {ENTITY_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="field !w-auto mono"
-              title="Período"
-            >
-              {periods.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={entityType}
+            onChange={(e) => setEntityType(e.target.value)}
+            className="field !w-auto"
+            title="Tipo de entidad"
+          >
+            {ENTITY_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
         }
       />
 

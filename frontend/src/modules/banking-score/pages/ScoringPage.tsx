@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Calculator, Radar as RadarIcon, ListChecks } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
@@ -7,8 +7,8 @@ import { RatingBadge } from "../components/RatingBadge";
 import { IndicatorTable } from "../components/IndicatorTable";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
+import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
-  listPeriods,
   runScoring,
   ScoringResult,
   SUB_KEYS,
@@ -16,27 +16,20 @@ import {
 } from "../api";
 
 export function ScoringPage() {
+  const { period } = useApp();
+  const periodEnd = periodToDate(period);
   const [bankId, setBankId] = useState("");
   const [bankName, setBankName] = useState("");
-  const [periods, setPeriods] = useState<string[]>([]);
-  const [period, setPeriod] = useState("");
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
-  useEffect(() => {
-    listPeriods().then((p) => {
-      setPeriods(p);
-      if (p.length) setPeriod(p[0]);
-    });
-  }, []);
-
   const run = async () => {
-    if (!bankId || !period) return;
+    if (!bankId) return;
     setLoading(true);
     setError(false);
     try {
-      setResult(await runScoring(bankId, period));
+      setResult(await runScoring(bankId, periodEnd));
     } catch {
       setError(true);
       setResult(null);
@@ -65,13 +58,8 @@ export function ScoringPage() {
               }}
             />
           </div>
-          <div className="w-40">
-            <label className="block text-xs font-medium text-muted mb-1">Período</label>
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
-              {periods.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+          <div className="text-xs text-muted pb-2.5">
+            Período <span className="mono text-body">{periodEnd}</span>
           </div>
           <button onClick={run} disabled={!bankId || loading} className="btn btn-primary">
             <Calculator className="w-4 h-4" />
