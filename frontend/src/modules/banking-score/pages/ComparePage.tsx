@@ -1,89 +1,84 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useEffect, useState } from "react";
 import { GitCompare, Plus, X } from "lucide-react";
-import client from "@/shared/api/client";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
-import { PeerBar } from "../components/PeerBar";
 import { RatingBadge } from "../components/RatingBadge";
 import { ScoreGauge } from "../components/ScoreGauge";
-import type { ScoringResult, ComparisonBank } from "@/types";
+import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
+import { fmtNum } from "@/shared/lib/format";
+import {
+  listPeriods,
+  runScoring,
+  ScoringResult,
+  SUB_KEYS,
+  SUB_LABELS,
+} from "../api";
 
-const MAX_BANKS = 4;
+const MAX = 4;
+
+interface Slot {
+  id: string;
+  name: string;
+}
 
 export function ComparePage() {
-  const { t } = useTranslation();
-  const [selected, setSelected] = useState<string[]>([""]);
+  const [slots, setSlots] = useState<Slot[]>([{ id: "", name: "" }]);
+  const [periods, setPeriods] = useState<string[]>([]);
   const [period, setPeriod] = useState("");
-  const [results, setResults] = useState<ComparisonBank[]>([]);
+  const [results, setResults] = useState<{ name: string; r: ScoringResult }[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const addBank = () => {
-    if (selected.length < MAX_BANKS) {
-      setSelected([...selected, ""]);
-    }
-  };
+  useEffect(() => {
+    listPeriods().then((p) => {
+      setPeriods(p);
+      if (p.length) setPeriod(p[0]);
+    });
+  }, []);
 
-  const removeBank = (idx: number) => {
-    setSelected(selected.filter((_, i) => i !== idx));
-  };
+  const valid = slots.filter((s) => s.id);
 
-  const setBank = (idx: number, val: string) => {
-    const copy = [...selected];
-    copy[idx] = val;
-    setSelected(copy);
-  };
-
-  const validBanks = selected.filter((b) => b.trim() !== "");
-
-  const runComparison = async () => {
-    if (validBanks.length < 2) return;
+  const run = async () => {
+    if (valid.length < 2 || !period) return;
     setLoading(true);
     try {
-      const promises = validBanks.map((bank) => {
-        const params: Record<string, string> = { bank_name: bank };
-        if (period) params.period = period;
-        return client.post<ScoringResult>("/banking-score/scoring/run", null, { params });
-      });
-      const responses = await Promise.all(promises);
-      setResults(
-        responses.map((r, i) => ({
-          bank_name: validBanks[i],
-          scoring_result: r.data,
-        }))
-      );
+      const rs = await Promise.all(valid.map((s) => runScoring(s.id, period)));
+      setResults(rs.map((r, i) => ({ name: valid[i].name, r })));
     } catch {
-      // silent
+      setResults([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Prepare bar chart data from results
-  const barData = results.map((r) => ({
-    bank_name: r.bank_name,
-    score: r.scoring_result.overall_score,
-  }));
+  const gridCols =
+    results.length === 2 ? "grid-cols-2" : results.length === 3 ? "grid-cols-3" : "grid-cols-4";
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-bold text-ink">{t("compare.title")}</h2>
+    <div>
+      <PageHead
+        eyebrow="SIB"
+        title="Comparador de entidades"
+        sub="Compara el rating y los sub-componentes de 2 a 4 entidades en un mismo período."
+      />
 
-      {/* Selection panel */}
-      <div className="card space-y-4">
-        <p className="text-sm text-muted">{t("compare.selectBanks")}</p>
-
-        <div className="space-y-3">
-          {selected.map((bank, idx) => (
+      <Card className="mb-5">
+        <p className="text-sm text-muted mb-3">Selecciona entidades (2–4)</p>
+        <div className="space-y-2.5 mb-4">
+          {slots.map((slot, idx) => (
             <div key={idx} className="flex items-center gap-3">
-              <div className="w-64">
-                <BankSelector value={bank} onChange={(v) => setBank(idx, v)} />
+              <div className="w-72">
+                <BankSelector
+                  value={slot.id}
+                  onChange={(id, name) =>
+                    setSlots((s) => s.map((v, i) => (i === idx ? { id, name } : v)))
+                  }
+                />
               </div>
-              {selected.length > 1 && (
+              {slots.length > 1 && (
                 <button
-                  onClick={() => removeBank(idx)}
+                  onClick={() => setSlots((s) => s.filter((_, i) => i !== idx))}
                   className="text-faint hover:text-alert"
-                  title={t("compare.remove")}
+                  title="Quitar"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -91,147 +86,89 @@ export function ComparePage() {
             </div>
           ))}
         </div>
-
         <div className="flex flex-wrap items-end gap-4">
-          {selected.length < MAX_BANKS && (
+          {slots.length < MAX && (
             <button
-              onClick={addBank}
-              className="text-sm text-ink hover:underline flex items-center gap-1"
+              onClick={() => setSlots((s) => [...s, { id: "", name: "" }])}
+              className="text-sm text-accent-ink hover:underline flex items-center gap-1"
             >
-              <Plus className="w-3.5 h-3.5" />
-              {t("compare.addBank")}
+              <Plus className="w-3.5 h-3.5" /> Añadir entidad
             </button>
           )}
-
           <div className="w-40">
-            <label className="block text-sm font-medium text-body mb-1">
-              {t("rankings.period")}
-            </label>
-            <input
-              type="text"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              placeholder="2024-Q4"
-              className="field"
-            />
+            <label className="block text-xs font-medium text-muted mb-1">Período</label>
+            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
+              {periods.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
           </div>
-
-          <button
-            onClick={runComparison}
-            disabled={validBanks.length < 2 || loading}
-            className="btn-primary flex items-center gap-2"
-          >
+          <button onClick={run} disabled={valid.length < 2 || loading} className="btn btn-primary">
             <GitCompare className="w-4 h-4" />
-            {loading ? t("compare.comparing") : t("compare.runComparison")}
+            {loading ? "Comparando…" : "Comparar"}
           </button>
         </div>
-      </div>
+      </Card>
 
-      {/* Results */}
-      {results.length === 0 && !loading && (
-        <div className="card text-center py-12 text-faint">
-          <GitCompare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>{t("compare.noSelection")}</p>
-        </div>
-      )}
-
-      {results.length > 0 && (
-        <>
-          {/* Score gauges row */}
-          <div className={`grid gap-4 ${
-            results.length === 2 ? "grid-cols-2" :
-            results.length === 3 ? "grid-cols-3" : "grid-cols-4"
-          }`}>
-            {results.map((r) => (
-              <div key={r.bank_name} className="card flex flex-col items-center">
-                <p className="text-sm font-medium text-body mb-2">{r.bank_name}</p>
-                <ScoreGauge score={r.scoring_result.overall_score} size={100} />
-                <div className="mt-2">
-                  <RatingBadge tier={r.scoring_result.rating_tier} size="sm" />
-                </div>
-              </div>
+      {results.length === 0 ? (
+        <StateBlock kind="empty" message="Selecciona al menos dos entidades y ejecuta la comparación." />
+      ) : (
+        <div className="space-y-5">
+          <div className={`grid gap-4 ${gridCols}`}>
+            {results.map(({ name, r }) => (
+              <Card key={name} className="flex flex-col items-center text-center">
+                <p className="text-sm text-ink mb-2 truncate w-full">{name}</p>
+                <ScoreGauge score={r.overall_score} size={100} />
+                <div className="mt-2"><RatingBadge tier={r.rating_tier} size="sm" /></div>
+              </Card>
             ))}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Overall score bar comparison */}
-            <div className="card">
-              <h3 className="font-semibold text-ink mb-4">Score General</h3>
-              <PeerBar data={barData} highlightBank={results[0]?.bank_name} />
-            </div>
+          <Card>
+            <CardHead title="Perfil comparado" subtitle="Sub-componentes (primeras dos entidades)" />
+            <RadarChart
+              data={results[0].r.sub_components}
+              comparisonData={results[1]?.r.sub_components}
+              comparisonLabel={results[1]?.name}
+            />
+          </Card>
 
-            {/* Radar overlay — first two banks */}
-            <div className="card">
-              <h3 className="font-semibold text-ink mb-4">Sub-componentes</h3>
-              <RadarChart
-                data={results[0].scoring_result.sub_components}
-                comparisonData={results.length > 1 ? results[1].scoring_result.sub_components : undefined}
-              />
-              {results.length > 1 && (
-                <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-ink" />
-                    {results[0].bank_name}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-alert" />
-                    {results[1].bank_name}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Sub-component comparison table */}
-          <div className="card">
-            <h3 className="font-semibold text-ink mb-4">Detalle por Sub-componente</h3>
+          <Card>
+            <CardHead icon={GitCompare} title="Detalle por sub-componente" />
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-line">
-                    <th className="text-left py-2 px-3 font-medium text-muted">Sub-componente</th>
-                    {results.map((r) => (
-                      <th key={r.bank_name} className="text-right py-2 px-3 font-medium text-muted">
-                        {r.bank_name}
-                      </th>
+                  <tr className="text-left text-xs text-muted border-b border-line">
+                    <th className="py-2 px-2 font-medium">Sub-componente</th>
+                    {results.map(({ name }) => (
+                      <th key={name} className="py-2 px-2 font-medium text-right truncate">{name}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {(["solidez", "calidad", "eficiencia", "liquidez", "diversificacion"] as const).map(
-                    (key) => (
-                      <tr key={key} className="border-b border-line">
-                        <td className="py-2 px-3 text-body">{t(`sub.${key}`, key)}</td>
-                        {results.map((r) => {
-                          const val = r.scoring_result.sub_components[key];
-                          return (
-                            <td key={r.bank_name} className="py-2 px-3 text-right font-semibold">
-                              <span className={
-                                val >= 70 ? "text-ok" :
-                                val >= 50 ? "text-ink" :
-                                "text-alert"
-                              }>
-                                {val.toFixed(1)}
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    )
-                  )}
+                  {SUB_KEYS.map((key) => (
+                    <tr key={key} className="border-b border-line/60">
+                      <td className="py-2 px-2 text-body">{SUB_LABELS[key]}</td>
+                      {results.map(({ name, r }) => (
+                        <td key={name} className="py-2 px-2 text-right mono text-ink">
+                          {fmtNum(r.sub_components[key], 1)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
                   <tr className="border-t-2 border-line">
-                    <td className="py-2 px-3 font-semibold text-ink">Score General</td>
-                    {results.map((r) => (
-                      <td key={r.bank_name} className="py-2 px-3 text-right font-bold text-ink">
-                        {r.scoring_result.overall_score.toFixed(1)}
+                    <td className="py-2 px-2 font-semibold text-ink">Score general</td>
+                    {results.map(({ name, r }) => (
+                      <td key={name} className="py-2 px-2 text-right mono font-bold text-ink">
+                        {fmtNum(r.overall_score, 1)}
                       </td>
                     ))}
                   </tr>
                 </tbody>
               </table>
             </div>
-          </div>
-        </>
+          </Card>
+        </div>
       )}
     </div>
   );
