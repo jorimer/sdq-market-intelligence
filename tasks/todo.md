@@ -131,16 +131,18 @@ ya implementa el pipeline; solo está acoplado al IRMP por imports a su `weights
 
 ---
 
-## FASE 2 — `macro_monitor` (Eje 2)
+## FASE 2 — `macro_monitor` (Eje 2)  ✅ 2026-06-06
 
-- [ ] Modelos: `MacroSeries`, `MacroSnapshot` (PK UUID, linaje, `null` sin interpolar) + Alembic
-- [ ] `bcrd_client` en `shared/data` (PIB/IMAE, IPC, monetario, externo, ENCFT, expectativas)
-- [ ] Scoring de **momentum** (cambio + aceleración) por serie con bandas de incertidumbre, sobre `shared/indices`
-- [ ] Señales tipo Reinhart-Rogoff (deuda) y Calvo (sudden stop); salidas **probabilísticas**
-- [ ] API `/api/v1/macro-monitor`: `GET /indicators` · `GET /snapshot?period=` · `GET /signals`
-- [ ] Publicar `macro.updated`
-- [ ] Tests momentum/señales + manejo de huecos ≥80%
-- [ ] Registrar routers en `app/main.py` + modelos en `alembic/env.py`
+- [x] Modelos: `MacroSeries`, `MacroSnapshot` (PK UUID, linaje, `null` sin interpolar) + migración `1c4cb96934bf`
+- [x] `bcrd_client` (fixture) ingiere series; fixture ampliado (gdp, inflación, remesas, deuda)
+- [x] Scoring de **momentum** (cambio + aceleración + tendencia + banda de incertidumbre + prob. de continuidad)
+- [x] Señales Reinhart-Rogoff (deuda) y Calvo (sudden stop) con severidad y evidencia
+- [x] API `/api/v1/macro-monitor`: `GET /indicators` · `GET /snapshot` · `GET /signals` · `POST /refresh`
+- [x] Publicar `macro.updated` (servicio, tras el snapshot)
+- [x] Tests momentum/señales/servicio (25) + manejo de huecos; suite total 246, cobertura 88%
+- [x] Routers en `app/main.py` + modelos en `alembic/env.py` (también completa el registro de MPR que faltaba)
+- [x] E2E verificado con usuario Claude contra la app real (login → refresh → indicators/snapshot/signals)
+- Nota: momentum es series temporales (módulo propio), no la normalización transversal de `shared/indices`.
 
 ---
 

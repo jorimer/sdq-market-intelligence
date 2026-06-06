@@ -36,12 +36,16 @@ from modules.banking_score.api.router_scoring import router as scoring_router
 from modules.banking_score.api.router_data import router as data_router
 from modules.banking_score.api.router_reports import router as reports_router
 from modules.banking_score.api.router_model import router as model_router
+from modules.macro_political_risk.api.router_scoring import router as mpr_scoring_router
+from modules.macro_monitor.api.router import router as macro_monitor_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(scoring_router, prefix="/api/v1/banking-score", tags=["Banking Score"])
 app.include_router(data_router, prefix="/api/v1/banking-score/data", tags=["Banking Data"])
 app.include_router(reports_router, prefix="/api/v1/banking-score/reports", tags=["Banking Reports"])
 app.include_router(model_router, prefix="/api/v1/banking-score/model", tags=["ML Model"])
+app.include_router(mpr_scoring_router, prefix="/api/v1/macro-political-risk", tags=["Macro-Political Risk"])
+app.include_router(macro_monitor_router, prefix="/api/v1/macro-monitor", tags=["Macro Monitor"])
 
 # Serve frontend in production
 if os.path.exists("frontend/dist"):
