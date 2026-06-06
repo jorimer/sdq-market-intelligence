@@ -1,0 +1,39 @@
+# House doctrine — Eje 5: Social & desarrollo (Índice de Desarrollo Multidimensional)
+# Doctrina §7: bienestar multidimensional > PIB; distribución > promedio;
+# conducta/registro > percepción declarada. Atención a la informalidad (de Soto).
+#
+# IDM: 0-100, MAYOR = MAYOR desarrollo/bienestar.
+version: "1.0"
+name: IDM
+direction: "mayor score = mayor desarrollo"
+
+dimension_weights:
+  health: 0.25
+  education: 0.25
+  living_standards: 0.25
+  inclusion: 0.25
+
+dimension_variables:
+  health:
+    - life_expectancy        # esperanza de vida (años)    mayor = mejor
+    - child_mortality        # mortalidad infantil (‰)     mayor = peor
+  education:
+    - literacy_rate          # alfabetización (%)          mayor = mejor
+    - schooling_years        # años de escolaridad         mayor = mejor
+  living_standards:
+    - income_per_capita      # ingreso per cápita          mayor = mejor
+    - poverty_rate           # pobreza (%)                 mayor = peor
+  inclusion:
+    - financial_inclusion    # inclusión financiera (%)    mayor = mejor
+    - informality_rate       # informalidad laboral (%)    mayor = peor
+
+# Variables donde MAYOR valor = MENOR desarrollo → se invierten.
+risk_increasing:
+  - child_mortality
+  - poverty_rate
+  - informality_rate
+
+bands:
+  - {name: Alto,  lower: 70.0, color: "#047857"}
+  - {name: Medio, lower: 40.0, color: "#F59E0B"}
+  - {name: Bajo,  lower: 0.0,  color: "#991B1B"}

@@ -1,0 +1,40 @@
+# House doctrine — Eje 7: ESG & clima (Índice de Resiliencia Climática/ESG)
+# Doctrina §9: materialidad financiera > cumplimiento formal; exigir métrica
+# (penalizar greenwashing); ajustar a vulnerabilidad del Caribe (huracanes/costa).
+#
+# IRC: 0-100, MAYOR = MENOR exposición / mejor gestión ESG.
+version: "1.0"
+name: IRC
+direction: "mayor score = menor exposición / mejor gestión"
+
+dimension_weights:
+  physical_risk: 0.30
+  transition_risk: 0.25
+  adaptive_capacity: 0.25
+  governance: 0.20
+
+dimension_variables:
+  physical_risk:
+    - hurricane_exposure     # exposición a huracanes 0-100  mayor = peor
+    - coastal_exposure       # exposición zona costera 0-100 mayor = peor
+  transition_risk:
+    - carbon_intensity       # intensidad de carbono         mayor = peor
+    - fossil_dependence      # dependencia de fósiles (%)    mayor = peor
+  adaptive_capacity:
+    - adaptation_investment  # inversión en adaptación 0-100 mayor = mejor
+    - diversification        # diversificación 0-100         mayor = mejor
+  governance:
+    - disclosure_quality     # calidad TCFD/ISSB 0-100       mayor = mejor
+    - emissions_targets      # metas de emisiones 0-100      mayor = mejor
+
+# Variables donde MAYOR valor = MAYOR exposición/riesgo → se invierten.
+risk_increasing:
+  - hurricane_exposure
+  - coastal_exposure
+  - carbon_intensity
+  - fossil_dependence
+
+bands:
+  - {name: Bajo,     lower: 70.0, color: "#047857"}
+  - {name: Moderado, lower: 40.0, color: "#F59E0B"}
+  - {name: Alto,     lower: 0.0,  color: "#991B1B"}
