@@ -134,6 +134,25 @@ def run() -> int:
     r = c.get("/api/v1/macro-monitor/signals")
     check("macro /signals 200", r.status_code == 200)
 
+    # ── Fase 5: trade_intel ────────────────────────────────────────
+    print("\nFase 5 — trade_intel (resiliencia comercial)")
+    flows = [
+        {"product": "instrumentos médicos", "direction": "export", "value": 2100.0},
+        {"product": "ferroníquel", "direction": "export", "value": 1200.0},
+        {"product": "cigarros", "direction": "export", "value": 900.0},
+        {"product": "petróleo", "direction": "import", "value": 3800.0},
+    ]
+    r = c.post("/api/v1/trade-intel/snapshot", json={"period": "2025", "flows": flows})
+    check("trade /snapshot 200 (persiste + publica trade.updated)", r.status_code == 200,
+          f"status={r.status_code}")
+    if r.status_code == 200:
+        ts = r.json()
+        check("resilience_score en [0,100]", 0.0 <= (ts.get("resilience_score") or -1) <= 100.0)
+    r = c.get("/api/v1/trade-intel/concentration")
+    check("trade /concentration 200", r.status_code == 200 and r.json().get("has_score") is True)
+    r = c.get("/api/v1/trade-intel/score")
+    check("trade /score 200", r.status_code == 200 and r.json().get("has_score") is True)
+
     return _summary()
 
 
@@ -142,7 +161,7 @@ def _summary() -> int:
     if _FAIL:
         print("Fallidas: " + ", ".join(_FAIL))
         return 1
-    print("E2E OK — Fase 0, 1A, 1B y 2 verificadas.")
+    print("E2E OK — Fase 0, 1A, 1B, 2 y 5 verificadas.")
     return 0
 
 

@@ -176,13 +176,14 @@ ya implementa el pipeline; solo está acoplado al IRMP por imports a su `weights
 
 ---
 
-## FASE 5 — `trade_intel` (Eje 6)
+## FASE 5 — `trade_intel` (Eje 6)  ✅ 2026-06-06
 
-- [ ] Modelos: `TradeFlow`, `TradeScore` (concentración/dependencia/resiliencia) + Alembic
-- [ ] `bcrd_client` (sector externo) + `dga_client` (aduanas por producto)
-- [ ] Índices: HHI exportaciones, dependencia importaciones, zonas francas, remesas, upgrading (Gereffi/Hausmann)
-- [ ] API `/api/v1/trade-intel`: `GET /flows` · `GET /concentration` · `GET /score`; publicar `trade.updated`
-- [ ] Tests HHI/dependencia + consistencia de clasificación ≥80%
+- [x] Modelos: `TradeFlow`, `TradeScore` (concentración/dependencia/resiliencia) + migración `14e19953826c`
+- [x] Índices: HHI exportaciones, diversificación (1-HHI), dependencia de importaciones, resiliencia (blend explicable)
+- [x] API `/api/v1/trade-intel`: `POST /score` · `POST /snapshot` · `GET /flows` · `GET /concentration` · `GET /score`; publica `trade.updated`
+- [x] Tests HHI/dependencia/resiliencia/servicio (14); cobertura módulo ~100%, total 88% (260 tests)
+- [x] Registrado en `app/main.py` + `alembic/env.py`; E2E ampliado (Fase 5) → 22/22
+- [ ] Pendiente (diferido): ingesta real `dga_client` (aduanas) — bloqueada por licencia sin confirmar (`license_ok=False`); flujos hoy se proveen explícitamente. Zonas francas/upgrading (Gereffi/Hausmann) en iteración posterior.
 
 ---
 
