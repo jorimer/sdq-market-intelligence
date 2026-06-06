@@ -153,6 +153,38 @@ def run() -> int:
     r = c.get("/api/v1/trade-intel/score")
     check("trade /score 200", r.status_code == 200 and r.json().get("has_score") is True)
 
+    # ── Fase 3: sector_intel (integrador: consume macro/irmp/trade) ─
+    print("\nFase 3 — sector_intel (IAI + SGPS, consume eventos)")
+    r = c.get("/api/v1/sector-intel/sectors")
+    check("sector /sectors ≥3 (ancla)", r.status_code == 200 and r.json().get("count", 0) >= 3)
+    r = c.get("/api/v1/sector-intel/weights")
+    iw = r.json().get("iai_dimension_weights", {}) if r.status_code == 200 else {}
+    check("pesos IAI suman 1.0", round(sum(iw.values()), 6) == 1.0)
+    dataset = {
+        "turismo": {"gdp_growth": 5.0, "inflation_stability": 70, "ease_of_business": 65,
+                    "operating_cost": 40, "labor_availability": 75, "skills_index": 60,
+                    "regulatory_quality": 62, "regulatory_volatility": 30,
+                    "sector_growth": 8.0, "sector_size": 70},
+        "energia": {"gdp_growth": 4.0, "inflation_stability": 68, "ease_of_business": 55,
+                    "operating_cost": 60, "labor_availability": 50, "skills_index": 65,
+                    "regulatory_quality": 58, "regulatory_volatility": 45,
+                    "sector_growth": 6.0, "sector_size": 60},
+    }
+    r = c.post("/api/v1/sector-intel/snapshot", json={
+        "period": "2025", "dataset": dataset,
+        "sgps_inputs": {"turismo": {"historical": 75, "structural": 80}},
+    })
+    check("sector /snapshot 200 (persiste + publica sector.updated)", r.status_code == 200,
+          f"status={r.status_code}")
+    if r.status_code == 200:
+        body = r.json()
+        check("acceleración integra upstream (componentes presentes)",
+              len(body["acceleration"]["components"]) >= 1,
+              f"components={body['acceleration']['components']}")
+        check("2 sectores puntuados", len(body["sectors"]) == 2)
+    r = c.get("/api/v1/sector-intel/turismo/latest")
+    check("sector /turismo/latest 200", r.status_code == 200 and r.json().get("has_score") is True)
+
     return _summary()
 
 
@@ -161,7 +193,7 @@ def _summary() -> int:
     if _FAIL:
         print("Fallidas: " + ", ".join(_FAIL))
         return 1
-    print("E2E OK — Fase 0, 1A, 1B, 2 y 5 verificadas.")
+    print("E2E OK — Fase 0, 1A, 1B, 2, 3 y 5 verificadas.")
     return 0
 
 

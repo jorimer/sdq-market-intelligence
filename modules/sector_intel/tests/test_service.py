@@ -1,0 +1,105 @@
+"""Tests for sector_intel persistence, integration and events."""
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from shared.database.base import Base
+from shared.events.event_bus import event_bus
+from modules.sector_intel.events import (
+    SECTOR_UPDATED,
+    acceleration_context,
+    register_subscribers,
+)
+from modules.sector_intel.models.models import (  # noqa: F401 — register tables
+    Sector,
+    SectorScore,
+    SectorVariable,
+)
+from modules.sector_intel.service import (
+    compute_and_persist,
+    get_latest,
+    seed_sectors,
+)
+
+DATASET = {
+    "turismo": {"gdp_growth": 5.0, "inflation_stability": 70, "ease_of_business": 65,
+                "operating_cost": 40, "labor_availability": 75, "skills_index": 60,
+                "regulatory_quality": 62, "regulatory_volatility": 30,
+                "sector_growth": 8.0, "sector_size": 70},
+    "energia": {"gdp_growth": 4.0, "inflation_stability": 68, "ease_of_business": 55,
+                "operating_cost": 60, "labor_availability": 50, "skills_index": 65,
+                "regulatory_quality": 58, "regulatory_volatility": 45,
+                "sector_growth": 6.0, "sector_size": 60},
+}
+SGPS_INPUTS = {"turismo": {"historical": 75, "structural": 80}}
+
+
+@pytest.fixture()
+def db():
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def clean_bus():
+    event_bus.clear()
+    acceleration_context.reset()
+    yield
+    event_bus.clear()
+    acceleration_context.reset()
+
+
+def test_seed_sectors_idempotent(db):
+    assert seed_sectors(db) == 3
+    assert seed_sectors(db) == 0
+    assert db.query(Sector).count() == 3
+
+
+def test_compute_and_persist_scores_each_sector(db):
+    res = compute_and_persist(db, "2025", DATASET, SGPS_INPUTS)
+    assert len(res["sectors"]) == 2
+    assert db.query(SectorScore).count() == 2
+    turismo = get_latest(db, "turismo")
+    assert turismo.iai_band in {"Alto", "Medio", "Bajo"}
+    assert turismo.sgps_score is not None
+
+
+def test_publishes_sector_updated(db):
+    received = []
+    event_bus.subscribe(SECTOR_UPDATED, lambda p: received.append(p))
+    compute_and_persist(db, "2025", DATASET, SGPS_INPUTS)
+    assert len(received) == 1
+    assert received[0]["period"] == "2025"
+    assert len(received[0]["sectors"]) == 2
+
+
+def test_acceleration_integrates_upstream_events(db):
+    # Wire context to bus and emit favorable upstream signals.
+    register_subscribers(event_bus, acceleration_context)
+    event_bus.publish("irmp.updated", {"country_code": "DO", "irmp_score": 90.0})
+    event_bus.publish("trade.updated", {"resilience_score": 90.0})
+
+    res = compute_and_persist(db, "2025", DATASET, SGPS_INPUTS)
+    # acceleration > neutral 50 because irmp & trade are strong
+    assert res["acceleration"]["acceleration"] > 50.0
+
+
+def test_idempotent_per_sector_period(db):
+    compute_and_persist(db, "2025", DATASET, SGPS_INPUTS)
+    compute_and_persist(db, "2025", DATASET, SGPS_INPUTS)
+    assert db.query(SectorScore).count() == 2
+
+
+def test_empty_dataset_raises(db):
+    with pytest.raises(ValueError):
+        compute_and_persist(db, "2025", {})
