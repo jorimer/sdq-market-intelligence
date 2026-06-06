@@ -78,3 +78,52 @@ export async function getLatest(bankId: string): Promise<ScoringResult & { has_r
   const { data } = await client.get(`/banking-score/${bankId}/latest`);
   return data;
 }
+
+export interface BankStats {
+  total_records: number;
+  total_entities: number;
+  total_ratings: number;
+  period_start: string | null;
+  period_end: string | null;
+}
+
+export async function getStats(): Promise<BankStats> {
+  const { data } = await client.get<BankStats>("/banking-score/stats");
+  return data;
+}
+
+export interface ReportItem {
+  id: string;
+  report_type: string | null;
+  period_end: string | null;
+  status: string | null;
+  created_at: string | null;
+  file_path: string | null;
+}
+
+export async function listReports(bankId: string): Promise<ReportItem[]> {
+  const { data } = await client.get<{ reports: ReportItem[] }>(`/banking-score/reports/${bankId}/list`);
+  return data.reports ?? [];
+}
+
+export async function generateReport(
+  bankId: string,
+  periodEnd: string,
+  reportType: string,
+): Promise<void> {
+  await client.post(`/banking-score/reports/${bankId}/generate`, null, {
+    params: { period_end: periodEnd, report_type: reportType },
+  });
+}
+
+export async function downloadReport(reportId: string): Promise<void> {
+  const r = await client.get(`/banking-score/reports/download/${reportId}`, {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(r.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `reporte_${reportId}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
