@@ -16,6 +16,51 @@ SUB_COMPONENT_WEIGHTS = {
     "diversificacion": 0.05,
 }
 
+# ── Weight profiles per entity_type (same framework, recalibrated) ──
+#
+# The 5 sub-components are universal; their relative weight is recalibrated by
+# entity type (SPEC §3): AAyP are mortgage-intensive (asset quality matters more),
+# corporaciones/cambiarias are smaller and liquidity/solidity-sensitive, etc.
+# Every profile must sum to 1.0.  Unknown types fall back to the base weights.
+
+WEIGHT_PROFILES = {
+    # Banca múltiple — base methodology.
+    "banca_multiple": dict(SUB_COMPONENT_WEIGHTS),
+    # Asociaciones de Ahorros y Préstamos — mortgage-intensive → asset quality up.
+    "aap": {
+        "solidez": 0.38, "calidad": 0.34, "eficiencia": 0.13,
+        "liquidez": 0.10, "diversificacion": 0.05,
+    },
+    # Bancos de ahorro y crédito — smaller, funding-sensitive → liquidity up.
+    "banco_ahorro_credito": {
+        "solidez": 0.40, "calidad": 0.28, "eficiencia": 0.14,
+        "liquidez": 0.13, "diversificacion": 0.05,
+    },
+    # Corporaciones de crédito — small, capital-sensitive → solidity up.
+    "corporacion_credito": {
+        "solidez": 0.45, "calidad": 0.28, "eficiencia": 0.13,
+        "liquidez": 0.10, "diversificacion": 0.04,
+    },
+    # Intermediación cambiaria — liquidity/operational, less of a credit book.
+    "cambiaria": {
+        "solidez": 0.35, "calidad": 0.20, "eficiencia": 0.20,
+        "liquidez": 0.20, "diversificacion": 0.05,
+    },
+    # Fiduciarias — fee-based, diversification/efficiency matter more.
+    "fiduciaria": {
+        "solidez": 0.35, "calidad": 0.20, "eficiencia": 0.25,
+        "liquidez": 0.10, "diversificacion": 0.10,
+    },
+}
+
+
+def get_sub_component_weights(entity_type=None) -> dict:
+    """Return the sub-component weight profile for *entity_type* (base if unknown)."""
+    if entity_type is None:
+        return dict(SUB_COMPONENT_WEIGHTS)
+    return dict(WEIGHT_PROFILES.get(entity_type, SUB_COMPONENT_WEIGHTS))
+
+
 # Indicator groupings by sub-component
 SOLIDEZ_INDICATORS = [
     "solvencia", "tier1_ratio", "leverage",

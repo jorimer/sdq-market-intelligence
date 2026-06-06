@@ -36,9 +36,13 @@ from shared.database.base import Base, UUIDMixin
 
 
 class BankType(str, enum.Enum):
+    """SIB-supervised entity types (Financial Entity Score universe, SPEC §3)."""
     banca_multiple = "banca_multiple"
     aap = "aap"
     banco_ahorro_credito = "banco_ahorro_credito"
+    corporacion_credito = "corporacion_credito"
+    cambiaria = "cambiaria"
+    fiduciaria = "fiduciaria"
 
 
 class PeriodType(str, enum.Enum):

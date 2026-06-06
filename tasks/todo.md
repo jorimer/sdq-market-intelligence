@@ -112,12 +112,14 @@ ya implementa el pipeline; solo está acoplado al IRMP por imports a su `weights
 
 ## FASE 1 — Cerrar Ejes existentes
 
-### 1A. `banking_score` (Eje 1) — extensión
-- [ ] Generalizar `Bank` → enum `entity_type` (banca_multiple, banco_ahorro_credito, corporacion_credito, aap, cambiaria, fiduciaria)
-- [ ] Perfiles de peso por `entity_type` (recalibración, mismo marco)
-- [ ] API: filtro/param `entity_type`; migración Alembic del nuevo campo
-- [ ] Consumir `irmp.updated` → ajustar **outlook** (no el score intrínseco)
-- [ ] Tests por tipo de entidad ≥80%; backtesting si hay histórico etiquetado
+### 1A. `banking_score` (Eje 1) — extensión  ✅ 2026-06-06
+- [x] `BankType` extendido a los 6 tipos SIB (banca_multiple, aap, banco_ahorro_credito, corporacion_credito, cambiaria, fiduciaria)
+- [x] Perfiles de peso por `entity_type` (`WEIGHT_PROFILES` + `get_sub_component_weights`), mismo marco; `run_scoring(data, entity_type=)` los aplica
+- [x] API: `GET /weights?entity_type=`; filtro `entity_type` en `/rankings`
+- [x] Consume `irmp.updated` → overlay de **outlook** (no el score): `events.py` (IRMPOutlookContext + overlay_outlook), suscrito en `main.py`
+- [x] Sin migración (columna `VARCHAR` sin CHECK en SQLite; autogenerate vacío)
+- [x] Tests perfiles/overlay/scoring por tipo (sin regresión: 164 banking); E2E 35/35; total 300, cobertura 88%
+- [ ] Pendiente (diferido): backtesting contra histórico etiquetado (requiere `outcomes` poblado)
 
 ### 1B. `macro_political_risk` (Eje 4) — completar  ✅ 2026-06-06
 - [x] Capa de persistencia: `service.py::compute_and_persist` guarda `IRMPSnapshot`/`DimensionScore` (idempotente por país+período)
