@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { PanelLeft, Moon, Sun, LogOut } from "lucide-react";
+import { PanelLeft, Menu, Moon, Sun, LogOut, Search } from "lucide-react";
 import { useApp, PERIODS, SCOPES, Scope } from "@/shared/context/AppContext";
 import { useAuth } from "@/shared/auth/AuthContext";
 import { ROUTE_LABELS } from "./nav";
@@ -18,15 +18,30 @@ function Breadcrumbs() {
   );
 }
 
+function fireCmdK() {
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
+  );
+}
+
 export function Topbar() {
-  const { dark, toggleDark, period, setPeriod, scope, setScope, toggleSidebar } = useApp();
+  const { dark, toggleDark, period, setPeriod, scope, setScope, toggleSidebar, setMobileOpen } = useApp();
   const { user, logout } = useAuth();
 
   return (
     <header className="h-[58px] shrink-0 flex items-center gap-3 px-4 border-b border-line bg-surface">
+      {/* Mobile: open drawer */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden shrink-0 grid place-items-center w-9 h-9 rounded-[10px] text-muted hover:bg-surface2 hover:text-ink transition"
+        title="Menú"
+      >
+        <Menu size={18} />
+      </button>
+      {/* Desktop: collapse */}
       <button
         onClick={toggleSidebar}
-        className="shrink-0 grid place-items-center w-9 h-9 rounded-[10px] text-muted hover:bg-surface2 hover:text-ink transition"
+        className="hidden md:grid shrink-0 place-items-center w-9 h-9 rounded-[10px] text-muted hover:bg-surface2 hover:text-ink transition"
         title="Colapsar menú"
       >
         <PanelLeft size={18} />
@@ -35,6 +50,16 @@ export function Topbar() {
       <div className="min-w-0 flex-1">
         <Breadcrumbs />
       </div>
+
+      {/* Command palette */}
+      <button
+        onClick={fireCmdK}
+        className="shrink-0 hidden sm:flex items-center gap-2 rounded-[10px] border border-line px-2.5 h-9 text-xs text-muted hover:bg-surface2 hover:text-ink transition"
+        title="Buscar (⌘K)"
+      >
+        <Search size={14} />
+        <kbd className="mono text-[10px]">⌘K</kbd>
+      </button>
 
       {/* Period */}
       <select
