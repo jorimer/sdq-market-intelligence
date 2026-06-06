@@ -234,10 +234,14 @@ Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pa
 
 **Fase 6.4 cerrada — las 8 pantallas de banking-score siguen el patrón canónico y funcionan contra la API.**
 
-### 6.5 Pendiente (polish, no bloqueante)
-- [ ] charts a medida en `shared/charts/` (heatmap/treemap/scenario-fan)
-- [ ] i18n EN (`en.json`); ⌘K; responsive rail/drawer fino; pantallas de Plataforma/Herramientas
-- [ ] unificar selector de período global (topbar) ↔ por-eje
+### 6.5 Polish
+- [x] **6.5a** (PR #23): shell responsive (drawer móvil + backdrop) + paleta de comandos ⌘K
+- [x] **6.5b** (PR #24): Plataforma — Resumen ejecutivo (consolidado de los 7 ejes) + Metodología (pesos de todos los índices)
+- [x] **6.5c** (PR #25): Configuración (settings reales: tema/período/ámbito/cuenta, persistidos)
+- [ ] Pendiente (mejoras, no bloqueante): charts a medida (heatmap/treemap/scenario-fan), i18n EN, unificar selector de período global↔eje
+- [ ] Futuro (features, no placeholders): Deal Scoring, Market Brief, Comparador cross-eje
+
+**Fase 6.5 cerrada en su núcleo** (shell responsive + ⌘K + Resumen ejecutivo + Metodología + Configuración). Lo restante son mejoras/features futuras anotadas.
 
 ---
 
