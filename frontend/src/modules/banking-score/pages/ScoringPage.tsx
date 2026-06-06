@@ -1,133 +1,128 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Calculator } from "lucide-react";
-import client from "@/shared/api/client";
+import { useEffect, useState } from "react";
+import { Calculator, Radar as RadarIcon, ListChecks } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { RatingBadge } from "../components/RatingBadge";
 import { IndicatorTable } from "../components/IndicatorTable";
-import type { ScoringResult } from "@/types";
+import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
+import { fmtNum } from "@/shared/lib/format";
+import {
+  listPeriods,
+  runScoring,
+  ScoringResult,
+  SUB_KEYS,
+  SUB_LABELS,
+} from "../api";
 
 export function ScoringPage() {
-  const { t } = useTranslation();
-  const [bank, setBank] = useState("");
+  const [bankId, setBankId] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [periods, setPeriods] = useState<string[]>([]);
   const [period, setPeriod] = useState("");
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
-  const runScoring = async () => {
-    if (!bank) return;
+  useEffect(() => {
+    listPeriods().then((p) => {
+      setPeriods(p);
+      if (p.length) setPeriod(p[0]);
+    });
+  }, []);
+
+  const run = async () => {
+    if (!bankId || !period) return;
     setLoading(true);
+    setError(false);
     try {
-      const params: Record<string, string> = { bank_name: bank };
-      if (period) params.period = period;
-      const { data } = await client.post<ScoringResult>(
-        "/banking-score/scoring/run",
-        null,
-        { params }
-      );
-      setResult(data);
-    } catch (err) {
-      console.error("Scoring failed:", err);
+      setResult(await runScoring(bankId, period));
+    } catch {
+      setError(true);
+      setResult(null);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-bold text-ink">{t("scoring.title")}</h2>
+    <div>
+      <PageHead
+        eyebrow="SIB · scoring"
+        title="Calcular rating"
+        sub="Ejecuta el modelo determinista (19 indicadores · 5 sub-componentes) para una entidad y período."
+      />
 
-      <div className="card">
-        <div className="flex flex-wrap items-end gap-4">
+      <Card className="mb-5">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="w-64">
-            <label className="block text-sm font-medium text-body mb-1">
-              {t("scoring.selectBank")}
-            </label>
-            <BankSelector value={bank} onChange={setBank} />
-          </div>
-          <div className="w-40">
-            <label className="block text-sm font-medium text-body mb-1">
-              {t("rankings.period")}
-            </label>
-            <input
-              type="text"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              placeholder="2024-Q4"
-              className="field"
+            <label className="block text-xs font-medium text-muted mb-1">Entidad</label>
+            <BankSelector
+              value={bankId}
+              onChange={(id, name) => {
+                setBankId(id);
+                setBankName(name);
+              }}
             />
           </div>
-          <button
-            onClick={runScoring}
-            disabled={!bank || loading}
-            className="btn-primary flex items-center gap-2"
-          >
+          <div className="w-40">
+            <label className="block text-xs font-medium text-muted mb-1">Período</label>
+            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
+              {periods.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={run} disabled={!bankId || loading} className="btn btn-primary">
             <Calculator className="w-4 h-4" />
-            {loading ? t("scoring.running") : t("scoring.runScoring")}
+            {loading ? "Calculando…" : "Calcular"}
           </button>
         </div>
-      </div>
+      </Card>
 
-      {!result && !loading && (
-        <div className="card text-center py-12 text-faint">
-          <Calculator className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>{t("scoring.noResults")}</p>
-        </div>
-      )}
-
-      {result && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="card flex flex-col items-center">
-            <div className="relative">
-              <ScoreGauge score={result.overall_score} size={160} />
-            </div>
-            <p className="text-sm text-muted mt-2">{t("scoring.overallScore")}</p>
-            <div className="mt-2">
+      {error ? (
+        <StateBlock kind="error" message="No se pudo calcular el rating. Verifica que haya datos para el período." />
+      ) : !result ? (
+        <StateBlock kind="empty" message="Selecciona una entidad y un período, y ejecuta el cálculo." />
+      ) : (
+        <div className="grid lg:grid-cols-3 gap-5">
+          <Card className="flex flex-col items-center text-center">
+            <div className="text-xs text-muted mb-2 w-full truncate">{bankName}</div>
+            <ScoreGauge score={result.overall_score} size={150} />
+            <div className="mt-3">
               <RatingBadge tier={result.rating_tier} size="lg" />
             </div>
-          </div>
+          </Card>
 
-          <div className="card">
-            <h3 className="font-semibold text-ink mb-4">
-              {t("scoring.subComponents")}
-            </h3>
+          <Card>
+            <CardHead icon={RadarIcon} title="Sub-componentes" subtitle="Perfil de la entidad" />
             <RadarChart data={result.sub_components} />
-          </div>
+          </Card>
 
-          <div className="card lg:col-span-1">
-            <h3 className="font-semibold text-ink mb-4">
-              {t("scoring.subComponents")}
-            </h3>
+          <Card>
+            <CardHead title="Ponderación" subtitle="Solidez 40 · Calidad 30 · Efic. 15 · Liq. 10 · Div. 5" />
             <div className="space-y-3">
-              {Object.entries(result.sub_components).map(([key, val]) => (
-                <div key={key} className="flex items-center justify-between">
-                  <span className="text-sm text-body">
-                    {t(`sub.${key}`, key)}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 bg-surface2 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-accent rounded-full transition-all"
-                        style={{ width: `${val}%` }}
-                      />
+              {SUB_KEYS.map((key) => {
+                const val = result.sub_components[key];
+                return (
+                  <div key={key}>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className="text-sm text-ink truncate">{SUB_LABELS[key]}</span>
+                      <span className="mono text-sm font-semibold text-ink">{fmtNum(val, 1)}</span>
                     </div>
-                    <span className="text-sm font-semibold w-10 text-right">
-                      {val.toFixed(1)}
-                    </span>
+                    <div className="h-2 rounded-full bg-surface2 overflow-hidden">
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${val}%` }} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          </div>
+          </Card>
 
-          <div className="card lg:col-span-3">
-            <h3 className="font-semibold text-ink mb-4">
-              {t("scoring.indicators")}
-            </h3>
-            <IndicatorTable indicators={result.indicators} />
-          </div>
+          <Card className="lg:col-span-3">
+            <CardHead icon={ListChecks} title="Indicadores" subtitle="19 indicadores normalizados" />
+            <IndicatorTable indicators={result.indicators ?? {}} />
+          </Card>
         </div>
       )}
     </div>

@@ -23,7 +23,12 @@ from modules.banking_score.models.models import (
     ModelType,
     Outlook,
 )
-from modules.banking_score.scoring.engine import run_scoring, simulate_from_scores
+from modules.banking_score.scoring.engine import (
+    calculate_deterministic_score,
+    run_scoring,
+    simulate_from_scores,
+)
+from modules.banking_score.scoring.rating_scale import get_tier_color, map_rating_tier
 from modules.banking_score.scoring.weights import (
     WEIGHT_PROFILES,
     get_sub_component_weights,
@@ -48,6 +53,32 @@ async def get_weights(
         "entity_type": entity_type,
         "weights": get_sub_component_weights(entity_type),
         "available_profiles": sorted(WEIGHT_PROFILES.keys()),
+    }
+
+
+@router.post(
+    "/simulate-scenario",
+    summary="Simulación what-if por sub-componentes",
+    description="Recalcula score y rating desde sub-componentes modificados (0-100). Determinista, sin persistir.",
+)
+async def simulate_scenario(
+    body: Dict[str, Any] = Body(
+        ...,
+        example={"sub_components": {"solidez": 80, "calidad": 70, "eficiencia": 60, "liquidez": 65, "diversificacion": 55}, "entity_type": "banca_multiple"},
+    ),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    subs = body.get("sub_components")
+    if not isinstance(subs, dict) or not subs:
+        raise HTTPException(status_code=400, detail="Se requiere 'sub_components'.")
+    weights = get_sub_component_weights(body.get("entity_type"))
+    overall = calculate_deterministic_score(subs, weights)
+    tier = map_rating_tier(overall)
+    return {
+        "sub_components": subs,
+        "overall_score": overall,
+        "rating_tier": tier,
+        "tier_color": get_tier_color(tier),
     }
 
 
@@ -374,6 +405,32 @@ async def get_rankings(
         for i, (rr, bank) in enumerate(results)
     ]
     return {"rankings": rankings, "count": len(rankings), "period_end": period_end or "latest"}
+
+
+# ─── Banks (catálogo) ────────────────────────────────────────────
+
+@router.get(
+    "/banks",
+    summary="Catálogo de entidades",
+    description="Lista de entidades activas (id, nombre, tipo) para selectores.",
+)
+async def list_banks(
+    entity_type: Optional[str] = Query(None, description="Filtrar por tipo de entidad"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = db.query(Bank).filter(Bank.is_active.is_(True))
+    banks = q.order_by(Bank.name).all()
+    items = [
+        {
+            "id": b.id,
+            "name": b.name,
+            "bank_type": b.bank_type.value if b.bank_type else None,
+        }
+        for b in banks
+        if not entity_type or (b.bank_type and b.bank_type.value == entity_type)
+    ]
+    return {"banks": items, "count": len(items)}
 
 
 # ─── Periods ─────────────────────────────────────────────────────
