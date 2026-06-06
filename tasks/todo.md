@@ -238,7 +238,8 @@ Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pa
 - [x] **6.5a** (PR #23): shell responsive (drawer móvil + backdrop) + paleta de comandos ⌘K
 - [x] **6.5b** (PR #24): Plataforma — Resumen ejecutivo (consolidado de los 7 ejes) + Metodología (pesos de todos los índices)
 - [x] **6.5c** (PR #25): Configuración (settings reales: tema/período/ámbito/cuenta, persistidos)
-- [ ] Pendiente (mejoras, no bloqueante): charts a medida (heatmap/treemap/scenario-fan), i18n EN, unificar selector de período global↔eje
+- [x] **Charts a medida** (PR #26): `shared/charts/Treemap` (squarify) en trade-intel (concentración) y `shared/charts/Heatmap` (secuencial) en sector-intel (matriz sector×dimensión), theme-aware
+- [ ] Pendiente (mejoras, no bloqueante): scenario-fan (requiere endpoint de histórico de series macro), i18n EN, unificar selector de período global↔eje
 - [ ] Futuro (features, no placeholders): Deal Scoring, Market Brief, Comparador cross-eje
 
 **Fase 6.5 cerrada en su núcleo** (shell responsive + ⌘K + Resumen ejecutivo + Metodología + Configuración). Lo restante son mejoras/features futuras anotadas.

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { LayoutGrid, ListOrdered, Zap } from "lucide-react";
+import { LayoutGrid, ListOrdered, Zap, Grid3x3 } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -13,6 +13,7 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
+import { Heatmap, HeatmapData } from "@/shared/charts/Heatmap";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
 import { useApp } from "@/shared/context/AppContext";
@@ -43,6 +44,7 @@ export function SectorIntelPage() {
   const [status, setStatus] = useState<Status>("loading");
   const [snap, setSnap] = useState<SnapshotResult | null>(null);
   const [detail, setDetail] = useState<SectorLatest | null>(null);
+  const [details, setDetails] = useState<Record<string, SectorLatest>>({});
   const [selected, setSelected] = useState("turismo");
   const [tab, setTab] = useState("desglose");
 
@@ -59,7 +61,14 @@ export function SectorIntelPage() {
     try {
       const s = await snapshot(period, SAMPLE_SECTORS, SGPS_INPUTS);
       setSnap(s);
-      await loadDetail(selected);
+      // Fetch every sector's breakdown to build the sector × dimension matrix.
+      const all = await Promise.all(
+        s.sectors.map((x) => getLatest(x.sector_code).then((d) => [x.sector_code, d] as const).catch(() => null)),
+      );
+      const map: Record<string, SectorLatest> = {};
+      all.forEach((e) => { if (e) map[e[0]] = e[1]; });
+      setDetails(map);
+      setDetail(map[selected] ?? null);
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -122,6 +131,17 @@ export function SectorIntelPage() {
   const accel = snap!.acceleration;
   const ranking = [...snap!.sectors].sort((a, b) => b.iai_score - a.iai_score);
 
+  // Sector × IAI-dimension heatmap (built from every sector's breakdown).
+  const dimKeys = Object.keys(IAI_LABELS);
+  const matrix: HeatmapData = {
+    rows: snap!.sectors.map((s) => SECTOR_NAMES[s.sector_code] ?? s.sector_code),
+    cols: dimKeys.map((k) => IAI_LABELS[k]),
+    values: snap!.sectors.map((s) => {
+      const d = details[s.sector_code]?.iai_breakdown;
+      return dimKeys.map((k) => (d?.[k] ? d[k].score : null));
+    }),
+  };
+
   return (
     <div>
       <PageHead
@@ -177,6 +197,7 @@ export function SectorIntelPage() {
             <Tabs
               tabs={[
                 { id: "desglose", label: "Desglose" },
+                { id: "matriz", label: "Matriz" },
                 { id: "ranking", label: "Ranking" },
                 { id: "aceleracion", label: "Aceleración" },
               ]}
@@ -202,6 +223,17 @@ export function SectorIntelPage() {
                     <DimensionBreakdown rows={sgpsRows} />
                   </div>
                 </div>
+              )}
+
+              {tab === "matriz" && (
+                <>
+                  <CardHead
+                    icon={Grid3x3}
+                    title="Matriz IAI"
+                    subtitle="Sector × dimensión · intensidad por score"
+                  />
+                  <Heatmap data={matrix} />
+                </>
               )}
 
               {tab === "ranking" && (
