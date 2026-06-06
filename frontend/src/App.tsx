@@ -23,6 +23,8 @@ import { MacroPoliticalRiskPage } from "@/modules/macro-political-risk/pages/Mac
 import { SectorIntelPage } from "@/modules/sector-intel/pages/SectorIntelPage";
 // Social Dev (Eje 5)
 import { SocialDevPage } from "@/modules/social-dev/pages/SocialDevPage";
+// Trade Intel (Eje 6)
+import { TradeIntelPage } from "@/modules/trade-intel/pages/TradeIntelPage";
 
 export default function App() {
   return (
@@ -53,17 +55,7 @@ export default function App() {
           <Route path="/sector-intel" element={<SectorIntelPage />} />
           <Route path="/macro-political-risk" element={<MacroPoliticalRiskPage />} />
           <Route path="/social-dev" element={<SocialDevPage />} />
-          <Route
-            path="/trade-intel"
-            element={
-              <PlaceholderPage
-                eyebrow="BCRD · DGA"
-                title="Comercio exterior"
-                sub="Resiliencia comercial: diversificación y dependencia, no volumen."
-                api="/api/v1/trade-intel"
-              />
-            }
-          />
+          <Route path="/trade-intel" element={<TradeIntelPage />} />
           <Route
             path="/esg-climate"
             element={
