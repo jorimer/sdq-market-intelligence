@@ -27,6 +27,9 @@ import { SocialDevPage } from "@/modules/social-dev/pages/SocialDevPage";
 import { TradeIntelPage } from "@/modules/trade-intel/pages/TradeIntelPage";
 // ESG & Climate (Eje 7)
 import { EsgClimatePage } from "@/modules/esg-climate/pages/EsgClimatePage";
+// Plataforma
+import { OverviewPage } from "@/modules/platform/pages/OverviewPage";
+import { MetodologiaPage } from "@/modules/platform/pages/MetodologiaPage";
 
 export default function App() {
   return (
@@ -71,18 +74,12 @@ export default function App() {
           />
 
           {/* Plataforma */}
-          <Route
-            path="/overview"
-            element={<PlaceholderPage title="Resumen ejecutivo" sub="Vista consolidada de los 7 ejes." />}
-          />
+          <Route path="/overview" element={<OverviewPage />} />
           <Route
             path="/compare"
             element={<PlaceholderPage title="Comparador" sub="Comparación lado a lado de entidades, sectores y países." />}
           />
-          <Route
-            path="/methodology"
-            element={<PlaceholderPage title="Metodología" sub="Doctrina, pesos y trazabilidad de cada índice." />}
-          />
+          <Route path="/methodology" element={<MetodologiaPage />} />
           <Route
             path="/settings"
             element={<PlaceholderPage title="Configuración" sub="Preferencias de cuenta y plataforma." />}
