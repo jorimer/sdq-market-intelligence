@@ -30,6 +30,7 @@ import { EsgClimatePage } from "@/modules/esg-climate/pages/EsgClimatePage";
 // Plataforma
 import { OverviewPage } from "@/modules/platform/pages/OverviewPage";
 import { MetodologiaPage } from "@/modules/platform/pages/MetodologiaPage";
+import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 
 export default function App() {
   return (
@@ -80,10 +81,7 @@ export default function App() {
             element={<PlaceholderPage title="Comparador" sub="Comparación lado a lado de entidades, sectores y países." />}
           />
           <Route path="/methodology" element={<MetodologiaPage />} />
-          <Route
-            path="/settings"
-            element={<PlaceholderPage title="Configuración" sub="Preferencias de cuenta y plataforma." />}
-          />
+          <Route path="/settings" element={<ConfiguracionPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/banking-score" replace />} />
       </Routes>
