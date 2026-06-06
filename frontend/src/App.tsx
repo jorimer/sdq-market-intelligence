@@ -19,6 +19,8 @@ import { ComparePage } from "@/modules/banking-score/pages/ComparePage";
 import { MacroMonitorPage } from "@/modules/macro-monitor/pages/MacroMonitorPage";
 // Macro-Political Risk (Eje 4)
 import { MacroPoliticalRiskPage } from "@/modules/macro-political-risk/pages/MacroPoliticalRiskPage";
+// Sector Intel (Eje 3)
+import { SectorIntelPage } from "@/modules/sector-intel/pages/SectorIntelPage";
 
 export default function App() {
   return (
@@ -46,17 +48,7 @@ export default function App() {
           <Route path="/macro-monitor" element={<MacroMonitorPage />} />
 
           {/* Ejes 3-7 — UI en construcción (backend disponible) */}
-          <Route
-            path="/sector-intel"
-            element={
-              <PlaceholderPage
-                eyebrow="ONE · BCRD"
-                title="Sectorial"
-                sub="Atractivo (IAI) y potencial de crecimiento (SGPS) por sector."
-                api="/api/v1/sector-intel"
-              />
-            }
-          />
+          <Route path="/sector-intel" element={<SectorIntelPage />} />
           <Route path="/macro-political-risk" element={<MacroPoliticalRiskPage />} />
           <Route
             path="/social-dev"
