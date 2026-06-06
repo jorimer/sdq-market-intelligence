@@ -24,7 +24,8 @@ frontend/.vite/
 # Database & runtime data
 *.db
 *.sqlite3
-data/
+# runtime data dir at repo root only (NOT shared/data, which is a code package)
+/data/
 
 # ML Models (track with Git LFS or store externally)
 *.pkl

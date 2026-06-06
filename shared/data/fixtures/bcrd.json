@@ -1,0 +1,29 @@
+{
+  "gdp_growth": {
+    "unit": "% interanual",
+    "observations": {
+      "2024-Q3": 5.1,
+      "2024-Q4": 5.4,
+      "2025-Q1": 4.8,
+      "2025-Q2": null
+    }
+  },
+  "inflation_yoy": {
+    "unit": "% interanual",
+    "observations": {
+      "2024-Q3": 3.3,
+      "2024-Q4": 3.6,
+      "2025-Q1": 3.9,
+      "2025-Q2": 4.1
+    }
+  },
+  "remittances": {
+    "unit": "USD millones",
+    "observations": {
+      "2024-Q3": 2650.0,
+      "2024-Q4": 2890.0,
+      "2025-Q1": 2710.0,
+      "2025-Q2": null
+    }
+  }
+}

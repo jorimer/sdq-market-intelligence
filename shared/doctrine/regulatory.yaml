@@ -1,0 +1,62 @@
+# House doctrine — Eje 4: Regulatorio & político (IRMP)
+# Doctrina de Casa v1 §6. Fuente de verdad de pesos y bandas del índice.
+# Todo cambio de ponderación se hace AQUÍ primero (PR), nunca en código.
+#
+# IRMP: 0-100, donde MAYOR = MENOR RIESGO (mayor estabilidad/predictibilidad).
+version: "1.0"
+name: IRMP
+direction: "mayor score = menor riesgo"
+
+# Pesos por dimensión (deben sumar 1.0)
+dimension_weights:
+  macro: 0.30        # Estabilidad macroeconómica
+  external: 0.20     # Solidez externa
+  political: 0.25    # Estabilidad político-institucional
+  regulatory: 0.15   # Predictibilidad regulatoria
+  events: 0.10       # Tensión / eventos de corto plazo
+
+# Variables por dimensión (claves de entrada crudas)
+dimension_variables:
+  macro:
+    - gdp_cagr_3y            # CAGR PIB 3a (%)              mayor = mejor
+    - inflation_gap          # |inflación - meta| (pp)      mayor = peor
+    - fiscal_balance_gdp     # balance fiscal / PIB (%)     mayor = mejor
+    - public_debt_gdp        # deuda pública / PIB (%)      mayor = peor
+    - reserves_import_months # reservas (meses import.)     mayor = mejor
+  external:
+    - current_account_gdp    # cuenta corriente / PIB (%)   mayor = mejor
+    - fdi_gdp                # IED / PIB (%)                mayor = mejor
+    - fx_volatility          # volatilidad cambiaria        mayor = peor
+    - sovereign_rating_score # rating soberano 0-100        mayor = mejor
+  political:
+    - wgi_rule_of_law         # WGI percentil 0-100         mayor = mejor
+    - wgi_gov_effectiveness   # WGI percentil 0-100         mayor = mejor
+    - wgi_control_corruption  # WGI percentil 0-100         mayor = mejor
+    - electoral_uncertainty   # 0-100 (rúbrica)             mayor = peor
+    - policy_continuity       # 0-100 (rúbrica)             mayor = mejor
+  regulatory:
+    - regulatory_volatility_5y # cambios en 5a              mayor = peor
+    - discretion               # 0-100 (rúbrica)            mayor = peor
+    - contract_enforcement     # 0-100                      mayor = mejor
+  events:
+    - news_sentiment    # sentimiento noticias (-100..100) mayor = mejor
+    - unrest_shocks     # intensidad disturbios 0-100      mayor = peor
+    - sanctions_signal  # exposición a sanciones 0-100     mayor = peor
+
+# Variables donde un valor crudo MAYOR implica MÁS riesgo → se invierten.
+risk_increasing:
+  - inflation_gap
+  - public_debt_gdp
+  - fx_volatility
+  - electoral_uncertainty
+  - regulatory_volatility_5y
+  - discretion
+  - unrest_shocks
+  - sanctions_signal
+
+# Bandas (descendentes por 'lower', cobertura completa de 0-100).
+bands:
+  - {name: Bajo,     lower: 80.0, color: "#047857"}
+  - {name: Moderado, lower: 60.0, color: "#F59E0B"}
+  - {name: Elevado,  lower: 40.0, color: "#F97316"}
+  - {name: Alto,     lower: 0.0,  color: "#991B1B"}
