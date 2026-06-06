@@ -13,6 +13,7 @@ import {
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum, fmtPct } from "@/shared/lib/format";
 import { useApp } from "@/shared/context/AppContext";
+import { Treemap } from "@/shared/charts/Treemap";
 import { scoreTrade, saveSnapshot, TradeScore } from "../api";
 import { SAMPLE_FLOWS } from "../data";
 
@@ -61,7 +62,6 @@ export function TradeIntelPage() {
 
   const s = score!;
   const band = bandFor(s.resilience_score);
-  const maxShare = Math.max(...s.top_export_products.map((p) => p.share), 0.01);
 
   const doSave = async () => {
     setSaved(null);
@@ -128,24 +128,13 @@ export function TradeIntelPage() {
               title="Concentración de exportaciones"
               subtitle="Participación por producto (HHI · diversificación > volumen)"
             />
-            <div className="space-y-2.5">
-              {s.top_export_products.map((p) => (
-                <div key={p.product}>
-                  <div className="flex items-baseline justify-between gap-3 mb-1">
-                    <span className="text-sm text-ink min-w-0 truncate">{p.product}</span>
-                    <span className="shrink-0 mono text-xs text-muted">
-                      {fmtPct(p.share * 100, 1)} · {fmtNum(p.value, 0)}M
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-surface2 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-teal transition-all duration-500"
-                      style={{ width: `${(p.share / maxShare) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Treemap
+              items={s.top_export_products.map((p) => ({
+                label: p.product,
+                value: p.value,
+                share: p.share,
+              }))}
+            />
           </Card>
         </div>
       </div>
