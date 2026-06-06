@@ -17,6 +17,8 @@ interface AppState {
   setScope: (s: Scope) => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  mobileOpen: boolean;
+  setMobileOpen: (v: boolean) => void;
 }
 
 const AppCtx = createContext<AppState | null>(null);
@@ -41,6 +43,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sidebarCollapsed, setCollapsed] = useState<boolean>(
     () => localStorage.getItem("sdq_sidebar") === "1",
   );
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -73,6 +76,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setScope,
         sidebarCollapsed,
         toggleSidebar,
+        mobileOpen,
+        setMobileOpen,
       }}
     >
       {children}
