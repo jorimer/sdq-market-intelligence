@@ -25,6 +25,8 @@ import { SectorIntelPage } from "@/modules/sector-intel/pages/SectorIntelPage";
 import { SocialDevPage } from "@/modules/social-dev/pages/SocialDevPage";
 // Trade Intel (Eje 6)
 import { TradeIntelPage } from "@/modules/trade-intel/pages/TradeIntelPage";
+// ESG & Climate (Eje 7)
+import { EsgClimatePage } from "@/modules/esg-climate/pages/EsgClimatePage";
 
 export default function App() {
   return (
@@ -56,17 +58,7 @@ export default function App() {
           <Route path="/macro-political-risk" element={<MacroPoliticalRiskPage />} />
           <Route path="/social-dev" element={<SocialDevPage />} />
           <Route path="/trade-intel" element={<TradeIntelPage />} />
-          <Route
-            path="/esg-climate"
-            element={
-              <PlaceholderPage
-                eyebrow="ONE · TCFD/ISSB"
-                title="ESG & clima"
-                sub="Exposición climática y materialidad por sector."
-                api="/api/v1/esg-climate"
-              />
-            }
-          />
+          <Route path="/esg-climate" element={<EsgClimatePage />} />
 
           {/* Herramientas */}
           <Route
