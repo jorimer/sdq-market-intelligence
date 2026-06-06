@@ -119,14 +119,15 @@ ya implementa el pipeline; solo está acoplado al IRMP por imports a su `weights
 - [ ] Consumir `irmp.updated` → ajustar **outlook** (no el score intrínseco)
 - [ ] Tests por tipo de entidad ≥80%; backtesting si hay histórico etiquetado
 
-### 1B. `macro_political_risk` (Eje 4) — completar
-- [ ] Capa de persistencia: servicio que corre `run_irmp` y guarda `IRMPSnapshot`/`DimensionScore`
-- [ ] Publicar `irmp.updated` tras score (ver `events.py`)
-- [ ] Refactor `scoring/` para apoyarse en `shared/indices` (sin romper tests)
-- [ ] Conectores reales WGI/BCRD vía `shared/data`
-- [ ] Endpoint de histórico/snapshot persistido; mantener `/weights` y `/score`
-- [ ] Backtesting contra episodios conocidos; sensibilidad de pesos ±10%
-- [ ] **Verificación**: tests existentes verdes + nuevos de persistencia/eventos
+### 1B. `macro_political_risk` (Eje 4) — completar  ✅ 2026-06-06
+- [x] Capa de persistencia: `service.py::compute_and_persist` guarda `IRMPSnapshot`/`DimensionScore` (idempotente por país+período)
+- [x] Publicar `irmp.updated` tras score (vía `events.py`, en el servicio)
+- [x] Refactor `scoring/` para apoyarse en `shared/indices` (Fase 0)
+- [x] Endpoint persistido: `POST /snapshot`, `GET /{cc}/latest`, `GET /{cc}/history`; `/weights` y `/score` intactos
+- [x] Migración Alembic `2d738fdbf669` (tablas `mpr_*`); aplica y hace roundtrip
+- [x] Sensibilidad de pesos ±10% (`test_sensitivity.py`: score estable y orden de pares preservado)
+- [x] **Verificación**: 37 tests MPR verdes (30 + 5 servicio/eventos + 2 sensibilidad); suite total 221
+- [ ] Pendiente (diferido): conector real WGI vía `shared/data`; backtesting contra episodios históricos (requiere `outcomes` poblado)
 
 ---
 
