@@ -17,6 +17,12 @@ from shared.notifications.service import Notification  # noqa: F401
 from modules.banking_score.models.models import (  # noqa: F401
     Bank, BankingData, RatingResult, RatingAction, Report,
 )
+from modules.macro_political_risk.models.models import (  # noqa: F401
+    Country, IRMPSnapshot, DimensionScore,
+)
+from modules.macro_monitor.models.models import (  # noqa: F401
+    MacroSeries, MacroSnapshot,
+)
 
 config = context.config
 
