@@ -35,7 +35,7 @@ jobs:
           ANTHROPIC_API_KEY: "sk-test-dummy"
           ENVIRONMENT: "test"
         run: |
-          pytest modules/banking_score/tests/ \
+          pytest modules/ shared/ \
             --cov=modules --cov=shared \
             --cov-report=xml --cov-report=term -v
           # Fail if coverage < 80%
