@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, Activity } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -10,14 +10,17 @@ import {
   StateBlock,
   LoadingGrid,
 } from "@/shared/ui/primitives";
+import { ScenarioFan } from "@/shared/charts/ScenarioFan";
 import { fmtNum } from "@/shared/lib/format";
 import { Tone } from "@/shared/lib/bands";
 import {
   getIndicators,
   getSignals,
+  getSeries,
   refresh,
   MacroIndicator,
   MacroSignal,
+  SeriesDetail,
 } from "../api";
 
 type Status = "loading" | "error" | "empty" | "ready";
@@ -40,6 +43,8 @@ export function MacroMonitorPage() {
   const [indicators, setIndicators] = useState<MacroIndicator[]>([]);
   const [signals, setSignals] = useState<MacroSignal[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [seriesCode, setSeriesCode] = useState("");
+  const [series, setSeries] = useState<SeriesDetail | null>(null);
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -47,15 +52,21 @@ export function MacroMonitorPage() {
       const [ind, sig] = await Promise.all([getIndicators(), getSignals()]);
       setIndicators(ind);
       setSignals(sig);
+      if (ind.length && !seriesCode) setSeriesCode(ind[0].series_code);
       setStatus(ind.length === 0 ? "empty" : "ready");
     } catch {
       setStatus("error");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (seriesCode) getSeries(seriesCode).then(setSeries).catch(() => setSeries(null));
+  }, [seriesCode]);
 
   const doRefresh = async () => {
     setRefreshing(true);
@@ -227,6 +238,42 @@ export function MacroMonitorPage() {
           </Card>
         </div>
       </div>
+
+      {/* Trajectory + projection */}
+      <Card className="mt-5">
+        <CardHead
+          icon={Activity}
+          title="Trayectoria & proyección"
+          subtitle="Histórico + proyección con banda de incertidumbre"
+          right={
+            <select
+              value={seriesCode}
+              onChange={(e) => setSeriesCode(e.target.value)}
+              className="field !w-auto mono text-xs"
+              title="Serie"
+            >
+              {indicators.map((i) => (
+                <option key={i.series_code} value={i.series_code}>{i.series_code}</option>
+              ))}
+            </select>
+          }
+        />
+        {series ? (
+          <ScenarioFan
+            points={series.observations}
+            projection={
+              series.momentum?.latest_value != null && series.momentum.change != null && series.momentum.uncertainty_band
+                ? {
+                    value: series.momentum.latest_value + series.momentum.change,
+                    band: series.momentum.uncertainty_band,
+                  }
+                : null
+            }
+          />
+        ) : (
+          <p className="text-sm text-muted py-6 text-center">Selecciona una serie.</p>
+        )}
+      </Card>
     </div>
   );
 }

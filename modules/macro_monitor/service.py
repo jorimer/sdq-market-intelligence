@@ -136,6 +136,18 @@ def get_indicators(db: Session) -> List[Dict[str, Any]]:
     return out
 
 
+def get_series(db: Session, series_code: str) -> Dict[str, Any]:
+    """Return one series' observations (period-ordered) + its momentum read."""
+    grouped = _series_by_code(db)
+    obs = grouped.get(series_code, [])
+    momentum = compute_series_momentum(obs) if obs else None
+    return {
+        "series_code": series_code,
+        "observations": [{"period": p, "value": v} for p, v in obs],
+        "momentum": momentum,
+    }
+
+
 def get_snapshot(db: Session, period: Optional[str] = None) -> Optional[MacroSnapshot]:
     """Persisted snapshot for *period* (latest if omitted)."""
     q = db.query(MacroSnapshot)
