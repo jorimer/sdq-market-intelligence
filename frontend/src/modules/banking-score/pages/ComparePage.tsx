@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { GitCompare, Plus, X } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
@@ -6,8 +6,8 @@ import { RatingBadge } from "../components/RatingBadge";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
+import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
-  listPeriods,
   runScoring,
   ScoringResult,
   SUB_KEYS,
@@ -22,26 +22,19 @@ interface Slot {
 }
 
 export function ComparePage() {
+  const { period } = useApp();
+  const periodEnd = periodToDate(period);
   const [slots, setSlots] = useState<Slot[]>([{ id: "", name: "" }]);
-  const [periods, setPeriods] = useState<string[]>([]);
-  const [period, setPeriod] = useState("");
   const [results, setResults] = useState<{ name: string; r: ScoringResult }[]>([]);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    listPeriods().then((p) => {
-      setPeriods(p);
-      if (p.length) setPeriod(p[0]);
-    });
-  }, []);
 
   const valid = slots.filter((s) => s.id);
 
   const run = async () => {
-    if (valid.length < 2 || !period) return;
+    if (valid.length < 2) return;
     setLoading(true);
     try {
-      const rs = await Promise.all(valid.map((s) => runScoring(s.id, period)));
+      const rs = await Promise.all(valid.map((s) => runScoring(s.id, periodEnd)));
       setResults(rs.map((r, i) => ({ name: valid[i].name, r })));
     } catch {
       setResults([]);
@@ -95,13 +88,8 @@ export function ComparePage() {
               <Plus className="w-3.5 h-3.5" /> Añadir entidad
             </button>
           )}
-          <div className="w-40">
-            <label className="block text-xs font-medium text-muted mb-1">Período</label>
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
-              {periods.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+          <div className="text-xs text-muted pb-2.5">
+            Período <span className="mono text-body">{periodEnd}</span>
           </div>
           <button onClick={run} disabled={valid.length < 2 || loading} className="btn btn-primary">
             <GitCompare className="w-4 h-4" />

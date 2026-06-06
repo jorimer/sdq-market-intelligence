@@ -2,8 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { FileText, Download } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
+import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
-  listPeriods,
   listReports,
   generateReport,
   downloadReport,
@@ -23,22 +23,15 @@ const STATUS_TONE: Record<string, "ok" | "warn" | "alert" | "muted"> = {
 };
 
 export function ReportsPage() {
+  const { period } = useApp();
+  const periodEnd = periodToDate(period);
   const [bankId, setBankId] = useState("");
   const [bankName, setBankName] = useState("");
-  const [periods, setPeriods] = useState<string[]>([]);
-  const [period, setPeriod] = useState("");
   const [reportType, setReportType] = useState("full_rating");
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  useEffect(() => {
-    listPeriods().then((p) => {
-      setPeriods(p);
-      if (p.length) setPeriod(p[0]);
-    });
-  }, []);
 
   const loadReports = useCallback((id: string) => {
     if (!id) return;
@@ -54,11 +47,11 @@ export function ReportsPage() {
   }, [bankId, loadReports]);
 
   const generate = async () => {
-    if (!bankId || !period) return;
+    if (!bankId) return;
     setGenerating(true);
     setMsg(null);
     try {
-      await generateReport(bankId, period, reportType);
+      await generateReport(bankId, periodEnd, reportType);
       setMsg({ ok: true, text: "Reporte generado." });
       loadReports(bankId);
     } catch (err: any) {
@@ -82,11 +75,8 @@ export function ReportsPage() {
             <label className="block text-xs font-medium text-muted mb-1">Entidad</label>
             <BankSelector value={bankId} onChange={(id, name) => { setBankId(id); setBankName(name); }} />
           </div>
-          <div className="w-40">
-            <label className="block text-xs font-medium text-muted mb-1">Período</label>
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
-              {periods.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
+          <div className="text-xs text-muted pb-2.5">
+            Período <span className="mono text-body">{periodEnd}</span>
           </div>
           <div className="w-48">
             <label className="block text-xs font-medium text-muted mb-1">Tipo</label>

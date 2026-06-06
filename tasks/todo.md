@@ -239,7 +239,8 @@ Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pa
 - [x] **6.5b** (PR #24): Plataforma — Resumen ejecutivo (consolidado de los 7 ejes) + Metodología (pesos de todos los índices)
 - [x] **6.5c** (PR #25): Configuración (settings reales: tema/período/ámbito/cuenta, persistidos)
 - [x] **Charts a medida** (PRs #26, #27): trío completo — `Treemap` (trade), `Heatmap` (sector matriz), `ScenarioFan` (macro, con endpoint `GET /macro-monitor/series/{code}`). Todos theme-aware.
-- [ ] Pendiente (mejoras, no bloqueante): i18n EN, unificar selector de período global↔eje
+- [x] **Unificación de período** (PR #28): banking ahora usa el período global del topbar (mapeo trimestre↔fecha ISO en `periodToDate`), selectores duplicados eliminados; los ejes 2-7 ya lo usaban
+- [ ] Pendiente (mejora, no bloqueante): i18n EN (refactor grande; sin switcher en UI hoy)
 - [ ] Futuro (features, no placeholders): Deal Scoring, Market Brief, Comparador cross-eje
 
 **Fase 6.5 cerrada en su núcleo** (shell responsive + ⌘K + Resumen ejecutivo + Metodología + Configuración). Lo restante son mejoras/features futuras anotadas.

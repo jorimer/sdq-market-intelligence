@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Sliders, RotateCcw, Zap } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { RatingBadge } from "../components/RatingBadge";
 import { PageHead, Card, CardHead, StateBlock, Delta } from "@/shared/ui/primitives";
+import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
-  listPeriods,
   runScoring,
   simulate,
   ScoringResult,
@@ -27,28 +27,21 @@ function fromResult(r: ScoringResult): SubComponents {
 }
 
 export function ScenariosPage() {
+  const { period } = useApp();
+  const periodEnd = periodToDate(period);
   const [bankId, setBankId] = useState("");
   const [bankName, setBankName] = useState("");
-  const [periods, setPeriods] = useState<string[]>([]);
-  const [period, setPeriod] = useState("");
   const [base, setBase] = useState<ScoringResult | null>(null);
   const [sim, setSim] = useState<ScoringResult | null>(null);
   const [sliders, setSliders] = useState<SubComponents>({ ...PRESETS.Base });
   const [loading, setLoading] = useState(false);
   const [simulating, setSimulating] = useState(false);
 
-  useEffect(() => {
-    listPeriods().then((p) => {
-      setPeriods(p);
-      if (p.length) setPeriod(p[0]);
-    });
-  }, []);
-
   const loadBase = async () => {
-    if (!bankId || !period) return;
+    if (!bankId) return;
     setLoading(true);
     try {
-      const r = await runScoring(bankId, period);
+      const r = await runScoring(bankId, periodEnd);
       setBase(r);
       setSliders(fromResult(r));
       setSim(null);
@@ -91,13 +84,8 @@ export function ScenariosPage() {
               }}
             />
           </div>
-          <div className="w-40">
-            <label className="block text-xs font-medium text-muted mb-1">Período</label>
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
-              {periods.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+          <div className="text-xs text-muted pb-2.5">
+            Período <span className="mono text-body">{periodEnd}</span>
           </div>
           <button onClick={loadBase} disabled={!bankId || loading} className="btn btn-primary">
             <Sliders className="w-4 h-4" />

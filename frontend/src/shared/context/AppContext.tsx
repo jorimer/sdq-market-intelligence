@@ -23,8 +23,18 @@ interface AppState {
 
 const AppCtx = createContext<AppState | null>(null);
 
-const PERIODS = ["2025-Q2", "2025-Q1", "2024-Q4", "2025", "2024"];
+const PERIODS = ["2025-Q2", "2025-Q1", "2024-Q4", "2024-Q3", "2024-Q2", "2024-Q1"];
 const SCOPES: Scope[] = ["RD", "Centroamérica", "Caribe"];
+
+const _QUARTER_END: Record<string, string> = { Q1: "03-31", Q2: "06-30", Q3: "09-30", Q4: "12-31" };
+
+/** Map a global period label ("2025-Q2" / "2025") to a period-end ISO date. */
+export function periodToDate(period: string): string {
+  const m = period.match(/^(\d{4})-(Q[1-4])$/);
+  if (m) return `${m[1]}-${_QUARTER_END[m[2]]}`;
+  if (/^\d{4}$/.test(period)) return `${period}-12-31`;
+  return period;
+}
 
 function initDark(): boolean {
   const saved = localStorage.getItem("sdq_dark");
