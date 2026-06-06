@@ -24,10 +24,31 @@ from modules.banking_score.models.models import (
     Outlook,
 )
 from modules.banking_score.scoring.engine import run_scoring, simulate_from_scores
+from modules.banking_score.scoring.weights import (
+    WEIGHT_PROFILES,
+    get_sub_component_weights,
+)
+from modules.banking_score.events import overlay_outlook
 
 logger = logging.getLogger("sdq.api.scoring")
 
 router = APIRouter()
+
+
+@router.get(
+    "/weights",
+    summary="Perfiles de peso por tipo de entidad",
+    description="Devuelve el perfil de pesos de sub-componentes (base o por entity_type).",
+)
+async def get_weights(
+    entity_type: Optional[str] = Query(None, description="Tipo de entidad SIB"),
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "entity_type": entity_type,
+        "weights": get_sub_component_weights(entity_type),
+        "available_profiles": sorted(WEIGHT_PROFILES.keys()),
+    }
 
 
 # ─── Run scoring for one bank ────────────────────────────────────
@@ -60,7 +81,7 @@ async def run_bank_scoring(
         )
 
     try:
-        result = run_scoring(data)
+        result = run_scoring(data, entity_type=bank.bank_type.value if bank.bank_type else None)
     except Exception as e:
         logger.error(f"Error de scoring para {bank_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error ejecutando scoring: {e}")
@@ -139,8 +160,9 @@ async def run_scoring_all(
 
     for record in records:
         try:
-            scoring_result = run_scoring(record)
             bank = db.query(Bank).filter_by(id=record.bank_id).first()
+            entity_type = bank.bank_type.value if bank and bank.bank_type else None
+            scoring_result = run_scoring(record, entity_type=entity_type)
 
             # Persist
             existing = db.query(RatingResult).filter_by(
@@ -296,6 +318,7 @@ async def get_rating_history(
 )
 async def get_rankings(
     period_end: str = Query(None, description="Filtro por período (YYYY-MM-DD). Si se omite, muestra el último rating de cada banco."),
+    entity_type: Optional[str] = Query(None, description="Filtrar por tipo de entidad SIB"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -331,6 +354,12 @@ async def get_rankings(
             .order_by(RatingResult.overall_score.desc())
             .all()
         )
+
+    if entity_type:
+        results = [
+            (rr, bank) for rr, bank in results
+            if bank.bank_type and bank.bank_type.value == entity_type
+        ]
 
     rankings = [
         {
@@ -437,7 +466,10 @@ def _detect_rating_action(
     else:
         action_type = ActionType.confirmacion
 
-    outlook = Outlook.positiva if score_delta > 3 else (Outlook.negativa if score_delta < -3 else Outlook.estable)
+    base_outlook = Outlook.positiva if score_delta > 3 else (Outlook.negativa if score_delta < -3 else Outlook.estable)
+    # IRMP overlay: the macro-political environment biases the outlook, not the score.
+    ov = overlay_outlook(base_outlook.value, "DO")
+    outlook = Outlook(ov["outlook"])
 
     action = RatingAction(
         bank_id=bank_id,
@@ -468,4 +500,6 @@ def _detect_rating_action(
         "new_tier": new_tier,
         "score_delta": score_delta,
         "outlook": outlook.value,
+        "outlook_irmp_band": ov["irmp_band"],
+        "outlook_adjusted_by_irmp": ov["adjusted"],
     }

@@ -57,8 +57,11 @@ app.include_router(sector_intel_router, prefix="/api/v1/sector-intel", tags=["Se
 app.include_router(social_dev_router, prefix="/api/v1/social-dev", tags=["Social Dev"])
 app.include_router(esg_climate_router, prefix="/api/v1/esg-climate", tags=["ESG & Climate"])
 
-# sector_intel consumes macro/irmp/trade .updated to feed the SGPS acceleration factor
-register_sector_subscribers()
+# Event subscriptions across axes (string contract via event_bus)
+from modules.banking_score.events import register_subscribers as register_banking_subscribers
+
+register_sector_subscribers()  # sector_intel ← macro/irmp/trade .updated (SGPS acceleration)
+register_banking_subscribers()  # banking_score ← irmp.updated (outlook overlay)
 
 # Serve frontend in production
 if os.path.exists("frontend/dist"):

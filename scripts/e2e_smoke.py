@@ -122,6 +122,12 @@ def run() -> int:
     check("banking /stats 200", r.status_code == 200)
     r = c.get("/api/v1/banking-score/rankings")
     check("banking /rankings 200", r.status_code == 200)
+    # Fase 1A: weight profile per entity_type
+    r = c.get("/api/v1/banking-score/weights", params={"entity_type": "aap"})
+    check("banking /weights?entity_type=aap 200", r.status_code == 200)
+    if r.status_code == 200:
+        w = r.json().get("weights", {})
+        check("perfil de pesos AAyP suma 1.0", round(sum(w.values()), 6) == 1.0)
 
     # ── Fase 0 (shared/data) + Fase 2: macro_monitor ───────────────
     print("\nFase 2 — macro_monitor (+ shared/data vía ingesta)")

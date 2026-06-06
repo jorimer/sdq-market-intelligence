@@ -19,6 +19,7 @@ from modules.banking_score.scoring.weights import (
     LIQUIDEZ_INDICATORS,
     SOLIDEZ_INDICATORS,
     SUB_COMPONENT_WEIGHTS,
+    get_sub_component_weights,
 )
 
 logger = logging.getLogger("sdq.scoring.engine")
@@ -352,21 +353,28 @@ def calculate_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str
     return {comp: round(_avg(keys), 2) for comp, keys in groups.items()}
 
 
-def calculate_deterministic_score(sub_scores: Dict[str, float]) -> float:
-    """Weighted-sum overall score from sub-component scores."""
-    total = sum(sub_scores.get(k, 0) * w for k, w in SUB_COMPONENT_WEIGHTS.items())
+def calculate_deterministic_score(sub_scores: Dict[str, float], weights: Dict[str, float] = None) -> float:
+    """Weighted-sum overall score from sub-component scores.
+
+    *weights* defaults to the base profile; pass an entity-type profile to
+    recalibrate without changing the framework.
+    """
+    weights = weights or SUB_COMPONENT_WEIGHTS
+    total = sum(sub_scores.get(k, 0) * w for k, w in weights.items())
     return round(_clamp(total), 2)
 
 
-def run_scoring(data) -> Dict[str, Any]:
+def run_scoring(data, entity_type=None) -> Dict[str, Any]:
     """Full deterministic scoring pipeline (no DB, no ML).
 
-    Returns a complete breakdown: indicators, sub-components, overall score,
-    rating tier, and tier color.
+    *entity_type* selects the weight profile (banca_multiple, aap,
+    banco_ahorro_credito, corporacion_credito, cambiaria, fiduciaria); unknown
+    types fall back to the base weights.  Returns a complete breakdown.
     """
+    weights = get_sub_component_weights(entity_type)
     indicators = calculate_all_indicators(data)
     sub_scores = calculate_sub_components(indicators)
-    overall_score = calculate_deterministic_score(sub_scores)
+    overall_score = calculate_deterministic_score(sub_scores, weights)
     tier = map_rating_tier(overall_score)
     color = get_tier_color(tier)
 
@@ -375,6 +383,8 @@ def run_scoring(data) -> Dict[str, Any]:
         "rating_tier": tier,
         "tier_color": color,
         "sub_components": sub_scores,
+        "entity_type": entity_type,
+        "weight_profile": weights,
         "indicators": {
             name: {"raw": float(v["raw"]), "score": float(v["score"])}
             for name, v in indicators.items()
