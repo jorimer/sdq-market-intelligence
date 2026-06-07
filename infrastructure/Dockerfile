@@ -27,6 +27,8 @@ COPY scripts/ ./scripts/
 COPY infrastructure/alembic/ ./infrastructure/alembic/
 COPY infrastructure/alembic.ini ./infrastructure/alembic.ini
 COPY infrastructure/log_config.json ./infrastructure/log_config.json
+COPY infrastructure/start.sh ./infrastructure/start.sh
+RUN chmod +x ./infrastructure/start.sh
 
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
@@ -43,5 +45,5 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 
 EXPOSE 8000
 
-# Run DB migrations (release phase) before serving, then start uvicorn.
-CMD ["sh", "-c", "alembic -c infrastructure/alembic.ini upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2 --log-config infrastructure/log_config.json"]
+# Role-aware entrypoint: web (migrations + uvicorn) or worker (Celery).
+CMD ["sh", "infrastructure/start.sh"]
