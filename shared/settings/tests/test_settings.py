@@ -109,6 +109,42 @@ def test_resolution_helpers(db):
     assert service.get_sector_api_proxy(db, "sb_do") == ("https://w.workers.dev", "psecret")
 
 
+def test_find_banking_source_by_sector_not_id(db):
+    """A provider with an arbitrary id but sector=banking is still resolved."""
+    service.update_settings(db, SettingsIn(sectorApis=[SectorApiIn(
+        provider="SDQFinAnalyst", sector="banking", country="DO",
+        apiKey="sib-real-key", baseUrl="https://apis.sb.gob.do/estadisticas/v2",
+    )]))
+    cfg = service.find_banking_source(db)
+    assert cfg is not None and cfg.provider == "SDQFinAnalyst"
+    creds = service.get_sib_credentials(db)
+    assert creds["api_key"] == "sib-real-key"
+    assert creds["base_url"].endswith("/estadisticas/v2")
+
+
+def test_find_banking_source_prefers_sb_do(db):
+    service.update_settings(db, SettingsIn(sectorApis=[
+        SectorApiIn(provider="Other", sector="banking", country="DO", apiKey="k-other"),
+        SectorApiIn(provider="sb_do", sector="banking", country="DO", apiKey="k-canonical"),
+    ]))
+    assert service.find_banking_source(db).provider == "sb_do"
+    assert service.get_sib_credentials(db)["api_key"] == "k-canonical"
+
+
+def test_find_banking_source_ignores_disabled(db):
+    service.update_settings(db, SettingsIn(sectorApis=[SectorApiIn(
+        provider="SDQFinAnalyst", sector="banking", country="DO", apiKey="k", enabled=False,
+    )]))
+    assert service.find_banking_source(db) is None
+
+
+def test_find_banking_source_skips_non_banking(db):
+    service.update_settings(db, SettingsIn(sectorApis=[SectorApiIn(
+        provider="trade_x", sector="trade", country="DO", apiKey="k",
+    )]))
+    assert service.find_banking_source(db) is None
+
+
 def test_disabled_provider_hides_key(db):
     service.update_settings(db, SettingsIn(sectorApis=[
         SectorApiIn(provider="sb_do", apiKey="k1", enabled=False),
