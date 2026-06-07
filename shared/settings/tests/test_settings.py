@@ -128,6 +128,49 @@ def test_connection_test_requires_key(db):
     assert res.status == "error"
 
 
+class _FakeResp:
+    def __init__(self, status, headers=None):
+        self.status_code = status
+        self.headers = headers or {}
+
+
+def _proxy_provider(db):
+    service.update_settings(db, SettingsIn(sectorApis=[SectorApiIn(
+        provider="sb_do", apiKey="sib-key", baseUrl="https://apis.sb.gob.do/estadisticas/v2",
+        proxyUrl="https://w.workers.dev", proxySecret="psecret",
+    )]))
+
+
+def test_proxy_secret_invalid_is_distinguished(db, monkeypatch):
+    """401 with NO X-Proxy-Status header → the Worker rejected the proxy secret."""
+    import httpx
+    _proxy_provider(db)
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _FakeResp(401, {}))
+    res = service.test_connection(db, ConnTestIn(provider="sb_do"))
+    assert res.status == "error"
+    assert "proxy" in res.detail.lower()
+    assert "sib" not in res.detail.lower()
+
+
+def test_sib_key_invalid_is_distinguished(db, monkeypatch):
+    """401 WITH X-Proxy-Status → the proxy relayed the SIB's rejection (bad SIB key)."""
+    import httpx
+    _proxy_provider(db)
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _FakeResp(401, {"X-Proxy-Status": "401"}))
+    res = service.test_connection(db, ConnTestIn(provider="sb_do"))
+    assert res.status == "error"
+    assert "sib" in res.detail.lower()
+
+
+def test_proxy_success(db, monkeypatch):
+    import httpx
+    _proxy_provider(db)
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _FakeResp(200, {"X-Proxy-Status": "200"}))
+    res = service.test_connection(db, ConnTestIn(provider="sb_do"))
+    assert res.status == "success"
+    assert res.viaProxy is True
+
+
 # ── router RBAC ───────────────────────────────────────────────────
 def _client(db, role):
     app = FastAPI()

@@ -252,25 +252,50 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
 
     try:
         resp = _do(headers)
-        if resp.status_code == 401 and secondary:
+        # The Cloudflare Worker tags every *relayed* upstream response with an
+        # `X-Proxy-Status` header. Its absence on an error means the Worker itself
+        # rejected us (bad proxy secret) — it never reached the SIB. This lets us
+        # say WHICH key failed: the proxy secret or the SIB API key.
+        relayed = use_proxy and _has_proxy_relay(resp)
+        # Only retry with the secondary SIB key when the SIB actually answered.
+        if resp.status_code == 401 and secondary and (not use_proxy or relayed):
             resp = _do({**headers, "Ocp-Apim-Subscription-Key": secondary})
+            relayed = use_proxy and _has_proxy_relay(resp)
         if resp.status_code == 200:
             return _persist_test(db, cfg, "success", "Conexión exitosa", 200, use_proxy)
-        if resp.status_code == 403:
-            return _persist_test(
-                db, cfg, "error",
-                "403 — bloqueado por el WAF del SIB. Configure el proxy Cloudflare.",
-                403, use_proxy,
-            )
         if resp.status_code == 401:
-            return _persist_test(db, cfg, "error", "401 — clave de API inválida.", 401, use_proxy)
-        return _persist_test(db, cfg, "error", f"HTTP {resp.status_code}", resp.status_code, use_proxy)
+            if use_proxy and not relayed:
+                msg = "401 — secreto del proxy (Cloudflare) inválido. Revise 'Secreto del proxy'."
+            else:
+                msg = "401 — clave de API del SIB inválida. Revise 'Clave de API'."
+            return _persist_test(db, cfg, "error", msg, 401, use_proxy)
+        if resp.status_code == 403:
+            if use_proxy and not relayed:
+                msg = "403 — el proxy Cloudflare rechazó la solicitud (host o secreto no permitido)."
+            elif use_proxy:
+                msg = "403 — el SIB rechazó la solicitud (vía proxy)."
+            else:
+                msg = "403 — bloqueado por el WAF del SIB. Configure el proxy Cloudflare."
+            return _persist_test(db, cfg, "error", msg, 403, use_proxy)
+        # Any other status: if proxying and not relayed, the Worker erred itself.
+        origin = "proxy Cloudflare" if (use_proxy and not relayed) else "SIB"
+        return _persist_test(db, cfg, "error", f"HTTP {resp.status_code} ({origin})", resp.status_code, use_proxy)
     except httpx.TimeoutException:
         return _persist_test(db, cfg, "error", "Tiempo de espera agotado.", None, use_proxy)
     except httpx.ConnectError:
         return _persist_test(db, cfg, "error", "No se pudo conectar.", None, use_proxy)
     except Exception as e:  # noqa: BLE001 — surface any client error as a test failure
         return _persist_test(db, cfg, "error", str(e)[:200], None, use_proxy)
+
+
+def _has_proxy_relay(resp) -> bool:
+    """True if the response carries the Worker's ``X-Proxy-Status`` header,
+    i.e. the proxy forwarded an upstream (SIB) response rather than rejecting
+    the request itself."""
+    try:
+        return any(k.lower() == "x-proxy-status" for k in resp.headers.keys())
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _persist_test(
