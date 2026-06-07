@@ -6,11 +6,17 @@
 set -e
 
 if [ "$SERVICE_ROLE" = "worker" ]; then
-  echo "Starting Celery worker…"
+  echo "Starting Celery worker (dedicated service)…"
   exec celery -A shared.tasks.celery_app worker --loglevel=info --concurrency=1
 else
   echo "Running migrations…"
   alembic -c infrastructure/alembic.ini upgrade head
+  # When Celery is enabled and there's no dedicated worker service, run a worker
+  # in this container so queued jobs are consumed. acks_late re-queues on restart.
+  if [ "$USE_CELERY" = "true" ]; then
+    echo "Starting in-container Celery worker…"
+    celery -A shared.tasks.celery_app worker --loglevel=info --concurrency=1 &
+  fi
   echo "Starting web (uvicorn)…"
   exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 2 \
     --log-config infrastructure/log_config.json
