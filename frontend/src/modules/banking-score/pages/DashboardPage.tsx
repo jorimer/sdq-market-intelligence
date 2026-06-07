@@ -11,6 +11,7 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
+import { ENTITY_TYPES, isCreditModel, entityTypeLabel } from "../entityTypes";
 
 type Status = "loading" | "error" | "ready";
 
@@ -31,11 +32,15 @@ export function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [rankings, setRankings] = useState<Rank[]>([]);
   const [status, setStatus] = useState<Status>("loading");
+  const [area, setArea] = useState(""); // entity_type filter ("" = todos)
 
   useEffect(() => {
+    setStatus("loading");
     Promise.all([
       client.get<Stats>("/banking-score/stats"),
-      client.get<{ rankings: Rank[] }>("/banking-score/rankings"),
+      client.get<{ rankings: Rank[] }>("/banking-score/rankings", {
+        params: area ? { entity_type: area } : {},
+      }),
     ])
       .then(([s, r]) => {
         setStats(s.data);
@@ -43,7 +48,25 @@ export function DashboardPage() {
         setStatus("ready");
       })
       .catch(() => setStatus("error"));
-  }, []);
+  }, [area]);
+
+  const areaTabs = (
+    <div className="flex flex-wrap gap-1.5 mb-5">
+      {ENTITY_TYPES.map((t) => (
+        <button
+          key={t.value}
+          onClick={() => setArea(t.value)}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
+            area === t.value
+              ? "bg-accent text-white border-accent"
+              : "bg-surface text-body border-line hover:border-linestrong"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
 
   const head = (
     <PageHead
@@ -53,14 +76,30 @@ export function DashboardPage() {
     />
   );
 
-  if (status === "loading") return <div>{head}<LoadingGrid /></div>;
+  if (status === "loading") return <div>{head}{areaTabs}<LoadingGrid /></div>;
   if (status === "error")
     return (
       <div>
         {head}
+        {areaTabs}
         <StateBlock kind="error" message="No se pudieron cargar los datos del sector. Reintenta." />
       </div>
     );
+
+  // Cambiarias / fiduciarias don't use the credit model yet — show honest state.
+  if (!isCreditModel(area)) {
+    return (
+      <div>
+        {head}
+        {areaTabs}
+        <StateBlock
+          kind="soon"
+          title="Submodelo en construcción"
+          message={`El análisis de ${entityTypeLabel(area).toLowerCase()} usa indicadores propios (no el modelo crediticio). Su submodelo está en desarrollo.`}
+        />
+      </div>
+    );
+  }
 
   const top = rankings.slice(0, 5);
   const avg = rankings.length
@@ -78,11 +117,12 @@ export function DashboardPage() {
   return (
     <div>
       {head}
+      {areaTabs}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <StatTile label="Entidades" value={stats?.total_entities ?? 0} />
+        <StatTile label="Entidades" value={area ? rankings.length : (stats?.total_entities ?? 0)} />
         <StatTile label="Score promedio" value={fmtNum(avg, 1)} />
-        <StatTile label="Ratings calculados" value={stats?.total_ratings ?? 0} />
+        <StatTile label="Ratings calculados" value={area ? rankings.length : (stats?.total_ratings ?? 0)} />
         <StatTile label="Último período" value={stats?.period_end ?? "—"} />
       </div>
 
