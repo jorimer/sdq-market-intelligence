@@ -281,6 +281,7 @@ async def sync_status(
 )
 async def sib_explore(
     period: str = Query("2024-12", description="Período YYYY-MM a consultar"),
+    tipos: str = Query("", description="Códigos tipoEntidad a probar (coma). Vacío = lista por defecto."),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != UserRole.admin:
@@ -291,32 +292,35 @@ async def sib_explore(
     if client is None:
         raise HTTPException(status_code=400, detail="SIB no configurada (clave/proxy).")
 
-    def _distinct_entities(records):
-        by_type: Dict[str, set] = {}
-        for r in records:
-            te = r.get("tipoEntidad") or r.get("tipoentidad") or r.get("tipo") or "?"
-            ent = r.get("entidad") or r.get("nombreEntidad") or r.get("nombre") or "?"
-            by_type.setdefault(str(te), set()).add(str(ent))
-        return {te: sorted(s)[:60] for te, s in by_type.items()}
-
     result: Dict[str, object] = {"period": period}
-    try:
-        principales = client._get("indicadores/principales", {"periodoInicial": period, "periodoFinal": period})
-        result["principales_fields"] = list(principales[0].keys()) if principales else []
-        result["principales_sample"] = principales[:2]
-        result["entities_by_type"] = _distinct_entities(principales)
-    except Exception as e:  # noqa: BLE001
-        result["principales_error"] = str(e)[:300]
 
-    # Exchange houses (intermediación cambiaria) use the EIC endpoints.
-    try:
-        eic = client._get("estados/situacion/eic", {"periodoInicial": period, "periodoFinal": period})
-        result["eic_count"] = len(eic)
-        result["eic_fields"] = list(eic[0].keys()) if eic else []
-        result["eic_entities"] = sorted({str(r.get("entidad") or r.get("nombreEntidad") or "?") for r in eic})[:60]
-    except Exception as e:  # noqa: BLE001
-        result["eic_error"] = str(e)[:300]
+    def _entities(records):
+        out = set()
+        for r in records:
+            out.add(str(r.get("entidad") or r.get("nombreEntidad") or r.get("nombre") or "?"))
+        return sorted(out)[:60]
 
+    # Probe each financial-statement endpoint with candidate tipoEntidad codes to
+    # find which ones return data (and the entity names) for the as-yet-uncovered
+    # types: corporaciones de crédito, agentes de cambio, fiduciarias.
+    candidates = [c.strip() for c in (tipos or "").split(",") if c.strip()] or [
+        "BM", "BAyC", "AAyP", "BAC", "AAP", "CC", "CCR", "CORP", "AC", "ARC",
+        "EIC", "AGC", "FID", "FI", "EF",
+    ]
+    probes: Dict[str, object] = {}
+    for endpoint in ("estados/situacion/eif", "estados/situacion/eic"):
+        for code in candidates:
+            label = f"{endpoint}?tipoEntidad={code}"
+            try:
+                recs = client._get(endpoint, {
+                    "periodoInicial": period, "periodoFinal": period, "tipoEntidad": code,
+                })
+                if recs:
+                    probes[label] = {"count": len(recs), "entities": _entities(recs),
+                                     "fields": list(recs[0].keys())}
+            except Exception as e:  # noqa: BLE001
+                probes[label] = {"error": str(e)[:120]}
+    result["probes"] = probes
     return result
 
 
