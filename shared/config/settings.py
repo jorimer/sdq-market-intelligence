@@ -23,8 +23,11 @@ class Settings(BaseSettings):
     SIB_API_KEY: str = ""
     SIB_API_BASE_URL: str = "https://apis.sb.gob.do/estadisticas/v2"
 
-    # Redis (optional, for event bus)
+    # Redis (event bus + Celery broker/backend)
     REDIS_URL: str = ""
+    # Route long background jobs (SIB backfill) through the Celery worker when a
+    # worker is running. Off by default → jobs run in an in-process thread.
+    USE_CELERY: bool = False
 
     # App
     DEFAULT_LANGUAGE: str = "es"

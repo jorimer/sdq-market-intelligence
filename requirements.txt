@@ -22,3 +22,4 @@ redis>=5.0
 python-dotenv>=1.0
 pyyaml>=6.0
 cryptography>=42.0
+celery>=5.3

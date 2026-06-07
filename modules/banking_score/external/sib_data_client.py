@@ -857,6 +857,28 @@ class SIBDataClient:
 
         return None
 
+    def get_working_tipos(self) -> List[str]:
+        """Discover (once) and return the SIB tipoEntidad codes that respond."""
+        if not self._discovered_tipo_codes:
+            self._discovered_tipo_codes = self._discover_working_tipo_codes()
+        return list(self._discovered_tipo_codes)
+
+    def extract_one_tipo(
+        self,
+        tipo: str,
+        period_start: str = "2021-01",
+        period_end: str = "",
+    ) -> Dict[str, List[Dict]]:
+        """Extract just one tipoEntidad — enables incremental, resumable backfills
+        (write each type as it completes instead of one 20-min all-or-nothing pass).
+        """
+        saved = list(self._discovered_tipo_codes)
+        self._discovered_tipo_codes = [tipo]  # truthy → bulk skips re-discovery
+        try:
+            return self.extract_all_entities_bulk(period_start=period_start, period_end=period_end)
+        finally:
+            self._discovered_tipo_codes = saved
+
     def extract_all_entities_bulk(
         self,
         period_start: str = "2021-01",

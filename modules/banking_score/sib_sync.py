@@ -188,51 +188,62 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             _write_status(db, is_running=False, phase="error", alerts=(current.get("alerts") or [])[-49:] + [msg])
             return {"status": "error", "message": msg, "connectivity": conn}
 
-        _write_status(db, phase="extrayendo de la API (puede tomar varios minutos)")
-        bulk = client.extract_all_entities_bulk(period_start=period_start)
+        _write_status(db, phase="descubriendo tipos de entidad")
+        tipos = client.get_working_tipos()
+        if not tipos:
+            msg = "El SIB no devolvió ningún tipo de entidad válido."
+            _write_status(db, is_running=False, phase="error", alerts=(current.get("alerts") or [])[-49:] + [msg])
+            return {"status": "error", "message": msg}
 
-        _write_status(db, phase="escribiendo datos")
+        # Incremental + idempotent: fetch and WRITE one tipoEntidad at a time,
+        # committing after each. Data lands progressively (visible in stats) and a
+        # restart only loses the in-progress type — a re-run upserts the rest.
         created = updated = matched = skipped_period = 0
-        errors = []
-        for short_name, periods in bulk.items():
-            if short_name.startswith("_"):
-                continue
-            bank = _match_bank(db, short_name)
-            if not bank:
-                errors.append(f"{short_name}: banco no encontrado en la base")
-                continue
-            matched += 1
-            code = SIB_ENTITY_CODES.get(short_name, {}).get("sib_code")
-            if code and not bank.sib_code:
-                bank.sib_code = code
-
-            for rec in periods:
-                rec = dict(rec)
-                pe = rec.pop("period_end")
-                rec.pop("period_type", None)
-                rec.pop("source", None)
-                # Quarterly platform: only ingest quarter-end periods.
-                if pe.month not in (3, 6, 9, 12):
-                    skipped_period += 1
+        errors: list = []
+        unmatched: list = []
+        for i, tipo in enumerate(tipos, 1):
+            _write_status(db, phase=f"extrayendo {tipo} ({i}/{len(tipos)})… (puede tardar)")
+            bulk = client.extract_one_tipo(tipo, period_start=period_start)
+            unmatched += bulk.get("_unmatched", [])
+            for short_name, periods in bulk.items():
+                if short_name.startswith("_"):
                     continue
-                existing = (
-                    db.query(BankingData)
-                    .filter_by(bank_id=bank.id, period_end=pe)
-                    .first()
-                )
-                row = existing or BankingData(bank_id=bank.id, period_end=pe)
-                row.period_type = PeriodType.quarterly
-                row.source = DataSource.sib_api
-                for k, v in rec.items():
-                    if v is not None:
-                        setattr(row, k, v)
-                if existing:
-                    updated += 1
-                else:
-                    db.add(row)
-                    created += 1
-            db.commit()
-            _write_status(db, phase=f"escribiendo… {matched} entidades, {created + updated} registros")
+                bank = _match_bank(db, short_name)
+                if not bank:
+                    errors.append(f"{short_name}: banco no encontrado en la base")
+                    continue
+                matched += 1
+                code = SIB_ENTITY_CODES.get(short_name, {}).get("sib_code")
+                if code and not bank.sib_code:
+                    bank.sib_code = code
+
+                for rec in periods:
+                    rec = dict(rec)
+                    pe = rec.pop("period_end")
+                    rec.pop("period_type", None)
+                    rec.pop("source", None)
+                    # Quarterly platform: only ingest quarter-end periods.
+                    if pe.month not in (3, 6, 9, 12):
+                        skipped_period += 1
+                        continue
+                    existing = (
+                        db.query(BankingData)
+                        .filter_by(bank_id=bank.id, period_end=pe)
+                        .first()
+                    )
+                    row = existing or BankingData(bank_id=bank.id, period_end=pe)
+                    row.period_type = PeriodType.quarterly
+                    row.source = DataSource.sib_api
+                    for k, v in rec.items():
+                        if v is not None:
+                            setattr(row, k, v)
+                    if existing:
+                        updated += 1
+                    else:
+                        db.add(row)
+                        created += 1
+            db.commit()  # persist this tipo before moving on (incremental)
+            _write_status(db, phase=f"{tipo} listo ({i}/{len(tipos)}) · {matched} entidades, {created + updated} registros")
 
         result = {
             "status": "completed",
@@ -240,7 +251,7 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             "records_created": created,
             "records_updated": updated,
             "periods_skipped_non_quarterly": skipped_period,
-            "unmatched": bulk.get("_unmatched", []),
+            "unmatched": unmatched,
             "errors": errors[:20],
         }
         _write_status(db, is_running=False, phase="completado", last_sync=_now(),
@@ -260,12 +271,25 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
 
 
 def start_backfill_background(force: bool = False) -> Dict:
-    """Kick off a backfill in a daemon thread; returns immediately."""
+    """Start the backfill: via the Celery worker when enabled (survives web
+    restarts, auto-retries on crash), otherwise an in-process thread.
+    """
+    from shared.config.settings import settings
+
     if get_sync_status().get("is_running"):
         return {"status": "already_running", "message": "Ya hay una sincronización en progreso."}
+
+    msg = ("Backfill SIB iniciado en segundo plano. La extracción es incremental "
+           "(los datos van apareciendo por tipo); puede tardar 10–20 min y el estado "
+           "se actualiza en esta pantalla.")
+
+    if settings.USE_CELERY and settings.REDIS_URL:
+        try:
+            from modules.banking_score.tasks import sib_backfill_task
+            sib_backfill_task.delay(force=force)
+            return {"status": "started", "via": "celery", "message": msg}
+        except Exception:  # noqa: BLE001 — fall back to thread if broker unavailable
+            logger.exception("No se pudo encolar en Celery; usando hilo")
+
     threading.Thread(target=run_backfill, kwargs={"force": force}, daemon=True).start()
-    return {
-        "status": "started",
-        "message": "Backfill SIB iniciado en segundo plano. La extracción completa "
-                   "puede tardar 10–20 min; el estado se actualiza en esta pantalla.",
-    }
+    return {"status": "started", "via": "thread", "message": msg}
