@@ -26,16 +26,102 @@ from shared.settings.schemas import (
 
 logger = logging.getLogger("sdq.settings.service")
 
-# Defaults for providers we ship knowledge of, so the UI can prefill base URLs.
-KNOWN_PROVIDERS = {
-    "sb_do": {
+# Catalog of data sources discovered for each sector (2026-06). Pre-seeded into
+# the config so the operator only fills the bits that depend on them: API keys
+# and (for the SIB) the Cloudflare proxy. ``requires_key`` is informational for
+# the UI; ``needs_proxy`` flags sources behind a WAF (only the SIB today).
+KNOWN_PROVIDERS = [
+    {
+        "provider": "sb_do",
         "providerName": "Superintendencia de Bancos (SB)",
         "apiName": "API de Estadísticas del Sistema Financiero",
         "country": "DO",
         "sector": "banking",
         "baseUrl": app_settings.SIB_API_BASE_URL,
+        "requires_key": True,
+        "needs_proxy": True,
+        "notes": "Clave en desarrollador.sb.gob.do (Azure APIM). Requiere proxy Cloudflare (WAF).",
     },
-}
+    {
+        "provider": "bcrd",
+        "providerName": "Banco Central (BCRD)",
+        "apiName": "API de Estadísticas Macroeconómicas",
+        "country": "DO",
+        "sector": "macro",
+        "baseUrl": "https://api.bancentral.gov.do",
+        "requires_key": True,
+        "needs_proxy": False,
+        "notes": "Token tras registro en apibcrd.bancentral.gov.do.",
+    },
+    {
+        "provider": "one_do",
+        "providerName": "Datos Abiertos (ONE / datos.gob.do)",
+        "apiName": "API CKAN de Datos Abiertos",
+        "country": "DO",
+        "sector": "social",
+        "baseUrl": "https://datos.gob.do/api/3",
+        "requires_key": False,
+        "needs_proxy": False,
+        "notes": "Pública (ODbL). Sin clave.",
+    },
+    {
+        "provider": "comtrade",
+        "providerName": "UN Comtrade",
+        "apiName": "API pública de comercio exterior",
+        "country": "DO",
+        "sector": "trade",
+        "baseUrl": "https://comtradeapi.un.org/public/v1",
+        "requires_key": False,
+        "needs_proxy": False,
+        "notes": "Pública (reporter 214). Clave opcional para volumen.",
+    },
+    {
+        "provider": "wgi",
+        "providerName": "Banco Mundial — WGI",
+        "apiName": "World Bank Indicators API",
+        "country": "DO",
+        "sector": "governance",
+        "baseUrl": "https://api.worldbank.org/v2",
+        "requires_key": False,
+        "needs_proxy": False,
+        "notes": "Pública (CC BY). Sin clave.",
+    },
+]
+
+
+def _known_base_url(provider: str) -> str:
+    for src in KNOWN_PROVIDERS:
+        if src["provider"] == provider:
+            return src.get("baseUrl", "")
+    return ""
+
+
+def ensure_known_sources(db: Session) -> int:
+    """Seed the discovered data sources (keyless, disabled) so they show up in
+    Configuración ready for the operator to add credentials. Idempotent: a source
+    is inserted only if no config exists for its provider id AND none exists for
+    its sector (so an operator's own banking entry isn't duplicated).
+    """
+    existing = db.query(SectorApiConfig).all()
+    providers = {c.provider for c in existing}
+    sectors = {(c.sector or "").strip().lower() for c in existing}
+    added = 0
+    for src in KNOWN_PROVIDERS:
+        if src["provider"] in providers or src["sector"].lower() in sectors:
+            continue
+        db.add(SectorApiConfig(
+            provider=src["provider"],
+            provider_name=src["providerName"],
+            api_name=src["apiName"],
+            country=src["country"],
+            sector=src["sector"],
+            base_url=src["baseUrl"],
+            enabled=False,  # operator enables after entering the key
+        ))
+        added += 1
+    if added:
+        db.commit()
+    return added
 
 _CLAUDE_KEY = "claude_api_key"
 _LANG_KEY = "default_language"
@@ -88,9 +174,10 @@ def _to_out(cfg: SectorApiConfig) -> SectorApiOut:
 
 
 def get_settings(db: Session) -> SettingsOut:
+    ensure_known_sources(db)  # pre-populate discovered sources (idempotent)
     claude = _get_app_setting(db, _CLAUDE_KEY)
     lang = _get_app_setting(db, _LANG_KEY)
-    apis = db.query(SectorApiConfig).order_by(SectorApiConfig.provider).all()
+    apis = db.query(SectorApiConfig).order_by(SectorApiConfig.sector, SectorApiConfig.provider).all()
     return SettingsOut(
         claudeApiKeySet=bool((claude and claude.value) or app_settings.ANTHROPIC_API_KEY),
         defaultLanguage=(lang.value if lang and lang.value else app_settings.DEFAULT_LANGUAGE),
@@ -183,7 +270,7 @@ def get_sector_api_base_url(db: Session, provider: str) -> str:
     cfg = _provider(db, provider)
     if cfg and cfg.base_url:
         return cfg.base_url
-    return KNOWN_PROVIDERS.get(provider, {}).get("baseUrl", "")
+    return _known_base_url(provider)
 
 
 def get_sector_api_proxy(db: Session, provider: str) -> Tuple[str, str]:
@@ -252,7 +339,7 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
     cfg = _provider(db, payload.provider)
     base = _normalize_base_url(
         payload.baseUrl or (cfg.base_url if cfg else "")
-        or KNOWN_PROVIDERS.get(payload.provider, {}).get("baseUrl", "")
+        or _known_base_url(payload.provider)
     )
     api_key = payload.apiKey if payload.apiKey not in (None, MASK) else (
         decrypt(cfg.api_key_enc) if cfg and cfg.api_key_enc else ""
