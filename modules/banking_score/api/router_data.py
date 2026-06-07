@@ -272,6 +272,50 @@ async def sync_status(
     return st
 
 
+# ─── SIB raw page diagnostic (test pagination semantics) ─────────
+
+@router.get("/sib-page-test", include_in_schema=False)
+async def sib_page_test(
+    endpoint: str = Query("estados/resultados/eif"),
+    tipo: str = Query("BM"),
+    periodo_inicial: str = Query("2024-01"),
+    periodo_final: str = Query("2024-12"),
+    paginas: int = Query(1),
+    registros: int = Query(100),
+    current_user: User = Depends(get_current_user),
+):
+    """Single raw page from the SIB API — to learn if `paginas`/`registros` are
+    honored (compare pages, try big registros). Returns count + a fingerprint."""
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Se requiere rol admin")
+    from modules.banking_score.external.sib_data_client import get_sib_data_client
+    import httpx as _httpx
+
+    client = get_sib_data_client(force_new=True)
+    if client is None:
+        raise HTTPException(status_code=400, detail="SIB no configurada.")
+    url = f"{client.base_url}/{endpoint.lstrip('/')}"
+    params = {
+        "periodoInicial": periodo_inicial, "periodoFinal": periodo_final,
+        "tipoEntidad": tipo, "paginas": paginas, "registros": registros,
+    }
+    data = client._get_with_retry(_httpx, url, params, endpoint, paginas)
+    if isinstance(data, dict):
+        data = data.get("data", data.get("registros", [data]))
+    if not isinstance(data, list):
+        return {"count": 0, "raw": str(data)[:300]}
+
+    def _fp(r):
+        return {k: r.get(k) for k in ("entidad", "periodo", "conceptoNivel1", "conceptoNivel2", "indicador", "componente", "valor") if k in r}
+
+    return {
+        "params": params,
+        "count": len(data),
+        "first": _fp(data[0]) if data else None,
+        "last": _fp(data[-1]) if data else None,
+    }
+
+
 # ─── SIB explorer (discover supervised entity universe, live) ────
 
 @router.get(
