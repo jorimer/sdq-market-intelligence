@@ -1,0 +1,17 @@
+#!/bin/sh
+# Container entrypoint. One image, two roles (selected by SERVICE_ROLE):
+#   - worker → Celery worker (background jobs: SIB backfill, etc.)
+#   - web (default) → run DB migrations, then uvicorn. Behaviour identical to the
+#     previous CMD, so the web service is unaffected by adding the worker.
+set -e
+
+if [ "$SERVICE_ROLE" = "worker" ]; then
+  echo "Starting Celery worker…"
+  exec celery -A shared.tasks.celery_app worker --loglevel=info --concurrency=1
+else
+  echo "Running migrations…"
+  alembic -c infrastructure/alembic.ini upgrade head
+  echo "Starting web (uvicorn)…"
+  exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 2 \
+    --log-config infrastructure/log_config.json
+fi
