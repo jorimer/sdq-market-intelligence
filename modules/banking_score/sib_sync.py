@@ -28,6 +28,7 @@ from modules.banking_score.external.sib_data_client import (
 from modules.banking_score.models.models import (
     Bank,
     BankingData,
+    BankType,
     DataSource,
     PeriodType,
     RatingResult,
@@ -38,6 +39,15 @@ logger = logging.getLogger("sdq.banking.sib_sync")
 
 # Official bank name per SIB short name (seed shorts match the SIB catalog 1:1).
 _SHORT_TO_NAME = {e["short"]: e["name"] for e in BANKING_ENTITIES}
+
+# SIB tipoEntidad code → our BankType. Extend here when a new category is added
+# to the catalog (e.g. agentes de cambio → cambiaria, fiduciarias → fiduciaria).
+_TIPO_TO_BANKTYPE = {
+    "BM": BankType.banca_multiple,
+    "AAP": BankType.aap,
+    "BAC": BankType.banco_ahorro_credito,
+    "CC": BankType.corporacion_credito,
+}
 
 # Sync status lives in the DB (AppSetting) so it's shared across uvicorn workers —
 # an in-memory dict was invisible to the worker handling the status poll, making a
@@ -145,11 +155,34 @@ def needs_backfill(db: Session) -> bool:
     return total > 0 and sib == 0
 
 
-def _match_bank(db: Session, short_name: str) -> Optional[Bank]:
-    name = _SHORT_TO_NAME.get(short_name)
+def _match_or_create_bank(db: Session, short_name: str):
+    """Find the bank for a SIB short name, or AUTO-CREATE it if it's in the SIB
+    catalog but not yet in the DB (so new supervised entities — banks, savings &
+    credit, corporaciones, future categories — appear automatically).
+
+    Returns (bank, created). bank is None if the entity isn't in our catalog or
+    its type maps to no BankType (then the caller raises a "new entity" alert).
+    """
+    info = SIB_ENTITY_CODES.get(short_name) or {}
+    name = _SHORT_TO_NAME.get(short_name) or (info.get("nombre_sib") or "").title()
     if not name:
-        return None
-    return db.query(Bank).filter(Bank.name == name).first()
+        return None, False
+    bank = db.query(Bank).filter(Bank.name == name).first()
+    if bank:
+        return bank, False
+    bank_type = _TIPO_TO_BANKTYPE.get(info.get("tipo_entidad"))
+    if not bank_type:
+        return None, False  # unknown category → not auto-created (alerted instead)
+    bank = Bank(
+        name=name,
+        bank_type=bank_type,
+        sib_code=info.get("sib_code"),
+        is_active=True,
+    )
+    db.add(bank)
+    db.flush()  # assign id
+    logger.info("Auto-registered new SIB entity: %s (%s)", name, bank_type.value)
+    return bank, True
 
 
 def _now() -> str:
@@ -201,7 +234,7 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
         # Incremental + idempotent: fetch and WRITE one tipoEntidad at a time,
         # committing after each. Data lands progressively (visible in stats) and a
         # restart only loses the in-progress type — a re-run upserts the rest.
-        created = updated = matched = skipped_period = 0
+        created = updated = matched = skipped_period = entities_created = 0
         errors: list = []
         unmatched: list = []
         for i, tipo in enumerate(tipos, 1):
@@ -211,10 +244,12 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             for short_name, periods in bulk.items():
                 if short_name.startswith("_"):
                     continue
-                bank = _match_bank(db, short_name)
+                bank, was_created = _match_or_create_bank(db, short_name)
                 if not bank:
-                    errors.append(f"{short_name}: banco no encontrado en la base")
+                    errors.append(f"{short_name}: entidad no catalogada")
                     continue
+                if was_created:
+                    entities_created += 1
                 matched += 1
                 code = SIB_ENTITY_CODES.get(short_name, {}).get("sib_code")
                 if code and not bank.sib_code:
@@ -248,17 +283,27 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             db.commit()  # persist this tipo before moving on (incremental)
             _write_status(db, phase=f"{tipo} listo ({i}/{len(tipos)}) · {matched} entidades, {created + updated} registros")
 
+        # Level 2: SIB returned entities we don't catalog → alert to add them.
+        new_alerts = (current.get("alerts") or [])[-48:]
+        uniq_unmatched = sorted(set(unmatched))
+        if uniq_unmatched:
+            new_alerts = (new_alerts + [
+                "Entidades del SIB no catalogadas (agrégalas al catálogo): "
+                + ", ".join(uniq_unmatched[:15])
+            ])[-49:]
+
         result = {
             "status": "completed",
             "entities_matched": matched,
+            "entities_created": entities_created,
             "records_created": created,
             "records_updated": updated,
             "periods_skipped_non_quarterly": skipped_period,
-            "unmatched": unmatched,
+            "unmatched": uniq_unmatched,
             "errors": errors[:20],
         }
         _write_status(db, is_running=False, phase="completado", last_sync=_now(),
-                      backfill_done=True, last_sync_result=result)
+                      backfill_done=True, last_sync_result=result, alerts=new_alerts)
         logger.info("SIB backfill: %s", result)
         return result
     except Exception as e:  # noqa: BLE001 — report any failure into status

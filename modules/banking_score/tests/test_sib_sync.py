@@ -104,6 +104,27 @@ def test_backfill_replaces_with_real_data(Session, monkeypatch):
     assert bank.sib_code == "BPD"  # populated from the SIB catalog
 
 
+def test_backfill_auto_registers_catalogued_entity(Session, monkeypatch):
+    """A SIB entity in the catalog but not in the DB is auto-created."""
+    db = Session()
+    other = Bank(name="Otro Banco", bank_type=BankType.banca_multiple)
+    db.add(other)
+    db.flush()
+    db.add(BankingData(bank_id=other.id, period_end=date(2024, 12, 31), source=DataSource.manual))
+    db.commit()
+    monkeypatch.setattr(sib_sync, "get_sib_data_client", lambda force_new=False: _StubClient())
+
+    result = sib_sync.run_backfill(force=True)
+    assert result["status"] == "completed"
+    assert result["entities_created"] >= 1  # Popular wasn't in the DB → created
+
+    db2 = Session()
+    popular = db2.query(Bank).filter_by(name="Banco Popular Dominicano").first()
+    assert popular is not None
+    assert popular.sib_code == "BPD"
+    assert popular.bank_type == BankType.banca_multiple
+
+
 def test_backfill_skipped_when_already_real(Session, monkeypatch):
     db = Session()
     bank = _seed_popular(db)
