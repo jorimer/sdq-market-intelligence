@@ -26,7 +26,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    role: UserRole = UserRole.viewer
+    # NOTE: role is intentionally NOT accepted here — public registration always
+    # creates a 'viewer'. Role elevation is server-side only (bootstrap/admin).
 
 
 class LoginRequest(BaseModel):
@@ -72,7 +73,7 @@ async def register(body: RegisterRequest, db: Session = Depends(get_db)):
         email=body.email,
         password_hash=hash_password(body.password),
         full_name=body.full_name,
-        role=body.role,
+        role=UserRole.viewer,
     )
     db.add(user)
     db.commit()

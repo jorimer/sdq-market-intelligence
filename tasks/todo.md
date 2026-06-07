@@ -253,7 +253,9 @@ Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pa
 - [x] Logs a **stdout** (`app/main.py` basicConfig + `infrastructure/log_config.json` de uvicorn vía `--log-config`) → Railway deja de clasificar INFO como error.
 - [x] `Body(example=...)` → `examples=[...]` en los 6 routers (elimina FastAPIDeprecationWarning de stderr).
 - [x] **Migraciones en el deploy** (PR #30): el `CMD` corre `alembic upgrade head` antes de uvicorn; la imagen espeja `infrastructure/` (alembic/ini/log_config) para que resuelvan paths e imports. Verificado: contenedor con sqlite limpio corre toda la cadena de migraciones y arranca (health 200).
-- [ ] Caveat pendiente del usuario: confirmar `DATABASE_URL`=**Postgres** en Railway (con esto el esquema se crea solo en el primer deploy).
+- [x] `DATABASE_URL`=Postgres confirmado por el usuario → el deploy crea el esquema solo.
+- [x] **Endurecimiento de prod** (PR #31): `/auth/register` fuerza `role=viewer` (cierra el hueco de auto-asignarse admin) + `scripts/prod_seed.py` (admin inicial idempotente desde `ADMIN_EMAIL`/`ADMIN_PASSWORD`, flags `--with-e2e`/`--with-banking`).
+- [ ] Pendiente operativo (usuario): correr `ADMIN_EMAIL=… ADMIN_PASSWORD=… python scripts/prod_seed.py` una vez desde la shell/one-off de Railway para crear el admin inicial.
 
 ## FASE 7 — Transversal / release
 
