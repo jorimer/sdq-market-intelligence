@@ -61,6 +61,9 @@ app.include_router(sector_intel_router, prefix="/api/v1/sector-intel", tags=["Se
 app.include_router(social_dev_router, prefix="/api/v1/social-dev", tags=["Social Dev"])
 app.include_router(esg_climate_router, prefix="/api/v1/esg-climate", tags=["ESG & Climate"])
 
+from shared.settings.router import router as settings_router
+app.include_router(settings_router, prefix="/api/v1/settings", tags=["Settings"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
 
