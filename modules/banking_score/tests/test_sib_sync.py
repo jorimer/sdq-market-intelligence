@@ -50,6 +50,12 @@ class _StubClient:
     def check_connectivity(self):
         return {"reachable": True, "status_code": 200}
 
+    def get_working_tipos(self):
+        return ["BM"]
+
+    def extract_one_tipo(self, tipo, period_start="2021-01"):
+        return self.extract_all_entities_bulk(period_start=period_start)
+
     def extract_all_entities_bulk(self, period_start="2021-01"):
         return {
             "Popular": [
