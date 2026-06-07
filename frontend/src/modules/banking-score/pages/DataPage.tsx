@@ -8,6 +8,8 @@ import { getStats, listPeriods, BankStats } from "../api";
 
 interface SyncStatus {
   is_running: boolean;
+  phase?: string;
+  started_at?: string | null;
   last_sync: string | null;
   last_check?: string | null;
   next_scheduled: string | null;
@@ -195,6 +197,26 @@ export function DataPage() {
           />
           {syncStatus ? (
             <div className="space-y-3">
+              {syncStatus.is_running && (
+                <div className="rounded-[10px] border border-accent/40 bg-accent-soft p-3">
+                  <div className="flex items-center gap-2 text-sm text-accent-ink font-medium">
+                    <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+                    <span className="truncate">{syncStatus.phase || "En progreso…"}</span>
+                    {syncStatus.started_at && (
+                      <span className="ml-auto mono text-xs text-muted shrink-0">
+                        {Math.max(0, Math.round((Date.now() - new Date(syncStatus.started_at).getTime()) / 60000))} min
+                      </span>
+                    )}
+                  </div>
+                  {/* Indeterminate progress bar */}
+                  <div className="mt-2 h-1.5 rounded-full bg-surface2 overflow-hidden">
+                    <div className="h-full w-1/3 rounded-full bg-accent animate-pulse" />
+                  </div>
+                  <p className="text-xs text-muted mt-2">
+                    La extracción del SIB puede tardar 10–20 min. Puedes salir de esta pantalla; el proceso sigue.
+                  </p>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted">Última sincronización</span>
                 <span className="mono text-ink">{syncStatus.last_sync?.slice(0, 19).replace("T", " ") || "—"}</span>
