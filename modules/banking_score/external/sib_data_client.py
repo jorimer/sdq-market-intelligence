@@ -76,6 +76,12 @@ SIB_ENTITY_CODES: Dict[str, Dict[str, Any]] = {
     "Unión":         {"sib_code": "UNI",   "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORRO Y CREDITO UNION"},
     "Gruficorp":     {"sib_code": "GRU",   "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORRO Y CREDITO GRUFICORP"},
     "Bonanza":       {"sib_code": "BON",   "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORRO Y CREDITO BONANZA"},
+
+    # Corporaciones de Crédito (CC) — report via estados/situacion/eif like banks.
+    # API entity codes confirmed live (2026): MONUMENTAL, NORPRESA, OFICORP.
+    "Monumental":    {"sib_code": "MONUMENTAL", "tipo_entidad": "CC", "nombre_sib": "CORPORACION DE CREDITO MONUMENTAL"},
+    "Nordestana":    {"sib_code": "NORPRESA",   "tipo_entidad": "CC", "nombre_sib": "CORPORACION DE CREDITO NORDESTANA DE PRESTAMOS"},
+    "Oficorp":       {"sib_code": "OFICORP",    "tipo_entidad": "CC", "nombre_sib": "CORPORACION DE CREDITO OFICORP"},
 }
 
 
@@ -517,9 +523,11 @@ class SIBDataClient:
         "BM": "BM",      # Same
         "BAC": "BAyC",   # Internal BAC → SIB BAyC
         "AAP": "AAyP",   # Internal AAP → SIB AAyP (to be confirmed)
+        "CC": "CC",      # Corporaciones de Crédito (confirmed live)
     }
-    # All candidate SIB entity types to try (we'll auto-discover which work)
-    SIB_TIPO_ENTIDAD_CANDIDATES = ["BM", "BAyC", "AAyP", "BAC", "AAP"]
+    # All candidate SIB entity types to try (we'll auto-discover which work).
+    # CC (corporaciones de crédito) report via the same EIF endpoints as banks.
+    SIB_TIPO_ENTIDAD_CANDIDATES = ["BM", "BAyC", "AAyP", "CC", "BAC", "AAP"]
     # Will be set by _discover_working_tipo_codes()
     _discovered_tipo_codes: List[str] = []
 
