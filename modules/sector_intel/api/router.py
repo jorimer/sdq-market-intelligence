@@ -70,7 +70,7 @@ async def sectors(
 
 @router.post("/iai", summary="Calcular IAI (sin persistir)")
 async def iai(
-    payload: Dict[str, Any] = Body(..., example={"sector_code": "turismo", "dataset": _EXAMPLE_DATASET}),
+    payload: Dict[str, Any] = Body(..., examples=[{"sector_code": "turismo", "dataset": _EXAMPLE_DATASET}]),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     sector_code = payload.get("sector_code")
@@ -91,14 +91,14 @@ async def iai(
 async def snapshot(
     payload: Dict[str, Any] = Body(
         ...,
-        example={
+        examples=[{
             "period": "2025",
             "dataset": _EXAMPLE_DATASET,
             "sgps_inputs": {
                 "turismo": {"historical": 75, "structural": 80},
                 "energia": {"historical": 60, "structural": 70},
             },
-        },
+        }],
     ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

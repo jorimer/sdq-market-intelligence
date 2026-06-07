@@ -36,7 +36,7 @@ _EXAMPLE_FLOWS = [
     description="HHI de exportaciones, diversificación, dependencia de importaciones y resiliencia.",
 )
 async def score(
-    payload: Dict[str, Any] = Body(..., example={"flows": _EXAMPLE_FLOWS}),
+    payload: Dict[str, Any] = Body(..., examples=[{"flows": _EXAMPLE_FLOWS}]),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     flows = payload.get("flows")
@@ -52,7 +52,7 @@ async def score(
 )
 async def snapshot(
     payload: Dict[str, Any] = Body(
-        ..., example={"period": "2025", "flows": _EXAMPLE_FLOWS}
+        ..., examples=[{"period": "2025", "flows": _EXAMPLE_FLOWS}]
     ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

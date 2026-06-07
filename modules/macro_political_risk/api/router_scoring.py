@@ -58,14 +58,14 @@ async def get_weights() -> Dict[str, Any]:
 async def score_country(
     payload: Dict[str, Any] = Body(
         ...,
-        example={
+        examples=[{
             "country_code": "DO",
             "dataset": {
                 "DO": {"gdp_cagr_3y": 4.5, "public_debt_gdp": 45.0},
                 "CR": {"gdp_cagr_3y": 3.2, "public_debt_gdp": 63.0},
                 "PA": {"gdp_cagr_3y": 5.1, "public_debt_gdp": 52.0},
             },
-        },
+        }],
     ),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -90,7 +90,7 @@ async def score_country(
 async def create_snapshot(
     payload: Dict[str, Any] = Body(
         ...,
-        example={
+        examples=[{
             "country_code": "DO",
             "period_end": "2025-12-31",
             "country_name": "República Dominicana",
@@ -100,7 +100,7 @@ async def create_snapshot(
                 "CR": {"gdp_cagr_3y": 3.2, "public_debt_gdp": 63.0},
                 "PA": {"gdp_cagr_3y": 5.1, "public_debt_gdp": 52.0},
             },
-        },
+        }],
     ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

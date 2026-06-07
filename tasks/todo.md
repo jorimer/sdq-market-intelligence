@@ -247,6 +247,13 @@ Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pa
 
 ---
 
+## Saneamiento de release (deploy)  ✅ 2026-06-06 (PR #29)
+- [x] Producción **sí** despliega vía integración nativa Railway↔GitHub (deploy en push a main); verificado con logs (health 200).
+- [x] Eliminado el job `deploy-railway` del CI (redundante; fallaba por `RAILWAY_TOKEN` vacío y ponía `main` en rojo).
+- [x] Logs a **stdout** (`app/main.py` basicConfig + `infrastructure/log_config.json` de uvicorn vía `--log-config`) → Railway deja de clasificar INFO como error.
+- [x] `Body(example=...)` → `examples=[...]` en los 6 routers (elimina FastAPIDeprecationWarning de stderr).
+- [ ] Caveat pendiente del usuario: confirmar `DATABASE_URL`=Postgres en Railway (no SQLite efímero) + que corran migraciones Alembic al deploy.
+
 ## FASE 7 — Transversal / release
 
 - [ ] Cada modelo nuevo registrado en `infrastructure/alembic/env.py` + migración generada y aplicada
