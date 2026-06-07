@@ -252,7 +252,8 @@ Reglas duras: tokens vía CSS vars, cabeceras a una línea, **4 estados** por pa
 - [x] Eliminado el job `deploy-railway` del CI (redundante; fallaba por `RAILWAY_TOKEN` vacío y ponía `main` en rojo).
 - [x] Logs a **stdout** (`app/main.py` basicConfig + `infrastructure/log_config.json` de uvicorn vía `--log-config`) → Railway deja de clasificar INFO como error.
 - [x] `Body(example=...)` → `examples=[...]` en los 6 routers (elimina FastAPIDeprecationWarning de stderr).
-- [ ] Caveat pendiente del usuario: confirmar `DATABASE_URL`=Postgres en Railway (no SQLite efímero) + que corran migraciones Alembic al deploy.
+- [x] **Migraciones en el deploy** (PR #30): el `CMD` corre `alembic upgrade head` antes de uvicorn; la imagen espeja `infrastructure/` (alembic/ini/log_config) para que resuelvan paths e imports. Verificado: contenedor con sqlite limpio corre toda la cadena de migraciones y arranca (health 200).
+- [ ] Caveat pendiente del usuario: confirmar `DATABASE_URL`=**Postgres** en Railway (con esto el esquema se crea solo en el primer deploy).
 
 ## FASE 7 — Transversal / release
 

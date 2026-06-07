@@ -24,9 +24,9 @@ COPY shared/ ./shared/
 COPY modules/ ./modules/
 COPY app/ ./app/
 COPY scripts/ ./scripts/
-COPY infrastructure/alembic/ ./alembic/
-COPY infrastructure/alembic.ini ./alembic.ini
-COPY infrastructure/log_config.json ./log_config.json
+COPY infrastructure/alembic/ ./infrastructure/alembic/
+COPY infrastructure/alembic.ini ./infrastructure/alembic.ini
+COPY infrastructure/log_config.json ./infrastructure/log_config.json
 
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
@@ -43,4 +43,5 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2 --log-config log_config.json"]
+# Run DB migrations (release phase) before serving, then start uvicorn.
+CMD ["sh", "-c", "alembic -c infrastructure/alembic.ini upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2 --log-config infrastructure/log_config.json"]
