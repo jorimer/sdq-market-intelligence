@@ -76,6 +76,7 @@ def _read_status(db: Session) -> Dict:
 def _write_status(db: Session, **updates) -> Dict:
     st = _read_status(db)
     st.update(updates)
+    st["heartbeat"] = datetime.now(timezone.utc).isoformat()  # liveness, per update
     payload = json.dumps(st)
     try:
         row = db.query(AppSetting).filter(AppSetting.key == _STATUS_KEY).first()
@@ -95,11 +96,13 @@ def get_sync_status(db: Optional[Session] = None) -> Dict:
     db = db or SessionLocal()
     try:
         st = _read_status(db)
-        # Clear a stale "running" flag (e.g. worker died mid-run) so the UI recovers.
-        if st.get("is_running") and st.get("started_at"):
+        # Clear a stale "running" flag only if there's been no heartbeat for a
+        # while (worker truly died) — not merely because the job is long-running.
+        ref = st.get("heartbeat") or st.get("started_at")
+        if st.get("is_running") and ref:
             try:
-                started = datetime.fromisoformat(st["started_at"])
-                if (datetime.now(timezone.utc) - started).total_seconds() > _STALE_SECONDS:
+                last = datetime.fromisoformat(ref)
+                if (datetime.now(timezone.utc) - last).total_seconds() > _STALE_SECONDS:
                     st = _write_status(db, is_running=False, phase="(interrumpido)")
             except (ValueError, TypeError):
                 pass
