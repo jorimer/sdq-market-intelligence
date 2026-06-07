@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Building2, ChevronDown } from "lucide-react";
 import { listBanks, BankRef } from "../api";
+import { ENTITY_TYPES } from "../entityTypes";
 
 interface Props {
   value: string; // bank id
@@ -11,6 +12,7 @@ interface Props {
 export function BankSelector({ value, onChange, placeholder }: Props) {
   const [banks, setBanks] = useState<BankRef[]>([]);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState(""); // entity_type ("área")
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -19,8 +21,10 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
       .catch(() => setBanks([]));
   }, []);
 
-  const filtered = banks.filter((b) =>
-    b.name.toLowerCase().includes(search.toLowerCase()),
+  const filtered = banks.filter(
+    (b) =>
+      b.name.toLowerCase().includes(search.toLowerCase()) &&
+      (!typeFilter || b.bank_type === typeFilter),
   );
   const selectedName = banks.find((b) => b.id === value)?.name;
 
@@ -39,7 +43,18 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
 
       {open && (
         <div className="absolute z-20 mt-1 w-full bg-surface rounded-[10px] shadow-pop border border-line max-h-72 overflow-hidden">
-          <div className="p-2 border-b border-line">
+          <div className="p-2 border-b border-line space-y-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="field text-sm py-1.5"
+            >
+              {ENTITY_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.value === "" ? "Todos los tipos" : t.label}
+                </option>
+              ))}
+            </select>
             <div className="flex items-center gap-2 px-2">
               <Search className="w-4 h-4 text-faint" />
               <input
