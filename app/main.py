@@ -5,6 +5,7 @@ import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 
 # Log to stdout so platform log collectors (Railway) don't flag INFO as errors.
 logging.basicConfig(
@@ -66,6 +67,40 @@ from modules.banking_score.events import register_subscribers as register_bankin
 register_sector_subscribers()  # sector_intel ← macro/irmp/trade .updated (SGPS acceleration)
 register_banking_subscribers()  # banking_score ← irmp.updated (outlook overlay)
 
-# Serve frontend in production
+# Serve frontend in production.
+#
+# Cache strategy for the SPA:
+#   - index.html must NEVER be cached: it references hash-named asset files, so a
+#     stale index.html points at old bundles and the user sees an outdated UI.
+#     We force revalidation on every load (no-cache).
+#   - /assets/* are content-hashed by Vite (e.g. index-BT2GSx-5.js); the URL
+#     changes whenever the content changes, so they're safe to cache forever.
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        try:
+            response = await super().get_response(path, scope)
+        except HTTPException as exc:
+            # SPA fallback: the frontend uses BrowserRouter, so client-side routes
+            # (e.g. /banking-score) have no file on disk and StaticFiles raises
+            # 404. Serve index.html instead so the router can take over. Real
+            # missing assets keep their 404 (their path starts with "assets/").
+            if exc.status_code == 404 and not path.startswith("assets/"):
+                response = await super().get_response("index.html", scope)
+            else:
+                raise
+        # Key off the resolved content type: with html=True (and the fallback
+        # above) Starlette rewrites the request path to index.html, so the request
+        # path alone is unreliable for telling HTML from a hashed asset.
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("text/html"):
+            # index.html references hash-named assets; a stale copy points at old
+            # bundles, so it must always be revalidated.
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        elif path.startswith("assets/"):
+            # Content-hashed by Vite — the URL changes on every build, so cache hard.
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 if os.path.exists("frontend/dist"):
-    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+    app.mount("/", SPAStaticFiles(directory="frontend/dist", html=True), name="frontend")
