@@ -19,7 +19,7 @@ export interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
-  ready?: boolean; // axis has a real UI (vs. placeholder)
+  ready?: boolean; // has a real UI/connector (vs. placeholder "pronto")
 }
 
 export interface NavGroup {
@@ -38,6 +38,16 @@ export const NAV: NavGroup[] = [
       { to: "/social-dev", label: "Social & desarrollo", icon: Users, ready: true },
       { to: "/trade-intel", label: "Comercio exterior", icon: Ship, ready: true },
       { to: "/esg-climate", label: "ESG & clima", icon: Leaf, ready: true },
+    ],
+  },
+  {
+    title: "Datos",
+    items: [
+      { to: "/datos/banca", label: "Banca · SIB", icon: Landmark, ready: true },
+      { to: "/datos/macro", label: "Macro · BCRD", icon: LineChart, ready: false },
+      { to: "/datos/social", label: "Social · ONE", icon: Users, ready: false },
+      { to: "/datos/comercio", label: "Comercio · Comtrade", icon: Ship, ready: false },
+      { to: "/datos/gobernanza", label: "Gobernanza · WGI", icon: Scale, ready: false },
     ],
   },
   {
