@@ -15,8 +15,15 @@ def test_entity_catalog_integrity():
     assert len(etl.SIB_ENTITY_CODES) >= 30
     for short, info in etl.SIB_ENTITY_CODES.items():
         assert info["sib_code"], f"{short} sin sib_code"
-        assert info["tipo_entidad"] in {"BM", "AAP", "BAC"}, info["tipo_entidad"]
+        assert info["tipo_entidad"] in {"BM", "AAP", "BAC", "CC"}, info["tipo_entidad"]
         assert info["nombre_sib"]
+
+
+def test_corporaciones_credito_covered():
+    """Corporaciones de crédito (CC) are in the catalog and fetch candidates."""
+    cc = {k: v for k, v in etl.SIB_ENTITY_CODES.items() if v["tipo_entidad"] == "CC"}
+    assert set(cc) == {"Monumental", "Nordestana", "Oficorp"}
+    assert "CC" in SIBDataClient.SIB_TIPO_ENTIDAD_CANDIDATES
 
 
 def test_client_none_without_key(monkeypatch):

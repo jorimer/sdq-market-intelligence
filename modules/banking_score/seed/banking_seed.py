@@ -66,6 +66,11 @@ BANKING_ENTITIES: List[Dict] = [
     {"name": "Banco de Ahorro y Crédito Unión",                    "short": "Unión",         "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 6_000},
     {"name": "Banco de Ahorro y Crédito Gruficorp",                "short": "Gruficorp",     "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 5_000},
     {"name": "Banco de Ahorro y Crédito Bonanza",                  "short": "Bonanza",       "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 4_000},
+
+    # ── Corporaciones de Crédito (3) ─────────────────────────────
+    {"name": "Corporación de Crédito Monumental",                  "short": "Monumental",    "type": "corporacion_credito", "tier": "small", "asset_base": 1_200},
+    {"name": "Corporación de Crédito Nordestana de Préstamos",     "short": "Nordestana",    "type": "corporacion_credito", "tier": "small", "asset_base": 900},
+    {"name": "Corporación de Crédito Oficorp",                     "short": "Oficorp",       "type": "corporacion_credito", "tier": "small", "asset_base": 700},
 ]
 
 # ═══════════════════════════════════════════════════════════════════
@@ -280,6 +285,7 @@ def _map_entity_type(entity_type: str) -> BankType:
         "banca_multiple": BankType.banca_multiple,
         "aap": BankType.aap,
         "banco_ahorro_credito": BankType.banco_ahorro_credito,
+        "corporacion_credito": BankType.corporacion_credito,
     }
     return mapping[entity_type]
 
@@ -290,6 +296,9 @@ def _get_profile_key(entity_type: str, tier: str) -> tuple:
         "banca_multiple": "banca_multiple",
         "aap": "asociacion",
         "banco_ahorro_credito": "ahorro_credito",
+        # Corporaciones de crédito: small credit institutions — reuse the
+        # ahorro_credito archetype for placeholder data (real data via backfill).
+        "corporacion_credito": "ahorro_credito",
     }
     return (type_map[entity_type], tier)
 
