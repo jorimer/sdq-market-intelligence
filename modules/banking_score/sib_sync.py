@@ -10,6 +10,7 @@ Only quarter-end periods are ingested (the platform is quarterly; the model's
 PeriodType has no monthly value). Long-running work runs in a background thread;
 progress is exposed via :func:`get_sync_status` for the "Sincronización SIB" UI.
 """
+import json
 import logging
 import threading
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from shared.database.session import SessionLocal
+from shared.settings.models import AppSetting
 from modules.banking_score.external.sib_data_client import (
     SIB_ENTITY_CODES,
     get_sib_data_client,
@@ -37,8 +39,17 @@ logger = logging.getLogger("sdq.banking.sib_sync")
 # Official bank name per SIB short name (seed shorts match the SIB catalog 1:1).
 _SHORT_TO_NAME = {e["short"]: e["name"] for e in BANKING_ENTITIES}
 
-_sync_status: Dict = {
+# Sync status lives in the DB (AppSetting) so it's shared across uvicorn workers —
+# an in-memory dict was invisible to the worker handling the status poll, making a
+# running backfill look dead. Treated as stale after this many seconds.
+_STATUS_KEY = "sib_sync_status"
+_STALE_SECONDS = 30 * 60
+_lock = threading.Lock()
+
+_DEFAULT_STATUS: Dict = {
     "is_running": False,
+    "phase": "",
+    "started_at": None,
     "last_sync": None,
     "last_check": None,
     "next_scheduled": None,
@@ -46,11 +57,56 @@ _sync_status: Dict = {
     "last_sync_result": None,
     "alerts": [],
 }
-_lock = threading.Lock()
 
 
-def get_sync_status() -> Dict:
-    return dict(_sync_status)
+def _read_status(db: Session) -> Dict:
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == _STATUS_KEY).first()
+    except Exception:  # noqa: BLE001 — table may not exist yet (pre-migration/tests)
+        db.rollback()
+        return dict(_DEFAULT_STATUS)
+    if row and row.value:
+        try:
+            return {**_DEFAULT_STATUS, **json.loads(row.value)}
+        except (ValueError, TypeError):
+            pass
+    return dict(_DEFAULT_STATUS)
+
+
+def _write_status(db: Session, **updates) -> Dict:
+    st = _read_status(db)
+    st.update(updates)
+    payload = json.dumps(st)
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == _STATUS_KEY).first()
+        if row:
+            row.value = payload
+            row.is_secret = False
+        else:
+            db.add(AppSetting(key=_STATUS_KEY, value=payload, is_secret=False))
+        db.commit()
+    except Exception:  # noqa: BLE001 — never let status persistence break the run
+        db.rollback()
+    return st
+
+
+def get_sync_status(db: Optional[Session] = None) -> Dict:
+    own = db is None
+    db = db or SessionLocal()
+    try:
+        st = _read_status(db)
+        # Clear a stale "running" flag (e.g. worker died mid-run) so the UI recovers.
+        if st.get("is_running") and st.get("started_at"):
+            try:
+                started = datetime.fromisoformat(st["started_at"])
+                if (datetime.now(timezone.utc) - started).total_seconds() > _STALE_SECONDS:
+                    st = _write_status(db, is_running=False, phase="(interrumpido)")
+            except (ValueError, TypeError):
+                pass
+        return st
+    finally:
+        if own:
+            db.close()
 
 
 def bank_data_stats(db: Session) -> Dict:
@@ -100,84 +156,83 @@ def _now() -> str:
 def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
     """Replace synthetic data with real SIB data (quarter-end periods only).
 
-    Synchronous — callers run it in a background thread. Returns a summary and
-    updates the module-level sync status.
+    Synchronous — callers run it in a background thread. Drives the DB-backed
+    sync status so progress is visible across all workers, and returns a summary.
     """
-    with _lock:
-        if _sync_status["is_running"]:
-            return {"status": "already_running", "message": "Ya hay una sincronización en progreso."}
-        _sync_status["is_running"] = True
-
+    db = SessionLocal()
     try:
-        db = SessionLocal()
-        try:
-            if not force and not needs_backfill(db):
-                return {
-                    "status": "skipped",
-                    "message": "Ya hay datos reales del SIB (source=sib_api). Use force=true para re-ejecutar.",
-                }
-        finally:
-            db.close()
+        with _lock:
+            current = get_sync_status(db)
+            if current.get("is_running"):
+                return {"status": "already_running", "message": "Ya hay una sincronización en progreso."}
+            _write_status(db, is_running=True, phase="iniciando", started_at=_now(),
+                          last_check=_now())
+
+        if not force and not needs_backfill(db):
+            _write_status(db, is_running=False, phase="")
+            return {
+                "status": "skipped",
+                "message": "Ya hay datos reales del SIB (source=sib_api). Use force=true para re-ejecutar.",
+            }
 
         client = get_sib_data_client(force_new=True)
         if client is None:
             msg = "Clave del SIB no configurada. Configúrela en Configuración → APIs de Benchmarks por Sector."
-            _sync_status["alerts"] = (_sync_status["alerts"] + [msg])[-50:]
+            _write_status(db, is_running=False, phase="error", alerts=(current.get("alerts") or [])[-49:] + [msg])
             return {"status": "error", "message": msg}
 
-        _sync_status["last_check"] = _now()
+        _write_status(db, phase="probando conexión")
         conn = client.check_connectivity()
         if not conn.get("reachable"):
             msg = f"No se pudo alcanzar la API del SIB ({conn.get('status_code')}). ¿Proxy configurado?"
-            _sync_status["alerts"] = (_sync_status["alerts"] + [msg])[-50:]
+            _write_status(db, is_running=False, phase="error", alerts=(current.get("alerts") or [])[-49:] + [msg])
             return {"status": "error", "message": msg, "connectivity": conn}
 
+        _write_status(db, phase="extrayendo de la API (puede tomar varios minutos)")
         bulk = client.extract_all_entities_bulk(period_start=period_start)
 
+        _write_status(db, phase="escribiendo datos")
         created = updated = matched = skipped_period = 0
         errors = []
-        db = SessionLocal()
-        try:
-            for short_name, periods in bulk.items():
-                if short_name.startswith("_"):
-                    continue
-                bank = _match_bank(db, short_name)
-                if not bank:
-                    errors.append(f"{short_name}: banco no encontrado en la base")
-                    continue
-                matched += 1
-                code = SIB_ENTITY_CODES.get(short_name, {}).get("sib_code")
-                if code and not bank.sib_code:
-                    bank.sib_code = code
+        for short_name, periods in bulk.items():
+            if short_name.startswith("_"):
+                continue
+            bank = _match_bank(db, short_name)
+            if not bank:
+                errors.append(f"{short_name}: banco no encontrado en la base")
+                continue
+            matched += 1
+            code = SIB_ENTITY_CODES.get(short_name, {}).get("sib_code")
+            if code and not bank.sib_code:
+                bank.sib_code = code
 
-                for rec in periods:
-                    rec = dict(rec)
-                    pe = rec.pop("period_end")
-                    rec.pop("period_type", None)
-                    rec.pop("source", None)
-                    # Quarterly platform: only ingest quarter-end periods.
-                    if pe.month not in (3, 6, 9, 12):
-                        skipped_period += 1
-                        continue
-                    existing = (
-                        db.query(BankingData)
-                        .filter_by(bank_id=bank.id, period_end=pe)
-                        .first()
-                    )
-                    row = existing or BankingData(bank_id=bank.id, period_end=pe)
-                    row.period_type = PeriodType.quarterly
-                    row.source = DataSource.sib_api
-                    for k, v in rec.items():
-                        if v is not None:
-                            setattr(row, k, v)
-                    if existing:
-                        updated += 1
-                    else:
-                        db.add(row)
-                        created += 1
-                db.commit()
-        finally:
-            db.close()
+            for rec in periods:
+                rec = dict(rec)
+                pe = rec.pop("period_end")
+                rec.pop("period_type", None)
+                rec.pop("source", None)
+                # Quarterly platform: only ingest quarter-end periods.
+                if pe.month not in (3, 6, 9, 12):
+                    skipped_period += 1
+                    continue
+                existing = (
+                    db.query(BankingData)
+                    .filter_by(bank_id=bank.id, period_end=pe)
+                    .first()
+                )
+                row = existing or BankingData(bank_id=bank.id, period_end=pe)
+                row.period_type = PeriodType.quarterly
+                row.source = DataSource.sib_api
+                for k, v in rec.items():
+                    if v is not None:
+                        setattr(row, k, v)
+                if existing:
+                    updated += 1
+                else:
+                    db.add(row)
+                    created += 1
+            db.commit()
+            _write_status(db, phase=f"escribiendo… {matched} entidades, {created + updated} registros")
 
         result = {
             "status": "completed",
@@ -188,26 +243,29 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             "unmatched": bulk.get("_unmatched", []),
             "errors": errors[:20],
         }
-        _sync_status["last_sync"] = _now()
-        _sync_status["backfill_done"] = True
-        _sync_status["last_sync_result"] = result
+        _write_status(db, is_running=False, phase="completado", last_sync=_now(),
+                      backfill_done=True, last_sync_result=result)
         logger.info("SIB backfill: %s", result)
         return result
     except Exception as e:  # noqa: BLE001 — report any failure into status
         logger.exception("SIB backfill failed")
-        _sync_status["alerts"] = (_sync_status["alerts"] + [str(e)[:200]])[-50:]
+        try:
+            _write_status(db, is_running=False, phase="error",
+                          alerts=(_read_status(db).get("alerts") or [])[-49:] + [str(e)[:200]])
+        except Exception:  # noqa: BLE001
+            pass
         return {"status": "error", "message": str(e)[:300]}
     finally:
-        _sync_status["is_running"] = False
+        db.close()
 
 
 def start_backfill_background(force: bool = False) -> Dict:
     """Kick off a backfill in a daemon thread; returns immediately."""
-    if _sync_status["is_running"]:
+    if get_sync_status().get("is_running"):
         return {"status": "already_running", "message": "Ya hay una sincronización en progreso."}
     threading.Thread(target=run_backfill, kwargs={"force": force}, daemon=True).start()
     return {
         "status": "started",
-        "message": "Backfill SIB iniciado en segundo plano (3–5 min). "
-                   "Consulte el estado en esta misma pantalla.",
+        "message": "Backfill SIB iniciado en segundo plano. La extracción completa "
+                   "puede tardar 10–20 min; el estado se actualiza en esta pantalla.",
     }
