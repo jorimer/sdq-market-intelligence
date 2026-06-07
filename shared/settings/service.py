@@ -7,7 +7,7 @@ back to env-based defaults so a fresh deployment still works.
 """
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -192,6 +192,46 @@ def get_sector_api_proxy(db: Session, provider: str) -> Tuple[str, str]:
     if cfg and cfg.enabled and cfg.proxy_url:
         return cfg.proxy_url, decrypt(cfg.proxy_secret_enc or "")
     return "", ""
+
+
+def find_banking_source(db: Session) -> Optional[SectorApiConfig]:
+    """Resolve the SIB banking data source WITHOUT depending on a magic provider
+    id. Preference order among *enabled* configs:
+      1. provider == "sb_do" (the canonical id), else
+      2. any provider with sector == "banking", preferring country "DO".
+
+    This lets an operator name the provider anything (e.g. "SDQFinAnalyst") and
+    still have the banking connector find it, as long as sector=banking.
+    """
+    rows = db.query(SectorApiConfig).filter(SectorApiConfig.enabled).all()
+    for r in rows:
+        if r.provider == "sb_do":
+            return r
+    banking = [r for r in rows if (r.sector or "").strip().lower() == "banking"]
+    do_first = [r for r in banking if (r.country or "").strip().upper() == "DO"]
+    return (do_first or banking or [None])[0]
+
+
+def get_sib_credentials(db: Session) -> Dict[str, str]:
+    """Resolve SIB credentials for the banking connector (sector-based, see
+    :func:`find_banking_source`), with env/config fallbacks."""
+    cfg = find_banking_source(db)
+    if cfg:
+        proxy_url = cfg.proxy_url or ""
+        return {
+            "api_key": decrypt(cfg.api_key_enc or "") or app_settings.SIB_API_KEY,
+            "api_key_secondary": decrypt(cfg.api_key_secondary_enc or ""),
+            "base_url": cfg.base_url or app_settings.SIB_API_BASE_URL,
+            "proxy_url": proxy_url,
+            "proxy_secret": decrypt(cfg.proxy_secret_enc or "") if proxy_url else "",
+        }
+    return {
+        "api_key": app_settings.SIB_API_KEY,
+        "api_key_secondary": "",
+        "base_url": app_settings.SIB_API_BASE_URL,
+        "proxy_url": "",
+        "proxy_secret": "",
+    }
 
 
 # ── Connection test ───────────────────────────────────────────────

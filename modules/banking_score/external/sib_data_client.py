@@ -1515,22 +1515,21 @@ _sib_data_client: Optional[SIBDataClient] = None
 
 
 def _resolve_sib_config() -> Tuple[str, str, str, str]:
-    """Resolve ``(api_key, base_url, proxy_url, proxy_secret)`` for the ``sb_do``
-    provider from the in-app settings (Postgres), with env/config fallbacks.
+    """Resolve ``(api_key, base_url, proxy_url, proxy_secret)`` for the SIB
+    banking source from the in-app settings (Postgres), with env/config fallbacks.
 
-    Credentials are managed from the app's Configuración screen
-    (``shared.settings``); the service helpers already fall back to
-    ``settings.SIB_API_KEY`` / ``settings.SIB_API_BASE_URL`` when unset.
+    The source is matched by sector (``find_banking_source``) — provider id
+    ``sb_do`` preferred, else any enabled banking provider (country DO first) —
+    so the operator can name the provider anything in the Configuración screen.
     """
     from shared.database.session import SessionLocal
     from shared.settings import service as settings_service
 
     db = SessionLocal()
     try:
-        api_key = settings_service.get_sector_api_key(db, "sb_do")
-        base_url = settings_service.get_sector_api_base_url(db, "sb_do") or "https://apis.sb.gob.do/estadisticas/v2"
-        proxy_url, proxy_secret = settings_service.get_sector_api_proxy(db, "sb_do")
-        return api_key, base_url.rstrip("/"), proxy_url, proxy_secret
+        creds = settings_service.get_sib_credentials(db)
+        base_url = (creds["base_url"] or "https://apis.sb.gob.do/estadisticas/v2").rstrip("/")
+        return creds["api_key"], base_url, creds["proxy_url"], creds["proxy_secret"]
     finally:
         db.close()
 
