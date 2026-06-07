@@ -272,6 +272,54 @@ async def sync_status(
     return st
 
 
+# ─── SIB explorer (discover supervised entity universe, live) ────
+
+@router.get(
+    "/sib-explore",
+    summary="Explorar entidades supervisadas (API SIB en vivo)",
+    description="Lista los tipos de entidad y nombres que devuelve la API del SIB, para mapear la cobertura. Requiere rol admin y SIB configurado.",
+)
+async def sib_explore(
+    period: str = Query("2024-12", description="Período YYYY-MM a consultar"),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Se requiere rol admin")
+    from modules.banking_score.external.sib_data_client import get_sib_data_client
+
+    client = get_sib_data_client(force_new=True)
+    if client is None:
+        raise HTTPException(status_code=400, detail="SIB no configurada (clave/proxy).")
+
+    def _distinct_entities(records):
+        by_type: Dict[str, set] = {}
+        for r in records:
+            te = r.get("tipoEntidad") or r.get("tipoentidad") or r.get("tipo") or "?"
+            ent = r.get("entidad") or r.get("nombreEntidad") or r.get("nombre") or "?"
+            by_type.setdefault(str(te), set()).add(str(ent))
+        return {te: sorted(s)[:60] for te, s in by_type.items()}
+
+    result: Dict[str, object] = {"period": period}
+    try:
+        principales = client._get("indicadores/principales", {"periodoInicial": period, "periodoFinal": period})
+        result["principales_fields"] = list(principales[0].keys()) if principales else []
+        result["principales_sample"] = principales[:2]
+        result["entities_by_type"] = _distinct_entities(principales)
+    except Exception as e:  # noqa: BLE001
+        result["principales_error"] = str(e)[:300]
+
+    # Exchange houses (intermediación cambiaria) use the EIC endpoints.
+    try:
+        eic = client._get("estados/situacion/eic", {"periodoInicial": period, "periodoFinal": period})
+        result["eic_count"] = len(eic)
+        result["eic_fields"] = list(eic[0].keys()) if eic else []
+        result["eic_entities"] = sorted({str(r.get("entidad") or r.get("nombreEntidad") or "?") for r in eic})[:60]
+    except Exception as e:  # noqa: BLE001
+        result["eic_error"] = str(e)[:300]
+
+    return result
+
+
 # ─── Data overview stats (for the "Base de Datos Bancaria" card) ─
 
 @router.get(
