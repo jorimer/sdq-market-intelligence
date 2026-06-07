@@ -227,48 +227,32 @@ async def seed_banks(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ─── SIB Sync ────────────────────────────────────────────────────
-
-@router.post(
-    "/sib-sync",
-    summary="Sincronizar con API SIB",
-    description="Sincroniza datos bancarios desde la API de la Superintendencia de Bancos. Requiere SIB_API_KEY.",
-)
-async def sync_from_sib(
-    period_end: str = Query("", description="Período final YYYY-MM (vacío = mes actual)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if current_user.role != UserRole.admin:
-        raise HTTPException(status_code=403, detail="Se requiere rol admin")
-
-    # SIB client stub — will be implemented in PASO 5
-    return {
-        "success": False,
-        "message": "Cliente SIB pendiente de implementación en Paso 5",
-    }
-
-
-# ─── SIB Backfill ────────────────────────────────────────────────
+# ─── SIB Backfill (replace synthetic data with real SIB data) ────
 
 @router.post(
     "/sib-backfill",
     summary="Backfill histórico desde SIB",
-    description="Reemplaza datos sintéticos con datos reales de la API SIB. Requiere rol admin.",
+    description="Reemplaza datos sintéticos con datos reales de la API SIB (en segundo plano). Requiere rol admin y clave SIB configurada.",
 )
 async def sib_backfill(
     force: bool = Query(False, description="Forzar re-ejecución aunque ya existan datos SIB"),
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
+    from modules.banking_score.sib_sync import start_backfill_background
+    return start_backfill_background(force=force)
 
-    # SIB backfill stub — will be implemented in PASO 5
-    return {
-        "success": False,
-        "message": "Backfill SIB pendiente de implementación en Paso 5",
-    }
+
+# Backward-compatible alias for /sib-sync → triggers the same backfill.
+@router.post("/sib-sync", summary="Sincronizar con API SIB", include_in_schema=False)
+async def sync_from_sib(
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Se requiere rol admin")
+    from modules.banking_score.sib_sync import start_backfill_background
+    return start_backfill_background(force=False)
 
 
 # ─── Sync Status ─────────────────────────────────────────────────
@@ -276,18 +260,31 @@ async def sib_backfill(
 @router.get(
     "/sync-status",
     summary="Estado de sincronización",
-    description="Retorna el estado de sincronización con la API SIB.",
+    description="Estado de la sincronización con la API SIB (para la tarjeta 'Sincronización SIB').",
 )
-async def get_sync_status(
+async def sync_status(
     current_user: User = Depends(get_current_user),
 ):
-    # Stub — will be implemented in PASO 5
-    return {
-        "is_running": False,
-        "last_sync": None,
-        "next_scheduled": None,
-        "alerts": [],
-    }
+    from modules.banking_score.sib_sync import get_sync_status
+    st = get_sync_status()
+    # Keep the legacy keys the frontend already reads, plus the richer fields.
+    st["next_scheduled"] = st.get("next_scheduled")
+    return st
+
+
+# ─── Data overview stats (for the "Base de Datos Bancaria" card) ─
+
+@router.get(
+    "/overview",
+    summary="Resumen de la base de datos bancaria",
+    description="Conteos de entidades, registros, calificaciones y rango de períodos.",
+)
+async def data_overview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from modules.banking_score.sib_sync import bank_data_stats
+    return bank_data_stats(db)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────

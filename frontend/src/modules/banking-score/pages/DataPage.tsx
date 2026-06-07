@@ -9,7 +9,15 @@ import { getStats, listPeriods, BankStats } from "../api";
 interface SyncStatus {
   is_running: boolean;
   last_sync: string | null;
+  last_check?: string | null;
   next_scheduled: string | null;
+  backfill_done?: boolean;
+  last_sync_result?: {
+    status?: string;
+    entities_matched?: number;
+    records_created?: number;
+    records_updated?: number;
+  } | null;
   alerts: string[];
 }
 interface RawPeriod {
@@ -27,6 +35,8 @@ export function DataPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const [rawBank, setRawBank] = useState("");
   const [rawData, setRawData] = useState<RawPeriod[]>([]);
@@ -89,15 +99,40 @@ export function DataPage() {
     }).catch(() => {});
   };
 
-  const triggerSync = async () => {
+  const triggerBackfill = async (force: boolean) => {
     setSyncing(true);
+    setActionMsg(null);
     try {
-      await client.post("/banking-score/data/sib-sync");
+      const { data } = await client.post(`/banking-score/data/sib-backfill?force=${force}`);
+      setActionMsg(data.message || "Proceso iniciado.");
       refresh();
+    } catch (err: any) {
+      setActionMsg(err?.response?.data?.detail || "Error al iniciar el backfill.");
     } finally {
       setSyncing(false);
     }
   };
+
+  const seedBanks = async () => {
+    setSeeding(true);
+    setActionMsg(null);
+    try {
+      const { data } = await client.post("/banking-score/data/seed-banks");
+      setActionMsg(data?.detail ? "Seed completado." : "Seed ejecutado.");
+      refresh();
+    } catch (err: any) {
+      setActionMsg(err?.response?.data?.detail || "Error en el seed.");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  // Poll status while a sync/backfill is running so the UI updates live.
+  useEffect(() => {
+    if (!syncStatus?.is_running) return;
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, [syncStatus?.is_running]);
 
   return (
     <div>
@@ -148,30 +183,59 @@ export function DataPage() {
         </Card>
 
         <Card>
-          <CardHead icon={RefreshCw} title="Sincronización SIB" />
+          <CardHead
+            icon={RefreshCw}
+            title="Sincronización SIB"
+            subtitle="Reemplaza datos de muestra por datos reales de la API del SIB"
+            right={
+              <span className={`chip ${syncStatus?.is_running ? "text-warn" : "text-ok"}`}>
+                {syncStatus?.is_running ? "En progreso" : "Inactivo"}
+              </span>
+            }
+          />
           {syncStatus ? (
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted">Última sincronización</span>
-                <span className="mono text-ink">{syncStatus.last_sync || "—"}</span>
+                <span className="mono text-ink">{syncStatus.last_sync?.slice(0, 19).replace("T", " ") || "—"}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted">Estado</span>
-                <span className={`font-medium ${syncStatus.is_running ? "text-warn" : "text-ok"}`}>
-                  {syncStatus.is_running ? "En progreso" : "Inactivo"}
-                </span>
-              </div>
-              {syncStatus.alerts?.map((a, i) => (
+              {syncStatus.last_sync_result && (
+                <div className="text-xs text-muted">
+                  Último resultado: {syncStatus.last_sync_result.status} ·{" "}
+                  {syncStatus.last_sync_result.entities_matched ?? 0} entidades ·{" "}
+                  {(syncStatus.last_sync_result.records_created ?? 0) + (syncStatus.last_sync_result.records_updated ?? 0)} registros
+                </div>
+              )}
+              {actionMsg && <div className="text-xs text-body bg-surface2 px-3 py-2 rounded-[10px]">{actionMsg}</div>}
+              {syncStatus.alerts?.slice(-3).map((a, i) => (
                 <div key={i} className="text-xs text-warn bg-warn-soft px-2 py-1 rounded">{a}</div>
               ))}
-              <button
-                onClick={triggerSync}
-                disabled={syncing || syncStatus.is_running}
-                className="btn btn-primary w-full justify-center"
-              >
-                <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-                {syncing ? "Sincronizando…" : "Sincronizar con SIB"}
-              </button>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => triggerBackfill(false)}
+                  disabled={syncing || syncStatus.is_running}
+                  className="btn btn-primary justify-center"
+                >
+                  <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+                  {syncing ? "Iniciando…" : "Sincronizar con SIB"}
+                </button>
+                <button
+                  onClick={() => triggerBackfill(true)}
+                  disabled={syncing || syncStatus.is_running}
+                  className="btn btn-ghost justify-center"
+                  title="Reemplaza todos los registros con datos reales del SIB"
+                >
+                  Backfill (forzar)
+                </button>
+                <button
+                  onClick={seedBanks}
+                  disabled={seeding || syncStatus.is_running}
+                  className="btn btn-ghost justify-center"
+                  title="Crea las 35 entidades + datos históricos de muestra"
+                >
+                  {seeding ? "Sembrando…" : "Sembrar bancos"}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
