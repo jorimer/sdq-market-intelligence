@@ -539,7 +539,7 @@ class SIBDataClient:
         entity_names_found = set()
 
         logger.info(
-            f"╔══ SIB API DIAGNOSTIC ══════════════════════════════════╗"
+            "╔══ SIB API DIAGNOSTIC ══════════════════════════════════╗"
         )
         logger.info(
             f"║  Testing tipoEntidad codes: {self.SIB_TIPO_ENTIDAD_CANDIDATES}"
@@ -626,11 +626,11 @@ class SIBDataClient:
             except Exception as e:
                 logger.info(f"║  ✗ entidad={ent_code} → ERROR: {e}")
 
-        logger.info(f"║")
+        logger.info("║")
         logger.info(f"║  Working tipoEntidad codes: {working}")
         logger.info(f"║  Entity names from API: {sorted(entity_names_found)[:10]}")
         logger.info(
-            f"╚══════════════════════════════════════════════════════════╝"
+            "╚══════════════════════════════════════════════════════════╝"
         )
 
         return working
