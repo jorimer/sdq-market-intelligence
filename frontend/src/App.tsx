@@ -14,6 +14,7 @@ import { DataPage } from "@/modules/banking-score/pages/DataPage";
 import { ModelPage } from "@/modules/banking-score/pages/ModelPage";
 import { ScenariosPage } from "@/modules/banking-score/pages/ScenariosPage";
 import { ComparePage } from "@/modules/banking-score/pages/ComparePage";
+import { BankingScoreLayout } from "@/modules/banking-score/components/BankingScoreLayout";
 
 // Macro Monitor (Eje 2) — new canonical pattern
 import { MacroMonitorPage } from "@/modules/macro-monitor/pages/MacroMonitorPage";
@@ -44,15 +45,38 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          {/* Eje 1 — Financiero */}
-          <Route path="/banking-score" element={<DashboardPage />} />
-          <Route path="/banking-score/scoring" element={<ScoringPage />} />
-          <Route path="/banking-score/rankings" element={<RankingsPage />} />
-          <Route path="/banking-score/reports" element={<ReportsPage />} />
-          <Route path="/banking-score/data" element={<DataPage />} />
-          <Route path="/banking-score/model" element={<ModelPage />} />
-          <Route path="/banking-score/scenarios" element={<ScenariosPage />} />
-          <Route path="/banking-score/compare" element={<ComparePage />} />
+          {/* Eje 1 — Financiero (sub-navegación por pestañas) */}
+          <Route path="/banking-score" element={<BankingScoreLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="scoring" element={<ScoringPage />} />
+            <Route path="rankings" element={<RankingsPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="model" element={<ModelPage />} />
+            <Route path="scenarios" element={<ScenariosPage />} />
+            <Route path="compare" element={<ComparePage />} />
+          </Route>
+          {/* Old data route → moved to the Datos section */}
+          <Route path="/banking-score/data" element={<Navigate to="/datos/banca" replace />} />
+
+          {/* Datos — extracción por sector (multi-fuente) */}
+          <Route path="/datos" element={<Navigate to="/datos/banca" replace />} />
+          <Route path="/datos/banca" element={<DataPage />} />
+          <Route
+            path="/datos/macro"
+            element={<PlaceholderPage title="Datos · Macroeconómico (BCRD)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
+          />
+          <Route
+            path="/datos/social"
+            element={<PlaceholderPage title="Datos · Social (ONE)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
+          />
+          <Route
+            path="/datos/comercio"
+            element={<PlaceholderPage title="Datos · Comercio (UN Comtrade)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
+          />
+          <Route
+            path="/datos/gobernanza"
+            element={<PlaceholderPage title="Datos · Gobernanza (WGI)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
+          />
 
           {/* Eje 2 — Macroeconómico */}
           <Route path="/macro-monitor" element={<MacroMonitorPage />} />

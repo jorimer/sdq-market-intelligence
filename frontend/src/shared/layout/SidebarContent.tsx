@@ -71,6 +71,11 @@ export function SidebarContent({ collapsed = false, onNavigate }: Props) {
                         )}
                         <Icon size={17} className={isActive ? "text-accent shrink-0" : "shrink-0"} />
                         {!collapsed && <span className="truncate">{item.label}</span>}
+                        {!collapsed && item.ready === false && (
+                          <span className="ml-auto shrink-0 mono text-[9px] uppercase tracking-wide text-faint border border-line rounded px-1 py-0.5">
+                            pronto
+                          </span>
+                        )}
                       </>
                     )}
                   </NavLink>
