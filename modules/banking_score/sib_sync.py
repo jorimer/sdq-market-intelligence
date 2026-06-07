@@ -60,7 +60,11 @@ _DEFAULT_STATUS: Dict = {
 
 
 def _read_status(db: Session) -> Dict:
-    row = db.query(AppSetting).filter(AppSetting.key == _STATUS_KEY).first()
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == _STATUS_KEY).first()
+    except Exception:  # noqa: BLE001 — table may not exist yet (pre-migration/tests)
+        db.rollback()
+        return dict(_DEFAULT_STATUS)
     if row and row.value:
         try:
             return {**_DEFAULT_STATUS, **json.loads(row.value)}
@@ -72,14 +76,17 @@ def _read_status(db: Session) -> Dict:
 def _write_status(db: Session, **updates) -> Dict:
     st = _read_status(db)
     st.update(updates)
-    row = db.query(AppSetting).filter(AppSetting.key == _STATUS_KEY).first()
     payload = json.dumps(st)
-    if row:
-        row.value = payload
-        row.is_secret = False
-    else:
-        db.add(AppSetting(key=_STATUS_KEY, value=payload, is_secret=False))
-    db.commit()
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == _STATUS_KEY).first()
+        if row:
+            row.value = payload
+            row.is_secret = False
+        else:
+            db.add(AppSetting(key=_STATUS_KEY, value=payload, is_secret=False))
+        db.commit()
+    except Exception:  # noqa: BLE001 — never let status persistence break the run
+        db.rollback()
     return st
 
 
