@@ -10,6 +10,41 @@ import {
 
 const MASK = "••••••••";
 
+/** Module-level so it keeps a stable identity across renders — defining it inside
+ * the editor recreated the component every keystroke, remounting the <input> and
+ * stealing focus. */
+function LabeledInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  mono = false,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  mono?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-muted mb-1">{label}</label>
+      <input
+        type={type}
+        className={`field ${mono ? "mono" : ""}`}
+        placeholder={placeholder}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
 /** Claude API key + sector benchmark APIs. Admin-only (gated by the page). */
 export function DataSourcesSection() {
   const [data, setData] = useState<AppSettings | null>(null);
@@ -278,19 +313,6 @@ function SectorApiEditor({
     }
   }
 
-  const Field = ({ label, k, placeholder, type = "text" }: { label: string; k: keyof SectorApiInput; placeholder?: string; type?: string }) => (
-    <div>
-      <label className="block text-xs font-medium text-muted mb-1">{label}</label>
-      <input
-        type={type}
-        className="field"
-        placeholder={placeholder}
-        value={(form[k] as string) ?? ""}
-        onChange={(e) => set(k, e.target.value as SectorApiInput[keyof SectorApiInput])}
-      />
-    </div>
-  );
-
   const secretPlaceholder = (isSet?: boolean) => (isSet ? MASK + " (sin cambios)" : "");
 
   return (
@@ -299,37 +321,29 @@ function SectorApiEditor({
         {isNew ? "Nueva fuente de datos" : `Editar: ${existing?.providerName || existing?.provider}`}
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">Identificador (provider)</label>
-          <input
-            className="field mono"
-            placeholder="sb_do"
-            value={form.provider}
-            disabled={!isNew}
-            onChange={(e) => set("provider", e.target.value)}
-          />
-        </div>
-        <Field label="Nombre" k="providerName" placeholder="Superintendencia de Bancos (SB)" />
-        <Field label="Nombre de la API" k="apiName" placeholder="API de Estadísticas del Sistema Financiero" />
-        <Field label="País" k="country" placeholder="DO" />
-        <Field label="Sector" k="sector" placeholder="banking" />
-        <Field label="URL base" k="baseUrl" placeholder="https://apis.sb.gob.do/estadisticas/v2" />
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">Clave de API</label>
-          <input type="password" className="field mono" placeholder={secretPlaceholder(existing?.apiKeySet)}
-            value={form.apiKey ?? ""} onChange={(e) => set("apiKey", e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">Clave secundaria</label>
-          <input type="password" className="field mono" placeholder={secretPlaceholder(existing?.apiKeySecondarySet)}
-            value={form.apiKeySecondary ?? ""} onChange={(e) => set("apiKeySecondary", e.target.value)} />
-        </div>
-        <Field label="URL del proxy (Cloudflare Worker)" k="proxyUrl" placeholder="https://…workers.dev" />
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">Secreto del proxy</label>
-          <input type="password" className="field mono" placeholder={secretPlaceholder(existing?.proxySecretSet)}
-            value={form.proxySecret ?? ""} onChange={(e) => set("proxySecret", e.target.value)} />
-        </div>
+        <LabeledInput label="Identificador (provider)" mono disabled={!isNew}
+          placeholder="sb_do" value={form.provider} onChange={(v) => set("provider", v)} />
+        <LabeledInput label="Nombre" placeholder="Superintendencia de Bancos (SB)"
+          value={form.providerName ?? ""} onChange={(v) => set("providerName", v)} />
+        <LabeledInput label="Nombre de la API" placeholder="API de Estadísticas del Sistema Financiero"
+          value={form.apiName ?? ""} onChange={(v) => set("apiName", v)} />
+        <LabeledInput label="País" placeholder="DO"
+          value={form.country ?? ""} onChange={(v) => set("country", v)} />
+        <LabeledInput label="Sector" placeholder="banking"
+          value={form.sector ?? ""} onChange={(v) => set("sector", v)} />
+        <LabeledInput label="URL base" placeholder="https://apis.sb.gob.do/estadisticas/v2"
+          value={form.baseUrl ?? ""} onChange={(v) => set("baseUrl", v)} />
+        <LabeledInput label="Clave de API" type="password" mono
+          placeholder={secretPlaceholder(existing?.apiKeySet)}
+          value={form.apiKey ?? ""} onChange={(v) => set("apiKey", v)} />
+        <LabeledInput label="Clave secundaria" type="password" mono
+          placeholder={secretPlaceholder(existing?.apiKeySecondarySet)}
+          value={form.apiKeySecondary ?? ""} onChange={(v) => set("apiKeySecondary", v)} />
+        <LabeledInput label="URL del proxy (Cloudflare Worker)" placeholder="https://…workers.dev"
+          value={form.proxyUrl ?? ""} onChange={(v) => set("proxyUrl", v)} />
+        <LabeledInput label="Secreto del proxy" type="password" mono
+          placeholder={secretPlaceholder(existing?.proxySecretSet)}
+          value={form.proxySecret ?? ""} onChange={(v) => set("proxySecret", v)} />
       </div>
 
       <label className="flex items-center gap-2 mt-3 text-sm text-body">

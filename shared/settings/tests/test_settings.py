@@ -70,9 +70,7 @@ def test_sector_api_upsert_and_masking(db):
         SectorApiIn(provider="sb_do", providerName="SB", apiKey="primary-key", baseUrl="https://x"),
     ]))
     out = service.get_settings(db)
-    assert len(out.sectorApis) == 1
-    api = out.sectorApis[0]
-    assert api.provider == "sb_do"
+    api = next(a for a in out.sectorApis if a.provider == "sb_do")
     assert api.apiKeySet is True
     assert api.apiKeyMasked == MASK
     # The plaintext key is never returned by the API model.
@@ -151,6 +149,37 @@ def test_disabled_provider_hides_key(db):
     ]))
     # Disabled → resolution falls back (env empty here) instead of returning the key.
     assert service.get_sector_api_key(db, "sb_do") == ""
+
+
+def test_ensure_known_sources_seeds_catalog(db):
+    n = service.ensure_known_sources(db)
+    assert n >= 4  # bcrd, one_do, comtrade, wgi (+ sb_do if no banking yet)
+    out = service.get_settings(db)
+    sectors = {a.sector for a in out.sectorApis}
+    assert {"macro", "social", "trade", "governance"} <= sectors
+    # Seeded sources are disabled (no keys) until the operator fills them.
+    bcrd = next(a for a in out.sectorApis if a.provider == "bcrd")
+    assert bcrd.enabled is False and bcrd.apiKeySet is False
+    assert bcrd.baseUrl == "https://api.bancentral.gov.do"
+
+
+def test_ensure_known_sources_idempotent(db):
+    service.ensure_known_sources(db)
+    before = len(service.get_settings(db).sectorApis)
+    service.ensure_known_sources(db)
+    after = len(service.get_settings(db).sectorApis)
+    assert before == after
+
+
+def test_ensure_known_sources_skips_existing_sector(db):
+    # Operator already has a banking source under a custom id.
+    service.update_settings(db, SettingsIn(sectorApis=[SectorApiIn(
+        provider="SDQFinAnalyst", sector="banking", country="DO", apiKey="k",
+    )]))
+    service.ensure_known_sources(db)
+    providers = {a.provider for a in service.get_settings(db).sectorApis}
+    assert "sb_do" not in providers  # not duplicated
+    assert "SDQFinAnalyst" in providers
 
 
 def test_delete_sector_api(db):
