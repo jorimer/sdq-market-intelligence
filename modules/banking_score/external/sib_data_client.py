@@ -124,6 +124,11 @@ class SIBDataClient:
     CONNECTIVITY_CHECK_TIMEOUT = 8   # Seconds for initial connectivity test
     FAIL_FAST_THRESHOLD        = 3   # Consecutive timeouts before aborting bulk
 
+    # Page size: the SIB API honors large `registros` (verified: 2000 returns a
+    # full period in one page). Big pages = ~20x fewer round-trips AND no 20k
+    # truncation (vs registros=100 capped at max_pages*100).
+    PAGE_SIZE = 5000
+
     def __init__(
         self,
         api_key: str,
@@ -139,8 +144,10 @@ class SIBDataClient:
         self.proxy_secret = proxy_secret
         self.use_proxy = bool(self.proxy_url and self.proxy_secret)
 
-        # Rolling window tracking
+        # Rolling window tracking (lock makes the limiter safe under concurrency)
         self._call_timestamps: List[float] = []
+        import threading
+        self._rate_lock = threading.Lock()
 
         # Fail-fast: track consecutive timeouts to abort early
         self._consecutive_timeouts = 0
@@ -178,15 +185,19 @@ class SIBDataClient:
         2. SOFT → HARD → 600ms delay per call
         3. At HARD → sleep until window resets
         """
-        now = time.time()
-        window_start = now - 60.0
+        self._rate_lock.acquire()
+        try:
+            now = time.time()
+            window_start = now - 60.0
 
-        # Prune calls older than 60s
-        self._call_timestamps = [
-            t for t in self._call_timestamps if t > window_start
-        ]
+            # Prune calls older than 60s
+            self._call_timestamps = [
+                t for t in self._call_timestamps if t > window_start
+            ]
 
-        calls_in_window = len(self._call_timestamps)
+            calls_in_window = len(self._call_timestamps)
+        finally:
+            self._rate_lock.release()
 
         if calls_in_window >= self.HARD_THRESHOLD:
             # Hard throttle: wait until oldest call falls out of window
@@ -209,8 +220,9 @@ class SIBDataClient:
             self._sleep(0.6)
 
         # Record this call
-        self._call_timestamps.append(time.time())
-        self.stats["total_calls"] += 1
+        with self._rate_lock:
+            self._call_timestamps.append(time.time())
+            self.stats["total_calls"] += 1
 
     # ── Connectivity check (fail-fast) ────────────────────────
 
@@ -336,7 +348,7 @@ class SIBDataClient:
         max_pages = 200  # increased from 50 to handle dense endpoints
 
         while page <= max_pages:
-            page_params = {**params, "paginas": page, "registros": 100}
+            page_params = {**params, "paginas": page, "registros": self.PAGE_SIZE}
             data = self._get_with_retry(httpx, url, page_params, endpoint, page)
 
             if data is None:
@@ -346,13 +358,13 @@ class SIBDataClient:
                 if not data:
                     break
                 all_results.extend(data)
-                if len(data) < 100:
+                if len(data) < self.PAGE_SIZE:
                     break
             elif isinstance(data, dict):
                 records = data.get("data", data.get("registros", []))
                 if isinstance(records, list):
                     all_results.extend(records)
-                    if len(records) < 100:
+                    if len(records) < self.PAGE_SIZE:
                         break
                 else:
                     all_results.append(data)
