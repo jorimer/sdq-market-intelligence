@@ -14,6 +14,7 @@ from shared.database.base import Base
 # Import all models so Alembic can detect them
 from shared.auth.models import User  # noqa: F401
 from shared.notifications.service import Notification  # noqa: F401
+from shared.settings.models import AppSetting, SectorApiConfig  # noqa: F401
 from modules.banking_score.models.models import (  # noqa: F401
     Bank, BankingData, RatingResult, RatingAction, Report,
 )

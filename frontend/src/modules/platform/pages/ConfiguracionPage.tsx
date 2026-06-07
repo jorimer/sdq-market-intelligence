@@ -1,19 +1,33 @@
 import { Moon, Sun, SlidersHorizontal, UserCircle } from "lucide-react";
-import { PageHead, Card, CardHead } from "@/shared/ui/primitives";
+import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
 import { useApp, PERIODS, SCOPES, Scope } from "@/shared/context/AppContext";
 import { useAuth } from "@/shared/auth/AuthContext";
+import { DataSourcesSection } from "../components/DataSourcesSection";
 
 export function ConfiguracionPage() {
   const { dark, toggleDark, period, setPeriod, scope, setScope } = useApp();
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   return (
     <div>
       <PageHead
         eyebrow="Plataforma"
         title="Configuración"
-        sub="Preferencias de la sesión. El tema, el período y el ámbito se conservan en este navegador."
+        sub="Preferencias de la sesión y fuentes de datos. El tema, el período y el ámbito se conservan en este navegador."
       />
+
+      {/* Fuentes de datos y claves de API — solo admin */}
+      <div className="mb-5">
+        {isAdmin ? (
+          <DataSourcesSection />
+        ) : (
+          <StateBlock
+            kind="forbidden"
+            message="La configuración de claves de API y fuentes de datos requiere rol de administrador."
+          />
+        )}
+      </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Apariencia */}

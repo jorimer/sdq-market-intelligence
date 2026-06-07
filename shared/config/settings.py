@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"
+
+    # Secret used to encrypt stored API keys (data-source config). Falls back to
+    # JWT_SECRET_KEY when unset so dev works out of the box; set explicitly in prod.
+    SETTINGS_SECRET: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
