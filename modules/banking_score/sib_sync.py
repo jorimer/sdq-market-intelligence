@@ -182,7 +182,7 @@ def _match_or_create_bank(db: Session, short_name: str):
     its type maps to no BankType (then the caller raises a "new entity" alert).
     """
     info = SIB_ENTITY_CODES.get(short_name) or {}
-    name = _SHORT_TO_NAME.get(short_name) or (info.get("nombre_sib") or "").title()
+    name = _SHORT_TO_NAME.get(short_name) or info.get("nombre") or (info.get("nombre_sib") or "").title()
     if not name:
         return None, False
     bank = db.query(Bank).filter(Bank.name == name).first()
@@ -195,7 +195,7 @@ def _match_or_create_bank(db: Session, short_name: str):
         name=name,
         bank_type=bank_type,
         sib_code=info.get("sib_code"),
-        is_active=True,
+        is_active=info.get("active", True),  # exited entities catalogued inactive
     )
     db.add(bank)
     db.flush()  # assign id

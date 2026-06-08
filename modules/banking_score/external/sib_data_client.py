@@ -85,6 +85,19 @@ SIB_ENTITY_CODES: Dict[str, Dict[str, Any]] = {
     "Monumental":    {"sib_code": "MONUMENTAL", "tipo_entidad": "CC", "nombre_sib": "CORPORACION DE CREDITO MONUMENTAL"},
     "Nordestana":    {"sib_code": "NORPRESA",   "tipo_entidad": "CC", "nombre_sib": "CORPORACION DE CREDITO NORDESTANA DE PRESTAMOS"},
     "Oficorp":       {"sib_code": "OFICORP",    "tipo_entidad": "CC", "nombre_sib": "CORPORACION DE CREDITO OFICORP"},
+
+    # Entities the SIB surfaced that weren't catalogued. Types verified against the
+    # live SIB across 2021–2026 (estados/situacion). `nombre` is the display name;
+    # `active=False` marks entities that exited the system — their historical data
+    # is still ingested and kept, they're just excluded from "current" views.
+    # — Active Bancos de Ahorro y Crédito (reporting as of 2026-Q1):
+    "Atlántico":     {"sib_code": "ATLANTICO", "tipo_entidad": "BAC", "nombre": "Banco de Ahorro y Crédito Atlántico",  "nombre_sib": "BANCO DE AHORRO Y CREDITO ATLANTICO"},
+    "Cofaci":        {"sib_code": "COFACI",    "tipo_entidad": "BAC", "nombre": "Banco de Ahorro y Crédito Cofaci",     "nombre_sib": "BANCO DE AHORRO Y CREDITO COFACI"},
+    "Óptima":        {"sib_code": "OPTIMA",    "tipo_entidad": "BAC", "nombre": "Banco de Ahorro y Crédito Óptima",     "nombre_sib": "BANCO DE AHORRO Y CREDITO OPTIMA"},
+    # — Exited the system (kept for historical analysis):
+    "Empire":        {"sib_code": "EMPIRE",    "tipo_entidad": "BAC", "nombre": "Banco de Ahorro y Crédito Empire",     "nombre_sib": "BANCO DE AHORRO Y CREDITO EMPIRE",  "active": False},
+    "Activo":        {"sib_code": "ACTIVO",    "tipo_entidad": "BM",  "nombre": "Banco Múltiple Activo",                 "nombre_sib": "BANCO MULTIPLE ACTIVO",            "active": False},
+    "Reidco":        {"sib_code": "REIDCO",    "tipo_entidad": "CC",  "nombre": "Corporación de Crédito Reidco",         "nombre_sib": "CORPORACION DE CREDITO REIDCO",    "active": False},
 }
 
 
