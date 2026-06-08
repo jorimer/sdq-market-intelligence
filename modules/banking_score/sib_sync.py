@@ -218,8 +218,10 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             current = get_sync_status(db)
             if current.get("is_running"):
                 return {"status": "already_running", "message": "Ya hay una sincronización en progreso."}
+            # Clear stale alerts so each run reports only its own state
+            # (otherwise an old error sticks around forever).
             _write_status(db, is_running=True, phase="iniciando", started_at=_now(),
-                          last_check=_now())
+                          last_check=_now(), alerts=[])
 
         if not force and not needs_backfill(db):
             _write_status(db, is_running=False, phase="")
@@ -231,21 +233,21 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
         client = get_sib_data_client(force_new=True)
         if client is None:
             msg = "Clave del SIB no configurada. Configúrela en Configuración → APIs de Benchmarks por Sector."
-            _write_status(db, is_running=False, phase="error", alerts=(current.get("alerts") or [])[-49:] + [msg])
+            _write_status(db, is_running=False, phase="error", alerts=[msg])
             return {"status": "error", "message": msg}
 
         _write_status(db, phase="probando conexión")
         conn = client.check_connectivity()
         if not conn.get("reachable"):
-            msg = f"No se pudo alcanzar la API del SIB ({conn.get('status_code')}). ¿Proxy configurado?"
-            _write_status(db, is_running=False, phase="error", alerts=(current.get("alerts") or [])[-49:] + [msg])
+            msg = "No se pudo alcanzar la API del SIB. Revisa la clave y el proxy en Configuración."
+            _write_status(db, is_running=False, phase="error", alerts=[msg])
             return {"status": "error", "message": msg, "connectivity": conn}
 
         _write_status(db, phase="descubriendo tipos de entidad")
         tipos = client.get_working_tipos()
         if not tipos:
             msg = "El SIB no devolvió ningún tipo de entidad válido."
-            _write_status(db, is_running=False, phase="error", alerts=(current.get("alerts") or [])[-49:] + [msg])
+            _write_status(db, is_running=False, phase="error", alerts=[msg])
             return {"status": "error", "message": msg}
 
         # Incremental + idempotent: fetch and WRITE one tipoEntidad at a time,
@@ -301,13 +303,14 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             _write_status(db, phase=f"{tipo} listo ({i}/{len(tipos)}) · {matched} entidades, {created + updated} registros")
 
         # Level 2: SIB returned entities we don't catalog → alert to add them.
-        new_alerts = (current.get("alerts") or [])[-48:]
-        uniq_unmatched = sorted(set(unmatched))
+        # Fresh list (alerts were cleared at start) so no stale errors linger.
+        new_alerts: list = []
+        uniq_unmatched = sorted({u for u in unmatched if u and u != "TODOS"})
         if uniq_unmatched:
-            new_alerts = (new_alerts + [
+            new_alerts = [
                 "Entidades del SIB no catalogadas (agrégalas al catálogo): "
                 + ", ".join(uniq_unmatched[:15])
-            ])[-49:]
+            ]
 
         result = {
             "status": "completed",
@@ -327,8 +330,7 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
         logger.exception("SIB backfill failed")  # full technical detail → logs
         friendly = _friendly_error(e)
         try:
-            _write_status(db, is_running=False, phase="error",
-                          alerts=(_read_status(db).get("alerts") or [])[-49:] + [friendly])
+            _write_status(db, is_running=False, phase="error", alerts=[friendly])
         except Exception:  # noqa: BLE001
             pass
         return {"status": "error", "message": friendly}
