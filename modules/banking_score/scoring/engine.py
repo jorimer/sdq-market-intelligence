@@ -6,7 +6,7 @@ Persistence and event publishing happen in the API layer or a service wrapper.
 """
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from modules.banking_score.scoring.rating_scale import (
     map_rating_tier,
@@ -314,30 +314,81 @@ _INDICATOR_FUNCS = {
 }
 
 
+# ─── Data integrity ─────────────────────────────────────────────
+# Each indicator's required input fields. An indicator is only "available" when
+# all of its inputs are present (not None). A missing input must NOT score as a
+# perfect/zero value (e.g. morosidad with no NPL data scored 100 = false perfect).
+# Unavailable indicators are excluded from the sub-component average, and
+# sub-components with no available indicators are N/D and dropped from the overall
+# score (weights renormalize over what's actually measured). This keeps the rating
+# auditable: every number traces to real data.
+
+INDICATOR_REQUIRES: Dict[str, List[str]] = {
+    "solvencia": ["patrimonio_tecnico", "apr"],
+    "tier1_ratio": ["capital_primario", "apr"],
+    "leverage": ["capital_tier1", "exposicion_total"],
+    "cobertura_provisiones": ["provisiones", "cartera_vencida_90d"],
+    "patrimonio_activos": ["patrimonio_tecnico", "activos_totales"],
+    "morosidad": ["cartera_vencida_90d", "cartera_bruta"],
+    "pct_cartera_a": ["cartera_categoria_a"],
+    "concentracion_top10": ["suma_top10"],
+    "hhi_sectorial": ["hhi_sectorial_raw"],
+    "castigos_pct": ["castigos"],
+    "exposicion_re": ["exposicion_re"],
+    "migracion": ["cartera_a_prev", "cartera_categoria_a"],
+    "roa": ["utilidad_neta", "activos_promedio"],
+    "roe": ["utilidad_neta", "patrimonio_promedio"],
+    "margen_financiero": ["ingresos_financieros", "gastos_financieros", "activos_productivos_avg"],
+    "cost_to_income": ["gastos_operacionales", "ingresos_operacionales"],
+    "liquidez_inmediata": ["caja_valores", "pasivos_cp"],
+    "ltd": ["cartera_neta", "depositos_totales"],
+    "liquidez_ajustada": ["activos_liquidos", "pasivos_exigibles"],
+    "hhi_ingresos": ["hhi_ingresos_raw"],
+}
+
+_CALIDAD_COMPONENT_KEYS = [
+    "morosidad", "pct_cartera_a", "concentracion_top10",
+    "hhi_sectorial", "castigos_pct", "exposicion_re", "migracion",
+]
+
+
+def _indicator_available(data, name: str) -> bool:
+    """True when every required input for *name* is present (not None)."""
+    return all(getattr(data, f, None) is not None for f in INDICATOR_REQUIRES.get(name, []))
+
+
 # ─── Public API ─────────────────────────────────────────────────
 
 
 def calculate_all_indicators(data) -> Dict[str, IndicatorResult]:
     """Calculate all 19 indicators (+ composite) from raw banking data.
 
-    *data* can be any object whose attributes match the field names in
-    ``BankingDataInput`` (SQLAlchemy model, dataclass, etc.).
-
-    Returns ``{indicator_name: {"raw": float, "score": float}}``.
+    Each result carries an ``available`` flag (False when its inputs are missing).
+    *data* can be any object whose attributes match ``BankingDataInput``.
     """
     indicators: Dict[str, IndicatorResult] = {}
 
     for name, func in _INDICATOR_FUNCS.items():
-        indicators[name] = func(data)
+        res = dict(func(data))
+        res["available"] = _indicator_available(data, name)
+        indicators[name] = res
 
-    # Composite calidad depends on the individual calidad indicators
-    indicators["composite_calidad"] = calc_composite_calidad(indicators)
+    # Composite calidad = mean of the AVAILABLE calidad components (not faked).
+    avail = [indicators[k]["score"] for k in _CALIDAD_COMPONENT_KEYS if indicators[k]["available"]]
+    if avail:
+        v = round(sum(avail) / len(avail), 2)
+        indicators["composite_calidad"] = {"raw": v, "score": v, "available": True}
+    else:
+        indicators["composite_calidad"] = {"raw": 0.0, "score": 0.0, "available": False}
 
     return indicators
 
 
-def calculate_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str, float]:
-    """Aggregate indicators into 5 weighted sub-component scores."""
+def calculate_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str, Optional[float]]:
+    """Aggregate indicators into 5 sub-component scores, averaging only the
+    AVAILABLE indicators. A sub-component with no available indicator is ``None``
+    (N/D) so the overall score can renormalize instead of crediting fake data.
+    """
     groups = {
         "solidez": SOLIDEZ_INDICATORS,
         "calidad": CALIDAD_INDICATORS,
@@ -346,21 +397,30 @@ def calculate_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str
         "diversificacion": DIVERSIFICACION_INDICATORS,
     }
 
-    def _avg(keys: List[str]) -> float:
-        vals = [indicators[k]["score"] for k in keys if k in indicators]
-        return sum(vals) / len(vals) if vals else 0.0
+    def _avg(keys: List[str]) -> Optional[float]:
+        vals = [
+            indicators[k]["score"]
+            for k in keys
+            if k in indicators and indicators[k].get("available", True)
+        ]
+        return round(sum(vals) / len(vals), 2) if vals else None
 
-    return {comp: round(_avg(keys), 2) for comp, keys in groups.items()}
+    return {comp: _avg(keys) for comp, keys in groups.items()}
 
 
-def calculate_deterministic_score(sub_scores: Dict[str, float], weights: Dict[str, float] = None) -> float:
+def calculate_deterministic_score(sub_scores: Dict[str, Optional[float]], weights: Dict[str, float] = None) -> float:
     """Weighted-sum overall score from sub-component scores.
 
-    *weights* defaults to the base profile; pass an entity-type profile to
-    recalibrate without changing the framework.
+    N/D sub-components (``None``) are excluded and the remaining weights are
+    renormalized, so the overall score reflects only what was actually measured
+    (never credits missing data). *weights* defaults to the base profile.
     """
     weights = weights or SUB_COMPONENT_WEIGHTS
-    total = sum(sub_scores.get(k, 0) * w for k, w in weights.items())
+    present = {k: v for k, v in sub_scores.items() if v is not None and k in weights}
+    total_w = sum(weights[k] for k in present)
+    if total_w <= 0:
+        return 0.0
+    total = sum(present[k] * weights[k] for k in present) / total_w
     return round(_clamp(total), 2)
 
 
@@ -396,11 +456,15 @@ def run_scoring(data, entity_type=None) -> Dict[str, Any]:
         "entity_type": entity_type,
         "weight_profile": weights,
         "indicators": {
-            name: {"raw": float(v["raw"]), "score": float(v["score"])}
+            name: {
+                "raw": float(v["raw"]) if v.get("raw") is not None else None,
+                "score": float(v["score"]) if v.get("score") is not None else None,
+                "available": v.get("available", True),
+            }
             for name, v in indicators.items()
         },
         "model_type": "deterministic",
-        "model_version": "1.0",
+        "model_version": "1.1",
     }
 
 

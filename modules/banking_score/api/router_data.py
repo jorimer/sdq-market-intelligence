@@ -354,11 +354,22 @@ async def sib_page_test(
             concepts.setdefault(n1, set()).add(n2)
     concept_inv = {k: sorted(v) for k, v in sorted(concepts.items())}
 
+    # Distinct flat field values (for indicator/solvency endpoints, which use
+    # `indicador`/`componente`/`tipoIndicador` instead of the concept tree).
+    flat: Dict[str, set] = {}
+    for r in data:
+        for f in ("indicador", "componente", "tipoIndicador"):
+            v = r.get(f)
+            if v:
+                flat.setdefault(f, set()).add(str(v))
+    flat_inv = {k: sorted(v) for k, v in sorted(flat.items())}
+
     return {
         "params": params,
         "count": len(data),
         "entities": sorted(e for e in entities if e),
         "concepts": concept_inv,
+        "fields": flat_inv,
         "first": _fp(data[0]) if data else None,
         "last": _fp(data[-1]) if data else None,
     }
