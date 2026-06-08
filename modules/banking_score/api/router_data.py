@@ -364,12 +364,26 @@ async def sib_page_test(
                 flat.setdefault(f, set()).add(str(v))
     flat_inv = {k: sorted(v) for k, v in sorted(flat.items())}
 
+    # Raw record shape (for endpoints whose fields we don't yet know, e.g. carteras).
+    sample_keys = sorted(data[0].keys()) if data else []
+    # Distinct values of any non-numeric dimension fields (to learn breakdowns).
+    dims: Dict[str, set] = {}
+    skip = {"entidad", "periodo", "valor", "Valor"}
+    for r in data[:5000]:
+        for k, v in r.items():
+            if k not in skip and isinstance(v, str):
+                dims.setdefault(k, set()).add(v)
+    dim_inv = {k: sorted(v)[:40] for k, v in sorted(dims.items())}
+
     return {
         "params": params,
         "count": len(data),
         "entities": sorted(e for e in entities if e),
         "concepts": concept_inv,
         "fields": flat_inv,
+        "sample_keys": sample_keys,
+        "dimensions": dim_inv,
+        "sample": data[0] if data else None,
         "first": _fp(data[0]) if data else None,
         "last": _fp(data[-1]) if data else None,
     }
