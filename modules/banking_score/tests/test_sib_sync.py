@@ -223,6 +223,19 @@ def test_match_or_create_respects_active_flag(Session):
     assert defunct.bank_type == BankType.banca_multiple
 
 
+def test_cambiaria_auto_registers_via_meta(Session):
+    """A cambiaria from the EIC feed (not in the static catalog) is auto-created
+    with bank_type cambiaria using the per-run _entity_meta side-channel."""
+    db = Session()
+    meta = {"CARIBEEXPRESS": {"sib_code": "CARIBEEXPRESS", "tipo_entidad": "ARC",
+                              "nombre": "Caribe Express (Remesas y Cambio)"}}
+    bank, created = sib_sync._match_or_create_bank(db, "CARIBEEXPRESS", extra_codes=meta)
+    assert created
+    assert bank.bank_type == BankType.cambiaria
+    assert bank.name == "Caribe Express (Remesas y Cambio)"
+    assert bank.sib_code == "CARIBEEXPRESS"
+
+
 def test_backfill_skipped_when_already_real(Session, monkeypatch):
     db = Session()
     bank = _seed_popular(db)
