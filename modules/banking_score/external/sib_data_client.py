@@ -15,8 +15,20 @@ Author: SDQ Financial Team
 """
 import logging
 import time
+import unicodedata
 from datetime import date, datetime
 from typing import Dict, Any, Optional, List, Tuple
+
+
+def _norm(s: str) -> str:
+    """Uppercase + strip diacritics, so 'Índice de Crédito' matches 'INDICE DE
+    CREDITO'. The SIB concept/indicator names carry accents; matching against
+    accent-free keywords silently failed and left fields unmapped (false N/D)."""
+    if not s:
+        return ""
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", str(s)) if not unicodedata.combining(c)
+    ).upper().strip()
 
 logger = logging.getLogger("sdq.external.sib_data")
 
@@ -1345,6 +1357,7 @@ class SIBDataClient:
         value_field: str = "valor",
         nivel1_filter: str = "",
         nivel2_filter: str = "",
+        exact: bool = False,
     ) -> Optional[float]:
         """
         Search a list of SIB records for a value matching concepto keywords.
@@ -1367,23 +1380,24 @@ class SIBDataClient:
             "conceptoNivel7",
             "concepto", "indicador", "componente",
         ]
+        norm_keywords = [_norm(k) for k in concepto_keywords]
         for record in records:
             # Optional hierarchy filter: require conceptoNivel1/2 match first
             if nivel1_filter:
-                n1 = (record.get("conceptoNivel1") or "").upper()
-                if nivel1_filter.upper() not in n1:
+                if _norm(nivel1_filter) not in _norm(record.get("conceptoNivel1")):
                     continue
             if nivel2_filter:
-                n2 = (record.get("conceptoNivel2") or "").upper()
-                if nivel2_filter.upper() not in n2:
+                if _norm(nivel2_filter) not in _norm(record.get("conceptoNivel2")):
                     continue
 
             for cf in concepto_fields:
-                concepto = (record.get(cf) or "").upper()
+                concepto = _norm(record.get(cf))
                 if not concepto or concepto == "TODOS":
                     continue
-                for keyword in concepto_keywords:
-                    if keyword.upper() in concepto:
+                for kw in norm_keywords:
+                    # `exact` avoids matching near-duplicate names (e.g. the
+                    # morosidad index vs its "(Capital)" variant).
+                    if (concepto == kw) if exact else (kw in concepto):
                         val = record.get(value_field) or record.get("Valor")
                         if val is not None:
                             try:
@@ -1535,13 +1549,11 @@ class SIBDataClient:
         roe = fv(ind, ["ROE"])
         margen_intermediacion = fv(ind, ["MARGEN DE INTERMEDIACI"])
 
-        # Derive activos_promedio and patrimonio_promedio from ROA/ROE
-        activos_promedio = None
-        patrimonio_promedio = None
-        if roa and utilidad_neta and abs(roa) > 0.001:
-            activos_promedio = abs(utilidad_neta / (roa / 100.0))
-        if roe and utilidad_neta and abs(roe) > 0.001:
-            patrimonio_promedio = abs(utilidad_neta / (roe / 100.0))
+        # ROA/ROE are computed by US from the statements (utilidad_neta from the
+        # income statement / balances), not lifted from the SIB ratio. Use the
+        # period-end balance as the average-balance proxy.
+        activos_promedio = activos_totales
+        patrimonio_promedio = patrimonio_neto
 
         # Gestión ratios — derive absolute P&L values
         # "Gastos Financieros / Captaciones Totales + Obligaciones con Costo"
@@ -1577,31 +1589,32 @@ class SIBDataClient:
             if gastos_operacionales:
                 ingresos_operacionales = gastos_operacionales / (gastos_op_ratio / 100.0)
 
-        # Provisiones — try "Cobertura de Cartera" indicator
-        provisiones_ratio = fv(ind, ["COBERTURA DE CARTERA DE CREDITO BRUTA"])
-        provisiones = None
-        if provisiones_ratio and cartera_bruta:
-            provisiones = cartera_bruta * (provisiones_ratio / 100.0)
+        # Liquidez — "Disponibilidades + Inversiones netas / Activos Netos" is a
+        # RATIO (%); convert to an ABSOLUTE so activos_liquidos/pasivos works.
+        disponib_inversion_ratio = fv(ind, ["DISPONIBILIDADES + INVERSIONES NETAS"])
+        activos_liquidos = None
+        if disponib_inversion_ratio is not None and activos_totales:
+            activos_liquidos = activos_totales * (disponib_inversion_ratio / 100.0)
+        elif caja_valores is not None:
+            activos_liquidos = caja_valores  # fallback: cash & equivalents
 
-        # Liquidez
-        disponib_captaciones = fv(ind, ["DISPONIBILIDADES / TOTAL DE CAPTACIONES"])
-        disponib_inversion = fv(ind, ["DISPONIBILIDADES + INVERSIONES NETAS"])
-        activos_liquidos = disponib_inversion  # ratio: liquid assets / total assets
-
-        # Cartera quality
-        cartera_vigente_ratio = fv(ind, ["CARTERA DE CREDITO VIGENTE / CARTERA DE CREDITO BRUTA"])
-        cartera_mora_ratio = fv(ind, ["CARTERA DE CREDITO EN MORA Y VENCIDA"])
-        cobertura_vencida_90 = fv(ind, ["COBERTURA DE CARTERA DE CREDITO VENCIDA MAYOR A 90"])
+        # Cartera quality — from the pre-computed SIB ratios (the income/balance
+        # statements lack loan-level detail; these are the only API source).
+        # `exact` avoids the near-duplicate "(Capital)" variants.
+        cartera_vigente_ratio = fv(ind, ["Cartera de Credito Vigente / Cartera De Credito Bruta"], exact=True)
+        morosidad_idx = fv(ind, ["Indice de Morosidad mayor a 90 dias"], exact=True)
+        cobertura_vencida_90 = fv(ind, ["Cobertura de Cartera de Credito Vencida Mayor A 90 Dias"], exact=True)
 
         cartera_vencida_90d = None
         cartera_categoria_a = None
-        if cartera_vigente_ratio and cartera_bruta:
-            cartera_categoria_a = cartera_bruta * (cartera_vigente_ratio / 100.0)
-        if cartera_mora_ratio and patrimonio_neto:
-            # This is "Mora y Vencida / Patrimonio" → absolute = ratio × patrimonio
-            cartera_vencida_90d = patrimonio_neto * (cartera_mora_ratio / 100.0)
-
+        provisiones = None
         cartera_total = cartera_bruta
+        if cartera_vigente_ratio is not None and cartera_bruta:
+            cartera_categoria_a = cartera_bruta * (cartera_vigente_ratio / 100.0)
+        if morosidad_idx is not None and cartera_bruta:
+            cartera_vencida_90d = cartera_bruta * (morosidad_idx / 100.0)
+        if cobertura_vencida_90 is not None and cartera_vencida_90d:
+            provisiones = cartera_vencida_90d * (cobertura_vencida_90 / 100.0)
 
         # Not directly available from SIB API
         castigos = None
