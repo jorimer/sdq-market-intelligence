@@ -100,6 +100,30 @@ SIB_ENTITY_CODES: Dict[str, Dict[str, Any]] = {
     "Reidco":        {"sib_code": "REIDCO",    "tipo_entidad": "CC",  "nombre": "Corporación de Crédito Reidco",         "nombre_sib": "CORPORACION DE CREDITO REIDCO",    "active": False},
 }
 
+# Intermediación cambiaria (estados .../eic). ARC = agentes de remesas y cambio;
+# AC = agentes de cambio. Processed via the eic endpoints and a dedicated mapper.
+# Entities are auto-registered generically (the EIC feed defines the universe), so
+# new agents appear automatically — no per-entity catalog to maintain.
+EIC_TIPOS = ("ARC", "AC")
+
+# Friendlier display names for the material ARC agents (the AC universe is large
+# and cryptic — those fall back to a title-cased code).
+CAMBIARIA_DISPLAY_NAMES = {
+    "CARIBEEXPRESS": "Caribe Express (Remesas y Cambio)",
+    "CIBAOEXPRESS": "Cibao Express (Remesas y Cambio)",
+    "MONEYCORPS": "MoneyCorps (Remesas y Cambio)",
+    "GIROSOL": "GiroSol (Remesas y Cambio)",
+    "REMVIMENCA": "Remesas Vimenca",
+    "CAPLA": "Capla (Remesas y Cambio)",
+}
+
+
+def cambiaria_display_name(code: str) -> str:
+    """Human-readable name for a cambiaria SIB code."""
+    if code in CAMBIARIA_DISPLAY_NAMES:
+        return CAMBIARIA_DISPLAY_NAMES[code]
+    return f"{code.title()} (Agente de Cambio)"
+
 
 class SIBDataClient:
     """
@@ -886,10 +910,17 @@ class SIBDataClient:
         return None
 
     def get_working_tipos(self) -> List[str]:
-        """Discover (once) and return the SIB tipoEntidad codes that respond."""
+        """Discover (once) the EIF tipoEntidad codes that respond, then append the
+        cambiaria (EIC) types so the backfill also ingests agentes de cambio y
+        remesas. EIC types are routed to the eic endpoints in extract_all_entities_bulk.
+        """
         if not self._discovered_tipo_codes:
             self._discovered_tipo_codes = self._discover_working_tipo_codes()
-        return list(self._discovered_tipo_codes)
+        tipos = list(self._discovered_tipo_codes)
+        for t in EIC_TIPOS:  # ARC (remesas y cambio), AC (agentes de cambio)
+            if t not in tipos:
+                tipos.append(t)
+        return tipos
 
     def extract_one_tipo(
         self,
@@ -931,6 +962,13 @@ class SIBDataClient:
         logger.info(
             f"Bulk fetch: all SIB data for {period_start} to {period_end}"
         )
+
+        # Cambiarias (EIC) take a separate path: different endpoints, no
+        # indicadores/solvencia, a dedicated mapper, and generic auto-registration.
+        # The EIF flow below is left completely untouched.
+        active = self._discovered_tipo_codes or []
+        if active and all(t in EIC_TIPOS for t in active):
+            return self._extract_eic_bulk(period_start, period_end)
 
         # Step 0: Auto-discover working tipoEntidad codes
         if not self._discovered_tipo_codes:
@@ -1122,6 +1160,114 @@ class SIBDataClient:
         )
 
         return results
+
+    # ── Cambiarias (EIC) extraction ────────────────────────────
+
+    def _extract_eic_bulk(self, period_start: str, period_end: str) -> Dict[str, List[Dict]]:
+        """Extract intermediación cambiaria (EIC) balance + income for the active
+        cambiaria types. Auto-registers every entity the feed returns (the EIC
+        universe defines coverage) via the ``_entity_meta`` side-channel.
+        """
+        period_end = period_end or self._current_period()
+        balance = self._fetch_for_all_types("estados/situacion/eic", period_start, period_end)
+        income = self._fetch_for_all_types("estados/resultados/eic", period_start, period_end)
+        logger.info(f"  EIC: {len(balance)} balance, {len(income)} income records")
+
+        by_ent: Dict[str, Dict[str, List]] = {}
+        tipo_of: Dict[str, str] = {}
+        for src_name, recs in (("income", income), ("balance", balance)):
+            for r in recs:
+                ent = (r.get("entidad") or "").strip()
+                if not ent or ent == "TODOS":
+                    continue
+                by_ent.setdefault(ent, {"income": [], "balance": []})[src_name].append(r)
+                tipo_of.setdefault(ent, (r.get("tipoEntidad") or "").strip() or "AC")
+
+        results: Dict[str, List[Dict]] = {}
+        meta: Dict[str, Dict] = {}
+        for ent, sources in by_ent.items():
+            periods = self._group_by_period(sources["income"], sources["balance"], [], [], [])
+            out = []
+            for period_date, data in periods.items():
+                try:
+                    mapped = self._map_eic_to_sdq_fields(data)
+                    if not mapped.get("activos_totales"):
+                        continue  # skip empty/near-empty periods
+                    mapped["period_end"] = period_date
+                    mapped["period_type"] = "quarterly" if period_date.month in (3, 6, 9, 12) else "monthly"
+                    mapped["source"] = "sib_api"
+                    out.append(mapped)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"EIC map failed {ent} {period_date}: {e}")
+            if out:
+                results[ent] = out
+                meta[ent] = {
+                    "sib_code": ent,
+                    "tipo_entidad": tipo_of.get(ent, "AC"),  # ARC or AC → cambiaria
+                    "nombre": cambiaria_display_name(ent),
+                }
+
+        results["_entity_meta"] = meta
+        results["_unmatched"] = []
+        results["_entity_names"] = []
+        logger.info(f"  EIC extract complete: {len(meta)} cambiarias")
+        return results
+
+    def _map_eic_to_sdq_fields(self, period_data: Dict) -> Dict[str, Any]:
+        """Map EIC balance + income concept rows to the BankingData fields used by
+        the cambiaria scoring path. Totals are summed from conceptoNivel2 children
+        (robust to the 'TODOS' aggregate-row convention).
+        """
+        balance = period_data.get("balance", [])
+        income = period_data.get("income", [])
+
+        def _bsum(n1: str):
+            total, found = 0.0, False
+            for r in balance:
+                if (r.get("conceptoNivel1") or "").strip() == n1:
+                    n2 = (r.get("conceptoNivel2") or "").strip()
+                    if n2 and n2 != "TODOS":
+                        try:
+                            total += float(r.get("valor") or 0)
+                            found = True
+                        except (TypeError, ValueError):
+                            pass
+            return total if found else None
+
+        def _bval(n1: str, n2: str):
+            for r in balance:
+                if ((r.get("conceptoNivel1") or "").strip() == n1
+                        and (r.get("conceptoNivel2") or "").strip() == n2):
+                    try:
+                        return float(r.get("valor") or 0)
+                    except (TypeError, ValueError):
+                        return None
+            return None
+
+        def _ival(n2: str):
+            for r in income:
+                if (r.get("conceptoNivel2") or "").strip() == n2:
+                    try:
+                        return float(r.get("valor") or 0)
+                    except (TypeError, ValueError):
+                        return None
+            return None
+
+        efectivo = _bval("Activos", "Efectivo y equivalentes de efectivo") or 0.0
+        inversiones = _bval("Activos", "Inversiones") or 0.0
+        resultado = _ival("TODOS")
+        if resultado is None:
+            antes, imp = _ival("Resultado antes del impuesto"), _ival("Impuesto sobre la renta")
+            resultado = (antes or 0.0) + (imp or 0.0) if (antes is not None or imp is not None) else None
+
+        return {
+            "activos_totales": _bsum("Activos"),
+            "patrimonio_tecnico": _bsum("Patrimonio"),
+            "pasivos_exigibles": _bsum("Pasivos"),
+            "activos_liquidos": efectivo + inversiones,
+            "cartera_bruta": _bval("Activos", "Cartera de créditos"),
+            "utilidad_neta": resultado,
+        }
 
     def extract_banking_data(
         self,

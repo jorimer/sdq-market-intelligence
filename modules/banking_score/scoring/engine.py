@@ -372,8 +372,18 @@ def run_scoring(data, entity_type=None) -> Dict[str, Any]:
     types fall back to the base weights.  Returns a complete breakdown.
     """
     weights = get_sub_component_weights(entity_type)
-    indicators = calculate_all_indicators(data)
-    sub_scores = calculate_sub_components(indicators)
+    if entity_type == "cambiaria":
+        # FX/remittance agents have no credit book — use the dedicated indicator
+        # set (same 5 sub-components, different inputs/thresholds).
+        from modules.banking_score.scoring.cambiaria import (
+            calculate_cambiaria_indicators,
+            calculate_cambiaria_sub_components,
+        )
+        indicators = calculate_cambiaria_indicators(data)
+        sub_scores = calculate_cambiaria_sub_components(indicators)
+    else:
+        indicators = calculate_all_indicators(data)
+        sub_scores = calculate_sub_components(indicators)
     overall_score = calculate_deterministic_score(sub_scores, weights)
     tier = map_rating_tier(overall_score)
     color = get_tier_color(tier)

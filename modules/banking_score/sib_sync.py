@@ -47,6 +47,9 @@ _TIPO_TO_BANKTYPE = {
     "AAP": BankType.aap,
     "BAC": BankType.banco_ahorro_credito,
     "CC": BankType.corporacion_credito,
+    # Intermediación cambiaria (EIC): agentes de remesas/cambio y de cambio.
+    "ARC": BankType.cambiaria,
+    "AC": BankType.cambiaria,
 }
 
 # Sync status lives in the DB (AppSetting) so it's shared across uvicorn workers —
@@ -173,15 +176,16 @@ def needs_backfill(db: Session) -> bool:
     return total > 0 and sib == 0
 
 
-def _match_or_create_bank(db: Session, short_name: str):
+def _match_or_create_bank(db: Session, short_name: str, extra_codes: Optional[Dict] = None):
     """Find the bank for a SIB short name, or AUTO-CREATE it if it's in the SIB
-    catalog but not yet in the DB (so new supervised entities — banks, savings &
-    credit, corporaciones, future categories — appear automatically).
+    catalog (or in *extra_codes*, a per-run dynamic catalog used for cambiarias
+    discovered live) but not yet in the DB — so new supervised entities appear
+    automatically.
 
-    Returns (bank, created). bank is None if the entity isn't in our catalog or
-    its type maps to no BankType (then the caller raises a "new entity" alert).
+    Returns (bank, created). bank is None if the entity isn't catalogued or its
+    type maps to no BankType (then the caller raises a "new entity" alert).
     """
-    info = SIB_ENTITY_CODES.get(short_name) or {}
+    info = SIB_ENTITY_CODES.get(short_name) or (extra_codes or {}).get(short_name) or {}
     name = _SHORT_TO_NAME.get(short_name) or info.get("nombre") or (info.get("nombre_sib") or "").title()
     if not name:
         return None, False
@@ -283,10 +287,11 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             _write_status(db, phase=f"extrayendo {tipo} ({i}/{len(tipos)})… (puede tardar)")
             bulk = client.extract_one_tipo(tipo, period_start=period_start)
             unmatched += bulk.get("_unmatched", [])
+            entity_meta = bulk.get("_entity_meta", {})  # cambiarias: live dynamic catalog
             for short_name, periods in bulk.items():
                 if short_name.startswith("_"):
                     continue
-                bank, was_created = _match_or_create_bank(db, short_name)
+                bank, was_created = _match_or_create_bank(db, short_name, extra_codes=entity_meta)
                 if not bank:
                     errors.append(f"{short_name}: entidad no catalogada")
                     continue
