@@ -148,6 +148,62 @@ def test_backfill_recalculates_ratings(Session, monkeypatch):
     assert rr.rating_tier
 
 
+class _FutureQuarterClient(_StubClient):
+    """SIB returns a closed quarter plus the in-progress (future) one."""
+
+    def extract_all_entities_bulk(self, period_start="2021-01"):
+        from datetime import timedelta
+        future = date.today() + timedelta(days=200)
+        # Normalize to a quarter-end month so it isn't skipped as non-quarterly.
+        fq = date(future.year, ((future.month - 1) // 3) * 3 + 3, 1)
+        # Move to a real quarter-end day (30/31) safely beyond today.
+        fq = date(fq.year + (1 if fq <= date.today() else 0), 12, 31)
+        return {
+            "Popular": [
+                {"period_end": date(2024, 12, 31), "period_type": "quarterly",
+                 "source": "sib_api", "activos_totales": 999.0, "patrimonio_tecnico": 50.0},
+                {"period_end": fq, "period_type": "quarterly",
+                 "source": "sib_api", "activos_totales": 1.0},
+            ],
+            "_unmatched": [], "_entity_names": [],
+        }
+
+
+def test_backfill_skips_future_quarter(Session, monkeypatch):
+    """The in-progress/future quarter must not be ingested or scored."""
+    db = Session()
+    _seed_popular(db)
+    monkeypatch.setattr(sib_sync, "get_sib_data_client", lambda force_new=False: _FutureQuarterClient())
+
+    result = sib_sync.run_backfill(force=True)
+    assert result["status"] == "completed"
+    assert result["periods_skipped_future"] >= 1
+
+    db2 = Session()
+    # No banking_data nor ratings for any future-dated period.
+    fut = db2.query(BankingData).filter(BankingData.period_end > date.today()).count()
+    fut_r = db2.query(RatingResult).filter(RatingResult.period_end > date.today()).count()
+    assert fut == 0
+    assert fut_r == 0
+
+
+def test_prune_future_periods(Session):
+    """prune_future_periods removes only future-dated rows."""
+    from datetime import timedelta
+    db = Session()
+    bank = _seed_popular(db)
+    future = date.today() + timedelta(days=120)
+    db.add(BankingData(bank_id=bank.id, period_end=future, source=DataSource.sib_api))
+    db.commit()
+    assert db.query(BankingData).filter(BankingData.period_end > date.today()).count() == 1
+
+    res = sib_sync.prune_future_periods(db)
+    assert res["data_deleted"] == 1
+    assert db.query(BankingData).filter(BankingData.period_end > date.today()).count() == 0
+    # The closed-period row survives.
+    assert db.query(BankingData).filter_by(period_end=date(2024, 12, 31)).count() == 1
+
+
 def test_backfill_skipped_when_already_real(Session, monkeypatch):
     db = Session()
     bank = _seed_popular(db)

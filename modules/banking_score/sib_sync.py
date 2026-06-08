@@ -13,7 +13,7 @@ progress is exposed via :func:`get_sync_status` for the "Sincronización SIB" UI
 import json
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Dict, Optional
 
 from sqlalchemy import func
@@ -143,6 +143,24 @@ def bank_data_stats(db: Session) -> Dict:
     }
 
 
+def prune_future_periods(db: Session) -> Dict[str, int]:
+    """Remove data/ratings for quarters that haven't closed yet (period_end in
+    the future). The SIB returns the in-progress quarter with partial figures
+    (no solvency/capital published), which would score as a bogus SDQ-D and
+    poison the "latest" rankings. These rows regenerate once the quarter closes.
+    """
+    today = date.today()
+    from modules.banking_score.models.models import RatingAction
+
+    ra = db.query(RatingAction).filter(RatingAction.period_end > today).delete(synchronize_session=False)
+    rr = db.query(RatingResult).filter(RatingResult.period_end > today).delete(synchronize_session=False)
+    bd = db.query(BankingData).filter(BankingData.period_end > today).delete(synchronize_session=False)
+    db.commit()
+    if bd or rr or ra:
+        logger.info("Pruned future periods (> %s): %d data, %d ratings, %d actions", today, bd, rr, ra)
+    return {"data_deleted": bd, "ratings_deleted": rr, "actions_deleted": ra}
+
+
 def needs_backfill(db: Session) -> bool:
     """True when there's data but none of it came from the real SIB API yet."""
     total = db.query(func.count(BankingData.id)).scalar() or 0
@@ -250,10 +268,15 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             _write_status(db, is_running=False, phase="error", alerts=[msg])
             return {"status": "error", "message": msg}
 
+        # Drop any in-progress/future quarter left over from a prior run before
+        # ingesting fresh data (keeps the "latest" rankings on closed quarters).
+        prune_future_periods(db)
+
         # Incremental + idempotent: fetch and WRITE one tipoEntidad at a time,
         # committing after each. Data lands progressively (visible in stats) and a
         # restart only loses the in-progress type — a re-run upserts the rest.
-        created = updated = matched = skipped_period = entities_created = 0
+        today = date.today()
+        created = updated = matched = skipped_period = skipped_future = entities_created = 0
         errors: list = []
         unmatched: list = []
         for i, tipo in enumerate(tipos, 1):
@@ -282,6 +305,11 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
                     # Quarterly platform: only ingest quarter-end periods.
                     if pe.month not in (3, 6, 9, 12):
                         skipped_period += 1
+                        continue
+                    # Skip the in-progress/future quarter — its data is partial
+                    # (no solvency yet) and would score as a bogus SDQ-D.
+                    if pe > today:
+                        skipped_future += 1
                         continue
                     existing = (
                         db.query(BankingData)
@@ -330,6 +358,7 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             "records_created": created,
             "records_updated": updated,
             "periods_skipped_non_quarterly": skipped_period,
+            "periods_skipped_future": skipped_future,
             "ratings_written": scoring["ratings_written"],
             "ratings_total": scoring["ratings_total"],
             "periods_scored": scoring["periods_scored"],

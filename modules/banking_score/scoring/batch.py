@@ -220,7 +220,9 @@ def score_all_periods(
     q = db.query(BankingData.period_end).distinct()
     if only_sib:
         q = q.filter(BankingData.source == DataSource.sib_api)
-    periods = sorted(r[0] for r in q.all())
+    # Never score quarters that haven't closed yet — their data is partial.
+    today = date.today()
+    periods = sorted(pe for (pe,) in q.all() if pe <= today)
 
     total_scored = 0
     per_period: List[Dict] = []
