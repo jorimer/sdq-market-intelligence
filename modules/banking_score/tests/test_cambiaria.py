@@ -72,3 +72,23 @@ def test_eic_mapper_parses_concepts():
 def test_cambiaria_display_name():
     assert "Caribe Express" in cambiaria_display_name("CARIBEEXPRESS")
     assert cambiaria_display_name("AGCRPLACIDO") == "Agcrplacido (Agente de Cambio)"
+
+
+def test_eic_bulk_meta_uses_queried_tipo_code(monkeypatch):
+    """The SIB record's tipoEntidad holds the full name (e.g. 'AGENTES DE...'),
+    not the code. _entity_meta must use the queried code (ARC/AC) so the
+    BankType mapping works — regression for the failed cambiaria backfill."""
+    client = SIBDataClient.__new__(SIBDataClient)
+    client._discovered_tipo_codes = ["ARC"]
+    bal = [
+        {"entidad": "CARIBEEXPRESS", "periodo": "2024-12", "tipoEntidad": "AGENTES DE REMESAS Y CAMBIO",
+         "conceptoNivel1": "Activos", "conceptoNivel2": "Efectivo y equivalentes de efectivo", "valor": 600},
+        {"entidad": "CARIBEEXPRESS", "periodo": "2024-12", "tipoEntidad": "AGENTES DE REMESAS Y CAMBIO",
+         "conceptoNivel1": "Patrimonio", "conceptoNivel2": "Patrimonio neto", "valor": 300},
+    ]
+    inc = [{"entidad": "CARIBEEXPRESS", "periodo": "2024-12", "tipoEntidad": "AGENTES DE REMESAS Y CAMBIO",
+            "conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "TODOS", "valor": 20}]
+    monkeypatch.setattr(client, "_fetch_for_all_types",
+                        lambda ep, ps, pe: bal if "situacion" in ep else inc)
+    out = client._extract_eic_bulk("2021-01", "2024-12")
+    assert out["_entity_meta"]["CARIBEEXPRESS"]["tipo_entidad"] == "ARC"  # code, not the name

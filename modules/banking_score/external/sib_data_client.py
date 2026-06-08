@@ -1169,19 +1169,23 @@ class SIBDataClient:
         universe defines coverage) via the ``_entity_meta`` side-channel.
         """
         period_end = period_end or self._current_period()
+        # The tipo CODE we queried with (ARC / AC). The SIB record's tipoEntidad
+        # field holds the full Spanish NAME ("AGENTES DE..."), not the code, so we
+        # must use the query code for the BankType mapping — both map to cambiaria.
+        active = [t for t in (self._discovered_tipo_codes or []) if t in EIC_TIPOS]
+        tipo_code = active[0] if active else "AC"
+
         balance = self._fetch_for_all_types("estados/situacion/eic", period_start, period_end)
         income = self._fetch_for_all_types("estados/resultados/eic", period_start, period_end)
         logger.info(f"  EIC: {len(balance)} balance, {len(income)} income records")
 
         by_ent: Dict[str, Dict[str, List]] = {}
-        tipo_of: Dict[str, str] = {}
         for src_name, recs in (("income", income), ("balance", balance)):
             for r in recs:
                 ent = (r.get("entidad") or "").strip()
                 if not ent or ent == "TODOS":
                     continue
                 by_ent.setdefault(ent, {"income": [], "balance": []})[src_name].append(r)
-                tipo_of.setdefault(ent, (r.get("tipoEntidad") or "").strip() or "AC")
 
         results: Dict[str, List[Dict]] = {}
         meta: Dict[str, Dict] = {}
@@ -1203,7 +1207,7 @@ class SIBDataClient:
                 results[ent] = out
                 meta[ent] = {
                     "sib_code": ent,
-                    "tipo_entidad": tipo_of.get(ent, "AC"),  # ARC or AC → cambiaria
+                    "tipo_entidad": tipo_code,  # ARC or AC → cambiaria
                     "nombre": cambiaria_display_name(ent),
                 }
 
