@@ -342,9 +342,23 @@ async def sib_page_test(
     def _fp(r):
         return {k: r.get(k) for k in ("entidad", "periodo", "conceptoNivel1", "conceptoNivel2", "indicador", "componente", "valor") if k in r}
 
+    # Distinct concept inventory (conceptoNivel1 → sorted set of conceptoNivel2),
+    # to design the EIC parser against verified concepts instead of guessing.
+    concepts: Dict[str, set] = {}
+    entities = set()
+    for r in data:
+        entities.add(str(r.get("entidad") or ""))
+        n1 = str(r.get("conceptoNivel1") or "")
+        n2 = str(r.get("conceptoNivel2") or "")
+        if n1:
+            concepts.setdefault(n1, set()).add(n2)
+    concept_inv = {k: sorted(v) for k, v in sorted(concepts.items())}
+
     return {
         "params": params,
         "count": len(data),
+        "entities": sorted(e for e in entities if e),
+        "concepts": concept_inv,
         "first": _fp(data[0]) if data else None,
         "last": _fp(data[-1]) if data else None,
     }
