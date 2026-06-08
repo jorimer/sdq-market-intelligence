@@ -11,7 +11,7 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
-import { ENTITY_TYPES, isCreditModel, entityTypeLabel } from "../entityTypes";
+import { ENTITY_TYPES, isCreditModel, isSubmodelReady, entityTypeLabel } from "../entityTypes";
 
 type Status = "loading" | "error" | "ready";
 
@@ -86,8 +86,8 @@ export function DashboardPage() {
       </div>
     );
 
-  // Cambiarias / fiduciarias don't use the credit model yet — show honest state.
-  if (!isCreditModel(area)) {
+  // Submodels without data yet (fiduciarias — not exposed by the SIB API).
+  if (!isSubmodelReady(area)) {
     return (
       <div>
         {head}
@@ -100,6 +100,11 @@ export function DashboardPage() {
       </div>
     );
   }
+
+  // Cambiarias use their own (non-credit) submodel — surface that honestly.
+  const submodelNote = !isCreditModel(area)
+    ? `${entityTypeLabel(area)}: submodelo propio (capitalización, liquidez operativa, eficiencia y márgenes) — no el modelo crediticio.`
+    : null;
 
   const top = rankings.slice(0, 5);
   const avg = rankings.length
@@ -118,6 +123,10 @@ export function DashboardPage() {
     <div>
       {head}
       {areaTabs}
+
+      {submodelNote && (
+        <p className="text-sm text-muted mb-4">{submodelNote}</p>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <StatTile label="Entidades" value={area ? rankings.length : (stats?.total_entities ?? 0)} />
