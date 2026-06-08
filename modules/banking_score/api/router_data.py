@@ -255,6 +255,25 @@ async def sync_from_sib(
     return start_backfill_background(force=False)
 
 
+# ─── Rescore (recompute ratings from existing data, no re-ingest) ─
+
+@router.post(
+    "/rescore",
+    summary="Recalcular ratings desde los datos existentes",
+    description="Recalcula y persiste los ratings de todos los períodos con datos, sin volver a descargar del SIB. Útil tras cargar datos o ajustar pesos. Requiere rol admin.",
+)
+async def rescore(
+    only_sib: bool = Query(True, description="Solo períodos con datos del SIB (omite datos sintéticos)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Se requiere rol admin")
+    from modules.banking_score.scoring.batch import score_all_periods
+    result = score_all_periods(db, only_sib=only_sib, created_by=current_user.id)
+    return {"success": True, **result}
+
+
 # ─── Sync Status ─────────────────────────────────────────────────
 
 @router.get(

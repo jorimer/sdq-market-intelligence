@@ -28,12 +28,12 @@ from modules.banking_score.scoring.engine import (
     run_scoring,
     simulate_from_scores,
 )
+from modules.banking_score.scoring.batch import detect_rating_action, score_period
 from modules.banking_score.scoring.rating_scale import get_tier_color, map_rating_tier
 from modules.banking_score.scoring.weights import (
     WEIGHT_PROFILES,
     get_sub_component_weights,
 )
-from modules.banking_score.events import overlay_outlook
 
 logger = logging.getLogger("sdq.api.scoring")
 
@@ -151,7 +151,7 @@ async def run_bank_scoring(
         db.add(rr)
 
     # ── Detect rating action (compare with previous period) ──
-    rating_action_info = _detect_rating_action(db, bank_id, pe, result, current_user.id)
+    rating_action_info = detect_rating_action(db, bank_id, pe, result, current_user.id)
 
     db.commit()
     logger.info(f"Scoring completado: {bank.name} | {period_end} → {result['rating_tier']}")
@@ -182,85 +182,11 @@ async def run_scoring_all(
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
 
-    records = db.query(BankingData).filter_by(period_end=pe).all()
-    if not records:
+    if not db.query(BankingData).filter_by(period_end=pe).first():
         raise HTTPException(status_code=404, detail=f"No hay datos bancarios para el período {period_end}")
 
-    results: List[Dict] = []
-    errors: List[Dict] = []
-
-    for record in records:
-        try:
-            bank = db.query(Bank).filter_by(id=record.bank_id).first()
-            entity_type = bank.bank_type.value if bank and bank.bank_type else None
-            scoring_result = run_scoring(record, entity_type=entity_type)
-
-            # Persist
-            existing = db.query(RatingResult).filter_by(
-                bank_id=record.bank_id, period_end=pe, model_type=ModelType.deterministic,
-            ).first()
-            if existing:
-                existing.overall_score = scoring_result["overall_score"]
-                existing.rating_tier = scoring_result["rating_tier"]
-                existing.solidez_score = scoring_result["sub_components"]["solidez"]
-                existing.calidad_score = scoring_result["sub_components"]["calidad"]
-                existing.eficiencia_score = scoring_result["sub_components"]["eficiencia"]
-                existing.liquidez_score = scoring_result["sub_components"]["liquidez"]
-                existing.diversificacion_score = scoring_result["sub_components"]["diversificacion"]
-                existing.indicator_details = scoring_result["indicators"]
-            else:
-                rr = RatingResult(
-                    bank_id=record.bank_id, period_end=pe,
-                    overall_score=scoring_result["overall_score"],
-                    rating_tier=scoring_result["rating_tier"],
-                    solidez_score=scoring_result["sub_components"]["solidez"],
-                    calidad_score=scoring_result["sub_components"]["calidad"],
-                    eficiencia_score=scoring_result["sub_components"]["eficiencia"],
-                    liquidez_score=scoring_result["sub_components"]["liquidez"],
-                    diversificacion_score=scoring_result["sub_components"]["diversificacion"],
-                    indicator_details=scoring_result["indicators"],
-                    model_type=ModelType.deterministic,
-                    model_version=scoring_result["model_version"],
-                    created_by=current_user.id,
-                )
-                db.add(rr)
-
-            action_info = _detect_rating_action(db, record.bank_id, pe, scoring_result, current_user.id)
-
-            results.append({
-                "bank_id": record.bank_id,
-                "bank_name": bank.name if bank else "Desconocido",
-                "overall_score": scoring_result["overall_score"],
-                "rating_tier": scoring_result["rating_tier"],
-                "rating_action": action_info,
-            })
-        except Exception as e:
-            errors.append({"bank_id": record.bank_id, "error": str(e)})
-
-    db.commit()
-
-    summary = {"upgrades": 0, "downgrades": 0, "confirmaciones": 0, "observaciones": 0}
-    for r in results:
-        act = r.get("rating_action")
-        if act:
-            key = act.get("action_type", "")
-            if key == "upgrade":
-                summary["upgrades"] += 1
-            elif key == "downgrade":
-                summary["downgrades"] += 1
-            elif key == "confirmacion":
-                summary["confirmaciones"] += 1
-            elif key == "observacion":
-                summary["observaciones"] += 1
-
-    return {
-        "success": True,
-        "period_end": period_end,
-        "scored": len(results),
-        "errors": errors,
-        "results": results,
-        "rating_actions_summary": summary,
-    }
+    summary = score_period(db, pe, created_by=current_user.id)
+    return {"success": True, **summary}
 
 
 # ─── Get Latest Rating ──────────────────────────────────────────
@@ -512,72 +438,3 @@ async def simulate(
     except Exception as e:
         logger.error(f"Error en simulación para {bank_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error en simulación: {e}")
-
-
-# ─── Helpers ─────────────────────────────────────────────────────
-
-def _detect_rating_action(
-    db: Session,
-    bank_id: str,
-    period_end: date,
-    scoring_result: Dict[str, Any],
-    user_id: str,
-) -> Optional[Dict]:
-    """Compare current scoring with previous period and create a RatingAction if applicable."""
-    previous = (
-        db.query(RatingResult)
-        .filter(RatingResult.bank_id == bank_id, RatingResult.period_end < period_end)
-        .order_by(RatingResult.period_end.desc())
-        .first()
-    )
-    if not previous:
-        return None
-
-    score_delta = round(float(scoring_result["overall_score"]) - float(previous.overall_score), 2)
-    prev_tier = previous.rating_tier
-    new_tier = scoring_result["rating_tier"]
-
-    if new_tier != prev_tier:
-        action_type = ActionType.upgrade if scoring_result["overall_score"] > float(previous.overall_score) else ActionType.downgrade
-    elif abs(score_delta) >= 2.0:
-        action_type = ActionType.observacion
-    else:
-        action_type = ActionType.confirmacion
-
-    base_outlook = Outlook.positiva if score_delta > 3 else (Outlook.negativa if score_delta < -3 else Outlook.estable)
-    # IRMP overlay: the macro-political environment biases the outlook, not the score.
-    ov = overlay_outlook(base_outlook.value, "DO")
-    outlook = Outlook(ov["outlook"])
-
-    action = RatingAction(
-        bank_id=bank_id,
-        period_end=period_end,
-        action_type=action_type,
-        previous_period_end=previous.period_end,
-        previous_score=previous.overall_score,
-        previous_tier=prev_tier,
-        new_score=scoring_result["overall_score"],
-        new_tier=new_tier,
-        score_delta=score_delta,
-        outlook=outlook,
-        previous_sub_components={
-            "solidez": float(previous.solidez_score or 0),
-            "calidad": float(previous.calidad_score or 0),
-            "eficiencia": float(previous.eficiencia_score or 0),
-            "liquidez": float(previous.liquidez_score or 0),
-            "diversificacion": float(previous.diversificacion_score or 0),
-        },
-        new_sub_components=scoring_result["sub_components"],
-        created_by=user_id,
-    )
-    db.add(action)
-
-    return {
-        "action_type": action_type.value,
-        "previous_tier": prev_tier,
-        "new_tier": new_tier,
-        "score_delta": score_delta,
-        "outlook": outlook.value,
-        "outlook_irmp_band": ov["irmp_band"],
-        "outlook_adjusted_by_irmp": ov["adjusted"],
-    }

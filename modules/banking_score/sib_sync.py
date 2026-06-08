@@ -302,6 +302,17 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             db.commit()  # persist this tipo before moving on (incremental)
             _write_status(db, phase=f"{tipo} listo ({i}/{len(tipos)}) · {matched} entidades, {created + updated} registros")
 
+        # Recalculate ratings for the freshly-ingested SIB data. Without this the
+        # platform has real data but stale/missing ratings (834 records vs 70
+        # ratings). Runs in the same session, oldest period first so rating-action
+        # deltas build chronologically; progress is visible in the sync status.
+        from modules.banking_score.scoring.batch import score_all_periods
+
+        def _scoring_progress(i: int, total: int, pe) -> None:
+            _write_status(db, phase=f"calculando ratings {pe} ({i}/{total})…")
+
+        scoring = score_all_periods(db, only_sib=True, on_progress=_scoring_progress)
+
         # Level 2: SIB returned entities we don't catalog → alert to add them.
         # Fresh list (alerts were cleared at start) so no stale errors linger.
         new_alerts: list = []
@@ -319,6 +330,9 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             "records_created": created,
             "records_updated": updated,
             "periods_skipped_non_quarterly": skipped_period,
+            "ratings_written": scoring["ratings_written"],
+            "ratings_total": scoring["ratings_total"],
+            "periods_scored": scoring["periods_scored"],
             "unmatched": uniq_unmatched,
             "errors": errors[:20],
         }
