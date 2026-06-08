@@ -189,6 +189,23 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _friendly_error(exc: Exception) -> str:
+    """Translate a raw exception into a clear Spanish message for the UI.
+    The full technical detail stays in the logs, not in front of the operator.
+    """
+    text = str(exc).lower()
+    if "enum" in text or "invalidtextrepresentation" in text:
+        return ("Error de configuración de la base (un tipo de entidad no estaba "
+                "registrado). Reintenta la sincronización.")
+    if "timeout" in text or "timed out" in text:
+        return "Tiempo de espera agotado al consultar la API del SIB. Reintenta."
+    if "connect" in text or "connection" in text:
+        return "No se pudo conectar con la API del SIB. Revisa la clave y el proxy."
+    if "ocp-apim" in text or "401" in text or "subscription" in text:
+        return "Credenciales del SIB inválidas. Revísalas en Configuración."
+    return "Ocurrió un error durante la sincronización. El detalle quedó en los registros (logs)."
+
+
 def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
     """Replace synthetic data with real SIB data (quarter-end periods only).
 
@@ -307,13 +324,14 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
         logger.info("SIB backfill: %s", result)
         return result
     except Exception as e:  # noqa: BLE001 — report any failure into status
-        logger.exception("SIB backfill failed")
+        logger.exception("SIB backfill failed")  # full technical detail → logs
+        friendly = _friendly_error(e)
         try:
             _write_status(db, is_running=False, phase="error",
-                          alerts=(_read_status(db).get("alerts") or [])[-49:] + [str(e)[:200]])
+                          alerts=(_read_status(db).get("alerts") or [])[-49:] + [friendly])
         except Exception:  # noqa: BLE001
             pass
-        return {"status": "error", "message": str(e)[:300]}
+        return {"status": "error", "message": friendly}
     finally:
         db.close()
 
