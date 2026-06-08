@@ -274,6 +274,21 @@ async def rescore(
     return {"success": True, **result}
 
 
+@router.post(
+    "/prune-future",
+    summary="Eliminar trimestres no cerrados (futuros)",
+    description="Borra datos y ratings de períodos cuyo trimestre aún no cerró (period_end > hoy). El SIB devuelve el trimestre en curso con datos parciales que distorsionan el ranking. Se regeneran al cerrar el trimestre. Requiere rol admin.",
+)
+async def prune_future(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Se requiere rol admin")
+    from modules.banking_score.sib_sync import prune_future_periods
+    return {"success": True, **prune_future_periods(db)}
+
+
 # ─── Sync Status ─────────────────────────────────────────────────
 
 @router.get(
