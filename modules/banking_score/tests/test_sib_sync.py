@@ -13,6 +13,7 @@ from modules.banking_score.models.models import (
     BankingData,
     BankType,
     DataSource,
+    RatingResult,
 )
 
 
@@ -123,6 +124,28 @@ def test_backfill_auto_registers_catalogued_entity(Session, monkeypatch):
     assert popular is not None
     assert popular.sib_code == "BPD"
     assert popular.bank_type == BankType.banca_multiple
+
+
+def test_backfill_recalculates_ratings(Session, monkeypatch):
+    """After ingesting SIB data, the backfill must compute and persist ratings
+    (closes the gap where data landed but ratings stayed empty/stale)."""
+    db = Session()
+    _seed_popular(db)
+    monkeypatch.setattr(sib_sync, "get_sib_data_client", lambda force_new=False: _StubClient())
+
+    assert db.query(RatingResult).count() == 0  # no ratings before
+    result = sib_sync.run_backfill(force=True)
+
+    assert result["status"] == "completed"
+    assert result["periods_scored"] == 1  # the 2024-12-31 quarter-end
+    assert result["ratings_written"] == 1
+    assert result["ratings_total"] == 1
+
+    db2 = Session()
+    rr = db2.query(RatingResult).filter_by(period_end=date(2024, 12, 31)).first()
+    assert rr is not None
+    assert 0 <= float(rr.overall_score) <= 100
+    assert rr.rating_tier
 
 
 def test_backfill_skipped_when_already_real(Session, monkeypatch):
