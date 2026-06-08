@@ -204,6 +204,25 @@ def test_prune_future_periods(Session):
     assert db.query(BankingData).filter_by(period_end=date(2024, 12, 31)).count() == 1
 
 
+def test_catalogued_entities_match_by_sib_code():
+    """The 6 newly-catalogued SIB codes resolve to their catalog entry."""
+    from modules.banking_score.external.sib_data_client import SIBDataClient
+    for code in ("ATLANTICO", "COFACI", "OPTIMA", "EMPIRE", "ACTIVO", "REIDCO"):
+        assert SIBDataClient._match_entity_name(code) is not None, code
+
+
+def test_match_or_create_respects_active_flag(Session):
+    """Exited entities are catalogued inactive; active ones stay active."""
+    db = Session()
+    active, created = sib_sync._match_or_create_bank(db, "Atlántico")
+    assert created and active.is_active is True
+    assert active.bank_type == BankType.banco_ahorro_credito
+
+    defunct, created2 = sib_sync._match_or_create_bank(db, "Activo")
+    assert created2 and defunct.is_active is False
+    assert defunct.bank_type == BankType.banca_multiple
+
+
 def test_backfill_skipped_when_already_real(Session, monkeypatch):
     db = Session()
     bank = _seed_popular(db)

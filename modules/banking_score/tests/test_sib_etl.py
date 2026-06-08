@@ -22,7 +22,8 @@ def test_entity_catalog_integrity():
 def test_corporaciones_credito_covered():
     """Corporaciones de crédito (CC) are in the catalog and fetch candidates."""
     cc = {k: v for k, v in etl.SIB_ENTITY_CODES.items() if v["tipo_entidad"] == "CC"}
-    assert set(cc) == {"Monumental", "Nordestana", "Oficorp"}
+    # Reidco is a (now-exited) corporación de crédito, catalogued for historical data.
+    assert set(cc) == {"Monumental", "Nordestana", "Oficorp", "Reidco"}
     assert "CC" in SIBDataClient.SIB_TIPO_ENTIDAD_CANDIDATES
 
 
