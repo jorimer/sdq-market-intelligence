@@ -110,3 +110,17 @@ Cada entrada sigue esta estructura:
 - **Causa raíz**: `health 200` NO garantiza que el rollout terminó (el contenedor viejo responde 200 durante el rollout).
 - **Regla**: antes de disparar un job largo en prod tras un merge, esperar a que el deploy esté estable: ventana fija (~160s) + varios `health 200` consecutivos, y confirmar `is_running=false`. Mejor: no mergear/desplegar mientras un job largo corre.
 - **Disparador**: disparar backfill/sync/import en prod justo después de un merge a `main`.
+
+### 2026-06-09 — Datos de una API: verificar UNIDADES y JERARQUÍA, no solo el nombre
+
+- **Síntoma**: el modelo de bancos daba disparates (ROA=418M, solvencia=0.0001, liquidez=−477) aunque cada campo "mapeaba".
+- **Causa raíz**: (a) **unidades distintas por endpoint** — el balance del SIB viene en pesos, los indicadores/solvencia en millones; sumarlos/dividirlos entre sí rompe todo. (b) **jerarquía** — el balance trae un subtotal `conceptoNivel3=TODOS` por cada `conceptoNivel2` MÁS sus hijos; sumar todas las filas hace doble conteo e infla los activos.
+- **Regla**: al consumir absolutos de varias fuentes, (1) confirmar la **unidad** de cada una con un dato real y normalizar; mejor aún, preferir los **ratios % ya calculados** (adimensionales) y calcular el resto desde UNA fuente consistente (el balance en pesos). (2) Para datos jerárquicos, leer solo el nivel de subtotal (`=TODOS`), nunca sumar subtotal + hijos.
+- **Disparador**: ETL que combina balance + indicadores + solvencia, o cualquier fuente con árbol de conceptos.
+
+### 2026-06-09 — Integridad: un indicador sin dato no debe puntuar "perfecto"
+
+- **Síntoma**: calidad/liquidez/diversificación salían idénticas en TODOS los bancos (81.9 / 14.37 / 100) — ~45% del peso fabricado.
+- **Causa raíz**: indicadores cuyos inputs no mapeaban computaban 0 → score perfecto (p. ej. morosidad sin datos = 0% = 100). El modelo "inventaba" dato faltante.
+- **Regla**: un indicador sin su input es **N/D** (se excluye del promedio del subcomponente); un subcomponente sin indicadores disponibles es N/D y el score global **repondera** sobre lo medido. Nunca acreditar dato faltante. Cada número del rating debe ser trazable a dato real.
+- **Disparador**: cualquier scoring/índice compuesto sobre datos externos con cobertura parcial.
