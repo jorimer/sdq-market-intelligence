@@ -70,20 +70,24 @@ def test_mapping_extracts_real_values():
             {"conceptoNivel1": "Patrimonio", "conceptoNivel2": "Patrimonio neto", "valor": 200.0},
         ],
         "solvency": [
-            {"componente": "PATRIMONIO TECNICO AJUSTADO", "valor": 800.0},
+            {"componente": "Índice de solvencia", "valor": 14.5},
             {"componente": "CAPITAL PRIMARIO", "valor": 600.0},
         ],
         "indicators": [
-            {"indicador": "ACTIVOS NETOS TOTALES", "valor": 5000.0},
+            {"indicador": "Índice de Morosidad mayor a 90 días", "valor": 2.3},
         ],
         "income": [],
     }
     out = client._map_to_sdq_fields(period_data)
     assert out["cartera_bruta"] == 1000.0
     assert out["depositos_totales"] == 700.0
-    assert out["patrimonio_tecnico"] == 800.0
-    assert out["capital_primario"] == 600.0
-    assert out["activos_totales"] == 5000.0
+    # Absolutes now come from the BALANCE (pesos), consistently:
+    assert out["patrimonio_tecnico"] == 200.0  # = accounting equity (balance)
+    assert out["activos_totales"] == 1000.0     # sum of Activos children
+    assert out["capital_primario"] == 600.0     # solvency, for the leverage ratio
+    # Pre-computed SIB ratios (%) are stored directly for the engine to prefer:
+    assert out["solvencia_pct"] == 14.5
+    assert out["morosidad_pct"] == 2.3
     # Fields the SIB API never provides stay None.
     assert out["suma_top10"] is None
     assert out["castigos"] is None

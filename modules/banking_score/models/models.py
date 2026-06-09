@@ -165,6 +165,18 @@ class BankingData(UUIDMixin, Base):
     # ── Diversificación inputs ──
     hhi_ingresos_raw = Column(Numeric(12, 4), nullable=True)
 
+    # ── Pre-computed SIB ratios (%, dimensionless) ──
+    # Stored directly from the SIB indicadores/solvencia endpoints so the engine
+    # can prefer them and avoid mixing units across endpoints (balance is pesos,
+    # indicadores are millions). NULL when the SIB didn't report that ratio.
+    solvencia_pct = Column(Numeric(10, 4), nullable=True)
+    tier1_pct = Column(Numeric(10, 4), nullable=True)
+    morosidad_pct = Column(Numeric(10, 4), nullable=True)
+    cartera_vigente_pct = Column(Numeric(10, 4), nullable=True)
+    cobertura_pct = Column(Numeric(10, 4), nullable=True)
+    margen_pct = Column(Numeric(10, 4), nullable=True)
+    cost_income_pct = Column(Numeric(10, 4), nullable=True)
+
     # ── Metadata ──
     source = Column(Enum(DataSource), default=DataSource.manual)
     uploaded_by = Column(String, ForeignKey("users.id"), nullable=True)

@@ -88,6 +88,15 @@ class BankingDataInput:
     activos_liquidos: float = 0.0
     pasivos_exigibles: float = 0.0
     hhi_ingresos_raw: float = 0.0
+    # Pre-computed SIB ratios (%, dimensionless). When present, the engine prefers
+    # them over the absolute-input formula — avoids cross-endpoint unit mixing.
+    solvencia_pct: Optional[float] = None
+    tier1_pct: Optional[float] = None
+    morosidad_pct: Optional[float] = None
+    cartera_vigente_pct: Optional[float] = None
+    cobertura_pct: Optional[float] = None
+    margen_pct: Optional[float] = None
+    cost_income_pct: Optional[float] = None
 
 
 # ─── Indicator result type ──────────────────────────────────────
@@ -103,17 +112,29 @@ IndicatorResult = Dict[str, float]  # {"raw": float, "score": float}
 # ── SOLIDEZ FINANCIERA (5 indicators) ───────────────────────────
 
 
+def _pct(d, field):
+    """Pre-computed SIB ratio (%) if present, else None."""
+    v = getattr(d, field, None)
+    return float(v) if v is not None else None
+
+
 def calc_solvencia(d) -> IndicatorResult:
-    """Capital Adequacy Ratio: patrimonio_tecnico / (APR + contingentes + riesgo_mercado)."""
-    denom = float(d.apr or 0) + float(d.contingentes or 0) + float(d.riesgo_mercado or 0)
-    raw = _safe_div(d.patrimonio_tecnico, denom) * 100
+    """Capital Adequacy Ratio. Prefers the SIB 'Índice de Solvencia' (%); falls
+    back to patrimonio_tecnico / (APR + contingentes + riesgo_mercado)."""
+    raw = _pct(d, "solvencia_pct")
+    if raw is None:
+        denom = float(d.apr or 0) + float(d.contingentes or 0) + float(d.riesgo_mercado or 0)
+        raw = _safe_div(d.patrimonio_tecnico, denom) * 100
     score = _clamp(min(100, (raw / 15) * 100))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 def calc_tier1_ratio(d) -> IndicatorResult:
-    """Tier 1 Capital Ratio: capital_primario / APR."""
-    raw = _safe_div(d.capital_primario, d.apr) * 100
+    """Tier 1 Capital Ratio. Prefers the SIB 'Índice de Solvencia de Capital
+    Primario' (%); falls back to capital_primario / APR."""
+    raw = _pct(d, "tier1_pct")
+    if raw is None:
+        raw = _safe_div(d.capital_primario, d.apr) * 100
     score = _clamp(min(100, ((raw - 4.5) / 4) * 100)) if raw >= 4.5 else 0
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
@@ -126,8 +147,11 @@ def calc_leverage(d) -> IndicatorResult:
 
 
 def calc_cobertura_provisiones(d) -> IndicatorResult:
-    """Provision Coverage: provisiones / cartera_vencida_90d."""
-    raw = _safe_div(d.provisiones, d.cartera_vencida_90d) * 100
+    """Provision Coverage. Prefers the SIB 'Cobertura de Cartera Vencida >90' (%);
+    falls back to provisiones / cartera_vencida_90d."""
+    raw = _pct(d, "cobertura_pct")
+    if raw is None:
+        raw = _safe_div(d.provisiones, d.cartera_vencida_90d) * 100
     score = _clamp(min(100, raw))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
@@ -143,15 +167,21 @@ def calc_patrimonio_activos(d) -> IndicatorResult:
 
 
 def calc_morosidad(d) -> IndicatorResult:
-    """NPL Ratio: cartera_vencida_90d / cartera_bruta (inverse: lower is better)."""
-    raw = _safe_div(d.cartera_vencida_90d, d.cartera_bruta) * 100
+    """NPL Ratio (inverse: lower is better). Prefers the SIB 'Índice de Morosidad
+    mayor a 90 días' (%); falls back to cartera_vencida_90d / cartera_bruta."""
+    raw = _pct(d, "morosidad_pct")
+    if raw is None:
+        raw = _safe_div(d.cartera_vencida_90d, d.cartera_bruta) * 100
     score = _clamp(max(0, 100 - raw * 10))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 def calc_pct_cartera_a(d) -> IndicatorResult:
-    """Category-A Portfolio: cartera_categoria_a / cartera_total."""
-    raw = _safe_div(d.cartera_categoria_a, d.cartera_total or d.cartera_bruta) * 100
+    """Performing portfolio %. Prefers the SIB 'Cartera Vigente / Bruta' (%);
+    falls back to cartera_categoria_a / cartera_total."""
+    raw = _pct(d, "cartera_vigente_pct")
+    if raw is None:
+        raw = _safe_div(d.cartera_categoria_a, d.cartera_total or d.cartera_bruta) * 100
     score = _clamp(min(100, (raw / 90) * 100))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
@@ -229,16 +259,22 @@ def calc_roe(d) -> IndicatorResult:
 
 
 def calc_margen_financiero(d) -> IndicatorResult:
-    """Net Interest Margin: (ingresos - gastos financieros) / activos_productivos_avg."""
-    neto = float(d.ingresos_financieros or 0) - float(d.gastos_financieros or 0)
-    raw = _safe_div(neto, d.activos_productivos_avg) * 100
+    """Net Interest Margin. Prefers the SIB 'Margen de Intermediación Neto' (%);
+    falls back to (ingresos - gastos financieros) / activos_productivos_avg."""
+    raw = _pct(d, "margen_pct")
+    if raw is None:
+        neto = float(d.ingresos_financieros or 0) - float(d.gastos_financieros or 0)
+        raw = _safe_div(neto, d.activos_productivos_avg) * 100
     score = _clamp(min(100, (raw / 6) * 100))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 def calc_cost_to_income(d) -> IndicatorResult:
-    """Cost-to-Income: gastos_operacionales / ingresos_operacionales (inverse)."""
-    raw = _safe_div(d.gastos_operacionales, d.ingresos_operacionales) * 100
+    """Cost-to-Income (inverse). Prefers the SIB 'Gastos Op / Ingresos Op' (%);
+    falls back to gastos_operacionales / ingresos_operacionales."""
+    raw = _pct(d, "cost_income_pct")
+    if raw is None:
+        raw = _safe_div(d.gastos_operacionales, d.ingresos_operacionales) * 100
     score = _clamp(max(0, 100 - raw))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
@@ -351,9 +387,25 @@ _CALIDAD_COMPONENT_KEYS = [
     "hhi_sectorial", "castigos_pct", "exposicion_re", "migracion",
 ]
 
+# Indicators that can be satisfied by a pre-computed SIB ratio field (preferred)
+# in addition to their absolute-input formula.
+INDICATOR_PCT_FIELD = {
+    "solvencia": "solvencia_pct",
+    "tier1_ratio": "tier1_pct",
+    "morosidad": "morosidad_pct",
+    "pct_cartera_a": "cartera_vigente_pct",
+    "cobertura_provisiones": "cobertura_pct",
+    "margen_financiero": "margen_pct",
+    "cost_to_income": "cost_income_pct",
+}
+
 
 def _indicator_available(data, name: str) -> bool:
-    """True when every required input for *name* is present (not None)."""
+    """True when the indicator can be computed — either from its pre-computed SIB
+    ratio field, or from all of its required absolute inputs (not None)."""
+    pf = INDICATOR_PCT_FIELD.get(name)
+    if pf is not None and getattr(data, pf, None) is not None:
+        return True
     return all(getattr(data, f, None) is not None for f in INDICATOR_REQUIRES.get(name, []))
 
 
