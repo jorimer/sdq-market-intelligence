@@ -316,13 +316,14 @@ async def sib_page_test(
     periodo_final: str = Query("2024-12"),
     paginas: int = Query(1),
     registros: int = Query(100),
+    grep: str = Query("", description="Filtrar filas crudas cuyo path de concepto contenga este término"),
     current_user: User = Depends(get_current_user),
 ):
     """Single raw page from the SIB API — to learn if `paginas`/`registros` are
     honored (compare pages, try big registros). Returns count + a fingerprint."""
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
-    from modules.banking_score.external.sib_data_client import get_sib_data_client
+    from modules.banking_score.external.sib_data_client import get_sib_data_client, _norm
     import httpx as _httpx
 
     client = get_sib_data_client(force_new=True)
@@ -375,6 +376,25 @@ async def sib_page_test(
                 dims.setdefault(k, set()).add(v)
     dim_inv = {k: sorted(v)[:40] for k, v in sorted(dims.items())}
 
+    # Compact raw-row dump (concept levels + valor) to inspect hierarchical trees
+    # like the income statement — to verify the real subtotal convention instead of
+    # guessing. Optional `grep` filters rows whose concept path contains the term.
+    grep_norm = _norm(grep) if grep else ""
+    levels = ("conceptoNivel1", "conceptoNivel2", "conceptoNivel3",
+              "conceptoNivel4", "conceptoNivel5", "conceptoNivel6", "conceptoNivel7")
+
+    def _row(r):
+        return {**{k: r.get(k) for k in levels if r.get(k) is not None},
+                "valor": r.get("valor")}
+
+    rows = []
+    for r in data:
+        if grep_norm and not any(grep_norm in _norm(r.get(k)) for k in levels):
+            continue
+        rows.append(_row(r))
+        if len(rows) >= 60:
+            break
+
     return {
         "params": params,
         "count": len(data),
@@ -384,6 +404,7 @@ async def sib_page_test(
         "sample_keys": sample_keys,
         "dimensions": dim_inv,
         "sample": data[0] if data else None,
+        "rows": rows,
         "first": _fp(data[0]) if data else None,
         "last": _fp(data[-1]) if data else None,
     }
