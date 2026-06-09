@@ -167,3 +167,25 @@ def test_compute_carteras_hhi_pings_progress_each_quarter(monkeypatch):
     client._compute_carteras_hhi("2024-01", "2024-12", on_progress=seen.append)
     assert len(seen) == 4
     assert seen[0].startswith("carteras 2024-03 (1/4)")
+
+
+# ── ETL: pagination must not silently truncate on a transient page failure ──
+
+def test_get_retries_failed_page_before_truncating(monkeypatch):
+    """A transient 504/timeout on a page must be retried, not silently dropped
+    (that truncation left deep income rows missing → hhi_ingresos N/D)."""
+    client = _client()
+    monkeypatch.setattr(client, "_sleep", lambda s: None)
+    seq = iter([None, [{"valor": 1}]])  # page fails once, then a short final page
+    monkeypatch.setattr(client, "_get_with_retry", lambda *a, **k: next(seq))
+    out = client._get("estados/resultados/eif", {"tipoEntidad": "BM"})
+    assert out == [{"valor": 1}]  # recovered — not truncated to []
+
+
+def test_get_stops_after_exhausting_page_retries(monkeypatch):
+    """If a page keeps failing past the extra retries, stop (no infinite loop)."""
+    client = _client()
+    monkeypatch.setattr(client, "_sleep", lambda s: None)
+    monkeypatch.setattr(client, "_get_with_retry", lambda *a, **k: None)
+    out = client._get("estados/resultados/eif", {"tipoEntidad": "BM"})
+    assert out == []
