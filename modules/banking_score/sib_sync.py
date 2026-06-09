@@ -57,10 +57,11 @@ _TIPO_TO_BANKTYPE = {
 # running backfill look dead. Treated as stale after this many seconds.
 _STATUS_KEY = "sib_sync_status"
 _STALE_SECONDS = 30 * 60
-# A backfill that completed within this window is treated as fresh: a duplicate
-# (Celery re-delivery) is skipped rather than re-ingested. Longer than the longest
-# expected run so an in-flight task's own re-delivery never slips past as "old".
-_DEDUP_WINDOW_SECONDS = 4 * 60 * 60
+# A backfill that completed within this window is treated as an accidental duplicate
+# (e.g. a double-click) and skipped. The Celery re-delivery STORM is prevented at the
+# source by broker visibility_timeout (6h) > run duration, so this only needs to guard
+# rapid double-triggers — kept short so a deliberate re-run isn't blocked for hours.
+_DEDUP_WINDOW_SECONDS = 15 * 60
 _lock = threading.Lock()
 
 _DEFAULT_STATUS: Dict = {
