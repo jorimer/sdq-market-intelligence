@@ -285,7 +285,15 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
         unmatched: list = []
         for i, tipo in enumerate(tipos, 1):
             _write_status(db, phase=f"extrayendo {tipo} ({i}/{len(tipos)})… (puede tardar)")
-            bulk = client.extract_one_tipo(tipo, period_start=period_start)
+
+            # Refresh the heartbeat during the long carteras/creditos aggregation
+            # (a quarter is ~100k+ rows). Without it the per-tipo status goes stale
+            # and get_sync_status false-flags the live run as "(interrumpido)".
+            def _progress(msg: str, _i=i, _tipo=tipo) -> None:
+                _write_status(db, is_running=True,
+                              phase=f"extrayendo {_tipo} ({_i}/{len(tipos)}) · {msg}")
+
+            bulk = client.extract_one_tipo(tipo, period_start=period_start, on_progress=_progress)
             unmatched += bulk.get("_unmatched", [])
             entity_meta = bulk.get("_entity_meta", {})  # cambiarias: live dynamic catalog
             for short_name, periods in bulk.items():

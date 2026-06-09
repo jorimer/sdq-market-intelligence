@@ -791,7 +791,8 @@ class SIBDataClient:
             return None
         return round(sum((v / total) ** 2 for v in buckets.values()) * 10000.0, 4)
 
-    def _compute_carteras_hhi(self, period_start: str, period_end: str = "") -> Dict[str, Dict[date, float]]:
+    def _compute_carteras_hhi(self, period_start: str, period_end: str = "",
+                              on_progress=None) -> Dict[str, Dict[date, float]]:
         """Stream carteras/creditos ONE quarter at a time, aggregating gross debt
         (``deuda``) by ``sectorEconomico`` per entity, and return the sector HHI per
         (short_name, quarter-end): Σ(sᵢ²)·10000 over sector shares (0–10000).
@@ -799,12 +800,18 @@ class SIBDataClient:
         Per-quarter querying keeps each call bounded (the full range 504s). Raw loan
         rows are discarded as we aggregate — the full cube is hundreds of thousands
         of rows and is never held in memory.
+
+        *on_progress(msg)* is called after each quarter so the caller can refresh the
+        sync heartbeat — this loop is the long pole (a quarter is ~100k+ rows) and
+        without it the per-tipo heartbeat goes stale and the UI false-flags "stopped".
         """
         quarters = self._quarters_in_range(period_start, period_end)
         # acc[short_name][period_date][sector] = summed deuda
         acc: Dict[str, Dict[date, Dict[str, float]]] = {}
-        for q in quarters:
+        for qi, q in enumerate(quarters, 1):
             rows = self._fetch_for_all_types("carteras/creditos", q, q)
+            if on_progress:
+                on_progress(f"carteras {q} ({qi}/{len(quarters)})")
             if not rows:
                 continue
             for r in rows:
@@ -1035,14 +1042,19 @@ class SIBDataClient:
         tipo: str,
         period_start: str = "2021-01",
         period_end: str = "",
+        on_progress=None,
     ) -> Dict[str, List[Dict]]:
         """Extract just one tipoEntidad — enables incremental, resumable backfills
         (write each type as it completes instead of one 20-min all-or-nothing pass).
+
+        *on_progress(msg)* is forwarded to the carteras loop so the caller can keep
+        the sync heartbeat fresh during the long per-quarter aggregation.
         """
         saved = list(self._discovered_tipo_codes)
         self._discovered_tipo_codes = [tipo]  # truthy → bulk skips re-discovery
         try:
-            return self.extract_all_entities_bulk(period_start=period_start, period_end=period_end)
+            return self.extract_all_entities_bulk(
+                period_start=period_start, period_end=period_end, on_progress=on_progress)
         finally:
             self._discovered_tipo_codes = saved
 
@@ -1050,6 +1062,7 @@ class SIBDataClient:
         self,
         period_start: str = "2021-01",
         period_end: str = "",
+        on_progress=None,
     ) -> Dict[str, List[Dict]]:
         """
         BULK ETL: fetch data from ALL SIB endpoints using tipoEntidad filter
@@ -1123,7 +1136,7 @@ class SIBDataClient:
         # We aggregate sector HHI per (entity, quarter) by streaming ONE quarter at a
         # time and discarding the raw rows (memory-safe). Result keyed by short_name.
         logger.info("  Computing sector HHI from carteras/creditos (per-quarter)...")
-        carteras_hhi = self._compute_carteras_hhi(period_start, period_end)
+        carteras_hhi = self._compute_carteras_hhi(period_start, period_end, on_progress=on_progress)
         logger.info(f"    → sector HHI for {len(carteras_hhi)} entities")
         loans: List[Dict] = []  # raw loan rows are never retained; HHI is injected post-map
 
