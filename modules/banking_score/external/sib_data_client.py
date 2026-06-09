@@ -1478,20 +1478,29 @@ class SIBDataClient:
         #  conceptoNivel2 = specific account group
         # ══════════════════════════════════════════════════════════
 
-        # ── Totals straight from the BALANCE (pesos) — sum each conceptoNivel1's
-        # children, so every absolute is in the same unit (the indicadores are in
-        # millions; mixing them broke solvencia/ROA/leverage).
+        # The balance is a hierarchy: each conceptoNivel2 carries a conceptoNivel3=
+        # TODOS subtotal PLUS its children. Keep only the subtotal rows so we never
+        # double-count (that inflated activos → ROA≈0). All values are in pesos.
+        bal_tot = [r for r in bal if _norm(r.get("conceptoNivel3")) in ("", "TODOS")]
+
         def _btot(n1: str):
+            # Prefer the explicit conceptoNivel1 total (conceptoNivel2 == TODOS).
+            for r in bal_tot:
+                if _norm(r.get("conceptoNivel1")) == _norm(n1) and _norm(r.get("conceptoNivel2")) == "TODOS":
+                    try:
+                        return float(r.get("valor") or 0)
+                    except (TypeError, ValueError):
+                        pass
+            # Fallback: sum the conceptoNivel2 subtotals (no double-count).
             tot, found = 0.0, False
-            for r in bal:
-                if _norm(r.get("conceptoNivel1")) == _norm(n1):
-                    n2 = _norm(r.get("conceptoNivel2"))
-                    if n2 and n2 != "TODOS":
-                        try:
-                            tot += float(r.get("valor") or 0)
-                            found = True
-                        except (TypeError, ValueError):
-                            pass
+            for r in bal_tot:
+                if (_norm(r.get("conceptoNivel1")) == _norm(n1)
+                        and _norm(r.get("conceptoNivel2")) not in ("", "TODOS")):
+                    try:
+                        tot += float(r.get("valor") or 0)
+                        found = True
+                    except (TypeError, ValueError):
+                        pass
             return tot if found else None
 
         activos_totales = _btot("Activos")
@@ -1502,17 +1511,17 @@ class SIBDataClient:
 
         # 1.0 Cash & equivalents. The SIB renamed this concept: current statements
         # use "Efectivo y equivalentes de efectivo" (older ones "Fondos disponibles").
-        caja_valores = fv(bal, ["Efectivo y equivalentes de efectivo", "Fondos disponibles"],
+        caja_valores = fv(bal_tot, ["Efectivo y equivalentes de efectivo", "Fondos disponibles"],
                           nivel1_filter="ACTIVOS")
-        inversiones = fv(bal, ["Inversiones"], nivel1_filter="ACTIVOS")
+        inversiones = fv(bal_tot, ["Inversiones"], nivel1_filter="ACTIVOS")
 
         # 1.3 Cartera de créditos (gross and net)
-        cartera_bruta = fv(bal, ["CARTERA DE CR"],
+        cartera_bruta = fv(bal_tot, ["CARTERA DE CR"],
                            nivel1_filter="ACTIVOS")
         cartera_neta = cartera_bruta  # Balance reports net after provisions
 
         # 2.1 Deposits — renamed to "Depósitos del público" (older: "Obligaciones con el público").
-        depositos_totales = fv(bal, ["Depositos del publico", "Obligaciones con el p"],
+        depositos_totales = fv(bal_tot, ["Depositos del publico", "Obligaciones con el p"],
                                nivel1_filter="PASIVOS")
         pasivos_cp = depositos_totales  # Deposits are primarily short-term
         contingentes_balance = None  # not used: regulatory contingents live in APR
