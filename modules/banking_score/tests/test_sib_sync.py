@@ -256,3 +256,19 @@ def test_backfill_errors_without_key(Session, monkeypatch):
     result = sib_sync.run_backfill(force=True)
     assert result["status"] == "error"
     assert "clave" in result["message"].lower() or "configur" in result["message"].lower()
+
+
+def test_backfill_skips_duplicate_when_recent(Session):
+    """A Celery re-delivery (acks_late) after a long run must NOT re-ingest:
+    if a backfill completed within the dedup window, the duplicate is skipped."""
+    from datetime import datetime, timezone
+
+    db = Session()
+    sib_sync._write_status(
+        db, is_running=False, backfill_done=True,
+        last_sync=datetime.now(timezone.utc).isoformat(),
+    )
+    db.close()
+    # Even force=True is skipped — the guard catches the duplicate before re-running.
+    result = sib_sync.run_backfill(force=True)
+    assert result["status"] == "skipped_duplicate"

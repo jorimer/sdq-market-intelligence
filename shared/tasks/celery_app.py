@@ -22,6 +22,12 @@ celery_app.conf.update(
     task_track_started=True,
     broker_connection_retry_on_startup=True,
     result_expires=3600,
+    # The SIB backfill can run for hours (the carteras cube is ~100k rows/quarter).
+    # Redis' default visibility_timeout is 1h, so a long task gets re-delivered
+    # mid-run and executes again — a storm of redundant full backfills. Widen the
+    # window past the longest expected run so an in-flight task is never re-queued
+    # while still working. (Pairs with the dedup guard in run_backfill.)
+    broker_transport_options={"visibility_timeout": 6 * 3600},
 )
 
 # Import task modules so the worker registers them.
