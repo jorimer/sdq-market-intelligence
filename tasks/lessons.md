@@ -118,6 +118,20 @@ Cada entrada sigue esta estructura:
 - **Regla**: al consumir absolutos de varias fuentes, (1) confirmar la **unidad** de cada una con un dato real y normalizar; mejor aún, preferir los **ratios % ya calculados** (adimensionales) y calcular el resto desde UNA fuente consistente (el balance en pesos). (2) Para datos jerárquicos, leer solo el nivel de subtotal (`=TODOS`), nunca sumar subtotal + hijos.
 - **Disparador**: ETL que combina balance + indicadores + solvencia, o cualquier fuente con árbol de conceptos.
 
+### 2026-06-09 — Enumerar TODO el catálogo de endpoints/jerarquía antes de declarar un dato "no disponible"
+
+- **Síntoma**: 3 indicadores de calidad (castigos, HHI ingresos, exposición inmobiliaria) se daban por "no publicados por el SIB". En realidad SÍ estaban: castigos en `indicadores/morosidad-estresada`, el desglose de ingresos en el árbol profundo (niveles 4-7) de `estados/resultados/eif`, y la exposición hipotecaria en `indicadores/riesgo-credito`.
+- **Causa raíz**: (a) el ETL viejo solo probó 2 de los 4 endpoints de `indicadores/` y ninguno de los nuevos; (b) los slugs nuevos usan **guion** (`morosidad-estresada`, `riesgo-credito`) y los intentos sin guion daban 404 → se concluyó "no existe"; (c) se asumió que el estado de resultados era "limitado" porque solo se leyó hasta `conceptoNivel2`, cuando el árbol tiene 7 niveles con todas las fuentes de ingreso.
+- **Regla**: antes de declarar un dato inexistente, (1) enumerar el catálogo COMPLETO de endpoints del portal del proveedor (no solo los que ya usás); (2) probar variantes de slug (con/sin guion, singular/plural) con el diagnóstico `sib-page-test`; (3) para endpoints jerárquicos, recorrer TODOS los niveles de concepto (revisar `dimensions`/`sample` del diagnóstico), no solo los primeros. Un 404 en un slug adivinado no prueba que el recurso no exista.
+- **Disparador**: cuando un indicador queda N/D por "dato no disponible" en una API externa con catálogo amplio o estructura jerárquica.
+
+### 2026-06-09 — Cubo granular: consultar acotado (período por período) y agregar al vuelo
+
+- **Síntoma**: `carteras/creditos` (cubo de préstamos) devolvía 504 y estaba deshabilitado; se creía que el endpoint estaba roto.
+- **Causa raíz**: se consultaba el rango completo (5 años × todos los tipos) de una; el servidor no alcanza a materializar el cubo. Una consulta de **un trimestre / un tipo** responde en ~12s sin 504.
+- **Regla**: para datasets granulares pesados, (1) consultar acotado (un período a la vez), paginando; (2) **agregar al vuelo** a la métrica final (p.ej. sumar `deuda` por `sectorEconomico` → HHI) y descartar las filas crudas — nunca acumular cientos de miles de filas en memoria ni en DB; (3) persistir solo el valor derivado por (entidad, período). Es el mismo principio que jobs en background con estado compartido.
+- **Disparador**: ETL de un endpoint que devuelve datos a nivel transacción/préstamo/celda de cubo, o que da 504/timeout en consultas amplias.
+
 ### 2026-06-09 — Integridad: un indicador sin dato no debe puntuar "perfecto"
 
 - **Síntoma**: calidad/liquidez/diversificación salían idénticas en TODOS los bancos (81.9 / 14.37 / 100) — ~45% del peso fabricado.

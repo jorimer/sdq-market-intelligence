@@ -97,6 +97,9 @@ class BankingDataInput:
     cobertura_pct: Optional[float] = None
     margen_pct: Optional[float] = None
     cost_income_pct: Optional[float] = None
+    # Cartera-quality ratios computed from a single SIB endpoint each (unit-safe).
+    castigos_pct: Optional[float] = None
+    exposicion_re_pct: Optional[float] = None
 
 
 # ─── Indicator result type ──────────────────────────────────────
@@ -206,15 +209,22 @@ def calc_hhi_sectorial(d) -> IndicatorResult:
 
 
 def calc_castigos_pct(d) -> IndicatorResult:
-    """Write-offs: castigos / cartera_bruta (inverse)."""
-    raw = _safe_div(d.castigos, d.cartera_bruta) * 100
+    """Write-offs (inverse). Prefers the SIB ratio castigos/carteraTotal (%) from
+    indicadores/morosidad-estresada; falls back to castigos / cartera_bruta."""
+    raw = _pct(d, "castigos_pct")
+    if raw is None:
+        raw = _safe_div(d.castigos, d.cartera_bruta) * 100
     score = _clamp(max(0, 100 - raw * 5))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 def calc_exposicion_re(d) -> IndicatorResult:
-    """Real Estate Exposure: exposicion_re / cartera_total (centered at 40%)."""
-    raw = _safe_div(d.exposicion_re, d.cartera_total or d.cartera_bruta) * 100
+    """Real Estate Exposure (centered at 40%). Prefers the SIB ratio
+    deuda-hipotecaria/deuda (%) from indicadores/riesgo-credito; falls back to
+    exposicion_re / cartera_total."""
+    raw = _pct(d, "exposicion_re_pct")
+    if raw is None:
+        raw = _safe_div(d.exposicion_re, d.cartera_total or d.cartera_bruta) * 100
     score = _clamp(100 - abs(raw - 40) / 1.5)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
@@ -397,6 +407,8 @@ INDICATOR_PCT_FIELD = {
     "cobertura_provisiones": "cobertura_pct",
     "margen_financiero": "margen_pct",
     "cost_to_income": "cost_income_pct",
+    "castigos_pct": "castigos_pct",
+    "exposicion_re": "exposicion_re_pct",
 }
 
 
