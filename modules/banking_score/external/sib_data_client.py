@@ -1481,17 +1481,19 @@ class SIBDataClient:
         # 1.0T Total Activos (Activos Netos Totales available as indicator)
         activos_totales = fv(ind, ["ACTIVOS NETOS TOTALES"])
 
-        # 1.0 Fondos disponibles (cash & equivalents)
-        caja_valores = fv(bal, ["FONDOS DISPONIBLES"],
+        # 1.0 Cash & equivalents. The SIB renamed this concept: current statements
+        # use "Efectivo y equivalentes de efectivo" (older ones "Fondos disponibles").
+        caja_valores = fv(bal, ["Efectivo y equivalentes de efectivo", "Fondos disponibles"],
                           nivel1_filter="ACTIVOS")
+        inversiones = fv(bal, ["Inversiones"], nivel1_filter="ACTIVOS")
 
         # 1.3 Cartera de créditos (gross and net)
         cartera_bruta = fv(bal, ["CARTERA DE CR"],
                            nivel1_filter="ACTIVOS")
         cartera_neta = cartera_bruta  # Balance reports net after provisions
 
-        # 2.1 Obligaciones con el público (deposits)
-        depositos_totales = fv(bal, ["OBLIGACIONES CON EL P"],
+        # 2.1 Deposits — renamed to "Depósitos del público" (older: "Obligaciones con el público").
+        depositos_totales = fv(bal, ["Depositos del publico", "Obligaciones con el p"],
                                nivel1_filter="PASIVOS")
 
         # 2.0T Total Pasivos — use Endeudamiento indicator × patrimonio or
@@ -1589,14 +1591,12 @@ class SIBDataClient:
             if gastos_operacionales:
                 ingresos_operacionales = gastos_operacionales / (gastos_op_ratio / 100.0)
 
-        # Liquidez — "Disponibilidades + Inversiones netas / Activos Netos" is a
-        # RATIO (%); convert to an ABSOLUTE so activos_liquidos/pasivos works.
-        disponib_inversion_ratio = fv(ind, ["DISPONIBILIDADES + INVERSIONES NETAS"])
-        activos_liquidos = None
-        if disponib_inversion_ratio is not None and activos_totales:
-            activos_liquidos = activos_totales * (disponib_inversion_ratio / 100.0)
-        elif caja_valores is not None:
-            activos_liquidos = caja_valores  # fallback: cash & equivalents
+        # Liquidez — liquid assets = cash & equivalents + investments, straight
+        # from the balance (absolute values, like the cambiaria mapper).
+        if caja_valores is not None or inversiones is not None:
+            activos_liquidos = (caja_valores or 0.0) + (inversiones or 0.0)
+        else:
+            activos_liquidos = None
 
         # Cartera quality — from the pre-computed SIB ratios (the income/balance
         # statements lack loan-level detail; these are the only API source).
