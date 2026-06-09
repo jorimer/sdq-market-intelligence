@@ -54,7 +54,9 @@ class _StubClient:
     def get_working_tipos(self):
         return ["BM"]
 
-    def extract_one_tipo(self, tipo, period_start="2021-01"):
+    def extract_one_tipo(self, tipo, period_start="2021-01", on_progress=None):
+        if on_progress:  # exercise the heartbeat callback path
+            on_progress("carteras 2024-12 (1/1)")
         return self.extract_all_entities_bulk(period_start=period_start)
 
     def extract_all_entities_bulk(self, period_start="2021-01"):
@@ -254,3 +256,19 @@ def test_backfill_errors_without_key(Session, monkeypatch):
     result = sib_sync.run_backfill(force=True)
     assert result["status"] == "error"
     assert "clave" in result["message"].lower() or "configur" in result["message"].lower()
+
+
+def test_backfill_skips_duplicate_when_recent(Session):
+    """A Celery re-delivery (acks_late) after a long run must NOT re-ingest:
+    if a backfill completed within the dedup window, the duplicate is skipped."""
+    from datetime import datetime, timezone
+
+    db = Session()
+    sib_sync._write_status(
+        db, is_running=False, backfill_done=True,
+        last_sync=datetime.now(timezone.utc).isoformat(),
+    )
+    db.close()
+    # Even force=True is skipped — the guard catches the duplicate before re-running.
+    result = sib_sync.run_backfill(force=True)
+    assert result["status"] == "skipped_duplicate"

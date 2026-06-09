@@ -157,3 +157,13 @@ def test_compute_carteras_hhi_aggregates_by_sector(monkeypatch):
     hhi = client._compute_carteras_hhi("2025-09", "2025-09")
     # shares 0.7 / 0.3 → (0.49 + 0.09) * 10000 = 5800
     assert hhi["Banreservas"][date(2025, 9, 30)] == 5800.0
+
+
+def test_compute_carteras_hhi_pings_progress_each_quarter(monkeypatch):
+    client = _client()
+    monkeypatch.setattr(client, "_fetch_for_all_types", lambda ep, a, b: [])
+    seen = []
+    # 4 quarters in 2024 → 4 heartbeat pings (keeps the sync status fresh)
+    client._compute_carteras_hhi("2024-01", "2024-12", on_progress=seen.append)
+    assert len(seen) == 4
+    assert seen[0].startswith("carteras 2024-03 (1/4)")

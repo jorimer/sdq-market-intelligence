@@ -57,6 +57,10 @@ _TIPO_TO_BANKTYPE = {
 # running backfill look dead. Treated as stale after this many seconds.
 _STATUS_KEY = "sib_sync_status"
 _STALE_SECONDS = 30 * 60
+# A backfill that completed within this window is treated as fresh: a duplicate
+# (Celery re-delivery) is skipped rather than re-ingested. Longer than the longest
+# expected run so an in-flight task's own re-delivery never slips past as "old".
+_DEDUP_WINDOW_SECONDS = 4 * 60 * 60
 _lock = threading.Lock()
 
 _DEFAULT_STATUS: Dict = {
@@ -240,6 +244,22 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             current = get_sync_status(db)
             if current.get("is_running"):
                 return {"status": "already_running", "message": "Ya hay una sincronización en progreso."}
+            # Dedup: Celery (acks_late) re-delivers a long-running task after the
+            # broker visibility timeout, so the same backfill executes again — a
+            # storm of redundant full runs. Skip if one completed very recently;
+            # a re-delivered duplicate just acks out instead of re-ingesting.
+            last_sync = current.get("last_sync")
+            if current.get("backfill_done") and last_sync:
+                try:
+                    age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_sync)).total_seconds()
+                    if age < _DEDUP_WINDOW_SECONDS:
+                        logger.warning("Skipping duplicate backfill (last completed %.0f min ago)", age / 60)
+                        return {
+                            "status": "skipped_duplicate",
+                            "message": f"Un backfill terminó hace {age / 60:.0f} min; se omite la corrida duplicada.",
+                        }
+                except (ValueError, TypeError):
+                    pass
             # Clear stale alerts so each run reports only its own state
             # (otherwise an old error sticks around forever).
             _write_status(db, is_running=True, phase="iniciando", started_at=_now(),
@@ -285,7 +305,15 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
         unmatched: list = []
         for i, tipo in enumerate(tipos, 1):
             _write_status(db, phase=f"extrayendo {tipo} ({i}/{len(tipos)})… (puede tardar)")
-            bulk = client.extract_one_tipo(tipo, period_start=period_start)
+
+            # Refresh the heartbeat during the long carteras/creditos aggregation
+            # (a quarter is ~100k+ rows). Without it the per-tipo status goes stale
+            # and get_sync_status false-flags the live run as "(interrumpido)".
+            def _progress(msg: str, _i=i, _tipo=tipo) -> None:
+                _write_status(db, is_running=True,
+                              phase=f"extrayendo {_tipo} ({_i}/{len(tipos)}) · {msg}")
+
+            bulk = client.extract_one_tipo(tipo, period_start=period_start, on_progress=_progress)
             unmatched += bulk.get("_unmatched", [])
             entity_meta = bulk.get("_entity_meta", {})  # cambiarias: live dynamic catalog
             for short_name, periods in bulk.items():
