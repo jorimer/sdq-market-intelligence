@@ -1478,8 +1478,27 @@ class SIBDataClient:
         #  conceptoNivel2 = specific account group
         # ══════════════════════════════════════════════════════════
 
-        # 1.0T Total Activos (Activos Netos Totales available as indicator)
-        activos_totales = fv(ind, ["ACTIVOS NETOS TOTALES"])
+        # ── Totals straight from the BALANCE (pesos) — sum each conceptoNivel1's
+        # children, so every absolute is in the same unit (the indicadores are in
+        # millions; mixing them broke solvencia/ROA/leverage).
+        def _btot(n1: str):
+            tot, found = 0.0, False
+            for r in bal:
+                if _norm(r.get("conceptoNivel1")) == _norm(n1):
+                    n2 = _norm(r.get("conceptoNivel2"))
+                    if n2 and n2 != "TODOS":
+                        try:
+                            tot += float(r.get("valor") or 0)
+                            found = True
+                        except (TypeError, ValueError):
+                            pass
+            return tot if found else None
+
+        activos_totales = _btot("Activos")
+        patrimonio_neto = _btot("Patrimonio")
+        pasivos_exigibles = _btot("Pasivos")
+        if pasivos_exigibles is None and activos_totales and patrimonio_neto:
+            pasivos_exigibles = activos_totales - patrimonio_neto
 
         # 1.0 Cash & equivalents. The SIB renamed this concept: current statements
         # use "Efectivo y equivalentes de efectivo" (older ones "Fondos disponibles").
@@ -1495,25 +1514,8 @@ class SIBDataClient:
         # 2.1 Deposits — renamed to "Depósitos del público" (older: "Obligaciones con el público").
         depositos_totales = fv(bal, ["Depositos del publico", "Obligaciones con el p"],
                                nivel1_filter="PASIVOS")
-
-        # 2.0T Total Pasivos — use Endeudamiento indicator × patrimonio or
-        # sum balance Pasivos. Try indicator "Activos Netos / Patrimonio" approach:
-        pasivos_exigibles = None  # Derived below from activos - patrimonio
-
-        # Short-term liabilities ≈ deposits + valores en circulación
         pasivos_cp = depositos_totales  # Deposits are primarily short-term
-
-        # 3.0T Patrimonio neto
-        patrimonio_neto = fv(bal, ["PATRIMONIO NETO"],
-                             nivel1_filter="PATRIMONIO")
-
-        # Derive pasivos = activos - patrimonio (accounting identity)
-        if activos_totales and patrimonio_neto:
-            pasivos_exigibles = activos_totales - patrimonio_neto
-
-        # Cuentas Contingentes
-        contingentes_balance = fv(bal, ["CUENTAS CONTINGENTES"],
-                                  nivel1_filter="CUENTAS CONTINGENTES")
+        contingentes_balance = None  # not used: regulatory contingents live in APR
 
         # ══════════════════════════════════════════════════════════
         #  INCOME STATEMENT — Limited to net result only
@@ -1532,14 +1534,22 @@ class SIBDataClient:
         #  EXACT names confirmed from API
         # ══════════════════════════════════════════════════════════
 
-        patrimonio_tecnico = fv(sol, ["PATRIMONIO TECNICO AJUSTADO", "PATRIMONIO T"])
+        # leverage (Basel) = capital_tier1 / exposicion_total — both from the
+        # solvency endpoint, so the ratio is unit-safe even if those are in millions.
         apr = fv(sol, ["ACTIVOS Y CONTINGENTES PONDERADOS POR RIESGO CREDITICIO Y DEDUCCIONES"])
         capital_primario = fv(sol, ["CAPITAL PRIMARIO"])
         capital_tier1 = capital_primario
         riesgo_mercado = fv(sol, ["CAPITAL REQUERIDO POR RIESGO DE MERCADO"])
         exposicion_total = fv(sol, ["ACTIVOS Y CONTINGENTES PONDERADOS POR RIESGO CREDITICIO Y RIESGO DE MERCADO"])
-        contingentes = contingentes_balance  # From balance sheet Cuentas Contingentes
-        indice_solvencia = fv(sol, ["INDICE DE SOLVENCIA"])
+        contingentes = None
+        # patrimonio_activos = equity / assets → use accounting equity (balance, pesos).
+        patrimonio_tecnico = patrimonio_neto
+
+        # Pre-computed SIB ratios (%, dimensionless) — the engine prefers these.
+        solvencia_pct = fv(sol, ["Indice de solvencia"], exact=True) or fv(ind, ["Indice de Solvencia"], exact=True)
+        tier1_pct = fv(ind, ["Indice de Solvencia de Capital Primario"], exact=True)
+        margen_pct = fv(ind, ["Margen de Intermediacion Neto"], exact=True)
+        cost_income_pct = fv(ind, ["Gastos Operacionales / Ingresos Operacionales"], exact=True)
 
         # ══════════════════════════════════════════════════════════
         #  INDICATORS — 77 pre-computed ratios (%)
@@ -1616,7 +1626,13 @@ class SIBDataClient:
         if cobertura_vencida_90 is not None and cartera_vencida_90d:
             provisiones = cartera_vencida_90d * (cobertura_vencida_90 / 100.0)
 
-        # Not directly available from SIB API
+        # The cartera-quality ratios are the SIB pre-computed %s — the engine
+        # prefers these directly (dimensionless, no unit issue).
+        morosidad_pct = morosidad_idx
+        cartera_vigente_pct = cartera_vigente_ratio
+        cobertura_pct = cobertura_vencida_90
+
+        # Not available from the SIB statements/indicators (would need carteras/creditos).
         castigos = None
         suma_top10 = None
         hhi_sectorial_raw = None
@@ -1669,6 +1685,15 @@ class SIBDataClient:
 
             # Diversification
             "hhi_ingresos_raw": hhi_ingresos_raw,
+
+            # Pre-computed SIB ratios (%, dimensionless) — engine prefers these.
+            "solvencia_pct": solvencia_pct,
+            "tier1_pct": tier1_pct,
+            "morosidad_pct": morosidad_pct,
+            "cartera_vigente_pct": cartera_vigente_pct,
+            "cobertura_pct": cobertura_pct,
+            "margen_pct": margen_pct,
+            "cost_income_pct": cost_income_pct,
         }
 
     # ── Bulk extraction for all entities ───────────────────────
