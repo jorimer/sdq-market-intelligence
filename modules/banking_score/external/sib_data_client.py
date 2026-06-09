@@ -404,7 +404,23 @@ class SIBDataClient:
             data = self._get_with_retry(httpx, url, page_params, endpoint, page)
 
             if data is None:
-                break  # Unrecoverable error
+                # A transient page failure (504/timeout) must NOT silently truncate
+                # the dataset. Truncation here dropped deep income rows mid-period,
+                # leaving hhi_ingresos (and other late-page concepts) N/D. Retry the
+                # page a few more times with backoff before giving up, and if it still
+                # fails, log loudly that the result is incomplete (never silent).
+                for _retry in range(3):
+                    self._sleep(5.0 * (_retry + 1))
+                    data = self._get_with_retry(httpx, url, page_params, endpoint, page)
+                    if data is not None:
+                        break
+                if data is None:
+                    logger.error(
+                        "SIB %s: TRUNCADO en página %d tras reintentos — %d filas "
+                        "obtenidas; el dataset queda INCOMPLETO para este endpoint.",
+                        endpoint, page, len(all_results),
+                    )
+                    break  # unrecoverable after extra retries
 
             if isinstance(data, list):
                 if not data:
