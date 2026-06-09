@@ -176,6 +176,12 @@ class BankingData(UUIDMixin, Base):
     cobertura_pct = Column(Numeric(10, 4), nullable=True)
     margen_pct = Column(Numeric(10, 4), nullable=True)
     cost_income_pct = Column(Numeric(10, 4), nullable=True)
+    # Cartera-quality ratios computed from a SINGLE SIB endpoint each (so the
+    # ratio is unit-safe regardless of that endpoint's unit):
+    #   castigos_pct      = castigos / carteraTotal      (indicadores/morosidad-estresada)
+    #   exposicion_re_pct = deuda hipotecaria / deuda    (indicadores/riesgo-credito)
+    castigos_pct = Column(Numeric(10, 4), nullable=True)
+    exposicion_re_pct = Column(Numeric(10, 4), nullable=True)
 
     # ── Metadata ──
     source = Column(Enum(DataSource), default=DataSource.manual)

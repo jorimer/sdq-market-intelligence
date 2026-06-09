@@ -740,6 +740,102 @@ class SIBDataClient:
         """Return current YYYY-MM for dynamic period defaults."""
         return datetime.now().strftime("%Y-%m")
 
+    def _quarters_in_range(self, period_start: str, period_end: str = "") -> List[str]:
+        """Quarter-end period strings (YYYY-MM, MM ∈ {03,06,09,12}) in the range."""
+        period_end = period_end or self._current_period()
+        try:
+            sy, sm = (int(x) for x in period_start.split("-")[:2])
+            ey, em = (int(x) for x in period_end.split("-")[:2])
+        except (ValueError, IndexError):
+            return []
+        out: List[str] = []
+        for y in range(sy, ey + 1):
+            for m in (3, 6, 9, 12):
+                if (y, m) < (sy, sm) or (y, m) > (ey, em):
+                    continue
+                out.append(f"{y}-{m:02d}")
+        return out
+
+    # Income-source buckets for the diversification HHI: the conceptoNivel4
+    # subtotals (rows where conceptoNivel5 == "TODOS") of the positive income
+    # streams in the estado de resultados tree.
+    _INCOME_HHI_N4 = (
+        "Margen financiero neto",
+        "Otros ingresos operacionales",
+        "Ingresos (gastos) por diferencia de cambio",
+        "Otros ingresos",
+    )
+
+    @classmethod
+    def _income_hhi_raw(cls, income_rows: List[Dict]) -> Optional[float]:
+        """Income-diversification HHI from the estado de resultados tree. Sums the
+        conceptoNivel4 income subtotals (conceptoNivel5 == 'TODOS') for the positive
+        income streams and returns Σ(sᵢ²)·10000 (0–10000 scale, matching the engine
+        thresholds). Returns None when no positive income is found."""
+        wanted = {_norm(x) for x in cls._INCOME_HHI_N4}
+        buckets: Dict[str, float] = {}
+        for r in income_rows or []:
+            if _norm(r.get("conceptoNivel5")) != "TODOS":
+                continue  # nivel4 subtotal only → no double counting with children
+            n4 = _norm(r.get("conceptoNivel4"))
+            if n4 not in wanted:
+                continue
+            try:
+                val = float(r.get("valor") or 0)
+            except (TypeError, ValueError):
+                continue
+            if val > 0:  # only positive income streams contribute to the mix
+                buckets[n4] = buckets.get(n4, 0.0) + val
+        total = sum(buckets.values())
+        if total <= 0:
+            return None
+        return round(sum((v / total) ** 2 for v in buckets.values()) * 10000.0, 4)
+
+    def _compute_carteras_hhi(self, period_start: str, period_end: str = "") -> Dict[str, Dict[date, float]]:
+        """Stream carteras/creditos ONE quarter at a time, aggregating gross debt
+        (``deuda``) by ``sectorEconomico`` per entity, and return the sector HHI per
+        (short_name, quarter-end): Σ(sᵢ²)·10000 over sector shares (0–10000).
+
+        Per-quarter querying keeps each call bounded (the full range 504s). Raw loan
+        rows are discarded as we aggregate — the full cube is hundreds of thousands
+        of rows and is never held in memory.
+        """
+        quarters = self._quarters_in_range(period_start, period_end)
+        # acc[short_name][period_date][sector] = summed deuda
+        acc: Dict[str, Dict[date, Dict[str, float]]] = {}
+        for q in quarters:
+            rows = self._fetch_for_all_types("carteras/creditos", q, q)
+            if not rows:
+                continue
+            for r in rows:
+                short = self._match_entity_name(r.get("entidad") or "")
+                if not short:
+                    continue
+                pe = self._period_to_quarter_end(r.get("periodo") or q)
+                if pe is None:
+                    continue
+                sector = (r.get("sectorEconomico") or "").strip()
+                if not sector or _norm(sector) == "TODOS":
+                    continue
+                try:
+                    deuda = float(r.get("deuda") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if deuda <= 0:
+                    continue
+                acc.setdefault(short, {}).setdefault(pe, {})
+                acc[short][pe][sector] = acc[short][pe].get(sector, 0.0) + deuda
+            logger.info(f"    carteras {q}: {len(rows)} rows aggregated")
+        result: Dict[str, Dict[date, float]] = {}
+        for short, by_period in acc.items():
+            for pe, sectors in by_period.items():
+                total = sum(sectors.values())
+                if total <= 0:
+                    continue
+                hhi = sum((v / total) ** 2 for v in sectors.values()) * 10000.0
+                result.setdefault(short, {})[pe] = round(hhi, 4)
+        return result
+
     def get_income_statement(
         self,
         period_start: str = "2021-01",
@@ -1009,15 +1105,29 @@ class SIBDataClient:
         solvency = self.get_solvency_components(period_start=period_start, period_end=period_end)
         logger.info(f"    → {len(solvency)} records")
 
-        # NOTE: carteras/creditos has historically returned 504 Gateway Timeout
-        # for all tipoEntidad codes. Skip to avoid 18+ timeout+retry cycles
-        # that add 30+ minutes of wasted time. Re-enable when SIB fixes this.
-        logger.info("  Skipping loans (carteras/creditos) — endpoint returns 504")
-        loans = []
-        # loans = self.get_loan_portfolio(period_start=period_start, period_end=period_end)
-        # logger.info(f"    → {len(loans)} records")
+        # Stressed-delinquency: 1 light row per entity per period, carries castigos
+        # (write-offs) + carteraTotal → real castigos_pct. Slug uses a hyphen.
+        logger.info("  Fetching stressed delinquency (indicadores/morosidad-estresada)...")
+        morosidad_estresada = self._fetch_for_all_types(
+            "indicadores/morosidad-estresada", period_start, period_end)
+        logger.info(f"    → {len(morosidad_estresada)} records")
 
-        all_data = income + balance + indicators + solvency + loans
+        # Credit-risk: a few rows per entity (tipoCartera × sector), carries deuda by
+        # tipoCartera → real exposición inmobiliaria (Créditos Hipotecarios share).
+        logger.info("  Fetching credit risk (indicadores/riesgo-credito)...")
+        riesgo_credito = self._fetch_for_all_types(
+            "indicadores/riesgo-credito", period_start, period_end)
+        logger.info(f"    → {len(riesgo_credito)} records")
+
+        # carteras/creditos is a huge loan-level cube; the full range at once 504s.
+        # We aggregate sector HHI per (entity, quarter) by streaming ONE quarter at a
+        # time and discarding the raw rows (memory-safe). Result keyed by short_name.
+        logger.info("  Computing sector HHI from carteras/creditos (per-quarter)...")
+        carteras_hhi = self._compute_carteras_hhi(period_start, period_end)
+        logger.info(f"    → sector HHI for {len(carteras_hhi)} entities")
+        loans: List[Dict] = []  # raw loan rows are never retained; HHI is injected post-map
+
+        all_data = income + balance + indicators + solvency + morosidad_estresada + riesgo_credito
         logger.info(f"  Total raw records: {len(all_data)}")
 
         # Log sample record structure to understand field names
@@ -1114,21 +1224,21 @@ class SIBDataClient:
         # because they have different conceptoNivel1 trees:
         #   income: "Resultado del ejercicio" → P&L items
         #   balance: "Activos", "Pasivos", "Patrimonio" → balance sheet items
+        _SRC_NAMES = ["income", "balance", "indicators", "solvency",
+                      "morosidad_estresada", "riesgo_credito"]
         entity_sources: Dict[str, Dict[str, List]] = {}
         for record_list, src_name in [
             (income, "income"), (balance, "balance"),
             (indicators, "indicators"), (solvency, "solvency"),
-            (loans, "loans"),
+            (morosidad_estresada, "morosidad_estresada"),
+            (riesgo_credito, "riesgo_credito"),
         ]:
             for record in record_list:
                 api_ent = record.get("entidad") or record.get("Entidad") or ""
                 short = entity_mapping.get(api_ent, "_unknown")
 
                 if short not in entity_sources:
-                    entity_sources[short] = {
-                        "income": [], "balance": [],
-                        "indicators": [], "solvency": [], "loans": [],
-                    }
+                    entity_sources[short] = {s: [] for s in _SRC_NAMES}
                 entity_sources[short][src_name].append(record)
 
         # Step 5: Map each entity's data to SdqBankingData fields
@@ -1137,16 +1247,17 @@ class SIBDataClient:
             if short_name == "_unknown":
                 continue
 
-            periods = self._group_by_period(
-                sources["income"], sources["balance"],
-                sources["indicators"], sources["solvency"],
-                sources["loans"],
-            )
+            periods = self._group_by_period(sources)
 
             entity_results = []
             for period_date, data in periods.items():
                 try:
                     mapped = self._map_to_sdq_fields(data)
+                    # Inject sector HHI aggregated from the carteras cube (computed
+                    # separately, period-by-period, to avoid the 504 on the full range).
+                    hhi = carteras_hhi.get(short_name, {}).get(period_date)
+                    if hhi is not None:
+                        mapped["hhi_sectorial_raw"] = hhi
                     mapped["period_end"] = period_date
                     mapped["period_type"] = (
                         "quarterly" if period_date.month in (3, 6, 9, 12) else "monthly"
@@ -1155,6 +1266,17 @@ class SIBDataClient:
                     entity_results.append(mapped)
                 except Exception as e:
                     logger.warning(f"Failed to map {short_name} {period_date}: {e}")
+
+            # Migración: link each period's cartera_a_prev to the previous closed
+            # period's category-A portfolio (chronological), so the migration
+            # indicator can score the change in performing-loan share.
+            entity_results.sort(key=lambda m: m["period_end"])
+            prev_cat_a = None
+            for m in entity_results:
+                if prev_cat_a is not None:
+                    m["cartera_a_prev"] = prev_cat_a
+                if m.get("cartera_categoria_a") is not None:
+                    prev_cat_a = m["cartera_categoria_a"]
 
             results[short_name] = entity_results
 
@@ -1202,7 +1324,7 @@ class SIBDataClient:
         results: Dict[str, List[Dict]] = {}
         meta: Dict[str, Dict] = {}
         for ent, sources in by_ent.items():
-            periods = self._group_by_period(sources["income"], sources["balance"], [], [], [])
+            periods = self._group_by_period({"income": sources["income"], "balance": sources["balance"]})
             out = []
             for period_date, data in periods.items():
                 try:
@@ -1307,47 +1429,44 @@ class SIBDataClient:
         bulk = self.extract_all_entities_bulk(period_start, period_end)
         return bulk.get(short_name, [])
 
-    def _group_by_period(self, *data_sources) -> Dict[date, Dict]:
+    @staticmethod
+    def _period_to_quarter_end(periodo: str) -> Optional[date]:
+        """Parse a SIB 'YYYY-MM' period string to its quarter-end date."""
+        if not periodo:
+            return None
+        try:
+            parts = str(periodo).split("-")
+            year, month = int(parts[0]), int(parts[1])
+        except (ValueError, IndexError):
+            return None
+        if month <= 3:
+            return date(year, 3, 31)
+        if month <= 6:
+            return date(year, 6, 30)
+        if month <= 9:
+            return date(year, 9, 30)
+        return date(year, 12, 31)
+
+    def _group_by_period(self, sources: Dict[str, List[Dict]]) -> Dict[date, Dict]:
         """
-        Group multiple data source responses by period date.
+        Group data source responses by period date.
 
         SIB API returns many rows per entity per period (one per concepto/line item).
-        We always store lists of records and extract values by searching through them.
+        We store lists of records per source and extract values by searching them.
 
-        Sources: income, balance, indicators, solvency, loans (5 separate lists).
+        *sources* maps a source name (income, balance, indicators, solvency,
+        morosidad_estresada, riesgo_credito, …) → its list of raw records.
         """
         grouped: Dict[date, Dict] = {}
-        source_names = ["income", "balance", "indicators", "solvency", "loans"]
-
-        for src_name, records in zip(source_names, data_sources):
-            for record in records:
+        for src_name, records in sources.items():
+            for record in records or []:
                 # SIB API uses 'periodo' field in YYYY-MM format
-                periodo = record.get("periodo") or record.get("Periodo") or ""
-                if not periodo:
+                period_date = self._period_to_quarter_end(
+                    record.get("periodo") or record.get("Periodo") or ""
+                )
+                if period_date is None:
                     continue
-                try:
-                    # Parse YYYY-MM to quarter-end date
-                    parts = periodo.split("-")
-                    year, month = int(parts[0]), int(parts[1])
-                    # Map to quarter end
-                    if month <= 3:
-                        period_date = date(year, 3, 31)
-                    elif month <= 6:
-                        period_date = date(year, 6, 30)
-                    elif month <= 9:
-                        period_date = date(year, 9, 30)
-                    else:
-                        period_date = date(year, 12, 31)
-                except (ValueError, IndexError):
-                    continue
-
-                if period_date not in grouped:
-                    grouped[period_date] = {}
-                # Always store as list (many rows per period is normal for SIB)
-                if src_name not in grouped[period_date]:
-                    grouped[period_date][src_name] = []
-                grouped[period_date][src_name].append(record)
-
+                grouped.setdefault(period_date, {}).setdefault(src_name, []).append(record)
         return grouped
 
     @staticmethod
@@ -1641,11 +1760,46 @@ class SIBDataClient:
         cartera_vigente_pct = cartera_vigente_ratio
         cobertura_pct = cobertura_vencida_90
 
-        # Not available from the SIB statements/indicators (would need carteras/creditos).
+        # ── Cartera-quality from the dedicated SIB endpoints (fase 2) ──
+        # castigos % from indicadores/morosidad-estresada (1 row/entity/period):
+        # castigos / carteraTotal — both from the SAME endpoint → unit-safe ratio.
         castigos = None
+        castigos_pct = None
+        for r in period_data.get("morosidad_estresada", []):
+            try:
+                ct = float(r.get("carteraTotal") or 0)
+                cg = float(r.get("castigos") or 0)
+            except (TypeError, ValueError):
+                continue
+            if ct > 0:
+                castigos = cg
+                castigos_pct = round(cg / ct * 100, 4)
+                break
+
+        # real-estate exposure % from indicadores/riesgo-credito: gross debt in the
+        # mortgage portfolio over total gross debt (same endpoint → unit-safe).
+        re_debt = 0.0
+        tot_debt = 0.0
+        for r in period_data.get("riesgo_credito", []):
+            try:
+                d = float(r.get("deuda") or 0)
+            except (TypeError, ValueError):
+                continue
+            if d <= 0:
+                continue
+            tot_debt += d
+            if "HIPOTECARIO" in _norm(r.get("tipoCartera")):
+                re_debt += d
+        exposicion_re_pct = round(re_debt / tot_debt * 100, 4) if tot_debt > 0 else None
+
+        # Income-diversification HHI from the estado de resultados tree (nivel4 subtotals).
+        hhi_ingresos_raw = self._income_hhi_raw(inc)
+
+        # hhi_sectorial_raw is injected post-map (aggregated from carteras/creditos,
+        # per-quarter, in extract_all_entities_bulk). exposicion_re/suma_top10/
+        # cartera_a_prev as absolutes are not published at this grain.
         suma_top10 = None
         hhi_sectorial_raw = None
-        hhi_ingresos_raw = None
         exposicion_re = None
         cartera_a_prev = None
 
@@ -1703,6 +1857,9 @@ class SIBDataClient:
             "cobertura_pct": cobertura_pct,
             "margen_pct": margen_pct,
             "cost_income_pct": cost_income_pct,
+            # Cartera-quality ratios (fase 2) — each from a single SIB endpoint.
+            "castigos_pct": castigos_pct,
+            "exposicion_re_pct": exposicion_re_pct,
         }
 
     # ── Bulk extraction for all entities ───────────────────────
