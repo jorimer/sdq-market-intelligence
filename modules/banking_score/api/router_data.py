@@ -579,3 +579,36 @@ async def fiduciaria_pdf_test(
     finally:
         if path and _os.path.exists(path):
             _os.remove(path)
+
+
+# ─── Fiduciary ingestion (admin) ─────────────────────────────────
+
+@router.post(
+    "/fiduciaria-sync",
+    summary="Sincronizar fiduciarias (PDFs auditados de la SIB)",
+    include_in_schema=False,
+)
+async def fiduciaria_sync(
+    include_trusts: bool = Query(True, description="Ingerir también los fideicomisos públicos"),
+    only_latest: bool = Query(False, description="Solo el último año por entidad (más rápido)"),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Requiere rol de administrador.")
+    from modules.banking_score.fiduciaria_sync import start_fiduciaria_sync_background
+
+    return start_fiduciaria_sync_background(include_trusts=include_trusts, only_latest=only_latest)
+
+
+@router.get(
+    "/fiduciaria-sync-status",
+    summary="Estado de la sincronización de fiduciarias",
+    include_in_schema=False,
+)
+async def fiduciaria_sync_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from modules.banking_score.fiduciaria_sync import get_fiduciaria_status
+
+    return get_fiduciaria_status(db)

@@ -54,6 +54,7 @@ class DataSource(str, enum.Enum):
     manual = "manual"
     sib_api = "sib_api"
     csv_upload = "csv_upload"
+    sib_pdf = "sib_pdf"  # fiduciary audited-statement PDFs (SIB supervised portal)
 
 
 class ModelType(str, enum.Enum):
@@ -304,3 +305,63 @@ class Report(UUIDMixin, Base):
 
     # Relationships
     bank = relationship("Bank", back_populates="reports")
+
+
+# ─── Fideicomisos públicos (public trusts) ────────────────────────
+# Trusts are patrimonios autónomos (funds), NOT solvency-rated entities — they get
+# their own "Índice de Salud del Fideicomiso" on a separate scale, not SDQ-AAA…D.
+
+class Fideicomiso(UUIDMixin, Base):
+    """A public trust (fideicomiso público) managed by a fiduciary."""
+    __tablename__ = "fideicomisos"
+
+    name = Column(String, nullable=False)
+    slug = Column(String, nullable=True)  # filename-stem key (e.g. "rd-vial")
+    fiduciaria_bank_id = Column(String, ForeignKey("banks.id"), nullable=True)
+    segment = Column(String, nullable=True)  # operativo|tenedor|desarrollo|social
+    source_url = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    __table_args__ = (UniqueConstraint("name", name="uq_fideicomiso_name"),)
+
+
+class FideicomisoData(UUIDMixin, Base):
+    """Raw figures extracted from a trust's audited statement (1 row = trust x period)."""
+    __tablename__ = "fideicomiso_data"
+
+    fideicomiso_id = Column(String, ForeignKey("fideicomisos.id"), nullable=False)
+    period_end = Column(Date, nullable=False)
+    period_type = Column(Enum(PeriodType), default=PeriodType.annual)
+
+    activos_totales = Column(Numeric(20, 2), nullable=True)
+    pasivos_totales = Column(Numeric(20, 2), nullable=True)
+    pasivos_circulantes = Column(Numeric(20, 2), nullable=True)
+    patrimonio_fideicomitido = Column(Numeric(20, 2), nullable=True)
+    activos_liquidos = Column(Numeric(20, 2), nullable=True)
+    resultado_periodo = Column(Numeric(20, 2), nullable=True)
+    ingresos_operacionales = Column(Numeric(20, 2), nullable=True)
+
+    source = Column(Enum(DataSource), default=DataSource.sib_pdf)
+
+    __table_args__ = (
+        UniqueConstraint("fideicomiso_id", "period_end", name="uq_fideicomiso_period"),
+    )
+
+
+class FideicomisoHealthScore(UUIDMixin, Base):
+    """Computed health index for a trust (own scale, not SDQ-AAA…D)."""
+    __tablename__ = "fideicomiso_health_scores"
+
+    fideicomiso_id = Column(String, ForeignKey("fideicomisos.id"), nullable=False)
+    period_end = Column(Date, nullable=False)
+
+    solvencia_score = Column(Numeric(6, 2), nullable=True)       # null = N/D
+    liquidez_score = Column(Numeric(6, 2), nullable=True)
+    sostenibilidad_score = Column(Numeric(6, 2), nullable=True)
+    overall_score = Column(Numeric(6, 2), nullable=True)
+    health_band = Column(String, nullable=True)  # Sólida|Estable|En vigilancia|Frágil|N/D
+    segment = Column(String, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("fideicomiso_id", "period_end", name="uq_fideicomiso_score_period"),
+    )

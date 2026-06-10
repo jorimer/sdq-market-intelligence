@@ -22,6 +22,9 @@ from modules.banking_score.models.models import (
     ActionType,
     ModelType,
     Outlook,
+    Fideicomiso,
+    FideicomisoData,
+    FideicomisoHealthScore,
 )
 from modules.banking_score.scoring.engine import (
     calculate_deterministic_score,
@@ -680,3 +683,56 @@ async def simulate(
     except Exception as e:
         logger.error(f"Error en simulación para {bank_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error en simulación: {e}")
+
+
+# ─── Fideicomisos públicos (public trusts) ───────────────────────
+
+@router.get(
+    "/trusts",
+    summary="Fideicomisos públicos (Índice de Salud)",
+    description="Lista de fideicomisos públicos con su Índice de Salud (escala propia, no SDQ).",
+)
+async def list_trusts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    trusts = db.query(Fideicomiso).filter(Fideicomiso.is_active.is_(True)).all()
+    out: List[Dict[str, Any]] = []
+    for t in trusts:
+        score = (
+            db.query(FideicomisoHealthScore)
+            .filter_by(fideicomiso_id=t.id)
+            .order_by(FideicomisoHealthScore.period_end.desc())
+            .first()
+        )
+        data = (
+            db.query(FideicomisoData)
+            .filter_by(fideicomiso_id=t.id)
+            .order_by(FideicomisoData.period_end.desc())
+            .first()
+        )
+        managing = db.query(Bank).filter_by(id=t.fiduciaria_bank_id).first() if t.fiduciaria_bank_id else None
+        out.append({
+            "id": t.id,
+            "name": t.name,
+            "segment": (score.segment if score else t.segment),
+            "fiduciaria": managing.name if managing else None,
+            "period_end": str(score.period_end) if score else None,
+            "health": {
+                "solvencia": float(score.solvencia_score) if score and score.solvencia_score is not None else None,
+                "liquidez": float(score.liquidez_score) if score and score.liquidez_score is not None else None,
+                "sostenibilidad": float(score.sostenibilidad_score) if score and score.sostenibilidad_score is not None else None,
+                "overall": float(score.overall_score) if score and score.overall_score is not None else None,
+                "band": score.health_band if score else "N/D",
+            },
+            "financials": {
+                "activos_totales": float(data.activos_totales) if data and data.activos_totales is not None else None,
+                "patrimonio_fideicomitido": float(data.patrimonio_fideicomitido) if data and data.patrimonio_fideicomitido is not None else None,
+                "pasivos_totales": float(data.pasivos_totales) if data and data.pasivos_totales is not None else None,
+                "resultado_periodo": float(data.resultado_periodo) if data and data.resultado_periodo is not None else None,
+                "ingresos_operacionales": float(data.ingresos_operacionales) if data and data.ingresos_operacionales is not None else None,
+            } if data else None,
+        })
+    # Sort by overall health desc (N/D last)
+    out.sort(key=lambda x: (x["health"]["overall"] is None, -(x["health"]["overall"] or 0)))
+    return {"trusts": out, "count": len(out)}
