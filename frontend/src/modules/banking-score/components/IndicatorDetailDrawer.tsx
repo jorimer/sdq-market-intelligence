@@ -56,6 +56,7 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
   const [detail, setDetail] = useState<IndicatorDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -67,10 +68,26 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
     let active = true;
     setLoading(true);
     setError(false);
-    getIndicatorDetail(bankId, indicatorKey)
-      .then((d) => active && setDetail(d))
-      .catch(() => active && setError(true))
-      .finally(() => active && setLoading(false));
+    setAiLoading(false);
+    // Phase 1: fast data (no AI) → render immediately.
+    getIndicatorDetail(bankId, indicatorKey, false)
+      .then((d) => {
+        if (!active) return;
+        setDetail(d);
+        setLoading(false);
+        if (!d.latest.available) return;
+        // Phase 2: AI insight in the background (~10-15s); fill it in when ready.
+        setAiLoading(true);
+        getIndicatorDetail(bankId, indicatorKey, true)
+          .then((full) => active && setDetail((prev) => (prev ? { ...prev, ai_insight: full.ai_insight } : full)))
+          .catch(() => undefined)
+          .finally(() => active && setAiLoading(false));
+      })
+      .catch(() => {
+        if (!active) return;
+        setError(true);
+        setLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -171,7 +188,14 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
                 <div className="flex items-center gap-2 mb-2 text-sm font-medium text-ink">
                   <Sparkles className="w-4 h-4 text-accent" /> Insight de IA
                 </div>
-                {aiUnavailable ? (
+                {aiLoading ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted">Generando análisis de IA… (~10–15s)</p>
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-11/12" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                ) : aiUnavailable ? (
                   <p className="text-sm text-muted leading-relaxed">
                     El análisis de IA no está disponible (clave de Anthropic no configurada o
                     sin dato para el período). El detalle numérico de arriba es completo.
