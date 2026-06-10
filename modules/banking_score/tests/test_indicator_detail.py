@@ -59,7 +59,8 @@ def test_build_indicator_detail_trend_and_peers(db):
     bm1 = Bank(name="Banco Uno", bank_type=BankType.banca_multiple)
     bm2 = Bank(name="Banco Dos", bank_type=BankType.banca_multiple)
     aap = Bank(name="Asoc Tres", bank_type=BankType.aap)
-    db.add_all([bm1, bm2, aap]); db.flush()
+    db.add_all([bm1, bm2, aap])
+    db.flush()
     # two periods of history for bm1 (trend)
     _rating(db, bm1, date(2025, 9, 30), morosidad_score=70, raw=3.0)
     _rating(db, bm1, date(2025, 12, 31), morosidad_score=80, raw=2.0)
@@ -87,19 +88,22 @@ def test_build_indicator_detail_trend_and_peers(db):
 
 def test_build_indicator_detail_unknown_key(db):
     bank = Bank(name="X", bank_type=BankType.banca_multiple)
-    db.add(bank); db.commit()
+    db.add(bank)
+    db.commit()
     assert build_indicator_detail(db, bank, "no_existe") is None
 
 
 def test_build_indicator_detail_no_ratings(db):
     bank = Bank(name="Y", bank_type=BankType.banca_multiple)
-    db.add(bank); db.commit()
+    db.add(bank)
+    db.commit()
     assert build_indicator_detail(db, bank, "morosidad") is None
 
 
 def test_na_indicator_marked_unavailable(db):
     bank = Bank(name="Z", bank_type=BankType.banca_multiple)
-    db.add(bank); db.flush()
+    db.add(bank)
+    db.flush()
     _rating(db, bank, date(2025, 12, 31), morosidad_score=0, raw=None, available=False)
     db.commit()
     detail = build_indicator_detail(db, bank, "morosidad")
@@ -110,7 +114,8 @@ def test_na_indicator_marked_unavailable(db):
 
 def test_ai_context_bounds_trend(db):
     bank = Bank(name="W", bank_type=BankType.banca_multiple)
-    db.add(bank); db.flush()
+    db.add(bank)
+    db.flush()
     qday = {3: 31, 6: 30, 9: 30, 12: 31}
     for i in range(16):  # 16 quarters → ai_context keeps last 12
         m = (i % 4) * 3 + 3
