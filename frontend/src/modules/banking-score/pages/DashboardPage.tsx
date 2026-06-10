@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Trophy, PieChart } from "lucide-react";
+import { Trophy, PieChart, ChevronRight } from "lucide-react";
 import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
+import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
 import {
   PageHead,
   Card,
@@ -23,6 +24,7 @@ interface Stats {
 }
 interface Rank {
   rank: number;
+  bank_id: string;
   bank_name: string;
   overall_score: number;
   rating_tier: string;
@@ -33,6 +35,7 @@ export function DashboardPage() {
   const [rankings, setRankings] = useState<Rank[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [area, setArea] = useState(""); // entity_type filter ("" = todos)
+  const [selectedBank, setSelectedBank] = useState<string | null>(null);
 
   useEffect(() => {
     setStatus("loading");
@@ -143,9 +146,10 @@ export function DashboardPage() {
           ) : (
             <div className="space-y-1">
               {top.map((bank) => (
-                <div
+                <button
                   key={bank.bank_name}
-                  className="flex items-center justify-between gap-3 py-2 border-b border-line/60 last:border-0"
+                  onClick={() => setSelectedBank(bank.bank_id)}
+                  className="w-full flex items-center justify-between gap-3 py-2 border-b border-line/60 last:border-0 hover:bg-surface2 text-left"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="w-6 shrink-0 mono text-sm text-faint">{bank.rank}</span>
@@ -156,8 +160,9 @@ export function DashboardPage() {
                       {fmtNum(bank.overall_score, 1)}
                     </span>
                     <RatingBadge tier={bank.rating_tier} size="sm" />
+                    <ChevronRight className="w-4 h-4 text-faint" />
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -187,6 +192,10 @@ export function DashboardPage() {
           )}
         </Card>
       </div>
+
+      {selectedBank && (
+        <EntityInsightDrawer bankId={selectedBank} onClose={() => setSelectedBank(null)} />
+      )}
     </div>
   );
 }

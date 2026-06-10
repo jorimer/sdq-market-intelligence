@@ -66,6 +66,19 @@ TEMPLATES = {
         "Reglas: NO inventes cifras fuera del contexto; cita los números provistos; "
         "respeta la dirección del indicador (si 'lower'/'higher'/'target' es mejor)."
     ),
+    "entity_rating": (
+        "Eres un analista de calificación de riesgo bancario en República Dominicana. "
+        "Explica EL FUNDAMENTO del rating de una entidad, a partir de datos reales del SIB.\n\n"
+        "Contexto:\n{context}\n\n"
+        "Escribe en español, máximo 400 palabras, con estos bloques:\n"
+        "1) **Lectura del rating**: qué significa el rating y el score global, y cómo se "
+        "posiciona vs los pares (usa el percentil provisto).\n"
+        "2) **Fortalezas**: los sub-componentes/indicadores que más impulsan el rating.\n"
+        "3) **Debilidades**: los sub-componentes/indicadores que más lo lastran.\n"
+        "4) **Trayectoria y qué vigilar**: evolución del score y señales a monitorear.\n"
+        "Reglas: NO inventes cifras fuera del contexto; cita los números provistos; "
+        "ponderá según los pesos de cada sub-componente."
+    ),
 }
 
 # Static fallback templates when API key is not available

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
+import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
 import { PageHead, Card, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
@@ -17,6 +19,7 @@ const ENTITY_TYPES = [
 
 interface Rank {
   rank: number;
+  bank_id: string;
   bank_name: string;
   bank_type: string | null;
   overall_score: number;
@@ -30,6 +33,7 @@ export function RankingsPage() {
   const [rankings, setRankings] = useState<Rank[]>([]);
   const [entityType, setEntityType] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selectedBank, setSelectedBank] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -86,11 +90,18 @@ export function RankingsPage() {
                   <th className="py-2 px-2 font-medium text-right">Score</th>
                   <th className="py-2 px-2 font-medium text-center">Rating</th>
                   <th className="py-2 px-2 font-medium text-right">Período</th>
+                  <th className="w-8" />
                 </tr>
               </thead>
               <tbody>
                 {rankings.map((r) => (
-                  <tr key={r.bank_name} className="border-b border-line/60 last:border-0 hover:bg-surface2">
+                  <tr
+                    key={r.bank_name}
+                    className="border-b border-line/60 last:border-0 hover:bg-surface2 cursor-pointer"
+                    onClick={() => setSelectedBank(r.bank_id)}
+                    tabIndex={0}
+                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setSelectedBank(r.bank_id))}
+                  >
                     <td className="py-2.5 px-2 mono text-faint">{r.rank}</td>
                     <td className="py-2.5 px-2 text-ink truncate">{r.bank_name}</td>
                     <td className="py-2.5 px-2 text-right mono font-semibold text-ink">
@@ -100,12 +111,19 @@ export function RankingsPage() {
                       <RatingBadge tier={r.rating_tier} size="sm" />
                     </td>
                     <td className="py-2.5 px-2 text-right mono text-xs text-muted">{r.period_end}</td>
+                    <td className="py-2.5 pr-2 text-right">
+                      <ChevronRight className="w-4 h-4 text-faint inline-block" />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </Card>
+      )}
+
+      {selectedBank && (
+        <EntityInsightDrawer bankId={selectedBank} onClose={() => setSelectedBank(null)} />
       )}
     </div>
   );
