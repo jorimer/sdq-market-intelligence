@@ -334,7 +334,7 @@ async def get_entity_insight(
 
 
 @router.post(
-    "/compare/insight",
+    "/insight/compare",
     summary="Análisis comparativo (IA)",
     description="Insight de IA comparando 2–4 entidades (ratings + sub-componentes).",
 )
@@ -387,7 +387,7 @@ async def compare_insight(
 
 
 @router.get(
-    "/sector/insight",
+    "/insight/sector",
     summary="Panorama del sector (IA)",
     description="Insight de IA sobre el panorama del sector (distribución de ratings, líderes y rezagadas).",
 )
@@ -444,7 +444,7 @@ async def sector_insight(
 
 
 @router.post(
-    "/scenario/insight",
+    "/insight/scenario",
     summary="Lectura del escenario (IA)",
     description="Insight de IA que interpreta un escenario simulado (sub-componentes ajustados).",
 )
