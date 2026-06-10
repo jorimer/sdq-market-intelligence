@@ -82,7 +82,7 @@ def _classify(url: str) -> Tuple[str, Optional[int]]:
     return "entity", year
 
 
-def discover_pdfs(slug: str, timeout: int = 30) -> Dict[str, List[Tuple[Any, str]]]:
+def discover_pdfs(slug: str, timeout: int = 30) -> Dict[str, List[Tuple[Any, str]]]:  # pragma: no cover - network
     """Scrape an entity page for its statement PDFs.
 
     Returns {"entity": [(year, abs_url), ...], "trusts": [(name, abs_url), ...]}.
@@ -121,7 +121,7 @@ def _trust_name(url: str) -> str:
     return stem.replace("-", " ").strip().upper() or stem.upper()
 
 
-def download_pdf(url: str, timeout: int = 120) -> str:
+def download_pdf(url: str, timeout: int = 120) -> str:  # pragma: no cover - network
     """Download a PDF to a temp file; return its path (caller deletes it)."""
     fd, path = tempfile.mkstemp(suffix=".pdf")
     try:

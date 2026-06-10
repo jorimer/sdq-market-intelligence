@@ -144,3 +144,110 @@ def test_income_hhi_helper():
     assert _income_hhi(500, 1000) == 0.5
     assert _income_hhi(None, 1000) is None
     assert _income_hhi(500, 0) is None
+
+
+# ─── Orchestration (DB-backed, network/AI stubbed) ───────────────
+
+import pytest  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from shared.database.base import Base  # noqa: E402
+import shared.auth.models  # noqa: E402,F401 — register the users table for FK resolution
+from modules.banking_score import fiduciaria_sync as fs  # noqa: E402
+from modules.banking_score.models.models import (  # noqa: E402
+    Bank, BankType, BankingData, RatingResult,
+    Fideicomiso, FideicomisoData, FideicomisoHealthScore,
+)
+
+_ENTITY_STMTS = {
+    "balance_general": [
+        {"original_text": "Efectivo y equivalentes de efectivo", "category": "assets", "amount_current": 199, "is_total": False},
+        {"original_text": "Inversiones", "category": "assets", "amount_current": 637, "is_total": False},
+        {"original_text": "Total activos", "category": "assets", "amount_current": 2031, "is_total": True},
+        {"original_text": "Total pasivos circulantes", "category": "liabilities", "amount_current": 765, "is_total": True},
+        {"original_text": "Total pasivos", "category": "liabilities", "amount_current": 884, "is_total": True},
+        {"original_text": "Total patrimonio", "category": "equity", "amount_current": 1147, "is_total": True},
+    ],
+    "estado_resultados": [
+        {"original_text": "Comisiones fiduciarias", "category": "revenue", "amount_current": 1310, "is_total": False},
+        {"original_text": "Total ingresos", "category": "revenue", "amount_current": 1334, "is_total": True},
+        {"original_text": "Total gastos operacionales", "category": "opex", "amount_current": 991, "is_total": True},
+        {"original_text": "Resultado neto", "category": "net_income", "amount_current": 320, "is_total": True},
+    ],
+}
+_TRUST_STMTS = {
+    "company_info": {"name": "FIDEICOMISO RD VIAL", "period_end": "2025-12-31"},
+    "balance_general": [
+        {"original_text": "Total activos", "category": "assets", "amount_current": 99896, "is_total": True},
+        {"original_text": "Total pasivos circulantes", "category": "liabilities", "amount_current": 4232, "is_total": True},
+        {"original_text": "Aportes del fideicomitente", "category": "equity", "amount_current": 9144, "is_total": False},
+        {"original_text": "Resultado del período", "category": "equity", "amount_current": 2472, "is_total": False},
+        {"original_text": "Total patrimonio fideicomitido", "category": "equity", "amount_current": 11616, "is_total": True},
+        {"original_text": "Efectivo y equivalentes de efectivo", "category": "assets", "amount_current": 12034, "is_total": False},
+    ],
+    "estado_resultados": [
+        {"original_text": "Total ingresos operacionales", "category": "revenue", "amount_current": 12784, "is_total": True},
+    ],
+}
+
+
+@pytest.fixture()
+def Session(monkeypatch):
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    monkeypatch.setattr(fs, "SessionLocal", SessionLocal)
+    return SessionLocal
+
+
+def test_run_fiduciaria_sync_persists_entities_trusts_and_scores(Session, monkeypatch):
+    # One entity (2024) + one trust — network/AI stubbed.
+    monkeypatch.setattr(fs.fc, "FIDUCIARY_ENTITIES", {"fiduciaria-reservas": "Fiduciaria Reservas"})
+    monkeypatch.setattr(fs.fc, "discover_pdfs", lambda slug: {
+        "entity": [(2024, "https://x/entity.pdf")],
+        "trusts": [("RD VIAL", "https://x/rd-vial.pdf")],
+    })
+    monkeypatch.setattr(fs, "_extract_one", lambda url: _TRUST_STMTS if "rd-vial" in url else _ENTITY_STMTS)
+
+    result = fs.run_fiduciaria_sync(include_trusts=True)
+    assert result["entities_ingested"] == 1
+    assert result["trusts_ingested"] == 1
+    assert result["ratings_written"] >= 1
+
+    db = Session()
+    # Entity persisted as a fiduciaria bank, with annual BankingData + a rating.
+    bank = db.query(Bank).filter_by(name="Fiduciaria Reservas").first()
+    assert bank is not None and bank.bank_type == BankType.fiduciaria
+    bd = db.query(BankingData).filter_by(bank_id=bank.id).first()
+    assert float(bd.activos_totales) == 2031
+    assert bd.hhi_ingresos_raw is not None  # computed from comisiones/ingresos
+    rr = db.query(RatingResult).filter_by(bank_id=bank.id).first()
+    assert rr is not None and rr.rating_tier.startswith("SDQ")
+    # Trust persisted with its own health index (NOT an SDQ tier).
+    trust = db.query(Fideicomiso).filter(Fideicomiso.name.like("%RD VIAL%")).first()
+    assert trust is not None
+    td = db.query(FideicomisoData).filter_by(fideicomiso_id=trust.id).first()
+    assert float(td.patrimonio_fideicomitido) == 11616
+    hs = db.query(FideicomisoHealthScore).filter_by(fideicomiso_id=trust.id).first()
+    assert hs.health_band in {"Sólida", "Estable", "En vigilancia", "Frágil"}
+    assert hs.segment == "operativo"
+    db.close()
+
+
+def test_audited_extractor_json_repair_and_parse():
+    from modules.banking_score.external.audited_pdf_extractor import AuditedPdfExtractor as A
+    # Clean JSON inside prose / code fence.
+    assert A._parse_json_response('```json\n{"a": 1}\n```') == {"a": 1}
+    assert A._parse_json_response('garbage {"b": 2} trailing') == {"b": 2}
+    # Truncated mid-stream (multi-line, as a real max_tokens cutoff) → repaired
+    # into a valid dict keeping the complete items, dropping the partial tail.
+    truncated = (
+        '{\n  "balance_general": [\n'
+        '    {"original_text": "Total activos", "amount_current": 100},\n'
+        '    {"original_text": "Inco'
+    )
+    repaired = A._repair_truncated_json(truncated)
+    assert repaired is not None
+    assert repaired["balance_general"][0]["amount_current"] == 100

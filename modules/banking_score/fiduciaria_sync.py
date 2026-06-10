@@ -204,7 +204,7 @@ def _upsert_trust_data(db: Session, trust_id: str, period_end: date, fields: Dic
     db.flush()
 
 
-def _extract_one(url: str) -> Dict:
+def _extract_one(url: str) -> Dict:  # pragma: no cover - network + AI
     """Download + AI-extract a PDF; return the raw statements dict."""
     from modules.banking_score.external.audited_pdf_extractor import AuditedPdfExtractor
 
@@ -315,7 +315,7 @@ def _parse_period_end(s: Optional[str]) -> Optional[date]:
         return None
 
 
-def start_fiduciaria_sync_background(include_trusts: bool = True, only_latest: bool = False) -> Dict:
+def start_fiduciaria_sync_background(include_trusts: bool = True, only_latest: bool = False) -> Dict:  # pragma: no cover - threading
     """Kick off the sync in a daemon thread; returns immediately."""
     db = SessionLocal()
     try:
