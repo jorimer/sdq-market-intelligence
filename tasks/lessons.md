@@ -125,6 +125,20 @@ Cada entrada sigue esta estructura:
 - **Regla**: antes de declarar un dato inexistente, (1) enumerar el catálogo COMPLETO de endpoints del portal del proveedor (no solo los que ya usás); (2) probar variantes de slug (con/sin guion, singular/plural) con el diagnóstico `sib-page-test`; (3) para endpoints jerárquicos, recorrer TODOS los niveles de concepto (revisar `dimensions`/`sample` del diagnóstico), no solo los primeros. Un 404 en un slug adivinado no prueba que el recurso no exista.
 - **Disparador**: cuando un indicador queda N/D por "dato no disponible" en una API externa con catálogo amplio o estructura jerárquica.
 
+### 2026-06-10 — Rutas literales de FastAPI no deben chocar con rutas `/{param}/...`
+
+- **Síntoma**: `GET /sector/insight` devolvía 404 "Banco sector no encontrado"; la tarjeta de IA del Dashboard mostraba "Error al cargar".
+- **Causa raíz**: la ruta parametrizada `GET /{bank_id}/insight` (registrada antes) matcheaba `/sector/insight` con `bank_id="sector"`. FastAPI resuelve por orden de registro y `/{bank_id}/insight` captura cualquier `/<X>/insight`.
+- **Regla**: una ruta literal de dos segmentos cuyo 2º segmento coincide con el de una ruta `/{param}/<lit>` choca. Solución: agrupar las literales bajo un prefijo propio que NO coincida (ej. `/insight/sector` en vez de `/sector/insight`), o registrarlas antes de la parametrizada. Verificar con un GET real tras agregar endpoints nuevos cerca de rutas `/{id}/...`.
+- **Disparador**: agregar endpoints con segmentos literales en un router que ya tiene rutas `/{id}/algo`.
+
+### 2026-06-10 — En árbol jerárquico, leer el SUBTOTAL exacto, no un match por substring
+
+- **Síntoma**: ROA/ROE salían negativos para todos los bancos (Banreservas ROE −2%, real +20%). `utilidad_neta = fv(inc, ["RESULTADO ANTES DEL IMPUESTO"])` devolvía −403M.
+- **Causa raíz**: `_find_value_in_records` hace match por substring sobre cualquier `conceptoNivelN` y devuelve la PRIMERA fila. En el árbol del SIB, `conceptoNivel2="Resultado antes del impuesto"` lo tienen TODAS las filas operacionales (hojas incluidas); la primera era una hoja de gasto ("Otros gastos"), no el subtotal del resultado.
+- **Regla**: para leer el valor de un nodo en un árbol jerárquico del SIB, apuntar a su fila de **subtotal** exacta vía la convención **TODOS-en-cascada** (el subtotal del nivel N es la fila donde nivel N+1 == "TODOS"), no un substring que cae en una hoja. Ej.: resultado antes de impuesto = `conceptoNivel2="Resultado antes del impuesto"` AND `conceptoNivel3="TODOS"`. Mismo patrón mordió en el HHI de ingresos. Verificar el valor contra un dato real conocido (Banreservas pre-tax ~24B/año, no −403M).
+- **Disparador**: extraer un total/subtotal de un endpoint jerárquico (estados/resultados, situación) del SIB con `_find_value_in_records`/substring.
+
 ### 2026-06-09 — Cubo granular: consultar acotado (período por período) y agregar al vuelo
 
 - **Síntoma**: `carteras/creditos` (cubo de préstamos) devolvía 504 y estaba deshabilitado; se creía que el endpoint estaba roto.
