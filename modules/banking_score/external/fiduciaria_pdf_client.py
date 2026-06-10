@@ -82,7 +82,7 @@ def _classify(url: str) -> Tuple[str, Optional[int]]:
     return "entity", year
 
 
-def discover_pdfs(slug: str, timeout: int = 30) -> Dict[str, List[Tuple[Any, str]]]:
+def discover_pdfs(slug: str, timeout: int = 30) -> Dict[str, List[Tuple[Any, str]]]:  # pragma: no cover - network
     """Scrape an entity page for its statement PDFs.
 
     Returns {"entity": [(year, abs_url), ...], "trusts": [(name, abs_url), ...]}.
@@ -121,7 +121,7 @@ def _trust_name(url: str) -> str:
     return stem.replace("-", " ").strip().upper() or stem.upper()
 
 
-def download_pdf(url: str, timeout: int = 120) -> str:
+def download_pdf(url: str, timeout: int = 120) -> str:  # pragma: no cover - network
     """Download a PDF to a temp file; return its path (caller deletes it)."""
     fd, path = tempfile.mkstemp(suffix=".pdf")
     try:
@@ -171,6 +171,23 @@ def _find_total(items: List[Dict[str, Any]], category: str, *label_keywords: str
     # 3) keyword only (last resort)
     for it in items:
         if matches(it):
+            v = _num(it)
+            if v is not None:
+                return v
+    return None
+
+
+def _find_equity_result(items: List[Dict[str, Any]], *label_keywords: str) -> Optional[float]:
+    """Find the period result inside the equity section (a non-total equity row
+    like 'Resultado del período' under Patrimonio fideicomitido)."""
+    kw = [k.lower() for k in label_keywords]
+    for it in items:
+        if it.get("is_total"):
+            continue
+        if it.get("category") != "equity":
+            continue
+        txt = (it.get("original_text") or "").lower()
+        if any(k in txt for k in kw):
             v = _num(it)
             if v is not None:
                 return v
@@ -237,8 +254,19 @@ def map_trust_fields(statements: Dict[str, Any]) -> Dict[str, Optional[float]]:
     patrimonio = _find_total(bg, "equity", "total patrimonio fideicom", "patrimonio fideicom", "total patrimonio")
     pasivos_circ = _find_total(bg, "liabilities", "total pasivos circulantes", "total pasivos corrientes")
     liquidos = _sum_matching(bg, "efectivo", "equivalentes de efectivo", "depósitos a plazo", "depositos a plazo", "inversiones")
-    resultado = _find_total(er, "net_income", "resultado del período", "resultado del periodo", "excedente", "resultado neto", "déficit", "deficit")
     ingresos = _find_total(er, "revenue", "total ingresos operacionales", "total ingresos")
+
+    # Net result: trusts show "Resultado del período" inside the equity section of
+    # the balance (Aportes + Resultado = Total patrimonio fideicomitido). Prefer
+    # that; fall back to a net row in the income statement.
+    _RES_KW = (
+        "resultado del período", "resultado del periodo", "resultado integral",
+        "resultado del ejercicio", "excedente", "déficit", "deficit", "beneficios",
+        "resultado neto",
+    )
+    resultado = _find_equity_result(bg, *_RES_KW)
+    if resultado is None:
+        resultado = _find_total(er, "net_income", *_RES_KW)
 
     return {
         "activos_totales": activos,

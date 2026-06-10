@@ -119,7 +119,7 @@ Return a JSON object: {{"estado_resultados": [{{"original_text": "...", "categor
 Rules: null for missing amounts; () = negative; include ALL line items including Total ingresos, Total gastos operacionales and the net result."""
 
 
-def extract_pdf_text(file_path: str, max_chars: int = 180_000) -> str:
+def extract_pdf_text(file_path: str, max_chars: int = 180_000) -> str:  # pragma: no cover - pdfplumber I/O
     """Extract text from a PDF via pdfplumber (works on the SIB fiduciary PDFs:
     scanned-with-OCR-text-layer and native digital). Truncates very long docs to
     stay within Claude's context window."""
@@ -162,7 +162,7 @@ class AuditedPdfExtractor:
 
     # ─── Public API ──────────────────────────────────────────────
 
-    def extract_statements(self, file_path: str) -> Dict[str, Any]:
+    def extract_statements(self, file_path: str) -> Dict[str, Any]:  # pragma: no cover - I/O + AI
         """Return {company_info, balance_general[], estado_resultados[]} for a PDF."""
         text = extract_pdf_text(file_path)
         if not text or len(text.strip()) < 100:
@@ -174,7 +174,7 @@ class AuditedPdfExtractor:
 
     # ─── Extraction with fallback ────────────────────────────────
 
-    def _extract_with_fallback(self, text: str) -> Dict[str, Any]:
+    def _extract_with_fallback(self, text: str) -> Dict[str, Any]:  # pragma: no cover - AI calls
         try:
             resp, stop = self._call_claude(
                 AUDITED_SYSTEM_PROMPT,
@@ -210,7 +210,7 @@ class AuditedPdfExtractor:
             "estado_resultados": parsed2.get("estado_resultados", []),
         }
 
-    def _call_claude(self, system_prompt: str, user_prompt: str, max_tokens: int) -> Tuple[str, str]:
+    def _call_claude(self, system_prompt: str, user_prompt: str, max_tokens: int) -> Tuple[str, str]:  # pragma: no cover - network
         try:
             response = self.client.messages.create(
                 model=self.model,
