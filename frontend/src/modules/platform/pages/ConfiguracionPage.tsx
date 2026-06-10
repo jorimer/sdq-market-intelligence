@@ -1,11 +1,11 @@
 import { Moon, Sun, SlidersHorizontal, UserCircle } from "lucide-react";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
-import { useApp, PERIODS, SCOPES, Scope } from "@/shared/context/AppContext";
+import { useApp, SCOPES, Scope } from "@/shared/context/AppContext";
 import { useAuth } from "@/shared/auth/AuthContext";
 import { DataSourcesSection } from "../components/DataSourcesSection";
 
 export function ConfiguracionPage() {
-  const { dark, toggleDark, period, setPeriod, scope, setScope } = useApp();
+  const { dark, toggleDark, period, setPeriod, periods, scope, setScope } = useApp();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
@@ -55,7 +55,7 @@ export function ConfiguracionPage() {
             <div>
               <label className="block text-xs font-medium text-muted mb-1">Período</label>
               <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
-                {PERIODS.map((p) => <option key={p} value={p}>{p}</option>)}
+                {periods.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>

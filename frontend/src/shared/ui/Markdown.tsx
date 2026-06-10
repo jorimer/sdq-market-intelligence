@@ -1,8 +1,8 @@
 import { Fragment, type ReactNode } from "react";
 
 /** Minimal, dependency-free Markdown renderer for the AI insights (consistent,
- * simple output: #/##/### headings, **bold**, ---, -/* and N. lists, paragraphs).
- * Renders React elements (no HTML injection), styled with design tokens. */
+ * simple output: #/##/### headings, **bold**, ---, -/* and N. lists, GFM tables,
+ * paragraphs). Renders React elements (no HTML injection), styled with design tokens. */
 
 function inline(text: string): ReactNode[] {
   // bold (**…**); everything else is plain text
@@ -12,6 +12,21 @@ function inline(text: string): ReactNode[] {
     }
     return <Fragment key={i}>{part}</Fragment>;
   });
+}
+
+/** Split a GFM table row "| a | b |" into trimmed cells ["a", "b"]. */
+function splitRow(line: string): string[] {
+  let t = line.trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|")) t = t.slice(0, -1);
+  return t.split("|").map((c) => c.trim());
+}
+
+/** A GFM table separator row: |---|:--:|---| (cells of -, optional : for align). */
+function isSeparatorRow(line: string): boolean {
+  const t = line.trim();
+  if (!t.includes("-") || !t.includes("|")) return false;
+  return splitRow(t).every((c) => /^:?-{1,}:?$/.test(c));
 }
 
 export function Markdown({ text, className = "" }: { text: string; className?: string }) {
@@ -40,9 +55,46 @@ export function Markdown({ text, className = "" }: { text: string; className?: s
     }
   };
 
-  for (const raw of lines) {
-    const line = raw.trim();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
     if (!line) { flushPara(); flushList(); continue; }
+
+    // GFM table: header row with pipes + a separator row immediately after.
+    if (line.includes("|") && i + 1 < lines.length && isSeparatorRow(lines[i + 1])) {
+      flushPara(); flushList();
+      const headers = splitRow(line);
+      const rows: string[][] = [];
+      let j = i + 2;
+      while (j < lines.length && lines[j].trim().includes("|") && lines[j].trim() !== "") {
+        rows.push(splitRow(lines[j]));
+        j++;
+      }
+      i = j - 1; // resume after the table
+      blocks.push(
+        <div key={blocks.length} className="overflow-x-auto">
+          <table className="w-full text-sm my-1">
+            <thead>
+              <tr className="text-left text-xs text-muted border-b border-line">
+                {headers.map((h, k) => (
+                  <th key={k} className={`py-2 px-2 font-medium ${k === 0 ? "" : "text-right"}`}>{inline(h)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((cells, r) => (
+                <tr key={r} className="border-b border-line/60">
+                  {cells.map((c, k) => (
+                    <td key={k} className={`py-2 px-2 ${k === 0 ? "text-body" : "text-right mono text-ink tabular-nums"}`}>{inline(c)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+
     if (/^---+$/.test(line)) { flushPara(); flushList(); blocks.push(<hr key={blocks.length} className="border-line my-1" />); continue; }
 
     const h = line.match(/^(#{1,3})\s+(.*)$/);
