@@ -15,7 +15,9 @@ from modules.banking_score.external.sib_data_client import SIBDataClient
 from modules.banking_score.scoring.engine import (
     calc_castigos_pct,
     calc_exposicion_re,
+    calc_roa,
     calculate_all_indicators,
+    _ytd_annualization_factor,
 )
 
 
@@ -189,3 +191,37 @@ def test_get_stops_after_exhausting_page_retries(monkeypatch):
     monkeypatch.setattr(client, "_get_with_retry", lambda *a, **k: None)
     out = client._get("estados/resultados/eif", {"tipoEntidad": "BM"})
     assert out == []
+
+
+# ── ETL: utilidad_neta must read the pre-tax SUBTOTAL, not a leaf expense ──
+
+def test_map_utilidad_uses_pretax_subtotal_not_leaf():
+    period_data = {"income": [
+        # a leaf expense under "Resultado antes del impuesto" — must NOT be picked
+        {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "Resultado antes del impuesto",
+         "conceptoNivel3": "Otros ingresos (gastos)", "conceptoNivel4": "Otros gastos",
+         "conceptoNivel5": "Otros gastos", "valor": -403},
+        # the pre-tax SUBTOTAL (cascade TODOS) — must be picked
+        {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "Resultado antes del impuesto",
+         "conceptoNivel3": "TODOS", "conceptoNivel4": "TODOS", "valor": 24226},
+    ]}
+    mapped = _client()._map_to_sdq_fields(period_data)
+    assert mapped["utilidad_neta"] == 24226
+
+
+# ── Engine: ROA/ROE annualized from YTD by the period month ──
+
+def test_ytd_annualization_factor():
+    assert _ytd_annualization_factor(SimpleNamespace(period_end=date(2025, 3, 31))) == 4.0
+    assert _ytd_annualization_factor(SimpleNamespace(period_end=date(2025, 6, 30))) == 2.0
+    assert _ytd_annualization_factor(SimpleNamespace(period_end=date(2025, 12, 31))) == 1.0
+    assert _ytd_annualization_factor(SimpleNamespace(period_end=None)) == 1.0
+
+
+def test_roa_annualized_for_q1():
+    # utilidad 6 (YTD Q1) / activos 1000 → 0.6% × 4 = 2.4% annual
+    d = _data(utilidad_neta=6, activos_promedio=1000, period_end=date(2025, 3, 31))
+    assert calc_roa(d)["raw"] == 2.4
+    # Q4 (full year) → no annualization
+    d4 = _data(utilidad_neta=24, activos_promedio=1000, period_end=date(2025, 12, 31))
+    assert calc_roa(d4)["raw"] == 2.4

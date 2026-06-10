@@ -42,6 +42,17 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, value))
 
 
+def _ytd_annualization_factor(d) -> float:
+    """The SIB income statement is YTD cumulative (Q1 = 3 months, Q2 = 6, …), but the
+    ROA/ROE scoring curves expect an ANNUAL rate. Annualize by the period's month so
+    intra-year quarters are comparable: month 3→×4, 6→×2, 9→×4/3, 12→×1. Defaults to
+    ×1 when the period month is unknown (e.g. synthetic test data)."""
+    month = getattr(getattr(d, "period_end", None), "month", None)
+    if month in (3, 6, 9):
+        return 12.0 / month
+    return 1.0
+
+
 # ─── Data protocol ──────────────────────────────────────────────
 # The engine expects any object whose attributes match the field names
 # listed below.  This can be a SQLAlchemy model, a dataclass, a
@@ -255,15 +266,15 @@ def calc_composite_calidad(indicators: Dict[str, IndicatorResult]) -> IndicatorR
 
 
 def calc_roa(d) -> IndicatorResult:
-    """Return on Assets: utilidad_neta / activos_promedio."""
-    raw = _safe_div(d.utilidad_neta, d.activos_promedio) * 100
+    """Return on Assets: utilidad_neta / activos_promedio (annualized from YTD)."""
+    raw = _safe_div(d.utilidad_neta, d.activos_promedio) * 100 * _ytd_annualization_factor(d)
     score = _clamp(min(100, (raw / 1.5) * 100))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 def calc_roe(d) -> IndicatorResult:
-    """Return on Equity: utilidad_neta / patrimonio_promedio."""
-    raw = _safe_div(d.utilidad_neta, d.patrimonio_promedio) * 100
+    """Return on Equity: utilidad_neta / patrimonio_promedio (annualized from YTD)."""
+    raw = _safe_div(d.utilidad_neta, d.patrimonio_promedio) * 100 * _ytd_annualization_factor(d)
     score = _clamp(min(100, (raw / 15) * 100))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
