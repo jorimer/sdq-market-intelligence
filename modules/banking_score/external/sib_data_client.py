@@ -1679,9 +1679,19 @@ class SIBDataClient:
         #  conceptoNivel2: "Resultado antes del impuesto" | "Impuesto sobre la renta"
         # ══════════════════════════════════════════════════════════
 
-        # 5.0N Resultado neto (pre-tax result as best proxy for utilidad neta)
-        utilidad_neta = fv(inc, ["RESULTADO ANTES DEL IMPUESTO"],
-                           nivel1_filter="RESULTADO")
+        # Pre-tax result. Must read the SUBTOTAL row (the cascade-TODOS convention:
+        # conceptoNivel2="Resultado antes del impuesto" AND conceptoNivel3="TODOS"),
+        # NOT a substring match — the latter returned the first matching row, which is
+        # a leaf expense (e.g. "Otros gastos" = -403M), giving negative/bogus ROA/ROE.
+        utilidad_neta = None
+        for r in inc:
+            if (_norm(r.get("conceptoNivel2")) == "RESULTADO ANTES DEL IMPUESTO"
+                    and _norm(r.get("conceptoNivel3")) == "TODOS"):
+                try:
+                    utilidad_neta = float(r.get("valor") or 0)
+                except (TypeError, ValueError):
+                    utilidad_neta = None
+                break
 
         # P&L LINE ITEMS NOT AVAILABLE from income endpoint.
         # We derive them from INDICATOR RATIOS × balance denominators.
