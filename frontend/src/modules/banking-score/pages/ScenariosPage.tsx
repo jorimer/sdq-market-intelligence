@@ -4,11 +4,13 @@ import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { RatingBadge } from "../components/RatingBadge";
+import { AiInsightCard } from "../components/AiInsightCard";
 import { PageHead, Card, CardHead, StateBlock, Delta } from "@/shared/ui/primitives";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
   runScoring,
   simulate,
+  getScenarioInsight,
   ScoringResult,
   SubComponents,
   SUB_KEYS,
@@ -181,6 +183,22 @@ export function ScenariosPage() {
               </div>
             )}
           </Card>
+
+          {sim && (
+            <div className="lg:col-span-3">
+              <AiInsightCard
+                title="Lectura del escenario (IA)"
+                subtitle={`Score simulado ${sim.overall_score.toFixed(1)} · ${sim.rating_tier}`}
+                icon={Zap}
+                depsKey={`${JSON.stringify(sim.sub_components)}|${sim.overall_score}`}
+                fetcher={() => getScenarioInsight(
+                  sim.sub_components,
+                  base.entity_type ?? undefined,
+                  { sub_components: base.sub_components, overall_score: base.overall_score },
+                )}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

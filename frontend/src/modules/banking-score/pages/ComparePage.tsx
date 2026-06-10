@@ -4,11 +4,13 @@ import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
 import { RatingBadge } from "../components/RatingBadge";
 import { ScoreGauge } from "../components/ScoreGauge";
+import { AiInsightCard } from "../components/AiInsightCard";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
   runScoring,
+  getCompareInsight,
   ScoringResult,
   SUB_KEYS,
   SUB_LABELS,
@@ -26,6 +28,7 @@ export function ComparePage() {
   const periodEnd = periodToDate(period);
   const [slots, setSlots] = useState<Slot[]>([{ id: "", name: "" }]);
   const [results, setResults] = useState<{ name: string; r: ScoringResult }[]>([]);
+  const [comparedIds, setComparedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const valid = slots.filter((s) => s.id);
@@ -36,8 +39,10 @@ export function ComparePage() {
     try {
       const rs = await Promise.all(valid.map((s) => runScoring(s.id, periodEnd)));
       setResults(rs.map((r, i) => ({ name: valid[i].name, r })));
+      setComparedIds(valid.map((s) => s.id));
     } catch {
       setResults([]);
+      setComparedIds([]);
     } finally {
       setLoading(false);
     }
@@ -156,6 +161,16 @@ export function ComparePage() {
               </table>
             </div>
           </Card>
+
+          {comparedIds.length >= 2 && (
+            <AiInsightCard
+              title="Análisis comparativo (IA)"
+              subtitle="Fortalezas y debilidades relativas de las entidades comparadas"
+              icon={GitCompare}
+              depsKey={`${comparedIds.join("-")}|${periodEnd}`}
+              fetcher={() => getCompareInsight(comparedIds, periodEnd)}
+            />
+          )}
         </div>
       )}
     </div>

@@ -165,6 +165,42 @@ export async function getEntityInsight(bankId: string, withAi = true): Promise<E
   return data;
 }
 
+/* ── Contextual AI insight cards (comparative · sector · scenario) ── */
+
+export interface AiInsight {
+  text: string;
+  model_used: string;
+  from_cache: boolean;
+}
+
+export async function getCompareInsight(bankIds: string[], periodEnd?: string): Promise<AiInsight | null> {
+  const { data } = await client.post<{ ai_insight: AiInsight | null }>(
+    "/banking-score/compare/insight",
+    { bank_ids: bankIds, period_end: periodEnd },
+  );
+  return data.ai_insight;
+}
+
+export async function getSectorInsight(entityType?: string, periodEnd?: string): Promise<AiInsight | null> {
+  const { data } = await client.get<{ ai_insight: AiInsight | null }>(
+    "/banking-score/sector/insight",
+    { params: { entity_type: entityType || undefined, period_end: periodEnd || undefined } },
+  );
+  return data.ai_insight;
+}
+
+export async function getScenarioInsight(
+  subComponents: SubComponents,
+  entityType?: string,
+  base?: { sub_components: SubComponents; overall_score: number },
+): Promise<AiInsight | null> {
+  const { data } = await client.post<{ ai_insight: AiInsight | null }>(
+    "/banking-score/scenario/insight",
+    { sub_components: subComponents, entity_type: entityType, base },
+  );
+  return data.ai_insight;
+}
+
 export interface BankStats {
   total_records: number;
   total_entities: number;
