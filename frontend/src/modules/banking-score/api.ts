@@ -130,6 +130,41 @@ export async function getIndicatorDetail(
   return data;
 }
 
+/* ── Entity drill-down (overall + sub-component drivers + peers + AI) ── */
+
+export interface EntitySubComponent {
+  key: string;
+  label: string;
+  score: number | null;
+  weight: number | null;
+  band: string | null;
+  driver: { key: string; label: string; score: number } | null;
+  drag: { key: string; label: string; score: number } | null;
+}
+
+export interface EntityInsight {
+  bank_id: string;
+  bank_name: string;
+  entity_type: string | null;
+  latest: { period_end: string; overall_score: number; rating_tier: string; band: string };
+  sub_components: EntitySubComponent[];
+  trend: { period_end: string; score: number; tier: string }[];
+  peers: {
+    period_end: string;
+    sector: IndicatorPeerStats | null;
+    entity_type: IndicatorPeerStats | null;
+    entity_type_label: string | null;
+  } | null;
+  ai_insight: { text: string; model_used: string; from_cache: boolean } | null;
+}
+
+export async function getEntityInsight(bankId: string, withAi = true): Promise<EntityInsight> {
+  const { data } = await client.get<EntityInsight>(`/banking-score/${bankId}/insight`, {
+    params: { with_ai: withAi },
+  });
+  return data;
+}
+
 export interface BankStats {
   total_records: number;
   total_entities: number;

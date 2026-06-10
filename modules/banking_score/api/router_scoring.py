@@ -30,6 +30,7 @@ from modules.banking_score.scoring.engine import (
 )
 from modules.banking_score.scoring.batch import detect_rating_action, score_period
 from modules.banking_score.scoring.indicator_detail import ai_context, build_indicator_detail
+from modules.banking_score.scoring.entity_insight import ai_context_entity, build_entity_insight
 from modules.banking_score.scoring.rating_scale import get_tier_color, map_rating_tier
 from modules.banking_score.scoring.weights import (
     WEIGHT_PROFILES,
@@ -272,6 +273,47 @@ async def get_indicator_detail(
             }
         except Exception as e:  # noqa: BLE001 — AI is best-effort; never break the drill-down
             logger.warning("AI insight no disponible para %s/%s: %s", bank_id, indicator_key, e)
+
+    return detail
+
+
+# ─── Entity drill-down (overall rating + sub-component drivers + AI) ──
+
+
+@router.get(
+    "/{bank_id}/insight",
+    summary="Drill-down de entidad",
+    description="Rating global + sub-componentes (impulsores/lastres) + posición vs pares + "
+                "tendencia del score, e insight de IA ('fundamento del rating', cacheado ~1h).",
+)
+async def get_entity_insight(
+    bank_id: str,
+    with_ai: bool = Query(True, description="Incluir insight de IA (Claude)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    bank = db.query(Bank).filter_by(id=bank_id).first()
+    if not bank:
+        raise HTTPException(status_code=404, detail=f"Banco {bank_id} no encontrado")
+
+    detail = build_entity_insight(db, bank)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="El banco no tiene calificaciones.")
+
+    detail["ai_insight"] = None
+    if with_ai:
+        try:
+            from shared.narrative.claude_engine import narrative_engine
+            res = await narrative_engine.generate(
+                ai_context_entity(detail), template="entity_rating", mode="detailed",
+            )
+            detail["ai_insight"] = {
+                "text": res.text,
+                "model_used": res.model_used,
+                "from_cache": res.from_cache,
+            }
+        except Exception as e:  # noqa: BLE001 — AI is best-effort; never break the drill-down
+            logger.warning("AI insight de entidad no disponible para %s: %s", bank_id, e)
 
     return detail
 
