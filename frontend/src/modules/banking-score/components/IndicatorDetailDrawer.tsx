@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Sparkles, TrendingUp, Users } from "lucide-react";
 import { TrendChart } from "./TrendChart";
 import { StateBlock, Skeleton } from "@/shared/ui/primitives";
+import { Markdown } from "@/shared/ui/Markdown";
 import { fmtNum } from "@/shared/lib/format";
 import { getIndicatorDetail, type IndicatorDetail } from "../api";
 
@@ -201,8 +202,8 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
                     sin dato para el período). El detalle numérico de arriba es completo.
                   </p>
                 ) : (
-                  <div className="text-sm text-body leading-relaxed whitespace-pre-wrap">
-                    {ai!.text}
+                  <div>
+                    <Markdown text={ai!.text} />
                     <div className="text-xs text-muted mt-3">
                       Generado por IA ({ai!.model_used}){ai!.from_cache ? " · caché" : ""}. Verifica antes de decidir.
                     </div>
