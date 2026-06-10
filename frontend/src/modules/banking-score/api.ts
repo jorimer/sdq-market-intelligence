@@ -249,3 +249,36 @@ export async function downloadReport(reportId: string): Promise<void> {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ─── Fideicomisos públicos (public trusts) — own health index ──────
+
+export interface TrustHealth {
+  solvencia: number | null;
+  liquidez: number | null;
+  sostenibilidad: number | null;
+  overall: number | null;
+  band: string;
+}
+
+export interface TrustFinancials {
+  activos_totales: number | null;
+  patrimonio_fideicomitido: number | null;
+  pasivos_totales: number | null;
+  resultado_periodo: number | null;
+  ingresos_operacionales: number | null;
+}
+
+export interface TrustRow {
+  id: string;
+  name: string;
+  segment: string | null;
+  fiduciaria: string | null;
+  period_end: string | null;
+  health: TrustHealth;
+  financials: TrustFinancials | null;
+}
+
+export async function getTrusts(): Promise<TrustRow[]> {
+  const { data } = await client.get<{ trusts: TrustRow[] }>("/banking-score/trusts");
+  return data.trusts ?? [];
+}
