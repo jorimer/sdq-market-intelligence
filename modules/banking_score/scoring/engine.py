@@ -517,6 +517,15 @@ def run_scoring(data, entity_type=None) -> Dict[str, Any]:
         )
         indicators = calculate_cambiaria_indicators(data)
         sub_scores = calculate_cambiaria_sub_components(indicators)
+    elif entity_type == "fiduciaria":
+        # Trust managers — no credit book; fee-based service company indicators
+        # from the audited annual statements (same 5 sub-components).
+        from modules.banking_score.scoring.fiduciaria import (
+            calculate_fiduciaria_indicators,
+            calculate_fiduciaria_sub_components,
+        )
+        indicators = calculate_fiduciaria_indicators(data)
+        sub_scores = calculate_fiduciaria_sub_components(indicators)
     else:
         indicators = calculate_all_indicators(data)
         sub_scores = calculate_sub_components(indicators)
