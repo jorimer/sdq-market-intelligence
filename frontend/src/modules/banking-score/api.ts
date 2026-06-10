@@ -119,9 +119,13 @@ export interface IndicatorDetail {
 export async function getIndicatorDetail(
   bankId: string,
   indicatorKey: string,
+  withAi = true,
 ): Promise<IndicatorDetail> {
+  // The AI insight takes ~10-15s (Claude detailed); fetch the data with_ai=false
+  // for an instant render, then re-fetch with_ai=true to fill the insight in.
   const { data } = await client.get<IndicatorDetail>(
     `/banking-score/${bankId}/indicator/${indicatorKey}`,
+    { params: { with_ai: withAi } },
   );
   return data;
 }
