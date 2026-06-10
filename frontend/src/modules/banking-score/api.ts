@@ -175,7 +175,7 @@ export interface AiInsight {
 
 export async function getCompareInsight(bankIds: string[], periodEnd?: string): Promise<AiInsight | null> {
   const { data } = await client.post<{ ai_insight: AiInsight | null }>(
-    "/banking-score/compare/insight",
+    "/banking-score/insight/compare",
     { bank_ids: bankIds, period_end: periodEnd },
   );
   return data.ai_insight;
@@ -183,7 +183,7 @@ export async function getCompareInsight(bankIds: string[], periodEnd?: string): 
 
 export async function getSectorInsight(entityType?: string, periodEnd?: string): Promise<AiInsight | null> {
   const { data } = await client.get<{ ai_insight: AiInsight | null }>(
-    "/banking-score/sector/insight",
+    "/banking-score/insight/sector",
     { params: { entity_type: entityType || undefined, period_end: periodEnd || undefined } },
   );
   return data.ai_insight;
@@ -195,7 +195,7 @@ export async function getScenarioInsight(
   base?: { sub_components: SubComponents; overall_score: number },
 ): Promise<AiInsight | null> {
   const { data } = await client.post<{ ai_insight: AiInsight | null }>(
-    "/banking-score/scenario/insight",
+    "/banking-score/insight/scenario",
     { sub_components: subComponents, entity_type: entityType, base },
   );
   return data.ai_insight;
