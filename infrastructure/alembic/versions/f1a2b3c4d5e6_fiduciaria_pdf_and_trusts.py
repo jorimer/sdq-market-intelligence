@@ -47,7 +47,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.Column("fideicomiso_id", sa.String(), sa.ForeignKey("fideicomisos.id"), nullable=False),
         sa.Column("period_end", sa.Date(), nullable=False),
-        sa.Column("period_type", sa.Enum("quarterly", "annual", name="periodtype"), nullable=True),
+        # create_type=False: periodtype/datasource already exist in Postgres
+        # (from banking_data) — don't try to CREATE TYPE again. No-op on SQLite.
+        sa.Column("period_type", sa.Enum("quarterly", "annual", name="periodtype", create_type=False), nullable=True),
         sa.Column("activos_totales", sa.Numeric(20, 2), nullable=True),
         sa.Column("pasivos_totales", sa.Numeric(20, 2), nullable=True),
         sa.Column("pasivos_circulantes", sa.Numeric(20, 2), nullable=True),
@@ -57,7 +59,7 @@ def upgrade() -> None:
         sa.Column("ingresos_operacionales", sa.Numeric(20, 2), nullable=True),
         sa.Column(
             "source",
-            sa.Enum("manual", "sib_api", "csv_upload", "sib_pdf", name="datasource"),
+            sa.Enum("manual", "sib_api", "csv_upload", "sib_pdf", name="datasource", create_type=False),
             nullable=True,
         ),
         sa.UniqueConstraint("fideicomiso_id", "period_end", name="uq_fideicomiso_period"),

@@ -1,8 +1,9 @@
 // Supervised entity types ("áreas") of the Financiero axis (SIB universe).
 // `creditModel` = the 19-indicator credit-rating model applies (Scoring page).
 // `submodelReady` = a working rating submodel exists, so ranking/dashboard show
-//   real data. Cambiarias use their own (EIC) submodel; fiduciarias are pending
-//   (the SIB API does not expose their statements).
+//   real data. Cambiarias use their own (EIC) submodel; fiduciarias use the
+//   audited-PDF submodel (SIB supervised portal); public trusts are on a separate
+//   health index ("Fideicomisos públicos" page).
 export interface EntityTypeOpt {
   value: string;
   label: string;
@@ -17,7 +18,7 @@ export const ENTITY_TYPES: EntityTypeOpt[] = [
   { value: "banco_ahorro_credito", label: "Ahorro y crédito", creditModel: true, submodelReady: true },
   { value: "corporacion_credito", label: "Corp. de crédito", creditModel: true, submodelReady: true },
   { value: "cambiaria", label: "Cambiarias", creditModel: false, submodelReady: true },
-  { value: "fiduciaria", label: "Fiduciarias", creditModel: false, submodelReady: false },
+  { value: "fiduciaria", label: "Fiduciarias", creditModel: false, submodelReady: true },
 ];
 
 export const isCreditModel = (value: string): boolean =>

@@ -14,6 +14,7 @@ import { DataPage } from "@/modules/banking-score/pages/DataPage";
 import { ModelPage } from "@/modules/banking-score/pages/ModelPage";
 import { ScenariosPage } from "@/modules/banking-score/pages/ScenariosPage";
 import { ComparePage } from "@/modules/banking-score/pages/ComparePage";
+import { FideicomisosPage } from "@/modules/banking-score/pages/FideicomisosPage";
 import { BankingScoreLayout } from "@/modules/banking-score/components/BankingScoreLayout";
 
 // Macro Monitor (Eje 2) — new canonical pattern
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="model" element={<ModelPage />} />
             <Route path="scenarios" element={<ScenariosPage />} />
             <Route path="compare" element={<ComparePage />} />
+            <Route path="fideicomisos" element={<FideicomisosPage />} />
           </Route>
           {/* Old data route → moved to the Datos section */}
           <Route path="/banking-score/data" element={<Navigate to="/datos/banca" replace />} />
