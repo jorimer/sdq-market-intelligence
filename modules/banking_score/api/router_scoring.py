@@ -29,6 +29,7 @@ from modules.banking_score.scoring.engine import (
     simulate_from_scores,
 )
 from modules.banking_score.scoring.batch import detect_rating_action, score_period
+from modules.banking_score.scoring.indicator_detail import ai_context, build_indicator_detail
 from modules.banking_score.scoring.rating_scale import get_tier_color, map_rating_tier
 from modules.banking_score.scoring.weights import (
     WEIGHT_PROFILES,
@@ -227,6 +228,52 @@ async def get_latest_rating(
         "model_type": result.model_type.value if result.model_type else "deterministic",
         "model_version": result.model_version,
     }
+
+
+# ─── Indicator drill-down (detail + trend + peers + AI insight) ──
+
+
+@router.get(
+    "/{bank_id}/indicator/{indicator_key}",
+    summary="Drill-down de un indicador",
+    description="Detalle de un indicador para un banco: valor/score/interpretación, "
+                "tendencia histórica, posición vs pares (sector y tipo de entidad), e "
+                "insight de IA (Claude, SCQA). El insight se cachea ~1h.",
+)
+async def get_indicator_detail(
+    bank_id: str,
+    indicator_key: str,
+    with_ai: bool = Query(True, description="Incluir insight de IA (Claude)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    bank = db.query(Bank).filter_by(id=bank_id).first()
+    if not bank:
+        raise HTTPException(status_code=404, detail=f"Banco {bank_id} no encontrado")
+
+    detail = build_indicator_detail(db, bank, indicator_key)
+    if detail is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Indicador '{indicator_key}' no reconocido o el banco no tiene calificaciones.",
+        )
+
+    detail["ai_insight"] = None
+    if with_ai and detail["latest"]["available"]:
+        try:
+            from shared.narrative.claude_engine import narrative_engine
+            res = await narrative_engine.generate(
+                ai_context(detail), template="indicator_insight", mode="detailed",
+            )
+            detail["ai_insight"] = {
+                "text": res.text,
+                "model_used": res.model_used,
+                "from_cache": res.from_cache,
+            }
+        except Exception as e:  # noqa: BLE001 — AI is best-effort; never break the drill-down
+            logger.warning("AI insight no disponible para %s/%s: %s", bank_id, indicator_key, e)
+
+    return detail
 
 
 # ─── Rating History ──────────────────────────────────────────────

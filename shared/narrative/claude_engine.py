@@ -52,6 +52,20 @@ TEMPLATES = {
         "perspectivas por segmento (banca múltiple, AAP, bancos de ahorro), "
         "riesgos y oportunidades. Formato SCQA. Máximo 800 palabras."
     ),
+    "indicator_insight": (
+        "Eres un analista de calificación de riesgo bancario en República Dominicana. "
+        "Analiza EN DETALLE un único indicador financiero de una entidad, a partir de "
+        "datos reales del SIB.\n\n"
+        "Contexto:\n{context}\n\n"
+        "Escribe en español, máximo 350 palabras, con estos 4 bloques claros:\n"
+        "1) **Lectura del nivel actual**: qué dice el valor y su score, e interpretación.\n"
+        "2) **Tendencia**: evolución en los trimestres provistos y drivers probables.\n"
+        "3) **Posición vs pares**: frente a la mediana del sector y del mismo tipo de entidad "
+        "(usa el percentil provisto).\n"
+        "4) **Implicaciones y qué vigilar**: riesgos o fortalezas y señales a monitorear.\n"
+        "Reglas: NO inventes cifras fuera del contexto; cita los números provistos; "
+        "respeta la dirección del indicador (si 'lower'/'higher'/'target' es mejor)."
+    ),
 }
 
 # Static fallback templates when API key is not available
