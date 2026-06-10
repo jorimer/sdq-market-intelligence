@@ -1,6 +1,6 @@
 import { useLocation } from "react-router-dom";
 import { PanelLeft, Menu, Moon, Sun, LogOut, Search } from "lucide-react";
-import { useApp, PERIODS, SCOPES, Scope } from "@/shared/context/AppContext";
+import { useApp, SCOPES, Scope } from "@/shared/context/AppContext";
 import { useAuth } from "@/shared/auth/AuthContext";
 import { ROUTE_LABELS } from "./nav";
 
@@ -25,7 +25,7 @@ function fireCmdK() {
 }
 
 export function Topbar() {
-  const { dark, toggleDark, period, setPeriod, scope, setScope, toggleSidebar, setMobileOpen } = useApp();
+  const { dark, toggleDark, period, setPeriod, periods, scope, setScope, toggleSidebar, setMobileOpen } = useApp();
   const { user, logout } = useAuth();
 
   return (
@@ -68,7 +68,7 @@ export function Topbar() {
         className="field mono !w-auto !py-1.5 text-xs shrink-0"
         title="Período"
       >
-        {PERIODS.map((p) => (
+        {periods.map((p) => (
           <option key={p} value={p}>
             {p}
           </option>
