@@ -42,6 +42,18 @@ logger = logging.getLogger("sdq.api.scoring")
 router = APIRouter()
 
 
+async def _ai_insight(context: Dict[str, Any], template: str) -> Optional[Dict[str, Any]]:
+    """Generate a Claude narrative from *context* using *template*; best-effort
+    (returns None on any failure so the endpoint never breaks)."""
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("AI insight (%s) no disponible: %s", template, e)
+        return None
+
+
 @router.get(
     "/weights",
     summary="Perfiles de peso por tipo de entidad",
@@ -316,6 +328,147 @@ async def get_entity_insight(
             logger.warning("AI insight de entidad no disponible para %s: %s", bank_id, e)
 
     return detail
+
+
+# ─── AI insight cards (comparative · sector · scenario) ──────────
+
+
+@router.post(
+    "/compare/insight",
+    summary="Análisis comparativo (IA)",
+    description="Insight de IA comparando 2–4 entidades (ratings + sub-componentes).",
+)
+async def compare_insight(
+    body: Dict[str, Any] = Body(..., examples=[{"bank_ids": ["id1", "id2"], "period_end": "2025-12-31"}]),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    bank_ids = body.get("bank_ids") or []
+    if not isinstance(bank_ids, list) or len(bank_ids) < 2:
+        raise HTTPException(status_code=400, detail="Se requieren al menos 2 bank_ids.")
+    period_end = body.get("period_end")
+    pe = None
+    if period_end:
+        try:
+            pe = date.fromisoformat(period_end)
+        except ValueError:
+            pe = None
+
+    entidades: List[Dict[str, Any]] = []
+    for bid in bank_ids[:4]:
+        bank = db.query(Bank).filter_by(id=bid).first()
+        if not bank:
+            continue
+        q = db.query(RatingResult).filter_by(bank_id=bid, model_type=ModelType.deterministic)
+        if pe is not None:
+            q = q.filter(RatingResult.period_end == pe)
+        rr = q.order_by(RatingResult.period_end.desc()).first()
+        if not rr:
+            continue
+        entidades.append({
+            "nombre": bank.name,
+            "tipo": bank.bank_type.value if bank.bank_type else None,
+            "rating": rr.rating_tier,
+            "score": float(rr.overall_score),
+            "sub_componentes": {
+                "solidez": float(rr.solidez_score or 0),
+                "calidad": float(rr.calidad_score or 0),
+                "eficiencia": float(rr.eficiencia_score or 0),
+                "liquidez": float(rr.liquidez_score or 0),
+                "diversificacion": float(rr.diversificacion_score or 0),
+            },
+        })
+    if len(entidades) < 2:
+        raise HTTPException(status_code=404, detail="No hay calificaciones suficientes para comparar.")
+
+    ctx = {"periodo": period_end or "último disponible", "entidades": entidades}
+    ai = await _ai_insight(ctx, "comparative") if body.get("with_ai", True) else None
+    return {"entities": [e["nombre"] for e in entidades], "ai_insight": ai}
+
+
+@router.get(
+    "/sector/insight",
+    summary="Panorama del sector (IA)",
+    description="Insight de IA sobre el panorama del sector (distribución de ratings, líderes y rezagadas).",
+)
+async def sector_insight(
+    entity_type: Optional[str] = Query(None, description="Tipo de entidad (vacío = todo el sistema)"),
+    period_end: Optional[str] = Query(None, description="Período (YYYY-MM-DD); por defecto el último"),
+    with_ai: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    pe = None
+    if period_end:
+        try:
+            pe = date.fromisoformat(period_end)
+        except ValueError:
+            pe = None
+    if pe is None:
+        pe = db.query(func.max(RatingResult.period_end)).filter(
+            RatingResult.model_type == ModelType.deterministic).scalar()
+    if pe is None:
+        raise HTTPException(status_code=404, detail="No hay calificaciones.")
+
+    rows = (
+        db.query(RatingResult, Bank)
+        .join(Bank, Bank.id == RatingResult.bank_id)
+        .filter(RatingResult.period_end == pe, RatingResult.model_type == ModelType.deterministic)
+        .all()
+    )
+    if entity_type:
+        rows = [(rr, b) for rr, b in rows if b.bank_type and b.bank_type.value == entity_type]
+    if not rows:
+        raise HTTPException(status_code=404, detail="Sin calificaciones para el sector/período.")
+
+    scores = [float(rr.overall_score) for rr, _ in rows]
+    by_tier: Dict[str, int] = {}
+    for rr, _ in rows:
+        by_tier[rr.rating_tier] = by_tier.get(rr.rating_tier, 0) + 1
+    ranked = sorted(rows, key=lambda x: float(x[0].overall_score), reverse=True)
+    avg = round(sum(scores) / len(scores), 2)
+    ctx = {
+        "periodo": str(pe),
+        "tipo": entity_type or "todo el sistema financiero",
+        "n_entidades": len(rows),
+        "score_promedio": avg,
+        "score_min": round(min(scores), 2),
+        "score_max": round(max(scores), 2),
+        "distribucion_rating": by_tier,
+        "lideres": [{"nombre": b.name, "score": float(rr.overall_score), "rating": rr.rating_tier} for rr, b in ranked[:5]],
+        "rezagadas": [{"nombre": b.name, "score": float(rr.overall_score), "rating": rr.rating_tier} for rr, b in ranked[-3:]],
+    }
+    ai = await _ai_insight(ctx, "sector_outlook") if with_ai else None
+    return {"period_end": str(pe), "entity_type": entity_type, "n": len(rows),
+            "score_promedio": avg, "ai_insight": ai}
+
+
+@router.post(
+    "/scenario/insight",
+    summary="Lectura del escenario (IA)",
+    description="Insight de IA que interpreta un escenario simulado (sub-componentes ajustados).",
+)
+async def scenario_insight(
+    body: Dict[str, Any] = Body(..., examples=[{"sub_components": {"solidez": 80, "calidad": 70, "eficiencia": 60, "liquidez": 65, "diversificacion": 55}, "entity_type": "banca_multiple"}]),
+    current_user: User = Depends(get_current_user),
+):
+    subs = body.get("sub_components")
+    if not isinstance(subs, dict) or not subs:
+        raise HTTPException(status_code=400, detail="Se requiere 'sub_components'.")
+    entity_type = body.get("entity_type")
+    weights = get_sub_component_weights(entity_type)
+    sim_score = calculate_deterministic_score(subs, weights)
+    sim_tier = map_rating_tier(sim_score)
+    ctx = {
+        "tipo_entidad": entity_type,
+        "sub_componentes_simulados": subs,
+        "score_simulado": sim_score,
+        "rating_simulado": sim_tier,
+        "base": body.get("base"),  # optional {sub_components, overall_score}
+    }
+    ai = await _ai_insight(ctx, "recommendation") if body.get("with_ai", True) else None
+    return {"overall_score": sim_score, "rating_tier": sim_tier,
+            "tier_color": get_tier_color(sim_tier), "ai_insight": ai}
 
 
 # ─── Rating History ──────────────────────────────────────────────

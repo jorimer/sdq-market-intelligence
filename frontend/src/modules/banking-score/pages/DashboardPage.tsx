@@ -3,6 +3,8 @@ import { Trophy, PieChart, ChevronRight } from "lucide-react";
 import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
 import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
+import { AiInsightCard } from "../components/AiInsightCard";
+import { getSectorInsight } from "../api";
 import {
   PageHead,
   Card,
@@ -192,6 +194,17 @@ export function DashboardPage() {
           )}
         </Card>
       </div>
+
+      {rankings.length > 0 && (
+        <div className="mt-5">
+          <AiInsightCard
+            title="Panorama del sector (IA)"
+            subtitle={area ? entityTypeLabel(area) : "Todo el sistema financiero"}
+            depsKey={`${area}|${stats?.period_end ?? ""}`}
+            fetcher={() => getSectorInsight(area)}
+          />
+        </div>
+      )}
 
       {selectedBank && (
         <EntityInsightDrawer bankId={selectedBank} onClose={() => setSelectedBank(null)} />
