@@ -317,6 +317,7 @@ async def sib_page_test(
     paginas: int = Query(1),
     registros: int = Query(100),
     grep: str = Query("", description="Filtrar filas crudas cuyo path de concepto contenga este término"),
+    entidad: str = Query("", description="Filtrar por código de entidad (en vez de tipo). Aísla un banco."),
     current_user: User = Depends(get_current_user),
 ):
     """Single raw page from the SIB API — to learn if `paginas`/`registros` are
@@ -330,10 +331,12 @@ async def sib_page_test(
     if client is None:
         raise HTTPException(status_code=400, detail="SIB no configurada.")
     url = f"{client.base_url}/{endpoint.lstrip('/')}"
+    # The SIB API takes EITHER entidad OR tipoEntidad — entidad isolates one bank.
     params = {
         "periodoInicial": periodo_inicial, "periodoFinal": periodo_final,
-        "tipoEntidad": tipo, "paginas": paginas, "registros": registros,
+        "paginas": paginas, "registros": registros,
     }
+    params["entidad" if entidad else "tipoEntidad"] = entidad or tipo
     data = client._get_with_retry(_httpx, url, params, endpoint, paginas)
     if isinstance(data, dict):
         data = data.get("data", data.get("registros", [data]))
@@ -392,7 +395,7 @@ async def sib_page_test(
         if grep_norm and not any(grep_norm in _norm(r.get(k)) for k in levels):
             continue
         rows.append(_row(r))
-        if len(rows) >= 60:
+        if len(rows) >= 250:
             break
 
     return {
