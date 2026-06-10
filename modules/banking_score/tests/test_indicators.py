@@ -371,19 +371,29 @@ class TestLiquidezAjustada:
 
 
 class TestHhiIngresos:
+    # Recalibrated curve: 100 at HHI<=3000, 0 at >=9000, linear between
+    # (score = 100*(9000-raw)/6000), to discriminate across the real income-HHI
+    # range (~3400-8500) instead of pegging ~2/3 of banks at 0.
     def test_well_diversified(self):
         d = BankingDataInput(hhi_ingresos_raw=2_000)
         r = calc_hhi_ingresos(d)
-        assert r["score"] == 100.0
+        assert r["score"] == 100.0  # clamped (<=3000)
 
     def test_moderately_concentrated(self):
-        d = BankingDataInput(hhi_ingresos_raw=4_000)
+        d = BankingDataInput(hhi_ingresos_raw=6_000)
         r = calc_hhi_ingresos(d)
-        # 100 - (4000-3000)/20 = 50
+        # 100*(9000-6000)/6000 = 50
         assert r["score"] == pytest.approx(50.0, abs=0.1)
 
+    def test_discriminates_in_real_range(self):
+        # median-ish bank no longer pegged at 0
+        assert calc_hhi_ingresos(BankingDataInput(hhi_ingresos_raw=5_442))["score"] == pytest.approx(59.3, abs=0.5)
+        # near-single-source → ~0
+        assert calc_hhi_ingresos(BankingDataInput(hhi_ingresos_raw=9_000))["score"] == 0.0
+
     def test_highly_concentrated(self):
-        d = BankingDataInput(hhi_ingresos_raw=6_000)
+        # above the 9000 anchor → clamped to 0
+        d = BankingDataInput(hhi_ingresos_raw=9_600)
         r = calc_hhi_ingresos(d)
         assert r["score"] == 0.0
 

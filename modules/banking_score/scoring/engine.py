@@ -329,15 +329,16 @@ def calc_liquidez_ajustada(d) -> IndicatorResult:
 
 
 def calc_hhi_ingresos(d) -> IndicatorResult:
-    """Income HHI: normalized inverse HHI of income sources."""
+    """Income diversification (inverse HHI of income sources).
+
+    Income has only ~4 source buckets, so the HHI floors around 2500–3000 even when
+    well spread, and DR banking is interest-income-heavy (observed range across the
+    universe ≈ 3400–8500, median ≈ 5400). The old 3000–5000 curve pegged ~2/3 of
+    banks at 0 (no discrimination). Recalibrated to the real range: 100 at HHI ≤ 3000
+    (well diversified for income), 0 at ≥ 9000 (near-single-source), linear between."""
     raw = float(d.hhi_ingresos_raw or 0)
-    if raw < 3000:
-        score = 100.0
-    elif raw <= 5000:
-        score = 100 - ((raw - 3000) / 20)
-    else:
-        score = 0.0
-    return {"raw": round(raw, 4), "score": round(_clamp(score), 2)}
+    score = _clamp(100 * (9000 - raw) / 6000)
+    return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 # ─── Dispatch table ─────────────────────────────────────────────
