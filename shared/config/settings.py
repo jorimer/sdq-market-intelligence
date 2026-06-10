@@ -5,9 +5,11 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./data/sdq_market_intel.db"
 
-    # Claude AI
+    # Claude AI. The model env var is ANTHROPIC_MODEL (the code previously read
+    # CLAUDE_MODEL, so a configured ANTHROPIC_MODEL was silently ignored). Default
+    # is a current model; override via the ANTHROPIC_MODEL env var.
     ANTHROPIC_API_KEY: str = ""
-    CLAUDE_MODEL: str = "claude-sonnet-4-5-20250929"
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
 
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
@@ -39,6 +41,9 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        # Ignore unknown env vars (e.g. a legacy CLAUDE_MODEL after the rename to
+        # ANTHROPIC_MODEL) instead of crashing the app on startup.
+        extra = "ignore"
 
 
 settings = Settings()

@@ -1,8 +1,13 @@
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { IndicatorDetail } from "@/types";
+import { IndicatorDetailDrawer } from "./IndicatorDetailDrawer";
 
 interface Props {
   indicators: Record<string, IndicatorDetail>;
+  /** When provided, rows become clickable and open the drill-down drawer. */
+  bankId?: string;
 }
 
 function getScoreColor(score: number): string {
@@ -19,10 +24,12 @@ function getScoreBg(score: number): string {
   return "bg-alert-soft";
 }
 
-export function IndicatorTable({ indicators }: Props) {
+export function IndicatorTable({ indicators, bankId }: Props) {
   const { t } = useTranslation();
+  const [selected, setSelected] = useState<string | null>(null);
 
   const entries = Object.entries(indicators);
+  const clickable = Boolean(bankId);
 
   if (entries.length === 0) {
     return <p className="text-muted text-sm">{t("common.noData")}</p>;
@@ -33,39 +40,45 @@ export function IndicatorTable({ indicators }: Props) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-line">
-            <th className="text-left py-2 px-3 font-medium text-muted">
-              Indicador
-            </th>
-            <th className="text-right py-2 px-3 font-medium text-muted">
-              Valor
-            </th>
-            <th className="text-right py-2 px-3 font-medium text-muted">
-              Score
-            </th>
+            <th className="text-left py-2 px-3 font-medium text-muted">Indicador</th>
+            <th className="text-right py-2 px-3 font-medium text-muted">Valor</th>
+            <th className="text-right py-2 px-3 font-medium text-muted">Score</th>
+            {clickable && <th className="w-8" />}
           </tr>
         </thead>
         <tbody>
           {entries.map(([key, detail]) => (
-            <tr key={key} className="border-b border-line hover:bg-surface2">
-              <td className="py-2 px-3 text-body">
-                {t(`indicators.${key}`, key)}
-              </td>
-              <td className="py-2 px-3 text-right text-body">
+            <tr
+              key={key}
+              className={`border-b border-line ${clickable ? "cursor-pointer hover:bg-surface2" : ""}`}
+              onClick={clickable ? () => setSelected(key) : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onKeyDown={clickable ? (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setSelected(key)) : undefined}
+            >
+              <td className="py-2 px-3 text-body">{t(`indicators.${key}`, key)}</td>
+              <td className="py-2 px-3 text-right text-body mono tabular-nums">
                 {typeof detail.raw === "number" ? detail.raw.toFixed(2) : "—"}
               </td>
               <td className="py-2 px-3 text-right">
                 <span
-                  className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${getScoreColor(
-                    detail.score
-                  )} ${getScoreBg(detail.score)}`}
+                  className={`inline-block px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${getScoreColor(detail.score)} ${getScoreBg(detail.score)}`}
                 >
                   {detail.score.toFixed(1)}
                 </span>
               </td>
+              {clickable && (
+                <td className="py-2 pr-3 text-right">
+                  <ChevronRight className="w-4 h-4 text-faint inline-block" />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
+
+      {clickable && selected && (
+        <IndicatorDetailDrawer bankId={bankId!} indicatorKey={selected} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }

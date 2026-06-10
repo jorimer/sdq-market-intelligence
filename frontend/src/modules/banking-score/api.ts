@@ -79,6 +79,53 @@ export async function getLatest(bankId: string): Promise<ScoringResult & { has_r
   return data;
 }
 
+/* ── Indicator drill-down (detail + trend + peers + AI insight) ── */
+
+export interface IndicatorPeerStats {
+  n: number;
+  median_score: number;
+  p25_score: number;
+  p75_score: number;
+  percentile: number;
+}
+
+export interface IndicatorDetail {
+  bank_id: string;
+  bank_name: string;
+  indicator: string;
+  label: string;
+  sub_component: string;
+  unit: string;
+  direction: string;
+  what_it_measures: string;
+  latest: {
+    period_end: string;
+    raw: number | null;
+    score: number;
+    available: boolean;
+    band: string | null;
+  };
+  interpretation: string;
+  trend: { period_end: string; raw: number | null; score: number }[];
+  peers: {
+    period_end: string;
+    sector: IndicatorPeerStats | null;
+    entity_type: IndicatorPeerStats | null;
+    entity_type_label: string | null;
+  } | null;
+  ai_insight: { text: string; model_used: string; from_cache: boolean } | null;
+}
+
+export async function getIndicatorDetail(
+  bankId: string,
+  indicatorKey: string,
+): Promise<IndicatorDetail> {
+  const { data } = await client.get<IndicatorDetail>(
+    `/banking-score/${bankId}/indicator/${indicatorKey}`,
+  );
+  return data;
+}
+
 export interface BankStats {
   total_records: number;
   total_entities: number;

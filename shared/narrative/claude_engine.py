@@ -189,7 +189,7 @@ class NarrativeEngine:
 
         try:
             response = client.messages.create(
-                model=settings.CLAUDE_MODEL,
+                model=settings.ANTHROPIC_MODEL,
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -204,7 +204,7 @@ class NarrativeEngine:
                 text=text,
                 tokens_used=total_tokens,
                 cost_estimate=cost,
-                model_used=settings.CLAUDE_MODEL,
+                model_used=settings.ANTHROPIC_MODEL,
             )
             self._set_cache(cache_key, result)
             logger.info(
