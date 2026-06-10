@@ -511,3 +511,71 @@ def _parse_excel(content: bytes) -> List[Dict[str, str]]:
         result.append(d)
     wb.close()
     return result
+
+
+# ─── Fiduciary PDF diagnostic (admin) ────────────────────────────
+# Validates the audited-PDF AI extraction end-to-end before wiring persistence.
+
+@router.get(
+    "/fiduciaria-pdf-test",
+    summary="Diagnóstico: extraer un PDF de fiduciaria/fideicomiso",
+    include_in_schema=False,
+)
+async def fiduciaria_pdf_test(
+    slug: str = Query("fiduciaria-reservas", description="Slug de la fiduciaria"),
+    year: int = Query(None, description="Año del estado de la entidad (p.ej. 2024)"),
+    trust: str = Query(None, description="Nombre del fideicomiso (en vez de la entidad)"),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Requiere rol de administrador.")
+
+    import os as _os
+
+    from modules.banking_score.external import fiduciaria_pdf_client as fc
+    from modules.banking_score.external.audited_pdf_extractor import AuditedPdfExtractor
+
+    try:
+        disco = fc.discover_pdfs(slug)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"No se pudo leer la ficha del portal: {e}")
+
+    is_trust = bool(trust)
+    if is_trust:
+        match = next((u for n, u in disco["trusts"] if trust.lower() in n.lower()), None)
+        if not match:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Fideicomiso '{trust}' no encontrado. Disponibles: "
+                + ", ".join(n for n, _ in disco["trusts"]),
+            )
+    else:
+        ents = disco["entity"]
+        if year is not None:
+            match = next((u for y, u in ents if y == year), None)
+        else:
+            match = ents[0][1] if ents else None
+        if not match:
+            yrs = [y for y, _ in ents]
+            raise HTTPException(status_code=404, detail=f"Sin estado de entidad para ese año. Años: {yrs}")
+
+    path = None
+    try:
+        path = fc.download_pdf(match)
+        extractor = AuditedPdfExtractor()
+        statements = extractor.extract_statements(path)
+        fields = fc.map_trust_fields(statements) if is_trust else fc.map_entity_fields(statements)
+        return {
+            "source_url": match,
+            "kind": "trust" if is_trust else "entity",
+            "company_info": statements.get("company_info", {}),
+            "n_balance_items": len(statements.get("balance_general", [])),
+            "n_income_items": len(statements.get("estado_resultados", [])),
+            "mapped_fields": fields,
+        }
+    except Exception as e:  # noqa: BLE001
+        logger.exception("fiduciaria-pdf-test falló")
+        raise HTTPException(status_code=500, detail=f"Extracción falló: {e}")
+    finally:
+        if path and _os.path.exists(path):
+            _os.remove(path)
