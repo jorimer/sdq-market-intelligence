@@ -108,8 +108,8 @@ export function ScoringPage() {
           </Card>
 
           <Card className="lg:col-span-3">
-            <CardHead icon={ListChecks} title="Indicadores" subtitle="19 indicadores normalizados" />
-            <IndicatorTable indicators={result.indicators ?? {}} />
+            <CardHead icon={ListChecks} title="Indicadores" subtitle="Clic en un indicador para ver tendencia, pares e insight de IA" />
+            <IndicatorTable indicators={result.indicators ?? {}} bankId={bankId} />
           </Card>
         </div>
       )}
