@@ -1,3 +1,33 @@
+# Handoff — SDQ·MIP (2026-06-10, sesión 6)
+
+## Verificación Comparar/Escenarios (cierra pendiente #3) + 2 fixes de UI (PR #90 — en prod)
+
+- **Comparar y Escenarios (insights de IA) verificados end-to-end en navegador contra prod**
+  (Claude `claude-sonnet-4-6`, narrativa SCQA, carga en dos fases, IA best-effort sin romper,
+  consola limpia). **Cierra el pendiente vivo #3** de la sesión 5.
+- **Hallazgo 1 — selector de período desfasado (arreglado)**: `PERIODS` estaba hardcodeado
+  con tope 2025-Q2 (y default ahí) mientras prod tiene ratings hasta 2026-03-31 → la app abría
+  con datos ~1 año viejos y 2025-Q3/Q4+2026-Q1 ni se podían elegir. Ahora `AppProvider` deriva
+  la lista de `GET /banking-score/periods` (ISO→label vía `dateToPeriod`), arranca en el más
+  reciente, reconcilia el guardado; key localStorage → `sdq_period_v2`; fallback estático hasta
+  2026-Q1. Topbar + Configuración leen `periods` del contexto.
+- **Hallazgo 2 — Markdown sin tablas GFM (arreglado)**: el insight Comparativo emitía una tabla
+  que `Markdown.tsx` mostraba con pipes crudos; ahora parsea tablas GFM y las renderiza como
+  `<table>` con tokens del design system (tabular-nums, theme-aware).
+- Verificado en navegador claro/oscuro (selector→2026-Q1 por defecto + 21 períodos; tabla limpia),
+  `tsc`+`build` OK, CI verde (backend-test/frontend-build/docker-build/security-scan), deploy a prod
+  confirmado (bundle nuevo en vivo, health 200, `/periods` count=21 reciente 2026-03-31).
+- **Lecciones nuevas** (`tasks/lessons.md`): no hardcodear enumeraciones que el backend ya conoce
+  (se desfasan); verificar end-to-end en navegador (el 200 esconde gaps de render).
+
+### Pendientes vivos (heredados de sesión 5, sin cambios)
+1. **Concentración top-10** sigue N/D — investigar SIMBAD (ángulo no probado).
+2. Castigos como "costo de crédito" (revisar definición). 4. Calibrar cambiarias + optimizar
+   backfill (~3h). 5. Seguridad pre-go-live (desactivar `claude@…`, admin real). 6. Otros ejes
+   (2–7): conectores live + replicar patrón drill-down/IA del Eje 1.
+
+---
+
 # Handoff — SDQ·MIP (2026-06-10, sesión 5)
 
 ## Estado al cierre: Eje 1 (banking_score) con metodología sólida + drill-down e IA en toda la app

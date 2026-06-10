@@ -139,6 +139,20 @@ Cada entrada sigue esta estructura:
 - **Regla**: para leer el valor de un nodo en un árbol jerárquico del SIB, apuntar a su fila de **subtotal** exacta vía la convención **TODOS-en-cascada** (el subtotal del nivel N es la fila donde nivel N+1 == "TODOS"), no un substring que cae en una hoja. Ej.: resultado antes de impuesto = `conceptoNivel2="Resultado antes del impuesto"` AND `conceptoNivel3="TODOS"`. Mismo patrón mordió en el HHI de ingresos. Verificar el valor contra un dato real conocido (Banreservas pre-tax ~24B/año, no −403M).
 - **Disparador**: extraer un total/subtotal de un endpoint jerárquico (estados/resultados, situación) del SIB con `_find_value_in_records`/substring.
 
+### 2026-06-10 — No hardcodear enumeraciones que el backend ya conoce (se desfasan en silencio)
+
+- **Síntoma**: el selector de período del topbar tope **2025-Q2** y abría ahí por defecto, mientras prod tenía ratings hasta **2026-03-31**. Toda la app (período transversal) mostraba datos ~1 año viejos y los 3 trimestres más frescos ni se podían seleccionar. Nadie lo notó hasta verificar en navegador.
+- **Causa raíz**: la lista `PERIODS` estaba hardcodeada en el front (`AppContext.tsx`) en vez de derivarse de los datos reales; ya existía `GET /banking-score/periods`. Una lista estática que depende de datos vivos se desfasa cada vez que entran datos nuevos.
+- **Regla**: si el backend ya conoce el conjunto (períodos, tipos de entidad, sectores…), **derivarlo en runtime** (con fallback estático por si falla el fetch), nunca hardcodear. Default = el elemento más reciente/relevante, y reconciliar el valor persistido si ya no existe en la lista. Al bumpear el default, versionar la key de localStorage (`*_v2`) para no quedar pegado al viejo.
+- **Disparador**: cualquier lista de opciones en UI (selectores, filtros, tabs) cuyo contenido válido dependa de datos que cambian con el tiempo.
+
+### 2026-06-10 — Verificar end-to-end en navegador revela gaps que el endpoint OK esconde
+
+- **Síntoma**: los endpoints de IA (`/insight/compare`, `/insight/scenario`) respondían 200 con narrativa correcta, pero en pantalla la tabla del insight Comparativo salía con **pipes Markdown crudos** (`| Componente | … |`) — el renderer `Markdown.tsx` era minimalista y no parseaba tablas GFM. El backend "verde" no lo delataba.
+- **Causa raíz**: verificar solo el backend (curl) no prueba el render. El contrato de datos puede estar bien y la presentación rota.
+- **Regla**: para features con salida visual, cerrar la verificación **en el navegador** (no solo curl), en claro y oscuro, mirando el render real. Lo que el usuario ve es la prueba, no el 200.
+- **Disparador**: verificar cualquier feature que produzca contenido renderizado (Markdown, tablas, charts, PDF).
+
 ### 2026-06-09 — Cubo granular: consultar acotado (período por período) y agregar al vuelo
 
 - **Síntoma**: `carteras/creditos` (cubo de préstamos) devolvía 504 y estaba deshabilitado; se creía que el endpoint estaba roto.
