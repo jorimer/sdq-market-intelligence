@@ -4,6 +4,7 @@ import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
 import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
 import { AiInsightCard } from "../components/AiInsightCard";
+import { MarketConcentrationCard } from "../components/MarketConcentrationCard";
 import { getSectorInsight } from "../api";
 import {
   PageHead,
@@ -194,6 +195,9 @@ export function DashboardPage() {
           )}
         </Card>
       </div>
+
+      {/* Market structure of the EIF universe — only on the system (all) view. */}
+      {area === "" && <MarketConcentrationCard />}
 
       {rankings.length > 0 && (
         <div className="mt-5">
