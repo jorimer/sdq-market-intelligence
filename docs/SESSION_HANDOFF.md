@@ -1,3 +1,57 @@
+# Handoff — SDQ·MIP (2026-06-11, sesión 7)
+
+## Submodelo de Fiduciarias (Eje 1) — NUEVO, en prod (PRs #92–#96)
+
+El usuario señaló que el **portal de supervisados** de la SIB (`sb.gob.do/supervisados/
+fiduciarias/`) **sí publica** los estados auditados de fiduciarias (la API de estadísticas
+no). Corrige la conclusión previa "no hay fuente". Se construyó el submodelo completo:
+
+### Fuente y extracción
+- **Estados auditados anuales en PDF** por entidad (2020–2025) + estados de **fideicomisos
+  públicos** (solo Reservas, ~20 del Estado). Enlaces server-side en el HTML (scraper
+  `httpx`+regex, clasificación entidad/fideicomiso acento-insensible).
+- **Extractor con IA portado** del repo probado `financial-analysis-agent`
+  (`ingestion/audited_statement_extractor`): prompts battle-tested + fallback
+  single→repair→split. Adaptado a `shared.config.settings` + `pdfplumber`. Vive en
+  `modules/banking_score/external/audited_pdf_extractor.py`. **Validado en prod**: Reservas
+  2024 exacto al peso (activos 2,031,047,582; ecuación contable cuadra).
+
+### Entidades fiduciarias (reusan el marco SDQ)
+- `scoring/fiduciaria.py` (espejo de cambiaria) + dispatch `entity_type=='fiduciaria'`;
+  perfil de pesos ya existía. Datos anuales → `BankingData` (period_end Dic-31,
+  period_type=annual, source=`sib_pdf`), calificadas con `score_period` → aparecen en
+  **Rankings al filtrar Fiduciaria + período Q4**. Verificado: BHD SDQ-A, Popular SDQ-D (2025).
+
+### Fideicomisos públicos (Índice de Salud propio, NO escala SDQ)
+- Modelos `Fideicomiso`/`FideicomisoData`/`FideicomisoHealthScore` (migración
+  `f1a2b3c4d5e6`) + `scoring/fideicomiso.py`: **3 dimensiones** (solvencia patrimonial ·
+  liquidez · sostenibilidad), escala propia (Sólida/Estable/En vigilancia/Frágil),
+  segmentado (operativo/tenedor/desarrollo). Apalancamiento **fuera** del score.
+- **Integridad**: exige **≥2 de 3 dimensiones** (un solo ratio no es veredicto → "Datos
+  insuficientes"). Verificado en prod: 20 fideicomisos, 8 Sólida/9 Estable/3 En vigilancia
+  (RD VIAL Estable 74 pese a apalancamiento; evita el ranking engañoso del 97%-patrimonio).
+- UI: página **Fideicomisos** (`/banking-score/fideicomisos`) + endpoint `GET /trusts`.
+  Verificada en navegador (claro/oscuro).
+
+### Operación
+- Sync admin: `POST /data/fiduciaria-sync?include_trusts=&include_entities=&only_latest=`
+  (job en background con estado/fase/progreso en DB, errores en español) + status.
+  Diagnóstico: `GET /data/fiduciaria-pdf-test?slug=&year=&trust=`.
+
+### ⚠️ Limitaciones honestas (pendientes)
+1. **Gap de OCR**: 7 PDFs de entidad (Reservas 2025, Popular 2020–2022/2024, La Nacional
+   2024–2025) son **escaneos imagen-only sin capa de texto** → `pdfplumber` no extrae →
+   N/D (nunca fabricado, logueado). El repo original tiene un `OCRProcessor` (tesseract)
+   que se **dejó fuera** del port; portarlo recuperaría esos años. **FiduAPAP no publica
+   estados** (página sin enlaces).
+2. **Alineación de período**: las fiduciarias son anuales (Dic-31/Q4); en Rankings solo se
+   ven al elegir el período Q4 correspondiente, y solo ~2 por trimestre por el gap de OCR.
+   Una vista "último por entidad" (el endpoint lo soporta omitiendo período) sería más clara.
+3. Re-correr el sync de entidades tras portar OCR; calibrar umbrales del scoring fiduciaria
+   (v1) y del índice de fideicomisos.
+
+---
+
 # Handoff — SDQ·MIP (2026-06-10, sesión 6)
 
 ## Verificación Comparar/Escenarios (cierra pendiente #3) + 2 fixes de UI (PR #90 — en prod)
