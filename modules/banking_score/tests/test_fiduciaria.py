@@ -40,9 +40,10 @@ def test_fiduciaria_scoring_discriminates():
 
 def test_fiduciaria_weight_profile():
     r = run_scoring(_ns(activos_totales=100, patrimonio_tecnico=50), entity_type="fiduciaria")
-    # fiduciaria profile: eficiencia 0.25, diversificación 0.10
-    assert abs(r["weight_profile"]["eficiencia"] - 0.25) < 1e-9
-    assert abs(r["weight_profile"]["diversificacion"] - 0.10) < 1e-9
+    # fiduciaria v1.1 profile: eficiencia 0.26, diversificación trimmed to 0.05
+    assert abs(r["weight_profile"]["eficiencia"] - 0.26) < 1e-9
+    assert abs(r["weight_profile"]["diversificacion"] - 0.05) < 1e-9
+    assert abs(sum(r["weight_profile"].values()) - 1.0) < 1e-9
 
 
 def test_pdf_link_classification_entity_vs_trust():
