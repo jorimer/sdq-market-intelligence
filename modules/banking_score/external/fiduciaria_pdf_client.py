@@ -196,7 +196,8 @@ def _find_equity_result(items: List[Dict[str, Any]], *label_keywords: str) -> Op
 
 def _last_income_total(items: List[Dict[str, Any]]) -> Optional[float]:
     """The bottom line of an income statement — last is_total row whose label looks
-    like a result (not 'Total ingresos'/'Total gastos'). Fallback for the net result."""
+    like a result (not 'Total ingresos'/'Total gastos', not zero). Fallback for the
+    net result when no explicit result label matched."""
     candidate = None
     for it in items:
         if not it.get("is_total"):
@@ -205,8 +206,8 @@ def _last_income_total(items: List[Dict[str, Any]]) -> Optional[float]:
         if "ingreso" in txt or "gasto" in txt:  # skip revenue/expense subtotals
             continue
         v = _num(it)
-        if v is not None:
-            candidate = v  # keep the last qualifying total
+        if v is not None and v != 0:  # skip nil "otro resultado integral" rows
+            candidate = v  # keep the last qualifying non-zero total
     return candidate
 
 
@@ -257,9 +258,13 @@ def map_entity_fields(statements: Dict[str, Any]) -> Dict[str, Optional[float]]:
     resultado = _find_total(
         er, "net_income", "resultado neto", "utilidad neta", "ganancia neta",
         "excedente", "resultado del ejercicio", "utilidad del ejercicio", "resultado integral",
+        "resultado del período", "resultado del periodo", "resultado del año",
+        "utilidad del período", "utilidad del periodo", "ganancia del", "beneficio neto",
     )
-    if resultado is None:
-        resultado = _last_income_total(er)  # bottom line of the income statement
+    if resultado is None or resultado == 0:
+        fallback = _last_income_total(er)  # bottom line of the income statement
+        if fallback:
+            resultado = fallback
 
     return {
         "activos_totales": activos,
