@@ -10,9 +10,11 @@ RUN npm run build
 FROM python:3.11-slim AS production
 WORKDIR /app
 
-# System dependencies (libgomp for XGBoost, curl for healthcheck)
+# System dependencies (libgomp for XGBoost, curl for healthcheck,
+# tesseract + spanish + poppler for OCR of image-only fiduciary scans)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev libgomp1 curl \
+    tesseract-ocr tesseract-ocr-spa poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies

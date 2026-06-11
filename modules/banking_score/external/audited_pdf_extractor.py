@@ -119,19 +119,41 @@ Return a JSON object: {{"estado_resultados": [{{"original_text": "...", "categor
 Rules: null for missing amounts; () = negative; include ALL line items including Total ingresos, Total gastos operacionales and the net result."""
 
 
+# Below this many extracted chars/page the PDF is treated as an image-only scan.
+_TEXT_LAYER_MIN_CHARS = 200
+
+
 def extract_pdf_text(file_path: str, max_chars: int = 180_000) -> str:  # pragma: no cover - pdfplumber I/O
-    """Extract text from a PDF via pdfplumber (works on the SIB fiduciary PDFs:
-    scanned-with-OCR-text-layer and native digital). Truncates very long docs to
-    stay within Claude's context window."""
+    """Extract text from a PDF. Tries pdfplumber (digital / OCR-text-layer scans);
+    if the result is too sparse (image-only scan), falls back to Tesseract OCR.
+    Truncates very long docs to stay within Claude's context window."""
     import pdfplumber
 
     parts: List[str] = []
+    n_pages = 0
     with pdfplumber.open(file_path) as pdf:
+        n_pages = len(pdf.pages)
         for page in pdf.pages:
             txt = page.extract_text() or ""
             if txt:
                 parts.append(txt)
     text = "\n".join(parts)
+
+    # Image-only scan (no text layer) → OCR fallback.
+    if len(text.strip()) < _TEXT_LAYER_MIN_CHARS * max(min(n_pages, 3), 1):
+        from modules.banking_score.external.ocr_processor import ocr_available, ocr_pdf_text
+
+        if ocr_available():
+            logger.info("[AuditedPdf] PDF sin capa de texto (%d chars/%d pág) → OCR", len(text), n_pages)
+            try:
+                ocr_text = ocr_pdf_text(file_path)
+                if len(ocr_text.strip()) > len(text.strip()):
+                    text = ocr_text
+            except Exception as e:  # noqa: BLE001 — OCR best-effort; keep whatever pdfplumber got
+                logger.warning("[AuditedPdf] OCR falló: %s", e)
+        else:
+            logger.warning("[AuditedPdf] PDF sin texto y OCR no disponible (sin tesseract)")
+
     if len(text) > max_chars:
         logger.warning("[AuditedPdf] texto truncado de %d a %d chars", len(text), max_chars)
         text = text[:max_chars]
