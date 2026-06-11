@@ -807,23 +807,25 @@ class SIBDataClient:
             return None
         return round(sum((v / total) ** 2 for v in buckets.values()) * 10000.0, 4)
 
-    def _compute_carteras_hhi(self, period_start: str, period_end: str = "",
-                              on_progress=None) -> Dict[str, Dict[date, float]]:
-        """Stream carteras/creditos ONE quarter at a time, aggregating gross debt
-        (``deuda``) by ``sectorEconomico`` per entity, and return the sector HHI per
-        (short_name, quarter-end): Σ(sᵢ²)·10000 over sector shares (0–10000).
+    def _compute_carteras_metrics(self, period_start: str, period_end: str = "",
+                                  on_progress=None) -> Dict[str, Dict[date, Dict[str, float]]]:
+        """Stream carteras/creditos ONE quarter at a time, aggregating per entity/quarter
+        in a SINGLE pass over the loan-level cube:
+          - sector HHI (Σ deuda by sectorEconomico → Σ shareᵢ²·10000)
+          - total cartera (Σ deuda)
+          - **mayores deudores** (Σ deuda where tipoCredito = "…Mayores Deudores") →
+            the SIB's largest-borrowers concentration (fills the per-bank top-10 gap)
+          - cartera vencida (Σ deudaVencida) and cartera clasificación A (Σ deuda, clas. A)
 
-        Per-quarter querying keeps each call bounded (the full range 504s). Raw loan
-        rows are discarded as we aggregate — the full cube is hundreds of thousands
-        of rows and is never held in memory.
+        Returns ``{short_name: {period_end: {"hhi","total","mayores","vencida","cartera_a"}}}``.
+        Per-quarter querying keeps each call bounded (the full range 504s). Raw rows are
+        discarded as we aggregate — the cube is hundreds of thousands of rows.
 
-        *on_progress(msg)* is called after each quarter so the caller can refresh the
-        sync heartbeat — this loop is the long pole (a quarter is ~100k+ rows) and
-        without it the per-tipo heartbeat goes stale and the UI false-flags "stopped".
+        *on_progress(msg)* refreshes the sync heartbeat (this loop is the long pole).
         """
         quarters = self._quarters_in_range(period_start, period_end)
-        # acc[short_name][period_date][sector] = summed deuda
-        acc: Dict[str, Dict[date, Dict[str, float]]] = {}
+        # acc[short][pe] = {"sectors": {sector: deuda}, "total","mayores","vencida","cartera_a"}
+        acc: Dict[str, Dict[date, Dict[str, Any]]] = {}
         for qi, q in enumerate(quarters, 1):
             rows = self._fetch_for_all_types("carteras/creditos", q, q)
             if on_progress:
@@ -837,26 +839,49 @@ class SIBDataClient:
                 pe = self._period_to_quarter_end(r.get("periodo") or q)
                 if pe is None:
                     continue
-                sector = (r.get("sectorEconomico") or "").strip()
-                if not sector or _norm(sector) == "TODOS":
-                    continue
                 try:
                     deuda = float(r.get("deuda") or 0)
                 except (TypeError, ValueError):
                     continue
                 if deuda <= 0:
                     continue
-                acc.setdefault(short, {}).setdefault(pe, {})
-                acc[short][pe][sector] = acc[short][pe].get(sector, 0.0) + deuda
+                # Skip TODOS rollup rows entirely — they are subtotals that would
+                # double-count every accumulator (the cube's real rows carry a concrete
+                # economic sector, incl. mortgages → "Z - ... VIVIENDAS").
+                sector = (r.get("sectorEconomico") or "").strip()
+                if _norm(sector) == "TODOS":
+                    continue
+                bucket = acc.setdefault(short, {}).setdefault(
+                    pe, {"sectors": {}, "total": 0.0, "mayores": 0.0, "vencida": 0.0, "cartera_a": 0.0})
+                bucket["total"] += deuda
+                tipo = _norm(r.get("tipoCredito") or "")
+                if "MAYORES DEUDORES" in tipo:
+                    bucket["mayores"] += deuda
+                try:
+                    bucket["vencida"] += float(r.get("deudaVencida") or 0)
+                except (TypeError, ValueError):
+                    pass
+                if (r.get("clasificacionEntidad") or "").strip().upper() == "A":
+                    bucket["cartera_a"] += deuda
+                if sector:
+                    bucket["sectors"][sector] = bucket["sectors"].get(sector, 0.0) + deuda
             logger.info(f"    carteras {q}: {len(rows)} rows aggregated")
-        result: Dict[str, Dict[date, float]] = {}
+        result: Dict[str, Dict[date, Dict[str, float]]] = {}
         for short, by_period in acc.items():
-            for pe, sectors in by_period.items():
-                total = sum(sectors.values())
+            for pe, b in by_period.items():
+                total = b["total"]
                 if total <= 0:
                     continue
-                hhi = sum((v / total) ** 2 for v in sectors.values()) * 10000.0
-                result.setdefault(short, {})[pe] = round(hhi, 4)
+                sectors = b["sectors"]
+                stot = sum(sectors.values())
+                hhi = (sum((v / stot) ** 2 for v in sectors.values()) * 10000.0) if stot > 0 else None
+                result.setdefault(short, {})[pe] = {
+                    "hhi": round(hhi, 4) if hhi is not None else None,
+                    "total": round(total, 2),
+                    "mayores": round(b["mayores"], 2),
+                    "vencida": round(b["vencida"], 2),
+                    "cartera_a": round(b["cartera_a"], 2),
+                }
         return result
 
     def get_income_statement(
@@ -1151,10 +1176,10 @@ class SIBDataClient:
         # carteras/creditos is a huge loan-level cube; the full range at once 504s.
         # We aggregate sector HHI per (entity, quarter) by streaming ONE quarter at a
         # time and discarding the raw rows (memory-safe). Result keyed by short_name.
-        logger.info("  Computing sector HHI from carteras/creditos (per-quarter)...")
-        carteras_hhi = self._compute_carteras_hhi(period_start, period_end, on_progress=on_progress)
-        logger.info(f"    → sector HHI for {len(carteras_hhi)} entities")
-        loans: List[Dict] = []  # raw loan rows are never retained; HHI is injected post-map
+        logger.info("  Computing carteras metrics from carteras/creditos (per-quarter)...")
+        carteras_metrics = self._compute_carteras_metrics(period_start, period_end, on_progress=on_progress)
+        logger.info(f"    → carteras metrics for {len(carteras_metrics)} entities")
+        loans: List[Dict] = []  # raw loan rows are never retained; metrics injected post-map
 
         all_data = income + balance + indicators + solvency + morosidad_estresada + riesgo_credito
         logger.info(f"  Total raw records: {len(all_data)}")
@@ -1282,11 +1307,25 @@ class SIBDataClient:
             for period_date, data in periods.items():
                 try:
                     mapped = self._map_to_sdq_fields(data)
-                    # Inject sector HHI aggregated from the carteras cube (computed
-                    # separately, period-by-period, to avoid the 504 on the full range).
-                    hhi = carteras_hhi.get(short_name, {}).get(period_date)
-                    if hhi is not None:
-                        mapped["hhi_sectorial_raw"] = hhi
+                    # Inject carteras-cube metrics aggregated period-by-period (avoids the
+                    # 504 on the full range). The cube is the source of truth for the loan
+                    # book: largest-debtors concentration, total, vigente A, vencida.
+                    cm = carteras_metrics.get(short_name, {}).get(period_date)
+                    if cm:
+                        if cm.get("hhi") is not None:
+                            mapped["hhi_sectorial_raw"] = cm["hhi"]
+                        total = cm.get("total") or 0
+                        if total > 0:
+                            mapped["cartera_total"] = total
+                            # Largest-debtors concentration (SIB "Mayores Deudores") →
+                            # fills the per-bank top-10 indicator that was N/D.
+                            mapped["suma_top10"] = cm.get("mayores")
+                            # Cube-consistent fallbacks for vigente-A and morosidad (used
+                            # only when the SIB pre-computed % ratios are missing).
+                            if cm.get("cartera_a"):
+                                mapped["cartera_categoria_a"] = cm["cartera_a"]
+                            if cm.get("vencida"):
+                                mapped["cartera_vencida_90d"] = cm["vencida"]
                     mapped["period_end"] = period_date
                     mapped["period_type"] = (
                         "quarterly" if period_date.month in (3, 6, 9, 12) else "monthly"
