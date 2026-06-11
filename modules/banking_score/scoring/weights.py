@@ -46,10 +46,13 @@ WEIGHT_PROFILES = {
         "solidez": 0.35, "calidad": 0.20, "eficiencia": 0.20,
         "liquidez": 0.20, "diversificacion": 0.05,
     },
-    # Fiduciarias — fee-based, diversification/efficiency matter more.
+    # Fiduciarias — fee-based service companies. Income diversification (HHI) is
+    # structurally ~0 for ALL of them (mono-line: ~100% comisiones fiduciarias), so it
+    # doesn't discriminate — its weight is trimmed (0.10→0.05) and redistributed to the
+    # dimensions that do (solidez/calidad/eficiencia). v1.1 calibration (2026-06-11).
     "fiduciaria": {
-        "solidez": 0.35, "calidad": 0.20, "eficiencia": 0.25,
-        "liquidez": 0.10, "diversificacion": 0.10,
+        "solidez": 0.37, "calidad": 0.22, "eficiencia": 0.26,
+        "liquidez": 0.10, "diversificacion": 0.05,
     },
 }
 
