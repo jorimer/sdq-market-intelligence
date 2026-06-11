@@ -590,6 +590,7 @@ async def fiduciaria_pdf_test(
 )
 async def fiduciaria_sync(
     include_trusts: bool = Query(True, description="Ingerir también los fideicomisos públicos"),
+    include_entities: bool = Query(True, description="Ingerir las entidades fiduciarias"),
     only_latest: bool = Query(False, description="Solo el último año por entidad (más rápido)"),
     current_user: User = Depends(get_current_user),
 ):
@@ -597,7 +598,9 @@ async def fiduciaria_sync(
         raise HTTPException(status_code=403, detail="Requiere rol de administrador.")
     from modules.banking_score.fiduciaria_sync import start_fiduciaria_sync_background
 
-    return start_fiduciaria_sync_background(include_trusts=include_trusts, only_latest=only_latest)
+    return start_fiduciaria_sync_background(
+        include_trusts=include_trusts, only_latest=only_latest, include_entities=include_entities,
+    )
 
 
 @router.get(

@@ -87,8 +87,14 @@ def compute_health(fields: Dict[str, Any]) -> Dict[str, Any]:
 
     dims = {"solvencia": solvencia, "liquidez": liquidez, "sostenibilidad": sostenibilidad}
     available = [v for v in dims.values() if v is not None]
-    overall = round(sum(available) / len(available), 2) if available else None
-    band = _band(overall)
+    # Integrity: a single dimension is NOT a health verdict (e.g. solvencia=100 alone,
+    # common in asset-holding trusts, would fake "Sólida"). Require ≥2 dimensions.
+    if len(available) >= 2:
+        overall = round(sum(available) / len(available), 2)
+        band = _band(overall)
+    else:
+        overall = None
+        band = "Datos insuficientes"
 
     return {
         "solvencia_score": solvencia,
