@@ -38,17 +38,20 @@ no). Corrige la conclusión previa "no hay fuente". Se construyó el submodelo c
   (job en background con estado/fase/progreso en DB, errores en español) + status.
   Diagnóstico: `GET /data/fiduciaria-pdf-test?slug=&year=&trust=`.
 
-### ⚠️ Limitaciones honestas (pendientes)
-1. **Gap de OCR**: 7 PDFs de entidad (Reservas 2025, Popular 2020–2022/2024, La Nacional
-   2024–2025) son **escaneos imagen-only sin capa de texto** → `pdfplumber` no extrae →
-   N/D (nunca fabricado, logueado). El repo original tiene un `OCRProcessor` (tesseract)
-   que se **dejó fuera** del port; portarlo recuperaría esos años. **FiduAPAP no publica
-   estados** (página sin enlaces).
-2. **Alineación de período**: las fiduciarias son anuales (Dic-31/Q4); en Rankings solo se
-   ven al elegir el período Q4 correspondiente, y solo ~2 por trimestre por el gap de OCR.
-   Una vista "último por entidad" (el endpoint lo soporta omitiendo período) sería más clara.
-3. Re-correr el sync de entidades tras portar OCR; calibrar umbrales del scoring fiduciaria
-   (v1) y del índice de fideicomisos.
+### Gap de OCR — RESUELTO (PR #98)
+- Los 7 PDFs imagen-only (Reservas 2025, Popular 2020–2022/2024, La Nacional 2024–2025) se
+  recuperaron portando el `OCRProcessor` (tesseract+poppler español) como **fallback** en
+  `extract_pdf_text` (si pdfplumber saca poco texto → OCR). Re-sync de entidades:
+  **24/24 ingeridos, 0 errores, 435 ratings**. En 2025-Q4 aparecen las **4 fiduciarias** que
+  publican: BHD SDQ-A, Reservas SDQ-BBB+, La Nacional SDQ-BBB, Popular SDQ-D.
+- **FiduAPAP** sigue sin rating: **no publica** estados en su ficha (no es un gap técnico).
+
+### ⚠️ Pendientes (refinamientos, no bugs)
+1. **Alineación de período**: las fiduciarias son anuales (Dic-31/Q4); en Rankings se ven al
+   elegir el período Q4. Una vista "último por entidad" (el endpoint lo soporta omitiendo
+   período) sería más clara para mezclar con la banca trimestral.
+2. Calibrar umbrales del scoring fiduciaria (v1) y del índice de fideicomisos (v1).
+3. OCR es lento (~1-2 min/PDF escaneado); el sync completo de entidades tarda ~20-30 min.
 
 ---
 
