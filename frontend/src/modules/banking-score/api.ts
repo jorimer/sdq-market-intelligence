@@ -282,3 +282,33 @@ export async function getTrusts(): Promise<TrustRow[]> {
   const { data } = await client.get<{ trusts: TrustRow[] }>("/banking-score/trusts");
   return data.trusts ?? [];
 }
+
+// ─── Market concentration (system-level: CR10 of the EIF) ──────────
+
+export interface ConcentrationEntity {
+  name: string;
+  value: number;
+  share: number;
+}
+export interface MarketConcentration {
+  period_end: string | null;
+  metric: string;
+  metric_label?: string;
+  available: boolean;
+  n_entities?: number;
+  total?: number;
+  cr5?: number;
+  cr10?: number;
+  hhi?: number;
+  top10?: ConcentrationEntity[];
+}
+
+export async function getMarketConcentration(
+  metric = "activos",
+  periodEnd?: string,
+): Promise<MarketConcentration> {
+  const { data } = await client.get<MarketConcentration>("/banking-score/market-concentration", {
+    params: { metric, ...(periodEnd ? { period_end: periodEnd } : {}) },
+  });
+  return data;
+}

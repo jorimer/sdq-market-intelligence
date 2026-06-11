@@ -736,3 +736,30 @@ async def list_trusts(
     # Sort by overall health desc (N/D last)
     out.sort(key=lambda x: (x["health"]["overall"] is None, -(x["health"]["overall"] or 0)))
     return {"trusts": out, "count": len(out)}
+
+
+# ─── Market concentration (system-level: CR5/CR10/HHI of the EIF) ─
+
+@router.get(
+    "/market-concentration",
+    summary="Concentración de mercado (CR10 de las EIF)",
+    description="CR5/CR10/HHI del universo EIF por activos/depósitos/cartera. Métrica de estructura de mercado (no es input del rating por banco).",
+)
+async def market_concentration(
+    period_end: Optional[str] = Query(None, description="Período (YYYY-MM-DD); por defecto el último"),
+    metric: str = Query("activos", description="activos | depositos | cartera"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from modules.banking_score.scoring.market_concentration import compute_market_concentration
+
+    pe = None
+    if period_end:
+        try:
+            pe = date.fromisoformat(period_end)
+        except ValueError:
+            pe = None
+    try:
+        return compute_market_concentration(db, period_end=pe, metric=metric)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
