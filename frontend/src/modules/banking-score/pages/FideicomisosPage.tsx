@@ -9,6 +9,7 @@ const BAND_CLASS: Record<string, string> = {
   "Estable": "text-accent-ink bg-accent-soft",
   "En vigilancia": "text-warn bg-warn-soft",
   "Frágil": "text-alert bg-alert-soft",
+  "Datos insuficientes": "text-muted bg-surface2",
   "N/D": "text-muted bg-surface2",
 };
 

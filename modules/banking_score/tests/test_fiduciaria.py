@@ -125,16 +125,27 @@ def test_trust_health_index_is_honest_across_heterogeneous_funds():
 
 
 def test_trust_health_nd_reweights_and_never_fabricates():
-    # Missing liquidity inputs → that dimension is N/D, overall reweights over the rest.
+    # Two dimensions available (solvencia + sostenibilidad) → reweights, real band.
     h = compute_health(dict(activos_totales=1000, patrimonio_fideicomitido=600,
                             resultado_periodo=20))  # no liquidos / pasivos_circ
     assert h["liquidez_score"] is None
     assert h["solvencia_score"] is not None
     assert h["overall_score"] is not None
-    # Empty input → everything N/D, band N/D (not a fabricated score).
+    # Empty input → everything N/D, no fabricated score.
     empty = compute_health({})
     assert empty["overall_score"] is None
-    assert empty["health_band"] == "N/D"
+    assert empty["health_band"] == "Datos insuficientes"
+
+
+def test_trust_health_requires_two_dimensions():
+    # A single dimension (solvencia=100, common in asset-holding trusts) is NOT a
+    # health verdict — must not fake "Sólida". Needs ≥2 dimensions for a band.
+    one_dim = compute_health(dict(activos_totales=1000, patrimonio_fideicomitido=1000))
+    assert one_dim["solvencia_score"] == 100.0
+    assert one_dim["liquidez_score"] is None
+    assert one_dim["sostenibilidad_score"] is None
+    assert one_dim["overall_score"] is None
+    assert one_dim["health_band"] == "Datos insuficientes"
 
 
 def test_income_hhi_helper():

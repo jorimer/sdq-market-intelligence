@@ -220,7 +220,8 @@ def _extract_one(url: str) -> Dict:  # pragma: no cover - network + AI
 
 # ─── Orchestration ───────────────────────────────────────────────
 
-def run_fiduciaria_sync(include_trusts: bool = True, only_latest: bool = False) -> Dict:
+def run_fiduciaria_sync(include_trusts: bool = True, only_latest: bool = False,
+                        include_entities: bool = True) -> Dict:
     """Ingest fiduciary entities (+ public trusts). Idempotent (upsert by period)."""
     db = SessionLocal()
     errors: list[str] = []
@@ -236,7 +237,7 @@ def run_fiduciaria_sync(include_trusts: bool = True, only_latest: bool = False) 
             except Exception as e:  # noqa: BLE001
                 errors.append(f"{name}: no se pudo leer la ficha ({e})")
                 continue
-            ents = disco["entity"]
+            ents = disco["entity"] if include_entities else []
             if only_latest and ents:
                 ents = [ents[0]]
             for year, url in ents:
@@ -315,7 +316,8 @@ def _parse_period_end(s: Optional[str]) -> Optional[date]:
         return None
 
 
-def start_fiduciaria_sync_background(include_trusts: bool = True, only_latest: bool = False) -> Dict:  # pragma: no cover - threading
+def start_fiduciaria_sync_background(include_trusts: bool = True, only_latest: bool = False,
+                                     include_entities: bool = True) -> Dict:  # pragma: no cover - threading
     """Kick off the sync in a daemon thread; returns immediately."""
     db = SessionLocal()
     try:
@@ -327,7 +329,8 @@ def start_fiduciaria_sync_background(include_trusts: bool = True, only_latest: b
 
     def _run():
         with _lock:
-            run_fiduciaria_sync(include_trusts=include_trusts, only_latest=only_latest)
+            run_fiduciaria_sync(include_trusts=include_trusts, only_latest=only_latest,
+                                include_entities=include_entities)
 
     threading.Thread(target=_run, daemon=True).start()
     return {"started": True}
