@@ -139,6 +139,13 @@ Cada entrada sigue esta estructura:
 - **Regla**: para leer el valor de un nodo en un árbol jerárquico del SIB, apuntar a su fila de **subtotal** exacta vía la convención **TODOS-en-cascada** (el subtotal del nivel N es la fila donde nivel N+1 == "TODOS"), no un substring que cae en una hoja. Ej.: resultado antes de impuesto = `conceptoNivel2="Resultado antes del impuesto"` AND `conceptoNivel3="TODOS"`. Mismo patrón mordió en el HHI de ingresos. Verificar el valor contra un dato real conocido (Banreservas pre-tax ~24B/año, no −403M).
 - **Disparador**: extraer un total/subtotal de un endpoint jerárquico (estados/resultados, situación) del SIB con `_find_value_in_records`/substring.
 
+### 2026-06-11 — Un score bajo "raro" suele ser extracción incompleta, no calibración
+
+- **Síntoma**: Fiduciaria Popular salía **SDQ-D** (el peor tier). La reacción instintiva fue "hay que calibrar los umbrales". Al inspeccionar los campos extraídos, `patrimonio_tecnico` y `utilidad_neta` estaban en **None** (su estado auditado etiqueta distinto que el de Reservas) → solidez/eficiencia colapsadas a ~0 → SDQ-D artificial. Tras robustecer el mapper, Popular pasó a **SDQ-BBB+** sin tocar un solo umbral.
+- **Causa raíz**: con un parser por keywords sobre formatos heterogéneos, un dato faltante (None→0) se ve igual que un score genuinamente malo. La "anomalía de calibración" era un hueco de extracción.
+- **Regla**: ante un score sospechosamente alto/bajo, **primero inspeccionar los campos crudos extraídos** (vía un diagnóstico que los devuelva), no los umbrales. Calibrar solo cuando los inputs estén completos y verificados. Robustez de mapper: claves alternativas + **identidad contable** (patrimonio = activos − pasivos), fallback al subtotal final (ignorando ceros), `abs()` en montos con signo. La calibración real (p. ej. un indicador que es ~0 para TODA una clase y no discrimina, como la diversificación en fiduciarias mono-línea) se decide DESPUÉS, con el dato completo y con criterio de dominio.
+- **Disparador**: un rating/score que sorprende (un líder en el peor tier, o todos clavados en un valor), sobre datos de un ETL por parseo heterogéneo.
+
 ### 2026-06-10 — No hardcodear enumeraciones que el backend ya conoce (se desfasan en silencio)
 
 - **Síntoma**: el selector de período del topbar tope **2025-Q2** y abría ahí por defecto, mientras prod tenía ratings hasta **2026-03-31**. Toda la app (período transversal) mostraba datos ~1 año viejos y los 3 trimestres más frescos ni se podían seleccionar. Nadie lo notó hasta verificar en navegador.
