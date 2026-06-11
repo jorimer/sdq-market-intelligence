@@ -10,6 +10,7 @@ Create Date: 2026-06-10
 """
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision = "f1a2b3c4d5e6"
 down_revision = "d3a7c4e1f2b5"
@@ -17,8 +18,23 @@ branch_labels = None
 depends_on = None
 
 
+def _existing_enum(dialect_name: str, name: str, *values):
+    """Reference an ALREADY-EXISTING enum type without re-creating it.
+
+    periodtype/datasource already exist in Postgres (from banking_data). A generic
+    ``sa.Enum`` ignores ``create_type=False`` and still emits ``CREATE TYPE`` →
+    DuplicateObject. The postgresql.ENUM variant honours ``create_type=False``. On
+    SQLite there's no shared type namespace, so a plain ``sa.Enum`` is fine.
+    """
+    if dialect_name == "postgresql":
+        return postgresql.ENUM(*values, name=name, create_type=False)
+    return sa.Enum(*values, name=name)
+
+
 def upgrade() -> None:
     bind = op.get_bind()
+    _periodtype = _existing_enum(bind.dialect.name, "periodtype", "quarterly", "annual")
+    _datasource = _existing_enum(bind.dialect.name, "datasource", "manual", "sib_api", "csv_upload", "sib_pdf")
 
     # 1) DataSource enum: add 'sib_pdf' (Postgres native enum; no-op on SQLite).
     if bind.dialect.name == "postgresql":
@@ -47,9 +63,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.Column("fideicomiso_id", sa.String(), sa.ForeignKey("fideicomisos.id"), nullable=False),
         sa.Column("period_end", sa.Date(), nullable=False),
-        # create_type=False: periodtype/datasource already exist in Postgres
-        # (from banking_data) — don't try to CREATE TYPE again. No-op on SQLite.
-        sa.Column("period_type", sa.Enum("quarterly", "annual", name="periodtype", create_type=False), nullable=True),
+        sa.Column("period_type", _periodtype, nullable=True),
         sa.Column("activos_totales", sa.Numeric(20, 2), nullable=True),
         sa.Column("pasivos_totales", sa.Numeric(20, 2), nullable=True),
         sa.Column("pasivos_circulantes", sa.Numeric(20, 2), nullable=True),
@@ -57,11 +71,7 @@ def upgrade() -> None:
         sa.Column("activos_liquidos", sa.Numeric(20, 2), nullable=True),
         sa.Column("resultado_periodo", sa.Numeric(20, 2), nullable=True),
         sa.Column("ingresos_operacionales", sa.Numeric(20, 2), nullable=True),
-        sa.Column(
-            "source",
-            sa.Enum("manual", "sib_api", "csv_upload", "sib_pdf", name="datasource", create_type=False),
-            nullable=True,
-        ),
+        sa.Column("source", _datasource, nullable=True),
         sa.UniqueConstraint("fideicomiso_id", "period_end", name="uq_fideicomiso_period"),
     )
 
