@@ -153,6 +153,39 @@ Cada entrada sigue esta estructura:
 - **Regla**: para features con salida visual, cerrar la verificación **en el navegador** (no solo curl), en claro y oscuro, mirando el render real. Lo que el usuario ve es la prueba, no el 200.
 - **Disparador**: verificar cualquier feature que produzca contenido renderizado (Markdown, tablas, charts, PDF).
 
+### 2026-06-11 — Al portar un módulo probado, no descartes la parte que vas a necesitar
+
+- **Síntoma**: el sync de fiduciarias falló en 7 de 24 PDFs de entidad con "no se pudo
+  extraer texto suficiente". Eran **escaneos imagen-only** (sin capa de texto OCR), a
+  diferencia de otros del mismo portal que sí la traían (escáner PaperStream con OCR).
+- **Causa raíz**: al portar el extractor del repo `financial-analysis-agent` dejé fuera su
+  `OCRProcessor` (detect scanned → OCR vía tesseract) "para no arrastrar dependencias
+  pesadas". Validé contra un PDF que SÍ tenía capa de texto y asumí que todos la tenían.
+  La fuente es heterogénea: unos PDFs son digitales, otros escaneos-con-OCR, otros
+  escaneos-imagen-puros.
+- **Regla**: cuando portás un módulo probado, mapeá QUÉ resuelve cada parte antes de
+  descartarla; la pieza que parece "extra" (OCR) suele cubrir un caso real del dataset.
+  Si la dejás fuera, **probá contra muestras variadas** (no un solo archivo "bueno") y
+  documentá el gap explícitamente. Para PDFs: detectar texto-extraíble vs imagen, y tener
+  un camino OCR para los imagen-only (o declararlos N/D, nunca fabricar).
+- **Disparador**: portar/adaptar un pipeline de ingesta o cualquier módulo del repo
+  original; validar extracción sobre fuentes heterogéneas.
+
+### 2026-06-11 — Índice compuesto: un solo eje disponible NO es un veredicto
+
+- **Síntoma**: al ver los datos reales en prod, muchos fideicomisos salían "Sólida 100"
+  calificados **solo por solvencia** (patrimonio/activos ≈100% en fondos tenedores), con
+  liquidez y sostenibilidad en N/D. El ranking quedaba engañoso (fondos parados arriba).
+- **Causa raíz**: `compute_health` promediaba las dimensiones disponibles sin mínimo; con
+  una sola dimensión, el "promedio" era esa dimensión → veredicto fabricado desde un ratio.
+- **Regla**: un índice compuesto sobre cobertura parcial debe exigir un **mínimo de ejes
+  medidos** (aquí ≥2 de 3) para emitir banda; por debajo, "Datos insuficientes", no un
+  número. Es el corolario de "dato faltante = N/D, nunca acreditar": tampoco se acredita un
+  veredicto global desde una sola señal. Verificar con datos REALES revela esto; los tests
+  sintéticos con todas las dimensiones presentes no.
+- **Disparador**: cualquier índice/score compuesto que promedie sub-dimensiones con
+  disponibilidad variable.
+
 ### 2026-06-09 — Cubo granular: consultar acotado (período por período) y agregar al vuelo
 
 - **Síntoma**: `carteras/creditos` (cubo de préstamos) devolvía 504 y estaba deshabilitado; se creía que el endpoint estaba roto.
