@@ -1308,24 +1308,22 @@ class SIBDataClient:
                 try:
                     mapped = self._map_to_sdq_fields(data)
                     # Inject carteras-cube metrics aggregated period-by-period (avoids the
-                    # 504 on the full range). The cube is the source of truth for the loan
-                    # book: largest-debtors concentration, total, vigente A, vencida.
+                    # 504 on the full range).
                     cm = carteras_metrics.get(short_name, {}).get(period_date)
                     if cm:
                         if cm.get("hhi") is not None:
                             mapped["hhi_sectorial_raw"] = cm["hhi"]
+                        # Largest-debtors concentration (SIB "Mayores Deudores") fills the
+                        # per-bank top-10 indicator that was N/D — numerator and denominator
+                        # both from the cube (self-consistent). We deliberately do NOT touch
+                        # cartera_vencida_90d / cartera_categoria_a: morosidad and %vigente
+                        # already use the SIB pre-computed ratios, and overwriting them with
+                        # cube figures distorts those indicators.
                         total = cm.get("total") or 0
-                        if total > 0:
+                        mayores = cm.get("mayores") or 0
+                        if total > 0 and mayores > 0:
                             mapped["cartera_total"] = total
-                            # Largest-debtors concentration (SIB "Mayores Deudores") →
-                            # fills the per-bank top-10 indicator that was N/D.
-                            mapped["suma_top10"] = cm.get("mayores")
-                            # Cube-consistent fallbacks for vigente-A and morosidad (used
-                            # only when the SIB pre-computed % ratios are missing).
-                            if cm.get("cartera_a"):
-                                mapped["cartera_categoria_a"] = cm["cartera_a"]
-                            if cm.get("vencida"):
-                                mapped["cartera_vencida_90d"] = cm["vencida"]
+                            mapped["suma_top10"] = mayores
                     mapped["period_end"] = period_date
                     mapped["period_type"] = (
                         "quarterly" if period_date.month in (3, 6, 9, 12) else "monthly"
