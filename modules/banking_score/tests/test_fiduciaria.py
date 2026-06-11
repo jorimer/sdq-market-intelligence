@@ -77,8 +77,35 @@ def test_entity_field_mapper_picks_totals():
     assert m["patrimonio_tecnico"] == 900
     assert m["activos_liquidos"] == 837            # efectivo + inversiones
     assert m["ingresos_operacionales"] == 1334
-    assert m["gastos_operacionales"] == 991
+    assert m["gastos_operacionales"] == 991        # magnitude, even if shown as ()
     assert m["utilidad_neta"] == 300
+
+
+def test_entity_mapper_patrimonio_identity_fallback():
+    # Statement without a matched equity total → patrimonio = activos - pasivos,
+    # and the net result falls back to the last income total.
+    statements = {
+        "balance_general": [
+            {"original_text": "Total activos", "category": "assets", "amount_current": 972, "is_total": True},
+            {"original_text": "Total pasivos", "category": "liabilities", "amount_current": 117, "is_total": True},
+            {"original_text": "Total capital de los accionistas", "category": "equity", "amount_current": 855, "is_total": True},
+        ],
+        "estado_resultados": [
+            {"original_text": "Total ingresos", "category": "revenue", "amount_current": 420, "is_total": True},
+            {"original_text": "Total gastos operacionales", "category": "opex", "amount_current": -310, "is_total": True},
+            {"original_text": "Ganancia neta del año", "category": "net_income", "amount_current": 95, "is_total": True},
+        ],
+    }
+    m = fc.map_entity_fields(statements)
+    # "Total capital de los accionistas" matched by the broadened keywords
+    assert m["patrimonio_tecnico"] == 855
+    assert m["gastos_operacionales"] == 310
+    assert m["utilidad_neta"] == 95
+
+    # Now drop the equity line entirely → identity fallback (972 - 117 = 855)
+    statements["balance_general"] = statements["balance_general"][:2]
+    m2 = fc.map_entity_fields(statements)
+    assert m2["patrimonio_tecnico"] == 855
 
 
 def test_trust_field_mapper_picks_patrimonio_fideicomitido():
