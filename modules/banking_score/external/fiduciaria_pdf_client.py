@@ -238,14 +238,28 @@ def map_entity_fields(statements: Dict[str, Any]) -> Dict[str, Optional[float]]:
 
     activos = _find_total(bg, "assets", "total activos", "total de activos")
     pasivos = _find_total(bg, "liabilities", "total pasivos", "total de pasivos")
-    patrimonio = _find_total(bg, "equity", "total patrimonio", "patrimonio fideicom", "total de patrimonio")
+    patrimonio = _find_total(
+        bg, "equity", "total patrimonio", "patrimonio fideicom", "total de patrimonio",
+        "patrimonio neto", "patrimonio de los accionistas", "capital contable", "total capital",
+    )
+    # Fallback by the accounting identity (Activos = Pasivos + Patrimonio) when the
+    # equity total isn't labelled in a way we matched.
+    if patrimonio is None and activos is not None and pasivos is not None:
+        patrimonio = round(activos - pasivos, 2)
     liquidos = _sum_matching(bg, "efectivo", "equivalentes de efectivo", "inversiones", "depósitos a plazo", "depositos a plazo")
     pasivos_circ = _find_total(bg, "liabilities", "total pasivos circulantes", "total pasivos corrientes")
 
-    ingresos = _find_total(er, "revenue", "total ingresos", "total de ingresos")
-    gastos_op = _find_total(er, "opex", "total gastos operacionales", "total gastos de operaci", "gastos operacionales")
+    ingresos = _find_total(er, "revenue", "total ingresos", "total de ingresos", "total ingresos operacionales")
+    gastos_op = _find_total(er, "opex", "total gastos operacionales", "total gastos de operaci", "total gastos", "gastos operacionales")
+    if gastos_op is not None:
+        gastos_op = abs(gastos_op)  # statements show expenses in () → keep magnitude
     comisiones = _sum_matching(er, "comisiones fiduciarias", "comisiones")
-    resultado = _find_total(er, "net_income", "resultado neto", "utilidad neta", "excedente", "resultado del ejercicio", "resultado integral")
+    resultado = _find_total(
+        er, "net_income", "resultado neto", "utilidad neta", "ganancia neta",
+        "excedente", "resultado del ejercicio", "utilidad del ejercicio", "resultado integral",
+    )
+    if resultado is None:
+        resultado = _last_income_total(er)  # bottom line of the income statement
 
     return {
         "activos_totales": activos,

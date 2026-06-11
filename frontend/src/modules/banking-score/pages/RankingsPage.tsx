@@ -33,20 +33,38 @@ export function RankingsPage() {
   const [rankings, setRankings] = useState<Rank[]>([]);
   const [entityType, setEntityType] = useState("");
   const [loading, setLoading] = useState(true);
+  const [latestFallback, setLatestFallback] = useState(false);
   const [selectedBank, setSelectedBank] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
-    client
-      .get<{ rankings: Rank[] }>("/banking-score/rankings", {
+    setLatestFallback(false);
+    const fetchRankings = (withPeriod: boolean) =>
+      client.get<{ rankings: Rank[] }>("/banking-score/rankings", {
         params: {
-          period_end: periodEnd,
+          ...(withPeriod ? { period_end: periodEnd } : {}),
           ...(entityType ? { entity_type: entityType } : {}),
         },
+      });
+
+    fetchRankings(true)
+      .then(async (r) => {
+        let rows = r.data.rankings ?? [];
+        // Some entity types report annually (e.g. fiduciarias, Dic-31) and have no
+        // data at a quarterly period. Fall back to the latest rating per entity.
+        if (rows.length === 0) {
+          const r2 = await fetchRankings(false);
+          rows = r2.data.rankings ?? [];
+          if (active && rows.length > 0) setLatestFallback(true);
+        }
+        if (active) setRankings(rows);
       })
-      .then((r) => setRankings(r.data.rankings ?? []))
-      .catch(() => setRankings([]))
-      .finally(() => setLoading(false));
+      .catch(() => active && setRankings([]))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
   }, [entityType, periodEnd]);
 
   return (
@@ -81,6 +99,12 @@ export function RankingsPage() {
         <StateBlock kind="empty" message="No hay ratings para este tipo de entidad." />
       ) : (
         <Card>
+          {latestFallback && (
+            <p className="text-xs text-muted mb-3">
+              No hay datos en el período seleccionado para este tipo (p. ej. las
+              fiduciarias reportan anualmente). Mostrando el <span className="text-body font-medium">último rating disponible</span> por entidad.
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
