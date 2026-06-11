@@ -46,12 +46,22 @@ no). Corrige la conclusión previa "no hay fuente". Se construyó el submodelo c
   publican: BHD SDQ-A, Reservas SDQ-BBB+, La Nacional SDQ-BBB, Popular SDQ-D.
 - **FiduAPAP** sigue sin rating: **no publica** estados en su ficha (no es un gap técnico).
 
-### ⚠️ Pendientes (refinamientos, no bugs)
-1. **Alineación de período**: las fiduciarias son anuales (Dic-31/Q4); en Rankings se ven al
-   elegir el período Q4. Una vista "último por entidad" (el endpoint lo soporta omitiendo
-   período) sería más clara para mezclar con la banca trimestral.
-2. Calibrar umbrales del scoring fiduciaria (v1) y del índice de fideicomisos (v1).
-3. OCR es lento (~1-2 min/PDF escaneado); el sync completo de entidades tarda ~20-30 min.
+### Refinamientos — HECHOS (PRs #100–#102)
+1. **Mapper de entidad robusto** (#100/#101): formatos que etiquetan distinto dejaban campos
+   en None → scores injustos (Popular salía **SDQ-D**). Ahora: patrimonio por identidad
+   contable (activos−pasivos) si no hay label, fallback de utilidad a la última fila total
+   (ignorando ceros), `abs()` en gastos, más keywords. Re-sync: **Popular SDQ-D→SDQ-BBB+**.
+   Ranking final 2025-Q4: **BHD AA- 85 · Popular BBB+ 61 · Reservas BBB+ 59 · La Nacional BBB 52**.
+2. **Alineación de período** (#100): Rankings cae al **último rating por entidad** si el
+   período seleccionado no tiene datos del tipo (las fiduciarias son anuales) + nota. Verificado
+   en navegador.
+3. **Calibración v1.1** (#102): la diversificación de ingresos es ~0 en TODAS las fiduciarias
+   (mono-línea) → no discrimina; peso **0.10→0.05** redistribuido a solidez/calidad/eficiencia.
+   Re-score sin re-extracción. solidez/calidad/eficiencia/liquidez sí discriminan (sanos).
+
+### ⚠️ Pendientes menores (no bugs)
+- OCR es lento (~1-2 min/PDF escaneado); el sync completo de entidades tarda ~20-30 min.
+- Calibración de umbrales es v1.1 (calibrable con más criterio de dominio).
 
 ---
 
