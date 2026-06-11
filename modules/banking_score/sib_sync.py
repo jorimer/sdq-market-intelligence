@@ -438,3 +438,79 @@ def start_backfill_background(force: bool = False) -> Dict:
 
     threading.Thread(target=run_backfill, kwargs={"force": force}, daemon=True).start()
     return {"status": "started", "via": "thread", "message": msg}
+
+
+# ─── Targeted recompute of carteras-cube metrics (one quarter) ───
+# Re-streams only carteras/creditos for a single period to populate the loan-book
+# fields (mayores deudores → suma_top10, total, vigente A, vencida) and rescore —
+# far faster than the full ~3h backfill, for iterating on the concentration data.
+
+def recompute_carteras_metrics(period: str) -> Dict:
+    """Stream carteras/creditos for *period* (YYYY-MM), update the cartera fields on
+    existing BankingData rows, and rescore the affected periods."""
+    db = SessionLocal()
+    try:
+        _write_status(db, is_running=True, phase=f"recomputando carteras {period}",
+                      started_at=_now(), result=None)
+        client = get_sib_data_client(force_new=True)
+        if client is None:
+            _write_status(db, is_running=False, phase="error",
+                          last_sync_result={"error": "Sin cliente SIB (¿falta la clave?)."})
+            return {"error": "Sin cliente SIB."}
+
+        metrics = client._compute_carteras_metrics(
+            period, period, on_progress=lambda m: _write_status(db, phase=m))
+
+        updated = 0
+        affected_periods: set = set()
+        for short_name, by_pe in metrics.items():
+            if short_name.startswith("_"):
+                continue
+            bank, _created = _match_or_create_bank(db, short_name)
+            if not bank:
+                continue
+            for pe, cm in by_pe.items():
+                row = db.query(BankingData).filter_by(bank_id=bank.id, period_end=pe).first()
+                if not row:
+                    continue  # only enrich existing rows (balance/income already loaded)
+                total = cm.get("total") or 0
+                if total <= 0:
+                    continue
+                row.cartera_total = total
+                row.suma_top10 = cm.get("mayores")
+                if cm.get("hhi") is not None:
+                    row.hhi_sectorial_raw = cm["hhi"]
+                if cm.get("cartera_a"):
+                    row.cartera_categoria_a = cm["cartera_a"]
+                if cm.get("vencida"):
+                    row.cartera_vencida_90d = cm["vencida"]
+                updated += 1
+                affected_periods.add(pe)
+        db.commit()
+
+        from modules.banking_score.scoring.batch import score_period
+        ratings = 0
+        for pe in sorted(affected_periods):
+            ratings += score_period(db, pe).get("scored", 0)
+
+        result = {"rows_updated": updated, "periods": len(affected_periods), "ratings_written": ratings}
+        _write_status(db, is_running=False, phase="completado",
+                      last_sync=_now(), last_sync_result=result)
+        return result
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logger.exception("recompute_carteras_metrics falló")
+        _write_status(db, is_running=False, phase="error",
+                      last_sync_result={"error": _friendly_error(e)})
+        return {"error": _friendly_error(e)}
+    finally:
+        db.close()
+
+
+def start_recompute_carteras_background(period: str) -> Dict:
+    """Kick off recompute_carteras_metrics in a daemon thread."""
+    st = get_sync_status()
+    if st.get("is_running"):
+        return {"started": False, "reason": "Ya hay una sincronización en curso."}
+    threading.Thread(target=recompute_carteras_metrics, kwargs={"period": period}, daemon=True).start()
+    return {"started": True, "period": period}

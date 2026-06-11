@@ -615,3 +615,19 @@ async def fiduciaria_sync_status(
     from modules.banking_score.fiduciaria_sync import get_fiduciaria_status
 
     return get_fiduciaria_status(db)
+
+
+@router.post(
+    "/recompute-carteras",
+    summary="Recomputar métricas de cartera (Mayores Deudores, A, vencida) de un trimestre",
+    include_in_schema=False,
+)
+async def recompute_carteras(
+    period: str = Query(..., description="Trimestre YYYY-MM (p. ej. 2025-12)"),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Requiere rol de administrador.")
+    from modules.banking_score.sib_sync import start_recompute_carteras_background
+
+    return start_recompute_carteras_background(period)
