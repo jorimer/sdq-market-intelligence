@@ -283,6 +283,21 @@ def test_bcrd_invalid_token_is_distinguished(db, monkeypatch):
     assert res.viaProxy is False
 
 
+def test_bcrd_rejected_token_surfaces_message(db, monkeypatch):
+    """A rejected token comes back as an ABP app error → clear, token-specific msg."""
+    from shared.data import bcrd_api
+
+    def _fake_fetch(*a, **k):
+        raise bcrd_api.BcrdApiError("Credenciales de acceso inválidas", is_auth=True)
+
+    monkeypatch.setattr(bcrd_api, "fetch_bcrd_variable", _fake_fetch)
+    _bcrd_provider(db)
+    res = service.test_connection(db, ConnTestIn(provider="bcrd"))
+    assert res.status == "error"
+    assert "Credenciales de acceso inválidas" in res.detail
+    assert "rechazado" in res.detail.lower()
+
+
 # ── router RBAC ───────────────────────────────────────────────────
 def _client(db, role):
     app = FastAPI()

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
-from shared.data.bcrd_api import BCRD_VARIABLES, fetch_bcrd_variable
+from shared.data.bcrd_api import BCRD_VARIABLES, BcrdApiError, fetch_bcrd_variable
 from shared.database.session import get_db
 from shared.publications import catalog as pub_catalog
 from shared.publications import service as pub_service
@@ -174,6 +174,11 @@ async def bcrd_test(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except BcrdApiError as e:
+        detail = (
+            f"Token del BCRD rechazado: {e.message}" if e.is_auth else f"BCRD: {e.message}"
+        )
+        raise HTTPException(status_code=400 if e.is_auth else 502, detail=detail)
     except httpx.HTTPStatusError as e:
         body = e.response.text[:500] if e.response is not None else ""
         raise HTTPException(
@@ -183,6 +188,34 @@ async def bcrd_test(
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Error de transporte hacia el BCRD: {e}")
     return {"variable": variable, "shape": _describe_shape(payload)}
+
+
+@router.get(
+    "/bcrd-egress-ip",
+    summary="Diagnóstico: IPv4 de salida del backend (para la allowlist del BCRD)",
+    description=(
+        "Solo admin. Devuelve la IPv4 pública desde la que el backend hace sus "
+        "llamadas salientes. Es la IP que debe autorizarse en la 'Lista de IP's' "
+        "del BCRD. OJO: en Railway sin IPs estáticas esta IP puede cambiar."
+    ),
+)
+async def bcrd_egress_ip(
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    try:  # pragma: no cover - network I/O
+        resp = httpx.get("https://api4.ipify.org", params={"format": "json"}, timeout=15)
+        resp.raise_for_status()
+        ip = resp.json().get("ip", "")
+    except httpx.HTTPError as e:  # pragma: no cover - network I/O
+        raise HTTPException(status_code=502, detail=f"No se pudo determinar la IP de salida: {e}")
+    return {
+        "egress_ipv4": ip,
+        "nota": (
+            "Autoriza esta IPv4 en la 'Lista de IP's' del BCRD. En Railway sin IPs "
+            "estáticas (plan Pro) puede cambiar; para algo permanente, habilita "
+            "Static Outbound IPs y autoriza las 3 IPs asignadas."
+        ),
+    }
 
 
 # ── Publicaciones BCRD (informes oficiales en PDF, digest IA) ──────
