@@ -13,6 +13,7 @@ from modules.macro_monitor.models.models import (  # noqa: F401 — register tab
 )
 from modules.macro_monitor.service import (
     build_snapshot,
+    delete_series,
     get_indicators,
     get_snapshot,
     ingest_series,
@@ -83,6 +84,26 @@ def test_build_snapshot_idempotent_per_period(db):
 def test_build_without_ingest_raises(db):
     with pytest.raises(ValueError):
         build_snapshot(db)
+
+
+def test_delete_series_removes_only_that_code(db):
+    ingest_series(db)
+    # seed an orphan code of the old schema alongside the real series
+    db.add(MacroSeries(series_code="bcrd.x.cuentas_corrientes.2023", period="2026-06", value=1.0))
+    db.commit()
+    before = db.query(MacroSeries).filter_by(series_code="gdp_growth").count()
+
+    deleted = delete_series(db, "bcrd.x.cuentas_corrientes.2023")
+
+    assert deleted == 1
+    assert db.query(MacroSeries).filter_by(series_code="bcrd.x.cuentas_corrientes.2023").count() == 0
+    # untouched series survive
+    assert db.query(MacroSeries).filter_by(series_code="gdp_growth").count() == before
+
+
+def test_delete_series_idempotent_for_absent_code(db):
+    ingest_series(db)
+    assert delete_series(db, "no.such.code") == 0
 
 
 def test_get_indicators_and_snapshot(db):
