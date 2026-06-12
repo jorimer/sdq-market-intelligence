@@ -66,6 +66,22 @@ TEMPLATES = {
         "Reglas: NO inventes cifras fuera del contexto; cita los números provistos; "
         "respeta la dirección del indicador (si 'lower'/'higher'/'target' es mejor)."
     ),
+    "subcomponent_focus": (
+        "Eres un analista de calificación de riesgo bancario en República Dominicana. "
+        "Analiza EN PROFUNDIDAD UN sub-componente del rating de una entidad —NO todo el "
+        "banco— a partir de datos reales del SIB.\n\n"
+        "Contexto (solo los indicadores de este sub-componente):\n{context}\n\n"
+        "Escribe en español, máximo 200 palabras, enfocado EXCLUSIVAMENTE en este "
+        "sub-componente, con estos bloques:\n"
+        "1) **Lectura**: el score del sub-componente y qué refleja.\n"
+        "2) **Impulsor y lastre**: el indicador que más lo sube y el que más lo baja, "
+        "con sus valores y scores.\n"
+        "3) **Vs pares**: posición frente a la mediana del sector/tipo si se provee.\n"
+        "4) **Veredicto**: una conclusión puntual y qué vigilar.\n"
+        "Reglas: NO repitas el panorama global del banco ni otros sub-componentes; "
+        "NO inventes cifras; cita SOLO los números provistos; respeta la dirección de "
+        "cada indicador (si menor/mayor es mejor)."
+    ),
     "entity_rating": (
         "Eres un analista de calificación de riesgo bancario en República Dominicana. "
         "Explica EL FUNDAMENTO del rating de una entidad, a partir de datos reales del SIB.\n\n"
