@@ -18,6 +18,7 @@ from shared.publications import service as pub_service
 from shared.publications.models import Publication
 from shared.settings.service import get_sector_api_base_url, get_sector_api_key
 from modules.macro_monitor.service import (
+    backfill_historico,
     build_snapshot,
     delete_series,
     get_indicators,
@@ -297,6 +298,28 @@ async def bcrd_historico(
         "last": last,
         "item_keys": list(first.keys()) if isinstance(first, dict) else None,
     }
+
+
+@router.post(
+    "/backfill-historico",
+    summary="Backfill del histórico BCRD (IPC + tipo de cambio)",
+    description=(
+        "Solo admin. Ingesta el histórico de las únicas dos series con profundidad "
+        "vía API: IPC (mensual desde 1984, índice + inflación interanual derivada) y "
+        "tipo de cambio (diario → mensual fin de mes). Idempotente (upsert). El resto "
+        "de series son snapshot y se acumulan hacia adelante."
+    ),
+)
+async def backfill_historico_endpoint(
+    year_from: int = Query(1984, description="Año inicial del backfill"),
+    year_to: int = Query(2026, description="Año final del backfill"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    try:
+        return backfill_historico(db, year_from=year_from, year_to=year_to)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ── Publicaciones BCRD (informes oficiales en PDF, digest IA) ──────
