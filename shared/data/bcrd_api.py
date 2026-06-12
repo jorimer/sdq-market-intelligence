@@ -10,7 +10,7 @@ rejected token comes back as HTTP 500 with ``{"success": false, "error":
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import httpx
 
@@ -64,8 +64,13 @@ def _unwrap_abp(payload: Any) -> Any:
 
 def fetch_bcrd_variable(
     token: str, variable: str, base_url: str = BCRD_BASE_URL, timeout: int = 30,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> Any:
     """POST to a BCRD MacroVariables endpoint with the token in the body.
+
+    *extra* merges additional body fields (e.g. the date-range params of the
+    Historico* endpoints: ``yearFrom``/``monthFrom``/… or ``fromDate``/``toDate``,
+    plus ``skipCount``/``maxResultCount``).
 
     Returns the (unwrapped) data, typically ``{"name", "values": [...]}``. Raises
     :class:`ValueError` on an unknown variable / missing token, :class:`BcrdApiError`
@@ -79,9 +84,12 @@ def fetch_bcrd_variable(
     token = (token or "").strip()
     if not token:
         raise ValueError("Falta el token del BCRD (configúralo en Configuración → BCRD).")
+    body: Dict[str, Any] = {"token": token}
+    if extra:
+        body.update(extra)
     url = f"{base_url.rstrip('/')}{path}"
     resp = httpx.post(  # pragma: no cover — network I/O
-        url, json={"token": token}, timeout=timeout,
+        url, json=body, timeout=timeout,
         headers={"Content-Type": "application/json", "User-Agent": "SDQ-MIP/1.0"},
     )
     # The BCRD signals a rejected token as HTTP 500 with an ABP error body, so we

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
-from shared.data.bcrd_api import BCRD_VARIABLES, BcrdApiError, fetch_bcrd_variable
+from shared.data.bcrd_api import BCRD_BASE_URL, BCRD_VARIABLES, BcrdApiError, fetch_bcrd_variable
 from shared.database.session import get_db
 from shared.publications import catalog as pub_catalog
 from shared.publications import service as pub_service
@@ -215,6 +215,68 @@ async def bcrd_egress_ip(
             "estáticas (plan Pro) puede cambiar; para algo permanente, habilita "
             "Static Outbound IPs y autoriza las 3 IPs asignadas."
         ),
+    }
+
+
+def _historico_extra(variable: str, year_from: int, year_to: int) -> Dict[str, Any]:
+    """Build the date-range body for a BCRD Historico* endpoint."""
+    if variable == "historico_ipc":
+        return {
+            "yearFrom": year_from, "monthFrom": 1, "yearTo": year_to, "monthTo": 12,
+            "skipCount": 0, "maxResultCount": 100000,
+        }
+    # historico_tasas (exchange rates) — date range
+    return {
+        "fromDate": f"{year_from}-01-01", "toDate": f"{year_to}-12-31",
+        "skipCount": 0, "maxResultCount": 100000,
+    }
+
+
+@router.get(
+    "/bcrd-historico",
+    summary="Diagnóstico: disponibilidad de histórico del BCRD (IPC / tasas)",
+    description=(
+        "Solo admin. Consulta un endpoint Historico* con un rango amplio y reporta "
+        "cuántas observaciones devuelve y el primer/último registro, para decidir la "
+        "profundidad del backfill. Variables: historico_ipc, historico_tasas."
+    ),
+)
+async def bcrd_historico(
+    variable: str = Query("historico_ipc", description="historico_ipc | historico_tasas"),
+    year_from: int = Query(1980, description="Año inicial del rango a sondear"),
+    year_to: int = Query(2026, description="Año final del rango a sondear"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    if variable not in ("historico_ipc", "historico_tasas"):
+        raise HTTPException(status_code=400, detail="variable debe ser historico_ipc o historico_tasas")
+    token = get_sector_api_key(db, "bcrd")
+    if not token:
+        raise HTTPException(status_code=400, detail="Falta el token del BCRD o la fuente está deshabilitada.")
+    base_url = get_sector_api_base_url(db, "bcrd") or None
+    extra = _historico_extra(variable, year_from, year_to)
+    try:
+        payload = fetch_bcrd_variable(token, variable, base_url=base_url or BCRD_BASE_URL, extra=extra)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BcrdApiError as e:
+        raise HTTPException(status_code=400 if e.is_auth else 502, detail=f"BCRD: {e.message}")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Error de transporte hacia el BCRD: {e}")
+    # Historico* responses may be a bare list, a {items:[...]} envelope, or {values:[...]}.
+    items = payload
+    if isinstance(payload, dict):
+        items = payload.get("items") or payload.get("values") or payload.get("result") or []
+    count = len(items) if isinstance(items, list) else 0
+    first = items[0] if count else None
+    last = items[-1] if count else None
+    return {
+        "variable": variable,
+        "rango_consultado": f"{year_from}-{year_to}",
+        "count": count,
+        "first": first,
+        "last": last,
+        "item_keys": list(first.keys()) if isinstance(first, dict) else None,
     }
 
 
