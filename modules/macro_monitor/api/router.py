@@ -190,6 +190,34 @@ async def bcrd_test(
     return {"variable": variable, "shape": _describe_shape(payload)}
 
 
+@router.get(
+    "/bcrd-egress-ip",
+    summary="Diagnóstico: IPv4 de salida del backend (para la allowlist del BCRD)",
+    description=(
+        "Solo admin. Devuelve la IPv4 pública desde la que el backend hace sus "
+        "llamadas salientes. Es la IP que debe autorizarse en la 'Lista de IP's' "
+        "del BCRD. OJO: en Railway sin IPs estáticas esta IP puede cambiar."
+    ),
+)
+async def bcrd_egress_ip(
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    try:  # pragma: no cover - network I/O
+        resp = httpx.get("https://api4.ipify.org", params={"format": "json"}, timeout=15)
+        resp.raise_for_status()
+        ip = resp.json().get("ip", "")
+    except httpx.HTTPError as e:  # pragma: no cover - network I/O
+        raise HTTPException(status_code=502, detail=f"No se pudo determinar la IP de salida: {e}")
+    return {
+        "egress_ipv4": ip,
+        "nota": (
+            "Autoriza esta IPv4 en la 'Lista de IP's' del BCRD. En Railway sin IPs "
+            "estáticas (plan Pro) puede cambiar; para algo permanente, habilita "
+            "Static Outbound IPs y autoriza las 3 IPs asignadas."
+        ),
+    }
+
+
 # ── Publicaciones BCRD (informes oficiales en PDF, digest IA) ──────
 def _pub_summary(p: Publication) -> Dict[str, Any]:
     """Compact row for lists (no raw text; only the digest's resumen)."""
