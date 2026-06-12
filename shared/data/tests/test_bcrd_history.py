@@ -61,8 +61,20 @@ def test_parse_fx_history_month_end_usd_only():
     assert by[FX_SELL_SERIES]["2026-06"] == 59.5
 
 
+def test_parse_fx_history_dict_result_wrapper():
+    # Real prod shape: a dict whose 'result' holds the [{totalCount, items}] wrapper.
+    payload = {"result": [{
+        "totalCount": 1,
+        "items": [
+            {"currencyId": 1, "buyingValue": 11.7, "sellingValue": 11.9, "exchangeRateDate": "1991-01-31T00:00:00", "isDeleted": False},
+        ],
+    }]}
+    by = _by(parse_fx_history(payload, LIN))
+    assert by[FX_BUY_SERIES]["1991-01"] == 11.7
+
+
 def test_parse_fx_history_skips_deleted():
-    payload = [{"items": [
+    payload = [{"totalCount": 1, "items": [
         {"currencyId": 1, "buyingValue": 1.0, "sellingValue": 1.0, "exchangeRateDate": "2025-01-15", "isDeleted": True},
     ]}]
     assert parse_fx_history(payload, LIN) == []

@@ -205,15 +205,22 @@ FX_SELL_SERIES = "bcrd.sector_externo.tasas_de_cambio.venta"
 
 
 def _as_item_list(payload: Any) -> List[Any]:
-    """Pull the list of records out of a Historico* payload (bare list or wrapped)."""
+    """Pull the list of records out of a Historico* payload.
+
+    Handles the several shapes the BCRD returns: a bare list (IPC), or a dict /
+    list whose single element is a ``{totalCount, items}`` summary wrapper (FX,
+    e.g. ``{"result": [{"totalCount": 8900, "items": [...]}]}``).
+    """
     if isinstance(payload, list):
-        # FX wraps the rows in a single ``{totalCount, items}`` summary object.
-        if payload and isinstance(payload[0], dict) and "items" in payload[0]:
-            return payload[0].get("items") or []
-        return payload
-    if isinstance(payload, dict):
-        return payload.get("items") or payload.get("values") or payload.get("result") or []
-    return []
+        lst = payload
+    elif isinstance(payload, dict):
+        lst = payload.get("items") or payload.get("values") or payload.get("result") or []
+    else:
+        return []
+    # FX wraps the daily rows inside a single {totalCount, items} object — dig in.
+    if lst and isinstance(lst[0], dict) and "items" in lst[0] and "totalCount" in lst[0]:
+        return lst[0].get("items") or []
+    return lst
 
 
 def parse_ipc_history(payload: Any, lineage: Lineage) -> List[Record]:
