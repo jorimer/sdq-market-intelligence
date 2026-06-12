@@ -7,6 +7,7 @@ Extracted from financial-analysis-agent/backend/app/services/sdq_report_service.
 """
 import logging
 import os
+import re
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -20,6 +21,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
+    HRFlowable,
     Image as RLImage,
     PageBreak,
     Paragraph,
@@ -112,6 +114,24 @@ def _get_styles():
     styles.add(ParagraphStyle(
         "SDQRating", parent=styles["Title"],
         fontSize=48, alignment=TA_CENTER, spaceAfter=10,
+    ))
+    # Markdown-narrative styles
+    styles.add(ParagraphStyle(
+        "SDQBodyBold", parent=styles["Normal"],
+        fontSize=10.5, leading=14, spaceAfter=4, spaceBefore=6,
+        textColor=NAVY, fontName="Helvetica-Bold",
+    ))
+    styles.add(ParagraphStyle(
+        "SDQBullet", parent=styles["Normal"],
+        fontSize=10, leading=14, spaceAfter=4, leftIndent=12, alignment=TA_JUSTIFY,
+    ))
+    styles.add(ParagraphStyle(
+        "SDQTableHead", parent=styles["Normal"],
+        fontSize=8.5, leading=11, textColor=WHITE, fontName="Helvetica-Bold",
+    ))
+    styles.add(ParagraphStyle(
+        "SDQTableCell", parent=styles["Normal"],
+        fontSize=8.5, leading=11,
     ))
     return styles
 
@@ -256,23 +276,114 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles) -> List:
     return elements
 
 
+# ── Markdown → ReportLab renderer ─────────────────────────────────
+# The AI narratives are Markdown (headings, **bold**, GFM tables, lists, ---).
+# Render them as proper flowables instead of dumping raw markup into the PDF.
+
+# Strip non-rendering glyphs the model sometimes emits (■ ✅ 🔴 emoji…), which
+# otherwise show as tofu boxes in the base ReportLab fonts.
+_GLYPH_RE = re.compile(
+    "[▀-▟■-◿✀-➿☀-⛿\U0001f000-\U0001ffff️]"
+)
+
+
+def _md_inline(text: str) -> str:
+    """Escape XML, then convert **bold** → <b> for a ReportLab Paragraph."""
+    text = _GLYPH_RE.sub("", text)
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
+    return text.strip()
+
+
+def _md_split_row(line: str) -> List[str]:
+    t = line.strip().strip("|")
+    return [c.strip() for c in t.split("|")]
+
+
+def _md_is_sep(line: str) -> bool:
+    t = line.strip()
+    return "-" in t and "|" in t and all(re.fullmatch(r":?-{1,}:?", c) for c in _md_split_row(t))
+
+
+def _md_table(header: List[str], rows: List[List[str]], styles) -> Table:
+    data = [[Paragraph(_md_inline(c), styles["SDQTableHead"]) for c in header]]
+    for r in rows:
+        cells = (r + [""] * len(header))[: len(header)]
+        data.append([Paragraph(_md_inline(c), styles["SDQTableCell"]) for c in cells])
+    ncol = len(header)
+    table = Table(data, colWidths=[(6.5 * inch) / ncol] * ncol, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    return table
+
+
+def _md_to_flowables(text: str, styles) -> List:
+    """Convert a Markdown string into ReportLab flowables."""
+    out: List = []
+    lines = text.replace("\r", "").split("\n")
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
+        line = raw.strip()
+        if not line:
+            i += 1
+            continue
+        # GFM table: header row + separator row
+        if "|" in line and i + 1 < len(lines) and _md_is_sep(lines[i + 1]):
+            header = _md_split_row(line)
+            body: List[List[str]] = []
+            j = i + 2
+            while j < len(lines) and "|" in lines[j] and lines[j].strip():
+                body.append(_md_split_row(lines[j]))
+                j += 1
+            out.append(_md_table(header, body, styles))
+            out.append(Spacer(1, 0.08 * inch))
+            i = j
+            continue
+        if re.fullmatch(r"-{3,}", line):
+            out.append(HRFlowable(width="100%", thickness=0.5, color=LIGHT_GRAY,
+                                  spaceBefore=4, spaceAfter=4))
+            i += 1
+            continue
+        h = re.match(r"^(#{1,3})\s+(.*)$", line)
+        if h:
+            lvl = len(h.group(1))
+            style = styles["SDQSubHeading"] if lvl <= 2 else styles["SDQBodyBold"]
+            out.append(Paragraph(_md_inline(h.group(2)), style))
+            i += 1
+            continue
+        m = re.match(r"^(?:[-*]|\d+[.)])\s+(.*)$", line)
+        if m:
+            out.append(Paragraph("•&nbsp; " + _md_inline(m.group(1)), styles["SDQBullet"]))
+            i += 1
+            continue
+        # Plain paragraph — gather following non-blank, non-special lines.
+        buf = [line]
+        i += 1
+        while i < len(lines) and lines[i].strip() and not re.match(
+            r"^(#{1,3}\s|[-*]\s|\d+[.)]\s|-{3,}$)", lines[i].strip()
+        ) and "|" not in lines[i]:
+            buf.append(lines[i].strip())
+            i += 1
+        out.append(Paragraph(_md_inline(" ".join(buf)), styles["SDQBody"]))
+    return out
+
+
 def _build_narrative_sections(narratives: Dict[str, str], styles) -> List:
     elements: List = []
     for section_key, text in narratives.items():
         title = NARRATIVE_SECTION_TITLES.get(
             section_key, section_key.replace("_", " ").title(),
         )
-        elements.append(Paragraph(title, styles["SDQSubHeading"]))
-        for para in text.split("\n\n"):
-            para = para.strip()
-            if para:
-                # Escape XML special characters for ReportLab
-                safe = (
-                    para.replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-                )
-                elements.append(Paragraph(safe, styles["SDQBody"]))
+        elements.append(Paragraph(title, styles["SDQHeading"]))
+        elements.extend(_md_to_flowables(text or "", styles))
         elements.append(Spacer(1, 0.2 * inch))
     return elements
 
