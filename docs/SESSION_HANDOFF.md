@@ -1,3 +1,42 @@
+# Handoff — SDQ·MIP (2026-06-11, sesión 8)
+
+## Cartera (Mayores Deudores), CR10 de mercado y reportes (PRs #104–#108)
+
+### Concentración de Mayores Deudores — cierra el N/D de `concentracion_top10` (PRs #105/#106)
+El cubo `carteras/creditos` (que ya streameábamos para el HHI sectorial) trae
+`tipoCredito="Créditos Comerciales a Mayores Deudores"` + `clasificacionEntidad` (A–E) +
+`deudaVencida`. `_compute_carteras_metrics` ahora agrega en la MISMA pasada: HHI + total +
+Mayores Deudores + vigente-A + vencida (salta rollups `sectorEconomico=TODOS`). Inyecta
+**solo** `suma_top10`(=Mayores Deudores) + `cartera_total` del cubo → llena el indicador
+por-banco que estaba N/D, **sin** tocar morosidad/%vigente (que ya usan ratios precomputados;
+tocarlos los distorsiona). Distribución real verificada y sensata (banca múltiple 35–99%,
+retail/AAyP 0–15%; la curva discrimina bien — no recalibrada).
+- **Operación**: `POST /data/recompute-carteras?period=YYYY-MM` re-streamea UN trimestre y
+  rescore (rápido). Poblados 2025-12 y 2026-03. **Pendiente**: backfill histórico 2021–2025
+  (job ~3h; correr fuera de ventana de deploys).
+
+### CR10 de concentración de mercado (PR #104)
+`concentracion_top10` por-banco (mayores deudores) ≠ **CR10 de mercado**. Nuevo
+`scoring/market_concentration.py` + `GET /market-concentration` + card en Dashboard: CR5/CR10/HHI
+del universo EIF por activos/depósitos/cartera. Real DR @2026-Q1: activos CR10 91.7%, HHI 1856.
+**No** es input del rating — es estructura de mercado.
+
+### Reportes PDF — formato + profundidad (PRs #107/#108)
+Feedback del usuario: pobre formato + análisis repetitivo. (1) Las narrativas IA son Markdown
+pero el PDF las metía como texto plano → salían `#`/`**`/pipes/■ crudos. Nuevo renderer
+Markdown→ReportLab (encabezados, negritas, **tablas GFM**, listas, divisores; glyphs limpiados).
+(2) Cada sub-componente corría un SCQA del banco entero (repetitivo) → nuevo template
+`subcomponent_focus` + contexto acotado (solo los indicadores de esa dimensión + impulsor/lastre)
+→ análisis enfocado y profundo por dimensión. Verificado generando un informe fresco de Banreservas.
+- **Pendiente menor**: `*italic*` simple no se convierte; "Vs pares" dice "no aplicable" porque no
+  se pasan benchmarks al template (cablear medianas sectoriales sería el siguiente paso).
+
+### IA + drill-down en fiduciarias
+- Entidades fiduciarias: **sí** (reusan el `EntityInsightDrawer` desde Rankings — verificado).
+- Fideicomisos públicos: **no** (tabla plana); agregar drawer + IA queda como opción.
+
+---
+
 # Handoff — SDQ·MIP (2026-06-11, sesión 7)
 
 ## Submodelo de Fiduciarias (Eje 1) — NUEVO, en prod (PRs #92–#96)
