@@ -178,7 +178,12 @@ export function MacroMonitorPage() {
                     const tm = TREND_META[i.trend] ?? TREND_META.estable;
                     return (
                       <tr key={i.series_code} className="border-b border-line/60 last:border-0">
-                        <td className="py-2.5 px-1 text-ink">{i.series_code}</td>
+                        <td className="py-2.5 px-1 text-ink" title={i.series_code}>
+                          {i.label ?? i.series_code}
+                          {i.unit ? (
+                            <span className="text-muted text-xs ml-1">({i.unit})</span>
+                          ) : null}
+                        </td>
                         <td className="py-2.5 px-1 text-right mono text-ink">
                           {fmtNum(i.latest_value, 1)}
                         </td>
@@ -249,11 +254,14 @@ export function MacroMonitorPage() {
             <select
               value={seriesCode}
               onChange={(e) => setSeriesCode(e.target.value)}
-              className="field !w-auto mono text-xs"
+              className="field !w-auto text-xs"
               title="Serie"
             >
               {indicators.map((i) => (
-                <option key={i.series_code} value={i.series_code}>{i.series_code}</option>
+                <option key={i.series_code} value={i.series_code}>
+                  {i.label ?? i.series_code}
+                  {i.unit ? ` (${i.unit})` : ""}
+                </option>
               ))}
             </select>
           }

@@ -5,7 +5,9 @@ from shared.data.bcrd_client import (
     _period_from_date,
     _period_from_label,
     _slug,
+    humanize_series_code,
     parse_variable,
+    series_label,
 )
 from shared.data.lineage import Lineage
 
@@ -34,6 +36,13 @@ def test_period_from_label_months_and_ranges():
     assert _period_from_label("Diciembre 2025") == "2025-12"
     assert _period_from_label("Ene-Abr 2026") is None  # range → skip
     assert _period_from_label("") is None
+
+
+def test_period_from_label_bare_year():
+    assert _period_from_label("2023") == "2023"
+    assert _period_from_label("2024") == "2024"
+    assert _period_from_label("23") is None  # not 4 digits
+    assert _period_from_label("20XX") is None
 
 
 # ── value-group (metrics are series, period from date) ────────────
@@ -126,3 +135,47 @@ def test_parse_handles_missing_and_non_numeric_values():
 def test_parse_empty_payload():
     assert parse_variable("inflacion", {}, LINEAGE, "2026-06") == []
     assert parse_variable("inflacion", None, LINEAGE, "2026-06") == []
+
+
+# ── bare-year period group (annual current-account series) ────────
+def test_parse_bare_year_metrics_become_annual_period_group():
+    payload = {
+        "name": "Sector Externo",
+        "values": [{
+            "name": "Cuentas Corrientes",
+            "values": [
+                {"name": "2023", "value": -3.7},
+                {"name": "2024", "value": -3.0},
+                {"name": "2025", "value": -1.2},
+            ],
+        }],
+    }
+    recs = parse_variable("sector_externo", payload, LINEAGE, "2026-06")
+    by = {(r.series, r.period): r for r in recs}
+    # one series, three annual periods — NOT the default period, NOT year-in-code
+    assert len(recs) == 3
+    assert all(r.series == "bcrd.sector_externo.cuentas_corrientes" for r in recs)
+    assert by[("bcrd.sector_externo.cuentas_corrientes", "2023")].value == -3.7
+    assert by[("bcrd.sector_externo.cuentas_corrientes", "2025")].value == -1.2
+
+
+# ── human-readable labels ─────────────────────────────────────────
+def test_series_label_explicit_map():
+    lbl = series_label("bcrd.inflacion.inflacion.interanual")
+    assert lbl == {"label": "Inflación interanual", "unit": "%"}
+    assert series_label("bcrd.sector_externo.reservas_internacionales.brutas") == {
+        "label": "Reservas internacionales brutas", "unit": "US$ MM",
+    }
+    assert series_label("gdp_growth") == {"label": "Crecimiento del PIB", "unit": "%"}
+
+
+def test_series_label_falls_back_to_humanized_slug():
+    lbl = series_label("bcrd.sector_externo.algo_nuevo.detalle")
+    assert lbl["unit"] is None
+    assert lbl["label"] == "Sector externo · algo nuevo · detalle"
+
+
+def test_humanize_collapses_repeats_and_drops_prefix():
+    # drops "bcrd", collapses the repeated "inflacion" segment
+    assert humanize_series_code("bcrd.inflacion.inflacion.mensual") == "Inflacion · mensual"
+    assert humanize_series_code("custom_code") == "Custom code"

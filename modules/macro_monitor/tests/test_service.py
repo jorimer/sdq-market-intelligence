@@ -93,6 +93,12 @@ def test_get_indicators_and_snapshot(db):
     codes = {i["series_code"] for i in indicators}
     assert {"gdp_growth", "inflation_yoy", "remittances", "public_debt_gdp"} <= codes
 
+    # each indicator carries a human label + unit for the UI
+    by_code = {i["series_code"]: i for i in indicators}
+    assert by_code["gdp_growth"]["label"] == "Crecimiento del PIB"
+    assert by_code["gdp_growth"]["unit"] == "%"
+    assert all("label" in i and "unit" in i for i in indicators)
+
     latest = get_snapshot(db)
     assert latest is not None
     assert latest.period == "2025-Q2"

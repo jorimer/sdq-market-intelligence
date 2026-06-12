@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.data.base_client import SourceClient
-from shared.data.bcrd_client import bcrd_client, resolve_bcrd_client
+from shared.data.bcrd_client import bcrd_client, resolve_bcrd_client, series_label
 from modules.macro_monitor.events import publish_macro_updated
 from modules.macro_monitor.models.models import MacroSeries, MacroSnapshot
 from modules.macro_monitor.scoring.momentum import compute_series_momentum
@@ -138,7 +138,7 @@ def get_indicators(db: Session) -> List[Dict[str, Any]]:
     out = []
     for code, obs in sorted(grouped.items()):
         m = compute_series_momentum(obs)
-        out.append({"series_code": code, **m})
+        out.append({"series_code": code, **series_label(code), **m})
     return out
 
 
