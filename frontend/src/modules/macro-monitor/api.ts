@@ -51,3 +51,9 @@ export async function getSeries(code: string): Promise<SeriesDetail> {
   const { data } = await client.get(`/macro-monitor/series/${code}`);
   return data;
 }
+
+/** Admin: borra todas las observaciones de un series_code. Devuelve cuántas se borraron. */
+export async function deleteSeries(code: string): Promise<number> {
+  const { data } = await client.delete(`/macro-monitor/series/${encodeURIComponent(code)}`);
+  return data.deleted ?? 0;
+}
