@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.data.base_client import SourceClient
-from shared.data.bcrd_client import bcrd_client
+from shared.data.bcrd_client import bcrd_client, resolve_bcrd_client
 from modules.macro_monitor.events import publish_macro_updated
 from modules.macro_monitor.models.models import MacroSeries, MacroSnapshot
 from modules.macro_monitor.scoring.momentum import compute_series_momentum
@@ -30,8 +30,14 @@ DEBT_SERIES = "public_debt_gdp"
 FLOW_SERIES = {"remittances", "fdi", "reserves", "exports", "capital_flows"}
 
 
-def ingest_series(db: Session, client: SourceClient = bcrd_client) -> int:
-    """Upsert observations from *client* into MacroSeries.  Returns rows touched."""
+def ingest_series(db: Session, client: Optional[SourceClient] = None) -> int:
+    """Upsert observations from *client* into MacroSeries.  Returns rows touched.
+
+    When *client* is omitted, resolves the BCRD source: live API if a token is
+    configured+enabled (Configuración → BCRD), otherwise the local fixture.
+    """
+    if client is None:
+        client = resolve_bcrd_client(db)
     records = client.fetch()
     touched = 0
     for r in records:

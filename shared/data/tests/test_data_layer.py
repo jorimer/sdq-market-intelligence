@@ -54,7 +54,8 @@ class TestFixtureFetch:
         assert r.lineage.source == "BCRD"
         assert r.lineage.fetched_at is not None
 
-    def test_live_mode_not_implemented_yet(self):
+    def test_live_mode_without_token_degrades_gracefully(self):
+        # BCRD live mode is implemented (Eje 2); with no token every variable
+        # fails its credential check and we return [] rather than raising.
         from shared.data.bcrd_client import BCRDClient
-        with pytest.raises(NotImplementedError):
-            BCRDClient(mode="live").fetch()
+        assert BCRDClient(mode="live").fetch() == []
