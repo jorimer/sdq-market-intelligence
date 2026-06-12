@@ -253,3 +253,31 @@ class TestReportIntegration:
         )
         assert os.path.exists(filepath)
         assert os.path.getsize(filepath) > 10_000  # Substantial PDF
+
+
+# ── Markdown → ReportLab renderer ────────────────────────────────
+
+def test_md_renderer_handles_headings_bold_tables_and_glyphs():
+    from reportlab.platypus import Table, Paragraph, HRFlowable
+    from modules.banking_score.reports.pdf_generator import _md_to_flowables, _get_styles, _md_inline
+    styles = _get_styles()
+    md = (
+        "# Resumen\n\n"
+        "## Situación\n\n"
+        "Posición **sólida** del banco.\n\n"
+        "### ■ Alerta ✅\n\n"
+        "| Factor | Score |\n|---|---|\n| Cost-to-Income | 23 |\n| Tier 1 | 0 |\n\n"
+        "- Punto **uno**\n- Punto dos\n\n"
+        "---\n"
+    )
+    flow = _md_to_flowables(md, styles)
+    # A real Table flowable is produced (not raw pipe text).
+    assert any(isinstance(f, Table) for f in flow)
+    assert any(isinstance(f, HRFlowable) for f in flow)
+    assert any(isinstance(f, Paragraph) for f in flow)
+    # Non-rendering glyphs are stripped; **bold** → <b>.
+    assert "■" not in _md_inline("### ■ Alerta ✅")
+    assert "✅" not in _md_inline("✅ ok")
+    assert _md_inline("Posición **sólida**") == "Posición <b>sólida</b>"
+    # XML special chars escaped.
+    assert _md_inline("a < b & c") == "a &lt; b &amp; c"
