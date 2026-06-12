@@ -89,11 +89,34 @@ export function DataSourcesSection() {
   );
 }
 
-/* ── Claude API key ──────────────────────────────────────────── */
+/* ── Claude API key + global Cloudflare proxy ────────────────── */
 function ClaudeKeyCard({ data, onSaved }: { data: AppSettings; onSaved: () => void }) {
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  // Global Cloudflare WAF proxy — entered once, shared by every source behind the WAF.
+  const [proxyUrl, setProxyUrl] = useState(data.cloudflareProxyUrl || "");
+  const [proxySecret, setProxySecret] = useState("");
+  const [savingProxy, setSavingProxy] = useState(false);
+  const [proxyMsg, setProxyMsg] = useState("");
+
+  async function saveProxy() {
+    setSavingProxy(true);
+    setProxyMsg("");
+    try {
+      await settingsApi.update({
+        cloudflareProxyUrl: proxyUrl,
+        ...(proxySecret ? { cloudflareProxySecret: proxySecret } : {}),
+      });
+      setProxySecret("");
+      setProxyMsg("Guardado");
+      onSaved();
+    } catch {
+      setProxyMsg("Error al guardar");
+    } finally {
+      setSavingProxy(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -131,6 +154,39 @@ function ClaudeKeyCard({ data, onSaved }: { data: AppSettings; onSaved: () => vo
         </button>
       </div>
       {msg && <p className="text-xs text-muted mt-2">{msg}</p>}
+
+      {/* Global Cloudflare WAF proxy — one credential for all sources behind the WAF. */}
+      <div className="mt-5 pt-4 border-t border-line">
+        <label className="block text-xs font-medium text-muted mb-1">Proxy Cloudflare (WAF)</label>
+        <p className="text-[11px] text-faint mb-2">
+          Credencial única para todas las fuentes detrás del WAF (hoy: SIB). Se introduce una sola vez.
+        </p>
+        <div className="space-y-2">
+          <input
+            className="field mono w-full"
+            placeholder="URL del Worker (https://…workers.dev)"
+            value={proxyUrl}
+            onChange={(e) => setProxyUrl(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <input
+              type="password"
+              className="field mono flex-1"
+              placeholder={data.cloudflareProxySecretSet ? MASK + " (configurado)" : "X-Proxy-Secret"}
+              value={proxySecret}
+              onChange={(e) => setProxySecret(e.target.value)}
+            />
+            <button
+              className="btn btn-primary shrink-0"
+              disabled={savingProxy || (!proxyUrl && !proxySecret)}
+              onClick={saveProxy}
+            >
+              {savingProxy ? <Loader2 size={15} className="animate-spin" /> : "Guardar"}
+            </button>
+          </div>
+        </div>
+        {proxyMsg && <p className="text-xs text-muted mt-2">{proxyMsg}</p>}
+      </div>
     </Card>
   );
 }
@@ -333,18 +389,18 @@ function SectorApiEditor({
           value={form.sector ?? ""} onChange={(v) => set("sector", v)} />
         <LabeledInput label="URL base" placeholder="https://apis.sb.gob.do/estadisticas/v2"
           value={form.baseUrl ?? ""} onChange={(v) => set("baseUrl", v)} />
-        <LabeledInput label="Clave de API" type="password" mono
+        <LabeledInput label={existing?.needsSecondary ? "Clave de API (primaria)" : "Clave de API / Token"}
+          type="password" mono
           placeholder={secretPlaceholder(existing?.apiKeySet)}
           value={form.apiKey ?? ""} onChange={(v) => set("apiKey", v)} />
-        <LabeledInput label="Clave secundaria" type="password" mono
-          placeholder={secretPlaceholder(existing?.apiKeySecondarySet)}
-          value={form.apiKeySecondary ?? ""} onChange={(v) => set("apiKeySecondary", v)} />
-        <LabeledInput label="URL del proxy (Cloudflare Worker)" placeholder="https://…workers.dev"
-          value={form.proxyUrl ?? ""} onChange={(v) => set("proxyUrl", v)} />
-        <LabeledInput label="Secreto del proxy" type="password" mono
-          placeholder={secretPlaceholder(existing?.proxySecretSet)}
-          value={form.proxySecret ?? ""} onChange={(v) => set("proxySecret", v)} />
+        {/* Secondary key only for Azure-APIM sources (SIB); BCRD etc. use a single token. */}
+        {existing?.needsSecondary && (
+          <LabeledInput label="Clave secundaria" type="password" mono
+            placeholder={secretPlaceholder(existing?.apiKeySecondarySet)}
+            value={form.apiKeySecondary ?? ""} onChange={(v) => set("apiKeySecondary", v)} />
+        )}
       </div>
+      {/* The Cloudflare proxy is now a single global credential (top card), not per-source. */}
 
       <label className="flex items-center gap-2 mt-3 text-sm text-body">
         <input type="checkbox" checked={form.enabled ?? true} onChange={(e) => set("enabled", e.target.checked)} />

@@ -20,6 +20,7 @@ class SectorApiOut(BaseModel):
     baseUrl: str = ""
     proxyUrl: str = ""
     enabled: bool = True
+    needsSecondary: bool = False  # only Azure-APIM SIB; others use a single token
     # Write-only secrets surface only as "is set" flags + a masked placeholder.
     apiKeySet: bool = False
     apiKeySecondarySet: bool = False
@@ -48,12 +49,17 @@ class SectorApiIn(BaseModel):
 class SettingsOut(BaseModel):
     claudeApiKeySet: bool = False
     defaultLanguage: str = "es"
+    # Global Cloudflare WAF proxy (shared by all sources behind the WAF).
+    cloudflareProxyUrl: str = ""
+    cloudflareProxySecretSet: bool = False
     sectorApis: List[SectorApiOut] = []
 
 
 class SettingsIn(BaseModel):
     claudeApiKey: Optional[str] = None
     defaultLanguage: Optional[str] = None
+    cloudflareProxyUrl: Optional[str] = None
+    cloudflareProxySecret: Optional[str] = None
     sectorApis: Optional[List[SectorApiIn]] = None
 
 
