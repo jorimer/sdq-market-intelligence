@@ -13,6 +13,9 @@ from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
 from shared.data.bcrd_api import BCRD_VARIABLES, fetch_bcrd_variable
 from shared.database.session import get_db
+from shared.publications import catalog as pub_catalog
+from shared.publications import service as pub_service
+from shared.publications.models import Publication
 from shared.settings.service import get_sector_api_base_url, get_sector_api_key
 from modules.macro_monitor.service import (
     build_snapshot,
@@ -180,3 +183,114 @@ async def bcrd_test(
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Error de transporte hacia el BCRD: {e}")
     return {"variable": variable, "shape": _describe_shape(payload)}
+
+
+# ── Publicaciones BCRD (informes oficiales en PDF, digest IA) ──────
+def _pub_summary(p: Publication) -> Dict[str, Any]:
+    """Compact row for lists (no raw text; only the digest's resumen)."""
+    digest = p.digest or {}
+    return {
+        "id": p.id,
+        "report_key": p.report_key,
+        "report_name": p.report_name,
+        "period": p.period,
+        "title": p.title,
+        "source_url": p.source_url,
+        "landing_url": p.landing_url,
+        "sectors": p.sectors or [],
+        "status": p.status,
+        "published_at": p.published_at,
+        "resumen": digest.get("resumen", ""),
+        "has_digest": bool(digest.get("resumen") or digest.get("hallazgos")),
+    }
+
+
+@router.get(
+    "/publications",
+    summary="Listado de publicaciones BCRD ingeridas",
+    description="Informes del BCRD con su digest IA. Filtra por 'report_key' (opcional).",
+)
+async def list_publications(
+    report_key: Optional[str] = Query(None, description="Clave del informe (opcional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    rows = pub_service.list_publications(db, report_key)
+    return {"publications": [_pub_summary(r) for r in rows], "count": len(rows)}
+
+
+@router.get(
+    "/publications/catalog",
+    summary="Catálogo + calendario de informes BCRD",
+    description="Los informes recurrentes (cadencia, sectores, link al BCRD) y el último período ingerido de cada uno.",
+)
+async def publications_catalog(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    latest = {
+        r.report_key: r.period
+        for r in db.query(Publication).filter_by(status="ok").order_by(Publication.period.asc()).all()
+    }
+    reports = [
+        {
+            "key": spec.key,
+            "name": spec.name,
+            "cadence": spec.cadence,
+            "sectors": list(spec.sectors),
+            "landing_url": spec.landing_url,
+            "latest_ingested_period": latest.get(spec.key),
+        }
+        for spec in pub_catalog.REPORTS.values()
+    ]
+    return {"reports": reports, "count": len(reports)}
+
+
+@router.get(
+    "/publications/{pub_id}",
+    summary="Detalle de una publicación (con digest completo)",
+)
+async def publication_detail(
+    pub_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    p = pub_service.get_publication(db, pub_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Publicación no encontrada")
+    out = _pub_summary(p)
+    out["digest"] = p.digest or {}
+    out["error"] = p.error
+    return out
+
+
+@router.post(
+    "/publications/refresh",
+    summary="Ingerir la última edición de los informes BCRD (admin)",
+    description=(
+        "Descarga, extrae y genera el digest IA de la última edición disponible. "
+        "Idempotente: omite ediciones ya ingeridas salvo 'force'. Indica 'report_key' "
+        "para procesar uno solo (más rápido)."
+    ),
+)
+async def refresh_publications(
+    report_key: Optional[str] = Query(None, description="Procesar solo este informe"),
+    force: bool = Query(False, description="Re-ingerir aunque ya exista"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    if report_key and report_key not in pub_catalog.REPORTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Informe desconocido: {report_key}. Opciones: {', '.join(pub_catalog.report_keys())}",
+        )
+    keys = [report_key] if report_key else pub_catalog.report_keys()
+    results = []
+    for key in keys:
+        row = pub_service.ingest_report(db, key, force=force)
+        if row is None:
+            results.append({"report_key": key, "status": "unavailable", "period": None})
+        else:
+            results.append({"report_key": key, "status": row.status, "period": row.period})
+    ingested = sum(1 for r in results if r["status"] == "ok")
+    return {"ingested_ok": ingested, "results": results}
