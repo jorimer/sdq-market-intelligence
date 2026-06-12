@@ -39,6 +39,7 @@ KNOWN_PROVIDERS = [
         "sector": "banking",
         "baseUrl": app_settings.SIB_API_BASE_URL,
         "requires_key": True,
+        "needs_secondary": True,  # Azure APIM: primary + secondary subscription keys
         "needs_proxy": True,
         "notes": "Clave en desarrollador.sb.gob.do (Azure APIM). Requiere proxy Cloudflare (WAF).",
     },
@@ -77,14 +78,14 @@ KNOWN_PROVIDERS = [
     },
     {
         "provider": "wgi",
-        "providerName": "Banco Mundial — WGI",
-        "apiName": "World Bank Indicators API",
+        "providerName": "Banco Mundial — Data360 (WGI/WDI)",
+        "apiName": "World Bank Data360 API",
         "country": "DO",
         "sector": "governance",
-        "baseUrl": "https://api.worldbank.org/v2",
+        "baseUrl": "https://data360api.worldbank.org",
         "requires_key": False,
         "needs_proxy": False,
-        "notes": "Pública (CC BY). Sin clave.",
+        "notes": "Pública (CC BY), sin clave. Endpoint /data360/data (REF_AREA=DOM, paginado por skip).",
     },
 ]
 
@@ -94,6 +95,15 @@ def _known_base_url(provider: str) -> str:
         if src["provider"] == provider:
             return src.get("baseUrl", "")
     return ""
+
+
+def _provider_needs_secondary(provider: str) -> bool:
+    """Whether a provider uses a secondary key (only Azure-APIM SIB). Others (e.g.
+    BCRD) get a single token, so the UI hides the secondary field."""
+    for src in KNOWN_PROVIDERS:
+        if src["provider"] == provider:
+            return bool(src.get("needs_secondary", False))
+    return False
 
 
 def ensure_known_sources(db: Session) -> int:
@@ -125,6 +135,10 @@ def ensure_known_sources(db: Session) -> int:
 
 _CLAUDE_KEY = "claude_api_key"
 _LANG_KEY = "default_language"
+# Cloudflare WAF proxy — GLOBAL (one credential shared by every source behind the
+# WAF), like the Claude key. Replaces the per-provider proxy fields.
+_PROXY_URL_KEY = "cloudflare_proxy_url"
+_PROXY_SECRET_KEY = "cloudflare_proxy_secret"
 
 
 # ── App-level key/value ───────────────────────────────────────────
@@ -150,6 +164,34 @@ def get_claude_api_key(db: Session) -> str:
     return app_settings.ANTHROPIC_API_KEY
 
 
+def get_proxy_config(db: Session) -> tuple:
+    """Resolve the GLOBAL Cloudflare proxy ``(url, secret)``. Falls back to the
+    banking source's per-config proxy (pre-migration / backward compat)."""
+    url_row = _get_app_setting(db, _PROXY_URL_KEY)
+    sec_row = _get_app_setting(db, _PROXY_SECRET_KEY)
+    url = (url_row.value if url_row else "") or ""
+    secret = decrypt(sec_row.value) if (sec_row and sec_row.value) else ""
+    if url and secret:
+        return url, secret
+    # Backward-compat: the live SIB proxy used to live on its SectorApiConfig.
+    cfg = find_banking_source(db)
+    if cfg and cfg.proxy_url:
+        return cfg.proxy_url, decrypt(cfg.proxy_secret_enc or "")
+    return url, secret
+
+
+def _migrate_proxy_to_global(db: Session) -> None:
+    """One-time: if no global proxy is set but the SIB source carries one, copy it
+    to the global setting so the operator manages it in a single place."""
+    if _get_app_setting(db, _PROXY_URL_KEY):
+        return
+    cfg = find_banking_source(db)
+    if cfg and cfg.proxy_url and (decrypt(cfg.proxy_secret_enc or "")):
+        _set_app_setting(db, _PROXY_URL_KEY, cfg.proxy_url, is_secret=False)
+        _set_app_setting(db, _PROXY_SECRET_KEY, decrypt(cfg.proxy_secret_enc or ""), is_secret=True)
+        db.commit()
+
+
 # ── Serialization (masked) ────────────────────────────────────────
 def _to_out(cfg: SectorApiConfig) -> SectorApiOut:
     api_key = decrypt(cfg.api_key_enc or "")
@@ -163,6 +205,7 @@ def _to_out(cfg: SectorApiConfig) -> SectorApiOut:
         baseUrl=cfg.base_url,
         proxyUrl=cfg.proxy_url,
         enabled=cfg.enabled,
+        needsSecondary=_provider_needs_secondary(cfg.provider),
         apiKeySet=bool(api_key),
         apiKeySecondarySet=bool(decrypt(cfg.api_key_secondary_enc or "")),
         proxySecretSet=bool(decrypt(cfg.proxy_secret_enc or "")),
@@ -175,12 +218,16 @@ def _to_out(cfg: SectorApiConfig) -> SectorApiOut:
 
 def get_settings(db: Session) -> SettingsOut:
     ensure_known_sources(db)  # pre-populate discovered sources (idempotent)
+    _migrate_proxy_to_global(db)  # one-time: SIB per-config proxy → global
     claude = _get_app_setting(db, _CLAUDE_KEY)
     lang = _get_app_setting(db, _LANG_KEY)
+    proxy_url, proxy_secret = get_proxy_config(db)
     apis = db.query(SectorApiConfig).order_by(SectorApiConfig.sector, SectorApiConfig.provider).all()
     return SettingsOut(
         claudeApiKeySet=bool((claude and claude.value) or app_settings.ANTHROPIC_API_KEY),
         defaultLanguage=(lang.value if lang and lang.value else app_settings.DEFAULT_LANGUAGE),
+        cloudflareProxyUrl=proxy_url,
+        cloudflareProxySecretSet=bool(proxy_secret),
         sectorApis=[_to_out(c) for c in apis],
     )
 
@@ -227,6 +274,10 @@ def update_settings(db: Session, payload: SettingsIn) -> SettingsOut:
         _set_app_setting(db, _CLAUDE_KEY, payload.claudeApiKey, is_secret=True)
     if payload.defaultLanguage is not None:
         _set_app_setting(db, _LANG_KEY, payload.defaultLanguage, is_secret=False)
+    if payload.cloudflareProxyUrl is not None:
+        _set_app_setting(db, _PROXY_URL_KEY, payload.cloudflareProxyUrl, is_secret=False)
+    if payload.cloudflareProxySecret is not None and payload.cloudflareProxySecret != MASK:
+        _set_app_setting(db, _PROXY_SECRET_KEY, payload.cloudflareProxySecret, is_secret=True)
     if payload.sectorApis is not None:
         for api in payload.sectorApis:
             _upsert_sector_api(db, api)
@@ -302,22 +353,22 @@ def find_banking_source(db: Session) -> Optional[SectorApiConfig]:
 def get_sib_credentials(db: Session) -> Dict[str, str]:
     """Resolve SIB credentials for the banking connector (sector-based, see
     :func:`find_banking_source`), with env/config fallbacks."""
+    proxy_url, proxy_secret = get_proxy_config(db)
     cfg = find_banking_source(db)
     if cfg:
-        proxy_url = cfg.proxy_url or ""
         return {
             "api_key": decrypt(cfg.api_key_enc or "") or app_settings.SIB_API_KEY,
             "api_key_secondary": decrypt(cfg.api_key_secondary_enc or ""),
             "base_url": cfg.base_url or app_settings.SIB_API_BASE_URL,
             "proxy_url": proxy_url,
-            "proxy_secret": decrypt(cfg.proxy_secret_enc or "") if proxy_url else "",
+            "proxy_secret": proxy_secret,
         }
     return {
         "api_key": app_settings.SIB_API_KEY,
         "api_key_secondary": "",
         "base_url": app_settings.SIB_API_BASE_URL,
-        "proxy_url": "",
-        "proxy_secret": "",
+        "proxy_url": proxy_url,
+        "proxy_secret": proxy_secret,
     }
 
 
@@ -347,10 +398,18 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
     secondary = payload.apiKeySecondary if payload.apiKeySecondary not in (None, MASK) else (
         decrypt(cfg.api_key_secondary_enc) if cfg and cfg.api_key_secondary_enc else ""
     )
-    proxy_url = (payload.proxyUrl if payload.proxyUrl is not None else (cfg.proxy_url if cfg else "")) or ""
-    proxy_secret = payload.proxySecret if payload.proxySecret not in (None, MASK) else (
-        decrypt(cfg.proxy_secret_enc) if cfg and cfg.proxy_secret_enc else ""
-    )
+    # Proxy: explicit override → per-provider (legacy) → GLOBAL Cloudflare proxy.
+    g_url, g_secret = get_proxy_config(db)
+    proxy_url = (
+        payload.proxyUrl if payload.proxyUrl is not None
+        else ((cfg.proxy_url if cfg else "") or g_url)
+    ) or ""
+    if payload.proxySecret not in (None, MASK):
+        proxy_secret = payload.proxySecret
+    elif cfg and cfg.proxy_secret_enc:
+        proxy_secret = decrypt(cfg.proxy_secret_enc)
+    else:
+        proxy_secret = g_secret
 
     if not base:
         return _persist_test(db, cfg, "error", "Falta la URL base.", None)

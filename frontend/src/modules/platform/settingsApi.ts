@@ -10,6 +10,7 @@ export interface SectorApi {
   baseUrl: string;
   proxyUrl: string;
   enabled: boolean;
+  needsSecondary: boolean;
   apiKeySet: boolean;
   apiKeySecondarySet: boolean;
   proxySecretSet: boolean;
@@ -22,6 +23,8 @@ export interface SectorApi {
 export interface AppSettings {
   claudeApiKeySet: boolean;
   defaultLanguage: string;
+  cloudflareProxyUrl: string;
+  cloudflareProxySecretSet: boolean;
   sectorApis: SectorApi[];
 }
 
@@ -43,6 +46,8 @@ export interface SectorApiInput {
 export interface SettingsInput {
   claudeApiKey?: string;
   defaultLanguage?: string;
+  cloudflareProxyUrl?: string;
+  cloudflareProxySecret?: string;
   sectorApis?: SectorApiInput[];
 }
 

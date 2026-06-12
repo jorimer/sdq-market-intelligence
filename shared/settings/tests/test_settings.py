@@ -261,3 +261,42 @@ def test_non_admin_forbidden(db, role):
     c = _client(db, role)
     assert c.get("/api/v1/settings").status_code == 403
     assert c.put("/api/v1/settings", json={}).status_code == 403
+
+
+def test_global_cloudflare_proxy_set_and_resolved(db):
+    """The proxy is a single global credential (like the Claude key)."""
+    from shared.settings.schemas import SettingsIn
+    service.update_settings(db, SettingsIn(
+        cloudflareProxyUrl="https://proxy.example.workers.dev",
+        cloudflareProxySecret="s3cr3t",
+    ))
+    out = service.get_settings(db)
+    assert out.cloudflareProxyUrl == "https://proxy.example.workers.dev"
+    assert out.cloudflareProxySecretSet is True
+    # The secret is never echoed back; resolution returns it for connectors.
+    url, secret = service.get_proxy_config(db)
+    assert url == "https://proxy.example.workers.dev" and secret == "s3cr3t"
+    # SIB credentials now resolve the proxy from the global setting.
+    creds = service.get_sib_credentials(db)
+    assert creds["proxy_url"] == "https://proxy.example.workers.dev"
+    assert creds["proxy_secret"] == "s3cr3t"
+
+
+def test_per_provider_proxy_migrates_to_global(db):
+    """An existing SIB per-config proxy is copied to the global setting once."""
+    from shared.settings.schemas import SectorApiIn, SettingsIn
+    service.update_settings(db, SettingsIn(sectorApis=[SectorApiIn(
+        provider="sb_do", sector="banking", baseUrl="https://apis.sb.gob.do",
+        apiKey="k", proxyUrl="https://old-proxy.workers.dev", proxySecret="oldsecret",
+    )]))
+    service._migrate_proxy_to_global(db)
+    url, secret = service.get_proxy_config(db)
+    assert url == "https://old-proxy.workers.dev" and secret == "oldsecret"
+
+
+def test_needs_secondary_flag(db):
+    """SIB (Azure APIM) needs a secondary key; BCRD (single token) does not."""
+    out = service.get_settings(db)
+    by_provider = {a.provider: a for a in out.sectorApis}
+    assert by_provider["sb_do"].needsSecondary is True
+    assert by_provider["bcrd"].needsSecondary is False
