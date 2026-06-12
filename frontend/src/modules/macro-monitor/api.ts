@@ -2,6 +2,8 @@ import client from "@/shared/api/client";
 
 export interface MacroIndicator {
   series_code: string;
+  label: string;
+  unit: string | null;
   latest_period: string | null;
   latest_value: number | null;
   change: number | null;
