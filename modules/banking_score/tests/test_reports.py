@@ -281,3 +281,29 @@ def test_md_renderer_handles_headings_bold_tables_and_glyphs():
     assert _md_inline("Posición **sólida**") == "Posición <b>sólida</b>"
     # XML special chars escaped.
     assert _md_inline("a < b & c") == "a &lt; b &amp; c"
+
+
+def test_subcomponent_sections_get_focused_context():
+    """Sub-component sections analyse ONLY their dimension (no whole-bank re-derivation)."""
+    from modules.banking_score.reports.narrative import _build_section_context, _SECTION_TO_TEMPLATE
+    sr = {
+        "overall_score": 80, "rating_tier": "SDQ-AA-",
+        "sub_components": {"solidez": 75, "calidad": 92},
+        "indicators": {
+            "solvencia": {"score": 100, "raw": 16, "available": True},
+            "patrimonio_activos": {"score": 60, "raw": 9, "available": True},
+            "morosidad": {"score": 92, "raw": 0.7, "available": True},  # calidad — must be excluded
+        },
+    }
+    assert _SECTION_TO_TEMPLATE["solidez_financiera"] == "subcomponent_focus"
+    ctx = _build_section_context("solidez_financiera", "Banreservas", sr, "2025-12")
+    assert ctx["sub_componente"] == "Solidez Financiera"
+    assert ctx["score_sub_componente"] == 75
+    assert set(ctx["indicadores"]) == {"solvencia", "patrimonio_activos"}  # no morosidad
+    assert ctx["impulsor"] == "solvencia"        # highest score
+    assert ctx["lastre"] == "patrimonio_activos"  # lowest score
+    assert "sub_components" not in ctx           # not the full bank picture
+
+    # Executive summary keeps the full picture.
+    exec_ctx = _build_section_context("executive_summary", "Banreservas", sr, "2025-12")
+    assert "sub_components" in exec_ctx and "indicators" in exec_ctx
