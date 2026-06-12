@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   GitCompare,
   BookOpen,
+  FileText,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -45,6 +46,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: "/datos/banca", label: "Banca · SIB", icon: Landmark, ready: true },
       { to: "/datos/macro", label: "Macro · BCRD", icon: LineChart, ready: false },
+      { to: "/publicaciones-bcrd", label: "Publicaciones · BCRD", icon: FileText, ready: true },
       { to: "/datos/social", label: "Social · ONE", icon: Users, ready: false },
       { to: "/datos/comercio", label: "Comercio · Comtrade", icon: Ship, ready: false },
       { to: "/datos/gobernanza", label: "Gobernanza · WGI", icon: Scale, ready: false },

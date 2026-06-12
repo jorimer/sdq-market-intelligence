@@ -19,6 +19,8 @@ import { BankingScoreLayout } from "@/modules/banking-score/components/BankingSc
 
 // Macro Monitor (Eje 2) — new canonical pattern
 import { MacroMonitorPage } from "@/modules/macro-monitor/pages/MacroMonitorPage";
+// Publicaciones BCRD (informes oficiales + digest IA)
+import { PublicationsPage } from "@/modules/publications/pages/PublicationsPage";
 // Macro-Political Risk (Eje 4)
 import { MacroPoliticalRiskPage } from "@/modules/macro-political-risk/pages/MacroPoliticalRiskPage";
 // Sector Intel (Eje 3)
@@ -82,6 +84,9 @@ export default function App() {
 
           {/* Eje 2 — Macroeconómico */}
           <Route path="/macro-monitor" element={<MacroMonitorPage />} />
+
+          {/* Publicaciones BCRD — informes oficiales + digest IA */}
+          <Route path="/publicaciones-bcrd" element={<PublicationsPage />} />
 
           {/* Ejes 3-7 — UI en construcción (backend disponible) */}
           <Route path="/sector-intel" element={<SectorIntelPage />} />
