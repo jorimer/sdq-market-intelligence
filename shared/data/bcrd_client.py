@@ -61,8 +61,15 @@ def _period_from_date(ds: str) -> Optional[str]:
 
 
 def _period_from_label(s: str) -> Optional[str]:
-    """``"Abril 2026"`` → ``"2026-04"``. None for ranges (``"Ene-Abr 2026"``) etc."""
+    """Parse a metric name that *is* a period.
+
+    ``"Abril 2026"`` → ``"2026-04"``; a bare year ``"2023"`` → ``"2023"`` (annual
+    series, e.g. ``sector_externo.cuentas_corrientes``). None for ranges
+    (``"Ene-Abr 2026"``) or anything else.
+    """
     parts = (s or "").strip().split()
+    if len(parts) == 1 and len(parts[0]) == 4 and parts[0].isdigit():
+        return parts[0]  # bare year → annual period
     if len(parts) == 2 and parts[1].isdigit():
         month = _MESES.get(_strip_accents(parts[0]).lower())
         if month:
@@ -77,6 +84,70 @@ def _num(v: Any) -> Optional[float]:
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+# ── Human-readable labels for macro series ────────────────────────
+# Maps a (slug) ``series_code`` → a Spanish display name + unit. Covers the live
+# BCRD series and the legacy fixture series (gdp_growth, …). Anything not listed
+# falls back to :func:`humanize_series_code` (slug → readable title).
+BCRD_SERIES_LABELS: Dict[str, Dict[str, str]] = {
+    # Inflación
+    "bcrd.inflacion.inflacion.interanual": {"label": "Inflación interanual", "unit": "%"},
+    "bcrd.inflacion.inflacion.acumulada": {"label": "Inflación acumulada", "unit": "%"},
+    "bcrd.inflacion.inflacion.mensual": {"label": "Inflación mensual", "unit": "%"},
+    "bcrd.inflacion.inflacion_subyacente.interanual": {"label": "Inflación subyacente interanual", "unit": "%"},
+    "bcrd.inflacion.inflacion_subyacente.acumulada": {"label": "Inflación subyacente acumulada", "unit": "%"},
+    "bcrd.inflacion.inflacion_subyacente.mensual": {"label": "Inflación subyacente mensual", "unit": "%"},
+    # Monetarias
+    "bcrd.monetarias.tasas_de_interes.activa": {"label": "Tasa de interés activa", "unit": "%"},
+    "bcrd.monetarias.tasas_de_interes.pasiva": {"label": "Tasa de interés pasiva", "unit": "%"},
+    "bcrd.monetarias.tasas_de_interes.interbancaria": {"label": "Tasa de interés interbancaria", "unit": "%"},
+    "bcrd.monetarias.prestamos_privados.total": {"label": "Préstamos al sector privado (total)", "unit": "%"},
+    "bcrd.monetarias.prestamos_privados.mon_nacional": {"label": "Préstamos al sector privado (moneda nacional)", "unit": "%"},
+    # Sector externo
+    "bcrd.sector_externo.reservas_internacionales.brutas": {"label": "Reservas internacionales brutas", "unit": "US$ MM"},
+    "bcrd.sector_externo.reservas_internacionales.netas": {"label": "Reservas internacionales netas", "unit": "US$ MM"},
+    "bcrd.sector_externo.tasas_de_cambio.compra": {"label": "Tipo de cambio (compra)", "unit": "RD$/US$"},
+    "bcrd.sector_externo.tasas_de_cambio.venta": {"label": "Tipo de cambio (venta)", "unit": "RD$/US$"},
+    "bcrd.sector_externo.cuentas_corrientes": {"label": "Cuenta corriente", "unit": "% PIB"},
+    # Sector real
+    "bcrd.sector_real.imaes": {"label": "IMAE (actividad económica)", "unit": "%"},
+    "bcrd.sector_real.pibs.producto_interno_bruto": {"label": "Producto Interno Bruto", "unit": "%"},
+    "bcrd.sector_real.pibs.pib_anual": {"label": "PIB anual", "unit": "%"},
+    # Legacy fixture series
+    "gdp_growth": {"label": "Crecimiento del PIB", "unit": "%"},
+    "inflation_yoy": {"label": "Inflación interanual", "unit": "%"},
+    "public_debt_gdp": {"label": "Deuda pública (% PIB)", "unit": "% PIB"},
+    "remittances": {"label": "Remesas", "unit": "US$ MM"},
+}
+
+
+def humanize_series_code(code: str) -> str:
+    """Derive a readable title from a slug code when no explicit label exists.
+
+    Drops the ``bcrd.`` prefix, splits on ``.``, collapses repeated adjacent
+    segments (``inflacion.inflacion`` → ``inflacion``), turns ``_`` into spaces
+    and capitalizes. ``bcrd.sector_externo.reservas_internacionales.brutas`` →
+    ``"Sector externo · reservas internacionales · brutas"``.
+    """
+    parts = [p for p in (code or "").split(".") if p]
+    if parts and parts[0] == "bcrd":
+        parts = parts[1:]
+    segments: List[str] = []
+    for p in parts:
+        seg = p.replace("_", " ").strip()
+        if seg and (not segments or segments[-1] != seg):
+            segments.append(seg)
+    text = " · ".join(segments) or (code or "")
+    return text[:1].upper() + text[1:]
+
+
+def series_label(code: str) -> Dict[str, Optional[str]]:
+    """Return ``{"label", "unit"}`` for a series code (explicit map or derived)."""
+    entry = BCRD_SERIES_LABELS.get(code)
+    if entry:
+        return {"label": entry["label"], "unit": entry.get("unit")}
+    return {"label": humanize_series_code(code), "unit": None}
 
 
 def parse_variable(
