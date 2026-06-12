@@ -386,11 +386,18 @@ def _test_bcrd_connection(db: Session, cfg, base: str, token: str) -> TestConnec
     """
     import httpx
 
-    from shared.data.bcrd_api import fetch_bcrd_variable
+    from shared.data.bcrd_api import BcrdApiError, fetch_bcrd_variable
 
     try:
         fetch_bcrd_variable(token, "inflacion", base_url=base, timeout=20)
         return _persist_test(db, cfg, "success", "Conexión exitosa", 200, False)
+    except BcrdApiError as e:
+        # The BCRD rejects a bad token as an app-level error (HTTP 500 body).
+        if e.is_auth:
+            msg = f"Token del BCRD rechazado: {e.message}. Revise 'Clave de API / Token'."
+        else:
+            msg = f"BCRD: {e.message}"
+        return _persist_test(db, cfg, "error", msg, e.http_status, False)
     except httpx.HTTPStatusError as e:
         code = e.response.status_code if e.response is not None else None
         if code == 401:

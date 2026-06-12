@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
-from shared.data.bcrd_api import BCRD_VARIABLES, fetch_bcrd_variable
+from shared.data.bcrd_api import BCRD_VARIABLES, BcrdApiError, fetch_bcrd_variable
 from shared.database.session import get_db
 from shared.publications import catalog as pub_catalog
 from shared.publications import service as pub_service
@@ -174,6 +174,11 @@ async def bcrd_test(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except BcrdApiError as e:
+        detail = (
+            f"Token del BCRD rechazado: {e.message}" if e.is_auth else f"BCRD: {e.message}"
+        )
+        raise HTTPException(status_code=400 if e.is_auth else 502, detail=detail)
     except httpx.HTTPStatusError as e:
         body = e.response.text[:500] if e.response is not None else ""
         raise HTTPException(
