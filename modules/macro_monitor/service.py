@@ -30,15 +30,8 @@ DEBT_SERIES = "public_debt_gdp"
 FLOW_SERIES = {"remittances", "fdi", "reserves", "exports", "capital_flows"}
 
 
-def ingest_series(db: Session, client: Optional[SourceClient] = None) -> int:
-    """Upsert observations from *client* into MacroSeries.  Returns rows touched.
-
-    When *client* is omitted, resolves the BCRD source: live API if a token is
-    configured+enabled (Configuración → BCRD), otherwise the local fixture.
-    """
-    if client is None:
-        client = resolve_bcrd_client(db)
-    records = client.fetch()
+def _upsert_records(db: Session, records) -> int:
+    """Upsert a list of :class:`Record` into MacroSeries (by series_code+period)."""
     touched = 0
     for r in records:
         row = (
@@ -62,8 +55,49 @@ def ingest_series(db: Session, client: Optional[SourceClient] = None) -> int:
             row.license = lic
         touched += 1
     db.commit()
+    return touched
+
+
+def ingest_series(db: Session, client: Optional[SourceClient] = None) -> int:
+    """Upsert observations from *client* into MacroSeries.  Returns rows touched.
+
+    When *client* is omitted, resolves the BCRD source: live API if a token is
+    configured+enabled (Configuración → BCRD), otherwise the local fixture.
+    """
+    if client is None:
+        client = resolve_bcrd_client(db)
+    touched = _upsert_records(db, client.fetch())
     logger.info("Ingesta macro: %d observaciones (%s)", touched, client.source)
     return touched
+
+
+def backfill_historico(db: Session, year_from: int = 1984, year_to: int = 2026) -> Dict[str, Any]:
+    """One-time backfill of the BCRD historical series (IPC + exchange rates).
+
+    Only these two have history via the API (the rest are snapshot-only). Requires
+    a configured+enabled BCRD token. Returns the rows touched and the span found.
+    """
+    from shared.data.bcrd_api import BCRD_BASE_URL
+    from shared.data.bcrd_client import fetch_history
+    from shared.settings.service import get_sector_api_base_url, get_sector_api_key
+
+    token = get_sector_api_key(db, "bcrd")
+    if not token:
+        raise ValueError("Falta el token del BCRD o la fuente está deshabilitada.")
+    base = get_sector_api_base_url(db, "bcrd") or BCRD_BASE_URL
+    records = fetch_history(token, base, year_from, year_to)
+    touched = _upsert_records(db, records)
+    periods = sorted({r.period for r in records})
+    by_series: Dict[str, int] = {}
+    for r in records:
+        by_series[r.series] = by_series.get(r.series, 0) + 1
+    logger.info("Backfill histórico BCRD: %d observaciones, %d series", touched, len(by_series))
+    return {
+        "touched": touched,
+        "series": by_series,
+        "period_min": periods[0] if periods else None,
+        "period_max": periods[-1] if periods else None,
+    }
 
 
 def _series_by_code(db: Session) -> Dict[str, List[tuple]]:
