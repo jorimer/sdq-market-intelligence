@@ -52,7 +52,12 @@ export function MacroMonitorPage() {
       const [ind, sig] = await Promise.all([getIndicators(), getSignals()]);
       setIndicators(ind);
       setSignals(sig);
-      if (ind.length && !seriesCode) setSeriesCode(ind[0].series_code);
+      if (ind.length && !seriesCode) {
+        // Default the trajectory chart to the series with the most history, so it
+        // plots a real curve instead of "datos insuficientes" on a snapshot series.
+        const richest = ind.reduce((a, b) => ((b.n_obs ?? 0) > (a.n_obs ?? 0) ? b : a));
+        setSeriesCode(richest.series_code);
+      }
       setStatus(ind.length === 0 ? "empty" : "ready");
     } catch {
       setStatus("error");

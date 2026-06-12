@@ -172,7 +172,9 @@ def get_indicators(db: Session) -> List[Dict[str, Any]]:
     out = []
     for code, obs in sorted(grouped.items()):
         m = compute_series_momentum(obs)
-        out.append({"series_code": code, **series_label(code), **m})
+        # n_obs lets the UI default the trajectory chart to a series with depth
+        # (snapshot-only series have 1-2 points and can't be plotted/projected).
+        out.append({"series_code": code, "n_obs": len(obs), **series_label(code), **m})
     return out
 
 
