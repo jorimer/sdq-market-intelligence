@@ -3,6 +3,7 @@ import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
 import { useApp, SCOPES, Scope } from "@/shared/context/AppContext";
 import { useAuth } from "@/shared/auth/AuthContext";
 import { DataSourcesSection } from "../components/DataSourcesSection";
+import { SeriesMaintenanceSection } from "../components/SeriesMaintenanceSection";
 
 export function ConfiguracionPage() {
   const { dark, toggleDark, period, setPeriod, periods, scope, setScope } = useApp();
@@ -18,9 +19,12 @@ export function ConfiguracionPage() {
       />
 
       {/* Fuentes de datos y claves de API — solo admin */}
-      <div className="mb-5">
+      <div className="mb-5 space-y-5">
         {isAdmin ? (
-          <DataSourcesSection />
+          <>
+            <DataSourcesSection />
+            <SeriesMaintenanceSection />
+          </>
         ) : (
           <StateBlock
             kind="forbidden"
