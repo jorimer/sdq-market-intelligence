@@ -1,5 +1,18 @@
 """Tests for the BCRD diagnostic helper in the macro_monitor router."""
-from modules.macro_monitor.api.router import _describe_shape
+from modules.macro_monitor.api.router import _describe_shape, _historico_extra
+
+
+def test_historico_extra_ipc_uses_year_month_range():
+    extra = _historico_extra("historico_ipc", 1984, 2026)
+    assert extra["yearFrom"] == 1984 and extra["yearTo"] == 2026
+    assert extra["monthFrom"] == 1 and extra["monthTo"] == 12
+    assert extra["maxResultCount"] > 0
+
+
+def test_historico_extra_tasas_uses_date_range():
+    extra = _historico_extra("historico_tasas", 1991, 2026)
+    assert extra["fromDate"] == "1991-01-01"
+    assert extra["toDate"] == "2026-12-31"
 
 
 def test_describe_shape_dict_with_values():
