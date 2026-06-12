@@ -188,6 +188,24 @@ def get_series(db: Session, series_code: str) -> Dict[str, Any]:
     }
 
 
+def delete_series(db: Session, series_code: str) -> int:
+    """Delete every observation of *series_code*.  Returns rows removed.
+
+    Maintenance op for orphaned codes: ``ingest_series`` upserts by
+    (series_code, period) and never prunes codes the parser stopped emitting, so
+    a schema change (e.g. collapsing per-year codes into one annual series) can
+    leave stale rows behind.  Idempotent — deleting an absent code returns 0.
+    """
+    deleted = (
+        db.query(MacroSeries)
+        .filter_by(series_code=series_code)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    logger.info("Borrado de serie macro '%s': %d observaciones", series_code, deleted)
+    return deleted
+
+
 def get_snapshot(db: Session, period: Optional[str] = None) -> Optional[MacroSnapshot]:
     """Persisted snapshot for *period* (latest if omitted)."""
     q = db.query(MacroSnapshot)

@@ -20,6 +20,7 @@ from shared.settings.service import get_sector_api_base_url, get_sector_api_key
 from modules.macro_monitor.service import (
     backfill_historico,
     build_snapshot,
+    delete_series,
     get_indicators,
     get_series,
     get_snapshot,
@@ -72,6 +73,24 @@ async def series_detail(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     return get_series(db, series_code)
+
+
+@router.delete(
+    "/series/{series_code}",
+    summary="Eliminar todas las observaciones de una serie (admin)",
+    description=(
+        "Solo admin. Borra de MacroSeries todas las observaciones de un "
+        "series_code. Mantenimiento para códigos huérfanos que el parser dejó "
+        "de producir (la ingesta hace upsert y no poda). Idempotente."
+    ),
+)
+async def delete_series_endpoint(
+    series_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    deleted = delete_series(db, series_code)
+    return {"series_code": series_code, "deleted": deleted}
 
 
 @router.get(
