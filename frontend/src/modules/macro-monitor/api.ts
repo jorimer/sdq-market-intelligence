@@ -4,6 +4,7 @@ export interface MacroIndicator {
   series_code: string;
   label: string;
   unit: string | null;
+  n_obs: number;
   latest_period: string | null;
   latest_value: number | null;
   change: number | null;
