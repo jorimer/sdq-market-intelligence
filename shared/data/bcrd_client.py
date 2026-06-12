@@ -114,6 +114,8 @@ BCRD_SERIES_LABELS: Dict[str, Dict[str, str]] = {
     "bcrd.sector_real.imaes": {"label": "IMAE (actividad económica)", "unit": "%"},
     "bcrd.sector_real.pibs.producto_interno_bruto": {"label": "Producto Interno Bruto", "unit": "%"},
     "bcrd.sector_real.pibs.pib_anual": {"label": "PIB anual", "unit": "%"},
+    # Histórico (backfill desde HistoricoIPC / HistoricoTasas)
+    "bcrd.ipc.indice": {"label": "Índice de precios al consumidor (IPC)", "unit": "índice"},
     # Legacy fixture series
     "gdp_growth": {"label": "Crecimiento del PIB", "unit": "%"},
     "inflation_yoy": {"label": "Inflación interanual", "unit": "%"},
@@ -190,6 +192,102 @@ def parse_variable(
                 out.append(Record(series=code, period=period, value=_num(m.get("value")),
                                    lineage=lineage, unit=None, dimension=gname))
     return out
+
+
+# ── Historical backfill (HistoricoIPC / HistoricoTasas) ───────────
+# Only IPC (monthly since 1984) and exchange rates (daily) expose history via the
+# API; the other variables are snapshot-only. Codes are shared with the live
+# parser where they line up (FX, inflación interanual) for one continuous series.
+IPC_INDEX_SERIES = "bcrd.ipc.indice"
+INFLATION_YOY_SERIES = "bcrd.inflacion.inflacion.interanual"
+FX_BUY_SERIES = "bcrd.sector_externo.tasas_de_cambio.compra"
+FX_SELL_SERIES = "bcrd.sector_externo.tasas_de_cambio.venta"
+
+
+def _as_item_list(payload: Any) -> List[Any]:
+    """Pull the list of records out of a Historico* payload (bare list or wrapped)."""
+    if isinstance(payload, list):
+        # FX wraps the rows in a single ``{totalCount, items}`` summary object.
+        if payload and isinstance(payload[0], dict) and "items" in payload[0]:
+            return payload[0].get("items") or []
+        return payload
+    if isinstance(payload, dict):
+        return payload.get("items") or payload.get("values") or payload.get("result") or []
+    return []
+
+
+def parse_ipc_history(payload: Any, lineage: Lineage) -> List[Record]:
+    """HistoricoIPC ``[{month, year, indexValue}]`` → IPC index + derived YoY inflation."""
+    rows = []
+    for it in _as_item_list(payload):
+        if not isinstance(it, dict):
+            continue
+        try:
+            y, m = int(it["year"]), int(it["month"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        rows.append((y, m, _num(it.get("indexValue"))))
+    rows.sort()
+    index_by_ym = {(y, m): v for y, m, v in rows}
+    out: List[Record] = []
+    for y, m, v in rows:
+        period = f"{y:04d}-{m:02d}"
+        out.append(Record(series=IPC_INDEX_SERIES, period=period, value=v,
+                          lineage=lineage, unit="índice"))
+        prev = index_by_ym.get((y - 1, m))
+        if prev and v:
+            yoy = round((v / prev - 1) * 100, 2)
+            out.append(Record(series=INFLATION_YOY_SERIES, period=period, value=yoy,
+                              lineage=lineage, unit="%"))
+    return out
+
+
+def parse_fx_history(payload: Any, lineage: Lineage, currency_id: int = 1) -> List[Record]:
+    """HistoricoTasas daily rates → month-end buying/selling for *currency_id* (USD=1)."""
+    by_period: Dict[str, tuple] = {}  # period → (date, buying, selling)
+    for it in _as_item_list(payload):
+        if not isinstance(it, dict) or it.get("currencyId") != currency_id or it.get("isDeleted"):
+            continue
+        ds = (it.get("exchangeRateDate") or "")[:10]  # "2026-06-11"
+        if len(ds) < 7:
+            continue
+        period = ds[:7]
+        prev = by_period.get(period)
+        if prev is None or ds > prev[0]:  # keep the latest day in the month
+            by_period[period] = (ds, _num(it.get("buyingValue")), _num(it.get("sellingValue")))
+    out: List[Record] = []
+    for period, (_ds, buy, sell) in sorted(by_period.items()):
+        out.append(Record(series=FX_BUY_SERIES, period=period, value=buy, lineage=lineage, unit="RD$/US$"))
+        out.append(Record(series=FX_SELL_SERIES, period=period, value=sell, lineage=lineage, unit="RD$/US$"))
+    return out
+
+
+def fetch_history(
+    token: str, base_url: str, year_from: int, year_to: int,
+) -> List[Record]:  # pragma: no cover - network I/O
+    """Fetch + parse the full IPC and FX history into Records (for a backfill)."""
+    from datetime import date
+
+    lineage = Lineage(source="BCRD", license=BCRDClient.license, fetched_at=date.today())
+    records: List[Record] = []
+    ipc_extra = {
+        "yearFrom": year_from, "monthFrom": 1, "yearTo": year_to, "monthTo": 12,
+        "skipCount": 0, "maxResultCount": 100000,
+    }
+    fx_extra = {
+        "fromDate": f"{year_from}-01-01", "toDate": f"{year_to}-12-31",
+        "skipCount": 0, "maxResultCount": 100000,
+    }
+    for variable, extra, parser in (
+        ("historico_ipc", ipc_extra, parse_ipc_history),
+        ("historico_tasas", fx_extra, parse_fx_history),
+    ):
+        try:
+            payload = fetch_bcrd_variable(token, variable, base_url=base_url, extra=extra)
+            records.extend(parser(payload, lineage))
+        except (BcrdApiError, httpx.HTTPError, ValueError) as e:
+            logger.warning("[BCRD backfill] %s falló: %s", variable, e)
+    return records
 
 
 class BCRDClient(FixtureBackedClient):
