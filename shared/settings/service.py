@@ -380,8 +380,36 @@ def _normalize_base_url(base: str) -> str:
     return base
 
 
+def _test_bcrd_connection(db: Session, cfg, base: str, token: str) -> TestConnectionOut:
+    """Probe the BCRD API with its real contract: POST ``{"token": …}`` to a
+    MacroVariables endpoint. Direct (no proxy/WAF) against the configured host.
+    """
+    import httpx
+
+    from shared.data.bcrd_api import fetch_bcrd_variable
+
+    try:
+        fetch_bcrd_variable(token, "inflacion", base_url=base, timeout=20)
+        return _persist_test(db, cfg, "success", "Conexión exitosa", 200, False)
+    except httpx.HTTPStatusError as e:
+        code = e.response.status_code if e.response is not None else None
+        if code == 401:
+            msg = "401 — token del BCRD inválido. Revise 'Clave de API / Token'."
+        elif code == 403:
+            msg = "403 — el BCRD rechazó la solicitud (token o permisos)."
+        else:
+            msg = f"HTTP {code} (BCRD)"
+        return _persist_test(db, cfg, "error", msg, code, False)
+    except httpx.TimeoutException:
+        return _persist_test(db, cfg, "error", "Tiempo de espera agotado.", None, False)
+    except httpx.ConnectError:
+        return _persist_test(db, cfg, "error", "No se pudo conectar al BCRD.", None, False)
+    except Exception as e:  # noqa: BLE001 — surface any client error as a test failure
+        return _persist_test(db, cfg, "error", str(e)[:200], None, False)
+
+
 def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut:
-    """Test connectivity to a provider's API (currently SIB), through the proxy
+    """Test connectivity to a provider's API (SIB or BCRD), through the proxy
     if configured. Uses overrides from the payload, else the stored config.
     Persists the result on the stored config row.
     """
@@ -415,6 +443,11 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
         return _persist_test(db, cfg, "error", "Falta la URL base.", None)
     if not api_key:
         return _persist_test(db, cfg, "error", "Falta la clave de API.", None)
+
+    # BCRD uses a different contract (token in the POST body, no proxy/WAF), so it
+    # gets its own probe instead of the SIB Azure-APIM path below.
+    if payload.provider == "bcrd":
+        return _test_bcrd_connection(db, cfg, base, api_key)
 
     # SIB lives behind Azure APIM (subscription-key header) + a Sucuri WAF that
     # blocks datacenter IPs, so a Mozilla UA is required and prod must use a proxy.

@@ -236,6 +236,53 @@ def test_proxy_success(db, monkeypatch):
     assert res.viaProxy is True
 
 
+# ── BCRD: provider-aware probe (token in body, no proxy) ──────────
+def _bcrd_provider(db):
+    service.update_settings(db, SettingsIn(sectorApis=[SectorApiIn(
+        provider="bcrd", apiKey="bcrd-token", baseUrl="https://api.bancentral.gov.do",
+    )]))
+
+
+def test_bcrd_uses_own_probe_not_sib(db, monkeypatch):
+    """BCRD test posts the token to MacroVariables — never the SIB indicadores path."""
+    from shared.data import bcrd_api
+    captured = {}
+
+    def _fake_fetch(token, variable, base_url=None, timeout=30):
+        captured["token"] = token
+        captured["variable"] = variable
+        captured["base_url"] = base_url
+        return {"name": "Inflación", "values": [{"period": "2025-01", "value": 4.5}]}
+
+    monkeypatch.setattr(bcrd_api, "fetch_bcrd_variable", _fake_fetch)
+    _bcrd_provider(db)
+    res = service.test_connection(db, ConnTestIn(provider="bcrd"))
+    assert res.status == "success"
+    assert res.viaProxy is False
+    assert captured["token"] == "bcrd-token"
+    assert captured["variable"] == "inflacion"
+    assert captured["base_url"] == "https://api.bancentral.gov.do"
+
+
+def test_bcrd_invalid_token_is_distinguished(db, monkeypatch):
+    import httpx
+    from shared.data import bcrd_api
+
+    class _Resp:
+        status_code = 401
+
+    def _fake_fetch(*a, **k):
+        raise httpx.HTTPStatusError("401", request=None, response=_Resp())
+
+    monkeypatch.setattr(bcrd_api, "fetch_bcrd_variable", _fake_fetch)
+    _bcrd_provider(db)
+    res = service.test_connection(db, ConnTestIn(provider="bcrd"))
+    assert res.status == "error"
+    assert "token" in res.detail.lower()
+    assert "sib" not in res.detail.lower()
+    assert res.viaProxy is False
+
+
 # ── router RBAC ───────────────────────────────────────────────────
 def _client(db, role):
     app = FastAPI()
