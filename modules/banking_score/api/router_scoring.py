@@ -34,6 +34,7 @@ from modules.banking_score.scoring.engine import (
 from modules.banking_score.scoring.batch import detect_rating_action, score_period
 from modules.banking_score.scoring.indicator_detail import ai_context, build_indicator_detail
 from modules.banking_score.scoring.entity_insight import ai_context_entity, build_entity_insight
+from shared.publications.service import publication_prompt_context
 from modules.banking_score.scoring.rating_scale import get_tier_color, map_rating_tier
 from modules.banking_score.scoring.weights import (
     WEIGHT_PROFILES,
@@ -319,8 +320,12 @@ async def get_entity_insight(
     if with_ai:
         try:
             from shared.narrative.claude_engine import narrative_engine
+            entity_ctx = ai_context_entity(detail)
+            pubs = publication_prompt_context(db, sector="banca")
+            if pubs:
+                entity_ctx["contexto_oficial_bcrd"] = pubs
             res = await narrative_engine.generate(
-                ai_context_entity(detail), template="entity_rating", mode="detailed",
+                entity_ctx, template="entity_rating", mode="detailed",
             )
             detail["ai_insight"] = {
                 "text": res.text,
@@ -441,6 +446,9 @@ async def sector_insight(
         "lideres": [{"nombre": b.name, "score": float(rr.overall_score), "rating": rr.rating_tier} for rr, b in ranked[:5]],
         "rezagadas": [{"nombre": b.name, "score": float(rr.overall_score), "rating": rr.rating_tier} for rr, b in ranked[-3:]],
     }
+    pubs = publication_prompt_context(db, sector="banca")
+    if pubs:
+        ctx["contexto_oficial_bcrd"] = pubs
     ai = await _ai_insight(ctx, "sector_outlook") if with_ai else None
     return {"period_end": str(pe), "entity_type": entity_type, "n": len(rows),
             "score_promedio": avg, "ai_insight": ai}

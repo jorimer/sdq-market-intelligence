@@ -50,7 +50,10 @@ TEMPLATES = {
         "Genera una perspectiva sectorial basada en:\n{context}\n\n"
         "Incluye: contexto macroeconómico, tendencias regulatorias, "
         "perspectivas por segmento (banca múltiple, AAP, bancos de ahorro), "
-        "riesgos y oportunidades. Formato SCQA. Máximo 800 palabras."
+        "riesgos y oportunidades. Formato SCQA. Máximo 800 palabras.\n"
+        "Si el contexto incluye 'contexto_oficial_bcrd' (informes del Banco Central, "
+        "p. ej. Estabilidad Financiera), apóyate en él para el panorama macro/sistémico "
+        "y cítalo explícitamente (nombre del informe y período)."
     ),
     "indicator_insight": (
         "Eres un analista de calificación de riesgo bancario en República Dominicana. "
@@ -93,7 +96,9 @@ TEMPLATES = {
         "3) **Debilidades**: los sub-componentes/indicadores que más lo lastran.\n"
         "4) **Trayectoria y qué vigilar**: evolución del score y señales a monitorear.\n"
         "Reglas: NO inventes cifras fuera del contexto; cita los números provistos; "
-        "ponderá según los pesos de cada sub-componente."
+        "ponderá según los pesos de cada sub-componente. "
+        "Si se incluye 'contexto_oficial_bcrd' (informes del Banco Central), úsalo solo "
+        "como telón de fondo sistémico y cítalo brevemente; el foco sigue siendo la entidad."
     ),
 }
 

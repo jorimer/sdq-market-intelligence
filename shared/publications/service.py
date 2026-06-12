@@ -136,6 +136,31 @@ def get_publication(db: Session, pub_id: str) -> Optional[Publication]:
     return db.query(Publication).filter_by(id=pub_id).first()
 
 
+def publication_prompt_context(
+    db: Session, sector: Optional[str] = None, max_findings: int = 3
+) -> List[Dict[str, Any]]:
+    """Compact, prompt-ready digest blocks to enrich an LLM insight.
+
+    Trims each latest digest (filtered by *sector*) to the essentials so it can be
+    inlined into a narrative prompt without bloating it. Empty when nothing fits.
+    """
+    out: List[Dict[str, Any]] = []
+    for d in get_latest_digests(db, sector=sector):
+        dg = d.get("digest") or {}
+        if not (dg.get("resumen") or dg.get("hallazgos")):
+            continue
+        out.append({
+            "informe": d["report_name"],
+            "periodo": d["period"],
+            "resumen": dg.get("resumen", ""),
+            "hallazgos": (dg.get("hallazgos") or [])[:max_findings],
+            "cifras": (dg.get("cifras") or [])[: max_findings + 1],
+            "riesgos": (dg.get("riesgos") or [])[:max_findings],
+            "fuente": d.get("source_url", ""),
+        })
+    return out
+
+
 def get_latest_digests(
     db: Session, sector: Optional[str] = None, limit_per_report: int = 1
 ) -> List[Dict[str, Any]]:

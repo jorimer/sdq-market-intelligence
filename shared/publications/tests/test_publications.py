@@ -279,6 +279,40 @@ def test_get_latest_digests_skips_errored(db):
     assert service.get_latest_digests(db, sector="macro") == []
 
 
+def test_publication_prompt_context_is_compact(db):
+    _seed(db, "estabilidad_financiera", "2024-12", ["banca", "macro"])
+    # enrich the seeded digest with findings/cifras/riesgos beyond the trim limits
+    row = service.list_publications(db, "estabilidad_financiera")[0]
+    row.digest = {
+        "resumen": "El sistema se mantiene estable.",
+        "hallazgos": ["h1", "h2", "h3", "h4"],
+        "cifras": [{"etiqueta": "solvencia", "valor": "17.4%"}] * 6,
+        "riesgos": ["r1", "r2", "r3", "r4"],
+        "relevancia": {},
+    }
+    db.commit()
+    ctx = service.publication_prompt_context(db, sector="banca", max_findings=3)
+    assert len(ctx) == 1
+    block = ctx[0]
+    assert block["informe"] == "estabilidad_financiera"
+    assert block["periodo"] == "2024-12"
+    assert len(block["hallazgos"]) == 3   # trimmed
+    assert len(block["cifras"]) == 4      # max_findings + 1
+    assert len(block["riesgos"]) == 3
+
+
+def test_publication_prompt_context_filters_sector(db):
+    _seed(db, "politica_monetaria", "2025-06", ["macro"])  # macro-only
+    assert service.publication_prompt_context(db, sector="banca") == []
+
+
+def test_publication_prompt_context_skips_empty_digest(db):
+    row = _seed(db, "estabilidad_financiera", "2024-12", ["banca"])
+    row.digest = {"resumen": "", "hallazgos": []}
+    db.commit()
+    assert service.publication_prompt_context(db, sector="banca") == []
+
+
 def test_list_publications_orders_desc(db):
     _seed(db, "politica_monetaria", "2024-12", ["macro"])
     _seed(db, "politica_monetaria", "2025-06", ["macro"])
