@@ -1,0 +1,111 @@
+"""Catalog of recurring BCRD reports + how to find their PDFs on the CDN.
+
+The BCRD hosts reports at predictable CDN paths, but file-naming differs per
+report (clean ``YYYY-MM`` suffixes for IPOM/Economía Dominicana; irregular
+``{Mes}{YYYY}`` for Estabilidad Financiera). Each :class:`ReportSpec` therefore
+yields *candidate* (period, url) pairs newest-first; the service HEAD-probes them
+and ingests the first that exists. Verified empirically 2026-06 (see PR notes).
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Tuple
+
+CDN = "https://cdn.bancentral.gov.do/documents"
+
+_IPOM_DIR = f"{CDN}/publicaciones-economicas/informe-de-politica-monetaria/documents"
+_INFECO_DIR = f"{CDN}/publicaciones-economicas/informe-de-la-economia-dominicana/documents"
+_ESTAB_DIR = f"{CDN}/informe-de-estabilidad-financiera/documents"
+
+_MESES = {
+    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+    7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre",
+    12: "Diciembre",
+}
+
+# (period_label, url) — newest first within a year
+Candidate = Tuple[str, str]
+
+
+def _ipom_candidates(year: int) -> List[Candidate]:
+    """Informe de Política Monetaria — semestral (junio / diciembre)."""
+    return [
+        (f"{year}-12", f"{_IPOM_DIR}/informepm{year}-12.pdf"),
+        (f"{year}-06", f"{_IPOM_DIR}/informepm{year}-06.pdf"),
+    ]
+
+
+def _infeco_candidates(year: int) -> List[Candidate]:
+    """Informe de la Economía Dominicana — prefiere 'definitivo'; -12, -09, -06."""
+    out: List[Candidate] = []
+    for mm in ("12", "09", "06"):
+        out.append((f"{year}-{mm}", f"{_INFECO_DIR}/infeco_definitivo{year}-{mm}.pdf"))
+        out.append((f"{year}-{mm} (preliminar)", f"{_INFECO_DIR}/infeco_preliminar{year}-{mm}.pdf"))
+    return out
+
+
+def _estabilidad_candidates(year: int) -> List[Candidate]:
+    """Informe de Estabilidad Financiera — naming irregular: {Mes}{YYYY} y {YYYY}."""
+    out: List[Candidate] = []
+    for month in (12, 9, 6, 3):
+        mes = _MESES[month]
+        out.append((f"{mes} {year}", f"{_ESTAB_DIR}/InformeEstabilidadFinanciera{mes}{year}.pdf"))
+    out.append((f"{year}", f"{_ESTAB_DIR}/InformeEstabilidadFinanciera{year}.pdf"))
+    return out
+
+
+@dataclass(frozen=True)
+class ReportSpec:
+    key: str
+    name: str
+    cadence: str            # semestral | trimestral | anual
+    sectors: Tuple[str, ...]  # relevance routing for insight enrichment
+    landing_url: str        # human page (for the UI "ver en BCRD" link)
+    _candidates: Callable[[int], List[Candidate]]
+
+    def candidates(self, year: int) -> List[Candidate]:
+        return self._candidates(year)
+
+
+REPORTS: Dict[str, ReportSpec] = {
+    "estabilidad_financiera": ReportSpec(
+        key="estabilidad_financiera",
+        name="Informe de Estabilidad Financiera",
+        cadence="semestral",
+        sectors=("banca", "macro"),
+        landing_url="https://www.bancentral.gov.do/a/d/4211-informe-de-estabilidad-financiera",
+        _candidates=_estabilidad_candidates,
+    ),
+    "economia_dominicana": ReportSpec(
+        key="economia_dominicana",
+        name="Informe de la Economía Dominicana",
+        cadence="semestral",
+        sectors=("macro", "banca"),
+        landing_url="https://www.bancentral.gov.do/a/d/2533-informe-de-la-economia-dominicana",
+        _candidates=_infeco_candidates,
+    ),
+    "politica_monetaria": ReportSpec(
+        key="politica_monetaria",
+        name="Informe de Política Monetaria (IPOM)",
+        cadence="semestral",
+        sectors=("macro",),
+        landing_url="https://www.bancentral.gov.do/a/d/2535-informe-de-politica-monetaria",
+        _candidates=_ipom_candidates,
+    ),
+}
+
+
+def report_keys() -> List[str]:
+    return list(REPORTS)
+
+
+def candidate_urls(report_key: str, year: int, lookback_years: int = 0) -> List[Candidate]:
+    """All candidate (period, url) for *report_key*, newest year first.
+
+    ``lookback_years`` adds older years (for backfilling history).
+    """
+    spec = REPORTS[report_key]
+    out: List[Candidate] = []
+    for y in range(year, year - lookback_years - 1, -1):
+        out.extend(spec.candidates(y))
+    return out
