@@ -29,6 +29,8 @@ const DIRECTION_HINT: Record<string, string> = {
 function fmtRaw(raw: number | null, unit: string): string {
   if (raw === null || raw === undefined) return "—";
   if (unit === "índice") return fmtNum(raw, 0);
+  if (unit === "veces") return `${fmtNum(raw, 2)}×`;
+  if (unit === "ratio") return fmtNum(raw, 2);
   return `${fmtNum(raw, 2)}%`;
 }
 

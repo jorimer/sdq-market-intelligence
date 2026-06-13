@@ -67,6 +67,52 @@ INDICATOR_META: Dict[str, Dict[str, str]] = {
                      "que": "Concentración de las fuentes de ingreso (menor es más diversificado)."},
 }
 
+# Non-credit submodels (cambiaria · fiduciaria) expose their own indicator keys as
+# sub-component drivers. They are NOT in INDICATOR_META above, so the drill-down used
+# to 404 for those entities. Metadata is keyed by entity_type because a few keys mean
+# opposite things across submodels (e.g. `diversificacion_ingresos`: a balance proxy
+# where higher is better for cambiarias, but an income HHI where lower is better for
+# fiduciarias). `roa`/`roe`/`cost_to_income` are reused from INDICATOR_META unchanged.
+SUBMODEL_INDICATOR_META: Dict[str, Dict[str, Dict[str, str]]] = {
+    "cambiaria": {
+        "capitalizacion": {"label": "Capitalización", "sub": "solidez", "unit": "%", "direction": "higher",
+                           "que": "Patrimonio / activos. Los agentes cambiarios se fondean con capital; mayor capitalización es más sólido."},
+        "apalancamiento": {"label": "Apalancamiento", "sub": "solidez", "unit": "veces", "direction": "lower",
+                           "que": "Pasivos exigibles / patrimonio. Apalancamiento del agente (menor es más sólido)."},
+        "calidad_activos": {"label": "Calidad de activos", "sub": "calidad", "unit": "%", "direction": "higher",
+                            "que": "Activos líquidos / activos. Proporción de activos líquidos vs inmovilizados."},
+        "exposicion_credito": {"label": "Exposición a crédito", "sub": "calidad", "unit": "%", "direction": "lower",
+                               "que": "Cartera de créditos / activos. Un libro de crédito fuera de la misión cambiaria añade riesgo (menor es mejor)."},
+        "cobertura_liquida": {"label": "Cobertura líquida", "sub": "liquidez", "unit": "%", "direction": "higher",
+                              "que": "Activos líquidos / pasivos exigibles. Capacidad de operar y liquidar obligaciones."},
+        "diversificacion_ingresos": {"label": "Diversificación (proxy)", "sub": "diversificacion", "unit": "ratio", "direction": "higher",
+                                     "que": "Proxy de diversificación por equilibrio del balance (el feed EIC no desglosa ingresos): 1 = balance más equilibrado."},
+    },
+    "fiduciaria": {
+        "capitalizacion": {"label": "Capitalización", "sub": "solidez", "unit": "%", "direction": "higher",
+                           "que": "Patrimonio / activos. Las fiduciarias son sociedades de servicios fondeadas con capital."},
+        "apalancamiento": {"label": "Apalancamiento", "sub": "solidez", "unit": "veces", "direction": "lower",
+                           "que": "Pasivos exigibles / patrimonio (menor es más sólido)."},
+        "calidad_activos": {"label": "Calidad de activos", "sub": "calidad", "unit": "%", "direction": "higher",
+                            "que": "Activos líquidos / activos. Liquidez/productividad de los activos vs inmovilizados."},
+        "cobertura_liquida": {"label": "Cobertura líquida", "sub": "liquidez", "unit": "%", "direction": "higher",
+                              "que": "Activos líquidos / pasivos circulantes. Capacidad de cubrir obligaciones de corto plazo."},
+        "diversificacion_ingresos": {"label": "Diversificación de ingresos", "sub": "diversificacion", "unit": "ratio", "direction": "lower",
+                                     "que": "HHI de ingresos (comisiones fiduciarias vs otros). Menor HHI = ingresos más diversificados."},
+    },
+}
+
+
+def _meta_for(indicator_key: str, bank: Bank) -> Optional[Dict[str, str]]:
+    """Resolve indicator metadata: credit model first, then the entity's submodel
+    (cambiaria / fiduciaria) for keys the credit model doesn't define."""
+    meta = INDICATOR_META.get(indicator_key)
+    if meta is not None:
+        return meta
+    if bank.bank_type is not None:
+        return SUBMODEL_INDICATOR_META.get(bank.bank_type.value, {}).get(indicator_key)
+    return None
+
 
 def _band(score: float) -> str:
     """Qualitative band from a 0–100 score (matches the UI color thresholds)."""
@@ -82,9 +128,17 @@ def _band(score: float) -> str:
 def _interpretation(meta: Dict[str, str], raw: Optional[float], score: float) -> str:
     """One-line, data-grounded reading of the indicator's current level."""
     band = _band(score)
-    val = f"{raw:.2f}{'' if meta['unit'] == 'índice' else '%'}" if isinstance(raw, (int, float)) else "N/D"
-    if meta["unit"] == "índice":
-        val = f"{raw:.0f}" if isinstance(raw, (int, float)) else "N/D"
+    unit = meta["unit"]
+    if not isinstance(raw, (int, float)):
+        val = "N/D"
+    elif unit == "índice":
+        val = f"{raw:.0f}"
+    elif unit == "veces":
+        val = f"{raw:.2f}×"
+    elif unit == "ratio":
+        val = f"{raw:.2f}"
+    else:
+        val = f"{raw:.2f}%"
     return f"Nivel {band} (score {score:.0f}/100). {meta['que']} Valor actual: {val}."
 
 
@@ -122,7 +176,7 @@ def build_indicator_detail(db: Session, bank: Bank, indicator_key: str) -> Optio
 
     Returns None if the indicator key is unknown or the bank has no ratings.
     """
-    meta = INDICATOR_META.get(indicator_key)
+    meta = _meta_for(indicator_key, bank)
     if meta is None:
         return None
 

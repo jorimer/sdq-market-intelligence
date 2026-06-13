@@ -11,6 +11,7 @@ from shared.auth.models import User  # noqa: F401 — register users table for F
 from modules.banking_score.models.models import Bank, BankType, ModelType, RatingResult
 from modules.banking_score.scoring.indicator_detail import (
     INDICATOR_META,
+    SUBMODEL_INDICATOR_META,
     _band,
     _peer_stats,
     ai_context,
@@ -110,6 +111,63 @@ def test_na_indicator_marked_unavailable(db):
     assert detail["latest"]["available"] is False
     assert detail["peers"] is None  # no peer comparison when N/D
     assert detail["trend"] == []  # unavailable periods excluded from trend
+
+
+# ── non-credit submodels (cambiaria · fiduciaria) — regression: used to 404 ──
+
+def _submodel_rating(db, bank, period, details):
+    db.add(RatingResult(
+        bank_id=bank.id, period_end=period, overall_score=72, rating_tier="SDQ-A",
+        model_type=ModelType.deterministic, indicator_details=details,
+    ))
+
+
+def test_cambiaria_submodel_indicators_resolve(db):
+    """The drill-down must load for cambiaria submodel keys (drawer 404 before fix)."""
+    camb = Bank(name="Agente FX", bank_type=BankType.cambiaria)
+    db.add(camb)
+    db.flush()
+    _submodel_rating(db, camb, date(2025, 12, 31), {
+        "capitalizacion": {"raw": 12.5, "score": 75, "available": True},
+        "apalancamiento": {"raw": 2.5, "score": 40, "available": True},
+        "exposicion_credito": {"raw": 15.0, "score": 85, "available": True},
+        "diversificacion_ingresos": {"raw": 0.84, "score": 82, "available": True},
+    })
+    db.commit()
+    for key in ("capitalizacion", "apalancamiento", "exposicion_credito", "diversificacion_ingresos"):
+        detail = build_indicator_detail(db, camb, key)
+        assert detail is not None, f"{key} should resolve for cambiaria (regression)"
+        assert detail["label"] == SUBMODEL_INDICATOR_META["cambiaria"][key]["label"]
+    # submodel-specific units surface (multiple → 'veces'; 0–1 proxy → 'ratio')
+    assert build_indicator_detail(db, camb, "apalancamiento")["unit"] == "veces"
+    assert build_indicator_detail(db, camb, "diversificacion_ingresos")["unit"] == "ratio"
+    assert build_indicator_detail(db, camb, "diversificacion_ingresos")["direction"] == "higher"
+
+
+def test_fiduciaria_diversificacion_direction_differs(db):
+    """Same key, opposite reading: fiduciaria income HHI is lower-is-better."""
+    fid = Bank(name="Fiduciaria X", bank_type=BankType.fiduciaria)
+    db.add(fid)
+    db.flush()
+    _submodel_rating(db, fid, date(2025, 12, 31), {
+        "diversificacion_ingresos": {"raw": 0.45, "score": 66, "available": True},
+    })
+    db.commit()
+    detail = build_indicator_detail(db, fid, "diversificacion_ingresos")
+    assert detail is not None
+    assert detail["direction"] == "lower"  # HHI: menor es más diversificado
+
+
+def test_submodel_key_does_not_leak_to_credit_entity(db):
+    """A cambiaria/fiduciaria key must NOT resolve for a credit-model entity."""
+    bm = Bank(name="Banco", bank_type=BankType.banca_multiple)
+    db.add(bm)
+    db.flush()
+    _submodel_rating(db, bm, date(2025, 12, 31), {
+        "capitalizacion": {"raw": 10.0, "score": 50, "available": True},
+    })
+    db.commit()
+    assert build_indicator_detail(db, bm, "capitalizacion") is None
 
 
 def test_ai_context_bounds_trend(db):
