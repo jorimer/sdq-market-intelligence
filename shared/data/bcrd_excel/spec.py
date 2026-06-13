@@ -18,13 +18,21 @@ Two orientations cover the corpus:
 * ``cross_tab`` — periods on both axes: years across a header row (sparse,
   forward-filled) and months down ``month_col``; metrics (e.g. BRUTAS/NETAS)
   repeat across columns. Series are synthesized per (metric × value column).
+
+* ``matrix`` — the transpose of ``period_rows``: periods run *across* a header
+  row (years in ``period_header_row``, optionally a quarter/month sub-row), and
+  each *data row* is a series whose name sits in ``label_col`` (e.g. national
+  accounts: concepts down the rows, years across the columns).
+
+A series period may be monthly (``YYYY-MM``), quarterly (``YYYY-Qn``) or annual
+(``YYYY``); ``period_rows`` with ``month_col=None`` is the annual case.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from typing import List, Optional
 
-ORIENTATIONS = ("period_rows", "cross_tab")
+ORIENTATIONS = ("period_rows", "cross_tab", "matrix")
 
 
 @dataclass
@@ -62,6 +70,12 @@ class ExtractionSpec:
     value_col_end: Optional[int] = None
     code_prefix: str = ""
     unit: Optional[str] = None
+
+    # ── matrix (periods across columns, series down rows) ────────
+    period_header_row: Optional[int] = None       # row of years across columns
+    subperiod_header_row: Optional[int] = None     # row of quarters/months (optional)
+    label_col: Optional[int] = None                # column holding each row's series name
+    frequency: Optional[str] = None                # "annual" | "quarterly" | "monthly"
 
     # ── provenance / caching ─────────────────────────────────────
     structure_hash: str = ""

@@ -11,8 +11,9 @@ import pytest
 
 from shared.data.bcrd_excel.extract import extract_records
 from shared.data.bcrd_excel.inference import infer_spec
+from shared.data.bcrd_excel.spec import ExtractionSpec
 from shared.data.bcrd_excel.validation import validate
-from shared.data.bcrd_excel.workbook import load_workbook
+from shared.data.bcrd_excel.workbook import Grid, Workbook, load_workbook
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -95,6 +96,57 @@ def test_validation_clean_reservas():
     old = [s for s in report.series if s.code.endswith(".brutas")][0]
     new = [s for s in report.series if s.code.endswith(".reservas_brutas")][0]
     assert old.period_max < "2003" <= new.period_min
+
+
+# ── Annual period_rows: a year column, no month axis ──────────────
+def test_ipc_anual_period_rows():
+    spec, recs = _extract("ipc_anual_base_2010.xls")
+    assert spec.orientation == "period_rows"
+    assert spec.month_col is None and spec.frequency == "annual"
+    idx = _series(recs, "indice_base_enero_1999")
+    assert idx["1984"] == pytest.approx(7.477, abs=1e-2)  # annual periods are "YYYY"
+    assert all(len(p) == 4 for p in idx)  # every period is a bare year
+    assert len(idx) >= 30 and "2019" in idx  # deep annual run, not a header artifact
+    # the year buried in the "Bases 1999 y 2010" subtitle (row 2) must not start data
+    assert spec.data_row_start > 4
+
+
+# ── Matrix: periods across a header row, series down the rows ──────
+def test_pib_gasto_matrix_annual():
+    spec, recs = _extract("pib_gasto.xls")
+    assert spec.orientation == "matrix" and spec.frequency == "annual"
+    # exact code: the absolute-values block (a later "% structure" block reuses the
+    # label and is kept distinct as consumo_final_rN — never merged with this one)
+    cf = _series(recs, ".consumo_final")
+    assert cf["1991"] == pytest.approx(106405.2, abs=1e-1)
+    assert all(len(p) == 4 for p in cf)  # annual columns → "YYYY"
+    # distinct concept rows are distinct series (codes unique, never merged)
+    codes = [s.code for s in validate(recs).series]
+    assert len(codes) == len(set(codes))
+
+
+def test_matrix_quarterly_synthetic():
+    """A quarterly matrix (years over a header row, E-M/A-J/J-S/O-D below) — built
+    in code to exercise the quarter path without a heavy .xls fixture."""
+    rows = [
+        ["Conceptos", 2010, 2010, 2010, 2010, 2011, 2011, 2011, 2011],
+        ["", "E-M", "A-J", "J-S", "O-D", "E-M", "A-J", "J-S", "O-D"],
+        ["Cuenta Corriente", -250.8, -1238.1, -1222.6, -1312.0, -488.8, -1202.9, -1299.7, -1343.2],
+        ["Balanza Comercial", -1.0, -2.0, -3.0, -4.0, -5.0, -6.0, -7.0, -8.0],
+    ]
+    wb = Workbook(path="bop.xls", grids=[Grid(name="BOP", rows=rows)])
+    spec = ExtractionSpec(
+        file="bop.xls", sheet="BOP", orientation="matrix", data_row_start=2,
+        period_header_row=0, subperiod_header_row=1, label_col=0,
+        value_col_start=1, value_col_end=9, frequency="quarterly", unit="US$ MM",
+    )
+    recs = extract_records(wb, spec)
+    cc = {r.period: r.value for r in recs if r.series.endswith(".cuenta_corriente")}
+    assert cc["2010-Q1"] == pytest.approx(-250.8)
+    assert cc["2010-Q4"] == pytest.approx(-1312.0)
+    assert cc["2011-Q2"] == pytest.approx(-1202.9)
+    assert sorted(cc) == ["2010-Q1", "2010-Q2", "2010-Q3", "2010-Q4",
+                          "2011-Q1", "2011-Q2", "2011-Q3", "2011-Q4"]
 
 
 # ── Cross-check against API-held values is the strongest signal ───

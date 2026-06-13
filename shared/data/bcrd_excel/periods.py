@@ -54,6 +54,34 @@ def parse_month(value: Any) -> Optional[int]:
     return _MONTHS.get(first)
 
 
+# quarter label → 1..4. Covers BCRD's many spellings: month-range ("E-M", "A-J",
+# "J-S", "O-D"; "Ene-Mar"), Roman ("I".."IV"), and "T1"/"1T"/"Trim 1"/"Q1".
+_QUARTERS: dict[str, int] = {
+    "e-m": 1, "a-j": 2, "j-s": 3, "o-d": 4,
+    "ene-mar": 1, "abr-jun": 2, "jul-sep": 3, "oct-dic": 4,
+    "ene-marzo": 1, "i": 1, "ii": 2, "iii": 3, "iv": 4,
+    "t1": 1, "t2": 2, "t3": 3, "t4": 4,
+    "1t": 1, "2t": 2, "3t": 3, "4t": 4,
+    "q1": 1, "q2": 2, "q3": 3, "q4": 4,
+    "trim1": 1, "trim2": 2, "trim3": 3, "trim4": 4,
+}
+
+
+def parse_quarter(value: Any) -> Optional[int]:
+    """``"E-M"`` / ``"Ene-Mar"`` / ``"III"`` / ``"T2"`` / ``"Q4"`` → 1..4; else None."""
+    token = normalize_label(value).rstrip(".").strip()
+    if not token:
+        return None
+    compact = token.replace(" ", "").replace("trimestre", "trim")
+    if compact in _QUARTERS:
+        return _QUARTERS[compact]
+    # "trim 1" / "1er trimestre" style → trailing/leading digit 1..4
+    m = re.search(r"\b([1-4])\b", token)
+    if m and ("trim" in token or "t" == token[:1]):
+        return int(m.group(1))
+    return None
+
+
 def parse_year(value: Any) -> Optional[int]:
     """``1982`` / ``1982.0`` / ``"1982"`` → 1982; None if not a plausible year."""
     if value is None:
@@ -68,11 +96,13 @@ def parse_year(value: Any) -> Optional[int]:
     return y if 1900 <= y <= 2100 else None
 
 
-def format_period(year: int, month: Optional[int]) -> str:
-    """``(2007, 5) → "2007-05"``; ``(2007, None) → "2007"`` (annual)."""
-    if month is None:
-        return f"{int(year):04d}"
-    return f"{int(year):04d}-{int(month):02d}"
+def format_period(year: int, month: Optional[int], quarter: Optional[int] = None) -> str:
+    """``(2007, 5) → "2007-05"``; ``(2007, None, 2) → "2007-Q2"``; ``(2007, None) → "2007"``."""
+    if month is not None:
+        return f"{int(year):04d}-{int(month):02d}"
+    if quarter is not None:
+        return f"{int(year):04d}-Q{int(quarter)}"
+    return f"{int(year):04d}"
 
 
 def coerce_num(value: Any) -> Optional[float]:
