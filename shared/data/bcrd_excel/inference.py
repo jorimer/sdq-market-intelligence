@@ -161,12 +161,19 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         subtotal = _has_subtotal_years(grid, month_col)
         year_col = None if subtotal else _sparse_year_column(grid, month_col, first_month_row)
         value_cols = _value_columns(grid, month_col, first_month_row)
-        series = [
-            SeriesSpec(code=_slug(_header_name(grid, c, first_month_row)),
-                       name=_header_name(grid, c, first_month_row),
-                       unit=None, value_col=c)
-            for c in value_cols
-        ]
+        # Distinct value columns must map to distinct series codes — never merge two
+        # columns into one (e.g. "Acumulada" under both "Serie Original" and "Serie
+        # Desestacionalizada"). Disambiguate slug collisions by column so the data
+        # of two real series is never silently mixed.
+        series: List[SeriesSpec] = []
+        seen_codes: dict[str, int] = {}
+        for c in value_cols:
+            name = _header_name(grid, c, first_month_row)
+            code = _slug(name)
+            if code in seen_codes:
+                code = f"{code}_c{c}"
+            seen_codes[code] = c
+            series.append(SeriesSpec(code=code, name=name, unit=None, value_col=c))
         resolved = subtotal or year_col is not None
         conf = min(0.85, 0.5 + 0.03 * month_count) if (resolved and series) else 0.0
         return ExtractionSpec(

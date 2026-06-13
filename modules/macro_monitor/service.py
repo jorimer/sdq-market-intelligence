@@ -100,6 +100,98 @@ def backfill_historico(db: Session, year_from: int = 1984, year_to: int = 2026) 
     }
 
 
+# ── Histórico Excel del BCRD (motor de ingesta AI-native) ─────────
+# Catálogo cabecera: los archivos de mayor valor, para quick-pick en la UI. Se
+# filtran contra el catálogo real (algunos pueden no estar presentes).
+_EXCEL_FEATURED = [
+    ("imae.xlsx", "IMAE — actividad económica"),
+    ("ipc.xls", "IPC — índice de precios"),
+    ("reservas_internacionales.xlsx", "Reservas internacionales"),
+    ("agregados_monetarios.xlsx", "Agregados monetarios (M1, M2…)"),
+    ("base_monetaria.xlsx", "Base monetaria"),
+    ("Serie_TPM.xlsx", "Tasa de Política Monetaria"),
+    ("Remesas_6.xlsx", "Remesas"),
+    ("bpagos.xls", "Balanza de pagos"),
+]
+
+
+def excel_catalog_summary() -> Dict[str, Any]:
+    """Resumen del catálogo de Excel históricos del BCRD (708 archivos) para la UI."""
+    from shared.data.bcrd_excel.catalog import find_entry, load_catalog
+
+    entries = load_catalog()
+    by_sector: Dict[str, int] = {}
+    by_ext: Dict[str, int] = {}
+    for e in entries:
+        by_sector[e.sector] = by_sector.get(e.sector, 0) + 1
+        by_ext[e.ext] = by_ext.get(e.ext, 0) + 1
+    featured = []
+    for filename, label in _EXCEL_FEATURED:
+        entry = find_entry(filename)
+        if entry is not None:
+            featured.append({"key": entry.filename, "label": label,
+                             "sector": entry.sector, "ext": entry.ext, "url": entry.url})
+    return {
+        "total": len(entries),
+        "by_sector": by_sector,
+        "by_ext": by_ext,
+        "featured": featured,
+    }
+
+
+def ingest_excel_file(
+    db: Session, *, key: Optional[str] = None, url: Optional[str] = None,
+    dry_run: bool = True,
+) -> Dict[str, Any]:
+    """Corre el motor sobre UN Excel del BCRD: descarga → spec → extracción →
+    validación; si ``dry_run`` es False, hace upsert a MacroSeries.
+
+    *key* es un nombre de archivo del catálogo (resuelve la URL del CDN); *url* es
+    una URL/ruta directa. Devuelve el resumen + las series extraídas con su estado
+    de validación, para que la UI muestre exactamente qué entraría/entró.
+    """
+    from shared.data.bcrd_excel.catalog import find_entry
+    from shared.data.bcrd_excel.engine import SpecCache, ingest_excel
+
+    source: Any
+    if key:
+        entry = find_entry(key)
+        if entry is None:
+            raise ValueError(f"El archivo '{key}' no está en el catálogo del BCRD.")
+        source = entry
+    elif url:
+        source = url
+    else:
+        raise ValueError("Indica 'key' (archivo del catálogo) o 'url'.")
+
+    result = ingest_excel(source, cache=SpecCache())
+    touched = 0
+    if not dry_run:
+        touched = _upsert_records(db, result.records)
+        logger.info("[macro] ingesta Excel %s: %d observaciones upserted", result.file, touched)
+
+    series_rows = [
+        {
+            "code": s.code, "unit": s.unit, "n_obs": s.n_obs,
+            "n_missing": s.n_missing, "period_min": s.period_min,
+            "period_max": s.period_max, "ok": s.ok, "flags": s.flags,
+        }
+        for s in result.report.series
+    ]
+    return {
+        "file": result.file,
+        "method": result.spec.method,
+        "confidence": result.spec.confidence,
+        "orientation": result.spec.orientation,
+        "records": len(result.records),
+        "series_count": len(result.report.series),
+        "validation_ok": result.report.ok,
+        "series": series_rows,
+        "dry_run": dry_run,
+        "touched": touched,
+    }
+
+
 def _series_by_code(db: Session) -> Dict[str, List[tuple]]:
     """Group all observations into ``{series_code: [(period, value), ...]}`` sorted."""
     grouped: Dict[str, list] = defaultdict(list)
