@@ -271,6 +271,57 @@ def run_excel_batch(
     return {"processed": len(entries), "ok": ok, "flagged": flagged, "failed": failed}
 
 
+def cross_validate_excel(db: Session) -> Dict[str, Any]:
+    """Cross-check the Excel-extracted series against the live API series.
+
+    For each curated mapping: extract the Excel file with the engine, apply the
+    transform (identity / YoY), pull the canonical series from MacroSeries, and
+    compare over the overlapping periods. The strongest correctness signal — the
+    engine's figures must equal the BCRD API's.
+    """
+    from shared.data.bcrd_excel.catalog import find_entry
+    from shared.data.bcrd_excel.crosscheck import CROSSCHECK_SPECS, compare, yoy
+    from shared.data.bcrd_excel.engine import SpecCache, ingest_excel
+
+    cache = SpecCache()
+    results: List[Dict[str, Any]] = []
+    for spec in CROSSCHECK_SPECS:
+        try:
+            entry = find_entry(spec.excel_key)
+            if entry is None:
+                results.append({"label": spec.label, "error": f"'{spec.excel_key}' no está en el catálogo"})
+                continue
+            res = ingest_excel(entry, cache=cache, use_claude=False)
+            excel_vals: Dict[str, Any] = {
+                r.period: r.value for r in res.records
+                if r.series.endswith(spec.excel_series_suffix)
+            }
+            if not excel_vals:
+                results.append({"label": spec.label, "error": "serie no encontrada en el Excel"})
+                continue
+            if spec.transform == "yoy":
+                excel_vals = yoy(excel_vals)
+            api_vals = {
+                row.period: row.value
+                for row in db.query(MacroSeries).filter_by(series_code=spec.api_series).all()
+            }
+            cmp = compare(excel_vals, api_vals, rel_tol=spec.rel_tol, abs_tol=spec.abs_tol)
+            results.append({
+                "label": spec.label, "api_series": spec.api_series,
+                "transform": spec.transform, "note": spec.note,
+                "n_compared": cmp.n_compared, "n_match": cmp.n_match,
+                "n_mismatch": cmp.n_mismatch, "max_abs_err": cmp.max_abs_err,
+                "period_min": cmp.period_min, "period_max": cmp.period_max,
+                "ok": cmp.ok, "examples": cmp.examples,
+                "api_obs": len(api_vals),
+            })
+        except Exception as e:  # noqa: BLE001 — report per-spec, don't abort the rest
+            logger.warning("[macro] cross-check %s falló: %s", spec.label, e)
+            results.append({"label": spec.label, "error": str(e)[:300]})
+    n_ok = sum(1 for r in results if r.get("ok"))
+    return {"results": results, "checks": len(results), "ok": n_ok}
+
+
 def get_excel_coverage(db: Session) -> Dict[str, Any]:
     """Coverage rollup + the flagged/failed files (for the report UI)."""
     from collections import Counter

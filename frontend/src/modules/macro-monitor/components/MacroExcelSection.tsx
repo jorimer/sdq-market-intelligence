@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FileSpreadsheet, Sparkles, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardHead, StatTile, Chip, StateBlock } from "@/shared/ui/primitives";
 import { MacroCoverageSection } from "./MacroCoverageSection";
+import { MacroCrosscheckSection } from "./MacroCrosscheckSection";
 import {
   getExcelCatalog,
   ingestExcel,
@@ -71,6 +72,9 @@ export function MacroExcelSection() {
     <div className="space-y-5">
       {/* Corpus-wide coverage report (batch runner) */}
       <MacroCoverageSection />
+
+      {/* Correctness: cross-check against the live API */}
+      <MacroCrosscheckSection />
 
       {/* Catalog stats */}
       {catStatus === "error" ? (

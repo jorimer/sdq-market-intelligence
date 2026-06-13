@@ -20,6 +20,7 @@ from shared.settings.service import get_sector_api_base_url, get_sector_api_key
 from modules.macro_monitor.service import (
     backfill_historico,
     build_snapshot,
+    cross_validate_excel,
     delete_series,
     excel_catalog_summary,
     get_excel_coverage,
@@ -383,6 +384,22 @@ async def excel_coverage(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     return get_excel_coverage(db)
+
+
+@router.get(
+    "/excel/crosscheck",
+    summary="Cruce de las series Excel contra el API del BCRD (admin)",
+    description=(
+        "Solo admin. Para cada serie solapada (IPC vía variación interanual, "
+        "reservas), extrae el Excel con el motor y la compara mes a mes contra la "
+        "serie canónica del API. La prueba más fuerte de correctitud."
+    ),
+)
+async def excel_crosscheck(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    return cross_validate_excel(db)
 
 
 @router.post(

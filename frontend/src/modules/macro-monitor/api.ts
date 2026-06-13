@@ -154,6 +154,32 @@ export async function getExcelCoverage(): Promise<ExcelCoverage> {
   const { data } = await client.get("/macro-monitor/excel/coverage");
   return data;
 }
+// ── Cruce contra el API (validación de correctitud) ───────────────
+export interface CrosscheckResult {
+  label: string;
+  api_series?: string;
+  transform?: string;
+  note?: string;
+  n_compared?: number;
+  n_match?: number;
+  n_mismatch?: number;
+  max_abs_err?: number;
+  period_min?: string | null;
+  period_max?: string | null;
+  ok?: boolean;
+  api_obs?: number;
+  examples?: { period: string; excel: number; api: number; abs_err: number }[];
+  error?: string;
+}
+export async function getCrosscheck(): Promise<{
+  results: CrosscheckResult[];
+  checks: number;
+  ok: number;
+}> {
+  const { data } = await client.get("/macro-monitor/excel/crosscheck");
+  return data;
+}
+
 /** Admin: lanza el barrido del motor sobre el catálogo en segundo plano. */
 export async function runExcelBatch(opts: {
   sector?: string;
