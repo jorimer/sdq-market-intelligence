@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Tuple
 
-from .periods import normalize_label, parse_month, parse_year
+from .periods import normalize_label, parse_month, parse_quarter, parse_year
 from .spec import ExtractionSpec, SeriesSpec
 from .workbook import Grid, Workbook
 
@@ -50,16 +50,64 @@ def _month_column(grid: Grid) -> Tuple[Optional[int], int, int]:
     return best_col, best_first, best_count
 
 
+def _axis_year(value) -> Optional[int]:
+    """Years for *axis detection* — stricter than ``parse_year`` so a year buried in
+    a subtitle ("Bases 1999 y 2010") or a range ("1991-2013") is NOT counted as a
+    period axis. Accepts a numeric year cell, or a string that *is* a year (allowing
+    a trailing footnote like "2008 3/")."""
+    if isinstance(value, (int, float)):
+        y = int(value)
+        return y if 1900 <= y <= 2100 else None
+    token = normalize_label(value)
+    token = re.sub(r"\s*\d+\s*/", "", token).strip()  # drop "3/" footnotes
+    if re.fullmatch(r"(19|20)\d{2}", token):
+        return int(token)
+    return None
+
+
 def _year_header_row(grid: Grid) -> Tuple[Optional[int], int]:
-    """Find a header row carrying several years across columns (cross-tab)."""
+    """Find a header row carrying several years across columns (cross-tab / matrix)."""
     best_row, best_count = None, 0
     for r in range(min(_SCAN_HEADER_ROWS, grid.nrows)):
-        years = sum(
-            1 for c in range(grid.ncols) if parse_year(grid.cell(r, c)) is not None
-        )
+        years = sum(1 for c in range(grid.ncols) if _axis_year(grid.cell(r, c)) is not None)
         if years > best_count:
             best_row, best_count = r, years
     return best_row, best_count
+
+
+def _year_column(grid: Grid) -> tuple[Optional[int], int, int]:
+    """Column richest in years *down the rows* (annual period_rows). (col, count, first_row)."""
+    best_col, best_count, best_first = None, 0, 0
+    for c in range(min(4, grid.ncols)):
+        rows = [r for r in range(grid.nrows) if _axis_year(grid.cell(r, c)) is not None]
+        if len(rows) > best_count:
+            best_col, best_count, best_first = c, len(rows), rows[0]
+    return best_col, best_count, best_first
+
+
+def _label_column(grid: Grid, value_col_start: int, row0: int, row1: int) -> Optional[int]:
+    """Column left of the values richest in text labels (the series names, matrix)."""
+    best_col, best_count = None, 0
+    for c in range(0, max(1, value_col_start)):
+        n = sum(
+            1 for r in range(row0, min(row1, grid.nrows))
+            if isinstance(grid.cell(r, c), str) and grid.cell(r, c).strip()
+        )
+        if n > best_count:
+            best_col, best_count = c, n
+    return best_col
+
+
+def _subperiod_row(grid: Grid, period_row: int, data_row0: int, c0: int, c1: int) -> Optional[int]:
+    """A row between the year header and the data whose cells parse as quarters/months."""
+    for r in range(period_row + 1, max(period_row + 1, data_row0)):
+        hits = sum(
+            1 for c in range(c0, c1)
+            if parse_quarter(grid.cell(r, c)) is not None or parse_month(grid.cell(r, c)) is not None
+        )
+        if hits >= 3:
+            return r
+    return None
 
 
 def _has_subtotal_years(grid: Grid, month_col: int) -> bool:
@@ -132,7 +180,7 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         # value columns start just after the month column
         c0 = month_col + 1
         years_on_row = [c for c in range(c0, grid.ncols)
-                        if parse_year(grid.cell(year_row, c)) is not None]
+                        if _axis_year(grid.cell(year_row, c)) is not None]
         c1 = (max(years_on_row) + 3) if years_on_row else grid.ncols
         # The metric row is the last header row just above the first data row.
         metric_row = max(year_row + 1, first_month_row - 1)
@@ -185,6 +233,51 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
             method="heuristic",
             notes=("subtotal-year" if subtotal else f"year_col={year_col}"),
         )
+
+    # Matrix: many periods across a header row (years), series down the rows. Covers
+    # national accounts, balance of payments, etc. — and the quarterly variants when
+    # a sub-row carries E-M/A-J/J-S/O-D.
+    if year_row_count >= 4:
+        years_on_row = [c for c in range(grid.ncols)
+                        if _axis_year(grid.cell(year_row, c)) is not None]
+        c0, c1 = min(years_on_row), max(years_on_row) + 1
+        label_col = _label_column(grid, c0, year_row + 1, grid.nrows)
+        if label_col is not None:
+            sub_row = _subperiod_row(grid, year_row, year_row + 4, c0, c1)
+            freq = "quarterly" if sub_row is not None else "annual"
+            data_start = (sub_row if sub_row is not None else year_row) + 1
+            conf = min(0.85, 0.5 + 0.03 * min(year_row_count, 12))
+            return ExtractionSpec(
+                file=file, sheet=grid.name, orientation="matrix",
+                data_row_start=data_start, period_header_row=year_row,
+                subperiod_header_row=sub_row, label_col=label_col,
+                value_col_start=c0, value_col_end=c1, frequency=freq,
+                structure_hash=sh, confidence=round(conf, 2), method="heuristic",
+                notes=f"matrix {freq}: {year_row_count} períodos en fila {year_row}",
+            )
+
+    # Annual period_rows: a column of years down the rows (no month axis).
+    year_col, year_col_count, first_year_row = _year_column(grid)
+    if year_col is not None and year_col_count >= 5 and year_col_count >= year_row_count:
+        value_cols = _value_columns(grid, year_col, first_year_row)
+        series = []
+        seen: dict[str, int] = {}
+        for c in value_cols:
+            name = _header_name(grid, c, first_year_row)
+            code = _slug(name)
+            if code in seen:
+                code = f"{code}_c{c}"
+            seen[code] = c
+            series.append(SeriesSpec(code=code, name=name, unit=None, value_col=c))
+        if series:
+            conf = min(0.8, 0.45 + 0.02 * year_col_count)
+            return ExtractionSpec(
+                file=file, sheet=grid.name, orientation="period_rows",
+                data_row_start=first_year_row, month_col=None, year_col=year_col,
+                series=series, frequency="annual", structure_hash=sh,
+                confidence=round(conf, 2), method="heuristic",
+                notes=f"period_rows annual: year_col={year_col}",
+            )
 
     # Unresolved — let the interpreter take it.
     return ExtractionSpec(

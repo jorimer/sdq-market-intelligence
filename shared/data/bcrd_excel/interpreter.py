@@ -28,21 +28,28 @@ _SPEC_TOOL = {
     "name": "emit_extraction_spec",
     "description": (
         "Emit the recipe to extract every historical time series from this BCRD "
-        "Excel sheet. Periods must normalize to 'YYYY-MM' (monthly) or 'YYYY' "
-        "(annual). Choose orientation 'period_rows' when each data row is one "
-        "period, or 'cross_tab' when years run across a header row and months down "
-        "a column. All row/column indices are 0-based into the previewed grid."
+        "Excel sheet. Periods normalize to 'YYYY-MM' (monthly), 'YYYY-Qn' "
+        "(quarterly) or 'YYYY' (annual). Pick the orientation:\n"
+        "- 'period_rows': each data row is one period (month in month_col, or annual "
+        "when there is no month — set month_col null and year_col to the year column).\n"
+        "- 'cross_tab': years across a header row AND months down a column.\n"
+        "- 'matrix': periods run across a header row (years in period_header_row, an "
+        "optional quarter/month row in subperiod_header_row) and each data ROW is a "
+        "series whose name is in label_col (e.g. national accounts, balance of "
+        "payments).\nAll row/column indices are 0-based into the previewed grid."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
-            "orientation": {"type": "string", "enum": ["period_rows", "cross_tab"]},
+            "orientation": {"type": "string", "enum": ["period_rows", "cross_tab", "matrix"]},
             "sheet": {"type": "string"},
+            "frequency": {"type": ["string", "null"], "enum": ["monthly", "quarterly", "annual", None]},
             "data_row_start": {"type": "integer"},
             "data_row_end": {"type": ["integer", "null"]},
-            "month_col": {"type": ["integer", "null"]},
+            "month_col": {"type": ["integer", "null"],
+                          "description": "period_rows: month column; null for annual"},
             "year_col": {"type": ["integer", "null"],
-                         "description": "period_rows: sparse year column, forward-filled"},
+                         "description": "period_rows: year column, forward-filled"},
             "subtotal_year_regex": {"type": ["string", "null"],
                                     "description": "period_rows: regex with one group "
                                     "capturing the year in trailing subtotal rows"},
@@ -60,11 +67,15 @@ _SPEC_TOOL = {
                     "required": ["code", "name", "value_col"],
                 },
             },
-            "year_header_row": {"type": ["integer", "null"], "description": "cross_tab"},
+            "year_header_row": {"type": ["integer", "null"], "description": "cross_tab/matrix: row of years"},
             "metric_header_row": {"type": ["integer", "null"], "description": "cross_tab"},
-            "value_col_start": {"type": ["integer", "null"], "description": "cross_tab"},
-            "value_col_end": {"type": ["integer", "null"], "description": "cross_tab"},
-            "unit": {"type": ["string", "null"], "description": "cross_tab default unit"},
+            "super_header_row": {"type": ["integer", "null"], "description": "cross_tab: optional super-header"},
+            "period_header_row": {"type": ["integer", "null"], "description": "matrix: row of years across cols"},
+            "subperiod_header_row": {"type": ["integer", "null"], "description": "matrix: row of quarters/months"},
+            "label_col": {"type": ["integer", "null"], "description": "matrix: column with each row's series name"},
+            "value_col_start": {"type": ["integer", "null"], "description": "cross_tab/matrix"},
+            "value_col_end": {"type": ["integer", "null"], "description": "cross_tab/matrix"},
+            "unit": {"type": ["string", "null"], "description": "cross_tab/matrix default unit"},
             "notes": {"type": "string"},
         },
         "required": ["orientation", "sheet", "data_row_start"],

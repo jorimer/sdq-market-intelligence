@@ -14,7 +14,14 @@ from typing import Dict, List, Optional
 from shared.data.base_client import Record
 from shared.data.lineage import Lineage
 
-from .periods import coerce_num, format_period, normalize_label, parse_month, parse_year
+from .periods import (
+    coerce_num,
+    format_period,
+    normalize_label,
+    parse_month,
+    parse_quarter,
+    parse_year,
+)
 from .spec import ExtractionSpec
 from .workbook import Grid, Workbook
 
@@ -106,17 +113,79 @@ def _extract_period_rows(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
                 emit(last_year + 1, bmonth, br)
         return out
 
-    # Sparse year column, forward-filled down the rows.
+    # Sparse year column, forward-filled down the rows. With no month column this
+    # is the *annual* case: each row that carries its own year is one obs.
+    annual = spec.month_col is None
     current_year: Optional[int] = None
     for r in range(spec.data_row_start, end):
-        if spec.year_col is not None:
-            y = parse_year(grid.cell(r, spec.year_col))
-            if y is not None:
-                current_year = y
-        month = parse_month(grid.cell(r, spec.month_col)) if spec.month_col is not None else None
+        row_year = parse_year(grid.cell(r, spec.year_col)) if spec.year_col is not None else None
+        if row_year is not None:
+            current_year = row_year
+        if annual:
+            if row_year is None:  # header / blank / sub-total row → skip
+                continue
+            emit(row_year, None, r)
+            continue
+        month = parse_month(grid.cell(r, spec.month_col))
         if month is None or current_year is None:
             continue
         emit(current_year, month, r)
+    return out
+
+
+def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
+                    prefix: str) -> List[Record]:
+    """Transpose of period_rows: periods across a header row, series down the rows."""
+    c0 = spec.value_col_start or 0
+    c1 = spec.value_col_end if spec.value_col_end is not None else grid.ncols
+    label_col = spec.label_col if spec.label_col is not None else 0
+    col_year = _forward_filled_years(grid, spec.period_header_row, c0, c1)
+    # Optional sub-period row: quarter or month per column.
+    col_sub: Dict[int, tuple] = {}
+    if spec.subperiod_header_row is not None:
+        for c in range(c0, c1):
+            cell = grid.cell(spec.subperiod_header_row, c)
+            q = parse_quarter(cell)
+            if q is not None:
+                col_sub[c] = ("Q", q)
+                continue
+            m = parse_month(cell)
+            if m is not None:
+                col_sub[c] = ("M", m)
+
+    def period_for(year: int, c: int) -> str:
+        sub = col_sub.get(c)
+        if sub and sub[0] == "Q":
+            return format_period(year, None, sub[1])
+        if sub and sub[0] == "M":
+            return format_period(year, sub[1])
+        return format_period(year, None)
+
+    end = spec.data_row_end if spec.data_row_end is not None else grid.nrows
+    out: List[Record] = []
+    seen: Dict[str, int] = {}
+    for r in range(spec.data_row_start, end):
+        raw = grid.cell(r, label_col)
+        if raw is None or isinstance(raw, (int, float)):
+            continue
+        name = str(raw).strip()
+        if not name:
+            continue
+        # Skip pure section headers: rows with no numeric value in the grid.
+        if not any(isinstance(grid.cell(r, c), (int, float)) for c in range(c0, c1)):
+            continue
+        code = _slug(name)
+        if code in seen:  # two rows reusing a label → keep them distinct, never merge
+            code = f"{code}_r{r}"
+        seen[code] = r
+        for c in range(c0, c1):
+            year = col_year.get(c)
+            if year is None:
+                continue
+            out.append(Record(
+                series=f"{prefix}.{code}", period=period_for(year, c),
+                value=coerce_num(grid.cell(r, c)), lineage=lineage, unit=spec.unit,
+            ))
     return out
 
 
@@ -169,4 +238,6 @@ def extract_records(workbook: Workbook, spec: ExtractionSpec) -> List[Record]:
     prefix = _code_prefix(spec)
     if spec.orientation == "cross_tab":
         return _extract_cross_tab(grid, spec, lineage, prefix)
+    if spec.orientation == "matrix":
+        return _extract_matrix(grid, spec, lineage, prefix)
     return _extract_period_rows(grid, spec, lineage, prefix)
