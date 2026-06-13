@@ -236,6 +236,8 @@ def extract_records(workbook: Workbook, spec: ExtractionSpec) -> List[Record]:
     grid = workbook.grid(spec.sheet)
     lineage = _lineage(spec)
     prefix = _code_prefix(spec)
+    if spec.data_row_start is None:  # a spec may omit it; start from the top
+        spec.data_row_start = 0
     if spec.orientation == "cross_tab":
         return _extract_cross_tab(grid, spec, lineage, prefix)
     if spec.orientation == "matrix":
