@@ -21,9 +21,11 @@ from modules.macro_monitor.service import (
     backfill_historico,
     build_snapshot,
     delete_series,
+    excel_catalog_summary,
     get_indicators,
     get_series,
     get_snapshot,
+    ingest_excel_file,
     ingest_series,
 )
 
@@ -320,6 +322,49 @@ async def backfill_historico_endpoint(
         return backfill_historico(db, year_from=year_from, year_to=year_to)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Histórico Excel del BCRD (motor de ingesta AI-native) ─────────
+@router.get(
+    "/excel/catalog",
+    summary="Catálogo de Excel históricos del BCRD (cobertura)",
+    description=(
+        "Resumen del catálogo de 708 Excel históricos del BCRD: conteo por sector y "
+        "formato, más una lista cabecera de archivos de alto valor para quick-pick."
+    ),
+)
+async def excel_catalog(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return excel_catalog_summary()
+
+
+@router.post(
+    "/excel/ingest",
+    summary="Ingerir un Excel histórico del BCRD con el motor AI-native (admin)",
+    description=(
+        "Solo admin. Descarga un Excel del BCRD (por 'key' del catálogo o 'url'), "
+        "infiere su estructura, extrae las series y las valida. Con 'dry_run=true' "
+        "(por defecto) solo reporta qué entraría; con 'dry_run=false' hace upsert a "
+        "MacroSeries (códigos bcrd.xls.*)."
+    ),
+)
+async def excel_ingest(
+    key: Optional[str] = Query(None, description="Nombre de archivo del catálogo (ej. imae.xlsx)"),
+    url: Optional[str] = Query(None, description="URL directa del CDN del BCRD"),
+    dry_run: bool = Query(True, description="Solo reportar (true) o persistir el upsert (false)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    if url and not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="La 'url' debe ser http(s) del CDN del BCRD.")
+    try:
+        return ingest_excel_file(db, key=key, url=url, dry_run=dry_run)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001 — descarga/parsing externo: reportar, no 500 opaco
+        logger.warning("[macro] ingesta Excel falló: %s", e)
+        raise HTTPException(status_code=502, detail=f"No se pudo ingerir el Excel: {e}")
 
 
 # ── Publicaciones BCRD (informes oficiales en PDF, digest IA) ──────

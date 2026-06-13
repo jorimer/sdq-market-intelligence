@@ -8,15 +8,7 @@ import {
   BarChart3,
   ListChecks,
 } from "lucide-react";
-import {
-  PageHead,
-  Card,
-  CardHead,
-  StatTile,
-  Chip,
-  StateBlock,
-  LoadingGrid,
-} from "@/shared/ui/primitives";
+import { Card, CardHead, StatTile, Chip, StateBlock, LoadingGrid } from "@/shared/ui/primitives";
 import { Tone } from "@/shared/lib/bands";
 import {
   getPublications,
@@ -30,10 +22,7 @@ import {
 
 type Status = "loading" | "error" | "empty" | "ready";
 
-const SECTOR_TONE: Record<string, Tone> = {
-  banca: "ok",
-  macro: "muted",
-};
+const SECTOR_TONE: Record<string, Tone> = { banca: "ok", macro: "muted" };
 
 function SectorChips({ sectors }: { sectors: string[] }) {
   return (
@@ -47,7 +36,9 @@ function SectorChips({ sectors }: { sectors: string[] }) {
   );
 }
 
-export function PublicationsPage() {
+/** BCRD official reports (PDF → AI digest), embeddable inside the Datos·Macro
+ * console. Self-loading; no page chrome of its own. */
+export function PublicationsSection() {
   const [status, setStatus] = useState<Status>("loading");
   const [pubs, setPubs] = useState<PublicationSummary[]>([]);
   const [catalog, setCatalog] = useState<CatalogReport[]>([]);
@@ -95,9 +86,9 @@ export function PublicationsPage() {
       setRefreshNote(`Revisión completa · ${res.ingested_ok} informe(s) al día.`);
       await load();
     } catch (e: unknown) {
-      const status = (e as { response?: { status?: number } })?.response?.status;
+      const s = (e as { response?: { status?: number } })?.response?.status;
       setRefreshNote(
-        status === 403
+        s === 403
           ? "Actualizar requiere rol de administrador."
           : "No se pudo actualizar. Reintenta en unos segundos.",
       );
@@ -111,23 +102,22 @@ export function PublicationsPage() {
     [catalog],
   );
 
-  const head = (
-    <PageHead
-      eyebrow="BCRD · Informes oficiales"
-      title="Publicaciones BCRD"
-      sub="Informes del Banco Central analizados con IA: resumen, hallazgos, cifras y riesgos. Alimentan los insights de Macro y Banca."
-      right={
-        <button onClick={doRefresh} disabled={refreshing} className="btn btn-soft">
-          {refreshing ? "Revisando…" : "Buscar nuevas ediciones"}
-        </button>
-      }
-    />
+  const actionBar = (
+    <div className="flex items-center justify-between mb-4">
+      <p className="text-sm text-muted max-w-2xl">
+        Informes del Banco Central analizados con IA: resumen, hallazgos, cifras y riesgos. Alimentan
+        los insights de Macro y Banca.
+      </p>
+      <button onClick={doRefresh} disabled={refreshing} className="btn btn-soft shrink-0">
+        {refreshing ? "Revisando…" : "Buscar nuevas ediciones"}
+      </button>
+    </div>
   );
 
   if (status === "loading") {
     return (
       <div>
-        {head}
+        {actionBar}
         <LoadingGrid />
       </div>
     );
@@ -136,7 +126,7 @@ export function PublicationsPage() {
   if (status === "error") {
     return (
       <div>
-        {head}
+        {actionBar}
         <StateBlock
           kind="error"
           message="No se pudieron cargar las publicaciones. Reintenta en unos segundos."
@@ -153,7 +143,7 @@ export function PublicationsPage() {
   if (status === "empty") {
     return (
       <div>
-        {head}
+        {actionBar}
         <StateBlock
           kind="empty"
           message="Aún no hay publicaciones ingeridas. Busca las últimas ediciones del BCRD para empezar."
@@ -172,15 +162,12 @@ export function PublicationsPage() {
 
   return (
     <div>
-      {head}
+      {actionBar}
 
       {refreshNote && (
-        <div className="mb-4 text-xs text-muted rounded-[10px] bg-surface2 px-3 py-2">
-          {refreshNote}
-        </div>
+        <div className="mb-4 text-xs text-muted rounded-[10px] bg-surface2 px-3 py-2">{refreshNote}</div>
       )}
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <StatTile label="Informes en catálogo" value={catalog.length} />
         <StatTile label="Ediciones ingeridas" value={okCount} />
@@ -188,7 +175,6 @@ export function PublicationsPage() {
         <StatTile label="Cadencia" value="Semestral" />
       </div>
 
-      {/* Calendar / catalog */}
       <Card className="mb-5">
         <CardHead
           icon={Calendar}
@@ -214,9 +200,7 @@ export function PublicationsPage() {
                   <td className="py-2.5 px-1">
                     <SectorChips sectors={c.sectors} />
                   </td>
-                  <td className="py-2.5 px-1 mono text-body">
-                    {latestPeriodByKey[c.key] ?? "—"}
-                  </td>
+                  <td className="py-2.5 px-1 mono text-body">{latestPeriodByKey[c.key] ?? "—"}</td>
                   <td className="py-2.5 px-1 text-right">
                     <a
                       href={c.landing_url}
@@ -235,7 +219,6 @@ export function PublicationsPage() {
       </Card>
 
       <div className="grid lg:grid-cols-3 gap-5">
-        {/* List */}
         <div>
           <Card>
             <CardHead icon={FileText} title="Informes" subtitle={`${pubs.length} ediciones`} />
@@ -254,9 +237,7 @@ export function PublicationsPage() {
                     >
                       <div className="flex items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-ink truncate">
-                            {p.report_name}
-                          </div>
+                          <div className="text-sm font-semibold text-ink truncate">{p.report_name}</div>
                           <div className="text-xs text-muted mt-0.5 mono">{p.period}</div>
                         </div>
                         {p.status !== "ok" && <Chip tone="alert">error</Chip>}
@@ -269,7 +250,6 @@ export function PublicationsPage() {
           </Card>
         </div>
 
-        {/* Detail */}
         <div className="lg:col-span-2">
           <Card>
             {detailLoading ? (

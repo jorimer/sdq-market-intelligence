@@ -19,8 +19,8 @@ import { BankingScoreLayout } from "@/modules/banking-score/components/BankingSc
 
 // Macro Monitor (Eje 2) — new canonical pattern
 import { MacroMonitorPage } from "@/modules/macro-monitor/pages/MacroMonitorPage";
-// Publicaciones BCRD (informes oficiales + digest IA)
-import { PublicationsPage } from "@/modules/publications/pages/PublicationsPage";
+// Datos · Macroeconómico (BCRD) — consola operativa (API + Excel + Publicaciones)
+import { DatosMacroPage } from "@/modules/macro-monitor/pages/DatosMacroPage";
 // Macro-Political Risk (Eje 4)
 import { MacroPoliticalRiskPage } from "@/modules/macro-political-risk/pages/MacroPoliticalRiskPage";
 // Sector Intel (Eje 3)
@@ -65,10 +65,7 @@ export default function App() {
           {/* Datos — extracción por sector (multi-fuente) */}
           <Route path="/datos" element={<Navigate to="/datos/banca" replace />} />
           <Route path="/datos/banca" element={<DataPage />} />
-          <Route
-            path="/datos/macro"
-            element={<PlaceholderPage title="Datos · Macroeconómico (BCRD)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
-          />
+          <Route path="/datos/macro" element={<DatosMacroPage />} />
           <Route
             path="/datos/social"
             element={<PlaceholderPage title="Datos · Social (ONE)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
@@ -85,8 +82,8 @@ export default function App() {
           {/* Eje 2 — Macroeconómico */}
           <Route path="/macro-monitor" element={<MacroMonitorPage />} />
 
-          {/* Publicaciones BCRD — informes oficiales + digest IA */}
-          <Route path="/publicaciones-bcrd" element={<PublicationsPage />} />
+          {/* Publicaciones BCRD — ahora una pestaña dentro de Datos · Macro */}
+          <Route path="/publicaciones-bcrd" element={<Navigate to="/datos/macro?tab=publicaciones" replace />} />
 
           {/* Ejes 3-7 — UI en construcción (backend disponible) */}
           <Route path="/sector-intel" element={<SectorIntelPage />} />

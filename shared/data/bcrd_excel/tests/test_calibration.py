@@ -50,6 +50,21 @@ def test_imae_subtotal_year():
     assert all(len(p) == 7 for p in idx)  # every period is YYYY-MM
 
 
+def test_imae_no_silent_series_merge():
+    """Distinct value columns must map to distinct series — "Acumulada" appears
+    under both "Serie Original" and "Serie Desestacionalizada"; merging them would
+    mix two series into one. The engine must keep them apart (no duplicate periods).
+    """
+    _, recs = _extract("imae.xlsx")
+    report = validate(recs, file="imae.xlsx")
+    # every series has unique periods (no two columns collapsed into one code)
+    assert all(s.duplicates == 0 for s in report.series), [
+        (s.code, s.duplicates) for s in report.series if s.duplicates
+    ]
+    codes = [s.code for s in report.series]
+    assert len(codes) == len(set(codes))  # codes themselves are unique
+
+
 # ── Reserves: cross-tab with a 2-level header + a 2003 methodology break ──
 def test_reservas_cross_tab():
     spec, recs = _extract("reservas_internacionales.xlsx")

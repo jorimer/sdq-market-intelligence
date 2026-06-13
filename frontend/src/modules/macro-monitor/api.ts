@@ -58,3 +58,72 @@ export async function deleteSeries(code: string): Promise<number> {
   const { data } = await client.delete(`/macro-monitor/series/${encodeURIComponent(code)}`);
   return data.deleted ?? 0;
 }
+
+/** Admin: backfill del histórico BCRD (IPC + tipo de cambio) vía API. */
+export interface BackfillResult {
+  touched: number;
+  series: Record<string, number>;
+  period_min: string | null;
+  period_max: string | null;
+}
+export async function backfillHistorico(yearFrom: number, yearTo: number): Promise<BackfillResult> {
+  const { data } = await client.post(
+    `/macro-monitor/backfill-historico?year_from=${yearFrom}&year_to=${yearTo}`,
+  );
+  return data;
+}
+
+// ── Histórico Excel (motor de ingesta AI-native) ──────────────────
+export interface ExcelFeatured {
+  key: string;
+  label: string;
+  sector: string;
+  ext: string;
+  url: string;
+}
+export interface ExcelCatalog {
+  total: number;
+  by_sector: Record<string, number>;
+  by_ext: Record<string, number>;
+  featured: ExcelFeatured[];
+}
+export async function getExcelCatalog(): Promise<ExcelCatalog> {
+  const { data } = await client.get("/macro-monitor/excel/catalog");
+  return data;
+}
+
+export interface ExcelSeriesRow {
+  code: string;
+  unit: string | null;
+  n_obs: number;
+  n_missing: number;
+  period_min: string | null;
+  period_max: string | null;
+  ok: boolean;
+  flags: string[];
+}
+export interface ExcelIngestResult {
+  file: string;
+  method: string;
+  confidence: number;
+  orientation: string;
+  records: number;
+  series_count: number;
+  validation_ok: boolean;
+  series: ExcelSeriesRow[];
+  dry_run: boolean;
+  touched: number;
+}
+/** Admin: corre el motor sobre un Excel del BCRD. dry_run=true solo reporta. */
+export async function ingestExcel(opts: {
+  key?: string;
+  url?: string;
+  dryRun: boolean;
+}): Promise<ExcelIngestResult> {
+  const params = new URLSearchParams();
+  if (opts.key) params.set("key", opts.key);
+  if (opts.url) params.set("url", opts.url);
+  params.set("dry_run", String(opts.dryRun));
+  const { data } = await client.post(`/macro-monitor/excel/ingest?${params.toString()}`);
+  return data;
+}
