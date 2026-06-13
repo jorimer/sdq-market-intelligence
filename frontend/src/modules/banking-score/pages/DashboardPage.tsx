@@ -3,7 +3,7 @@ import { Trophy, PieChart, ChevronRight } from "lucide-react";
 import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
 import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
-import { AiInsightCard } from "../components/AiInsightCard";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { MarketConcentrationCard } from "../components/MarketConcentrationCard";
 import { getSectorInsight } from "../api";
 import {

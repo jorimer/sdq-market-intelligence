@@ -167,11 +167,10 @@ export async function getEntityInsight(bankId: string, withAi = true): Promise<E
 
 /* ── Contextual AI insight cards (comparative · sector · scenario) ── */
 
-export interface AiInsight {
-  text: string;
-  model_used: string;
-  from_cache: boolean;
-}
+// AiInsight now lives in shared/ui (promoted in T1). Re-exported here so existing
+// consumers importing it from this module keep working unchanged.
+export type { AiInsight } from "@/shared/ui/insight-types";
+import type { AiInsight } from "@/shared/ui/insight-types";
 
 export async function getCompareInsight(bankIds: string[], periodEnd?: string): Promise<AiInsight | null> {
   const { data } = await client.post<{ ai_insight: AiInsight | null }>(

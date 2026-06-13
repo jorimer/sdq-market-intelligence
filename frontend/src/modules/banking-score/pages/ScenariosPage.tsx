@@ -4,7 +4,7 @@ import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { RatingBadge } from "../components/RatingBadge";
-import { AiInsightCard } from "../components/AiInsightCard";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { PageHead, Card, CardHead, StateBlock, Delta } from "@/shared/ui/primitives";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
