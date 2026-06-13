@@ -11,7 +11,10 @@ AJAX desde **`https://www.bancentral.gov.do/a/CustomView/<articleId>-<slug>`**
 (GET público, devuelve HTML con los links del CDN). Los archivos viven en
 `https://cdn.bancentral.gov.do/documents/estadisticas/<sector>/documents/<archivo>.{xlsx,xls}`.
 
-Inventario completo (708 archivos) en [`bcrd_estadisticas_catalog.json`](bcrd_estadisticas_catalog.json).
+Inventario completo (708 archivos) en
+[`shared/data/bcrd_excel/catalog_data.json`](../shared/data/bcrd_excel/catalog_data.json)
+(vive dentro del paquete del motor para que viaje con el código en el contenedor;
+se carga vía `shared.data.bcrd_excel.catalog.load_catalog`).
 
 | Sector | articleId | # archivos |
 |---|---|---|
