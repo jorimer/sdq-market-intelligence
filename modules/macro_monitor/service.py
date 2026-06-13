@@ -31,7 +31,18 @@ FLOW_SERIES = {"remittances", "fdi", "reserves", "exports", "capital_flows"}
 
 
 def _upsert_records(db: Session, records) -> int:
-    """Upsert a list of :class:`Record` into MacroSeries (by series_code+period)."""
+    """Upsert a list of :class:`Record` into MacroSeries (by series_code+period).
+
+    Dedupes the batch by (series_code, period) first: the Excel extractor can emit
+    duplicate rows for some flagged layouts, and the session is ``autoflush=False``,
+    so two same-key rows both pass the per-row "not found" check and then collide at
+    commit (Postgres UniqueViolation on uq_mm_series_period). Last-wins matches the
+    per-row upsert semantics.
+    """
+    deduped: Dict[tuple, Any] = {}
+    for r in records:
+        deduped[(r.series, r.period)] = r
+    records = list(deduped.values())
     touched = 0
     for r in records:
         row = (
