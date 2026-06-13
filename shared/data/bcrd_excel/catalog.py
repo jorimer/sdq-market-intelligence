@@ -1,8 +1,12 @@
-"""Load the BCRD statistics catalog (``docs/bcrd_estadisticas_catalog.json``).
+"""Load the BCRD statistics catalog (``catalog_data.json``, shipped in this package).
 
 The catalog is the discovered inventory of ~708 historical Excel files grouped by
 sector, each entry a CDN URL. This module flattens it into ``CatalogEntry`` rows
 the engine can iterate over.
+
+The JSON lives *inside* this package (not under ``docs/``) and is resolved relative
+to ``__file__`` so it ships with the code and works regardless of the working
+directory or what the Docker image copies.
 """
 from __future__ import annotations
 
@@ -11,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
-_DEFAULT_CATALOG = Path("docs/bcrd_estadisticas_catalog.json")
+_DEFAULT_CATALOG = Path(__file__).resolve().parent / "catalog_data.json"
 
 
 @dataclass(frozen=True)

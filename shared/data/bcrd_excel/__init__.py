@@ -1,7 +1,7 @@
 """AI-native ingestion engine for the BCRD historical statistics Excel corpus.
 
-The BCRD publishes ~708 historical Excel files (catalog in
-``docs/bcrd_estadisticas_catalog.json``), each with a *bespoke* layout: periods
+The BCRD publishes ~708 historical Excel files (catalog in ``catalog_data.json``,
+shipped in this package), each with a *bespoke* layout: periods
 run down rows or across columns, headers span several rows, years sit in a sparse
 column, a sparse header row, or only in trailing "Promedio YYYY" subtotal rows.
 Hand-writing one parser per file is the anti-pattern this engine replaces.
