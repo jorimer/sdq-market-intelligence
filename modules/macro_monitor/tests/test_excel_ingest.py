@@ -34,6 +34,25 @@ def db():
         Base.metadata.drop_all(bind=engine)
 
 
+def test_upsert_records_dedupes_duplicate_series_period(db):
+    """El extractor puede emitir filas duplicadas (series, period) en layouts
+    marcados; con autoflush=False eso provoca UniqueViolation en Postgres al
+    commitear. _upsert_records dedup (last-wins) y persiste una sola fila.
+    """
+    lin = Lineage(source="BCRD", license="x", fetched_at=date.today())
+    recs = [
+        Record(series="bcrd.xls.piianual.bonos", period="2004", value=1.0, lineage=lin, unit="x"),
+        Record(series="bcrd.xls.piianual.bonos", period="2004", value=2.0, lineage=lin, unit="x"),
+        Record(series="bcrd.xls.piianual.bonos", period="2005", value=3.0, lineage=lin, unit="x"),
+    ]
+    touched = service._upsert_records(db, recs)
+    assert touched == 2  # (bonos,2004) colapsado a uno + (bonos,2005)
+    rows = db.query(MacroSeries).filter_by(series_code="bcrd.xls.piianual.bonos").all()
+    assert len(rows) == 2
+    val_2004 = next(r.value for r in rows if r.period == "2004")
+    assert val_2004 == 2.0  # last-wins
+
+
 def test_excel_catalog_summary_reads_real_catalog():
     summary = service.excel_catalog_summary()
     assert summary["total"] == 708
