@@ -75,6 +75,31 @@ def _year_header_row(grid: Grid) -> Tuple[Optional[int], int]:
     return best_row, best_count
 
 
+def _quarter_column(grid: Grid) -> Tuple[Optional[int], int, int]:
+    """Column richest in quarter labels (I-IV / E-M / T1-T4). (col, first_row, count)."""
+    best_col, best_count, best_first = None, 0, 0
+    for c in range(min(4, grid.ncols)):
+        rows = [r for r in range(grid.nrows) if parse_quarter(grid.cell(r, c)) is not None]
+        if len(rows) > best_count:
+            best_col, best_count, best_first = c, len(rows), rows[0]
+    return best_col, best_first, best_count
+
+
+def _has_year_markers(grid: Grid, col: int) -> bool:
+    """True if year-marker rows exist in *col*: 'Promedio YYYY' or a bare year."""
+    rx = re.compile(_SUBTOTAL_RE)
+    for r in range(grid.nrows):
+        label = " ".join(normalize_label(grid.cell(r, c)) for c in range(0, col + 2))
+        if rx.search(label):
+            return True
+        cell = grid.cell(r, col)
+        if parse_quarter(cell) is None and parse_month(cell) is None:
+            v = cell if isinstance(cell, (int, float)) else None
+            if v is not None and 1900 <= int(v) <= 2100:
+                return True
+    return False
+
+
 def _year_column(grid: Grid) -> tuple[Optional[int], int, int]:
     """Column richest in years *down the rows* (annual period_rows). (col, count, first_row)."""
     best_col, best_count, best_first = None, 0, 0
@@ -254,6 +279,29 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
                 value_col_start=c0, value_col_end=c1, frequency=freq,
                 structure_hash=sh, confidence=round(conf, 2), method="heuristic",
                 notes=f"matrix {freq}: {year_row_count} períodos en fila {year_row}",
+            )
+
+    # Quarterly period_rows: quarters (I-IV / E-M) down a column, year revealed by
+    # a "Promedio YYYY" or bare-year marker row (e.g. PIB / deflactor trimestral).
+    qcol, first_q_row, q_count = _quarter_column(grid)
+    if qcol is not None and q_count >= 4 and _has_year_markers(grid, qcol):
+        value_cols = _value_columns(grid, qcol, first_q_row)
+        series = []
+        seen_q: dict[str, int] = {}
+        for c in value_cols:
+            name = _header_name(grid, c, first_q_row)
+            code = _slug(name)
+            if code in seen_q:
+                code = f"{code}_c{c}"
+            seen_q[code] = c
+            series.append(SeriesSpec(code=code, name=name, unit=None, value_col=c))
+        if series:
+            return ExtractionSpec(
+                file=file, sheet=grid.name, orientation="period_rows",
+                data_row_start=first_q_row, month_col=qcol,
+                subtotal_year_regex=_SUBTOTAL_RE, series=series, frequency="trimestral",
+                structure_hash=sh, confidence=round(min(0.82, 0.5 + 0.04 * q_count), 2),
+                method="heuristic", notes="period_rows trimestral (marcador de año)",
             )
 
     # Annual period_rows: a column of years down the rows (no month axis).
