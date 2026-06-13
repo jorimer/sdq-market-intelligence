@@ -266,6 +266,10 @@ def run_excel_batch(
                 ok += status == "ok"
                 flagged += status == "flagged"
             except Exception as ex:  # noqa: BLE001 — record the failure, continue the batch
+                # A failed upsert (e.g. a DB constraint) leaves the session in a
+                # poisoned transaction; roll back before the next DB write, or the
+                # failure-report write below ALSO throws and aborts the whole batch.
+                db.rollback()
                 failed += 1
                 _upsert_excel_report(db, {
                     "file_url": e.url, "filename": e.filename, "sector": e.sector,
@@ -337,6 +341,10 @@ def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
             ok += status == "ok"
             flagged += status == "flagged"
         except Exception as e:  # noqa: BLE001
+            # Roll back the poisoned transaction (e.g. a failed upsert) before the
+            # failure-report write, or it throws too and aborts the whole canonical
+            # run — leaving only the files persisted before the first bad one.
+            db.rollback()
             failed += 1
             _upsert_excel_report(db, {
                 "file_url": entry.url, "filename": entry.filename, "sector": entry.sector,

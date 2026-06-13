@@ -27,7 +27,13 @@ class MacroSeries(UUIDMixin, Base):
         Index("ix_mm_series_code_period", "series_code", "period"),
     )
 
-    series_code = Column(String(60), nullable=False)   # e.g. "gdp_growth"
+    # Short API codes ("gdp_growth") AND the Excel engine's hierarchical codes
+    # ("bcrd.xls.<file>.<metric>", e.g.
+    # "bcrd.xls.ipc_base_2019_2020_serie_referencial.variacion_porcentual_con_dic"
+    # = 73 chars). PostgreSQL ENFORCES VARCHAR length (SQLite does not), so a too-
+    # short cap silently passes dev/tests and then 502s in prod with
+    # StringDataRightTruncation. Keep this generous for engine-generated codes.
+    series_code = Column(String(255), nullable=False)
     period = Column(String(10), nullable=False)        # "2025", "2025-Q1", "2025-01"
     value = Column(Float, nullable=True)               # NULL = missing, no interpolation
     unit = Column(String(40), nullable=True)
