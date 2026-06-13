@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FileSpreadsheet, Sparkles, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardHead, StatTile, Chip, StateBlock } from "@/shared/ui/primitives";
+import { MacroCanonicalSection } from "./MacroCanonicalSection";
 import { MacroCoverageSection } from "./MacroCoverageSection";
 import { MacroCrosscheckSection } from "./MacroCrosscheckSection";
 import {
@@ -70,11 +71,23 @@ export function MacroExcelSection() {
 
   return (
     <div className="space-y-5">
+      {/* Primary: the curated canonical registry (what we actually keep) */}
+      <MacroCanonicalSection />
+
+      {/* Correctness: cross-check the canonical series against the live API */}
+      <MacroCrosscheckSection />
+
+      {/* ── Secondary: full-corpus discovery & diagnostics (708 archivos) ── */}
+      <div className="pt-2">
+        <h3 className="font-display text-sm font-bold text-ink">Inventario y diagnóstico del corpus</h3>
+        <p className="text-xs text-muted mt-0.5">
+          Los 708 Excel descubiertos y el barrido del motor — herramienta de descubrimiento y
+          revisión, no el dato de producción (eso es el catálogo canónico de arriba).
+        </p>
+      </div>
+
       {/* Corpus-wide coverage report (batch runner) */}
       <MacroCoverageSection />
-
-      {/* Correctness: cross-check against the live API */}
-      <MacroCrosscheckSection />
 
       {/* Catalog stats */}
       {catStatus === "error" ? (

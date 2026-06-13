@@ -278,6 +278,74 @@ def run_excel_batch(
     return {"processed": len(entries), "ok": ok, "flagged": flagged, "failed": failed}
 
 
+def get_canonical_registry(db: Session) -> Dict[str, Any]:
+    """The curated canonical series + each one's current extraction status.
+
+    The registry is the base-homogeneous selection an analyst cites; we attach the
+    latest extraction outcome (from the per-file reports) so the UI can show, per
+    series, whether it extracts cleanly today.
+    """
+    from modules.macro_monitor.models.models import ExcelFileReport
+    from shared.data.bcrd_excel import canonical
+
+    reports = {r.filename: r for r in db.query(ExcelFileReport).all()}
+    out = []
+    for s in canonical.as_dicts():
+        rep = reports.get(s["source_file"])
+        s["extraction"] = (
+            {"status": rep.status, "n_series": int(rep.n_series or 0),
+             "method": rep.method, "orientation": rep.orientation}
+            if rep else None
+        )
+        out.append(s)
+    return {"series": out, "count": len(out)}
+
+
+def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
+    """Run the engine over ONLY the canonical source files (not the whole catalog).
+
+    Dedupes shared source files (e.g. reserves brutas/netas come from one file).
+    Upserts a per-file report; with *persist*, upserts the extracted series too.
+    """
+    from shared.data.bcrd_excel import canonical
+    from shared.data.bcrd_excel.catalog import find_entry
+    from shared.data.bcrd_excel.engine import SpecCache, ingest_excel
+
+    cache = SpecCache()
+    seen: set = set()
+    ok = flagged = failed = 0
+    for s in canonical.registry():
+        if s.source_file in seen:
+            continue
+        seen.add(s.source_file)
+        entry = find_entry(s.source_file)
+        if entry is None:
+            failed += 1
+            continue
+        try:
+            r = ingest_excel(entry, cache=cache, use_claude=True)
+            status = "ok" if r.report.ok else "flagged"
+            persisted = _upsert_records(db, r.records) if persist else 0
+            _upsert_excel_report(db, {
+                "file_url": entry.url, "filename": entry.filename, "sector": entry.sector,
+                "status": status, "method": r.spec.method, "orientation": r.spec.orientation,
+                "frequency": r.spec.frequency, "confidence": r.spec.confidence,
+                "n_records": len(r.records), "n_series": len(r.report.series),
+                "n_flagged": len(r.report.flagged), "persisted": persisted, "error": None,
+                "flags": [{"code": x.code, "flags": x.flags} for x in r.report.flagged][:20],
+            })
+            ok += status == "ok"
+            flagged += status == "flagged"
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            _upsert_excel_report(db, {
+                "file_url": entry.url, "filename": entry.filename, "sector": entry.sector,
+                "status": "failed", "error": str(e)[:500],
+            })
+    logger.info("[macro] ingesta canónica: %d ok, %d marcados, %d fallidos", ok, flagged, failed)
+    return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed}
+
+
 def cross_validate_excel(db: Session) -> Dict[str, Any]:
     """Cross-check the Excel-extracted series against the live API series.
 
