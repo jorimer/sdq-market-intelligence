@@ -38,6 +38,35 @@ class MacroSeries(UUIDMixin, Base):
     license = Column(String(120), nullable=True)
 
 
+class ExcelFileReport(UUIDMixin, Base):
+    """Per-file outcome of running the AI-native engine over the BCRD Excel corpus.
+
+    One row per source file (latest run), so the coverage report is queryable:
+    how many files resolved, by which method, what's flagged for review, what
+    failed. Populated by the batch runner; upserted by ``file_url``.
+    """
+    __tablename__ = "mm_excel_reports"
+    __table_args__ = (
+        UniqueConstraint("file_url", name="uq_mm_excel_file"),
+        Index("ix_mm_excel_status", "status"),
+    )
+
+    file_url = Column(String(500), nullable=False)
+    filename = Column(String(200), nullable=True)
+    sector = Column(String(60), nullable=True)
+    status = Column(String(20), nullable=False)        # "ok" | "flagged" | "failed"
+    method = Column(String(20), nullable=True)         # heuristic | claude | cached
+    orientation = Column(String(20), nullable=True)
+    frequency = Column(String(20), nullable=True)
+    confidence = Column(Float, nullable=True)
+    n_records = Column(Float, nullable=True)
+    n_series = Column(Float, nullable=True)
+    n_flagged = Column(Float, nullable=True)
+    persisted = Column(Float, nullable=True)           # observations upserted to MacroSeries
+    error = Column(String(500), nullable=True)
+    flags = Column(JSON, nullable=True)                # [{code, flags:[...]}] for flagged series
+
+
 class MacroSnapshot(UUIDMixin, Base):
     """Computed momentum + signals for one period (the monitor's output)."""
     __tablename__ = "mm_snapshots"

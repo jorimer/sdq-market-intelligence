@@ -127,3 +127,45 @@ export async function ingestExcel(opts: {
   const { data } = await client.post(`/macro-monitor/excel/ingest?${params.toString()}`);
   return data;
 }
+
+// ── Barrido del corpus + cobertura ────────────────────────────────
+export interface ExcelAttention {
+  filename: string | null;
+  sector: string | null;
+  status: "flagged" | "failed";
+  orientation: string | null;
+  frequency: string | null;
+  confidence: number | null;
+  n_series: number;
+  n_flagged: number;
+  error: string | null;
+  flags: { code: string; flags: string[] }[];
+}
+export interface ExcelCoverage {
+  total_catalog: number;
+  reported: number;
+  by_status: Record<string, number>;
+  by_method: Record<string, number>;
+  by_frequency: Record<string, number>;
+  attention: ExcelAttention[];
+  status: { is_running: boolean; done: number; total: number; started_at: string | null };
+}
+export async function getExcelCoverage(): Promise<ExcelCoverage> {
+  const { data } = await client.get("/macro-monitor/excel/coverage");
+  return data;
+}
+/** Admin: lanza el barrido del motor sobre el catálogo en segundo plano. */
+export async function runExcelBatch(opts: {
+  sector?: string;
+  limit?: number;
+  persist?: boolean;
+  force?: boolean;
+}): Promise<{ status: string; via?: string; message: string }> {
+  const params = new URLSearchParams();
+  if (opts.sector) params.set("sector", opts.sector);
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  if (opts.persist) params.set("persist", "true");
+  if (opts.force) params.set("force", "true");
+  const { data } = await client.post(`/macro-monitor/excel/batch?${params.toString()}`);
+  return data;
+}

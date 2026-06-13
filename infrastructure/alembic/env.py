@@ -23,7 +23,7 @@ from modules.macro_political_risk.models.models import (  # noqa: F401
     Country, IRMPSnapshot, DimensionScore,
 )
 from modules.macro_monitor.models.models import (  # noqa: F401
-    MacroSeries, MacroSnapshot,
+    ExcelFileReport, MacroSeries, MacroSnapshot,
 )
 from modules.trade_intel.models.models import (  # noqa: F401
     TradeFlow, TradeScore,

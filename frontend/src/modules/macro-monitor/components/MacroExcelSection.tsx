@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FileSpreadsheet, Sparkles, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardHead, StatTile, Chip, StateBlock } from "@/shared/ui/primitives";
+import { MacroCoverageSection } from "./MacroCoverageSection";
 import {
   getExcelCatalog,
   ingestExcel,
@@ -68,7 +69,10 @@ export function MacroExcelSection() {
 
   return (
     <div className="space-y-5">
-      {/* Coverage */}
+      {/* Corpus-wide coverage report (batch runner) */}
+      <MacroCoverageSection />
+
+      {/* Catalog stats */}
       {catStatus === "error" ? (
         <StateBlock kind="error" message="No se pudo cargar el catálogo de Excel del BCRD." />
       ) : (
