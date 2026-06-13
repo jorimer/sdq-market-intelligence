@@ -40,7 +40,7 @@ Leyenda robustez: 🟢 extrae limpio y validable · 🟡 extrae pero requiere re
 | IMAE | `imae.xlsx` | 2007=100 | mensual | `bcrd.sector_real.imaes` | índice + YoY | único indicador de actividad de alta frecuencia; desde 2007 | 🟢 |
 | PIB real (crecimiento) | `pib_2018.xlsx` | 2018 | trimestral | — | base 2018 vigente; `*_retro` (2007 empalmado) para historia; YoY del volumen | base oficial vigente; el crecimiento es base-invariante | 🔴 (hoy da "sin series") |
 | PIB nominal por gasto | `pib_gasto.xls` | corriente | anual | — | nivel corriente directo | demanda agregada (consumo, inversión, X-M) | 🟡 |
-| Deflactor del PIB | `pib_deflactor_2018.xlsx` | 2018 | trimestral | — | YoY como inflación implícita | medida amplia de precios | 🔴 |
+| Deflactor del PIB | `pib_deflactor_2018.xlsx` | 2018 | trimestral | — | YoY como inflación implícita | medida amplia de precios | 🟢 (trimestral) |
 
 ### Sector Externo
 | Serie | Archivo canónico | Base | Frec. | API | Homogeneización | Razón | Robustez |

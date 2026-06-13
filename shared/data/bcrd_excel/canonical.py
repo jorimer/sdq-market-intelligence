@@ -91,7 +91,8 @@ REGISTRY: List[CanonicalSeries] = [
         homogenization="base 2018 vigente; series '*_retro' (2007 empalmado) para historia; "
                        "el crecimiento (YoY del volumen) es invariante a la base",
         rationale="Base oficial vigente; el crecimiento real es la medida citable y base-invariante.",
-        robustness="red",  # el motor aún no extrae este layout (PR de extracción)
+        robustness="green",  # period_rows trimestral (trimestres + marcador de año)
+        excel_series_suffix="serie_original_indice",
     ),
     CanonicalSeries(
         key="pib_nominal_gasto", concept="PIB nominal por gasto", sector="sector_real",
@@ -105,7 +106,8 @@ REGISTRY: List[CanonicalSeries] = [
         source_file="pib_deflactor_2018.xlsx", base="2018", frequency="trimestral",
         homogenization="YoY como inflación implícita",
         rationale="Medida amplia de precios de toda la economía (no solo consumo).",
-        robustness="red",
+        robustness="green",  # period_rows trimestral
+        excel_series_suffix="deflactor_del_pib",
     ),
     # ── Sector Externo ───────────────────────────────────────────
     CanonicalSeries(
@@ -134,9 +136,10 @@ REGISTRY: List[CanonicalSeries] = [
     CanonicalSeries(
         key="remesas", concept="Remesas", sector="sector_externo",
         source_file="Remesas_6.xlsx", base="US$ MM", frequency="mensual",
-        homogenization="nivel directo",
-        rationale="Mayor flujo externo de divisas del país; soporte del consumo.",
-        robustness="red",
+        homogenization="nivel directo (matriz años×meses)",
+        rationale="Mayor flujo externo de divisas del país; soporte del consumo. "
+                  "Ojo: las celdas vienen en US$ (no millones pese al rótulo) — verificar unidad.",
+        robustness="yellow",  # extrae como matriz; revisar la unidad declarada
     ),
     CanonicalSeries(
         key="pii", concept="Posición de inversión internacional", sector="sector_externo",

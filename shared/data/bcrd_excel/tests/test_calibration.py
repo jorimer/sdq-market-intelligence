@@ -149,6 +149,17 @@ def test_matrix_quarterly_synthetic():
                           "2011-Q1", "2011-Q2", "2011-Q3", "2011-Q4"]
 
 
+# ── Quarterly period_rows: quarters down a column, year via subtotal ──
+def test_pib_trimestral_quarters():
+    spec, recs = _extract("pib_2018.xlsx")
+    assert spec.orientation == "period_rows" and spec.frequency == "trimestral"
+    idx = _series(recs, "serie_original_indice")
+    # quarter revealed by the trailing "Promedio 2007" marker; quarterly periods
+    assert idx["2007-Q1"] == pytest.approx(56.2, abs=0.1)
+    assert idx["2008-Q1"] == pytest.approx(61.0, abs=0.1)
+    assert all(p.endswith(("-Q1", "-Q2", "-Q3", "-Q4")) for p in idx)
+
+
 # ── Cross-check against API-held values is the strongest signal ───
 def test_crosscheck_matches_reference():
     _, recs = _extract("reservas_internacionales.xlsx")

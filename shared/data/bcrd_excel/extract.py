@@ -76,10 +76,25 @@ def _extract_period_rows(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     end = spec.data_row_end if spec.data_row_end is not None else grid.nrows
     series = spec.series
     subtotal_re = re.compile(spec.subtotal_year_regex) if spec.subtotal_year_regex else None
+    pcol = spec.month_col  # the within-year period column: months OR quarters
     out: List[Record] = []
 
-    def emit(year: int, month: Optional[int], r: int) -> None:
-        period = format_period(year, month)
+    def subperiod(r: int) -> Optional[tuple]:
+        """(kind, n) for the row's within-year period: ('M',1..12) or ('Q',1..4)."""
+        if pcol is None:
+            return None
+        cell = grid.cell(r, pcol)
+        m = parse_month(cell)
+        if m is not None:
+            return ("M", m)
+        q = parse_quarter(cell)
+        return ("Q", q) if q is not None else None
+
+    def emit(year: int, sub: Optional[tuple], r: int) -> None:
+        if sub and sub[0] == "Q":
+            period = format_period(year, None, sub[1])
+        else:
+            period = format_period(year, sub[1] if sub else None)
         for s in series:
             out.append(Record(
                 series=f"{prefix}.{s.code}" if not s.code.startswith(prefix) else s.code,
@@ -88,34 +103,34 @@ def _extract_period_rows(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
             ))
 
     if subtotal_re is not None:
-        # Year revealed by a trailing subtotal row ("Promedio 2007"); buffer the
-        # block's months and stamp them once the year appears.
-        buffer: List[tuple[int, int]] = []  # (row, month)
+        # Year revealed by a trailing subtotal row ("Promedio 2007") or a bare-year
+        # row ("2018"); buffer the block's months/quarters and stamp them on the year.
+        buffer: List[tuple[int, tuple]] = []  # (row, sub)
         last_year: Optional[int] = None
         for r in range(spec.data_row_start, end):
-            label = " ".join(
-                normalize_label(grid.cell(r, c)) for c in range(0, (spec.month_col or 0) + 2)
-            )
-            m = subtotal_re.search(label)
-            if m:
-                year = int(m.group(1))
-                for br, bmonth in buffer:
-                    emit(year, bmonth, br)
-                last_year = year
-                buffer = []
+            sub = subperiod(r)
+            if sub is None:  # not a data period → maybe a year marker
+                label = " ".join(
+                    normalize_label(grid.cell(r, c)) for c in range(0, (pcol or 0) + 2)
+                )
+                m = subtotal_re.search(label)
+                year = int(m.group(1)) if m else parse_year(grid.cell(r, pcol)) if pcol is not None else None
+                if year is not None and buffer:
+                    for br, bsub in buffer:
+                        emit(year, bsub, br)
+                    last_year = year
+                    buffer = []
                 continue
-            month = parse_month(grid.cell(r, spec.month_col)) if spec.month_col is not None else None
-            if month is not None:
-                buffer.append((r, month))
+            buffer.append((r, sub))
         # A still-open final block (latest year, no subtotal yet): infer +1.
         if buffer and last_year is not None and len(buffer) <= 12:
-            for br, bmonth in buffer:
-                emit(last_year + 1, bmonth, br)
+            for br, bsub in buffer:
+                emit(last_year + 1, bsub, br)
         return out
 
-    # Sparse year column, forward-filled down the rows. With no month column this
+    # Sparse year column, forward-filled down the rows. With no period column this
     # is the *annual* case: each row that carries its own year is one obs.
-    annual = spec.month_col is None
+    annual = pcol is None
     current_year: Optional[int] = None
     for r in range(spec.data_row_start, end):
         row_year = parse_year(grid.cell(r, spec.year_col)) if spec.year_col is not None else None
@@ -126,10 +141,10 @@ def _extract_period_rows(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
                 continue
             emit(row_year, None, r)
             continue
-        month = parse_month(grid.cell(r, spec.month_col))
-        if month is None or current_year is None:
+        sub = subperiod(r)
+        if sub is None or current_year is None:
             continue
-        emit(current_year, month, r)
+        emit(current_year, sub, r)
     return out
 
 
