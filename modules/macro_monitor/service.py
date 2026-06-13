@@ -346,6 +346,35 @@ def ingest_canonical(db: Session, *, persist: bool = False) -> Dict[str, Any]:
     return {"files": len(seen), "ok": ok, "flagged": flagged, "failed": failed}
 
 
+def start_canonical_ingest_background(*, persist: bool = False) -> Dict[str, Any]:
+    """Launch the canonical ingest in the worker/thread — it runs the engine over
+    ~20 files (some via Claude), too long for a synchronous request."""
+    import threading
+
+    from shared.config.settings import settings
+
+    msg = ("Ingesta del set canónico iniciada en segundo plano (≈1-2 min). El estado "
+           "de cada serie se actualiza en el catálogo canónico al recargar.")
+    if settings.USE_CELERY and settings.REDIS_URL:
+        try:
+            from modules.macro_monitor.tasks import ingest_canonical_task
+            ingest_canonical_task.delay(persist=persist)
+            return {"status": "started", "via": "celery", "message": msg}
+        except Exception:  # noqa: BLE001
+            logger.exception("No se pudo encolar la ingesta canónica; usando hilo")
+
+    def _run() -> None:
+        from shared.database.session import SessionLocal
+        db = SessionLocal()
+        try:
+            ingest_canonical(db, persist=persist)
+        finally:
+            db.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started", "via": "thread", "message": msg}
+
+
 def cross_validate_excel(db: Session) -> Dict[str, Any]:
     """Cross-check the Excel-extracted series against the live API series.
 

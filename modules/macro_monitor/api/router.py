@@ -28,9 +28,9 @@ from modules.macro_monitor.service import (
     get_indicators,
     get_series,
     get_snapshot,
-    ingest_canonical,
     ingest_excel_file,
     ingest_series,
+    start_canonical_ingest_background,
     start_excel_batch_background,
 )
 
@@ -393,16 +393,16 @@ async def excel_canonical(
     "/excel/ingest-canonical",
     summary="Ingerir SOLO el set canónico de series del BCRD (admin)",
     description=(
-        "Solo admin. Corre el motor sobre los archivos canónicos (no los 708) y, con "
-        "'persist=true', hace upsert de las series extraídas a MacroSeries."
+        "Solo admin. Lanza en segundo plano el motor sobre los archivos canónicos "
+        "(no los 708); con 'persist=true' hace upsert de las series extraídas a "
+        "MacroSeries. El avance se ve en el catálogo canónico."
     ),
 )
 async def excel_ingest_canonical(
     persist: bool = Query(False, description="Upsert de las series a MacroSeries"),
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
-    return ingest_canonical(db, persist=persist)
+    return start_canonical_ingest_background(persist=persist)
 
 
 @router.get(

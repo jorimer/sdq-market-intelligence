@@ -49,10 +49,9 @@ export function MacroCanonicalSection() {
     setNote("");
     try {
       const r = await ingestCanonical(persist);
-      setNote(
-        `${persist ? "Ingesta" : "Análisis"} canónico: ${r.ok} ok · ${r.flagged} marcados · ${r.failed} fallidos (${r.files} archivos).`,
-      );
-      await load();
+      setNote(r.message);
+      // it runs in the background; refresh the extraction column shortly after
+      setTimeout(load, 4000);
     } catch (e: unknown) {
       const s = (e as { response?: { status?: number } })?.response?.status;
       setNote(s === 403 ? "Requiere rol de administrador." : "No se pudo ingerir el set canónico.");
