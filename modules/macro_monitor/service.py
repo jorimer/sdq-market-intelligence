@@ -192,6 +192,154 @@ def ingest_excel_file(
     }
 
 
+# ── Batch run over the catalog + coverage report ──────────────────
+# In-process status (mirrors the SIB sync). Survives within a web process; the
+# persisted ExcelFileReport rows are the durable record across restarts.
+_excel_batch_status: Dict[str, Any] = {
+    "is_running": False, "done": 0, "total": 0, "started_at": None, "last_error": None,
+}
+
+
+def excel_batch_status() -> Dict[str, Any]:
+    return dict(_excel_batch_status)
+
+
+def _upsert_excel_report(db: Session, fields: Dict[str, Any]) -> None:
+    from modules.macro_monitor.models.models import ExcelFileReport
+
+    row = db.query(ExcelFileReport).filter_by(file_url=fields["file_url"]).first()
+    if row is None:
+        row = ExcelFileReport(file_url=fields["file_url"])
+        db.add(row)
+    for k, v in fields.items():
+        setattr(row, k, v)
+    db.commit()
+
+
+def run_excel_batch(
+    db: Session, *, sector: Optional[str] = None, limit: Optional[int] = None,
+    use_claude: bool = True, persist_series: bool = False, force: bool = False,
+) -> Dict[str, Any]:
+    """Run the engine over the catalog (or one *sector*), upserting a per-file
+    report. Idempotent: without *force*, files already reported are skipped
+    (resume). With *persist_series*, also upserts the extracted records.
+    """
+    from modules.macro_monitor.models.models import ExcelFileReport
+    from shared.data.bcrd_excel.catalog import load_catalog
+    from shared.data.bcrd_excel.engine import SpecCache, ingest_excel
+
+    entries = [e for e in load_catalog() if not sector or e.sector == sector]
+    if limit:
+        entries = entries[:limit]
+    done_urls = set()
+    if not force:
+        done_urls = {r.file_url for r in db.query(ExcelFileReport.file_url).all()}
+
+    cache = SpecCache()
+    _excel_batch_status.update(is_running=True, done=0, total=len(entries), last_error=None)
+    ok = flagged = failed = 0
+    try:
+        for e in entries:
+            if e.url in done_urls:
+                _excel_batch_status["done"] += 1
+                continue
+            try:
+                r = ingest_excel(e, cache=cache, use_claude=use_claude)
+                status = "ok" if r.report.ok else "flagged"
+                persisted = _upsert_records(db, r.records) if persist_series else 0
+                _upsert_excel_report(db, {
+                    "file_url": e.url, "filename": e.filename, "sector": e.sector,
+                    "status": status, "method": r.spec.method,
+                    "orientation": r.spec.orientation, "frequency": r.spec.frequency,
+                    "confidence": r.spec.confidence, "n_records": len(r.records),
+                    "n_series": len(r.report.series), "n_flagged": len(r.report.flagged),
+                    "persisted": persisted, "error": None,
+                    "flags": [{"code": s.code, "flags": s.flags} for s in r.report.flagged][:20],
+                })
+                ok += status == "ok"
+                flagged += status == "flagged"
+            except Exception as ex:  # noqa: BLE001 — record the failure, continue the batch
+                failed += 1
+                _upsert_excel_report(db, {
+                    "file_url": e.url, "filename": e.filename, "sector": e.sector,
+                    "status": "failed", "error": str(ex)[:500],
+                })
+            _excel_batch_status["done"] += 1
+    finally:
+        _excel_batch_status["is_running"] = False
+    logger.info("[macro] batch Excel: %d ok, %d marcados, %d fallidos", ok, flagged, failed)
+    return {"processed": len(entries), "ok": ok, "flagged": flagged, "failed": failed}
+
+
+def get_excel_coverage(db: Session) -> Dict[str, Any]:
+    """Coverage rollup + the flagged/failed files (for the report UI)."""
+    from collections import Counter
+
+    from modules.macro_monitor.models.models import ExcelFileReport
+    from shared.data.bcrd_excel.catalog import load_catalog
+
+    total_catalog = len(load_catalog())
+    rows = db.query(ExcelFileReport).all()
+    by_status: Counter = Counter(r.status for r in rows)
+    by_method: Counter = Counter(r.method for r in rows if r.method)
+    by_freq: Counter = Counter(r.frequency for r in rows if r.frequency)
+    attention = [
+        {
+            "filename": r.filename, "sector": r.sector, "status": r.status,
+            "orientation": r.orientation, "frequency": r.frequency,
+            "confidence": r.confidence, "n_series": int(r.n_series or 0),
+            "n_flagged": int(r.n_flagged or 0), "error": r.error,
+            "flags": r.flags or [],
+        }
+        for r in rows if r.status in ("flagged", "failed")
+    ]
+    return {
+        "total_catalog": total_catalog,
+        "reported": len(rows),
+        "by_status": dict(by_status),
+        "by_method": dict(by_method),
+        "by_frequency": dict(by_freq),
+        "attention": attention,
+        "status": excel_batch_status(),
+    }
+
+
+def start_excel_batch_background(
+    *, sector: Optional[str] = None, limit: Optional[int] = None,
+    use_claude: bool = True, persist_series: bool = False, force: bool = False,
+) -> Dict[str, Any]:
+    """Launch the batch in the Celery worker (survives web restarts) or a thread."""
+    import threading
+
+    from shared.config.settings import settings
+
+    if _excel_batch_status.get("is_running"):
+        return {"status": "already_running", "message": "Ya hay un barrido en progreso."}
+    msg = ("Barrido del corpus Excel iniciado en segundo plano. Puede tardar varios "
+           "minutos (descarga + inferencia, con Claude en los layouts difíciles); el "
+           "avance se actualiza en esta pantalla.")
+    kwargs = dict(sector=sector, limit=limit, use_claude=use_claude,
+                  persist_series=persist_series, force=force)
+    if settings.USE_CELERY and settings.REDIS_URL:
+        try:
+            from modules.macro_monitor.tasks import excel_batch_task
+            excel_batch_task.delay(**kwargs)
+            return {"status": "started", "via": "celery", "message": msg}
+        except Exception:  # noqa: BLE001 — fall back to a thread if the broker is down
+            logger.exception("No se pudo encolar el batch Excel; usando hilo")
+
+    def _run() -> None:
+        from shared.database.session import SessionLocal
+        db = SessionLocal()
+        try:
+            run_excel_batch(db, **kwargs)
+        finally:
+            db.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started", "via": "thread", "message": msg}
+
+
 def _series_by_code(db: Session) -> Dict[str, List[tuple]]:
     """Group all observations into ``{series_code: [(period, value), ...]}`` sorted."""
     grouped: Dict[str, list] = defaultdict(list)

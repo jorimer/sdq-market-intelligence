@@ -22,11 +22,13 @@ from modules.macro_monitor.service import (
     build_snapshot,
     delete_series,
     excel_catalog_summary,
+    get_excel_coverage,
     get_indicators,
     get_series,
     get_snapshot,
     ingest_excel_file,
     ingest_series,
+    start_excel_batch_background,
 )
 
 logger = logging.getLogger("sdq.api.macro_monitor")
@@ -365,6 +367,46 @@ async def excel_ingest(
     except Exception as e:  # noqa: BLE001 — descarga/parsing externo: reportar, no 500 opaco
         logger.warning("[macro] ingesta Excel falló: %s", e)
         raise HTTPException(status_code=502, detail=f"No se pudo ingerir el Excel: {e}")
+
+
+@router.get(
+    "/excel/coverage",
+    summary="Cobertura del corpus Excel del BCRD (reporte del barrido)",
+    description=(
+        "Rollup del barrido del motor sobre el catálogo: cuántos archivos se "
+        "resolvieron (y por qué método/orientación/frecuencia), cuántos quedaron "
+        "marcados para revisión y cuántos fallaron, con el detalle de esos."
+    ),
+)
+async def excel_coverage(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return get_excel_coverage(db)
+
+
+@router.post(
+    "/excel/batch",
+    summary="Correr el motor sobre el catálogo Excel del BCRD (admin)",
+    description=(
+        "Solo admin. Lanza en segundo plano el barrido del motor sobre el catálogo "
+        "(o un 'sector'). Idempotente: sin 'force' omite archivos ya reportados "
+        "(reanuda). Con 'persist=true' hace upsert de las series extraídas. El "
+        "avance se consulta en /excel/coverage."
+    ),
+)
+async def excel_batch(
+    sector: Optional[str] = Query(None, description="Procesar solo este sector"),
+    limit: Optional[int] = Query(None, description="Máximo de archivos (prueba)"),
+    persist: bool = Query(False, description="Upsert de las series a MacroSeries"),
+    use_claude: bool = Query(True, description="Usar el intérprete Claude en layouts difíciles"),
+    force: bool = Query(False, description="Re-procesar archivos ya reportados"),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    return start_excel_batch_background(
+        sector=sector, limit=limit, use_claude=use_claude,
+        persist_series=persist, force=force,
+    )
 
 
 # ── Publicaciones BCRD (informes oficiales en PDF, digest IA) ──────
