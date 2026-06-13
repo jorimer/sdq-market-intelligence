@@ -1,6 +1,14 @@
 """Macro Monitor — API endpoints.
 
 prefix: /api/v1/macro-monitor
+
+Las operaciones se declaran ``def`` (síncronas), NO ``async def``. Todo el trabajo
+aguas abajo es bloqueante: SQLAlchemy síncrono, descargas del CDN del BCRD, parseo
+de Excel y llamadas a Claude (~10-60s en layouts difíciles). FastAPI corre las
+funciones ``def`` en su threadpool, fuera del event loop; un ``async def`` las
+correría DENTRO del loop y una sola ingesta lenta congelaría al único worker de
+uvicorn → 502 en cascada. No las conviertas a ``async def`` sin volver async todo
+el I/O subyacente. (Las cargas largas —batch/canónico— van a Celery/hilo aparte.)
 """
 import logging
 from typing import Any, Dict, Optional
@@ -44,7 +52,7 @@ router = APIRouter()
     summary="Ingerir series y recomputar el snapshot macro",
     description="Pull de fuentes (BCRD), cálculo de momentum + señales, persiste y publica 'macro.updated'.",
 )
-async def refresh(
+def refresh(
     period: Optional[str] = Query(None, description="Etiqueta del período (por defecto, el último observado)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -61,7 +69,7 @@ async def refresh(
     summary="Indicadores macro con su momentum",
     description="Último momentum (cambio, aceleración, tendencia, banda de incertidumbre) por serie.",
 )
-async def indicators(
+def indicators(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -74,7 +82,7 @@ async def indicators(
     summary="Histórico de una serie + momentum",
     description="Observaciones (período-ordenadas) de una serie y su lectura de momentum (para la proyección).",
 )
-async def series_detail(
+def series_detail(
     series_code: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -91,7 +99,7 @@ async def series_detail(
         "de producir (la ingesta hace upsert y no poda). Idempotente."
     ),
 )
-async def delete_series_endpoint(
+def delete_series_endpoint(
     series_code: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
@@ -105,7 +113,7 @@ async def delete_series_endpoint(
     summary="Snapshot macro persistido",
     description="Momentum + señales del período indicado (o el último).",
 )
-async def snapshot(
+def snapshot(
     period: Optional[str] = Query(None, description="Período (YYYY, YYYY-Qn, YYYY-MM). Si se omite, el último."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -129,7 +137,7 @@ async def snapshot(
     summary="Señales de alerta temprana",
     description="Señales del snapshot (Reinhart-Rogoff deuda, Calvo freno súbito).",
 )
-async def signals(
+def signals(
     period: Optional[str] = Query(None, description="Período. Si se omite, el último."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -178,7 +186,7 @@ def _describe_shape(payload: Any, sample: int = 3) -> Dict[str, Any]:
         "diseñar el parser live. No persiste nada."
     ),
 )
-async def bcrd_test(
+def bcrd_test(
     variable: str = Query("inflacion", description=f"Una de: {', '.join(BCRD_VARIABLES)}"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
@@ -226,7 +234,7 @@ async def bcrd_test(
         "del BCRD. OJO: en Railway sin IPs estáticas esta IP puede cambiar."
     ),
 )
-async def bcrd_egress_ip(
+def bcrd_egress_ip(
     current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
     try:  # pragma: no cover - network I/O
@@ -268,7 +276,7 @@ def _historico_extra(variable: str, year_from: int, year_to: int) -> Dict[str, A
         "profundidad del backfill. Variables: historico_ipc, historico_tasas."
     ),
 )
-async def bcrd_historico(
+def bcrd_historico(
     variable: str = Query("historico_ipc", description="historico_ipc | historico_tasas"),
     year_from: int = Query(1980, description="Año inicial del rango a sondear"),
     year_to: int = Query(2026, description="Año final del rango a sondear"),
@@ -317,7 +325,7 @@ async def bcrd_historico(
         "de series son snapshot y se acumulan hacia adelante."
     ),
 )
-async def backfill_historico_endpoint(
+def backfill_historico_endpoint(
     year_from: int = Query(1984, description="Año inicial del backfill"),
     year_to: int = Query(2026, description="Año final del backfill"),
     db: Session = Depends(get_db),
@@ -338,7 +346,7 @@ async def backfill_historico_endpoint(
         "formato, más una lista cabecera de archivos de alto valor para quick-pick."
     ),
 )
-async def excel_catalog(
+def excel_catalog(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     return excel_catalog_summary()
@@ -354,7 +362,7 @@ async def excel_catalog(
         "MacroSeries (códigos bcrd.xls.*)."
     ),
 )
-async def excel_ingest(
+def excel_ingest(
     key: Optional[str] = Query(None, description="Nombre de archivo del catálogo (ej. imae.xlsx)"),
     url: Optional[str] = Query(None, description="URL directa del CDN del BCRD"),
     dry_run: bool = Query(True, description="Solo reportar (true) o persistir el upsert (false)"),
@@ -382,7 +390,7 @@ async def excel_ingest(
         "citable en informes."
     ),
 )
-async def excel_canonical(
+def excel_canonical(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -398,7 +406,7 @@ async def excel_canonical(
         "MacroSeries. El avance se ve en el catálogo canónico."
     ),
 )
-async def excel_ingest_canonical(
+def excel_ingest_canonical(
     persist: bool = Query(False, description="Upsert de las series a MacroSeries"),
     current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
@@ -414,7 +422,7 @@ async def excel_ingest_canonical(
         "marcados para revisión y cuántos fallaron, con el detalle de esos."
     ),
 )
-async def excel_coverage(
+def excel_coverage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -430,7 +438,7 @@ async def excel_coverage(
         "serie canónica del API. La prueba más fuerte de correctitud."
     ),
 )
-async def excel_crosscheck(
+def excel_crosscheck(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
@@ -447,7 +455,7 @@ async def excel_crosscheck(
         "avance se consulta en /excel/coverage."
     ),
 )
-async def excel_batch(
+def excel_batch(
     sector: Optional[str] = Query(None, description="Procesar solo este sector"),
     limit: Optional[int] = Query(None, description="Máximo de archivos (prueba)"),
     persist: bool = Query(False, description="Upsert de las series a MacroSeries"),
@@ -486,7 +494,7 @@ def _pub_summary(p: Publication) -> Dict[str, Any]:
     summary="Listado de publicaciones BCRD ingeridas",
     description="Informes del BCRD con su digest IA. Filtra por 'report_key' (opcional).",
 )
-async def list_publications(
+def list_publications(
     report_key: Optional[str] = Query(None, description="Clave del informe (opcional)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -500,7 +508,7 @@ async def list_publications(
     summary="Catálogo + calendario de informes BCRD",
     description="Los informes recurrentes (cadencia, sectores, link al BCRD) y el último período ingerido de cada uno.",
 )
-async def publications_catalog(
+def publications_catalog(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -526,7 +534,7 @@ async def publications_catalog(
     "/publications/{pub_id}",
     summary="Detalle de una publicación (con digest completo)",
 )
-async def publication_detail(
+def publication_detail(
     pub_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -549,7 +557,7 @@ async def publication_detail(
         "para procesar uno solo (más rápido)."
     ),
 )
-async def refresh_publications(
+def refresh_publications(
     report_key: Optional[str] = Query(None, description="Procesar solo este informe"),
     force: bool = Query(False, description="Re-ingerir aunque ya exista"),
     db: Session = Depends(get_db),
