@@ -23,10 +23,12 @@ from modules.macro_monitor.service import (
     cross_validate_excel,
     delete_series,
     excel_catalog_summary,
+    get_canonical_registry,
     get_excel_coverage,
     get_indicators,
     get_series,
     get_snapshot,
+    ingest_canonical,
     ingest_excel_file,
     ingest_series,
     start_excel_batch_background,
@@ -368,6 +370,39 @@ async def excel_ingest(
     except Exception as e:  # noqa: BLE001 — descarga/parsing externo: reportar, no 500 opaco
         logger.warning("[macro] ingesta Excel falló: %s", e)
         raise HTTPException(status_code=502, detail=f"No se pudo ingerir el Excel: {e}")
+
+
+@router.get(
+    "/excel/canonical",
+    summary="Registro canónico de series del BCRD (selección base-homogénea)",
+    description=(
+        "El set curado de ~25 series canónicas (una fuente por concepto, con base, "
+        "frecuencia, estrategia de homogeneización, razón económica, robustez y la "
+        "serie API ligada) + el estado de extracción actual de cada una. Documentación "
+        "citable en informes."
+    ),
+)
+async def excel_canonical(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return get_canonical_registry(db)
+
+
+@router.post(
+    "/excel/ingest-canonical",
+    summary="Ingerir SOLO el set canónico de series del BCRD (admin)",
+    description=(
+        "Solo admin. Corre el motor sobre los archivos canónicos (no los 708) y, con "
+        "'persist=true', hace upsert de las series extraídas a MacroSeries."
+    ),
+)
+async def excel_ingest_canonical(
+    persist: bool = Query(False, description="Upsert de las series a MacroSeries"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    return ingest_canonical(db, persist=persist)
 
 
 @router.get(

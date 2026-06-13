@@ -31,51 +31,18 @@ se carga vía `shared.data.bcrd_excel.catalog.load_catalog`).
 **Cada Excel tiene layout a medida** (cabeceras multi-fila, año-en-columna,
 mes-en-filas, múltiples sub-series por hoja) → parser/config por archivo.
 
-## Lista cabecera curada (~22 archivos, 95% del valor)
 
-Alcance acordado: framework de ETL + estos archivos (no los 708). El resto se
-suma después con solo un config.
+## Selección canónica (fuente de verdad)
 
-### Sector Real
-- `imae.xlsx` — IMAE (actividad económica, mensual desde 2007)
-- `pib.xls` / `pib_2018.xlsx` — PIB
-- `pib_gasto.xls` — PIB por gasto
-- `pib_origen_anual.xls` — PIB por origen
-- `fbkf.xlsx` — Formación bruta de capital fijo
+> La lista curada de "~22 archivos cabecera" y el plan de "un config por archivo"
+> que vivían aquí quedaron **superados**. El motor de ingesta AI-native infiere la
+> estructura de cualquier Excel (ver `shared/data/bcrd_excel/`), y la selección de
+> qué se ingiere —el set **base-homogéneo** de ~25 series canónicas, con su base,
+> frecuencia, razón económica, robustez y la serie API ligada— vive en:
+>
+> **[`SERIES_CANONICAS_BCRD.md`](SERIES_CANONICAS_BCRD.md)** (doc) y, como dato,
+> en **`shared/data/bcrd_excel/canonical.py`** (registro que alimenta la UI y la
+> ingesta). No se ingieren los 708; el catálogo completo es solo descubrimiento.
 
-### Precios
-- `ipc.xls` — IPC general (último empalme)
-- `ipc_grupos.xls` — IPC por grupos
-
-### Sector Externo
-- `bpagos.xls` — Balanza de pagos
-- `reservas_internacionales.xlsx` — Reservas internacionales
-- `Remesas_6.xlsx` — Remesas
-- `DeudaBC.xlsx` — Deuda
-- `piianual.xls` — Posición de inversión internacional
-
-### Sector Monetario y Financiero
-- `agregados_monetarios.xlsx` — Agregados monetarios (M1, M2…)
-- `base_monetaria.xlsx` — Base monetaria
-- `panorama_sf.xlsx` — Panorama del sistema financiero
-- `tf_activa.xls` / `tf_pasiva.xls` — Tasas de interés activa/pasiva
-- `Serie_TPM.xlsx` — Tasa de Política Monetaria
-
-### Turismo
-- `lleg_total.xls` — Llegada total de turistas
-
-### Mercado Cambiario
-- `TASA_DOLAR_REFERENCIA_MC.xlsx` — Tipo de cambio de referencia
-
-### Mercado de Trabajo
-- `tasa_ocupacion.xls` / `tasa_desocupacion.xls` — Ocupación / desocupación
-
-## Plan de build (iterativo)
-
-1. **Framework**: descarga (xls/xlsx) + parser config-driven (hoja, filas de
-   cabecera, encoding de período año/mes, columnas→series) + upsert MacroSeries
-   (reusar `_upsert_records`) + endpoint admin de backfill por archivo.
-2. **Iteración 1**: IMAE + IPC + reservas (prueba la arquitectura end-to-end).
-3. **Iteraciones 2..N**: un config por archivo cabecera, inspeccionando el layout.
-
-Relacionado: [[bcrd-live-connector]] (API live + backfill IPC/FX ya hechos).
+Relacionado: [[bcrd-live-connector]] (API live + backfill IPC/FX), Publicaciones
+(calendario e informes oficiales).

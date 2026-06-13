@@ -154,6 +154,42 @@ export async function getExcelCoverage(): Promise<ExcelCoverage> {
   const { data } = await client.get("/macro-monitor/excel/coverage");
   return data;
 }
+// ── Registro canónico (selección base-homogénea) ──────────────────
+export interface CanonicalExtraction {
+  status: "ok" | "flagged" | "failed";
+  n_series: number;
+  method: string | null;
+  orientation: string | null;
+}
+export interface CanonicalSeries {
+  key: string;
+  concept: string;
+  sector: string;
+  source_file: string;
+  base: string;
+  frequency: string;
+  homogenization: string;
+  rationale: string;
+  robustness: "green" | "yellow" | "red";
+  api_series: string | null;
+  api_transform: string | null;
+  extraction: CanonicalExtraction | null;
+}
+export async function getCanonical(): Promise<{ series: CanonicalSeries[]; count: number }> {
+  const { data } = await client.get("/macro-monitor/excel/canonical");
+  return data;
+}
+/** Admin: ingiere solo el set canónico (no los 708). */
+export async function ingestCanonical(persist: boolean): Promise<{
+  files: number;
+  ok: number;
+  flagged: number;
+  failed: number;
+}> {
+  const { data } = await client.post(`/macro-monitor/excel/ingest-canonical?persist=${persist}`);
+  return data;
+}
+
 // ── Cruce contra el API (validación de correctitud) ───────────────
 export interface CrosscheckResult {
   label: string;
