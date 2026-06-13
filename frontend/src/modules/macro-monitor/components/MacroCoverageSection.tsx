@@ -23,13 +23,30 @@ export function MacroCoverageSection() {
   const [limit, setLimit] = useState<number | "">(20);
   const [persist, setPersist] = useState(false);
   const [note, setNote] = useState("");
+  // When the batch runs in the Celery worker, the web process's `is_running` flag
+  // stays false (the in-memory status lives in the worker) — so we also drive live
+  // updates off the persisted `reported` count climbing toward the catalog total.
+  const [polling, setPolling] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastRep = useRef(-1);
+  const stale = useRef(0);
 
   const load = useCallback(async () => {
     try {
       const c = await getExcelCoverage();
       setCov(c);
       setStatus("ready");
+      if (c.reported === lastRep.current) stale.current += 1;
+      else {
+        stale.current = 0;
+        lastRep.current = c.reported;
+      }
+      // Stop polling once it's clearly done: all reported, or the count has been
+      // flat for ~20s while the worker reports it isn't running.
+      const finished =
+        !c.status.is_running &&
+        (c.reported >= c.total_catalog || (c.reported > 0 && stale.current >= 5));
+      if (finished) setPolling(false);
       return c;
     } catch {
       setStatus("error");
@@ -37,23 +54,27 @@ export function MacroCoverageSection() {
     }
   }, []);
 
+  // First load: if a batch is already in flight (count below total), start polling.
   useEffect(() => {
-    load();
+    load().then((c) => {
+      if (c && (c.status.is_running || (c.reported > 0 && c.reported < c.total_catalog))) {
+        setPolling(true);
+      }
+    });
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
   }, [load]);
 
-  // Poll while a batch is running so progress updates live.
   useEffect(() => {
-    const running = cov?.status?.is_running;
-    if (running && !timer.current) {
+    const active = cov?.status?.is_running || polling;
+    if (active && !timer.current) {
       timer.current = setInterval(load, 4000);
-    } else if (!running && timer.current) {
+    } else if (!active && timer.current) {
       clearInterval(timer.current);
       timer.current = null;
     }
-  }, [cov?.status?.is_running, load]);
+  }, [cov?.status?.is_running, polling, load]);
 
   const run = async () => {
     setBusy(true);
@@ -61,6 +82,9 @@ export function MacroCoverageSection() {
     try {
       const res = await runExcelBatch({ limit: limit === "" ? undefined : limit, persist });
       setNote(res.message);
+      lastRep.current = -1;
+      stale.current = 0;
+      setPolling(true); // keep the panel live even when it runs in the Celery worker
       await load();
     } catch (e: unknown) {
       const s = (e as { response?: { status?: number } })?.response?.status;
@@ -75,9 +99,17 @@ export function MacroCoverageSection() {
   }
 
   const st = cov?.status;
-  const running = !!st?.is_running;
+  // "active" = either the worker reports running, or we're polling a Celery run
+  // whose progress shows up as the persisted count climbing toward the total.
+  const active = !!st?.is_running || polling;
   const byStatus = cov?.by_status ?? {};
-  const pct = st && st.total ? Math.round((st.done / st.total) * 100) : 0;
+  const total = cov?.total_catalog ?? 0;
+  const reported = cov?.reported ?? 0;
+  const pct = st?.is_running && st.total
+    ? Math.round((st.done / st.total) * 100)
+    : total
+      ? Math.round((reported / total) * 100)
+      : 0;
 
   return (
     <Card>
@@ -86,12 +118,12 @@ export function MacroCoverageSection() {
         title="Cobertura del corpus"
         subtitle="Barrido del motor sobre el catálogo: qué resolvió y qué quedó para revisión"
         right={
-          running ? (
+          active ? (
             <span className="chip text-warn flex items-center gap-1">
-              <Loader2 size={12} className="animate-spin" /> {st?.done}/{st?.total}
+              <Loader2 size={12} className="animate-spin" /> {reported}/{total}
             </span>
           ) : (
-            <span className="chip text-muted">{cov?.reported ?? 0}/{cov?.total_catalog ?? 0} reportados</span>
+            <span className="chip text-muted">{reported}/{total} reportados</span>
           )
         }
       />
@@ -120,13 +152,13 @@ export function MacroCoverageSection() {
         </div>
       )}
 
-      {running && (
+      {active && (
         <div className="mb-4">
           <div className="h-1.5 rounded-full bg-surface2 overflow-hidden">
             <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
           </div>
           <p className="text-xs text-muted mt-2">
-            Barrido en progreso ({pct}%). Puedes salir de esta pantalla; el proceso sigue.
+            Barrido en progreso ({reported}/{total} · {pct}%). Puedes salir de esta pantalla; el proceso sigue.
           </p>
         </div>
       )}
@@ -153,9 +185,9 @@ export function MacroCoverageSection() {
           />
           Persistir series (bcrd.xls.*)
         </label>
-        <button onClick={run} disabled={busy || running} className="btn btn-primary">
-          {busy || running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          {running ? "En progreso…" : limit === "" ? "Correr todo el catálogo" : `Correr barrido (${limit})`}
+        <button onClick={run} disabled={busy || active} className="btn btn-primary">
+          {busy || active ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+          {active ? "En progreso…" : limit === "" ? "Correr todo el catálogo" : `Correr barrido (${limit})`}
         </button>
       </div>
       {note && <p className="text-xs text-muted bg-surface2 px-3 py-2 rounded-[10px] mb-2">{note}</p>}
