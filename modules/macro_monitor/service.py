@@ -233,7 +233,14 @@ def run_excel_batch(
         entries = entries[:limit]
     done_urls = set()
     if not force:
-        done_urls = {r.file_url for r in db.query(ExcelFileReport.file_url).all()}
+        # Resume: skip files already resolved (ok/flagged), but RETRY failures so a
+        # fixed engine bug or a transient download error gets re-attempted.
+        done_urls = {
+            r.file_url
+            for r in db.query(ExcelFileReport.file_url)
+            .filter(ExcelFileReport.status != "failed")
+            .all()
+        }
 
     cache = SpecCache()
     _excel_batch_status.update(is_running=True, done=0, total=len(entries), last_error=None)

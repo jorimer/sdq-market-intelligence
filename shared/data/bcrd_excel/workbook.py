@@ -37,7 +37,14 @@ class Grid:
         return max((len(r) for r in self.rows), default=0)
 
     def cell(self, r: int, c: int) -> Any:
-        """Value at 0-based (row, col); ``None`` if out of range."""
+        """Value at 0-based (row, col); ``None`` if out of range or index is None.
+
+        Index-None tolerance matters because a spec (heuristic or Claude-emitted)
+        may leave a row/col field unset for its orientation; reading through it
+        should yield "no value", not crash the whole batch.
+        """
+        if r is None or c is None:
+            return None
         if 0 <= r < len(self.rows):
             row = self.rows[r]
             if 0 <= c < len(row):
@@ -81,11 +88,12 @@ def _load_xlsx(path: Path) -> List[Grid]:
 
     wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
     try:
+        # ``worksheets`` excludes chart-only sheets (Chartsheet), which have no
+        # ``iter_rows`` and would otherwise crash the load.
         grids = []
-        for name in wb.sheetnames:
-            ws = wb[name]
+        for ws in wb.worksheets:
             rows = [list(r) for r in ws.iter_rows(values_only=True)]
-            grids.append(Grid(name=name, rows=rows))
+            grids.append(Grid(name=ws.title, rows=rows))
         return grids
     finally:
         wb.close()
