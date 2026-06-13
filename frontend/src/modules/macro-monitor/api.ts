@@ -179,12 +179,11 @@ export async function getCanonical(): Promise<{ series: CanonicalSeries[]; count
   const { data } = await client.get("/macro-monitor/excel/canonical");
   return data;
 }
-/** Admin: ingiere solo el set canónico (no los 708). */
+/** Admin: lanza en segundo plano la ingesta del set canónico (no los 708). */
 export async function ingestCanonical(persist: boolean): Promise<{
-  files: number;
-  ok: number;
-  flagged: number;
-  failed: number;
+  status: string;
+  via?: string;
+  message: string;
 }> {
   const { data } = await client.post(`/macro-monitor/excel/ingest-canonical?persist=${persist}`);
   return data;

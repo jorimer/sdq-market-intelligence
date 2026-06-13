@@ -13,3 +13,16 @@ def excel_batch_task(self, **kwargs) -> dict:  # noqa: ARG001
         return run_excel_batch(db, **kwargs)
     finally:
         db.close()
+
+
+@celery_app.task(name="macro.ingest_canonical", bind=True)
+def ingest_canonical_task(self, persist: bool = False) -> dict:  # noqa: ARG001
+    """Ingest only the canonical series in the Celery worker."""
+    from shared.database.session import SessionLocal
+    from modules.macro_monitor.service import ingest_canonical
+
+    db = SessionLocal()
+    try:
+        return ingest_canonical(db, persist=persist)
+    finally:
+        db.close()
