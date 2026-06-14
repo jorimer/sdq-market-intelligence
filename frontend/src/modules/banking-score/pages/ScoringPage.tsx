@@ -6,6 +6,7 @@ import { ScoreGauge } from "../components/ScoreGauge";
 import { RatingBadge } from "../components/RatingBadge";
 import { IndicatorTable } from "../components/IndicatorTable";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
+import { useEntityPeriodGuard } from "../components/EntityPeriodNotice";
 import { fmtNum } from "@/shared/lib/format";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
@@ -23,6 +24,7 @@ export function ScoringPage() {
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const { blocked, notice } = useEntityPeriodGuard(bankId, bankName);
 
   const run = async () => {
     if (!bankId) return;
@@ -61,11 +63,12 @@ export function ScoringPage() {
           <div className="text-xs text-muted pb-2.5">
             Período <span className="mono text-body">{periodEnd}</span>
           </div>
-          <button onClick={run} disabled={!bankId || loading} className="btn btn-primary">
+          <button onClick={run} disabled={!bankId || loading || blocked} className="btn btn-primary">
             <Calculator className="w-4 h-4" />
             {loading ? "Calculando…" : "Calcular"}
           </button>
         </div>
+        {notice}
       </Card>
 
       {error ? (

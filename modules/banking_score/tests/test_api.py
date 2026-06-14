@@ -673,3 +673,37 @@ class TestScoringEdgeCases:
         assert resp.status_code == 200
         data = resp.json()
         assert data["total_records"] == 0
+
+
+class TestEntityPeriods:
+    """GET /{bank_id}/periods — periods an entity has BankingData for (desc).
+
+    Backs the period-aware UX: lets the UI tell 'sin dato para este período' apart
+    from an error and guide the user to the entity's latest available period.
+    """
+
+    def test_periods_lists_loaded_periods_desc(self):
+        from datetime import date
+        from modules.banking_score.models.models import BankType, DataSource
+        token = register_and_login()
+        headers = auth_headers(token)
+        db = TestSessionLocal()
+        bank = Bank(name="Banco Periodos", bank_type=BankType.banca_multiple, is_active=True)
+        db.add(bank)
+        db.flush()
+        for pe in (date(2025, 6, 30), date(2025, 12, 31)):  # inserted out of order
+            db.add(BankingData(bank_id=bank.id, period_end=pe, source=DataSource.manual))
+        db.commit()
+        bank_id = bank.id
+        db.close()
+
+        resp = client.get(f"/api/v1/banking-score/{bank_id}/periods", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json()["periods"] == ["2025-12-31", "2025-06-30"]  # most recent first
+
+    def test_periods_empty_for_entity_without_data(self):
+        token = register_and_login()
+        headers = auth_headers(token)
+        resp = client.get("/api/v1/banking-score/no-such-bank/periods", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json()["periods"] == []

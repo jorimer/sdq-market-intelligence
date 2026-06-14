@@ -6,6 +6,7 @@ import { RatingBadge } from "../components/RatingBadge";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
+import { useBankPeriods, evaluatePeriod, PeriodNoticeBox, type PeriodVerdict } from "../components/EntityPeriodNotice";
 import { fmtNum } from "@/shared/lib/format";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
@@ -24,7 +25,7 @@ interface Slot {
 }
 
 export function ComparePage() {
-  const { period } = useApp();
+  const { period, periods } = useApp();
   const periodEnd = periodToDate(period);
   const [slots, setSlots] = useState<Slot[]>([{ id: "", name: "" }]);
   const [results, setResults] = useState<{ name: string; r: ScoringResult }[]>([]);
@@ -32,6 +33,18 @@ export function ComparePage() {
   const [loading, setLoading] = useState(false);
 
   const valid = slots.filter((s) => s.id);
+
+  // Per-entity period coverage: some entities may lack the global period (data not
+  // yet loaded, or annual reporters). Flag them and block the compare until resolved.
+  const { periodsOf } = useBankPeriods(valid.map((s) => s.id));
+  const unavailable: { name: string; verdict: Extract<PeriodVerdict, { available: false }> }[] = [];
+  for (const s of valid) {
+    const p = periodsOf(s.id);
+    if (p === undefined) continue; // still loading
+    const v = evaluatePeriod(period, p, periods);
+    if (!v.available) unavailable.push({ name: s.name, verdict: v });
+  }
+  const blocked = unavailable.length > 0;
 
   const run = async () => {
     if (valid.length < 2) return;
@@ -96,11 +109,14 @@ export function ComparePage() {
           <div className="text-xs text-muted pb-2.5">
             Período <span className="mono text-body">{periodEnd}</span>
           </div>
-          <button onClick={run} disabled={valid.length < 2 || loading} className="btn btn-primary">
+          <button onClick={run} disabled={valid.length < 2 || loading || blocked} className="btn btn-primary">
             <GitCompare className="w-4 h-4" />
             {loading ? "Comparando…" : "Comparar"}
           </button>
         </div>
+        {unavailable.map((u, i) => (
+          <PeriodNoticeBox key={i} verdict={u.verdict} entityName={u.name} className="mt-3" />
+        ))}
       </Card>
 
       {results.length === 0 ? (

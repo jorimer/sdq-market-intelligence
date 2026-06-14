@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { FileText, Download } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
+import { useEntityPeriodGuard } from "../components/EntityPeriodNotice";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
   listReports,
@@ -32,6 +33,7 @@ export function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const { blocked, notice } = useEntityPeriodGuard(bankId, bankName);
 
   const loadReports = useCallback((id: string) => {
     if (!id) return;
@@ -84,11 +86,12 @@ export function ReportsPage() {
               {REPORT_TYPES.map((rt) => <option key={rt.value} value={rt.value}>{rt.label}</option>)}
             </select>
           </div>
-          <button onClick={generate} disabled={!bankId || generating} className="btn btn-primary">
+          <button onClick={generate} disabled={!bankId || generating || blocked} className="btn btn-primary">
             <FileText className="w-4 h-4" />
             {generating ? "Generando…" : "Generar"}
           </button>
         </div>
+        {notice}
         {msg && (
           <div className={`mt-3 text-sm p-3 rounded-[10px] ${msg.ok ? "bg-ok-soft text-ok" : "bg-alert-soft text-alert"}`}>
             {msg.text}
