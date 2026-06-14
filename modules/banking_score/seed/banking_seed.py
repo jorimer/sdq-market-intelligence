@@ -57,7 +57,9 @@ BANKING_ENTITIES: List[Dict] = [
     {"name": "Asociación Peravia de Ahorros y Préstamos",          "short": "Peravia",       "type": "aap",            "tier": "small",  "asset_base": 3_000},
     # ── Bancos de Ahorro y Crédito (10) ──────────────────────────
     {"name": "Banco ADOPEM de Ahorro y Crédito",                   "short": "ADOPEM",        "type": "banco_ahorro_credito", "tier": "medium", "asset_base": 42_000},
-    {"name": "Banco ADEMI de Ahorro y Crédito",                    "short": "ADEMI",         "type": "banco_ahorro_credito", "tier": "medium", "asset_base": 38_000},
+    # Banco Ademi es BANCA MÚLTIPLE desde 2013 (antes ONG microfinanciera); el SIB lo
+    # reporta bajo BM (verificado vs SIMBAD 2026-06-14). No es ahorro y crédito.
+    {"name": "Banco Múltiple Ademi",                               "short": "ADEMI",         "type": "banca_multiple",       "tier": "medium", "asset_base": 38_000},
     {"name": "Banco de Ahorro y Crédito Confisa",                  "short": "Confisa",       "type": "banco_ahorro_credito", "tier": "medium", "asset_base": 25_000},
     {"name": "Banco de Ahorro y Crédito FONDESA",                  "short": "FONDESA",       "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 18_000},
     {"name": "Motor Crédito Banco de Ahorro y Crédito",            "short": "Motor Crédito", "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 15_000},
