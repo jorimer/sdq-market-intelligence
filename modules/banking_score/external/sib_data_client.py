@@ -1419,7 +1419,8 @@ class SIBDataClient:
         logger.info(f"  EIC extract complete: {len(meta)} cambiarias")
         return results
 
-    def _map_eic_to_sdq_fields(self, period_data: Dict) -> Dict[str, Any]:
+    @staticmethod
+    def _map_eic_to_sdq_fields(period_data: Dict) -> Dict[str, Any]:
         """Map ONE PERIOD of EIC balance + income concept rows to the BankingData
         fields used by the cambiaria scoring path.
 

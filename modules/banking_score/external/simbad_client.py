@@ -57,7 +57,11 @@ def _post_chart_data(dataset_id: int, columns: List[str], filters: List[Dict],
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         payload = json.loads(resp.read())
-    return payload["result"][0].get("data", []) or []
+    data = payload["result"][0].get("data", []) or []
+    if len(data) >= row_limit:
+        logger.warning("SIMBAD dataset %s hit row_limit=%d — result may be TRUNCATED; "
+                       "narrow the filters or paginate.", dataset_id, row_limit)
+    return data
 
 
 def _to_concept_rows(rows: List[Dict]) -> List[Dict]:
@@ -156,7 +160,7 @@ def extract_cambiaria_bulk(period_start: str = "2021-01", period_end: str = "") 
                 "balance": _to_concept_rows(data["balance"]),
                 "income": _to_concept_rows(data["income"]),
             }
-            mapped = SIBDataClient._map_eic_to_sdq_fields(None, period_data)
+            mapped = SIBDataClient._map_eic_to_sdq_fields(period_data)
             if not mapped.get("activos_totales"):
                 continue  # skip empty/near-empty periods (the model reweights on N/D)
             mapped["period_end"] = pe

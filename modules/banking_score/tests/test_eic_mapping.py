@@ -30,7 +30,7 @@ def test_mapper_reads_todos_subtotal_not_sum_of_children():
         {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "TODOS",
          "conceptoNivel3": "TODOS", "conceptoNivel4": "TODOS", "conceptoNivel5": "TODOS", "valor": 50},
     ]
-    out = SIBDataClient._map_eic_to_sdq_fields(None, {"balance": balance, "income": income})
+    out = SIBDataClient._map_eic_to_sdq_fields({"balance": balance, "income": income})
     assert out["activos_totales"] == 1000          # NOT 600+400+200+400+400 (the old bug)
     assert out["patrimonio_tecnico"] == 800
     assert out["pasivos_exigibles"] == 200
@@ -46,7 +46,7 @@ def test_mapper_income_falls_back_to_pre_tax_plus_impuesto():
         {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "Impuesto sobre la renta",
          "conceptoNivel3": "TODOS", "conceptoNivel4": "TODOS", "conceptoNivel5": "TODOS", "valor": -20},
     ]
-    out = SIBDataClient._map_eic_to_sdq_fields(None, {"balance": balance, "income": income})
+    out = SIBDataClient._map_eic_to_sdq_fields({"balance": balance, "income": income})
     assert out["utilidad_neta"] == 50  # 70 + (-20)
 
 

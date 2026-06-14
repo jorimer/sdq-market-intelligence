@@ -60,7 +60,7 @@ def test_eic_mapper_parses_concepts():
             {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "TODOS", "conceptoNivel3": "TODOS", "valor": 35},
         ],
     }
-    m = SIBDataClient._map_eic_to_sdq_fields(client, period_data)
+    m = SIBDataClient._map_eic_to_sdq_fields(period_data)
     assert m["activos_totales"] == 1000      # the Activos/TODOS subtotal
     assert m["pasivos_exigibles"] == 700
     assert m["patrimonio_tecnico"] == 300
