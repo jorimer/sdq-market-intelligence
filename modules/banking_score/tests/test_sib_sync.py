@@ -217,6 +217,22 @@ def test_catalogued_entities_match_by_sib_code():
         assert SIBDataClient._match_entity_name(code) is not None, code
 
 
+def test_short_code_substring_does_not_misroute():
+    """Regression: a short sib_code fragment must NOT substring-match an unrelated
+    entity. Bonanza's code 'BON' once grabbed 'BONAO' (an AAP), routing Bonao's
+    balance onto Bonanza. Substring matching is now restricted to full names."""
+    from modules.banking_score.external.sib_data_client import SIBDataClient as C
+    # Bonao resolves to its own catalog entry (added alongside the fix).
+    assert C._match_entity_name("ASOC. BONAO DE AHORROS Y PRESTAMOS") == "Bonao"
+    assert C._match_entity_name("BONAO") == "Bonao"
+    # Real Bonanza still resolves to Bonanza via its full name.
+    assert C._match_entity_name("BANCO DE AHORRO Y CREDITO BONANZA") == "Bonanza"
+    # An unrelated name containing the fragment 'BON' must not be grabbed.
+    assert C._match_entity_name("BONAVENTURA SRL") is None
+    # The 'BON' code is still a valid EXACT key (just not a substring key).
+    assert C._match_entity_name("BON") == "Bonanza"
+
+
 def test_match_or_create_respects_active_flag(Session):
     """Exited entities are catalogued inactive; active ones stay active."""
     db = Session()
@@ -306,7 +322,11 @@ def test_simbad_fallback_fills_gaps_and_respects_api_primary(Session, monkeypatc
     db.commit()
     camb_id = camb.id
 
-    monkeypatch.setattr(sib_sync, "get_sib_data_client", lambda force_new=False: _StubClient())
+    # The SIMBAD cambiaria fallback only runs when the backfill includes a
+    # cambiaria type (ARC/AC) — as a real full backfill always does.
+    stub = _StubClient()
+    monkeypatch.setattr(stub, "get_working_tipos", lambda: ["AC"])
+    monkeypatch.setattr(sib_sync, "get_sib_data_client", lambda force_new=False: stub)
     monkeypatch.setattr(sib_sync, "extract_cambiaria_bulk", lambda **_: {
         "AGCEXIST": [
             {"period_end": date(2025, 9, 30), "activos_totales": 111},   # exists (API) → keep
@@ -322,3 +342,31 @@ def test_simbad_fallback_fills_gaps_and_respects_api_primary(Session, monkeypatc
     dec = db2.query(BankingData).filter_by(bank_id=camb_id, period_end=date(2025, 12, 31)).first()
     assert sep is not None and sep.source == DataSource.sib_api and float(sep.activos_totales) == 999
     assert dec is not None and dec.source == DataSource.sib_simbad and float(dec.activos_totales) == 222
+
+
+def test_only_tipos_targeted_reingest_skips_simbad(Session, monkeypatch):
+    """A targeted re-ingest (only_tipos without a cambiaria type) ingests the
+    requested type and does NOT invoke the SIMBAD cambiaria fallback."""
+    db = Session()
+
+    class _MultiTipoStub(_StubClient):
+        seen: list = []
+
+        def get_working_tipos(self):
+            return ["BM", "BAC", "AAP", "AC"]
+
+        def extract_one_tipo(self, tipo, period_start="2021-01", on_progress=None):
+            _MultiTipoStub.seen.append(tipo)
+            return self.extract_all_entities_bulk(period_start=period_start)
+
+    _MultiTipoStub.seen = []
+    monkeypatch.setattr(sib_sync, "get_sib_data_client", lambda force_new=False: _MultiTipoStub())
+
+    def _boom(**_):
+        raise AssertionError("SIMBAD fallback must not run for a non-cambiaria targeted re-ingest")
+    monkeypatch.setattr(sib_sync, "extract_cambiaria_bulk", _boom)
+
+    res = sib_sync.run_backfill(force=True, only_tipos=["AAP"])
+    assert res["status"] == "completed"
+    # Only the requested type was extracted (BM/BAC/AC skipped).
+    assert _MultiTipoStub.seen == ["AAP"]

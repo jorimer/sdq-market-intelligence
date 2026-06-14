@@ -14,7 +14,7 @@ import json
 import logging
 import threading
 from datetime import date, datetime, timezone
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from shared.database.session import SessionLocal
 from shared.settings.models import AppSetting
 from modules.banking_score.external.sib_data_client import (
+    EIC_TIPOS,
     SIB_ENTITY_CODES,
     get_sib_data_client,
 )
@@ -234,11 +235,17 @@ def _friendly_error(exc: Exception) -> str:
     return "Ocurrió un error durante la sincronización. El detalle quedó en los registros (logs)."
 
 
-def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
+def run_backfill(force: bool = False, period_start: str = "2021-01",
+                 only_tipos: Optional[List[str]] = None) -> Dict:
     """Replace synthetic data with real SIB data (quarter-end periods only).
 
     Synchronous — callers run it in a background thread. Drives the DB-backed
     sync status so progress is visible across all workers, and returns a summary.
+
+    *only_tipos* (e.g. ``["BAC", "AAP"]``) restricts the run to those entity
+    types — a targeted re-ingest that skips the slow BM carteras stream. When it
+    excludes the cambiaria types (ARC/AC), the SIMBAD cambiaria fallback is
+    skipped too.
     """
     db = SessionLocal()
     try:
@@ -293,6 +300,16 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             msg = "El SIB no devolvió ningún tipo de entidad válido."
             _write_status(db, is_running=False, phase="error", alerts=[msg])
             return {"status": "error", "message": msg}
+
+        # Targeted re-ingest: restrict to requested types (preserve discovery order).
+        if only_tipos:
+            wanted = {t.strip().upper() for t in only_tipos}
+            tipos = [t for t in tipos if t.upper() in wanted]
+            if not tipos:
+                msg = f"Ninguno de los tipos solicitados está disponible: {sorted(wanted)}"
+                _write_status(db, is_running=False, phase="error", alerts=[msg])
+                return {"status": "error", "message": msg}
+            logger.info("Backfill dirigido a tipos: %s", tipos)
 
         # Drop any in-progress/future quarter left over from a prior run before
         # ingesting fresh data (keeps the "latest" rankings on closed quarters).
@@ -371,41 +388,44 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
         # (entity × quarter-end) the API pass didn't produce. API stays PRIMARY:
         # never overwrite an existing row. Best-effort — must not break the backfill.
         simbad_created = 0
-        try:
-            _write_status(db, phase="SIMBAD: completando cambiarias faltantes…")
-            simbad = extract_cambiaria_bulk(period_start=period_start)
-            simbad_meta = simbad.get("_entity_meta", {})
-            for short_name, speriods in simbad.items():
-                if short_name.startswith("_"):
-                    continue
-                bank, was_created = _match_or_create_bank(db, short_name, extra_codes=simbad_meta)
-                if not bank:
-                    continue
-                if was_created:
-                    entities_created += 1
-                for rec in speriods:
-                    rec = dict(rec)
-                    pe = rec.pop("period_end")
-                    rec.pop("period_type", None)
-                    rec.pop("source", None)
-                    if pe.month not in (3, 6, 9, 12) or pe > today:
+        # Only relevant when the run includes cambiaria types — a targeted
+        # BAC/AAP re-ingest has no cambiarias to fill, so skip the SIMBAD pass.
+        if any(t.upper() in EIC_TIPOS for t in tipos):
+            try:
+                _write_status(db, phase="SIMBAD: completando cambiarias faltantes…")
+                simbad = extract_cambiaria_bulk(period_start=period_start)
+                simbad_meta = simbad.get("_entity_meta", {})
+                for short_name, speriods in simbad.items():
+                    if short_name.startswith("_"):
                         continue
-                    if db.query(BankingData).filter_by(bank_id=bank.id, period_end=pe).first():
-                        continue  # API primary — leave its row untouched
-                    row = BankingData(bank_id=bank.id, period_end=pe,
-                                      period_type=PeriodType.quarterly, source=DataSource.sib_simbad)
-                    for k, v in rec.items():
-                        if v is not None:
-                            setattr(row, k, v)
-                    db.add(row)
-                    simbad_created += 1
-            db.commit()
-            created += simbad_created
-            _write_status(db, phase=f"SIMBAD: {simbad_created} períodos de cambiarias completados")
-        except Exception as e:  # noqa: BLE001 — fallback must never break the API backfill
-            db.rollback()
-            logger.warning("SIMBAD fallback falló (no crítico): %s", e)
-            _write_status(db, phase="SIMBAD: fallback omitido (ver logs)")
+                    bank, was_created = _match_or_create_bank(db, short_name, extra_codes=simbad_meta)
+                    if not bank:
+                        continue
+                    if was_created:
+                        entities_created += 1
+                    for rec in speriods:
+                        rec = dict(rec)
+                        pe = rec.pop("period_end")
+                        rec.pop("period_type", None)
+                        rec.pop("source", None)
+                        if pe.month not in (3, 6, 9, 12) or pe > today:
+                            continue
+                        if db.query(BankingData).filter_by(bank_id=bank.id, period_end=pe).first():
+                            continue  # API primary — leave its row untouched
+                        row = BankingData(bank_id=bank.id, period_end=pe,
+                                          period_type=PeriodType.quarterly, source=DataSource.sib_simbad)
+                        for k, v in rec.items():
+                            if v is not None:
+                                setattr(row, k, v)
+                        db.add(row)
+                        simbad_created += 1
+                db.commit()
+                created += simbad_created
+                _write_status(db, phase=f"SIMBAD: {simbad_created} períodos de cambiarias completados")
+            except Exception as e:  # noqa: BLE001 — fallback must never break the API backfill
+                db.rollback()
+                logger.warning("SIMBAD fallback falló (no crítico): %s", e)
+                _write_status(db, phase="SIMBAD: fallback omitido (ver logs)")
 
         # Recalculate ratings for the freshly-ingested SIB data. Without this the
         # platform has real data but stale/missing ratings (834 records vs 70
@@ -458,9 +478,12 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
         db.close()
 
 
-def start_backfill_background(force: bool = False) -> Dict:
+def start_backfill_background(force: bool = False,
+                              only_tipos: Optional[List[str]] = None) -> Dict:
     """Start the backfill: via the Celery worker when enabled (survives web
     restarts, auto-retries on crash), otherwise an in-process thread.
+
+    *only_tipos* restricts the run to the given entity types (targeted re-ingest).
     """
     from shared.config.settings import settings
 
@@ -474,12 +497,13 @@ def start_backfill_background(force: bool = False) -> Dict:
     if settings.USE_CELERY and settings.REDIS_URL:
         try:
             from modules.banking_score.tasks import sib_backfill_task
-            sib_backfill_task.delay(force=force)
+            sib_backfill_task.delay(force=force, only_tipos=only_tipos)
             return {"status": "started", "via": "celery", "message": msg}
         except Exception:  # noqa: BLE001 — fall back to thread if broker unavailable
             logger.exception("No se pudo encolar en Celery; usando hilo")
 
-    threading.Thread(target=run_backfill, kwargs={"force": force}, daemon=True).start()
+    threading.Thread(target=run_backfill,
+                     kwargs={"force": force, "only_tipos": only_tipos}, daemon=True).start()
     return {"status": "started", "via": "thread", "message": msg}
 
 
