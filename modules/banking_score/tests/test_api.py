@@ -707,3 +707,49 @@ class TestEntityPeriods:
         resp = client.get("/api/v1/banking-score/no-such-bank/periods", headers=headers)
         assert resp.status_code == 200
         assert resp.json()["periods"] == []
+
+
+class TestReportDownload:
+    """Re-download must work after the disk file is gone (ephemeral FS / redeploy):
+    the PDF bytes are persisted in the DB (reports.file_blob)."""
+
+    def _make_completed_report(self, *, with_blob: bool, on_disk: bool, tmp_path):
+        from datetime import date
+        from modules.banking_score.models.models import (
+            Report, ReportType, ReportStatus, BankType,
+        )
+        db = TestSessionLocal()
+        bank = Bank(name="Banco Reporte", bank_type=BankType.banca_multiple, is_active=True)
+        db.add(bank)
+        db.flush()
+        path = str(tmp_path / "rep.pdf")
+        if on_disk:
+            with open(path, "wb") as fh:
+                fh.write(b"%PDF-1.4 disk")
+        report = Report(
+            bank_id=bank.id,
+            period_end=date(2025, 12, 31),
+            report_type=ReportType.full_rating,
+            status=ReportStatus.completed,
+            file_path=path,
+            file_blob=b"%PDF-1.4 blob-bytes" if with_blob else None,
+        )
+        db.add(report)
+        db.commit()
+        rid = report.id
+        db.close()
+        return rid
+
+    def test_download_serves_blob_when_disk_file_missing(self, tmp_path):
+        headers = auth_headers(register_and_login())
+        rid = self._make_completed_report(with_blob=True, on_disk=False, tmp_path=tmp_path)
+        resp = client.get(f"/api/v1/banking-score/reports/download/{rid}", headers=headers)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/pdf"
+        assert resp.content == b"%PDF-1.4 blob-bytes"  # from DB, not disk
+
+    def test_download_404_when_no_blob_and_disk_gone(self, tmp_path):
+        headers = auth_headers(register_and_login())
+        rid = self._make_completed_report(with_blob=False, on_disk=False, tmp_path=tmp_path)
+        resp = client.get(f"/api/v1/banking-score/reports/download/{rid}", headers=headers)
+        assert resp.status_code == 404
