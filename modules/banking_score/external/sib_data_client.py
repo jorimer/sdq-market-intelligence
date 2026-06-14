@@ -80,6 +80,7 @@ SIB_ENTITY_CODES: Dict[str, Dict[str, Any]] = {
     "Maguana":       {"sib_code": "MAGUANA", "tipo_entidad": "AAP", "nombre_sib": "ASOC. MAGUANA DE AHORROS Y PRESTAMOS"},
     "Mocana":        {"sib_code": "MOCANA",  "tipo_entidad": "AAP", "nombre_sib": "ASOC. MOCANA DE AHORROS Y PRESTAMOS"},
     "Peravia":       {"sib_code": "PERAVIA", "tipo_entidad": "AAP", "nombre_sib": "ASOC. PERAVIA DE AHORROS Y PRESTAMOS"},
+    "Bonao":         {"sib_code": "BONAO",  "tipo_entidad": "AAP", "nombre_sib": "ASOC. BONAO DE AHORROS Y PRESTAMOS"},
     # Bancos de Ahorro y Crédito
     "ADOPEM":        {"sib_code": "ADP",   "tipo_entidad": "BAC", "nombre_sib": "BANCO ADOPEM DE AHORRO Y CREDITO"},
     "ADEMI":         {"sib_code": "ADM",   "tipo_entidad": "BM",  "nombre_sib": "BANCO MULTIPLE ADEMI"},  # banca múltiple desde 2013
@@ -1032,17 +1033,32 @@ class SIBDataClient:
 
     # Build reverse lookup: nombre_sib → short_name
     # The SIB API returns entity names in the 'entidad' response field.
+    #
+    # Two maps with different roles:
+    #  • _ENTITY_REVERSE_MAP — EXACT lookups. Holds every alias (API name,
+    #    nombre_sib, sib_code, short). Codes/abbreviations are safe here because
+    #    an exact key never collides.
+    #  • _SUBSTRING_NAMES — SUBSTRING fallback. Holds ONLY full descriptive names
+    #    (nombre_sib + explicit API names). Short codes are deliberately excluded:
+    #    a fragment like "BON" (Bonanza's sib_code) is a substring of unrelated
+    #    entities ("BONAO"), so using codes for substring matching misroutes data
+    #    (Bonao's balance once landed on Bonanza this way).
     _ENTITY_REVERSE_MAP: Dict[str, str] = {}
-    # First: add explicit API name mappings (highest priority)
+    _SUBSTRING_NAMES: Dict[str, str] = {}
+    # First: add explicit API name mappings (highest priority) — real names, so
+    # they are valid substring candidates too.
     for _api_name, _short in SIB_API_NAME_MAP.items():
         _ENTITY_REVERSE_MAP[_api_name.upper()] = _short
-    # Then: add nombre_sib and sib_code mappings
+        _SUBSTRING_NAMES[_api_name.upper()] = _short
+    # Then: add nombre_sib and sib_code mappings. Only nombre_sib (the full
+    # descriptive name) is eligible for substring matching.
     for _short, _info in SIB_ENTITY_CODES.items():
         _nombre = _info["nombre_sib"].strip().upper()
         _code = _info["sib_code"].strip().upper()
         _ENTITY_REVERSE_MAP[_nombre] = _short
         _ENTITY_REVERSE_MAP[_code] = _short
         _ENTITY_REVERSE_MAP[_short.upper()] = _short
+        _SUBSTRING_NAMES[_nombre] = _short
 
     @classmethod
     def _match_entity_name(cls, api_entity_name: str) -> Optional[str]:
@@ -1050,7 +1066,9 @@ class SIBDataClient:
         Match an entity name from the SIB API response to our short_name.
 
         The SIB API 'entidad' field format is unknown — could be full name,
-        abbreviation, or code. We try exact match first, then fuzzy substring.
+        abbreviation, or code. We try exact match first, then a substring
+        fallback restricted to full descriptive names (never short codes, whose
+        fragments collide with unrelated entities).
         """
         if not api_entity_name:
             return None
@@ -1061,8 +1079,8 @@ class SIBDataClient:
         if name_upper in cls._ENTITY_REVERSE_MAP:
             return cls._ENTITY_REVERSE_MAP[name_upper]
 
-        # Substring match: check if any known name is contained or contains
-        for known_name, short in cls._ENTITY_REVERSE_MAP.items():
+        # Substring match — full descriptive names only (codes excluded).
+        for known_name, short in cls._SUBSTRING_NAMES.items():
             if known_name in name_upper or name_upper in known_name:
                 return short
 

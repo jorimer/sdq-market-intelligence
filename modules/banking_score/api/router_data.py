@@ -7,7 +7,7 @@ import csv
 import io
 import logging
 from datetime import date
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -236,24 +236,28 @@ async def seed_banks(
 )
 async def sib_backfill(
     force: bool = Query(False, description="Forzar re-ejecución aunque ya existan datos SIB"),
+    tipos: Optional[str] = Query(None, description="Re-ingesta dirigida: lista de tipos separados por coma (p.ej. 'BAC,AAP'). Omite los demás tipos y el fallback SIMBAD."),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.sib_sync import start_backfill_background
-    return start_backfill_background(force=force)
+    only_tipos = [t.strip() for t in tipos.split(",") if t.strip()] if tipos else None
+    return start_backfill_background(force=force, only_tipos=only_tipos)
 
 
 # Backward-compatible alias for /sib-sync → triggers the same backfill.
 @router.post("/sib-sync", summary="Sincronizar con API SIB", include_in_schema=False)
 async def sync_from_sib(
     force: bool = Query(False, description="Forzar re-ingesta aunque ya haya datos / un backfill reciente (admin override)"),
+    tipos: Optional[str] = Query(None, description="Re-ingesta dirigida: lista de tipos separados por coma (p.ej. 'BAC,AAP')."),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.sib_sync import start_backfill_background
-    return start_backfill_background(force=force)
+    only_tipos = [t.strip() for t in tipos.split(",") if t.strip()] if tipos else None
+    return start_backfill_background(force=force, only_tipos=only_tipos)
 
 
 # ─── Rescore (recompute ratings from existing data, no re-ingest) ─
