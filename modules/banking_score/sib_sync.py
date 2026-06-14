@@ -251,7 +251,7 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
             # storm of redundant full runs. Skip if one completed very recently;
             # a re-delivered duplicate just acks out instead of re-ingesting.
             last_sync = current.get("last_sync")
-            if current.get("backfill_done") and last_sync:
+            if not force and current.get("backfill_done") and last_sync:  # force = admin override
                 try:
                     age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_sync)).total_seconds()
                     if age < _DEDUP_WINDOW_SECONDS:

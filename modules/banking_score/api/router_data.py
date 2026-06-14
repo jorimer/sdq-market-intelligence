@@ -247,12 +247,13 @@ async def sib_backfill(
 # Backward-compatible alias for /sib-sync → triggers the same backfill.
 @router.post("/sib-sync", summary="Sincronizar con API SIB", include_in_schema=False)
 async def sync_from_sib(
+    force: bool = Query(False, description="Forzar re-ingesta aunque ya haya datos / un backfill reciente (admin override)"),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.sib_sync import start_backfill_background
-    return start_backfill_background(force=False)
+    return start_backfill_background(force=force)
 
 
 # ─── Rescore (recompute ratings from existing data, no re-ingest) ─
