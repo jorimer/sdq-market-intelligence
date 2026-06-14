@@ -68,6 +68,8 @@ BANKING_ENTITIES: List[Dict] = [
     {"name": "Banco de Ahorro y Crédito Unión",                    "short": "Unión",         "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 6_000},
     {"name": "Banco de Ahorro y Crédito Gruficorp",                "short": "Gruficorp",     "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 5_000},
     {"name": "Banco de Ahorro y Crédito Bonanza",                  "short": "Bonanza",       "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 4_000},
+    {"name": "Banco de Ahorros y Créditos Bancotui",               "short": "Bancotui",      "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 2_100},
+    {"name": "Leasing Confisa Banco de Ahorro y Crédito",          "short": "Leasconfisa",   "type": "banco_ahorro_credito", "tier": "small",  "asset_base": 1_700},
 
     # ── Corporaciones de Crédito (3) ─────────────────────────────
     {"name": "Corporación de Crédito Monumental",                  "short": "Monumental",    "type": "corporacion_credito", "tier": "small", "asset_base": 1_200},

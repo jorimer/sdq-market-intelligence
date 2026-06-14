@@ -91,6 +91,9 @@ SIB_ENTITY_CODES: Dict[str, Dict[str, Any]] = {
     "Unión":         {"sib_code": "UNI",   "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORRO Y CREDITO UNION"},
     "Gruficorp":     {"sib_code": "GRU",   "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORRO Y CREDITO GRUFICORP"},
     "Bonanza":       {"sib_code": "BON",   "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORRO Y CREDITO BONANZA"},
+    # API entity codes confirmed live (BAyC, 2026): BANCOTUI, LEASCONFISA.
+    "Bancotui":      {"sib_code": "BANCOTUI",    "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORROS Y CREDITOS BANCOTUI"},
+    "Leasconfisa":   {"sib_code": "LEASCONFISA", "tipo_entidad": "BAC", "nombre_sib": "LEASING CONFISA BANCO DE AHORRO Y CREDITO"},
 
     # Corporaciones de Crédito (CC) — report via estados/situacion/eif like banks.
     # API entity codes confirmed live (2026): MONUMENTAL, NORPRESA, OFICORP.

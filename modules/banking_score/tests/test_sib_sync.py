@@ -264,7 +264,8 @@ def test_backfill_errors_without_key(Session, monkeypatch):
 
 def test_backfill_skips_duplicate_when_recent(Session):
     """A Celery re-delivery (acks_late) after a long run must NOT re-ingest:
-    if a backfill completed within the dedup window, the duplicate is skipped."""
+    if a routine (force=False) backfill completed within the dedup window, the
+    duplicate is skipped. An explicit admin force=True overrides the guard."""
     from datetime import datetime, timezone
 
     db = Session()
@@ -273,9 +274,22 @@ def test_backfill_skips_duplicate_when_recent(Session):
         last_sync=datetime.now(timezone.utc).isoformat(),
     )
     db.close()
-    # Even force=True is skipped — the guard catches the duplicate before re-running.
-    result = sib_sync.run_backfill(force=True)
+    # Routine re-delivery (the real acks_late case) is force=False → skipped.
+    result = sib_sync.run_backfill(force=False)
     assert result["status"] == "skipped_duplicate"
+
+
+def test_backfill_force_overrides_dedup(Session, monkeypatch):
+    """An explicit admin force=True must bypass the dedup guard and re-ingest."""
+    from datetime import datetime, timezone
+    db = Session()
+    _seed_popular(db)
+    sib_sync._write_status(db, is_running=False, backfill_done=True,
+                           last_sync=datetime.now(timezone.utc).isoformat())
+    db.close()
+    monkeypatch.setattr(sib_sync, "get_sib_data_client", lambda force_new=False: _StubClient())
+    result = sib_sync.run_backfill(force=True)
+    assert result["status"] == "completed"  # not skipped_duplicate
 
 
 def test_simbad_fallback_fills_gaps_and_respects_api_primary(Session, monkeypatch):
