@@ -43,28 +43,28 @@ def test_cambiaria_uses_cambiaria_weight_profile():
 
 
 def test_eic_mapper_parses_concepts():
+    """Reads the TODOS-cascade subtotal of each node (never sums children — that
+    double-counts subtotal+leaves; see lessons 2026-06-09/10 and the 2026-06-14 audit)."""
     client = SIBDataClient.__new__(SIBDataClient)  # no network init needed
     period_data = {
         "balance": [
-            {"conceptoNivel1": "Activos", "conceptoNivel2": "Efectivo y equivalentes de efectivo", "valor": 600},
-            {"conceptoNivel1": "Activos", "conceptoNivel2": "Inversiones", "valor": 100},
-            {"conceptoNivel1": "Activos", "conceptoNivel2": "Cartera de créditos", "valor": 200},
-            {"conceptoNivel1": "Activos", "conceptoNivel2": "Otros activos", "valor": 100},
-            {"conceptoNivel1": "Activos", "conceptoNivel2": "TODOS", "valor": 1000},  # must be ignored
-            {"conceptoNivel1": "Pasivos", "conceptoNivel2": "Otros pasivos", "valor": 700},
-            {"conceptoNivel1": "Patrimonio", "conceptoNivel2": "Patrimonio neto", "valor": 300},
+            {"conceptoNivel1": "Activos", "conceptoNivel2": "TODOS", "conceptoNivel3": "TODOS", "valor": 1000},  # grand total
+            {"conceptoNivel1": "Activos", "conceptoNivel2": "Efectivo y equivalentes de efectivo", "conceptoNivel3": "TODOS", "valor": 600},
+            {"conceptoNivel1": "Activos", "conceptoNivel2": "Efectivo y equivalentes de efectivo", "conceptoNivel3": "Caja", "valor": 600},  # leaf (must NOT add)
+            {"conceptoNivel1": "Activos", "conceptoNivel2": "Inversiones", "conceptoNivel3": "TODOS", "valor": 100},
+            {"conceptoNivel1": "Activos", "conceptoNivel2": "Cartera de créditos", "conceptoNivel3": "TODOS", "valor": 200},
+            {"conceptoNivel1": "Pasivos", "conceptoNivel2": "TODOS", "conceptoNivel3": "TODOS", "valor": 700},
+            {"conceptoNivel1": "Patrimonio", "conceptoNivel2": "TODOS", "conceptoNivel3": "TODOS", "valor": 300},
         ],
         "income": [
-            {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "Resultado antes del impuesto", "valor": 50},
-            {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "Impuesto sobre la renta", "valor": -15},
-            {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "TODOS", "valor": 35},
+            {"conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "TODOS", "conceptoNivel3": "TODOS", "valor": 35},
         ],
     }
-    m = SIBDataClient._map_eic_to_sdq_fields(client, period_data)
-    assert m["activos_totales"] == 1000      # sum of children, not the TODOS row
+    m = SIBDataClient._map_eic_to_sdq_fields(period_data)
+    assert m["activos_totales"] == 1000      # the Activos/TODOS subtotal
     assert m["pasivos_exigibles"] == 700
     assert m["patrimonio_tecnico"] == 300
-    assert m["activos_liquidos"] == 700      # efectivo + inversiones
+    assert m["activos_liquidos"] == 700      # efectivo (600 subtotal, not its 600 leaf again) + inversiones (100)
     assert m["cartera_bruta"] == 200
     assert m["utilidad_neta"] == 35
 
@@ -82,12 +82,12 @@ def test_eic_bulk_meta_uses_queried_tipo_code(monkeypatch):
     client._discovered_tipo_codes = ["ARC"]
     bal = [
         {"entidad": "CARIBEEXPRESS", "periodo": "2024-12", "tipoEntidad": "AGENTES DE REMESAS Y CAMBIO",
-         "conceptoNivel1": "Activos", "conceptoNivel2": "Efectivo y equivalentes de efectivo", "valor": 600},
+         "conceptoNivel1": "Activos", "conceptoNivel2": "TODOS", "conceptoNivel3": "TODOS", "valor": 900},
         {"entidad": "CARIBEEXPRESS", "periodo": "2024-12", "tipoEntidad": "AGENTES DE REMESAS Y CAMBIO",
-         "conceptoNivel1": "Patrimonio", "conceptoNivel2": "Patrimonio neto", "valor": 300},
+         "conceptoNivel1": "Patrimonio", "conceptoNivel2": "TODOS", "conceptoNivel3": "TODOS", "valor": 300},
     ]
     inc = [{"entidad": "CARIBEEXPRESS", "periodo": "2024-12", "tipoEntidad": "AGENTES DE REMESAS Y CAMBIO",
-            "conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "TODOS", "valor": 20}]
+            "conceptoNivel1": "Resultado del ejercicio", "conceptoNivel2": "TODOS", "conceptoNivel3": "TODOS", "valor": 20}]
     monkeypatch.setattr(client, "_fetch_for_all_types",
                         lambda ep, ps, pe: bal if "situacion" in ep else inc)
     out = client._extract_eic_bulk("2021-01", "2024-12")

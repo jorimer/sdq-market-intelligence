@@ -1390,7 +1390,9 @@ class SIBDataClient:
         results: Dict[str, List[Dict]] = {}
         meta: Dict[str, Dict] = {}
         for ent, sources in by_ent.items():
-            periods = self._group_by_period({"income": sources["income"], "balance": sources["balance"]})
+            # EIC is monthly → group by exact month (NOT bucketed to the quarter, which
+            # would mix months into one period and inflate stocks / scramble income).
+            periods = self._group_by_exact_month({"income": sources["income"], "balance": sources["balance"]})
             out = []
             for period_date, data in periods.items():
                 try:
@@ -1417,59 +1419,52 @@ class SIBDataClient:
         logger.info(f"  EIC extract complete: {len(meta)} cambiarias")
         return results
 
-    def _map_eic_to_sdq_fields(self, period_data: Dict) -> Dict[str, Any]:
-        """Map EIC balance + income concept rows to the BankingData fields used by
-        the cambiaria scoring path. Totals are summed from conceptoNivel2 children
-        (robust to the 'TODOS' aggregate-row convention).
+    @staticmethod
+    def _map_eic_to_sdq_fields(period_data: Dict) -> Dict[str, Any]:
+        """Map ONE PERIOD of EIC balance + income concept rows to the BankingData
+        fields used by the cambiaria scoring path.
+
+        Reads the **TODOS-cascade subtotal** of each node — never sums the children.
+        The EIC tree carries, for every node, a subtotal row whose deeper levels are
+        all ``TODOS`` (e.g. ``Activos/TODOS/…`` = total assets; ``Activos/Efectivo…/
+        TODOS`` = cash subtotal). Summing the conceptoNivel children instead double-
+        counts (subtotal + leaves); see lessons 2026-06-09/10. *period_data* must hold
+        a single month's records (see ``_group_by_exact_month``) — mixing months
+        inflates stocks and makes the income first-match non-deterministic.
         """
         balance = period_data.get("balance", [])
         income = period_data.get("income", [])
 
-        def _bsum(n1: str):
-            total, found = 0.0, False
-            for r in balance:
-                if (r.get("conceptoNivel1") or "").strip() == n1:
-                    n2 = (r.get("conceptoNivel2") or "").strip()
-                    if n2 and n2 != "TODOS":
-                        try:
-                            total += float(r.get("valor") or 0)
-                            found = True
-                        except (TypeError, ValueError):
-                            pass
-            return total if found else None
-
-        def _bval(n1: str, n2: str):
-            for r in balance:
-                if ((r.get("conceptoNivel1") or "").strip() == n1
-                        and (r.get("conceptoNivel2") or "").strip() == n2):
+        def _sub(records, n1: str, n2: str = "TODOS"):
+            """Value of node (n1[/n2]) read from its cascade subtotal row: this n1/n2
+            with every deeper conceptoNivel == 'TODOS' (or absent)."""
+            for r in records:
+                if ((r.get("conceptoNivel1") or "").strip() != n1
+                        or (r.get("conceptoNivel2") or "").strip() != n2):
+                    continue
+                if all((r.get(f"conceptoNivel{i}") or "TODOS").strip() == "TODOS"
+                       for i in range(3, 8)):
                     try:
                         return float(r.get("valor") or 0)
                     except (TypeError, ValueError):
                         return None
             return None
 
-        def _ival(n2: str):
-            for r in income:
-                if (r.get("conceptoNivel2") or "").strip() == n2:
-                    try:
-                        return float(r.get("valor") or 0)
-                    except (TypeError, ValueError):
-                        return None
-            return None
-
-        efectivo = _bval("Activos", "Efectivo y equivalentes de efectivo") or 0.0
-        inversiones = _bval("Activos", "Inversiones") or 0.0
-        resultado = _ival("TODOS")
+        efectivo = _sub(balance, "Activos", "Efectivo y equivalentes de efectivo") or 0.0
+        inversiones = _sub(balance, "Activos", "Inversiones") or 0.0
+        # Net result of the year (YTD): the after-tax bottom line subtotal.
+        resultado = _sub(income, "Resultado del ejercicio", "TODOS")
         if resultado is None:
-            antes, imp = _ival("Resultado antes del impuesto"), _ival("Impuesto sobre la renta")
+            antes = _sub(income, "Resultado del ejercicio", "Resultado antes del impuesto")
+            imp = _sub(income, "Resultado del ejercicio", "Impuesto sobre la renta")
             resultado = (antes or 0.0) + (imp or 0.0) if (antes is not None or imp is not None) else None
 
         return {
-            "activos_totales": _bsum("Activos"),
-            "patrimonio_tecnico": _bsum("Patrimonio"),
-            "pasivos_exigibles": _bsum("Pasivos"),
+            "activos_totales": _sub(balance, "Activos", "TODOS"),
+            "patrimonio_tecnico": _sub(balance, "Patrimonio", "TODOS"),
+            "pasivos_exigibles": _sub(balance, "Pasivos", "TODOS"),
             "activos_liquidos": efectivo + inversiones,
-            "cartera_bruta": _bval("Activos", "Cartera de créditos"),
+            "cartera_bruta": _sub(balance, "Activos", "Cartera de créditos"),
             "utilidad_neta": resultado,
         }
 
@@ -1494,6 +1489,41 @@ class SIBDataClient:
 
         bulk = self.extract_all_entities_bulk(period_start, period_end)
         return bulk.get(short_name, [])
+
+    @staticmethod
+    def _month_end(periodo: str) -> Optional[date]:
+        """Parse a SIB 'YYYY-MM' period string to its month-end date.
+
+        Used for EIC (cambiarias), which the SIB publishes **monthly** — each month
+        must stay its own period so a quarter-end bucket holds only that month's data
+        (bucketing to the quarter mixed Oct+Nov+Dec into Q4 → inflated stocks +
+        non-deterministic income). Closing months (3/6/9/12) yield the quarter-end
+        date, so the downstream quarterly filter keeps exactly the right snapshot."""
+        if not periodo:
+            return None
+        try:
+            parts = str(periodo).split("-")
+            year, month = int(parts[0]), int(parts[1])
+        except (ValueError, IndexError):
+            return None
+        import calendar
+        return date(year, month, calendar.monthrange(year, month)[1])
+
+    def _group_by_exact_month(self, sources: Dict[str, List[Dict]]) -> Dict[date, Dict]:
+        """Group records by their EXACT month (month-end date), not the quarter.
+
+        Unlike ``_group_by_period`` (which buckets every month into its quarter-end
+        and is correct only for quarterly feeds like EIF), this keeps each monthly EIC
+        period separate. The caller marks closing months as quarterly; the sync then
+        persists only those — each with a single month's records."""
+        grouped: Dict[date, Dict] = {}
+        for src_name, records in sources.items():
+            for record in records or []:
+                d = self._month_end(record.get("periodo") or record.get("Periodo") or "")
+                if d is None:
+                    continue
+                grouped.setdefault(d, {}).setdefault(src_name, []).append(record)
+        return grouped
 
     @staticmethod
     def _period_to_quarter_end(periodo: str) -> Optional[date]:

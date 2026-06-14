@@ -55,6 +55,7 @@ class DataSource(str, enum.Enum):
     sib_api = "sib_api"
     csv_upload = "csv_upload"
     sib_pdf = "sib_pdf"  # fiduciary audited-statement PDFs (SIB supervised portal)
+    sib_simbad = "sib_simbad"  # SIMBAD public Superset — fallback when the open API lacks a period
 
 
 class ModelType(str, enum.Enum):
