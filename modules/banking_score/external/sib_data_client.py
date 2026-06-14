@@ -82,7 +82,7 @@ SIB_ENTITY_CODES: Dict[str, Dict[str, Any]] = {
     "Peravia":       {"sib_code": "PERAVIA", "tipo_entidad": "AAP", "nombre_sib": "ASOC. PERAVIA DE AHORROS Y PRESTAMOS"},
     # Bancos de Ahorro y Crédito
     "ADOPEM":        {"sib_code": "ADP",   "tipo_entidad": "BAC", "nombre_sib": "BANCO ADOPEM DE AHORRO Y CREDITO"},
-    "ADEMI":         {"sib_code": "ADM",   "tipo_entidad": "BAC", "nombre_sib": "BANCO ADEMI DE AHORRO Y CREDITO"},
+    "ADEMI":         {"sib_code": "ADM",   "tipo_entidad": "BM",  "nombre_sib": "BANCO MULTIPLE ADEMI"},  # banca múltiple desde 2013
     "Confisa":       {"sib_code": "CON",   "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORRO Y CREDITO CONFISA"},
     "FONDESA":       {"sib_code": "FND",   "tipo_entidad": "BAC", "nombre_sib": "BANCO DE AHORRO Y CREDITO FONDESA"},
     "Motor Crédito": {"sib_code": "MOT",   "tipo_entidad": "BAC", "nombre_sib": "MOTOR CREDITO BAC"},
