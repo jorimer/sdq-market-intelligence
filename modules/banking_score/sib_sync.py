@@ -25,6 +25,7 @@ from modules.banking_score.external.sib_data_client import (
     SIB_ENTITY_CODES,
     get_sib_data_client,
 )
+from modules.banking_score.external.simbad_client import extract_cambiaria_bulk
 from modules.banking_score.models.models import (
     Bank,
     BankingData,
@@ -363,6 +364,48 @@ def run_backfill(force: bool = False, period_start: str = "2021-01") -> Dict:
                         created += 1
             db.commit()  # persist this tipo before moving on (incremental)
             _write_status(db, phase=f"{tipo} listo ({i}/{len(tipos)}) · {matched} entidades, {created + updated} registros")
+
+        # ── SIMBAD fallback (cambiarias) ───────────────────────────────────────
+        # The open API doesn't publish AC cambiarias for recent quarters (verified
+        # 2026); SIMBAD (public Superset of the SB) does. Fill any cambiaria
+        # (entity × quarter-end) the API pass didn't produce. API stays PRIMARY:
+        # never overwrite an existing row. Best-effort — must not break the backfill.
+        simbad_created = 0
+        try:
+            _write_status(db, phase="SIMBAD: completando cambiarias faltantes…")
+            simbad = extract_cambiaria_bulk(period_start=period_start)
+            simbad_meta = simbad.get("_entity_meta", {})
+            for short_name, speriods in simbad.items():
+                if short_name.startswith("_"):
+                    continue
+                bank, was_created = _match_or_create_bank(db, short_name, extra_codes=simbad_meta)
+                if not bank:
+                    continue
+                if was_created:
+                    entities_created += 1
+                for rec in speriods:
+                    rec = dict(rec)
+                    pe = rec.pop("period_end")
+                    rec.pop("period_type", None)
+                    rec.pop("source", None)
+                    if pe.month not in (3, 6, 9, 12) or pe > today:
+                        continue
+                    if db.query(BankingData).filter_by(bank_id=bank.id, period_end=pe).first():
+                        continue  # API primary — leave its row untouched
+                    row = BankingData(bank_id=bank.id, period_end=pe,
+                                      period_type=PeriodType.quarterly, source=DataSource.sib_simbad)
+                    for k, v in rec.items():
+                        if v is not None:
+                            setattr(row, k, v)
+                    db.add(row)
+                    simbad_created += 1
+            db.commit()
+            created += simbad_created
+            _write_status(db, phase=f"SIMBAD: {simbad_created} períodos de cambiarias completados")
+        except Exception as e:  # noqa: BLE001 — fallback must never break the API backfill
+            db.rollback()
+            logger.warning("SIMBAD fallback falló (no crítico): %s", e)
+            _write_status(db, phase="SIMBAD: fallback omitido (ver logs)")
 
         # Recalculate ratings for the freshly-ingested SIB data. Without this the
         # platform has real data but stale/missing ratings (834 records vs 70

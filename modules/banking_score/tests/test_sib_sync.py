@@ -13,6 +13,7 @@ from modules.banking_score.models.models import (
     BankingData,
     BankType,
     DataSource,
+    PeriodType,
     RatingResult,
 )
 
@@ -28,6 +29,9 @@ def Session(monkeypatch):
     SessionLocal = sessionmaker(bind=engine)
     # Make the service use this engine.
     monkeypatch.setattr(sib_sync, "SessionLocal", SessionLocal)
+    # Hermetic by default: stub the SIMBAD fallback (it hits the live network).
+    # The dedicated test below overrides it to exercise the fallback.
+    monkeypatch.setattr(sib_sync, "extract_cambiaria_bulk", lambda **_: {"_entity_meta": {}})
     return SessionLocal
 
 
@@ -272,3 +276,35 @@ def test_backfill_skips_duplicate_when_recent(Session):
     # Even force=True is skipped — the guard catches the duplicate before re-running.
     result = sib_sync.run_backfill(force=True)
     assert result["status"] == "skipped_duplicate"
+
+
+def test_simbad_fallback_fills_gaps_and_respects_api_primary(Session, monkeypatch):
+    """The SIMBAD fallback writes cambiaria (entity × quarter-end) the API didn't,
+    tagged source=sib_simbad, and NEVER overwrites an existing (API) row."""
+    db = Session()
+    camb = Bank(name="Agc Existing (Agente de Cambio)", sib_code="AGCEXIST",
+                bank_type=BankType.cambiaria)
+    db.add(camb)
+    db.flush()
+    db.add(BankingData(bank_id=camb.id, period_end=date(2025, 9, 30),
+                       source=DataSource.sib_api, period_type=PeriodType.quarterly,
+                       activos_totales=999))
+    db.commit()
+    camb_id = camb.id
+
+    monkeypatch.setattr(sib_sync, "get_sib_data_client", lambda force_new=False: _StubClient())
+    monkeypatch.setattr(sib_sync, "extract_cambiaria_bulk", lambda **_: {
+        "AGCEXIST": [
+            {"period_end": date(2025, 9, 30), "activos_totales": 111},   # exists (API) → keep
+            {"period_end": date(2025, 12, 31), "activos_totales": 222},  # new → fill from SIMBAD
+        ],
+        "_entity_meta": {"AGCEXIST": {"sib_code": "AGCEXIST", "tipo_entidad": "AC",
+                                      "nombre": "Agc Existing (Agente de Cambio)"}},
+    })
+    sib_sync.run_backfill(force=True)
+
+    db2 = Session()
+    sep = db2.query(BankingData).filter_by(bank_id=camb_id, period_end=date(2025, 9, 30)).first()
+    dec = db2.query(BankingData).filter_by(bank_id=camb_id, period_end=date(2025, 12, 31)).first()
+    assert sep is not None and sep.source == DataSource.sib_api and float(sep.activos_totales) == 999
+    assert dec is not None and dec.source == DataSource.sib_simbad and float(dec.activos_totales) == 222
