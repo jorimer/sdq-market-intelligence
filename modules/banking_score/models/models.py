@@ -22,6 +22,7 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -293,7 +294,8 @@ class Report(UUIDMixin, Base):
     period_end = Column(Date, nullable=True)
 
     report_type = Column(Enum(ReportType), nullable=False)
-    file_path = Column(String(500), nullable=True)
+    file_path = Column(String(500), nullable=True)  # ruta en disco (legacy/compat)
+    file_blob = Column(LargeBinary, nullable=True)  # bytes del PDF — store durable (sobrevive redeploys del FS efímero)
     file_size = Column(Integer, nullable=True)
     narrative_model = Column(String(100), nullable=True)
 

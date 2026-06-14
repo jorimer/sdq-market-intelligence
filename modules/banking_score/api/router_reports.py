@@ -4,10 +4,10 @@ prefix: /api/v1/banking-score/reports
 Extracted from monolith router_banking_scoring.py.
 """
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
@@ -54,25 +54,33 @@ async def download_report(
             detail=f"Reporte no completado (estado: {report.status.value})",
         )
 
-    if not report.file_path:
-        raise HTTPException(
-            status_code=404,
-            detail="Archivo de reporte no disponible aún. Generación PDF en Paso 5.",
-        )
-
-    from pathlib import Path
-    file_path = Path(report.file_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Archivo de reporte no encontrado en disco")
-
     bank = db.query(Bank).filter_by(id=report.bank_id).first()
     bank_name = (bank.name if bank else "entity").replace(" ", "_")
     filename = f"SDQ_{report.report_type.value}_{bank_name}_{report.period_end}.pdf"
 
-    return FileResponse(
-        path=str(file_path),
-        media_type="application/pdf",
-        filename=filename,
+    # Primary: serve the PDF bytes from the DB (durable, survives redeploys).
+    if report.file_blob:
+        return Response(
+            content=report.file_blob,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # Fallback: legacy reports with only a disk path (pre-blob). These vanish on
+    # redeploy of the ephemeral FS, so this may 404 — surface a clear message.
+    if report.file_path:
+        from pathlib import Path
+        file_path = Path(report.file_path)
+        if file_path.exists():
+            return FileResponse(
+                path=str(file_path),
+                media_type="application/pdf",
+                filename=filename,
+            )
+
+    raise HTTPException(
+        status_code=404,
+        detail="Archivo de reporte no disponible. Vuelva a generar el reporte.",
     )
 
 
@@ -416,8 +424,16 @@ async def generate_report(
             period=period_end,
             narratives=narratives,
         )
+        # Persist the PDF bytes in the DB (durable). The disk file lives on the
+        # container's ephemeral FS and vanishes on redeploy — without this, the
+        # row survives but re-download 404s. Keep file_path for filename/compat.
+        from pathlib import Path
+        pdf_bytes = Path(file_path).read_bytes()
         report.status = ReportStatus.completed
         report.file_path = file_path
+        report.file_blob = pdf_bytes
+        report.file_size = len(pdf_bytes)
+        report.completed_at = datetime.now(timezone.utc)
         report.narrative_model = "claude" if narratives else "none"
     except Exception as e:
         logger.error("PDF generation failed: %s", e)
