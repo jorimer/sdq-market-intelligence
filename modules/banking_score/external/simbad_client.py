@@ -107,28 +107,31 @@ def extract_cambiaria_bulk(period_start: str = "2021-01", period_end: str = "") 
     """
     start_year, end_year = _quarter_years(period_start, period_end)
 
-    bal_rows = _post_chart_data(
-        DATASET_BALANCE,
-        ["Año", "Mes", "ENTIDAD", "CONCEPTO_NIVEL_1", "CONCEPTO_NIVEL_2", "CONCEPTO_NIVEL_3", "MONTO"],
-        [
-            {"col": "SISTEMA", "op": "==", "val": _CAMBIARIA_SYSTEM},
-            {"col": "Año", "op": ">=", "val": start_year},
-            {"col": "Año", "op": "<=", "val": end_year},
-            {"col": "Mes", "op": "IN", "val": list(_QUARTER_MONTHS)},
-        ],
-    )
-    # Income (dataset 34) has only FECHA (a temporal column), no Año/Mes → bound by a date
-    # range (ISO strings; the column rejects epoch-int filters) so the row_limit isn't
-    # exhausted by deep history, which would truncate the recent months we need.
-    inc_rows = _post_chart_data(
-        DATASET_INCOME,
-        ["FECHA", "ENTIDAD"] + [f"CONCEPTO_NIVEL_{i}" for i in range(1, 8)] + ["MONTO"],
-        [
-            {"col": "SISTEMA", "op": "==", "val": _CAMBIARIA_SYSTEM},
-            {"col": "FECHA", "op": ">=", "val": f"{start_year}-01-01"},
-            {"col": "FECHA", "op": "<=", "val": f"{end_year}-12-31"},
-        ],
-    )
+    # Query YEAR BY YEAR so neither dataset's row_limit truncates over deep history.
+    # Income (dataset 34) is a 7-level tree (~200+ rows per entity-month) and exceeds
+    # 200k across the full range; balance (3 levels) is smaller but chunked too for safety.
+    # Income has only FECHA (a temporal column; rejects epoch-int filters → ISO strings).
+    bal_rows: List[Dict] = []
+    inc_rows: List[Dict] = []
+    for yr in range(start_year, end_year + 1):
+        bal_rows += _post_chart_data(
+            DATASET_BALANCE,
+            ["Año", "Mes", "ENTIDAD", "CONCEPTO_NIVEL_1", "CONCEPTO_NIVEL_2", "CONCEPTO_NIVEL_3", "MONTO"],
+            [
+                {"col": "SISTEMA", "op": "==", "val": _CAMBIARIA_SYSTEM},
+                {"col": "Año", "op": "==", "val": yr},
+                {"col": "Mes", "op": "IN", "val": list(_QUARTER_MONTHS)},
+            ],
+        )
+        inc_rows += _post_chart_data(
+            DATASET_INCOME,
+            ["FECHA", "ENTIDAD"] + [f"CONCEPTO_NIVEL_{i}" for i in range(1, 8)] + ["MONTO"],
+            [
+                {"col": "SISTEMA", "op": "==", "val": _CAMBIARIA_SYSTEM},
+                {"col": "FECHA", "op": ">=", "val": f"{yr}-01-01"},
+                {"col": "FECHA", "op": "<=", "val": f"{yr}-12-31"},
+            ],
+        )
     logger.info("  SIMBAD cambiaria: %d balance, %d income rows", len(bal_rows), len(inc_rows))
 
     # Bucket balance by (entidad, quarter-end date); income by the same, parsing FECHA.
