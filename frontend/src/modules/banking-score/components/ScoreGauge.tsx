@@ -13,7 +13,7 @@ export function ScoreGauge({ score, size = 120, label }: Props) {
   const color = toneVar(bandFor(score).tone);
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <circle
           cx={size / 2}
@@ -36,10 +36,7 @@ export function ScoreGauge({ score, size = 120, label }: Props) {
           className="transition-all duration-700"
         />
       </svg>
-      <div
-        className="absolute flex flex-col items-center justify-center"
-        style={{ width: size, height: size }}
-      >
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-bold" style={{ color }}>
           {score.toFixed(1)}
         </span>
