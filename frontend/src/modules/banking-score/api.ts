@@ -79,6 +79,13 @@ export async function getLatest(bankId: string): Promise<ScoringResult & { has_r
   return data;
 }
 
+/** Period-ends (ISO, desc) the entity has data for — to tell "sin dato para este
+ * período" apart from an error and guide the user to its latest available period. */
+export async function getBankPeriods(bankId: string): Promise<string[]> {
+  const { data } = await client.get<{ periods: string[] }>(`/banking-score/${bankId}/periods`);
+  return data.periods ?? [];
+}
+
 /* ── Indicator drill-down (detail + trend + peers + AI insight) ── */
 
 export interface IndicatorPeerStats {

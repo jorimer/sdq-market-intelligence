@@ -6,6 +6,7 @@ import { ScoreGauge } from "../components/ScoreGauge";
 import { RatingBadge } from "../components/RatingBadge";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { PageHead, Card, CardHead, StateBlock, Delta } from "@/shared/ui/primitives";
+import { useEntityPeriodGuard } from "../components/EntityPeriodNotice";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
   runScoring,
@@ -38,6 +39,7 @@ export function ScenariosPage() {
   const [sliders, setSliders] = useState<SubComponents>({ ...PRESETS.Base });
   const [loading, setLoading] = useState(false);
   const [simulating, setSimulating] = useState(false);
+  const { blocked, notice } = useEntityPeriodGuard(bankId, bankName);
 
   const loadBase = async () => {
     if (!bankId) return;
@@ -89,11 +91,12 @@ export function ScenariosPage() {
           <div className="text-xs text-muted pb-2.5">
             Período <span className="mono text-body">{periodEnd}</span>
           </div>
-          <button onClick={loadBase} disabled={!bankId || loading} className="btn btn-primary">
+          <button onClick={loadBase} disabled={!bankId || loading || blocked} className="btn btn-primary">
             <Sliders className="w-4 h-4" />
             {loading ? "Cargando…" : "Cargar base"}
           </button>
         </div>
+        {notice}
       </Card>
 
       {!base ? (

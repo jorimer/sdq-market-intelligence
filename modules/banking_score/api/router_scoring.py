@@ -247,6 +247,29 @@ async def get_latest_rating(
     }
 
 
+@router.get(
+    "/{bank_id}/periods",
+    summary="Períodos con datos de una entidad",
+    description="Períodos (period_end ISO, descendente) para los que la entidad tiene "
+                "datos cargados (BankingData) y por tanto se puede calcular/mostrar. "
+                "Permite a la UI distinguir 'sin dato para este período' de un error y "
+                "guiar al usuario al último período disponible de esa entidad.",
+)
+async def get_bank_periods(
+    bank_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(BankingData.period_end)
+        .filter(BankingData.bank_id == bank_id)
+        .distinct()
+        .order_by(BankingData.period_end.desc())
+        .all()
+    )
+    return {"bank_id": bank_id, "periods": [str(r[0]) for r in rows]}
+
+
 # ─── Indicator drill-down (detail + trend + peers + AI insight) ──
 
 
