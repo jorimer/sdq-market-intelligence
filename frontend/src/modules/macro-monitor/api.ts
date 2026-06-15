@@ -1,4 +1,5 @@
 import client from "@/shared/api/client";
+import type { AiInsight } from "@/shared/ui/insight-types";
 
 export interface MacroIndicator {
   series_code: string;
@@ -46,11 +47,32 @@ export interface SeriesDetail {
     change: number | null;
     uncertainty_band: [number, number] | null;
   } | null;
+  ai_insight?: AiInsight | null;
 }
 
-export async function getSeries(code: string): Promise<SeriesDetail> {
-  const { data } = await client.get(`/macro-monitor/series/${code}`);
+/** Detalle de una serie. `withAi` (lento ~10-15s) genera el insight de Claude. */
+export async function getSeries(code: string, withAi = false): Promise<SeriesDetail> {
+  const { data } = await client.get(`/macro-monitor/series/${code}`, {
+    params: { with_ai: withAi },
+  });
   return data;
+}
+
+/** Insight de IA de la serie (fase 2 — para AiInsightCard). */
+export async function getSeriesInsight(code: string): Promise<AiInsight | null> {
+  const { data } = await client.get<SeriesDetail>(`/macro-monitor/series/${code}`, {
+    params: { with_ai: true },
+  });
+  return data.ai_insight ?? null;
+}
+
+/** Lectura de coyuntura (IA) del snapshot macro (fase 2 — para AiInsightCard). */
+export async function getMacroSnapshotInsight(period?: string): Promise<AiInsight | null> {
+  const { data } = await client.get<{ ai_insight: AiInsight | null }>(
+    "/macro-monitor/snapshot",
+    { params: { with_ai: true, ...(period ? { period } : {}) } },
+  );
+  return data.ai_insight ?? null;
 }
 
 /** Admin: borra todas las observaciones de un series_code. Devuelve cuántas se borraron. */

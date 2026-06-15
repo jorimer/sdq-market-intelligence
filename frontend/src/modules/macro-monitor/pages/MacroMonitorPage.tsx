@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, Activity } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, Activity, Sparkles } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -10,6 +10,7 @@ import {
   StateBlock,
   LoadingGrid,
 } from "@/shared/ui/primitives";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { ScenarioFan } from "@/shared/charts/ScenarioFan";
 import { fmtNum } from "@/shared/lib/format";
 import { Tone } from "@/shared/lib/bands";
@@ -17,6 +18,8 @@ import {
   getIndicators,
   getSignals,
   getSeries,
+  getSeriesInsight,
+  getMacroSnapshotInsight,
   refresh,
   MacroIndicator,
   MacroSignal,
@@ -142,6 +145,8 @@ export function MacroMonitorPage() {
   }
 
   const accelerating = indicators.filter((i) => i.trend === "acelerando").length;
+  const latestPeriod =
+    indicators.map((i) => i.latest_period).filter(Boolean).sort().slice(-1)[0] ?? "none";
 
   return (
     <div>
@@ -155,6 +160,17 @@ export function MacroMonitorPage() {
         <StatTile
           label="Sin señales = "
           value={signals.length === 0 ? "estable" : "vigilar"}
+        />
+      </div>
+
+      {/* Coyuntura (IA) */}
+      <div className="mb-5">
+        <AiInsightCard
+          title="Lectura de coyuntura (IA)"
+          subtitle="Riesgos y oportunidades del entorno macro actual (BCRD)"
+          icon={Sparkles}
+          depsKey={`coyuntura:${latestPeriod}:${indicators.length}`}
+          fetcher={() => getMacroSnapshotInsight()}
         />
       </div>
 
@@ -287,6 +303,19 @@ export function MacroMonitorPage() {
           <p className="text-sm text-muted py-6 text-center">Selecciona una serie.</p>
         )}
       </Card>
+
+      {/* Series analysis (IA) */}
+      {seriesCode && (
+        <div className="mt-5">
+          <AiInsightCard
+            title="Análisis de la serie (IA)"
+            subtitle={series?.series_code ?? seriesCode}
+            icon={Activity}
+            depsKey={`serie:${seriesCode}`}
+            fetcher={() => getSeriesInsight(seriesCode)}
+          />
+        </div>
+      )}
     </div>
   );
 }
