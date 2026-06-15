@@ -321,3 +321,50 @@ class TestIntegration:
         score, tier, probs = model.predict(flat_scores)
         assert 0 <= score <= 100
         assert tier.startswith("SDQ-")
+
+
+@_skip_xgb
+class TestModelDurability:
+    """The trained model must survive a redeploy (disk file gone): it is
+    persisted in Postgres (ml_models) and loaded from DB on cold start."""
+
+    def _db(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.pool import StaticPool
+        from shared.database.base import Base
+        from shared.auth.models import User  # noqa: F401 — register FK target
+        import modules.banking_score.models.models  # noqa: F401 — register tables
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+        )
+        Base.metadata.create_all(bind=engine)
+        return sessionmaker(bind=engine)()
+
+    def test_save_and_load_from_db_when_disk_gone(self, tmp_path):
+        db = self._db()
+        gen = TestXGBoostModel()._generate_training_data(60)
+
+        trainer = SDQXGBoostModel()
+        trainer._model_path = str(tmp_path / "m.pkl")
+        trainer.train(*gen)
+        trainer.save_to_db(db)
+
+        # Simulate redeploy: fresh instance, NO disk file present.
+        revived = SDQXGBoostModel()
+        revived._model_path = str(tmp_path / "gone.pkl")  # does not exist
+        assert revived.ensure_loaded(db) is True
+        assert revived.version == trainer.version
+        assert revived.get_status(db)["model_available"] is True
+
+        # Predictions match the original.
+        scores = {feat: 70.0 for feat in FEATURE_ORDER}
+        s1, t1, _ = trainer.predict(scores)
+        s2, t2, _ = revived.predict(scores)
+        assert abs(s1 - s2) < 0.01 and t1 == t2
+
+    def test_status_reports_unavailable_without_disk_or_db(self, tmp_path):
+        db = self._db()
+        model = SDQXGBoostModel()
+        model._model_path = str(tmp_path / "none.pkl")
+        assert model.get_status(db)["model_available"] is False

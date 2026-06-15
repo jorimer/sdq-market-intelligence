@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Calculator, Radar as RadarIcon, ListChecks } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
@@ -11,10 +11,13 @@ import { fmtNum } from "@/shared/lib/format";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
   runScoring,
+  getModelStatus,
   ScoringResult,
   SUB_KEYS,
   SUB_LABELS,
 } from "../api";
+
+type ModelMode = "deterministic" | "ml";
 
 export function ScoringPage() {
   const { period } = useApp();
@@ -24,14 +27,22 @@ export function ScoringPage() {
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [modelMode, setModelMode] = useState<ModelMode>("deterministic");
+  const [mlAvailable, setMlAvailable] = useState(false);
   const { blocked, notice } = useEntityPeriodGuard(bankId, bankName);
+
+  useEffect(() => {
+    getModelStatus()
+      .then((s) => setMlAvailable(!!s.ml_available))
+      .catch(() => setMlAvailable(false));
+  }, []);
 
   const run = async () => {
     if (!bankId) return;
     setLoading(true);
     setError(false);
     try {
-      setResult(await runScoring(bankId, periodEnd));
+      setResult(await runScoring(bankId, periodEnd, modelMode));
     } catch {
       setError(true);
       setResult(null);
@@ -45,7 +56,7 @@ export function ScoringPage() {
       <PageHead
         eyebrow="SIB · scoring"
         title="Calcular rating"
-        sub="Ejecuta el modelo determinista (19 indicadores · 5 sub-componentes) para una entidad y período."
+        sub="Calcula 19 indicadores y 5 sub-componentes para una entidad y período. Elige el modelo: determinista o ML (XGBoost)."
       />
 
       <Card className="mb-5">
@@ -62,6 +73,29 @@ export function ScoringPage() {
           </div>
           <div className="text-xs text-muted pb-2.5">
             Período <span className="mono text-body">{periodEnd}</span>
+          </div>
+          <div className="pb-1">
+            <label className="block text-xs font-medium text-muted mb-1">Modelo</label>
+            <div className="inline-flex rounded-lg border border-line bg-surface2 p-0.5">
+              {(["deterministic", "ml"] as ModelMode[]).map((m) => {
+                const disabled = m === "ml" && !mlAvailable;
+                const active = modelMode === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setModelMode(m)}
+                    title={disabled ? "Entrena el modelo en la sección Modelo" : undefined}
+                    className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                      active ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"
+                    } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                  >
+                    {m === "deterministic" ? "Determinista" : "ML"}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <button onClick={run} disabled={!bankId || loading || blocked} className="btn btn-primary">
             <Calculator className="w-4 h-4" />
@@ -82,6 +116,11 @@ export function ScoringPage() {
             <ScoreGauge score={result.overall_score} size={150} />
             <div className="mt-3">
               <RatingBadge tier={result.rating_tier} size="lg" />
+            </div>
+            <div className="mt-2 text-[11px] text-muted">
+              {result.model === "ml"
+                ? `Modelo ML · XGBoost${result.model_version ? " · v" + result.model_version : ""}`
+                : "Modelo determinista"}
             </div>
           </Card>
 

@@ -55,6 +55,24 @@ def setup_db():
     Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(autouse=True)
+def isolate_ml_singleton(tmp_path):
+    """The xgboost_model singleton is module-global: a trained model (or a dev's
+    on-disk pickle at MODELS_DIR) would leak across tests. Reset it to a clean,
+    isolated state around each test and restore afterward."""
+    from modules.banking_score.ml.xgboost_model import xgboost_model
+    snap = (xgboost_model.model, xgboost_model.label_encoder,
+            xgboost_model.version, xgboost_model.metrics, xgboost_model._model_path)
+    xgboost_model.model = None
+    xgboost_model.label_encoder = None
+    xgboost_model.version = None
+    xgboost_model.metrics = None
+    xgboost_model._model_path = str(tmp_path / "isolated_model.pkl")
+    yield
+    (xgboost_model.model, xgboost_model.label_encoder,
+     xgboost_model.version, xgboost_model.metrics, xgboost_model._model_path) = snap
+
+
 # ─── Auth Helpers ────────────────────────────────────────────────
 
 def register_and_login(email="test@sdq.do", password="Test1234!", full_name="Test User"):
@@ -753,3 +771,78 @@ class TestReportDownload:
         rid = self._make_completed_report(with_blob=False, on_disk=False, tmp_path=tmp_path)
         resp = client.get(f"/api/v1/banking-score/reports/download/{rid}", headers=headers)
         assert resp.status_code == 404
+
+
+try:
+    import xgboost as _xgb  # noqa: F401
+    _XGB_OK = True
+except Exception:
+    _XGB_OK = False
+
+
+class TestMlScoring:
+    """Scoring with model=ml: predicts via XGBoost and persists a separate
+    RatingResult (model_type=ml), coexisting with the deterministic series."""
+
+    def test_run_ml_without_trained_model_returns_400(self):
+        headers = auth_headers(register_and_login())
+        db = TestSessionLocal()
+        bank = seed_test_bank(db)
+        bid = bank.id
+        db.close()
+        from modules.banking_score.ml.xgboost_model import xgboost_model
+        xgboost_model.model = None
+        xgboost_model._model_path = "/tmp/sdq_no_such_model.pkl"
+        resp = client.post(
+            f"/api/v1/banking-score/{bid}/run?period_end=2024-12-31&model=ml",
+            headers=headers,
+        )
+        assert resp.status_code == 400
+        assert "ML" in resp.json()["detail"]
+
+    @pytest.mark.skipif(not _XGB_OK, reason="xgboost libs missing")
+    def test_run_ml_persists_ml_rating_from_db(self, tmp_path):
+        import numpy as np
+        from modules.banking_score.ml.xgboost_model import xgboost_model
+        from modules.banking_score.models.models import RatingResult, ModelType
+        from modules.banking_score.scoring.weights import FEATURE_ORDER
+
+        headers = auth_headers(register_and_login())
+        db = TestSessionLocal()
+        bank = seed_test_bank(db)
+        bid = bank.id
+
+        tiers_pool = ["SDQ-AAA", "SDQ-AA+", "SDQ-AA", "SDQ-AA-", "SDQ-A+",
+                      "SDQ-A", "SDQ-A-", "SDQ-BBB+", "SDQ-BBB", "SDQ-D"]
+        rng = np.random.RandomState(0)
+        feats, tiers = [], []
+        for _ in range(60):
+            v = rng.uniform(20, 95, size=len(FEATURE_ORDER)).tolist()
+            feats.append(v)
+            tiers.append(tiers_pool[min(9, max(0, int((100 - np.mean(v)) / 10)))])
+        xgboost_model.model = None
+        xgboost_model._model_path = str(tmp_path / "train.pkl")
+        xgboost_model.train(feats, tiers)
+        xgboost_model.save_to_db(db)
+        db.commit()
+        db.close()
+
+        # Force the endpoint to load from DB (cold-start: no memory, no disk).
+        xgboost_model.model = None
+        xgboost_model._model_path = str(tmp_path / "gone.pkl")
+
+        resp = client.post(
+            f"/api/v1/banking-score/{bid}/run?period_end=2024-12-31&model=ml",
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["model"] == "ml"
+        assert data["rating_tier"].startswith("SDQ-")
+
+        db2 = TestSessionLocal()
+        ml_row = db2.query(RatingResult).filter_by(bank_id=bid, model_type=ModelType.ml).first()
+        det_row = db2.query(RatingResult).filter_by(bank_id=bid, model_type=ModelType.deterministic).first()
+        db2.close()
+        assert ml_row is not None          # ml rating persisted
+        assert det_row is None             # independent of the deterministic series

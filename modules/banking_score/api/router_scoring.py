@@ -32,6 +32,7 @@ from modules.banking_score.scoring.engine import (
     simulate_from_scores,
 )
 from modules.banking_score.scoring.batch import detect_rating_action, score_period
+from modules.banking_score.ml.xgboost_model import xgboost_model
 from modules.banking_score.scoring.indicator_detail import ai_context, build_indicator_detail
 from modules.banking_score.scoring.entity_insight import ai_context_entity, build_entity_insight
 from shared.publications.service import publication_prompt_context
@@ -110,9 +111,13 @@ async def simulate_scenario(
 async def run_bank_scoring(
     bank_id: str,
     period_end: str = Query(..., description="Fecha fin del período (YYYY-MM-DD)"),
+    model: str = Query("deterministic", description="Modelo de scoring: 'deterministic' o 'ml' (XGBoost)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if model not in ("deterministic", "ml"):
+        raise HTTPException(status_code=400, detail="model debe ser 'deterministic' o 'ml'")
+
     bank = db.query(Bank).filter_by(id=bank_id).first()
     if not bank:
         raise HTTPException(status_code=404, detail=f"Banco {bank_id} no encontrado")
@@ -130,14 +135,39 @@ async def run_bank_scoring(
         )
 
     try:
+        # Indicators & sub-components are always computed deterministically — they
+        # are also the ML model's feature inputs.
         result = run_scoring(data, entity_type=bank.bank_type.value if bank.bank_type else None)
     except Exception as e:
         logger.error(f"Error de scoring para {bank_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error ejecutando scoring: {e}")
 
-    # Persist RatingResult
+    model_type = ModelType.deterministic
+    if model == "ml":
+        if not xgboost_model.ensure_loaded(db):
+            raise HTTPException(
+                status_code=400,
+                detail="El modelo ML no está entrenado. Entrénalo en la sección Modelo.",
+            )
+        try:
+            flat_scores = {k: v.get("score", 0.0) for k, v in (result.get("indicators") or {}).items()}
+            ml_score, ml_tier, ml_probs = xgboost_model.predict(flat_scores)
+        except Exception as e:
+            logger.error(f"Error en predicción ML para {bank_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Error en predicción ML: {e}")
+        # ML overrides the overall score/tier; sub-components & indicators (the
+        # deterministic features) are kept for explainability.
+        result["overall_score"] = ml_score
+        result["rating_tier"] = ml_tier
+        result["tier_color"] = get_tier_color(ml_tier)
+        result["tier_probabilities"] = ml_probs
+        result["model_version"] = xgboost_model.version or result.get("model_version")
+        model_type = ModelType.ml
+    result["model"] = model
+
+    # Persist RatingResult (deterministic and ml coexist via the unique constraint)
     existing = db.query(RatingResult).filter_by(
-        bank_id=bank_id, period_end=pe, model_type=ModelType.deterministic,
+        bank_id=bank_id, period_end=pe, model_type=model_type,
     ).first()
 
     if existing:
@@ -162,14 +192,17 @@ async def run_bank_scoring(
             liquidez_score=result["sub_components"]["liquidez"],
             diversificacion_score=result["sub_components"]["diversificacion"],
             indicator_details=result["indicators"],
-            model_type=ModelType.deterministic,
+            model_type=model_type,
             model_version=result["model_version"],
             created_by=current_user.id,
         )
         db.add(rr)
 
     # ── Detect rating action (compare with previous period) ──
-    rating_action_info = detect_rating_action(db, bank_id, pe, result, current_user.id)
+    # Rating actions track the canonical (deterministic) series only.
+    rating_action_info = None
+    if model_type == ModelType.deterministic:
+        rating_action_info = detect_rating_action(db, bank_id, pe, result, current_user.id)
 
     db.commit()
     logger.info(f"Scoring completado: {bank.name} | {period_end} → {result['rating_tier']}")
