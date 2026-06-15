@@ -840,3 +840,45 @@ async def market_concentration(
         return compute_market_concentration(db, period_end=pe, metric=metric)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ─── Validación / Backtest del rating (T4) ──────────────────────
+
+@router.get(
+    "/validation/backtest",
+    summary="Backtest de discriminación del rating",
+    description="Reporte de validación (Gini + curva de distress por tier). Lee el último cálculo persistido.",
+)
+async def get_backtest_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    import json
+    from shared.settings.models import AppSetting
+    from modules.banking_score.operations import BACKTEST_REPORT_KEY
+
+    row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_REPORT_KEY).first()
+    if row and row.value:
+        try:
+            return {"computed": True, **json.loads(row.value)}
+        except (ValueError, TypeError):
+            pass
+    return {
+        "computed": False,
+        "message": "El backtest aún no se ha calculado. Genéralo desde la consola de operación o con 'Regenerar'.",
+    }
+
+
+@router.post(
+    "/validation/backtest/run",
+    summary="Recalcular el backtest (admin)",
+    description="Dispara el recálculo del backtest en segundo plano y persiste el reporte.",
+)
+async def run_backtest(
+    current_user: User = Depends(get_current_user),
+):
+    from shared.auth.models import UserRole
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Se requiere rol admin")
+    from modules.banking_score import operations
+    return operations.trigger("backtest", origin="manual", user_id=current_user.id)
