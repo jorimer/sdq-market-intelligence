@@ -512,21 +512,27 @@ def start_backfill_background(force: bool = False,
 # fields (mayores deudores → suma_top10, total, vigente A, vencida) and rescore —
 # far faster than the full ~3h backfill, for iterating on the concentration data.
 
-def recompute_carteras_metrics(period: str) -> Dict:
+def recompute_carteras_metrics(period: str, write_status=None) -> Dict:
     """Stream carteras/creditos for *period* (YYYY-MM), update the cartera fields on
-    existing BankingData rows, and rescore the affected periods."""
+    existing BankingData rows, and rescore the affected periods.
+
+    *write_status* lets a caller redirect progress to its own status store (e.g. the
+    operation console's per-op status). Defaults to the SIB sync status for the
+    legacy standalone trigger.
+    """
+    write_status = write_status or _write_status
     db = SessionLocal()
     try:
-        _write_status(db, is_running=True, phase=f"recomputando carteras {period}",
+        write_status(db, is_running=True, phase=f"recomputando carteras {period}",
                       started_at=_now(), result=None)
         client = get_sib_data_client(force_new=True)
         if client is None:
-            _write_status(db, is_running=False, phase="error",
+            write_status(db, is_running=False, phase="error",
                           last_sync_result={"error": "Sin cliente SIB (¿falta la clave?)."})
             return {"error": "Sin cliente SIB."}
 
         metrics = client._compute_carteras_metrics(
-            period, period, on_progress=lambda m: _write_status(db, phase=m))
+            period, period, on_progress=lambda m: write_status(db, phase=m))
 
         updated = 0
         affected_periods: set = set()
@@ -561,13 +567,13 @@ def recompute_carteras_metrics(period: str) -> Dict:
             ratings += score_period(db, pe).get("scored", 0)
 
         result = {"rows_updated": updated, "periods": len(affected_periods), "ratings_written": ratings}
-        _write_status(db, is_running=False, phase="completado",
+        write_status(db, is_running=False, phase="completado",
                       last_sync=_now(), last_sync_result=result)
         return result
     except Exception as e:  # noqa: BLE001
         db.rollback()
         logger.exception("recompute_carteras_metrics falló")
-        _write_status(db, is_running=False, phase="error",
+        write_status(db, is_running=False, phase="error",
                       last_sync_result={"error": _friendly_error(e)})
         return {"error": _friendly_error(e)}
     finally:

@@ -18,6 +18,7 @@ else
     python -m celery -A shared.tasks.celery_app worker --loglevel=info --concurrency=1 &
   fi
   echo "Starting web (uvicorn)…"
+  export SDQ_SCHEDULER=1  # in-app Operation Console scheduler (atomic-claim → safe with N workers)
   exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 2 \
     --log-config infrastructure/log_config.json
 fi
