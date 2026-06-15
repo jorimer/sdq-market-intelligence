@@ -89,3 +89,15 @@ def test_snapshot_period_mixed_formats_chronological(db):
     db.commit()
     res = build_snapshot(db)
     assert res["period"] == "2026-06"
+
+
+def test_get_snapshot_skips_stale_future_label(db):
+    from modules.macro_monitor.models.models import MacroSnapshot
+    from modules.macro_monitor.service import get_snapshot
+    # A stale future-labeled snapshot must NOT be returned as "the latest".
+    db.add(MacroSnapshot(period="2099-12", momentum={}, signals=[], series_count=1, signal_count=0))
+    db.add(MacroSnapshot(period="2026-05", momentum={}, signals=[], series_count=1, signal_count=0))
+    db.add(MacroSnapshot(period="2026-Q1", momentum={}, signals=[], series_count=1, signal_count=0))
+    db.commit()
+    snap = get_snapshot(db)  # latest CLOSED, chronological
+    assert snap.period == "2026-05"  # not 2099-12 (future), not 2026-Q1 (earlier)
