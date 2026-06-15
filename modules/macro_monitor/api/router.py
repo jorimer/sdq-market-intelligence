@@ -47,6 +47,25 @@ logger = logging.getLogger("sdq.api.macro_monitor")
 router = APIRouter()
 
 
+def _ai_insight(context: Dict[str, Any], template: str) -> Optional[Dict[str, Any]]:
+    """Generate a Claude narrative from *context* using *template*; best-effort
+    (returns None on any failure so the endpoint never breaks).
+
+    These endpoints are sync ``def`` (threadpool), so we drive the async engine
+    with ``asyncio.run`` in this worker thread — the blocking Anthropic call runs
+    off the main event loop. Without an API key the engine returns a static
+    fallback (``model_used == "static_fallback"``), which we pass through.
+    """
+    import asyncio
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = asyncio.run(narrative_engine.generate(context, template=template, mode="detailed"))
+        return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
+        logger.warning("AI insight macro (%s) no disponible: %s", template, e)
+        return None
+
+
 @router.post(
     "/refresh",
     summary="Ingerir series y recomputar el snapshot macro",
@@ -84,10 +103,17 @@ def indicators(
 )
 def series_detail(
     series_code: str,
+    with_ai: bool = Query(False, description="Incluir insight de IA (Claude) — fase 2, lento (~10-15s)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    return get_series(db, series_code)
+    detail = get_series(db, series_code)
+    detail["ai_insight"] = None
+    if with_ai and detail.get("observations"):
+        from modules.macro_monitor.ai_context import series_ai_context
+        meta = next((i for i in get_indicators(db) if i.get("series_code") == series_code), None)
+        detail["ai_insight"] = _ai_insight(series_ai_context(detail, meta), "trend_analysis")
+    return detail
 
 
 @router.delete(
@@ -115,13 +141,14 @@ def delete_series_endpoint(
 )
 def snapshot(
     period: Optional[str] = Query(None, description="Período (YYYY, YYYY-Qn, YYYY-MM). Si se omite, el último."),
+    with_ai: bool = Query(False, description="Incluir lectura de coyuntura de IA (Claude) — fase 2, lento (~10-15s)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     snap = get_snapshot(db, period)
     if snap is None:
         return {"has_snapshot": False, "period": period}
-    return {
+    out = {
         "has_snapshot": True,
         "period": snap.period,
         "momentum": snap.momentum,
@@ -129,7 +156,12 @@ def snapshot(
         "series_count": snap.series_count,
         "signal_count": snap.signal_count,
         "model_version": snap.model_version,
+        "ai_insight": None,
     }
+    if with_ai:
+        from modules.macro_monitor.ai_context import snapshot_ai_context
+        out["ai_insight"] = _ai_insight(snapshot_ai_context(out, get_indicators(db)), "executive_summary")
+    return out
 
 
 @router.get(

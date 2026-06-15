@@ -77,3 +77,37 @@ def test_delete_series_requires_admin(db):
     assert r.status_code == 403
     # row untouched
     assert db.query(MacroSeries).count() == 1
+
+
+# ─── AI insight (with_ai) — gated, best-effort ──────────────────
+
+def test_series_with_ai_false_has_no_insight(db):
+    _seed(db, "bcrd.test.serie", "2026-01", 1.0)
+    _seed(db, "bcrd.test.serie", "2026-02", 2.0)
+    c = _client(db)
+    r = c.get("/api/v1/macro-monitor/series/bcrd.test.serie", params={"with_ai": "false"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "ai_insight" in body
+    assert body["ai_insight"] is None  # deterministic, fast
+
+
+def test_series_with_ai_true_best_effort(db):
+    _seed(db, "bcrd.test.serie", "2026-01", 1.0)
+    _seed(db, "bcrd.test.serie", "2026-02", 2.0)
+    c = _client(db)
+    r = c.get("/api/v1/macro-monitor/series/bcrd.test.serie", params={"with_ai": "true"})
+    assert r.status_code == 200
+    ai = r.json()["ai_insight"]
+    # No API key in tests → static fallback (best-effort never breaks the endpoint).
+    assert ai is not None
+    assert "text" in ai and ai["text"]
+    assert ai["model_used"] == "static_fallback"
+
+
+def test_series_with_ai_true_empty_series_skips(db):
+    # No observations → no insight attempted (and no crash).
+    c = _client(db)
+    r = c.get("/api/v1/macro-monitor/series/bcrd.absent", params={"with_ai": "true"})
+    assert r.status_code == 200
+    assert r.json()["ai_insight"] is None
