@@ -691,8 +691,19 @@ def delete_series(db: Session, series_code: str) -> int:
 
 
 def get_snapshot(db: Session, period: Optional[str] = None) -> Optional[MacroSnapshot]:
-    """Persisted snapshot for *period* (latest if omitted)."""
+    """Persisted snapshot for *period* (latest CLOSED one if omitted).
+
+    Picks chronologically (lexical ``period desc`` mis-ranks mixed formats) and
+    skips future-labeled snapshots — a stale future snapshot (e.g. left by a
+    pre-fix build) must not resurface as "the latest".
+    """
     q = db.query(MacroSnapshot)
     if period:
         return q.filter_by(period=period).first()
-    return q.order_by(MacroSnapshot.period.desc()).first()
+    today = date.today()
+    snaps = q.all()
+    if not snaps:
+        return None
+    closed = [s for s in snaps if (period_start_date(s.period) or date.min) <= today]
+    pool = closed or snaps  # degenerate: only future snapshots exist → least-bad
+    return max(pool, key=lambda s: (period_end_date(s.period) or date.min, s.period))
