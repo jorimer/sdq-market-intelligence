@@ -46,6 +46,7 @@ export function MacroMonitorPage() {
   const [indicators, setIndicators] = useState<MacroIndicator[]>([]);
   const [signals, setSignals] = useState<MacroSignal[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [seriesCode, setSeriesCode] = useState("");
   const [series, setSeries] = useState<SeriesDetail | null>(null);
 
@@ -148,6 +149,14 @@ export function MacroMonitorPage() {
   const latestPeriod =
     indicators.map((i) => i.latest_period).filter(Boolean).sort().slice(-1)[0] ?? "none";
 
+  // Curate the table to the material movers (by |aceleración|); the full 292
+  // series live behind a drill-down so the page leads with the narrative, not a wall.
+  const HEADLINE_N = 25;
+  const movers = [...indicators]
+    .filter((i) => i.acceleration != null && i.trend !== "insuficiente")
+    .sort((a, b) => Math.abs(b.acceleration as number) - Math.abs(a.acceleration as number));
+  const tableRows = showAll ? indicators : movers.slice(0, HEADLINE_N);
+
   return (
     <div>
       {head}
@@ -180,8 +189,20 @@ export function MacroMonitorPage() {
           <Card>
             <CardHead
               icon={TrendingUp}
-              title="Indicadores con momentum"
-              subtitle="Cambio, aceleración y tendencia por serie"
+              title={showAll ? "Todas las series" : "Indicadores en movimiento"}
+              subtitle={
+                showAll
+                  ? `${indicators.length} series monitoreadas`
+                  : `Las ${Math.min(HEADLINE_N, movers.length)} de mayor aceleración`
+              }
+              right={
+                <button
+                  onClick={() => setShowAll((v) => !v)}
+                  className="btn btn-ghost !py-1 !px-2.5 text-xs"
+                >
+                  {showAll ? "Ver solo las activas" : `Ver todas (${indicators.length})`}
+                </button>
+              }
             />
             <div className="overflow-x-auto -mx-1">
               <table className="w-full text-sm">
@@ -195,7 +216,17 @@ export function MacroMonitorPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {indicators.map((i) => {
+                  {tableRows.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-4 text-center text-sm text-muted">
+                        Sin series con momentum suficiente todavía.{" "}
+                        <button onClick={() => setShowAll(true)} className="text-accent underline">
+                          Ver todas ({indicators.length})
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                  {tableRows.map((i) => {
                     const tm = TREND_META[i.trend] ?? TREND_META.estable;
                     return (
                       <tr key={i.series_code} className="border-b border-line/60 last:border-0">

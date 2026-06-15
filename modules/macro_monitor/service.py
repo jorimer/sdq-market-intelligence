@@ -9,7 +9,10 @@ The scoring (`scoring/momentum.py`, `scoring/signals.py`) is pure; this layer
 wires it to the DB, the data layer and the event bus.
 """
 import logging
+import re
+from calendar import monthrange
 from collections import defaultdict
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -514,13 +517,73 @@ def start_excel_batch_background(
     return {"status": "started", "via": "thread", "message": msg}
 
 
-def _series_by_code(db: Session) -> Dict[str, List[tuple]]:
-    """Group all observations into ``{series_code: [(period, value), ...]}`` sorted."""
+_Q_END = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
+_Q_START = {1: (1, 1), 2: (4, 1), 3: (7, 1), 4: (10, 1)}
+
+
+def period_end_date(period: Optional[str]) -> Optional[date]:
+    """Date a period label CLOSES on, for chronological ordering.
+
+    Handles ``YYYY``, ``YYYY-MM`` and ``YYYY-Qn`` (case-insensitive). Returns
+    None when unparseable, so callers can decide how to treat it.
+    """
+    if not period:
+        return None
+    p = period.strip().upper()
+    m = re.fullmatch(r"(\d{4})", p)
+    if m:
+        return date(int(m.group(1)), 12, 31)
+    m = re.fullmatch(r"(\d{4})-Q([1-4])", p)
+    if m:
+        mo, dd = _Q_END[int(m.group(2))]
+        return date(int(m.group(1)), mo, dd)
+    m = re.fullmatch(r"(\d{4})-(\d{2})", p)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        if 1 <= mo <= 12:
+            return date(y, mo, monthrange(y, mo)[1])
+    return None
+
+
+def period_start_date(period: Optional[str]) -> Optional[date]:
+    """Date a period label STARTS on. A period is "future" iff its start > today
+    (so the current, in-progress period is kept; only genuinely-future ones drop)."""
+    if not period:
+        return None
+    p = period.strip().upper()
+    m = re.fullmatch(r"(\d{4})", p)
+    if m:
+        return date(int(m.group(1)), 1, 1)
+    m = re.fullmatch(r"(\d{4})-Q([1-4])", p)
+    if m:
+        mo, dd = _Q_START[int(m.group(2))]
+        return date(int(m.group(1)), mo, dd)
+    m = re.fullmatch(r"(\d{4})-(\d{2})", p)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        if 1 <= mo <= 12:
+            return date(y, mo, 1)
+    return None
+
+
+def _series_by_code(db: Session, include_future: bool = False) -> Dict[str, List[tuple]]:
+    """Group observations into ``{series_code: [(period, value), ...]}`` sorted.
+
+    Future periods (those that START after today) are dropped by default — some
+    Excel sheets carry projected months that must not pollute the snapshot label,
+    the "latest value" or momentum. The current in-progress period is kept. Set
+    *include_future* to keep everything.
+    """
+    today = date.today()
     grouped: Dict[str, list] = defaultdict(list)
     for row in db.query(MacroSeries).all():
+        if not include_future:
+            start = period_start_date(row.period)
+            if start is not None and start > today:
+                continue
         grouped[row.series_code].append((row.period, row.value))
     for code in grouped:
-        grouped[code].sort(key=lambda pv: pv[0])
+        grouped[code].sort(key=lambda pv: (period_end_date(pv[0]) or date.min, pv[0]))
     return grouped
 
 
@@ -545,7 +608,12 @@ def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     signals = detect_signals(debt_latest, flow_pct)
 
     if period is None:
-        period = max(p for obs in grouped.values() for p, _ in obs)
+        # Latest CLOSED period (grouped already excludes future), chosen
+        # chronologically — lexical max mis-ranks mixed formats ("2026-Q1" > "2026-06").
+        all_periods = [p for obs in grouped.values() for p, _ in obs]
+        if not all_periods:
+            raise ValueError("Solo hay períodos futuros; no hay período cerrado para el snapshot.")
+        period = max(all_periods, key=lambda p: (period_end_date(p) or date.min, p))
 
     snapshot = db.query(MacroSnapshot).filter_by(period=period).first()
     if snapshot is None:
