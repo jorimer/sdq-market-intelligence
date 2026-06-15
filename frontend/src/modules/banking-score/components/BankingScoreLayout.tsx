@@ -14,6 +14,7 @@ const TABS: { to: string; label: string; end?: boolean }[] = [
   { to: "/banking-score/compare", label: "Comparar" },
   { to: "/banking-score/fideicomisos", label: "Fideicomisos" },
   { to: "/banking-score/model", label: "Modelo" },
+  { to: "/banking-score/validation", label: "Validación" },
   { to: "/banking-score/reports", label: "Reportes" },
 ];
 

@@ -149,6 +149,30 @@ def _run_recompute(params, user_id, set_phase) -> Dict:
     return recompute_carteras_metrics(period, write_status=_ws)
 
 
+BACKTEST_REPORT_KEY = "backtest_report"
+
+
+def _run_backtest(params, user_id, set_phase) -> Dict:
+    """Recompute the Eje-1 backtest and persist the report (AppSetting)."""
+    from modules.banking_score.validation.report import build_backtest_report
+    db = SessionLocal()
+    try:
+        set_phase("derivando desenlaces y métricas de discriminación")
+        rep = build_backtest_report(db)
+        rep["generated_at"] = _now()
+        row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_REPORT_KEY).first()
+        payload = json.dumps(rep)
+        if row:
+            row.value = payload
+        else:
+            db.add(AppSetting(key=BACKTEST_REPORT_KEY, value=payload, is_secret=False))
+        db.commit()
+        return {"gini": rep.get("gini"), "n_observations": rep.get("n_observations"),
+                "n_events": rep.get("n_events"), "monotonic": rep.get("monotonic")}
+    finally:
+        db.close()
+
+
 # ── Operation registry ────────────────────────────────────────────
 
 class Operation:
@@ -177,6 +201,11 @@ OPERATIONS: Dict[str, Operation] = {
         "recompute-carteras", "Recomputar carteras",
         "Re-descarga las carteras de crédito de un trimestre y actualiza concentración/mora.",
         _run_recompute, default_interval_hours=0, needs_params=["period"],
+    ),
+    "backtest": Operation(
+        "backtest", "Backtest del rating",
+        "Recalcula la validación de discriminación del rating (Gini + curva de distress por tier).",
+        _run_backtest, default_interval_hours=720,
     ),
 }
 

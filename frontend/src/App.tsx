@@ -13,6 +13,7 @@ import { ReportsPage } from "@/modules/banking-score/pages/ReportsPage";
 import { DataPage } from "@/modules/banking-score/pages/DataPage";
 import { OperacionesPage } from "@/modules/banking-score/pages/OperacionesPage";
 import { ModelPage } from "@/modules/banking-score/pages/ModelPage";
+import { ValidationPage } from "@/modules/banking-score/pages/ValidationPage";
 import { ScenariosPage } from "@/modules/banking-score/pages/ScenariosPage";
 import { ComparePage } from "@/modules/banking-score/pages/ComparePage";
 import { FideicomisosPage } from "@/modules/banking-score/pages/FideicomisosPage";
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="rankings" element={<RankingsPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="model" element={<ModelPage />} />
+            <Route path="validation" element={<ValidationPage />} />
             <Route path="scenarios" element={<ScenariosPage />} />
             <Route path="compare" element={<ComparePage />} />
             <Route path="fideicomisos" element={<FideicomisosPage />} />

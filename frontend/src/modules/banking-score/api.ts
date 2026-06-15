@@ -410,3 +410,38 @@ export async function setOperationSchedule(
   );
   return data;
 }
+
+// ─── Validación / Backtest (T4) ─────────────────────────────────
+
+export interface BacktestTierRow {
+  tier: string;
+  n: number;
+  events: number;
+  rate: number | null;
+}
+
+export interface BacktestReport {
+  computed: boolean;
+  message?: string;
+  ok?: boolean;
+  horizon_quarters?: number;
+  n_observations?: number;
+  n_events?: number;
+  event_rate?: number;
+  gini?: number | null;
+  gini_ci?: [number, number] | null;
+  by_tier?: BacktestTierRow[];
+  monotonic?: boolean;
+  caveats?: string[];
+  generated_at?: string;
+}
+
+export async function getBacktestReport(): Promise<BacktestReport> {
+  const { data } = await client.get<BacktestReport>("/banking-score/validation/backtest");
+  return data;
+}
+
+export async function runBacktest(): Promise<{ started: boolean; reason?: string }> {
+  const { data } = await client.post("/banking-score/validation/backtest/run");
+  return data;
+}
