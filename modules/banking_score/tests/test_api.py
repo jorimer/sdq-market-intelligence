@@ -846,3 +846,47 @@ class TestMlScoring:
         db2.close()
         assert ml_row is not None          # ml rating persisted
         assert det_row is None             # independent of the deterministic series
+
+    def test_rankings_dedupe_when_both_models_exist(self):
+        """Regression: a coexisting deterministic + ml rating for the same
+        (bank, period) must not surface the entity twice. Rankings shows the
+        canonical (deterministic) model by default; model=ml is opt-in."""
+        from modules.banking_score.models.models import RatingResult, ModelType
+
+        headers = auth_headers(register_and_login())
+        db = TestSessionLocal()
+        bank = seed_test_bank(db)
+        bid = bank.id
+        db.close()
+
+        # Deterministic rating via the normal pipeline.
+        client.post(f"/api/v1/banking-score/{bid}/run?period_end=2024-12-31", headers=headers)
+
+        # Persist a coexisting ML rating for the same bank + period.
+        db = TestSessionLocal()
+        det = db.query(RatingResult).filter_by(
+            bank_id=bid, model_type=ModelType.deterministic).first()
+        db.add(RatingResult(
+            bank_id=bid, period_end=det.period_end, model_type=ModelType.ml,
+            overall_score=det.overall_score - 2, rating_tier=det.rating_tier,
+            model_version="test-ml",
+        ))
+        db.commit()
+        db.close()
+
+        # Default (deterministic): the bank appears exactly once.
+        resp = client.get("/api/v1/banking-score/rankings", headers=headers)
+        assert resp.status_code == 200
+        ids = [r["bank_id"] for r in resp.json()["rankings"]]
+        assert ids.count(bid) == 1
+
+        # model=ml: returns the ML rating for the bank.
+        resp_ml = client.get("/api/v1/banking-score/rankings?model=ml", headers=headers)
+        assert resp_ml.status_code == 200
+        ml_ids = [r["bank_id"] for r in resp_ml.json()["rankings"]]
+        assert ml_ids.count(bid) == 1
+
+        # Invalid model → 400.
+        assert client.get(
+            "/api/v1/banking-score/rankings?model=bogus", headers=headers
+        ).status_code == 400

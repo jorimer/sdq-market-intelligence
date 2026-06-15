@@ -150,7 +150,7 @@ export function DashboardPage() {
             <div className="space-y-1">
               {top.map((bank) => (
                 <button
-                  key={bank.bank_name}
+                  key={`${bank.bank_id}-${bank.rank}`}
                   onClick={() => setSelectedBank(bank.bank_id)}
                   className="w-full flex items-center justify-between gap-3 py-2 border-b border-line/60 last:border-0 hover:bg-surface2 text-left"
                 >
