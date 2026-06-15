@@ -585,9 +585,15 @@ async def get_rating_history(
 async def get_rankings(
     period_end: str = Query(None, description="Filtro por período (YYYY-MM-DD). Si se omite, muestra el último rating de cada banco."),
     entity_type: Optional[str] = Query(None, description="Filtrar por tipo de entidad SIB"),
+    model: str = Query("deterministic", description="Modelo de rating a mostrar (deterministic | ml). Por defecto el determinista (canónico)."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    try:
+        model_type = ModelType(model)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Modelo inválido")
+
     if period_end:
         try:
             pe = date.fromisoformat(period_end)
@@ -597,6 +603,7 @@ async def get_rankings(
             db.query(RatingResult, Bank)
             .join(Bank, Bank.id == RatingResult.bank_id)
             .filter(RatingResult.period_end == pe)
+            .filter(RatingResult.model_type == model_type)
             .order_by(RatingResult.overall_score.desc())
             .all()
         )
@@ -607,6 +614,7 @@ async def get_rankings(
                 RatingResult.bank_id,
                 func.max(RatingResult.period_end).label("max_pe"),
             )
+            .filter(RatingResult.model_type == model_type)
             .group_by(RatingResult.bank_id)
             .subquery()
         )
@@ -617,6 +625,7 @@ async def get_rankings(
                 RatingResult.bank_id == subq.c.bank_id,
                 RatingResult.period_end == subq.c.max_pe,
             ))
+            .filter(RatingResult.model_type == model_type)
             .order_by(RatingResult.overall_score.desc())
             .all()
         )
@@ -702,7 +711,11 @@ async def get_stats(
 ):
     total_records = db.query(func.count(BankingData.id)).scalar()
     total_entities = db.query(func.count(func.distinct(BankingData.bank_id))).scalar()
-    total_ratings = db.query(func.count(RatingResult.id)).scalar()
+    total_ratings = (
+        db.query(func.count(RatingResult.id))
+        .filter(RatingResult.model_type == ModelType.deterministic)
+        .scalar()
+    )
 
     date_range = db.query(
         func.min(BankingData.period_end),
