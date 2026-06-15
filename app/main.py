@@ -70,6 +70,13 @@ from modules.banking_score.events import register_subscribers as register_bankin
 register_sector_subscribers()  # sector_intel ← macro/irmp/trade .updated (SGPS acceleration)
 register_banking_subscribers()  # banking_score ← irmp.updated (outlook overlay)
 
+# In-app scheduler for the Operation Console. Web-only (the worker doesn't import
+# app.main) and env-gated so tests/dev don't spawn the tick. start.sh sets it on.
+import os as _os
+if _os.getenv("SDQ_SCHEDULER") == "1":
+    from modules.banking_score import operations as _bank_ops
+    _bank_ops.start_scheduler()
+
 # Serve frontend in production.
 #
 # Cache strategy for the SPA:

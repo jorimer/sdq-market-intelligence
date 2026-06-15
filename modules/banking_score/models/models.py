@@ -330,6 +330,39 @@ class MlModel(UUIDMixin, Base):
     trained_by = Column(String, ForeignKey("users.id"), nullable=True)
 
 
+# ─── Operation console (run history + schedules) ──────────────────
+# Recurring admin operations (rescore, prune-future, recompute-carteras, …) were
+# curl-only. These tables back the in-UI "Consola de Operación": run history for
+# audit, and durable schedules for the in-app scheduler (survives restarts since
+# the next-run lives in the DB, not memory).
+
+
+class OperationRun(UUIDMixin, Base):
+    """One execution of a console operation — audit trail."""
+    __tablename__ = "operation_runs"
+
+    operation = Column(String(50), nullable=False, index=True)
+    origin = Column(String(20), nullable=False, default="manual")  # manual | schedule | api
+    triggered_by = Column(String, ForeignKey("users.id"), nullable=True)
+    status = Column(String(20), nullable=False, default="running")  # running | completed | error | skipped
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    summary = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+
+
+class OperationSchedule(UUIDMixin, Base):
+    """Durable cadence for a console operation (in-app scheduler)."""
+    __tablename__ = "operation_schedules"
+
+    operation = Column(String(50), nullable=False, unique=True, index=True)
+    enabled = Column(Boolean, nullable=False, default=False)
+    interval_hours = Column(Integer, nullable=False, default=168)  # default weekly
+    params = Column(JSON, nullable=True)  # e.g. {"period": "2025-12"} for recompute
+    next_run_at = Column(DateTime, nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+
+
 # ─── Fideicomisos públicos (public trusts) ────────────────────────
 # Trusts are patrimonios autónomos (funds), NOT solvency-rated entities — they get
 # their own "Índice de Salud del Fideicomiso" on a separate scale, not SDQ-AAA…D.

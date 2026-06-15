@@ -8,6 +8,7 @@ import {
   Leaf,
   Target,
   Sparkles,
+  Wrench,
   LayoutDashboard,
   GitCompare,
   BookOpen,
@@ -44,6 +45,7 @@ export const NAV: NavGroup[] = [
     title: "Datos",
     items: [
       { to: "/datos/banca", label: "Banca · SIB", icon: Landmark, ready: true },
+      { to: "/datos/operaciones", label: "Operaciones", icon: Wrench, ready: true },
       { to: "/datos/macro", label: "Macro · BCRD", icon: LineChart, ready: true },
       { to: "/datos/social", label: "Social · ONE", icon: Users, ready: false },
       { to: "/datos/comercio", label: "Comercio · Comtrade", icon: Ship, ready: false },

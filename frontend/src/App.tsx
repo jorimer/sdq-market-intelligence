@@ -11,6 +11,7 @@ import { ScoringPage } from "@/modules/banking-score/pages/ScoringPage";
 import { RankingsPage } from "@/modules/banking-score/pages/RankingsPage";
 import { ReportsPage } from "@/modules/banking-score/pages/ReportsPage";
 import { DataPage } from "@/modules/banking-score/pages/DataPage";
+import { OperacionesPage } from "@/modules/banking-score/pages/OperacionesPage";
 import { ModelPage } from "@/modules/banking-score/pages/ModelPage";
 import { ScenariosPage } from "@/modules/banking-score/pages/ScenariosPage";
 import { ComparePage } from "@/modules/banking-score/pages/ComparePage";
@@ -65,6 +66,7 @@ export default function App() {
           {/* Datos — extracción por sector (multi-fuente) */}
           <Route path="/datos" element={<Navigate to="/datos/banca" replace />} />
           <Route path="/datos/banca" element={<DataPage />} />
+          <Route path="/datos/operaciones" element={<OperacionesPage />} />
           <Route path="/datos/macro" element={<DatosMacroPage />} />
           <Route
             path="/datos/social"
