@@ -40,6 +40,9 @@ export interface ScoringResult {
   sub_components: SubComponents;
   indicators?: Record<string, { raw: number; score: number }>;
   entity_type?: string | null;
+  model?: "deterministic" | "ml";
+  model_version?: string;
+  tier_probabilities?: Record<string, number>;
 }
 
 export async function listBanks(entityType?: string): Promise<BankRef[]> {
@@ -54,11 +57,22 @@ export async function listPeriods(): Promise<string[]> {
   return data.periods ?? [];
 }
 
-export async function runScoring(bankId: string, periodEnd: string): Promise<ScoringResult> {
+export async function runScoring(
+  bankId: string,
+  periodEnd: string,
+  model: "deterministic" | "ml" = "deterministic",
+): Promise<ScoringResult> {
   const { data } = await client.post<ScoringResult>(
     `/banking-score/${bankId}/run`,
     null,
-    { params: { period_end: periodEnd } },
+    { params: { period_end: periodEnd, model } },
+  );
+  return data;
+}
+
+export async function getModelStatus(): Promise<import("@/types").ModelStatus> {
+  const { data } = await client.get<import("@/types").ModelStatus>(
+    "/banking-score/model/status",
   );
   return data;
 }

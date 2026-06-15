@@ -40,7 +40,7 @@ async def get_model_status(
 ):
     total_records = db.query(func.count(BankingData.id)).scalar()
     total_ratings = db.query(func.count(RatingResult.id)).scalar()
-    model_status = xgboost_model.get_status()
+    model_status = xgboost_model.get_status(db)
 
     return {
         "ml_available": model_status["model_available"],
@@ -102,6 +102,8 @@ async def train_model(
 
     try:
         metrics = xgboost_model.train(features, tiers)
+        # Persist to Postgres (durable) — disk pickle alone vanishes on redeploy.
+        xgboost_model.save_to_db(db, trained_by=current_user.id)
     except Exception as e:
         logger.error("Training failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Error en entrenamiento: {e}")

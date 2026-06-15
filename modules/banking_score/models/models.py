@@ -310,6 +310,26 @@ class Report(UUIDMixin, Base):
     bank = relationship("Bank", back_populates="reports")
 
 
+# ─── ML model artifact ────────────────────────────────────────────
+
+
+class MlModel(UUIDMixin, Base):
+    """Serialized ML model artifact (durable store).
+
+    The trained XGBoost pickle was kept only on ``MODELS_DIR`` (the container's
+    ephemeral FS — the app service has no Railway volume), so it vanished on every
+    redeploy and ``ml_available`` reverted to false. This table persists the
+    pickle bytes in Postgres; the newest row is the active model.
+    """
+    __tablename__ = "ml_models"
+
+    module = Column(String(50), nullable=False, default="banking_score")
+    version = Column(String(50), nullable=True)
+    model_blob = Column(LargeBinary, nullable=False)
+    metrics = Column(JSON, nullable=True)
+    trained_by = Column(String, ForeignKey("users.id"), nullable=True)
+
+
 # ─── Fideicomisos públicos (public trusts) ────────────────────────
 # Trusts are patrimonios autónomos (funds), NOT solvency-rated entities — they get
 # their own "Índice de Salud del Fideicomiso" on a separate scale, not SDQ-AAA…D.

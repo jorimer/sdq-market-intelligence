@@ -198,14 +198,90 @@ class SDQXGBoostModel:
         self.metrics = payload.get("metrics")
         logger.info("Model loaded: v=%s", self.version)
 
-    # ── Status ────────────────────────────────────────────────────
+    # ── Durable persistence (Postgres) ───────────────────────────
+    # The disk pickle lives on the ephemeral container FS and vanishes on
+    # redeploy. The newest ml_models row is the durable source of truth, loaded
+    # into memory on cold start.
 
-    def get_status(self) -> Dict:
-        has_model = os.path.exists(self._model_path)
-        return {
-            "model_available": has_model,
+    def _serialize(self) -> bytes:
+        return pickle.dumps({
+            "model": self.model,
+            "label_encoder": self.label_encoder,
             "version": self.version,
             "metrics": self.metrics,
+        })
+
+    def _deserialize(self, blob: bytes) -> None:
+        payload = pickle.loads(blob)
+        self.model = payload["model"]
+        self.label_encoder = payload["label_encoder"]
+        self.version = payload.get("version")
+        self.metrics = payload.get("metrics")
+
+    def save_to_db(self, db, trained_by: Optional[str] = None) -> None:
+        """Persist the in-memory model as a new ml_models row (durable)."""
+        from modules.banking_score.models.models import MlModel
+        if self.model is None:
+            raise RuntimeError("No hay modelo en memoria para guardar.")
+        db.add(MlModel(
+            module="banking_score",
+            version=self.version,
+            model_blob=self._serialize(),
+            metrics=self.metrics,
+            trained_by=trained_by,
+        ))
+        db.commit()
+        logger.info("Model persisted to DB: v=%s", self.version)
+
+    def _latest_row(self, db):
+        from modules.banking_score.models.models import MlModel
+        return (
+            db.query(MlModel)
+            .filter(MlModel.module == "banking_score")
+            .order_by(MlModel.created_at.desc())
+            .first()
+        )
+
+    def load_from_db(self, db) -> bool:
+        """Load the most recent model from the DB into memory. Returns success."""
+        row = self._latest_row(db)
+        if not row:
+            return False
+        _ensure_ml_libs()
+        self._deserialize(row.model_blob)
+        logger.info("Model loaded from DB: v=%s", self.version)
+        return True
+
+    def ensure_loaded(self, db=None) -> bool:
+        """Make a usable model available in memory: in-memory → disk → DB."""
+        if self.model is not None:
+            return True
+        if os.path.exists(self._model_path):
+            try:
+                self._load()
+                return True
+            except Exception as e:  # noqa: BLE001 — fall through to DB
+                logger.warning("Disk model load failed: %s", e)
+        if db is not None:
+            return self.load_from_db(db)
+        return False
+
+    # ── Status ────────────────────────────────────────────────────
+
+    def get_status(self, db=None) -> Dict:
+        available = self.model is not None or os.path.exists(self._model_path)
+        version = self.version
+        metrics = self.metrics
+        if db is not None:
+            row = self._latest_row(db)
+            if row:
+                available = True
+                version = version or row.version
+                metrics = metrics or row.metrics
+        return {
+            "model_available": available,
+            "version": version,
+            "metrics": metrics,
             "model_path": self._model_path,
         }
 
