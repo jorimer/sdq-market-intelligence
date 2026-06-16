@@ -379,14 +379,10 @@ export interface OperationsStatus {
   history: OperationRunHistory[];
 }
 
-const OP_TRIGGER_PATHS: Record<string, string> = {
-  rescore: "/banking-score/data/rescore",
-  "prune-future": "/banking-score/data/prune-future",
-  "recompute-carteras": "/banking-score/data/recompute-carteras",
-};
+// Platform-wide Operation Console (cross-module): /api/v1/operations/*
 
 export async function getOperationsStatus(): Promise<OperationsStatus> {
-  const { data } = await client.get<OperationsStatus>("/banking-score/data/operations-status");
+  const { data } = await client.get<OperationsStatus>("/operations/status");
   return data;
 }
 
@@ -394,9 +390,7 @@ export async function triggerOperation(
   name: string,
   params?: Record<string, string>,
 ): Promise<{ started: boolean; reason?: string; run_id?: string }> {
-  const path = OP_TRIGGER_PATHS[name];
-  if (!path) throw new Error(`Operación desconocida: ${name}`);
-  const { data } = await client.post(path, null, { params: params ?? {} });
+  const { data } = await client.post(`/operations/${name}/run`, params ?? {});
   return data;
 }
 
@@ -404,10 +398,7 @@ export async function setOperationSchedule(
   name: string,
   body: { enabled: boolean; interval_hours?: number; params?: Record<string, unknown> },
 ): Promise<OperationSchedule> {
-  const { data } = await client.put<OperationSchedule>(
-    `/banking-score/data/operations-schedule/${name}`,
-    body,
-  );
+  const { data } = await client.put<OperationSchedule>(`/operations/${name}/schedule`, body);
   return data;
 }
 

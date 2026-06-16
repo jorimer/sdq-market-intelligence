@@ -1,0 +1,7 @@
+{
+  "DO": {"wgi_rule_of_law": {"2023": 42.0}, "wgi_gov_effectiveness": {"2023": 48.0}, "wgi_control_corruption": {"2023": 38.0}},
+  "CR": {"wgi_rule_of_law": {"2023": 66.0}, "wgi_gov_effectiveness": {"2023": 62.0}, "wgi_control_corruption": {"2023": 68.0}},
+  "PA": {"wgi_rule_of_law": {"2023": 50.0}, "wgi_gov_effectiveness": {"2023": 56.0}, "wgi_control_corruption": {"2023": 44.0}},
+  "GT": {"wgi_rule_of_law": {"2023": 28.0}, "wgi_gov_effectiveness": {"2023": 34.0}, "wgi_control_corruption": {"2023": 24.0}},
+  "JM": {"wgi_rule_of_law": {"2023": 45.0}, "wgi_gov_effectiveness": {"2023": 50.0}, "wgi_control_corruption": {"2023": 40.0}}
+}

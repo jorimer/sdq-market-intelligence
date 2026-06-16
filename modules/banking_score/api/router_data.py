@@ -11,7 +11,6 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
@@ -274,7 +273,7 @@ async def rescore(
 ):
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
-    from modules.banking_score import operations
+    from shared import operations
     return operations.trigger("rescore", origin="manual", user_id=current_user.id,
                               params={"only_sib": only_sib})
 
@@ -289,7 +288,7 @@ async def prune_future(
 ):
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
-    from modules.banking_score import operations
+    from shared import operations
     return operations.trigger("prune-future", origin="manual", user_id=current_user.id)
 
 
@@ -310,49 +309,9 @@ async def sync_status(
     return st
 
 
-# ─── Operation console (unified status + history) ────────────────
-
-@router.get(
-    "/operations-status",
-    summary="Estado de las operaciones de la consola",
-    description="Estado en vivo de las operaciones recurrentes (rescore, prune, recompute) + historial reciente.",
-)
-async def operations_status(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if current_user.role != UserRole.admin:
-        raise HTTPException(status_code=403, detail="Se requiere rol admin")
-    from modules.banking_score import operations
-    return operations.all_status(db)
-
-
-class ScheduleUpdate(BaseModel):
-    enabled: bool
-    interval_hours: Optional[int] = None
-    params: Optional[Dict] = None
-
-
-@router.put(
-    "/operations-schedule/{operation}",
-    summary="Configurar el agendado de una operación",
-    description="Activa/desactiva y fija la cadencia (horas) de una operación recurrente.",
-)
-async def set_operation_schedule(
-    operation: str,
-    body: ScheduleUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if current_user.role != UserRole.admin:
-        raise HTTPException(status_code=403, detail="Se requiere rol admin")
-    from modules.banking_score import operations
-    try:
-        return operations.set_schedule(
-            db, operation, body.enabled, body.interval_hours, body.params,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# Operation-console status/schedule endpoints moved to the platform router
+# (shared/operations/router.py, prefix /api/v1/operations). The per-operation
+# triggers below stay for back-compat; the console uses /operations/{name}/run.
 
 
 # ─── SIB raw page diagnostic (test pagination semantics) ─────────
@@ -677,6 +636,6 @@ async def recompute_carteras(
 ):
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Requiere rol de administrador.")
-    from modules.banking_score import operations
+    from shared import operations
     return operations.trigger("recompute-carteras", origin="manual",
                               user_id=current_user.id, params={"period": period})
