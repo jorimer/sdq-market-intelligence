@@ -124,6 +124,74 @@ def fetch_events(days: int = WINDOW_DAYS) -> List[Record]:  # pragma: no cover -
     return rows_to_records(rows)
 
 
+# ── Historical instability events (for the IRMP backtest, governance outcome) ──
+EVENTS_TABLE = "gdelt-bq.gdeltv2.events"
+# CAMEO root codes for instability: protest, coerce, assault, fight, mass violence.
+INSTABILITY_ROOTS = ("14", "17", "18", "19", "20")
+
+
+def build_events_query() -> str:
+    """Instability-event count per (FIPS country, year) from GDELT Events 2.0.
+
+    Counts high-intensity CAMEO events located in each peer country. Selects only
+    Year / EventRootCode / ActionGeo_CountryCode (column pruning) and filters by
+    Year + country + root code. Parameterized by @start_year and @fips.
+    """
+    roots = ",".join(f"'{r}'" for r in INSTABILITY_ROOTS)
+    return f"""
+    SELECT
+      ActionGeo_CountryCode AS fips,
+      Year AS year,
+      COUNT(*) AS instability_events
+    FROM `{EVENTS_TABLE}`
+    WHERE Year >= @start_year
+      AND EventRootCode IN ({roots})
+      AND ActionGeo_CountryCode IN UNNEST(@fips)
+    GROUP BY fips, year
+    """
+
+
+def _events_job_config(start_year: int, dry_run: bool = False):  # pragma: no cover - needs BigQuery
+    from google.cloud import bigquery
+    return bigquery.QueryJobConfig(
+        dry_run=dry_run, use_query_cache=not dry_run,
+        query_parameters=[
+            bigquery.ScalarQueryParameter("start_year", "INT64", start_year),
+            bigquery.ArrayQueryParameter("fips", "STRING", list(FIPS_TO_ISO2.keys())),
+        ],
+    )
+
+
+def _bq_client():  # pragma: no cover - needs BigQuery + creds
+    raw = os.environ.get("GCP_SA_JSON")
+    if not raw:
+        raise GdeltBQError("GCP_SA_JSON no configurado")
+    from google.cloud import bigquery
+    from google.oauth2 import service_account
+    info = json.loads(raw)
+    creds = service_account.Credentials.from_service_account_info(info)
+    return bigquery.Client(project=info.get("project_id"), credentials=creds)
+
+
+def fetch_instability_events(start_year: int = 2014) -> Dict[str, Dict[int, int]]:  # pragma: no cover - needs BigQuery
+    """Return ``{iso2: {year: instability_event_count}}`` from GDELT Events."""
+    client = _bq_client()
+    rows = client.query(build_events_query(), job_config=_events_job_config(start_year)).result()
+    out: Dict[str, Dict[int, int]] = {}
+    for r in rows:
+        iso2 = FIPS_TO_ISO2.get(r["fips"])
+        if iso2 and r["year"]:
+            out.setdefault(iso2, {})[int(r["year"])] = int(r["instability_events"])
+    return out
+
+
+def events_dry_run_bytes(start_year: int = 2014) -> int:  # pragma: no cover - needs BigQuery + creds
+    """Bytes the instability-events query would scan (free dry run, cost check)."""
+    client = _bq_client()
+    return client.query(build_events_query(),
+                        job_config=_events_job_config(start_year, dry_run=True)).total_bytes_processed
+
+
 def dry_run_bytes(days: int = WINDOW_DAYS) -> int:  # pragma: no cover - needs BigQuery + creds
     """Bytes the events query would scan (a free dry run — for cost validation)."""
     raw = os.environ.get("GCP_SA_JSON")

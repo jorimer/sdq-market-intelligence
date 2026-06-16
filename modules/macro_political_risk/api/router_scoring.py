@@ -210,15 +210,42 @@ async def irmp_dataset(
 
 @router.get("/gdelt-bq-dryrun", include_in_schema=False)
 async def gdelt_bq_dryrun(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
-    """Diagnostic: bytes the GDELT-BigQuery events query would scan (free dry run),
-    to confirm it stays inside the free tier before enabling a real sync."""
-    from shared.data.gdelt_bq_client import dry_run_bytes
+    """Diagnostic: bytes the GDELT-BigQuery queries (events sync + backtest events)
+    would scan (free dry run), to confirm they stay inside the free tier."""
+    from shared.data.gdelt_bq_client import dry_run_bytes, events_dry_run_bytes
+    out: Dict[str, Any] = {"free_tier_gb": 1000}
     try:
-        nbytes = dry_run_bytes()
-        return {"ok": True, "bytes": nbytes, "gb": round(nbytes / 1e9, 3),
-                "free_tier_gb": 1000, "within_free_tier": nbytes < 1e12}
-    except Exception as e:  # noqa: BLE001 — diagnostic; surface the reason
-        return {"ok": False, "error": str(e)}
+        gkg = dry_run_bytes()
+        out["gkg_gb"] = round(gkg / 1e9, 3)
+    except Exception as e:  # noqa: BLE001
+        out["gkg_error"] = str(e)
+    try:
+        ev = events_dry_run_bytes(2012)
+        out["events_gb"] = round(ev / 1e9, 3)
+    except Exception as e:  # noqa: BLE001
+        out["events_error"] = str(e)
+    out["ok"] = "gkg_gb" in out or "events_gb" in out
+    return out
+
+
+BACKTEST_KEY = "irmp_backtest_report"
+
+
+@router.get(
+    "/validation/backtest",
+    summary="Reporte de validación (backtest) del IRMP",
+    description="Devuelve el último backtest persistido (discriminación + validez convergente).",
+)
+async def get_backtest(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from shared.settings.models import AppSetting
+    import json
+    row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_KEY).first()
+    if not row:
+        return {"has_report": False}
+    return {"has_report": True, **json.loads(row.value)}
 
 
 @router.get(
