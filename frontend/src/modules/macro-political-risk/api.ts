@@ -1,4 +1,5 @@
 import client from "@/shared/api/client";
+import type { AiInsight } from "@/shared/ui/insight-types";
 
 export interface IRMPDimension {
   score: number;
@@ -15,6 +16,7 @@ export interface IRMPResult {
   dimensions: Record<string, IRMPDimension>;
   peer_set_size: number;
   model_version: string;
+  ai_insight?: AiInsight | null;
 }
 
 export interface IRMPWeights {
@@ -57,11 +59,13 @@ export async function getLiveVariables(period?: string): Promise<WgiLive> {
 export async function scoreCountry(
   countryCode: string,
   dataset: RegionalDataset,
+  opts?: { withAi?: boolean; countryName?: string },
 ): Promise<IRMPResult> {
-  const { data } = await client.post("/macro-political-risk/score", {
-    country_code: countryCode,
-    dataset,
-  });
+  const { data } = await client.post(
+    "/macro-political-risk/score",
+    { country_code: countryCode, dataset, country_name: opts?.countryName },
+    { params: opts?.withAi ? { with_ai: true } : undefined },
+  );
   return data;
 }
 

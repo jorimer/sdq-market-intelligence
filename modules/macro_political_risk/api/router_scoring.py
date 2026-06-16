@@ -28,10 +28,26 @@ from modules.macro_political_risk.service import (
     get_history,
     get_latest,
 )
+from modules.macro_political_risk.ai_context import irmp_ai_context
 
 logger = logging.getLogger("sdq.api.macro_political_risk")
 
 router = APIRouter()
+
+
+async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
+    """Generate a Claude narrative from *context*; best-effort (returns None on any
+    failure so the endpoint never breaks). These endpoints are ``async def``, so we
+    await the engine directly. Without an API key it returns a static fallback
+    (``model_used == "static_fallback"``), passed through.
+    """
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
+        logger.warning("AI insight IRMP (%s) no disponible: %s", template, e)
+        return None
 
 
 @router.get(
@@ -68,6 +84,7 @@ async def score_country(
             },
         }],
     ),
+    with_ai: bool = Query(False, description="Incluir evaluación de riesgo de IA (Claude) — fase 2, lento (~10-15s)"),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     country_code = payload.get("country_code")
@@ -75,9 +92,14 @@ async def score_country(
     if not country_code or not isinstance(dataset, dict):
         raise HTTPException(status_code=400, detail="Se requiere 'country_code' y 'dataset'.")
     try:
-        return run_irmp(country_code, dataset)
+        result = run_irmp(country_code, dataset)
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    result["ai_insight"] = None
+    if with_ai:
+        ctx = irmp_ai_context(result, payload.get("country_name"))
+        result["ai_insight"] = await _ai_insight(ctx, "risk_assessment")
+    return result
 
 
 @router.post(

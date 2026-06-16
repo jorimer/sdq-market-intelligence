@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Scale, ListOrdered, SlidersHorizontal } from "lucide-react";
+import { Scale, ListOrdered, SlidersHorizontal, ShieldAlert } from "lucide-react";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import {
   PageHead,
   Card,
@@ -311,6 +312,23 @@ export function MacroPoliticalRiskPage() {
           </Card>
         </div>
       </div>
+
+      {cur && (
+        <div className="mt-5">
+          <AiInsightCard
+            title="Evaluación de riesgo (IA)"
+            subtitle={`${COUNTRY_NAMES[selected] ?? selected} · IRMP ${fmtNum(cur.irmp_score, 1)} · ${band.label}`}
+            icon={ShieldAlert}
+            depsKey={`${selected}:${liveInfo.period ?? "fix"}`}
+            fetcher={() =>
+              scoreCountry(selected, dataset, {
+                withAi: true,
+                countryName: COUNTRY_NAMES[selected],
+              }).then((r) => r.ai_insight ?? null)
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }
