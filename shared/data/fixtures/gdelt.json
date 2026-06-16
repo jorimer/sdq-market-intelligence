@@ -1,0 +1,7 @@
+{
+  "DO": {"news_sentiment": {"2024": 15.0}, "unrest_shocks": {"2024": 20.0}},
+  "CR": {"news_sentiment": {"2024": 18.0}, "unrest_shocks": {"2024": 16.0}},
+  "PA": {"news_sentiment": {"2024": 8.0}, "unrest_shocks": {"2024": 24.0}},
+  "GT": {"news_sentiment": {"2024": -10.0}, "unrest_shocks": {"2024": 38.0}},
+  "JM": {"news_sentiment": {"2024": 12.0}, "unrest_shocks": {"2024": 28.0}}
+}

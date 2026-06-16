@@ -28,6 +28,15 @@ def _run_wdi_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_gdelt_sync(params, user_id, set_phase) -> Dict:
+    from modules.macro_political_risk.gdelt_sync import gdelt_sync
+    db = SessionLocal()
+    try:
+        return gdelt_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 _PEER_NAMES = {"DO": "República Dominicana", "CR": "Costa Rica", "PA": "Panamá",
                "GT": "Guatemala", "JM": "Jamaica"}
 _PEER_REGIONS = {"DO": "Caribe", "CR": "Centroamérica", "PA": "Centroamérica",
@@ -83,6 +92,13 @@ def register() -> None:
         "corriente, IED desde WDI; deuda y balance fiscal desde IMF WEO) para el "
         "peer set regional y los persiste.",
         _run_wdi_sync, default_interval_hours=720,  # anual → cadencia larga
+    ))
+    register_operation(Operation(
+        "gdelt-sync", "Sincronizar eventos (GDELT)",
+        "Trae señales de eventos desde GDELT (tono de noticias → news_sentiment; "
+        "cobertura de disturbios → unrest_shocks) para el peer set. Espaciada por "
+        "el rate-limit de GDELT (~1-2 min). sanctions_signal queda como rúbrica.",
+        _run_gdelt_sync, default_interval_hours=168,  # eventos = coyuntura → semanal
     ))
     register_operation(Operation(
         "irmp-snapshot", "Calcular snapshot IRMP",
