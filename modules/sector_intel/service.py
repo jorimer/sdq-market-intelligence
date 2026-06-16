@@ -25,16 +25,17 @@ logger = logging.getLogger("sdq.sector_intel.service")
 
 MODEL_VERSION = "1.0"
 
-# Anchor sectors (decision 2026-06-06): start narrow before opening the 16.
-ANCHOR_SECTORS = [
-    ("turismo", "Turismo"),
-    ("energia", "Energía"),
-    ("zonas_francas", "Zonas Francas"),
-]
+# Sector catalog (decision 2026-06-16, owner): the full-economy leaf partition
+# from the BCRD national accounts (~17 sectors summing to total Value Added),
+# replacing the original 3 anchors. Single source of truth lives in
+# ``shared.data.bcrd_sectors`` (the connector that populates them with real data).
+from shared.data.bcrd_sectors import sector_catalog
+
+ANCHOR_SECTORS = sector_catalog()
 
 
 def seed_sectors(db: Session) -> int:
-    """Ensure the anchor sectors exist.  Returns how many were created."""
+    """Ensure the sector catalog exists.  Returns how many were created."""
     created = 0
     for code, name in ANCHOR_SECTORS:
         if db.query(Sector).filter_by(code=code).first() is None:

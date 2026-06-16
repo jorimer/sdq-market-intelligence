@@ -60,9 +60,13 @@ def clean_bus():
 
 
 def test_seed_sectors_idempotent(db):
-    assert seed_sectors(db) == 3
+    from modules.sector_intel.service import ANCHOR_SECTORS
+
+    n = len(ANCHOR_SECTORS)  # full-economy BCRD catalog (~17 leaf sectors)
+    assert n == 17
+    assert seed_sectors(db) == n
     assert seed_sectors(db) == 0
-    assert db.query(Sector).count() == 3
+    assert db.query(Sector).count() == n
 
 
 def test_compute_and_persist_scores_each_sector(db):
