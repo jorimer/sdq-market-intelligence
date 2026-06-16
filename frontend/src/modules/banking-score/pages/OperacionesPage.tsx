@@ -22,6 +22,95 @@ function fmtDateTime(iso: string | null): string {
   return d.toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" });
 }
 
+// Map of known result keys → human label (Spanish). Unknown keys fall back to
+// a humanized version of the key, so a runner that adds a field never breaks.
+const RESULT_LABELS: Record<string, string> = {
+  // rescore
+  periods_scored: "Períodos calificados",
+  ratings_written: "Ratings escritos",
+  ratings_total: "Ratings totales",
+  per_period: "Detalle por período",
+  // prune-future
+  data_deleted: "Datos borrados",
+  ratings_deleted: "Ratings borrados",
+  actions_deleted: "Acciones borradas",
+  // recompute-carteras
+  entities: "Entidades",
+  records: "Registros",
+  ratings: "Ratings",
+  sib_records: "Registros SIB",
+  period_start: "Inicio del período",
+  period_end: "Fin del período",
+  // backtest
+  gini: "Gini",
+  n_observations: "Observaciones",
+  n_events: "Eventos",
+  monotonic: "Monótona",
+  // wgi-sync
+  synced: "Valores sincronizados",
+  periods: "Períodos",
+  countries: "Países",
+  variables: "Variables",
+  // common
+  errors: "Errores",
+  error: "Error",
+  status: "Estado",
+  message: "Mensaje",
+};
+
+function resultLabel(key: string): string {
+  if (RESULT_LABELS[key]) return RESULT_LABELS[key];
+  const spaced = key.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function fmtResultValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (typeof value === "number") {
+    if (Number.isInteger(value)) return value.toLocaleString("es-DO");
+    return value.toLocaleString("es-DO", { maximumFractionDigits: 3 });
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return key === "errors" ? "ninguno" : "—";
+    if (value.every((v) => v === null || ["string", "number", "boolean"].includes(typeof v))) {
+      return value.map((v) => String(v)).join(", ");
+    }
+    return `${value.length} ítem${value.length === 1 ? "" : "s"}`;
+  }
+  if (typeof value === "object") {
+    const n = Object.keys(value as Record<string, unknown>).length;
+    return `${n} campo${n === 1 ? "" : "s"}`;
+  }
+  return String(value);
+}
+
+function ResultDetail({ result, when }: { result: Record<string, unknown>; when: string | null }) {
+  const entries = Object.entries(result);
+  return (
+    <div className="mt-3">
+      <div className="text-xs text-muted">
+        Último resultado · <span className="mono text-body">{fmtDateTime(when)}</span>
+      </div>
+      <dl className="mt-1.5 divide-y divide-line/40">
+        {entries.map(([k, v]) => (
+          <div key={k} className="flex items-baseline justify-between gap-3 py-1">
+            <dt className="text-xs text-muted min-w-0 flex-1 truncate" title={resultLabel(k)}>
+              {resultLabel(k)}
+            </dt>
+            <dd
+              className="text-xs mono text-body tabular-nums shrink-0 text-right max-w-[60%] truncate"
+              title={fmtResultValue(k, v)}
+            >
+              {fmtResultValue(k, v)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 function statusChip(op: OperationInfo) {
   const s = op.status;
   if (s.is_running) return <Chip tone="accent">En curso</Chip>;
@@ -83,13 +172,7 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
         </div>
       )}
 
-      {!s.is_running && result && (
-        <div className="mt-3 text-xs text-muted">
-          Último resultado{" "}
-          <span className="mono text-body">{fmtDateTime(s.last_run)}</span>:{" "}
-          <span className="mono text-body tabular-nums">{JSON.stringify(result)}</span>
-        </div>
-      )}
+      {!s.is_running && result && <ResultDetail result={result} when={s.last_run} />}
       {!s.is_running && s.error && (
         <div className="mt-2 text-xs text-alert">{s.error}</div>
       )}

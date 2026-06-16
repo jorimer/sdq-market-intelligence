@@ -17,10 +17,12 @@ import { fmtNum } from "@/shared/lib/format";
 import { useApp } from "@/shared/context/AppContext";
 import {
   getWeights,
+  getWgiLive,
   scoreCountry,
   saveSnapshot,
   IRMPResult,
   IRMPWeights,
+  WgiLive,
 } from "../api";
 import {
   SAMPLE_REGIONAL,
@@ -29,6 +31,33 @@ import {
 } from "../data";
 
 type Status = "loading" | "error" | "ready";
+type Dataset = Record<string, Record<string, number>>;
+
+// The three governance inputs sourced live from World Bank WGI; the rest of the
+// regional dataset stays illustrative until its own source is wired.
+const WGI_KEYS = ["wgi_rule_of_law", "wgi_gov_effectiveness", "wgi_control_corruption"];
+
+interface WgiInfo {
+  period: string | null;
+  covered: number;
+  total: number;
+  live: boolean;
+}
+
+// Overlay live WGI values onto the fixture dataset, only where a real number
+// exists. Missing live values keep the declared fixture — never fabricated.
+function mergeWgi(base: Dataset, live: WgiLive): Dataset {
+  const merged: Dataset = {};
+  for (const [iso, vars] of Object.entries(base)) {
+    const liveVars = live.countries[iso] ?? {};
+    const next = { ...vars };
+    for (const k of WGI_KEYS) {
+      if (typeof liveVars[k] === "number") next[k] = liveVars[k];
+    }
+    merged[iso] = next;
+  }
+  return merged;
+}
 
 function periodEndFor(period: string): string {
   const q: Record<string, string> = { Q1: "03-31", Q2: "06-30", Q3: "09-30", Q4: "12-31" };
@@ -46,20 +75,44 @@ export function MacroPoliticalRiskPage() {
   const [selected, setSelected] = useState("DO");
   const [tab, setTab] = useState("desglose");
   const [saved, setSaved] = useState<string | null>(null);
+  const [dataset, setDataset] = useState<Dataset>(SAMPLE_REGIONAL);
+  const [wgiInfo, setWgiInfo] = useState<WgiInfo>({
+    period: null, covered: 0, total: Object.keys(SAMPLE_REGIONAL).length, live: false,
+  });
 
   const codes = Object.keys(SAMPLE_REGIONAL);
 
   const load = useCallback(async () => {
     setStatus("loading");
     try {
+      // Live WGI overlay is best-effort: if the sync hasn't run or the call
+      // fails, fall back to the fixture so the page never breaks.
+      let merged: Dataset = SAMPLE_REGIONAL;
+      let info: WgiInfo = { period: null, covered: 0, total: codes.length, live: false };
+      try {
+        const live = await getWgiLive();
+        if (live.has_data) {
+          merged = mergeWgi(SAMPLE_REGIONAL, live);
+          const covered = codes.filter((iso) => {
+            const lv = live.countries[iso];
+            return lv && WGI_KEYS.some((k) => typeof lv[k] === "number");
+          }).length;
+          info = { period: live.period, covered, total: codes.length, live: covered > 0 };
+        }
+      } catch {
+        /* keep fixture — degradación elegante */
+      }
+
       const [w, ...scores] = await Promise.all([
         getWeights(),
-        ...codes.map((c) => scoreCountry(c, SAMPLE_REGIONAL)),
+        ...codes.map((c) => scoreCountry(c, merged)),
       ]);
       const map: Record<string, IRMPResult> = {};
       scores.forEach((s) => (map[s.country_code] = s));
       setWeights(w);
       setResults(map);
+      setDataset(merged);
+      setWgiInfo(info);
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -75,7 +128,7 @@ export function MacroPoliticalRiskPage() {
     <PageHead
       eyebrow="WGI · BCRD · SIB"
       title="Regulatorio & político"
-      sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Datos regionales ilustrativos."
+      sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Gobernanza (WGI) en vivo del Banco Mundial; resto del conjunto regional ilustrativo."
     />
   );
 
@@ -112,7 +165,7 @@ export function MacroPoliticalRiskPage() {
   const doSave = async () => {
     setSaved(null);
     try {
-      await saveSnapshot(selected, SAMPLE_REGIONAL, periodEndFor(period), COUNTRY_NAMES[selected]);
+      await saveSnapshot(selected, dataset, periodEndFor(period), COUNTRY_NAMES[selected]);
       setSaved(`Snapshot guardado (${periodEndFor(period)}) · evento irmp.updated publicado`);
     } catch {
       setSaved("No se pudo guardar el snapshot.");
@@ -124,7 +177,7 @@ export function MacroPoliticalRiskPage() {
       <PageHead
         eyebrow="WGI · BCRD · SIB"
         title="Regulatorio & político"
-        sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Datos regionales ilustrativos."
+        sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Gobernanza (WGI) en vivo del Banco Mundial; resto del conjunto regional ilustrativo."
         right={
           <select
             value={selected}
@@ -153,6 +206,15 @@ export function MacroPoliticalRiskPage() {
           </div>
           <div className="mt-3 text-xs text-muted">
             Conjunto regional: {cur?.peer_set_size ?? codes.length} países
+          </div>
+          <div className="mt-2">
+            {wgiInfo.live ? (
+              <Chip tone="ok">
+                WGI en vivo · {wgiInfo.period} · {wgiInfo.covered}/{wgiInfo.total} países
+              </Chip>
+            ) : (
+              <Chip tone="muted">WGI ilustrativo · sync pendiente</Chip>
+            )}
           </div>
           <button onClick={doSave} className="btn btn-soft mt-4 w-full">
             Guardar snapshot

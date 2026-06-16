@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from modules.macro_political_risk.events import publish_irmp_updated
 from modules.macro_political_risk.models.models import (
     Country,
+    CountryVariable,
     DimensionScore,
     IRMPSnapshot,
     RiskBand,
@@ -112,6 +113,45 @@ def get_latest(db: Session, country_code: str) -> Optional[IRMPSnapshot]:
         .order_by(IRMPSnapshot.period_end.desc())
         .first()
     )
+
+
+def get_country_variables(
+    db: Session, period: Optional[str] = None, source: str = "WGI"
+) -> Dict[str, Any]:
+    """Read persisted source variables grouped by country: ``{iso: {variable: value}}``.
+
+    When *period* is omitted, uses the most recent period present for *source*
+    (WGI is annual → lexical sort over the 4-digit year works). Returns the
+    period actually used plus the variable list, so callers can declare lineage
+    and overlay live data without fabricating missing values.
+    """
+    base = db.query(CountryVariable).filter(CountryVariable.source == source)
+    if period is None:
+        period = (
+            base.with_entities(CountryVariable.period)
+            .order_by(CountryVariable.period.desc())
+            .limit(1)
+            .scalar()
+        )
+    if period is None:
+        return {"source": source, "period": None, "has_data": False,
+                "countries": {}, "variables": []}
+
+    rows = base.filter(CountryVariable.period == period).all()
+    countries: Dict[str, Dict[str, float]] = {}
+    variables = set()
+    for r in rows:
+        if r.value is None:  # missing stays missing — never overlaid downstream
+            continue
+        countries.setdefault(r.iso_code, {})[r.variable] = float(r.value)
+        variables.add(r.variable)
+    return {
+        "source": source,
+        "period": period,
+        "has_data": bool(countries),
+        "countries": countries,
+        "variables": sorted(variables),
+    }
 
 
 def get_history(db: Session, country_code: str, limit: int = 20) -> List[IRMPSnapshot]:
