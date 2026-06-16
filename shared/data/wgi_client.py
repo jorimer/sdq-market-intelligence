@@ -29,6 +29,9 @@ WGI_INDICATORS: Dict[str, str] = {
     "GOV_WGI_RL.SC": "wgi_rule_of_law",
     "GOV_WGI_GE.SC": "wgi_gov_effectiveness",
     "GOV_WGI_CC.SC": "wgi_control_corruption",
+    "GOV_WGI_PV.SC": "wgi_political_stability",
+    "GOV_WGI_VA.SC": "wgi_voice_accountability",
+    "GOV_WGI_RQ.SC": "wgi_regulatory_quality",
 }
 
 # Regional peer set: our ISO2 key → ISO3 (what the WB API expects).

@@ -1,7 +1,7 @@
 {
-  "DO": {"wgi_rule_of_law": {"2023": 42.0}, "wgi_gov_effectiveness": {"2023": 48.0}, "wgi_control_corruption": {"2023": 38.0}},
-  "CR": {"wgi_rule_of_law": {"2023": 66.0}, "wgi_gov_effectiveness": {"2023": 62.0}, "wgi_control_corruption": {"2023": 68.0}},
-  "PA": {"wgi_rule_of_law": {"2023": 50.0}, "wgi_gov_effectiveness": {"2023": 56.0}, "wgi_control_corruption": {"2023": 44.0}},
-  "GT": {"wgi_rule_of_law": {"2023": 28.0}, "wgi_gov_effectiveness": {"2023": 34.0}, "wgi_control_corruption": {"2023": 24.0}},
-  "JM": {"wgi_rule_of_law": {"2023": 45.0}, "wgi_gov_effectiveness": {"2023": 50.0}, "wgi_control_corruption": {"2023": 40.0}}
+  "DO": {"wgi_rule_of_law": {"2024": 53.83}, "wgi_gov_effectiveness": {"2024": 52.79}, "wgi_control_corruption": {"2024": 42.48}, "wgi_political_stability": {"2024": 75.96}, "wgi_voice_accountability": {"2024": 60.37}, "wgi_regulatory_quality": {"2024": 58.13}},
+  "CR": {"wgi_rule_of_law": {"2024": 67.58}, "wgi_gov_effectiveness": {"2024": 56.92}, "wgi_control_corruption": {"2024": 61.6}, "wgi_political_stability": {"2024": 85.98}, "wgi_voice_accountability": {"2024": 74.55}, "wgi_regulatory_quality": {"2024": 64.04}},
+  "PA": {"wgi_rule_of_law": {"2024": 52.43}, "wgi_gov_effectiveness": {"2024": 56.11}, "wgi_control_corruption": {"2024": 36.64}, "wgi_political_stability": {"2024": 70.42}, "wgi_voice_accountability": {"2024": 64.57}, "wgi_regulatory_quality": {"2024": 53.7}},
+  "GT": {"wgi_rule_of_law": {"2024": 40.4}, "wgi_gov_effectiveness": {"2024": 33.66}, "wgi_control_corruption": {"2024": 28.66}, "wgi_political_stability": {"2024": 62.31}, "wgi_voice_accountability": {"2024": 48.61}, "wgi_regulatory_quality": {"2024": 49.98}},
+  "JM": {"wgi_rule_of_law": {"2024": 55.63}, "wgi_gov_effectiveness": {"2024": 54.67}, "wgi_control_corruption": {"2024": 45.91}, "wgi_political_stability": {"2024": 74.04}, "wgi_voice_accountability": {"2024": 65.34}, "wgi_regulatory_quality": {"2024": 56.3}}
 }

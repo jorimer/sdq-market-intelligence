@@ -15,18 +15,18 @@ def test_fixture_mode_records_carry_country_in_dimension():
     do_rl = [r for r in recs if r.dimension == "DO" and r.series == "wgi_rule_of_law"]
     assert len(do_rl) == 1
     r = do_rl[0]
-    assert r.value == 42.0
+    assert r.value == 53.83
     assert r.unit == "percentil 0-100"
-    assert r.period == "2023"
+    assert r.period == "2024"
     assert r.lineage.source == "WGI"
     assert len({r.dimension for r in recs}) == 5   # 5 peer countries
-    assert len({r.series for r in recs}) == 3       # 3 WGI variables
+    assert len({r.series for r in recs}) == 6       # 6 WGI variables (RL/GE/CC/PV/VA/RQ)
 
 
 def test_fixture_filter_by_series_and_period():
     c = WGIClient(mode="fixture")
-    rl = c.fetch(series="wgi_rule_of_law")
-    assert rl and all(r.series == "wgi_rule_of_law" for r in rl)
+    rl = c.fetch(series="wgi_political_stability")
+    assert rl and all(r.series == "wgi_political_stability" for r in rl)
     assert len(rl) == 5
     assert c.fetch(period="1999") == []  # no such year
 
@@ -56,9 +56,12 @@ def test_live_skips_a_failing_indicator(monkeypatch):
         return [{"countryiso3code": "DOM", "date": "2023", "value": 50.0}], None
     monkeypatch.setattr(wc, "fetch_wgi_indicator", flaky)
     recs = WGIClient(mode="live").fetch()
-    # RL failed → only the other two variables present, endpoint didn't break
+    # RL failed → the other five variables present, endpoint didn't break
     assert "wgi_rule_of_law" not in {r.series for r in recs}
-    assert {r.series for r in recs} == {"wgi_gov_effectiveness", "wgi_control_corruption"}
+    assert {r.series for r in recs} == {
+        "wgi_gov_effectiveness", "wgi_control_corruption",
+        "wgi_political_stability", "wgi_voice_accountability", "wgi_regulatory_quality",
+    }
 
 
 # ── HTTP error shape ────────────────────────────────────────────

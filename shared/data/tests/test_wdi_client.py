@@ -9,7 +9,9 @@ from shared.data.wdi_client import (
     WDI_GDP_LEVEL,
     WDI_INFLATION,
     _cagr,
+    _fx_volatility,
     _latest_year_at_or_before,
+    declared_sovereign_records,
     fetch_imf_indicator,
 )
 
@@ -20,6 +22,26 @@ def test_cagr_math_and_guards():
     assert _cagr(100.0, 110.0, 3) == 3.23      # (110/100)^(1/3)-1
     assert _cagr(0.0, 110.0, 3) is None        # non-positive base
     assert _cagr(100.0, None, 3) is None        # missing endpoint
+
+
+def test_fx_volatility_proxy_and_guards():
+    # Dollarized (flat) → 0.0; needs ≥3 points; None when too short.
+    assert _fx_volatility({2022: 1.0, 2023: 1.0, 2024: 1.0}) == 0.0
+    assert _fx_volatility({2023: 100.0, 2024: 110.0}) is None     # only 1 change
+    rising = {2021: 100.0, 2022: 110.0, 2023: 121.0, 2024: 133.1}  # steady +10%/yr
+    assert _fx_volatility(rising) == 0.0                          # constant rate → σ=0
+
+
+def test_declared_sovereign_records_map_ratings_to_scores():
+    recs = declared_sovereign_records("2024")
+    by = {r.dimension: r for r in recs}
+    assert set(by) == {"DO", "CR", "PA", "GT", "JM"}
+    assert all(r.series == "sovereign_rating_score" for r in recs)
+    assert all(r.period == "2024" for r in recs)
+    assert by["PA"].value == 55.0      # BBB- (investment grade, highest of peers)
+    assert by["DO"].value == 45.0      # BB
+    assert by["GT"].value == 50.0      # BB+
+    assert by["PA"].lineage.source == "SDQ_DECLARED"
 
 
 def test_latest_year_at_or_before_caps_forecasts():

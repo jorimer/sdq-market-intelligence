@@ -1,7 +1,7 @@
 {
-  "DO": {"current_account_gdp": {"2024": -3.35}, "fdi_gdp": {"2024": 3.6}, "reserves_import_months": {"2024": 3.65}, "inflation_gap": {"2024": 0.7}},
-  "CR": {"current_account_gdp": {"2024": -0.95}, "fdi_gdp": {"2024": 5.56}, "reserves_import_months": {"2024": 4.22}, "inflation_gap": {"2024": 3.41}},
-  "PA": {"current_account_gdp": {"2024": 1.93}, "fdi_gdp": {"2024": 3.75}, "reserves_import_months": {"2024": 2.07}, "inflation_gap": {"2024": 1.31}},
-  "GT": {"current_account_gdp": {"2024": 2.89}, "fdi_gdp": {"2024": 1.63}, "reserves_import_months": {"2024": 7.39}, "inflation_gap": {"2024": 1.13}},
-  "JM": {"current_account_gdp": {"2024": 3.08}, "fdi_gdp": {"2024": 1.39}, "reserves_import_months": {"2024": 6.47}, "inflation_gap": {"2024": 0.41}}
+  "DO": {"current_account_gdp": {"2024": -3.35}, "fdi_gdp": {"2024": 3.6}, "reserves_import_months": {"2024": 3.65}, "inflation_gap": {"2024": 0.7}, "fx_volatility": {"2024": 4.28}, "sovereign_rating_score": {"2024": 45.0}},
+  "CR": {"current_account_gdp": {"2024": -0.95}, "fdi_gdp": {"2024": 5.56}, "reserves_import_months": {"2024": 4.22}, "inflation_gap": {"2024": 3.41}, "fx_volatility": {"2024": 7.37}, "sovereign_rating_score": {"2024": 45.0}},
+  "PA": {"current_account_gdp": {"2024": 1.93}, "fdi_gdp": {"2024": 3.75}, "reserves_import_months": {"2024": 2.07}, "inflation_gap": {"2024": 1.31}, "fx_volatility": {"2024": 0.0}, "sovereign_rating_score": {"2024": 55.0}},
+  "GT": {"current_account_gdp": {"2024": 2.89}, "fdi_gdp": {"2024": 1.63}, "reserves_import_months": {"2024": 7.39}, "inflation_gap": {"2024": 1.13}, "fx_volatility": {"2024": 1.01}, "sovereign_rating_score": {"2024": 50.0}},
+  "JM": {"current_account_gdp": {"2024": 3.08}, "fdi_gdp": {"2024": 1.39}, "reserves_import_months": {"2024": 6.47}, "inflation_gap": {"2024": 0.41}, "fx_volatility": {"2024": 2.34}, "sovereign_rating_score": {"2024": 45.0}}
 }

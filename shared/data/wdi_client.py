@@ -21,6 +21,7 @@ interpolated. IMF forecasts are excluded: values are capped at the WDI reference
 year (latest year with real GDP data), so no projected year leaks in as data.
 """
 import logging
+import statistics
 from datetime import date
 from typing import Dict, List, Optional, Tuple
 
@@ -50,6 +51,8 @@ WDI_DIRECT: Dict[str, Tuple[str, str]] = {
 # WDI series used to DERIVE a variable.
 WDI_GDP_LEVEL = "NY.GDP.MKTP.KD"   # constant-USD GDP level → gdp_cagr_3y
 WDI_INFLATION = "FP.CPI.TOTL.ZG"   # CPI inflation % → inflation_gap
+WDI_FX = "PA.NUS.FCRF"             # official exchange rate (LCU/USD) → fx_volatility
+FX_VOL_YEARS = 7                    # annual FX points → up to 6 YoY changes
 
 # IMF WEO indicators: code → IRMP variable (% of GDP).
 IMF_INDICATORS: Dict[str, str] = {
@@ -105,6 +108,50 @@ def _cagr(level_old: float, level_new: float, years: int) -> Optional[float]:
     if level_old is None or level_new is None or level_old <= 0 or level_new <= 0:
         return None
     return round(((level_new / level_old) ** (1.0 / years) - 1.0) * 100.0, 2)
+
+
+def _fx_volatility(fx_by_year: Dict[int, float]) -> Optional[float]:
+    """σ of year-over-year %-changes of the exchange rate (annual-based proxy).
+
+    Needs ≥3 yearly points (≥2 changes). A flat (dollarized) series → 0.0.
+    Returns None when there isn't enough history — never fabricated.
+    """
+    years = sorted(y for y, v in fx_by_year.items() if v is not None and v > 0)
+    if len(years) < 3:
+        return None
+    changes = [
+        100.0 * (fx_by_year[years[i]] - fx_by_year[years[i - 1]]) / fx_by_year[years[i - 1]]
+        for i in range(1, len(years))
+    ]
+    return round(statistics.pstdev(changes), 2)
+
+
+def declared_sovereign_records(period: str) -> List[Record]:
+    """Emit ``sovereign_rating_score`` from the declared doctrine table.
+
+    Not an API value: S&P long-term FC ratings are maintained in
+    ``regulatory.yaml`` (with agency + as-of date) and mapped to 0-100 via the
+    declared ``rating_scale``. Stamped at *period* so it aligns with the live
+    data in a snapshot. Source ``SDQ_DECLARED`` makes the provenance explicit.
+    """
+    doc = load_doctrine_raw("regulatory")
+    ratings = doc.get("sovereign_ratings", {})
+    scale = doc.get("rating_scale", {})
+    out: List[Record] = []
+    for iso2, info in ratings.items():
+        rating = info.get("rating") if isinstance(info, dict) else None
+        score = scale.get(rating)
+        lineage = Lineage(
+            source="SDQ_DECLARED", license="declarado (doctrina)",
+            fetched_at=date.today(),
+            note=f"rating S&P {rating} ({info.get('as_of') if isinstance(info, dict) else '?'}) → escala declarada",
+        )
+        out.append(Record(
+            series="sovereign_rating_score", period=period,
+            value=None if score is None else float(score),
+            lineage=lineage, unit="0-100 (escala S&P declarada)", dimension=iso2,
+        ))
+    return out
 
 
 class WDIClient(FixtureBackedClient):
@@ -181,6 +228,27 @@ class WDIClient(FixtureBackedClient):
                     var, str(r.get("date") or ""), r.get("value"),
                     r.get("countryiso3code") or "", unit, code, pub,
                 ))
+
+        # 3.5) fx_volatility — annual-based proxy: σ of YoY %-changes of the
+        #      official exchange rate over FX_VOL_YEARS. Dollarized PA → ~0.
+        try:
+            rows, published = fetch_wb_indicator(WDI_FX, iso3, mrv=FX_VOL_YEARS)
+            pub = _parse_date(published)
+            by_country: Dict[str, Dict[int, float]] = {}
+            for r in rows:
+                iso, yr, val = r.get("countryiso3code"), r.get("date"), r.get("value")
+                if iso and yr and val is not None:
+                    by_country.setdefault(iso, {})[int(yr)] = float(val)
+            for iso, fx in by_country.items():
+                vol = _fx_volatility(fx)
+                newest = max(fx) if fx else None
+                out.append(self._record(
+                    "fx_volatility", str(newest) if newest else "", vol, iso,
+                    "σ cambios % anuales (base anual)", WDI_FX, pub,
+                    note="proxy de volatilidad cambiaria (base anual, no mensual)",
+                ))
+        except (WDIApiError, httpx.HTTPError, ValueError) as e:
+            logger.warning("[WDI live] %s falló: %s", WDI_FX, e)
 
         # 4) IMF WEO — debt + fiscal balance, capped at the WDI reference year so
         #    no forecast year leaks in as data. Without a real reference year
