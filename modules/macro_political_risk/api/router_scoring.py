@@ -150,6 +150,24 @@ async def wgi_live(
 
 
 @router.get(
+    "/variables",
+    summary="Todas las variables IRMP persistidas (WGI + WDI + IMF + declaradas)",
+    description=(
+        "Devuelve TODO el dato real/declarado persistido para el IRMP, agrupado "
+        "por país: {iso: {variable: valor}}, sin filtrar por fuente. El frontend "
+        "lo superpone sobre el conjunto ilustrativo para correr el índice sobre "
+        "dato real sin fabricar las variables aún no sourced."
+    ),
+)
+async def all_variables(
+    period: str | None = Query(None, description="Período (ej. '2024'); por defecto el más reciente."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return get_country_variables(db, period=period, source=None)
+
+
+@router.get(
     "/{country_code}/latest",
     summary="Último IRMP persistido de un país",
 )

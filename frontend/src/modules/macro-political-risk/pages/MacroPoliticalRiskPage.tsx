@@ -17,7 +17,7 @@ import { fmtNum } from "@/shared/lib/format";
 import { useApp } from "@/shared/context/AppContext";
 import {
   getWeights,
-  getWgiLive,
+  getLiveVariables,
   scoreCountry,
   saveSnapshot,
   IRMPResult,
@@ -33,28 +33,21 @@ import {
 type Status = "loading" | "error" | "ready";
 type Dataset = Record<string, Record<string, number>>;
 
-// The three governance inputs sourced live from World Bank WGI; the rest of the
-// regional dataset stays illustrative until its own source is wired.
-const WGI_KEYS = ["wgi_rule_of_law", "wgi_gov_effectiveness", "wgi_control_corruption"];
-
-interface WgiInfo {
+interface LiveInfo {
   period: string | null;
-  covered: number;
+  covered: number;        // countries with ≥1 live variable
   total: number;
+  variables: number;      // distinct live/declared variables
   live: boolean;
 }
 
-// Overlay live WGI values onto the fixture dataset, only where a real number
-// exists. Missing live values keep the declared fixture — never fabricated.
-function mergeWgi(base: Dataset, live: WgiLive): Dataset {
+// Overlay every persisted live/declared variable onto the fixture dataset. Live
+// values override and add keys; variables not yet sourced keep their declared
+// fixture — never fabricated. Backend already drops missing (null) values.
+function mergeLive(base: Dataset, live: WgiLive): Dataset {
   const merged: Dataset = {};
-  for (const [iso, vars] of Object.entries(base)) {
-    const liveVars = live.countries[iso] ?? {};
-    const next = { ...vars };
-    for (const k of WGI_KEYS) {
-      if (typeof liveVars[k] === "number") next[k] = liveVars[k];
-    }
-    merged[iso] = next;
+  for (const iso of Object.keys(base)) {
+    merged[iso] = { ...base[iso], ...(live.countries[iso] ?? {}) };
   }
   return merged;
 }
@@ -76,8 +69,8 @@ export function MacroPoliticalRiskPage() {
   const [tab, setTab] = useState("desglose");
   const [saved, setSaved] = useState<string | null>(null);
   const [dataset, setDataset] = useState<Dataset>(SAMPLE_REGIONAL);
-  const [wgiInfo, setWgiInfo] = useState<WgiInfo>({
-    period: null, covered: 0, total: Object.keys(SAMPLE_REGIONAL).length, live: false,
+  const [liveInfo, setLiveInfo] = useState<LiveInfo>({
+    period: null, covered: 0, total: Object.keys(SAMPLE_REGIONAL).length, variables: 0, live: false,
   });
 
   const codes = Object.keys(SAMPLE_REGIONAL);
@@ -85,19 +78,22 @@ export function MacroPoliticalRiskPage() {
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      // Live WGI overlay is best-effort: if the sync hasn't run or the call
-      // fails, fall back to the fixture so the page never breaks.
+      // Live overlay is best-effort: if the syncs haven't run or the call fails,
+      // fall back to the fixture so the page never breaks.
       let merged: Dataset = SAMPLE_REGIONAL;
-      let info: WgiInfo = { period: null, covered: 0, total: codes.length, live: false };
+      let info: LiveInfo = { period: null, covered: 0, total: codes.length, variables: 0, live: false };
       try {
-        const live = await getWgiLive();
+        const live = await getLiveVariables();
         if (live.has_data) {
-          merged = mergeWgi(SAMPLE_REGIONAL, live);
+          merged = mergeLive(SAMPLE_REGIONAL, live);
           const covered = codes.filter((iso) => {
             const lv = live.countries[iso];
-            return lv && WGI_KEYS.some((k) => typeof lv[k] === "number");
+            return lv && Object.keys(lv).length > 0;
           }).length;
-          info = { period: live.period, covered, total: codes.length, live: covered > 0 };
+          info = {
+            period: live.period, covered, total: codes.length,
+            variables: live.variables.length, live: covered > 0,
+          };
         }
       } catch {
         /* keep fixture — degradación elegante */
@@ -112,7 +108,7 @@ export function MacroPoliticalRiskPage() {
       setWeights(w);
       setResults(map);
       setDataset(merged);
-      setWgiInfo(info);
+      setLiveInfo(info);
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -128,7 +124,7 @@ export function MacroPoliticalRiskPage() {
     <PageHead
       eyebrow="WGI · BCRD · SIB"
       title="Regulatorio & político"
-      sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Gobernanza (WGI) en vivo del Banco Mundial; resto del conjunto regional ilustrativo."
+      sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Macro/externa/gobernanza en vivo (WGI · WDI · IMF) + rating declarado; variables de juicio aún ilustrativas."
     />
   );
 
@@ -177,7 +173,7 @@ export function MacroPoliticalRiskPage() {
       <PageHead
         eyebrow="WGI · BCRD · SIB"
         title="Regulatorio & político"
-        sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Gobernanza (WGI) en vivo del Banco Mundial; resto del conjunto regional ilustrativo."
+        sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Macro/externa/gobernanza en vivo (WGI · WDI · IMF) + rating declarado; variables de juicio aún ilustrativas."
         right={
           <select
             value={selected}
@@ -208,12 +204,12 @@ export function MacroPoliticalRiskPage() {
             Conjunto regional: {cur?.peer_set_size ?? codes.length} países
           </div>
           <div className="mt-2">
-            {wgiInfo.live ? (
+            {liveInfo.live ? (
               <Chip tone="ok">
-                WGI en vivo · {wgiInfo.period} · {wgiInfo.covered}/{wgiInfo.total} países
+                {liveInfo.variables} variables en vivo · {liveInfo.period} · {liveInfo.covered}/{liveInfo.total} países
               </Chip>
             ) : (
-              <Chip tone="muted">WGI ilustrativo · sync pendiente</Chip>
+              <Chip tone="muted">Datos ilustrativos · sync pendiente</Chip>
             )}
           </div>
           <button onClick={doSave} className="btn btn-soft mt-4 w-full">
