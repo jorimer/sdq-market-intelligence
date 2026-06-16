@@ -18,12 +18,11 @@ import { fmtNum } from "@/shared/lib/format";
 import { useApp } from "@/shared/context/AppContext";
 import {
   getWeights,
-  getLiveVariables,
+  getDataset,
   scoreCountry,
   saveSnapshot,
   IRMPResult,
   IRMPWeights,
-  WgiLive,
 } from "../api";
 import {
   SAMPLE_REGIONAL,
@@ -33,6 +32,7 @@ import {
 
 type Status = "loading" | "error" | "ready";
 type Dataset = Record<string, Record<string, number>>;
+type SourceMap = Record<string, Record<string, "live" | "rubric">>;
 
 interface LiveInfo {
   period: string | null;
@@ -40,17 +40,6 @@ interface LiveInfo {
   total: number;
   variables: number;      // distinct live/declared variables
   live: boolean;
-}
-
-// Overlay every persisted live/declared variable onto the fixture dataset. Live
-// values override and add keys; variables not yet sourced keep their declared
-// fixture — never fabricated. Backend already drops missing (null) values.
-function mergeLive(base: Dataset, live: WgiLive): Dataset {
-  const merged: Dataset = {};
-  for (const iso of Object.keys(base)) {
-    merged[iso] = { ...base[iso], ...(live.countries[iso] ?? {}) };
-  }
-  return merged;
 }
 
 function periodEndFor(period: string): string {
@@ -70,45 +59,59 @@ export function MacroPoliticalRiskPage() {
   const [tab, setTab] = useState("desglose");
   const [saved, setSaved] = useState<string | null>(null);
   const [dataset, setDataset] = useState<Dataset>(SAMPLE_REGIONAL);
+  const [sources, setSources] = useState<SourceMap>({});
+  const [dataPeriod, setDataPeriod] = useState<string | null>(null);
   const [liveInfo, setLiveInfo] = useState<LiveInfo>({
     period: null, covered: 0, total: Object.keys(SAMPLE_REGIONAL).length, variables: 0, live: false,
   });
 
-  const codes = Object.keys(SAMPLE_REGIONAL);
+  // Presentation country list: fixture order first, plus any extra country the
+  // backend actually scored (so a doctrine/live addition isn't silently hidden
+  // from the ranking and selector).
+  const codes = [...new Set([...Object.keys(SAMPLE_REGIONAL), ...Object.keys(results)])];
 
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      // Live overlay is best-effort: if the syncs haven't run or the call fails,
-      // fall back to the fixture so the page never breaks.
-      let merged: Dataset = SAMPLE_REGIONAL;
+      // Single source of truth: the backend assembles declared rubric + live data
+      // (real wins). Best-effort: if it fails or has no live data, fall back to the
+      // illustrative fixture so the page never breaks.
+      let data: Dataset = SAMPLE_REGIONAL;
+      let smap: SourceMap = {};
+      let dperiod: string | null = null;
       let info: LiveInfo = { period: null, covered: 0, total: codes.length, variables: 0, live: false };
       try {
-        const live = await getLiveVariables();
-        if (live.has_data) {
-          merged = mergeLive(SAMPLE_REGIONAL, live);
-          const covered = codes.filter((iso) => {
-            const lv = live.countries[iso];
-            return lv && Object.keys(lv).length > 0;
-          }).length;
-          info = {
-            period: live.period, covered, total: codes.length,
-            variables: live.variables.length, live: covered > 0,
-          };
+        const asm = await getDataset();
+        if (asm.has_live && Object.keys(asm.dataset).length) {
+          data = asm.dataset;
+          smap = asm.sources;
+          dperiod = asm.period;
+          const liveVars = new Set<string>();
+          let covered = 0;
+          for (const iso of Object.keys(asm.sources)) {
+            const live = Object.entries(asm.sources[iso]).filter(([, s]) => s === "live");
+            if (live.length) covered += 1;
+            live.forEach(([v]) => liveVars.add(v));
+          }
+          info = { period: asm.period, covered, total: Object.keys(asm.dataset).length,
+                   variables: liveVars.size, live: covered > 0 };
         }
       } catch {
         /* keep fixture — degradación elegante */
       }
 
+      const dataCodes = Object.keys(data);
       const [w, ...scores] = await Promise.all([
         getWeights(),
-        ...codes.map((c) => scoreCountry(c, merged)),
+        ...dataCodes.map((c) => scoreCountry(c, data)),
       ]);
       const map: Record<string, IRMPResult> = {};
       scores.forEach((s) => (map[s.country_code] = s));
       setWeights(w);
       setResults(map);
-      setDataset(merged);
+      setDataset(data);
+      setSources(smap);
+      setDataPeriod(dperiod);
       setLiveInfo(info);
       setStatus("ready");
     } catch {
@@ -144,14 +147,28 @@ export function MacroPoliticalRiskPage() {
 
   const cur = results[selected];
   const band = riskBandFor(cur?.irmp_score);
+  const sel = sources[selected] ?? {};
   const rows: DimensionRow[] = cur
-    ? Object.entries(cur.dimensions).map(([key, d]) => ({
-        key,
-        label: DIMENSION_LABELS[key] ?? key,
-        score: d.score,
-        weight: d.weight,
-        contribution: d.contribution,
-      }))
+    ? Object.entries(cur.dimensions).map(([key, d]) => {
+        const vars = weights?.dimension_variables[key] ?? [];
+        const live = vars.filter((v) => sel[v] === "live").length;
+        const tag: DimensionRow["tag"] =
+          vars.length === 0 || Object.keys(sel).length === 0
+            ? undefined
+            : live === vars.length
+            ? { text: "en vivo", ok: true }
+            : live === 0
+            ? { text: "rúbrica" }
+            : { text: `${live}/${vars.length} en vivo`, ok: live >= vars.length / 2 };
+        return {
+          key,
+          label: DIMENSION_LABELS[key] ?? key,
+          score: d.score,
+          weight: d.weight,
+          contribution: d.contribution,
+          tag,
+        };
+      })
     : [];
 
   const ranking = [...codes]
@@ -159,11 +176,14 @@ export function MacroPoliticalRiskPage() {
     .filter(Boolean)
     .sort((a, b) => b.irmp_score - a.irmp_score);
 
+  // Persist at the data vintage (e.g. 2024) so the manual save and the scheduled
+  // irmp-snapshot operation key snapshots the same way.
+  const snapPeriod = periodEndFor(dataPeriod ?? period);
   const doSave = async () => {
     setSaved(null);
     try {
-      await saveSnapshot(selected, dataset, periodEndFor(period), COUNTRY_NAMES[selected]);
-      setSaved(`Snapshot guardado (${periodEndFor(period)}) · evento irmp.updated publicado`);
+      await saveSnapshot(selected, dataset, snapPeriod, COUNTRY_NAMES[selected]);
+      setSaved(`Snapshot guardado (${snapPeriod}) · evento irmp.updated publicado`);
     } catch {
       setSaved("No se pudo guardar el snapshot.");
     }
