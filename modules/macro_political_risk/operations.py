@@ -37,6 +37,15 @@ def _run_gdelt_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_gdelt_bq_sync(params, user_id, set_phase) -> Dict:
+    from modules.macro_political_risk.gdelt_bq_sync import gdelt_bq_sync
+    db = SessionLocal()
+    try:
+        return gdelt_bq_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 _PEER_NAMES = {"DO": "República Dominicana", "CR": "Costa Rica", "PA": "Panamá",
                "GT": "Guatemala", "JM": "Jamaica"}
 _PEER_REGIONS = {"DO": "Caribe", "CR": "Centroamérica", "PA": "Centroamérica",
@@ -94,11 +103,18 @@ def register() -> None:
         _run_wdi_sync, default_interval_hours=720,  # anual → cadencia larga
     ))
     register_operation(Operation(
-        "gdelt-sync", "Sincronizar eventos (GDELT)",
-        "Trae señales de eventos desde GDELT (tono de noticias → news_sentiment; "
+        "gdelt-sync", "Sincronizar eventos (GDELT · DOC API)",
+        "Trae señales de eventos desde la DOC API de GDELT (tono → news_sentiment; "
         "cobertura de disturbios → unrest_shocks) para el peer set. Espaciada por "
-        "el rate-limit de GDELT (~1-2 min). sanctions_signal queda como rúbrica.",
+        "el rate-limit de GDELT (~2 min). Frágil; preferir 'eventos (BigQuery)'.",
         _run_gdelt_sync, default_interval_hours=168,  # eventos = coyuntura → semanal
+    ))
+    register_operation(Operation(
+        "gdelt-bq-sync", "Sincronizar eventos (GDELT · BigQuery)",
+        "Trae los 3 indicadores de eventos (tono → news_sentiment; PROTEST → "
+        "unrest_shocks; ECON_SANCTIONS → sanctions_signal) desde el dataset público "
+        "de GDELT en BigQuery. Robusto (sin rate-limit). Requiere GCP_SA_JSON.",
+        _run_gdelt_bq_sync, default_interval_hours=168,
     ))
     register_operation(Operation(
         "irmp-snapshot", "Calcular snapshot IRMP",

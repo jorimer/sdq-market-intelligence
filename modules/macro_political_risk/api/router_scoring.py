@@ -208,6 +208,19 @@ async def irmp_dataset(
     return assemble_irmp_dataset(db, period=period)
 
 
+@router.get("/gdelt-bq-dryrun", include_in_schema=False)
+async def gdelt_bq_dryrun(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Diagnostic: bytes the GDELT-BigQuery events query would scan (free dry run),
+    to confirm it stays inside the free tier before enabling a real sync."""
+    from shared.data.gdelt_bq_client import dry_run_bytes
+    try:
+        nbytes = dry_run_bytes()
+        return {"ok": True, "bytes": nbytes, "gb": round(nbytes / 1e9, 3),
+                "free_tier_gb": 1000, "within_free_tier": nbytes < 1e12}
+    except Exception as e:  # noqa: BLE001 — diagnostic; surface the reason
+        return {"ok": False, "error": str(e)}
+
+
 @router.get(
     "/{country_code}/latest",
     summary="Último IRMP persistido de un país",
