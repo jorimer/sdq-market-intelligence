@@ -101,20 +101,29 @@ def build_backtest_report(series: Optional[Dict] = None,
     SECONDARY = macro-fiscal distress (shown for contrast, overlaps with inputs).
     """
     from modules.macro_political_risk.validation.historical import fetch_series
+    from modules.macro_political_risk.validation.peers import VALIDATION_PEERS, fips_to_iso2
     from shared.data.gdelt_bq_client import fetch_instability_events
     if series is None:
-        series = fetch_series()
+        series = fetch_series(VALIDATION_PEERS)
     if events is None:
-        events = fetch_instability_events(start_year=2012)
-    panel = build_panel(series)
+        events = fetch_instability_events(2012, fips_to_iso2(VALIDATION_PEERS))
+    panel = build_panel(series, VALIDATION_PEERS)
 
     governance = _metrics_for(label_panel_governance(panel, events))
     credit = _metrics_for(label_panel(series, panel))
     rho, pairs = _convergent_validity(series, panel)
 
+    panel_countries = sorted({r["iso"] for r in panel})
+    with_events = sorted({iso for iso, ys in events.items() if ys})
     return {
         "primary_outcome": "instability_spike",
-        "n_countries": len({r["iso"] for r in panel}),
+        "n_countries": len(panel_countries),
+        "coverage": {
+            "panel_size": len(VALIDATION_PEERS),
+            "countries_in_panel": panel_countries,
+            "countries_with_events": with_events,
+            "missing_events": [c for c in panel_countries if c not in with_events],
+        },
         "governance": governance,     # IRMP vs realized political instability (fair)
         "credit": credit,             # IRMP vs macro-fiscal distress (contrast)
         "convergent_validity": {"spearman_irmp_vs_rating": rho, "pairs": pairs},

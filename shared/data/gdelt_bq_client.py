@@ -151,13 +151,13 @@ def build_events_query() -> str:
     """
 
 
-def _events_job_config(start_year: int, dry_run: bool = False):  # pragma: no cover - needs BigQuery
+def _events_job_config(start_year: int, fips: Optional[List[str]] = None, dry_run: bool = False):  # pragma: no cover - needs BigQuery
     from google.cloud import bigquery
     return bigquery.QueryJobConfig(
         dry_run=dry_run, use_query_cache=not dry_run,
         query_parameters=[
             bigquery.ScalarQueryParameter("start_year", "INT64", start_year),
-            bigquery.ArrayQueryParameter("fips", "STRING", list(FIPS_TO_ISO2.keys())),
+            bigquery.ArrayQueryParameter("fips", "STRING", fips or list(FIPS_TO_ISO2.keys())),
         ],
     )
 
@@ -173,13 +173,20 @@ def _bq_client():  # pragma: no cover - needs BigQuery + creds
     return bigquery.Client(project=info.get("project_id"), credentials=creds)
 
 
-def fetch_instability_events(start_year: int = 2014) -> Dict[str, Dict[int, int]]:  # pragma: no cover - needs BigQuery
-    """Return ``{iso2: {year: instability_event_count}}`` from GDELT Events."""
+def fetch_instability_events(start_year: int = 2014,
+                             fips_map: Optional[Dict[str, str]] = None) -> Dict[str, Dict[int, int]]:  # pragma: no cover - needs BigQuery
+    """Return ``{iso2: {year: instability_event_count}}`` from GDELT Events.
+
+    *fips_map* (FIPS → iso2) selects the countries; defaults to the production peer
+    set. A FIPS not present in the data simply yields no rows for that country.
+    """
+    fmap = fips_map or FIPS_TO_ISO2
     client = _bq_client()
-    rows = client.query(build_events_query(), job_config=_events_job_config(start_year)).result()
+    rows = client.query(build_events_query(),
+                        job_config=_events_job_config(start_year, list(fmap.keys()))).result()
     out: Dict[str, Dict[int, int]] = {}
     for r in rows:
-        iso2 = FIPS_TO_ISO2.get(r["fips"])
+        iso2 = fmap.get(r["fips"])
         if iso2 and r["year"]:
             out.setdefault(iso2, {})[int(r["year"])] = int(r["instability_events"])
     return out
