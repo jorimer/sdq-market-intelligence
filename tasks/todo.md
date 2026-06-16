@@ -13,12 +13,17 @@
 - **Operabilidad por defecto:** toda operación recurrente nace con UI. Un endpoint suelto sin UI **no está hecho** (plan §7).
 
 ## Orden de fuentes (confirmado)
-BCRD (cerrar D+E) → **WGI (siguiente)** → ONE → DGA → DGII (diferido, licencia).
+BCRD ✅ → WGI/Eje 4 ✅ → **ONE/Eje 3 (en curso)** → DGA → DGII (diferido, licencia).
 
 ---
 
-## SPRINT — objetivo
-Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, sobre una base de operabilidad y componentes de IA compartidos que sirvan a todos los ejes.
+## ESTADO (actualizado 2026-06-16)
+- **Sprint T1–T5 + T4B: CERRADO.** Ejes 1 (Banca), 2 (Macro) y 4 (IRMP) cerrados a profundidad. Detalle histórico abajo (sección "SPRINT T1–T5").
+- **Eje 4 (IRMP): CERRADO** por los 6 gates; metodología validada en panel amplio de 24 países (Gini gobernanza +0.21, IC [0.06, 0.36], monótona). PRs #158–#171. Memoria `eje4-cierre-plan`.
+- **Eje 3 (`sector_intel`): EN CURSO.** Espina sectorial = **BCRD valor agregado por sector** (decisión del dueño 2026-06-16), NO la ONE (delgada → enriquecimiento). **T-E3-1 (Gate A) ✅ en prod (PR #172).** Siguiente: T-E3-2. Ver sección "Eje 3" abajo.
+
+## SPRINT T1–T5 (CERRADO) — objetivo original
+Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, sobre una base de operabilidad y componentes de IA compartidos que sirvan a todos los ejes. **Resultado: cumplido** (memorias `cierre-banca-tres-puntos`, `eje4-cierre-plan`). El desglose T1–T5/T4B de abajo queda como registro histórico.
 
 ### T1 · Refactor compartido de componentes IA (plan §5.1) — *bloquea T3*
 
@@ -86,6 +91,18 @@ Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, 
 - [ ] Honestidad: intervalos por bootstrap; etiquetar "validación preliminar, no grado-Basilea".
 - [ ] **Sensor:** curva monótona (SDQ-D peor) y Gini reportado con IC; reporte visible y regenerable desde UI.
 
+### T4B · Hardening de Macro (Eje 2) — cierre honesto de Gate D *(corre TRAS T4, ANTES de T5)*
+
+> Decisión del dueño 2026-06-15 (ver `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md`).
+> No es alcance nuevo: es la deuda de Gate C/D que dejó "Insuficiente" + fecha futura.
+> Cierra Eje 2 a profundidad antes de abrir Eje 4 (WGI), respetando el orden de fuentes.
+> Causa raíz confirmada en código (no inferida).
+
+- [ ] **Punto 1 — fix de fecha futura [bajo].** Subir `POST /data/prune-future` a UI (parte de T2) o correrlo; asegurar que el snapshot del período no incluya períodos futuros. Causa: data futura filtrándose → resumen IA fechado "Diciembre 2026" con filtro en Q1.
+- [ ] **Punto 2 — ventana de momentum [bajo-medio].** Alimentar a `compute_series_momentum` la serie histórica completa (no solo el período seleccionado), para que `trend`/`acceleration` se computen sobre ≥3 obs donde existan. Causa: `momentum.py` devuelve `insuficiente` con `len(clean)<2`; el `service` pasa solo el período → 1 punto/serie. Curar la tabla a ~25-30 series cabecera; colapsar/separar las de <2 obs reales.
+- [ ] **Punto 3 — reordenar el héroe [bajo-medio].** Subir "Lectura de coyuntura (IA)" (SCQA) a primer plano; degradar la tabla de 292 a drill-down/anexo. Quitar la lectura "2 de 292" de la cabecera.
+- [ ] **Sensor:** snapshot sin períodos futuros; tabla cabecera sin muro de "Insuficiente" (cada fila dice algo); narrativa SCQA como elemento principal; navegador claro/oscuro; consola limpia; reviewer subagent sobre el diff.
+
 ### T5 · WGI Gate A — arranque Eje 4 (plan §3/§4)
 - [ ] `shared/data/wgi_client` live (World Bank API), hereda de `base_client`.
 - [ ] Checklist de integridad (plan §4): unidades, matching, linaje, idempotencia por período, rezago declarado.
@@ -95,6 +112,17 @@ Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, 
 
 ---
 
+## Eje 3 · `sector_intel` (sectorial) — EN CURSO
+
+> Decisión del dueño 2026-06-16: la espina sectorial = **BCRD valor agregado por sector** (PIB por sectores de origen, 17 sectores = 100% de la economía), NO los 3 anclas finos ni la ONE (que publica poco → queda como **enriquecimiento**). Anti-Frankenstein: reusa la fuente BCRD ya ingerida. Memoria `eje3-sector-intel`.
+
+- [x] **T-E3-1 · Gate A — conector live BCRD valor agregado por sector.** ✅ CERRADO EN PROD (PR #172, `5c126ba`). `shared/data/bcrd_sectors.py` (parser determinista **fail-closed** anti-doble-conteo; `sector_size`=share del VAB, `sector_growth`=real interanual). `bcrd_sectores_sync` → `si_variables` idempotente. Operación `bcrd-sectores-sync` en la Consola (Gate F). Sensor prod: synced 272, 17 sectores, 2018-2025, `errors:[]`; Σ 2024 = 100% exacto. Suite 646 verde, reviewer subagent APTO.
+- [ ] **T-E3-2 · Contrato macro→sectorial** (punto 5 del `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md`). Objeto por período en `shared/` (factores macro: dirección + magnitud + sectores/agentes impactados), producido por `macro_monitor`, consumido por la §2 "Contexto macro" del informe sectorial **y** la dimensión macro del IAI. Construir productor + consumidor juntos (no especular la interfaz).
+- [ ] **T-E3-3 · Gate B/C — cablear IAI/SGPS a `si_variables`** (hoy el frontend corre sobre el fixture `SAMPLE_SECTORS`). Mapear las 10 vars del IAI a sus fuentes (sector=BCRD✅; regulación=WGI live; macro=contrato T-E3-2; negocios/talento=WGI/WDI+ONE); lo no cubierto → `null` declarado, surface al dueño.
+- [ ] **T-E3-4 · Gate D — insight IA por sector** (template `sector_outlook`, patrón compartido `shared/ui`).
+- [ ] **T-E3-5 · Gate E — backtest sectorial** honesto.
+- [ ] **Enriquecimiento ONE/WGI** (llegada de turistas, generación de energía, gobernanza) sobre la base BCRD.
+
 ## Proceso (recordatorio CLAUDE.md)
 - Plan First confirmado antes de implementar cada T.
 - Reviewer subagent antes de cerrar cada PR no trivial (diff + este todo + CLAUDE.md).
@@ -103,3 +131,5 @@ Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, 
 
 ## Deuda registrada (no en este sprint)
 - Deal Scoring huérfano → módulo formal. · DGII bloqueado por licencia. · Seguridad pre-go-live (admin real, desactivar cuenta de prueba).
+- **Macro punto 4 — capa de traducción [medio]** → diferido a **sprint de diferenciación** (decisión dueño 2026-06-15). Por señal activa / clúster acelerando, una línea de implicación por agente (empleado / PyME / gran empresa), usando el framework del PDF de niveles. Extiende `ai_context.py` + template. Ver `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md` §3 punto 4.
+- **Macro punto 5 — contrato macro→sectorial [medio]** → **documentado hoy, se construye al abrir Eje 3 (ONE)**, no antes (decisión dueño 2026-06-15). Objeto estructurado por período (5-8 factores macro: dirección + magnitud + sectores/agentes impactados) que vive en `shared/` y alimenta la §2 del informe sectorial. **Requisito de diseño para Eje 3:** la §2 "Contexto macro" del sectorial consume este contrato, no re-deriva macro a mano. Spec en `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md` §3-4 punto 5.

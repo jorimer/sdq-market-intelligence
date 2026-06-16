@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shared.database.base import Base
+import shared.settings.models  # noqa: F401 — register sector_api_config table before create_all
 from shared.events.event_bus import event_bus
 from modules.macro_monitor.events import MACRO_UPDATED
 from modules.macro_monitor.models.models import (  # noqa: F401 — register tables
