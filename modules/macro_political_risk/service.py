@@ -116,38 +116,48 @@ def get_latest(db: Session, country_code: str) -> Optional[IRMPSnapshot]:
 
 
 def get_country_variables(
-    db: Session, period: Optional[str] = None, source: str = "WGI"
+    db: Session, period: Optional[str] = None, source: Optional[str] = "WGI"
 ) -> Dict[str, Any]:
-    """Read persisted source variables grouped by country: ``{iso: {variable: value}}``.
+    """Read persisted variables grouped by country: ``{iso: {variable: value}}``.
 
-    When *period* is omitted, uses the most recent period present for *source*
-    (WGI is annual → lexical sort over the 4-digit year works). Returns the
-    period actually used plus the variable list, so callers can declare lineage
-    and overlay live data without fabricating missing values.
+    *source* filters to one upstream (e.g. ``"WGI"``); pass ``None`` to return
+    every source (WGI + WDI + IMF_WEO + declared). When *period* is omitted, uses
+    the most recent period present (annual → lexical sort over the 4-digit year).
+    Returns the period actually used plus the variable list, so callers can
+    overlay live data without fabricating missing values.
     """
-    base = db.query(CountryVariable).filter(CountryVariable.source == source)
-    if period is None:
-        period = (
-            base.with_entities(CountryVariable.period)
-            .order_by(CountryVariable.period.desc())
-            .limit(1)
-            .scalar()
-        )
-    if period is None:
-        return {"source": source, "period": None, "has_data": False,
-                "countries": {}, "variables": []}
+    base = db.query(CountryVariable)
+    if source is not None:
+        base = base.filter(CountryVariable.source == source)
 
-    rows = base.filter(CountryVariable.period == period).all()
+    if period is not None:
+        rows = base.filter(CountryVariable.period == period).all()
+    else:
+        # Latest period PER (country, variable). Sources publish on different
+        # lags (WGI vs WDI vs IMF), so a single global "max period" would silently
+        # drop a source that trails — take each variable at its own latest instead.
+        latest: Dict[tuple, CountryVariable] = {}
+        for r in base.all():
+            key = (r.iso_code, r.variable)
+            cur = latest.get(key)
+            if cur is None or r.period > cur.period:
+                latest[key] = r
+        rows = list(latest.values())
+
     countries: Dict[str, Dict[str, float]] = {}
     variables = set()
+    used_periods = set()
     for r in rows:
         if r.value is None:  # missing stays missing — never overlaid downstream
             continue
         countries.setdefault(r.iso_code, {})[r.variable] = float(r.value)
         variables.add(r.variable)
+        used_periods.add(r.period)
     return {
-        "source": source,
-        "period": period,
+        "source": source or "ALL",
+        # Representative period for display (the most recent observed). Individual
+        # variables may be at an earlier period; values are each point-in-time.
+        "period": (period or (max(used_periods) if used_periods else None)),
         "has_data": bool(countries),
         "countries": countries,
         "variables": sorted(variables),

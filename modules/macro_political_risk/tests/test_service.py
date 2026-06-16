@@ -145,6 +145,40 @@ def test_country_variables_explicit_period_filter(db):
     assert res["countries"]["DO"] == {"wgi_rule_of_law": 50.0}
 
 
+def test_country_variables_all_sources_when_source_none(db):
+    # Mixed upstreams at the same period; source=None returns them all.
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="wgi_rule_of_law",
+                           value=53.8, source="WGI"))
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="public_debt_gdp",
+                           value=58.8, source="IMF_WEO"))
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="sovereign_rating_score",
+                           value=45.0, source="SDQ_DECLARED"))
+    db.commit()
+
+    res = get_country_variables(db, source=None)
+    assert res["source"] == "ALL"
+    assert res["countries"]["DO"] == {
+        "wgi_rule_of_law": 53.8, "public_debt_gdp": 58.8, "sovereign_rating_score": 45.0,
+    }
+    # Filtering by a single source still narrows it.
+    only_wgi = get_country_variables(db, source="WGI")
+    assert only_wgi["countries"]["DO"] == {"wgi_rule_of_law": 53.8}
+
+
+def test_country_variables_cross_source_lag_keeps_both(db):
+    # WGI trails a year behind WDI/IMF — neither must be dropped (per-variable latest).
+    db.add(CountryVariable(iso_code="DO", period="2023", variable="wgi_rule_of_law",
+                           value=50.0, source="WGI"))
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="public_debt_gdp",
+                           value=58.8, source="IMF_WEO"))
+    db.commit()
+
+    res = get_country_variables(db, source=None)
+    # Both survive even though they sit at different periods.
+    assert res["countries"]["DO"] == {"wgi_rule_of_law": 50.0, "public_debt_gdp": 58.8}
+    assert res["period"] == "2024"   # representative = most recent observed
+
+
 def test_country_variables_skips_null_values(db):
     # Missing value persisted as None must never surface (no fabrication).
     _add_var(db, "DO", "2024", "wgi_rule_of_law", 53.8)

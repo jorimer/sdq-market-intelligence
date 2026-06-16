@@ -46,6 +46,14 @@ export async function getWgiLive(period?: string): Promise<WgiLive> {
   return data;
 }
 
+// All persisted IRMP variables (WGI + WDI + IMF + declared), any source.
+export async function getLiveVariables(period?: string): Promise<WgiLive> {
+  const { data } = await client.get("/macro-political-risk/variables", {
+    params: period ? { period } : undefined,
+  });
+  return data;
+}
+
 export async function scoreCountry(
   countryCode: string,
   dataset: RegionalDataset,
