@@ -203,6 +203,42 @@ def test_assemble_overlays_live_over_rubric(db):
     assert asm["has_live"] is True
 
 
+def test_gdelt_sync_skips_none_and_stamps_at_vintage(db, monkeypatch):
+    # Existing real data fixes the vintage; GDELT must align to it and skip gaps.
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="wgi_rule_of_law",
+                           value=53.8, source="WGI"))
+    db.commit()
+
+    import shared.data.gdelt_client as gc
+    from shared.data.base_client import Record
+    from shared.data.lineage import Lineage
+    from modules.macro_political_risk.gdelt_sync import gdelt_sync
+
+    lin = Lineage(source="GDELT", license="x", fetched_at=date(2026, 6, 16))
+    fake = [
+        Record(series="news_sentiment", period="2026", value=2.5, lineage=lin, dimension="DO"),
+        Record(series="unrest_shocks", period="2026", value=None, lineage=lin, dimension="DO"),
+    ]
+
+    class _FakeClient:
+        def __init__(self, mode=None):
+            pass
+        def fetch(self):
+            return fake
+
+    monkeypatch.setattr(gc, "GDELTClient", _FakeClient)
+    res = gdelt_sync(db)
+
+    assert res["synced"] == 1 and res["skipped_missing"] == 1
+    assert res["period"] == "2024"   # stamped at the existing data vintage, not "2026"
+    # non-null tone persisted at the vintage
+    rows = db.query(CountryVariable).filter_by(variable="news_sentiment").all()
+    assert len(rows) == 1 and rows[0].period == "2024" and rows[0].value == 2.5
+    assert rows[0].source == "GDELT"
+    # the None unrest_shocks was NEVER persisted (rubric stays the fallback)
+    assert db.query(CountryVariable).filter_by(variable="unrest_shocks").count() == 0
+
+
 def test_assemble_rubric_only_when_no_live(db):
     asm = assemble_irmp_dataset(db)
     assert asm["has_live"] is False
