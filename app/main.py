@@ -64,18 +64,25 @@ app.include_router(esg_climate_router, prefix="/api/v1/esg-climate", tags=["ESG 
 from shared.settings.router import router as settings_router
 app.include_router(settings_router, prefix="/api/v1/settings", tags=["Settings"])
 
+from shared.operations.router import router as operations_router
+app.include_router(operations_router, prefix="/api/v1/operations", tags=["Operaciones"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
 
 register_sector_subscribers()  # sector_intel ← macro/irmp/trade .updated (SGPS acceleration)
 register_banking_subscribers()  # banking_score ← irmp.updated (outlook overlay)
 
-# In-app scheduler for the Operation Console. Web-only (the worker doesn't import
-# app.main) and env-gated so tests/dev don't spawn the tick. start.sh sets it on.
+# Operation Console: each module registers its operations at import time into the
+# shared registry (shared.operations). Import the register modules so the console
+# sees every operation, then (web-only, env-gated) start the in-app scheduler.
+import modules.banking_score.operations  # noqa: F401 — registers banking ops
+import modules.macro_political_risk.operations  # noqa: F401 — registers wgi-sync
+
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":
-    from modules.banking_score import operations as _bank_ops
-    _bank_ops.start_scheduler()
+    from shared.operations import start_scheduler
+    start_scheduler()
 
 # Serve frontend in production.
 #

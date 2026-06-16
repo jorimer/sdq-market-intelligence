@@ -46,6 +46,27 @@ class Country(UUIDMixin, Base):
     )
 
 
+class CountryVariable(UUIDMixin, Base):
+    """One sourced IRMP input value: (country, period, variable) → value.
+
+    The store the module lacked: lets a sync (e.g. WGI) persist live source data
+    per country/period so the IRMP dataset is assembled from real data instead of
+    caller-supplied fixtures.
+    """
+    __tablename__ = "mpr_country_variables"
+
+    iso_code = Column(String(3), nullable=False)
+    period = Column(String(10), nullable=False)   # WGI is annual → "2024"
+    variable = Column(String(60), nullable=False)
+    value = Column(Float, nullable=True)          # None = missing, never interpolated
+    source = Column(String(20), nullable=False, default="WGI")
+
+    __table_args__ = (
+        UniqueConstraint("iso_code", "period", "variable", name="uq_mpr_var_country_period"),
+        Index("ix_mpr_var_country_period", "iso_code", "period"),
+    )
+
+
 class IRMPSnapshot(UUIDMixin, Base):
     """Computed IRMP for one country and period."""
     __tablename__ = "mpr_irmp_snapshots"

@@ -7,8 +7,9 @@ from sqlalchemy.pool import StaticPool
 from shared.database.base import Base
 import shared.auth.models  # noqa: F401 — register users (FK target)
 import shared.settings.models  # noqa: F401 — register app_setting
-import modules.banking_score.models.models  # noqa: F401 — register operation_runs
-from modules.banking_score import operations
+import shared.operations.models  # noqa: F401 — register operation_runs/schedules
+import modules.banking_score.operations  # noqa: F401 — registers banking ops (rescore, recompute…)
+from shared.operations import service as operations
 
 
 @pytest.fixture()
@@ -118,7 +119,7 @@ def test_set_schedule_disable_clears_next_run(Session):
 
 def test_run_due_schedules_fires_due_and_advances(Session):
     from datetime import timedelta
-    from modules.banking_score.models.models import OperationSchedule
+    from shared.operations.models import OperationSchedule
 
     fired_ops = []
 
@@ -149,7 +150,7 @@ def test_run_due_schedules_fires_due_and_advances(Session):
 
 def test_run_due_skips_not_yet_due(Session):
     from datetime import timedelta
-    from modules.banking_score.models.models import OperationSchedule
+    from shared.operations.models import OperationSchedule
     db = Session()
     db.add(OperationSchedule(
         operation="rescore", enabled=True, interval_hours=24,
