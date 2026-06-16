@@ -52,6 +52,33 @@ _PEER_REGIONS = {"DO": "Caribe", "CR": "Centroamérica", "PA": "Centroamérica",
                  "GT": "Centroamérica", "JM": "Caribe"}
 
 
+def _run_irmp_backtest(params, user_id, set_phase) -> Dict:
+    """Rebuild the IRMP backtest (historical panel + GDELT instability outcome) and
+    persist the report. Returns a compact summary for the console."""
+    import json
+    from datetime import datetime, timezone
+    from shared.settings.models import AppSetting
+    from modules.macro_political_risk.validation.report import build_backtest_report
+    db = SessionLocal()
+    try:
+        set_phase("reconstruyendo panel histórico + outcomes de inestabilidad (GDELT/BQ)")
+        rep = build_backtest_report()
+        rep["generated_at"] = datetime.now(timezone.utc).isoformat()
+        row = db.query(AppSetting).filter(AppSetting.key == "irmp_backtest_report").first()
+        payload = json.dumps(rep)
+        if row:
+            row.value = payload
+        else:
+            db.add(AppSetting(key="irmp_backtest_report", value=payload, is_secret=False))
+        db.commit()
+        gov = rep.get("governance", {})
+        return {"gini_gobernanza": gov.get("gini"), "n_obs": gov.get("n_observations"),
+                "n_eventos": gov.get("n_events"), "monotonic": gov.get("monotonic"),
+                "spearman_vs_rating": rep.get("convergent_validity", {}).get("spearman_irmp_vs_rating")}
+    finally:
+        db.close()
+
+
 def _run_irmp_snapshot(params, user_id, set_phase) -> Dict:
     """Assemble the IRMP dataset (real + declared rubric) and compute+persist a
     snapshot for every peer country at the latest period, publishing irmp.updated.
@@ -115,6 +142,13 @@ def register() -> None:
         "unrest_shocks; ECON_SANCTIONS → sanctions_signal) desde el dataset público "
         "de GDELT en BigQuery. Robusto (sin rate-limit). Requiere GCP_SA_JSON.",
         _run_gdelt_bq_sync, default_interval_hours=168,
+    ))
+    register_operation(Operation(
+        "irmp-backtest", "Backtest del IRMP (validación)",
+        "Reconstruye el IRMP histórico (2014-2024) y lo valida contra inestabilidad "
+        "política realizada (eventos GDELT/BigQuery) + validez convergente vs rating. "
+        "Direccional (N=5). Requiere GCP_SA_JSON.",
+        _run_irmp_backtest, default_interval_hours=720,
     ))
     register_operation(Operation(
         "irmp-snapshot", "Calcular snapshot IRMP",
