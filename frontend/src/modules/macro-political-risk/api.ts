@@ -76,3 +76,39 @@ export async function saveSnapshot(
   });
   return data;
 }
+
+// ── Backtest (Gate E) ──────────────────────────────────────────
+export interface BacktestMetrics {
+  n_observations: number;
+  n_events: number;
+  event_rate: number | null;
+  years: [number, number] | null;
+  gini: number | null;
+  gini_ci: [number | null, number | null];
+  distress_by_band: { tier: string; n: number; events: number; rate: number | null }[];
+  monotonic: boolean;
+}
+
+export interface BacktestReport {
+  has_report: boolean;
+  primary_outcome?: string;
+  n_countries?: number;
+  governance?: BacktestMetrics;
+  credit?: BacktestMetrics;
+  convergent_validity?: {
+    spearman_irmp_vs_rating: number | null;
+    pairs: { iso: string; irmp: number; rating: string; rating_score: number }[];
+  };
+  disclaimer?: string;
+  generated_at?: string;
+}
+
+export async function getBacktest(): Promise<BacktestReport> {
+  const { data } = await client.get("/macro-political-risk/validation/backtest");
+  return data;
+}
+
+export async function runBacktest(): Promise<{ started: boolean; reason?: string }> {
+  const { data } = await client.post("/operations/irmp-backtest/run", {});
+  return data;
+}
