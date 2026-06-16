@@ -13,6 +13,7 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
+import { ValidationTab } from "../components/ValidationTab";
 import { riskBandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
 import { useApp } from "@/shared/context/AppContext";
@@ -247,6 +248,7 @@ export function MacroPoliticalRiskPage() {
                 { id: "desglose", label: "Desglose explicable" },
                 { id: "ranking", label: "Ranking regional" },
                 { id: "pesos", label: "Pesos" },
+                { id: "validacion", label: "Validación" },
               ]}
               active={tab}
               onChange={setTab}
@@ -328,6 +330,8 @@ export function MacroPoliticalRiskPage() {
                   </div>
                 </>
               )}
+
+              {tab === "validacion" && <ValidationTab />}
             </div>
           </Card>
         </div>
