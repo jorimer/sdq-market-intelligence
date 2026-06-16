@@ -23,6 +23,7 @@ from modules.macro_political_risk.scoring.weights import (
     RISK_INCREASING_VARIABLES,
 )
 from modules.macro_political_risk.service import (
+    assemble_irmp_dataset,
     compute_and_persist,
     get_country_variables,
     get_history,
@@ -187,6 +188,24 @@ async def all_variables(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     return get_country_variables(db, period=period, source=None)
+
+
+@router.get(
+    "/dataset",
+    summary="Dataset IRMP ensamblado (dato real + rúbrica declarada)",
+    description=(
+        "Devuelve el dataset completo por país que alimenta el índice: la rúbrica "
+        "declarada (doctrina) superpuesta con el dato real persistido (real gana), "
+        "más un mapa de procedencia por variable (live/rubric). Fuente única para "
+        "el snapshot y el frontend."
+    ),
+)
+async def irmp_dataset(
+    period: str | None = Query(None, description="Período (ej. '2024'); por defecto el más reciente."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return assemble_irmp_dataset(db, period=period)
 
 
 @router.get(

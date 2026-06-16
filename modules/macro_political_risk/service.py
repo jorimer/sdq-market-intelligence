@@ -164,6 +164,38 @@ def get_country_variables(
     }
 
 
+def assemble_irmp_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
+    """Full IRMP dataset per country: declared rubric (doctrine) overlaid with
+    persisted live/declared data (real wins). Single source of truth so the
+    persisted snapshot and the UI score the same inputs.
+
+    Returns ``{period, dataset: {iso: {var: value}}, sources: {iso: {var:
+    "live"|"rubric"}}, has_live}``. The ``sources`` map powers a real-vs-rubric
+    disclosure. Rubric values not yet sourced stay declared — never fabricated.
+    """
+    from shared.doctrine import load_doctrine_raw
+
+    rubric = load_doctrine_raw("regulatory").get("rubric_inputs", {})
+    live = get_country_variables(db, period=period, source=None)
+    dataset: Dict[str, Dict[str, float]] = {}
+    sources: Dict[str, Dict[str, str]] = {}
+    isos = set(rubric) | set(live["countries"])
+    for iso in isos:
+        merged = {k: float(v) for k, v in (rubric.get(iso) or {}).items()}
+        smap = {k: "rubric" for k in merged}
+        for var, val in live["countries"].get(iso, {}).items():
+            merged[var] = val
+            smap[var] = "live"
+        dataset[iso] = merged
+        sources[iso] = smap
+    return {
+        "period": live["period"],
+        "dataset": dataset,
+        "sources": sources,
+        "has_live": live["has_data"],
+    }
+
+
 def get_history(db: Session, country_code: str, limit: int = 20) -> List[IRMPSnapshot]:
     """Snapshot history for *country_code*, most recent first."""
     return (

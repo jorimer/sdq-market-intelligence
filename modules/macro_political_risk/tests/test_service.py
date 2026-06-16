@@ -17,6 +17,7 @@ from modules.macro_political_risk.models.models import (  # noqa: F401 — regis
     RiskBand,
 )
 from modules.macro_political_risk.service import (
+    assemble_irmp_dataset,
     compute_and_persist,
     get_country_variables,
     get_history,
@@ -177,6 +178,37 @@ def test_country_variables_cross_source_lag_keeps_both(db):
     # Both survive even though they sit at different periods.
     assert res["countries"]["DO"] == {"wgi_rule_of_law": 50.0, "public_debt_gdp": 58.8}
     assert res["period"] == "2024"   # representative = most recent observed
+
+
+def test_assemble_overlays_live_over_rubric(db):
+    # Rubric comes from doctrine; persisted live data overrides it where present.
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="public_debt_gdp",
+                           value=58.8, source="IMF_WEO"))
+    # A live value that also exists as a rubric var must win:
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="contract_enforcement",
+                           value=99.0, source="WGI"))
+    db.commit()
+
+    asm = assemble_irmp_dataset(db)
+    do = asm["dataset"]["DO"]
+    # rubric var present (declared, from doctrine)
+    assert "electoral_uncertainty" in do
+    assert asm["sources"]["DO"]["electoral_uncertainty"] == "rubric"
+    # live var added
+    assert do["public_debt_gdp"] == 58.8
+    assert asm["sources"]["DO"]["public_debt_gdp"] == "live"
+    # live overrides the rubric value for the same var
+    assert do["contract_enforcement"] == 99.0
+    assert asm["sources"]["DO"]["contract_enforcement"] == "live"
+    assert asm["has_live"] is True
+
+
+def test_assemble_rubric_only_when_no_live(db):
+    asm = assemble_irmp_dataset(db)
+    assert asm["has_live"] is False
+    # Still returns the declared rubric for the peer set (no fabrication, no crash).
+    assert set(asm["dataset"]) == {"DO", "CR", "PA", "GT", "JM"}
+    assert all(v == "rubric" for v in asm["sources"]["DO"].values())
 
 
 def test_country_variables_skips_null_values(db):
