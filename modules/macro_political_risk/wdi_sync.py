@@ -6,6 +6,7 @@ IRMP runs on real data instead of fixtures. Mirrors :mod:`wgi_sync`. Each value
 keeps its upstream in ``CountryVariable.source`` ("WDI" or "IMF_WEO").
 """
 import logging
+from datetime import date
 from typing import Callable, Dict, Optional
 
 from sqlalchemy.orm import Session
@@ -23,10 +24,17 @@ def wdi_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> 
     set_phase("consultando WDI (Banco Mundial) + IMF WEO")
     client = WDIClient(mode="live")
     try:
-        records = client.fetch()
+        records = list(client.fetch())
     except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
         logger.warning("WDI/IMF sync falló: %s", e)
         return {"error": f"WDI/IMF no disponible: {e}", "synced": 0, "errors": [str(e)]}
+
+    # Declared sovereign_rating_score (doctrine table), stamped at the live data's
+    # reference period so it aligns with WDI/IMF in a snapshot.
+    from shared.data.wdi_client import declared_sovereign_records
+    live_periods = [r.period for r in records if r.period]
+    ref_period = max(live_periods) if live_periods else str(date.today().year)
+    records += declared_sovereign_records(ref_period)
 
     set_phase(f"persistiendo {len(records)} valores")
     synced = 0
