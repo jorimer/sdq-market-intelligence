@@ -110,10 +110,12 @@ export function ValidationTab() {
         </p>
       </div>
 
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-3">
         <span className="text-xs text-muted">
-          Outcome primario: <span className="text-body">inestabilidad política realizada</span> (eventos GDELT)
-          {report.generated_at && <> · calculado {fmtDate(report.generated_at)}</>}
+          Outcome: <span className="text-body">inestabilidad política realizada</span> (eventos GDELT).
+          Metodología validada en panel amplio LatAm+Caribe ({report.n_countries} países); el producto es
+          el peer set regional.
+          {report.generated_at && <> · {fmtDate(report.generated_at)}</>}
         </span>
         {regenBtn}
       </div>
