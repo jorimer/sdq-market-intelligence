@@ -60,3 +60,14 @@ bands:
   - {name: Moderado, lower: 60.0, color: "#F59E0B"}
   - {name: Elevado,  lower: 40.0, color: "#F97316"}
   - {name: Alto,     lower: 0.0,  color: "#991B1B"}
+
+# SUPUESTO declarado (no es un dato de API): meta de inflación por país, punto
+# medio del rango meta oficial del banco central. Alimenta inflation_gap =
+# |inflación observada − meta|. Cambiar aquí (PR) si una meta oficial cambia.
+# PA es dolarizado (sin meta propia) → se usa la meta de facto importada (~2%).
+inflation_targets:
+  DO: 4.0   # BCRD: 4% ±1
+  CR: 3.0   # BCCR: 3% ±1
+  GT: 4.0   # Banguat: 4% ±1
+  JM: 5.0   # BOJ: rango 4-6, punto medio
+  PA: 2.0   # dolarizado: meta de facto importada (Fed largo plazo)
