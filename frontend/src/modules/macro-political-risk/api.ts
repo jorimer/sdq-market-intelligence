@@ -26,8 +26,23 @@ export interface IRMPWeights {
 
 type RegionalDataset = Record<string, Record<string, number>>;
 
+export interface WgiLive {
+  source: string;
+  period: string | null;
+  has_data: boolean;
+  countries: Record<string, Record<string, number>>;
+  variables: string[];
+}
+
 export async function getWeights(): Promise<IRMPWeights> {
   const { data } = await client.get("/macro-political-risk/weights");
+  return data;
+}
+
+export async function getWgiLive(period?: string): Promise<WgiLive> {
+  const { data } = await client.get("/macro-political-risk/wgi", {
+    params: period ? { period } : undefined,
+  });
   return data;
 }
 

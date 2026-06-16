@@ -24,6 +24,7 @@ from modules.macro_political_risk.scoring.weights import (
 )
 from modules.macro_political_risk.service import (
     compute_and_persist,
+    get_country_variables,
     get_history,
     get_latest,
 )
@@ -128,6 +129,24 @@ async def create_snapshot(
         )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get(
+    "/wgi",
+    summary="Valores WGI en vivo persistidos (Banco Mundial)",
+    description=(
+        "Devuelve los indicadores de gobernanza WGI persistidos por el sync, "
+        "agrupados por país: {iso: {variable: valor}}. Sin 'period' usa el más "
+        "reciente disponible. Permite al frontend superponer dato real sobre el "
+        "conjunto regional sin fabricar valores faltantes."
+    ),
+)
+async def wgi_live(
+    period: str | None = Query(None, description="Período WGI (ej. '2024'); por defecto el más reciente."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return get_country_variables(db, period=period, source="WGI")
 
 
 @router.get(

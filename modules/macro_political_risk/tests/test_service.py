@@ -11,12 +11,14 @@ from shared.events.event_bus import event_bus
 from modules.macro_political_risk.events import IRMP_UPDATED
 from modules.macro_political_risk.models.models import (  # noqa: F401 — register tables
     Country,
+    CountryVariable,
     DimensionScore,
     IRMPSnapshot,
     RiskBand,
 )
 from modules.macro_political_risk.service import (
     compute_and_persist,
+    get_country_variables,
     get_history,
     get_latest,
 )
@@ -103,3 +105,52 @@ def test_unknown_country_raises_and_persists_nothing(db):
     with pytest.raises(KeyError):
         compute_and_persist(db, "XX", DATASET, date(2025, 12, 31))
     assert db.query(IRMPSnapshot).count() == 0
+
+
+def _add_var(db, iso, period, variable, value):
+    db.add(CountryVariable(iso_code=iso, period=period, variable=variable,
+                           value=value, source="WGI"))
+
+
+def test_country_variables_empty_table(db):
+    res = get_country_variables(db)
+    assert res["has_data"] is False
+    assert res["period"] is None
+    assert res["countries"] == {}
+
+
+def test_country_variables_groups_by_country_latest_period(db):
+    # Two periods present → helper defaults to the most recent ("2024").
+    _add_var(db, "DO", "2023", "wgi_rule_of_law", 50.0)
+    _add_var(db, "DO", "2024", "wgi_rule_of_law", 53.8)
+    _add_var(db, "DO", "2024", "wgi_gov_effectiveness", 49.1)
+    _add_var(db, "CR", "2024", "wgi_rule_of_law", 66.0)
+    db.commit()
+
+    res = get_country_variables(db)
+    assert res["period"] == "2024"
+    assert res["has_data"] is True
+    assert res["countries"]["DO"] == {"wgi_rule_of_law": 53.8, "wgi_gov_effectiveness": 49.1}
+    assert res["countries"]["CR"] == {"wgi_rule_of_law": 66.0}
+    assert res["variables"] == ["wgi_gov_effectiveness", "wgi_rule_of_law"]
+
+
+def test_country_variables_explicit_period_filter(db):
+    _add_var(db, "DO", "2023", "wgi_rule_of_law", 50.0)
+    _add_var(db, "DO", "2024", "wgi_rule_of_law", 53.8)
+    db.commit()
+
+    res = get_country_variables(db, period="2023")
+    assert res["period"] == "2023"
+    assert res["countries"]["DO"] == {"wgi_rule_of_law": 50.0}
+
+
+def test_country_variables_skips_null_values(db):
+    # Missing value persisted as None must never surface (no fabrication).
+    _add_var(db, "DO", "2024", "wgi_rule_of_law", 53.8)
+    _add_var(db, "DO", "2024", "wgi_control_corruption", None)
+    db.commit()
+
+    res = get_country_variables(db)
+    assert res["countries"]["DO"] == {"wgi_rule_of_law": 53.8}
+    assert "wgi_control_corruption" not in res["countries"]["DO"]
