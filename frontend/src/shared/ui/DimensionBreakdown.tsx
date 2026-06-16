@@ -6,6 +6,8 @@ export interface DimensionRow {
   score: number;
   weight: number;
   contribution: number;
+  /** Optional provenance tag (e.g. "5/5 en vivo" / "rúbrica") shown by the label. */
+  tag?: { text: string; ok?: boolean };
 }
 
 /**
@@ -19,7 +21,18 @@ export function DimensionBreakdown({ rows }: { rows: DimensionRow[] }) {
       {rows.map((d) => (
         <div key={d.key}>
           <div className="flex items-baseline justify-between gap-3 mb-1">
-            <span className="text-sm text-ink min-w-0 truncate">{d.label}</span>
+            <span className="min-w-0 flex items-baseline gap-2">
+              <span className="text-sm text-ink truncate">{d.label}</span>
+              {d.tag && (
+                <span
+                  className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full ${
+                    d.tag.ok ? "bg-ok-soft text-ok" : "bg-surface2 text-muted"
+                  }`}
+                >
+                  {d.tag.text}
+                </span>
+              )}
+            </span>
             <span className="shrink-0 mono text-xs text-muted">
               peso {Math.round(d.weight * 100)}% · aporta {fmtNum(d.contribution, 1)}
             </span>

@@ -28,29 +28,22 @@ export interface IRMPWeights {
 
 type RegionalDataset = Record<string, Record<string, number>>;
 
-export interface WgiLive {
-  source: string;
-  period: string | null;
-  has_data: boolean;
-  countries: Record<string, Record<string, number>>;
-  variables: string[];
-}
-
 export async function getWeights(): Promise<IRMPWeights> {
   const { data } = await client.get("/macro-political-risk/weights");
   return data;
 }
 
-export async function getWgiLive(period?: string): Promise<WgiLive> {
-  const { data } = await client.get("/macro-political-risk/wgi", {
-    params: period ? { period } : undefined,
-  });
-  return data;
+export interface IrmpDataset {
+  period: string | null;
+  dataset: Record<string, Record<string, number>>;
+  sources: Record<string, Record<string, "live" | "rubric">>;
+  has_live: boolean;
 }
 
-// All persisted IRMP variables (WGI + WDI + IMF + declared), any source.
-export async function getLiveVariables(period?: string): Promise<WgiLive> {
-  const { data } = await client.get("/macro-political-risk/variables", {
+// Full assembled dataset (declared rubric overlaid with live data) + provenance.
+// Single source of truth so the UI scores exactly what the snapshot persists.
+export async function getDataset(period?: string): Promise<IrmpDataset> {
+  const { data } = await client.get("/macro-political-risk/dataset", {
     params: period ? { period } : undefined,
   });
   return data;
