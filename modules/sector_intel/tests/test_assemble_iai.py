@@ -96,6 +96,29 @@ def test_assemble_merges_real_and_rubric_with_sources(db):
     assert asm["has_live"] is True
 
 
+def test_backfill_scores_all_periods_and_purges_cruft(db):
+    from modules.sector_intel.models.models import SectorScore
+    from modules.sector_intel.service import backfill_sector_scores, get_latest
+
+    # real BCRD data for two years
+    _seed_sector_var(db, "turismo", "sector_size", 8.0, "2023")
+    _seed_sector_var(db, "turismo", "sector_growth", 5.0, "2023")
+    _seed_sector_var(db, "turismo", "sector_size", 8.9, "2024")
+    _seed_sector_var(db, "turismo", "sector_growth", 9.5, "2024")
+    # stale cruft from the legacy fixture-POST flow (a quarterly period)
+    db.add(SectorScore(sector_code="turismo", period="2024-Q4", iai_score=82.1, model_version="1.0"))
+    db.commit()
+
+    res = backfill_sector_scores(db)
+    assert res["errors"] == []
+    assert set(res["periods"]) == {"2023", "2024"} and res["latest"] == "2024"
+    assert res["purged"] == 1 and "2024-Q4" in res["purged_periods"]
+    # persisted scores are exactly the real backfill — no cruft, no fixture remnants
+    assert {s.period for s in db.query(SectorScore).all()} == {"2023", "2024"}
+    # getLatest returns the canonical (annual) latest
+    assert get_latest(db, "turismo").period == "2024"
+
+
 def test_assemble_without_contract_macro_is_neutral_rubric(db):
     _seed_sector_var(db, "comercio", "sector_size", 12.9)
     db.commit()

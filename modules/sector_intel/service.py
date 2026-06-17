@@ -8,7 +8,7 @@ For a period it computes, per sector:
 Persists SectorScore rows and publishes ``sector.updated``.
 """
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -191,10 +191,24 @@ def _load_macro_contract(db: Session) -> Dict[str, Any]:
         return {}
 
 
-def assemble_iai_dataset(db: Session) -> Dict[str, Any]:
-    """Full IAI dataset per sector: declared rubric (doctrine) + real data
-    (BCRD sector dim, contract-derived macro_exposure). Single source of truth so
-    the persisted snapshot and the UI score the same inputs.
+def _sector_periods(db: Session) -> List[str]:
+    """Distinct periods present in ``si_variables``, chronologically sorted."""
+    from modules.sector_intel.models.models import SectorVariable
+
+    periods = {p for (p,) in db.query(SectorVariable.period).distinct() if p}
+    return sorted(periods, key=_period_key)
+
+
+def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
+    """Full IAI dataset per sector for *period*: declared rubric (doctrine) + real
+    data (BCRD sector dim, contract-derived macro_exposure). Single source of truth
+    so the persisted snapshot and the UI score the same inputs.
+
+    The macro→sectorial contract is *current* (latest macro), so its real
+    ``macro_exposure`` is used only for the latest period; for a historical
+    backfill period there is no period-specific contract, so macro_exposure falls
+    back to a neutral 50 (declared) — never the current contract stamped on the
+    past. The sector dimension is real per period. *period* defaults to the latest.
 
     Returns ``{period, dataset, sources, sgps_inputs, has_live}``. ``sources``
     maps each var to ``"live"`` or ``"rubric"`` for the real-vs-rubric badge.
@@ -206,8 +220,12 @@ def assemble_iai_dataset(db: Session) -> Dict[str, Any]:
     doc = load_doctrine_raw("sectoral")
     defaults = doc.get("rubric_defaults", {})
     overrides = doc.get("rubric_overrides", {})
-    live = get_sector_variables(db)
-    contract = _load_macro_contract(db)
+    all_periods = _sector_periods(db)
+    live_period = all_periods[-1] if all_periods else None
+    target = period or live_period
+    use_live_macro = target is not None and target == live_period
+    live = get_sector_variables(db, period=target) if target else {"sectors": {}, "period": None, "has_data": False}
+    contract = _load_macro_contract(db) if use_live_macro else {}
     factors = contract.get("factors", []) if contract else []
 
     dataset: Dict[str, Dict[str, float]] = {}
@@ -238,5 +256,35 @@ def assemble_iai_dataset(db: Session) -> Dict[str, Any]:
             "structural": float(ov.get("sgps_structural", defaults.get("sgps_structural", 50))),
         }
 
-    return {"period": live["period"], "dataset": dataset, "sources": sources,
+    return {"period": target, "dataset": dataset, "sources": sources,
             "sgps_inputs": sgps_inputs, "has_live": live["has_data"]}
+
+
+def backfill_sector_scores(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+    """Backfill the IAI/SGPS for EVERY period with real BCRD data, then purge any
+    score outside that set (the SIB pattern: score_all_periods + prune).
+
+    Removes stale ``SectorScore`` rows left by the legacy fixture-POST flow (e.g.
+    a ``"2025-Q4"`` 3-sector snapshot) so the persisted index is exactly the real
+    backfill — no seeded/fixture remnants. The latest period is scored last so the
+    published ``sector.updated`` reflects the current snapshot.
+    """
+    set_phase = set_phase or (lambda _m: None)
+    periods = _sector_periods(db)
+    if not periods:
+        return {"scored_periods": 0, "purged": 0,
+                "errors": ["sin dato sectorial; corre bcrd-sectores-sync primero"]}
+
+    for i, p in enumerate(periods, 1):
+        set_phase(f"backfill IAI/SGPS {p} ({i}/{len(periods)})")
+        asm = assemble_iai_dataset(db, period=p)
+        compute_and_persist(db, period=p, sector_dataset=asm["dataset"], sgps_inputs=asm["sgps_inputs"])
+
+    set_phase("purgando scores fuera del backfill (fixture/seed)")
+    keep = set(periods)
+    stale = db.query(SectorScore).filter(SectorScore.period.notin_(keep)).all()
+    purged_periods = sorted({s.period for s in stale})
+    db.query(SectorScore).filter(SectorScore.period.notin_(keep)).delete(synchronize_session=False)
+    db.commit()
+    return {"scored_periods": len(periods), "periods": periods, "latest": periods[-1],
+            "purged": len(stale), "purged_periods": purged_periods, "errors": []}
