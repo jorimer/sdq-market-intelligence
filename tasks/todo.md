@@ -122,7 +122,15 @@ Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, 
 - [ ] **T-E3-4 · Gate D — insight IA por sector** (template `sector_outlook`, patrón compartido `shared/ui`).
 - [ ] **T-E3-5 · Gate E — backtest sectorial** honesto.
 - [ ] **Enriquecimiento ONE/WGI** (llegada de turistas, generación de energía, gobernanza) sobre la base BCRD.
-- [ ] **PENDIENTE — volver sobre la ONE como fuente de enriquecimiento rica (decisión dueño 2026-06-16).** La ONE NO se agota en los 10 datasets de `datos.gob.do` (esos son delgados): publica **muchos estudios temáticos** (boletines, monografías, ENHOGAR, ENI, encuestas y perfiles sectoriales/sociales) que son una gran fuente de enriquecimiento cualitativo y cuantitativo. Investigar a fondo su portal de publicaciones (one.gob.do) y el catálogo de estudios; mapear qué aportan por sector/eje (sectorial, social, ESG) más allá del valor agregado del BCRD. Patrón candidato: digest IA de PDFs como las publicaciones del BCRD ([[bcrd-publications]]). No bloquea T-E3-3; es enriquecimiento posterior.
+- [ ] **ONE como fuente rica (decisión dueño 2026-06-16) — EN CURSO via Eje 6.** La ONE publica datasets estructurados (datos.gob.do CSV) + **estudios/encuestas en PDF** (Censo 2022, ENHOGAR, ENAE, Boletín Pobreza, Anuario Sociodemográfico, Compendio Vitales). Inventario detallado hecho (2026-06-17). Patrón: CSV→índice (como BCRD sectores); PDF→digest IA (como [[bcrd-publications]]).
+
+## Eje 6 · `social_dev` (Social/ONE) — EN CURSO
+
+> Apertura del eje Social con dato real de la ONE, reemplazando el fixture `SAMPLE_REGIONS` (5 regiones inventadas) por las **10 regiones de desarrollo** reales. Decisión dueño 2026-06-17 (Fase 1: lo estructurado/rápido). Inventario IDM→fuente: solo `poverty_rate` es ONE estructurado por región; salud=WDI nacional, inclusión/informalidad=BCRD, educación=Censo/ENHOGAR PDF (extracción diferida). Mosaico honesto como el IAI.
+
+- [x] **T-Social-1 · Gate A — conector ONE pobreza** ✅. `shared/data/one_client.py` live (CSV `descargas.one.gob.do`, pobreza general+extrema por las 10 regiones, 2000-2024, matching acento/alias-tolerante incl. Ozama) → `one_social_sync` → `sd_indicators` (theme/entity_key=región). Operación `one-social-sync` en la Consola. Sensor live: 500 records, Enriquillo 31% (más pobre) / Valdesia 11%. Reviewer APTO.
+- [ ] **T-Social-2 · Gate B/C — cablear IDM a dato real (single-source) + backfill + purga.** assemble_idm_dataset (pobreza ONE real + WDI salud nacional + rúbrica declarada educación/inclusión/informalidad, badge real-vs-rúbrica), las 10 regiones como peer set; backfill por año; purga del cruft `SAMPLE_REGIONS`; frontend single-source (como Eje 3).
+- [ ] **T-Social-3+ (Fase 2/3):** extracción AI-native de Censo 2022/ENHOGAR (educación/salud por región) + estudios ONE como publicaciones (digest IA).
 
 ## Proceso (recordatorio CLAUDE.md)
 - Plan First confirmado antes de implementar cada T.
