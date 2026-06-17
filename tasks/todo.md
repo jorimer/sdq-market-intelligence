@@ -122,6 +122,7 @@ Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, 
 - [ ] **T-E3-4 · Gate D — insight IA por sector** (template `sector_outlook`, patrón compartido `shared/ui`).
 - [ ] **T-E3-5 · Gate E — backtest sectorial** honesto.
 - [ ] **Enriquecimiento ONE/WGI** (llegada de turistas, generación de energía, gobernanza) sobre la base BCRD.
+- [ ] **PENDIENTE — volver sobre la ONE como fuente de enriquecimiento rica (decisión dueño 2026-06-16).** La ONE NO se agota en los 10 datasets de `datos.gob.do` (esos son delgados): publica **muchos estudios temáticos** (boletines, monografías, ENHOGAR, ENI, encuestas y perfiles sectoriales/sociales) que son una gran fuente de enriquecimiento cualitativo y cuantitativo. Investigar a fondo su portal de publicaciones (one.gob.do) y el catálogo de estudios; mapear qué aportan por sector/eje (sectorial, social, ESG) más allá del valor agregado del BCRD. Patrón candidato: digest IA de PDFs como las publicaciones del BCRD ([[bcrd-publications]]). No bloquea T-E3-3; es enriquecimiento posterior.
 
 ## Proceso (recordatorio CLAUDE.md)
 - Plan First confirmado antes de implementar cada T.
