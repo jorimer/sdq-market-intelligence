@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { LayoutGrid, ListOrdered, Zap, Grid3x3 } from "lucide-react";
+import { LayoutGrid, ListOrdered, Zap, Grid3x3, Activity } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -20,9 +20,13 @@ import { useApp } from "@/shared/context/AppContext";
 import {
   snapshot,
   getLatest,
+  getMacroContext,
   SnapshotResult,
   SectorLatest,
+  MacroContext,
+  MacroFactor,
 } from "../api";
+import { Tone } from "@/shared/lib/bands";
 import {
   SAMPLE_SECTORS,
   SGPS_INPUTS,
@@ -39,6 +43,68 @@ const ACCEL_LABELS: Record<string, string> = {
   macro: "Señales macro",
 };
 
+const DIRECTION_TONE: Record<string, Tone> = {
+  favorable: "ok",
+  adverso: "alert",
+  neutral: "muted",
+  "n/d": "muted",
+};
+const DIRECTION_LABEL: Record<string, string> = {
+  favorable: "Favorable",
+  adverso: "Adverso",
+  neutral: "Neutral",
+  "n/d": "N/D",
+};
+const TREND_ARROW: Record<string, string> = {
+  acelerando: "↑",
+  desacelerando: "↓",
+  estable: "→",
+};
+
+/** One macro factor of the §2 contract: reading + direction + impacted sectors. */
+function MacroFactorRow({ f, highlight }: { f: MacroFactor; highlight: string }) {
+  const tone = DIRECTION_TONE[f.direction] ?? "muted";
+  const hits = f.impacted_sectors.some((s) => s.slug === highlight);
+  return (
+    <div
+      className={`rounded-[10px] border p-3 ${
+        hits ? "border-accent/40 bg-accent-soft/20" : "border-line bg-surface2"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-ink truncate">{f.label}</div>
+          <div className="text-xs text-muted mono mt-0.5">
+            {f.reading}
+            {f.trend && TREND_ARROW[f.trend] ? ` ${TREND_ARROW[f.trend]}` : ""}
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center gap-1.5">
+          <Chip tone={tone}>{DIRECTION_LABEL[f.direction] ?? f.direction}</Chip>
+          {f.direction !== "n/d" && f.magnitude !== "n/d" && (
+            <span className="text-[11px] text-muted capitalize">{f.magnitude}</span>
+          )}
+        </div>
+      </div>
+      <p className="text-xs text-body mt-2">{f.rationale}</p>
+      {(f.impacted_sectors.length > 0 || f.impacted_agents.length > 0) && (
+        <div className="flex flex-wrap gap-1.5 mt-2.5">
+          {f.impacted_sectors.map((s) => (
+            <Chip key={s.slug} tone={s.slug === highlight ? "accent" : "muted"}>
+              {s.name}
+            </Chip>
+          ))}
+          {f.impacted_agents.map((a) => (
+            <Chip key={a} tone="muted">
+              {a}
+            </Chip>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SectorIntelPage() {
   const { period } = useApp();
   const [status, setStatus] = useState<Status>("loading");
@@ -47,6 +113,7 @@ export function SectorIntelPage() {
   const [details, setDetails] = useState<Record<string, SectorLatest>>({});
   const [selected, setSelected] = useState("turismo");
   const [tab, setTab] = useState("desglose");
+  const [macroCtx, setMacroCtx] = useState<MacroContext | null>(null);
 
   const loadDetail = useCallback(async (code: string) => {
     try {
@@ -83,6 +150,15 @@ export function SectorIntelPage() {
   useEffect(() => {
     if (status === "ready") loadDetail(selected);
   }, [selected, status, loadDetail]);
+
+  // §2 "Contexto macro": the macro→sectorial contract from Eje 2 (best-effort).
+  useEffect(() => {
+    let active = true;
+    getMacroContext()
+      .then((c) => { if (active) setMacroCtx(c); })
+      .catch(() => { if (active) setMacroCtx(null); });
+    return () => { active = false; };
+  }, []);
 
   const head = (
     <PageHead
@@ -197,6 +273,7 @@ export function SectorIntelPage() {
             <Tabs
               tabs={[
                 { id: "desglose", label: "Desglose" },
+                { id: "contexto", label: "Contexto macro" },
                 { id: "matriz", label: "Matriz" },
                 { id: "ranking", label: "Ranking" },
                 { id: "aceleracion", label: "Aceleración" },
@@ -223,6 +300,33 @@ export function SectorIntelPage() {
                     <DimensionBreakdown rows={sgpsRows} />
                   </div>
                 </div>
+              )}
+
+              {tab === "contexto" && (
+                <>
+                  <CardHead
+                    icon={Activity}
+                    title="Contexto macro"
+                    subtitle={
+                      macroCtx
+                        ? `${macroCtx.available_count}/${macroCtx.factor_count} factores en vivo${
+                            macroCtx.period ? ` · ${macroCtx.period}` : ""
+                          } · resaltado: ${SECTOR_NAMES[selected] ?? selected}`
+                        : "Entorno macro del BCRD (Eje 2)"
+                    }
+                  />
+                  {!macroCtx ? (
+                    <p className="text-sm text-muted">Cargando el contexto macro…</p>
+                  ) : macroCtx.factors.length === 0 ? (
+                    <p className="text-sm text-muted">Sin factores macro disponibles.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {macroCtx.factors.map((f) => (
+                        <MacroFactorRow key={f.key} f={f} highlight={selected} />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
 
               {tab === "matriz" && (

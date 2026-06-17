@@ -181,6 +181,31 @@ def signals(
     return {"period": snap.period, "signals": sigs, "count": len(sigs)}
 
 
+@router.get(
+    "/macro-context",
+    summary="Contrato macro→sectorial (factores con impacto por sector)",
+    description=(
+        "Objeto estructurado del entorno macro: ~7 factores (inflación, actividad, "
+        "TPM, tipo de cambio, reservas, deuda, remesas), cada uno con dirección "
+        "(favorable/adverso/neutral), magnitud y los sectores/agentes que impacta. "
+        "Lo consume la §2 'Contexto macro' del informe sectorial (Eje 3). Derivado "
+        "del dato real del BCRD; un factor sin dato sale como 'n/d'."
+    ),
+)
+def macro_context(
+    period: Optional[str] = Query(None, description="Etiqueta del período (por defecto, el último snapshot)."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.macro_monitor.macro_context import build_macro_context
+
+    label = period
+    if label is None:
+        snap = get_snapshot(db, None)
+        label = snap.period if snap is not None else None
+    return build_macro_context(db, period=label).to_dict()
+
+
 def _describe_shape(payload: Any, sample: int = 3) -> Dict[str, Any]:
     """Summarize a JSON payload's structure without dumping all of it.
 

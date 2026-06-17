@@ -1,0 +1,115 @@
+# Macro→sectorial contract doctrine (Eje 2 → Eje 3).
+#
+# House knowledge: how each macro reading maps to a sector-facing signal. The
+# producer (modules/macro_monitor/macro_context.py) reads the live BCRD series
+# named here, classifies direction/magnitude with these thresholds, and tags the
+# impacted sectors/agents. Change the mapping HERE, not in code (doctrine PR).
+#
+# Per factor:
+#   series_code      : the MacroSeries code to read (must exist in prod).
+#   mode             : "level"  → classify the latest value directly (it's a rate
+#                                  or a ratio: inflation, growth, TPM, debt/GDP).
+#                      "change" → classify the YoY % change of a level/stock
+#                                  series (fx, reserves, remittances).
+#   scale            : multiply the raw value (e.g. TPM stored as 0.0525 → ×100).
+#   good_direction   : "low"  → lower is favorable (inflation, TPM, debt, fx deprec.)
+#                      "high" → higher is favorable (activity, reserves, remittances).
+#   favorable_at / adverse_at : thresholds (on value if level, on YoY% if change).
+#   magnitude_ref    : distance past the crossed threshold that counts as "alto".
+#   impacted_sectors : sector slugs (must exist in shared.data.bcrd_sectors).
+#   impacted_agents  : free labels (hogar / PyME / gran empresa / exportador / …).
+version: "1.0"
+name: "Contrato macro→sectorial"
+
+factors:
+  - key: inflation
+    label: "Inflación interanual"
+    series_code: "bcrd.inflacion.inflacion.interanual"
+    unit: "%"
+    mode: level
+    good_direction: low          # meta BCRD 4% ±1; sobre meta erosiona consumo
+    favorable_at: 4.0
+    adverse_at: 5.0
+    magnitude_ref: 2.0
+    impacted_sectors: [comercio, turismo, manufactura_local]
+    impacted_agents: [hogar, PyME]
+    rationale: "Inflación sobre la meta erosiona el poder de compra; golpea consumo y comercio."
+
+  - key: activity
+    label: "Actividad económica (IMAE)"
+    series_code: "bcrd.xls.imae.variacion_porcentual_interanual"
+    unit: "%"
+    mode: level
+    good_direction: high         # crecimiento de la actividad
+    favorable_at: 3.5
+    adverse_at: 1.5
+    magnitude_ref: 2.0
+    impacted_sectors: [construccion, comercio, turismo, transporte]
+    impacted_agents: [gran empresa, PyME]
+    rationale: "La expansión de la actividad arrastra demanda transversal, con fuerza en construcción, comercio y turismo."
+
+  - key: policy_rate
+    label: "Tasa de Política Monetaria"
+    series_code: "bcrd.xls.serie_tpm.tasa_de_politica_monetaria"
+    unit: "%"
+    mode: level
+    scale: 100.0                 # almacenada como fracción (0.0525 → 5.25%)
+    good_direction: low          # alta = crédito caro
+    favorable_at: 5.0
+    adverse_at: 7.0
+    magnitude_ref: 2.0
+    impacted_sectors: [construccion, inmobiliario, comercio]
+    impacted_agents: [PyME, hogar, banca]
+    rationale: "Una TPM alta encarece el crédito y enfría la inversión sensible a tasa (construcción, inmobiliario)."
+
+  - key: fx_depreciation
+    label: "Depreciación cambiaria (interanual)"
+    series_code: "bcrd.sector_externo.tasas_de_cambio.venta"
+    unit: "%"
+    mode: change                 # YoY % del tipo de cambio (RD$/US$)
+    good_direction: low          # depreciación fuerte = inestabilidad e inflación importada
+    favorable_at: 3.0
+    adverse_at: 8.0
+    magnitude_ref: 5.0
+    impacted_sectors: [zonas_francas, turismo, comercio, manufactura_local]
+    impacted_agents: [exportador, importador]
+    rationale: "Depreciación moderada favorece a exportadores y turismo; una abrupta encarece insumos importados y presiona precios."
+
+  - key: reserves
+    label: "Reservas internacionales (interanual)"
+    series_code: "bcrd.xls.reservas_internacionales.reservas_brutas"
+    unit: "%"
+    mode: change                 # YoY % de las reservas brutas
+    good_direction: high         # más reservas = colchón externo
+    favorable_at: 0.0
+    adverse_at: -8.0
+    magnitude_ref: 10.0
+    impacted_sectors: [comercio, manufactura_local]
+    impacted_agents: [importador, banca]
+    rationale: "Las reservas sostienen la estabilidad cambiaria; su caída adelanta presión sobre la divisa y los importadores."
+
+  - key: public_debt
+    label: "Deuda pública / PIB"
+    series_code: "public_debt_gdp"
+    unit: "% PIB"
+    mode: level
+    good_direction: low          # Reinhart-Rogoff: umbral 60%
+    favorable_at: 50.0
+    adverse_at: 60.0
+    magnitude_ref: 15.0
+    impacted_sectors: [construccion, administracion_publica]
+    impacted_agents: [gran empresa, banca]
+    rationale: "Una deuda elevada estrecha el espacio fiscal; condiciona la obra pública y el gasto que dinamiza sectores."
+
+  - key: remittances
+    label: "Remesas familiares (interanual)"
+    series_code: "bcrd.xls.bpagos.remesas_familiares"
+    unit: "%"
+    mode: change                 # YoY % de las remesas
+    good_direction: high
+    favorable_at: 3.0
+    adverse_at: -5.0
+    magnitude_ref: 8.0
+    impacted_sectors: [comercio, construccion]
+    impacted_agents: [hogar, PyME]
+    rationale: "Las remesas sostienen el consumo de los hogares y la autoconstrucción; su dinámica mueve comercio y construcción."

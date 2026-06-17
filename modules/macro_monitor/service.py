@@ -628,11 +628,17 @@ def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     db.commit()
     db.refresh(snapshot)
 
+    # Macro→sectorial contract (Eje 3 §2 consumes it). Function-level import: the
+    # producer imports this module, so a top-level import would be circular.
+    from modules.macro_monitor.macro_context import build_macro_context
+    contract = build_macro_context(db, period=period, grouped=grouped)
+
     payload = {
         "period": period,
         "series_count": len(grouped),
         "signal_count": len(signals),
         "signals": signals,
+        "contract": contract.to_dict(),
     }
     publish_macro_updated(payload)
     logger.info(

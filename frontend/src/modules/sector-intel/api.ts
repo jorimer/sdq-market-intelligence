@@ -69,3 +69,35 @@ export async function getLatest(sectorCode: string): Promise<SectorLatest> {
   const { data } = await client.get(`/sector-intel/${sectorCode}/latest`);
   return data;
 }
+
+// ── Macro→sectorial contract (§2 "Contexto macro") — produced by Eje 2 ──
+export interface MacroFactor {
+  key: string;
+  label: string;
+  value: number | null;
+  unit: string | null;
+  direction: "favorable" | "adverso" | "neutral" | "n/d";
+  magnitude: "alto" | "moderado" | "bajo" | "n/d";
+  reading: string;
+  impacted_sectors: { slug: string; name: string }[];
+  impacted_agents: string[];
+  trend: string | null;
+  series_code: string | null;
+  rationale: string;
+}
+
+export interface MacroContext {
+  period: string | null;
+  factors: MacroFactor[];
+  factor_count: number;
+  available_count: number;
+  generated_from: string;
+  doctrine_version: string | null;
+}
+
+export async function getMacroContext(period?: string): Promise<MacroContext> {
+  const { data } = await client.get("/macro-monitor/macro-context", {
+    params: period ? { period } : undefined,
+  });
+  return data;
+}
