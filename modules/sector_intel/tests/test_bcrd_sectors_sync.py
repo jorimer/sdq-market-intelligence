@@ -16,6 +16,8 @@ from shared.data.bcrd_sectors import (
     TOTAL_LABEL,
     VAR_GROWTH,
     VAR_SIZE,
+    _annual_by_sector,
+    _complete_year_columns,
     _norm,
     build_sector_records,
 )
@@ -99,6 +101,37 @@ def test_missing_leaf_fails_closed():
     del nominal[_norm(LABELS[3])]
     with pytest.raises(BCRDSectorsError):
         build_sector_records(nominal, {}, url=None)
+
+
+def test_annual_by_sector_takes_first_block_only():
+    # The workbook stacks blocks (level, then growth/incidence) repeating sectors.
+    # Only the first block (before the first repeated "Valor Agregado") is the
+    # quantity we want; summing across blocks corrupts the real YoY growth.
+    header = ("VALOR AGREGADO POR ACTIVIDAD ECONOMICA", 2024, None, None, None, 2025, None, None, None)
+    rows = [
+        header,
+        ("Construcción", 10, 10, 10, 10, 20, 20, 20, 20),   # block 1: 2024=40, 2025=80
+        ("Comercio", 5, 5, 5, 5, 5, 5, 5, 5),               #          2024=20, 2025=20
+        (TOTAL_LABEL, 15, 15, 15, 15, 25, 25, 25, 25),      # closes block 1: 2024=60
+        ("Construcción", 99, 99, 99, 99, 99, 99, 99, 99),   # block 2 — must be IGNORED
+        (TOTAL_LABEL, 99, 99, 99, 99, 99, 99, 99, 99),
+    ]
+    out = _annual_by_sector(rows, _complete_year_columns(header))
+    assert out[_norm("Construcción")] == {2024: 40.0, 2025: 80.0}   # not 40+396
+    assert out[_norm(TOTAL_LABEL)] == {2024: 60.0, 2025: 100.0}     # first block only
+
+
+def test_annual_by_sector_single_block_unaffected():
+    # No second "Valor Agregado": first-occurrence guard alone must keep it correct.
+    header = ("VALOR AGREGADO POR ACTIVIDAD ECONOMICA", 2024, None, None, None)
+    rows = [
+        header,
+        ("Construcción", 10, 10, 10, 10),     # 2024 = 40
+        (TOTAL_LABEL, 15, 15, 15, 15),        # 2024 = 60
+    ]
+    out = _annual_by_sector(rows, _complete_year_columns(header))
+    assert out[_norm("Construcción")] == {2024: 40.0}
+    assert out[_norm(TOTAL_LABEL)] == {2024: 60.0}
 
 
 def test_norm_is_accent_and_case_insensitive():

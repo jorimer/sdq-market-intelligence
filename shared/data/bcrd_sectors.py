@@ -157,19 +157,33 @@ def _column_years(rows: List[tuple]) -> Dict[int, int]:
 
 
 def _annual_by_sector(rows: List[tuple], col_year: Dict[int, int]) -> Dict[str, Dict[int, float]]:
-    """Sum quarter columns into annual totals per tracked label (leaves + total)."""
+    """Sum quarter columns into annual totals per tracked label, **first block only**.
+
+    Each sheet stacks several blocks that repeat the same sector labels: the
+    nominal sheet has a RD$-level block then a structure-share block; the real
+    sheet has a volume-index block then growth-% and incidence blocks. Only the
+    *first* block carries the quantity we want (the level / the volume index). The
+    first "Valor Agregado" row closes that block — we take the first occurrence of
+    each label and stop at the next "Valor Agregado". Summing across blocks would
+    corrupt the real YoY growth (the size shares survive because the level
+    dominates and cancels in the ratio, but growth does not).
+    """
     wanted = set(_LABEL_TO_SLUG) | {_norm(TOTAL_LABEL)}
+    total = _norm(TOTAL_LABEL)
     out: Dict[str, Dict[int, float]] = {}
     for r in rows:
-        if not r:
+        if not r or not r[0]:
             continue
         label = _norm(r[0])
-        if label not in wanted:
-            continue
-        bucket = out.setdefault(label, {})
+        if label == total and total in out:
+            break  # second "Valor Agregado" → next block; the first block is done
+        if label not in wanted or label in out:
+            continue  # first occurrence only
+        bucket: Dict[int, float] = {}
         for j, year in col_year.items():
             if j < len(r) and isinstance(r[j], (int, float)) and not isinstance(r[j], bool):
                 bucket[year] = bucket.get(year, 0.0) + float(r[j])
+        out[label] = bucket
     return out
 
 
