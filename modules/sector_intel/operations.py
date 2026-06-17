@@ -20,25 +20,12 @@ def _run_bcrd_sectores_sync(params, user_id, set_phase) -> Dict:
 
 
 def _run_sector_snapshot(params, user_id, set_phase) -> Dict:
-    """Assemble the IAI dataset (real BCRD + contract macro + declared rubric) and
-    compute+persist the IAI/SGPS for every sector, publishing sector.updated."""
-    from datetime import date
-
-    from modules.sector_intel.service import assemble_iai_dataset, compute_and_persist
+    """Backfill the IAI/SGPS over EVERY real period (BCRD) and purge any score
+    outside that set (no fixture/seed remnants), publishing sector.updated."""
+    from modules.sector_intel.service import backfill_sector_scores
     db = SessionLocal()
     try:
-        set_phase("ensamblando dataset (real + rúbrica)")
-        asm = assemble_iai_dataset(db)
-        period = asm["period"] or str(date.today().year)
-        set_phase(f"calculando IAI/SGPS de {len(asm['dataset'])} sectores")
-        res = compute_and_persist(
-            db, period=period, sector_dataset=asm["dataset"], sgps_inputs=asm["sgps_inputs"],
-        )
-        live_dims = sum(
-            1 for smap in asm["sources"].values() for v in smap.values() if v == "live"
-        )
-        return {"sectors": len(res["sectors"]), "period": period,
-                "has_live": asm["has_live"], "valores_en_vivo": live_dims, "errors": []}
+        return backfill_sector_scores(db, set_phase=set_phase)
     finally:
         db.close()
 
@@ -52,10 +39,11 @@ def register() -> None:
         _run_bcrd_sectores_sync, default_interval_hours=2160,  # cuentas nac. ~trimestral → trimestral
     ))
     register_operation(Operation(
-        "sector-snapshot", "Calcular snapshot sectorial (IAI/SGPS)",
-        "Ensambla el dataset por sector (dato real del BCRD + exposición macro del "
-        "contrato + rúbrica declarada) y calcula+persiste el IAI/SGPS de los ~17 "
-        "sectores para el último período, publicando sector.updated.",
+        "sector-snapshot", "Backfill del índice sectorial (IAI/SGPS)",
+        "Calcula+persiste el IAI/SGPS de los ~17 sectores para TODOS los períodos "
+        "con dato real del BCRD (2018-…), con exposición macro real solo en el "
+        "período actual y rúbrica declarada para el resto, y purga cualquier score "
+        "fuera del backfill (sin restos de fixture). Publica sector.updated.",
         _run_sector_snapshot, default_interval_hours=2160,
     ))
 
