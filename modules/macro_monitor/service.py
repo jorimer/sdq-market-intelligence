@@ -628,17 +628,21 @@ def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     db.commit()
     db.refresh(snapshot)
 
-    # Macro→sectorial contract (Eje 3 §2 consumes it). Function-level import: the
+    # Macro→sectorial contract (Eje 3 consumes it). Function-level import: the
     # producer imports this module, so a top-level import would be circular.
     from modules.macro_monitor.macro_context import build_macro_context
     contract = build_macro_context(db, period=period, grouped=grouped)
+    contract_dict = contract.to_dict()
+    # Persist to a shared AppSetting so sector_intel can read the contract without
+    # a cross-module import (it derives each sector's macro_exposure from it).
+    _persist_macro_contract(db, contract_dict)
 
     payload = {
         "period": period,
         "series_count": len(grouped),
         "signal_count": len(signals),
         "signals": signals,
-        "contract": contract.to_dict(),
+        "contract": contract_dict,
     }
     publish_macro_updated(payload)
     logger.info(
@@ -652,6 +656,26 @@ def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
         "signals": signals,
         "model_version": MODEL_VERSION,
     }
+
+
+def _persist_macro_contract(db: Session, contract: Dict[str, Any]) -> None:
+    """Upsert the latest macro→sectorial contract into a shared AppSetting.
+
+    Lets ``sector_intel`` read it (for each sector's macro_exposure) without
+    importing this module — the contract type/key live in ``shared.contracts``.
+    """
+    import json
+
+    from shared.contracts import APP_SETTING_KEY
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == APP_SETTING_KEY).first()
+    payload = json.dumps(contract)
+    if row is None:
+        db.add(AppSetting(key=APP_SETTING_KEY, value=payload, is_secret=False))
+    else:
+        row.value = payload
+    db.commit()
 
 
 def get_indicators(db: Session) -> List[Dict[str, Any]]:

@@ -18,6 +18,7 @@ from modules.sector_intel.scoring.sgps import (
     W_STRUCTURAL,
 )
 from modules.sector_intel.service import (
+    assemble_iai_dataset,
     compute_and_persist,
     get_latest,
     get_sectors,
@@ -29,14 +30,12 @@ logger = logging.getLogger("sdq.api.sector_intel")
 router = APIRouter()
 
 _EXAMPLE_DATASET = {
-    "turismo": {"gdp_growth": 5.0, "inflation_stability": 70, "ease_of_business": 65,
-                "operating_cost": 40, "labor_availability": 75, "skills_index": 60,
-                "regulatory_quality": 62, "regulatory_volatility": 30,
-                "sector_growth": 8.0, "sector_size": 70},
-    "energia": {"gdp_growth": 4.0, "inflation_stability": 68, "ease_of_business": 55,
-                "operating_cost": 60, "labor_availability": 50, "skills_index": 65,
-                "regulatory_quality": 58, "regulatory_volatility": 45,
-                "sector_growth": 6.0, "sector_size": 60},
+    "turismo": {"macro_exposure": 56, "ease_of_business": 65, "operating_cost": 40,
+                "labor_availability": 75, "skills_index": 60, "regulatory_quality": 62,
+                "regulatory_volatility": 30, "sector_growth": 9.5, "sector_size": 8.9},
+    "comercio": {"macro_exposure": 50, "ease_of_business": 50, "operating_cost": 50,
+                 "labor_availability": 50, "skills_index": 50, "regulatory_quality": 50,
+                 "regulatory_volatility": 50, "sector_growth": 5.6, "sector_size": 12.9},
 }
 
 
@@ -96,7 +95,7 @@ async def snapshot(
             "dataset": _EXAMPLE_DATASET,
             "sgps_inputs": {
                 "turismo": {"historical": 75, "structural": 80},
-                "energia": {"historical": 60, "structural": 70},
+                "comercio": {"historical": 60, "structural": 70},
             },
         }],
     ),
@@ -115,6 +114,23 @@ async def snapshot(
         )
     except (ValueError, KeyError) as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get(
+    "/dataset",
+    summary="Dataset ensamblado del IAI (real + rúbrica) con procedencia",
+    description=(
+        "El dataset por sector que alimenta el IAI: dato real (tamaño/crecimiento del "
+        "BCRD, exposición macro del contrato) + rúbrica declarada (negocios/talento/"
+        "regulatoria). Incluye 'sources' (live|rubric) por variable para el badge "
+        "real-vs-rúbrica. Single-source: el snapshot y la UI puntúan lo mismo."
+    ),
+)
+async def dataset(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return assemble_iai_dataset(db)
 
 
 @router.get("/{sector_code}/latest", summary="Último IAI/SGPS persistido de un sector")

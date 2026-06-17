@@ -17,6 +17,10 @@ available", never a fabricated reading.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+# AppSetting key under which macro_monitor persists the latest contract, so
+# cross-module consumers (sector_intel) read it without importing the producer.
+APP_SETTING_KEY = "macro_sector_contract"
+
 # Allowed direction / magnitude values (kept as plain strings for JSON transport).
 FAVORABLE = "favorable"
 ADVERSO = "adverso"
@@ -56,6 +60,28 @@ class MacroFactor:
             "series_code": self.series_code,
             "rationale": self.rationale,
         }
+
+
+# Per-sector macro exposure: how the current macro factors hit one sector.
+_EXPOSURE_MAGNITUDE = {"alto": 10.0, "moderado": 6.0, "bajo": 3.0}
+_EXPOSURE_DIRECTION = {FAVORABLE: 1.0, ADVERSO: -1.0, NEUTRAL: 0.0, ND: 0.0}
+
+
+def sector_macro_exposure(factors: List[Dict[str, Any]], slug: str, base: float = 50.0) -> float:
+    """A 0-100 macro score for one sector from the contract's factors.
+
+    Starts neutral (50) and is nudged by each factor that impacts *slug*: a
+    favorable factor lifts it, an adverse one lowers it, scaled by magnitude. A
+    sector no factor touches stays 50. This is what makes the IAI *macro*
+    dimension discriminate sectors (an economy-wide value would normalize flat).
+    *factors* are the dicts from :meth:`MacroSectorContract.to_dict`.
+    """
+    score = base
+    for f in factors:
+        if any(s.get("slug") == slug for s in f.get("impacted_sectors", [])):
+            score += _EXPOSURE_DIRECTION.get(f.get("direction"), 0.0) * \
+                _EXPOSURE_MAGNITUDE.get(f.get("magnitude"), 0.0)
+    return round(max(0.0, min(100.0, score)), 2)
 
 
 @dataclass(frozen=True)

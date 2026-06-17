@@ -14,7 +14,6 @@ import { getExposure } from "@/modules/esg-climate/api";
 import { SAMPLE_SECTORS as ESG_SECTORS } from "@/modules/esg-climate/data";
 import { computeIndex } from "@/modules/social-dev/api";
 import { SAMPLE_REGIONS } from "@/modules/social-dev/data";
-import { SAMPLE_SECTORS as IAI_SECTORS } from "@/modules/sector-intel/data";
 
 interface Tile {
   to: string;
@@ -45,8 +44,8 @@ export function OverviewPage() {
         ]),
         // Regulatorio (IRMP)
         scoreCountry("DO", SAMPLE_REGIONAL),
-        // Sectorial (IAI turismo)
-        client.post("/sector-intel/iai", { sector_code: "turismo", dataset: IAI_SECTORS }),
+        // Sectorial (IAI turismo) — persisted snapshot (real data, single-source)
+        client.get<{ has_score: boolean; iai_score?: number }>("/sector-intel/turismo/latest"),
         // Social
         computeIndex("2025", SAMPLE_REGIONS),
         // Comercio
@@ -72,8 +71,8 @@ export function OverviewPage() {
         t.push({ to: "/macro-political-risk", eyebrow: "WGI", title: "Regulatorio & político", value: fmtNum(irmp.value.irmp_score, 1), band: riskBandFor(irmp.value.irmp_score), note: "IRMP · RD" });
 
       const sec = results[2];
-      if (sec.status === "fulfilled")
-        t.push({ to: "/sector-intel", eyebrow: "ONE", title: "Sectorial", value: fmtNum(sec.value.data.iai_score, 1), band: bandFor(sec.value.data.iai_score), note: "IAI · Turismo" });
+      if (sec.status === "fulfilled" && sec.value.data.has_score)
+        t.push({ to: "/sector-intel", eyebrow: "BCRD", title: "Sectorial", value: fmtNum(sec.value.data.iai_score, 1), band: bandFor(sec.value.data.iai_score), note: "IAI · Turismo" });
 
       const soc = results[3];
       if (soc.status === "fulfilled")

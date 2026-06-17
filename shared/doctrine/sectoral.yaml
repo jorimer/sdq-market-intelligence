@@ -17,8 +17,10 @@ dimension_weights:
 
 dimension_variables:
   macro:
-    - gdp_growth            # crecimiento (%)            mayor = mejor
-    - inflation_stability   # estabilidad de precios 0-100 mayor = mejor
+    - macro_exposure        # exposición macro POR-SECTOR (del contrato macro→sectorial,
+                            # Eje 2): 50 ± impacto de los factores que golpean al sector.
+                            # 0-100, mayor = mejor. Reemplaza gdp_growth/inflation_stability
+                            # (económica-wide, no discriminaban entre sectores).
   business:
     - ease_of_business      # facilidad de hacer negocios 0-100 mayor = mejor
     - operating_cost        # costo operativo (índice)    mayor = peor
@@ -29,13 +31,37 @@ dimension_variables:
     - regulatory_quality    # calidad regulatoria 0-100   mayor = mejor
     - regulatory_volatility # volatilidad regulatoria     mayor = peor
   sector:
-    - sector_growth         # crecimiento del sector (%)  mayor = mejor
-    - sector_size           # tamaño relativo del sector  mayor = mejor
+    - sector_growth         # crecimiento del sector (%)  mayor = mejor   [BCRD real]
+    - sector_size           # tamaño relativo del sector  mayor = mejor   [BCRD real]
 
 # Variables donde MAYOR valor = MENOR atractivo → se invierten.
 risk_increasing:
   - operating_cost
   - regulatory_volatility
+
+# Rúbrica declarada (Gate C) — juicio de casa para las dimensiones sin dato
+# sectorial real aún (negocios / talento / regulatoria) + los inputs del SGPS
+# (histórico / estructural). La UI las marca "rúbrica". Suben a real luego:
+# regulatoria ← WGI (Eje 4); negocios/talento ← estudios de la ONE (pendiente).
+#
+# NEUTRAL 50 para los 17 ("no diferenciamos aún"). IMPORTANTE: bajo la
+# normalización min-max del motor, dar overrides solo a ALGUNOS sectores hundiría
+# a los neutrales al piso (un artefacto, no una señal). Por eso la rúbrica es
+# uniforme: estas dimensiones quedan constantes (base transparente, no discriminan)
+# y el ranking lo mueven solo `sector` (BCRD) y `macro_exposure` (contrato), que
+# son dato real. La diferenciación por sector entra cuando haya dato real para
+# TODOS (WGI / estudios ONE), no como juicio parcial que distorsiona.
+rubric_defaults:
+  ease_of_business: 50
+  operating_cost: 50
+  labor_availability: 50
+  skills_index: 50
+  regulatory_quality: 50
+  regulatory_volatility: 50
+  sgps_historical: 50
+  sgps_structural: 50
+
+# rubric_overrides: por-sector, vacío por ahora (ver nota arriba: parcial distorsiona).
 
 # Bandas de atractivo (descendentes por 'lower', cobertura 0-100).
 bands:

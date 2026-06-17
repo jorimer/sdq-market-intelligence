@@ -5,6 +5,11 @@ consumes, so the consumer never re-derives the producer's domain by hand. Living
 in ``shared/`` (not in either module) keeps both sides free of cross-module
 imports — they depend on the contract type, not on each other.
 """
-from shared.contracts.macro_sector import MacroFactor, MacroSectorContract
+from shared.contracts.macro_sector import (
+    APP_SETTING_KEY,
+    MacroFactor,
+    MacroSectorContract,
+    sector_macro_exposure,
+)
 
-__all__ = ["MacroFactor", "MacroSectorContract"]
+__all__ = ["APP_SETTING_KEY", "MacroFactor", "MacroSectorContract", "sector_macro_exposure"]
