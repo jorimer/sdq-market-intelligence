@@ -120,13 +120,17 @@ def get_sectors(db: Session) -> List[Sector]:
 def _period_key(period: Optional[str]) -> tuple:
     """Chronological sort key for a period label, robust to mixed formats.
 
-    The BCRD value-added connector emits annual ``YYYY``; a stray quarterly
-    ``YYYY-Qn`` (e.g. from a manual /snapshot) sorts correctly too — lexical
-    ordering would mis-rank ``"2025-Q4"`` vs ``"2025"`` (the macro_monitor lesson)."""
+    The BCRD value-added connector emits annual ``YYYY`` — the canonical full-year
+    figure, which must sort *after* any quarter of that year (sentinel ``5`` >
+    ``Q4``). So the annual snapshot wins over stale quarterly rows left by the
+    legacy fixture-POST flow (``"2025"`` beats ``"2025-Q4"``), and lexical ordering
+    — which would mis-rank these — is avoided (the macro_monitor period lesson)."""
     import re
 
     m = re.match(r"(\d{4})(?:-Q([1-4]))?", period or "")
-    return (int(m.group(1)), int(m.group(2) or 4)) if m else (0, 0)
+    if not m:
+        return (0, 0)
+    return (int(m.group(1)), int(m.group(2)) if m.group(2) else 5)
 
 
 def get_latest(db: Session, sector_code: str) -> Optional[SectorScore]:

@@ -62,7 +62,9 @@ def test_period_key_orders_mixed_formats():
     # annual is the connector's format; a stray quarterly must still sort right
     assert _period_key("2025") > _period_key("2024")
     assert _period_key("2025-Q1") < _period_key("2025-Q4")
-    assert _period_key("2025-Q4") <= _period_key("2025")   # "2025" ≡ year-end (Q4)
+    # the annual figure is canonical → beats any quarter of its year (and stale
+    # quarterly cruft from the legacy fixture-POST flow)
+    assert _period_key("2025") > _period_key("2025-Q4")
 
 
 # ── assemble_iai_dataset ──────────────────────────────────────────
