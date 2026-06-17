@@ -117,10 +117,122 @@ def get_sectors(db: Session) -> List[Sector]:
     return db.query(Sector).order_by(Sector.code).all()
 
 
+def _period_key(period: Optional[str]) -> tuple:
+    """Chronological sort key for a period label, robust to mixed formats.
+
+    The BCRD value-added connector emits annual ``YYYY``; a stray quarterly
+    ``YYYY-Qn`` (e.g. from a manual /snapshot) sorts correctly too — lexical
+    ordering would mis-rank ``"2025-Q4"`` vs ``"2025"`` (the macro_monitor lesson)."""
+    import re
+
+    m = re.match(r"(\d{4})(?:-Q([1-4]))?", period or "")
+    return (int(m.group(1)), int(m.group(2) or 4)) if m else (0, 0)
+
+
 def get_latest(db: Session, sector_code: str) -> Optional[SectorScore]:
-    return (
-        db.query(SectorScore)
-        .filter_by(sector_code=sector_code)
-        .order_by(SectorScore.period.desc())
-        .first()
-    )
+    rows = db.query(SectorScore).filter_by(sector_code=sector_code).all()
+    return max(rows, key=lambda s: _period_key(s.period)) if rows else None
+
+
+# IAI rubric variables (Gate C) — declared until sourced (negocios/talento/regulatoria).
+IAI_RUBRIC_VARS = (
+    "ease_of_business", "operating_cost", "labor_availability",
+    "skills_index", "regulatory_quality", "regulatory_volatility",
+)
+# Real sector inputs from si_variables (BCRD value added).
+SECTOR_LIVE_VARS = ("sector_size", "sector_growth")
+
+
+def get_sector_variables(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
+    """Real per-sector inputs from ``si_variables`` (BCRD). Latest period per
+    (sector, variable) when *period* is omitted — sources can lag differently."""
+    from modules.sector_intel.models.models import SectorVariable
+
+    q = db.query(SectorVariable)
+    if period:
+        q = q.filter(SectorVariable.period == period)
+    best: Dict[tuple, tuple] = {}  # (sector, var) -> (period, value)
+    for r in q.all():
+        key = (r.sector_code, r.variable)
+        cur = best.get(key)
+        if cur is None or _period_key(r.period) > _period_key(cur[0]):
+            best[key] = (r.period, r.value)
+    sectors: Dict[str, Dict[str, float]] = {}
+    periods = set()
+    for (sc, var), (p, val) in best.items():
+        if val is not None:
+            sectors.setdefault(sc, {})[var] = val
+            if p:
+                periods.add(p)
+    return {"sectors": sectors,
+            "period": max(periods, key=_period_key) if periods else None,
+            "has_data": bool(sectors)}
+
+
+def _load_macro_contract(db: Session) -> Dict[str, Any]:
+    """Read the latest macro→sectorial contract from the shared AppSetting
+    (written by macro_monitor). Empty dict if none yet — macro_exposure then
+    falls back to a neutral 50 (declared), never fabricated."""
+    import json
+
+    from shared.contracts import APP_SETTING_KEY
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == APP_SETTING_KEY).first()
+    if row is None or not row.value:
+        return {}
+    try:
+        return json.loads(row.value)
+    except (ValueError, TypeError):
+        return {}
+
+
+def assemble_iai_dataset(db: Session) -> Dict[str, Any]:
+    """Full IAI dataset per sector: declared rubric (doctrine) + real data
+    (BCRD sector dim, contract-derived macro_exposure). Single source of truth so
+    the persisted snapshot and the UI score the same inputs.
+
+    Returns ``{period, dataset, sources, sgps_inputs, has_live}``. ``sources``
+    maps each var to ``"live"`` or ``"rubric"`` for the real-vs-rubric badge.
+    """
+    from shared.contracts import sector_macro_exposure
+    from shared.data.bcrd_sectors import sector_catalog
+    from shared.doctrine import load_doctrine_raw
+
+    doc = load_doctrine_raw("sectoral")
+    defaults = doc.get("rubric_defaults", {})
+    overrides = doc.get("rubric_overrides", {})
+    live = get_sector_variables(db)
+    contract = _load_macro_contract(db)
+    factors = contract.get("factors", []) if contract else []
+
+    dataset: Dict[str, Dict[str, float]] = {}
+    sources: Dict[str, Dict[str, str]] = {}
+    sgps_inputs: Dict[str, Dict[str, float]] = {}
+
+    for slug, _name in sector_catalog():
+        ov = overrides.get(slug, {})
+        merged: Dict[str, float] = {}
+        smap: Dict[str, str] = {}
+        # Rubric (declared) for the not-yet-sourced dimensions.
+        for var in IAI_RUBRIC_VARS:
+            merged[var] = float(ov.get(var, defaults.get(var, 50)))
+            smap[var] = "rubric"
+        # macro_exposure (real) — derived per-sector from the macro contract.
+        merged["macro_exposure"] = sector_macro_exposure(factors, slug)
+        smap["macro_exposure"] = "live" if factors else "rubric"
+        # sector dimension (real) from si_variables — overrides any rubric.
+        sv = live["sectors"].get(slug, {})
+        for var in SECTOR_LIVE_VARS:
+            if sv.get(var) is not None:
+                merged[var] = sv[var]
+                smap[var] = "live"
+        dataset[slug] = merged
+        sources[slug] = smap
+        sgps_inputs[slug] = {
+            "historical": float(ov.get("sgps_historical", defaults.get("sgps_historical", 50))),
+            "structural": float(ov.get("sgps_structural", defaults.get("sgps_structural", 50))),
+        }
+
+    return {"period": live["period"], "dataset": dataset, "sources": sources,
+            "sgps_inputs": sgps_inputs, "has_live": live["has_data"]}

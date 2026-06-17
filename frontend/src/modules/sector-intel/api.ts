@@ -101,3 +101,27 @@ export async function getMacroContext(period?: string): Promise<MacroContext> {
   });
   return data;
 }
+
+export interface SectorInfo {
+  code: string;
+  name: string;
+  is_active: boolean;
+}
+
+export async function getSectors(): Promise<SectorInfo[]> {
+  const { data } = await client.get("/sector-intel/sectors");
+  return data.sectors as SectorInfo[];
+}
+
+export interface IaiDataset {
+  period: string | null;
+  dataset: Record<string, Record<string, number>>;
+  sources: Record<string, Record<string, "live" | "rubric">>;
+  sgps_inputs: Record<string, Record<string, number>>;
+  has_live: boolean;
+}
+
+export async function getDataset(): Promise<IaiDataset> {
+  const { data } = await client.get("/sector-intel/dataset");
+  return data;
+}

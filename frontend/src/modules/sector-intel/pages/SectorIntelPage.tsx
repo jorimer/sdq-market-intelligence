@@ -16,24 +16,19 @@ import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown
 import { Heatmap, HeatmapData } from "@/shared/charts/Heatmap";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
-import { useApp } from "@/shared/context/AppContext";
 import {
-  snapshot,
+  getSectors,
+  getDataset,
   getLatest,
   getMacroContext,
-  SnapshotResult,
+  SectorInfo,
   SectorLatest,
+  IaiDataset,
   MacroContext,
   MacroFactor,
 } from "../api";
+import { IAI_LABELS, SGPS_LABELS, IAI_DIM_VARS } from "../data";
 import { Tone } from "@/shared/lib/bands";
-import {
-  SAMPLE_SECTORS,
-  SGPS_INPUTS,
-  SECTOR_NAMES,
-  IAI_LABELS,
-  SGPS_LABELS,
-} from "../data";
 
 type Status = "loading" | "error" | "ready";
 
@@ -60,6 +55,19 @@ const TREND_ARROW: Record<string, string> = {
   desacelerando: "↓",
   estable: "→",
 };
+
+/** Real-vs-rubric tag for one IAI dimension, from the dataset's sources map. */
+function dimTag(
+  sources: Record<string, string> | undefined,
+  dimKey: string,
+): DimensionRow["tag"] {
+  const vars = IAI_DIM_VARS[dimKey] ?? [];
+  if (!sources || vars.length === 0) return undefined;
+  const live = vars.filter((v) => sources[v] === "live").length;
+  if (live === 0) return { text: "rúbrica", ok: false };
+  if (live === vars.length) return { text: "en vivo", ok: true };
+  return { text: `${live}/${vars.length} en vivo`, ok: true };
+}
 
 /** One macro factor of the §2 contract: reading + direction + impacted sectors. */
 function MacroFactorRow({ f, highlight }: { f: MacroFactor; highlight: string }) {
@@ -106,50 +114,36 @@ function MacroFactorRow({ f, highlight }: { f: MacroFactor; highlight: string })
 }
 
 export function SectorIntelPage() {
-  const { period } = useApp();
   const [status, setStatus] = useState<Status>("loading");
-  const [snap, setSnap] = useState<SnapshotResult | null>(null);
-  const [detail, setDetail] = useState<SectorLatest | null>(null);
+  const [sectors, setSectors] = useState<SectorInfo[]>([]);
+  const [ds, setDs] = useState<IaiDataset | null>(null);
   const [details, setDetails] = useState<Record<string, SectorLatest>>({});
   const [selected, setSelected] = useState("turismo");
   const [tab, setTab] = useState("desglose");
   const [macroCtx, setMacroCtx] = useState<MacroContext | null>(null);
 
-  const loadDetail = useCallback(async (code: string) => {
-    try {
-      setDetail(await getLatest(code));
-    } catch {
-      setDetail(null);
-    }
-  }, []);
-
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      const s = await snapshot(period, SAMPLE_SECTORS, SGPS_INPUTS);
-      setSnap(s);
-      // Fetch every sector's breakdown to build the sector × dimension matrix.
+      const [secs, dataset] = await Promise.all([getSectors(), getDataset()]);
+      setSectors(secs);
+      setDs(dataset);
       const all = await Promise.all(
-        s.sectors.map((x) => getLatest(x.sector_code).then((d) => [x.sector_code, d] as const).catch(() => null)),
+        secs.map((s) =>
+          getLatest(s.code).then((d) => [s.code, d] as const).catch(() => null),
+        ),
       );
       const map: Record<string, SectorLatest> = {};
-      all.forEach((e) => { if (e) map[e[0]] = e[1]; });
+      all.forEach((e) => { if (e && e[1].has_score) map[e[0]] = e[1]; });
       setDetails(map);
-      setDetail(map[selected] ?? null);
+      setSelected((prev) => (map[prev] ? prev : secs.find((s) => map[s.code])?.code ?? prev));
       setStatus("ready");
     } catch {
       setStatus("error");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (status === "ready") loadDetail(selected);
-  }, [selected, status, loadDetail]);
+  useEffect(() => { load(); }, [load]);
 
   // §2 "Contexto macro": the macro→sectorial contract from Eje 2 (best-effort).
   useEffect(() => {
@@ -160,11 +154,16 @@ export function SectorIntelPage() {
     return () => { active = false; };
   }, []);
 
+  const names: Record<string, string> = Object.fromEntries(
+    sectors.map((s) => [s.code, s.name]),
+  );
+  const nameOf = (code: string) => names[code] ?? code;
+
   const head = (
     <PageHead
-      eyebrow="ONE · BCRD"
+      eyebrow="BCRD · contrato macro · rúbrica"
       title="Sectorial"
-      sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. La Aceleración del SGPS lee macro/IRMP/comercio. Datos ilustrativos."
+      sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. Tamaño y crecimiento del BCRD; exposición macro del contrato del Eje 2; el resto, rúbrica declarada."
     />
   );
 
@@ -175,14 +174,27 @@ export function SectorIntelPage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudo calcular el índice sectorial. Reintenta."
+          message="No se pudo cargar el índice sectorial. Reintenta."
           action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
         />
       </div>
     );
 
-  const cur = snap!.sectors.find((s) => s.sector_code === selected);
-  const iaiBand = bandFor(cur?.iai_score);
+  const scored = sectors.filter((s) => details[s.code]);
+  if (scored.length === 0)
+    return (
+      <div>
+        {head}
+        <StateBlock
+          kind="empty"
+          message="Aún no hay snapshot sectorial. Corre la operación «Calcular snapshot sectorial (IAI/SGPS)» en la Consola de Operación."
+        />
+      </div>
+    );
+
+  const detail = details[selected] ?? null;
+  const sources = ds?.sources[selected];
+  const iaiBand = bandFor(detail?.iai_score);
 
   const iaiRows: DimensionRow[] = detail
     ? Object.entries(detail.iai_breakdown).map(([key, d]) => ({
@@ -191,6 +203,7 @@ export function SectorIntelPage() {
         score: d.score,
         weight: d.weight,
         contribution: d.contribution,
+        tag: dimTag(sources, key),
       }))
     : [];
 
@@ -204,26 +217,31 @@ export function SectorIntelPage() {
       }))
     : [];
 
-  const accel = snap!.acceleration;
-  const ranking = [...snap!.sectors].sort((a, b) => b.iai_score - a.iai_score);
+  const accel = detail?.sgps_breakdown.acceleration_detail;
+  const ranking = [...scored]
+    .map((s) => ({ code: s.code, ...details[s.code] }))
+    .sort((a, b) => b.iai_score - a.iai_score);
 
-  // Sector × IAI-dimension heatmap (built from every sector's breakdown).
   const dimKeys = Object.keys(IAI_LABELS);
   const matrix: HeatmapData = {
-    rows: snap!.sectors.map((s) => SECTOR_NAMES[s.sector_code] ?? s.sector_code),
+    rows: scored.map((s) => nameOf(s.code)),
     cols: dimKeys.map((k) => IAI_LABELS[k]),
-    values: snap!.sectors.map((s) => {
-      const d = details[s.sector_code]?.iai_breakdown;
+    values: scored.map((s) => {
+      const d = details[s.code]?.iai_breakdown;
       return dimKeys.map((k) => (d?.[k] ? d[k].score : null));
     }),
   };
 
+  const liveDims = sources
+    ? dimKeys.filter((k) => dimTag(sources, k)?.ok).length
+    : 0;
+
   return (
     <div>
       <PageHead
-        eyebrow="ONE · BCRD"
+        eyebrow="BCRD · contrato macro · rúbrica"
         title="Sectorial"
-        sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. La Aceleración del SGPS lee macro/IRMP/comercio. Datos ilustrativos."
+        sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. Tamaño y crecimiento del BCRD; exposición macro del contrato del Eje 2; el resto, rúbrica declarada."
         right={
           <select
             value={selected}
@@ -231,39 +249,31 @@ export function SectorIntelPage() {
             className="field !w-auto"
             title="Sector"
           >
-            {snap!.sectors.map((s) => (
-              <option key={s.sector_code} value={s.sector_code}>
-                {SECTOR_NAMES[s.sector_code] ?? s.sector_code}
-              </option>
+            {scored.map((s) => (
+              <option key={s.code} value={s.code}>{nameOf(s.code)}</option>
             ))}
           </select>
         }
       />
 
+      <div className="flex flex-wrap items-center gap-2 mb-4 -mt-2">
+        <Chip tone={ds?.has_live ? "ok" : "muted"}>
+          {liveDims}/{dimKeys.length} dimensiones en vivo
+        </Chip>
+        {ds?.period && <Chip tone="muted">{ds.period}</Chip>}
+        <Chip tone="muted">{scored.length} sectores</Chip>
+      </div>
+
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Hero */}
         <Card className="lg:col-span-1 flex flex-col items-center text-center">
-          <div className="text-xs text-muted mb-1 w-full truncate">
-            {SECTOR_NAMES[selected] ?? selected}
-          </div>
+          <div className="text-xs text-muted mb-1 w-full truncate">{nameOf(selected)}</div>
           <div className="mono text-[10px] uppercase tracking-[0.16em] text-accent mb-2">IAI</div>
-          <Gauge score={cur?.iai_score} band={iaiBand} />
-          <div className="mt-3">
-            <BandBadge band={iaiBand} />
-          </div>
+          <Gauge score={detail?.iai_score} band={iaiBand} />
+          <div className="mt-3"><BandBadge band={iaiBand} /></div>
           <div className="grid grid-cols-2 gap-3 w-full mt-5">
-            <div className="rounded-[10px] bg-surface2 p-3">
-              <div className="text-[11px] text-muted">SGPS</div>
-              <div className="font-display text-xl font-extrabold text-ink mono mt-0.5">
-                {fmtNum(cur?.sgps_score, 1)}
-              </div>
-            </div>
-            <div className="rounded-[10px] bg-surface2 p-3">
-              <div className="text-[11px] text-muted">Aceleración</div>
-              <div className="font-display text-xl font-extrabold text-ink mono mt-0.5">
-                {fmtNum(accel.acceleration, 1)}
-              </div>
-            </div>
+            <StatTile label="SGPS" value={fmtNum(detail?.sgps_score, 1)} />
+            <StatTile label="Aceleración" value={fmtNum(accel?.acceleration, 1)} />
           </div>
         </Card>
 
@@ -288,7 +298,7 @@ export function SectorIntelPage() {
                     <CardHead
                       icon={LayoutGrid}
                       title="IAI — dimensiones"
-                      subtitle={`${SECTOR_NAMES[selected] ?? selected} · ponderadas`}
+                      subtitle={`${nameOf(selected)} · ponderadas · badge real-vs-rúbrica`}
                     />
                     <DimensionBreakdown rows={iaiRows} />
                   </div>
@@ -311,7 +321,7 @@ export function SectorIntelPage() {
                       macroCtx
                         ? `${macroCtx.available_count}/${macroCtx.factor_count} factores en vivo${
                             macroCtx.period ? ` · ${macroCtx.period}` : ""
-                          } · resaltado: ${SECTOR_NAMES[selected] ?? selected}`
+                          } · resaltado: ${nameOf(selected)}`
                         : "Entorno macro del BCRD (Eje 2)"
                     }
                   />
@@ -358,24 +368,20 @@ export function SectorIntelPage() {
                         const b = bandFor(r.iai_score);
                         return (
                           <tr
-                            key={r.sector_code}
+                            key={r.code}
                             className={`border-b border-line/60 last:border-0 ${
-                              r.sector_code === selected ? "bg-accent-soft/40" : ""
+                              r.code === selected ? "bg-accent-soft/40" : ""
                             }`}
                           >
                             <td className="py-2.5 px-1 mono text-muted">{i + 1}</td>
-                            <td className="py-2.5 px-1 text-ink truncate">
-                              {SECTOR_NAMES[r.sector_code] ?? r.sector_code}
-                            </td>
+                            <td className="py-2.5 px-1 text-ink truncate">{nameOf(r.code)}</td>
                             <td className="py-2.5 px-1 text-right mono font-semibold text-ink">
                               {fmtNum(r.iai_score, 1)}
                             </td>
                             <td className="py-2.5 px-1 text-right mono text-body">
                               {fmtNum(r.sgps_score, 1)}
                             </td>
-                            <td className="py-2.5 px-1">
-                              <BandBadge band={b} />
-                            </td>
+                            <td className="py-2.5 px-1"><BandBadge band={b} /></td>
                           </tr>
                         );
                       })}
@@ -393,11 +399,11 @@ export function SectorIntelPage() {
                   />
                   <div className="flex items-baseline gap-2 mb-4">
                     <span className="font-display text-3xl font-extrabold text-ink mono">
-                      {fmtNum(accel.acceleration, 1)}
+                      {fmtNum(accel?.acceleration, 1)}
                     </span>
-                    <span className="text-xs text-muted">base {fmtNum(accel.base, 0)}</span>
+                    <span className="text-xs text-muted">base {fmtNum(accel?.base, 0)}</span>
                   </div>
-                  {Object.keys(accel.components).length === 0 ? (
+                  {!accel || Object.keys(accel.components).length === 0 ? (
                     <p className="text-sm text-muted">
                       Sin señales upstream aún. Genera snapshots de IRMP/comercio/macro para
                       alimentar la aceleración.
@@ -411,8 +417,7 @@ export function SectorIntelPage() {
                         >
                           <span className="text-sm text-ink">{ACCEL_LABELS[k] ?? k}</span>
                           <Chip tone={v >= 0 ? "ok" : "alert"}>
-                            {v >= 0 ? "+" : ""}
-                            {fmtNum(v, 1)}
+                            {v >= 0 ? "+" : ""}{fmtNum(v, 1)}
                           </Chip>
                         </div>
                       ))}
