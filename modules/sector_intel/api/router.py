@@ -29,6 +29,19 @@ logger = logging.getLogger("sdq.api.sector_intel")
 
 router = APIRouter()
 
+
+async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
+    """Generate a Claude narrative from *context*; best-effort (returns None on any
+    failure so the endpoint never breaks). Without an API key the engine returns a
+    static fallback (``model_used == "static_fallback"``), passed through."""
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
+        logger.warning("AI insight sector (%s) no disponible: %s", template, e)
+        return None
+
 _EXAMPLE_DATASET = {
     "turismo": {"macro_exposure": 56, "ease_of_business": 65, "operating_cost": 40,
                 "labor_availability": 75, "skills_index": 60, "regulatory_quality": 62,
@@ -153,3 +166,29 @@ async def latest(
         "sgps_breakdown": s.sgps_breakdown,
         "model_version": s.model_version,
     }
+
+
+@router.get(
+    "/{sector_code}/insight",
+    summary="Perspectiva de IA del sector (IAI/SGPS) — fase 2, lento (~10-15s)",
+    description="Narrativa SCQA que explica el atractivo del sector (IAI), sus motores "
+    "por dimensión y la aceleración (SGPS), siendo honesta sobre qué es real vs rúbrica.",
+)
+async def insight(
+    sector_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.sector_intel.ai_context import sector_ai_context
+
+    s = get_latest(db, sector_code)
+    if s is None:
+        return {"has_score": False, "sector_code": sector_code, "ai_insight": None}
+    name = next((sec.name for sec in get_sectors(db) if sec.code == sector_code), None)
+    latest = {
+        "sector_code": sector_code, "period": s.period, "iai_score": s.iai_score,
+        "iai_band": s.iai_band, "sgps_score": s.sgps_score, "iai_breakdown": s.iai_breakdown,
+    }
+    ctx = sector_ai_context(latest, sector_name=name, sgps_detail=s.sgps_breakdown)
+    return {"has_score": True, "sector_code": sector_code,
+            "ai_insight": await _ai_insight(ctx, "sector_outlook")}
