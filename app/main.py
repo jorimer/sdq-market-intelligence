@@ -80,6 +80,7 @@ import modules.banking_score.operations  # noqa: F401 — registers banking ops
 import modules.macro_political_risk.operations  # noqa: F401 — registers wgi-sync
 import modules.sector_intel.operations  # noqa: F401 — registers bcrd-sectores-sync
 import modules.social_dev.operations  # noqa: F401 — registers one-social-sync
+import modules.trade_intel.operations  # noqa: F401 — registers dga-trade-sync
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":

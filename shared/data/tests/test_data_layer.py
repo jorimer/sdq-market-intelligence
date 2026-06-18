@@ -7,9 +7,18 @@ from shared.data import (
     LicenseError,
     Record,
     bcrd_client,
-    dga_client,
 )
+from shared.data.base_client import FixtureBackedClient
 from shared.data.lineage import Lineage
+
+
+class _UnlicensedClient(FixtureBackedClient):
+    """A source whose license does not permit ingestion (for the gate test)."""
+
+    source = "TEST"
+    license = "por confirmar"
+    license_ok = False
+    fixture_file = "none.json"
 
 
 class TestLineage:
@@ -26,9 +35,9 @@ class TestLineage:
 
 class TestLicenseGate:
     def test_unlicensed_source_blocks_fetch(self):
-        # DGA license is unconfirmed → license_ok = False
+        # A source with license_ok=False must be blocked by the gate.
         with pytest.raises(LicenseError):
-            dga_client.fetch()
+            _UnlicensedClient().fetch()
 
     def test_licensed_source_allows_fetch(self):
         records = bcrd_client.fetch()

@@ -12,23 +12,19 @@ import {
 } from "@/shared/ui/primitives";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum, fmtPct } from "@/shared/lib/format";
-import { useApp } from "@/shared/context/AppContext";
 import { Treemap } from "@/shared/charts/Treemap";
-import { scoreTrade, saveSnapshot, TradeScore } from "../api";
-import { SAMPLE_FLOWS } from "../data";
+import { getTradeScore, TradeScore } from "../api";
 
 type Status = "loading" | "error" | "ready";
 
 export function TradeIntelPage() {
-  const { period } = useApp();
   const [status, setStatus] = useState<Status>("loading");
   const [score, setScore] = useState<TradeScore | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      setScore(await scoreTrade(SAMPLE_FLOWS));
+      setScore(await getTradeScore());
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -41,9 +37,9 @@ export function TradeIntelPage() {
 
   const head = (
     <PageHead
-      eyebrow="BCRD · DGA"
+      eyebrow="DGA · Aduanas"
       title="Comercio exterior"
-      sub="Resiliencia comercial: diversificación y dependencia, no volumen. Datos ilustrativos."
+      sub="Resiliencia comercial: diversificación y dependencia, no volumen. Datos de la DGA (Aduanas), por capítulo arancelario."
     />
   );
 
@@ -54,38 +50,33 @@ export function TradeIntelPage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudo calcular el índice de comercio. Reintenta."
+          message="No se pudo cargar el índice de comercio. Reintenta."
           action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
         />
       </div>
     );
 
   const s = score!;
-  const band = bandFor(s.resilience_score);
+  if (!s.has_score)
+    return (
+      <div>
+        {head}
+        <StateBlock
+          kind="empty"
+          message="Aún no hay datos de comercio. Corre la operación «Sincronizar comercio (Aduanas/DGA)» en la Consola de Operación para ingerir las estadísticas de comercio exterior."
+        />
+      </div>
+    );
 
-  const doSave = async () => {
-    setSaved(null);
-    try {
-      await saveSnapshot(period.slice(0, 4), SAMPLE_FLOWS);
-      setSaved("Snapshot guardado · evento trade.updated publicado");
-    } catch {
-      setSaved("No se pudo guardar el snapshot.");
-    }
-  };
+  const band = bandFor(s.resilience_score);
 
   return (
     <div>
       <PageHead
-        eyebrow="BCRD · DGA"
+        eyebrow="DGA · Aduanas"
         title="Comercio exterior"
-        sub="Resiliencia comercial: diversificación y dependencia, no volumen. Datos ilustrativos."
-        right={
-          <button onClick={doSave} className="btn btn-soft">
-            Guardar snapshot
-          </button>
-        }
+        sub={`Resiliencia comercial por capítulo arancelario (DGA). Período ${s.period ?? "—"}.`}
       />
-      {saved && <div className="text-xs text-muted mb-3 -mt-3">{saved}</div>}
 
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Hero */}
@@ -117,16 +108,16 @@ export function TradeIntelPage() {
         <div className="lg:col-span-2 space-y-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatTile label="HHI exportaciones" value={fmtNum(s.hhi_exports, 3)} />
-            <StatTile label="Productos export." value={s.n_products_export} />
-            <StatTile label="Export. total" value={fmtNum(s.total_exports, 0)} unit="M" />
-            <StatTile label="Import. total" value={fmtNum(s.total_imports, 0)} unit="M" />
+            <StatTile label="Capítulos export." value={s.n_products_export ?? "—"} />
+            <StatTile label="Export. total" value={fmtNum(s.total_exports, 0)} unit="M US$" />
+            <StatTile label="Import. total" value={fmtNum(s.total_imports, 0)} unit="M US$" />
           </div>
 
           <Card>
             <CardHead
               icon={Boxes}
               title="Concentración de exportaciones"
-              subtitle="Participación por producto (HHI · diversificación > volumen)"
+              subtitle="Participación por capítulo (HHI · diversificación > volumen)"
             />
             <Treemap
               items={s.top_export_products.map((p) => ({
