@@ -47,6 +47,7 @@ _RUBRIC_VARS = ("fossil_dependence", "carbon_intensity")
 def assemble_irc_dataset(
     db: Session, period: Optional[str] = None,
     hurricane_exp: Optional[Dict[str, float]] = None,
+    transition: Optional[Dict[str, Dict[str, float]]] = None,
 ) -> Dict[str, Any]:
     """Full IRC dataset per country for *period*: real (ND-GAIN: sensitivity +
     adaptive + governance; HURDAT2: hurricane exposure) + declared rubric
@@ -60,6 +61,14 @@ def assemble_irc_dataset(
     ref_year = ndgain_client.reference_year()
     target = period or ref_year
     panel = ndgain_client.panel(list(IRC_PANEL))
+
+    # Transition goes live ONLY IF every panel country has both metrics — a partial
+    # fill would distort the cross-country min-max (the IDM education lesson). Ember
+    # covers the whole panel, so in practice this passes.
+    transition_live = bool(transition) and all(
+        iso in transition and all(v in transition[iso] for v in _RUBRIC_VARS)
+        for iso in panel
+    )
 
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
@@ -75,9 +84,14 @@ def assemble_irc_dataset(
         else:
             merged["hurricane_exposure"] = float(comp["exposure"])
         smap["hurricane_exposure"] = "live"
-        for var in _RUBRIC_VARS:                    # transition: rubric until Gate C
-            merged[var] = float(defaults.get(var, 0.5))
-            smap[var] = "rubric"
+        # Transition: Ember real if the panel is complete, else declared rubric.
+        for var in _RUBRIC_VARS:
+            if transition_live:
+                merged[var] = float(transition[iso3][var])
+                smap[var] = "live"
+            else:
+                merged[var] = float(defaults.get(var, 0.5))
+                smap[var] = "rubric"
         dataset[iso3] = merged
         sources[iso3] = smap
     return {"period": target, "dataset": dataset, "sources": sources,
@@ -128,16 +142,27 @@ def esg_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> 
     except Exception as e:  # noqa: BLE001 — Gate B best-effort; fallback to ND-GAIN
         logger.warning("HURDAT2 no disponible, físico cae a ND-GAIN: %s", e)
 
-    set_phase("ensamblando IRC del panel (ND-GAIN + HURDAT2)")
-    asm = assemble_irc_dataset(db, hurricane_exp=hurricane_exp)
+    transition: Optional[Dict[str, Dict[str, float]]] = None
+    set_phase("descargando transición eléctrica (Ember: fósil + carbono)")
+    try:
+        from shared.data.ember_client import ember_client
+        transition = ember_client.fetch_transition(list(IRC_PANEL))
+    except Exception as e:  # noqa: BLE001 — Gate C best-effort; fallback to rubric
+        logger.warning("Ember no disponible, transición cae a rúbrica: %s", e)
+
+    set_phase("ensamblando IRC del panel (ND-GAIN + HURDAT2 + Ember)")
+    asm = assemble_irc_dataset(db, hurricane_exp=hurricane_exp, transition=transition)
     if not asm["dataset"]:
         return {"error": "ND-GAIN sin datos para el panel", "scored": 0, "errors": ["sin datos"]}
+    transition_live = asm["sources"].get("DOM", {}).get("fossil_dependence") == "live"
     set_phase(f"calculando IRC de {len(asm['dataset'])} países ({asm['period']})")
     res = compute_and_persist(db, period=asm["period"], dataset=asm["dataset"], sources=asm["sources"])
     return {"scored": len(res["countries"]), "period": asm["period"],
             "reference_year": asm["reference_year"],
             "hurricane_source": "HURDAT2" if hurricane_exp else "ND-GAIN (fallback)",
-            "hurdat2_year": hurdat2_year, "countries": len(asm["dataset"]), "errors": []}
+            "hurdat2_year": hurdat2_year,
+            "transition_source": "Ember" if transition_live else "rúbrica (fallback)",
+            "countries": len(asm["dataset"]), "errors": []}
 
 
 def get_scores(db: Session, period: Optional[str] = None) -> List[ESGScore]:
