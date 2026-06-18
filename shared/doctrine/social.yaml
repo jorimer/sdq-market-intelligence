@@ -37,3 +37,16 @@ bands:
   - {name: Alto,  lower: 70.0, color: "#047857"}
   - {name: Medio, lower: 40.0, color: "#F59E0B"}
   - {name: Bajo,  lower: 0.0,  color: "#991B1B"}
+
+# Rúbrica declarada (Gate C) — variables del IDM sin dato real aún. NEUTRAL 50
+# (uniforme: no discrimina ni finge; un valor parcial distorsionaría el min-max).
+# Suben a real: poverty_rate ya es ONE por región ✅; salud (life_expectancy/
+# child_mortality) = WDI nacional ✅; educación (literacy/schooling) e ingreso ←
+# Censo 2022/ENHOGAR (PDF, extracción pendiente); inclusión/informalidad ← BCRD
+# (ENIEF/ENCFT, pendiente). La UI marca cada variable real-vs-rúbrica.
+rubric_defaults:
+  income_per_capita: 50
+  literacy_rate: 50
+  schooling_years: 50
+  financial_inclusion: 50
+  informality_rate: 50

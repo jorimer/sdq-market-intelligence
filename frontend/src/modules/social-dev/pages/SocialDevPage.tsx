@@ -7,6 +7,7 @@ import {
   Gauge,
   BandBadge,
   StatTile,
+  Chip,
   Tabs,
   StateBlock,
   LoadingGrid,
@@ -14,59 +15,62 @@ import {
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
 import { bandFor, toneVar } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
-import { useApp } from "@/shared/context/AppContext";
 import {
-  computeIndex,
-  getDetail,
-  IndexResult,
-  SdgDetail,
+  getIndicators,
+  getDataset,
+  IndicatorsResult,
+  IdmDataset,
 } from "../api";
-import { SAMPLE_REGIONS, REGION_NAMES, DIM_LABELS } from "../data";
+import { REGION_NAMES, DIM_LABELS, IDM_DIM_VARS } from "../data";
 
 type Status = "loading" | "error" | "ready";
 
+/** Real-vs-rubric tag for one IDM dimension, from the dataset's sources map. */
+function dimTag(
+  sources: Record<string, string> | undefined,
+  dimKey: string,
+): DimensionRow["tag"] {
+  const vars = IDM_DIM_VARS[dimKey] ?? [];
+  if (!sources || vars.length === 0) return undefined;
+  const live = vars.filter((v) => sources[v] === "live").length;
+  if (live === 0) return { text: "rúbrica", ok: false };
+  if (live === vars.length) return { text: "en vivo", ok: true };
+  return { text: `${live}/${vars.length} en vivo`, ok: true };
+}
+
 export function SocialDevPage() {
-  const { period } = useApp();
   const [status, setStatus] = useState<Status>("loading");
-  const [result, setResult] = useState<IndexResult | null>(null);
-  const [detail, setDetail] = useState<SdgDetail | null>(null);
-  const [selected, setSelected] = useState("nacional");
+  const [data, setData] = useState<IndicatorsResult | null>(null);
+  const [ds, setDs] = useState<IdmDataset | null>(null);
+  const [selected, setSelected] = useState("ozama");
   const [tab, setTab] = useState("distribucion");
 
-  const loadDetail = useCallback(async (key: string) => {
-    try {
-      setDetail(await getDetail(key));
-    } catch {
-      setDetail(null);
-    }
-  }, []);
+  const nameOf = (key: string) => REGION_NAMES[key] ?? key;
 
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      const r = await computeIndex(period, SAMPLE_REGIONS);
-      setResult(r);
-      await loadDetail(selected);
+      const [ind, dataset] = await Promise.all([getIndicators(), getDataset()]);
+      setData(ind);
+      setDs(dataset);
+      setSelected((prev) =>
+        ind.indicators.some((e) => e.entity_key === prev)
+          ? prev
+          : ind.indicators[0]?.entity_key ?? prev,
+      );
       setStatus("ready");
     } catch {
       setStatus("error");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (status === "ready") loadDetail(selected);
-  }, [selected, status, loadDetail]);
+  useEffect(() => { load(); }, [load]);
 
   const head = (
     <PageHead
-      eyebrow="ONE"
+      eyebrow="ONE · WDI · rúbrica"
       title="Social & desarrollo"
-      sub="Índice multidimensional de desarrollo por región. Se reporta la distribución, no solo el promedio. Datos ilustrativos."
+      sub="Índice de desarrollo (IDM) por las 10 regiones de desarrollo. Pobreza de la ONE; salud del WDI; el resto, rúbrica declarada. Se reporta la distribución, no solo el promedio."
     />
   );
 
@@ -77,38 +81,54 @@ export function SocialDevPage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudo calcular el índice de desarrollo. Reintenta."
+          message="No se pudo cargar el índice de desarrollo. Reintenta."
           action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
         />
       </div>
     );
 
-  const dist = result!.distribution;
-  const cur = result!.entities.find((e) => e.entity_key === selected);
-  const band = bandFor(cur?.development_score);
-  const ranking = [...result!.entities].sort((a, b) => b.development_score - a.development_score);
+  const entities = data!.indicators;
+  if (entities.length === 0)
+    return (
+      <div>
+        {head}
+        <StateBlock
+          kind="empty"
+          message="Aún no hay snapshot del IDM. Corre la operación «Backfill del índice de desarrollo (IDM)» en la Consola de Operación."
+        />
+      </div>
+    );
 
-  const rows: DimensionRow[] = detail
-    ? Object.entries(detail.dimensions).map(([key, d]) => ({
+  const dist = data!.distribution;
+  const cur = entities.find((e) => e.entity_key === selected);
+  const sources = ds?.sources[selected];
+  const band = bandFor(cur?.development_score);
+  const ranking = [...entities].sort((a, b) => b.development_score - a.development_score);
+
+  const rows: DimensionRow[] = cur
+    ? Object.entries(cur.breakdown).map(([key, d]) => ({
         key,
         label: DIM_LABELS[key] ?? key,
         score: d.score,
         weight: d.weight,
         contribution: d.contribution,
+        tag: dimTag(sources, key),
       }))
     : [];
 
-  // Distribution dot plot bounds
   const lo = dist.min ?? 0;
   const hi = dist.max ?? 100;
   const span = Math.max(1, hi - lo);
+  const liveDims = sources
+    ? Object.keys(DIM_LABELS).filter((k) => dimTag(sources, k)?.ok).length
+    : 0;
 
   return (
     <div>
       <PageHead
-        eyebrow="ONE"
+        eyebrow="ONE · WDI · rúbrica"
         title="Social & desarrollo"
-        sub="Índice multidimensional de desarrollo por región. Se reporta la distribución, no solo el promedio. Datos ilustrativos."
+        sub="Índice de desarrollo (IDM) por las 10 regiones de desarrollo. Pobreza de la ONE; salud del WDI; el resto, rúbrica declarada. Se reporta la distribución, no solo el promedio."
         right={
           <select
             value={selected}
@@ -116,25 +136,27 @@ export function SocialDevPage() {
             className="field !w-auto"
             title="Región"
           >
-            {result!.entities.map((e) => (
-              <option key={e.entity_key} value={e.entity_key}>
-                {REGION_NAMES[e.entity_key] ?? e.entity_key}
-              </option>
+            {entities.map((e) => (
+              <option key={e.entity_key} value={e.entity_key}>{nameOf(e.entity_key)}</option>
             ))}
           </select>
         }
       />
 
+      <div className="flex flex-wrap items-center gap-2 mb-4 -mt-2">
+        <Chip tone={ds?.has_live ? "ok" : "muted"}>
+          {liveDims}/{Object.keys(DIM_LABELS).length} dimensiones en vivo
+        </Chip>
+        {data!.period && <Chip tone="muted">{data!.period}</Chip>}
+        <Chip tone="muted">{entities.length} regiones</Chip>
+      </div>
+
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Hero */}
         <Card className="lg:col-span-1 flex flex-col items-center text-center">
-          <div className="text-xs text-muted mb-3 w-full truncate">
-            {REGION_NAMES[selected] ?? selected}
-          </div>
+          <div className="text-xs text-muted mb-3 w-full truncate">{nameOf(selected)}</div>
           <Gauge score={cur?.development_score} band={band} />
-          <div className="mt-3">
-            <BandBadge band={band} />
-          </div>
+          <div className="mt-3"><BandBadge band={band} /></div>
           <div className="text-xs text-muted mt-3">{dist.n} regiones · IDM</div>
         </Card>
 
@@ -164,7 +186,6 @@ export function SocialDevPage() {
                     <StatTile label="Máximo" value={fmtNum(dist.max, 1)} />
                     <StatTile label="Amplitud" value={fmtNum(dist.spread, 1)} />
                   </div>
-                  {/* dot plot */}
                   <div className="rounded-[10px] bg-surface2 p-4">
                     <div className="relative h-10">
                       {ranking.map((e) => {
@@ -173,7 +194,7 @@ export function SocialDevPage() {
                         return (
                           <div
                             key={e.entity_key}
-                            title={`${REGION_NAMES[e.entity_key] ?? e.entity_key}: ${fmtNum(e.development_score, 1)}`}
+                            title={`${nameOf(e.entity_key)}: ${fmtNum(e.development_score, 1)}`}
                             className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-surface"
                             style={{ left: `${x}%`, background: toneVar(b.tone) }}
                           />
@@ -194,7 +215,7 @@ export function SocialDevPage() {
                   <CardHead
                     icon={Users}
                     title="Dimensiones del desarrollo"
-                    subtitle={`${REGION_NAMES[selected] ?? selected} · ponderadas`}
+                    subtitle={`${nameOf(selected)} · ponderadas · badge real-vs-rúbrica`}
                   />
                   <DimensionBreakdown rows={rows} />
                 </>
@@ -223,15 +244,11 @@ export function SocialDevPage() {
                             }`}
                           >
                             <td className="py-2.5 px-1 mono text-muted">{i + 1}</td>
-                            <td className="py-2.5 px-1 text-ink truncate">
-                              {REGION_NAMES[e.entity_key] ?? e.entity_key}
-                            </td>
+                            <td className="py-2.5 px-1 text-ink truncate">{nameOf(e.entity_key)}</td>
                             <td className="py-2.5 px-1 text-right mono font-semibold text-ink">
                               {fmtNum(e.development_score, 1)}
                             </td>
-                            <td className="py-2.5 px-1">
-                              <BandBadge band={b} />
-                            </td>
+                            <td className="py-2.5 px-1"><BandBadge band={b} /></td>
                           </tr>
                         );
                       })}

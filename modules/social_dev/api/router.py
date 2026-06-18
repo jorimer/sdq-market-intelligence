@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
-from modules.social_dev.scoring.development import IDM_CONFIG
+from modules.social_dev.scoring.development import IDM_CONFIG, distribution_stats
 from modules.social_dev.service import (
+    assemble_idm_dataset,
     compute_and_persist,
     get_latest,
     get_scores,
@@ -65,19 +66,43 @@ async def index(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/indicators", summary="Scores de desarrollo persistidos")
+@router.get("/indicators", summary="Scores de desarrollo persistidos (último período)")
 async def indicators(
-    period: Optional[str] = Query(None),
+    period: Optional[str] = Query(None, description="Período; por defecto, el último con scores."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     rows = get_scores(db, period)
+    if period is None and rows:
+        from modules.social_dev.service import _period_key
+
+        latest = max((r.period for r in rows), key=_period_key)
+        rows = [r for r in rows if r.period == latest]
     items = [
-        {"entity_key": r.entity_key, "period": r.period,
-         "development_score": r.development_score, "band": r.band}
+        {"entity_key": r.entity_key, "period": r.period, "development_score": r.development_score,
+         "band": r.band, "breakdown": r.breakdown}
         for r in rows
     ]
-    return {"indicators": items, "count": len(items)}
+    dist = distribution_stats([r.development_score for r in rows if r.development_score is not None])
+    return {"indicators": items, "count": len(items), "distribution": dist,
+            "period": items[0]["period"] if items else None}
+
+
+@router.get(
+    "/dataset",
+    summary="Dataset ensamblado del IDM (real + rúbrica) con procedencia",
+    description=(
+        "El dataset por región que alimenta el IDM: dato real (pobreza ONE por "
+        "región, salud WDI nacional) + rúbrica declarada (ingreso/educación/"
+        "inclusión). Incluye 'sources' (live|rubric) por variable para el badge "
+        "real-vs-rúbrica. Single-source: el snapshot y la UI puntúan lo mismo."
+    ),
+)
+async def dataset(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return assemble_idm_dataset(db)
 
 
 @router.get("/sdg", summary="Resumen ODS (placeholder estructurado)")
