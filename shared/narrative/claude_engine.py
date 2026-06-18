@@ -55,6 +55,21 @@ TEMPLATES = {
         "p. ej. Estabilidad Financiera), apóyate en él para el panorama macro/sistémico "
         "y cítalo explícitamente (nombre del informe y período)."
     ),
+    "social_outlook": (
+        "Eres un economista del desarrollo analizando el Índice de Desarrollo "
+        "Multidimensional (IDM) de una región de la República Dominicana.\n\n"
+        "Contexto:\n{context}\n\n"
+        "Escribe en español, máximo 450 palabras, formato SCQA, con estos bloques:\n"
+        "1) **Lectura**: el score IDM de la región, su banda y su posición en la "
+        "distribución (usa el rank y la dispersión provistos — distribución > promedio).\n"
+        "2) **Fortalezas y rezagos**: las dimensiones que más suman y las que más "
+        "lastran (salud/educación/nivel de vida/inclusión), citando sus scores.\n"
+        "3) **Desigualdad**: qué dice la posición de la región frente a las demás.\n"
+        "4) **Qué vigilar**: prioridades de desarrollo.\n"
+        "Reglas: doctrina = bienestar multidimensional, distribución > promedio; NO "
+        "inventes cifras fuera del contexto; respeta la procedencia (real vs rúbrica "
+        "declarada) y NO sobre-interpretes una dimensión marcada como rúbrica."
+    ),
     "indicator_insight": (
         "Eres un analista de calificación de riesgo bancario en República Dominicana. "
         "Analiza EN DETALLE un único indicador financiero de una entidad, a partir de "
