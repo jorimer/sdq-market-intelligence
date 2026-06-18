@@ -1,4 +1,9 @@
-"""Tests for esg_climate: exposure, materiality, persistence, events."""
+"""Tests for esg_climate: IRC nacional (ND-GAIN panel), persistence, events.
+
+The IRC was re-scoped from per-sector to per-country (Caribbean/LatAm panel).
+Physical/adaptive/governance come from real ND-GAIN; transition is declared
+rubric until the energy source is wired (Gate C).
+"""
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -6,22 +11,17 @@ from sqlalchemy.pool import StaticPool
 
 from shared.database.base import Base
 from shared.events.event_bus import event_bus
+from shared.data.ndgain_client import ndgain_client
 from modules.esg_climate.events import ESG_UPDATED
-from modules.esg_climate.models.models import (  # noqa: F401 — register tables
-    ESGScore,
-    EnvIndicator,
+from modules.esg_climate.models.models import ESGScore, EnvIndicator  # noqa: F401 — register tables
+from modules.esg_climate.scoring.exposure import IRC_CONFIG, compute_irc
+from modules.esg_climate.service import (
+    IRC_PANEL,
+    assemble_irc_dataset,
+    compute_and_persist,
+    esg_sync,
+    get_latest,
 )
-from modules.esg_climate.scoring.exposure import IRC_CONFIG, compute_exposure
-from modules.esg_climate.service import compute_and_persist, get_latest
-
-DATASET = {
-    "turismo": {"hurricane_exposure": 80, "coastal_exposure": 90, "carbon_intensity": 40,
-                "fossil_dependence": 55, "adaptation_investment": 45, "diversification": 50,
-                "disclosure_quality": 40, "emissions_targets": 35},
-    "energia": {"hurricane_exposure": 50, "coastal_exposure": 40, "carbon_intensity": 85,
-                "fossil_dependence": 80, "adaptation_investment": 55, "diversification": 45,
-                "disclosure_quality": 60, "emissions_targets": 55},
-}
 
 
 @pytest.fixture()
@@ -47,33 +47,42 @@ def test_weights_sum_to_one():
     assert round(sum(IRC_CONFIG.dimension_weights.values()), 6) == 1.0
 
 
-def test_exposure_inverts_risk_variables():
-    res = compute_exposure("energia", DATASET)
+def test_ndgain_fixture_has_the_panel():
+    panel = ndgain_client.panel(list(IRC_PANEL))
+    assert "DOM" in panel
+    assert panel["DOM"]["governance"] > 0          # real value present
+    assert ndgain_client.reference_year()           # year stamped
+
+
+def test_assemble_marks_real_vs_rubric(db):
+    asm = assemble_irc_dataset(db)
+    assert asm["has_live"] and asm["dataset"].get("DOM")
+    src = asm["sources"]["DOM"]
+    # ND-GAIN dimensions are live; transition is declared rubric.
+    assert src["governance_quality"] == "live"
+    assert src["climate_exposure"] == "live"
+    assert src["fossil_dependence"] == "rubric"
+    assert src["carbon_intensity"] == "rubric"
+
+
+def test_compute_irc_inverts_risk_variables(db):
+    asm = assemble_irc_dataset(db)
+    res = compute_irc("DOM", asm["dataset"])
     assert 0.0 <= res["esg_score"] <= 100.0
-    ci = res["dimensions"]["transition_risk"]["variables"]["carbon_intensity"]
-    assert ci["inverted"] is True  # higher carbon = worse → inverted
-
-    # energia has higher carbon intensity than turismo → worse transition score
-    res_t = compute_exposure("turismo", DATASET)
-    assert res["dimensions"]["transition_risk"]["score"] < res_t["dimensions"]["transition_risk"]["score"]
+    exp = res["dimensions"]["physical_risk"]["variables"]["climate_exposure"]
+    assert exp["inverted"] is True                  # higher exposure = worse → inverted
 
 
-def test_materiality_flag_present():
-    res = compute_exposure("turismo", DATASET)
-    assert "materiality" in res
-    assert res["materiality"]["level"] in {"alta", "media", "baja"}
-
-
-def test_persist_and_publish(db):
+def test_sync_persists_panel_and_publishes(db):
     received = []
     event_bus.subscribe(ESG_UPDATED, lambda p: received.append(p))
-    compute_and_persist(db, "2025", DATASET)
-    assert db.query(ESGScore).count() == 2
-    assert len(received) == 1
-    assert received[0]["period"] == "2025"
-    row = get_latest(db, "turismo")
-    assert row.esg_score is not None
-    assert row.materiality_level in {"alta", "media", "baja"}
+    res = esg_sync(db)
+    assert res["errors"] == [] and res["scored"] == res["countries"] > 1
+    assert db.query(ESGScore).count() == res["scored"]
+    assert len(received) == 1 and received[0]["period"] == res["period"]
+    dr = get_latest(db, "DOM")
+    assert dr is not None and dr.esg_score is not None
+    assert dr.entity_key == "DOM"
 
 
 def test_empty_dataset_raises(db):

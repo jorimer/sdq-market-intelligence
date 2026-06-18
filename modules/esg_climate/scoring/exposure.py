@@ -1,9 +1,9 @@
-"""ESG / climate exposure scoring (Eje 7).
+"""IRC — climate-resilience scoring (Eje 7), national.
 
-Doctrine §9: financial materiality > formal compliance; demand a metric (penalize
-greenwashing); adjust to Caribbean vulnerability.  The composite per sector is
-computed with the shared index engine (higher = lower exposure / better managed);
-a materiality flag marks sectors where exposure is high but governance is weak.
+Re-scoped 2026-06-18 from per-sector to per-COUNTRY: the composite per country is
+computed with the shared index engine (higher = more resilient / less climate
+risk), against the Caribbean/LatAm panel as the peer set. Doctrine in
+``shared/doctrine/esg.yaml`` (v2.0).
 """
 from typing import Dict
 
@@ -13,38 +13,15 @@ from shared.indices.dimensions import Dataset
 
 IRC_CONFIG = load_doctrine("esg")
 
-# Materiality thresholds (on the 0-100 resilience score; lower = more exposed).
-_MATERIAL_SCORE = 50.0
-_WEAK_GOVERNANCE = 50.0
 
-
-def _materiality(score: float, governance_score: float) -> Dict:
-    """Flag financial materiality: high exposure + weak governance = material risk."""
-    material = score < _MATERIAL_SCORE
-    greenwashing_flag = material and governance_score >= 70.0  # buena narrativa, alta exposición
-    if score < _MATERIAL_SCORE and governance_score < _WEAK_GOVERNANCE:
-        level = "alta"
-    elif material:
-        level = "media"
-    else:
-        level = "baja"
+def compute_irc(entity_key: str, dataset: Dataset) -> Dict:
+    """Compute the climate-resilience (IRC) score for *entity_key* (a country)."""
+    result = run_index(entity_key, dataset, IRC_CONFIG)
     return {
-        "material": material,
-        "level": level,
-        "greenwashing_watch": greenwashing_flag,
-    }
-
-
-def compute_exposure(sector_key: str, dataset: Dataset) -> Dict:
-    """Compute the ESG/climate resilience score + materiality for *sector_key*."""
-    result = run_index(sector_key, dataset, IRC_CONFIG)
-    gov = result["dimensions"].get("governance", {}).get("score", 50.0)
-    return {
-        "sector_key": result["entity_key"],
+        "entity_key": result["entity_key"],
         "esg_score": result["score"],
         "band": result["band"],
         "band_color": result["band_color"],
         "dimensions": result["dimensions"],
-        "materiality": _materiality(result["score"], gov),
         "model_version": result["model_version"],
     }

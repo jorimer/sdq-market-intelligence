@@ -1,41 +1,34 @@
 import client from "@/shared/api/client";
 
-export interface Materiality {
-  material: boolean;
-  level: string;
-  greenwashing_watch: boolean;
-}
-
-/** A persisted ESG/climate sector score (from /indicators). */
-export interface ESGIndicator {
-  sector_key: string;
+/** One country's IRC (climate resilience) score in the panel. */
+export interface IRCIndicator {
+  entity_key: string;
+  country_name: string;
   period: string;
   esg_score: number;
   band: string;
-  material: boolean;
-  materiality_level: string;
 }
 
-/** Per-sector detail with the dimension breakdown (from /score). */
-export interface ESGSectorDetail {
+/** Per-country detail with the dimension breakdown + real-vs-rubric sources. */
+export interface IRCCountryDetail {
   has_score: boolean;
-  sector_key: string;
+  entity_key: string;
+  country_name?: string;
   period?: string;
   esg_score?: number;
   band?: string;
-  materiality_level?: string;
   breakdown?: {
     dimensions: Record<string, { score: number; weight: number; contribution: number }>;
-    materiality: Materiality;
+    sources: Record<string, "live" | "rubric">;
   };
 }
 
-export async function getIndicators(): Promise<{ indicators: ESGIndicator[]; count: number }> {
+export async function getIndicators(): Promise<{ indicators: IRCIndicator[]; count: number; period: string | null }> {
   const { data } = await client.get("/esg-climate/indicators");
   return data;
 }
 
-export async function getSectorScore(sectorKey: string): Promise<ESGSectorDetail> {
-  const { data } = await client.get("/esg-climate/score", { params: { sector_key: sectorKey } });
+export async function getCountryScore(entityKey: string): Promise<IRCCountryDetail> {
+  const { data } = await client.get("/esg-climate/score", { params: { entity_key: entityKey } });
   return data;
 }

@@ -36,18 +36,22 @@ class EnvIndicator(UUIDMixin, Base):
 
 
 class ESGScore(UUIDMixin, Base):
-    """Computed ESG/climate exposure + materiality for a sector and period."""
+    """Computed IRC (climate resilience) for a country/entity and period.
+
+    Re-scoped 2026-06-18 from per-sector to NATIONAL: ``entity_key`` is a country
+    ISO3 (the peer set is the Caribbean/LatAm panel). ``material``/
+    ``materiality_level`` are legacy sector fields, left nullable and unused."""
     __tablename__ = "esg_scores"
     __table_args__ = (
-        UniqueConstraint("sector_key", "period", name="uq_esg_sector_period"),
-        Index("ix_esg_scores_sector_period", "sector_key", "period"),
+        UniqueConstraint("entity_key", "period", name="uq_esg_entity_period"),
+        Index("ix_esg_scores_entity_period", "entity_key", "period"),
     )
 
-    sector_key = Column(String(60), nullable=False)
+    entity_key = Column(String(60), nullable=False)   # country ISO3 (e.g. "DOM")
     period = Column(String(10), nullable=False)
     esg_score = Column(Float, nullable=True)
     band = Column(String(20), nullable=True)
-    material = Column(Boolean, nullable=True)
-    materiality_level = Column(String(20), nullable=True)
+    material = Column(Boolean, nullable=True)          # legacy (sector materiality), unused
+    materiality_level = Column(String(20), nullable=True)  # legacy, unused
     breakdown = Column(JSON, nullable=True)
     model_version = Column(String(10), default="1.0", nullable=False)
