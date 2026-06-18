@@ -39,3 +39,22 @@ export async function getCountryScore(entityKey: string): Promise<IRCCountryDeta
   const { data } = await client.get("/esg-climate/score", { params: { entity_key: entityKey } });
   return data;
 }
+
+/** IRC backtest report (validation vs realized climate-disaster mortality). */
+export interface IRCBacktest {
+  computed: boolean;
+  message?: string;
+  n_countries?: number;
+  outcome?: string;
+  spearman?: number | null;
+  spearman_ci?: [number | null, number | null];
+  by_band?: { band: string; n: number; mean_climate_deaths_per_100k: number | null }[];
+  monotonic?: boolean;
+  note?: string;
+  generated_at?: string;
+}
+
+export async function getBacktest(): Promise<IRCBacktest> {
+  const { data } = await client.get("/esg-climate/backtest");
+  return data;
+}
