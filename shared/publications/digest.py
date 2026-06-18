@@ -25,8 +25,8 @@ logger = logging.getLogger("sdq.publications.digest")
 _MAX_TOKENS = 4096
 
 _PROMPT = (
-    "Eres un economista senior del Caribe analizando un informe oficial del Banco "
-    "Central de la República Dominicana ('{report_name}', período {period}).\n\n"
+    "Eres un analista senior del Caribe analizando un informe/estudio estadístico "
+    "oficial de la República Dominicana ('{report_name}', período {period}).\n\n"
     "A partir del texto del informe, produce un análisis estructurado en español, "
     "objetivo y citando cifras concretas cuando existan. Responde ÚNICAMENTE con un "
     "objeto JSON válido (sin texto adicional, sin ```), con esta forma exacta:\n"

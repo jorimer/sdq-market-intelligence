@@ -28,6 +28,26 @@ def _run_idm_snapshot(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_one_publications_sync(params, user_id, set_phase) -> Dict:
+    """Ingest the ONE studies (Censo/ENHOGAR/Pobreza/Vitales/Anuario) as
+    publications with an AI digest (the BCRD-publications pattern, for ONE)."""
+    from shared.publications import catalog as pub_catalog
+    from shared.publications import service as pub_service
+    db = SessionLocal()
+    try:
+        keys = pub_catalog.report_keys("ONE")
+        results = []
+        for i, key in enumerate(keys, 1):
+            set_phase(f"ingiriendo {key} ({i}/{len(keys)})")
+            row = pub_service.ingest_report(db, key, force=bool((params or {}).get("force")))
+            results.append({"report_key": key, "status": row.status if row else "unavailable",
+                            "period": row.period if row else None})
+        ok = sum(1 for r in results if r["status"] == "ok")
+        return {"ingested_ok": ok, "total": len(keys), "results": results, "errors": []}
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "one-social-sync", "Sincronizar social (ONE pobreza + WDI salud)",
@@ -42,6 +62,13 @@ def register() -> None:
         "real (pobreza ONE + salud WDI + rúbrica declarada), y purga cualquier score "
         "fuera del backfill (sin restos de fixture). Publica social.updated.",
         _run_idm_snapshot, default_interval_hours=2160,
+    ))
+    register_operation(Operation(
+        "one-publications-sync", "Ingerir estudios de la ONE (digest IA)",
+        "Descarga los estudios/encuestas de la ONE (Censo 2022, ENHOGAR, Boletín de "
+        "Pobreza, Estadísticas Vitales, Anuario Sociodemográfico), extrae el texto y "
+        "genera un digest de IA, ruteado a Social/ESG. Patrón de publicaciones BCRD.",
+        _run_one_publications_sync, default_interval_hours=2160,
     ))
 
 

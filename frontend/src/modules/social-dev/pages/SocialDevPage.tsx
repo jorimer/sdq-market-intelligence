@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Users, ListOrdered, BarChart3 } from "lucide-react";
+import { Users, ListOrdered, BarChart3, FileText } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -18,8 +18,10 @@ import { fmtNum } from "@/shared/lib/format";
 import {
   getIndicators,
   getDataset,
+  getPublications,
   IndicatorsResult,
   IdmDataset,
+  OnePublication,
 } from "../api";
 import { REGION_NAMES, DIM_LABELS, IDM_DIM_VARS } from "../data";
 
@@ -44,6 +46,7 @@ export function SocialDevPage() {
   const [ds, setDs] = useState<IdmDataset | null>(null);
   const [selected, setSelected] = useState("ozama");
   const [tab, setTab] = useState("distribucion");
+  const [pubs, setPubs] = useState<OnePublication[]>([]);
 
   const nameOf = (key: string) => REGION_NAMES[key] ?? key;
 
@@ -65,6 +68,15 @@ export function SocialDevPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // ONE studies (digest IA) — best-effort, independent of the index.
+  useEffect(() => {
+    let active = true;
+    getPublications()
+      .then((r) => { if (active) setPubs(r.publications.filter((p) => p.status === "ok")); })
+      .catch(() => { if (active) setPubs([]); });
+    return () => { active = false; };
+  }, []);
 
   const head = (
     <PageHead
@@ -168,6 +180,7 @@ export function SocialDevPage() {
                 { id: "distribucion", label: "Distribución" },
                 { id: "desglose", label: "Desglose" },
                 { id: "ranking", label: "Ranking" },
+                { id: "estudios", label: `Estudios ONE${pubs.length ? ` (${pubs.length})` : ""}` },
               ]}
               active={tab}
               onChange={setTab}
@@ -254,6 +267,54 @@ export function SocialDevPage() {
                       })}
                     </tbody>
                   </table>
+                </>
+              )}
+
+              {tab === "estudios" && (
+                <>
+                  <CardHead
+                    icon={FileText}
+                    title="Estudios de la ONE"
+                    subtitle="Censo, ENHOGAR, Pobreza, Vitales, Anuario · digest de IA"
+                  />
+                  {pubs.length === 0 ? (
+                    <p className="text-sm text-muted">
+                      Sin estudios ingeridos aún. Corre la operación «Ingerir estudios de la ONE»
+                      en la Consola de Operación.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {pubs.map((p) => (
+                        <div key={p.id} className="rounded-[10px] border border-line bg-surface2 p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-semibold text-ink truncate">{p.report_name}</div>
+                              <div className="text-xs text-muted mono mt-0.5">{p.period}</div>
+                            </div>
+                            <a
+                              href={p.landing_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="shrink-0 text-xs text-accent hover:underline"
+                            >
+                              ver en ONE ↗
+                            </a>
+                          </div>
+                          {p.resumen && <p className="text-xs text-body mt-2">{p.resumen}</p>}
+                          {p.hallazgos?.length > 0 && (
+                            <ul className="mt-2 space-y-1">
+                              {p.hallazgos.slice(0, 4).map((h, i) => (
+                                <li key={i} className="text-xs text-muted flex gap-1.5">
+                                  <span className="text-accent">·</span>
+                                  <span className="min-w-0">{h}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
