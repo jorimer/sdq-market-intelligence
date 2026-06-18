@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Leaf, ListOrdered } from "lucide-react";
+import { Leaf, ListOrdered, ShieldCheck } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -7,6 +7,7 @@ import {
   Gauge,
   Chip,
   Tabs,
+  StatTile,
   StateBlock,
   LoadingGrid,
 } from "@/shared/ui/primitives";
@@ -14,7 +15,7 @@ import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { Band } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
-import { getIndicators, getCountryScore, getCountryInsight, IRCIndicator, IRCCountryDetail } from "../api";
+import { getIndicators, getCountryScore, getCountryInsight, getBacktest, IRCIndicator, IRCCountryDetail, IRCBacktest } from "../api";
 import { DIM_LABELS, IRC_DIM_VARS } from "../data";
 
 type Status = "loading" | "error" | "ready";
@@ -46,6 +47,11 @@ export function EsgClimatePage() {
   const [detail, setDetail] = useState<IRCCountryDetail | null>(null);
   const [selected, setSelected] = useState("DOM");
   const [tab, setTab] = useState("desglose");
+  const [backtest, setBacktest] = useState<IRCBacktest | null>(null);
+
+  useEffect(() => {
+    getBacktest().then(setBacktest).catch(() => setBacktest(null));
+  }, []);
 
   const loadDetail = useCallback(async (key: string) => {
     try {
@@ -154,6 +160,7 @@ export function EsgClimatePage() {
               tabs={[
                 { id: "desglose", label: "Desglose" },
                 { id: "ranking", label: "Ranking del panel" },
+                { id: "validacion", label: "Validación" },
               ]}
               active={tab}
               onChange={setTab}
@@ -198,6 +205,57 @@ export function EsgClimatePage() {
                       })}
                     </tbody>
                   </table>
+                </>
+              )}
+
+              {tab === "validacion" && (
+                <>
+                  <CardHead icon={ShieldCheck} title="Backtest del IRC"
+                    subtitle="¿La resiliencia predice menos daño climático real? (OWID/EM-DAT)" />
+                  {!backtest?.computed ? (
+                    <StateBlock kind="empty"
+                      message={backtest?.message ?? "Aún no hay backtest. Corre «Backtest del IRC climático» en la Consola de Operación."} />
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <StatTile label="Correlación (Spearman)" value={fmtNum(backtest.spearman ?? null, 3)} />
+                        <StatTile label="IC 95%"
+                          value={backtest.spearman_ci
+                            ? `${fmtNum(backtest.spearman_ci[0] ?? null, 2)} … ${fmtNum(backtest.spearman_ci[1] ?? null, 2)}`
+                            : "—"} />
+                        <StatTile label="Países" value={backtest.n_countries ?? "—"} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Chip tone={backtest.monotonic ? "ok" : "warn"}>
+                          {backtest.monotonic ? "Monótona ✓" : "No monótona"}
+                        </Chip>
+                        <span className="text-xs text-muted">
+                          mayor resiliencia → menos muertes por desastre climático
+                        </span>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-muted border-b border-line">
+                            <th className="py-2 px-1 font-medium">Banda IRC</th>
+                            <th className="py-2 px-1 font-medium text-right">Países</th>
+                            <th className="py-2 px-1 font-medium text-right">Muertes/100k/año</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(backtest.by_band ?? []).map((b) => (
+                            <tr key={b.band} className="border-b border-line/60 last:border-0">
+                              <td className="py-2.5 px-1 text-ink">{b.band}</td>
+                              <td className="py-2.5 px-1 text-right mono text-body">{b.n}</td>
+                              <td className="py-2.5 px-1 text-right mono text-ink">
+                                {fmtNum(b.mean_climate_deaths_per_100k ?? null, 3)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {backtest.note && <p className="text-xs text-muted">{backtest.note}</p>}
+                    </div>
+                  )}
                 </>
               )}
             </div>

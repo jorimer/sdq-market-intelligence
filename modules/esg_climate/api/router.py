@@ -51,6 +51,20 @@ async def weights(current_user: User = Depends(get_current_user)) -> Dict[str, A
     }
 
 
+@router.get("/backtest", summary="Backtest del IRC (validación vs mortalidad climática)")
+async def backtest(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    import json
+
+    from shared.settings.models import AppSetting
+    row = db.query(AppSetting).filter(AppSetting.key == "esg_backtest_report").first()
+    if not row or not row.value:
+        return {"computed": False, "message": "Aún no hay backtest. Corre la operación «Backtest del IRC climático»."}
+    return json.loads(row.value)
+
+
 @router.get("/indicators", summary="IRC por país (panel Caribe/LatAm, más resiliente primero)")
 async def indicators(
     period: Optional[str] = Query(None),
