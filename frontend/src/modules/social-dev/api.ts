@@ -68,3 +68,19 @@ export async function getDataset(): Promise<IdmDataset> {
   const { data } = await client.get("/social-dev/dataset");
   return data;
 }
+
+export interface OnePublication {
+  id: string;
+  report_name: string;
+  period: string;
+  landing_url: string;
+  status: string;
+  sectors: string[];
+  resumen: string;
+  hallazgos: string[];
+}
+
+export async function getPublications(): Promise<{ publications: OnePublication[]; count: number }> {
+  const { data } = await client.get("/social-dev/publications");
+  return data;
+}

@@ -32,7 +32,8 @@ def db():
 
 # ── catalog ───────────────────────────────────────────────────────
 def test_report_catalog_has_three():
-    assert set(catalog.report_keys()) == {
+    # the BCRD catalog (ONE studies are catalogued too, filtered by source)
+    assert set(catalog.report_keys("BCRD")) == {
         "estabilidad_financiera", "economia_dominicana", "politica_monetaria",
     }
 

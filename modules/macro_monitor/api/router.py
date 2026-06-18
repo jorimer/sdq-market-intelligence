@@ -557,6 +557,8 @@ def list_publications(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     rows = pub_service.list_publications(db, report_key)
+    bcrd = set(pub_catalog.report_keys("BCRD"))
+    rows = [r for r in rows if r.report_key in bcrd]  # ONE studies surface in their own ejes
     return {"publications": [_pub_summary(r) for r in rows], "count": len(rows)}
 
 
@@ -582,7 +584,7 @@ def publications_catalog(
             "landing_url": spec.landing_url,
             "latest_ingested_period": latest.get(spec.key),
         }
-        for spec in pub_catalog.REPORTS.values()
+        for spec in pub_catalog.REPORTS.values() if spec.source == "BCRD"
     ]
     return {"reports": reports, "count": len(reports)}
 
@@ -625,7 +627,7 @@ def refresh_publications(
             status_code=400,
             detail=f"Informe desconocido: {report_key}. Opciones: {', '.join(pub_catalog.report_keys())}",
         )
-    keys = [report_key] if report_key else pub_catalog.report_keys()
+    keys = [report_key] if report_key else pub_catalog.report_keys("BCRD")
     results = []
     for key in keys:
         row = pub_service.ingest_report(db, key, force=force)

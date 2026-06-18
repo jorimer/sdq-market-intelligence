@@ -105,6 +105,26 @@ async def dataset(
     return assemble_idm_dataset(db)
 
 
+@router.get("/publications", summary="Estudios de la ONE (digest IA)")
+async def publications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from shared.publications import catalog as pub_catalog
+    from shared.publications import service as pub_service
+
+    one_keys = set(pub_catalog.report_keys("ONE"))
+    rows = [r for r in pub_service.list_publications(db) if r.report_key in one_keys]
+    items = [
+        {"id": r.id, "report_key": r.report_key, "report_name": r.report_name,
+         "period": r.period, "landing_url": r.landing_url, "status": r.status,
+         "sectors": r.sectors or [], "resumen": (r.digest or {}).get("resumen", ""),
+         "hallazgos": (r.digest or {}).get("hallazgos", [])}
+        for r in rows
+    ]
+    return {"publications": items, "count": len(items)}
+
+
 @router.get("/sdg", summary="Resumen ODS (placeholder estructurado)")
 async def sdg(
     entity_key: str = Query("nacional"),
