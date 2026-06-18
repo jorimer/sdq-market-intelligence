@@ -1,4 +1,11 @@
 import client from "@/shared/api/client";
+import type { AiInsight } from "@/shared/ui/insight-types";
+
+/** Contextual AI insight for the trade-resilience picture. Best-effort. */
+export async function getTradeInsight(): Promise<AiInsight | null> {
+  const { data } = await client.get("/trade-intel/insight");
+  return (data.ai_insight as AiInsight | null) ?? null;
+}
 
 export interface TopProduct {
   product: string;
