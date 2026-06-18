@@ -28,6 +28,17 @@ def _run_idm_snapshot(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_one_education_extract(params, user_id, set_phase) -> Dict:
+    """AI-native extraction of by-region education (literacy + schooling years)
+    from the full ENHOGAR report → ``sd_indicators``. Needs a prod ANTHROPIC key."""
+    from modules.social_dev.education_extract import one_education_sync
+    db = SessionLocal()
+    try:
+        return one_education_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_one_publications_sync(params, user_id, set_phase) -> Dict:
     """Ingest the ONE studies (Censo/ENHOGAR/Pobreza/Vitales/Anuario) as
     publications with an AI digest (the BCRD-publications pattern, for ONE)."""
@@ -62,6 +73,14 @@ def register() -> None:
         "real (pobreza ONE + salud WDI + rúbrica declarada), y purga cualquier score "
         "fuera del backfill (sin restos de fixture). Publica social.updated.",
         _run_idm_snapshot, default_interval_hours=2160,
+    ))
+    register_operation(Operation(
+        "one-education-extract", "Educación por región (extracción IA del ENHOGAR)",
+        "Lee el informe COMPLETO del ENHOGAR-2022 (ONE) y extrae con IA la tasa de "
+        "alfabetización y los años de escolaridad de las 10 regiones de desarrollo "
+        "(solo lo que el texto declara; nunca estima). Sube la dimensión educación "
+        "del IDM de rúbrica a dato real. Requiere la clave ANTHROPIC (prod).",
+        _run_one_education_extract, default_interval_hours=8760,  # estudio puntual → anual+
     ))
     register_operation(Operation(
         "one-publications-sync", "Ingerir estudios de la ONE (digest IA)",

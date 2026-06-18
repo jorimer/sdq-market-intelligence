@@ -84,10 +84,10 @@ def get_latest(db: Session, entity_key: str) -> Optional[DevelopmentScore]:
 
 
 # IDM variable sources (Gate C): poverty by region (ONE), health national (WDI),
-# the rest declared rubric until sourced (income/education ← Censo/ENHOGAR PDF;
-# inclusion/informality ← BCRD).
-RUBRIC_VARS = ("income_per_capita", "literacy_rate", "schooling_years",
-               "financial_inclusion", "informality_rate")
+# education by region (ONE ENHOGAR, AI-extracted), the rest declared rubric until
+# sourced (income ← Censo/ENHOGAR; inclusion/informality ← BCRD).
+RUBRIC_VARS = ("income_per_capita", "financial_inclusion", "informality_rate")
+EDUCATION_VARS = ("literacy_rate", "schooling_years")
 HEALTH_VARS = ("life_expectancy", "child_mortality")
 POVERTY_VAR = "poverty_rate"
 HEALTH_ENTITY = "nacional"
@@ -123,9 +123,10 @@ def _poverty_periods(db: Session) -> List[str]:
 
 def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Full IDM dataset per development region for *period*: real (ONE poverty by
-    region + WDI national health, applied to all regions) + declared rubric. Single
-    source of truth. Returns ``{period, dataset, sources, has_live}`` with a
-    live|rubric provenance map per variable. *period* defaults to the latest."""
+    region + WDI national health, applied to all regions + ONE education by region)
+    + declared rubric. Single source of truth. Returns ``{period, dataset, sources,
+    has_live}`` with a live|rubric provenance map per variable. *period* defaults
+    to the latest."""
     from shared.data.one_client import region_catalog
     from shared.doctrine import load_doctrine_raw
 
@@ -135,14 +136,33 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     snap = get_social_indicators(db, period=target)["entities"] if target else {}
     nat = snap.get(HEALTH_ENTITY, {})
 
+    regions = region_catalog()
+    # Education is by region from a one-off study (ENHOGAR, AI-extracted), on its
+    # own period — take the latest real value per (region, var) regardless of the
+    # poverty target. A variable goes live ONLY IF *every* region has it: a partial
+    # fill would distort the cross-region min-max (doctrine §rubric_defaults), so
+    # an incomplete extraction stays uniform rubric for all rather than half-real.
+    latest = get_social_indicators(db)["entities"]
+    edu_live = {
+        var: all(latest.get(slug, {}).get(var) is not None for slug, _ in regions)
+        for var in EDUCATION_VARS
+    }
+
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
-    for slug, _name in region_catalog():
+    for slug, _name in regions:
         merged: Dict[str, float] = {}
         smap: Dict[str, str] = {}
         for var in RUBRIC_VARS:
             merged[var] = float(defaults.get(var, 50))
             smap[var] = "rubric"
+        for var in EDUCATION_VARS:  # by region (ONE ENHOGAR), live iff complete
+            if edu_live[var]:
+                merged[var] = float(latest[slug][var])
+                smap[var] = "live"
+            else:
+                merged[var] = float(defaults.get(var, 50))
+                smap[var] = "rubric"
         for var in HEALTH_VARS:  # national (WDI), same for all regions
             v = nat.get(var)
             if v is not None:
