@@ -11,9 +11,10 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { Band } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
-import { getIndicators, getCountryScore, IRCIndicator, IRCCountryDetail } from "../api";
+import { getIndicators, getCountryScore, getCountryInsight, IRCIndicator, IRCCountryDetail } from "../api";
 import { DIM_LABELS, IRC_DIM_VARS } from "../data";
 
 type Status = "loading" | "error" | "ready";
@@ -202,6 +203,15 @@ export function EsgClimatePage() {
             </div>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-5">
+        <AiInsightCard
+          title="Perspectiva climática (IA)"
+          subtitle={`${nameOf(selected)} · IRC + posición en el panel · SCQA`}
+          depsKey={selected}
+          fetcher={() => getCountryInsight(selected)}
+        />
       </div>
     </div>
   );

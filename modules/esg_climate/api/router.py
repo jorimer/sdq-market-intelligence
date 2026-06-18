@@ -28,6 +28,19 @@ logger = logging.getLogger("sdq.api.esg_climate")
 router = APIRouter()
 
 
+async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
+    """Generate a Claude narrative from *context*; best-effort (returns None on any
+    failure so the endpoint never breaks). Without an API key the engine returns a
+    static fallback (``model_used == "static_fallback"``), passed through."""
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
+        logger.warning("AI insight clima (%s) no disponible: %s", template, e)
+        return None
+
+
 @router.get("/weights", summary="Pesos del IRC climático (doctrina)")
 async def weights(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
     return {
@@ -87,6 +100,39 @@ async def latest(
         "breakdown": s.breakdown,
         "model_version": s.model_version,
     }
+
+
+@router.get(
+    "/{entity_key}/insight",
+    summary="Perspectiva de IA del IRC de un país — fase 2, lento (~10-15s)",
+    description="Narrativa SCQA que explica la resiliencia climática del país: "
+    "fortalezas/vulnerabilidades por dimensión, posición en el panel y procedencia real.",
+)
+async def insight(
+    entity_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    import statistics
+
+    from modules.esg_climate.ai_context import climate_ai_context
+
+    s = get_latest(db, entity_key)
+    if s is None:
+        return {"has_score": False, "entity_key": entity_key, "ai_insight": None}
+
+    peers = [r for r in get_scores(db, s.period) if r.esg_score is not None]
+    peers.sort(key=lambda r: r.esg_score, reverse=True)   # most resilient first
+    rank = next((i + 1 for i, r in enumerate(peers) if r.entity_key == entity_key), None)
+    vals = [float(r.esg_score) for r in peers]
+    dist = ({"mean": round(statistics.mean(vals), 2), "min": round(min(vals), 2),
+             "max": round(max(vals), 2), "spread": round(max(vals) - min(vals), 2)}
+            if vals else None)
+    score = {"esg_score": s.esg_score, "band": s.band, "period": s.period, "breakdown": s.breakdown}
+    ctx = climate_ai_context(entity_key, score, country_name=IRC_PANEL.get(entity_key),
+                             rank=rank, n_countries=len(peers), distribution=dist)
+    return {"has_score": True, "entity_key": entity_key,
+            "ai_insight": await _ai_insight(ctx, "climate_outlook")}
 
 
 @router.delete(
