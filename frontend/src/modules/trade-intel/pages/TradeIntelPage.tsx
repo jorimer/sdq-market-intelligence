@@ -13,7 +13,8 @@ import {
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum, fmtPct } from "@/shared/lib/format";
 import { Treemap } from "@/shared/charts/Treemap";
-import { getTradeScore, TradeScore } from "../api";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
+import { getTradeScore, getTradeInsight, TradeScore } from "../api";
 
 type Status = "loading" | "error" | "ready";
 
@@ -128,6 +129,15 @@ export function TradeIntelPage() {
             />
           </Card>
         </div>
+      </div>
+
+      <div className="mt-5">
+        <AiInsightCard
+          title="Perspectiva del comercio (IA)"
+          subtitle={`Resiliencia, concentración y dependencia · ${s.period ?? ""} · SCQA`.trim()}
+          depsKey={s.period ?? "trade"}
+          fetcher={getTradeInsight}
+        />
       </div>
     </div>
   );
