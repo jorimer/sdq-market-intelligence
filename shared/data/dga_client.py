@@ -103,7 +103,7 @@ def parse_chapter_xlsx(content: bytes) -> List[Tuple[str, str, float]]:
             continue
         code = str(r[0]).strip()
         desc = str(r[1]).strip() if r[1] is not None else ""
-        if not re.fullmatch(r"\d{1,3}", code):  # chapter codes only; skips Total/blank
+        if not re.fullmatch(r"\d{1,2}", code):  # HS chapters 01-99 only; skips Total/blank
             continue
         val = r[2]
         if not isinstance(val, (int, float)):

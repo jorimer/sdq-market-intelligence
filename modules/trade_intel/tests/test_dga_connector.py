@@ -90,3 +90,73 @@ def test_flows_for_maps_to_millions_with_source():
     assert perlas["period"] == "2026-Q1"
     assert perlas["source"] == "DGA"
     assert perlas["partner"] is None
+
+
+# ── End-to-end sync (httpx mocked, no network) ────────────────────
+
+import pytest  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from shared.database.base import Base  # noqa: E402
+from modules.trade_intel.models.models import TradeFlow, TradeScore  # noqa: E402
+from modules.trade_intel import dga_sync  # noqa: E402
+
+
+@pytest.fixture
+def db():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    s = sessionmaker(bind=engine)()
+    try:
+        yield s
+    finally:
+        s.close()
+
+
+class _Resp:
+    def __init__(self, text="", content=b""):
+        self.text = text
+        self.content = content
+
+
+class _FakeHttp:
+    """Stands in for httpx.Client: serves landing HTML and xlsx bytes by URL."""
+
+    def __init__(self, export_html, import_html, xlsx, **_):
+        self._export_html = export_html
+        self._import_html = import_html
+        self._xlsx = xlsx
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def get(self, url):
+        if url == dga_sync.EXPORTS_LANDING:
+            return _Resp(text=self._export_html)
+        if url == dga_sync.IMPORTS_LANDING:
+            return _Resp(text=self._import_html)
+        return _Resp(content=self._xlsx)
+
+
+def test_dga_trade_sync_end_to_end(db, monkeypatch):
+    exp_html = '<a href="/media/aaa111/exportaciones_por_capitulo_enero_marzo_2026dc.xlsx">x</a>'
+    imp_html = '<a href="/media/bbb222/importaciones_por_capitulo_enero_marzo_2026dc.xlsx">x</a>'
+    xlsx = _sample_xlsx()
+
+    import httpx
+    monkeypatch.setattr(httpx, "Client",
+                        lambda **kw: _FakeHttp(exp_html, imp_html, xlsx, **kw))
+
+    res = dga_sync.dga_trade_sync(db)
+    assert res["periods"] == ["2026-Q1"] and res["latest"] == "2026-Q1"
+    assert res["errors"] == []
+    # 2 chapters × 2 directions persisted as flows; one score for the quarter.
+    assert db.query(TradeFlow).count() == 4
+    score = db.query(TradeScore).filter_by(period="2026-Q1").first()
+    assert score is not None and score.resilience_score is not None
+    assert score.import_dependency == 0.5  # symmetric export/import totals → 50%

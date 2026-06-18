@@ -75,20 +75,21 @@ def dga_trade_sync(
             errors: List[str] = []
             for i, period in enumerate(periods, 1):
                 set_phase(f"Aduanas {period} ({i}/{len(periods)})")
-                flows: List[Dict] = []
-                for direction, urls in (("export", exp), ("import", imp)):
-                    url = urls.get(period)
-                    if not url:
-                        continue
-                    try:
+                try:
+                    flows: List[Dict] = []
+                    for direction, urls in (("export", exp), ("import", imp)):
+                        url = urls.get(period)
+                        if not url:
+                            continue
                         flows += _flows_for(http.get(url).content, direction, period)
-                    except Exception as e:  # noqa: BLE001 — per-file best-effort
-                        errors.append(f"{direction} {period}: {e}")
-                if not flows:
-                    errors.append(f"{period}: sin flujos")
-                    continue
-                compute_and_persist(db, period=period, flows=flows)
-                ingested.append(period)
+                    if not flows:
+                        errors.append(f"{period}: sin flujos")
+                        continue
+                    compute_and_persist(db, period=period, flows=flows)
+                    ingested.append(period)
+                except Exception as e:  # noqa: BLE001 — per-quarter best-effort
+                    db.rollback()  # a bad quarter must not abort the rest of the backfill
+                    errors.append(f"{period}: {e}")
     except Exception as e:  # noqa: BLE001 — report, don't crash the op
         logger.warning("DGA trade sync falló: %s", e)
         return {"error": str(e), "periods": [], "errors": [str(e)]}
