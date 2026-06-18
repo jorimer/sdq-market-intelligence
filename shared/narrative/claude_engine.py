@@ -70,6 +70,21 @@ TEMPLATES = {
         "inventes cifras fuera del contexto; respeta la procedencia (real vs rúbrica "
         "declarada) y NO sobre-interpretes una dimensión marcada como rúbrica."
     ),
+    "trade_outlook": (
+        "Eres el economista jefe de una firma de análisis en República Dominicana, "
+        "analizando la RESILIENCIA del comercio exterior (no el volumen).\n\n"
+        "Contexto (datos de Aduanas/DGA por capítulo arancelario):\n{context}\n\n"
+        "Escribe en español, máximo 450 palabras, formato SCQA, con estos bloques:\n"
+        "1) **Lectura**: el score de resiliencia y qué refleja (diversificación + "
+        "dependencia de importaciones).\n"
+        "2) **Concentración exportadora**: qué capítulos dominan (cita las participaciones "
+        "provistas) y qué riesgo implica esa concentración.\n"
+        "3) **Dependencia**: lectura de la dependencia de importaciones y su implicación.\n"
+        "4) **Qué vigilar**: señales y vulnerabilidades.\n"
+        "Reglas: doctrina = diversificación > volumen, medir dependencia no solo apertura; "
+        "NO inventes cifras fuera del contexto; cita los números provistos; reconoce que NO "
+        "hay detalle por país socio."
+    ),
     "indicator_insight": (
         "Eres un analista de calificación de riesgo bancario en República Dominicana. "
         "Analiza EN DETALLE un único indicador financiero de una entidad, a partir de "

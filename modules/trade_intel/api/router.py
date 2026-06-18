@@ -23,6 +23,19 @@ logger = logging.getLogger("sdq.api.trade_intel")
 
 router = APIRouter()
 
+
+async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
+    """Generate a Claude narrative from *context*; best-effort (returns None on any
+    failure so the endpoint never breaks). Without an API key the engine returns a
+    static fallback (``model_used == "static_fallback"``), passed through."""
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
+        logger.warning("AI insight comercio (%s) no disponible: %s", template, e)
+        return None
+
 _EXAMPLE_FLOWS = [
     {"product": "ferroníquel", "direction": "export", "value": 1200.0, "partner": "US"},
     {"product": "instrumentos médicos", "direction": "export", "value": 2100.0, "partner": "US"},
@@ -153,3 +166,32 @@ async def latest_score(
         "top_export_products": bd.get("top_export_products", []),
         "source": "DGA",
     }
+
+
+@router.get(
+    "/insight",
+    summary="Perspectiva de IA del comercio exterior (resiliencia) — fase 2, lento (~10-15s)",
+    description="Narrativa SCQA que explica la resiliencia comercial: concentración "
+    "exportadora por capítulo y dependencia de importaciones (datos DGA/Aduanas).",
+)
+async def insight(
+    period: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.trade_intel.ai_context import trade_ai_context
+
+    s = get_latest_score(db, period)
+    if s is None:
+        return {"has_score": False, "period": period, "ai_insight": None}
+    bd = s.breakdown or {}
+    score = {
+        "period": s.period, "hhi_exports": s.hhi_exports,
+        "export_diversification": s.export_diversification,
+        "import_dependency": s.import_dependency, "resilience_score": s.resilience_score,
+        "total_exports": bd.get("total_exports"), "total_imports": bd.get("total_imports"),
+        "n_products_export": bd.get("n_products_export"),
+        "top_export_products": bd.get("top_export_products", []),
+    }
+    return {"has_score": True, "period": s.period,
+            "ai_insight": await _ai_insight(trade_ai_context(score), "trade_outlook")}
