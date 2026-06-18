@@ -32,9 +32,9 @@ IRC_PANEL: Dict[str, str] = {
     "VEN": "Venezuela",
 }
 
-# IRC variable ← ND-GAIN component (real). Transition vars are declared rubric.
+# IRC variable ← ND-GAIN component (real). Transition vars are declared rubric;
+# hurricane_exposure (physical) comes from HURDAT2 (Gate B), ND-GAIN as fallback.
 _NDGAIN_MAP = {
-    "climate_exposure": "exposure",
     "climate_sensitivity": "sensitivity",
     "adaptation_readiness": "readiness",
     "economic_readiness": "economic",
@@ -44,10 +44,15 @@ _NDGAIN_MAP = {
 _RUBRIC_VARS = ("fossil_dependence", "carbon_intensity")
 
 
-def assemble_irc_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
-    """Full IRC dataset per country for *period*: real (ND-GAIN: physical/adaptive/
-    governance) + declared rubric (transition). Returns ``{period, dataset, sources,
-    reference_year, has_live}`` with a live|rubric provenance map per variable.
+def assemble_irc_dataset(
+    db: Session, period: Optional[str] = None,
+    hurricane_exp: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
+    """Full IRC dataset per country for *period*: real (ND-GAIN: sensitivity +
+    adaptive + governance; HURDAT2: hurricane exposure) + declared rubric
+    (transition). Returns ``{period, dataset, sources, reference_year, has_live}``
+    with a live|rubric provenance map per variable. *hurricane_exp* (HURDAT2, by
+    iso3) feeds physical exposure; if absent, falls back to ND-GAIN exposure.
     *period* defaults to the ND-GAIN reference year."""
     from shared.doctrine import load_doctrine_raw
 
@@ -64,6 +69,12 @@ def assemble_irc_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
         for var, nd in _NDGAIN_MAP.items():        # ND-GAIN real
             merged[var] = float(comp[nd])
             smap[var] = "live"
+        # Physical exposure: HURDAT2 hurricane exposure (real), ND-GAIN as fallback.
+        if hurricane_exp is not None and iso3 in hurricane_exp:
+            merged["hurricane_exposure"] = float(hurricane_exp[iso3])
+        else:
+            merged["hurricane_exposure"] = float(comp["exposure"])
+        smap["hurricane_exposure"] = "live"
         for var in _RUBRIC_VARS:                    # transition: rubric until Gate C
             merged[var] = float(defaults.get(var, 0.5))
             smap[var] = "rubric"
@@ -103,16 +114,30 @@ def compute_and_persist(
 
 
 def esg_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
-    """Assemble the IRC dataset from ND-GAIN and persist the panel snapshot."""
+    """Assemble the IRC dataset (ND-GAIN + HURDAT2 hurricane exposure) and persist
+    the panel snapshot. HURDAT2 is best-effort: on failure, physical exposure falls
+    back to ND-GAIN (the IRC still computes on real data)."""
     set_phase = set_phase or (lambda _m: None)
-    set_phase("ensamblando IRC del panel (ND-GAIN)")
-    asm = assemble_irc_dataset(db)
+
+    hurricane_exp: Optional[Dict[str, float]] = None
+    hurdat2_year = None
+    set_phase("descargando exposición a huracanes (HURDAT2/NOAA)")
+    try:
+        from shared.data.hurdat2_client import hurdat2_client
+        hurricane_exp, hurdat2_year = hurdat2_client.fetch_exposure(list(IRC_PANEL))
+    except Exception as e:  # noqa: BLE001 — Gate B best-effort; fallback to ND-GAIN
+        logger.warning("HURDAT2 no disponible, físico cae a ND-GAIN: %s", e)
+
+    set_phase("ensamblando IRC del panel (ND-GAIN + HURDAT2)")
+    asm = assemble_irc_dataset(db, hurricane_exp=hurricane_exp)
     if not asm["dataset"]:
         return {"error": "ND-GAIN sin datos para el panel", "scored": 0, "errors": ["sin datos"]}
     set_phase(f"calculando IRC de {len(asm['dataset'])} países ({asm['period']})")
     res = compute_and_persist(db, period=asm["period"], dataset=asm["dataset"], sources=asm["sources"])
     return {"scored": len(res["countries"]), "period": asm["period"],
-            "reference_year": asm["reference_year"], "countries": len(asm["dataset"]), "errors": []}
+            "reference_year": asm["reference_year"],
+            "hurricane_source": "HURDAT2" if hurricane_exp else "ND-GAIN (fallback)",
+            "hurdat2_year": hurdat2_year, "countries": len(asm["dataset"]), "errors": []}
 
 
 def get_scores(db: Session, period: Optional[str] = None) -> List[ESGScore]:
