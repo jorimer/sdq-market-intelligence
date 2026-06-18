@@ -23,6 +23,9 @@ import { BankingScoreLayout } from "@/modules/banking-score/components/BankingSc
 import { MacroMonitorPage } from "@/modules/macro-monitor/pages/MacroMonitorPage";
 // Datos · Macroeconómico (BCRD) — consola operativa (API + Excel + Publicaciones)
 import { DatosMacroPage } from "@/modules/macro-monitor/pages/DatosMacroPage";
+// Datos · Social (ONE) y Comercio (DGA) — consolas de operación por fuente
+import { DatosSocialPage } from "@/modules/social-dev/pages/DatosSocialPage";
+import { DatosComercioPage } from "@/modules/trade-intel/pages/DatosComercioPage";
 // Macro-Political Risk (Eje 4)
 import { MacroPoliticalRiskPage } from "@/modules/macro-political-risk/pages/MacroPoliticalRiskPage";
 // Sector Intel (Eje 3)
@@ -70,14 +73,8 @@ export default function App() {
           <Route path="/datos/banca" element={<DataPage />} />
           <Route path="/datos/operaciones" element={<OperacionesPage />} />
           <Route path="/datos/macro" element={<DatosMacroPage />} />
-          <Route
-            path="/datos/social"
-            element={<PlaceholderPage title="Datos · Social (ONE)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
-          />
-          <Route
-            path="/datos/comercio"
-            element={<PlaceholderPage title="Datos · Comercio (UN Comtrade)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
-          />
+          <Route path="/datos/social" element={<DatosSocialPage />} />
+          <Route path="/datos/comercio" element={<DatosComercioPage />} />
           <Route
             path="/datos/gobernanza"
             element={<PlaceholderPage title="Datos · Gobernanza (WGI)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
