@@ -12,8 +12,6 @@ import { scoreTrade } from "@/modules/trade-intel/api";
 import { SAMPLE_FLOWS } from "@/modules/trade-intel/data";
 import { getExposure } from "@/modules/esg-climate/api";
 import { SAMPLE_SECTORS as ESG_SECTORS } from "@/modules/esg-climate/data";
-import { computeIndex } from "@/modules/social-dev/api";
-import { SAMPLE_REGIONS } from "@/modules/social-dev/data";
 
 interface Tile {
   to: string;
@@ -47,7 +45,8 @@ export function OverviewPage() {
         // Sectorial (IAI turismo) — persisted snapshot (real data, single-source)
         client.get<{ has_score: boolean; iai_score?: number }>("/sector-intel/turismo/latest"),
         // Social
-        computeIndex("2025", SAMPLE_REGIONS),
+        // Social (IDM) — persisted snapshot (real data, single-source)
+        client.get<{ distribution: { mean: number | null } }>("/social-dev/indicators"),
         // Comercio
         scoreTrade(SAMPLE_FLOWS),
         // ESG
@@ -75,8 +74,8 @@ export function OverviewPage() {
         t.push({ to: "/sector-intel", eyebrow: "BCRD", title: "Sectorial", value: fmtNum(sec.value.data.iai_score, 1), band: bandFor(sec.value.data.iai_score), note: "IAI · Turismo" });
 
       const soc = results[3];
-      if (soc.status === "fulfilled")
-        t.push({ to: "/social-dev", eyebrow: "ONE", title: "Social & desarrollo", value: fmtNum(soc.value.distribution.mean, 1), band: bandFor(soc.value.distribution.mean ?? undefined), note: "IDM · promedio" });
+      if (soc.status === "fulfilled" && soc.value.data.distribution?.mean != null)
+        t.push({ to: "/social-dev", eyebrow: "ONE", title: "Social & desarrollo", value: fmtNum(soc.value.data.distribution.mean, 1), band: bandFor(soc.value.data.distribution.mean ?? undefined), note: "IDM · promedio" });
 
       const tr = results[4];
       if (tr.status === "fulfilled")
