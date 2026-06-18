@@ -160,3 +160,14 @@ def test_dga_trade_sync_end_to_end(db, monkeypatch):
     score = db.query(TradeScore).filter_by(period="2026-Q1").first()
     assert score is not None and score.resilience_score is not None
     assert score.import_dependency == 0.5  # symmetric export/import totals → 50%
+
+
+def test_product_column_is_text_not_bounded():
+    """Guard against the dev↔prod parity bug: real HS chapter descriptions exceed
+    120 chars, so ``product`` must be unbounded Text (a bounded String silently
+    held on SQLite but raised StringDataRightTruncation on Postgres)."""
+    import sqlalchemy as sa
+
+    from modules.trade_intel.models.models import TradeFlow
+
+    assert isinstance(TradeFlow.__table__.c.product.type, sa.Text)
