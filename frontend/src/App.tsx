@@ -23,9 +23,10 @@ import { BankingScoreLayout } from "@/modules/banking-score/components/BankingSc
 import { MacroMonitorPage } from "@/modules/macro-monitor/pages/MacroMonitorPage";
 // Datos · Macroeconómico (BCRD) — consola operativa (API + Excel + Publicaciones)
 import { DatosMacroPage } from "@/modules/macro-monitor/pages/DatosMacroPage";
-// Datos · Social (ONE) y Comercio (DGA) — consolas de operación por fuente
+// Datos · Social (ONE), Comercio (DGA), Gobernanza (WGI) — consolas por fuente
 import { DatosSocialPage } from "@/modules/social-dev/pages/DatosSocialPage";
 import { DatosComercioPage } from "@/modules/trade-intel/pages/DatosComercioPage";
+import { DatosGobernanzaPage } from "@/modules/macro-political-risk/pages/DatosGobernanzaPage";
 // Macro-Political Risk (Eje 4)
 import { MacroPoliticalRiskPage } from "@/modules/macro-political-risk/pages/MacroPoliticalRiskPage";
 // Sector Intel (Eje 3)
@@ -75,10 +76,7 @@ export default function App() {
           <Route path="/datos/macro" element={<DatosMacroPage />} />
           <Route path="/datos/social" element={<DatosSocialPage />} />
           <Route path="/datos/comercio" element={<DatosComercioPage />} />
-          <Route
-            path="/datos/gobernanza"
-            element={<PlaceholderPage title="Datos · Gobernanza (WGI)" sub="Conector en construcción. Configure la fuente en Configuración → APIs de Benchmarks por Sector." />}
-          />
+          <Route path="/datos/gobernanza" element={<DatosGobernanzaPage />} />
 
           {/* Eje 2 — Macroeconómico */}
           <Route path="/macro-monitor" element={<MacroMonitorPage />} />
