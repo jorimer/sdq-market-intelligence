@@ -49,7 +49,7 @@ export const NAV: NavGroup[] = [
       { to: "/datos/macro", label: "Macro · BCRD", icon: LineChart, ready: true },
       { to: "/datos/social", label: "Social · ONE", icon: Users, ready: true },
       { to: "/datos/comercio", label: "Comercio · DGA", icon: Ship, ready: true },
-      { to: "/datos/gobernanza", label: "Gobernanza · WGI", icon: Scale, ready: false },
+      { to: "/datos/gobernanza", label: "Gobernanza · WGI", icon: Scale, ready: true },
     ],
   },
   {
