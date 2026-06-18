@@ -8,9 +8,10 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from shared.auth.dependencies import get_current_user
-from shared.auth.models import User
+from shared.auth.dependencies import get_current_user, require_role
+from shared.auth.models import User, UserRole
 from shared.database.session import get_db
+from modules.trade_intel.models.models import TradeFlow, TradeScore
 from modules.trade_intel.scoring.concentration import compute_trade_scores
 from modules.trade_intel.service import (
     compute_and_persist,
@@ -47,15 +48,17 @@ async def score(
 
 @router.post(
     "/snapshot",
-    summary="Calcular, persistir y publicar el score comercial",
-    description="Persiste los flujos y el score del período y publica 'trade.updated'.",
+    summary="Calcular, persistir y publicar el score comercial (admin)",
+    description="Persiste los flujos y el score del período y publica 'trade.updated'. "
+    "Solo admin: es el contrato de ingesta real (DGA/aduanas), no una vía para "
+    "sembrar datos desde la UI.",
 )
 async def snapshot(
     payload: Dict[str, Any] = Body(
         ..., examples=[{"period": "2025", "flows": _EXAMPLE_FLOWS}]
     ),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
     period = payload.get("period")
     flows = payload.get("flows")
@@ -65,6 +68,24 @@ async def snapshot(
         return compute_and_persist(db, period=period, flows=flows)
     except (ValueError, KeyError) as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete(
+    "/data",
+    summary="Purgar el dato comercial persistido (admin)",
+    description="Borra todos los flujos y scores comerciales persistidos. Para "
+    "limpiar fixture ilustrativo: no hay fuente real (DGA sin licencia) hasta "
+    "habilitar aduanas.",
+)
+async def purge_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    scores = db.query(TradeScore).delete()
+    flows = db.query(TradeFlow).delete()
+    db.commit()
+    logger.info("Purgado dato comercial: %d scores, %d flujos", scores, flows)
+    return {"scores_deleted": scores, "flows_deleted": flows}
 
 
 @router.get("/flows", summary="Flujos comerciales persistidos")
@@ -115,6 +136,7 @@ async def latest_score(
     s = get_latest_score(db, period)
     if s is None:
         return {"has_score": False, "period": period}
+    bd = s.breakdown or {}
     return {
         "has_score": True,
         "period": s.period,
@@ -123,4 +145,11 @@ async def latest_score(
         "import_dependency": s.import_dependency,
         "resilience_score": s.resilience_score,
         "model_version": s.model_version,
+        # Full breakdown so the UI renders headline + treemap from one read.
+        "total_exports": bd.get("total_exports"),
+        "total_imports": bd.get("total_imports"),
+        "n_products_export": bd.get("n_products_export"),
+        "n_products_import": bd.get("n_products_import"),
+        "top_export_products": bd.get("top_export_products", []),
+        "source": "DGA",
     }

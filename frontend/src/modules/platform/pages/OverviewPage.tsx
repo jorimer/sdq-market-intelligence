@@ -8,10 +8,8 @@ import { fmtNum } from "@/shared/lib/format";
 
 import { scoreCountry } from "@/modules/macro-political-risk/api";
 import { SAMPLE_REGIONAL } from "@/modules/macro-political-risk/data";
-import { scoreTrade } from "@/modules/trade-intel/api";
-import { SAMPLE_FLOWS } from "@/modules/trade-intel/data";
-import { getExposure } from "@/modules/esg-climate/api";
-import { SAMPLE_SECTORS as ESG_SECTORS } from "@/modules/esg-climate/data";
+import { getTradeScore } from "@/modules/trade-intel/api";
+import { getIndicators as getEsgIndicators } from "@/modules/esg-climate/api";
 
 interface Tile {
   to: string;
@@ -47,10 +45,10 @@ export function OverviewPage() {
         // Social
         // Social (IDM) — persisted snapshot (real data, single-source)
         client.get<{ distribution: { mean: number | null } }>("/social-dev/indicators"),
-        // Comercio
-        scoreTrade(SAMPLE_FLOWS),
-        // ESG
-        getExposure("turismo", ESG_SECTORS),
+        // Comercio (resiliencia) — snapshot persistido real (DGA/Aduanas)
+        getTradeScore(),
+        // ESG — scores persistidos (vacío hasta tener fuente sectorial real)
+        getEsgIndicators(),
         // Macro
         client.get<{ count: number }>("/macro-monitor/indicators"),
       ]);
@@ -78,12 +76,15 @@ export function OverviewPage() {
         t.push({ to: "/social-dev", eyebrow: "ONE", title: "Social & desarrollo", value: fmtNum(soc.value.data.distribution.mean, 1), band: bandFor(soc.value.data.distribution.mean ?? undefined), note: "IDM · promedio" });
 
       const tr = results[4];
-      if (tr.status === "fulfilled")
-        t.push({ to: "/trade-intel", eyebrow: "BCRD", title: "Comercio exterior", value: fmtNum(tr.value.resilience_score, 1), band: bandFor(tr.value.resilience_score ?? undefined), note: "Resiliencia" });
+      if (tr.status === "fulfilled" && tr.value.has_score)
+        t.push({ to: "/trade-intel", eyebrow: "DGA", title: "Comercio exterior", value: fmtNum(tr.value.resilience_score, 1), band: bandFor(tr.value.resilience_score ?? undefined), note: `Resiliencia · ${tr.value.period ?? ""}`.trim() });
 
       const esg = results[5];
-      if (esg.status === "fulfilled")
-        t.push({ to: "/esg-climate", eyebrow: "TCFD", title: "ESG & clima", value: fmtNum(esg.value.esg_score, 1), band: esgBand(esg.value.esg_score), note: "Turismo" });
+      if (esg.status === "fulfilled" && esg.value.count > 0) {
+        // Most exposed sector (lowest score) as the headline.
+        const worst = [...esg.value.indicators].sort((a, b) => a.esg_score - b.esg_score)[0];
+        t.push({ to: "/esg-climate", eyebrow: "TCFD", title: "ESG & clima", value: fmtNum(worst.esg_score, 1), band: esgBand(worst.esg_score), note: worst.sector_key });
+      }
 
       const mac = results[6];
       if (mac.status === "fulfilled")
@@ -98,7 +99,7 @@ export function OverviewPage() {
     <PageHead
       eyebrow="Plataforma"
       title="Resumen ejecutivo"
-      sub="Lectura consolidada de los 7 ejes de inteligencia. Datos ilustrativos por eje; abre cada uno para el detalle explicable."
+      sub="Lectura consolidada de los 7 ejes de inteligencia. Abre cada uno para el detalle explicable."
     />
   );
 

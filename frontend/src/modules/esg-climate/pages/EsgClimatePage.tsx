@@ -13,14 +13,13 @@ import {
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
 import { Band } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
-import { useApp } from "@/shared/context/AppContext";
 import {
-  scoreSectors,
-  getExposure,
-  ESGSectorSummary,
-  ESGExposure,
+  getIndicators,
+  getSectorScore,
+  ESGIndicator,
+  ESGSectorDetail,
 } from "../api";
-import { SAMPLE_SECTORS, SECTOR_NAMES, DIM_LABELS, MATERIALITY_TONE } from "../data";
+import { SECTOR_NAMES, DIM_LABELS, MATERIALITY_TONE } from "../data";
 
 type Status = "loading" | "error" | "ready";
 
@@ -32,17 +31,18 @@ function esgBand(score: number | null | undefined): Band {
   return { label: "Exposición alta", tone: "alert" };
 }
 
+const nameOf = (key: string) => SECTOR_NAMES[key] ?? key;
+
 export function EsgClimatePage() {
-  const { period } = useApp();
   const [status, setStatus] = useState<Status>("loading");
-  const [sectors, setSectors] = useState<ESGSectorSummary[]>([]);
-  const [detail, setDetail] = useState<ESGExposure | null>(null);
-  const [selected, setSelected] = useState("turismo");
+  const [sectors, setSectors] = useState<ESGIndicator[]>([]);
+  const [detail, setDetail] = useState<ESGSectorDetail | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [tab, setTab] = useState("desglose");
 
   const loadDetail = useCallback(async (key: string) => {
     try {
-      setDetail(await getExposure(key, SAMPLE_SECTORS));
+      setDetail(await getSectorScore(key));
     } catch {
       setDetail(null);
     }
@@ -51,29 +51,30 @@ export function EsgClimatePage() {
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      const r = await scoreSectors(period, SAMPLE_SECTORS);
-      setSectors(r.sectors);
-      await loadDetail(selected);
+      const r = await getIndicators();
+      setSectors(r.indicators);
+      setSelected((prev) =>
+        prev && r.indicators.some((s) => s.sector_key === prev)
+          ? prev
+          : r.indicators[0]?.sector_key ?? null,
+      );
       setStatus("ready");
     } catch {
       setStatus("error");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (status === "ready") loadDetail(selected);
+    if (status === "ready" && selected) loadDetail(selected);
   }, [selected, status, loadDetail]);
 
   const head = (
     <PageHead
-      eyebrow="ONE · TCFD/ISSB"
+      eyebrow="TCFD/ISSB"
       title="ESG & clima"
-      sub="Exposición climática y materialidad por sector. Mayor score = menor exposición. Datos ilustrativos."
+      sub="Exposición climática y materialidad por sector. Mayor score = menor exposición."
     />
   );
 
@@ -84,8 +85,19 @@ export function EsgClimatePage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudo calcular la exposición ESG. Reintenta."
+          message="No se pudo cargar la exposición ESG. Reintenta."
           action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
+        />
+      </div>
+    );
+
+  if (sectors.length === 0)
+    return (
+      <div>
+        {head}
+        <StateBlock
+          kind="empty"
+          message="Aún no hay datos ESG/clima por sector. La metodología (exposición física, transición, adaptación y gobernanza) está lista; falta una fuente sectorial real para alimentarla."
         />
       </div>
     );
@@ -95,32 +107,32 @@ export function EsgClimatePage() {
   // Most exposed first (ascending score).
   const ranking = [...sectors].sort((a, b) => a.esg_score - b.esg_score);
 
-  const rows: DimensionRow[] = detail
-    ? Object.entries(detail.dimensions).map(([key, d]) => ({
-        key,
-        label: DIM_LABELS[key] ?? key,
-        score: d.score,
-        weight: d.weight,
-        contribution: d.contribution,
-      }))
-    : [];
+  const dims = detail?.breakdown?.dimensions ?? {};
+  const rows: DimensionRow[] = Object.entries(dims).map(([key, d]) => ({
+    key,
+    label: DIM_LABELS[key] ?? key,
+    score: d.score,
+    weight: d.weight,
+    contribution: d.contribution,
+  }));
+  const materiality = detail?.breakdown?.materiality;
 
   return (
     <div>
       <PageHead
-        eyebrow="ONE · TCFD/ISSB"
+        eyebrow="TCFD/ISSB"
         title="ESG & clima"
-        sub="Exposición climática y materialidad por sector. Mayor score = menor exposición. Datos ilustrativos."
+        sub="Exposición climática y materialidad por sector. Mayor score = menor exposición."
         right={
           <select
-            value={selected}
+            value={selected ?? ""}
             onChange={(e) => setSelected(e.target.value)}
             className="field !w-auto"
             title="Sector"
           >
             {sectors.map((s) => (
               <option key={s.sector_key} value={s.sector_key}>
-                {SECTOR_NAMES[s.sector_key] ?? s.sector_key}
+                {nameOf(s.sector_key)}
               </option>
             ))}
           </select>
@@ -131,21 +143,21 @@ export function EsgClimatePage() {
         {/* Hero */}
         <Card className="lg:col-span-1 flex flex-col items-center text-center">
           <div className="text-xs text-muted mb-3 w-full truncate">
-            {SECTOR_NAMES[selected] ?? selected}
+            {selected ? nameOf(selected) : "—"}
           </div>
           <Gauge score={cur?.esg_score} band={band} />
           <div className="mt-3 flex items-center gap-2">
             <Chip tone={band.tone}>{band.label}</Chip>
           </div>
-          {detail && (
+          {materiality && (
             <div className="mt-4 w-full rounded-[10px] bg-surface2 p-3 text-left">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-muted">Materialidad financiera</span>
-                <Chip tone={MATERIALITY_TONE[detail.materiality.level] ?? "muted"}>
-                  {detail.materiality.level}
+                <Chip tone={MATERIALITY_TONE[materiality.level] ?? "muted"}>
+                  {materiality.level}
                 </Chip>
               </div>
-              {detail.materiality.greenwashing_watch && (
+              {materiality.greenwashing_watch && (
                 <div className="flex items-center gap-1.5 text-xs text-warn mt-2">
                   <AlertTriangle size={13} />
                   Vigilancia de greenwashing
@@ -172,7 +184,7 @@ export function EsgClimatePage() {
                   <CardHead
                     icon={Leaf}
                     title="Dimensiones de exposición"
-                    subtitle={`${SECTOR_NAMES[selected] ?? selected} · mayor = mejor gestión`}
+                    subtitle={`${selected ? nameOf(selected) : "—"} · mayor = mejor gestión`}
                   />
                   <DimensionBreakdown rows={rows} />
                 </>
@@ -207,7 +219,7 @@ export function EsgClimatePage() {
                           >
                             <td className="py-2.5 px-1 mono text-muted">{i + 1}</td>
                             <td className="py-2.5 px-1 text-ink truncate">
-                              {SECTOR_NAMES[s.sector_key] ?? s.sector_key}
+                              {nameOf(s.sector_key)}
                             </td>
                             <td className="py-2.5 px-1 text-right mono font-semibold text-ink">
                               {fmtNum(s.esg_score, 1)}
@@ -216,8 +228,8 @@ export function EsgClimatePage() {
                               <Chip tone={b.tone}>{b.label}</Chip>
                             </td>
                             <td className="py-2.5 px-1">
-                              <Chip tone={MATERIALITY_TONE[s.materiality] ?? "muted"}>
-                                {s.materiality}
+                              <Chip tone={MATERIALITY_TONE[s.materiality_level] ?? "muted"}>
+                                {s.materiality_level}
                               </Chip>
                             </td>
                           </tr>

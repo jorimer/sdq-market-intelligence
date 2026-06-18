@@ -6,37 +6,36 @@ export interface Materiality {
   greenwashing_watch: boolean;
 }
 
-export interface ESGSectorSummary {
+/** A persisted ESG/climate sector score (from /indicators). */
+export interface ESGIndicator {
   sector_key: string;
+  period: string;
   esg_score: number;
   band: string;
-  materiality: string;
+  material: boolean;
+  materiality_level: string;
 }
 
-export interface ESGExposure {
+/** Per-sector detail with the dimension breakdown (from /score). */
+export interface ESGSectorDetail {
+  has_score: boolean;
   sector_key: string;
-  esg_score: number;
-  band: string;
-  dimensions: Record<string, { score: number; weight: number; contribution: number }>;
-  materiality: Materiality;
+  period?: string;
+  esg_score?: number;
+  band?: string;
+  materiality_level?: string;
+  breakdown?: {
+    dimensions: Record<string, { score: number; weight: number; contribution: number }>;
+    materiality: Materiality;
+  };
 }
 
-type Dataset = Record<string, Record<string, number>>;
-
-export async function getWeights() {
-  const { data } = await client.get("/esg-climate/weights");
-  return data as { dimension_weights: Record<string, number>; direction: string };
-}
-
-export async function scoreSectors(
-  period: string,
-  dataset: Dataset,
-): Promise<{ period: string; sectors: ESGSectorSummary[] }> {
-  const { data } = await client.post("/esg-climate/score", { period, dataset });
+export async function getIndicators(): Promise<{ indicators: ESGIndicator[]; count: number }> {
+  const { data } = await client.get("/esg-climate/indicators");
   return data;
 }
 
-export async function getExposure(sectorKey: string, dataset: Dataset): Promise<ESGExposure> {
-  const { data } = await client.post("/esg-climate/exposure", { sector_key: sectorKey, dataset });
+export async function getSectorScore(sectorKey: string): Promise<ESGSectorDetail> {
+  const { data } = await client.get("/esg-climate/score", { params: { sector_key: sectorKey } });
   return data;
 }

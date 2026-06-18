@@ -8,9 +8,10 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from shared.auth.dependencies import get_current_user
-from shared.auth.models import User
+from shared.auth.dependencies import get_current_user, require_role
+from shared.auth.models import User, UserRole
 from shared.database.session import get_db
+from modules.esg_climate.models.models import EnvIndicator, ESGScore
 from modules.esg_climate.scoring.exposure import IRC_CONFIG, compute_exposure
 from modules.esg_climate.service import (
     compute_and_persist,
@@ -47,13 +48,15 @@ async def weights(current_user: User = Depends(get_current_user)) -> Dict[str, A
 
 @router.post(
     "/score",
-    summary="Calcular, persistir y publicar la exposición ESG/clima",
-    description="Exposición + materialidad por sector; publica 'esg.updated'.",
+    summary="Calcular, persistir y publicar la exposición ESG/clima (admin)",
+    description="Exposición + materialidad por sector; publica 'esg.updated'. Solo "
+    "admin: es el contrato de ingesta real, no una vía para sembrar datos desde la "
+    "UI. Para un cálculo sin persistir usa POST /exposure.",
 )
 async def score(
     payload: Dict[str, Any] = Body(..., examples=[_EXAMPLE]),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
     period = payload.get("period")
     dataset = payload.get("dataset")
@@ -93,6 +96,23 @@ async def indicators(
         for r in rows
     ]
     return {"indicators": items, "count": len(items)}
+
+
+@router.delete(
+    "/data",
+    summary="Purgar los scores ESG persistidos (admin)",
+    description="Borra todos los scores e indicadores ESG persistidos. Para limpiar "
+    "fixture ilustrativo: no hay fuente sectorial real todavía.",
+)
+async def purge_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    scores = db.query(ESGScore).delete()
+    indicators_ = db.query(EnvIndicator).delete()
+    db.commit()
+    logger.info("Purgado dato ESG: %d scores, %d indicadores", scores, indicators_)
+    return {"scores_deleted": scores, "indicators_deleted": indicators_}
 
 
 @router.get("/score", summary="Último score ESG de un sector")
