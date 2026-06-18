@@ -60,7 +60,7 @@ def test_assemble_marks_real_vs_rubric(db):
     src = asm["sources"]["DOM"]
     # ND-GAIN dimensions are live; transition is declared rubric.
     assert src["governance_quality"] == "live"
-    assert src["climate_exposure"] == "live"
+    assert src["hurricane_exposure"] == "live"
     assert src["fossil_dependence"] == "rubric"
     assert src["carbon_intensity"] == "rubric"
 
@@ -69,8 +69,15 @@ def test_compute_irc_inverts_risk_variables(db):
     asm = assemble_irc_dataset(db)
     res = compute_irc("DOM", asm["dataset"])
     assert 0.0 <= res["esg_score"] <= 100.0
-    exp = res["dimensions"]["physical_risk"]["variables"]["climate_exposure"]
+    exp = res["dimensions"]["physical_risk"]["variables"]["hurricane_exposure"]
     assert exp["inverted"] is True                  # higher exposure = worse → inverted
+
+
+def test_hurricane_exposure_overrides_physical(db):
+    # When HURDAT2 exposure is supplied, it feeds hurricane_exposure (still live).
+    asm = assemble_irc_dataset(db, hurricane_exp={"DOM": 240.0})
+    assert asm["dataset"]["DOM"]["hurricane_exposure"] == 240.0
+    assert asm["sources"]["DOM"]["hurricane_exposure"] == "live"
 
 
 def test_sync_persists_panel_and_publishes(db):

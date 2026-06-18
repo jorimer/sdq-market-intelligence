@@ -19,8 +19,8 @@ dimension_weights:
 
 dimension_variables:
   physical_risk:
-    - climate_exposure       # exposición climática (ND-GAIN)   mayor = peor
-    - climate_sensitivity    # sensibilidad climática (ND-GAIN) mayor = peor
+    - hurricane_exposure     # exposición a huracanes (HURDAT2/NOAA) mayor = peor
+    - climate_sensitivity    # sensibilidad climática (ND-GAIN)      mayor = peor
   transition_risk:
     - fossil_dependence      # dependencia de fósiles (energía/PEN) mayor = peor
     - carbon_intensity       # intensidad de carbono (CO2)          mayor = peor
@@ -33,7 +33,7 @@ dimension_variables:
 
 # Variables donde MAYOR valor = MAYOR riesgo → se invierten en el min-max.
 risk_increasing:
-  - climate_exposure
+  - hurricane_exposure
   - climate_sensitivity
   - fossil_dependence
   - carbon_intensity
