@@ -143,7 +143,7 @@ def seed_test_bank(db_session):
         activos_liquidos=85_000_000_000,
         pasivos_exigibles=180_000_000_000,
         hhi_ingresos_raw=2800,
-        source=DataSource.manual,
+        source=DataSource.sib_api,  # real source: scoring ignores synthetic (manual)
     )
     db_session.add(data)
     db_session.commit()
