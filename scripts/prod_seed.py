@@ -11,7 +11,7 @@ Run once from the platform's shell / one-off (e.g. Railway):
 
 Flags:
     --with-e2e      also create the Claude E2E user (scripts/seed_e2e_user).
-    --with-banking  also seed illustrative banking entities/data.
+    --with-banking  also seed the banking entity *catalog* (35 entities, no data).
 
 Security: role elevation is server-side only — the public /auth/register always
 creates a 'viewer'. This script is the controlled path to the first admin.
@@ -62,7 +62,7 @@ def create_admin(db) -> bool:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Bootstrap de producción (admin inicial)")
     parser.add_argument("--with-e2e", action="store_true", help="Crear también el usuario E2E Claude")
-    parser.add_argument("--with-banking", action="store_true", help="Sembrar entidades/datos de banca")
+    parser.add_argument("--with-banking", action="store_true", help="Sembrar el catálogo de entidades de banca (sin datos)")
     args = parser.parse_args()
 
     logger.info("DB destino: %s", settings.DATABASE_URL.split("@")[-1])

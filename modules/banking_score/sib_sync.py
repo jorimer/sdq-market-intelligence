@@ -137,17 +137,22 @@ def bank_data_stats(db: Session) -> Dict:
     records = db.query(func.count(BankingData.id)).scalar() or 0
     ratings = db.query(func.count(RatingResult.id)).scalar() or 0
     rng = db.query(func.min(BankingData.period_end), func.max(BankingData.period_end)).first()
-    sib_records = (
-        db.query(func.count(BankingData.id))
-        .filter(BankingData.source == DataSource.sib_api)
-        .scalar()
-        or 0
-    )
+    by_source = {
+        src.value: cnt
+        for src, cnt in db.query(BankingData.source, func.count(BankingData.id))
+        .group_by(BankingData.source)
+        .all()
+    }
+    sib_records = by_source.get(DataSource.sib_api.value, 0)
     return {
         "entities": entities,
         "records": records,
         "ratings": ratings,
         "sib_records": sib_records,
+        # Per-source breakdown surfaces any residual synthetic (manual) fixture so
+        # it can never hide among the real sources (sib_api/simbad/csv_upload).
+        "by_source": by_source,
+        "synthetic_records": by_source.get(DataSource.manual.value, 0),
         "period_start": str(rng[0]) if rng and rng[0] else None,
         "period_end": str(rng[1]) if rng and rng[1] else None,
     }
@@ -169,6 +174,42 @@ def prune_future_periods(db: Session) -> Dict[str, int]:
     if bd or rr or ra:
         logger.info("Pruned future periods (> %s): %d data, %d ratings, %d actions", today, bd, rr, ra)
     return {"data_deleted": bd, "ratings_deleted": rr, "actions_deleted": ra}
+
+
+def purge_synthetic_data(db: Session) -> Dict[str, int]:
+    """Delete all synthetic seed data (``source=manual``) and any ratings/actions
+    left orphaned by the deletion.
+
+    ``manual`` is produced by nothing anymore (the seed was sealed to catalog-only)
+    and the scoring already ignores it; this clears any residue from before the
+    seal so the DB holds only real data. A rating/action is orphaned when its
+    (bank, period) no longer has *any* backing ``BankingData`` row — that happens
+    only for pure-manual (bank, period) pairs; periods that also hold real data
+    keep their real ratings untouched.
+    """
+    from sqlalchemy import and_, exists
+
+    from modules.banking_score.models.models import RatingAction
+
+    bd = (
+        db.query(BankingData)
+        .filter(BankingData.source == DataSource.manual)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+
+    backed = lambda model: exists().where(and_(  # noqa: E731 — terse local predicate
+        BankingData.bank_id == model.bank_id,
+        BankingData.period_end == model.period_end,
+    ))
+    ra = db.query(RatingAction).filter(~backed(RatingAction)).delete(synchronize_session=False)
+    rr = db.query(RatingResult).filter(~backed(RatingResult)).delete(synchronize_session=False)
+    db.commit()
+
+    if bd or rr or ra:
+        logger.info("Purged synthetic data: %d manual records, %d orphan ratings, %d orphan actions",
+                    bd, rr, ra)
+    return {"synthetic_deleted": bd, "orphan_ratings_deleted": rr, "orphan_actions_deleted": ra}
 
 
 def needs_backfill(db: Session) -> bool:

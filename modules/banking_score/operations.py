@@ -37,6 +37,16 @@ def _run_prune(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_purge_synthetic(params, user_id, set_phase) -> Dict:
+    from modules.banking_score.sib_sync import purge_synthetic_data
+    db = SessionLocal()
+    try:
+        set_phase("purgando datos sintéticos (source=manual) y ratings huérfanos")
+        return purge_synthetic_data(db)
+    finally:
+        db.close()
+
+
 def _run_recompute(params, user_id, set_phase) -> Dict:
     period = params.get("period")
     if not period:
@@ -86,6 +96,13 @@ def register() -> None:
         "prune-future", "Eliminar trimestres futuros",
         "Borra datos y ratings de trimestres aún no cerrados (period_end > hoy).",
         _run_prune, default_interval_hours=168,
+    ))
+    register_operation(Operation(
+        "purge-synthetic", "Purgar datos sintéticos (seed)",
+        "Borra los datos sembrados sintéticos (source=manual) y los ratings/acciones "
+        "que queden huérfanos. El catálogo de entidades y todo dato real "
+        "(SIB/SIMBAD/CSV) quedan intactos. Sella el seed: la app solo puntúa dato real.",
+        _run_purge_synthetic, default_interval_hours=0,
     ))
     register_operation(Operation(
         "recompute-carteras", "Recomputar carteras",

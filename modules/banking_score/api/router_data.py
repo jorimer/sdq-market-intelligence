@@ -208,8 +208,10 @@ async def get_raw_data(
 
 @router.post(
     "/seed-banks",
-    summary="Seed 35 bancos dominicanos",
-    description="Crea las 35 entidades reguladas por la SIB y 5 años de datos históricos. Requiere rol admin.",
+    summary="Seed del catálogo de entidades dominicanas",
+    description="Crea (idempotente) las entidades reguladas por la SIB. Solo el "
+    "catálogo: NO siembra datos financieros (esos vienen de fuentes reales: SIB/"
+    "SIMBAD/CSV). Requiere rol admin.",
 )
 async def seed_banks(
     db: Session = Depends(get_db),

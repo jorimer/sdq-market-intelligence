@@ -158,7 +158,14 @@ def score_period(
     rating actions, and commit. Returns a summary (scored count, per-bank
     results, errors, rating-action tallies).
     """
-    records = db.query(BankingData).filter_by(period_end=period_end).all()
+    # Never score synthetic seed data (source=manual): it must never produce a
+    # rating, even if a residue survives. Real sources only (sib_api/simbad/csv).
+    records = (
+        db.query(BankingData)
+        .filter(BankingData.period_end == period_end,
+                BankingData.source != DataSource.manual)
+        .all()
+    )
     results: List[Dict] = []
     errors: List[Dict] = []
 
@@ -213,13 +220,14 @@ def score_all_periods(
     """Score every period that has data, oldest-first (so rating-action deltas
     build chronologically).
 
-    *only_sib* restricts to periods that contain at least one ``sib_api`` record
-    (skips purely synthetic/seed periods). *on_progress(i, total, period)* is
+    *only_sib* restricts to periods that contain at least one real (non-``manual``)
+    record — i.e. skips purely synthetic/seed periods while keeping SIMBAD and
+    CSV-upload periods (both real sources). *on_progress(i, total, period)* is
     called before each period for visible progress reporting.
     """
     q = db.query(BankingData.period_end).distinct()
     if only_sib:
-        q = q.filter(BankingData.source == DataSource.sib_api)
+        q = q.filter(BankingData.source != DataSource.manual)
     # Never score quarters that haven't closed yet — their data is partial.
     today = date.today()
     periods = sorted(pe for (pe,) in q.all() if pe <= today)
