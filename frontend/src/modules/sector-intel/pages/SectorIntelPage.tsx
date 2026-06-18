@@ -13,6 +13,7 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { Heatmap, HeatmapData } from "@/shared/charts/Heatmap";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
@@ -21,6 +22,7 @@ import {
   getDataset,
   getLatest,
   getMacroContext,
+  getSectorInsight,
   SectorInfo,
   SectorLatest,
   IaiDataset,
@@ -428,6 +430,15 @@ export function SectorIntelPage() {
             </div>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-5">
+        <AiInsightCard
+          title="Perspectiva del sector (IA)"
+          subtitle={`${nameOf(selected)} · IAI + aceleración, marco SCQA`}
+          depsKey={selected}
+          fetcher={() => getSectorInsight(selected)}
+        />
       </div>
     </div>
   );
