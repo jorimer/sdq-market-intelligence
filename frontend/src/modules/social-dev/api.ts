@@ -1,4 +1,11 @@
 import client from "@/shared/api/client";
+import type { AiInsight } from "@/shared/ui/insight-types";
+
+/** Contextual AI insight for one region's IDM (development narrative). Best-effort. */
+export async function getRegionInsight(entityKey: string): Promise<AiInsight | null> {
+  const { data } = await client.get(`/social-dev/${entityKey}/insight`);
+  return (data.ai_insight as AiInsight | null) ?? null;
+}
 
 export interface SocialEntity {
   entity_key: string;

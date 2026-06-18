@@ -23,6 +23,19 @@ logger = logging.getLogger("sdq.api.social_dev")
 
 router = APIRouter()
 
+
+async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
+    """Generate a Claude narrative from *context*; best-effort (returns None on any
+    failure so the endpoint never breaks). Without an API key the engine returns a
+    static fallback (``model_used == "static_fallback"``), passed through."""
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
+        logger.warning("AI insight social (%s) no disponible: %s", template, e)
+        return None
+
 _EXAMPLE = {
     "period": "2025",
     "dataset": {
@@ -143,3 +156,36 @@ async def sdg(
         "band": s.band,
         "dimensions": s.breakdown,
     }
+
+
+@router.get(
+    "/{entity_key}/insight",
+    summary="Perspectiva de IA del desarrollo (IDM) por región — fase 2, lento (~10-15s)",
+    description="Narrativa SCQA que explica el IDM de una región: fortalezas/rezagos por "
+    "dimensión, posición en la distribución (desigualdad) y procedencia real-vs-rúbrica.",
+)
+async def insight(
+    entity_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from shared.data.one_client import region_catalog
+    from modules.social_dev.ai_context import social_ai_context
+
+    s = get_latest(db, entity_key)
+    if s is None:
+        return {"has_score": False, "entity_key": entity_key, "ai_insight": None}
+
+    # Rank + distribution among the regions of the same (latest) period — inequality read.
+    peers = [r for r in get_scores(db, s.period) if r.development_score is not None]
+    peers.sort(key=lambda r: r.development_score, reverse=True)
+    rank = next((i + 1 for i, r in enumerate(peers) if r.entity_key == entity_key), None)
+    dist = distribution_stats([r.development_score for r in peers])
+    name = dict(region_catalog()).get(entity_key)
+    sources = assemble_idm_dataset(db, period=s.period)["sources"].get(entity_key)
+    score = {"development_score": s.development_score, "band": s.band,
+             "period": s.period, "breakdown": s.breakdown}
+    ctx = social_ai_context(entity_key, score, region_name=name, sources=sources,
+                            rank=rank, n_regions=len(peers), distribution=dist)
+    return {"has_score": True, "entity_key": entity_key,
+            "ai_insight": await _ai_insight(ctx, "social_outlook")}

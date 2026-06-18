@@ -13,12 +13,14 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { bandFor, toneVar } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
 import {
   getIndicators,
   getDataset,
   getPublications,
+  getRegionInsight,
   IndicatorsResult,
   IdmDataset,
   OnePublication,
@@ -320,6 +322,15 @@ export function SocialDevPage() {
             </div>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-5">
+        <AiInsightCard
+          title="Perspectiva del desarrollo (IA)"
+          subtitle={`${nameOf(selected)} · IDM y desigualdad · SCQA`}
+          depsKey={selected}
+          fetcher={() => getRegionInsight(selected)}
+        />
       </div>
     </div>
   );
