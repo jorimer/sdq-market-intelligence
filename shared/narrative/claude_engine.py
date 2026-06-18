@@ -85,6 +85,22 @@ TEMPLATES = {
         "NO inventes cifras fuera del contexto; cita los números provistos; reconoce que NO "
         "hay detalle por país socio."
     ),
+    "climate_outlook": (
+        "Eres un analista de riesgo climático evaluando la RESILIENCIA CLIMÁTICA "
+        "(IRC) de un país frente a un panel Caribe/LatAm.\n\n"
+        "Contexto:\n{context}\n\n"
+        "Escribe en español, máximo 450 palabras, formato SCQA, con estos bloques:\n"
+        "1) **Lectura**: el IRC del país, su banda y su posición en el panel (usa el "
+        "rank y la dispersión — distribución > promedio).\n"
+        "2) **Fortalezas y vulnerabilidades**: las dimensiones que más suman y las que "
+        "más lastran (riesgo físico/transición/capacidad adaptativa/gobernanza), citando "
+        "sus scores.\n"
+        "3) **Exposición física vs descarbonización**: lee el huracán y la dependencia "
+        "fósil del país.\n"
+        "4) **Qué vigilar**: prioridades de adaptación/transición.\n"
+        "Reglas: NO inventes cifras fuera del contexto; cita los números y la fuente "
+        "real provista por dimensión (HURDAT2/Ember/ND-GAIN); mayor IRC = más resiliente."
+    ),
     "indicator_insight": (
         "Eres un analista de calificación de riesgo bancario en República Dominicana. "
         "Analiza EN DETALLE un único indicador financiero de una entidad, a partir de "
