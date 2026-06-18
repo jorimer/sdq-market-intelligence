@@ -41,9 +41,11 @@ bands:
 # Rúbrica declarada (Gate C) — variables del IDM sin dato real aún. NEUTRAL 50
 # (uniforme: no discrimina ni finge; un valor parcial distorsionaría el min-max).
 # Suben a real: poverty_rate ya es ONE por región ✅; salud (life_expectancy/
-# child_mortality) = WDI nacional ✅; educación (literacy/schooling) e ingreso ←
-# Censo 2022/ENHOGAR (PDF, extracción pendiente); inclusión/informalidad ← BCRD
-# (ENIEF/ENCFT, pendiente). La UI marca cada variable real-vs-rúbrica.
+# child_mortality) = WDI nacional ✅; educación (literacy/schooling) = ONE ENHOGAR
+# por región, extracción IA ✅ (sube a live solo si las 10 regiones tienen el dato:
+# un relleno parcial distorsiona el min-max); ingreso ← Censo 2022/ENHOGAR
+# (pendiente); inclusión/informalidad ← BCRD (ENIEF/ENCFT, pendiente). La UI marca
+# cada variable real-vs-rúbrica.
 rubric_defaults:
   income_per_capita: 50
   literacy_rate: 50
