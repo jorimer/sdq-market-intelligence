@@ -1,11 +1,15 @@
-# House doctrine — Eje 7: ESG & clima (Índice de Resiliencia Climática/ESG)
-# Doctrina §9: materialidad financiera > cumplimiento formal; exigir métrica
-# (penalizar greenwashing); ajustar a vulnerabilidad del Caribe (huracanes/costa).
+# House doctrine — Eje 7: ESG & clima (Índice de Resiliencia Climática)
+# Doctrina §9: materialidad financiera > cumplimiento formal; ajustar a la
+# vulnerabilidad del Caribe (huracanes/costa).
 #
-# IRC: 0-100, MAYOR = MENOR exposición / mejor gestión ESG.
-version: "1.0"
+# RE-ENCUADRE 2026-06-18 (v2.0): el IRC pasa de POR-SECTOR a NACIONAL (país),
+# con panel Caribe/LatAm — porque el dato climático real (ND-GAIN, CLIMADA/HURDAT2,
+# balance energético) se mide nacionalmente, no por sector económico. Molde IRMP.
+#
+# IRC: 0-100, MAYOR = MAYOR resiliencia / MENOR riesgo climático.
+version: "2.0"
 name: IRC
-direction: "mayor score = menor exposición / mejor gestión"
+direction: "mayor score = mayor resiliencia / menor riesgo climático"
 
 dimension_weights:
   physical_risk: 0.30
@@ -15,26 +19,34 @@ dimension_weights:
 
 dimension_variables:
   physical_risk:
-    - hurricane_exposure     # exposición a huracanes 0-100  mayor = peor
-    - coastal_exposure       # exposición zona costera 0-100 mayor = peor
+    - climate_exposure       # exposición climática (ND-GAIN)   mayor = peor
+    - climate_sensitivity    # sensibilidad climática (ND-GAIN) mayor = peor
   transition_risk:
-    - carbon_intensity       # intensidad de carbono         mayor = peor
-    - fossil_dependence      # dependencia de fósiles (%)    mayor = peor
+    - fossil_dependence      # dependencia de fósiles (energía/PEN) mayor = peor
+    - carbon_intensity       # intensidad de carbono (CO2)          mayor = peor
   adaptive_capacity:
-    - adaptation_investment  # inversión en adaptación 0-100 mayor = mejor
-    - diversification        # diversificación 0-100         mayor = mejor
+    - adaptation_readiness   # preparación para adaptarse (ND-GAIN readiness) mayor = mejor
+    - economic_readiness     # preparación económica (ND-GAIN)                mayor = mejor
   governance:
-    - disclosure_quality     # calidad TCFD/ISSB 0-100       mayor = mejor
-    - emissions_targets      # metas de emisiones 0-100      mayor = mejor
+    - governance_quality     # calidad de gobernanza (ND-GAIN)  mayor = mejor
+    - social_readiness       # preparación social (ND-GAIN)     mayor = mejor
 
-# Variables donde MAYOR valor = MAYOR exposición/riesgo → se invierten.
+# Variables donde MAYOR valor = MAYOR riesgo → se invierten en el min-max.
 risk_increasing:
-  - hurricane_exposure
-  - coastal_exposure
-  - carbon_intensity
+  - climate_exposure
+  - climate_sensitivity
   - fossil_dependence
+  - carbon_intensity
 
 bands:
-  - {name: Bajo,     lower: 70.0, color: "#047857"}
-  - {name: Moderado, lower: 40.0, color: "#F59E0B"}
-  - {name: Alto,     lower: 0.0,  color: "#991B1B"}
+  - {name: Alta,     lower: 60.0, color: "#047857"}   # alta resiliencia
+  - {name: Moderada, lower: 40.0, color: "#F59E0B"}
+  - {name: Baja,     lower: 0.0,  color: "#991B1B"}   # baja resiliencia / alto riesgo
+
+# Rúbrica declarada (neutral) para lo aún no sourced. Transición (fossil/carbon)
+# sube a real con el balance energético/PEN (Gate C) y un panel global (Ember).
+# Físico afina con HURDAT2 (Gate B). Hoy: físico/adaptativa/gobernanza = ND-GAIN
+# real; transición = rúbrica uniforme (no discrimina hasta tener la fuente).
+rubric_defaults:
+  fossil_dependence: 0.5
+  carbon_intensity: 0.5

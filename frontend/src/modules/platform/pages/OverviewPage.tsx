@@ -21,9 +21,10 @@ interface Tile {
 }
 
 function esgBand(score: number): Band {
-  if (score >= 70) return { label: "Exposición baja", tone: "ok" };
-  if (score >= 40) return { label: "Exposición moderada", tone: "warn" };
-  return { label: "Exposición alta", tone: "alert" };
+  // IRC: higher = more resilient.
+  if (score >= 60) return { label: "Resiliencia alta", tone: "ok" };
+  if (score >= 40) return { label: "Resiliencia moderada", tone: "warn" };
+  return { label: "Resiliencia baja", tone: "alert" };
 }
 
 export function OverviewPage() {
@@ -81,9 +82,10 @@ export function OverviewPage() {
 
       const esg = results[5];
       if (esg.status === "fulfilled" && esg.value.count > 0) {
-        // Most exposed sector (lowest score) as the headline.
-        const worst = [...esg.value.indicators].sort((a, b) => a.esg_score - b.esg_score)[0];
-        t.push({ to: "/esg-climate", eyebrow: "TCFD", title: "ESG & clima", value: fmtNum(worst.esg_score, 1), band: esgBand(worst.esg_score), note: worst.sector_key });
+        // National IRC for the product focus (RD), with the panel as context.
+        const dr = esg.value.indicators.find((c) => c.entity_key === "DOM")
+          ?? esg.value.indicators[0];
+        t.push({ to: "/esg-climate", eyebrow: "ND-GAIN", title: "ESG & clima", value: fmtNum(dr.esg_score, 1), band: esgBand(dr.esg_score), note: `IRC · ${dr.country_name}` });
       }
 
       const mac = results[6];

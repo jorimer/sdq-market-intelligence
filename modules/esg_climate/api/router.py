@@ -1,20 +1,24 @@
-"""ESG & Climate — API endpoints.
+"""ESG & Climate — API endpoints (IRC nacional).
 
 prefix: /api/v1/esg-climate
+Re-scoped 2026-06-18: the IRC is per-country over the Caribbean/LatAm panel.
+Ingestion is server-side via the ``esg-sync`` console operation (ND-GAIN); these
+endpoints are read-only + an admin purge.
 """
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
 from shared.database.session import get_db
-from modules.esg_climate.models.models import EnvIndicator, ESGScore
-from modules.esg_climate.scoring.exposure import IRC_CONFIG, compute_exposure
+from modules.esg_climate.models.models import ESGScore, EnvIndicator
+from modules.esg_climate.scoring.exposure import IRC_CONFIG
 from modules.esg_climate.service import (
-    compute_and_persist,
+    IRC_PANEL,
+    assemble_irc_dataset,
     get_latest,
     get_scores,
 )
@@ -23,20 +27,8 @@ logger = logging.getLogger("sdq.api.esg_climate")
 
 router = APIRouter()
 
-_EXAMPLE = {
-    "period": "2025",
-    "dataset": {
-        "turismo": {"hurricane_exposure": 80, "coastal_exposure": 90, "carbon_intensity": 40,
-                    "fossil_dependence": 55, "adaptation_investment": 45, "diversification": 50,
-                    "disclosure_quality": 40, "emissions_targets": 35},
-        "energia": {"hurricane_exposure": 50, "coastal_exposure": 40, "carbon_intensity": 85,
-                    "fossil_dependence": 80, "adaptation_investment": 55, "diversification": 45,
-                    "disclosure_quality": 60, "emissions_targets": 55},
-    },
-}
 
-
-@router.get("/weights", summary="Pesos del índice ESG/clima (doctrina)")
+@router.get("/weights", summary="Pesos del IRC climático (doctrina)")
 async def weights(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
     return {
         "dimension_weights": IRC_CONFIG.dimension_weights,
@@ -46,44 +38,7 @@ async def weights(current_user: User = Depends(get_current_user)) -> Dict[str, A
     }
 
 
-@router.post(
-    "/score",
-    summary="Calcular, persistir y publicar la exposición ESG/clima (admin)",
-    description="Exposición + materialidad por sector; publica 'esg.updated'. Solo "
-    "admin: es el contrato de ingesta real, no una vía para sembrar datos desde la "
-    "UI. Para un cálculo sin persistir usa POST /exposure.",
-)
-async def score(
-    payload: Dict[str, Any] = Body(..., examples=[_EXAMPLE]),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.admin)),
-) -> Dict[str, Any]:
-    period = payload.get("period")
-    dataset = payload.get("dataset")
-    if not period or not isinstance(dataset, dict) or not dataset:
-        raise HTTPException(status_code=400, detail="Se requiere 'period' y 'dataset'.")
-    try:
-        return compute_and_persist(db, period=period, dataset=dataset)
-    except (ValueError, KeyError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.post("/exposure", summary="Calcular exposición de un sector (sin persistir)")
-async def exposure_one(
-    payload: Dict[str, Any] = Body(..., examples=[{"sector_key": "turismo", "dataset": _EXAMPLE["dataset"]}]),
-    current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
-    sector_key = payload.get("sector_key")
-    dataset = payload.get("dataset")
-    if not sector_key or not isinstance(dataset, dict):
-        raise HTTPException(status_code=400, detail="Se requiere 'sector_key' y 'dataset'.")
-    try:
-        return compute_exposure(sector_key, dataset)
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.get("/indicators", summary="Scores ESG persistidos (más expuestos primero)")
+@router.get("/indicators", summary="IRC por país (panel Caribe/LatAm, más resiliente primero)")
 async def indicators(
     period: Optional[str] = Query(None),
     db: Session = Depends(get_db),
@@ -91,18 +46,53 @@ async def indicators(
 ) -> Dict[str, Any]:
     rows = get_scores(db, period)
     items = [
-        {"sector_key": r.sector_key, "period": r.period, "esg_score": r.esg_score,
-         "band": r.band, "material": r.material, "materiality_level": r.materiality_level}
+        {"entity_key": r.entity_key, "country_name": IRC_PANEL.get(r.entity_key, r.entity_key),
+         "period": r.period, "esg_score": r.esg_score, "band": r.band}
         for r in rows
     ]
-    return {"indicators": items, "count": len(items)}
+    return {"indicators": items, "count": len(items),
+            "period": items[0]["period"] if items else None}
+
+
+@router.get(
+    "/dataset",
+    summary="Dataset ensamblado del IRC (real + rúbrica) con procedencia",
+    description="El dataset por país que alimenta el IRC: real (ND-GAIN: físico/"
+    "adaptativa/gobernanza) + rúbrica declarada (transición, hasta cablear energía/"
+    "PEN). Incluye 'sources' (live|rubric) por variable para el badge real-vs-rúbrica.",
+)
+async def dataset(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return assemble_irc_dataset(db)
+
+
+@router.get("/score", summary="IRC de un país (con desglose por dimensión)")
+async def latest(
+    entity_key: str = Query("DOM"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    s = get_latest(db, entity_key)
+    if s is None:
+        return {"has_score": False, "entity_key": entity_key}
+    return {
+        "has_score": True,
+        "entity_key": entity_key,
+        "country_name": IRC_PANEL.get(entity_key, entity_key),
+        "period": s.period,
+        "esg_score": s.esg_score,
+        "band": s.band,
+        "breakdown": s.breakdown,
+        "model_version": s.model_version,
+    }
 
 
 @router.delete(
     "/data",
-    summary="Purgar los scores ESG persistidos (admin)",
-    description="Borra todos los scores e indicadores ESG persistidos. Para limpiar "
-    "fixture ilustrativo: no hay fuente sectorial real todavía.",
+    summary="Purgar los scores IRC persistidos (admin)",
+    description="Borra todos los scores e indicadores ESG/clima persistidos.",
 )
 async def purge_data(
     db: Session = Depends(get_db),
@@ -113,25 +103,3 @@ async def purge_data(
     db.commit()
     logger.info("Purgado dato ESG: %d scores, %d indicadores", scores, indicators_)
     return {"scores_deleted": scores, "indicators_deleted": indicators_}
-
-
-@router.get("/score", summary="Último score ESG de un sector")
-async def latest(
-    sector_key: str = Query("turismo"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
-    s = get_latest(db, sector_key)
-    if s is None:
-        return {"has_score": False, "sector_key": sector_key}
-    return {
-        "has_score": True,
-        "sector_key": sector_key,
-        "period": s.period,
-        "esg_score": s.esg_score,
-        "band": s.band,
-        "material": s.material,
-        "materiality_level": s.materiality_level,
-        "breakdown": s.breakdown,
-        "model_version": s.model_version,
-    }
