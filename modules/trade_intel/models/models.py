@@ -14,6 +14,7 @@ from sqlalchemy import (
     Index,
     JSON,
     String,
+    Text,
 )
 
 from shared.database.base import Base, UUIDMixin
@@ -31,7 +32,7 @@ class TradeFlow(UUIDMixin, Base):
         Index("ix_ti_flows_period_dir", "period", "direction"),
     )
 
-    product = Column(String(120), nullable=False)
+    product = Column(Text, nullable=False)  # full HS chapter description (can exceed 120)
     direction = Column(Enum(TradeDirection), nullable=False)
     value = Column(Float, nullable=True)               # NULL = missing, no interpolation
     period = Column(String(10), nullable=False)        # "2025", "2025-Q1"
