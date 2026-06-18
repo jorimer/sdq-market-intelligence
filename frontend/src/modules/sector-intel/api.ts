@@ -1,4 +1,11 @@
 import client from "@/shared/api/client";
+import type { AiInsight } from "@/shared/ui/insight-types";
+
+/** Contextual AI insight for one sector (IAI/SGPS narrative). Best-effort. */
+export async function getSectorInsight(sectorCode: string): Promise<AiInsight | null> {
+  const { data } = await client.get(`/sector-intel/${sectorCode}/insight`);
+  return (data.ai_insight as AiInsight | null) ?? null;
+}
 
 export interface SectorSummary {
   sector_code: string;
