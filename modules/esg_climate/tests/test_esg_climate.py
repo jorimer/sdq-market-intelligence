@@ -80,7 +80,23 @@ def test_hurricane_exposure_overrides_physical(db):
     assert asm["sources"]["DOM"]["hurricane_exposure"] == "live"
 
 
-def test_sync_persists_panel_and_publishes(db):
+def test_transition_live_only_when_panel_complete(db):
+    # Partial transition (only DOM) → stays rubric for all (no min-max distortion).
+    asm = assemble_irc_dataset(db, transition={"DOM": {"fossil_dependence": 76.0, "carbon_intensity": 537.0}})
+    assert asm["sources"]["DOM"]["fossil_dependence"] == "rubric"
+    # Complete transition for every panel country → live.
+    full = {iso: {"fossil_dependence": 50.0, "carbon_intensity": 300.0} for iso in IRC_PANEL}
+    asm2 = assemble_irc_dataset(db, transition=full)
+    assert asm2["sources"]["DOM"]["fossil_dependence"] == "live"
+    assert asm2["dataset"]["DOM"]["carbon_intensity"] == 300.0
+
+
+def test_sync_persists_panel_and_publishes(db, monkeypatch):
+    # Keep the test offline: stub the network connectors (HURDAT2 + Ember).
+    from shared.data.hurdat2_client import hurdat2_client
+    from shared.data.ember_client import ember_client
+    monkeypatch.setattr(hurdat2_client, "fetch_exposure", lambda iso: ({}, None))
+    monkeypatch.setattr(ember_client, "fetch_transition", lambda iso: {})
     received = []
     event_bus.subscribe(ESG_UPDATED, lambda p: received.append(p))
     res = esg_sync(db)
