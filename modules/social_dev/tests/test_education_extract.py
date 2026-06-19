@@ -22,37 +22,44 @@ VALID_SLUGS = {slug for slug, _ in region_catalog()}
 
 def test_keeps_in_range_values():
     out = validate_education(
-        {"enriquillo": {"literacy_rate": 88.5, "schooling_years": 7.2}}, VALID_SLUGS)
-    assert out == {"enriquillo": {"literacy_rate": 88.5, "schooling_years": 7.2}}
+        {"enriquillo": {"literacy_rate": 88.5}}, VALID_SLUGS)
+    assert out == {"enriquillo": {"literacy_rate": 88.5}}
 
 
 def test_drops_out_of_range_as_misread():
-    # literacy 30 (<50) and schooling 40 (>15) are implausible → dropped to None,
-    # but the region survives because schooling/literacy of the *other* var is ok.
+    # literacy 30 (<50) is implausible → region dropped; 92 is in range → kept.
+    # schooling_years is ignored entirely (no longer extracted by region).
     out = validate_education(
-        {"enriquillo": {"literacy_rate": 30.0, "schooling_years": 8.0},
-         "valdesia": {"literacy_rate": 92.0, "schooling_years": 40.0}}, VALID_SLUGS)
-    assert out["enriquillo"] == {"literacy_rate": None, "schooling_years": 8.0}
-    assert out["valdesia"] == {"literacy_rate": 92.0, "schooling_years": None}
+        {"enriquillo": {"literacy_rate": 30.0},
+         "valdesia": {"literacy_rate": 92.0}}, VALID_SLUGS)
+    assert "enriquillo" not in out
+    assert out["valdesia"] == {"literacy_rate": 92.0}
 
 
 def test_drops_region_with_all_none():
-    # Both indicators out of range → no real data → region omitted entirely.
+    # literacy out of range → no real data → region omitted entirely.
     out = validate_education(
-        {"enriquillo": {"literacy_rate": 10.0, "schooling_years": 99.0}}, VALID_SLUGS)
+        {"enriquillo": {"literacy_rate": 10.0}}, VALID_SLUGS)
     assert out == {}
+
+
+def test_ignores_extraneous_schooling_years():
+    # schooling_years is national now; even if the model returns it, it is dropped.
+    out = validate_education(
+        {"valdesia": {"literacy_rate": 91.3, "schooling_years": 9.0}}, VALID_SLUGS)
+    assert out == {"valdesia": {"literacy_rate": 91.3}}
 
 
 def test_skips_unknown_region():
     out = validate_education(
-        {"region_inexistente": {"literacy_rate": 90.0, "schooling_years": 9.0}}, VALID_SLUGS)
+        {"region_inexistente": {"literacy_rate": 90.0}}, VALID_SLUGS)
     assert out == {}
 
 
 def test_coerces_string_numbers_and_null():
     out = validate_education(
-        {"valdesia": {"literacy_rate": "91.3", "schooling_years": None}}, VALID_SLUGS)
-    assert out == {"valdesia": {"literacy_rate": 91.3, "schooling_years": None}}
+        {"valdesia": {"literacy_rate": "91.3"}, "enriquillo": {"literacy_rate": None}}, VALID_SLUGS)
+    assert out == {"valdesia": {"literacy_rate": 91.3}}
 
 
 def test_tolerates_garbage_shapes():
