@@ -17,6 +17,7 @@ import { Treemap } from "@/shared/charts/Treemap";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { getTradeScore, getTradeInsight, TradeScore } from "../api";
 import { ValidationTab } from "../components/ValidationTab";
+import { PartnersTab } from "../components/PartnersTab";
 
 type Status = "loading" | "error" | "ready";
 
@@ -79,12 +80,15 @@ export function TradeIntelPage() {
         <Tabs
           tabs={[
             { id: "panorama", label: "Panorama" },
+            { id: "socios", label: "Socios" },
             { id: "validacion", label: "Validación" },
           ]}
           active={tab}
           onChange={setTab}
         />
       </Card>
+
+      {tab === "socios" && <PartnersTab />}
 
       {tab === "validacion" && <ValidationTab />}
 

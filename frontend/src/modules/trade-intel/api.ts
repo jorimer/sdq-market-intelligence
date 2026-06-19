@@ -71,3 +71,25 @@ export async function runTradeBacktest(): Promise<{ started: boolean; reason?: s
   const { data } = await client.post("/operations/trade-backtest/run", {});
   return data;
 }
+
+// ── Partner-country concentration (geographic resilience) ──────
+export interface PartnerBlock {
+  total: number;
+  hhi: number | null;
+  diversification: number | null;
+  n_partners: number;
+  top: { partner: string; value: number; share: number }[];
+}
+
+export interface TradePartners {
+  has_data: boolean;
+  period?: string;
+  source?: string;
+  export?: PartnerBlock;
+  import?: PartnerBlock;
+}
+
+export async function getTradePartners(): Promise<TradePartners> {
+  const { data } = await client.get("/trade-intel/partners");
+  return data;
+}

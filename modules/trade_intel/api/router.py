@@ -198,6 +198,22 @@ async def insight(
 
 
 @router.get(
+    "/partners",
+    summary="Concentración por socio comercial (dimensión geográfica)",
+    description="Concentración geográfica del comercio de RD por país socio "
+    "(exportaciones e importaciones): HHI, diversificación y top socios. Dato de "
+    "UN Comtrade (RD como reportante) — el detalle por país que el Power BI de la "
+    "DGA no exporta.",
+)
+async def partners(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.trade_intel.partners import partner_concentration_report
+
+    return partner_concentration_report()
+
+
+@router.get(
     "/validation/backtest",
     summary="Backtest de resiliencia comercial (Gate E)",
     description="Devuelve el último backtest persistido: discriminación (Gini + IC) "
