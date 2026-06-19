@@ -83,12 +83,18 @@ def get_latest(db: Session, entity_key: str) -> Optional[DevelopmentScore]:
     return max(rows, key=lambda s: _period_key(s.period)) if rows else None
 
 
-# IDM variable sources (Gate C): poverty by region (ONE), health national (WDI),
+# IDM variable sources (Gate C): poverty by region (ONE), national series applied
+# to every region (WDI health + ONE/BCRD labour: informality + income proxy),
 # education by region (ONE ENHOGAR, AI-extracted), the rest declared rubric until
-# sourced (income ← Censo/ENHOGAR; inclusion/informality ← BCRD).
-RUBRIC_VARS = ("income_per_capita", "financial_inclusion", "informality_rate")
+# sourced (financial_inclusion ← Findex/SB).
+RUBRIC_VARS = ("financial_inclusion",)
 EDUCATION_VARS = ("literacy_rate", "schooling_years")
 HEALTH_VARS = ("life_expectancy", "child_mortality")
+# National annual series (ONE/BCRD labour) applied uniformly to every region; they
+# carry a declared rubric default (50) when a period lacks the real value, matching
+# their prior always-rubric behaviour. income_per_capita is a declared PROXY
+# (ONE hourly labour income).
+NATIONAL_LIVE_VARS = ("income_per_capita", "informality_rate")
 POVERTY_VAR = "poverty_rate"
 HEALTH_ENTITY = "nacional"
 
@@ -167,6 +173,10 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
             v = nat.get(var)
             if v is not None:
                 merged[var] = float(v)
+            smap[var] = "live" if v is not None else "rubric"
+        for var in NATIONAL_LIVE_VARS:  # national (ONE labour), rubric default if absent
+            v = nat.get(var)
+            merged[var] = float(v) if v is not None else float(defaults.get(var, 50))
             smap[var] = "live" if v is not None else "rubric"
         pov = snap.get(slug, {}).get(POVERTY_VAR)  # by region (ONE)
         if pov is not None:

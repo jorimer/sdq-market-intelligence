@@ -11,12 +11,19 @@ publications-digest path, not here.
 :mod:`shared.data.bcrd_sectors` carries the sector slug. Missing values stay
 ``None`` — never interpolated. ``live`` mode downloads the CSV; ``fixture`` mode
 reads ``one.json`` for offline/tests.
+
+A second dataset is wired below as plain module functions (not the ``Record``
+client): the national ONE/BCRD labour series (informality + income proxy) that
+fill two IDM variables, scraped from the Trabajo landing by media-hash (the DGA
+pattern) and parsed from their *Indicador* sheet.
 """
 import csv
 import io
 import logging
+import re
 import unicodedata
 from datetime import date
+from html import unescape
 from typing import Dict, List, Optional
 
 from shared.data.base_client import FixtureBackedClient, Record
@@ -192,3 +199,91 @@ def _filter(records: List[Record], series: Optional[str], period: Optional[str])
 
 
 one_client = ONEClient()
+
+
+# ── ONE labour statistics (national annual series) ─────────────────────────
+# Real ONE/BCRD (ENFT/ENCFT) labour indicators that fill two IDM variables held
+# as declared rubric: informality_rate (exact match) and income (a declared
+# PROXY: hourly labour income, not household per-capita income). National annual
+# series, applied to every region like the WDI health vars. Files live on the
+# ONE Umbraco CDN under ``/media/<hash>/<slug>.xlsx`` (the DGA media-hash pattern);
+# the hash rotates, so we scrape the landing page for the current links.
+LABOR_LANDING = (
+    "https://www.one.gob.do/datos-y-estadisticas/temas/estadisticas-sociales/trabajo/"
+)
+# IDM theme → filename slug fragment (accent-insensitive) to match on the landing.
+_LABOR_SLUGS: Dict[str, str] = {
+    "informality_rate": "tasa-de-informalidad-en-el-empleo-por-sexo",
+    "income_per_capita": "ingreso-laboral-promedio-por-hora-trabajada-en-ocupacion-principal",
+}
+_MEDIA_XLSX_RE = re.compile(r"/media/[a-z0-9]+/[^\"'> ]+?\.xlsx", re.IGNORECASE)
+_HEADERS = {"User-Agent": "Mozilla/5.0 (SDQ-MIP ONE labour connector)"}
+
+
+def _end_year(path: str) -> int:
+    """Highest 4-digit year in a filename (its coverage end), or 0."""
+    return max((int(y) for y in re.findall(r"(?:19|20)\d{2}", path)), default=0)
+
+
+def discover_labor_links(html_text: str) -> Dict[str, str]:
+    """``{idm_theme: /media/<hash>/<slug>.xlsx}`` from the Trabajo landing HTML.
+
+    Matches each known file by its filename slug (accent/case-insensitive), so a
+    rotated media hash is followed automatically. When several revisions match the
+    same slug (e.g. ``…-2004-2023`` and ``…-2004-2024``) the one with the latest
+    end-year wins (deterministic, like the DGA ``-v2`` tie-break). A file that
+    isn't found is simply absent (never fabricated)."""
+    best: Dict[str, tuple] = {}  # theme -> (end_year, url)
+    for raw in sorted({unescape(m) for m in _MEDIA_XLSX_RE.findall(html_text)}):
+        norm = _norm(raw)
+        for theme, slug in _LABOR_SLUGS.items():
+            if slug in norm:
+                ey = _end_year(raw)
+                if theme not in best or ey > best[theme][0]:
+                    best[theme] = (ey, raw)
+    return {theme: url for theme, (_ey, url) in best.items()}
+
+
+def parse_one_indicator_xlsx(content: bytes) -> List[tuple]:
+    """Parse an ONE *Indicador* sheet → ``[(year, value)]`` from the Total column.
+
+    The file's first sheet is a *Ficha técnica* (metadata); the series lives in
+    the ``Indicador`` sheet as ``Año | Total | Hombres | Mujeres``. Year rows are
+    found by a 4-digit year in column A; missing/non-numeric stays out."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    # Sheet names often carry trailing spaces/case; fall back to the last sheet.
+    sheet = next((n for n in wb.sheetnames if n.strip().casefold() == "indicador"), None)
+    ws = wb[sheet] if sheet else wb[wb.sheetnames[-1]]
+    out: List[tuple] = []
+    for row in ws.iter_rows(values_only=True):
+        if not row:
+            continue
+        a, total = row[0], (row[1] if len(row) > 1 else None)
+        if isinstance(a, (int, float)) and 1990 <= int(a) <= 2100 and isinstance(total, (int, float)):
+            out.append((int(a), round(float(total), 4)))
+    return out
+
+
+def fetch_one_labor() -> List[tuple]:  # pragma: no cover - network I/O
+    """Live: scrape the Trabajo landing, download the matched files, parse them →
+    ``[(idm_theme, year, value)]`` (national). Best-effort per file."""
+    import urllib.parse
+
+    import httpx
+
+    resp = httpx.get(LABOR_LANDING, timeout=40, follow_redirects=True, headers=_HEADERS)
+    resp.raise_for_status()
+    links = discover_labor_links(resp.text)
+    out: List[tuple] = []
+    for theme, path in links.items():
+        url = "https://www.one.gob.do" + urllib.parse.quote(path)
+        try:
+            f = httpx.get(url, timeout=60, follow_redirects=True, headers=_HEADERS)
+            f.raise_for_status()
+            for year, value in parse_one_indicator_xlsx(f.content):
+                out.append((theme, year, value))
+        except (httpx.HTTPError, ValueError, KeyError) as e:
+            logger.warning("[ONE] descarga/parseo de %s (%s) falló: %s", theme, path, e)
+    return out
