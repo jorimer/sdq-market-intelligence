@@ -145,6 +145,10 @@ IAI_RUBRIC_VARS = (
 )
 # Real sector inputs from si_variables (BCRD value added).
 SECTOR_LIVE_VARS = ("sector_size", "sector_growth")
+# Storage dimension of the per-slug IAI inputs. Other dimensions in si_variables
+# (e.g. ``labor_encft`` — branch-level ENCFT employment, the Gate-E outcome) are NOT
+# index inputs and must not define the index's period grid, so reads scope to this.
+SECTOR_DIMENSION = "sector"
 
 
 def get_sector_variables(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
@@ -152,7 +156,7 @@ def get_sector_variables(db: Session, period: Optional[str] = None) -> Dict[str,
     (sector, variable) when *period* is omitted — sources can lag differently."""
     from modules.sector_intel.models.models import SectorVariable
 
-    q = db.query(SectorVariable)
+    q = db.query(SectorVariable).filter(SectorVariable.dimension == SECTOR_DIMENSION)
     if period:
         q = q.filter(SectorVariable.period == period)
     best: Dict[tuple, tuple] = {}  # (sector, var) -> (period, value)
@@ -195,7 +199,8 @@ def _sector_periods(db: Session) -> List[str]:
     """Distinct periods present in ``si_variables``, chronologically sorted."""
     from modules.sector_intel.models.models import SectorVariable
 
-    periods = {p for (p,) in db.query(SectorVariable.period).distinct() if p}
+    periods = {p for (p,) in db.query(SectorVariable.period)
+               .filter(SectorVariable.dimension == SECTOR_DIMENSION).distinct() if p}
     return sorted(periods, key=_period_key)
 
 

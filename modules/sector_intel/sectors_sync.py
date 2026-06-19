@@ -15,6 +15,11 @@ from modules.sector_intel.models.models import SectorVariable
 logger = logging.getLogger("sdq.sector_intel.sectors_sync")
 
 SECTOR_DIMENSION = "sector"  # IAI dimension these variables belong to
+# ENCFT employment is published by the ONE at a 10-activity-branch resolution (NOT
+# the 17 BCRD slugs); these rows are keyed by branch under their own dimension so
+# the 17-slug IAI never reads them. They are the Gate-E outcome (Δempleo) and the
+# raw input the per-slug ``labor_availability`` is later derived from.
+LABOR_ENCFT_DIMENSION = "labor_encft"
 
 # WGI regulatory quality is NATIONAL (one value for the country, not per sector), so
 # it's stored as a national AppSetting series and applied uniformly to every sector
@@ -90,7 +95,7 @@ def bcrd_sectores_sync(db: Session, set_phase: Optional[Callable[[str], None]] =
         periods.add(period)
         existing = (
             db.query(SectorVariable)
-            .filter_by(sector_code=slug, period=period, variable=var)
+            .filter_by(sector_code=slug, dimension=SECTOR_DIMENSION, period=period, variable=var)
             .first()
         )
         row = existing or SectorVariable(
@@ -110,6 +115,64 @@ def bcrd_sectores_sync(db: Session, set_phase: Optional[Callable[[str], None]] =
         "sectors_seeded": seeded,
         "periods": sorted(periods),
         "sectors": len({r.dimension for r in records if r.dimension}),
+        "variables": sorted({r.series for r in records}),
+        "errors": errors,
+    }
+
+
+def encft_empleo_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
+    """Pull live ONE/ENCFT employment by activity branch and upsert into ``si_variables``.
+
+    Persists the real, point-in-time employment panel (10 ONE branches, ENFT
+    2008-2016 / ENCFT 2017-2024) under ``dimension="labor_encft"`` — the Gate-E
+    outcome and the raw input ``labor_availability`` is later derived from. Rows are
+    keyed by branch (not the 17 slugs); the IAI never reads this dimension, so the
+    17-slug index is untouched. Idempotent by (sector_code, period, variable);
+    best-effort (reports ``errors[]``, never raises on an upstream failure).
+    """
+    set_phase = set_phase or (lambda _m: None)
+    from shared.data.encft_employment import EmploymentClient
+
+    set_phase("descargando empleo por actividad económica (ONE · ENCFT)")
+    client = EmploymentClient(mode="live")
+    try:
+        records = list(client.fetch())
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("ENCFT empleo sync falló: %s", e)
+        return {"error": f"empleo ENCFT no disponible: {e}", "synced": 0, "errors": [str(e)]}
+
+    set_phase(f"persistiendo {len(records)} valores")
+    synced = 0
+    periods = set()
+    errors = []
+    for r in records:
+        branch, var, period = r.dimension, r.series, r.period
+        if not branch or not period:
+            errors.append(f"registro sin rama/período: {var}")
+            continue
+        periods.add(period)
+        existing = (
+            db.query(SectorVariable)
+            .filter_by(sector_code=branch, dimension=LABOR_ENCFT_DIMENSION,
+                       period=period, variable=var)
+            .first()
+        )
+        row = existing or SectorVariable(
+            sector_code=branch, dimension=LABOR_ENCFT_DIMENSION, variable=var, period=period,
+        )
+        row.value = r.value
+        row.dimension = LABOR_ENCFT_DIMENSION
+        row.source = r.lineage.source if r.lineage else "ONE"
+        row.published_at = r.lineage.published_at if r.lineage else None
+        row.license = r.lineage.license if r.lineage else None
+        if not existing:
+            db.add(row)
+        synced += 1
+    db.commit()
+    return {
+        "synced": synced,
+        "periods": sorted(periods),
+        "branches": len({r.dimension for r in records if r.dimension}),
         "variables": sorted({r.series for r in records}),
         "errors": errors,
     }

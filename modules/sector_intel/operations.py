@@ -28,6 +28,15 @@ def _run_wgi_regulatory_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_encft_empleo_sync(params, user_id, set_phase) -> Dict:
+    from modules.sector_intel.sectors_sync import encft_empleo_sync
+    db = SessionLocal()
+    try:
+        return encft_empleo_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_sector_snapshot(params, user_id, set_phase) -> Dict:
     """Backfill the IAI/SGPS over EVERY real period (BCRD) and purge any score
     outside that set (no fixture/seed remnants), publishing sector.updated."""
@@ -55,6 +64,15 @@ def register() -> None:
         "sectores (no cambia el ranking, mejora la procedencia). Corre antes del "
         "backfill del índice.",
         _run_wgi_regulatory_sync, default_interval_hours=2160,
+    ))
+    register_operation(Operation(
+        "encft-empleo-sync", "Sincronizar empleo (ONE · ENCFT por actividad)",
+        "Trae el empleo (población ocupada) por actividad económica de la ONE "
+        "(ENFT 2008-2016 / ENCFT 2017-2024), a su resolución real de 10 ramas, y lo "
+        "persiste como panel histórico. Es el desenlace que valida el Gate E "
+        "(crecimiento del empleo por rama) y el insumo del que luego se deriva la "
+        "disponibilidad laboral del IAI. Anual.",
+        _run_encft_empleo_sync, default_interval_hours=8760,  # serie anual → anual
     ))
     register_operation(Operation(
         "sector-snapshot", "Backfill del índice sectorial (IAI/SGPS)",
