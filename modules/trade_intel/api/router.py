@@ -195,3 +195,22 @@ async def insight(
     }
     return {"has_score": True, "period": s.period,
             "ai_insight": await _ai_insight(trade_ai_context(score), "trade_outlook")}
+
+
+@router.get(
+    "/validation/backtest",
+    summary="Backtest de resiliencia comercial (Gate E)",
+    description="Devuelve el último backtest persistido: discriminación (Gini + IC) "
+    "de la resiliencia vs shocks externos realizados, en panel regional.",
+)
+async def get_backtest(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from shared.settings.models import AppSetting
+    import json
+
+    row = db.query(AppSetting).filter(AppSetting.key == "trade_backtest_report").first()
+    if not row:
+        return {"has_report": False}
+    return {"has_report": True, **json.loads(row.value)}
