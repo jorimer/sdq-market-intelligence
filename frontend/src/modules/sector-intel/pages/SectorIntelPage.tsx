@@ -163,9 +163,9 @@ export function SectorIntelPage() {
 
   const head = (
     <PageHead
-      eyebrow="BCRD · contrato macro · rúbrica"
+      eyebrow="BCRD · macro · WGI · rúbrica"
       title="Sectorial"
-      sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. Tamaño y crecimiento del BCRD; exposición macro del contrato del Eje 2; el resto, rúbrica declarada."
+      sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. Tamaño y crecimiento del BCRD; exposición macro del contrato del Eje 2; calidad regulatoria del WGI (nacional); negocios y talento, rúbrica declarada."
     />
   );
 
@@ -241,9 +241,9 @@ export function SectorIntelPage() {
   return (
     <div>
       <PageHead
-        eyebrow="BCRD · contrato macro · rúbrica"
+        eyebrow="BCRD · macro · WGI · rúbrica"
         title="Sectorial"
-        sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. Tamaño y crecimiento del BCRD; exposición macro del contrato del Eje 2; el resto, rúbrica declarada."
+        sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. Tamaño y crecimiento del BCRD; exposición macro del contrato del Eje 2; calidad regulatoria del WGI (nacional); negocios y talento, rúbrica declarada."
         right={
           <select
             value={selected}

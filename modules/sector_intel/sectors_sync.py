@@ -16,6 +16,45 @@ logger = logging.getLogger("sdq.sector_intel.sectors_sync")
 
 SECTOR_DIMENSION = "sector"  # IAI dimension these variables belong to
 
+# WGI regulatory quality is NATIONAL (one value for the country, not per sector), so
+# it's stored as a national AppSetting series and applied uniformly to every sector
+# in the IAI assembly — like the macro→sectorial contract. It makes the regulation
+# dimension real (vs declared rubric) but, being uniform across sectors, does not
+# change the cross-sectional ranking (it normalizes to neutral).
+WGI_REGULATORY_KEY = "sector_regulatory_wgi"
+WGI_RQ_CODE = "GOV_WGI_RQ.SC"
+
+
+def wgi_regulatory_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
+    """Fetch the national WGI regulatory-quality series (DOM, 0-100 percentile) and
+    persist it as an AppSetting the IAI assembly reads. Best-effort."""
+    import json
+
+    from shared.data.wgi_client import fetch_wgi_indicator
+    from shared.settings.models import AppSetting
+
+    set_phase = set_phase or (lambda _m: None)
+    set_phase("descargando calidad regulatoria nacional (WGI)")
+    try:
+        rows, last_updated = fetch_wgi_indicator(WGI_RQ_CODE, ["DOM"], mrv=12)
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("WGI regulatory sync falló: %s", e)
+        return {"error": str(e), "years": 0, "errors": [str(e)]}
+
+    series = {str(r["date"]): float(r["value"]) for r in rows
+              if r.get("date") and r.get("value") is not None}
+    payload = {"series": series, "unit": "percentil 0-100", "source": "WGI",
+               "last_updated": last_updated}
+    row = db.query(AppSetting).filter(AppSetting.key == WGI_REGULATORY_KEY).first()
+    if row:
+        row.value = json.dumps(payload)
+    else:
+        db.add(AppSetting(key=WGI_REGULATORY_KEY, value=json.dumps(payload), is_secret=False))
+    db.commit()
+    years = sorted(series)
+    return {"years": len(series), "range": [years[0], years[-1]] if years else None,
+            "latest": series.get(years[-1]) if years else None, "errors": []}
+
 
 def bcrd_sectores_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
     """Pull live BCRD value-added and upsert into ``si_variables``.
