@@ -206,6 +206,16 @@ def test_coverage_goes_live_by_region_and_period(db):
     assert "secondary_coverage" not in asm["dataset"]["valdesia"]
 
 
+def test_indicator_units_fit_postgres_varchar40():
+    """sd_indicators.unit is VARCHAR(40): SQLite ignores it, Postgres truncates →
+    every declared unit string must fit (dev↔prod parity guard)."""
+    from modules.social_dev.social_sync import COVERAGE_UNIT, _LABOR_UNITS
+
+    units = list(_LABOR_UNITS.values()) + [COVERAGE_UNIT]
+    too_long = [u for u in units if len(u) > 40]
+    assert not too_long, f"unit > 40 chars (rompe en Postgres): {too_long}"
+
+
 def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
     import sys
 
