@@ -26,6 +26,7 @@ _LABOR_UNITS = {
     "informality_rate": "% de la población ocupada",
     "income_per_capita": "RD$/hora (proxy: ingreso laboral)",
 }
+COVERAGE_THEME = "secondary_coverage"  # ONE net secondary-coverage by region + period
 
 
 def _upsert_indicator(db: Session, *, theme, entity, period, value, source, disagg, unit) -> None:
@@ -87,6 +88,26 @@ def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_one_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Fetch ONE net secondary-coverage by the 10 development regions (2010-2024) →
+    sd_indicators (by region + period, like poverty). Best-effort."""
+    from shared.data.one_client import fetch_one_education_coverage
+
+    set_phase("cobertura educativa por región (ONE: secundaria)")
+    try:
+        rows = fetch_one_education_coverage()
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("[social] ONE coverage sync falló: %s", e)
+        return 0
+    synced = 0
+    for region_slug, year, value in rows:
+        _upsert_indicator(db, theme=COVERAGE_THEME, entity=region_slug, period=str(year),
+                          value=float(value), source="ONE", disagg="region",
+                          unit="% (tasa neta de cobertura, nivel secundario)")
+        synced += 1
+    return synced
+
+
 def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
     """Pull live social data (ONE poverty by region + WDI national health) and
     upsert into ``sd_indicators``. Best-effort; never raises on an upstream failure.
@@ -117,15 +138,18 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         synced += 1
     health_synced = _sync_wdi_health(db, set_phase)
     labor_synced = _sync_one_labor(db, set_phase)
+    coverage_synced = _sync_one_coverage(db, set_phase)
     db.commit()
     return {
         "synced": synced,
         "health_synced": health_synced,
         "labor_synced": labor_synced,
+        "coverage_synced": coverage_synced,
         "periods": sorted(periods),
         "regions": len({r.dimension for r in records if r.dimension}),
         "themes": (sorted({r.series for r in records})
                    + sorted(set(WDI_HEALTH.values()))
-                   + sorted(_LABOR_UNITS.keys())),
+                   + sorted(_LABOR_UNITS.keys())
+                   + [COVERAGE_THEME]),
         "errors": errors,
     }

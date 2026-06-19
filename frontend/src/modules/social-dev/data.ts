@@ -27,7 +27,7 @@ export const DIM_LABELS: Record<string, string> = {
 // dimension from the dataset's `sources` map.
 export const IDM_DIM_VARS: Record<string, string[]> = {
   health: ["life_expectancy", "child_mortality"],
-  education: ["literacy_rate", "schooling_years"],
+  education: ["literacy_rate", "schooling_years", "secondary_coverage"],
   living_standards: ["income_per_capita", "poverty_rate"],
   inclusion: ["financial_inclusion", "informality_rate"],
 };

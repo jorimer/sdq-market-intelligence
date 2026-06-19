@@ -225,23 +225,27 @@ def _end_year(path: str) -> int:
     return max((int(y) for y in re.findall(r"(?:19|20)\d{2}", path)), default=0)
 
 
-def discover_labor_links(html_text: str) -> Dict[str, str]:
-    """``{idm_theme: /media/<hash>/<slug>.xlsx}`` from the Trabajo landing HTML.
+def _match_media_links(html_text: str, slugs: Dict[str, str]) -> Dict[str, str]:
+    """``{key: /media/<hash>/<slug>.xlsx}`` matching each *slugs* fragment in the HTML.
 
-    Matches each known file by its filename slug (accent/case-insensitive), so a
-    rotated media hash is followed automatically. When several revisions match the
-    same slug (e.g. ``…-2004-2023`` and ``…-2004-2024``) the one with the latest
-    end-year wins (deterministic, like the DGA ``-v2`` tie-break). A file that
-    isn't found is simply absent (never fabricated)."""
-    best: Dict[str, tuple] = {}  # theme -> (end_year, url)
+    Accent/case-insensitive (so a rotated media hash is followed automatically);
+    when several revisions match the same slug (e.g. ``…-2004-2023`` and
+    ``…-2004-2024``) the latest end-year wins (deterministic, like the DGA ``-v2``
+    tie-break). A file that isn't found is simply absent (never fabricated)."""
+    best: Dict[str, tuple] = {}  # key -> (end_year, url)
     for raw in sorted({unescape(m) for m in _MEDIA_XLSX_RE.findall(html_text)}):
         norm = _norm(raw)
-        for theme, slug in _LABOR_SLUGS.items():
+        for key, slug in slugs.items():
             if slug in norm:
                 ey = _end_year(raw)
-                if theme not in best or ey > best[theme][0]:
-                    best[theme] = (ey, raw)
-    return {theme: url for theme, (_ey, url) in best.items()}
+                if key not in best or ey > best[key][0]:
+                    best[key] = (ey, raw)
+    return {key: url for key, (_ey, url) in best.items()}
+
+
+def discover_labor_links(html_text: str) -> Dict[str, str]:
+    """``{idm_theme: /media/<hash>/<slug>.xlsx}`` for the Trabajo labour files."""
+    return _match_media_links(html_text, _LABOR_SLUGS)
 
 
 def parse_one_indicator_xlsx(content: bytes) -> List[tuple]:
@@ -287,3 +291,119 @@ def fetch_one_labor() -> List[tuple]:  # pragma: no cover - network I/O
         except (httpx.HTTPError, ValueError, KeyError) as e:
             logger.warning("[ONE] descarga/parseo de %s (%s) falló: %s", theme, path, e)
     return out
+
+
+# ── ONE education — regional net-coverage (secondary) by development region ─
+# Real ONE/MINERD net secondary-coverage by the 10 development regions, 2010-2024
+# (the IDM's education dimension otherwise has only the static ENHOGAR-2022 study).
+# Adds real REGIONAL + TEMPORAL differentiation (access, complementing attainment).
+EDUCATION_LANDING = (
+    "https://www.one.gob.do/datos-y-estadisticas/temas/estadisticas-sociales/educacion/"
+)
+_EDUCATION_SLUGS: Dict[str, str] = {
+    "secondary_coverage": "tasa-neta-de-cobertura-por-nivel-region-provincia",
+}
+
+
+def _coverage_region_slug(label: str) -> Optional[str]:
+    """Map a 'Región X' row label to a development-region slug (None if not one)."""
+    n = _norm(label).replace("region ", "", 1).strip()
+    return _REGION_BY_NORM.get(n)
+
+
+_SCHOOL_YEAR_RE = re.compile(r"^(20\d{2})-(20\d{2})")
+_SECONDARY_LEVELS = {"secundario", "medio"}  # "Medio" is the pre-2014 secondary label
+
+
+def parse_one_coverage_xlsx(content: bytes) -> List[tuple]:
+    """Parse 'tasa neta de cobertura por nivel, según región y provincia' →
+    ``[(region_slug, year, secondary_coverage)]`` for the 10 development regions.
+
+    Columns are grouped by school year (``A-B`` → calendar year ``B``), each split
+    into levels (Inicial/Primario/Secundario — older years: Inicial/Básico/Medio).
+    The secondary column is located by matching the level sub-header within each
+    group's span (NOT a fixed offset), so a layout/level-order change can't silently
+    read the wrong level. Province rows, the header and 'Total país' are skipped."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    try:
+        ws = wb[wb.sheetnames[0]]
+        rows = [list(r) for r in ws.iter_rows(values_only=True)]
+    finally:
+        wb.close()
+
+    # 1) year-group starts: a row with ``20YY-20YY+1`` tokens (B == A+1).
+    groups: Dict[int, int] = {}   # start_col -> ending calendar year
+    year_row = -1
+    for idx, r in enumerate(rows[:8]):
+        cols: Dict[int, int] = {}
+        for ci, c in enumerate(r):
+            m = _SCHOOL_YEAR_RE.match(c.strip()) if isinstance(c, str) else None
+            if m and int(m.group(2)) == int(m.group(1)) + 1:
+                cols[ci] = int(m.group(2))
+        if cols:
+            groups, year_row = cols, idx
+            break
+    if not groups:
+        logger.warning("[ONE] cobertura: no se encontró la fila de años-lectivos (layout cambió?)")
+        return []
+
+    # 2) secondary column per group: match the level sub-header within the group span.
+    starts = sorted(groups)
+
+    def _span_end(sc: int) -> int:
+        later = [s for s in starts if s > sc]
+        return later[0] if later else sc + 3
+
+    sec_col: Dict[int, int] = {}
+    for r in rows[year_row: year_row + 4]:
+        for sc in starts:
+            for col in range(sc, min(_span_end(sc), len(r))):
+                if isinstance(r[col], str) and _norm(r[col]) in _SECONDARY_LEVELS:
+                    sec_col[sc] = col
+        if len(sec_col) == len(starts):
+            break
+    if not sec_col:
+        logger.warning("[ONE] cobertura: no se ubicó la columna 'Secundario/Medio' (layout cambió?)")
+        return []
+
+    # 3) region aggregate rows only ('Región …'); provinces/header/'Total país' skip.
+    out: List[tuple] = []
+    mapped = 0
+    for r in rows:
+        if not r or not isinstance(r[0], str) or not _norm(r[0]).startswith("region "):
+            continue
+        if _norm(r[0]) == "region y provincia":   # the column header, not a region
+            continue
+        slug = _coverage_region_slug(r[0])
+        if not slug:
+            logger.warning("[ONE] cobertura: etiqueta 'Región …' no reconocida: %r", r[0])
+            continue
+        mapped += 1
+        for sc, yr in groups.items():
+            col = sec_col.get(sc)
+            v = r[col] if col is not None and col < len(r) else None
+            if isinstance(v, (int, float)):
+                out.append((slug, yr, round(float(v), 2)))
+    if not mapped:
+        logger.warning("[ONE] cobertura: ninguna fila 'Región …' mapeó (layout cambió?)")
+    return out
+
+
+def fetch_one_education_coverage() -> List[tuple]:  # pragma: no cover - network I/O
+    """Live: scrape the Educación landing, download the net-coverage file, parse it →
+    ``[(region_slug, year, secondary_coverage)]``."""
+    import urllib.parse
+
+    import httpx
+
+    resp = httpx.get(EDUCATION_LANDING, timeout=40, follow_redirects=True, headers=_HEADERS)
+    resp.raise_for_status()
+    path = _match_media_links(resp.text, _EDUCATION_SLUGS).get("secondary_coverage")
+    if not path:
+        return []
+    url = "https://www.one.gob.do" + urllib.parse.quote(path)
+    f = httpx.get(url, timeout=90, follow_redirects=True, headers=_HEADERS)
+    f.raise_for_status()
+    return parse_one_coverage_xlsx(f.content)

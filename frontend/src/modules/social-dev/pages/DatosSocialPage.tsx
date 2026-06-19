@@ -80,7 +80,8 @@ function SocialOverview() {
             </div>
             <p className="mt-2 text-[11px] text-faint">
               Ingreso = proxy real (ingreso laboral por hora, ONE/BCRD ENCFT), no ingreso per cápita
-              del hogar. Informalidad = dato exacto (ONE/BCRD ENCFT). Ambas nacionales.
+              del hogar. Informalidad = dato exacto (ONE/BCRD ENCFT), nacional. Educación añade
+              cobertura neta secundaria por región y año (ONE, 2010-2024) al logro del ENHOGAR.
             </p>
           </div>
         </>
