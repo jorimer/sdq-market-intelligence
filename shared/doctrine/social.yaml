@@ -49,7 +49,9 @@ bands:
 # ENHOGAR por región, extracción IA ✅ (live solo si las 10 regiones tienen el dato);
 # secondary_coverage = ONE cobertura neta secundaria por región + año 2010-2024 ✅
 # (acceso educativo regional+temporal real, complementa el logro del ENHOGAR estático);
-# financial_inclusion ← Findex/SB (pendiente). La UI marca cada variable real-vs-rúbrica.
+# financial_inclusion = BM Findex cajeros/100k adultos (proxy de acceso, nacional anual) ✅
+# — última variable que sale de rúbrica; el IDM queda 8/8 en dato real. La UI marca
+# cada variable real-vs-rúbrica.
 rubric_defaults:
   income_per_capita: 50
   literacy_rate: 50

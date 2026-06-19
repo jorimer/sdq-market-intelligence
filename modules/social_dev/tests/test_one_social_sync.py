@@ -56,6 +56,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, set_phase: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_labor", lambda db, set_phase: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_coverage", lambda db, set_phase: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, set_phase: 0)
 
     first = one_social_sync(db)
     assert first["errors"] == []
@@ -209,11 +210,48 @@ def test_coverage_goes_live_by_region_and_period(db):
 def test_indicator_units_fit_postgres_varchar40():
     """sd_indicators.unit is VARCHAR(40): SQLite ignores it, Postgres truncates →
     every declared unit string must fit (dev↔prod parity guard)."""
-    from modules.social_dev.social_sync import COVERAGE_UNIT, _LABOR_UNITS
+    from modules.social_dev.social_sync import COVERAGE_UNIT, FINDEX_UNIT, _LABOR_UNITS
 
-    units = list(_LABOR_UNITS.values()) + [COVERAGE_UNIT]
+    units = list(_LABOR_UNITS.values()) + [COVERAGE_UNIT, FINDEX_UNIT]
     too_long = [u for u in units if len(u) > 40]
     assert not too_long, f"unit > 40 chars (rompe en Postgres): {too_long}"
+
+
+def test_findex_financial_inclusion_goes_live_latest_available(db):
+    """WB Findex financial access is national + lags; the latest value goes live for
+    the current IDM period (so inclusión is real even if the target year has no obs)."""
+    _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
+    _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
+    _ind(db, "nacional", "financial_inclusion", "2023", 40.06, source="WB")  # 2023, not 2024
+    db.commit()
+
+    from modules.social_dev.service import assemble_idm_dataset
+    asm = assemble_idm_dataset(db)
+    assert asm["period"] == "2024"
+    for slug in ("enriquillo", "valdesia"):                     # national → every region, live
+        assert asm["dataset"][slug]["financial_inclusion"] == 40.06
+        assert asm["sources"][slug]["financial_inclusion"] == "live"
+
+
+def test_sync_wb_findex_upserts_national(db, monkeypatch):
+    import shared.data.wdi_client as wdi  # not re-exported by the package → real module
+
+    monkeypatch.setattr(
+        wdi, "fetch_wb_indicator",
+        lambda code, isos, mrv=25: ([{"date": "2023", "value": 40.06},
+                                     {"date": "2022", "value": 38.5}], None),
+    )
+    from modules.social_dev.social_sync import _sync_wb_findex
+
+    n = _sync_wb_findex(db, lambda _m: None)
+    db.commit()
+    assert n == 2
+    row = (
+        db.query(SocialIndicator)
+        .filter_by(entity_key="nacional", theme="financial_inclusion", period="2023")
+        .first()
+    )
+    assert row is not None and row.value == 40.06 and row.source == "WB"
 
 
 def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
