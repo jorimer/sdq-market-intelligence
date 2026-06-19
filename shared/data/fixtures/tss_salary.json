@@ -1,0 +1,128 @@
+{
+  "administracion_publica": {
+    "avg_salary": {
+      "2024": 40187,
+      "2025": 41652,
+      "2026": 42458
+    }
+  },
+  "alquiler_de_viviendas": {
+    "avg_salary": {
+      "2024": 31959,
+      "2025": 34127,
+      "2026": 35464
+    }
+  },
+  "comercio": {
+    "avg_salary": {
+      "2024": 31786,
+      "2025": 34381,
+      "2026": 36162
+    }
+  },
+  "comunicaciones": {
+    "avg_salary": {
+      "2024": 42704,
+      "2025": 45666,
+      "2026": 48145
+    }
+  },
+  "construccion": {
+    "avg_salary": {
+      "2024": 35189,
+      "2025": 38815,
+      "2026": 40944
+    }
+  },
+  "cultivo_de_cereales": {
+    "avg_salary": {
+      "2024": 25405,
+      "2025": 29547,
+      "2026": 30780
+    }
+  },
+  "cultivos_tradicionales": {
+    "avg_salary": {
+      "2024": 23768,
+      "2025": 26094,
+      "2026": 27974
+    }
+  },
+  "electricidad_gas_y_agua": {
+    "avg_salary": {
+      "2024": 48182,
+      "2025": 52170,
+      "2026": 53910
+    }
+  },
+  "explotacion_de_minas_y_canteras": {
+    "avg_salary": {
+      "2024": 74266,
+      "2025": 79478,
+      "2026": 81777
+    }
+  },
+  "ganaderia_silvicultura_y_pesca": {
+    "avg_salary": {
+      "2024": 28848,
+      "2025": 31588,
+      "2026": 33371
+    }
+  },
+  "hoteles_bares_y_restaurantes": {
+    "avg_salary": {
+      "2024": 23981,
+      "2025": 26113,
+      "2026": 27595
+    }
+  },
+  "intermediacion_financiera_seguros_y_otras": {
+    "avg_salary": {
+      "2024": 58147,
+      "2025": 61140,
+      "2026": 65365
+    }
+  },
+  "manufactura": {
+    "avg_salary": {
+      "2024": 33684,
+      "2025": 36614,
+      "2026": 37654
+    }
+  },
+  "otros_servicios": {
+    "avg_salary": {
+      "2024": 31409,
+      "2025": 33280,
+      "2026": 34267
+    }
+  },
+  "servicios_agropecuarios": {
+    "avg_salary": {
+      "2024": 24842,
+      "2025": 26921,
+      "2026": 28860
+    }
+  },
+  "servicios_de_ensenanza": {
+    "avg_salary": {
+      "2024": 38927,
+      "2025": 41215,
+      "2026": 42261
+    }
+  },
+  "servicios_de_salud": {
+    "avg_salary": {
+      "2024": 35080,
+      "2025": 38307,
+      "2026": 40670
+    }
+  },
+  "transporte_y_almacenamiento": {
+    "avg_salary": {
+      "2024": 35650,
+      "2025": 38966,
+      "2026": 41203
+    }
+  }
+}
