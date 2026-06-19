@@ -19,6 +19,15 @@ def _run_bcrd_sectores_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_wgi_regulatory_sync(params, user_id, set_phase) -> Dict:
+    from modules.sector_intel.sectors_sync import wgi_regulatory_sync
+    db = SessionLocal()
+    try:
+        return wgi_regulatory_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_sector_snapshot(params, user_id, set_phase) -> Dict:
     """Backfill the IAI/SGPS over EVERY real period (BCRD) and purge any score
     outside that set (no fixture/seed remnants), publishing sector.updated."""
@@ -37,6 +46,15 @@ def register() -> None:
         "de origen, base 2018): tamaño (share del VAB) y crecimiento real interanual "
         "para los ~17 sectores de la economía, y los persiste para el IAI.",
         _run_bcrd_sectores_sync, default_interval_hours=2160,  # cuentas nac. ~trimestral → trimestral
+    ))
+    register_operation(Operation(
+        "wgi-sectorial-sync", "Sincronizar regulación (WGI · calidad regulatoria)",
+        "Trae la calidad regulatoria nacional del Banco Mundial (WGI, percentil "
+        "0-100, anual) y la persiste para la dimensión regulación del IAI. Es "
+        "nacional: sube esa dimensión de rúbrica a dato real, igual para los 17 "
+        "sectores (no cambia el ranking, mejora la procedencia). Corre antes del "
+        "backfill del índice.",
+        _run_wgi_regulatory_sync, default_interval_hours=2160,
     ))
     register_operation(Operation(
         "sector-snapshot", "Backfill del índice sectorial (IAI/SGPS)",

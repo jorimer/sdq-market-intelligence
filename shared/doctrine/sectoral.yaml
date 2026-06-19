@@ -28,8 +28,8 @@ dimension_variables:
     - labor_availability    # disponibilidad de mano de obra 0-100 mayor = mejor
     - skills_index          # nivel de competencias 0-100 mayor = mejor
   regulation:
-    - regulatory_quality    # calidad regulatoria 0-100   mayor = mejor
-    - regulatory_volatility # volatilidad regulatoria     mayor = peor
+    - regulatory_quality    # calidad regulatoria 0-100   mayor = mejor  [WGI nacional]
+    - regulatory_volatility # volatilidad regulatoria     mayor = peor   [rúbrica]
   sector:
     - sector_growth         # crecimiento del sector (%)  mayor = mejor   [BCRD real]
     - sector_size           # tamaño relativo del sector  mayor = mejor   [BCRD real]

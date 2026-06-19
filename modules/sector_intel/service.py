@@ -199,6 +199,32 @@ def _sector_periods(db: Session) -> List[str]:
     return sorted(periods, key=_period_key)
 
 
+def _load_wgi_regulatory(db: Session, target: Optional[str]) -> Optional[float]:
+    """National WGI regulatory-quality (0-100) for *target*'s year, with latest-year
+    fallback (WGI lags ~1 year, so the current period uses the most recent value).
+    Read from the AppSetting written by ``wgi_regulatory_sync``; None if absent."""
+    import json
+    import re
+
+    from modules.sector_intel.sectors_sync import WGI_REGULATORY_KEY
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == WGI_REGULATORY_KEY).first()
+    if row is None or not row.value:
+        return None
+    try:
+        series = json.loads(row.value).get("series", {})
+    except (ValueError, TypeError):
+        series = {}
+    if not series:
+        return None
+    m = re.match(r"(\d{4})", target or "")
+    year = m.group(1) if m else None
+    if year and year in series:
+        return float(series[year])
+    return float(series[max(series, key=int)])  # latest available (e.g. current period)
+
+
 def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Full IAI dataset per sector for *period*: declared rubric (doctrine) + real
     data (BCRD sector dim, contract-derived macro_exposure). Single source of truth
@@ -227,6 +253,9 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     live = get_sector_variables(db, period=target) if target else {"sectors": {}, "period": None, "has_data": False}
     contract = _load_macro_contract(db) if use_live_macro else {}
     factors = contract.get("factors", []) if contract else []
+    # WGI regulatory quality (national, 0-100) — same for every sector (does not
+    # discriminate sectors, but real instead of declared rubric).
+    reg_quality = _load_wgi_regulatory(db, target)
 
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
@@ -243,6 +272,10 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
         # macro_exposure (real) — derived per-sector from the macro contract.
         merged["macro_exposure"] = sector_macro_exposure(factors, slug)
         smap["macro_exposure"] = "live" if factors else "rubric"
+        # regulatory_quality (real, national WGI) — same for every sector.
+        if reg_quality is not None:
+            merged["regulatory_quality"] = reg_quality
+            smap["regulatory_quality"] = "live"
         # sector dimension (real) from si_variables — overrides any rubric.
         sv = live["sectors"].get(slug, {})
         for var in SECTOR_LIVE_VARS:

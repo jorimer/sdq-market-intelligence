@@ -35,6 +35,11 @@ def _set_contract(db, factors):
     db.add(AppSetting(key=APP_SETTING_KEY, value=json.dumps({"factors": factors}), is_secret=False))
 
 
+def _set_wgi(db, series):
+    from modules.sector_intel.sectors_sync import WGI_REGULATORY_KEY
+    db.add(AppSetting(key=WGI_REGULATORY_KEY, value=json.dumps({"series": series}), is_secret=False))
+
+
 # ── sector_macro_exposure helper ──────────────────────────────────
 def test_macro_exposure_nudges_by_impacting_factors():
     factors = [
@@ -127,3 +132,42 @@ def test_assemble_without_contract_macro_is_neutral_rubric(db):
     assert c["macro_exposure"] == 50.0
     assert asm["sources"]["comercio"]["macro_exposure"] == "rubric"   # no contract → declared
     assert asm["sources"]["comercio"]["sector_size"] == "live"
+    assert asm["sources"]["comercio"]["regulatory_quality"] == "rubric"  # no WGI → declared
+    assert c["regulatory_quality"] == 50
+
+
+def test_wgi_regulatory_quality_live_and_uniform_across_sectors(db):
+    _seed_sector_var(db, "turismo", "sector_size", 8.9, "2024")
+    _set_wgi(db, {"2023": 56.0, "2024": 58.1})
+    db.commit()
+
+    asm = assemble_iai_dataset(db, period="2024")
+    for slug in ("turismo", "mineria", "salud"):                 # national → same for all
+        assert asm["dataset"][slug]["regulatory_quality"] == 58.1
+        assert asm["sources"][slug]["regulatory_quality"] == "live"
+    assert asm["dataset"]["turismo"]["regulatory_volatility"] == 50  # still rubric
+    assert asm["sources"]["turismo"]["regulatory_volatility"] == "rubric"
+
+
+def test_wgi_regulatory_latest_fallback_for_current_period(db):
+    # WGI lags: the latest sector period (2025) has no WGI obs → use the latest (2024).
+    _seed_sector_var(db, "turismo", "sector_size", 8.9, "2025")
+    _set_wgi(db, {"2023": 56.0, "2024": 58.1})
+    db.commit()
+    asm = assemble_iai_dataset(db, period="2025")
+    assert asm["dataset"]["turismo"]["regulatory_quality"] == 58.1   # latest-available
+    assert asm["sources"]["turismo"]["regulatory_quality"] == "live"
+
+
+def test_wgi_regulatory_sync_persists_series(db, monkeypatch):
+    import shared.data.wgi_client as wgi
+
+    monkeypatch.setattr(wgi, "fetch_wgi_indicator",
+                        lambda code, isos, mrv=12: ([{"date": "2024", "value": 58.13},
+                                                     {"date": "2023", "value": 56.0}], "2026-03-18"))
+    from modules.sector_intel.sectors_sync import WGI_REGULATORY_KEY, wgi_regulatory_sync
+
+    res = wgi_regulatory_sync(db)
+    assert res["years"] == 2 and res["latest"] == 58.13 and res["errors"] == []
+    row = db.query(AppSetting).filter(AppSetting.key == WGI_REGULATORY_KEY).first()
+    assert row is not None and json.loads(row.value)["series"]["2024"] == 58.13
