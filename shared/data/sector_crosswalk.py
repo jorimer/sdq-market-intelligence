@@ -143,3 +143,59 @@ def coverage() -> Dict[str, object]:
         "direct": sorted(direct),
         "bundled": bundled,
     }
+
+
+# ── TSS salary activities → BCRD-17 slugs ─────────────────────────────────────
+# The TSS Power BI report exposes 18 detailed activities (``ACT_ECO2_BC``), finer
+# than the ENCFT employment branches. Each BCRD-17 slug is fed by ≥1 TSS activity
+# (keyed by :func:`shared.data.tss_salary.activity_key`):
+#   * agropecuario aggregates 4 TSS sub-items (mean of their salaries — declared);
+#   * manufactura_local / zonas_francas share "Manufactura" (TSS doesn't split ZF);
+#   * otros_servicios / servicios_profesionales share "Otros Servicios".
+# Everything else is 1:1. "No identificado" is dropped by the connector.
+SLUG_TO_TSS_ACTIVITIES: Dict[str, List[str]] = {
+    "agropecuario": ["cultivo_de_cereales", "cultivos_tradicionales",
+                     "ganaderia_silvicultura_y_pesca", "servicios_agropecuarios"],
+    "mineria": ["explotacion_de_minas_y_canteras"],
+    "manufactura_local": ["manufactura"],
+    "zonas_francas": ["manufactura"],
+    "construccion": ["construccion"],
+    "energia": ["electricidad_gas_y_agua"],
+    "comercio": ["comercio"],
+    "turismo": ["hoteles_bares_y_restaurantes"],
+    "transporte": ["transporte_y_almacenamiento"],
+    "comunicaciones": ["comunicaciones"],
+    "financiero": ["intermediacion_financiera_seguros_y_otras"],
+    "inmobiliario": ["alquiler_de_viviendas"],
+    "ensenanza": ["servicios_de_ensenanza"],
+    "salud": ["servicios_de_salud"],
+    "administracion_publica": ["administracion_publica"],
+    "otros_servicios": ["otros_servicios"],
+    "servicios_profesionales": ["otros_servicios"],
+}
+
+# Same fail-closed partition guard: every BCRD-17 slug must be fed by the TSS map.
+if set(SLUG_TO_TSS_ACTIVITIES) != _CATALOG_SLUGS:
+    _miss = sorted(_CATALOG_SLUGS - set(SLUG_TO_TSS_ACTIVITIES))
+    _extra = sorted(set(SLUG_TO_TSS_ACTIVITIES) - _CATALOG_SLUGS)
+    raise RuntimeError(
+        f"SLUG_TO_TSS_ACTIVITIES desalineado con BCRD-17 (faltan={_miss}, sobran={_extra})."
+    )
+
+
+def salary_by_slug(activity_salary: Dict[str, float]) -> Dict[str, Optional[float]]:
+    """Map TSS per-activity salary → per-slug salary (the IAI ``operating_cost``).
+
+    ``activity_salary`` is ``{activity_key: salary}``. For a slug fed by several TSS
+    activities (agropecuario) the salaries are averaged (declared, unweighted — the
+    difference vs the TSS worker-weighted aggregate is <2% and washes out under the
+    index min-max). A slug whose activities are all absent maps to ``None`` (never
+    fabricated). Slugs sharing an activity (manufactura/ZF) get the same value — a
+    declared proxy, like the ENCFT bundle.
+    """
+    out: Dict[str, Optional[float]] = {}
+    for slug, activities in SLUG_TO_TSS_ACTIVITIES.items():
+        vals = [activity_salary[a] for a in activities
+                if activity_salary.get(a) is not None]
+        out[slug] = round(sum(vals) / len(vals), 2) if vals else None
+    return out
