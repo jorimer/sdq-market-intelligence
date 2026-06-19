@@ -96,6 +96,9 @@ HEALTH_VARS = ("life_expectancy", "child_mortality")
 # (ONE hourly labour income).
 NATIONAL_LIVE_VARS = ("income_per_capita", "informality_rate")
 POVERTY_VAR = "poverty_rate"
+# Net secondary-coverage by development region + period (ONE), like poverty: real
+# regional + temporal education-access signal in the education dimension.
+COVERAGE_VAR = "secondary_coverage"
 HEALTH_ENTITY = "nacional"
 
 
@@ -182,6 +185,10 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
         if pov is not None:
             merged[POVERTY_VAR] = float(pov)
         smap[POVERTY_VAR] = "live" if pov is not None else "rubric"
+        cov = snap.get(slug, {}).get(COVERAGE_VAR)  # by region + period (ONE)
+        if cov is not None:
+            merged[COVERAGE_VAR] = float(cov)
+        smap[COVERAGE_VAR] = "live" if cov is not None else "rubric"
         dataset[slug] = merged
         sources[slug] = smap
     return {"period": target, "dataset": dataset, "sources": sources, "has_live": bool(snap)}

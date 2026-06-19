@@ -18,8 +18,9 @@ dimension_variables:
     - life_expectancy        # esperanza de vida (años)    mayor = mejor
     - child_mortality        # mortalidad infantil (‰)     mayor = peor
   education:
-    - literacy_rate          # alfabetización (%)          mayor = mejor
-    - schooling_years        # años de escolaridad         mayor = mejor
+    - literacy_rate          # alfabetización (%)          mayor = mejor   [ENHOGAR por región]
+    - schooling_years        # años de escolaridad         mayor = mejor   [ENHOGAR por región]
+    - secondary_coverage     # cobertura neta secundaria (%) mayor = mejor [ONE por región + año]
   living_standards:
     - income_per_capita      # ingreso per cápita          mayor = mejor
     - poverty_rate           # pobreza (%)                 mayor = peor
@@ -46,6 +47,8 @@ bands:
 # (match exacto); income_per_capita = ONE ingreso laboral/hora nacional ✅ (PROXY
 # declarado, no ingreso per cápita del hogar); educación (literacy/schooling) = ONE
 # ENHOGAR por región, extracción IA ✅ (live solo si las 10 regiones tienen el dato);
+# secondary_coverage = ONE cobertura neta secundaria por región + año 2010-2024 ✅
+# (acceso educativo regional+temporal real, complementa el logro del ENHOGAR estático);
 # financial_inclusion ← Findex/SB (pendiente). La UI marca cada variable real-vs-rúbrica.
 rubric_defaults:
   income_per_capita: 50
@@ -53,3 +56,4 @@ rubric_defaults:
   schooling_years: 50
   financial_inclusion: 50
   informality_rate: 50
+  secondary_coverage: 50

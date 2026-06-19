@@ -52,9 +52,10 @@ def test_fixture_client_offline():
 
 def test_sync_persists_and_is_idempotent(db, monkeypatch):
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
-    # WDI health + ONE labour hit the network — stub them (covered by live sensors).
+    # WDI health + ONE labour/coverage hit the network — stub them (live sensors cover).
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, set_phase: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_labor", lambda db, set_phase: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_coverage", lambda db, set_phase: 0)
 
     first = one_social_sync(db)
     assert first["errors"] == []
@@ -162,6 +163,68 @@ def test_discover_labor_links_prefers_latest_revision():
         '<a href="/media/bbb/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx">new</a>'
     )
     assert discover_labor_links(html)["informality_rate"].endswith("2004-2024.xlsx")
+
+
+def test_parse_one_coverage_xlsx_secondary_by_region():
+    """Net secondary-coverage parser: 3rd column per year-group, dev regions only."""
+    import io
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Cuadro: tasa neta de cobertura, según región y provincia"])
+    ws.append([None, "2023-2024", None, None, "2022-2023", None, None])  # year-group labels
+    ws.append([None, "Inicial", "Primario", "Secundario", "Inicial", "Primario", "Secundario"])
+    ws.append(["Total país", 30, 90, 70, 29, 89, 69])                    # skipped (not "Región …")
+    ws.append(["Región Metropolitana", 33, 86, 67, 32, 85, 66])         # → ozama
+    ws.append(["Distrito Nacional", 37, 87, 73, 36, 88, 72])            # province → skipped
+    ws.append(["Región Cibao Norte", 34, 94, 71, 33, 93, 70])          # → cibao_norte
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    from shared.data.one_client import parse_one_coverage_xlsx
+    rows = parse_one_coverage_xlsx(buf.getvalue())
+    by = {(s, y): v for s, y, v in rows}
+    assert by[("ozama", 2024)] == 67 and by[("ozama", 2023)] == 66       # Metropolitana → ozama
+    assert by[("cibao_norte", 2024)] == 71                               # 3rd col = secondary
+    assert all(s in {"ozama", "cibao_norte"} for s, _, _ in rows)        # país/provincia excluded
+
+
+def test_coverage_goes_live_by_region_and_period(db):
+    _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
+    _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
+    _ind(db, "enriquillo", "secondary_coverage", "2024", 66.8)   # valdesia has none
+    db.commit()
+
+    from modules.social_dev.service import assemble_idm_dataset
+    asm = assemble_idm_dataset(db)
+    enr = asm["dataset"]["enriquillo"]
+    assert enr["secondary_coverage"] == 66.8                            # by region + period
+    assert asm["sources"]["enriquillo"]["secondary_coverage"] == "live"
+    # A region without coverage that period → rubric, value excluded (engine skips it).
+    assert asm["sources"]["valdesia"]["secondary_coverage"] == "rubric"
+    assert "secondary_coverage" not in asm["dataset"]["valdesia"]
+
+
+def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
+    import sys
+
+    oc_mod = sys.modules["shared.data.one_client"]
+    monkeypatch.setattr(
+        oc_mod, "fetch_one_education_coverage",
+        lambda: [("enriquillo", 2024, 66.8), ("ozama", 2024, 67.7)],
+    )
+    from modules.social_dev.social_sync import _sync_one_coverage
+
+    n = _sync_one_coverage(db, lambda _m: None)
+    db.commit()
+    assert n == 2
+    row = (
+        db.query(SocialIndicator)
+        .filter_by(entity_key="enriquillo", theme="secondary_coverage", period="2024")
+        .first()
+    )
+    assert row is not None and row.value == 66.8 and row.source == "ONE" and row.disaggregation == "region"
 
 
 def test_discover_labor_links_matches_by_slug():
