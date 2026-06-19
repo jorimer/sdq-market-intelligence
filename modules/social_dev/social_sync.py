@@ -27,6 +27,7 @@ _LABOR_UNITS = {
     "income_per_capita": "RD$/hora (proxy: ingreso laboral)",
 }
 COVERAGE_THEME = "secondary_coverage"  # ONE net secondary-coverage by region + period
+COVERAGE_UNIT = "% (cobertura neta secundaria)"  # ≤40 chars: sd_indicators.unit VARCHAR(40)
 
 
 def _upsert_indicator(db: Session, *, theme, entity, period, value, source, disagg, unit) -> None:
@@ -102,8 +103,7 @@ def _sync_one_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
     synced = 0
     for region_slug, year, value in rows:
         _upsert_indicator(db, theme=COVERAGE_THEME, entity=region_slug, period=str(year),
-                          value=float(value), source="ONE", disagg="region",
-                          unit="% (tasa neta de cobertura, nivel secundario)")
+                          value=float(value), source="ONE", disagg="region", unit=COVERAGE_UNIT)
         synced += 1
     return synced
 
