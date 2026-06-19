@@ -164,6 +164,70 @@ def fetch_trade(peers: Dict[str, Dict[str, str]], years: List[int],
     return trade
 
 
+_PARTNER_REF_URL = "https://comtradeapi.un.org/files/v1/app/reference/partnerAreas.json"
+# Non-country partner codes to drop: World(0) + aggregates/special categories that
+# Comtrade doesn't flag as isGroup (837 Bunkers, 838 Free Zones, 839 Special, 899
+# Areas nes, 490 "Other Asia, nes", 568 "Other Europe, nes", 636/637 nes).
+_PARTNER_DROP = {0, 490, 568, 636, 637, 837, 838, 839, 899}
+
+
+def _partner_names() -> Dict[int, str]:
+    """{m49_code: country_name} for real countries (drops groups/aggregates)."""
+    data = httpx.get(_PARTNER_REF_URL, timeout=40, headers={"User-Agent": "sdq-mip/1.0"}).json()
+    out: Dict[int, str] = {}
+    for r in data.get("results", []):
+        code = r.get("PartnerCode")
+        if code in _PARTNER_DROP or r.get("isGroup"):
+            continue
+        name = (r.get("PartnerDesc") or r.get("text") or "").strip()
+        if code is not None and name:
+            out[int(code)] = name
+    return out
+
+
+def fetch_trade_partners(m49: str, years: List[int],
+                         progress=None) -> Dict[str, Dict[str, Dict[str, float]]]:
+    """Bilateral trade by PARTNER country (the geographic dimension the DGA Power BI
+    doesn't export): ``{year: {"export": {country: usd_millions}, "import": {...}}}``.
+
+    Omitting partnerCode returns every partner (by M49 code); names are resolved from
+    the Comtrade reference. World/aggregate codes are dropped — only real countries."""
+    names = _partner_names()
+    out: Dict[str, Dict[str, Dict[str, float]]] = {}
+    for year in years:
+        if progress:
+            progress(f"socios {year}")
+        year_out: Dict[str, Dict[str, float]] = {}
+        for flow, key in (("X", "export"), ("M", "import")):
+            rows = _comtrade_get({
+                "reporterCode": m49, "period": str(year), "partner2Code": "0",
+                "motCode": "0", "customsCode": "C00", "flowCode": flow, "cmdCode": "TOTAL",
+            })
+            byc: Dict[str, float] = {}
+            for r in rows:
+                code, val = r.get("partnerCode"), r.get("primaryValue")
+                if code in _PARTNER_DROP or val is None:
+                    continue
+                name = names.get(int(code))
+                if name:
+                    byc[name] = byc.get(name, 0.0) + float(val) / _USD_TO_MILLIONS
+            year_out[key] = {c: round(v, 4) for c, v in byc.items()}
+            time.sleep(1.0)
+        if year_out.get("export") or year_out.get("import"):
+            out[str(year)] = year_out
+    return out
+
+
+def load_partners() -> Dict:
+    """Read the committed partner fixture: ``{meta, partners}`` (or ``{}``)."""
+    path = _FIXTURES_DIR / "comtrade_partners.json"
+    if not path.exists():
+        logger.warning("Fixture de socios COMTRADE ausente: %s", path.name)
+        return {}
+    with path.open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def _wb_series(code: str, iso3_to_iso2: Dict[str, str], mrv: int,
                timeout: int = 60) -> Dict[str, Dict[str, float]]:
     """``{iso2: {year_str: value}}`` for a World Bank indicator over the panel."""
