@@ -82,6 +82,8 @@ function SocialOverview() {
               Ingreso = proxy real (ingreso laboral por hora, ONE/BCRD ENCFT), no ingreso per cápita
               del hogar. Informalidad = dato exacto (ONE/BCRD ENCFT), nacional. Educación añade
               cobertura neta secundaria por región y año (ONE, 2010-2024) al logro del ENHOGAR.
+              Inclusión financiera = proxy de acceso (cajeros/100k adultos, BM Findex) — el IDM
+              queda con sus 8 variables en dato real.
             </p>
           </div>
         </>

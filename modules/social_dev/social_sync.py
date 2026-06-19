@@ -29,6 +29,13 @@ _LABOR_UNITS = {
 COVERAGE_THEME = "secondary_coverage"  # ONE net secondary-coverage by region + period
 COVERAGE_UNIT = "% (cobertura neta secundaria)"  # ≤40 chars: sd_indicators.unit VARCHAR(40)
 
+# National financial inclusion (World Bank Findex): ATMs per 100k adults — an annual
+# access PROXY (denser than the sparse account-ownership survey). Closes the IDM's
+# last rubric variable. National, applied to every region like WDI health.
+WB_FINDEX = {"FB.ATM.TOTL.P5": "financial_inclusion"}
+FINDEX_UNIT = "cajeros/100k (proxy acceso BM)"  # ≤40 chars: sd_indicators.unit
+_WB_FINDEX_YEARS = 25  # ATMs/100k spans 2004-2023 (≤25)
+
 
 def _upsert_indicator(db: Session, *, theme, entity, period, value, source, disagg, unit) -> None:
     existing = (
@@ -108,6 +115,29 @@ def _sync_one_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_wb_findex(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Fetch World Bank Findex financial-access (ATMs/100k adults) → sd_indicators
+    (entity ``nacional``, applied to every region). Best-effort."""
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    set_phase("inclusión financiera nacional (BM Findex: cajeros/100k)")
+    synced = 0
+    for code, theme in WB_FINDEX.items():
+        try:
+            rows, _ = fetch_wb_indicator(code, ["DOM"], mrv=_WB_FINDEX_YEARS)
+        except Exception as e:  # noqa: BLE001 — best-effort per indicator
+            logger.warning("[social] BM Findex %s falló: %s", code, e)
+            continue
+        for r in rows:
+            yr, val = r.get("date"), r.get("value")
+            if not yr or val is None:
+                continue
+            _upsert_indicator(db, theme=theme, entity=HEALTH_ENTITY, period=str(yr),
+                              value=float(val), source="WB", disagg="nacional", unit=FINDEX_UNIT)
+            synced += 1
+    return synced
+
+
 def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
     """Pull live social data (ONE poverty by region + WDI national health) and
     upsert into ``sd_indicators``. Best-effort; never raises on an upstream failure.
@@ -139,17 +169,20 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     health_synced = _sync_wdi_health(db, set_phase)
     labor_synced = _sync_one_labor(db, set_phase)
     coverage_synced = _sync_one_coverage(db, set_phase)
+    findex_synced = _sync_wb_findex(db, set_phase)
     db.commit()
     return {
         "synced": synced,
         "health_synced": health_synced,
         "labor_synced": labor_synced,
         "coverage_synced": coverage_synced,
+        "findex_synced": findex_synced,
         "periods": sorted(periods),
         "regions": len({r.dimension for r in records if r.dimension}),
         "themes": (sorted({r.series for r in records})
                    + sorted(set(WDI_HEALTH.values()))
                    + sorted(_LABOR_UNITS.keys())
-                   + [COVERAGE_THEME]),
+                   + [COVERAGE_THEME]
+                   + sorted(WB_FINDEX.values())),
         "errors": errors,
     }

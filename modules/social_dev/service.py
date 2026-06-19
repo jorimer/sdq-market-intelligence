@@ -83,11 +83,13 @@ def get_latest(db: Session, entity_key: str) -> Optional[DevelopmentScore]:
     return max(rows, key=lambda s: _period_key(s.period)) if rows else None
 
 
-# IDM variable sources (Gate C): poverty by region (ONE), national series applied
-# to every region (WDI health + ONE/BCRD labour: informality + income proxy),
-# education by region (ONE ENHOGAR, AI-extracted), the rest declared rubric until
-# sourced (financial_inclusion ← Findex/SB).
-RUBRIC_VARS = ("financial_inclusion",)
+# IDM variable sources (Gate C): poverty + net coverage by region (ONE), national
+# series applied to every region (WDI health + ONE/BCRD labour + WB Findex financial
+# access), education by region (ONE ENHOGAR, AI-extracted). All 8 vars now sourced.
+RUBRIC_VARS = ()  # none left: financial_inclusion now WB Findex (latest-available)
+# financial_inclusion: latest-available national value (Findex access proxy lags a
+# year), so the current IDM period stays live — like the ENHOGAR study's latest use.
+FINANCIAL_VAR = "financial_inclusion"
 EDUCATION_VARS = ("literacy_rate", "schooling_years")
 HEALTH_VARS = ("life_expectancy", "child_mortality")
 # National annual series (ONE/BCRD labour) applied uniformly to every region; they
@@ -152,6 +154,7 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     # fill would distort the cross-region min-max (doctrine §rubric_defaults), so
     # an incomplete extraction stays uniform rubric for all rather than half-real.
     latest = get_social_indicators(db)["entities"]
+    nat_latest = latest.get(HEALTH_ENTITY, {})  # latest national value per theme
     edu_live = {
         var: all(latest.get(slug, {}).get(var) is not None for slug, _ in regions)
         for var in EDUCATION_VARS
@@ -162,9 +165,12 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     for slug, _name in regions:
         merged: Dict[str, float] = {}
         smap: Dict[str, str] = {}
-        for var in RUBRIC_VARS:
+        for var in RUBRIC_VARS:  # none left (all 8 IDM vars sourced)
             merged[var] = float(defaults.get(var, 50))
             smap[var] = "rubric"
+        fi = nat_latest.get(FINANCIAL_VAR)  # national (WB Findex), latest-available
+        merged[FINANCIAL_VAR] = float(fi) if fi is not None else float(defaults.get(FINANCIAL_VAR, 50))
+        smap[FINANCIAL_VAR] = "live" if fi is not None else "rubric"
         for var in EDUCATION_VARS:  # by region (ONE ENHOGAR), live iff complete
             if edu_live[var]:
                 merged[var] = float(latest[slug][var])
