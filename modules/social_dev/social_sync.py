@@ -138,6 +138,26 @@ def _sync_wb_findex(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_one_schooling(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Fetch ONE national average years of schooling (15+, 2000-2024) → sd_indicators
+    (entity ``nacional``, period-matched). ENHOGAR only has literacy by region, not
+    years of schooling, so this comes from the national ONE series. Best-effort."""
+    from shared.data.one_client import fetch_one_education_schooling
+
+    set_phase("escolaridad nacional (ONE: años promedio de educación)")
+    try:
+        rows = fetch_one_education_schooling()
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("[social] ONE schooling sync falló: %s", e)
+        return 0
+    synced = 0
+    for year, value in rows:
+        _upsert_indicator(db, theme="schooling_years", entity=HEALTH_ENTITY, period=str(year),
+                          value=float(value), source="ONE", disagg="nacional", unit="años")
+        synced += 1
+    return synced
+
+
 def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
     """Pull live social data (ONE poverty by region + WDI national health) and
     upsert into ``sd_indicators``. Best-effort; never raises on an upstream failure.
@@ -169,6 +189,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     health_synced = _sync_wdi_health(db, set_phase)
     labor_synced = _sync_one_labor(db, set_phase)
     coverage_synced = _sync_one_coverage(db, set_phase)
+    schooling_synced = _sync_one_schooling(db, set_phase)
     findex_synced = _sync_wb_findex(db, set_phase)
     db.commit()
     return {
@@ -176,13 +197,14 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "health_synced": health_synced,
         "labor_synced": labor_synced,
         "coverage_synced": coverage_synced,
+        "schooling_synced": schooling_synced,
         "findex_synced": findex_synced,
         "periods": sorted(periods),
         "regions": len({r.dimension for r in records if r.dimension}),
         "themes": (sorted({r.series for r in records})
                    + sorted(set(WDI_HEALTH.values()))
                    + sorted(_LABOR_UNITS.keys())
-                   + [COVERAGE_THEME]
+                   + [COVERAGE_THEME, "schooling_years"]
                    + sorted(WB_FINDEX.values())),
         "errors": errors,
     }

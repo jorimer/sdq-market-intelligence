@@ -56,6 +56,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, set_phase: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_labor", lambda db, set_phase: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_coverage", lambda db, set_phase: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, set_phase: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, set_phase: 0)
 
     first = one_social_sync(db)
@@ -252,6 +253,25 @@ def test_sync_wb_findex_upserts_national(db, monkeypatch):
         .first()
     )
     assert row is not None and row.value == 40.06 and row.source == "WB"
+
+
+def test_sync_one_schooling_upserts_national(db, monkeypatch):
+    import sys
+
+    oc_mod = sys.modules["shared.data.one_client"]  # patch the real module (re-export shadow)
+    monkeypatch.setattr(oc_mod, "fetch_one_education_schooling",
+                        lambda: [(2023, 9.61), (2024, 9.61)])
+    from modules.social_dev.social_sync import _sync_one_schooling
+
+    n = _sync_one_schooling(db, lambda _m: None)
+    db.commit()
+    assert n == 2
+    row = (
+        db.query(SocialIndicator)
+        .filter_by(entity_key="nacional", theme="schooling_years", period="2024")
+        .first()
+    )
+    assert row is not None and row.value == 9.61 and row.source == "ONE" and row.unit == "años"
 
 
 def test_sync_one_coverage_upserts_by_region(db, monkeypatch):

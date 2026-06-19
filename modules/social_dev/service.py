@@ -90,13 +90,15 @@ RUBRIC_VARS = ()  # none left: financial_inclusion now WB Findex (latest-availab
 # financial_inclusion: latest-available national value (Findex access proxy lags a
 # year), so the current IDM period stays live — like the ENHOGAR study's latest use.
 FINANCIAL_VAR = "financial_inclusion"
-EDUCATION_VARS = ("literacy_rate", "schooling_years")
+# literacy_rate is by region (ENHOGAR). schooling_years is NATIONAL: ENHOGAR reports
+# only literacy by region, not years of schooling, so it comes from the national ONE
+# series (años promedio de educación) like income/informality.
+EDUCATION_VARS = ("literacy_rate",)
 HEALTH_VARS = ("life_expectancy", "child_mortality")
-# National annual series (ONE/BCRD labour) applied uniformly to every region; they
-# carry a declared rubric default (50) when a period lacks the real value, matching
-# their prior always-rubric behaviour. income_per_capita is a declared PROXY
-# (ONE hourly labour income).
-NATIONAL_LIVE_VARS = ("income_per_capita", "informality_rate")
+# National annual series applied uniformly to every region; carry a declared rubric
+# default (50) when a period lacks the real value. income_per_capita is a declared
+# PROXY (ONE hourly labour income); schooling_years = ONE national years of schooling.
+NATIONAL_LIVE_VARS = ("income_per_capita", "informality_rate", "schooling_years")
 POVERTY_VAR = "poverty_rate"
 # Net secondary-coverage by development region + period (ONE), like poverty: real
 # regional + temporal education-access signal in the education dimension.

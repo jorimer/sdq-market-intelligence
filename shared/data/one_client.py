@@ -303,6 +303,9 @@ EDUCATION_LANDING = (
 _EDUCATION_SLUGS: Dict[str, str] = {
     "secondary_coverage": "tasa-neta-de-cobertura-por-nivel-region-provincia",
 }
+# National average years of schooling (15+) — the IDM's schooling_years (ENHOGAR
+# only reports literacy by region, not years of schooling). Simple Año|Total sheet.
+_SCHOOLING_SLUG = "anos-promedio-de-educacion-de-la-poblacion-de-15-anos-y-mas"
 
 
 def _coverage_region_slug(label: str) -> Optional[str]:
@@ -407,3 +410,21 @@ def fetch_one_education_coverage() -> List[tuple]:  # pragma: no cover - network
     f = httpx.get(url, timeout=90, follow_redirects=True, headers=_HEADERS)
     f.raise_for_status()
     return parse_one_coverage_xlsx(f.content)
+
+
+def fetch_one_education_schooling() -> List[tuple]:  # pragma: no cover - network I/O
+    """Live: national average years of schooling (15+) from the Educación landing →
+    ``[(year, value)]`` (the IDM's ``schooling_years``, national)."""
+    import urllib.parse
+
+    import httpx
+
+    resp = httpx.get(EDUCATION_LANDING, timeout=40, follow_redirects=True, headers=_HEADERS)
+    resp.raise_for_status()
+    path = _match_media_links(resp.text, {"schooling_years": _SCHOOLING_SLUG}).get("schooling_years")
+    if not path:
+        return []
+    f = httpx.get("https://www.one.gob.do" + urllib.parse.quote(path), timeout=60,
+                  follow_redirects=True, headers=_HEADERS)
+    f.raise_for_status()
+    return parse_one_indicator_xlsx(f.content)
