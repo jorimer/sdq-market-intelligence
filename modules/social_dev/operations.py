@@ -59,6 +59,33 @@ def _run_one_publications_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_idm_convergent_validity(params, user_id, set_phase) -> Dict:
+    """Compute the IDM convergent-validity report (regional ranking vs PNUD IDHr)
+    and persist it. Deterministic (reads persisted scores + committed reference)."""
+    import json
+    from datetime import datetime, timezone
+
+    from modules.social_dev.validation.report import build_convergent_validity
+    from shared.settings.models import AppSetting
+
+    set_phase("validez convergente del IDM vs IDH regional del PNUD")
+    db = SessionLocal()
+    try:
+        rep = build_convergent_validity(db)
+        rep["generated_at"] = datetime.now(timezone.utc).isoformat()
+        row = db.query(AppSetting).filter(AppSetting.key == "idm_convergent_validity").first()
+        payload = json.dumps(rep)
+        if row:
+            row.value = payload
+        else:
+            db.add(AppSetting(key="idm_convergent_validity", value=payload, is_secret=False))
+        db.commit()
+        return {"spearman": rep.get("spearman"), "n_regions": rep.get("n_regions"),
+                "spearman_ci": rep.get("spearman_ci")}
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "one-social-sync", "Sincronizar social (ONE pobreza + WDI salud)",
@@ -75,12 +102,20 @@ def register() -> None:
         _run_idm_snapshot, default_interval_hours=2160,
     ))
     register_operation(Operation(
-        "one-education-extract", "Educación por región (extracción IA del ENHOGAR)",
+        "one-education-extract", "Alfabetización por región (extracción IA del ENHOGAR)",
         "Lee el informe COMPLETO del ENHOGAR-2022 (ONE) y extrae con IA la tasa de "
-        "alfabetización y los años de escolaridad de las 10 regiones de desarrollo "
-        "(solo lo que el texto declara; nunca estima). Sube la dimensión educación "
-        "del IDM de rúbrica a dato real. Requiere la clave ANTHROPIC (prod).",
+        "alfabetización de las 10 regiones de desarrollo (solo lo que el texto "
+        "declara; nunca estima). Sube literacy_rate del IDM de rúbrica a real. "
+        "(Escolaridad viene de la serie nacional ONE, no de aquí.) Requiere ANTHROPIC.",
         _run_one_education_extract, default_interval_hours=8760,  # estudio puntual → anual+
+    ))
+    register_operation(Operation(
+        "idm-convergent-validity", "Validación del IDM (validez convergente)",
+        "Valida el ranking regional del IDM contra el IDH regional (IDHr) del PNUD "
+        "para las mismas 10 regiones: Spearman + IC bootstrap. No es un backtest "
+        "temporal (no aplica al IDM); es validez convergente vs una medida "
+        "independiente de desarrollo. Recalcula desde los scores persistidos.",
+        _run_idm_convergent_validity, default_interval_hours=2160,
     ))
     register_operation(Operation(
         "one-publications-sync", "Ingerir estudios de la ONE (digest IA)",

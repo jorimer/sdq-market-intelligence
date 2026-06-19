@@ -91,3 +91,36 @@ export async function getPublications(): Promise<{ publications: OnePublication[
   const { data } = await client.get("/social-dev/publications");
   return data;
 }
+
+// ── Gate E: convergent validity (IDM regional ranking vs PNUD IDHr) ──
+export interface ConvergentPair {
+  region: string;
+  idm_score: number;
+  idm_rank: number;
+  idhr: number;
+  idhr_rank: number;
+  rank_diff: number;
+}
+
+export interface ConvergentReport {
+  has_report: boolean;
+  has_data?: boolean;
+  n_regions?: number;
+  spearman?: number | null;
+  spearman_ci?: [number | null, number | null];
+  pairs?: ConvergentPair[];
+  source?: string;
+  top_divergence?: { region: string; rank_diff: number };
+  disclaimer?: string;
+  generated_at?: string;
+}
+
+export async function getConvergentValidity(): Promise<ConvergentReport> {
+  const { data } = await client.get("/social-dev/validation/convergent");
+  return data;
+}
+
+export async function runConvergentValidity(): Promise<{ started: boolean; reason?: string }> {
+  const { data } = await client.post("/operations/idm-convergent-validity/run", {});
+  return data;
+}

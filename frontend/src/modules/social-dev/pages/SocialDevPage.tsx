@@ -26,6 +26,7 @@ import {
   OnePublication,
 } from "../api";
 import { REGION_NAMES, DIM_LABELS, IDM_DIM_VARS } from "../data";
+import { ValidationTab } from "../components/ValidationTab";
 
 type Status = "loading" | "error" | "ready";
 
@@ -182,6 +183,7 @@ export function SocialDevPage() {
                 { id: "distribucion", label: "Distribución" },
                 { id: "desglose", label: "Desglose" },
                 { id: "ranking", label: "Ranking" },
+                { id: "validacion", label: "Validación" },
                 { id: "estudios", label: `Estudios ONE${pubs.length ? ` (${pubs.length})` : ""}` },
               ]}
               active={tab}
@@ -271,6 +273,8 @@ export function SocialDevPage() {
                   </table>
                 </>
               )}
+
+              {tab === "validacion" && <ValidationTab />}
 
               {tab === "estudios" && (
                 <>
