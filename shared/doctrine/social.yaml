@@ -38,14 +38,15 @@ bands:
   - {name: Medio, lower: 40.0, color: "#F59E0B"}
   - {name: Bajo,  lower: 0.0,  color: "#991B1B"}
 
-# Rúbrica declarada (Gate C) — variables del IDM sin dato real aún. NEUTRAL 50
-# (uniforme: no discrimina ni finge; un valor parcial distorsionaría el min-max).
-# Suben a real: poverty_rate ya es ONE por región ✅; salud (life_expectancy/
-# child_mortality) = WDI nacional ✅; educación (literacy/schooling) = ONE ENHOGAR
-# por región, extracción IA ✅ (sube a live solo si las 10 regiones tienen el dato:
-# un relleno parcial distorsiona el min-max); ingreso ← Censo 2022/ENHOGAR
-# (pendiente); inclusión/informalidad ← BCRD (ENIEF/ENCFT, pendiente). La UI marca
-# cada variable real-vs-rúbrica.
+# Rúbrica declarada (Gate C) — defaults NEUTRAL 50 usados solo como respaldo si una
+# variable no tiene dato real para el período (uniforme: no discrimina ni finge; un
+# valor parcial distorsionaría el min-max).
+# Estado por variable: poverty_rate = ONE por región ✅; salud (life_expectancy/
+# child_mortality) = WDI nacional ✅; informality_rate = ONE/BCRD (ENCFT) nacional ✅
+# (match exacto); income_per_capita = ONE ingreso laboral/hora nacional ✅ (PROXY
+# declarado, no ingreso per cápita del hogar); educación (literacy/schooling) = ONE
+# ENHOGAR por región, extracción IA ✅ (live solo si las 10 regiones tienen el dato);
+# financial_inclusion ← Findex/SB (pendiente). La UI marca cada variable real-vs-rúbrica.
 rubric_defaults:
   income_per_capita: 50
   literacy_rate: 50

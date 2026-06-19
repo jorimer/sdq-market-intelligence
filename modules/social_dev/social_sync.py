@@ -19,6 +19,14 @@ WDI_HEALTH = {"SP.DYN.LE00.IN": "life_expectancy", "SP.DYN.IMRT.IN": "child_mort
 HEALTH_ENTITY = "nacional"
 _WDI_HEALTH_YEARS = 30
 
+# National labour (ONE/BCRD ENCFT) → applied to every region, like WDI health.
+# informality_rate = exact IDM variable; income_per_capita = declared PROXY
+# (hourly labour income, not household per-capita income).
+_LABOR_UNITS = {
+    "informality_rate": "% de la población ocupada",
+    "income_per_capita": "RD$/hora (proxy: ingreso laboral)",
+}
+
 
 def _upsert_indicator(db: Session, *, theme, entity, period, value, source, disagg, unit) -> None:
     existing = (
@@ -59,6 +67,26 @@ def _sync_wdi_health(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Fetch national ONE labour series (informality + income proxy) → sd_indicators
+    (entity ``nacional``, applied to every region in the assembly). Best-effort."""
+    from shared.data.one_client import fetch_one_labor
+
+    set_phase("trabajo nacional (ONE: informalidad + ingreso)")
+    try:
+        rows = fetch_one_labor()
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("[social] ONE labour sync falló: %s", e)
+        return 0
+    synced = 0
+    for theme, year, value in rows:
+        _upsert_indicator(db, theme=theme, entity=HEALTH_ENTITY, period=str(year),
+                          value=float(value), source="ONE",
+                          disagg="nacional", unit=_LABOR_UNITS.get(theme))
+        synced += 1
+    return synced
+
+
 def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
     """Pull live social data (ONE poverty by region + WDI national health) and
     upsert into ``sd_indicators``. Best-effort; never raises on an upstream failure.
@@ -88,12 +116,16 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
                           value=r.value, source="ONE", disagg="region", unit=r.unit)
         synced += 1
     health_synced = _sync_wdi_health(db, set_phase)
+    labor_synced = _sync_one_labor(db, set_phase)
     db.commit()
     return {
         "synced": synced,
         "health_synced": health_synced,
+        "labor_synced": labor_synced,
         "periods": sorted(periods),
         "regions": len({r.dimension for r in records if r.dimension}),
-        "themes": sorted({r.series for r in records}) + sorted(set(WDI_HEALTH.values())),
+        "themes": (sorted({r.series for r in records})
+                   + sorted(set(WDI_HEALTH.values()))
+                   + sorted(_LABOR_UNITS.keys())),
         "errors": errors,
     }

@@ -52,8 +52,9 @@ def test_fixture_client_offline():
 
 def test_sync_persists_and_is_idempotent(db, monkeypatch):
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
-    # WDI health hits the network — stub it out (covered by the live sensor instead).
+    # WDI health + ONE labour hit the network — stub them (covered by live sensors).
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, set_phase: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_labor", lambda db, set_phase: 0)
 
     first = one_social_sync(db)
     assert first["errors"] == []
@@ -92,7 +93,110 @@ def test_assemble_idm_real_plus_rubric_with_sources(db):
     enr, src = asm["dataset"]["enriquillo"], asm["sources"]["enriquillo"]
     assert enr["poverty_rate"] == 31.0 and src["poverty_rate"] == "live"   # ONE, by region
     assert enr["life_expectancy"] == 73.9 and src["life_expectancy"] == "live"  # WDI national
-    assert src["income_per_capita"] == "rubric" and enr["income_per_capita"] == 50  # declared
+    # No national labour yet → income/informality fall back to declared rubric 50.
+    assert src["income_per_capita"] == "rubric" and enr["income_per_capita"] == 50
+    assert src["informality_rate"] == "rubric" and enr["informality_rate"] == 50
+
+
+def test_national_labor_goes_live_for_every_region(db):
+    """ONE national informality + income (proxy) apply to every region, live."""
+    _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
+    _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
+    _ind(db, "nacional", "informality_rate", "2024", 55.46)
+    _ind(db, "nacional", "income_per_capita", "2024", 167.46)
+    db.commit()
+
+    from modules.social_dev.service import assemble_idm_dataset
+    asm = assemble_idm_dataset(db)
+    for slug in ("enriquillo", "valdesia"):                  # uniform across regions
+        row, src = asm["dataset"][slug], asm["sources"][slug]
+        assert row["informality_rate"] == 55.46 and src["informality_rate"] == "live"
+        assert row["income_per_capita"] == 167.46 and src["income_per_capita"] == "live"
+    # financial_inclusion has no source → stays declared rubric.
+    assert asm["sources"]["enriquillo"]["financial_inclusion"] == "rubric"
+
+
+def test_parse_one_indicator_xlsx_reads_total_by_year():
+    import io
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    wb.active.title = " Ficha "                              # metadata sheet (ignored)
+    wb.active["A1"] = "Ficha técnica"
+    ws = wb.create_sheet("Indicador")
+    ws.append(["REPÚBLICA DOMINICANA: Tasa de Informalidad…"])  # title row
+    ws.append(["Año", "Total", "Hombres", "Mujeres"])           # header
+    ws.append([2022, 57.56, 61.21, 52.3])
+    ws.append([2023, 56.54, 60.3, 51.27])
+    ws.append(["Fuente: ENCFT (BCRD)"])                         # trailing note (ignored)
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    from shared.data.one_client import parse_one_indicator_xlsx
+    assert parse_one_indicator_xlsx(buf.getvalue()) == [(2022, 57.56), (2023, 56.54)]
+
+
+def test_parse_one_indicator_tolerates_sheet_whitespace():
+    """ONE sheet names often carry trailing spaces — must still be found."""
+    import io
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    wb.active.title = " Ficha "
+    ws = wb.create_sheet("Indicador ")              # trailing space
+    ws.append(["Año", "Total"])
+    ws.append([2024, 167.46])
+    wb.create_sheet("Notas")                         # later sheet must NOT win
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    from shared.data.one_client import parse_one_indicator_xlsx
+    assert parse_one_indicator_xlsx(buf.getvalue()) == [(2024, 167.46)]
+
+
+def test_discover_labor_links_prefers_latest_revision():
+    from shared.data.one_client import discover_labor_links
+
+    html = (
+        '<a href="/media/aaa/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2023.xlsx">old</a>'
+        '<a href="/media/bbb/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx">new</a>'
+    )
+    assert discover_labor_links(html)["informality_rate"].endswith("2004-2024.xlsx")
+
+
+def test_discover_labor_links_matches_by_slug():
+    from shared.data.one_client import discover_labor_links
+
+    html = (
+        '<a href="/media/3fxoh4pp/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx">x</a>'
+        '<a href="/media/dtmlxqpw/ingreso-laboral-promedio-por-hora-trabajada-en-ocupaci&#243;n-principal-2000-2024.xlsx">y</a>'
+        '<a href="/media/zzzz/poblaci&#243;n-desocupada-2008-2024.xlsx">z</a>'  # distractor
+    )
+    links = discover_labor_links(html)
+    assert links["informality_rate"].endswith("tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx")
+    assert "ingreso-laboral-promedio-por-hora-trabajada" in links["income_per_capita"]
+    assert set(links) == {"informality_rate", "income_per_capita"}            # distractor excluded
+
+
+def test_sync_one_labor_upserts_national(db, monkeypatch):
+    import sys  # the package re-exports `one_client`, shadowing the submodule attr →
+    oc_mod = sys.modules["shared.data.one_client"]  # patch the real module object
+
+    monkeypatch.setattr(
+        oc_mod, "fetch_one_labor",
+        lambda: [("informality_rate", 2024, 55.46), ("income_per_capita", 2024, 167.46)],
+    )
+    from modules.social_dev.social_sync import _sync_one_labor
+
+    n = _sync_one_labor(db, lambda _m: None)
+    db.commit()
+    assert n == 2
+    row = (
+        db.query(SocialIndicator)
+        .filter_by(entity_key="nacional", theme="informality_rate", period="2024")
+        .first()
+    )
+    assert row is not None and row.value == 55.46 and row.source == "ONE"
 
 
 def test_backfill_idm_scores_and_purges_cruft(db):

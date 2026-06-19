@@ -78,6 +78,10 @@ function SocialOverview() {
                 );
               })}
             </div>
+            <p className="mt-2 text-[11px] text-faint">
+              Ingreso = proxy real (ingreso laboral por hora, ONE/BCRD ENCFT), no ingreso per cápita
+              del hogar. Informalidad = dato exacto (ONE/BCRD ENCFT). Ambas nacionales.
+            </p>
           </div>
         </>
       )}
@@ -91,7 +95,7 @@ export function DatosSocialPage() {
     <OperationsConsole
       eyebrow="Datos · Social"
       title="Social · ONE"
-      sub="Ingesta y cálculo del desarrollo social: pobreza por región (ONE), salud (WDI), educación del ENHOGAR, estudios de la ONE e índice IDM."
+      sub="Ingesta y cálculo del desarrollo social: pobreza por región (ONE), salud (WDI), informalidad e ingreso nacionales (ONE/BCRD), educación del ENHOGAR e índice IDM."
       filter={(op) => SOCIAL_OPS.has(op.name)}
       emptyMessage="No hay operaciones de Social registradas."
       overview={<SocialOverview />}
