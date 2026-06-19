@@ -17,7 +17,7 @@ _DIM_LABELS = {
 # Which variables feed each IDM dimension (mirrors shared/doctrine/social.yaml).
 _DIM_VARS = {
     "health": ["life_expectancy", "child_mortality"],
-    "education": ["literacy_rate", "schooling_years"],
+    "education": ["literacy_rate", "schooling_years", "secondary_coverage"],
     "living_standards": ["income_per_capita", "poverty_rate"],
     "inclusion": ["financial_inclusion", "informality_rate"],
 }
@@ -77,6 +77,9 @@ def social_ai_context(
         "dimensions": rows,
         "strongest_dimension": strongest,
         "weakest_dimension": weakest,
-        "note": "Real: pobreza (ONE por región), salud (WDI nacional), alfabetización "
-                "(ENHOGAR por región). Rúbrica declarada: ingreso, escolaridad, inclusión.",
+        "note": "Dato real: pobreza, alfabetización y cobertura secundaria (ONE por "
+                "región); salud (WDI nacional); ingreso, informalidad y escolaridad (ONE "
+                "nacional); inclusión financiera (BM Findex). Las 9 variables del IDM en "
+                "dato real; la diferenciación regional la dan pobreza, alfabetización y "
+                "cobertura (las nacionales se aplican planas a todas las regiones).",
     }

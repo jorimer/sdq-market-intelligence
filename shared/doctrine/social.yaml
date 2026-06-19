@@ -19,7 +19,7 @@ dimension_variables:
     - child_mortality        # mortalidad infantil (‰)     mayor = peor
   education:
     - literacy_rate          # alfabetización (%)          mayor = mejor   [ENHOGAR por región]
-    - schooling_years        # años de escolaridad         mayor = mejor   [ENHOGAR por región]
+    - schooling_years        # años de escolaridad         mayor = mejor   [ONE nacional 2000-2024]
     - secondary_coverage     # cobertura neta secundaria (%) mayor = mejor [ONE por región + año]
   living_standards:
     - income_per_capita      # ingreso per cápita          mayor = mejor
@@ -45,13 +45,13 @@ bands:
 # Estado por variable: poverty_rate = ONE por región ✅; salud (life_expectancy/
 # child_mortality) = WDI nacional ✅; informality_rate = ONE/BCRD (ENCFT) nacional ✅
 # (match exacto); income_per_capita = ONE ingreso laboral/hora nacional ✅ (PROXY
-# declarado, no ingreso per cápita del hogar); educación (literacy/schooling) = ONE
-# ENHOGAR por región, extracción IA ✅ (live solo si las 10 regiones tienen el dato);
-# secondary_coverage = ONE cobertura neta secundaria por región + año 2010-2024 ✅
-# (acceso educativo regional+temporal real, complementa el logro del ENHOGAR estático);
-# financial_inclusion = BM Findex cajeros/100k adultos (proxy de acceso, nacional anual) ✅
-# — última variable que sale de rúbrica; el IDM queda 8/8 en dato real. La UI marca
-# cada variable real-vs-rúbrica.
+# declarado, no ingreso per cápita del hogar); literacy_rate = ONE ENHOGAR por región,
+# extracción IA ✅ (live si las 10 regiones tienen el dato); schooling_years = ONE
+# nacional años promedio de educación 2000-2024 ✅ (ENHOGAR no publica años de estudio
+# por región, solo alfabetización); secondary_coverage = ONE cobertura neta secundaria
+# por región + año 2010-2024 ✅ (acceso educativo regional+temporal); financial_inclusion
+# = BM Findex cajeros/100k adultos (proxy de acceso, nacional anual) ✅. Las 9 variables
+# del IDM en dato real. La UI marca cada variable real-vs-rúbrica.
 rubric_defaults:
   income_per_capita: 50
   literacy_rate: 50
