@@ -102,6 +102,23 @@ async def indicators(
 
 
 @router.get(
+    "/validation/convergent",
+    summary="Validez convergente del IDM (ranking regional vs IDH regional del PNUD)",
+)
+async def convergent_validity(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from shared.settings.models import AppSetting
+    import json
+
+    row = db.query(AppSetting).filter(AppSetting.key == "idm_convergent_validity").first()
+    if not row:
+        return {"has_report": False}
+    return {"has_report": True, **json.loads(row.value)}
+
+
+@router.get(
     "/dataset",
     summary="Dataset ensamblado del IDM (real + rúbrica) con procedencia",
     description=(
@@ -112,10 +129,11 @@ async def indicators(
     ),
 )
 async def dataset(
+    period: Optional[str] = Query(None, description="Período; por defecto, el último."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    return assemble_idm_dataset(db)
+    return assemble_idm_dataset(db, period=period)
 
 
 @router.get("/publications", summary="Estudios de la ONE (digest IA)")
