@@ -14,6 +14,7 @@ from shared.data.base_client import (
 from shared.data.bcrd_client import bcrd_client
 from shared.data.dga_client import dga_client
 from shared.data.dgii_client import dgii_client
+from shared.data.hacienda_client import hacienda_client
 from shared.data.lineage import Lineage
 from shared.data.one_client import one_client
 from shared.data.outcomes import LabeledOutcome
@@ -32,4 +33,5 @@ __all__ = [
     "one_client",
     "dgii_client",
     "dga_client",
+    "hacienda_client",
 ]
