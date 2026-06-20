@@ -146,6 +146,28 @@ async def dataset(
     return assemble_iai_dataset(db)
 
 
+@router.get(
+    "/validation",
+    summary="Backtest sectorial (Gate E · empleo formal)",
+    description="Devuelve el último Gate E persistido: IC de rango (Spearman) entre el "
+    "IAI en T y el crecimiento del empleo formal por rama en T+1, con su IC, IC parcial "
+    "(controlando crecimiento) y spread por quintil. Direccional.",
+)
+async def validation(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    import json
+
+    from modules.sector_intel.operations import GATE_E_KEY
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == GATE_E_KEY).first()
+    if not row:
+        return {"has_report": False}
+    return {"has_report": True, **json.loads(row.value)}
+
+
 @router.get("/{sector_code}/latest", summary="Último IAI/SGPS persistido de un sector")
 async def latest(
     sector_code: str,

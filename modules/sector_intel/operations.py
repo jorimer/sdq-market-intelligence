@@ -4,10 +4,14 @@ Registers the BCRD value-added sync into the shared operation console
 (:mod:`shared.operations`) so it is triggerable / monitorable / schedulable from
 the UI alongside every other module's operations (Gate F from day one).
 """
+import json
+from datetime import datetime, timezone
 from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+
+GATE_E_KEY = "sector_gate_e_report"
 
 
 def _run_bcrd_sectores_sync(params, user_id, set_phase) -> Dict:
@@ -57,6 +61,31 @@ def _run_sector_snapshot(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_sector_gate_e(params, user_id, set_phase) -> Dict:
+    """Run the Gate-E backtest (IAI_T vs Δempleo_{T+1} por rama) and persist it.
+    Corre después de sector-snapshot + encft-empleo-sync (dependencia de orden)."""
+    from modules.sector_intel.validation.report import gate_e_report
+    from shared.settings.models import AppSetting
+
+    set_phase("agregando IAI a ramas + outcome de empleo + IC de Spearman")
+    db = SessionLocal()
+    try:
+        rep = gate_e_report(db)
+        rep["generated_at"] = datetime.now(timezone.utc).isoformat()
+        row = db.query(AppSetting).filter(AppSetting.key == GATE_E_KEY).first()
+        payload = json.dumps(rep)
+        if row:
+            row.value = payload
+        else:
+            db.add(AppSetting(key=GATE_E_KEY, value=payload, is_secret=False))
+        db.commit()
+    finally:
+        db.close()
+    return {"has_data": rep.get("has_data"), "spearman": rep.get("spearman"),
+            "spearman_ci": rep.get("spearman_ci"), "n_obs": rep.get("n_observations"),
+            "spearman_partial_growth": rep.get("spearman_partial_growth")}
+
+
 def register() -> None:
     register_operation(Operation(
         "bcrd-sectores-sync", "Sincronizar sectores (BCRD · valor agregado)",
@@ -98,6 +127,14 @@ def register() -> None:
         "período actual y rúbrica declarada para el resto, y purga cualquier score "
         "fuera del backfill (sin restos de fixture). Publica sector.updated.",
         _run_sector_snapshot, default_interval_hours=2160,
+    ))
+    register_operation(Operation(
+        "sector-gate-e", "Backtest sectorial (Gate E · empleo formal)",
+        "Valida que el IAI en T ordena el crecimiento del empleo formal por rama en "
+        "T+1 (IC de rango de Spearman, panel ENCFT a 10 ramas), controlando por el "
+        "crecimiento del sector para acotar la circularidad. Direccional, se reporta "
+        "con su n e IC. Corre después de sector-snapshot y encft-empleo-sync.",
+        _run_sector_gate_e, default_interval_hours=0,  # on-demand
     ))
 
 
