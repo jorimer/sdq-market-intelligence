@@ -143,7 +143,7 @@ export interface GateEQuintileSpread {
   top_iai_mean_growth: number;
   bottom_iai_mean_growth: number;
   spread: number;
-  tile_size: number;
+  n_years: number;
 }
 export interface SectorGateEReport {
   has_report: boolean;
@@ -154,8 +154,15 @@ export interface SectorGateEReport {
   n_observations?: number;
   n_branches?: number;
   years?: [string, string];
-  spearman?: number | null;
-  spearman_ci?: [number | null, number | null];
+  // headline — mean yearly IC with a Student-t CI over the series of yearly ICs
+  mean_yearly_ic?: number | null;
+  n_years?: number;
+  ic_t_stat?: number | null;
+  ic_ci?: [number | null, number | null];
+  // secondary — pooled stacked Spearman (overstates precision; kept for transparency)
+  spearman_pooled?: number | null;
+  spearman_pooled_ci?: [number | null, number | null];
+  spearman_pooled_note?: string;
   spearman_partial_growth?: number | null;
   spearman_partial_n?: number | null;
   by_year?: GateEByYear[];
