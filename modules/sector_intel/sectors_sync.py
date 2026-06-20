@@ -6,7 +6,8 @@ by sector/period/variable), so the IAI can run on real sector data instead of
 the 3-anchor fixture. Mirrors :mod:`modules.macro_political_risk.wdi_sync`.
 """
 import logging
-from typing import Callable, Dict, Optional
+from datetime import date
+from typing import Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,25 @@ SECTOR_DIMENSION = "sector"  # IAI dimension these variables belong to
 # the 17-slug IAI never reads them. They are the Gate-E outcome (Δempleo) and the
 # raw input the per-slug ``labor_availability`` is later derived from.
 LABOR_ENCFT_DIMENSION = "labor_encft"
+
+# TSS salary → operating_cost is a CROSS-SECTIONAL snapshot (per-slug, applied
+# uniformly across periods like the national WGI), so it lives as an AppSetting the
+# IAI assembly reads, not as per-period si_variables rows.
+OPERATING_COST_KEY = "sector_operating_cost"
+
+
+def latest_complete_year(years, current_year: int) -> Optional[str]:
+    """Latest year in *years* that is not the in-progress *current_year*.
+
+    The TSS report carries the current (partial) calendar year; prefer the latest
+    completed year for a stable snapshot, falling back to the max if that's all
+    there is. Pure/testable.
+    """
+    ys = sorted({int(y) for y in years})
+    if not ys:
+        return None
+    complete = [y for y in ys if y < current_year]
+    return str(complete[-1] if complete else ys[-1])
 
 # WGI regulatory quality is NATIONAL (one value for the country, not per sector), so
 # it's stored as a national AppSetting series and applied uniformly to every sector
@@ -176,3 +196,49 @@ def encft_empleo_sync(db: Session, set_phase: Optional[Callable[[str], None]] = 
         "variables": sorted({r.series for r in records}),
         "errors": errors,
     }
+
+
+def tss_salario_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
+    """Fetch TSS salary-by-activity, map to per-slug ``operating_cost`` and persist
+    it as the AppSetting the IAI assembly reads. Best-effort.
+
+    The salary is a cross-sectional snapshot (the TSS series only covers recent
+    years, the IAI runs 2018-…), so the latest complete year is applied uniformly
+    across periods — the WGI pattern. Persisted per BCRD-17 slug (short keys), NOT
+    per raw activity (whose key can exceed ``VARCHAR(40)``).
+    """
+    import json
+
+    from shared.data.sector_crosswalk import salary_by_slug
+    from shared.data.tss_salary import TSSSalaryClient, VAR_SALARY
+    from shared.settings.models import AppSetting
+
+    set_phase = set_phase or (lambda _m: None)
+    set_phase("descargando salario por actividad (TSS · Power BI)")
+    client = TSSSalaryClient(mode="live")
+    try:
+        records = list(client.fetch())
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("TSS salario sync falló: %s", e)
+        return {"error": f"salario TSS no disponible: {e}", "slugs": 0, "errors": [str(e)]}
+
+    year = latest_complete_year({r.period for r in records}, date.today().year)
+    if not year:
+        return {"error": "el reporte TSS no trajo años", "slugs": 0, "errors": ["sin años"]}
+
+    activity_salary = {r.dimension: r.value for r in records
+                       if r.period == year and r.series == VAR_SALARY and r.value is not None}
+    by_slug = salary_by_slug(activity_salary)
+    series: Dict[str, float] = {slug: v for slug, v in by_slug.items() if v is not None}
+    missing: List[str] = sorted(slug for slug, v in by_slug.items() if v is None)
+
+    payload = {"series": series, "year": year, "unit": "RD$/mes (salario promedio cotizable)",
+               "source": "TSS"}
+    row = db.query(AppSetting).filter(AppSetting.key == OPERATING_COST_KEY).first()
+    if row:
+        row.value = json.dumps(payload)
+    else:
+        db.add(AppSetting(key=OPERATING_COST_KEY, value=json.dumps(payload), is_secret=False))
+    db.commit()
+    return {"slugs": len(series), "year": year, "missing": missing,
+            "activities": len(activity_salary), "errors": []}
