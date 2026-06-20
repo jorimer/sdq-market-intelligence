@@ -132,10 +132,16 @@ Ordenado por **valor descendente** (esfuerzo vs. IP desbloqueada), no por conven
 | ~~2~~ ✅ | ONE + ENCFT + TSS (Power BI) | Eje 3 sectorial | hecho | Cerrado (A–F); IAI 5/5 dims live; Gate E IC-mean honesto. |
 | ~~3~~ ✅ | DGA + Comtrade | Eje 5 trade | hecho | Cerrado (A–F). |
 | ~~ESG~~ ✅ | ND-GAIN+HURDAT2+Ember | Eje 7 ESG/IRC | hecho | Cerrado, validado. |
-| **Polish (opcional)** | DGII datos abiertos · Findex · país-socio Comercio · skills/ease_of_business | enriquecimiento | bajo-medio | NO bloqueante. DGII: ver nota abajo. |
+| **Fiscal (Eje 2) — en curso** | Hacienda EO + DGII | dimensión fiscal del macro | medio | **Conectores HECHOS** (#216 DGII, #217 Hacienda EO). Falta: sync + dimensión fiscal en macro_monitor (UI). |
+| Polish (opcional) | Findex · país-socio Comercio · skills/ease_of_business | enriquecimiento | bajo-medio | NO bloqueante. |
 | Diferido (decisión) | DGII **RNC** (nivel contribuyente) · Deal Scoring · capa traducción macro | — | — | RNC tiene riesgo legal/privacidad real; el resto, decisión de alcance. |
 
-> **DGII (corregido 2026-06-20):** la org DGII en datos.gob.do tiene **4 datasets, TODOS bajo ODbL** (misma licencia que DGA/CNZFE/ONE) → **los datos abiertos agregados NO están bloqueados**. El "license must be…" del código era conservador y aplica solo al **RNC a nivel contribuyente** (entidad), que tiene riesgo legal/privacidad y NO necesitamos. Datasets abiertos: *Recaudación Efectiva* (por **tipo de impuesto** × mes, 2017-2026 — pulso fiscal NACIONAL, no por sector), *Retenciones ISR Salarios* (tabla de retención), *Gastos Educativos*, *Parque Vehicular*. El de **recaudación por sector económico** vive en la sección de estadísticas de `dgii.gov.do` (scrape + verificar licencia), no en el portal abierto. Decisión de alcance pendiente (ver `tasks/todo.md`).
+> **FISCAL → Eje 2 (2026-06-20, decisión del dueño "ambos").** Dos conectores live, aditivos:
+> - **Hacienda Estado de Operaciones** (`hacienda_client`, #217): cuentas fiscales GFS consolidadas (ingresos, gastos, **déficit/superávit**), MENSUAL 2000-2025. El pulso fiscal correcto y rico. PRIMARIO.
+> - **DGII recaudación** (`dgii_client`, #216): recaudación efectiva por grupo de impuesto, mensual. Detalle tributario complementario.
+>
+> **Recaudación por los 17 sectores económicos: NO existe viva** (verificado 3×: DGII abierto, DGII Excel mensual, Hacienda EO/ingresos — todo por tipo de impuesto, no por actividad). Solo congelado 2019 (Boletín DGII). Brecha de disponibilidad, no de esfuerzo.
+> Pendiente: sync + dimensión fiscal en `macro_monitor` (Gate F UI) + insight IA (Gate D). Otras fuentes Hacienda útiles (no tocadas): COFOG (gasto por función), Coyuntura Fiscal (narrativa trimestral), Boletín Pobreza Monetaria (→ Eje 6).
 
 ---
 
