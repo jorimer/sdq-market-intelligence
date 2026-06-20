@@ -33,6 +33,7 @@ from modules.macro_monitor.service import (
     excel_catalog_summary,
     get_canonical_registry,
     get_excel_coverage,
+    get_fiscal_pulse,
     get_indicators,
     get_series,
     get_snapshot,
@@ -132,6 +133,19 @@ def delete_series_endpoint(
 ) -> Dict[str, Any]:
     deleted = delete_series(db, series_code)
     return {"series_code": series_code, "deleted": deleted}
+
+
+@router.get(
+    "/fiscal",
+    summary="Pulso fiscal (Eje 2)",
+    description="Estado de Operaciones de Hacienda (ingresos/gastos/déficit, mensual) "
+    "+ recaudación por grupo de impuesto de la DGII, desde las series fiscales persistidas.",
+)
+def fiscal(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return get_fiscal_pulse(db)
 
 
 @router.get(
