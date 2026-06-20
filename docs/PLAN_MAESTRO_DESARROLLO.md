@@ -69,27 +69,36 @@ Anti-patrón con nombre: **"falsa imposibilidad"** / **"N/D prematuro"**. Tratar
 
 ---
 
-## 1. Estado actual — ground truth (verificado 2026-06-16)
+## 1. Estado actual — ground truth (verificado 2026-06-20)
+
+> **DISCIPLINA (directiva del dueño 2026-06-20):** este §1 se mantiene **siempre
+> actualizado** — es la fuente de verdad del status del plan. Al cerrar cualquier
+> gate/eje, actualizar esta tabla en el mismo ciclo, no después.
 
 Madurez real por módulo. Esto es lo que existe, no lo que la spec promete.
 
-| Eje | Módulo | Fuente de datos | ¿Datos reales? | ¿Insight IA? | ¿Backtest? |
+| Eje | Módulo | Fuente de datos (live) | ¿Datos reales? | ¿Insight IA? | ¿Backtest (Gate E)? |
 |----|--------|-----------------|----------------|:------------:|:----------:|
-| 1 | `banking_score` | SIB (live) + OCR + fiduciarias/cambiarias | ✅ histórico completo backfilled | ✅ **completo** | ✅ MVP (Gini+IC) |
-| 2 | `macro_monitor` | BCRD (live, API + Excel histórico) | ✅ histórico completo | ✅ (T3) | n/a |
-| 4 | `macro_political_risk` | WGI+WDI+IMF+GDELT/BigQuery (live) | ✅ **18/23 real** | ✅ (Gate D) | ✅ **validado** (panel 24 países) |
-| 3 | `sector_intel` | **BCRD valor agregado por sector (live, Gate A ✅)** + ONE (enriquecimiento, pend.) | ✅ Gate A (17 sectores=100% VAB) | ❌ pend. (Gate D) | ❌ pend. (Gate E) |
-| 5 | `trade_intel` | DGA (fixture) | ❌ fixture | ❌ falta | ❌ |
-| 6 | `social_dev` | ONE/DGII (fixture) | ❌ fixture | ❌ falta | ❌ |
-| 7 | `esg_climate` | (fixture) | ❌ fixture | ❌ falta | ❌ |
+| 1 | `banking_score` | SIB/SIMBAD + OCR fiduciarias/cambiarias | ✅ histórico backfilled | ✅ | ✅ Gini+IC |
+| 2 | `macro_monitor` | BCRD (API + Excel histórico) + publicaciones | ✅ histórico completo | ✅ | n/a (monitor) |
+| 3 | `sector_intel` | BCRD valor agregado + ENCFT empleo + TSS salario | ✅ **5/5 dims live** | ✅ (#187) | ✅ **IC-mean honesto** (#211/#213) |
+| 4 | `macro_political_risk` | WGI+WDI+IMF+GDELT/BigQuery | ✅ 18/23 real | ✅ | ✅ validado (24 países) |
+| 5 | `trade_intel` | DGA aduanas + UN Comtrade | ✅ real | ✅ | ✅ resiliencia (#197) |
+| 6 | `social_dev` | ONE (pobreza/IDM/educación) | ✅ real (Findex pend.) | ✅ | ✅ |
+| 7 | `esg_climate` | ND-GAIN + HURDAT2 + Ember | ✅ real | ✅ | ✅ validado (IRC) |
 
-> **Ejes 1, 2 y 4 cerrados a profundidad** (A–E + F). **Eje 3 en curso** (Gate A cerrado, PR #172). Siguiente: T-E3-2 (contrato macro→sectorial) → T-E3-3 (cablear IAI a dato real). Detalle vivo en `tasks/todo.md`; memoria `eje3-sector-intel`.
+> **LOS 7 EJES CERRADOS A PROFUNDIDAD (A–F), en prod (2026-06-20).** El núcleo del
+> blueprint —7 ejes con dato real, insight IA explicable y backtest honesto, todo
+> operable desde la UI— está construido y corriendo. Restos NO bloqueantes (polish
+> opcional + diferidos por decisión) en `tasks/todo.md`. Lo único que separa
+> "construido" de "lanzable" es el endurecimiento pre-go-live (seguridad), dejado
+> para el final por decisión del dueño (2026-06-20).
 
 **Gaps estructurales que este plan cierra:**
 - **G1 — Insight IA ~~solo en Eje 1~~ → resuelto en Ejes 1/2/4 (2026-06-16).** Los componentes (`AiInsightCard`, `useTwoPhaseInsight`, `InsightDrawerShell`, `AiInsightBody`) se promovieron a `shared/ui/` (T1) y se cablearon en `macro_monitor` (T3) y `macro_political_risk` (Gate D). Pendiente: Ejes 3/5/6/7. → §5.
 - **G2 — Capa de outcomes sin construir.** `shared/data/outcomes.py` es un dataclass de 25 líneas referenciado solo en `__init__.py`. El foso de Dato del Blueprint depende de esto. → §6.
 - **G3 — Deal Scoring huérfano.** `Modelos Propietarios/deal_scoring.py` sigue fuera de `modules/`. IP sin capitalizar (fuera del alcance inmediato de este plan; registrar como deuda).
-- **G4 — fuentes en fixture → en cierre.** WGI/WDI/IMF/GDELT **live** (Eje 4 ✅). Sectorial (Eje 3) sobre **BCRD valor agregado por sector live** (Gate A ✅); ONE pendiente como enriquecimiento. Restan en fixture: DGA (Eje 5), DGII (Eje 6, diferido por licencia), ESG (Eje 7). → orden §3.
+- **G4 — fuentes en fixture → CERRADO (2026-06-20).** Las 7 fuentes principales están live (BCRD, WGI/WDI/IMF/GDELT, ONE/ENCFT/TSS, DGA/Comtrade, ND-GAIN/HURDAT2/Ember). Solo queda **DGII** como enriquecimiento opcional (datos abiertos ODbL — no bloqueado; RNC contribuyente diferido por riesgo legal). → §3.
 
 ---
 
@@ -118,13 +127,15 @@ Ordenado por **valor descendente** (esfuerzo vs. IP desbloqueada), no por conven
 
 | Prioridad | Fuente | Desbloquea | Esfuerzo estimado | Razón |
 |----------|--------|-----------|-------------------|-------|
-| **En curso** | BCRD | Eje 2 macro + overlay de outlook al Eje 1 | Casi listo | Cerrar Gates D y E (le falta IA + validación). |
-| **1 (siguiente)** | **WGI** (World Bank Governance Indicators) | Eje 4 / RRI — **IP ya integrada** | **Bajo** | API estructurada, anual, sin OCR ni paginación pesada. Capitaliza IP existente con la fuente más fácil que queda. |
-| 2 | ONE | Eje 3 sectorial (IAI/SGPS) | Medio | Data sectorial; arrancar con 2–3 sectores ancla (Turismo, Energía/Construcción) por la Doctrina de Casa. **Requisito de diseño (v1.1):** la §2 "Contexto macro" del informe sectorial **consume el contrato macro→sectorial** del Eje 2 (objeto por período: 5–8 factores con dirección + magnitud + sectores/agentes impactados, en `shared/`), **no re-deriva macro a mano**. El contrato se construye al abrir esta fuente. Spec: `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md` §3–4 punto 5. |
-| 3 | DGA (aduanas) | Eje 5 trade | Medio-alto | Requiere acceso a data de comercio. |
-| 4 | DGII | Eje 6 social/fiscal | **Diferir** | El código marca fricción de licencia ("license must be…"). **Riesgo legal antes que técnico** — no abordar sin validación legal. |
+| ~~En curso~~ ✅ | BCRD | Eje 2 macro + overlay Eje 1 | hecho | Cerrado (A–F). |
+| ~~1~~ ✅ | WGI/WDI/IMF/GDELT | Eje 4 IRMP | hecho | Cerrado, validado 24 países. |
+| ~~2~~ ✅ | ONE + ENCFT + TSS (Power BI) | Eje 3 sectorial | hecho | Cerrado (A–F); IAI 5/5 dims live; Gate E IC-mean honesto. |
+| ~~3~~ ✅ | DGA + Comtrade | Eje 5 trade | hecho | Cerrado (A–F). |
+| ~~ESG~~ ✅ | ND-GAIN+HURDAT2+Ember | Eje 7 ESG/IRC | hecho | Cerrado, validado. |
+| **Polish (opcional)** | DGII datos abiertos · Findex · país-socio Comercio · skills/ease_of_business | enriquecimiento | bajo-medio | NO bloqueante. DGII: ver nota abajo. |
+| Diferido (decisión) | DGII **RNC** (nivel contribuyente) · Deal Scoring · capa traducción macro | — | — | RNC tiene riesgo legal/privacidad real; el resto, decisión de alcance. |
 
-> **Nota:** WGI antes que ONE está confirmado por el dueño. Si un pipeline comercial concreto exige sectorial primero, ese es el único disparador para reordenar — y se documenta el cambio aquí.
+> **DGII (corregido 2026-06-20):** la org DGII en datos.gob.do tiene **4 datasets, TODOS bajo ODbL** (misma licencia que DGA/CNZFE/ONE) → **los datos abiertos agregados NO están bloqueados**. El "license must be…" del código era conservador y aplica solo al **RNC a nivel contribuyente** (entidad), que tiene riesgo legal/privacidad y NO necesitamos. Datasets abiertos: *Recaudación Efectiva* (por **tipo de impuesto** × mes, 2017-2026 — pulso fiscal NACIONAL, no por sector), *Retenciones ISR Salarios* (tabla de retención), *Gastos Educativos*, *Parque Vehicular*. El de **recaudación por sector económico** vive en la sección de estadísticas de `dgii.gov.do` (scrape + verificar licencia), no en el portal abierto. Decisión de alcance pendiente (ver `tasks/todo.md`).
 
 ---
 
@@ -291,5 +302,5 @@ Un **PR** está listo cuando: CI verde (backend-test/frontend-build/docker-build
 
 ## 10. Deuda registrada (fuera de alcance inmediato)
 - **Deal Scoring** (`Modelos Propietarios/deal_scoring.py`) — integrar como módulo formal (api/models/tests). IP sin capitalizar.
-- **DGII** — bloqueado por licencia; validación legal antes de tocar.
-- **Seguridad pre-go-live** — desactivar `claude@sdqconsulting.com.do`, crear admin real (requiere secretos del dueño).
+- **DGII** — datos abiertos (4 datasets ODbL en datos.gob.do) **NO bloqueados**; construibles cuando se decida el alcance/uso. Solo el **RNC a nivel contribuyente** queda diferido por riesgo legal/privacidad. Ver §3 nota DGII.
+- **Seguridad pre-go-live** — desactivar `claude@sdqconsulting.com.do`, crear admin real (requiere secretos del dueño). **Dejado para el final por decisión del dueño (2026-06-20).**
