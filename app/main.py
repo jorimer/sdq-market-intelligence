@@ -77,6 +77,7 @@ register_banking_subscribers()  # banking_score ← irmp.updated (outlook overla
 # shared registry (shared.operations). Import the register modules so the console
 # sees every operation, then (web-only, env-gated) start the in-app scheduler.
 import modules.banking_score.operations  # noqa: F401 — registers banking ops
+import modules.macro_monitor.operations  # noqa: F401 — registers fiscal-sync
 import modules.macro_political_risk.operations  # noqa: F401 — registers wgi-sync
 import modules.sector_intel.operations  # noqa: F401 — registers bcrd-sectores-sync
 import modules.social_dev.operations  # noqa: F401 — registers one-social-sync

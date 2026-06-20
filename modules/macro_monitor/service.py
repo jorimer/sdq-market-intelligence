@@ -85,6 +85,50 @@ def ingest_series(db: Session, client: Optional[SourceClient] = None) -> int:
     return touched
 
 
+# Fiscal pulse (Eje 2): the DGII + Hacienda connectors emit one ``series`` name with
+# the actual line in ``dimension``; remap to a namespaced ``series_code`` so each
+# fiscal line is its own MacroSeries (no collision under the (series_code, period) key).
+FISCAL_SOURCES = (
+    ("fiscal_eo", "Estado de Operaciones (Hacienda)"),    # ingresos/gastos/déficit, mensual
+    ("fiscal_dgii", "recaudación por impuesto (DGII)"),   # recaudación efectiva, mensual
+)
+
+
+def fiscal_sync(db: Session, set_phase: Optional[Any] = None,
+                clients: Optional[Dict[str, SourceClient]] = None) -> Dict[str, Any]:
+    """Pull the fiscal pulse (Hacienda Estado de Operaciones + DGII recaudación) and
+    upsert it into MacroSeries as namespaced fiscal series. Best-effort per source.
+
+    *clients* lets tests inject fixture-mode clients; live otherwise.
+    """
+    from dataclasses import replace
+
+    set_phase = set_phase or (lambda _m: None)
+    if clients is None:
+        from shared.data.dgii_client import DGIIClient
+        from shared.data.hacienda_client import HaciendaClient
+        clients = {"fiscal_eo": HaciendaClient(mode="live"), "fiscal_dgii": DGIIClient(mode="live")}
+
+    touched = 0
+    codes: set = set()
+    periods: set = set()
+    errors: List[str] = []
+    for prefix, label in FISCAL_SOURCES:
+        set_phase(f"descargando {label}")
+        try:
+            records = list(clients[prefix].fetch())
+        except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+            logger.warning("fiscal sync %s falló: %s", prefix, e)
+            errors.append(f"{label}: {e}")
+            continue
+        remapped = [replace(r, series=f"{prefix}.{r.dimension}") for r in records if r.dimension]
+        touched += _upsert_records(db, remapped)
+        codes |= {r.series for r in remapped}
+        periods |= {r.period for r in remapped}
+    return {"touched": touched, "series": len(codes), "errors": errors,
+            "period_range": [min(periods), max(periods)] if periods else None}
+
+
 def backfill_historico(db: Session, year_from: int = 1984, year_to: int = 2026) -> Dict[str, Any]:
     """One-time backfill of the BCRD historical series (IPC + exchange rates).
 
