@@ -142,3 +142,48 @@ Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, 
 - Deal Scoring huérfano → módulo formal. · DGII bloqueado por licencia. · Seguridad pre-go-live (admin real, desactivar cuenta de prueba).
 - **Macro punto 4 — capa de traducción [medio]** → diferido a **sprint de diferenciación** (decisión dueño 2026-06-15). Por señal activa / clúster acelerando, una línea de implicación por agente (empleado / PyME / gran empresa), usando el framework del PDF de niveles. Extiende `ai_context.py` + template. Ver `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md` §3 punto 4.
 - **Macro punto 5 — contrato macro→sectorial [medio]** → **documentado hoy, se construye al abrir Eje 3 (ONE)**, no antes (decisión dueño 2026-06-15). Objeto estructurado por período (5-8 factores macro: dirección + magnitud + sectores/agentes impactados) que vive en `shared/` y alimenta la §2 del informe sectorial. **Requisito de diseño para Eje 3:** la §2 "Contexto macro" del sectorial consume este contrato, no re-deriva macro a mano. Spec en `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md` §3-4 punto 5.
+
+---
+
+## TAREA — Corregir inferencia del Gate E sectorial (IC apilado → IC-mean con t)
+> Plan fino (Plan First). Origen: `tasks/TASK_gate_e_ic_inference_fix.md`. Sin migraciones, sin tocar ingesta, sin subir señal.
+> **Decisión verificada:** `scipy>=1.12` YA está en `requirements.txt` (línea 10) → uso `scipy.stats.t.ppf` para el cuantil t (lo presente, impacto mínimo; no implemento t a mano).
+
+### 1. `shared/validation/metrics.py` — `mean_ic_with_t(yearly_ics, alpha=0.05)`
+- [ ] Función pura, sin DB. Input: lista de ICs anuales (ya filtrados no-None). `k = len`.
+  - `k < 2` → `None` (n insuficiente para inferencia).
+  - `mean = Σ/k`; `sd` muestral (ddof=1) = `sqrt(Σ(x-mean)²/(k-1))`; `se = sd/sqrt(k)`.
+  - `sd == 0` → `t_stat = None`, `ci_lo = ci_hi = mean` (CI degenerado, con disclosure) — no crashea.
+  - si no: `t_stat = mean/se`; `tcrit = scipy.stats.t.ppf(1-alpha/2, k-1)` (import lazy dentro); `ci = mean ± tcrit·se`.
+  - Devuelve `{mean_ic, n_years, sd, t_stat, ci_lo, ci_hi}` (redondeados). **t de Student df=k-1, NO normal** (n chico es el punto).
+
+### 2. `modules/sector_intel/validation/report.py` — IC-mean como titular
+- [ ] Tras `per_year`: `yearly = [p["spearman"] for p in per_year if p["spearman"] is not None]` → `ic = mean_ic_with_t(yearly)`.
+- [ ] **Titular nuevo** en el dict: `mean_yearly_ic`, `n_years`, `ic_t_stat`, `ic_ci = [ci_lo, ci_hi]` (None-safe si `ic is None`).
+- [ ] **Degradar el pooled:** renombrar `spearman`→`spearman_pooled`, `spearman_ci`→`spearman_pooled_ci`, con nota `"pooled (sin clustering — sobrestima la precisión)"`. Sigue visible, NO titular.
+- [ ] `_quintile_spread` → **dentro de cada año y promediado**: nuevo `_quintile_spread_by_year(by_year, k=5)` (por año: ordena las ~10 ramas, top vs bottom k-tile del outcome; promedia los spreads sobre años; salta años con <k ramas). Mismo sesgo de clustering, menor magnitud.
+- [ ] **Intacto:** `_partial_spearman` por `sector_growth_T` (`spearman_partial_growth`/`_n`) y `by_year`.
+- [ ] Disclaimer: titular = IC-mean con t sobre n años; el pooled es secundario y por qué; dejar explícito que la resolución es **10 ramas, no 17** (manuf/ZF/minería colapsan en "Industrias" del lado del outcome — limitación de resolución, no se resuelve aquí).
+
+### 3. Frontend — `api.ts` + `components/ValidationTab.tsx`
+- [ ] `api.ts` `SectorGateEReport`: +`mean_yearly_ic`, `n_years`, `ic_t_stat`, `ic_ci`; renombrar `spearman`→`spearman_pooled`, `spearman_ci`→`spearman_pooled_ci` (opcionales). Mantener `by_year`, `quintile_spread`, partial.
+- [ ] `ValidationTab.tsx`: titular = StatTiles `IC medio anual` (`mean_yearly_ic`) + `IC 95% (t · n años)` (`ic_ci`) + `n años` (`n_years`); el `ρ pooled` pasa a tile/nota secundaria etiquetada "apilado, sobrestima precisión". `ciExcludesZero` ahora sobre `ic_ci`.
+- [ ] Badge: cuando el `ic_ci` cruza cero → **"Inconclusivo por potencia (n insuficiente)"** (no "No significativo"); si lo excluye → "Significativo". + línea de contexto: "con n por año ≈10, el IC mínimo detectable es alto; validación direccional, no confirmatoria."
+
+### 4. Tests
+- [ ] `shared/validation/tests/__init__.py` + `test_metrics.py`: `mean_ic_with_t` con ICs anuales conocidos → mean/t/CI esperados; `k<2`→None; `sd=0`→`t_stat None` sin crash. (+ smoke de `spearman`/`spearman_bootstrap_ci` para mantener cobertura del archivo ≥80%.)
+- [ ] `test_validation.py`: el reporte expone `mean_yearly_ic` (titular) y `spearman_pooled` (secundario, etiquetado); señal fuerte sembrada en **≥2 años** → el IC-mean la detecta (CI excluye 0); ruido → CI cruza 0, se reporta tal cual. **Ajustar** `test_gate_e_report_recovers_monotonic_signal` para sembrar ≥2 años (hoy siembra 1 → `mean_ic_with_t` daría None).
+
+### 5. Sensores (correr y reportar; no cerrar en rojo)
+```
+ruff check shared/validation modules/sector_intel/validation
+pytest shared/validation/tests/ modules/sector_intel/tests/test_validation.py -v
+pytest --cov=shared/validation --cov=modules/sector_intel/validation --cov-report=term-missing \
+       shared/validation/tests modules/sector_intel/tests/test_validation.py   # ≥80% en lo tocado
+```
+> Nota: el comando de cobertura de la tarea apunta `modules/sector_intel/validation` como path de TEST, pero los tests viven en `modules/sector_intel/tests/` → incluyo `test_validation.py` para que `report.py` quede cubierto de verdad.
+
+### Cierre
+- [ ] Reviewer subagent (diff + tarea + CLAUDE.md + lessons): titular = IC-mean con t, pooled secundario y etiquetado, parcial `sector_growth_T` intacto, strings en español.
+- [ ] Verificar E2E en prod: tab "Validación" muestra el titular nuevo + badge "Inconclusivo por potencia".
+- [ ] Entrada en `tasks/lessons.md` (síntoma/causa/regla/disparador).

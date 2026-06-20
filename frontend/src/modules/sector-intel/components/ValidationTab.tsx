@@ -141,8 +141,10 @@ export function ValidationTab() {
     );
   }
 
-  const sig = ciExcludesZero(report.spearman_ci);
-  const ci = report.spearman_ci;
+  // Headline = mean yearly IC with a Student-t CI; significance = its CI excludes zero.
+  const sig = ciExcludesZero(report.ic_ci);
+  const ci = report.ic_ci;
+  const pooledCi = report.spearman_pooled_ci;
   const qs = report.quintile_spread;
 
   return (
@@ -165,10 +167,10 @@ export function ValidationTab() {
         {regenBtn}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <StatTile label="Spearman ρ (IAI_T → Δempleo T+1)" value={fmtRho(report.spearman)} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+        <StatTile label="IC medio anual (IAI_T → Δempleo T+1)" value={fmtRho(report.mean_yearly_ic)} />
         <StatTile
-          label="IC 95% (bootstrap)"
+          label={`IC 95% (t · ${report.n_years ?? "—"} años)`}
           value={ci && ci[0] != null ? `${fmtRho(ci[0])} … ${fmtRho(ci[1])}` : "—"}
         />
         <StatTile
@@ -183,6 +185,16 @@ export function ValidationTab() {
         />
       </div>
 
+      {/* Secundario, etiquetado: el ρ apilado (sobrestima la precisión) */}
+      <p className="text-xs text-faint mb-5">
+        Secundario · ρ apilado (pooled): {fmtRho(report.spearman_pooled)}
+        {pooledCi && pooledCi[0] != null && (
+          <> · IC {fmtRho(pooledCi[0])} … {fmtRho(pooledCi[1])}</>
+        )}{" "}
+        — remuestrea los pares sector-año como independientes y{" "}
+        <span className="text-muted">sobrestima la precisión</span>; el titular es el IC medio anual con t.
+      </p>
+
       <div className="grid lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHead
@@ -190,21 +202,25 @@ export function ValidationTab() {
             title="IC de rango por año"
             subtitle={`¿el IAI ordena el crecimiento del empleo del año siguiente? · ${report.years?.[0]}–${report.years?.[1]}`}
             right={
-              <Chip tone={sig ? "ok" : "warn"}>{sig ? "Significativo" : "No significativo"}</Chip>
+              <Chip tone={sig ? "ok" : "warn"}>
+                {sig ? "Significativo" : "Inconclusivo por potencia (n insuficiente)"}
+              </Chip>
             }
           />
           {report.by_year && <YearBars rows={report.by_year} />}
           <p className="mt-3 text-xs text-muted">
             {sig ? (
               <>
-                El IC excluye el cero: el IAI <span className="font-medium">discrimina</span> el
-                crecimiento del empleo en T+1.
+                El IC medio de las cross-sections anuales <span className="font-medium">excluye el
+                cero</span>: el IAI discrimina el crecimiento del empleo en T+1.
               </>
             ) : (
               <>
-                El IC <span className="font-medium">cruza el cero</span>: la señal es nula/débil. El
-                empleo formal lo dominan shocks macro comunes y el IAI aún es ~mitad rúbrica en
-                negocios/talento. Honestidad sobre la fuerza de la señal, no maquillaje.
+                El IC medio anual <span className="font-medium">cruza el cero</span>: la evidencia es{" "}
+                <span className="font-medium">inconclusiva por potencia</span>, no una refutación.
+                Con n por año ≈10, el IC mínimo detectable es alto. El empleo formal lo dominan
+                shocks macro comunes y el IAI aún es ~mitad rúbrica en negocios/talento. Honestidad
+                sobre la fuerza de la señal, no maquillaje.
               </>
             )}
           </p>
@@ -214,7 +230,9 @@ export function ValidationTab() {
           <CardHead
             icon={BarChart3}
             title="Spread por quintil del IAI"
-            subtitle="Crecimiento medio del empleo: quintil IAI alto vs bajo"
+            subtitle={`Crecimiento del empleo: quintil alto vs bajo · dentro de cada año, promediado${
+              qs?.n_years ? ` (${qs.n_years} años)` : ""
+            }`}
           />
           {qs ? (
             <div className="space-y-3 mt-1">

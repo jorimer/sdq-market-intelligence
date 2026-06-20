@@ -44,16 +44,24 @@ def _emp(db, branch, value, period):
 
 
 def _seed_monotonic(db):
-    """IAI and next-year employment growth perfectly rank-aligned → Spearman ≈ 1."""
+    """IAI and next-year employment growth rank-aligned in TWO years → yearly IC ≈ 1.
+
+    Seeds a coherent employment series (2018→2019→2020 each +2·i %) so BOTH year-pairs
+    rank monotonically with the IAI, giving a per-year IC series (n_years=2) for the
+    mean-IC headline — not just a single stacked cross-section.
+    """
     # sector_growth is a non-monotonic permutation (not rank-aligned with the IAI),
     # so the partial correlation is well-defined (denominator != 0).
     growth_perm = [3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0]
     for i, (branch, slug) in enumerate(_PAIRS, start=1):
-        _score(db, slug, "2018", iai=10.0 * i)
-        _var(db, slug, "sector_size", 1.0, "2018")
-        _var(db, slug, "sector_growth", growth_perm[i - 1], "2018")
+        g = 1 + 2 * i / 100.0
         _emp(db, branch, 1000.0, "2018")
-        _emp(db, branch, 1000.0 * (1 + 2 * i / 100.0), "2019")   # growth = 2·i %
+        _emp(db, branch, 1000.0 * g, "2019")          # 2018→2019 growth = 2·i %
+        _emp(db, branch, 1000.0 * g * g, "2020")      # 2019→2020 growth = 2·i %
+        for period in ("2018", "2019"):
+            _score(db, slug, period, iai=10.0 * i)
+            _var(db, slug, "sector_size", 1.0, period)
+            _var(db, slug, "sector_growth", growth_perm[i - 1], period)
     db.commit()
 
 
@@ -89,10 +97,33 @@ def test_gate_e_report_recovers_monotonic_signal(db):
     _seed_monotonic(db)
     rep = gate_e_report(db)
     assert rep["has_data"] is True
-    assert rep["n_observations"] == 7
-    assert rep["spearman"] == pytest.approx(1.0)         # perfect rank alignment
+    assert rep["n_observations"] == 14                   # 7 branches × 2 year-pairs
+    assert rep["n_years"] == 2
+    # HEADLINE: mean yearly IC detects the signal (both years rank-align → IC≈1)
+    assert rep["mean_yearly_ic"] == pytest.approx(1.0)
+    assert rep["ic_ci"][0] == pytest.approx(1.0)         # CI excludes zero (point at 1.0)
+    # SECONDARY: the pooled stacked Spearman is still reported, labeled
+    assert rep["spearman_pooled"] == pytest.approx(1.0)
+    assert "spearman_pooled_note" in rep
     assert rep["quintile_spread"]["spread"] > 0
-    assert rep["spearman_partial_growth"] is not None    # control computed
+    assert rep["spearman_partial_growth"] is not None    # control computed, intact
+
+
+def test_gate_e_report_reports_noise_without_massaging(db):
+    """Signal flips sign across years → mean IC ≈ 0, CI crosses zero, shown as-is."""
+    for i, (branch, slug) in enumerate(_PAIRS, start=1):
+        _emp(db, branch, 1000.0, "2018")
+        _emp(db, branch, 1000.0 * (1 + 2 * i / 100.0), "2019")    # 2018 IC = +1 (rank↑)
+        # 2019→2020 growth = 2·(8−i)% → ranks OPPOSITE to the IAI → 2019 IC = −1
+        _emp(db, branch, 1000.0 * (1 + 2 * i / 100.0) * (1 + 2 * (8 - i) / 100.0), "2020")
+        for period in ("2018", "2019"):
+            _score(db, slug, period, iai=10.0 * i)
+            _var(db, slug, "sector_size", 1.0, period)
+    db.commit()
+    rep = gate_e_report(db)
+    assert rep["has_data"] is True
+    assert rep["mean_yearly_ic"] == pytest.approx(0.0, abs=0.05)  # +1 and −1 average to 0
+    assert rep["ic_ci"][0] < 0 < rep["ic_ci"][1]                 # CI spans zero, honest
 
 
 def test_gate_e_report_honest_when_insufficient(db):

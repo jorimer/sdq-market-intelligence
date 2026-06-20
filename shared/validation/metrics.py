@@ -126,6 +126,36 @@ def spearman_bootstrap_ci(
     return base, lo, hi
 
 
+def mean_ic_with_t(yearly_ics: List[float], alpha: float = 0.05) -> Optional[Dict]:
+    """Mean information coefficient + t-test over the series of yearly ICs.
+
+    The defensible statistic for a sector×year panel: average the per-year
+    cross-sectional rank IC and infer on the SERIES of ``k`` yearly ICs, instead of
+    bootstrap-resampling the stacked pairs (which treats year/sector-clustered
+    observations as independent and understates the CI). Inference uses Student's
+    t with ``df = k-1`` — NOT the normal — because the small ``k`` is the whole point.
+
+    Returns ``{mean_ic, n_years, sd, t_stat, ci_lo, ci_hi}`` or ``None`` if ``k < 2``
+    (no series to infer on). With zero variance (all ICs equal) the t is undefined →
+    ``t_stat`` is ``None`` and the CI collapses to the mean (disclosed, never crashes).
+    """
+    k = len(yearly_ics)
+    if k < 2:
+        return None
+    mean = sum(yearly_ics) / k
+    sd = (sum((x - mean) ** 2 for x in yearly_ics) / (k - 1)) ** 0.5  # sample sd (ddof=1)
+    se = sd / (k ** 0.5)
+    if se == 0:  # all yearly ICs identical → t undefined, CI is a point
+        return {"mean_ic": round(mean, 3), "n_years": k, "sd": 0.0,
+                "t_stat": None, "ci_lo": round(mean, 3), "ci_hi": round(mean, 3)}
+    from scipy.stats import t as student_t  # scipy is a project dependency (requirements.txt)
+
+    half = float(student_t.ppf(1 - alpha / 2, k - 1)) * se
+    return {"mean_ic": round(mean, 3), "n_years": k, "sd": round(sd, 4),
+            "t_stat": round(mean / se, 3),
+            "ci_lo": round(mean - half, 3), "ci_hi": round(mean + half, 3)}
+
+
 def deterioration_rate_by_tier(
     tiers: List[str], labels: List[int], tier_order: List[str],
 ) -> Tuple[List[Dict], bool]:
