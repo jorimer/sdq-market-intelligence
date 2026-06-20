@@ -159,6 +159,60 @@ def test_wgi_regulatory_latest_fallback_for_current_period(db):
     assert asm["sources"]["turismo"]["regulatory_quality"] == "live"
 
 
+def _seed_employment(db, branch, value, period="2024"):
+    db.add(SectorVariable(sector_code=branch, dimension="labor_encft",
+                          variable="employment", value=value, period=period, source="ONE"))
+
+
+def _set_operating_cost(db, series, year="2025"):
+    from modules.sector_intel.sectors_sync import OPERATING_COST_KEY
+    db.add(AppSetting(key=OPERATING_COST_KEY,
+                      value=json.dumps({"series": series, "year": year}), is_secret=False))
+
+
+from shared.data.bcrd_sectors import sector_catalog
+
+_ALL_SLUGS = [s for s, _n in sector_catalog()]
+_ALL_BRANCHES = ["agricultura", "industrias", "energia", "construccion", "comercio",
+                 "turismo", "transporte_comunicaciones", "financiero",
+                 "administracion_publica", "otros_servicios"]
+
+
+def _seed_full_coverage(db):
+    """Real operating_cost (17 slugs) + employment (10 branches) → full coverage."""
+    _seed_sector_var(db, "turismo", "sector_size", 8.9, "2024")
+    for i, br in enumerate(_ALL_BRANCHES):
+        _seed_employment(db, br, 100000.0 + i * 10000, "2024")
+    _set_operating_cost(db, {slug: 30000.0 + i * 1000 for i, slug in enumerate(_ALL_SLUGS)})
+
+
+def test_full_coverage_takes_operating_cost_and_labor_live(db):
+    _seed_full_coverage(db)
+    db.commit()
+    asm = assemble_iai_dataset(db, period="2024")
+    # both dims are live for ALL 17 slugs (no partial override)
+    assert all(s["operating_cost"] == "live" for s in asm["sources"].values())
+    assert all(s["labor_availability"] == "live" for s in asm["sources"].values())
+    # bundle proxy: the 3 industrias slugs share the branch employment
+    ind = asm["dataset"]["manufactura_local"]["labor_availability"]
+    assert asm["dataset"]["zonas_francas"]["labor_availability"] == ind
+    assert asm["dataset"]["mineria"]["labor_availability"] == ind
+
+
+def test_partial_coverage_stays_full_rubric(db):
+    """A partial snapshot must NOT override — it would sink rubric sectors to the
+    min-max floor (the artefact the doctrine forbids). All-or-nothing."""
+    _seed_sector_var(db, "turismo", "sector_size", 8.9, "2024")
+    _seed_employment(db, "turismo", 333000.0, "2024")       # only 1 of 10 branches
+    _set_operating_cost(db, {"turismo": 26113.0, "mineria": 79478.0})  # only 2 of 17 slugs
+    db.commit()
+    asm = assemble_iai_dataset(db, period="2024")
+    assert all(s["operating_cost"] == "rubric" for s in asm["sources"].values())
+    assert all(s["labor_availability"] == "rubric" for s in asm["sources"].values())
+    assert asm["dataset"]["turismo"]["operating_cost"] == 50   # not the real 26113
+    assert asm["dataset"]["turismo"]["labor_availability"] == 50
+
+
 def test_wgi_regulatory_sync_persists_series(db, monkeypatch):
     import shared.data.wgi_client as wgi
 

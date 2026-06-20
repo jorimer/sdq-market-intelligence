@@ -37,6 +37,15 @@ def _run_encft_empleo_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_tss_salario_sync(params, user_id, set_phase) -> Dict:
+    from modules.sector_intel.sectors_sync import tss_salario_sync
+    db = SessionLocal()
+    try:
+        return tss_salario_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_sector_snapshot(params, user_id, set_phase) -> Dict:
     """Backfill the IAI/SGPS over EVERY real period (BCRD) and purge any score
     outside that set (no fixture/seed remnants), publishing sector.updated."""
@@ -73,6 +82,14 @@ def register() -> None:
         "(crecimiento del empleo por rama) y el insumo del que luego se deriva la "
         "disponibilidad laboral del IAI. Anual.",
         _run_encft_empleo_sync, default_interval_hours=8760,  # serie anual → anual
+    ))
+    register_operation(Operation(
+        "tss-salario-sync", "Sincronizar costo operativo (TSS · salario por actividad)",
+        "Trae el salario promedio cotizable por actividad económica de la TSS (Power "
+        "BI) y lo mapea a costo operativo por sector (los 17), insumo real de la "
+        "dimensión negocios del IAI. Es una foto transversal del último año completo, "
+        "aplicada a todos los períodos (como la calidad regulatoria WGI). Anual.",
+        _run_tss_salario_sync, default_interval_hours=8760,
     ))
     register_operation(Operation(
         "sector-snapshot", "Backfill del índice sectorial (IAI/SGPS)",

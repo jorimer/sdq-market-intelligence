@@ -230,6 +230,75 @@ def _load_wgi_regulatory(db: Session, target: Optional[str]) -> Optional[float]:
     return float(series[max(series, key=int)])  # latest available (e.g. current period)
 
 
+def _load_operating_cost(db: Session) -> Dict[str, float]:
+    """Per-slug ``operating_cost`` (TSS salary snapshot) from the AppSetting written
+    by ``tss_salario_sync``. ``{}`` if absent → operating_cost stays declared rubric.
+
+    Cross-sectional snapshot applied uniformly across periods (the WGI pattern): the
+    TSS series only covers recent years while the IAI runs 2018-…, so a single recent
+    salary photo discriminates sectors in every period.
+
+    All-or-nothing: returned only when it covers ALL 17 slugs. A partial override
+    would sink the rubric-50 sectors to the min-max floor — the exact artefact the
+    doctrine forbids (sectoral.yaml). Partial coverage → ``{}`` (stay full rubric)."""
+    import json
+
+    from modules.sector_intel.sectors_sync import OPERATING_COST_KEY
+    from shared.data.bcrd_sectors import sector_catalog
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == OPERATING_COST_KEY).first()
+    if row is None or not row.value:
+        return {}
+    try:
+        series = {k: float(v) for k, v in json.loads(row.value).get("series", {}).items()}
+    except (ValueError, TypeError):
+        return {}
+    all_slugs = {slug for slug, _name in sector_catalog()}
+    if not all_slugs.issubset(series):
+        return {}  # partial coverage → leave every sector on declared rubric
+    return {slug: series[slug] for slug in all_slugs}
+
+
+def _load_labor_availability(db: Session, target: Optional[str]) -> Dict[str, float]:
+    """Per-slug ``labor_availability`` (ENCFT employment) for *target*'s period.
+
+    Reads the branch-level employment persisted under ``labor_encft`` and maps it to
+    the BCRD-17 slugs via the crosswalk: a slug takes its ONE branch's employment.
+    Slugs in an aggregate branch (manufactura_local/zonas_francas/mineria) share the
+    branch value — a declared proxy. Per-period (real temporal signal); if *target*
+    has no employment row, the latest available period is used (WGI-style fallback).
+
+    All-or-nothing (like :func:`_load_operating_cost`): returned only when ALL 17
+    slugs resolve to a branch with employment in the chosen period. Partial coverage
+    → ``{}`` (stay full rubric), so a missing branch can't sink some slugs to the
+    min-max floor while others carry real headcounts."""
+    from modules.sector_intel.models.models import SectorVariable
+    from modules.sector_intel.sectors_sync import LABOR_ENCFT_DIMENSION
+    from shared.data.bcrd_sectors import sector_catalog
+    from shared.data.sector_crosswalk import slug_branch
+
+    rows = (db.query(SectorVariable)
+            .filter(SectorVariable.dimension == LABOR_ENCFT_DIMENSION,
+                    SectorVariable.variable == "employment").all())
+    by_period: Dict[str, Dict[str, float]] = {}
+    for r in rows:
+        if r.value is not None and r.period:
+            by_period.setdefault(r.period, {})[r.sector_code] = r.value
+    if not by_period:
+        return {}
+    use = target if target in by_period else max(by_period, key=_period_key)
+    emp_by_branch = by_period[use]
+    out: Dict[str, float] = {}
+    for slug, _name in sector_catalog():
+        v = emp_by_branch.get(slug_branch(slug) or "")
+        if v is not None:
+            out[slug] = v
+    if len(out) < len(list(sector_catalog())):
+        return {}  # a branch is missing this period → leave every sector on rubric
+    return out
+
+
 def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Full IAI dataset per sector for *period*: declared rubric (doctrine) + real
     data (BCRD sector dim, contract-derived macro_exposure). Single source of truth
@@ -261,6 +330,12 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     # WGI regulatory quality (national, 0-100) — same for every sector (does not
     # discriminate sectors, but real instead of declared rubric).
     reg_quality = _load_wgi_regulatory(db, target)
+    # operating_cost (TSS salary snapshot, per slug) + labor_availability (ENCFT
+    # employment, per period) — real business/talent inputs, raise these dims out of
+    # declared rubric. Both cover all 17 slugs (crosswalk), so no partial-override
+    # min-max distortion. operating_cost is risk-increasing (inverted by the engine).
+    op_cost = _load_operating_cost(db)
+    labor = _load_labor_availability(db, target)
 
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
@@ -287,6 +362,13 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
             if sv.get(var) is not None:
                 merged[var] = sv[var]
                 smap[var] = "live"
+        # operating_cost (TSS) + labor_availability (ENCFT) — real, override rubric.
+        if op_cost.get(slug) is not None:
+            merged["operating_cost"] = op_cost[slug]
+            smap["operating_cost"] = "live"
+        if labor.get(slug) is not None:
+            merged["labor_availability"] = labor[slug]
+            smap["labor_availability"] = "live"
         dataset[slug] = merged
         sources[slug] = smap
         sgps_inputs[slug] = {
