@@ -12,6 +12,7 @@ import {
   StateBlock,
   LoadingGrid,
 } from "@/shared/ui/primitives";
+import { ValidationTab } from "../components/ValidationTab";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { Heatmap, HeatmapData } from "@/shared/charts/Heatmap";
@@ -289,6 +290,7 @@ export function SectorIntelPage() {
                 { id: "matriz", label: "Matriz" },
                 { id: "ranking", label: "Ranking" },
                 { id: "aceleracion", label: "Aceleración" },
+                { id: "validacion", label: "Validación" },
               ]}
               active={tab}
               onChange={setTab}
@@ -427,6 +429,7 @@ export function SectorIntelPage() {
                   )}
                 </>
               )}
+              {tab === "validacion" && <ValidationTab />}
             </div>
           </Card>
         </div>

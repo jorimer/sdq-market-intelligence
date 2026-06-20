@@ -132,3 +132,44 @@ export async function getDataset(): Promise<IaiDataset> {
   const { data } = await client.get("/sector-intel/dataset");
   return data;
 }
+
+// ── Gate E (validación: IAI_T vs Δempleo formal T+1) ─────────────
+export interface GateEByYear {
+  year: string;
+  n: number;
+  spearman: number | null;
+}
+export interface GateEQuintileSpread {
+  top_iai_mean_growth: number;
+  bottom_iai_mean_growth: number;
+  spread: number;
+  tile_size: number;
+}
+export interface SectorGateEReport {
+  has_report: boolean;
+  has_data?: boolean;
+  reason?: string;
+  outcome?: string;
+  resolution?: string;
+  n_observations?: number;
+  n_branches?: number;
+  years?: [string, string];
+  spearman?: number | null;
+  spearman_ci?: [number | null, number | null];
+  spearman_partial_growth?: number | null;
+  spearman_partial_n?: number | null;
+  by_year?: GateEByYear[];
+  quintile_spread?: GateEQuintileSpread | null;
+  disclaimer?: string;
+  generated_at?: string;
+}
+
+export async function getSectorValidation(): Promise<SectorGateEReport> {
+  const { data } = await client.get("/sector-intel/validation");
+  return data;
+}
+
+export async function runSectorGateE(): Promise<{ started: boolean; reason?: string }> {
+  const { data } = await client.post("/operations/sector-gate-e/run", {});
+  return data;
+}
