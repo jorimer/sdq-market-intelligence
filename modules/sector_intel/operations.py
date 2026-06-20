@@ -67,7 +67,7 @@ def _run_sector_gate_e(params, user_id, set_phase) -> Dict:
     from modules.sector_intel.validation.report import gate_e_report
     from shared.settings.models import AppSetting
 
-    set_phase("agregando IAI a ramas + outcome de empleo + IC de Spearman")
+    set_phase("agregando IAI a ramas + outcome de empleo + IC medio anual (t)")
     db = SessionLocal()
     try:
         rep = gate_e_report(db)
@@ -81,9 +81,13 @@ def _run_sector_gate_e(params, user_id, set_phase) -> Dict:
         db.commit()
     finally:
         db.close()
-    return {"has_data": rep.get("has_data"), "spearman": rep.get("spearman"),
-            "spearman_ci": rep.get("spearman_ci"), "n_obs": rep.get("n_observations"),
-            "spearman_partial_growth": rep.get("spearman_partial_growth")}
+    # Console summary surfaces the HEADLINE (mean yearly IC with its t-CI), not the
+    # secondary pooled stat; n_obs and the growth-partial for context.
+    return {"has_data": rep.get("has_data"), "mean_yearly_ic": rep.get("mean_yearly_ic"),
+            "ic_ci": rep.get("ic_ci"), "n_years": rep.get("n_years"),
+            "n_obs": rep.get("n_observations"),
+            "spearman_partial_growth": rep.get("spearman_partial_growth"),
+            "spearman_pooled": rep.get("spearman_pooled")}
 
 
 def register() -> None:
