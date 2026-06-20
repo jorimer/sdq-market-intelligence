@@ -11,6 +11,7 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
+import { FiscalSection } from "../components/FiscalSection";
 import { ScenarioFan } from "@/shared/charts/ScenarioFan";
 import { fmtNum } from "@/shared/lib/format";
 import { Tone } from "@/shared/lib/bands";
@@ -347,6 +348,15 @@ export function MacroMonitorPage() {
           />
         </div>
       )}
+
+      {/* Pulso fiscal (Eje 2) */}
+      <div className="mt-8">
+        <h2 className="font-display text-lg font-bold text-ink mb-1">Pulso fiscal</h2>
+        <p className="text-sm text-muted mb-4">
+          Cuentas del Gobierno Central — ingresos, gastos y déficit — y recaudación tributaria.
+        </p>
+        <FiscalSection />
+      </div>
     </div>
   );
 }

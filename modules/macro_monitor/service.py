@@ -129,6 +129,71 @@ def fiscal_sync(db: Session, set_phase: Optional[Any] = None,
             "period_range": [min(periods), max(periods)] if periods else None}
 
 
+# Display labels for the fiscal lines (Estado de Operaciones + DGII recaudación).
+FISCAL_LABELS = {
+    "ingresos": "Ingresos", "gastos": "Gastos", "balance_global": "Balance global (déficit)",
+    "resultado_operativo": "Resultado operativo", "impuestos": "Impuestos",
+    "imp_ingresos": "Imp. sobre ingresos", "imp_propiedad": "Imp. sobre propiedad",
+    "imp_bienes_servicios": "Imp. bienes y servicios (ITBIS)",
+    "imp_comercio_exterior": "Imp. comercio exterior", "contribuciones_sociales": "Contribuciones sociales",
+    "otros_ingresos": "Otros ingresos", "remuneracion": "Remuneración", "intereses": "Intereses",
+    "subsidios": "Subsidios", "inversion": "Inversión",
+    "comercio_exterior": "Comercio exterior", "mercancias_servicios": "Mercancías y servicios",
+    "ecologicos": "Ecológicos", "contraprestacion": "Contraprestación", "otros": "Otros", "propiedad": "Propiedad",
+}
+# EO lines surfaced as the monthly fiscal timeline.
+_EO_TIMELINE = ("ingresos", "gastos", "balance_global")
+
+
+def get_fiscal_pulse(db: Session) -> Dict[str, Any]:
+    """Assemble the fiscal pulse for the macro UI from the persisted fiscal series.
+
+    Returns the EO monthly timeline (ingresos / gastos / balance global) and the
+    latest DGII recaudación composition by tax group. ``has_data`` False if the
+    fiscal-sync hasn't run. Mixed units are flagged per panel (EO in RD$ millones,
+    DGII in RD$)."""
+    rows = (db.query(MacroSeries)
+            .filter(MacroSeries.series_code.like("fiscal_%")).all())
+    by_code: Dict[str, Dict[str, float]] = defaultdict(dict)
+    for r in rows:
+        if r.value is not None and r.period:
+            by_code[r.series_code][r.period] = r.value
+    if not by_code:
+        return {"has_data": False}
+
+    def timeline(code: str) -> List[Dict[str, Any]]:
+        d = by_code.get(f"fiscal_eo.{code}", {})
+        return [{"period": p, "value": d[p]} for p in sorted(d)]
+
+    eo = {k: timeline(k) for k in _EO_TIMELINE}
+    latest = eo["ingresos"][-1]["period"] if eo["ingresos"] else None
+    eo_latest = {k: (by_code.get(f"fiscal_eo.{k}", {}).get(latest)) for k in _EO_TIMELINE} if latest else {}
+
+    # DGII recaudación composition for its latest month (the tax groups, not the total)
+    dgii_codes = [c for c in by_code if c.startswith("fiscal_dgii.") and not c.endswith(".total")]
+    dgii_periods = sorted({p for c in dgii_codes for p in by_code[c]})
+    dgii_latest = dgii_periods[-1] if dgii_periods else None
+    recaudacion = []
+    for c in dgii_codes:
+        slug = c.split(".", 1)[1]
+        v = by_code[c].get(dgii_latest)
+        if v is not None:
+            recaudacion.append({"slug": slug, "label": FISCAL_LABELS.get(slug, slug), "value": v})
+    recaudacion.sort(key=lambda x: x["value"], reverse=True)
+
+    all_periods = sorted({p for d in by_code.values() for p in d})
+    return {
+        "has_data": True,
+        "period_range": [all_periods[0], all_periods[-1]],
+        "latest_period": latest,
+        "eo_unit": "RD$ millones",
+        "eo": eo,
+        "eo_latest": eo_latest,
+        "recaudacion_unit": "RD$",
+        "recaudacion": {"period": dgii_latest, "groups": recaudacion},
+    }
+
+
 def backfill_historico(db: Session, year_from: int = 1984, year_to: int = 2026) -> Dict[str, Any]:
     """One-time backfill of the BCRD historical series (IPC + exchange rates).
 

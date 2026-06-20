@@ -252,3 +252,29 @@ export async function runExcelBatch(opts: {
   const { data } = await client.post(`/macro-monitor/excel/batch?${params.toString()}`);
   return data;
 }
+
+// ── Pulso fiscal (Eje 2: Hacienda Estado de Operaciones + DGII recaudación) ──
+export interface FiscalPoint {
+  period: string;
+  value: number;
+}
+export interface FiscalRecaudacionGroup {
+  slug: string;
+  label: string;
+  value: number;
+}
+export interface FiscalPulse {
+  has_data: boolean;
+  period_range?: [string, string];
+  latest_period?: string | null;
+  eo_unit?: string;
+  eo?: { ingresos: FiscalPoint[]; gastos: FiscalPoint[]; balance_global: FiscalPoint[] };
+  eo_latest?: { ingresos: number | null; gastos: number | null; balance_global: number | null };
+  recaudacion_unit?: string;
+  recaudacion?: { period: string | null; groups: FiscalRecaudacionGroup[] };
+}
+
+export async function getFiscalPulse(): Promise<FiscalPulse> {
+  const { data } = await client.get("/macro-monitor/fiscal");
+  return data;
+}
