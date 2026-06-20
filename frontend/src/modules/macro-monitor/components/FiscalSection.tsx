@@ -10,8 +10,9 @@ import {
 } from "recharts";
 import { Landmark, RefreshCw } from "lucide-react";
 import { Card, CardHead, StatTile, StateBlock } from "@/shared/ui/primitives";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { fmtNum } from "@/shared/lib/format";
-import { FiscalPulse, getFiscalPulse } from "../api";
+import { FiscalPulse, getFiscalInsight, getFiscalPulse } from "../api";
 
 function fmtMM(v: number | null | undefined): string {
   return v == null ? "—" : `RD$ ${fmtNum(v, 0)} MM`;
@@ -125,6 +126,14 @@ export function FiscalSection() {
           )}
         </Card>
       </div>
+
+      <AiInsightCard
+        title="Lectura fiscal (IA)"
+        subtitle={`Situación fiscal · ${pulse.latest_period ?? ""}`}
+        icon={Landmark}
+        depsKey={`fiscal:${pulse.latest_period ?? ""}`}
+        fetcher={getFiscalInsight}
+      />
 
       <p className="flex items-center gap-1.5 text-xs text-faint">
         <RefreshCw className="w-3 h-3" /> Fuente: Ministerio de Hacienda (Estado de Operaciones) + DGII (recaudación). Mensual.

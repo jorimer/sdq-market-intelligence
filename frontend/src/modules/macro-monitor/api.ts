@@ -278,3 +278,8 @@ export async function getFiscalPulse(): Promise<FiscalPulse> {
   const { data } = await client.get("/macro-monitor/fiscal");
   return data;
 }
+
+export async function getFiscalInsight(): Promise<AiInsight | null> {
+  const { data } = await client.get<{ ai_insight: AiInsight | null }>("/macro-monitor/fiscal/insight");
+  return data.ai_insight ?? null;
+}

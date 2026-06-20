@@ -149,6 +149,21 @@ def fiscal(
 
 
 @router.get(
+    "/fiscal/insight",
+    summary="Perspectiva de IA del pulso fiscal — fase 2, lento (~10-15s)",
+    description="Lectura SCQA de la situación fiscal (ingresos/gastos/déficit y "
+    "recaudación) con Claude. Best-effort: cae a fallback estático sin clave.",
+)
+def fiscal_insight(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.macro_monitor.ai_context import fiscal_ai_context
+
+    return {"ai_insight": _ai_insight(fiscal_ai_context(get_fiscal_pulse(db)), "executive_summary")}
+
+
+@router.get(
     "/snapshot",
     summary="Snapshot macro persistido",
     description="Momentum + señales del período indicado (o el último).",

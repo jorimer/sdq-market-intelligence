@@ -70,3 +70,35 @@ def snapshot_ai_context(snapshot: Dict[str, Any],
         "signals": snapshot.get("signals") or [],
         "top_movers": movers[:6],
     }
+
+
+def fiscal_ai_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
+    """Compact context for the fiscal-pulse executive summary (SCQA).
+
+    Only what matters at the fiscal level: the latest ingresos/gastos/déficit, the
+    recent deficit trajectory (last 12 months) and the top recaudación lines — not
+    every monthly point. ``has_data`` False yields a minimal context the template
+    renders as "sin datos"."""
+    if not pulse.get("has_data"):
+        return {"title": "Pulso fiscal", "has_data": False}
+    lat = pulse.get("eo_latest") or {}
+    deficit_recent = [
+        {"period": d["period"], "value": d["value"]}
+        for d in (pulse.get("eo", {}).get("balance_global") or [])[-12:]
+    ]
+    rec = pulse.get("recaudacion") or {}
+    return {
+        "title": "Pulso fiscal — Gobierno Central",
+        "has_data": True,
+        "period": pulse.get("latest_period"),
+        "unit": pulse.get("eo_unit"),
+        "ingresos": lat.get("ingresos"),
+        "gastos": lat.get("gastos"),
+        "balance_global": lat.get("balance_global"),
+        "deficit_ultimos_12m": deficit_recent,
+        "recaudacion_unit": pulse.get("recaudacion_unit"),
+        "recaudacion_top": [
+            {"label": g.get("label"), "value": g.get("value")}
+            for g in (rec.get("groups") or [])[:5]
+        ],
+    }
