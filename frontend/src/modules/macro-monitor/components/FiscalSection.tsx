@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   CartesianGrid,
   Line,
@@ -14,8 +16,8 @@ import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { fmtNum } from "@/shared/lib/format";
 import { FiscalPulse, getFiscalInsight, getFiscalPulse } from "../api";
 
-function fmtMM(v: number | null | undefined): string {
-  return v == null ? "—" : `RD$ ${fmtNum(v, 0)} MM`;
+function fmtMM(v: number | null | undefined, t: TFunction): string {
+  return v == null ? "—" : t("macro.fiscalMM", { v: fmtNum(v, 0) });
 }
 
 /** Merge ingresos + gastos timelines into one series for the last `months` points. */
@@ -29,6 +31,7 @@ function mergeTimeline(p: FiscalPulse, months = 36) {
 }
 
 export function FiscalSection() {
+  const { t } = useTranslation();
   const [pulse, setPulse] = useState<FiscalPulse | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
 
@@ -45,14 +48,11 @@ export function FiscalSection() {
     load();
   }, [load]);
 
-  if (status === "loading") return <StateBlock kind="loading" message="Cargando pulso fiscal…" />;
-  if (status === "error") return <StateBlock kind="error" message="No se pudo cargar el pulso fiscal." />;
+  if (status === "loading") return <StateBlock kind="loading" message={t("macro.fiscalLoading")} />;
+  if (status === "error") return <StateBlock kind="error" message={t("macro.fiscalError")} />;
   if (!pulse?.has_data) {
     return (
-      <StateBlock
-        kind="empty"
-        message="Aún no hay datos fiscales. Corre la operación «Sincronizar pulso fiscal» en Operaciones."
-      />
+      <StateBlock kind="empty" message={t("macro.fiscalEmpty")} />
     );
   }
 
@@ -65,11 +65,11 @@ export function FiscalSection() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatTile label={`Ingresos · ${pulse.latest_period ?? ""}`} value={fmtMM(lat.ingresos)} />
-        <StatTile label="Gastos" value={fmtMM(lat.gastos)} />
-        <StatTile label="Balance global (déficit)" value={fmtMM(deficit)} />
+        <StatTile label={t("macro.fiscalStatIngresos", { period: pulse.latest_period ?? "" })} value={fmtMM(lat.ingresos, t)} />
+        <StatTile label={t("macro.fiscalStatGastos")} value={fmtMM(lat.gastos, t)} />
+        <StatTile label={t("macro.fiscalStatDeficit")} value={fmtMM(deficit, t)} />
         <StatTile
-          label="Cobertura"
+          label={t("macro.fiscalStatCoverage")}
           value={pulse.period_range ? `${pulse.period_range[0]} – ${pulse.period_range[1]}` : "—"}
         />
       </div>
@@ -78,8 +78,8 @@ export function FiscalSection() {
         <Card className="lg:col-span-2">
           <CardHead
             icon={Landmark}
-            title="Ingresos vs gastos del Gobierno Central"
-            subtitle={`Estado de Operaciones (Hacienda) · ${pulse.eo_unit ?? "RD$ MM"} · últimos 36 meses`}
+            title={t("macro.fiscalChartTitle")}
+            subtitle={t("macro.fiscalChartSubtitle", { unit: pulse.eo_unit ?? "RD$ MM" })}
           />
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={data}>
@@ -88,7 +88,7 @@ export function FiscalSection() {
               <YAxis tick={{ fontSize: 10, fill: "var(--muted)" }} stroke="var(--border-strong)" width={56}
                 tickFormatter={(v: number) => fmtNum(v / 1000, 0) + "k"} />
               <Tooltip
-                formatter={(v: number, name: string) => [fmtMM(v), name === "ingresos" ? "Ingresos" : "Gastos"]}
+                formatter={(v: number, name: string) => [fmtMM(v, t), name === "ingresos" ? t("macro.fiscalIngresos") : t("macro.fiscalGastos")]}
                 contentStyle={{ borderRadius: 8, fontSize: 12, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--ink)" }}
               />
               <Line type="monotone" dataKey="ingresos" stroke="var(--c1)" strokeWidth={2} dot={false} connectNulls />
@@ -96,16 +96,16 @@ export function FiscalSection() {
             </LineChart>
           </ResponsiveContainer>
           <div className="flex items-center gap-4 mt-1 text-xs text-muted">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded" style={{ background: "var(--c1)" }} /> Ingresos</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded" style={{ background: "var(--c4)" }} /> Gastos</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded" style={{ background: "var(--c1)" }} /> {t("macro.fiscalIngresos")}</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded" style={{ background: "var(--c4)" }} /> {t("macro.fiscalGastos")}</span>
           </div>
         </Card>
 
         <Card>
           <CardHead
             icon={Landmark}
-            title="Recaudación por impuesto"
-            subtitle={`DGII · ${pulse.recaudacion?.period ?? ""} · ${pulse.recaudacion_unit ?? "RD$"}`}
+            title={t("macro.fiscalRecaudTitle")}
+            subtitle={t("macro.fiscalRecaudSubtitle", { period: pulse.recaudacion?.period ?? "", unit: pulse.recaudacion_unit ?? "RD$" })}
           />
           {groups.length ? (
             <div className="space-y-2.5 mt-1">
@@ -122,21 +122,21 @@ export function FiscalSection() {
               ))}
             </div>
           ) : (
-            <StateBlock kind="empty" message="Sin recaudación DGII." />
+            <StateBlock kind="empty" message={t("macro.fiscalRecaudEmpty")} />
           )}
         </Card>
       </div>
 
       <AiInsightCard
-        title="Lectura fiscal (IA)"
-        subtitle={`Situación fiscal · ${pulse.latest_period ?? ""}`}
+        title={t("macro.fiscalInsightTitle")}
+        subtitle={t("macro.fiscalInsightSubtitle", { period: pulse.latest_period ?? "" })}
         icon={Landmark}
         depsKey={`fiscal:${pulse.latest_period ?? ""}`}
         fetcher={getFiscalInsight}
       />
 
       <p className="flex items-center gap-1.5 text-xs text-faint">
-        <RefreshCw className="w-3 h-3" /> Fuente: Ministerio de Hacienda (Estado de Operaciones) + DGII (recaudación). Mensual.
+        <RefreshCw className="w-3 h-3" /> {t("macro.fiscalSource")}
       </p>
     </div>
   );

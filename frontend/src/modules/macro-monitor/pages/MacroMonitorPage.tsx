@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, TrendingUp, TrendingDown, Minus, Activity, Sparkles } from "lucide-react";
 import {
   PageHead,
@@ -43,6 +44,7 @@ const SEVERITY_TONE: Record<string, Tone> = {
 };
 
 export function MacroMonitorPage() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [indicators, setIndicators] = useState<MacroIndicator[]>([]);
   const [signals, setSignals] = useState<MacroSignal[]>([]);
@@ -92,12 +94,12 @@ export function MacroMonitorPage() {
 
   const head = (
     <PageHead
-      eyebrow="BCRD · Monitor de coyuntura"
-      title="Macroeconómico"
-      sub="Momentum y puntos de inflexión sobre datos del BCRD. Detecta fragilidad temprana y traduce el entorno en señales para los demás ejes."
+      eyebrow={t("macro.eyebrow")}
+      title={t("macro.title")}
+      sub={t("macro.sub")}
       right={
         <button onClick={doRefresh} disabled={refreshing} className="btn btn-soft">
-          {refreshing ? "Actualizando…" : "Actualizar"}
+          {refreshing ? t("macro.refreshing") : t("macro.refresh")}
         </button>
       }
     />
@@ -118,10 +120,10 @@ export function MacroMonitorPage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudieron cargar los indicadores macro. Reintenta en unos segundos."
+          message={t("macro.errorLoad")}
           action={
             <button onClick={load} className="btn btn-ghost">
-              Reintentar
+              {t("common_retry")}
             </button>
           }
         />
@@ -135,10 +137,10 @@ export function MacroMonitorPage() {
         {head}
         <StateBlock
           kind="empty"
-          message="Aún no hay un snapshot macro. Genera el primero ingiriendo las series del BCRD."
+          message={t("macro.emptyMsg")}
           action={
             <button onClick={doRefresh} disabled={refreshing} className="btn btn-primary">
-              {refreshing ? "Generando…" : "Generar snapshot"}
+              {refreshing ? t("macro.generating") : t("macro.generateSnapshot")}
             </button>
           }
         />
@@ -164,20 +166,20 @@ export function MacroMonitorPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <StatTile label="Series monitoreadas" value={indicators.length} />
-        <StatTile label="Señales activas" value={signals.length} />
-        <StatTile label="En aceleración" value={accelerating} />
+        <StatTile label={t("macro.kpiSeries")} value={indicators.length} />
+        <StatTile label={t("macro.kpiSignals")} value={signals.length} />
+        <StatTile label={t("macro.kpiAccelerating")} value={accelerating} />
         <StatTile
-          label="Sin señales = "
-          value={signals.length === 0 ? "estable" : "vigilar"}
+          label={t("macro.kpiNoSignals")}
+          value={signals.length === 0 ? t("macro.stable") : t("macro.watch")}
         />
       </div>
 
       {/* Coyuntura (IA) */}
       <div className="mb-5">
         <AiInsightCard
-          title="Lectura de coyuntura (IA)"
-          subtitle="Riesgos y oportunidades del entorno macro actual (BCRD)"
+          title={t("macro.coyunturaTitle")}
+          subtitle={t("macro.coyunturaSubtitle")}
           icon={Sparkles}
           depsKey={`coyuntura:${latestPeriod}:${indicators.length}`}
           fetcher={() => getMacroSnapshotInsight()}
@@ -190,18 +192,18 @@ export function MacroMonitorPage() {
           <Card>
             <CardHead
               icon={TrendingUp}
-              title={showAll ? "Todas las series" : "Indicadores en movimiento"}
+              title={showAll ? t("macro.tableTitleAll") : t("macro.tableTitleMovers")}
               subtitle={
                 showAll
-                  ? `${indicators.length} series monitoreadas`
-                  : `Las ${Math.min(HEADLINE_N, movers.length)} de mayor aceleración`
+                  ? t("macro.tableSubAll", { n: indicators.length })
+                  : t("macro.tableSubMovers", { n: Math.min(HEADLINE_N, movers.length) })
               }
               right={
                 <button
                   onClick={() => setShowAll((v) => !v)}
                   className="btn btn-ghost !py-1 !px-2.5 text-xs"
                 >
-                  {showAll ? "Ver solo las activas" : `Ver todas (${indicators.length})`}
+                  {showAll ? t("macro.viewActive") : t("macro.viewAll", { n: indicators.length })}
                 </button>
               }
             />
@@ -209,26 +211,27 @@ export function MacroMonitorPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted border-b border-line">
-                    <th className="py-2 px-1 font-medium">Serie</th>
-                    <th className="py-2 px-1 font-medium text-right">Último</th>
-                    <th className="py-2 px-1 font-medium text-right">Δ</th>
-                    <th className="py-2 px-1 font-medium text-right">Aceleración</th>
-                    <th className="py-2 px-1 font-medium">Tendencia</th>
+                    <th className="py-2 px-1 font-medium">{t("macro.colSeries")}</th>
+                    <th className="py-2 px-1 font-medium text-right">{t("macro.colLatest")}</th>
+                    <th className="py-2 px-1 font-medium text-right">{t("macro.colDelta")}</th>
+                    <th className="py-2 px-1 font-medium text-right">{t("macro.colAccel")}</th>
+                    <th className="py-2 px-1 font-medium">{t("macro.colTrend")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tableRows.length === 0 && (
                     <tr>
                       <td colSpan={5} className="py-4 text-center text-sm text-muted">
-                        Sin series con momentum suficiente todavía.{" "}
+                        {t("macro.emptyMomentum")}{" "}
                         <button onClick={() => setShowAll(true)} className="text-accent underline">
-                          Ver todas ({indicators.length})
+                          {t("macro.viewAll", { n: indicators.length })}
                         </button>
                       </td>
                     </tr>
                   )}
                   {tableRows.map((i) => {
                     const tm = TREND_META[i.trend] ?? TREND_META.estable;
+                    const trendLabel = t(`macro.trend.${i.trend}`, tm.label);
                     return (
                       <tr key={i.series_code} className="border-b border-line/60 last:border-0">
                         <td className="py-2.5 px-1 text-ink" title={i.series_code}>
@@ -247,7 +250,7 @@ export function MacroMonitorPage() {
                           {fmtNum(i.acceleration, 2)}
                         </td>
                         <td className="py-2.5 px-1">
-                          <Chip tone={tm.tone}>{tm.label}</Chip>
+                          <Chip tone={tm.tone}>{trendLabel}</Chip>
                         </td>
                       </tr>
                     );
@@ -263,11 +266,11 @@ export function MacroMonitorPage() {
           <Card>
             <CardHead
               icon={AlertTriangle}
-              title="Señales de alerta"
-              subtitle="Reinhart-Rogoff · Calvo"
+              title={t("macro.signalsTitle")}
+              subtitle={t("macro.signalsSubtitle")}
             />
             {signals.length === 0 ? (
-              <p className="text-sm text-muted py-4 text-center">Sin señales activas.</p>
+              <p className="text-sm text-muted py-4 text-center">{t("macro.noSignals")}</p>
             ) : (
               <ul className="space-y-2.5">
                 {signals.map((s, idx) => (
@@ -278,9 +281,9 @@ export function MacroMonitorPage() {
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold text-ink truncate">
                         {s.signal === "debt_overhang"
-                          ? "Sobreendeudamiento"
+                          ? t("macro.signalDebt")
                           : s.signal === "sudden_stop"
-                            ? "Freno súbito"
+                            ? t("macro.signalSuddenStop")
                             : s.signal}
                       </div>
                       <div className="text-xs text-muted mt-0.5">
@@ -301,14 +304,14 @@ export function MacroMonitorPage() {
       <Card className="mt-5">
         <CardHead
           icon={Activity}
-          title="Trayectoria & proyección"
-          subtitle="Histórico + proyección con banda de incertidumbre"
+          title={t("macro.trajectoryTitle")}
+          subtitle={t("macro.trajectorySubtitle")}
           right={
             <select
               value={seriesCode}
               onChange={(e) => setSeriesCode(e.target.value)}
               className="field !w-auto text-xs"
-              title="Serie"
+              title={t("macro.seriesSelect")}
             >
               {indicators.map((i) => (
                 <option key={i.series_code} value={i.series_code}>
@@ -332,7 +335,7 @@ export function MacroMonitorPage() {
             }
           />
         ) : (
-          <p className="text-sm text-muted py-6 text-center">Selecciona una serie.</p>
+          <p className="text-sm text-muted py-6 text-center">{t("macro.selectSeries")}</p>
         )}
       </Card>
 
@@ -340,7 +343,7 @@ export function MacroMonitorPage() {
       {seriesCode && (
         <div className="mt-5">
           <AiInsightCard
-            title="Análisis de la serie (IA)"
+            title={t("macro.seriesInsightTitle")}
             subtitle={series?.series_code ?? seriesCode}
             icon={Activity}
             depsKey={`serie:${seriesCode}`}
@@ -351,9 +354,9 @@ export function MacroMonitorPage() {
 
       {/* Pulso fiscal (Eje 2) */}
       <div className="mt-8">
-        <h2 className="font-display text-lg font-bold text-ink mb-1">Pulso fiscal</h2>
+        <h2 className="font-display text-lg font-bold text-ink mb-1">{t("macro.fiscalPulseTitle")}</h2>
         <p className="text-sm text-muted mb-4">
-          Cuentas del Gobierno Central — ingresos, gastos y déficit — y recaudación tributaria.
+          {t("macro.fiscalPulseSub")}
         </p>
         <FiscalSection />
       </div>
