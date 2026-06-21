@@ -151,8 +151,14 @@ Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, 
 - `ruff check` sobre todo el changeset (incl. tests) + CI verde + merge `--no-ff`.
 - Tras cualquier corrección del dueño: actualizar `tasks/lessons.md` (síntoma, causa raíz, regla, disparador).
 
+## Pre-go-live (en curso)
+- [x] **RBAC + administración de usuarios** ✅ **en prod (#235 backend, #236 frontend).** Rol jerárquico super_admin/admin/analyst/viewer + tier free/pro/enterprise (monetización declarada) + CRUD gateado con barandas anti-escalada/anti-lockout + página Administración→Usuarios. Ver [[rbac-user-admin]].
+- [ ] **Crear super_admin real:** el dueño setea `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` en Railway → bootstrap idempotente lo crea en el deploy.
+- [ ] **Endurecimiento de seguridad:** desactivar cuenta E2E (`scripts/seed_e2e_user.py --deactivate`) una vez exista el super_admin real + revisar exposición del repo público (secretos/datos versionados).
+- [ ] **Toggle de idioma EN/ES/FR** (i18n: scaffold existe, falta toggle + traducir la app + decidir narrativas IA).
+
 ## Deuda registrada (no en este sprint)
-- Deal Scoring huérfano → módulo formal. · DGII bloqueado por licencia. · Seguridad pre-go-live (admin real, desactivar cuenta de prueba).
+- Deal Scoring huérfano → módulo formal. · DGII bloqueado por licencia.
 - **Macro punto 4 — capa de traducción [medio]** → diferido a **sprint de diferenciación** (decisión dueño 2026-06-15). Por señal activa / clúster acelerando, una línea de implicación por agente (empleado / PyME / gran empresa), usando el framework del PDF de niveles. Extiende `ai_context.py` + template. Ver `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md` §3 punto 4.
 - **Macro punto 5 — contrato macro→sectorial [medio]** → **documentado hoy, se construye al abrir Eje 3 (ONE)**, no antes (decisión dueño 2026-06-15). Objeto estructurado por período (5-8 factores macro: dirección + magnitud + sectores/agentes impactados) que vive en `shared/` y alimenta la §2 del informe sectorial. **Requisito de diseño para Eje 3:** la §2 "Contexto macro" del sectorial consume este contrato, no re-deriva macro a mano. Spec en `docs/DIAGNOSTICO_MACRO_Y_HARDENING_2026-06-15.md` §3-4 punto 5.
 
