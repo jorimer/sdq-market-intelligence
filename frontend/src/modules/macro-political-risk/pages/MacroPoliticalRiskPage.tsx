@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Scale, ListOrdered, SlidersHorizontal, ShieldAlert } from "lucide-react";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import {
@@ -28,7 +29,6 @@ import {
 import {
   SAMPLE_REGIONAL,
   COUNTRY_NAMES,
-  DIMENSION_LABELS,
 } from "../data";
 
 type Status = "loading" | "error" | "ready";
@@ -52,6 +52,7 @@ function periodEndFor(period: string): string {
 }
 
 export function MacroPoliticalRiskPage() {
+  const { t } = useTranslation();
   const { period } = useApp();
   const [status, setStatus] = useState<Status>("loading");
   const [results, setResults] = useState<Record<string, IRMPResult>>({});
@@ -127,9 +128,9 @@ export function MacroPoliticalRiskPage() {
 
   const head = (
     <PageHead
-      eyebrow="WGI · BCRD · SIB"
-      title="Regulatorio & político"
-      sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Macro/externa/gobernanza en vivo (WGI · WDI · IMF) + rating declarado; variables de juicio aún ilustrativas."
+      eyebrow={t("mpr.eyebrow")}
+      title={t("mpr.title")}
+      sub={t("mpr.sub")}
     />
   );
 
@@ -140,14 +141,14 @@ export function MacroPoliticalRiskPage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudo calcular el IRMP. Verifica el backend y reintenta."
-          action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
+          message={t("mpr.errorLoad")}
+          action={<button onClick={load} className="btn btn-ghost">{t("common_retry")}</button>}
         />
       </div>
     );
 
   const cur = results[selected];
-  const band = riskBandFor(cur?.irmp_score);
+  const band = riskBandFor(cur?.irmp_score, t);
   const sel = sources[selected] ?? {};
   const rows: DimensionRow[] = cur
     ? Object.entries(cur.dimensions).map(([key, d]) => {
@@ -157,13 +158,13 @@ export function MacroPoliticalRiskPage() {
           vars.length === 0 || Object.keys(sel).length === 0
             ? undefined
             : live === vars.length
-            ? { text: "en vivo", ok: true }
+            ? { text: t("widgets.tagLive"), ok: true }
             : live === 0
-            ? { text: "rúbrica" }
-            : { text: `${live}/${vars.length} en vivo`, ok: live >= vars.length / 2 };
+            ? { text: t("widgets.tagRubric") }
+            : { text: t("widgets.tagPartialLive", { n: live, total: vars.length }), ok: live >= vars.length / 2 };
         return {
           key,
-          label: DIMENSION_LABELS[key] ?? key,
+          label: t(`mpr.dims.${key}`, key),
           score: d.score,
           weight: d.weight,
           contribution: d.contribution,
@@ -184,24 +185,24 @@ export function MacroPoliticalRiskPage() {
     setSaved(null);
     try {
       await saveSnapshot(selected, dataset, snapPeriod, COUNTRY_NAMES[selected]);
-      setSaved(`Snapshot guardado (${snapPeriod}) · evento irmp.updated publicado`);
+      setSaved(t("mpr.savedOk", { period: snapPeriod }));
     } catch {
-      setSaved("No se pudo guardar el snapshot.");
+      setSaved(t("mpr.savedErr"));
     }
   };
 
   return (
     <div>
       <PageHead
-        eyebrow="WGI · BCRD · SIB"
-        title="Regulatorio & político"
-        sub="Índice de Riesgo Macro-Político (IRMP): mayor score = menor riesgo. Determinista y auditable. Macro/externa/gobernanza en vivo (WGI · WDI · IMF) + rating declarado; variables de juicio aún ilustrativas."
+        eyebrow={t("mpr.eyebrow")}
+        title={t("mpr.title")}
+        sub={t("mpr.sub")}
         right={
           <select
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
             className="field !w-auto"
-            title="País"
+            title={t("mpr.countrySelect")}
           >
             {codes.map((c) => (
               <option key={c} value={c}>
@@ -223,19 +224,19 @@ export function MacroPoliticalRiskPage() {
             <BandBadge band={band} />
           </div>
           <div className="mt-3 text-xs text-muted">
-            Conjunto regional: {cur?.peer_set_size ?? codes.length} países
+            {t("mpr.heroPeerSet", { n: cur?.peer_set_size ?? codes.length })}
           </div>
           <div className="mt-2">
             {liveInfo.live ? (
               <Chip tone="ok">
-                {liveInfo.variables} variables en vivo · {liveInfo.period} · {liveInfo.covered}/{liveInfo.total} países
+                {t("mpr.liveChip", { vars: liveInfo.variables, period: liveInfo.period, covered: liveInfo.covered, total: liveInfo.total })}
               </Chip>
             ) : (
-              <Chip tone="muted">Datos ilustrativos · sync pendiente</Chip>
+              <Chip tone="muted">{t("mpr.illustrativeChip")}</Chip>
             )}
           </div>
           <button onClick={doSave} className="btn btn-soft mt-4 w-full">
-            Guardar snapshot
+            {t("mpr.saveSnapshot")}
           </button>
           {saved && <div className="text-xs text-muted mt-2">{saved}</div>}
         </Card>
@@ -245,10 +246,10 @@ export function MacroPoliticalRiskPage() {
           <Card>
             <Tabs
               tabs={[
-                { id: "desglose", label: "Desglose explicable" },
-                { id: "ranking", label: "Ranking regional" },
-                { id: "pesos", label: "Pesos" },
-                { id: "validacion", label: "Validación" },
+                { id: "desglose", label: t("mpr.tabBreakdown") },
+                { id: "ranking", label: t("mpr.tabRanking") },
+                { id: "pesos", label: t("mpr.tabWeights") },
+                { id: "validacion", label: t("mpr.tabValidation") },
               ]}
               active={tab}
               onChange={setTab}
@@ -259,8 +260,8 @@ export function MacroPoliticalRiskPage() {
                 <>
                   <CardHead
                     icon={Scale}
-                    title="Dimensiones ponderadas"
-                    subtitle={`${COUNTRY_NAMES[selected] ?? selected} · contribución al IRMP`}
+                    title={t("mpr.breakdownTitle")}
+                    subtitle={t("mpr.breakdownSubtitle", { country: COUNTRY_NAMES[selected] ?? selected })}
                   />
                   <DimensionBreakdown rows={rows} />
                 </>
@@ -270,21 +271,21 @@ export function MacroPoliticalRiskPage() {
                 <>
                   <CardHead
                     icon={ListOrdered}
-                    title="Ranking regional"
-                    subtitle="Mayor score = menor riesgo"
+                    title={t("mpr.rankingTitle")}
+                    subtitle={t("mpr.rankingSubtitle")}
                   />
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted border-b border-line">
                         <th className="py-2 px-1 font-medium">#</th>
-                        <th className="py-2 px-1 font-medium">País</th>
+                        <th className="py-2 px-1 font-medium">{t("mpr.colCountry")}</th>
                         <th className="py-2 px-1 font-medium text-right">IRMP</th>
-                        <th className="py-2 px-1 font-medium">Banda</th>
+                        <th className="py-2 px-1 font-medium">{t("mpr.colBand")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ranking.map((r, i) => {
-                        const b = riskBandFor(r.irmp_score);
+                        const b = riskBandFor(r.irmp_score, t);
                         return (
                           <tr
                             key={r.country_code}
@@ -314,7 +315,7 @@ export function MacroPoliticalRiskPage() {
                 <>
                   <CardHead
                     icon={SlidersHorizontal}
-                    title="Ponderaciones del índice"
+                    title={t("mpr.weightsTitle")}
                     subtitle={weights.direction}
                   />
                   <div className="space-y-2">
@@ -323,7 +324,7 @@ export function MacroPoliticalRiskPage() {
                         key={k}
                         className="flex items-center justify-between gap-3 py-1.5 border-b border-line/60 last:border-0"
                       >
-                        <span className="text-sm text-ink">{DIMENSION_LABELS[k] ?? k}</span>
+                        <span className="text-sm text-ink">{t(`mpr.dims.${k}`, k)}</span>
                         <Chip tone="accent">{Math.round(w * 100)}%</Chip>
                       </div>
                     ))}
@@ -340,8 +341,8 @@ export function MacroPoliticalRiskPage() {
       {cur && (
         <div className="mt-5">
           <AiInsightCard
-            title="Evaluación de riesgo (IA)"
-            subtitle={`${COUNTRY_NAMES[selected] ?? selected} · IRMP ${fmtNum(cur.irmp_score, 1)} · ${band.label}`}
+            title={t("mpr.insightTitle")}
+            subtitle={t("mpr.insightSubtitle", { country: COUNTRY_NAMES[selected] ?? selected, score: fmtNum(cur.irmp_score, 1), band: band.label })}
             icon={ShieldAlert}
             depsKey={`${selected}:${liveInfo.period ?? "fix"}`}
             fetcher={() =>
