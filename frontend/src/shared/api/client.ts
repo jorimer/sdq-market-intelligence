@@ -14,6 +14,10 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // Idioma para las narrativas IA (el backend lo lee vía dependencia global).
+  if (config.headers) {
+    config.headers["X-Lang"] = localStorage.getItem("lang") || "es";
+  }
   return config;
 });
 

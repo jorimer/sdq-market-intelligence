@@ -6,8 +6,31 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from shared.config.settings import settings
+from shared.narrative.lang_context import get_request_lang
 
 logger = logging.getLogger(__name__)
+
+# Directiva que fuerza el idioma de salida. Va al FINAL del prompt (la última
+# instrucción manda), así no hay que reescribir los ~16 templates por idioma:
+# Claude genera nativo en el idioma destino respetando esta orden.
+_LANG_DIRECTIVE = {
+    "en": (
+        "\n\nIMPORTANT: Write your ENTIRE response in English, regardless of any "
+        "language mentioned above. Keep proper nouns, acronyms (IRMP, IAI, IRC, SIB, "
+        "BCRD, NPL, ROA, ROE…) and every figure exactly as given."
+    ),
+    "fr": (
+        "\n\nIMPORTANT : Rédige TOUTE ta réponse en français, quelle que soit la "
+        "langue indiquée ci-dessus. Conserve les noms propres, les sigles (IRMP, IAI, "
+        "IRC, SIB, BCRD, NPL, ROA, ROE…) et tous les chiffres tels quels."
+    ),
+}
+
+
+def _apply_lang(prompt: str, lang: str) -> str:
+    """Anexa la directiva de idioma si no es el default (es)."""
+    directive = _LANG_DIRECTIVE.get(lang)
+    return prompt + directive if directive else prompt
 
 # Prompt templates using SCQA (Situation-Complication-Question-Answer) framework
 TEMPLATES = {
@@ -231,8 +254,8 @@ class NarrativeEngine:
                 logger.warning("anthropic package not installed, using fallback templates")
         return self._client
 
-    def _cache_key(self, context: dict, template: str, mode: str) -> str:
-        content = json.dumps(context, sort_keys=True, default=str) + template + mode
+    def _cache_key(self, context: dict, template: str, mode: str, lang: str) -> str:
+        content = json.dumps(context, sort_keys=True, default=str) + template + mode + lang
         return hashlib.sha256(content.encode()).hexdigest()
 
     def _get_cached(self, key: str) -> Optional[NarrativeResult]:
@@ -270,6 +293,7 @@ class NarrativeEngine:
         context: dict,
         template: str = "executive_summary",
         mode: str = "standard",
+        lang: Optional[str] = None,
     ) -> NarrativeResult:
         """Generate a narrative using Claude AI or fallback templates.
 
@@ -277,14 +301,17 @@ class NarrativeEngine:
             context: Dictionary with data to include in the narrative.
             template: One of the predefined template names.
             mode: 'standard' or 'detailed' for longer outputs.
+            lang: 'es'|'en'|'fr'. If None, uses the request language (X-Lang header
+                via the global dependency), defaulting to 'es'.
 
         Returns:
             NarrativeResult with generated text and metadata.
         """
-        cache_key = self._cache_key(context, template, mode)
+        lang = (lang or get_request_lang() or "es")
+        cache_key = self._cache_key(context, template, mode, lang)
         cached = self._get_cached(cache_key)
         if cached:
-            logger.info("Narrative cache hit for template=%s", template)
+            logger.info("Narrative cache hit for template=%s lang=%s", template, lang)
             return cached
 
         # Try Claude API
@@ -301,7 +328,7 @@ class NarrativeEngine:
             prompt_template = TEMPLATES["executive_summary"]
 
         context_str = json.dumps(context, indent=2, ensure_ascii=False, default=str)
-        prompt = prompt_template.format(context=context_str)
+        prompt = _apply_lang(prompt_template.format(context=context_str), lang)
 
         max_tokens = 2048 if mode == "detailed" else 1024
 

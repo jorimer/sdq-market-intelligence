@@ -2,10 +2,12 @@ import logging
 import os
 import sys
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
+
+from shared.narrative.lang_context import resolve_request_lang
 
 # Log to stdout so platform log collectors (Railway) don't flag INFO as errors.
 logging.basicConfig(
@@ -18,6 +20,8 @@ app = FastAPI(
     title="SDQ Market Intelligence",
     description="Plataforma de Inteligencia Financiera Integral",
     version="1.0.0",
+    # Dependencia global: fija el idioma de la request (X-Lang) para las narrativas IA.
+    dependencies=[Depends(resolve_request_lang)],
 )
 
 app.add_middleware(
