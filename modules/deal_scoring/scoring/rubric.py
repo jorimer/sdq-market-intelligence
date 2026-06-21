@@ -84,8 +84,10 @@ def compute_deal_score(features: Dict[str, Any], anchors: Dict[str, Optional[flo
     Componente faltante (analista y eje ausentes) → se omite y su peso se redistribuye
     proporcionalmente entre los presentes (no se penaliza por dato faltante)."""
     def g(k):
+        # Señales de analista 0-100: se acotan al rango para que el score sea siempre
+        # un índice honesto 0-100 (los anchors y stage/momentum ya vienen acotados).
         v = features.get(k)
-        return float(v) if isinstance(v, (int, float)) else None
+        return max(0.0, min(100.0, float(v))) if isinstance(v, (int, float)) else None
 
     # Cada componente: (valor 0-100 | None, origen)
     comps: Dict[str, Dict[str, Any]] = {}

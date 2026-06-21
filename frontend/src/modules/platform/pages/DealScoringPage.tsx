@@ -115,10 +115,10 @@ export function DealScoringPage() {
             <div className="col-span-2 border-t border-line pt-3 mt-1">
               <p className="text-xs text-muted mb-2">Señales de analista (0–100, opcionales)</p>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Track record promotor"><input className="field w-full" type="number" value={form.promoter_track_record} onChange={set("promoter_track_record")} placeholder="—" /></Field>
-                <Field label="Calidad financiera"><input className="field w-full" type="number" value={form.financial_quality} onChange={set("financial_quality")} placeholder="—" /></Field>
-                <Field label="Validación de mercado" hint="o IAI"><input className="field w-full" type="number" value={form.market_validation} onChange={set("market_validation")} placeholder="ancla a IAI" /></Field>
-                <Field label="Prep. regulatoria" hint="o IRMP"><input className="field w-full" type="number" value={form.regulatory_readiness} onChange={set("regulatory_readiness")} placeholder="ancla a IRMP" /></Field>
+                <Field label="Track record promotor"><input className="field w-full" type="number" min={0} max={100} value={form.promoter_track_record} onChange={set("promoter_track_record")} placeholder="—" /></Field>
+                <Field label="Calidad financiera"><input className="field w-full" type="number" min={0} max={100} value={form.financial_quality} onChange={set("financial_quality")} placeholder="—" /></Field>
+                <Field label="Validación de mercado" hint="o IAI"><input className="field w-full" type="number" min={0} max={100} value={form.market_validation} onChange={set("market_validation")} placeholder="ancla a IAI" /></Field>
+                <Field label="Prep. regulatoria" hint="o IRMP"><input className="field w-full" type="number" min={0} max={100} value={form.regulatory_readiness} onChange={set("regulatory_readiness")} placeholder="ancla a IRMP" /></Field>
               </div>
             </div>
           </div>

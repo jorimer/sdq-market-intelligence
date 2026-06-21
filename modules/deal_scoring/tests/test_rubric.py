@@ -44,6 +44,16 @@ def test_weights_redistribute_when_components_missing():
     assert r["confidence"] == "baja"  # solo 1 señal de analista
 
 
+def test_clamps_out_of_range_analyst_inputs():
+    """Inputs fuera de 0-100 se acotan → el score nunca sale del rango 0-100."""
+    hi = compute_deal_score({"promoter_track_record": 150, "deal_stage": "legal"}, {})
+    lo = compute_deal_score({"promoter_track_record": -50, "deal_stage": "initial"}, {})
+    assert 0.0 <= hi["score"] <= 100.0
+    assert 0.0 <= lo["score"] <= 100.0
+    promoter = next(f for f in hi["key_factors"] if f["factor"] == "promoter")
+    assert promoter["value"] == 100.0  # 150 → clamp 100
+
+
 def test_stage_and_momentum_monotonic():
     base = {"promoter_track_record": 50, "financial_quality": 50,
             "market_validation": 50, "regulatory_readiness": 50}
