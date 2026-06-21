@@ -45,6 +45,17 @@ TEMPLATES = {
         "Compara métricas clave, identifica fortalezas y debilidades relativas, "
         "y posiciona en el contexto del sector. Formato SCQA. Máximo 500 palabras."
     ),
+    "cross_compare": (
+        "Eres un analista de benchmarking de inteligencia económica de República "
+        "Dominicana y el Caribe.\n\n"
+        "Compara los elementos de este contexto (cada uno con su score 0-100 y su "
+        "desglose por dimensión):\n{context}\n\n"
+        "El campo 'eje' indica el índice comparado. Contrasta los scores generales y "
+        "por dimensión; identifica fortalezas y debilidades RELATIVAS entre los "
+        "elementos (quién lidera y en qué dimensión, quién queda rezagado y por qué) "
+        "y cierra con una lectura accionable. Formato SCQA. Usa SOLO las cifras del "
+        "contexto, no inventes ninguna. Máximo 450 palabras."
+    ),
     "sector_outlook": (
         "Eres el economista jefe de una firma de análisis financiero en República Dominicana.\n\n"
         "Genera una perspectiva sectorial basada en:\n{context}\n\n"

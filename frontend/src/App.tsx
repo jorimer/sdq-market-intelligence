@@ -40,6 +40,7 @@ import { EsgClimatePage } from "@/modules/esg-climate/pages/EsgClimatePage";
 // Plataforma
 import { OverviewPage } from "@/modules/platform/pages/OverviewPage";
 import { MetodologiaPage } from "@/modules/platform/pages/MetodologiaPage";
+import { ComparadorPage } from "@/modules/platform/pages/ComparadorPage";
 import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 
 export default function App() {
@@ -105,7 +106,7 @@ export default function App() {
           <Route path="/overview" element={<OverviewPage />} />
           <Route
             path="/compare"
-            element={<PlaceholderPage title="Comparador" sub="Comparación lado a lado de entidades, sectores y países." />}
+            element={<ComparadorPage />}
           />
           <Route path="/methodology" element={<MetodologiaPage />} />
           <Route path="/settings" element={<ConfiguracionPage />} />
