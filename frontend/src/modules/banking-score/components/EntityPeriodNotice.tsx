@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { CalendarClock } from "lucide-react";
 import { useApp, dateToPeriod } from "@/shared/context/AppContext";
 import { useAuth } from "@/shared/auth/AuthContext";
@@ -79,17 +81,22 @@ export function evaluatePeriod(
   return { available: false, kind: "absent", latestLabel };
 }
 
-function message(verdict: Exclude<PeriodVerdict, { available: true }>, globalLabel: string, entityName?: string): string {
-  const who = entityName ? entityName : "Esta entidad";
+function message(
+  verdict: Exclude<PeriodVerdict, { available: true }>,
+  globalLabel: string,
+  t: TFunction,
+  entityName?: string,
+): string {
+  const who = entityName ? entityName : t("banking.thisEntity");
   switch (verdict.kind) {
     case "none":
-      return `${who} no tiene datos cargados todavía.`;
+      return t("banking.periodNoneMsg", { who });
     case "annual":
-      return `${who} reporta de forma anual (cierre de diciembre); no hay datos para ${globalLabel}.`;
+      return t("banking.periodAnnualMsg", { who, period: globalLabel });
     case "pending":
-      return `Los datos de ${globalLabel} aún no se han cargado para ${who.toLowerCase() === "esta entidad" ? "esta entidad" : who} (otras entidades sí los tienen).`;
+      return t("banking.periodPendingMsg", { who, period: globalLabel });
     case "absent":
-      return `Sin datos para ${globalLabel} en el sistema.`;
+      return t("banking.periodAbsentMsg", { period: globalLabel });
   }
 }
 
@@ -107,25 +114,26 @@ export function PeriodNoticeBox({
 }) {
   const { period, setPeriod } = useApp();
   const { hasRole } = useAuth();
+  const { t } = useTranslation();
   if (verdict.available) return null;
 
   return (
     <div className={`rounded-[10px] bg-warn-soft text-warn px-3 py-2.5 text-sm flex flex-wrap items-center gap-x-3 gap-y-1.5 ${className}`}>
       <span className="flex items-center gap-2 min-w-0">
         <CalendarClock className="w-4 h-4 shrink-0" />
-        <span>{message(verdict, period, entityName)}</span>
+        <span>{message(verdict, period, t, entityName)}</span>
       </span>
       {verdict.latestLabel && (
         <button
           onClick={() => setPeriod(verdict.latestLabel!)}
           className="underline font-medium hover:opacity-80 shrink-0"
         >
-          Ver {verdict.latestLabel}
+          {t("banking.periodViewLabel", { label: verdict.latestLabel })}
         </button>
       )}
       {verdict.kind === "pending" && hasRole("admin") && (
         <Link to="/datos/banca" className="underline font-medium hover:opacity-80 shrink-0">
-          Cargar datos
+          {t("banking.periodLoadData")}
         </Link>
       )}
     </div>
