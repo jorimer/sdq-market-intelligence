@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Search, Building2, ChevronDown } from "lucide-react";
 import { listBanks, BankRef } from "../api";
 import { ENTITY_TYPES } from "../entityTypes";
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function BankSelector({ value, onChange, placeholder }: Props) {
+  const { t } = useTranslation();
   const [banks, setBanks] = useState<BankRef[]>([]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState(""); // entity_type ("área")
@@ -36,7 +38,7 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
       >
         <Building2 className="w-4 h-4 text-faint shrink-0" />
         <span className={`min-w-0 flex-1 truncate ${selectedName ? "text-ink" : "text-faint"}`}>
-          {selectedName || placeholder || "Seleccionar entidad"}
+          {selectedName || placeholder || t("banking.selectEntity")}
         </span>
         <ChevronDown className="w-4 h-4 text-faint shrink-0" />
       </button>
@@ -49,9 +51,9 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
               onChange={(e) => setTypeFilter(e.target.value)}
               className="field text-sm py-1.5"
             >
-              {ENTITY_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.value === "" ? "Todos los tipos" : t.label}
+              {ENTITY_TYPES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.value === "" ? t("banking.allTypes") : t(`banking.entityType.${opt.value}`, opt.label)}
                 </option>
               ))}
             </select>
@@ -61,7 +63,7 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full text-sm outline-none bg-transparent text-ink py-1"
-                placeholder="Buscar…"
+                placeholder={t("banking.searchPlaceholder")}
                 autoFocus
               />
             </div>
@@ -84,7 +86,7 @@ export function BankSelector({ value, onChange, placeholder }: Props) {
               </li>
             ))}
             {filtered.length === 0 && (
-              <li className="px-4 py-3 text-sm text-faint text-center">Sin resultados</li>
+              <li className="px-4 py-3 text-sm text-faint text-center">{t("banking.noResults")}</li>
             )}
           </ul>
         </div>

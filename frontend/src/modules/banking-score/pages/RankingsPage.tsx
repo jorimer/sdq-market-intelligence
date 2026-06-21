@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
 import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
@@ -6,16 +7,7 @@ import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
 import { PageHead, Card, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
-
-const ENTITY_TYPES = [
-  { value: "", label: "Todos los tipos" },
-  { value: "banca_multiple", label: "Banca múltiple" },
-  { value: "aap", label: "AAyP" },
-  { value: "banco_ahorro_credito", label: "Ahorro y crédito" },
-  { value: "corporacion_credito", label: "Corp. de crédito" },
-  { value: "cambiaria", label: "Cambiaria" },
-  { value: "fiduciaria", label: "Fiduciaria" },
-];
+import { ENTITY_TYPES } from "../entityTypes";
 
 interface Rank {
   rank: number;
@@ -28,6 +20,7 @@ interface Rank {
 }
 
 export function RankingsPage() {
+  const { t } = useTranslation();
   const { period } = useApp();
   const periodEnd = periodToDate(period);
   const [rankings, setRankings] = useState<Rank[]>([]);
@@ -70,18 +63,18 @@ export function RankingsPage() {
   return (
     <div>
       <PageHead
-        eyebrow="SIB"
-        title="Ranking de entidades"
-        sub="Entidades financieras ordenadas por score SDQ. Filtra por tipo de entidad supervisada."
+        eyebrow={t("banking.rankEyebrow")}
+        title={t("banking.rankTitle")}
+        sub={t("banking.rankSub")}
         right={
           <select
             value={entityType}
             onChange={(e) => setEntityType(e.target.value)}
             className="field !w-auto"
-            title="Tipo de entidad"
+            title={t("banking.rankTypeSelect")}
           >
-            {ENTITY_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
+            {ENTITY_TYPES.map((opt) => (
+              <option key={opt.value} value={opt.value}>{t(`banking.entityType.${opt.value || "all"}`, opt.label)}</option>
             ))}
           </select>
         }
@@ -96,13 +89,12 @@ export function RankingsPage() {
           </div>
         </Card>
       ) : rankings.length === 0 ? (
-        <StateBlock kind="empty" message="No hay ratings para este tipo de entidad." />
+        <StateBlock kind="empty" message={t("banking.rankEmpty")} />
       ) : (
         <Card>
           {latestFallback && (
             <p className="text-xs text-muted mb-3">
-              No hay datos en el período seleccionado para este tipo (p. ej. las
-              fiduciarias reportan anualmente). Mostrando el <span className="text-body font-medium">último rating disponible</span> por entidad.
+              {t("banking.rankFallbackPrefix")}<span className="text-body font-medium">{t("banking.rankFallbackBold")}</span>{t("banking.rankFallbackSuffix")}
             </p>
           )}
           <div className="overflow-x-auto">
@@ -110,10 +102,10 @@ export function RankingsPage() {
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-line">
                   <th className="py-2 px-2 font-medium">#</th>
-                  <th className="py-2 px-2 font-medium">Entidad</th>
-                  <th className="py-2 px-2 font-medium text-right">Score</th>
-                  <th className="py-2 px-2 font-medium text-center">Rating</th>
-                  <th className="py-2 px-2 font-medium text-right">Período</th>
+                  <th className="py-2 px-2 font-medium">{t("banking.rankColEntity")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{t("banking.rankColScore")}</th>
+                  <th className="py-2 px-2 font-medium text-center">{t("banking.rankColRating")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{t("banking.rankColPeriod")}</th>
                   <th className="w-8" />
                 </tr>
               </thead>
