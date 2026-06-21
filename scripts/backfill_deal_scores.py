@@ -81,13 +81,14 @@ def _parse_bool(s):
     return None
 
 
-def _parse_int(s):
+def _parse_int(s, lo=0, hi=100):
+    """Entero acotado a [lo, hi]. Default 0-100 (escala de scores de analista)."""
     s = str(s).strip()
     if not s:
         return None
     v = int(float(s))
-    if not 0 <= v <= 100:
-        raise ValueError(f"score fuera de 0-100: {v}")
+    if not lo <= v <= hi:
+        raise ValueError(f"valor fuera de {lo}-{hi}: {v}")
     return v
 
 
@@ -110,11 +111,15 @@ def import_csv(path: str) -> int:
                     print(f"  ⚠ no existe en DB, salto: {name}")
                     continue
                 changed = False
-                for c in SCORE_COLS + ["days_since_first_contact"]:
-                    v = _parse_int(row.get(c, ""))
+                for c in SCORE_COLS:
+                    v = _parse_int(row.get(c, ""))  # scores 0-100
                     if v is not None:
                         setattr(d, c, v)
                         changed = True
+                days = _parse_int(row.get("days_since_first_contact", ""), hi=100_000)
+                if days is not None:
+                    d.days_since_first_contact = days
+                    changed = True
                 for c, ttype in (("deal_stage", DealStage),
                                  ("label_confidence", LabelConfidence)):
                     raw = row.get(c, "").strip()
@@ -180,6 +185,9 @@ def interactive() -> int:
         db.commit()
         print(f"\nActualizadas {updated} oportunidades.")
         return updated
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
