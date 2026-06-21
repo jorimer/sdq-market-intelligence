@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Users, ListOrdered, BarChart3, FileText } from "lucide-react";
 import {
   PageHead,
@@ -25,7 +27,7 @@ import {
   IdmDataset,
   OnePublication,
 } from "../api";
-import { REGION_NAMES, DIM_LABELS, IDM_DIM_VARS } from "../data";
+import { REGION_NAMES, IDM_DIM_VARS } from "../data";
 import { ValidationTab } from "../components/ValidationTab";
 
 type Status = "loading" | "error" | "ready";
@@ -34,16 +36,18 @@ type Status = "loading" | "error" | "ready";
 function dimTag(
   sources: Record<string, string> | undefined,
   dimKey: string,
+  t: TFunction,
 ): DimensionRow["tag"] {
   const vars = IDM_DIM_VARS[dimKey] ?? [];
   if (!sources || vars.length === 0) return undefined;
   const live = vars.filter((v) => sources[v] === "live").length;
-  if (live === 0) return { text: "rúbrica", ok: false };
-  if (live === vars.length) return { text: "en vivo", ok: true };
-  return { text: `${live}/${vars.length} en vivo`, ok: true };
+  if (live === 0) return { text: t("widgets.tagRubric"), ok: false };
+  if (live === vars.length) return { text: t("widgets.tagLive"), ok: true };
+  return { text: t("widgets.tagPartialLive", { n: live, total: vars.length }), ok: true };
 }
 
 export function SocialDevPage() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [data, setData] = useState<IndicatorsResult | null>(null);
   const [ds, setDs] = useState<IdmDataset | null>(null);
@@ -83,9 +87,9 @@ export function SocialDevPage() {
 
   const head = (
     <PageHead
-      eyebrow="ONE · WDI · rúbrica"
-      title="Social & desarrollo"
-      sub="Índice de desarrollo (IDM) por las 10 regiones de desarrollo. Pobreza de la ONE; salud del WDI; el resto, rúbrica declarada. Se reporta la distribución, no solo el promedio."
+      eyebrow={t("social.eyebrow")}
+      title={t("social.title")}
+      sub={t("social.sub")}
     />
   );
 
@@ -96,8 +100,8 @@ export function SocialDevPage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudo cargar el índice de desarrollo. Reintenta."
-          action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
+          message={t("social.errorLoad")}
+          action={<button onClick={load} className="btn btn-ghost">{t("common_retry")}</button>}
         />
       </div>
     );
@@ -107,49 +111,47 @@ export function SocialDevPage() {
     return (
       <div>
         {head}
-        <StateBlock
-          kind="empty"
-          message="Aún no hay snapshot del IDM. Corre la operación «Backfill del índice de desarrollo (IDM)» en la Consola de Operación."
-        />
+        <StateBlock kind="empty" message={t("social.emptyNoSnapshot")} />
       </div>
     );
 
   const dist = data!.distribution;
   const cur = entities.find((e) => e.entity_key === selected);
   const sources = ds?.sources[selected];
-  const band = bandFor(cur?.development_score);
+  const band = bandFor(cur?.development_score, t);
   const ranking = [...entities].sort((a, b) => b.development_score - a.development_score);
 
   const rows: DimensionRow[] = cur
     ? Object.entries(cur.breakdown).map(([key, d]) => ({
         key,
-        label: DIM_LABELS[key] ?? key,
+        label: t(`social.dims.${key}`, key),
         score: d.score,
         weight: d.weight,
         contribution: d.contribution,
-        tag: dimTag(sources, key),
+        tag: dimTag(sources, key, t),
       }))
     : [];
 
   const lo = dist.min ?? 0;
   const hi = dist.max ?? 100;
   const span = Math.max(1, hi - lo);
+  const dimCount = Object.keys(IDM_DIM_VARS).length;
   const liveDims = sources
-    ? Object.keys(DIM_LABELS).filter((k) => dimTag(sources, k)?.ok).length
+    ? Object.keys(IDM_DIM_VARS).filter((k) => dimTag(sources, k, t)?.ok).length
     : 0;
 
   return (
     <div>
       <PageHead
-        eyebrow="ONE · WDI · rúbrica"
-        title="Social & desarrollo"
-        sub="Índice de desarrollo (IDM) por las 10 regiones de desarrollo. Pobreza de la ONE; salud del WDI; el resto, rúbrica declarada. Se reporta la distribución, no solo el promedio."
+        eyebrow={t("social.eyebrow")}
+        title={t("social.title")}
+        sub={t("social.sub")}
         right={
           <select
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
             className="field !w-auto"
-            title="Región"
+            title={t("social.regionSelect")}
           >
             {entities.map((e) => (
               <option key={e.entity_key} value={e.entity_key}>{nameOf(e.entity_key)}</option>
@@ -160,10 +162,10 @@ export function SocialDevPage() {
 
       <div className="flex flex-wrap items-center gap-2 mb-4 -mt-2">
         <Chip tone={ds?.has_live ? "ok" : "muted"}>
-          {liveDims}/{Object.keys(DIM_LABELS).length} dimensiones en vivo
+          {t("social.liveDimsChip", { live: liveDims, total: dimCount })}
         </Chip>
         {data!.period && <Chip tone="muted">{data!.period}</Chip>}
-        <Chip tone="muted">{entities.length} regiones</Chip>
+        <Chip tone="muted">{t("social.regionsCount", { n: entities.length })}</Chip>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
@@ -172,7 +174,7 @@ export function SocialDevPage() {
           <div className="text-xs text-muted mb-3 w-full truncate">{nameOf(selected)}</div>
           <Gauge score={cur?.development_score} band={band} />
           <div className="mt-3"><BandBadge band={band} /></div>
-          <div className="text-xs text-muted mt-3">{dist.n} regiones · IDM</div>
+          <div className="text-xs text-muted mt-3">{t("social.heroCount", { n: dist.n })}</div>
         </Card>
 
         {/* Tabs */}
@@ -180,11 +182,11 @@ export function SocialDevPage() {
           <Card>
             <Tabs
               tabs={[
-                { id: "distribucion", label: "Distribución" },
-                { id: "desglose", label: "Desglose" },
-                { id: "ranking", label: "Ranking" },
-                { id: "validacion", label: "Validación" },
-                { id: "estudios", label: `Estudios ONE${pubs.length ? ` (${pubs.length})` : ""}` },
+                { id: "distribucion", label: t("social.tabDistribution") },
+                { id: "desglose", label: t("social.tabBreakdown") },
+                { id: "ranking", label: t("social.tabRanking") },
+                { id: "validacion", label: t("social.tabValidation") },
+                { id: "estudios", label: pubs.length ? t("social.tabStudiesN", { n: pubs.length }) : t("social.tabStudies") },
               ]}
               active={tab}
               onChange={setTab}
@@ -194,14 +196,14 @@ export function SocialDevPage() {
                 <>
                   <CardHead
                     icon={BarChart3}
-                    title="Distribución regional"
-                    subtitle="Promedio Y dispersión (distribución > promedio)"
+                    title={t("social.distTitle")}
+                    subtitle={t("social.distSubtitle")}
                   />
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                    <StatTile label="Promedio" value={fmtNum(dist.mean, 1)} />
-                    <StatTile label="Mínimo" value={fmtNum(dist.min, 1)} />
-                    <StatTile label="Máximo" value={fmtNum(dist.max, 1)} />
-                    <StatTile label="Amplitud" value={fmtNum(dist.spread, 1)} />
+                    <StatTile label={t("social.statMean")} value={fmtNum(dist.mean, 1)} />
+                    <StatTile label={t("social.statMin")} value={fmtNum(dist.min, 1)} />
+                    <StatTile label={t("social.statMax")} value={fmtNum(dist.max, 1)} />
+                    <StatTile label={t("social.statSpread")} value={fmtNum(dist.spread, 1)} />
                   </div>
                   <div className="rounded-[10px] bg-surface2 p-4">
                     <div className="relative h-10">
@@ -220,7 +222,7 @@ export function SocialDevPage() {
                     </div>
                     <div className="flex justify-between mono text-[11px] text-muted mt-1">
                       <span>{fmtNum(dist.min, 0)}</span>
-                      <span>coef. variación {dist.cv != null ? fmtNum(dist.cv * 100, 1) + "%" : "—"}</span>
+                      <span>{t("social.cv", { v: dist.cv != null ? fmtNum(dist.cv * 100, 1) + "%" : "—" })}</span>
                       <span>{fmtNum(dist.max, 0)}</span>
                     </div>
                   </div>
@@ -231,8 +233,8 @@ export function SocialDevPage() {
                 <>
                   <CardHead
                     icon={Users}
-                    title="Dimensiones del desarrollo"
-                    subtitle={`${nameOf(selected)} · ponderadas · badge real-vs-rúbrica`}
+                    title={t("social.breakdownTitle")}
+                    subtitle={t("social.breakdownSubtitle", { region: nameOf(selected) })}
                   />
                   <DimensionBreakdown rows={rows} />
                 </>
@@ -240,19 +242,19 @@ export function SocialDevPage() {
 
               {tab === "ranking" && (
                 <>
-                  <CardHead icon={ListOrdered} title="Ranking regional" subtitle="Índice de desarrollo" />
+                  <CardHead icon={ListOrdered} title={t("social.rankingTitle")} subtitle={t("social.rankingSubtitle")} />
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted border-b border-line">
                         <th className="py-2 px-1 font-medium">#</th>
-                        <th className="py-2 px-1 font-medium">Región</th>
+                        <th className="py-2 px-1 font-medium">{t("social.colRegion")}</th>
                         <th className="py-2 px-1 font-medium text-right">IDM</th>
-                        <th className="py-2 px-1 font-medium">Banda</th>
+                        <th className="py-2 px-1 font-medium">{t("social.colBand")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ranking.map((e, i) => {
-                        const b = bandFor(e.development_score);
+                        const b = bandFor(e.development_score, t);
                         return (
                           <tr
                             key={e.entity_key}
@@ -280,14 +282,11 @@ export function SocialDevPage() {
                 <>
                   <CardHead
                     icon={FileText}
-                    title="Estudios de la ONE"
-                    subtitle="Censo, ENHOGAR, Pobreza, Vitales, Anuario · digest de IA"
+                    title={t("social.studiesTitle")}
+                    subtitle={t("social.studiesSubtitle")}
                   />
                   {pubs.length === 0 ? (
-                    <p className="text-sm text-muted">
-                      Sin estudios ingeridos aún. Corre la operación «Ingerir estudios de la ONE»
-                      en la Consola de Operación.
-                    </p>
+                    <p className="text-sm text-muted">{t("social.studiesEmpty")}</p>
                   ) : (
                     <div className="space-y-3">
                       {pubs.map((p) => (
@@ -303,7 +302,7 @@ export function SocialDevPage() {
                               rel="noreferrer"
                               className="shrink-0 text-xs text-accent hover:underline"
                             >
-                              ver en ONE ↗
+                              {t("social.studyLink")}
                             </a>
                           </div>
                           {p.resumen && <p className="text-xs text-body mt-2">{p.resumen}</p>}
@@ -330,8 +329,8 @@ export function SocialDevPage() {
 
       <div className="mt-5">
         <AiInsightCard
-          title="Perspectiva del desarrollo (IA)"
-          subtitle={`${nameOf(selected)} · IDM y desigualdad · SCQA`}
+          title={t("social.insightTitle")}
+          subtitle={t("social.insightSubtitle", { region: nameOf(selected) })}
           depsKey={selected}
           fetcher={() => getRegionInsight(selected)}
         />
