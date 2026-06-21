@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ShieldCheck, RefreshCw, AlertTriangle, TrendingDown } from "lucide-react";
 import { Card, CardHead, StatTile, StateBlock, Chip } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
@@ -41,6 +42,7 @@ function BandCurve({ m }: { m: BacktestMetrics }) {
 }
 
 export function ValidationTab() {
+  const { t } = useTranslation();
   const [report, setReport] = useState<TradeBacktestReport | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState(false);
@@ -107,20 +109,17 @@ export function ValidationTab() {
   const regenBtn = (
     <button onClick={regenerate} disabled={busy} className="btn btn-ghost !py-1.5">
       <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
-      {busy ? "Generando…" : "Regenerar"}
+      {busy ? t("trade.valRegenBusy") : t("trade.valRegen")}
     </button>
   );
 
-  if (status === "loading") return <StateBlock kind="loading" message="Cargando backtest…" />;
-  if (status === "error") return <StateBlock kind="error" message="No se pudo cargar el backtest." />;
+  if (status === "loading") return <StateBlock kind="loading" message={t("trade.valLoading")} />;
+  if (status === "error") return <StateBlock kind="error" message={t("trade.valError")} />;
   if (!report?.has_report || !report.export_collapse) {
     return (
       <div>
         <div className="flex justify-end mb-3">{regenBtn}</div>
-        <StateBlock
-          kind="empty"
-          message="El backtest aún no se ha calculado. Usa «Regenerar» para reconstruir el panel y validarlo."
-        />
+        <StateBlock kind="empty" message={t("trade.valEmpty")} />
       </div>
     );
   }
@@ -135,7 +134,7 @@ export function ValidationTab() {
         <AlertTriangle className="w-4 h-4 text-warn shrink-0 mt-0.5" />
         <p className="text-xs text-body">
           <span className="font-semibold text-ink">
-            Validación preliminar y direccional, no grado-Basilea.
+            {t("trade.valDisclaimerStrong")}
           </span>{" "}
           {report.disclaimer}
         </p>
@@ -143,53 +142,48 @@ export function ValidationTab() {
 
       <div className="flex items-center justify-between mb-3 gap-3">
         <span className="text-xs text-muted">
-          Outcome primario: <span className="text-body">colapso de ingresos de exportación</span>{" "}
-          (caída ≥10% interanual). Panel amplio LatAm+Caribe ({report.n_countries} países); el
-          producto es RD.
+          {t("trade.valOutcomeLabel")} <span className="text-body">{t("trade.valOutcomeValue")}</span>
+          {t("trade.valOutcomeRest", { n: report.n_countries })}
           {report.generated_at && <> · {fmtDate(report.generated_at)}</>}
         </span>
         {regenBtn}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <StatTile label="Gini (colapso export.)" value={prim.gini == null ? "N/D" : fmtNum(prim.gini, 3)} />
+        <StatTile label={t("trade.valStatGini")} value={prim.gini == null ? t("trade.na") : fmtNum(prim.gini, 3)} />
         <StatTile
-          label="IC 95%"
+          label={t("trade.valStatCi")}
           value={prim.gini_ci?.[0] != null ? `${fmtNum(prim.gini_ci[0], 2)} – ${fmtNum(prim.gini_ci[1], 2)}` : "—"}
         />
         <StatTile
-          label="Observaciones"
-          value={`${fmtNum(prim.n_observations, 0)} (${report.n_countries} países)`}
+          label={t("trade.valStatObs")}
+          value={t("trade.valObsValue", { n: fmtNum(prim.n_observations, 0), countries: report.n_countries })}
         />
-        <StatTile label="Eventos" value={`${prim.n_events} (${fmtPct(prim.event_rate)})`} />
+        <StatTile label={t("trade.valStatEvents")} value={`${prim.n_events} (${fmtPct(prim.event_rate)})`} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHead
             icon={ShieldCheck}
-            title="Tasa de colapso de exportaciones por banda de resiliencia"
-            subtitle="Debería subir de «Fuerte» a «Débil» si la resiliencia discrimina"
+            title={t("trade.valCollapseTitle")}
+            subtitle={t("trade.valCollapseSubtitle")}
             right={
               <Chip tone={prim.monotonic ? "ok" : "warn"}>
-                {prim.monotonic ? "Monótona" : "No monótona"}
+                {prim.monotonic ? t("trade.valMonotonic") : t("trade.valNotMonotonic")}
               </Chip>
             }
           />
           <BandCurve m={prim} />
           {prim.gini != null && prim.gini >= 0.2 ? (
             <p className="mt-3 text-xs text-muted">
-              El intervalo de confianza{" "}
-              {prim.gini_ci && (prim.gini_ci[0] ?? 0) > 0 ? "excluye el cero" : "es estrecho"}: la
-              resiliencia <span className="font-medium">discrimina</span> el colapso exportador que
-              es el constructo que apunta — estructura comercial en T → shock de nivel futuro (no
-              circular).
+              {t("trade.valDiscPrefix")}
+              {prim.gini_ci && (prim.gini_ci[0] ?? 0) > 0 ? t("trade.valCiExcludes") : t("trade.valCiNarrow")}
+              {t("trade.valDiscMid")}<span className="font-medium">{t("trade.valDiscBold")}</span>{t("trade.valDiscSuffix")}
             </p>
           ) : (
             <p className="mt-3 text-xs text-muted">
-              El intervalo de confianza se acerca a cero: discriminación{" "}
-              <span className="font-medium">débil</span>. Honestidad sobre la fuerza de la señal, no
-              maquillaje.
+              {t("trade.valDiscWeakPrefix")}<span className="font-medium">{t("trade.valDiscWeakBold")}</span>{t("trade.valDiscWeakSuffix")}
             </p>
           )}
         </Card>
@@ -197,20 +191,20 @@ export function ValidationTab() {
         <Card>
           <CardHead
             icon={TrendingDown}
-            title="Contraste independiente: shock macro externo"
-            subtitle="Cuenta corriente / reservas / recesión (WDI)"
+            title={t("trade.valContrastTitle")}
+            subtitle={t("trade.valContrastSubtitle")}
           />
           {contrast ? (
             <>
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
-                  <div className="text-xs text-muted">Gini</div>
+                  <div className="text-xs text-muted">{t("trade.valContrastGini")}</div>
                   <div className="text-2xl font-display text-ink tabular-nums">
                     {contrast.gini == null ? "—" : fmtNum(contrast.gini, 3)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted">IC 95%</div>
+                  <div className="text-xs text-muted">{t("trade.valContrastCi")}</div>
                   <div className="text-sm font-display text-body tabular-nums mt-1.5">
                     {contrast.gini_ci?.[0] != null
                       ? `${fmtNum(contrast.gini_ci[0], 2)} – ${fmtNum(contrast.gini_ci[1], 2)}`
@@ -220,14 +214,12 @@ export function ValidationTab() {
               </div>
               <BandCurve m={contrast} />
               <p className="mt-3 pt-3 border-t border-line/60 text-[11px] text-faint">
-                Fuente independiente (WDI). El índice <span className="font-medium">no</span> lo
-                discrimina: el distress macro amplio lo dominan shocks comunes globales, no la
-                estructura comercial. {contrast.n_events} eventos en{" "}
-                {fmtNum(contrast.n_observations, 0)} obs.
+                {t("trade.valContrastNotePrefix")}<span className="font-medium">{t("trade.valContrastNoBold")}</span>
+                {t("trade.valContrastNoteSuffix", { events: contrast.n_events, obs: fmtNum(contrast.n_observations, 0) })}
               </p>
             </>
           ) : (
-            <p className="text-xs text-muted">Sin datos de contraste.</p>
+            <p className="text-xs text-muted">{t("trade.valContrastEmpty")}</p>
           )}
         </Card>
       </div>
