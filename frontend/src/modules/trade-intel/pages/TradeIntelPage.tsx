@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Boxes } from "lucide-react";
 import {
   PageHead,
@@ -22,6 +23,7 @@ import { PartnersTab } from "../components/PartnersTab";
 type Status = "loading" | "error" | "ready";
 
 export function TradeIntelPage() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [score, setScore] = useState<TradeScore | null>(null);
   const [tab, setTab] = useState("panorama");
@@ -42,9 +44,9 @@ export function TradeIntelPage() {
 
   const head = (
     <PageHead
-      eyebrow="DGA · Aduanas"
-      title="Comercio exterior"
-      sub="Resiliencia comercial: diversificación y dependencia, no volumen. Datos de la DGA (Aduanas), por capítulo arancelario."
+      eyebrow={t("trade.eyebrow")}
+      title={t("trade.title")}
+      sub={t("trade.subDefault")}
     />
   );
 
@@ -55,33 +57,29 @@ export function TradeIntelPage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudo cargar el índice de comercio. Reintenta."
-          action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
+          message={t("trade.errorLoad")}
+          action={<button onClick={load} className="btn btn-ghost">{t("common_retry")}</button>}
         />
       </div>
     );
 
   const s = score!;
-  const band = s.has_score ? bandFor(s.resilience_score) : null;
+  const band = s.has_score ? bandFor(s.resilience_score, t) : null;
 
   return (
     <div>
       <PageHead
-        eyebrow="DGA · Aduanas"
-        title="Comercio exterior"
-        sub={
-          s.has_score
-            ? `Resiliencia comercial por capítulo arancelario (DGA). Período ${s.period ?? "—"}.`
-            : "Resiliencia comercial: diversificación y dependencia, no volumen."
-        }
+        eyebrow={t("trade.eyebrow")}
+        title={t("trade.title")}
+        sub={s.has_score ? t("trade.subScored", { period: s.period ?? "—" }) : t("trade.subDefault")}
       />
 
       <Card className="mb-5">
         <Tabs
           tabs={[
-            { id: "panorama", label: "Panorama" },
-            { id: "socios", label: "Socios" },
-            { id: "validacion", label: "Validación" },
+            { id: "panorama", label: t("trade.tabPanorama") },
+            { id: "socios", label: t("trade.tabPartners") },
+            { id: "validacion", label: t("trade.tabValidation") },
           ]}
           active={tab}
           onChange={setTab}
@@ -93,10 +91,7 @@ export function TradeIntelPage() {
       {tab === "validacion" && <ValidationTab />}
 
       {tab === "panorama" && !s.has_score && (
-        <StateBlock
-          kind="empty"
-          message="Aún no hay datos de comercio. Corre la operación «Sincronizar comercio (Aduanas/DGA)» en la Consola de Operación para ingerir las estadísticas de comercio exterior."
-        />
+        <StateBlock kind="empty" message={t("trade.emptyNoData")} />
       )}
 
       {tab === "panorama" && s.has_score && band && (
@@ -105,7 +100,7 @@ export function TradeIntelPage() {
             {/* Hero */}
             <Card className="lg:col-span-1 flex flex-col items-center text-center">
               <div className="mono text-[10px] uppercase tracking-[0.16em] text-accent mb-2">
-                Índice de resiliencia
+                {t("trade.resilienceIndex")}
               </div>
               <Gauge score={s.resilience_score} band={band} />
               <div className="mt-3">
@@ -113,13 +108,13 @@ export function TradeIntelPage() {
               </div>
               <div className="grid grid-cols-2 gap-3 w-full mt-5">
                 <div className="rounded-[10px] bg-surface2 p-3">
-                  <div className="text-[11px] text-muted">Diversificación</div>
+                  <div className="text-[11px] text-muted">{t("trade.diversification")}</div>
                   <div className="font-display text-lg font-extrabold text-ink mono mt-0.5">
                     {fmtNum(s.export_diversification, 1)}
                   </div>
                 </div>
                 <div className="rounded-[10px] bg-surface2 p-3">
-                  <div className="text-[11px] text-muted">Dep. importaciones</div>
+                  <div className="text-[11px] text-muted">{t("trade.importDep")}</div>
                   <div className="font-display text-lg font-extrabold text-ink mono mt-0.5">
                     {s.import_dependency != null ? fmtPct(s.import_dependency * 100, 0) : "—"}
                   </div>
@@ -130,17 +125,17 @@ export function TradeIntelPage() {
             {/* Concentration */}
             <div className="lg:col-span-2 space-y-5">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatTile label="HHI exportaciones" value={fmtNum(s.hhi_exports, 3)} />
-                <StatTile label="Capítulos export." value={s.n_products_export ?? "—"} />
-                <StatTile label="Export. total" value={fmtNum(s.total_exports, 0)} unit="M US$" />
-                <StatTile label="Import. total" value={fmtNum(s.total_imports, 0)} unit="M US$" />
+                <StatTile label={t("trade.hhiExports")} value={fmtNum(s.hhi_exports, 3)} />
+                <StatTile label={t("trade.chaptersExport")} value={s.n_products_export ?? "—"} />
+                <StatTile label={t("trade.totalExports")} value={fmtNum(s.total_exports, 0)} unit={t("trade.unitMusd")} />
+                <StatTile label={t("trade.totalImports")} value={fmtNum(s.total_imports, 0)} unit={t("trade.unitMusd")} />
               </div>
 
               <Card>
                 <CardHead
                   icon={Boxes}
-                  title="Concentración de exportaciones"
-                  subtitle="Participación por capítulo (HHI · diversificación > volumen)"
+                  title={t("trade.concentrationTitle")}
+                  subtitle={t("trade.concentrationSubtitle")}
                 />
                 <Treemap
                   items={s.top_export_products.map((p) => ({
@@ -155,8 +150,8 @@ export function TradeIntelPage() {
 
           <div className="mt-5">
             <AiInsightCard
-              title="Perspectiva del comercio (IA)"
-              subtitle={`Resiliencia, concentración y dependencia · ${s.period ?? ""} · SCQA`.trim()}
+              title={t("trade.insightTitle")}
+              subtitle={t("trade.insightSubtitle", { period: s.period ?? "" })}
               depsKey={s.period ?? "trade"}
               fetcher={getTradeInsight}
             />
