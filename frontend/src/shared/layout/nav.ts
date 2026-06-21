@@ -13,6 +13,7 @@ import {
   GitCompare,
   BookOpen,
   Settings,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   ready?: boolean; // has a real UI/connector (vs. placeholder "pronto")
+  minRole?: string; // rol mínimo (jerárquico) para ver el item; ausente = todos
 }
 
 export interface NavGroup {
@@ -66,6 +68,12 @@ export const NAV: NavGroup[] = [
       { to: "/compare", label: "Comparador", icon: GitCompare },
       { to: "/methodology", label: "Metodología", icon: BookOpen },
       { to: "/settings", label: "Configuración", icon: Settings },
+    ],
+  },
+  {
+    title: "Administración",
+    items: [
+      { to: "/admin/users", label: "Usuarios", icon: ShieldCheck, ready: true, minRole: "admin" },
     ],
   },
 ];

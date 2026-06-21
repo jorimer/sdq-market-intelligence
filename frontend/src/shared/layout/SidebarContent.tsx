@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { NAV } from "./nav";
+import { useAuth } from "@/shared/auth/AuthContext";
 
 export function ArcMark() {
   return (
@@ -28,6 +29,13 @@ interface Props {
 }
 
 export function SidebarContent({ collapsed = false, onNavigate }: Props) {
+  const { hasRole } = useAuth();
+  // Oculta items gateados por rol (jerárquico); grupos que quedan vacíos no se muestran.
+  const groups = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.minRole || hasRole(i.minRole)),
+  })).filter((g) => g.items.length > 0);
+
   return (
     <>
       <div className="h-[58px] flex items-center gap-2.5 px-4 border-b border-line shrink-0">
@@ -40,7 +48,7 @@ export function SidebarContent({ collapsed = false, onNavigate }: Props) {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-5">
-        {NAV.map((group) => (
+        {groups.map((group) => (
           <div key={group.title}>
             {!collapsed && (
               <div className="mono text-[10px] font-semibold uppercase tracking-[0.14em] text-faint px-2.5 mb-1.5">

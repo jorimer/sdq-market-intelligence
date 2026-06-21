@@ -112,6 +112,7 @@ export interface User {
   email: string;
   full_name: string;
   role: string;
+  tier: string;
   is_active: boolean;
 }
 
@@ -123,6 +124,7 @@ export interface LoginResponse {
   email: string;
   full_name: string;
   role: string;
+  tier: string;
 }
 
 /* ── API response wrappers ────────────────────────────────────── */
