@@ -67,6 +67,9 @@ app.include_router(settings_router, prefix="/api/v1/settings", tags=["Settings"]
 from shared.operations.router import router as operations_router
 app.include_router(operations_router, prefix="/api/v1/operations", tags=["Operaciones"])
 
+from shared.tools.router import router as tools_router
+app.include_router(tools_router, prefix="/api/v1/tools", tags=["Tools"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
 
@@ -83,6 +86,7 @@ import modules.sector_intel.operations  # noqa: F401 — registers bcrd-sectores
 import modules.social_dev.operations  # noqa: F401 — registers one-social-sync
 import modules.trade_intel.operations  # noqa: F401 — registers dga-trade-sync
 import modules.esg_climate.operations  # noqa: F401 — registers esg-sync
+import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":
