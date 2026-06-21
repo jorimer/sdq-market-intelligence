@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Network } from "lucide-react";
 import { Card, CardHead, Skeleton, StateBlock } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import { getMarketConcentration, MarketConcentration } from "../api";
 
 const METRICS = [
-  { value: "activos", label: "Activos" },
-  { value: "depositos", label: "Depósitos" },
-  { value: "cartera", label: "Cartera" },
+  { value: "activos", key: "mcMetricActivos" },
+  { value: "depositos", key: "mcMetricDepositos" },
+  { value: "cartera", key: "mcMetricCartera" },
 ];
 
 /** HHI reading (US DoJ thresholds, ×10000 scale). */
-function hhiLabel(hhi: number): string {
-  if (hhi < 1500) return "mercado no concentrado";
-  if (hhi < 2500) return "concentración moderada";
-  return "mercado altamente concentrado";
+function hhiLabel(hhi: number, t: TFunction): string {
+  if (hhi < 1500) return t("banking.mcHhiNotConc");
+  if (hhi < 2500) return t("banking.mcHhiModerate");
+  return t("banking.mcHhiHigh");
 }
 
 function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -29,6 +31,7 @@ function Metric({ label, value, sub }: { label: string; value: string; sub?: str
 
 /** System-level market concentration of the EIF (CR5/CR10/HHI). Not a per-bank input. */
 export function MarketConcentrationCard() {
+  const { t } = useTranslation();
   const [metric, setMetric] = useState("activos");
   const [data, setData] = useState<MarketConcentration | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,17 +54,17 @@ export function MarketConcentrationCard() {
     <Card className="mt-5">
       <CardHead
         icon={Network}
-        title="Concentración de mercado (EIF)"
-        subtitle="CR10 · estructura del sistema, no input del rating"
+        title={t("banking.mcTitle")}
+        subtitle={t("banking.mcSubtitle")}
         right={
           <select
             value={metric}
             onChange={(e) => setMetric(e.target.value)}
             className="field !w-auto !py-1 text-xs"
-            title="Métrica"
+            title={t("banking.mcMetricSelect")}
           >
             {METRICS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
+              <option key={m.value} value={m.value}>{t(`banking.${m.key}`)}</option>
             ))}
           </select>
         }
@@ -70,17 +73,16 @@ export function MarketConcentrationCard() {
       {loading ? (
         <div className="space-y-2"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-24 w-full" /></div>
       ) : error || !data?.available ? (
-        <StateBlock kind="empty" message="No hay datos suficientes para calcular la concentración." />
+        <StateBlock kind="empty" message={t("banking.mcEmpty")} />
       ) : (
         <div>
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <Metric label="CR10" value={`${fmtNum(data.cr10, 1)}%`} sub={`10 mayores de ${data.n_entities}`} />
-            <Metric label="CR5" value={`${fmtNum(data.cr5, 1)}%`} sub="5 mayores" />
-            <Metric label="HHI" value={fmtNum(data.hhi, 0)} sub={hhiLabel(data.hhi ?? 0)} />
+            <Metric label="CR10" value={`${fmtNum(data.cr10, 1)}%`} sub={t("banking.mcCr10Sub", { n: data.n_entities })} />
+            <Metric label="CR5" value={`${fmtNum(data.cr5, 1)}%`} sub={t("banking.mcCr5Sub")} />
+            <Metric label="HHI" value={fmtNum(data.hhi, 0)} sub={hhiLabel(data.hhi ?? 0, t)} />
           </div>
           <p className="text-xs text-muted mb-3">
-            {data.metric_label} de las EIF · período <span className="mono text-body">{data.period_end}</span>.
-            CR10 = activos de las 10 mayores / activos del sistema.
+            {t("banking.mcDescPrefix", { label: data.metric_label })}<span className="mono text-body">{data.period_end}</span>{t("banking.mcDescSuffix")}
           </p>
           <div className="space-y-1.5">
             {data.top10?.map((e, i) => (
