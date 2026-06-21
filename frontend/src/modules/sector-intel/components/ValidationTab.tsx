@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ShieldCheck, RefreshCw, AlertTriangle, BarChart3 } from "lucide-react";
 import { Card, CardHead, StatTile, StateBlock, Chip } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
@@ -54,6 +55,7 @@ function YearBars({ rows }: { rows: NonNullable<SectorGateEReport["by_year"]> })
 }
 
 export function ValidationTab() {
+  const { t } = useTranslation();
   const [report, setReport] = useState<SectorGateEReport | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState(false);
@@ -120,22 +122,19 @@ export function ValidationTab() {
   const regenBtn = (
     <button onClick={regenerate} disabled={busy} className="btn btn-ghost !py-1.5">
       <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
-      {busy ? "Generando…" : "Regenerar"}
+      {busy ? t("sector.valRegenBusy") : t("sector.valRegen")}
     </button>
   );
 
-  if (status === "loading") return <StateBlock kind="loading" message="Cargando backtest…" />;
-  if (status === "error") return <StateBlock kind="error" message="No se pudo cargar el backtest." />;
+  if (status === "loading") return <StateBlock kind="loading" message={t("sector.valLoading")} />;
+  if (status === "error") return <StateBlock kind="error" message={t("sector.valError")} />;
   if (!report?.has_report || report.has_data === false) {
     return (
       <div>
         <div className="flex justify-end mb-3">{regenBtn}</div>
         <StateBlock
           kind="empty"
-          message={
-            report?.reason ??
-            "El backtest aún no se ha calculado. Usa «Regenerar» para validar el IAI contra el empleo."
-          }
+          message={report?.reason ?? t("sector.valEmpty")}
         />
       </div>
     );
@@ -153,14 +152,14 @@ export function ValidationTab() {
       <div className="mb-4 flex items-start gap-2.5 rounded-[10px] bg-warn-soft p-3.5">
         <AlertTriangle className="w-4 h-4 text-warn shrink-0 mt-0.5" />
         <p className="text-xs text-body">
-          <span className="font-semibold text-ink">Validación direccional, no grado-Basilea.</span>{" "}
+          <span className="font-semibold text-ink">{t("sector.valDisclaimerStrong")}</span>{" "}
           {report.disclaimer}
         </p>
       </div>
 
       <div className="flex items-center justify-between mb-3 gap-3">
         <span className="text-xs text-muted">
-          Outcome: <span className="text-body">{report.outcome}</span> ·{" "}
+          {t("sector.valOutcomeLabel")} <span className="text-body">{report.outcome}</span> ·{" "}
           {report.resolution}
           {report.generated_at && <> · {fmtDate(report.generated_at)}</>}
         </span>
@@ -168,42 +167,41 @@ export function ValidationTab() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-        <StatTile label="IC medio anual (IAI_T → Δempleo T+1)" value={fmtRho(report.mean_yearly_ic)} />
+        <StatTile label={t("sector.valStatIcMean")} value={fmtRho(report.mean_yearly_ic)} />
         <StatTile
-          label={`IC 95% (t · ${report.n_years ?? "—"} años)`}
+          label={t("sector.valStatIcCi", { n: report.n_years ?? "—" })}
           value={ci && ci[0] != null ? `${fmtRho(ci[0])} … ${fmtRho(ci[1])}` : "—"}
         />
         <StatTile
-          label="ρ parcial (control crecimiento)"
+          label={t("sector.valStatPartial")}
           value={`${fmtRho(report.spearman_partial_growth)}${
             report.spearman_partial_n ? ` · n=${report.spearman_partial_n}` : ""
           }`}
         />
         <StatTile
-          label="Observaciones"
-          value={`${fmtNum(report.n_observations, 0)} · ${report.n_branches} ramas`}
+          label={t("sector.valStatObs")}
+          value={t("sector.valObsValue", { n: fmtNum(report.n_observations, 0), branches: report.n_branches })}
         />
       </div>
 
       {/* Secundario, etiquetado: el ρ apilado (sobrestima la precisión) */}
       <p className="text-xs text-faint mb-5">
-        Secundario · ρ apilado (pooled): {fmtRho(report.spearman_pooled)}
-        {pooledCi && pooledCi[0] != null && (
-          <> · IC {fmtRho(pooledCi[0])} … {fmtRho(pooledCi[1])}</>
-        )}{" "}
-        — remuestrea los pares sector-año como independientes y{" "}
-        <span className="text-muted">sobrestima la precisión</span>; el titular es el IC medio anual con t.
+        {t("sector.valPooledPrefix", { rho: fmtRho(report.spearman_pooled) })}
+        {pooledCi && pooledCi[0] != null && t("sector.valPooledCi", { lo: fmtRho(pooledCi[0]), hi: fmtRho(pooledCi[1]) })}
+        {t("sector.valPooledMid")}
+        <span className="text-muted">{t("sector.valPooledBold")}</span>
+        {t("sector.valPooledSuffix")}
       </p>
 
       <div className="grid lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHead
             icon={ShieldCheck}
-            title="IC de rango por año"
-            subtitle={`¿el IAI ordena el crecimiento del empleo del año siguiente? · ${report.years?.[0]}–${report.years?.[1]}`}
+            title={t("sector.valIcYearTitle")}
+            subtitle={t("sector.valIcYearSubtitle", { y0: report.years?.[0], y1: report.years?.[1] })}
             right={
               <Chip tone={sig ? "ok" : "warn"}>
-                {sig ? "Significativo" : "Inconclusivo por potencia (n insuficiente)"}
+                {sig ? t("sector.valSigYes") : t("sector.valSigNo")}
               </Chip>
             }
           />
@@ -211,16 +209,12 @@ export function ValidationTab() {
           <p className="mt-3 text-xs text-muted">
             {sig ? (
               <>
-                El IC medio de las cross-sections anuales <span className="font-medium">excluye el
-                cero</span>: el IAI discrimina el crecimiento del empleo en T+1.
+                {t("sector.valSigYesPrefix")}<span className="font-medium">{t("sector.valSigYesBold")}</span>{t("sector.valSigYesSuffix")}
               </>
             ) : (
               <>
-                El IC medio anual <span className="font-medium">cruza el cero</span>: la evidencia es{" "}
-                <span className="font-medium">inconclusiva por potencia</span>, no una refutación.
-                Con n por año ≈10, el IC mínimo detectable es alto. El empleo formal lo dominan
-                shocks macro comunes y el IAI aún es ~mitad rúbrica en negocios/talento. Honestidad
-                sobre la fuerza de la señal, no maquillaje.
+                {t("sector.valSigNoPrefix")}<span className="font-medium">{t("sector.valSigNoBold1")}</span>{t("sector.valSigNoMid")}
+                <span className="font-medium">{t("sector.valSigNoBold2")}</span>{t("sector.valSigNoSuffix")}
               </>
             )}
           </p>
@@ -229,25 +223,22 @@ export function ValidationTab() {
         <Card>
           <CardHead
             icon={BarChart3}
-            title="Spread por quintil del IAI"
-            subtitle={`Crecimiento del empleo: quintil alto vs bajo · dentro de cada año, promediado${
-              qs?.n_years ? ` (${qs.n_years} años)` : ""
-            }`}
+            title={t("sector.valQuintileTitle")}
+            subtitle={t("sector.valQuintileSubtitle", { yearsPart: qs?.n_years ? ` (${qs.n_years})` : "" })}
           />
           {qs ? (
             <div className="space-y-3 mt-1">
-              <StatTile label="Quintil IAI alto" value={fmtPp(qs.top_iai_mean_growth)} />
-              <StatTile label="Quintil IAI bajo" value={fmtPp(qs.bottom_iai_mean_growth)} />
+              <StatTile label={t("sector.valQHigh")} value={fmtPp(qs.top_iai_mean_growth)} />
+              <StatTile label={t("sector.valQLow")} value={fmtPp(qs.bottom_iai_mean_growth)} />
               <div className="border-t border-grid pt-3">
-                <StatTile label="Spread (alto − bajo)" value={fmtPp(qs.spread)} />
+                <StatTile label={t("sector.valQSpread")} value={fmtPp(qs.spread)} />
               </div>
               <p className="text-xs text-muted">
-                Dirección {qs.spread > 0 ? "positiva" : "negativa"} ({fmtPp(qs.spread)}), pero el IC
-                de rango manda sobre la significancia.
+                {t("sector.valQDirNote", { dir: qs.spread > 0 ? t("sector.valDirPositive") : t("sector.valDirNegative"), spread: fmtPp(qs.spread) })}
               </p>
             </div>
           ) : (
-            <StateBlock kind="empty" message="Panel insuficiente para el spread." />
+            <StateBlock kind="empty" message={t("sector.valQEmpty")} />
           )}
         </Card>
       </div>
