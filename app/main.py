@@ -36,6 +36,7 @@ async def health():
 
 # --- Module routers ---
 from shared.auth.router import router as auth_router
+from shared.auth.admin_router import router as users_admin_router
 from modules.banking_score.api.router_scoring import router as scoring_router
 from modules.banking_score.api.router_data import router as data_router
 from modules.banking_score.api.router_reports import router as reports_router
@@ -49,6 +50,7 @@ from modules.social_dev.api.router import router as social_dev_router
 from modules.esg_climate.api.router import router as esg_climate_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(users_admin_router, prefix="/api/v1/admin/users", tags=["User Admin"])
 app.include_router(scoring_router, prefix="/api/v1/banking-score", tags=["Banking Score"])
 app.include_router(data_router, prefix="/api/v1/banking-score/data", tags=["Banking Data"])
 app.include_router(reports_router, prefix="/api/v1/banking-score/reports", tags=["Banking Reports"])
