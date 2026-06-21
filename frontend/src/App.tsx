@@ -41,6 +41,7 @@ import { EsgClimatePage } from "@/modules/esg-climate/pages/EsgClimatePage";
 import { OverviewPage } from "@/modules/platform/pages/OverviewPage";
 import { MetodologiaPage } from "@/modules/platform/pages/MetodologiaPage";
 import { ComparadorPage } from "@/modules/platform/pages/ComparadorPage";
+import { MarketBriefPage } from "@/modules/platform/pages/MarketBriefPage";
 import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 
 export default function App() {
@@ -99,7 +100,7 @@ export default function App() {
           />
           <Route
             path="/tools/market-brief"
-            element={<PlaceholderPage title="Market Brief" sub="Resúmenes de mercado generados con Claude." />}
+            element={<MarketBriefPage />}
           />
 
           {/* Plataforma */}

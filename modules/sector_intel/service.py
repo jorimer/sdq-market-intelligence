@@ -138,6 +138,20 @@ def get_latest(db: Session, sector_code: str) -> Optional[SectorScore]:
     return max(rows, key=lambda s: _period_key(s.period)) if rows else None
 
 
+def get_latest_scores(db: Session) -> List[SectorScore]:
+    """All sectors' scores for the most recent period (one row per sector), most
+    attractive (highest IAI) first. Single query — for cross-axis snapshots."""
+    rows = db.query(SectorScore).all()
+    if not rows:
+        return []
+    latest = max(rows, key=lambda s: _period_key(s.period)).period
+    return sorted(
+        (s for s in rows if s.period == latest),
+        key=lambda s: s.iai_score if s.iai_score is not None else -1.0,
+        reverse=True,
+    )
+
+
 # IAI rubric variables (Gate C) — declared until sourced (negocios/talento/regulatoria).
 IAI_RUBRIC_VARS = (
     "ease_of_business", "operating_cost", "labor_availability",
