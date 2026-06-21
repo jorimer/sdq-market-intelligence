@@ -46,6 +46,7 @@ class DealType(str, enum.Enum):
     debt_portfolio = "debt_portfolio"
     venture = "venture"
     financing = "financing"
+    advisory = "advisory"   # asesoría/mandato — tipo dominante en la cartera SDQ
     other = "other"
 
 

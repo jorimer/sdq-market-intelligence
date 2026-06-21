@@ -73,6 +73,9 @@ app.include_router(tools_router, prefix="/api/v1/tools", tags=["Tools"])
 from app.deal_scoring_api import router as deal_scoring_router
 app.include_router(deal_scoring_router, prefix="/api/v1/deal-scoring", tags=["Deal Scoring"])
 
+from modules.deal_scoring.api.router import router as deal_registry_router
+app.include_router(deal_registry_router, prefix="/api/v1/deal-scoring", tags=["Deal Scoring"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
 

@@ -80,3 +80,36 @@ export async function scoreDeal(input: Record<string, any>): Promise<DealScoreRe
   const { data } = await client.post("/deal-scoring/score", input);
   return data;
 }
+
+export interface LearningCurve {
+  n_labeled: number;
+  n_closed: number;
+  n_lost: number;
+  computed: boolean;
+  status: string; // "rubrica" | "modelo"
+  ready_for_model: boolean;
+  cv_auc?: number;
+  auc_ci?: [number | null, number | null];
+  graduation_floor: number;
+  message: string;
+  caveats?: string[];
+}
+export async function getLearningCurve(): Promise<LearningCurve> {
+  const { data } = await client.get("/deal-scoring/learning-curve");
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function saveDeal(input: Record<string, any>): Promise<{ saved: boolean; total: number }> {
+  const { data } = await client.post("/deal-scoring/deals", input);
+  return data;
+}
+
+export async function importDeals(file: File): Promise<{ inserted: number; updated: number; skipped: number; total: number }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const { data } = await client.post("/deal-scoring/import", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}

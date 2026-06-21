@@ -1,18 +1,23 @@
-import { useState } from "react";
-import { Target, Sparkles, Anchor } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Target, Sparkles, Anchor, Database, Save, Upload, GraduationCap } from "lucide-react";
 import {
   PageHead,
   Card,
   CardHead,
   Chip,
   Gauge,
+  StatTile,
   StateBlock,
   Skeleton,
 } from "@/shared/ui/primitives";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
-import { scoreDeal, type DealScoreResult } from "../api";
+import { useAuth } from "@/shared/auth/AuthContext";
+import {
+  scoreDeal, saveDeal, importDeals, getLearningCurve,
+  type DealScoreResult, type LearningCurve,
+} from "../api";
 
 /* ──────────────────────────────────────────────────────────────────
  * Deal Scoring — RÚBRICA DECLARADA (cold-start), anclada a los 7 ejes.
@@ -59,12 +64,56 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export function DealScoringPage() {
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole("admin");
   const [form, setForm] = useState<FormState>(EMPTY);
   const [result, setResult] = useState<DealScoreResult | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [curve, setCurve] = useState<LearningCurve | null>(null);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const loadCurve = () => getLearningCurve().then(setCurve).catch(() => setCurve(null));
+  useEffect(() => { loadCurve(); }, []);
 
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const harvest = async () => {
+    setSavedMsg(null);
+    try {
+      const payload = {
+        deal_name: form.deal_name || `Deal ${new Date().toISOString().slice(0, 10)}`,
+        deal_type: form.deal_type, sector: form.sector,
+        country: form.country.trim().toUpperCase(), deal_stage: form.deal_stage,
+        deal_size_usd: num(form.deal_size_usd), equity_required_pct: num(form.equity_required_pct),
+        promoter_track_record: num(form.promoter_track_record), financial_quality: num(form.financial_quality),
+        market_validation: num(form.market_validation), regulatory_readiness: num(form.regulatory_readiness),
+        days_since_first_contact: num(form.days_since_first_contact),
+      };
+      const r = await saveDeal(payload);
+      setSavedMsg(`Guardado en el registro (${r.total} deals).`);
+      loadCurve();
+    } catch (e) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setSavedMsg((e as any)?.response?.status === 409 ? "Ya existe un deal con ese nombre." : "No se pudo guardar.");
+    }
+  };
+
+  const onImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportMsg("Importando…");
+    try {
+      const r = await importDeals(file);
+      setImportMsg(`Importados: ${r.inserted} nuevos, ${r.updated} actualizados, ${r.skipped} omitidos (total ${r.total}).`);
+      loadCurve();
+    } catch {
+      setImportMsg("No se pudo importar el CSV.");
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  };
 
   const run = async () => {
     setStatus("loading");
@@ -150,6 +199,10 @@ export function DealScoringPage() {
                 <p className="text-[11px] text-faint mt-2 max-w-xs">
                   Índice de cierre/atractivo (no una probabilidad). {result.components_present}/{result.components_total} componentes con dato.
                 </p>
+                <button onClick={harvest} className="btn btn-ghost !py-1.5 mt-3">
+                  <Save className="w-3.5 h-3.5" /> Guardar al registro
+                </button>
+                {savedMsg && <p className="text-xs text-muted mt-2">{savedMsg}</p>}
               </Card>
 
               {anchors.length > 0 && (
@@ -198,6 +251,55 @@ export function DealScoringPage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* Estado del modelo — curva de aprendizaje (rúbrica → entrenado) */}
+      <div className="mt-5">
+        <Card>
+          <CardHead
+            icon={GraduationCap}
+            title="Estado del modelo"
+            subtitle="¿Sigue en rúbrica o ya gradúa a modelo entrenado? Criterio: IC del AUC en cross-validation, no un N arbitrario."
+            right={isAdmin ? (
+              <>
+                <input ref={fileRef} type="file" accept=".csv" onChange={onImport} className="hidden" />
+                <button onClick={() => fileRef.current?.click()} className="btn btn-ghost !py-1.5">
+                  <Upload className="w-3.5 h-3.5" /> Importar CSV
+                </button>
+              </>
+            ) : undefined}
+          />
+          {!curve ? (
+            <Skeleton className="h-20" />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                <StatTile label="Estado" value={curve.status === "modelo" ? "Modelo" : "Rúbrica"} />
+                <StatTile label="Labels en registro" value={`${curve.n_labeled}`} />
+                <StatTile label="Balance (cerr/perd)" value={`${curve.n_closed}/${curve.n_lost}`} />
+                <StatTile label="AUC en CV" value={curve.computed && curve.cv_auc != null ? fmtNum(curve.cv_auc, 3) : "—"} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <Chip tone={curve.ready_for_model ? "ok" : "warn"}>
+                  {curve.ready_for_model ? "Modelo entrenado viable" : "Aún en rúbrica"}
+                </Chip>
+                {curve.computed && curve.auc_ci?.[0] != null && (
+                  <Chip tone="muted">
+                    IC95% {fmtNum(curve.auc_ci[0], 3)}–{fmtNum(curve.auc_ci[1], 3)} · umbral {curve.graduation_floor}
+                  </Chip>
+                )}
+                <span className="text-xs text-faint flex items-center gap-1"><Database className="w-3 h-3" /> graduación por evidencia, no por "200"</span>
+              </div>
+              <p className="text-sm text-body">{curve.message}</p>
+              {curve.caveats && (
+                <ul className="mt-2 space-y-1 text-xs text-faint list-disc pl-4">
+                  {curve.caveats.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+              )}
+              {importMsg && <p className="text-xs text-muted mt-3">{importMsg}</p>}
+            </>
+          )}
+        </Card>
       </div>
     </div>
   );
