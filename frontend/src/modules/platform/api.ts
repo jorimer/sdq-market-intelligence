@@ -54,3 +54,29 @@ export async function runMarketBrief(): Promise<{ started: boolean; reason?: str
   const { data } = await client.post("/operations/market-brief/run", {});
   return data;
 }
+
+/* ── Deal Scoring (rúbrica declarada anclada a los 7 ejes) ── */
+export interface DealFactor {
+  factor: string;
+  value: number;
+  source: string;
+  weight: number;
+  contribution: number;
+}
+export interface DealScoreResult {
+  score: number;
+  confidence: string;
+  method: string;
+  is_trained_model: boolean;
+  key_factors: DealFactor[];
+  components_present: number;
+  components_total: number;
+  anchors_used: Record<string, number>;
+  anchor_sources: Record<string, string>;
+  ai_insight: AiInsight | null;
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function scoreDeal(input: Record<string, any>): Promise<DealScoreResult> {
+  const { data } = await client.post("/deal-scoring/score", input);
+  return data;
+}

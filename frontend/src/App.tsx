@@ -42,6 +42,7 @@ import { OverviewPage } from "@/modules/platform/pages/OverviewPage";
 import { MetodologiaPage } from "@/modules/platform/pages/MetodologiaPage";
 import { ComparadorPage } from "@/modules/platform/pages/ComparadorPage";
 import { MarketBriefPage } from "@/modules/platform/pages/MarketBriefPage";
+import { DealScoringPage } from "@/modules/platform/pages/DealScoringPage";
 import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 
 export default function App() {
@@ -96,7 +97,7 @@ export default function App() {
           {/* Herramientas */}
           <Route
             path="/tools/deal-scoring"
-            element={<PlaceholderPage title="Deal Scoring" sub="Evaluación integral de oportunidades." />}
+            element={<DealScoringPage />}
           />
           <Route
             path="/tools/market-brief"
