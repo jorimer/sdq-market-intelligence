@@ -16,6 +16,9 @@ export const REGION_NAMES: Record<string, string> = {
   yuma: "Yuma",
 };
 
+// Etiquetas de dimensión del IDM. La página del eje (SocialDevPage) usa i18n
+// (social.dims.*); este mapa lo sigue usando la página de la sección Datos
+// (DatosSocialPage) hasta el sweep de la sección Datos.
 export const DIM_LABELS: Record<string, string> = {
   health: "Salud",
   education: "Educación",
