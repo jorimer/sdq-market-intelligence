@@ -22,6 +22,13 @@ BCRD ✅ → WGI/Eje 4 ✅ → **ONE/Eje 3 (en curso)** → DGA → DGII (diferi
 - **Eje 4 (IRMP): CERRADO** por los 6 gates; metodología validada en panel amplio de 24 países (Gini gobernanza +0.21, IC [0.06, 0.36], monótona). PRs #158–#171. Memoria `eje4-cierre-plan`.
 - **Eje 3 (`sector_intel`): EN CURSO.** Espina sectorial = **BCRD valor agregado por sector** (decisión del dueño 2026-06-16), NO la ONE (delgada → enriquecimiento). **T-E3-1 (Gate A) ✅ en prod (PR #172).** Siguiente: T-E3-2. Ver sección "Eje 3" abajo.
 
+## HOUSEKEEPING UI (pre-go-live) — 4 secciones del menú incompletas
+> Los 7 ejes están cerrados A–F. Antes del endurecimiento de seguridad, completar las 4 superficies del menú que aún eran placeholder/parciales. Una a la vez (plan fino → confirmación → implementar → verificar prod → reviewer → merge `--no-ff`).
+- [x] **#1 · Metodología** (`/methodology`) ✅ **en prod (PR #223).** De solo-pesos a documento vivo de doctrina: marco de gates A–F, doctrina anti-fabricación, fuentes reales por eje (badges), **digest de validación que tira en vivo de los 6 backtests** (significancia honesta: 5 ejes Significativo, Sectorial nulo honesto, Macro n/a monitor), pesos por índice, marco SCQA. Sin backend nuevo. Verificado en prod con cuenta E2E. Reviewer APTO sin blockers.
+- [ ] **#2 · Comparador** (`/compare`, hoy PlaceholderPage) — comparación lado a lado de entidades/sectores/países por sus scores. Molde: `frontend/src/modules/banking-score/pages/ComparePage.tsx`.
+- [ ] **#3 · Market Brief** (`/tools/market-brief`, hoy PlaceholderPage) — resumen de mercado cross-eje generado con Claude (reusa el narrative engine + snapshots por eje).
+- [ ] **#4 · Deal Scoring** (`/tools/deal-scoring`, hoy PlaceholderPage) — **IP recuperado** (`docs/Modelos Propietarios/DealScoringAgent_Development_Spec.docx` + `deal_scoring.py`): XGBoost de prob. de cierre con explicabilidad + narrativa Claude. **Bloqueo de datos verificado:** `docs/Casos Entrenamiento/` es biblioteca de dominio, **0 deals etiquetados** (todos casos de éxito) → no alcanza para el XGBoost supervisado (requiere ≥200, balance 40–60%). **Decisión del dueño pendiente:** camino A (rúbrica determinística integrando los 7 ejes + narrativa Claude, XGBoost como destino futuro) vs. conseguir el dataset. No arrancar sin esa definición.
+
 ## SPRINT T1–T5 (CERRADO) — objetivo original
 Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, sobre una base de operabilidad y componentes de IA compartidos que sirvan a todos los ejes. **Resultado: cumplido** (memorias `cierre-banca-tres-puntos`, `eje4-cierre-plan`). El desglose T1–T5/T4B de abajo queda como registro histórico.
 
