@@ -56,6 +56,20 @@ TEMPLATES = {
         "y cierra con una lectura accionable. Formato SCQA. Usa SOLO las cifras del "
         "contexto, no inventes ninguna. Máximo 450 palabras."
     ),
+    "market_brief": (
+        "Eres el economista jefe de una firma de inteligencia económica de "
+        "República Dominicana. Redacta un BRIEF DE MERCADO ejecutivo que sintetiza "
+        "el estado del país a través de todos los ejes monitoreados:\n{context}\n\n"
+        "El contexto trae, por eje, su score/banda y cifras clave (financiero, "
+        "macro-fiscal, regulatorio/IRMP, comercio, social/IDM, ESG/clima, sectorial). "
+        "Estructura: (1) un PANORAMA de 2-3 frases; (2) las SEÑALES por eje, integradas "
+        "en una narrativa (no una lista plana) — destacá fortalezas, tensiones y "
+        "divergencias entre ejes; (3) una CONCLUSIÓN accionable. Conecta los ejes entre "
+        "sí (p. ej. cómo el pulso macro o el riesgo regulatorio condiciona lo sectorial "
+        "y comercial). Usa SOLO las cifras del contexto, nunca inventes ninguna; si un "
+        "eje viene sin dato, omítelo sin inventarlo. Tono ejecutivo y conciso. "
+        "Máximo 700 palabras. Formato Markdown con encabezados."
+    ),
     "sector_outlook": (
         "Eres el economista jefe de una firma de análisis financiero en República Dominicana.\n\n"
         "Genera una perspectiva sectorial basada en:\n{context}\n\n"

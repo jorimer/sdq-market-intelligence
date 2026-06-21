@@ -21,3 +21,36 @@ export async function getCompareInsight(
   const { data } = await client.post("/tools/compare-insight", { eje, items });
   return (data.ai_insight as AiInsight | null) ?? null;
 }
+
+/* ── Market Brief (síntesis cross-eje cacheada, generada por una Operación) ── */
+export interface BriefAxis {
+  eje: string;
+  available: boolean;
+  period?: string;
+  headline?: string;
+  score?: number | null;
+  score_label?: string;
+  band?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  detail?: any;
+}
+
+export interface MarketBriefReport {
+  computed: boolean;
+  message?: string;
+  snapshot?: { pais: string; axes: BriefAxis[] };
+  brief?: AiInsight | null;
+  n_ejes_con_dato?: number;
+  generated_at?: string;
+}
+
+export async function getMarketBrief(): Promise<MarketBriefReport> {
+  const { data } = await client.get("/tools/market-brief");
+  return data;
+}
+
+/** Dispara la Operación market-brief (admin). Devuelve {started, reason?}. */
+export async function runMarketBrief(): Promise<{ started: boolean; reason?: string }> {
+  const { data } = await client.post("/operations/market-brief/run", {});
+  return data;
+}

@@ -86,6 +86,7 @@ import modules.sector_intel.operations  # noqa: F401 — registers bcrd-sectores
 import modules.social_dev.operations  # noqa: F401 — registers one-social-sync
 import modules.trade_intel.operations  # noqa: F401 — registers dga-trade-sync
 import modules.esg_climate.operations  # noqa: F401 — registers esg-sync
+import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":
