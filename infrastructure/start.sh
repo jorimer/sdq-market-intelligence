@@ -11,6 +11,10 @@ if [ "$SERVICE_ROLE" = "worker" ]; then
 else
   echo "Running migrations…"
   alembic -c infrastructure/alembic.ini upgrade head
+  # Bootstrap idempotente del super_admin real (solo crea si no existe ninguno y hay
+  # SUPERADMIN_EMAIL/PASSWORD). No debe tumbar el deploy si algo falla.
+  echo "Bootstrapping super_admin (si aplica)…"
+  python scripts/bootstrap_superadmin.py || echo "bootstrap_superadmin: omitido/no crítico"
   # When Celery is enabled and there's no dedicated worker service, run a worker
   # in this container so queued jobs are consumed. acks_late re-queues on restart.
   if [ "$USE_CELERY" = "true" ]; then

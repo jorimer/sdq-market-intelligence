@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from shared.auth.jwt_handler import decode_token
-from shared.auth.models import User, UserRole
+from shared.auth.models import User, UserRole, role_satisfies
 from shared.database.session import get_db
 
 security = HTTPBearer()
@@ -68,12 +68,14 @@ async def get_current_user(
 
 
 def require_role(*roles: UserRole) -> Callable:
-    """Dependency wrapper that checks if the current user has one of the required roles."""
+    """Dependency que exige uno de `roles` — JERÁRQUICO: un rol superior satisface el
+    requerimiento de uno inferior (p.ej. super_admin cumple cualquier exigencia de
+    admin). Así agregar super_admin no deja afuera de lo que hoy pide `require_role(admin)`."""
 
     async def role_checker(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        if current_user.role not in roles:
+        if not any(role_satisfies(current_user.role, r) for r in roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Se requiere rol: {', '.join(r.value for r in roles)}",

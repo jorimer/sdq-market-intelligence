@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _tier_value(user: User) -> str:
+    """tier nunca debería ser None (server_default 'free'), pero el path de login no
+    debe reventar (500) por una fila legada sin tier."""
+    return user.tier.value if user.tier else "free"
+
+
 # --- Schemas ---
 
 class RegisterRequest(BaseModel):
@@ -43,6 +49,7 @@ class TokenResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    tier: str
 
 
 class RefreshRequest(BaseModel):
@@ -54,6 +61,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    tier: str
     is_active: bool
 
 
@@ -90,6 +98,7 @@ async def register(body: RegisterRequest, db: Session = Depends(get_db)):
         email=user.email,
         full_name=user.full_name,
         role=user.role.value,
+        tier=_tier_value(user),
     )
 
 
@@ -137,6 +146,7 @@ async def login(body: LoginRequest, db: Session = Depends(get_db)):
         email=user.email,
         full_name=user.full_name,
         role=user.role.value,
+        tier=_tier_value(user),
     )
 
 
@@ -174,6 +184,7 @@ async def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
         email=user.email,
         full_name=user.full_name,
         role=user.role.value,
+        tier=_tier_value(user),
     )
 
 
@@ -185,5 +196,6 @@ async def me(current_user: User = Depends(get_current_user)):
         email=current_user.email,
         full_name=current_user.full_name,
         role=current_user.role.value,
+        tier=_tier_value(current_user),
         is_active=current_user.is_active,
     )
