@@ -44,6 +44,7 @@ import { ComparadorPage } from "@/modules/platform/pages/ComparadorPage";
 import { MarketBriefPage } from "@/modules/platform/pages/MarketBriefPage";
 import { DealScoringPage } from "@/modules/platform/pages/DealScoringPage";
 import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
+import { UsersAdminPage } from "@/modules/platform/pages/UsersAdminPage";
 
 export default function App() {
   return (
@@ -112,6 +113,16 @@ export default function App() {
           />
           <Route path="/methodology" element={<MetodologiaPage />} />
           <Route path="/settings" element={<ConfiguracionPage />} />
+
+          {/* Administración (gateado por rol) */}
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <UsersAdminPage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
         <Route path="*" element={<Navigate to="/banking-score" replace />} />
       </Routes>

@@ -8,6 +8,7 @@ import {
 } from "react";
 import client from "@/shared/api/client";
 import type { User, LoginResponse } from "@/types";
+import { roleSatisfies } from "./roles";
 
 interface AuthContextType {
   user: User | null;
@@ -58,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.email,
       full_name: data.full_name,
       role: data.role,
+      tier: data.tier,
       is_active: true,
     });
   };
@@ -68,7 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const hasRole = (role: string) => user?.role === role;
+  // Jerárquico: un rol superior satisface el requerimiento de uno inferior.
+  const hasRole = (role: string) => roleSatisfies(user?.role, role);
 
   return (
     <AuthContext.Provider
