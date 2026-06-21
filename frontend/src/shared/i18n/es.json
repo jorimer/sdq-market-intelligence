@@ -225,5 +225,68 @@
       "/settings": "Configuraci\u00f3n",
       "/admin/users": "Usuarios"
     }
+  },
+  "common_retry": "Reintentar",
+  "esg": {
+    "eyebrow": "ND-GAIN \u00b7 panel Caribe/LatAm",
+    "title": "ESG & clima",
+    "subFull": "\u00cdndice de Resiliencia Clim\u00e1tica (IRC) nacional sobre el panel regional. Mayor score = mayor resiliencia. F\u00edsico/adaptativa/gobernanza con dato real (ND-GAIN); transici\u00f3n, r\u00fabrica hasta cablear energ\u00eda.",
+    "subShort": "\u00cdndice de Resiliencia Clim\u00e1tica (IRC) \u00b7 {{period}}. Mayor = mayor resiliencia.",
+    "countrySelect": "Pa\u00eds",
+    "panelCount": "{{count}} pa\u00edses \u00b7 panel regional",
+    "errorLoad": "No se pudo cargar el IRC. Reintenta.",
+    "emptyNoIrc": "A\u00fan no hay IRC. Corre la operaci\u00f3n \u00abSincronizar IRC clim\u00e1tico (ND-GAIN)\u00bb en la Consola de Operaci\u00f3n.",
+    "band": {
+      "noData": "Sin dato",
+      "high": "Resiliencia alta",
+      "moderate": "Resiliencia moderada",
+      "low": "Resiliencia baja"
+    },
+    "tag": {
+      "rubric": "r\u00fabrica",
+      "live": "en vivo",
+      "partialLive": "{{n}}/{{total}} en vivo"
+    },
+    "tab": {
+      "breakdown": "Desglose",
+      "ranking": "Ranking del panel",
+      "validation": "Validaci\u00f3n"
+    },
+    "breakdownTitle": "Dimensiones del IRC",
+    "breakdownSubtitle": "{{country}} \u00b7 ponderadas \u00b7 badge real-vs-r\u00fabrica",
+    "rankingTitle": "Ranking de resiliencia clim\u00e1tica",
+    "rankingSubtitle": "M\u00e1s resiliente primero",
+    "validationTitle": "Backtest del IRC",
+    "validationSubtitle": "\u00bfLa resiliencia predice menos da\u00f1o clim\u00e1tico real? (OWID/EM-DAT)",
+    "emptyBacktest": "A\u00fan no hay backtest. Corre \u00abBacktest del IRC clim\u00e1tico\u00bb en la Consola de Operaci\u00f3n.",
+    "colCountry": "Pa\u00eds",
+    "colResilience": "Resiliencia",
+    "colIrcBand": "Banda IRC",
+    "colCountries": "Pa\u00edses",
+    "colDeaths": "Muertes/100k/a\u00f1o",
+    "valSpearman": "Correlaci\u00f3n (Spearman)",
+    "valCi": "IC 95%",
+    "valCountries": "Pa\u00edses",
+    "monotonicYes": "Mon\u00f3tona \u2713",
+    "monotonicNo": "No mon\u00f3tona",
+    "monotonicHint": "mayor resiliencia \u2192 menos muertes por desastre clim\u00e1tico",
+    "insightTitle": "Perspectiva clim\u00e1tica (IA)",
+    "insightSubtitle": "{{country}} \u00b7 IRC + posici\u00f3n en el panel \u00b7 SCQA",
+    "dims": {
+      "physical_risk": "Riesgo f\u00edsico",
+      "transition_risk": "Riesgo de transici\u00f3n",
+      "adaptive_capacity": "Capacidad adaptativa",
+      "governance": "Gobernanza"
+    }
+  },
+  "widgets": {
+    "gaugeOf100": "de 100",
+    "dimMeta": "peso {{w}}% \u00b7 aporta {{c}}",
+    "aiGenerating": "Generando an\u00e1lisis de IA\u2026 (~10\u201315s)",
+    "aiError": "No se pudo generar el an\u00e1lisis de IA.",
+    "aiByModel": "Generado por IA ({{model}})",
+    "aiCached": "cach\u00e9",
+    "aiVerify": "Verifica antes de decidir.",
+    "aiUnavailable": "El an\u00e1lisis de IA no est\u00e1 disponible (clave de Anthropic no configurada)."
   }
 }

@@ -1,11 +1,6 @@
-// Label maps for the IRC (climate resilience) UI — national, panel Caribe/LatAm.
-
-export const DIM_LABELS: Record<string, string> = {
-  physical_risk: "Riesgo físico",
-  transition_risk: "Riesgo de transición",
-  adaptive_capacity: "Capacidad adaptativa",
-  governance: "Gobernanza",
-};
+// IRC (climate resilience) UI maps — national, panel Caribe/LatAm.
+// Las etiquetas de dimensión viven en i18n (esg.dims.*); aquí solo el mapeo de
+// variables por dimensión (sin texto de UI).
 
 // Which variables feed each IRC dimension (mirrors shared/doctrine/esg.yaml) —
 // used to tag each dimension real-vs-rúbrica from the dataset's source map.

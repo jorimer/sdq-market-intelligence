@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Leaf, ListOrdered, ShieldCheck } from "lucide-react";
 import {
   PageHead,
@@ -16,32 +18,34 @@ import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { Band } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
 import { getIndicators, getCountryScore, getCountryInsight, getBacktest, IRCIndicator, IRCCountryDetail, IRCBacktest } from "../api";
-import { DIM_LABELS, IRC_DIM_VARS } from "../data";
+import { IRC_DIM_VARS } from "../data";
 
 type Status = "loading" | "error" | "ready";
 
 // Higher IRC = more resilient / lower climate risk.
-function ircBand(score: number | null | undefined): Band {
-  if (score == null) return { label: "Sin dato", tone: "muted" };
-  if (score >= 60) return { label: "Resiliencia alta", tone: "ok" };
-  if (score >= 40) return { label: "Resiliencia moderada", tone: "warn" };
-  return { label: "Resiliencia baja", tone: "alert" };
+function ircBand(score: number | null | undefined, t: TFunction): Band {
+  if (score == null) return { label: t("esg.band.noData"), tone: "muted" };
+  if (score >= 60) return { label: t("esg.band.high"), tone: "ok" };
+  if (score >= 40) return { label: t("esg.band.moderate"), tone: "warn" };
+  return { label: t("esg.band.low"), tone: "alert" };
 }
 
 /** Real-vs-rubric tag for one IRC dimension, from the source map. */
 function dimTag(
   sources: Record<string, string> | undefined,
   dimKey: string,
+  t: TFunction,
 ): DimensionRow["tag"] {
   const vars = IRC_DIM_VARS[dimKey] ?? [];
   if (!sources || vars.length === 0) return undefined;
   const live = vars.filter((v) => sources[v] === "live").length;
-  if (live === 0) return { text: "rúbrica", ok: false };
-  if (live === vars.length) return { text: "en vivo", ok: true };
-  return { text: `${live}/${vars.length} en vivo`, ok: true };
+  if (live === 0) return { text: t("esg.tag.rubric"), ok: false };
+  if (live === vars.length) return { text: t("esg.tag.live"), ok: true };
+  return { text: t("esg.tag.partialLive", { n: live, total: vars.length }), ok: true };
 }
 
 export function EsgClimatePage() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [countries, setCountries] = useState<IRCIndicator[]>([]);
   const [detail, setDetail] = useState<IRCCountryDetail | null>(null);
@@ -88,9 +92,9 @@ export function EsgClimatePage() {
 
   const head = (
     <PageHead
-      eyebrow="ND-GAIN · panel Caribe/LatAm"
-      title="ESG & clima"
-      sub="Índice de Resiliencia Climática (IRC) nacional sobre el panel regional. Mayor score = mayor resiliencia. Físico/adaptativa/gobernanza con dato real (ND-GAIN); transición, rúbrica hasta cablear energía."
+      eyebrow={t("esg.eyebrow")}
+      title={t("esg.title")}
+      sub={t("esg.subFull")}
     />
   );
 
@@ -99,8 +103,8 @@ export function EsgClimatePage() {
     return (
       <div>
         {head}
-        <StateBlock kind="error" message="No se pudo cargar el IRC. Reintenta."
-          action={<button onClick={load} className="btn btn-ghost">Reintentar</button>} />
+        <StateBlock kind="error" message={t("esg.errorLoad")}
+          action={<button onClick={load} className="btn btn-ghost">{t("common_retry")}</button>} />
       </div>
     );
 
@@ -108,34 +112,33 @@ export function EsgClimatePage() {
     return (
       <div>
         {head}
-        <StateBlock kind="empty"
-          message="Aún no hay IRC. Corre la operación «Sincronizar IRC climático (ND-GAIN)» en la Consola de Operación." />
+        <StateBlock kind="empty" message={t("esg.emptyNoIrc")} />
       </div>
     );
 
   const cur = countries.find((c) => c.entity_key === selected);
-  const band = ircBand(cur?.esg_score);
+  const band = ircBand(cur?.esg_score, t);
   const ranking = [...countries].sort((a, b) => b.esg_score - a.esg_score); // most resilient first
   const sources = detail?.breakdown?.sources;
   const dims = detail?.breakdown?.dimensions ?? {};
   const rows: DimensionRow[] = Object.entries(dims).map(([key, d]) => ({
     key,
-    label: DIM_LABELS[key] ?? key,
+    label: t(`esg.dims.${key}`, key),
     score: d.score,
     weight: d.weight,
     contribution: d.contribution,
-    tag: dimTag(sources, key),
+    tag: dimTag(sources, key, t),
   }));
 
   return (
     <div>
       <PageHead
-        eyebrow="ND-GAIN · panel Caribe/LatAm"
-        title="ESG & clima"
-        sub={`Índice de Resiliencia Climática (IRC) · ${cur?.period ?? ""}. Mayor = mayor resiliencia.`}
+        eyebrow={t("esg.eyebrow")}
+        title={t("esg.title")}
+        sub={t("esg.subShort", { period: cur?.period ?? "" })}
         right={
           <select value={selected} onChange={(e) => setSelected(e.target.value)}
-            className="field !w-auto" title="País">
+            className="field !w-auto" title={t("esg.countrySelect")}>
             {countries.map((c) => (
               <option key={c.entity_key} value={c.entity_key}>{c.country_name}</option>
             ))}
@@ -150,7 +153,7 @@ export function EsgClimatePage() {
           <div className="mono text-[10px] uppercase tracking-[0.16em] text-accent mb-2">IRC</div>
           <Gauge score={cur?.esg_score} band={band} />
           <div className="mt-3"><Chip tone={band.tone}>{band.label}</Chip></div>
-          <div className="text-xs text-muted mt-3">{countries.length} países · panel regional</div>
+          <div className="text-xs text-muted mt-3">{t("esg.panelCount", { count: countries.length })}</div>
         </Card>
 
         {/* Tabs */}
@@ -158,9 +161,9 @@ export function EsgClimatePage() {
           <Card>
             <Tabs
               tabs={[
-                { id: "desglose", label: "Desglose" },
-                { id: "ranking", label: "Ranking del panel" },
-                { id: "validacion", label: "Validación" },
+                { id: "desglose", label: t("esg.tab.breakdown") },
+                { id: "ranking", label: t("esg.tab.ranking") },
+                { id: "validacion", label: t("esg.tab.validation") },
               ]}
               active={tab}
               onChange={setTab}
@@ -168,28 +171,28 @@ export function EsgClimatePage() {
             <div className="pt-5">
               {tab === "desglose" && (
                 <>
-                  <CardHead icon={Leaf} title="Dimensiones del IRC"
-                    subtitle={`${nameOf(selected)} · ponderadas · badge real-vs-rúbrica`} />
+                  <CardHead icon={Leaf} title={t("esg.breakdownTitle")}
+                    subtitle={t("esg.breakdownSubtitle", { country: nameOf(selected) })} />
                   <DimensionBreakdown rows={rows} />
                 </>
               )}
 
               {tab === "ranking" && (
                 <>
-                  <CardHead icon={ListOrdered} title="Ranking de resiliencia climática"
-                    subtitle="Más resiliente primero" />
+                  <CardHead icon={ListOrdered} title={t("esg.rankingTitle")}
+                    subtitle={t("esg.rankingSubtitle")} />
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted border-b border-line">
                         <th className="py-2 px-1 font-medium">#</th>
-                        <th className="py-2 px-1 font-medium">País</th>
+                        <th className="py-2 px-1 font-medium">{t("esg.colCountry")}</th>
                         <th className="py-2 px-1 font-medium text-right">IRC</th>
-                        <th className="py-2 px-1 font-medium">Resiliencia</th>
+                        <th className="py-2 px-1 font-medium">{t("esg.colResilience")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ranking.map((c, i) => {
-                        const b = ircBand(c.esg_score);
+                        const b = ircBand(c.esg_score, t);
                         return (
                           <tr key={c.entity_key}
                             className={`border-b border-line/60 last:border-0 ${
@@ -210,35 +213,35 @@ export function EsgClimatePage() {
 
               {tab === "validacion" && (
                 <>
-                  <CardHead icon={ShieldCheck} title="Backtest del IRC"
-                    subtitle="¿La resiliencia predice menos daño climático real? (OWID/EM-DAT)" />
+                  <CardHead icon={ShieldCheck} title={t("esg.validationTitle")}
+                    subtitle={t("esg.validationSubtitle")} />
                   {!backtest?.computed ? (
                     <StateBlock kind="empty"
-                      message={backtest?.message ?? "Aún no hay backtest. Corre «Backtest del IRC climático» en la Consola de Operación."} />
+                      message={backtest?.message ?? t("esg.emptyBacktest")} />
                   ) : (
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <StatTile label="Correlación (Spearman)" value={fmtNum(backtest.spearman ?? null, 3)} />
-                        <StatTile label="IC 95%"
+                        <StatTile label={t("esg.valSpearman")} value={fmtNum(backtest.spearman ?? null, 3)} />
+                        <StatTile label={t("esg.valCi")}
                           value={backtest.spearman_ci
                             ? `${fmtNum(backtest.spearman_ci[0] ?? null, 2)} … ${fmtNum(backtest.spearman_ci[1] ?? null, 2)}`
                             : "—"} />
-                        <StatTile label="Países" value={backtest.n_countries ?? "—"} />
+                        <StatTile label={t("esg.valCountries")} value={backtest.n_countries ?? "—"} />
                       </div>
                       <div className="flex items-center gap-2">
                         <Chip tone={backtest.monotonic ? "ok" : "warn"}>
-                          {backtest.monotonic ? "Monótona ✓" : "No monótona"}
+                          {backtest.monotonic ? t("esg.monotonicYes") : t("esg.monotonicNo")}
                         </Chip>
                         <span className="text-xs text-muted">
-                          mayor resiliencia → menos muertes por desastre climático
+                          {t("esg.monotonicHint")}
                         </span>
                       </div>
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left text-xs text-muted border-b border-line">
-                            <th className="py-2 px-1 font-medium">Banda IRC</th>
-                            <th className="py-2 px-1 font-medium text-right">Países</th>
-                            <th className="py-2 px-1 font-medium text-right">Muertes/100k/año</th>
+                            <th className="py-2 px-1 font-medium">{t("esg.colIrcBand")}</th>
+                            <th className="py-2 px-1 font-medium text-right">{t("esg.colCountries")}</th>
+                            <th className="py-2 px-1 font-medium text-right">{t("esg.colDeaths")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -265,8 +268,8 @@ export function EsgClimatePage() {
 
       <div className="mt-5">
         <AiInsightCard
-          title="Perspectiva climática (IA)"
-          subtitle={`${nameOf(selected)} · IRC + posición en el panel · SCQA`}
+          title={t("esg.insightTitle")}
+          subtitle={t("esg.insightSubtitle", { country: nameOf(selected) })}
           depsKey={selected}
           fetcher={() => getCountryInsight(selected)}
         />

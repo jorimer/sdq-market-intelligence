@@ -165,6 +165,7 @@ export function Gauge({
   band: Band;
   size?: number;
 }) {
+  const { t: gaugeT } = useTranslation();
   const stroke = 10;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -191,7 +192,7 @@ export function Gauge({
         <span className="font-display text-[28px] font-extrabold text-ink mono leading-none">
           {score == null ? "—" : score.toFixed(1)}
         </span>
-        <span className="text-[11px] text-muted mt-1">de 100</span>
+        <span className="text-[11px] text-muted mt-1">{gaugeT("widgets.gaugeOf100")}</span>
       </div>
     </div>
   );

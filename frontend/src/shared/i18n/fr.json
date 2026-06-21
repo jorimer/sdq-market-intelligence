@@ -225,5 +225,68 @@
       "/settings": "Configuration",
       "/admin/users": "Utilisateurs"
     }
+  },
+  "common_retry": "R\u00e9essayer",
+  "esg": {
+    "eyebrow": "ND-GAIN \u00b7 panel Cara\u00efbes/Am\u00e9rique latine",
+    "title": "ESG & climat",
+    "subFull": "Indice de R\u00e9silience Climatique (IRC) national sur le panel r\u00e9gional. Score plus \u00e9lev\u00e9 = plus r\u00e9silient. Physique/adaptative/gouvernance sur donn\u00e9es r\u00e9elles (ND-GAIN) ; transition au bar\u00e8me jusqu'au c\u00e2blage de l'\u00e9nergie.",
+    "subShort": "Indice de R\u00e9silience Climatique (IRC) \u00b7 {{period}}. Plus \u00e9lev\u00e9 = plus r\u00e9silient.",
+    "countrySelect": "Pays",
+    "panelCount": "{{count}} pays \u00b7 panel r\u00e9gional",
+    "errorLoad": "Impossible de charger l'IRC. R\u00e9essayez.",
+    "emptyNoIrc": "Pas encore d'IRC. Lancez l'op\u00e9ration \u00ab Synchroniser l'IRC climatique (ND-GAIN) \u00bb dans la Console d'Op\u00e9ration.",
+    "band": {
+      "noData": "Aucune donn\u00e9e",
+      "high": "R\u00e9silience \u00e9lev\u00e9e",
+      "moderate": "R\u00e9silience mod\u00e9r\u00e9e",
+      "low": "R\u00e9silience faible"
+    },
+    "tag": {
+      "rubric": "bar\u00e8me",
+      "live": "en direct",
+      "partialLive": "{{n}}/{{total}} en direct"
+    },
+    "tab": {
+      "breakdown": "D\u00e9tail",
+      "ranking": "Classement du panel",
+      "validation": "Validation"
+    },
+    "breakdownTitle": "Dimensions de l'IRC",
+    "breakdownSubtitle": "{{country}} \u00b7 pond\u00e9r\u00e9es \u00b7 badge r\u00e9el-vs-bar\u00e8me",
+    "rankingTitle": "Classement de r\u00e9silience climatique",
+    "rankingSubtitle": "Le plus r\u00e9silient en premier",
+    "validationTitle": "Backtest de l'IRC",
+    "validationSubtitle": "La r\u00e9silience pr\u00e9dit-elle moins de dommages climatiques r\u00e9els ? (OWID/EM-DAT)",
+    "emptyBacktest": "Pas encore de backtest. Lancez \u00ab Backtest de l'IRC climatique \u00bb dans la Console d'Op\u00e9ration.",
+    "colCountry": "Pays",
+    "colResilience": "R\u00e9silience",
+    "colIrcBand": "Bande IRC",
+    "colCountries": "Pays",
+    "colDeaths": "D\u00e9c\u00e8s/100k/an",
+    "valSpearman": "Corr\u00e9lation (Spearman)",
+    "valCi": "IC 95 %",
+    "valCountries": "Pays",
+    "monotonicYes": "Monotone \u2713",
+    "monotonicNo": "Non monotone",
+    "monotonicHint": "plus de r\u00e9silience \u2192 moins de d\u00e9c\u00e8s dus aux catastrophes climatiques",
+    "insightTitle": "Perspective climatique (IA)",
+    "insightSubtitle": "{{country}} \u00b7 IRC + position dans le panel \u00b7 SCQA",
+    "dims": {
+      "physical_risk": "Risque physique",
+      "transition_risk": "Risque de transition",
+      "adaptive_capacity": "Capacit\u00e9 d'adaptation",
+      "governance": "Gouvernance"
+    }
+  },
+  "widgets": {
+    "gaugeOf100": "sur 100",
+    "dimMeta": "poids {{w}} % \u00b7 apporte {{c}}",
+    "aiGenerating": "G\u00e9n\u00e9ration de l'analyse IA\u2026 (~10\u201315 s)",
+    "aiError": "Impossible de g\u00e9n\u00e9rer l'analyse IA.",
+    "aiByModel": "G\u00e9n\u00e9r\u00e9 par IA ({{model}})",
+    "aiCached": "cache",
+    "aiVerify": "V\u00e9rifiez avant de d\u00e9cider.",
+    "aiUnavailable": "L'analyse IA n'est pas disponible (cl\u00e9 Anthropic non configur\u00e9e)."
   }
 }
