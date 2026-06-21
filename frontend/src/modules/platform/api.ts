@@ -81,10 +81,18 @@ export async function scoreDeal(input: Record<string, any>): Promise<DealScoreRe
   return data;
 }
 
+export interface RetrospectiveDiagnostic {
+  n: number;
+  cv_auc: number;
+  auc_ci: [number | null, number | null];
+  note: string;
+}
 export interface LearningCurve {
   n_labeled: number;
   n_closed: number;
   n_lost: number;
+  n_ex_ante: number;
+  n_retrospective: number;
   computed: boolean;
   status: string; // "rubrica" | "modelo"
   ready_for_model: boolean;
@@ -93,6 +101,7 @@ export interface LearningCurve {
   graduation_floor: number;
   message: string;
   caveats?: string[];
+  retrospective_diagnostic?: RetrospectiveDiagnostic | null;
 }
 export async function getLearningCurve(): Promise<LearningCurve> {
   const { data } = await client.get("/deal-scoring/learning-curve");
