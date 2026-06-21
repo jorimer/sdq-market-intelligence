@@ -8,22 +8,26 @@ export interface Band {
   tone: Tone;
 }
 
-/** Standard index band (higher = stronger). */
-export function bandFor(score: number | null | undefined): Band {
-  if (score == null) return { label: "Sin dato", tone: "muted" };
-  if (score >= 85) return { label: "Fuerte", tone: "ok" };
-  if (score >= 70) return { label: "Sólido", tone: "accent" };
-  if (score >= 55) return { label: "Vigilar", tone: "warn" };
-  return { label: "Débil", tone: "alert" };
+/** i18n translator (key → text). Optional so non-migrated callers keep Spanish. */
+type Translator = (key: string) => string;
+const lbl = (t: Translator | undefined, key: string, es: string) => (t ? t(key) : es);
+
+/** Standard index band (higher = stronger). Pass `t` to localize the label. */
+export function bandFor(score: number | null | undefined, t?: Translator): Band {
+  if (score == null) return { label: lbl(t, "bands.noData", "Sin dato"), tone: "muted" };
+  if (score >= 85) return { label: lbl(t, "bands.strong", "Fuerte"), tone: "ok" };
+  if (score >= 70) return { label: lbl(t, "bands.solid", "Sólido"), tone: "accent" };
+  if (score >= 55) return { label: lbl(t, "bands.watch", "Vigilar"), tone: "warn" };
+  return { label: lbl(t, "bands.weak", "Débil"), tone: "alert" };
 }
 
-/** Risk-axis band (higher score = lower risk). */
-export function riskBandFor(score: number | null | undefined): Band {
-  if (score == null) return { label: "Sin dato", tone: "muted" };
-  if (score >= 80) return { label: "Riesgo bajo", tone: "ok" };
-  if (score >= 60) return { label: "Riesgo moderado", tone: "accent" };
-  if (score >= 40) return { label: "Riesgo elevado", tone: "warn" };
-  return { label: "Riesgo alto", tone: "alert" };
+/** Risk-axis band (higher score = lower risk). Pass `t` to localize the label. */
+export function riskBandFor(score: number | null | undefined, t?: Translator): Band {
+  if (score == null) return { label: lbl(t, "bands.noData", "Sin dato"), tone: "muted" };
+  if (score >= 80) return { label: lbl(t, "bands.riskLow", "Riesgo bajo"), tone: "ok" };
+  if (score >= 60) return { label: lbl(t, "bands.riskModerate", "Riesgo moderado"), tone: "accent" };
+  if (score >= 40) return { label: lbl(t, "bands.riskElevated", "Riesgo elevado"), tone: "warn" };
+  return { label: lbl(t, "bands.riskHigh", "Riesgo alto"), tone: "alert" };
 }
 
 /** Tailwind classes (token-based) for a tone's soft badge. */

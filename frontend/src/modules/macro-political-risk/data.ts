@@ -52,10 +52,4 @@ export const SAMPLE_REGIONAL: Record<string, Record<string, number>> = {
   },
 };
 
-export const DIMENSION_LABELS: Record<string, string> = {
-  macro: "Macroeconómica",
-  external: "Externa",
-  political: "Político-institucional",
-  regulatory: "Regulatoria",
-  events: "Eventos",
-};
+// Las etiquetas de dimensión viven ahora en i18n (mpr.dims.*).
