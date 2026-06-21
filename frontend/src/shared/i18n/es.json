@@ -167,5 +167,63 @@
     "cobertura_liquidez": "Cobertura de Liquidez",
     "activos_liquidos": "Activos L\u00edquidos / Pasivos",
     "hhi_ingresos": "HHI Ingresos"
+  },
+  "shell": {
+    "menu": "Men\u00fa",
+    "collapseMenu": "Colapsar men\u00fa",
+    "search": "Buscar (\u2318K)",
+    "period": "Per\u00edodo",
+    "scope": "\u00c1mbito",
+    "lightMode": "Modo claro",
+    "darkMode": "Modo oscuro",
+    "logout": "Cerrar sesi\u00f3n",
+    "user": "Usuario",
+    "home": "Inicio",
+    "soon": "pronto",
+    "loading": "Cargando..."
+  },
+  "lang": {
+    "label": "Idioma",
+    "es": "Espa\u00f1ol",
+    "en": "English",
+    "fr": "Fran\u00e7ais"
+  },
+  "states": {
+    "loading": "Cargando\u2026",
+    "empty": "Sin datos",
+    "error": "Error al cargar",
+    "forbidden": "Sin permiso",
+    "soon": "En construcci\u00f3n"
+  },
+  "sidebar": {
+    "groups": {
+      "intelligence": "Ejes de inteligencia",
+      "data": "Datos",
+      "tools": "Herramientas",
+      "platform": "Plataforma",
+      "admin": "Administraci\u00f3n"
+    },
+    "items": {
+      "/banking-score": "Financiero",
+      "/macro-monitor": "Macroecon\u00f3mico",
+      "/sector-intel": "Sectorial",
+      "/macro-political-risk": "Regulatorio & pol\u00edtico",
+      "/social-dev": "Social & desarrollo",
+      "/trade-intel": "Comercio exterior",
+      "/esg-climate": "ESG & clima",
+      "/datos/banca": "Banca \u00b7 SIB",
+      "/datos/operaciones": "Operaciones",
+      "/datos/macro": "Macro \u00b7 BCRD",
+      "/datos/social": "Social \u00b7 ONE",
+      "/datos/comercio": "Comercio \u00b7 DGA",
+      "/datos/gobernanza": "Gobernanza \u00b7 WGI",
+      "/tools/deal-scoring": "Deal Scoring",
+      "/tools/market-brief": "Market Brief",
+      "/overview": "Resumen ejecutivo",
+      "/compare": "Comparador",
+      "/methodology": "Metodolog\u00eda",
+      "/settings": "Configuraci\u00f3n",
+      "/admin/users": "Usuarios"
+    }
   }
 }

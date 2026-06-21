@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { NAV } from "./nav";
 import { useAuth } from "@/shared/auth/AuthContext";
 
@@ -30,6 +31,7 @@ interface Props {
 
 export function SidebarContent({ collapsed = false, onNavigate }: Props) {
   const { hasRole } = useAuth();
+  const { t } = useTranslation();
   // Oculta items gateados por rol (jerárquico); grupos que quedan vacíos no se muestran.
   const groups = NAV.map((g) => ({
     ...g,
@@ -52,7 +54,7 @@ export function SidebarContent({ collapsed = false, onNavigate }: Props) {
           <div key={group.title}>
             {!collapsed && (
               <div className="mono text-[10px] font-semibold uppercase tracking-[0.14em] text-faint px-2.5 mb-1.5">
-                {group.title}
+                {t(`sidebar.groups.${group.key}`, group.title)}
               </div>
             )}
             <div className="space-y-0.5">
@@ -62,7 +64,7 @@ export function SidebarContent({ collapsed = false, onNavigate }: Props) {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    title={item.label}
+                    title={t(`sidebar.items.${item.to}`, item.label)}
                     onClick={onNavigate}
                     className={({ isActive }) =>
                       `relative flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm font-medium transition ${
@@ -78,10 +80,10 @@ export function SidebarContent({ collapsed = false, onNavigate }: Props) {
                           <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-accent" />
                         )}
                         <Icon size={17} className={isActive ? "text-accent shrink-0" : "shrink-0"} />
-                        {!collapsed && <span className="truncate">{item.label}</span>}
+                        {!collapsed && <span className="truncate">{t(`sidebar.items.${item.to}`, item.label)}</span>}
                         {!collapsed && item.ready === false && (
                           <span className="ml-auto shrink-0 mono text-[9px] uppercase tracking-wide text-faint border border-line rounded px-1 py-0.5">
-                            pronto
+                            {t("shell.soon")}
                           </span>
                         )}
                       </>

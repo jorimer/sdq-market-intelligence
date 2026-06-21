@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "./AuthContext";
 import type { ReactNode } from "react";
 
@@ -9,11 +10,12 @@ interface Props {
 
 export function ProtectedRoute({ children, requiredRole }: Props) {
   const { isAuthenticated, isLoading, hasRole } = useAuth();
+  const { t } = useTranslation();
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-pulse text-ink text-lg">Cargando...</div>
+        <div className="animate-pulse text-ink text-lg">{t("shell.loading")}</div>
       </div>
     );
   }
