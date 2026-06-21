@@ -70,7 +70,11 @@ async def import_csv(
 ) -> Dict[str, Any]:
     """Upsert por `deal_name`. Columnas: deal_name, deal_type, sector, country,
     deal_size_usd, equity_required_pct, deal_stage, closed_successfully,
-    label_confidence, source_folder, note (las 4 señales de analista opcionales)."""
+    label_confidence, source_folder, note (las 4 señales de analista opcionales).
+
+    Una carga masiva es curación histórica → los labels se marcan RETROSPECTIVOS por
+    defecto (no gradúan el modelo; ver learning_curve). Una columna `retrospective`
+    explícita en el CSV puede sobreescribirlo."""
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     raw = await file.read()
@@ -109,6 +113,9 @@ async def import_csv(
             d.days_since_first_contact = int(max(0, days))
         d.label_confidence = _enum(LabelConfidence, row.get("label_confidence"),
                                    default=LabelConfidence.baja)
+        # Curación histórica = retrospectiva por defecto; una columna explícita manda.
+        retro = _bool(row.get("retrospective"))
+        d.retrospective = True if retro is None else retro
         d.source_folder = (row.get("source_folder") or "").strip() or None
         d.note = (row.get("note") or "").strip() or None
         if is_new:
@@ -142,6 +149,9 @@ async def save_deal(
         deal_stage=_enum(DealStage, body.get("deal_stage")),
         closed_successfully=_bool(body.get("closed_successfully")) if body.get("closed_successfully") not in (None, "") else None,
         label_confidence=LabelConfidence.baja,
+        # Cosecha going-forward: se scorea antes de conocer el outcome → ex-ante (sin
+        # fuga). Es el único camino que gradúa el modelo (ver learning_curve).
+        retrospective=False,
         note=(body.get("note") or "").strip() or None,
     )
     for c in ("promoter_track_record", "financial_quality", "market_validation", "regulatory_readiness"):

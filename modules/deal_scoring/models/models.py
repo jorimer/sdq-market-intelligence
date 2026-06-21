@@ -30,6 +30,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
 )
 
 from shared.database.base import Base, UUIDMixin
@@ -112,6 +113,13 @@ class HistoricalDeal(UUIDMixin, Base):
     # Target + outcome
     closed_successfully = Column(Boolean, nullable=True)  # 1=cerró, 0=no, NULL=abierto
     outcome_date = Column(Date, nullable=True)
+
+    # Procedencia del label: ¿se etiquetó con el outcome YA conocido (backfill
+    # histórico) o se scoreó ANTES de saberlo (cosecha going-forward)? Solo los
+    # ex-ante (retrospective=False) son libres de fuga y pueden GRADUAR el modelo.
+    # Anti-fabricación: un AUC alto sobre labels retrospectivos es leakage, no skill.
+    retrospective = Column(Boolean, nullable=False, default=False,
+                           server_default=false())
 
     # Trazabilidad / calidad del label
     source_folder = Column(Text, nullable=True)

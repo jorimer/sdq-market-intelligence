@@ -276,25 +276,41 @@ export function DealScoringPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
                 <StatTile label="Estado" value={curve.status === "modelo" ? "Modelo" : "Rúbrica"} />
                 <StatTile label="Labels en registro" value={`${curve.n_labeled}`} />
-                <StatTile label="Balance (cerr/perd)" value={`${curve.n_closed}/${curve.n_lost}`} />
-                <StatTile label="AUC en CV" value={curve.computed && curve.cv_auc != null ? fmtNum(curve.cv_auc, 3) : "—"} />
+                <StatTile label="Ex-ante (gradúan)" value={`${curve.n_ex_ante}`} unit="sin fuga" />
+                <StatTile label="AUC en CV (ex-ante)" value={curve.computed && curve.cv_auc != null ? fmtNum(curve.cv_auc, 3) : "—"} />
               </div>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <Chip tone={curve.ready_for_model ? "ok" : "warn"}>
                   {curve.ready_for_model ? "Modelo entrenado viable" : "Aún en rúbrica"}
                 </Chip>
+                <Chip tone="muted">{curve.n_closed}/{curve.n_lost} cerr/perd</Chip>
                 {curve.computed && curve.auc_ci?.[0] != null && (
                   <Chip tone="muted">
                     IC95% {fmtNum(curve.auc_ci[0], 3)}–{fmtNum(curve.auc_ci[1], 3)} · umbral {curve.graduation_floor}
                   </Chip>
                 )}
-                <span className="text-xs text-faint flex items-center gap-1"><Database className="w-3 h-3" /> graduación por evidencia, no por "200"</span>
+                <span className="text-xs text-faint flex items-center gap-1"><Database className="w-3 h-3" /> gradúa solo cosecha going-forward</span>
               </div>
               <p className="text-sm text-body">{curve.message}</p>
               {curve.caveats && (
                 <ul className="mt-2 space-y-1 text-xs text-faint list-disc pl-4">
                   {curve.caveats.map((c, i) => <li key={i}>{c}</li>)}
                 </ul>
+              )}
+              {curve.retrospective_diagnostic && (
+                <div className="mt-3 rounded-lg border border-line bg-subtle/40 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip tone="warn">Diagnóstico retrospectivo · no gradúa</Chip>
+                    <span className="text-xs text-muted tabular-nums">
+                      AUC in-sample {fmtNum(curve.retrospective_diagnostic.cv_auc, 3)}
+                      {curve.retrospective_diagnostic.auc_ci?.[0] != null && (
+                        <> · IC95% {fmtNum(curve.retrospective_diagnostic.auc_ci[0], 3)}–{fmtNum(curve.retrospective_diagnostic.auc_ci[1], 3)}</>
+                      )}
+                      {" "}· N={curve.retrospective_diagnostic.n}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-faint">{curve.retrospective_diagnostic.note}</p>
+                </div>
               )}
               {importMsg && <p className="text-xs text-muted mt-3">{importMsg}</p>}
             </>
