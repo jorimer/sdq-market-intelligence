@@ -167,5 +167,63 @@
     "cobertura_liquidez": "Liquidity Coverage",
     "activos_liquidos": "Liquid Assets / Liabilities",
     "hhi_ingresos": "Revenue HHI"
+  },
+  "shell": {
+    "menu": "Menu",
+    "collapseMenu": "Collapse menu",
+    "search": "Search (\u2318K)",
+    "period": "Period",
+    "scope": "Scope",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "logout": "Log out",
+    "user": "User",
+    "home": "Home",
+    "soon": "soon",
+    "loading": "Loading..."
+  },
+  "lang": {
+    "label": "Language",
+    "es": "Espa\u00f1ol",
+    "en": "English",
+    "fr": "Fran\u00e7ais"
+  },
+  "states": {
+    "loading": "Loading\u2026",
+    "empty": "No data",
+    "error": "Failed to load",
+    "forbidden": "No permission",
+    "soon": "Coming soon"
+  },
+  "sidebar": {
+    "groups": {
+      "intelligence": "Intelligence axes",
+      "data": "Data",
+      "tools": "Tools",
+      "platform": "Platform",
+      "admin": "Administration"
+    },
+    "items": {
+      "/banking-score": "Financial",
+      "/macro-monitor": "Macroeconomic",
+      "/sector-intel": "Sector",
+      "/macro-political-risk": "Regulatory & political",
+      "/social-dev": "Social & development",
+      "/trade-intel": "Foreign trade",
+      "/esg-climate": "ESG & climate",
+      "/datos/banca": "Banking \u00b7 SIB",
+      "/datos/operaciones": "Operations",
+      "/datos/macro": "Macro \u00b7 BCRD",
+      "/datos/social": "Social \u00b7 ONE",
+      "/datos/comercio": "Trade \u00b7 DGA",
+      "/datos/gobernanza": "Governance \u00b7 WGI",
+      "/tools/deal-scoring": "Deal Scoring",
+      "/tools/market-brief": "Market Brief",
+      "/overview": "Executive summary",
+      "/compare": "Comparator",
+      "/methodology": "Methodology",
+      "/settings": "Settings",
+      "/admin/users": "Users"
+    }
   }
 }

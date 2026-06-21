@@ -26,12 +26,14 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-  title: string;
+  key: string; // clave i18n del grupo (sidebar.groups.<key>)
+  title: string; // fallback ES
   items: NavItem[];
 }
 
 export const NAV: NavGroup[] = [
   {
+    key: "intelligence",
     title: "Ejes de inteligencia",
     items: [
       { to: "/banking-score", label: "Financiero", icon: Landmark, ready: true },
@@ -44,6 +46,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    key: "data",
     title: "Datos",
     items: [
       { to: "/datos/banca", label: "Banca · SIB", icon: Landmark, ready: true },
@@ -55,6 +58,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    key: "tools",
     title: "Herramientas",
     items: [
       { to: "/tools/deal-scoring", label: "Deal Scoring", icon: Target },
@@ -62,6 +66,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    key: "platform",
     title: "Plataforma",
     items: [
       { to: "/overview", label: "Resumen ejecutivo", icon: LayoutDashboard },
@@ -71,6 +76,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    key: "admin",
     title: "Administración",
     items: [
       { to: "/admin/users", label: "Usuarios", icon: ShieldCheck, ready: true, minRole: "admin" },

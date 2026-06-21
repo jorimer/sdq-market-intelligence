@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   Inbox,
@@ -254,13 +255,14 @@ export function StateBlock({
 }) {
   const meta = STATE_META[kind];
   const Icon = meta.icon;
+  const { t } = useTranslation();
   return (
     <div className="card p-10 flex flex-col items-center justify-center text-center">
       <span className="grid place-items-center w-12 h-12 rounded-xl bg-surface2 text-muted mb-3">
         <Icon size={22} className={kind === "loading" ? "animate-spin" : ""} />
       </span>
       <div className="font-display text-[15px] font-bold text-ink whitespace-nowrap">
-        {title ?? meta.title}
+        {title ?? t(`states.${kind}`, meta.title)}
       </div>
       {message && <p className="text-sm text-muted mt-1.5 max-w-md">{message}</p>}
       {action && <div className="mt-4">{action}</div>}

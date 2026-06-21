@@ -1,0 +1,229 @@
+{
+  "app": {
+    "title": "SDQ Market Intelligence",
+    "loading": "Chargement..."
+  },
+  "auth": {
+    "subtitle": "Plateforme d'Intelligence de March\u00e9",
+    "email": "Adresse e-mail",
+    "password": "Mot de passe",
+    "login": "Se connecter",
+    "loggingIn": "Connexion...",
+    "logout": "Se d\u00e9connecter",
+    "loginError": "Identifiants invalides. R\u00e9essayez."
+  },
+  "nav": {
+    "bankingScore": "Banking Score",
+    "dashboard": "Tableau de bord",
+    "scoring": "Scoring",
+    "rankings": "Classements",
+    "reports": "Rapports",
+    "data": "Donn\u00e9es",
+    "model": "Mod\u00e8le ML",
+    "scenarios": "Sc\u00e9narios",
+    "compare": "Comparer"
+  },
+  "dashboard": {
+    "title": "Tableau de bord - Banking Score",
+    "sectorStats": "Statistiques du secteur",
+    "topBanks": "Top 5 des banques",
+    "recentActions": "Actions r\u00e9centes",
+    "totalBanks": "Banques not\u00e9es",
+    "avgScore": "Score moyen",
+    "latestPeriod": "Derni\u00e8re p\u00e9riode",
+    "totalRecords": "Total des enregistrements"
+  },
+  "scoring": {
+    "title": "Scoring bancaire",
+    "selectBank": "S\u00e9lectionner une banque",
+    "runScoring": "Lancer le scoring",
+    "running": "Calcul en cours...",
+    "overallScore": "Score global",
+    "ratingTier": "Notation",
+    "subComponents": "Sous-composantes",
+    "indicators": "Indicateurs financiers",
+    "noResults": "S\u00e9lectionnez une banque et lancez le scoring pour voir les r\u00e9sultats."
+  },
+  "rankings": {
+    "title": "Classements",
+    "period": "P\u00e9riode",
+    "rank": "Pos.",
+    "bank": "Banque",
+    "score": "Score",
+    "tier": "Notation",
+    "change": "Variation",
+    "noData": "Aucune donn\u00e9e de classement pour la p\u00e9riode s\u00e9lectionn\u00e9e."
+  },
+  "reports": {
+    "title": "Rapports",
+    "generate": "G\u00e9n\u00e9rer un rapport",
+    "generating": "G\u00e9n\u00e9ration...",
+    "download": "T\u00e9l\u00e9charger",
+    "type": "Type",
+    "bank": "Banque",
+    "period": "P\u00e9riode",
+    "date": "Date",
+    "history": "Historique des rapports",
+    "noHistory": "Aucun rapport g\u00e9n\u00e9r\u00e9 pour l'instant.",
+    "types": {
+      "full_rating": "Notation compl\u00e8te",
+      "scorecard": "Scorecard",
+      "communique": "Communiqu\u00e9",
+      "datawatch": "DataWatch",
+      "wire": "Wire",
+      "criteria": "Crit\u00e8res",
+      "sector_outlook": "Perspective sectorielle"
+    }
+  },
+  "data": {
+    "title": "Gestion des donn\u00e9es",
+    "upload": "Importer CSV",
+    "uploading": "Importation...",
+    "dropzone": "Glissez un fichier CSV ici ou cliquez pour s\u00e9lectionner",
+    "records": "Enregistrements",
+    "banks": "Banques",
+    "periods": "P\u00e9riodes",
+    "sibSync": "Synchronisation SIB",
+    "lastSync": "Derni\u00e8re synchronisation",
+    "rawData": "Donn\u00e9es brutes"
+  },
+  "model": {
+    "title": "Mod\u00e8le ML",
+    "status": "\u00c9tat du mod\u00e8le",
+    "available": "Disponible",
+    "unavailable": "Indisponible",
+    "type": "Type",
+    "version": "Version",
+    "accuracy": "Pr\u00e9cision",
+    "kappa": "Kappa",
+    "trainingSamples": "\u00c9chantillons d'entra\u00eenement",
+    "totalRatings": "Total des notations",
+    "train": "Entra\u00eener le mod\u00e8le",
+    "training": "Entra\u00eenement...",
+    "minRecords": "Minimum 30 enregistrements pour entra\u00eener"
+  },
+  "scenarios": {
+    "title": "Sc\u00e9narios What-If",
+    "adjustSliders": "Ajustez les sous-composantes pour simuler des sc\u00e9narios",
+    "reset": "R\u00e9initialiser",
+    "presets": "Sc\u00e9narios pr\u00e9d\u00e9finis",
+    "optimistic": "Optimiste",
+    "pessimistic": "Pessimiste",
+    "baseline": "Base",
+    "stressTest": "Stress Test",
+    "simulatedScore": "Score simul\u00e9",
+    "simulatedTier": "Notation simul\u00e9e",
+    "currentVsSimulated": "Actuel vs. simul\u00e9"
+  },
+  "compare": {
+    "title": "Comparaison de banques",
+    "selectBanks": "S\u00e9lectionnez 2 \u00e0 4 banques \u00e0 comparer",
+    "addBank": "Ajouter une banque",
+    "remove": "Retirer",
+    "runComparison": "Comparer",
+    "comparing": "Comparaison...",
+    "noSelection": "S\u00e9lectionnez au moins 2 banques \u00e0 comparer."
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "search": "Rechercher...",
+    "noData": "Aucune donn\u00e9e disponible",
+    "error": "Erreur",
+    "success": "Succ\u00e8s",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "of": "de"
+  },
+  "sub": {
+    "solidez": "Solidit\u00e9 financi\u00e8re",
+    "calidad": "Qualit\u00e9 des actifs",
+    "eficiencia": "Efficacit\u00e9 et rentabilit\u00e9",
+    "liquidez": "Liquidit\u00e9",
+    "diversificacion": "Diversification"
+  },
+  "indicators": {
+    "solvencia": "Solvabilit\u00e9 (CAR)",
+    "capital_primario": "Capital primaire",
+    "apalancamiento": "Levier",
+    "capital_tier1": "Capital Tier 1",
+    "cobertura_contingentes": "Couverture des engagements",
+    "morosidad": "Cr\u00e9ances douteuses (NPL)",
+    "cobertura_provisiones": "Couverture des provisions",
+    "concentracion_top10": "Concentration Top 10",
+    "hhi_sectorial": "HHI sectoriel",
+    "castigos_cartera": "Radiations / Portefeuille",
+    "concentracion_re": "Concentration RE",
+    "calidad_cartera_a": "Qualit\u00e9 portefeuille A",
+    "roa": "ROA",
+    "roe": "ROE",
+    "nim": "Marge d'interm\u00e9diation (NIM)",
+    "eficiencia_operativa": "Efficacit\u00e9 op\u00e9rationnelle",
+    "liquidez_inmediata": "Liquidit\u00e9 imm\u00e9diate",
+    "cartera_depositos": "Portefeuille / D\u00e9p\u00f4ts",
+    "cobertura_liquidez": "Couverture de liquidit\u00e9",
+    "activos_liquidos": "Actifs liquides / Passifs",
+    "hhi_ingresos": "HHI revenus"
+  },
+  "shell": {
+    "menu": "Menu",
+    "collapseMenu": "R\u00e9duire le menu",
+    "search": "Rechercher (\u2318K)",
+    "period": "P\u00e9riode",
+    "scope": "P\u00e9rim\u00e8tre",
+    "lightMode": "Mode clair",
+    "darkMode": "Mode sombre",
+    "logout": "Se d\u00e9connecter",
+    "user": "Utilisateur",
+    "home": "Accueil",
+    "soon": "bient\u00f4t",
+    "loading": "Chargement..."
+  },
+  "lang": {
+    "label": "Langue",
+    "es": "Espa\u00f1ol",
+    "en": "English",
+    "fr": "Fran\u00e7ais"
+  },
+  "states": {
+    "loading": "Chargement\u2026",
+    "empty": "Aucune donn\u00e9e",
+    "error": "\u00c9chec du chargement",
+    "forbidden": "Acc\u00e8s refus\u00e9",
+    "soon": "En construction"
+  },
+  "sidebar": {
+    "groups": {
+      "intelligence": "Axes d'intelligence",
+      "data": "Donn\u00e9es",
+      "tools": "Outils",
+      "platform": "Plateforme",
+      "admin": "Administration"
+    },
+    "items": {
+      "/banking-score": "Financier",
+      "/macro-monitor": "Macro\u00e9conomique",
+      "/sector-intel": "Sectoriel",
+      "/macro-political-risk": "R\u00e9glementaire & politique",
+      "/social-dev": "Social & d\u00e9veloppement",
+      "/trade-intel": "Commerce ext\u00e9rieur",
+      "/esg-climate": "ESG & climat",
+      "/datos/banca": "Banque \u00b7 SIB",
+      "/datos/operaciones": "Op\u00e9rations",
+      "/datos/macro": "Macro \u00b7 BCRD",
+      "/datos/social": "Social \u00b7 ONE",
+      "/datos/comercio": "Commerce \u00b7 DGA",
+      "/datos/gobernanza": "Gouvernance \u00b7 WGI",
+      "/tools/deal-scoring": "Deal Scoring",
+      "/tools/market-brief": "Market Brief",
+      "/overview": "R\u00e9sum\u00e9 ex\u00e9cutif",
+      "/compare": "Comparateur",
+      "/methodology": "M\u00e9thodologie",
+      "/settings": "Configuration",
+      "/admin/users": "Utilisateurs"
+    }
+  }
+}
