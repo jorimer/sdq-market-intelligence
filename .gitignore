@@ -46,6 +46,12 @@ Thumbs.db
 reports/*.pdf
 temp/
 
+# IP propietaria + material de cliente (NO versionar — repo público).
+# Specs propietarios, whitepapers, inventario de deals con nombres reales,
+# y casos de entrenamiento. El seed del módulo deal_scoring va anonimizado.
+docs/Modelos Propietarios/
+docs/Casos Entrenamiento/
+
 # Coverage
 htmlcov/
 .coverage
