@@ -155,7 +155,7 @@ Cerrar Eje 2 (`macro_monitor`) a profundidad y arrancar Eje 4 (WGI) por Gate A, 
 - [x] **RBAC + administración de usuarios** ✅ **en prod (#235 backend, #236 frontend).** Rol jerárquico super_admin/admin/analyst/viewer + tier free/pro/enterprise (monetización declarada) + CRUD gateado con barandas anti-escalada/anti-lockout + página Administración→Usuarios. Ver [[rbac-user-admin]].
 - [ ] **Crear super_admin real:** el dueño setea `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` en Railway → bootstrap idempotente lo crea en el deploy.
 - [ ] **Endurecimiento de seguridad:** desactivar cuenta E2E (`scripts/seed_e2e_user.py --deactivate`) una vez exista el super_admin real + revisar exposición del repo público (secretos/datos versionados).
-- [~] **Idioma EN/ES/FR (i18n) — por fases.** [x] **Fase 1** (toggle ES/EN/FR + marco traducido) ✅ en prod (#238). [ ] **Fase 2:** narrativas IA en el idioma (pasar lang al motor Claude). [ ] **Fase 3:** barrido de ~1000 strings por eje. Ver [[i18n-multilang]].
+- [~] **Idioma EN/ES/FR (i18n) — por fases.** [x] **Fase 1** (toggle + marco) ✅ #238. [x] **Fase 2** (narrativas IA por idioma vía header X-Lang + dependencia global) ✅ #240. [ ] **Fase 3:** barrido de ~1000 strings por eje. Ver [[i18n-multilang]].
 
 ## Deuda registrada (no en este sprint)
 - Deal Scoring huérfano → módulo formal. · DGII bloqueado por licencia.
