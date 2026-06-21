@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+
 // Supervised entity types ("áreas") of the Financiero axis (SIB universe).
 // `creditModel` = the 19-indicator credit-rating model applies (Scoring page).
 // `submodelReady` = a working rating submodel exists, so ranking/dashboard show
@@ -27,5 +29,8 @@ export const isCreditModel = (value: string): boolean =>
 export const isSubmodelReady = (value: string): boolean =>
   ENTITY_TYPES.find((t) => t.value === value)?.submodelReady ?? true;
 
-export const entityTypeLabel = (value: string): string =>
-  ENTITY_TYPES.find((t) => t.value === value)?.label ?? value;
+/** ES fallback label; pass a translator to localize via banking.entityType.<key>. */
+export const entityTypeLabel = (value: string, t?: TFunction): string => {
+  const fallback = ENTITY_TYPES.find((o) => o.value === value)?.label ?? value;
+  return t ? t(`banking.entityType.${value || "all"}`, fallback) : fallback;
+};

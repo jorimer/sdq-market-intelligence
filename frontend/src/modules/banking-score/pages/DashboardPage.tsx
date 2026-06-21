@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Trophy, PieChart, ChevronRight } from "lucide-react";
 import client from "@/shared/api/client";
 import { RatingBadge } from "../components/RatingBadge";
@@ -34,6 +35,7 @@ interface Rank {
 }
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<Stats | null>(null);
   const [rankings, setRankings] = useState<Rank[]>([]);
   const [status, setStatus] = useState<Status>("loading");
@@ -58,17 +60,17 @@ export function DashboardPage() {
 
   const areaTabs = (
     <div className="flex flex-wrap gap-1.5 mb-5">
-      {ENTITY_TYPES.map((t) => (
+      {ENTITY_TYPES.map((opt) => (
         <button
-          key={t.value}
-          onClick={() => setArea(t.value)}
+          key={opt.value}
+          onClick={() => setArea(opt.value)}
           className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
-            area === t.value
+            area === opt.value
               ? "bg-accent text-white border-accent"
               : "bg-surface text-body border-line hover:border-linestrong"
           }`}
         >
-          {t.label}
+          {t(`banking.entityType.${opt.value || "all"}`, opt.label)}
         </button>
       ))}
     </div>
@@ -76,9 +78,9 @@ export function DashboardPage() {
 
   const head = (
     <PageHead
-      eyebrow="SIB · SIMBAD"
-      title="Financiero"
-      sub="Score de entidad financiera explicable y auditable para el universo supervisado por la SIB (Financial Entity Score)."
+      eyebrow={t("banking.dashEyebrow")}
+      title={t("banking.dashTitle")}
+      sub={t("banking.dashSub")}
     />
   );
 
@@ -88,7 +90,7 @@ export function DashboardPage() {
       <div>
         {head}
         {areaTabs}
-        <StateBlock kind="error" message="No se pudieron cargar los datos del sector. Reintenta." />
+        <StateBlock kind="error" message={t("banking.dashErrorSector")} />
       </div>
     );
 
@@ -100,8 +102,8 @@ export function DashboardPage() {
         {areaTabs}
         <StateBlock
           kind="soon"
-          title="Submodelo en construcción"
-          message={`El análisis de ${entityTypeLabel(area).toLowerCase()} usa indicadores propios (no el modelo crediticio). Su submodelo está en desarrollo.`}
+          title={t("banking.submodelSoonTitle")}
+          message={t("banking.submodelSoonMsg", { type: entityTypeLabel(area, t).toLowerCase() })}
         />
       </div>
     );
@@ -109,7 +111,7 @@ export function DashboardPage() {
 
   // Cambiarias use their own (non-credit) submodel — surface that honestly.
   const submodelNote = !isCreditModel(area)
-    ? `${entityTypeLabel(area)}: submodelo propio (capitalización, liquidez operativa, eficiencia y márgenes) — no el modelo crediticio.`
+    ? t("banking.submodelNote", { type: entityTypeLabel(area, t) })
     : null;
 
   const top = rankings.slice(0, 5);
@@ -135,17 +137,17 @@ export function DashboardPage() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <StatTile label="Entidades" value={area ? rankings.length : (stats?.total_entities ?? 0)} />
-        <StatTile label="Score promedio" value={fmtNum(avg, 1)} />
-        <StatTile label="Ratings calculados" value={area ? rankings.length : (stats?.total_ratings ?? 0)} />
-        <StatTile label="Último período" value={stats?.period_end ?? "—"} />
+        <StatTile label={t("banking.statEntities")} value={area ? rankings.length : (stats?.total_entities ?? 0)} />
+        <StatTile label={t("banking.statAvgScore")} value={fmtNum(avg, 1)} />
+        <StatTile label={t("banking.statRatings")} value={area ? rankings.length : (stats?.total_ratings ?? 0)} />
+        <StatTile label={t("banking.statLatestPeriod")} value={stats?.period_end ?? "—"} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
         <Card>
-          <CardHead icon={Trophy} title="Top entidades" subtitle="Por score SDQ" />
+          <CardHead icon={Trophy} title={t("banking.topTitle")} subtitle={t("banking.topSubtitle")} />
           {top.length === 0 ? (
-            <p className="text-sm text-muted py-4 text-center">Sin ratings calculados.</p>
+            <p className="text-sm text-muted py-4 text-center">{t("banking.noRatings")}</p>
           ) : (
             <div className="space-y-1">
               {top.map((bank) => (
@@ -172,9 +174,9 @@ export function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHead icon={PieChart} title="Distribución por rating" subtitle="Entidades por nivel SDQ" />
+          <CardHead icon={PieChart} title={t("banking.distTitle")} subtitle={t("banking.distSubtitle")} />
           {tiers.length === 0 ? (
-            <p className="text-sm text-muted py-4 text-center">Sin datos.</p>
+            <p className="text-sm text-muted py-4 text-center">{t("banking.dashNoData")}</p>
           ) : (
             <div className="space-y-2.5">
               {tiers.map(([tier, count]) => (
@@ -202,8 +204,8 @@ export function DashboardPage() {
       {rankings.length > 0 && (
         <div className="mt-5">
           <AiInsightCard
-            title="Panorama del sector (IA)"
-            subtitle={area ? entityTypeLabel(area) : "Todo el sistema financiero"}
+            title={t("banking.dashInsightTitle")}
+            subtitle={area ? entityTypeLabel(area, t) : t("banking.dashInsightAll")}
             depsKey={`${area}|${stats?.period_end ?? ""}`}
             fetcher={() => getSectorInsight(area)}
           />
