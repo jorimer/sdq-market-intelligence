@@ -55,6 +55,13 @@ def _num(val):
         return None
 
 
+def _equity(val):
+    """equity_required_pct va a Numeric(5,2) → acotar a [0, 999.99] para no reventar
+    en Postgres (en SQLite pasa silencioso — gap de parity conocido)."""
+    v = _num(val)
+    return None if v is None else max(0.0, min(999.99, v))
+
+
 @router.post("/import", summary="Cargar deals por CSV (admin)")
 async def import_csv(
     file: UploadFile = File(...),
@@ -89,14 +96,17 @@ async def import_csv(
         d.sector = sec
         d.country = country
         d.deal_size_usd = _num(row.get("deal_size_usd"))
-        d.equity_required_pct = _num(row.get("equity_required_pct"))
+        d.equity_required_pct = _equity(row.get("equity_required_pct"))
         d.deal_stage = _enum(DealStage, row.get("deal_stage"))
         d.closed_successfully = _bool(row.get("closed_successfully"))
         for c in ("promoter_track_record", "financial_quality", "market_validation",
-                  "regulatory_readiness", "days_since_first_contact"):
+                  "regulatory_readiness"):
             v = _num(row.get(c))
             if v is not None:
-                setattr(d, c, int(v))
+                setattr(d, c, int(max(0, min(100, v))))
+        days = _num(row.get("days_since_first_contact"))
+        if days is not None:
+            d.days_since_first_contact = int(max(0, days))
         d.label_confidence = _enum(LabelConfidence, row.get("label_confidence"),
                                    default=LabelConfidence.baja)
         d.source_folder = (row.get("source_folder") or "").strip() or None
@@ -128,7 +138,7 @@ async def save_deal(
         deal_name=name, deal_type=dt, sector=sec,
         country=(body.get("country") or "DO").strip().upper()[:2] or "DO",
         deal_size_usd=_num(body.get("deal_size_usd")),
-        equity_required_pct=_num(body.get("equity_required_pct")),
+        equity_required_pct=_equity(body.get("equity_required_pct")),
         deal_stage=_enum(DealStage, body.get("deal_stage")),
         closed_successfully=_bool(body.get("closed_successfully")) if body.get("closed_successfully") not in (None, "") else None,
         label_confidence=LabelConfidence.baja,
@@ -140,7 +150,7 @@ async def save_deal(
             setattr(d, c, int(max(0, min(100, v))))
     od = _num(body.get("days_since_first_contact"))
     if od is not None:
-        d.days_since_first_contact = int(od)
+        d.days_since_first_contact = int(max(0, od))
     if d.closed_successfully is not None:
         d.outcome_date = date.today()
     db.add(d)
