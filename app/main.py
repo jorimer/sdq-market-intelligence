@@ -67,6 +67,9 @@ app.include_router(settings_router, prefix="/api/v1/settings", tags=["Settings"]
 from shared.operations.router import router as operations_router
 app.include_router(operations_router, prefix="/api/v1/operations", tags=["Operaciones"])
 
+from shared.tools.router import router as tools_router
+app.include_router(tools_router, prefix="/api/v1/tools", tags=["Tools"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
 
