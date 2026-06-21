@@ -2,19 +2,7 @@
 // the backend (BCRD value added + macro contract + declared rubric) via the
 // `/sector-intel/dataset` and `/{code}/latest` endpoints — no fixture here.
 
-export const IAI_LABELS: Record<string, string> = {
-  macro: "Macro",
-  business: "Negocios",
-  talent: "Talento",
-  regulation: "Regulación",
-  sector: "Sector",
-};
-
-export const SGPS_LABELS: Record<string, string> = {
-  historical: "Histórico",
-  structural: "Estructural",
-  acceleration: "Aceleración",
-};
+// Las etiquetas de dimensión/factor viven ahora en i18n (sector.iai.* / sector.sgps.*).
 
 // Which variables back each IAI dimension — used to derive the real-vs-rubric tag
 // per dimension from the dataset's `sources` map.

@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { LayoutGrid, ListOrdered, Zap, Grid3x3, Activity } from "lucide-react";
 import {
   PageHead,
@@ -30,28 +32,16 @@ import {
   MacroContext,
   MacroFactor,
 } from "../api";
-import { IAI_LABELS, SGPS_LABELS, IAI_DIM_VARS } from "../data";
+import { IAI_DIM_VARS } from "../data";
 import { Tone } from "@/shared/lib/bands";
 
 type Status = "loading" | "error" | "ready";
-
-const ACCEL_LABELS: Record<string, string> = {
-  irmp: "Riesgo macro-político (IRMP)",
-  trade: "Resiliencia comercial",
-  macro: "Señales macro",
-};
 
 const DIRECTION_TONE: Record<string, Tone> = {
   favorable: "ok",
   adverso: "alert",
   neutral: "muted",
   "n/d": "muted",
-};
-const DIRECTION_LABEL: Record<string, string> = {
-  favorable: "Favorable",
-  adverso: "Adverso",
-  neutral: "Neutral",
-  "n/d": "N/D",
 };
 const TREND_ARROW: Record<string, string> = {
   acelerando: "↑",
@@ -63,17 +53,18 @@ const TREND_ARROW: Record<string, string> = {
 function dimTag(
   sources: Record<string, string> | undefined,
   dimKey: string,
+  t: TFunction,
 ): DimensionRow["tag"] {
   const vars = IAI_DIM_VARS[dimKey] ?? [];
   if (!sources || vars.length === 0) return undefined;
   const live = vars.filter((v) => sources[v] === "live").length;
-  if (live === 0) return { text: "rúbrica", ok: false };
-  if (live === vars.length) return { text: "en vivo", ok: true };
-  return { text: `${live}/${vars.length} en vivo`, ok: true };
+  if (live === 0) return { text: t("widgets.tagRubric"), ok: false };
+  if (live === vars.length) return { text: t("widgets.tagLive"), ok: true };
+  return { text: t("widgets.tagPartialLive", { n: live, total: vars.length }), ok: true };
 }
 
 /** One macro factor of the §2 contract: reading + direction + impacted sectors. */
-function MacroFactorRow({ f, highlight }: { f: MacroFactor; highlight: string }) {
+function MacroFactorRow({ f, highlight, t }: { f: MacroFactor; highlight: string; t: TFunction }) {
   const tone = DIRECTION_TONE[f.direction] ?? "muted";
   const hits = f.impacted_sectors.some((s) => s.slug === highlight);
   return (
@@ -91,7 +82,7 @@ function MacroFactorRow({ f, highlight }: { f: MacroFactor; highlight: string })
           </div>
         </div>
         <div className="shrink-0 flex items-center gap-1.5">
-          <Chip tone={tone}>{DIRECTION_LABEL[f.direction] ?? f.direction}</Chip>
+          <Chip tone={tone}>{t(`sector.dir.${f.direction}`, f.direction)}</Chip>
           {f.direction !== "n/d" && f.magnitude !== "n/d" && (
             <span className="text-[11px] text-muted capitalize">{f.magnitude}</span>
           )}
@@ -117,6 +108,7 @@ function MacroFactorRow({ f, highlight }: { f: MacroFactor; highlight: string })
 }
 
 export function SectorIntelPage() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [sectors, setSectors] = useState<SectorInfo[]>([]);
   const [ds, setDs] = useState<IaiDataset | null>(null);
@@ -164,9 +156,9 @@ export function SectorIntelPage() {
 
   const head = (
     <PageHead
-      eyebrow="BCRD · macro · WGI · rúbrica"
-      title="Sectorial"
-      sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. Tamaño y crecimiento del BCRD; exposición macro del contrato del Eje 2; calidad regulatoria del WGI (nacional); negocios y talento, rúbrica declarada."
+      eyebrow={t("sector.eyebrow")}
+      title={t("sector.title")}
+      sub={t("sector.sub")}
     />
   );
 
@@ -177,8 +169,8 @@ export function SectorIntelPage() {
         {head}
         <StateBlock
           kind="error"
-          message="No se pudo cargar el índice sectorial. Reintenta."
-          action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
+          message={t("sector.errorLoad")}
+          action={<button onClick={load} className="btn btn-ghost">{t("common_retry")}</button>}
         />
       </div>
     );
@@ -188,32 +180,29 @@ export function SectorIntelPage() {
     return (
       <div>
         {head}
-        <StateBlock
-          kind="empty"
-          message="Aún no hay snapshot sectorial. Corre la operación «Calcular snapshot sectorial (IAI/SGPS)» en la Consola de Operación."
-        />
+        <StateBlock kind="empty" message={t("sector.emptyNoSnapshot")} />
       </div>
     );
 
   const detail = details[selected] ?? null;
   const sources = ds?.sources[selected];
-  const iaiBand = bandFor(detail?.iai_score);
+  const iaiBand = bandFor(detail?.iai_score, t);
 
   const iaiRows: DimensionRow[] = detail
     ? Object.entries(detail.iai_breakdown).map(([key, d]) => ({
         key,
-        label: IAI_LABELS[key] ?? key,
+        label: t(`sector.iai.${key}`, key),
         score: d.score,
         weight: d.weight,
         contribution: d.contribution,
-        tag: dimTag(sources, key),
+        tag: dimTag(sources, key, t),
       }))
     : [];
 
   const sgpsRows: DimensionRow[] = detail
     ? Object.entries(detail.sgps_breakdown.factors).map(([key, f]) => ({
         key,
-        label: SGPS_LABELS[key] ?? key,
+        label: t(`sector.sgps.${key}`, key),
         score: f.value,
         weight: f.weight,
         contribution: f.contribution,
@@ -225,10 +214,10 @@ export function SectorIntelPage() {
     .map((s) => ({ code: s.code, ...details[s.code] }))
     .sort((a, b) => b.iai_score - a.iai_score);
 
-  const dimKeys = Object.keys(IAI_LABELS);
+  const dimKeys = Object.keys(IAI_DIM_VARS);
   const matrix: HeatmapData = {
     rows: scored.map((s) => nameOf(s.code)),
-    cols: dimKeys.map((k) => IAI_LABELS[k]),
+    cols: dimKeys.map((k) => t(`sector.iai.${k}`, k)),
     values: scored.map((s) => {
       const d = details[s.code]?.iai_breakdown;
       return dimKeys.map((k) => (d?.[k] ? d[k].score : null));
@@ -236,21 +225,21 @@ export function SectorIntelPage() {
   };
 
   const liveDims = sources
-    ? dimKeys.filter((k) => dimTag(sources, k)?.ok).length
+    ? dimKeys.filter((k) => dimTag(sources, k, t)?.ok).length
     : 0;
 
   return (
     <div>
       <PageHead
-        eyebrow="BCRD · macro · WGI · rúbrica"
-        title="Sectorial"
-        sub="Atractivo de inversión (IAI) y potencial de crecimiento (SGPS) por sector. Tamaño y crecimiento del BCRD; exposición macro del contrato del Eje 2; calidad regulatoria del WGI (nacional); negocios y talento, rúbrica declarada."
+        eyebrow={t("sector.eyebrow")}
+        title={t("sector.title")}
+        sub={t("sector.sub")}
         right={
           <select
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
             className="field !w-auto"
-            title="Sector"
+            title={t("sector.sectorSelect")}
           >
             {scored.map((s) => (
               <option key={s.code} value={s.code}>{nameOf(s.code)}</option>
@@ -261,10 +250,10 @@ export function SectorIntelPage() {
 
       <div className="flex flex-wrap items-center gap-2 mb-4 -mt-2">
         <Chip tone={ds?.has_live ? "ok" : "muted"}>
-          {liveDims}/{dimKeys.length} dimensiones en vivo
+          {t("sector.liveDimsChip", { live: liveDims, total: dimKeys.length })}
         </Chip>
         {ds?.period && <Chip tone="muted">{ds.period}</Chip>}
-        <Chip tone="muted">{scored.length} sectores</Chip>
+        <Chip tone="muted">{t("sector.sectorsCount", { n: scored.length })}</Chip>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
@@ -275,8 +264,8 @@ export function SectorIntelPage() {
           <Gauge score={detail?.iai_score} band={iaiBand} />
           <div className="mt-3"><BandBadge band={iaiBand} /></div>
           <div className="grid grid-cols-2 gap-3 w-full mt-5">
-            <StatTile label="SGPS" value={fmtNum(detail?.sgps_score, 1)} />
-            <StatTile label="Aceleración" value={fmtNum(accel?.acceleration, 1)} />
+            <StatTile label={t("sector.statSgps")} value={fmtNum(detail?.sgps_score, 1)} />
+            <StatTile label={t("sector.statAccel")} value={fmtNum(accel?.acceleration, 1)} />
           </div>
         </Card>
 
@@ -285,12 +274,12 @@ export function SectorIntelPage() {
           <Card>
             <Tabs
               tabs={[
-                { id: "desglose", label: "Desglose" },
-                { id: "contexto", label: "Contexto macro" },
-                { id: "matriz", label: "Matriz" },
-                { id: "ranking", label: "Ranking" },
-                { id: "aceleracion", label: "Aceleración" },
-                { id: "validacion", label: "Validación" },
+                { id: "desglose", label: t("sector.tabBreakdown") },
+                { id: "contexto", label: t("sector.tabMacro") },
+                { id: "matriz", label: t("sector.tabMatrix") },
+                { id: "ranking", label: t("sector.tabRanking") },
+                { id: "aceleracion", label: t("sector.tabAccel") },
+                { id: "validacion", label: t("sector.tabValidation") },
               ]}
               active={tab}
               onChange={setTab}
@@ -301,15 +290,15 @@ export function SectorIntelPage() {
                   <div>
                     <CardHead
                       icon={LayoutGrid}
-                      title="IAI — dimensiones"
-                      subtitle={`${nameOf(selected)} · ponderadas · badge real-vs-rúbrica`}
+                      title={t("sector.iaiDimsTitle")}
+                      subtitle={t("sector.iaiDimsSubtitle", { sector: nameOf(selected) })}
                     />
                     <DimensionBreakdown rows={iaiRows} />
                   </div>
                   <div>
                     <CardHead
-                      title="SGPS — factores"
-                      subtitle="Histórico 40 · Estructural 35 · Aceleración 25"
+                      title={t("sector.sgpsTitle")}
+                      subtitle={t("sector.sgpsSubtitle")}
                     />
                     <DimensionBreakdown rows={sgpsRows} />
                   </div>
@@ -320,23 +309,26 @@ export function SectorIntelPage() {
                 <>
                   <CardHead
                     icon={Activity}
-                    title="Contexto macro"
+                    title={t("sector.macroTitle")}
                     subtitle={
                       macroCtx
-                        ? `${macroCtx.available_count}/${macroCtx.factor_count} factores en vivo${
-                            macroCtx.period ? ` · ${macroCtx.period}` : ""
-                          } · resaltado: ${nameOf(selected)}`
-                        : "Entorno macro del BCRD (Eje 2)"
+                        ? t("sector.macroSubtitleLive", {
+                            available: macroCtx.available_count,
+                            total: macroCtx.factor_count,
+                            periodPart: macroCtx.period ? ` · ${macroCtx.period}` : "",
+                            sector: nameOf(selected),
+                          })
+                        : t("sector.macroSubtitleDefault")
                     }
                   />
                   {!macroCtx ? (
-                    <p className="text-sm text-muted">Cargando el contexto macro…</p>
+                    <p className="text-sm text-muted">{t("sector.macroLoading")}</p>
                   ) : macroCtx.factors.length === 0 ? (
-                    <p className="text-sm text-muted">Sin factores macro disponibles.</p>
+                    <p className="text-sm text-muted">{t("sector.macroEmpty")}</p>
                   ) : (
                     <div className="space-y-3">
                       {macroCtx.factors.map((f) => (
-                        <MacroFactorRow key={f.key} f={f} highlight={selected} />
+                        <MacroFactorRow key={f.key} f={f} highlight={selected} t={t} />
                       ))}
                     </div>
                   )}
@@ -347,8 +339,8 @@ export function SectorIntelPage() {
                 <>
                   <CardHead
                     icon={Grid3x3}
-                    title="Matriz IAI"
-                    subtitle="Sector × dimensión · intensidad por score"
+                    title={t("sector.matrixTitle")}
+                    subtitle={t("sector.matrixSubtitle")}
                   />
                   <Heatmap data={matrix} />
                 </>
@@ -356,20 +348,20 @@ export function SectorIntelPage() {
 
               {tab === "ranking" && (
                 <>
-                  <CardHead icon={ListOrdered} title="Ranking por IAI" subtitle="Atractivo de inversión" />
+                  <CardHead icon={ListOrdered} title={t("sector.rankingTitle")} subtitle={t("sector.rankingSubtitle")} />
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted border-b border-line">
                         <th className="py-2 px-1 font-medium">#</th>
-                        <th className="py-2 px-1 font-medium">Sector</th>
+                        <th className="py-2 px-1 font-medium">{t("sector.colSector")}</th>
                         <th className="py-2 px-1 font-medium text-right">IAI</th>
                         <th className="py-2 px-1 font-medium text-right">SGPS</th>
-                        <th className="py-2 px-1 font-medium">Banda</th>
+                        <th className="py-2 px-1 font-medium">{t("sector.colBand")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ranking.map((r, i) => {
-                        const b = bandFor(r.iai_score);
+                        const b = bandFor(r.iai_score, t);
                         return (
                           <tr
                             key={r.code}
@@ -398,20 +390,17 @@ export function SectorIntelPage() {
                 <>
                   <CardHead
                     icon={Zap}
-                    title="Factor de aceleración"
-                    subtitle="Entorno upstream (macro · IRMP · comercio) vía event_bus"
+                    title={t("sector.accelTitle")}
+                    subtitle={t("sector.accelSubtitle")}
                   />
                   <div className="flex items-baseline gap-2 mb-4">
                     <span className="font-display text-3xl font-extrabold text-ink mono">
                       {fmtNum(accel?.acceleration, 1)}
                     </span>
-                    <span className="text-xs text-muted">base {fmtNum(accel?.base, 0)}</span>
+                    <span className="text-xs text-muted">{t("sector.accelBase", { base: fmtNum(accel?.base, 0) })}</span>
                   </div>
                   {!accel || Object.keys(accel.components).length === 0 ? (
-                    <p className="text-sm text-muted">
-                      Sin señales upstream aún. Genera snapshots de IRMP/comercio/macro para
-                      alimentar la aceleración.
-                    </p>
+                    <p className="text-sm text-muted">{t("sector.accelEmpty")}</p>
                   ) : (
                     <div className="space-y-2">
                       {Object.entries(accel.components).map(([k, v]) => (
@@ -419,7 +408,7 @@ export function SectorIntelPage() {
                           key={k}
                           className="flex items-center justify-between gap-3 py-1.5 border-b border-line/60 last:border-0"
                         >
-                          <span className="text-sm text-ink">{ACCEL_LABELS[k] ?? k}</span>
+                          <span className="text-sm text-ink">{t(`sector.accelComp.${k}`, k)}</span>
                           <Chip tone={v >= 0 ? "ok" : "alert"}>
                             {v >= 0 ? "+" : ""}{fmtNum(v, 1)}
                           </Chip>
@@ -437,8 +426,8 @@ export function SectorIntelPage() {
 
       <div className="mt-5">
         <AiInsightCard
-          title="Perspectiva del sector (IA)"
-          subtitle={`${nameOf(selected)} · IAI + aceleración, marco SCQA`}
+          title={t("sector.insightTitle")}
+          subtitle={t("sector.insightSubtitle", { sector: nameOf(selected) })}
           depsKey={selected}
           fetcher={() => getSectorInsight(selected)}
         />
