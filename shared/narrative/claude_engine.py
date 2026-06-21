@@ -70,6 +70,19 @@ TEMPLATES = {
         "eje viene sin dato, omítelo sin inventarlo. Tono ejecutivo y conciso. "
         "Máximo 700 palabras. Formato Markdown con encabezados."
     ),
+    "deal_outlook": (
+        "Eres un Managing Director de banca de inversión / corporate development de SDQ "
+        "Consulting evaluando un deal:\n{context}\n\n"
+        "El 'score' (0-100) sale de una RÚBRICA DECLARADA (no un modelo entrenado) anclada "
+        "a la inteligencia real de la plataforma: IRMP (riesgo regulatorio/político del país), "
+        "IAI (atractivo del sector) e IRC (clima). Los 'drivers' traen cada componente con su "
+        "valor, origen (analista vs eje) y contribución. Genera un análisis ejecutivo (3-5 "
+        "frases): (1) lectura general de cierre/atractivo, (2) drivers positivos clave, "
+        "(3) el riesgo/preocupación principal, (4) UNA recomendación accionable para subir la "
+        "probabilidad de cierre. Apóyate en el 'contexto_ejes' cuando exista. Usa SOLO las "
+        "cifras del contexto, nunca inventes. Aclara que es una lectura de rúbrica, no de un "
+        "modelo entrenado. Conciso, sin jerga. Máximo 220 palabras."
+    ),
     "sector_outlook": (
         "Eres el economista jefe de una firma de análisis financiero en República Dominicana.\n\n"
         "Genera una perspectiva sectorial basada en:\n{context}\n\n"
