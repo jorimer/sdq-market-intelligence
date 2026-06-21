@@ -132,7 +132,7 @@ Ordenado por **valor descendente** (esfuerzo vs. IP desbloqueada), no por conven
 | ~~2~~ ✅ | ONE + ENCFT + TSS (Power BI) | Eje 3 sectorial | hecho | Cerrado (A–F); IAI 5/5 dims live; Gate E IC-mean honesto. |
 | ~~3~~ ✅ | DGA + Comtrade | Eje 5 trade | hecho | Cerrado (A–F). |
 | ~~ESG~~ ✅ | ND-GAIN+HURDAT2+Ember | Eje 7 ESG/IRC | hecho | Cerrado, validado. |
-| **Fiscal (Eje 2) — en curso** | Hacienda EO + DGII | dimensión fiscal del macro | medio | **Conectores HECHOS** (#216 DGII, #217 Hacienda EO). Falta: sync + dimensión fiscal en macro_monitor (UI). |
+| ~~Fiscal (Eje 2)~~ ✅ | Hacienda EO + DGII | dimensión fiscal del macro | hecho | **CERRADO Y VERIFICADO EN PROD.** Conectores (#216/#217) + sync (#219) + panel fiscal (#220) + insight IA SCQA (#221). Panel: ingresos/gastos/déficit + recaudación, 2000-2026. |
 | Polish (opcional) | Findex · país-socio Comercio · skills/ease_of_business | enriquecimiento | bajo-medio | NO bloqueante. |
 | Diferido (decisión) | DGII **RNC** (nivel contribuyente) · Deal Scoring · capa traducción macro | — | — | RNC tiene riesgo legal/privacidad real; el resto, decisión de alcance. |
 
