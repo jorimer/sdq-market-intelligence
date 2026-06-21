@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { fmtNum } from "@/shared/lib/format";
 
 export interface DimensionRow {
@@ -16,6 +17,7 @@ export interface DimensionRow {
  * contribution make the composite reconstructable by hand.
  */
 export function DimensionBreakdown({ rows }: { rows: DimensionRow[] }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3.5">
       {rows.map((d) => (
@@ -34,7 +36,7 @@ export function DimensionBreakdown({ rows }: { rows: DimensionRow[] }) {
               )}
             </span>
             <span className="shrink-0 mono text-xs text-muted">
-              peso {Math.round(d.weight * 100)}% · aporta {fmtNum(d.contribution, 1)}
+              {t("widgets.dimMeta", { w: Math.round(d.weight * 100), c: fmtNum(d.contribution, 1) })}
             </span>
           </div>
           <div className="flex items-center gap-2.5">

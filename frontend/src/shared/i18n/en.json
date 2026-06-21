@@ -225,5 +225,68 @@
       "/settings": "Settings",
       "/admin/users": "Users"
     }
+  },
+  "common_retry": "Retry",
+  "esg": {
+    "eyebrow": "ND-GAIN \u00b7 Caribbean/LatAm panel",
+    "title": "ESG & climate",
+    "subFull": "National Climate Resilience Index (IRC) over the regional panel. Higher score = more resilient. Physical/adaptive/governance on real data (ND-GAIN); transition is rubric-based until energy is wired.",
+    "subShort": "Climate Resilience Index (IRC) \u00b7 {{period}}. Higher = more resilient.",
+    "countrySelect": "Country",
+    "panelCount": "{{count}} countries \u00b7 regional panel",
+    "errorLoad": "Could not load the IRC. Retry.",
+    "emptyNoIrc": "No IRC yet. Run the \u00abSync climate IRC (ND-GAIN)\u00bb operation in the Operations Console.",
+    "band": {
+      "noData": "No data",
+      "high": "High resilience",
+      "moderate": "Moderate resilience",
+      "low": "Low resilience"
+    },
+    "tag": {
+      "rubric": "rubric",
+      "live": "live",
+      "partialLive": "{{n}}/{{total}} live"
+    },
+    "tab": {
+      "breakdown": "Breakdown",
+      "ranking": "Panel ranking",
+      "validation": "Validation"
+    },
+    "breakdownTitle": "IRC dimensions",
+    "breakdownSubtitle": "{{country}} \u00b7 weighted \u00b7 real-vs-rubric badge",
+    "rankingTitle": "Climate resilience ranking",
+    "rankingSubtitle": "Most resilient first",
+    "validationTitle": "IRC backtest",
+    "validationSubtitle": "Does resilience predict less real climate damage? (OWID/EM-DAT)",
+    "emptyBacktest": "No backtest yet. Run \u00abIRC climate backtest\u00bb in the Operations Console.",
+    "colCountry": "Country",
+    "colResilience": "Resilience",
+    "colIrcBand": "IRC band",
+    "colCountries": "Countries",
+    "colDeaths": "Deaths/100k/yr",
+    "valSpearman": "Correlation (Spearman)",
+    "valCi": "95% CI",
+    "valCountries": "Countries",
+    "monotonicYes": "Monotonic \u2713",
+    "monotonicNo": "Not monotonic",
+    "monotonicHint": "higher resilience \u2192 fewer deaths from climate disasters",
+    "insightTitle": "Climate outlook (AI)",
+    "insightSubtitle": "{{country}} \u00b7 IRC + panel position \u00b7 SCQA",
+    "dims": {
+      "physical_risk": "Physical risk",
+      "transition_risk": "Transition risk",
+      "adaptive_capacity": "Adaptive capacity",
+      "governance": "Governance"
+    }
+  },
+  "widgets": {
+    "gaugeOf100": "of 100",
+    "dimMeta": "weight {{w}}% \u00b7 contributes {{c}}",
+    "aiGenerating": "Generating AI analysis\u2026 (~10\u201315s)",
+    "aiError": "Could not generate the AI analysis.",
+    "aiByModel": "AI-generated ({{model}})",
+    "aiCached": "cached",
+    "aiVerify": "Verify before deciding.",
+    "aiUnavailable": "AI analysis is unavailable (Anthropic key not configured)."
   }
 }

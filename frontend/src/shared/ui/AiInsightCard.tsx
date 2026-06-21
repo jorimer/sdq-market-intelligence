@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Sparkles, type LucideIcon } from "lucide-react";
 import { Card, CardHead } from "@/shared/ui/primitives";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
@@ -16,6 +17,7 @@ interface Props {
 /** Card that loads a contextual AI insight (comparative / sector / scenario),
  * showing a "Generando…" state while Claude responds (~10-15s) then the markdown. */
 export function AiInsightCard({ title, subtitle, icon = Sparkles, depsKey, fetcher }: Props) {
+  const { t } = useTranslation();
   const [ai, setAi] = useState<AiInsight | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -43,7 +45,7 @@ export function AiInsightCard({ title, subtitle, icon = Sparkles, depsKey, fetch
         loading={loading}
         error={error}
         ai={ai}
-        unavailableHint="El análisis de IA no está disponible (clave de Anthropic no configurada)."
+        unavailableHint={t("widgets.aiUnavailable")}
       />
     </Card>
   );
