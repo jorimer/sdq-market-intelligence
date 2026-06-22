@@ -114,6 +114,63 @@ def test_aporte_correcto_pasa():
     assert deterministic_unsupported(_ctx(), "solidez aporta 40.0 puntos al global") == []
 
 
+# ── (5) dirección vs P75 ────────────────────────────────────────────────────────
+
+def test_direccion_p75_invertida_se_marca():
+    # score 86.42 > p75 85.25 ; decir "por debajo" invierte el lado → marca
+    bad = deterministic_unsupported(_ctx(), "0.15 pts por debajo del P75 del grupo (85.25)")
+    assert any("p75" in f.lower() for f in bad)
+
+
+def test_direccion_p75_correcta_pasa():
+    assert deterministic_unsupported(_ctx(), "1.17 pts por encima del P75 (85.25)") == []
+
+
+# ── (6) afirmación de extremo ───────────────────────────────────────────────────
+
+def test_extremo_minimo_incorrecto_se_marca():
+    # 88.96 no es el mínimo de la ventana (88.67 lo es) aunque difieran <0.3
+    ctx = _ctx(tendencia_score=[
+        {"periodo": "2024-03", "score": 88.67}, {"periodo": "2025-03", "score": 89.29},
+        {"periodo": "2026-03", "score": 88.96}, {"periodo": "2023-06", "score": 90.42}])
+    bad = deterministic_unsupported(ctx, "88.96, el valor más bajo del período analizado")
+    assert any("mínimo" in f for f in bad)
+
+
+def test_extremo_minimo_correcto_pasa():
+    ctx = _ctx(tendencia_score=[
+        {"periodo": "2024-03", "score": 88.67}, {"periodo": "2026-03", "score": 88.96}])
+    assert deterministic_unsupported(ctx, "88.67 es el más bajo de los doce trimestres") == []
+
+
+# ── (7) conteo bajo umbral ──────────────────────────────────────────────────────
+
+def test_extremo_de_otra_metrica_no_es_fp():
+    # "ROE 85.5 el más alto del período": 85.5 no es un score de la ventana → ignorar
+    ctx = _ctx(tendencia_score=[
+        {"periodo": "2024-03", "score": 88.67}, {"periodo": "2026-03", "score": 88.96}])
+    assert deterministic_unsupported(ctx, "el ROE de 85.5 fue el más alto del período") == []
+
+
+def test_conteo_bajo_umbral_violado_se_marca():
+    # últimos 4: 89.74, 89.34, 89.27, 88.96 ; "por debajo de 89.50" lo rompe 89.74
+    ctx = _ctx(tendencia_score=[
+        {"periodo": "2025-03", "score": 89.29}, {"periodo": "2025-06", "score": 89.74},
+        {"periodo": "2025-09", "score": 89.34}, {"periodo": "2025-12", "score": 89.27},
+        {"periodo": "2026-03", "score": 88.96}])
+    bad = deterministic_unsupported(
+        ctx, "lleva cuatro trimestres consecutivos por debajo de 89.50")
+    assert any("trimestres" in f for f in bad)
+
+
+def test_conteo_umbral_de_otra_metrica_no_es_fp():
+    # "eficiencia dos trimestres por debajo de 60": 60 fuera del rango del score → ignorar
+    ctx = _ctx(tendencia_score=[
+        {"periodo": "2025-12", "score": 89.27}, {"periodo": "2026-03", "score": 88.96}])
+    assert deterministic_unsupported(
+        ctx, "la eficiencia cayó dos trimestres por debajo de 60") == []
+
+
 # ── limpio / redondeo / best-effort ─────────────────────────────────────────────
 
 def test_texto_limpio_no_marca_nada():
@@ -125,3 +182,9 @@ def test_texto_limpio_no_marca_nada():
 def test_contexto_incompleto_no_rompe():
     assert deterministic_unsupported({}, "cualquier cosa con 6.2 sobre la mediana") == []
     assert deterministic_unsupported({"score_global": None}, "texto 88.96") == []
+
+
+def test_punto_suelto_no_rompe_el_detector():
+    # un '.' antes de 'sobre la mediana' no debe tirar el detector (regresion: float('.'))
+    txt = "El banco es sólido. sobre la mediana de pares hay margen; aporta 40.0 puntos."
+    assert isinstance(deterministic_unsupported(_ctx(), txt), list)

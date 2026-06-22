@@ -92,6 +92,10 @@ _MONTH_TO_MM = {
     "octubre": "10", "noviembre": "11", "diciembre": "12",
 }
 _Q_TO_MM = {"1": "03", "2": "06", "3": "09", "4": "12"}
+_NUM_WORDS = {
+    "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7,
+    "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12,
+}
 # Tolerancia: las cifras del cerebro son de 2 decimales; un claim "preciso" debe
 # coincidir casi exacto. 0.3 absorbe redondeo a 1 decimal sin tragarse errores reales
 # (15.7 vs 15, 6.2 vs 3.77, 88.96 vs 88.67 quedan fuera).
@@ -155,7 +159,7 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
             d_type = abs(score - med_type) if med_type is not None else None
             d_sector = abs(score - med_sector) if med_sector is not None else None
             for m in re.finditer(
-                r"([\d.]+)\s*(?:puntos?|pts?\.?)?\s*(?:por\s+)?"
+                r"(\d+(?:\.\d+)?)\s*(?:puntos?|pts?\.?)?\s*(?:por\s+)?"
                 r"(?:encima|sobre|arriba|debajo|bajo)\s+(?:de\s+)?la\s+mediana"
                 r"(?:\s+(?:de\s+sus\s+|de\s+su\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+|"
                 r"del\s+|de\s+)?(?P<obj>\w+))?", text, re.I):
@@ -226,6 +230,87 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
                     flags.append(
                         f"{v} como corte de {month}: no coincide con ningún {month} "
                         f"de la serie ({', '.join(str(x) for x in month_scores)})")
+
+        # (5) comparación vs P75 — verifica DIRECCIÓN (debajo/encima) y magnitud
+        if score is not None:
+            p75_type = ((pares.get("entity_type") or {}).get("p75_score"))
+            p75_sector = ((pares.get("sector") or {}).get("p75_score"))
+            p75_type = float(p75_type) if p75_type is not None else None
+            p75_sector = float(p75_sector) if p75_sector is not None else None
+            for m in re.finditer(
+                r"(?:(\d+(?:\.\d+)?)\s*(?:puntos?|pts?\.?)?\s*)?(?:por\s+)?"
+                r"(?P<dir>encima|sobre|arriba|debajo|bajo)\s+(?:de\s+)?(?:el\s+|del\s+|la\s+)?"
+                r"(?:p\.?\s?75|percentil\s*75)(?P<q>[^.,;\n]{0,30})", text, re.I):
+                q = (m.group("q") or "").lower()
+                base = p75_sector if "sector" in q else (p75_type if p75_type is not None
+                                                         else p75_sector)
+                if base is None:
+                    continue
+                d = (m.group("dir") or "").lower()
+                above = d in ("encima", "sobre", "arriba")
+                # dirección: margen de redondeo (0.05), no _TOL — un gap real de 0.15
+                # invierte el lado aunque sea chico.
+                if (above and score < base - 0.05) or (not above and score > base + 0.05):
+                    flags.append(
+                        f"'{d} del p75': el score {round(score, 2)} está del lado opuesto "
+                        f"del p75 {round(base, 2)}")
+                elif m.group(1) and not _close(float(m.group(1)), abs(score - base)):
+                    flags.append(
+                        f"{m.group(1)} vs p75: real {round(abs(score - base), 2)} "
+                        f"({round(score, 2)} vs {round(base, 2)})")
+
+        # (6) afirmación de EXTREMO ('el más bajo/alto', 'mínimo/máximo') sobre la ventana.
+        #     Es errónea si EXISTE un valor estrictamente menor (para mínimo) o mayor (máximo)
+        #     en la ventana — comparar contra el extremo con margen de redondeo, no _TOL.
+        if scores:
+            for m in re.finditer(
+                r"(\d+\.\d+)\s*[,;:]?\s*(?:es\s+|fue\s+|sigue\s+siendo\s+)?"
+                r"(?:el|la|un|una)?\s*(?:valor|punto|score|nivel|cierre)?\s*"
+                r"(?P<ext>m[áa]s\s+baj[oa]|m[áa]s\s+alt[oa]|m[íi]nimo|m[áa]ximo|menor|mayor)"
+                r"\b[^.\n]{0,35}?(?:per[íi]odo|trimestre|doce|12|hist[óo]r|ventana|serie)",
+                text, re.I):
+                v = float(m.group(1))
+                # ancla al dominio del score: el valor que dice ser el extremo de la
+                # ventana DEBE ser un score de la ventana (si no, la frase habla de otra
+                # métrica —ROE, eficiencia— que cae en el rango: no es nuestro asunto).
+                if not any(_close(v, s, 0.3) for s in scores):
+                    continue
+                ext = m.group("ext").lower()
+                is_min = ext.startswith(("más b", "mas b", "mín", "min", "menor"))
+                target = min(scores) if is_min else max(scores)
+                lower_exists = is_min and any(s < v - 0.05 for s in scores)
+                higher_exists = (not is_min) and any(s > v + 0.05 for s in scores)
+                if lower_exists or higher_exists:
+                    flags.append(
+                        f"{m.group(1)} como {'mínimo' if is_min else 'máximo'} de la ventana: "
+                        f"real {round(target, 2)}")
+
+        # (7) 'N trimestres (consecutivos) por debajo/encima de T' — todos del lado citado
+        if scores:
+            for m in re.finditer(
+                r"(?P<cnt>\d+|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)"
+                r"\s+trimestres?\s+(?:consecutiv\w+\s+)?(?:por\s+)?"
+                r"(?P<dir>debajo|bajo|encima|sobre|arriba)\s+(?:de\s+)?(?P<thr>\d+(?:\.\d+)?)",
+                text, re.I):
+                tok = m.group("cnt").lower()
+                n = int(tok) if tok.isdigit() else _NUM_WORDS.get(tok, 0)
+                if not (1 <= n <= len(scores)):
+                    continue
+                thr = float(m.group("thr"))
+                # ancla: el umbral debe caer en el rango del score (si no, la frase habla
+                # de otra métrica —"eficiencia bajo 60", "ROE bajo 12"— no del score).
+                if not (min(scores) - 3 <= thr <= max(scores) + 3):
+                    continue
+                below = (m.group("dir") or "").lower() in ("debajo", "bajo")
+                last = scores[-n:]
+                # margen de redondeo (0.05): un valor 0.24 al otro lado ya rompe el claim
+                viol = any(v >= thr + 0.05 for v in last) if below \
+                    else any(v <= thr - 0.05 for v in last)
+                if viol:
+                    side = "debajo" if below else "encima"
+                    flags.append(
+                        f"'{n} trimestres {side} de {m.group('thr')}': la serie reciente "
+                        f"({', '.join(str(round(v, 2)) for v in last)}) no cumple")
 
         # (4) 'aporta(n) N puntos' que no traza a ningún aporte ni suma de aportes
         aportes = []
