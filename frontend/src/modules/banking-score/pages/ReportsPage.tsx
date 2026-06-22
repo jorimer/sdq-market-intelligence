@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { FileText, Download } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
@@ -11,11 +12,7 @@ import {
   ReportItem,
 } from "../api";
 
-const REPORT_TYPES = [
-  { value: "full_rating", label: "Rating completo" },
-  { value: "scorecard", label: "Scorecard" },
-  { value: "communique", label: "Comunicado" },
-];
+const REPORT_TYPE_VALUES = ["full_rating", "scorecard", "communique"];
 
 const STATUS_TONE: Record<string, "ok" | "warn" | "alert" | "muted"> = {
   completed: "ok",
@@ -24,6 +21,7 @@ const STATUS_TONE: Record<string, "ok" | "warn" | "alert" | "muted"> = {
 };
 
 export function ReportsPage() {
+  const { t } = useTranslation();
   const { period } = useApp();
   const periodEnd = periodToDate(period);
   const [bankId, setBankId] = useState("");
@@ -54,10 +52,10 @@ export function ReportsPage() {
     setMsg(null);
     try {
       await generateReport(bankId, periodEnd, reportType);
-      setMsg({ ok: true, text: "Reporte generado." });
+      setMsg({ ok: true, text: t("banking.repMsgOk") });
       loadReports(bankId);
     } catch (err: any) {
-      setMsg({ ok: false, text: err?.response?.data?.detail || "No se pudo generar el reporte." });
+      setMsg({ ok: false, text: err?.response?.data?.detail || t("banking.repMsgErr") });
     } finally {
       setGenerating(false);
     }
@@ -66,29 +64,31 @@ export function ReportsPage() {
   return (
     <div>
       <PageHead
-        eyebrow="SIB · reportes"
-        title="Reportes"
-        sub="Genera y descarga reportes de rating por entidad (full rating, scorecard, comunicado)."
+        eyebrow={t("banking.repEyebrow")}
+        title={t("banking.repTitle")}
+        sub={t("banking.repSub")}
       />
 
       <Card className="mb-5">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-64">
-            <label className="block text-xs font-medium text-muted mb-1">Entidad</label>
+            <label className="block text-xs font-medium text-muted mb-1">{t("banking.fieldEntity")}</label>
             <BankSelector value={bankId} onChange={(id, name) => { setBankId(id); setBankName(name); }} />
           </div>
           <div className="text-xs text-muted pb-2.5">
-            Período <span className="mono text-body">{periodEnd}</span>
+            {t("banking.periodLabel")} <span className="mono text-body">{periodEnd}</span>
           </div>
           <div className="w-48">
-            <label className="block text-xs font-medium text-muted mb-1">Tipo</label>
+            <label className="block text-xs font-medium text-muted mb-1">{t("banking.repTypeLabel")}</label>
             <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="field">
-              {REPORT_TYPES.map((rt) => <option key={rt.value} value={rt.value}>{rt.label}</option>)}
+              {REPORT_TYPE_VALUES.map((value) => (
+                <option key={value} value={value}>{t(`banking.repType.${value}`, value)}</option>
+              ))}
             </select>
           </div>
           <button onClick={generate} disabled={!bankId || generating || blocked} className="btn btn-primary">
             <FileText className="w-4 h-4" />
-            {generating ? "Generando…" : "Generar"}
+            {generating ? t("banking.repBtnGenerating") : t("banking.repBtnGenerate")}
           </button>
         </div>
         {notice}
@@ -100,29 +100,29 @@ export function ReportsPage() {
       </Card>
 
       <Card>
-        <CardHead icon={FileText} title="Reportes generados" subtitle={bankName || "Selecciona una entidad"} />
+        <CardHead icon={FileText} title={t("banking.repCardTitle")} subtitle={bankName || t("banking.repSelectEntity")} />
         {!bankId ? (
-          <StateBlock kind="empty" message="Selecciona una entidad para ver y generar sus reportes." />
+          <StateBlock kind="empty" message={t("banking.repEmptyNoEntity")} />
         ) : loading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
           </div>
         ) : reports.length === 0 ? (
-          <p className="text-sm text-muted py-6 text-center">Aún no hay reportes para esta entidad.</p>
+          <p className="text-sm text-muted py-6 text-center">{t("banking.repEmptyNoReports")}</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted border-b border-line">
-                <th className="py-2 px-2 font-medium">Tipo</th>
-                <th className="py-2 px-2 font-medium">Período</th>
-                <th className="py-2 px-2 font-medium">Estado</th>
-                <th className="py-2 px-2 font-medium text-right">Acción</th>
+                <th className="py-2 px-2 font-medium">{t("banking.repColType")}</th>
+                <th className="py-2 px-2 font-medium">{t("banking.repColPeriod")}</th>
+                <th className="py-2 px-2 font-medium">{t("banking.repColStatus")}</th>
+                <th className="py-2 px-2 font-medium text-right">{t("banking.repColAction")}</th>
               </tr>
             </thead>
             <tbody>
               {reports.map((r) => (
                 <tr key={r.id} className="border-b border-line/60 last:border-0">
-                  <td className="py-2.5 px-2 text-ink">{r.report_type}</td>
+                  <td className="py-2.5 px-2 text-ink">{t(`banking.repType.${r.report_type}`, r.report_type ?? "—")}</td>
                   <td className="py-2.5 px-2 mono text-body">{r.period_end ?? "—"}</td>
                   <td className="py-2.5 px-2">
                     <Chip tone={STATUS_TONE[r.status ?? ""] ?? "muted"}>{r.status ?? "—"}</Chip>

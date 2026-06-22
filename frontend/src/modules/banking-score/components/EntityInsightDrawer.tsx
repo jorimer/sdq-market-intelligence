@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Sparkles, TrendingUp, Users, Layers, ChevronRight } from "lucide-react";
 import { TrendChart } from "./TrendChart";
 import { RatingBadge } from "./RatingBadge";
 import { IndicatorDetailDrawer } from "./IndicatorDetailDrawer";
+import { entityTypeLabel } from "../entityTypes";
 import { StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
@@ -16,13 +18,14 @@ interface Props {
 }
 
 function PeerRow({ label, stats, score }: { label: string; stats: { n: number; median_score: number; percentile: number } | null; score: number }) {
+  const { t } = useTranslation();
   if (!stats) return null;
   return (
     <div>
       <div className="flex items-baseline justify-between mb-1">
         <span className="text-sm text-body truncate min-w-0 flex-1">{label}</span>
         <span className="text-xs text-muted shrink-0 ml-2">
-          n={stats.n} · mediana <span className="mono text-body">{fmtNum(stats.median_score, 0)}</span>
+          n={stats.n} · {t("banking.peerMedian")} <span className="mono text-body">{fmtNum(stats.median_score, 0)}</span>
         </span>
       </div>
       <div className="relative h-2 rounded-full bg-surface2 overflow-hidden">
@@ -30,13 +33,14 @@ function PeerRow({ label, stats, score }: { label: string; stats: { n: number; m
         <div className="absolute inset-y-0 w-px bg-linestrong" style={{ left: `${Math.max(0, Math.min(100, stats.median_score))}%` }} />
       </div>
       <div className="text-xs text-muted mt-1">
-        Percentil <span className="mono text-body">{fmtNum(stats.percentile, 0)}</span> del grupo
+        {t("banking.peerPercentilePre")} <span className="mono text-body">{fmtNum(stats.percentile, 0)}</span> {t("banking.peerPercentilePost")}
       </div>
     </div>
   );
 }
 
 export function EntityInsightDrawer({ bankId, onClose }: Props) {
+  const { t } = useTranslation();
   const [indicatorKey, setIndicatorKey] = useState<string | null>(null);
   const { data: detail, ai, loading, aiLoading, error } = useTwoPhaseInsight<EntityInsight>(
     (withAi) => getEntityInsight(bankId, withAi),
@@ -47,8 +51,8 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
   return (
     <>
       <InsightDrawerShell
-        eyebrow={`Entidad · ${detail?.latest.period_end ?? ""}`}
-        title={detail?.bank_name ?? "Detalle de la entidad"}
+        eyebrow={`${t("banking.entEyebrow")} · ${detail?.latest.period_end ?? ""}`}
+        title={detail?.bank_name ?? t("banking.entTitleFallback")}
         onClose={onClose}
         onEscape={() => (indicatorKey ? setIndicatorKey(null) : onClose())}
       >
@@ -59,7 +63,7 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
             <Skeleton className="h-32 w-full" />
           </div>
         ) : error || !detail ? (
-          <StateBlock kind="error" message="No se pudo cargar el detalle de la entidad." />
+          <StateBlock kind="error" message={t("banking.entError")} />
         ) : (
           <>
             <div className="flex items-end justify-between gap-4">
@@ -67,7 +71,7 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
                 <div className="text-3xl font-semibold text-ink mono tabular-nums">
                   {fmtNum(detail.latest.overall_score, 1)}
                 </div>
-                <div className="text-xs text-muted mt-1">Score SDQ global</div>
+                <div className="text-xs text-muted mt-1">{t("banking.entGlobalScore")}</div>
               </div>
               <RatingBadge tier={detail.latest.rating_tier} size="lg" />
             </div>
@@ -75,17 +79,17 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
             {/* sub-components with driver/drag */}
             <section>
               <div className="flex items-center gap-2 mb-3 text-sm font-medium text-ink">
-                <Layers className="w-4 h-4 text-muted" /> Sub-componentes
+                <Layers className="w-4 h-4 text-muted" /> {t("banking.entSubComponents")}
               </div>
               <div className="space-y-4">
                 {detail.sub_components.map((s) => (
                   <div key={s.key}>
                     <div className="flex items-baseline justify-between mb-1">
                       <span className="text-sm text-body truncate min-w-0 flex-1">
-                        {s.label} <span className="text-xs text-faint">· peso {fmtNum((s.weight ?? 0) * 100, 0)}%</span>
+                        {t(`sub.${s.key}`, s.label)} <span className="text-xs text-faint">· {t("banking.entWeight", { n: fmtNum((s.weight ?? 0) * 100, 0) })}</span>
                       </span>
                       <span className="text-sm font-semibold text-ink mono tabular-nums shrink-0 ml-2">
-                        {s.score === null ? "N/D" : fmtNum(s.score, 1)}
+                        {s.score === null ? t("banking.na") : fmtNum(s.score, 1)}
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-surface2 overflow-hidden">
@@ -96,13 +100,13 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
                         {s.driver && (
                           <button onClick={() => setIndicatorKey(s.driver!.key)}
                             className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-ok-soft text-ok hover:opacity-80">
-                            ↑ {s.driver.label} <ChevronRight className="w-3 h-3" />
+                            ↑ {t(`indicators.${s.driver.key}`, s.driver.label)} <ChevronRight className="w-3 h-3" />
                           </button>
                         )}
                         {s.drag && s.drag.key !== s.driver?.key && (
                           <button onClick={() => setIndicatorKey(s.drag!.key)}
                             className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-alert-soft text-alert hover:opacity-80">
-                            ↓ {s.drag.label} <ChevronRight className="w-3 h-3" />
+                            ↓ {t(`indicators.${s.drag.key}`, s.drag.label)} <ChevronRight className="w-3 h-3" />
                           </button>
                         )}
                       </div>
@@ -115,32 +119,32 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
             {detail.trend.length > 1 && (
               <section>
                 <div className="flex items-center gap-2 mb-2 text-sm font-medium text-ink">
-                  <TrendingUp className="w-4 h-4 text-muted" /> Tendencia (score global)
+                  <TrendingUp className="w-4 h-4 text-muted" /> {t("banking.entTrendTitle")}
                 </div>
-                <TrendChart data={detail.trend.map((t) => ({ period: t.period_end, score: t.score }))} />
+                <TrendChart data={detail.trend.map((pt) => ({ period: pt.period_end, score: pt.score }))} />
               </section>
             )}
 
             {detail.peers && (detail.peers.sector || detail.peers.entity_type) && (
               <section>
                 <div className="flex items-center gap-2 mb-3 text-sm font-medium text-ink">
-                  <Users className="w-4 h-4 text-muted" /> Posición vs pares
+                  <Users className="w-4 h-4 text-muted" /> {t("banking.peerTitle")}
                 </div>
                 <div className="space-y-4">
-                  <PeerRow label="Todo el sector" stats={detail.peers.sector} score={detail.latest.overall_score} />
-                  <PeerRow label={`Mismo tipo (${detail.peers.entity_type_label ?? "—"})`} stats={detail.peers.entity_type} score={detail.latest.overall_score} />
+                  <PeerRow label={t("banking.peerSector")} stats={detail.peers.sector} score={detail.latest.overall_score} />
+                  <PeerRow label={t("banking.peerSameType", { type: detail.entity_type ? entityTypeLabel(detail.entity_type, t) : (detail.peers.entity_type_label ?? "—") })} stats={detail.peers.entity_type} score={detail.latest.overall_score} />
                 </div>
               </section>
             )}
 
             <section>
               <div className="flex items-center gap-2 mb-2 text-sm font-medium text-ink">
-                <Sparkles className="w-4 h-4 text-accent" /> Fundamento del rating (IA)
+                <Sparkles className="w-4 h-4 text-accent" /> {t("banking.entAiTitle")}
               </div>
               <AiInsightBody
                 loading={aiLoading}
                 ai={ai}
-                unavailableHint="El análisis de IA no está disponible (clave de Anthropic no configurada). El detalle de arriba es completo."
+                unavailableHint={t("banking.entAiUnavailable")}
               />
             </section>
           </>
@@ -149,7 +153,7 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
 
       {/* drill from a sub-component's driver/drag into the indicator drawer */}
       {indicatorKey && (
-        <IndicatorDetailDrawer bankId={bankId} indicatorKey={indicatorKey} onClose={() => setIndicatorKey(null)} />
+        <IndicatorDetailDrawer bankId={bankId} indicatorKey={indicatorKey} entityType={detail?.entity_type} onClose={() => setIndicatorKey(null)} />
       )}
     </>
   );
