@@ -132,10 +132,23 @@ def _pct(d, field):
     return float(v) if v is not None else None
 
 
+def _sib_ratio_positive(d, field):
+    """Pre-computed SIB ratio (%) ONLY if it is a plausible positive value, else None.
+
+    Capital-adequacy ratios (solvency, Tier-1) are positive by construction — a bank
+    with negative core capital would be insolvent. The SIB feed has shipped a NEGATED
+    value for some periods (e.g. tier1 ≈ -14% where the real ratio is ≈ +14%); a
+    non-positive value is therefore spurious and the caller must fall back to the
+    structural derivation (capital / APR). Never trust a sign-flipped source figure.
+    """
+    v = _pct(d, field)
+    return v if (v is not None and v > 0) else None
+
+
 def calc_solvencia(d) -> IndicatorResult:
     """Capital Adequacy Ratio. Prefers the SIB 'Índice de Solvencia' (%); falls
     back to patrimonio_tecnico / (APR + contingentes + riesgo_mercado)."""
-    raw = _pct(d, "solvencia_pct")
+    raw = _sib_ratio_positive(d, "solvencia_pct")
     if raw is None:
         denom = float(d.apr or 0) + float(d.contingentes or 0) + float(d.riesgo_mercado or 0)
         raw = _safe_div(d.patrimonio_tecnico, denom) * 100
@@ -146,7 +159,7 @@ def calc_solvencia(d) -> IndicatorResult:
 def calc_tier1_ratio(d) -> IndicatorResult:
     """Tier 1 Capital Ratio. Prefers the SIB 'Índice de Solvencia de Capital
     Primario' (%); falls back to capital_primario / APR."""
-    raw = _pct(d, "tier1_pct")
+    raw = _sib_ratio_positive(d, "tier1_pct")
     if raw is None:
         raw = _safe_div(d.capital_primario, d.apr) * 100
     score = _clamp(min(100, ((raw - 4.5) / 4) * 100)) if raw >= 4.5 else 0
