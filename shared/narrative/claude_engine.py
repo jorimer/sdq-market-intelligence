@@ -270,6 +270,9 @@ class NarrativeResult:
     model_used: str = ""
     timestamp: float = field(default_factory=time.time)
     from_cache: bool = False
+    # Cifras del output que el guardrail numérico no pudo trazar al contexto tras
+    # regenerar (cerebro). Vacío = verificado limpio o ruta sin guardrail.
+    guard_unsupported: list = field(default_factory=list)
 
 
 class NarrativeEngine:
@@ -306,29 +309,66 @@ class NarrativeEngine:
     def _set_cache(self, key: str, result: NarrativeResult):
         self._cache[key] = (result, time.time())
 
-    def _result_from_response(self, response, cache_key: str, template: str) -> NarrativeResult:
-        """Build, cache and return a NarrativeResult from a Claude API response.
-
-        Shared by both routes (legacy and cerebro) so token/cost/cache accounting is
-        identical regardless of whether a `system` prompt was used.
-        """
-        text = response.content[0].text
+    def _build_result(self, response) -> NarrativeResult:
+        """NarrativeResult from a Claude response — token/cost accounting, no caching."""
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
-        total_tokens = input_tokens + output_tokens
-        # Approximate cost (Sonnet pricing)
         cost = (input_tokens * 3.0 / 1_000_000) + (output_tokens * 15.0 / 1_000_000)
-        result = NarrativeResult(
-            text=text,
-            tokens_used=total_tokens,
+        return NarrativeResult(
+            text=response.content[0].text,
+            tokens_used=input_tokens + output_tokens,
             cost_estimate=cost,
             model_used=settings.ANTHROPIC_MODEL,
         )
+
+    def _result_from_response(self, response, cache_key: str, template: str) -> NarrativeResult:
+        """Build, cache and return a NarrativeResult (legacy route)."""
+        result = self._build_result(response)
         self._set_cache(cache_key, result)
         logger.info(
             "Narrative generated: template=%s, tokens=%d, cost=$%.4f",
-            template, total_tokens, cost,
+            template, result.tokens_used, result.cost_estimate,
         )
+        return result
+
+    def _generate_guarded(self, client, system: str, user: str, max_tokens: int,
+                          context_str: str, cache_key: str, template: str) -> NarrativeResult:
+        """Cerebro generation + numeric guardrail: generate, verify every figure traces
+        to the context, and regenerate ONCE if any is unsupported. Caches and returns the
+        final result with ``guard_unsupported`` recording figures still unverified (if the
+        regen also failed) — best-effort, never blanks the insight."""
+        from shared.narrative.numeric_guard import CORRECTION_NOTICE, verify_figures
+
+        def _gen(user_msg):
+            resp = client.messages.create(
+                model=settings.ANTHROPIC_MODEL, max_tokens=max_tokens,
+                system=system, messages=[{"role": "user", "content": user_msg}],
+            )
+            return self._build_result(resp)
+
+        result = _gen(user)
+        guard_model = settings.ANTHROPIC_GUARD_MODEL
+        bad = verify_figures(client, guard_model, context_str, result.text)
+        if bad:
+            logger.warning("Guardrail (%s): cifras sin respaldo %s — regenerando una vez",
+                           template, bad)
+            try:
+                corrected = _gen(user + CORRECTION_NOTICE.format(bad="; ".join(bad)))
+                # acumula tokens/costo de ambas llamadas (transparencia)
+                corrected.tokens_used += result.tokens_used
+                corrected.cost_estimate += result.cost_estimate
+                corrected.guard_unsupported = verify_figures(
+                    client, guard_model, context_str, corrected.text)
+                if corrected.guard_unsupported:
+                    logger.warning("Guardrail (%s): persisten cifras tras regenerar: %s",
+                                   template, corrected.guard_unsupported)
+                result = corrected
+            except Exception as e:  # noqa: BLE001 — best-effort; sirve el original marcado
+                logger.error("Regeneración del guardrail falló: %s", e)
+                result.guard_unsupported = bad
+        self._set_cache(cache_key, result)
+        logger.info("Narrative (cerebro) template=%s tokens=%d guard_flags=%d",
+                    template, result.tokens_used, len(result.guard_unsupported))
         return result
 
     def _generate_fallback(self, context: dict, template: str) -> NarrativeResult:
@@ -406,13 +446,8 @@ class NarrativeEngine:
                 system = build_system(axis, audience, mode)
                 user = _apply_lang(thin.format(context=context_str), lang)
                 try:
-                    response = client.messages.create(
-                        model=settings.ANTHROPIC_MODEL,
-                        max_tokens=max_tokens,
-                        system=system,
-                        messages=[{"role": "user", "content": user}],
-                    )
-                    return self._result_from_response(response, cache_key, template)
+                    return self._generate_guarded(
+                        client, system, user, max_tokens, context_str, cache_key, template)
                 except Exception as e:  # noqa: BLE001
                     logger.error("Claude API error (cerebro): %s. Fallback estático.", e)
                     result = self._generate_fallback(context, template)
