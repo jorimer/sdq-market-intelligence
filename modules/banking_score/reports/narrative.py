@@ -153,10 +153,16 @@ async def generate_report_narratives(
         # Use 'detailed' mode for full_rating to get longer outputs
         mode = "detailed" if report_type == "full_rating" else "standard"
 
+        # Cerebro route only for the in-scope banking template; el reporte tiene un
+        # lector fijo (comité de crédito). El resto de secciones queda en ruta legacy.
+        cerebro = {"axis": "banking", "audience": "comite_credito"} \
+            if template == "subcomponent_focus" else {}
+
         result: NarrativeResult = await narrative_engine.generate(
             context=context,
             template=template,
             mode=mode,
+            **cerebro,
         )
         narratives[section] = result.text
 
