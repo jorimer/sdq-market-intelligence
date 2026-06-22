@@ -10,10 +10,12 @@ class Settings(BaseSettings):
     # is a current model; override via the ANTHROPIC_MODEL env var.
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
-    # Cheap model used by the numeric anti-hallucination guardrail (cerebro route):
-    # judges whether every figure in an insight traces to the context. Override via
-    # the ANTHROPIC_GUARD_MODEL env var.
-    ANTHROPIC_GUARD_MODEL: str = "claude-haiku-4-5-20251001"
+    # Model used by the numeric anti-hallucination guardrail (cerebro route): judges
+    # whether every figure in an insight traces to the context — including period↔value
+    # correspondence and the arithmetic of relative/derived claims, which need a capable
+    # model (Haiku missed wrong-period values and miscomputed deltas in the pilot sensor).
+    # Override via the ANTHROPIC_GUARD_MODEL env var.
+    ANTHROPIC_GUARD_MODEL: str = "claude-sonnet-4-6"
 
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
