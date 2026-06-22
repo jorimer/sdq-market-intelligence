@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { GitCompare, Plus, X } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
@@ -14,7 +15,6 @@ import {
   getCompareInsight,
   ScoringResult,
   SUB_KEYS,
-  SUB_LABELS,
 } from "../api";
 
 const MAX = 4;
@@ -25,6 +25,7 @@ interface Slot {
 }
 
 export function ComparePage() {
+  const { t } = useTranslation();
   const { period, periods } = useApp();
   const periodEnd = periodToDate(period);
   const [slots, setSlots] = useState<Slot[]>([{ id: "", name: "" }]);
@@ -67,13 +68,13 @@ export function ComparePage() {
   return (
     <div>
       <PageHead
-        eyebrow="SIB"
-        title="Comparador de entidades"
-        sub="Compara el rating y los sub-componentes de 2 a 4 entidades en un mismo período."
+        eyebrow={t("banking.cmpEyebrow")}
+        title={t("banking.cmpTitle")}
+        sub={t("banking.cmpSub")}
       />
 
       <Card className="mb-5">
-        <p className="text-sm text-muted mb-3">Selecciona entidades (2–4)</p>
+        <p className="text-sm text-muted mb-3">{t("banking.cmpSelectPrompt")}</p>
         <div className="space-y-2.5 mb-4">
           {slots.map((slot, idx) => (
             <div key={idx} className="flex items-center gap-3">
@@ -89,7 +90,7 @@ export function ComparePage() {
                 <button
                   onClick={() => setSlots((s) => s.filter((_, i) => i !== idx))}
                   className="text-faint hover:text-alert"
-                  title="Quitar"
+                  title={t("banking.cmpRemoveTitle")}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -103,15 +104,15 @@ export function ComparePage() {
               onClick={() => setSlots((s) => [...s, { id: "", name: "" }])}
               className="text-sm text-accent-ink hover:underline flex items-center gap-1"
             >
-              <Plus className="w-3.5 h-3.5" /> Añadir entidad
+              <Plus className="w-3.5 h-3.5" /> {t("banking.cmpAddEntity")}
             </button>
           )}
           <div className="text-xs text-muted pb-2.5">
-            Período <span className="mono text-body">{periodEnd}</span>
+            {t("banking.scoringPeriod")} <span className="mono text-body">{periodEnd}</span>
           </div>
           <button onClick={run} disabled={valid.length < 2 || loading || blocked} className="btn btn-primary">
             <GitCompare className="w-4 h-4" />
-            {loading ? "Comparando…" : "Comparar"}
+            {loading ? t("banking.cmpComparing") : t("banking.cmpCompare")}
           </button>
         </div>
         {unavailable.map((u, i) => (
@@ -120,7 +121,7 @@ export function ComparePage() {
       </Card>
 
       {results.length === 0 ? (
-        <StateBlock kind="empty" message="Selecciona al menos dos entidades y ejecuta la comparación." />
+        <StateBlock kind="empty" message={t("banking.cmpEmpty")} />
       ) : (
         <div className="space-y-5">
           <div className={`grid gap-4 ${gridCols}`}>
@@ -134,7 +135,7 @@ export function ComparePage() {
           </div>
 
           <Card>
-            <CardHead title="Perfil comparado" subtitle="Sub-componentes (primeras dos entidades)" />
+            <CardHead title={t("banking.cmpProfileTitle")} subtitle={t("banking.cmpProfileSubtitle")} />
             <RadarChart
               data={results[0].r.sub_components}
               comparisonData={results[1]?.r.sub_components}
@@ -143,12 +144,12 @@ export function ComparePage() {
           </Card>
 
           <Card>
-            <CardHead icon={GitCompare} title="Detalle por sub-componente" />
+            <CardHead icon={GitCompare} title={t("banking.cmpDetailTitle")} />
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted border-b border-line">
-                    <th className="py-2 px-2 font-medium">Sub-componente</th>
+                    <th className="py-2 px-2 font-medium">{t("banking.cmpColSubcomponent")}</th>
                     {results.map(({ name }) => (
                       <th key={name} className="py-2 px-2 font-medium text-right truncate">{name}</th>
                     ))}
@@ -157,7 +158,7 @@ export function ComparePage() {
                 <tbody>
                   {SUB_KEYS.map((key) => (
                     <tr key={key} className="border-b border-line/60">
-                      <td className="py-2 px-2 text-body">{SUB_LABELS[key]}</td>
+                      <td className="py-2 px-2 text-body">{t(`sub.${key}`)}</td>
                       {results.map(({ name, r }) => (
                         <td key={name} className="py-2 px-2 text-right mono text-ink">
                           {fmtNum(r.sub_components[key], 1)}
@@ -166,7 +167,7 @@ export function ComparePage() {
                     </tr>
                   ))}
                   <tr className="border-t-2 border-line">
-                    <td className="py-2 px-2 font-semibold text-ink">Score general</td>
+                    <td className="py-2 px-2 font-semibold text-ink">{t("banking.cmpScoreGeneral")}</td>
                     {results.map(({ name, r }) => (
                       <td key={name} className="py-2 px-2 text-right mono font-bold text-ink">
                         {fmtNum(r.overall_score, 1)}
@@ -180,8 +181,8 @@ export function ComparePage() {
 
           {comparedIds.length >= 2 && (
             <AiInsightCard
-              title="Análisis comparativo (IA)"
-              subtitle="Fortalezas y debilidades relativas de las entidades comparadas"
+              title={t("banking.cmpInsightTitle")}
+              subtitle={t("banking.cmpInsightSubtitle")}
               icon={GitCompare}
               depsKey={`${comparedIds.join("-")}|${periodEnd}`}
               fetcher={() => getCompareInsight(comparedIds, periodEnd)}
