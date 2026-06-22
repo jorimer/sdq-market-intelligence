@@ -199,3 +199,93 @@ def salary_by_slug(activity_salary: Dict[str, float]) -> Dict[str, Optional[floa
                 if activity_salary.get(a) is not None]
         out[slug] = round(sum(vals) / len(vals), 2) if vals else None
     return out
+
+
+# ── ENAE economic activity (ONE) → BCRD-17 sector crosswalk ───────────────────
+# The ENAE (Encuesta Nacional de Actividad Económica) publishes structural-financial
+# tables (income, costs, profit, profitability) at a **9-sector** resolution — a
+# DIFFERENT cut than the ENCFT 10 branches: it splits transport from communications
+# and electricity from water, but does NOT cover the whole economy. Verified against
+# the real ONE tabulados (2026-06-21):
+#
+#   * 9 ENAE sectors map onto 9 BCRD-17 slugs. ``manufactura`` is a ``bundle``
+#     (ENAE doesn't carve out the zonas-francas regime — same disclosure as the
+#     ENCFT/TSS treatment of ZF). ``electricidad`` and ``agua`` are TWO ENAE sectors
+#     that BOTH feed the single ``energia`` slug (combine downstream).
+#   * 8 BCRD slugs are NOT in the ENAE frame at all: agropecuario, financiero,
+#     inmobiliario, ensenanza, salud, administracion_publica, servicios_profesionales,
+#     otros_servicios. ENAE is therefore a PARTIAL (not full-17) source — coverage is
+#     declared via :func:`enae_coverage`, never imputed for the missing 8.
+#
+# Records are keyed by the ENAE sector identity (like ENCFT keys by branch); the
+# 17-slug IAI never reads them directly — the per-slug derivation is a later phase.
+class EnaeSector(NamedTuple):
+    """One ENAE survey sector and the BCRD-17 slug(s) it feeds."""
+
+    key: str                 # stable ENAE sector identifier (short, < VARCHAR(40))
+    label: str               # ONE display label (as printed in the tabulado)
+    members: List[str]       # BCRD-17 slugs this ENAE sector feeds (≥1)
+    kind: str                # "direct" (1 slug) | "bundle" (>1 slug) | "partial" (shares a slug)
+    note: Optional[str]      # disclosure, else None
+
+
+# Order follows the ONE tabulado's row order.
+ENAE_SECTORS: List[EnaeSector] = [
+    EnaeSector("minas", "Explotación de minas y canteras", ["mineria"], "direct", None),
+    EnaeSector("manufactura", "Industrias manufactureras",
+               ["manufactura_local", "zonas_francas"], "bundle",
+               "La ENAE no separa la manufactura local de las zonas francas."),
+    EnaeSector("electricidad", "Suministro de electricidad", ["energia"], "partial",
+               "«energia» combina electricidad y agua (dos sectores ENAE)."),
+    EnaeSector("agua", "Suministro de agua", ["energia"], "partial",
+               "«energia» combina electricidad y agua (dos sectores ENAE)."),
+    EnaeSector("construccion", "Construcción", ["construccion"], "direct", None),
+    EnaeSector("comercio", "Comercio", ["comercio"], "direct", None),
+    EnaeSector("transporte", "Transporte y almacenamiento", ["transporte"], "direct", None),
+    EnaeSector("alojamiento", "Alojamiento y comida", ["turismo"], "direct", None),
+    EnaeSector("informacion", "Información y comunicaciones", ["comunicaciones"], "direct", None),
+]
+
+ENAE_KEYS: List[str] = [s.key for s in ENAE_SECTORS]
+_ENAE_BY_KEY: Dict[str, EnaeSector] = {s.key: s for s in ENAE_SECTORS}
+_ENAE_LABEL_TO_KEY: Dict[str, str] = {norm(s.label): s.key for s in ENAE_SECTORS}
+
+# Partition guard (fail-closed at import): every ENAE member must be a real BCRD-17
+# slug. Unlike the ENCFT/TSS maps this is a SUBSET (ENAE doesn't cover all 17), so we
+# only assert membership validity — not full coverage.
+_ENAE_MEMBER_SLUGS = {s for sec in ENAE_SECTORS for s in sec.members}
+_ENAE_EXTRA = _ENAE_MEMBER_SLUGS - _CATALOG_SLUGS
+if _ENAE_EXTRA:
+    raise RuntimeError(
+        f"Crosswalk ENAE: slug(s) inexistente(s) en el catálogo BCRD-17: {sorted(_ENAE_EXTRA)}"
+    )
+
+
+def map_enae_label(raw_label: object) -> Optional[str]:
+    """ONE ENAE row label → ENAE sector key (``None`` if not one of the 9 sectors).
+
+    Tolerant to accents/case/spacing. The ``"Total"`` row and note rows → ``None``.
+    """
+    return _ENAE_LABEL_TO_KEY.get(norm(raw_label))
+
+
+def enae_members(key: str) -> List[str]:
+    """BCRD-17 slugs fed by ENAE sector *key* (``[]`` if unknown)."""
+    s = _ENAE_BY_KEY.get(key)
+    return list(s.members) if s else []
+
+
+def enae_coverage() -> Dict[str, object]:
+    """Declared ENAE coverage for the real-vs-rubric disclosure.
+
+    ``covered`` = BCRD-17 slugs the ENAE frame reaches; ``uncovered`` = the slugs it
+    does not (stay rubric / other sources). The union is the full BCRD-17.
+    """
+    covered = sorted(_ENAE_MEMBER_SLUGS)
+    uncovered = sorted(_CATALOG_SLUGS - _ENAE_MEMBER_SLUGS)
+    return {
+        "n_enae_sectors": len(ENAE_SECTORS),
+        "n_slugs_covered": len(covered),
+        "covered": covered,
+        "uncovered": uncovered,
+    }
