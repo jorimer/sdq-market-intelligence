@@ -21,6 +21,12 @@ SECTOR_DIMENSION = "sector"  # IAI dimension these variables belong to
 # the 17-slug IAI never reads them. They are the Gate-E outcome (Δempleo) and the
 # raw input the per-slug ``labor_availability`` is later derived from.
 LABOR_ENCFT_DIMENSION = "labor_encft"
+# ENAE structural-financial variables (income/costs/profit/profitability) are
+# published per ENAE survey sector (9, a partial cut — NOT the 17 slugs), so rows are
+# keyed by ENAE sector under their own dimension. The 17-slug IAI never reads them;
+# wiring them into the business/talent dimensions (de-rubricizing operating_cost +
+# a profitability signal) is a later phase. This sync only ingests the real panel.
+ENAE_DIMENSION = "enae"
 
 # TSS salary → operating_cost is a CROSS-SECTIONAL snapshot (per-slug, applied
 # uniformly across periods like the national WGI), so it lives as an AppSetting the
@@ -193,6 +199,62 @@ def encft_empleo_sync(db: Session, set_phase: Optional[Callable[[str], None]] = 
         "synced": synced,
         "periods": sorted(periods),
         "branches": len({r.dimension for r in records if r.dimension}),
+        "variables": sorted({r.series for r in records}),
+        "errors": errors,
+    }
+
+
+def enae_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
+    """Pull live ONE/ENAE structural-financial tables (income, costs, profit,
+    profitability) by survey sector and upsert into ``si_variables``.
+
+    Persists the real per-sector panel (9 ENAE sectors, 2015-2022) under
+    ``dimension="enae"`` — keyed by ENAE sector (not the 17 slugs), so the 17-slug
+    IAI is untouched. Idempotent by (sector_code, dimension, period, variable);
+    best-effort (reports ``errors[]``, never raises on an upstream failure).
+    """
+    set_phase = set_phase or (lambda _m: None)
+    from shared.data.enae_activity import EnaeActivityClient
+
+    set_phase("descargando actividad económica por sector (ONE · ENAE)")
+    client = EnaeActivityClient(mode="live")
+    try:
+        records = list(client.fetch())
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("ENAE sync falló: %s", e)
+        return {"error": f"ENAE no disponible: {e}", "synced": 0, "errors": [str(e)]}
+
+    set_phase(f"persistiendo {len(records)} valores")
+    synced = 0
+    periods = set()
+    errors = []
+    for r in records:
+        sector, var, period = r.dimension, r.series, r.period
+        if not sector or not period:
+            errors.append(f"registro sin sector/período: {var}")
+            continue
+        periods.add(period)
+        existing = (
+            db.query(SectorVariable)
+            .filter_by(sector_code=sector, dimension=ENAE_DIMENSION, period=period, variable=var)
+            .first()
+        )
+        row = existing or SectorVariable(
+            sector_code=sector, dimension=ENAE_DIMENSION, variable=var, period=period,
+        )
+        row.value = r.value
+        row.dimension = ENAE_DIMENSION
+        row.source = r.lineage.source if r.lineage else "ONE"
+        row.published_at = r.lineage.published_at if r.lineage else None
+        row.license = r.lineage.license if r.lineage else None
+        if not existing:
+            db.add(row)
+        synced += 1
+    db.commit()
+    return {
+        "synced": synced,
+        "periods": sorted(periods),
+        "sectors": len({r.dimension for r in records if r.dimension}),
         "variables": sorted({r.series for r in records}),
         "errors": errors,
     }

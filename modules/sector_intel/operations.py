@@ -41,6 +41,15 @@ def _run_encft_empleo_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_enae_sync(params, user_id, set_phase) -> Dict:
+    from modules.sector_intel.sectors_sync import enae_sync
+    db = SessionLocal()
+    try:
+        return enae_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_tss_salario_sync(params, user_id, set_phase) -> Dict:
     from modules.sector_intel.sectors_sync import tss_salario_sync
     db = SessionLocal()
@@ -115,6 +124,16 @@ def register() -> None:
         "(crecimiento del empleo por rama) y el insumo del que luego se deriva la "
         "disponibilidad laboral del IAI. Anual.",
         _run_encft_empleo_sync, default_interval_hours=8760,  # serie anual → anual
+    ))
+    register_operation(Operation(
+        "enae-sync", "Sincronizar actividad económica (ONE · ENAE estructural)",
+        "Trae de la ENAE (ONE) los datos estructurales-financieros reales por sector "
+        "(ingresos, costos y gastos, utilidad y rentabilidad, 2015-2022) a su "
+        "resolución de 9 sectores encuestados, y los persiste como panel. Es dato "
+        "real para des-rubricar las dimensiones de negocios (costo/margen) y sumar "
+        "una señal de rentabilidad al IAI; cubre 9 de los 17 sectores (incluido "
+        "Comercio). Anual.",
+        _run_enae_sync, default_interval_hours=8760,  # serie anual → anual
     ))
     register_operation(Operation(
         "tss-salario-sync", "Sincronizar costo operativo (TSS · salario por actividad)",
