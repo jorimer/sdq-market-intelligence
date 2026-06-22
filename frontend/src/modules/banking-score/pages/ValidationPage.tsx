@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ShieldCheck, RefreshCw, AlertTriangle, Info } from "lucide-react";
 import { PageHead, Card, CardHead, StatTile, StateBlock, Chip } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
@@ -8,12 +9,15 @@ function fmtPct(x: number | null | undefined): string {
   return x == null ? "—" : `${(x * 100).toFixed(1)}%`;
 }
 
-function fmtDate(iso?: string): string {
+const DATE_LOCALE: Record<string, string> = { es: "es-DO", en: "en-US", fr: "fr-FR" };
+
+function fmtDate(iso: string | undefined, lang: string): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" });
+  return new Date(iso).toLocaleString(DATE_LOCALE[lang] ?? "es-DO", { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function ValidationPage() {
+  const { t, i18n } = useTranslation();
   const [report, setReport] = useState<BacktestReport | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState(false);
@@ -80,20 +84,20 @@ export function ValidationPage() {
 
   const head = (
     <PageHead
-      eyebrow="SIB · validación"
-      title="Backtest del rating"
-      sub="¿El score discrimina el deterioro futuro? Poder de discriminación (Gini) y tasa de distress por tier."
+      eyebrow={t("banking.valEyebrow")}
+      title={t("banking.valTitle")}
+      sub={t("banking.valSub")}
       right={
         <button onClick={regenerate} disabled={busy} className="btn btn-ghost">
           <RefreshCw className={`w-4 h-4 ${busy ? "animate-spin" : ""}`} />
-          {busy ? "Generando…" : "Regenerar"}
+          {busy ? t("banking.valBtnGenerating") : t("banking.valBtnRegenerate")}
         </button>
       }
     />
   );
 
-  if (status === "loading") return <div>{head}<StateBlock kind="loading" message="Cargando backtest…" /></div>;
-  if (status === "error") return <div>{head}<StateBlock kind="error" message="No se pudo cargar el backtest." /></div>;
+  if (status === "loading") return <div>{head}<StateBlock kind="loading" message={t("banking.valLoading")} /></div>;
+  if (status === "error") return <div>{head}<StateBlock kind="error" message={t("banking.valErrorLoad")} /></div>;
 
   if (!report?.computed) {
     return (
@@ -101,7 +105,7 @@ export function ValidationPage() {
         {head}
         <StateBlock
           kind="empty"
-          message={report?.message ?? "El backtest aún no se ha calculado. Usa 'Regenerar' para generarlo."}
+          message={report?.message ?? t("banking.valEmpty")}
         />
       </div>
     );
@@ -118,28 +122,28 @@ export function ValidationPage() {
       <div className="mb-5 flex items-start gap-2.5 rounded-[10px] bg-warn-soft p-3.5">
         <AlertTriangle className="w-4 h-4 text-warn shrink-0 mt-0.5" />
         <p className="text-xs text-body">
-          <span className="font-semibold text-ink">Validación preliminar.</span> No es un rating grado-Basilea
-          ni una PD calibrada. El desenlace es <span className="font-medium">distress financiero</span> (no
-          quiebras), y la discriminación es <span className="font-medium">direccional</span>.
+          <span className="font-semibold text-ink">{t("banking.valDiscBold")}</span>{t("banking.valDiscPre")}
+          <span className="font-medium">{t("banking.valDiscDistress")}</span>{t("banking.valDiscMid")}
+          <span className="font-medium">{t("banking.valDiscDirectional")}</span>.
         </p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <StatTile
-          label="Gini (poder de discriminación)"
-          value={report.gini == null ? "N/D" : fmtNum(report.gini, 3)}
+          label={t("banking.valStatGini")}
+          value={report.gini == null ? t("banking.na") : fmtNum(report.gini, 3)}
         />
         <StatTile
-          label="IC 95%"
+          label={t("banking.valStatCi")}
           value={
             report.gini_ci
               ? `${fmtNum(report.gini_ci[0], 2)} – ${fmtNum(report.gini_ci[1], 2)}`
               : "—"
           }
         />
-        <StatTile label="Observaciones" value={fmtNum(report.n_observations, 0)} />
-        <StatTile label="Eventos de distress" value={`${report.n_events} (${fmtPct(report.event_rate)})`} />
+        <StatTile label={t("banking.valStatObs")} value={fmtNum(report.n_observations, 0)} />
+        <StatTile label={t("banking.valStatEvents")} value={`${report.n_events} (${fmtPct(report.event_rate)})`} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
@@ -147,11 +151,11 @@ export function ValidationPage() {
         <Card className="lg:col-span-2">
           <CardHead
             icon={ShieldCheck}
-            title="Tasa de distress por tier"
-            subtitle={`Horizonte ${report.horizon_quarters}T · debería subir de SDQ-AAA a SDQ-D`}
+            title={t("banking.valTierTitle")}
+            subtitle={t("banking.valTierSubtitle", { q: report.horizon_quarters })}
             right={
               <Chip tone={report.monotonic ? "ok" : "warn"}>
-                {report.monotonic ? "Monótona" : "No monótona"}
+                {report.monotonic ? t("banking.valMonotonic") : t("banking.valNonMonotonic")}
               </Chip>
             }
           />
@@ -173,15 +177,14 @@ export function ValidationPage() {
           </div>
           {giniWeak && (
             <p className="mt-3 text-xs text-muted">
-              Gini moderado: el score ordena el riesgo en la dirección correcta, pero la separación es
-              parcial — consistente con un sistema bancario estable y sin defaults.
+              {t("banking.valGiniWeak")}
             </p>
           )}
         </Card>
 
         {/* Notas metodológicas */}
         <Card>
-          <CardHead icon={Info} title="Notas metodológicas" subtitle="Lo que esta validación sí y no afirma" />
+          <CardHead icon={Info} title={t("banking.valNotesTitle")} subtitle={t("banking.valNotesSubtitle")} />
           <ul className="space-y-2.5">
             {(report.caveats ?? []).map((c, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-body">
@@ -191,7 +194,7 @@ export function ValidationPage() {
             ))}
           </ul>
           {report.generated_at && (
-            <p className="mt-4 text-[11px] text-faint">Calculado: {fmtDate(report.generated_at)}</p>
+            <p className="mt-4 text-[11px] text-faint">{t("banking.valComputedAt", { date: fmtDate(report.generated_at, i18n.language) })}</p>
           )}
         </Card>
       </div>

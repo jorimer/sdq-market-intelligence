@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Brain, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 import client from "@/shared/api/client";
 import { PageHead, Card, CardHead, StatTile, StateBlock, LoadingGrid } from "@/shared/ui/primitives";
@@ -6,6 +7,7 @@ import { fmtNum } from "@/shared/lib/format";
 import type { ModelStatus } from "@/types";
 
 export function ModelPage() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [training, setTraining] = useState(false);
@@ -27,10 +29,10 @@ export function ModelPage() {
     setTrainResult(null);
     try {
       const { data } = await client.post("/banking-score/model/train");
-      setTrainResult({ ok: true, text: data.message || "Modelo entrenado exitosamente" });
+      setTrainResult({ ok: true, text: data.message || t("banking.mdlTrainOk") });
       fetchStatus();
     } catch (err: any) {
-      setTrainResult({ ok: false, text: err?.response?.data?.detail || "Error al entrenar" });
+      setTrainResult({ ok: false, text: err?.response?.data?.detail || t("banking.mdlTrainErr") });
     } finally {
       setTraining(false);
     }
@@ -39,8 +41,8 @@ export function ModelPage() {
   const head = (
     <PageHead
       eyebrow="XGBoost"
-      title="Modelo ML"
-      sub="Complemento explicable al núcleo determinista (contribuciones por variable), no oráculo."
+      title={t("banking.mdlTitle")}
+      sub={t("banking.mdlSub")}
     />
   );
 
@@ -56,25 +58,25 @@ export function ModelPage() {
         <Card>
           <CardHead
             icon={Brain}
-            title="Estado del modelo"
+            title={t("banking.mdlStatusTitle")}
             right={
               status?.ml_available ? (
                 <span className="inline-flex items-center gap-1.5 text-sm text-ok font-medium">
-                  <CheckCircle className="w-4 h-4" /> Disponible
+                  <CheckCircle className="w-4 h-4" /> {t("banking.mdlAvailable")}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-sm text-alert font-medium">
-                  <XCircle className="w-4 h-4" /> No disponible
+                  <XCircle className="w-4 h-4" /> {t("banking.mdlUnavailable")}
                 </span>
               )
             }
           />
           <div className="space-y-2.5">
             {[
-              ["Tipo", status?.model_type ?? "—"],
-              ["Versión", status?.model_version ?? "—"],
-              ["Muestras de entrenamiento", status?.training_records ?? 0],
-              ["Ratings totales", status?.total_ratings ?? 0],
+              [t("banking.mdlRowType"), status?.model_type ?? "—"],
+              [t("banking.mdlRowVersion"), status?.model_version ?? "—"],
+              [t("banking.mdlRowTrainSamples"), status?.training_records ?? 0],
+              [t("banking.mdlRowTotalRatings"), status?.total_ratings ?? 0],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between text-sm border-b border-line/60 pb-2 last:border-0">
                 <span className="text-muted">{k}</span>
@@ -85,17 +87,17 @@ export function ModelPage() {
         </Card>
 
         <Card>
-          <CardHead title="Métricas" subtitle="Desempeño en validación" />
+          <CardHead title={t("banking.mdlMetricsTitle")} subtitle={t("banking.mdlMetricsSubtitle")} />
           {m ? (
             <div className="grid grid-cols-2 gap-3">
-              <StatTile label="Accuracy" value={fmtNum(m.accuracy * 100, 1)} unit="%" />
-              <StatTile label="Kappa" value={fmtNum(m.kappa, 3)} />
-              <StatTile label="N entrenamiento" value={m.n_train} />
-              <StatTile label="N prueba" value={m.n_test} />
+              <StatTile label={t("banking.mdlAccuracy")} value={fmtNum(m.accuracy * 100, 1)} unit="%" />
+              <StatTile label={t("banking.mdlKappa")} value={fmtNum(m.kappa, 3)} />
+              <StatTile label={t("banking.mdlNTrain")} value={m.n_train} />
+              <StatTile label={t("banking.mdlNTest")} value={m.n_test} />
             </div>
           ) : (
             <p className="text-sm text-muted py-6 text-center">
-              Sin métricas. Entrena el modelo primero.
+              {t("banking.mdlNoMetrics")}
             </p>
           )}
         </Card>
@@ -104,14 +106,17 @@ export function ModelPage() {
       <Card>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="font-display text-[15px] font-bold text-ink">Entrenar modelo</h3>
+            <h3 className="font-display text-[15px] font-bold text-ink">{t("banking.mdlTrainTitle")}</h3>
             <p className="text-sm text-muted mt-1">
-              Requiere ≥ {status?.min_records_for_training ?? 30} ratings; actualmente {status?.training_records ?? 0}.
+              {t("banking.mdlTrainHint", {
+                min: status?.min_records_for_training ?? 30,
+                actual: status?.training_records ?? 0,
+              })}
             </p>
           </div>
           <button onClick={train} disabled={training || !status?.can_train} className="btn btn-primary shrink-0">
             <RefreshCw className={`w-4 h-4 ${training ? "animate-spin" : ""}`} />
-            {training ? "Entrenando…" : "Entrenar"}
+            {training ? t("banking.mdlBtnTraining") : t("banking.mdlBtnTrain")}
           </button>
         </div>
         {trainResult && (

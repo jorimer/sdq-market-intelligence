@@ -1,5 +1,7 @@
+import { useTranslation } from "react-i18next";
 import { Sparkles, TrendingUp, Users } from "lucide-react";
 import { TrendChart } from "./TrendChart";
+import { entityTypeLabel } from "../entityTypes";
 import { StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
@@ -10,6 +12,7 @@ import { getIndicatorDetail, type IndicatorDetail } from "../api";
 interface Props {
   bankId: string;
   indicatorKey: string;
+  entityType?: string | null;
   onClose: () => void;
 }
 
@@ -20,10 +23,11 @@ function scoreColor(score: number): string {
   return "text-alert bg-alert-soft";
 }
 
-const DIRECTION_HINT: Record<string, string> = {
-  higher: "Mayor es mejor",
-  lower: "Menor es mejor",
-  target: "Óptimo en un rango intermedio",
+// Maps the backend `direction` value to its translation key.
+const DIRECTION_KEY: Record<string, string> = {
+  higher: "banking.indDirHigher",
+  lower: "banking.indDirLower",
+  target: "banking.indDirTarget",
 };
 
 function fmtRaw(raw: number | null, unit: string): string {
@@ -35,13 +39,14 @@ function fmtRaw(raw: number | null, unit: string): string {
 }
 
 function PeerRow({ label, stats, score }: { label: string; stats: { n: number; median_score: number; percentile: number } | null; score: number }) {
+  const { t } = useTranslation();
   if (!stats) return null;
   return (
     <div>
       <div className="flex items-baseline justify-between mb-1">
         <span className="text-sm text-body truncate min-w-0 flex-1">{label}</span>
         <span className="text-xs text-muted shrink-0 ml-2">
-          n={stats.n} · mediana <span className="mono text-body">{fmtNum(stats.median_score, 0)}</span>
+          n={stats.n} · {t("banking.peerMedian")} <span className="mono text-body">{fmtNum(stats.median_score, 0)}</span>
         </span>
       </div>
       {/* score track with median tick + this entity marker */}
@@ -50,13 +55,14 @@ function PeerRow({ label, stats, score }: { label: string; stats: { n: number; m
         <div className="absolute inset-y-0 w-px bg-linestrong" style={{ left: `${Math.max(0, Math.min(100, stats.median_score))}%` }} />
       </div>
       <div className="text-xs text-muted mt-1">
-        Percentil <span className="mono text-body">{fmtNum(stats.percentile, 0)}</span> del grupo
+        {t("banking.peerPercentilePre")} <span className="mono text-body">{fmtNum(stats.percentile, 0)}</span> {t("banking.peerPercentilePost")}
       </div>
     </div>
   );
 }
 
-export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) {
+export function IndicatorDetailDrawer({ bankId, indicatorKey, entityType, onClose }: Props) {
+  const { t } = useTranslation();
   const { data: detail, ai, loading, aiLoading, error } = useTwoPhaseInsight<IndicatorDetail>(
     (withAi) => getIndicatorDetail(bankId, indicatorKey, withAi),
     `${bankId}:${indicatorKey}`,
@@ -65,8 +71,8 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
 
   return (
     <InsightDrawerShell
-      eyebrow={detail?.bank_name ?? "Indicador"}
-      title={detail?.label ?? "Detalle del indicador"}
+      eyebrow={detail?.bank_name ?? t("banking.indEyebrowFallback")}
+      title={detail ? t(`indicators.${detail.indicator}`, detail.label) : t("banking.indTitleFallback")}
       onClose={onClose}
     >
       {loading ? (
@@ -76,14 +82,14 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
           <Skeleton className="h-32 w-full" />
         </div>
       ) : error || !detail ? (
-        <StateBlock kind="error" message="No se pudo cargar el detalle del indicador." />
+        <StateBlock kind="error" message={t("banking.indError")} />
       ) : (
         <>
           {/* value + score */}
           <div className="flex items-end justify-between gap-4">
             <div className="min-w-0">
               <div className="text-xs text-muted mb-1">
-                {detail.sub_component} · {DIRECTION_HINT[detail.direction] ?? ""}
+                {t(`sub.${detail.sub_component}`, detail.sub_component)} · {DIRECTION_KEY[detail.direction] ? t(DIRECTION_KEY[detail.direction]) : ""}
               </div>
               <div className="text-3xl font-semibold text-ink mono tabular-nums">
                 {fmtRaw(detail.latest.raw, detail.unit)}
@@ -108,9 +114,9 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
           {detail.trend.length > 1 && (
             <section>
               <div className="flex items-center gap-2 mb-2 text-sm font-medium text-ink">
-                <TrendingUp className="w-4 h-4 text-muted" /> Tendencia (score)
+                <TrendingUp className="w-4 h-4 text-muted" /> {t("banking.indTrendTitle")}
               </div>
-              <TrendChart data={detail.trend.map((t) => ({ period: t.period_end, score: t.score }))} />
+              <TrendChart data={detail.trend.map((pt) => ({ period: pt.period_end, score: pt.score }))} />
             </section>
           )}
 
@@ -118,12 +124,12 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
           {detail.peers && (detail.peers.sector || detail.peers.entity_type) && (
             <section>
               <div className="flex items-center gap-2 mb-3 text-sm font-medium text-ink">
-                <Users className="w-4 h-4 text-muted" /> Posición vs pares
+                <Users className="w-4 h-4 text-muted" /> {t("banking.peerTitle")}
               </div>
               <div className="space-y-4">
-                <PeerRow label="Todo el sector" stats={detail.peers.sector} score={detail.latest.score} />
+                <PeerRow label={t("banking.peerSector")} stats={detail.peers.sector} score={detail.latest.score} />
                 <PeerRow
-                  label={`Mismo tipo (${detail.peers.entity_type_label ?? "—"})`}
+                  label={t("banking.peerSameType", { type: entityType ? entityTypeLabel(entityType, t) : (detail.peers.entity_type_label ?? "—") })}
                   stats={detail.peers.entity_type}
                   score={detail.latest.score}
                 />
@@ -134,12 +140,12 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, onClose }: Props) 
           {/* AI insight */}
           <section>
             <div className="flex items-center gap-2 mb-2 text-sm font-medium text-ink">
-              <Sparkles className="w-4 h-4 text-accent" /> Insight de IA
+              <Sparkles className="w-4 h-4 text-accent" /> {t("banking.indAiTitle")}
             </div>
             <AiInsightBody
               loading={aiLoading}
               ai={ai}
-              unavailableHint="El análisis de IA no está disponible (clave de Anthropic no configurada o sin dato para el período). El detalle numérico de arriba es completo."
+              unavailableHint={t("banking.indAiUnavailable")}
             />
           </section>
         </>
