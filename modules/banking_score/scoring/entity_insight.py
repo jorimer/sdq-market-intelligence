@@ -157,23 +157,33 @@ def ai_context_entity(detail: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _derived_figures(detail: Dict[str, Any], window: list) -> Dict[str, Any]:
-    """Pre-compute the derived figures the model tends to miscompute: weighted
-    contribution per sub-component, deltas vs peer medians/p75, the 12-quarter score
-    range (with periods), and the Q1/March closes (with periods)."""
+    """Pre-compute the derived figures the model tends to miscompute, so it COPIES
+    instead of calculating: weighted contribution per sub-component (+ leader vs the
+    rest), deltas vs peer medians/p75, approx peers that outrank it, the 12-quarter
+    range and recent variations (with periods), per-component gap to ceiling, and the
+    Q1/March closes. Each maps to a relational mode the sensor caught the LLM botching."""
     out: Dict[str, Any] = {}
     score = detail["latest"].get("overall_score")
+    subs = detail["sub_components"]
 
-    out["aporte_por_componente"] = [
-        {"componente": s["label"],
-         "aporte_pts": round((s["score"] or 0) * (s["weight"] or 0), 2)}
-        for s in detail["sub_components"]
-    ]
+    aportes = [{"componente": s["label"],
+                "aporte_pts": round((s["score"] or 0) * (s["weight"] or 0), 2),
+                "gap_al_techo_pts": round(100 - (s["score"] or 0), 2)}
+               for s in subs]
+    out["aporte_por_componente"] = aportes
+    if aportes:
+        lider = max(aportes, key=lambda a: a["aporte_pts"])
+        resto = round(sum(a["aporte_pts"] for a in aportes) - lider["aporte_pts"], 2)
+        out["aporte_lider_vs_resto"] = {
+            "lider": lider["componente"], "aporte_lider": lider["aporte_pts"],
+            "suma_resto": resto, "lider_supera_al_resto": lider["aporte_pts"] > resto,
+        }
 
     peers = detail.get("peers") or {}
+    et = peers.get("entity_type") or {}
+    sec = peers.get("sector") or {}
     if score is not None:
         deltas: Dict[str, Any] = {}
-        et = peers.get("entity_type") or {}
-        sec = peers.get("sector") or {}
         if et.get("median_score") is not None:
             deltas["vs_mediana_tipo"] = round(score - et["median_score"], 2)
         if et.get("p75_score") is not None:
@@ -182,6 +192,11 @@ def _derived_figures(detail: Dict[str, Any], window: list) -> Dict[str, Any]:
             deltas["vs_mediana_sector"] = round(score - sec["median_score"], 2)
         if deltas:
             out["delta_score"] = deltas
+    # ~pares que lo superan (de percentil y n) — evita el "N entidades lo superan" errado
+    if et.get("percentile") is not None and et.get("n"):
+        out["pares_tipo_que_lo_superan_aprox"] = {
+            "aprox": round((1 - et["percentile"] / 100) * et["n"]), "de_n": et["n"],
+        }
 
     scores = [(t["period_end"], t["score"]) for t in window if t.get("score") is not None]
     if scores:
@@ -192,6 +207,15 @@ def _derived_figures(detail: Dict[str, Any], window: list) -> Dict[str, Any]:
             "max": {"periodo": hi[0], "score": hi[1]},
             "n_periodos": len(scores),
         }
+        # variaciones del score actual vs hitos — evita deltas entre períodos mal restados
+        cur_p, cur = scores[-1]
+        var: Dict[str, Any] = {"caida_desde_max": round(hi[1] - cur, 2),
+                               "subida_desde_min": round(cur - lo[1], 2)}
+        if len(scores) >= 2:
+            var["vs_trimestre_anterior"] = round(cur - scores[-2][1], 2)
+        if len(scores) >= 5:
+            var["vs_mismo_trimestre_ano_previo"] = round(cur - scores[-5][1], 2)
+        out["variacion_score_actual"] = var
     cortes_q1 = [{"periodo": t["period_end"], "score": t["score"]}
                  for t in window if str(t.get("period_end") or "")[5:7] == "03"]
     if cortes_q1:
