@@ -266,7 +266,8 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
             for m in re.finditer(
                 r"(\d+\.\d+)\s*[,;:]?\s*(?:es\s+|fue\s+|sigue\s+siendo\s+)?"
                 r"(?:el|la|un|una)?\s*(?:valor|punto|score|nivel|cierre)?\s*"
-                r"(?P<ext>m[áa]s\s+baj[oa]|m[áa]s\s+alt[oa]|m[íi]nimo|m[áa]ximo|menor|mayor)"
+                r"(?P<ext>m[áa]s\s+baj[oa]|m[áa]s\s+alt[oa]|m[íi]nimo|m[áa]ximo|menor|"
+                r"mayor|piso|techo)"
                 r"\b[^.\n]{0,35}?(?:per[íi]odo|trimestre|doce|12|hist[óo]r|ventana|serie)",
                 text, re.I):
                 v = float(m.group(1))
@@ -276,7 +277,7 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
                 if not any(_close(v, s, 0.3) for s in scores):
                     continue
                 ext = m.group("ext").lower()
-                is_min = ext.startswith(("más b", "mas b", "mín", "min", "menor"))
+                is_min = ext.startswith(("más b", "mas b", "mín", "min", "menor", "piso"))
                 target = min(scores) if is_min else max(scores)
                 lower_exists = is_min and any(s < v - 0.05 for s in scores)
                 higher_exists = (not is_min) and any(s > v + 0.05 for s in scores)
