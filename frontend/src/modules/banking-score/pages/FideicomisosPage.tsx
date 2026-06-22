@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Landmark, Info } from "lucide-react";
 import { PageHead, Card, CardHead, StateBlock, LoadingGrid } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import { getTrusts, TrustRow } from "../api";
 
+// Keyed by the backend-provided band text (data); only the chip color is derived here.
 const BAND_CLASS: Record<string, string> = {
   "Sólida": "text-ok bg-ok-soft",
   "Estable": "text-accent-ink bg-accent-soft",
@@ -11,13 +13,6 @@ const BAND_CLASS: Record<string, string> = {
   "Frágil": "text-alert bg-alert-soft",
   "Datos insuficientes": "text-muted bg-surface2",
   "N/D": "text-muted bg-surface2",
-};
-
-const SEGMENT_LABEL: Record<string, string> = {
-  operativo: "Operativo",
-  tenedor: "Tenedor",
-  desarrollo: "Desarrollo",
-  indeterminado: "—",
 };
 
 function HealthBadge({ band }: { band: string }) {
@@ -43,6 +38,7 @@ function dimCell(value: number | null) {
 }
 
 export function FideicomisosPage() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<TrustRow[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -59,73 +55,66 @@ export function FideicomisosPage() {
   return (
     <div>
       <PageHead
-        eyebrow="SIB · Fideicomisos públicos"
-        title="Fideicomisos públicos"
-        sub="Índice de Salud del Fideicomiso — escala propia (no la escala SDQ de entidades), sobre estados auditados."
+        eyebrow={t("banking.fidEyebrow")}
+        title={t("banking.fidTitle")}
+        sub={t("banking.fidSub")}
       />
 
       <Card className="mb-5">
         <div className="flex items-start gap-2 text-sm text-muted">
           <Info className="w-4 h-4 mt-0.5 shrink-0 text-faint" />
           <p className="leading-relaxed">
-            Los fideicomisos son patrimonios autónomos muy heterogéneos (una concesión
-            operativa apalancada vs. un fondo tenedor de activos), por lo que <span className="text-body font-medium">no</span> se
-            califican en la escala SDQ-AAA…D. El índice combina <span className="text-body font-medium">solvencia patrimonial</span>,{" "}
-            <span className="text-body font-medium">liquidez</span> y <span className="text-body font-medium">sostenibilidad</span>; el
-            apalancamiento se muestra como contexto (segmento), no puntúa. Cifras en RD$ millones.
+            {t("banking.fidInfoP1")}<span className="text-body font-medium">{t("banking.fidInfoNo")}</span>{t("banking.fidInfoMid")}<span className="text-body font-medium">{t("banking.fidInfoSolv")}</span>{t("banking.fidInfoSep")}<span className="text-body font-medium">{t("banking.fidInfoLiq")}</span>{t("banking.fidInfoAnd")}<span className="text-body font-medium">{t("banking.fidInfoSost")}</span>{t("banking.fidInfoSuffix")}
           </p>
         </div>
       </Card>
 
       {error ? (
-        <StateBlock kind="error" message="No se pudieron cargar los fideicomisos." />
+        <StateBlock kind="error" message={t("banking.fidError")} />
       ) : rows === null ? (
         <LoadingGrid />
       ) : rows.length === 0 ? (
-        <StateBlock
-          kind="empty"
-          message="Aún no hay fideicomisos ingeridos. Ejecuta la sincronización de fiduciarias."
-        />
+        <StateBlock kind="empty" message={t("banking.fidEmpty")} />
       ) : (
         <Card>
-          <CardHead icon={Landmark} title="Fideicomisos" subtitle={`${rows.length} fondos · ordenados por salud`} />
+          <CardHead icon={Landmark} title={t("banking.fidCardTitle")} subtitle={t("banking.fidCardSubtitle", { n: rows.length })} />
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-line">
-                  <th className="py-2 px-2 font-medium">Fideicomiso</th>
-                  <th className="py-2 px-2 font-medium">Segmento</th>
-                  <th className="py-2 px-2 font-medium">Salud</th>
-                  <th className="py-2 px-2 font-medium text-center">Solv.</th>
-                  <th className="py-2 px-2 font-medium text-center">Liq.</th>
-                  <th className="py-2 px-2 font-medium text-center">Sost.</th>
-                  <th className="py-2 px-2 font-medium text-right">Activos</th>
-                  <th className="py-2 px-2 font-medium text-right">Patrimonio</th>
-                  <th className="py-2 px-2 font-medium text-right">Resultado</th>
+                  <th className="py-2 px-2 font-medium">{t("banking.fidColTrust")}</th>
+                  <th className="py-2 px-2 font-medium">{t("banking.fidColSegment")}</th>
+                  <th className="py-2 px-2 font-medium">{t("banking.fidColHealth")}</th>
+                  <th className="py-2 px-2 font-medium text-center">{t("banking.fidColSolv")}</th>
+                  <th className="py-2 px-2 font-medium text-center">{t("banking.fidColLiq")}</th>
+                  <th className="py-2 px-2 font-medium text-center">{t("banking.fidColSost")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{t("banking.fidColAssets")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{t("banking.fidColEquity")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{t("banking.fidColResult")}</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((t) => (
-                  <tr key={t.id} className="border-b border-line/60">
+                {rows.map((trust) => (
+                  <tr key={trust.id} className="border-b border-line/60">
                     <td className="py-2 px-2">
-                      <div className="text-body font-medium truncate max-w-[260px]" title={t.name}>{t.name}</div>
-                      {t.period_end && <div className="text-[10px] text-faint mono">{t.period_end}</div>}
+                      <div className="text-body font-medium truncate max-w-[260px]" title={trust.name}>{trust.name}</div>
+                      {trust.period_end && <div className="text-[10px] text-faint mono">{trust.period_end}</div>}
                     </td>
-                    <td className="py-2 px-2 text-muted">{SEGMENT_LABEL[t.segment ?? ""] ?? "—"}</td>
+                    <td className="py-2 px-2 text-muted">{t(`banking.fidSegment.${trust.segment ?? "indeterminado"}`, "—")}</td>
                     <td className="py-2 px-2">
                       <div className="flex items-center gap-2">
-                        <HealthBadge band={t.health.band} />
+                        <HealthBadge band={trust.health.band} />
                         <span className="mono text-xs text-muted tabular-nums">
-                          {t.health.overall === null ? "" : fmtNum(t.health.overall, 0)}
+                          {trust.health.overall === null ? "" : fmtNum(trust.health.overall, 0)}
                         </span>
                       </div>
                     </td>
-                    <td className="py-2 px-2 text-center">{dimCell(t.health.solvencia)}</td>
-                    <td className="py-2 px-2 text-center">{dimCell(t.health.liquidez)}</td>
-                    <td className="py-2 px-2 text-center">{dimCell(t.health.sostenibilidad)}</td>
-                    <td className="py-2 px-2 text-right mono text-ink tabular-nums">{mm(t.financials?.activos_totales)}</td>
-                    <td className="py-2 px-2 text-right mono text-ink tabular-nums">{mm(t.financials?.patrimonio_fideicomitido)}</td>
-                    <td className="py-2 px-2 text-right mono text-ink tabular-nums">{mm(t.financials?.resultado_periodo)}</td>
+                    <td className="py-2 px-2 text-center">{dimCell(trust.health.solvencia)}</td>
+                    <td className="py-2 px-2 text-center">{dimCell(trust.health.liquidez)}</td>
+                    <td className="py-2 px-2 text-center">{dimCell(trust.health.sostenibilidad)}</td>
+                    <td className="py-2 px-2 text-right mono text-ink tabular-nums">{mm(trust.financials?.activos_totales)}</td>
+                    <td className="py-2 px-2 text-right mono text-ink tabular-nums">{mm(trust.financials?.patrimonio_fideicomitido)}</td>
+                    <td className="py-2 px-2 text-right mono text-ink tabular-nums">{mm(trust.financials?.resultado_periodo)}</td>
                   </tr>
                 ))}
               </tbody>

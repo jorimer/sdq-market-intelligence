@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Sliders, RotateCcw, Zap } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
@@ -15,7 +16,6 @@ import {
   ScoringResult,
   SubComponents,
   SUB_KEYS,
-  SUB_LABELS,
 } from "../api";
 
 const PRESETS: Record<string, SubComponents> = {
@@ -30,6 +30,7 @@ function fromResult(r: ScoringResult): SubComponents {
 }
 
 export function ScenariosPage() {
+  const { t } = useTranslation();
   const { period } = useApp();
   const periodEnd = periodToDate(period);
   const [bankId, setBankId] = useState("");
@@ -71,15 +72,15 @@ export function ScenariosPage() {
   return (
     <div>
       <PageHead
-        eyebrow="iSRM · what-if"
-        title="Escenarios"
-        sub="Modela el rating ajustando los sub-componentes (iSRM). Carga la base de una entidad y simula."
+        eyebrow={t("banking.scenEyebrow")}
+        title={t("banking.scenTitle")}
+        sub={t("banking.scenSub")}
       />
 
       <Card className="mb-5">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-64">
-            <label className="block text-xs font-medium text-muted mb-1">Entidad</label>
+            <label className="block text-xs font-medium text-muted mb-1">{t("banking.fieldEntity")}</label>
             <BankSelector
               value={bankId}
               onChange={(id, name) => {
@@ -89,28 +90,28 @@ export function ScenariosPage() {
             />
           </div>
           <div className="text-xs text-muted pb-2.5">
-            Período <span className="mono text-body">{periodEnd}</span>
+            {t("banking.scoringPeriod")} <span className="mono text-body">{periodEnd}</span>
           </div>
           <button onClick={loadBase} disabled={!bankId || loading || blocked} className="btn btn-primary">
             <Sliders className="w-4 h-4" />
-            {loading ? "Cargando…" : "Cargar base"}
+            {loading ? t("banking.scenLoading") : t("banking.scenLoadBase")}
           </button>
         </div>
         {notice}
       </Card>
 
       {!base ? (
-        <StateBlock kind="empty" message="Selecciona una entidad y carga su base para iniciar la simulación." />
+        <StateBlock kind="empty" message={t("banking.scenEmpty")} />
       ) : (
         <div className="grid lg:grid-cols-3 gap-5">
           {/* Sliders */}
           <Card>
-            <CardHead title="Ajustar sub-componentes" subtitle={bankName} />
+            <CardHead title={t("banking.scenAdjustTitle")} subtitle={bankName} />
             <div className="space-y-4">
               {SUB_KEYS.map((key) => (
                 <div key={key}>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-body">{SUB_LABELS[key]}</span>
+                    <span className="text-body">{t(`sub.${key}`)}</span>
                     <span className="mono font-semibold text-ink">{sliders[key].toFixed(1)}</span>
                   </div>
                   <input
@@ -126,7 +127,7 @@ export function ScenariosPage() {
               ))}
             </div>
             <div className="mt-4">
-              <p className="text-xs font-medium text-muted mb-2">Presets</p>
+              <p className="text-xs font-medium text-muted mb-2">{t("banking.scenPresetsLabel")}</p>
               <div className="grid grid-cols-2 gap-2">
                 {Object.keys(PRESETS).map((p) => (
                   <button
@@ -134,7 +135,7 @@ export function ScenariosPage() {
                     onClick={() => setSliders({ ...PRESETS[p] })}
                     className="text-xs px-2 py-1.5 rounded-[10px] border border-line hover:bg-surface2 text-body"
                   >
-                    {p}
+                    {t(`banking.scenPreset.${p}`, p)}
                   </button>
                 ))}
               </div>
@@ -142,12 +143,12 @@ export function ScenariosPage() {
             <div className="flex gap-2 mt-4">
               <button onClick={runSim} disabled={simulating} className="btn btn-primary flex-1">
                 <Zap className="w-4 h-4" />
-                {simulating ? "Simulando…" : "Simular"}
+                {simulating ? t("banking.scenSimulating") : t("banking.scenSimulate")}
               </button>
               <button
                 onClick={() => { setSliders(fromResult(base)); setSim(null); }}
                 className="btn btn-ghost"
-                title="Restablecer"
+                title={t("banking.scenResetTitle")}
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
@@ -156,18 +157,18 @@ export function ScenariosPage() {
 
           {/* Radar */}
           <Card>
-            <CardHead title="Base vs. simulado" subtitle="Perfil de sub-componentes" />
+            <CardHead title={t("banking.scenRadarTitle")} subtitle={t("banking.scenRadarSubtitle")} />
             <RadarChart
               data={base.sub_components}
               comparisonData={sim?.sub_components}
-              comparisonLabel="Simulado"
+              comparisonLabel={t("banking.scenSimulated")}
             />
           </Card>
 
           {/* Gauges */}
           <Card className="space-y-5">
             <div className="text-center">
-              <p className="text-xs text-muted mb-2">Base</p>
+              <p className="text-xs text-muted mb-2">{t("banking.scenBase")}</p>
               <div className="flex flex-col items-center">
                 <ScoreGauge score={base.overall_score} size={120} />
                 <div className="mt-2"><RatingBadge tier={base.rating_tier} size="md" /></div>
@@ -175,7 +176,7 @@ export function ScenariosPage() {
             </div>
             {sim && (
               <div className="border-t border-line pt-5 text-center">
-                <p className="text-xs text-muted mb-2">Simulado</p>
+                <p className="text-xs text-muted mb-2">{t("banking.scenSimulated")}</p>
                 <div className="flex flex-col items-center">
                   <ScoreGauge score={sim.overall_score} size={120} />
                   <div className="mt-2"><RatingBadge tier={sim.rating_tier} size="md" /></div>
@@ -190,8 +191,8 @@ export function ScenariosPage() {
           {sim && (
             <div className="lg:col-span-3">
               <AiInsightCard
-                title="Lectura del escenario (IA)"
-                subtitle={`Score simulado ${sim.overall_score.toFixed(1)} · ${sim.rating_tier}`}
+                title={t("banking.scenInsightTitle")}
+                subtitle={t("banking.scenInsightSubtitle", { score: sim.overall_score.toFixed(1), tier: sim.rating_tier })}
                 icon={Zap}
                 depsKey={`${JSON.stringify(sim.sub_components)}|${sim.overall_score}`}
                 fetcher={() => getScenarioInsight(
