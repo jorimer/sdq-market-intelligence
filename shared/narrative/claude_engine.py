@@ -209,6 +209,40 @@ TEMPLATES = {
     ),
 }
 
+# Thin task templates — ruta cerebro (activada por axis=). La persona y las reglas
+# comunes viven en el `system` (shared/narrative/cerebro.py); el thin solo lleva la
+# tarea, la forma y los guardarraíles específicos del template (topes, dirección del
+# indicador, percentil, peso de sub-componente, BCRD como telón). La regla "no inventes
+# cifras" NO se repite aquí: vive en EPISTEMIC_STANDARD del cerebro y sigue activa.
+THIN_TEMPLATES = {
+    "entity_rating": (
+        "Explica el FUNDAMENTO del rating de esta entidad, a partir de datos reales del SIB.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 400 palabras. No cubras los cuatro puntos por igual: ve profundo en la "
+        "tensión que más condiciona la decisión de la audiencia. Apóyate en: lectura del "
+        "rating y posición vs pares (usa el percentil), el/los sub-componente(s) que más "
+        "impulsan y los que más lastran (pondera por su peso), y la trayectoria del score. "
+        "Si hay 'contexto_oficial_bcrd', úsalo solo como telón sistémico y cítalo breve."
+    ),
+    "indicator_insight": (
+        "Analiza EN DETALLE un único indicador financiero de la entidad (datos reales SIB).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. Cubre nivel actual y su lectura, tendencia en los trimestres "
+        "provistos y drivers probables, posición vs la mediana del sector y del mismo tipo de "
+        "entidad (usa el percentil), e implicaciones para la decisión de la audiencia. Respeta "
+        "la dirección del indicador (si 'lower'/'higher'/'target' es mejor)."
+    ),
+    "subcomponent_focus": (
+        "Analiza EN PROFUNDIDAD UN sub-componente del rating —NO todo el banco— (datos SIB).\n"
+        "Contexto (solo los indicadores de este sub-componente):\n{context}\n\n"
+        "Máximo 200 palabras, enfocado EXCLUSIVAMENTE en este sub-componente. Cubre: qué "
+        "refleja su score, el indicador que más lo sube y el que más lo baja (con sus valores "
+        "y scores), "
+        "posición vs pares si se provee, y un veredicto puntual con qué vigilar. NO repitas el "
+        "panorama global del banco ni otros sub-componentes."
+    ),
+}
+
 # Static fallback templates when API key is not available
 STATIC_FALLBACKS = {
     "executive_summary": (
@@ -254,8 +288,10 @@ class NarrativeEngine:
                 logger.warning("anthropic package not installed, using fallback templates")
         return self._client
 
-    def _cache_key(self, context: dict, template: str, mode: str, lang: str) -> str:
-        content = json.dumps(context, sort_keys=True, default=str) + template + mode + lang
+    def _cache_key(self, context: dict, template: str, mode: str, lang: str,
+                   axis: Optional[str] = None, audience: Optional[str] = None) -> str:
+        content = (json.dumps(context, sort_keys=True, default=str)
+                   + template + mode + lang + (axis or "") + (audience or ""))
         return hashlib.sha256(content.encode()).hexdigest()
 
     def _get_cached(self, key: str) -> Optional[NarrativeResult]:
@@ -269,6 +305,31 @@ class NarrativeEngine:
 
     def _set_cache(self, key: str, result: NarrativeResult):
         self._cache[key] = (result, time.time())
+
+    def _result_from_response(self, response, cache_key: str, template: str) -> NarrativeResult:
+        """Build, cache and return a NarrativeResult from a Claude API response.
+
+        Shared by both routes (legacy and cerebro) so token/cost/cache accounting is
+        identical regardless of whether a `system` prompt was used.
+        """
+        text = response.content[0].text
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
+        total_tokens = input_tokens + output_tokens
+        # Approximate cost (Sonnet pricing)
+        cost = (input_tokens * 3.0 / 1_000_000) + (output_tokens * 15.0 / 1_000_000)
+        result = NarrativeResult(
+            text=text,
+            tokens_used=total_tokens,
+            cost_estimate=cost,
+            model_used=settings.ANTHROPIC_MODEL,
+        )
+        self._set_cache(cache_key, result)
+        logger.info(
+            "Narrative generated: template=%s, tokens=%d, cost=$%.4f",
+            template, total_tokens, cost,
+        )
+        return result
 
     def _generate_fallback(self, context: dict, template: str) -> NarrativeResult:
         """Generate narrative from static templates when API key is unavailable."""
@@ -294,6 +355,8 @@ class NarrativeEngine:
         template: str = "executive_summary",
         mode: str = "standard",
         lang: Optional[str] = None,
+        axis: Optional[str] = None,
+        audience: Optional[str] = None,
     ) -> NarrativeResult:
         """Generate a narrative using Claude AI or fallback templates.
 
@@ -303,15 +366,21 @@ class NarrativeEngine:
             mode: 'standard' or 'detailed' for longer outputs.
             lang: 'es'|'en'|'fr'. If None, uses the request language (X-Lang header
                 via the global dependency), defaulting to 'es'.
+            axis: when set, activates the "cerebro" route — an assembled `system`
+                prompt (identity + axis doctrine + epistemic standard + audience frame
+                + insight bar) plus a thin task template. When None, the legacy route
+                (single user message, fat template) is used unchanged.
+            audience: audience key for the cerebro frame; falls back to the axis default
+                if None/unknown. Ignored on the legacy route.
 
         Returns:
             NarrativeResult with generated text and metadata.
         """
         lang = (lang or get_request_lang() or "es")
-        cache_key = self._cache_key(context, template, mode, lang)
+        cache_key = self._cache_key(context, template, mode, lang, axis, audience)
         cached = self._get_cached(cache_key)
         if cached:
-            logger.info("Narrative cache hit for template=%s lang=%s", template, lang)
+            logger.info("Narrative cache hit for template=%s lang=%s axis=%s", template, lang, axis)
             return cached
 
         # Try Claude API
@@ -322,15 +391,41 @@ class NarrativeEngine:
             self._set_cache(cache_key, result)
             return result
 
+        context_str = json.dumps(context, indent=2, ensure_ascii=False, default=str)
+        max_tokens = 2048 if mode == "detailed" else 1024
+
+        if axis:  # ── ruta cerebro: system ensamblado + template thin ──
+            from shared.narrative.cerebro import AXIS_DOCTRINE, build_system
+            thin = THIN_TEMPLATES.get(template)
+            if not thin or axis not in AXIS_DOCTRINE:
+                # axis sin doctrina o template sin thin → ruta legacy (nunca KeyError:
+                # generate_report_narratives no tiene try/except propio).
+                logger.warning("Cerebro no aplicable (axis=%s, template=%s); ruta legacy",
+                               axis, template)
+            else:
+                system = build_system(axis, audience, mode)
+                user = _apply_lang(thin.format(context=context_str), lang)
+                try:
+                    response = client.messages.create(
+                        model=settings.ANTHROPIC_MODEL,
+                        max_tokens=max_tokens,
+                        system=system,
+                        messages=[{"role": "user", "content": user}],
+                    )
+                    return self._result_from_response(response, cache_key, template)
+                except Exception as e:  # noqa: BLE001
+                    logger.error("Claude API error (cerebro): %s. Fallback estático.", e)
+                    result = self._generate_fallback(context, template)
+                    self._set_cache(cache_key, result)
+                    return result
+
+        # ── ruta legacy (los otros módulos / templates sin thin) — sin cambios ──
         prompt_template = TEMPLATES.get(template)
         if not prompt_template:
             logger.warning("Unknown template '%s', using executive_summary", template)
             prompt_template = TEMPLATES["executive_summary"]
 
-        context_str = json.dumps(context, indent=2, ensure_ascii=False, default=str)
         prompt = _apply_lang(prompt_template.format(context=context_str), lang)
-
-        max_tokens = 2048 if mode == "detailed" else 1024
 
         try:
             response = client.messages.create(
@@ -338,25 +433,7 @@ class NarrativeEngine:
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}],
             )
-            text = response.content[0].text
-            input_tokens = response.usage.input_tokens
-            output_tokens = response.usage.output_tokens
-            total_tokens = input_tokens + output_tokens
-            # Approximate cost (Sonnet pricing)
-            cost = (input_tokens * 3.0 / 1_000_000) + (output_tokens * 15.0 / 1_000_000)
-
-            result = NarrativeResult(
-                text=text,
-                tokens_used=total_tokens,
-                cost_estimate=cost,
-                model_used=settings.ANTHROPIC_MODEL,
-            )
-            self._set_cache(cache_key, result)
-            logger.info(
-                "Narrative generated: template=%s, tokens=%d, cost=$%.4f",
-                template, total_tokens, cost,
-            )
-            return result
+            return self._result_from_response(response, cache_key, template)
 
         except Exception as e:
             logger.error("Claude API error: %s. Falling back to static template.", e)

@@ -317,6 +317,11 @@ async def get_indicator_detail(
     bank_id: str,
     indicator_key: str,
     with_ai: bool = Query(True, description="Incluir insight de IA (Claude)"),
+    audience: str = Query(
+        "comite_credito",
+        description="Audiencia para orientar el insight (comite_credito·entidad·"
+                    "inversionista·supervisor); una clave desconocida cae al default.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -337,6 +342,7 @@ async def get_indicator_detail(
             from shared.narrative.claude_engine import narrative_engine
             res = await narrative_engine.generate(
                 ai_context(detail), template="indicator_insight", mode="detailed",
+                axis="banking", audience=audience,
             )
             detail["ai_insight"] = {
                 "text": res.text,
@@ -361,6 +367,11 @@ async def get_indicator_detail(
 async def get_entity_insight(
     bank_id: str,
     with_ai: bool = Query(True, description="Incluir insight de IA (Claude)"),
+    audience: str = Query(
+        "comite_credito",
+        description="Audiencia para orientar el insight (comite_credito·entidad·"
+                    "inversionista·supervisor); una clave desconocida cae al default.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -382,6 +393,7 @@ async def get_entity_insight(
                 entity_ctx["contexto_oficial_bcrd"] = pubs
             res = await narrative_engine.generate(
                 entity_ctx, template="entity_rating", mode="detailed",
+                axis="banking", audience=audience,
             )
             detail["ai_insight"] = {
                 "text": res.text,
