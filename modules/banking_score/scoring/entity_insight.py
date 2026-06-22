@@ -134,6 +134,7 @@ def build_entity_insight(db: Session, bank: Bank) -> Optional[Dict[str, Any]]:
 
 def ai_context_entity(detail: Dict[str, Any]) -> Dict[str, Any]:
     """Compact context for the entity AI narrative."""
+    window = detail["trend"][-12:]
     return {
         "entidad": detail["bank_name"],
         "tipo_entidad": detail["entity_type"],
@@ -148,5 +149,51 @@ def ai_context_entity(detail: Dict[str, Any]) -> Dict[str, Any]:
         ],
         "pares": detail.get("peers"),
         "tendencia_score": [{"periodo": t["period_end"], "score": t["score"]}
-                            for t in detail["trend"][-12:]],
+                            for t in window],
+        # Cifras derivadas YA CALCULADAS — el analista DEBE copiarlas, no recomputarlas
+        # (el LLM erraba deltas, aportes y rangos). Ver _derived_figures.
+        "cifras_derivadas": _derived_figures(detail, window),
     }
+
+
+def _derived_figures(detail: Dict[str, Any], window: list) -> Dict[str, Any]:
+    """Pre-compute the derived figures the model tends to miscompute: weighted
+    contribution per sub-component, deltas vs peer medians/p75, the 12-quarter score
+    range (with periods), and the Q1/March closes (with periods)."""
+    out: Dict[str, Any] = {}
+    score = detail["latest"].get("overall_score")
+
+    out["aporte_por_componente"] = [
+        {"componente": s["label"],
+         "aporte_pts": round((s["score"] or 0) * (s["weight"] or 0), 2)}
+        for s in detail["sub_components"]
+    ]
+
+    peers = detail.get("peers") or {}
+    if score is not None:
+        deltas: Dict[str, Any] = {}
+        et = peers.get("entity_type") or {}
+        sec = peers.get("sector") or {}
+        if et.get("median_score") is not None:
+            deltas["vs_mediana_tipo"] = round(score - et["median_score"], 2)
+        if et.get("p75_score") is not None:
+            deltas["vs_p75_tipo"] = round(score - et["p75_score"], 2)
+        if sec.get("median_score") is not None:
+            deltas["vs_mediana_sector"] = round(score - sec["median_score"], 2)
+        if deltas:
+            out["delta_score"] = deltas
+
+    scores = [(t["period_end"], t["score"]) for t in window if t.get("score") is not None]
+    if scores:
+        lo = min(scores, key=lambda x: x[1])
+        hi = max(scores, key=lambda x: x[1])
+        out["rango_score_12t"] = {
+            "min": {"periodo": lo[0], "score": lo[1]},
+            "max": {"periodo": hi[0], "score": hi[1]},
+            "n_periodos": len(scores),
+        }
+    cortes_q1 = [{"periodo": t["period_end"], "score": t["score"]}
+                 for t in window if str(t.get("period_end") or "")[5:7] == "03"]
+    if cortes_q1:
+        out["cortes_q1_marzo"] = cortes_q1
+    return out

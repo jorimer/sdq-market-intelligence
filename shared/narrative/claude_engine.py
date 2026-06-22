@@ -222,7 +222,12 @@ THIN_TEMPLATES = {
         "tensión que más condiciona la decisión de la audiencia. Apóyate en: lectura del "
         "rating y posición vs pares (usa el percentil), el/los sub-componente(s) que más "
         "impulsan y los que más lastran (pondera por su peso), y la trayectoria del score. "
-        "Si hay 'contexto_oficial_bcrd', úsalo solo como telón sistémico y cítalo breve."
+        "Si hay 'contexto_oficial_bcrd', úsalo solo como telón sistémico y cítalo breve.\n\n"
+        "CIFRAS DERIVADAS: el aporte de cada sub-componente (score×peso), los deltas vs la "
+        "mediana/p75 de pares, el rango del score en 12 trimestres y los cortes de marzo YA "
+        "están calculados en 'cifras_derivadas'. Copiá esos valores tal cual; NO recalcules "
+        "aportes, deltas ni rangos, y al citar un score de un período usá EXACTAMENTE el de "
+        "'tendencia_score' para ese período (no atribuyas un valor a otro trimestre)."
     ),
     "indicator_insight": (
         "Analiza EN DETALLE un único indicador financiero de la entidad (datos reales SIB).\n"
@@ -332,12 +337,17 @@ class NarrativeEngine:
         return result
 
     def _generate_guarded(self, client, system: str, user: str, max_tokens: int,
-                          context_str: str, cache_key: str, template: str) -> NarrativeResult:
+                          context_str: str, cache_key: str, template: str,
+                          context: Optional[dict] = None) -> NarrativeResult:
         """Cerebro generation + numeric guardrail: generate, verify every figure traces
-        to the context, and regenerate ONCE if any is unsupported. Caches and returns the
-        final result with ``guard_unsupported`` recording figures still unverified (if the
-        regen also failed) — best-effort, never blanks the insight."""
-        from shared.narrative.numeric_guard import CORRECTION_NOTICE, verify_figures
+        to the context, and regenerate ONCE if any is unsupported. Two layers feed the
+        check: a DETERMINISTIC computation (deltas vs median, range bounds, value↔period,
+        weighted contributions — modes the LLM judge proved unreliable on) plus the LLM
+        judge for the rest. Caches and returns the final result with ``guard_unsupported``
+        recording figures still unverified (if the regen also failed) — best-effort, never
+        blanks the insight."""
+        from shared.narrative.numeric_guard import (
+            CORRECTION_NOTICE, deterministic_unsupported, verify_figures)
 
         def _gen(user_msg):
             resp = client.messages.create(
@@ -346,9 +356,21 @@ class NarrativeEngine:
             )
             return self._build_result(resp)
 
-        result = _gen(user)
         guard_model = settings.ANTHROPIC_GUARD_MODEL
-        bad = verify_figures(client, guard_model, context_str, result.text)
+
+        def _check(text: str) -> list:
+            # determinista primero (gratis, garantía mecánica) + juez LLM (semántico)
+            det = deterministic_unsupported(context or {}, text)
+            llm = verify_figures(client, guard_model, context_str, text)
+            seen, merged = set(), []
+            for f in det + llm:
+                if f not in seen:
+                    seen.add(f)
+                    merged.append(f)
+            return merged
+
+        result = _gen(user)
+        bad = _check(result.text)
         if bad:
             logger.warning("Guardrail (%s): cifras sin respaldo %s — regenerando una vez",
                            template, bad)
@@ -357,8 +379,7 @@ class NarrativeEngine:
                 # acumula tokens/costo de ambas llamadas (transparencia)
                 corrected.tokens_used += result.tokens_used
                 corrected.cost_estimate += result.cost_estimate
-                corrected.guard_unsupported = verify_figures(
-                    client, guard_model, context_str, corrected.text)
+                corrected.guard_unsupported = _check(corrected.text)
                 if corrected.guard_unsupported:
                     logger.warning("Guardrail (%s): persisten cifras tras regenerar: %s",
                                    template, corrected.guard_unsupported)
@@ -447,7 +468,8 @@ class NarrativeEngine:
                 user = _apply_lang(thin.format(context=context_str), lang)
                 try:
                     return self._generate_guarded(
-                        client, system, user, max_tokens, context_str, cache_key, template)
+                        client, system, user, max_tokens, context_str, cache_key, template,
+                        context=context)
                 except Exception as e:  # noqa: BLE001
                     logger.error("Claude API error (cerebro): %s. Fallback estático.", e)
                     result = self._generate_fallback(context, template)
