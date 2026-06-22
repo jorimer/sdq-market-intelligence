@@ -143,6 +143,14 @@ class TestSolvencia:
         assert r["raw"] == 0.0
         assert r["score"] == 0.0
 
+    def test_negative_sib_ratio_falls_back_to_structural(self):
+        # Mismo patrón que tier1: un solvencia_pct no-positivo del SIB es espurio →
+        # derivar de patrimonio_tecnico / (APR + contingentes + riesgo_mercado).
+        d = BankingDataInput(solvencia_pct=-12.0, patrimonio_tecnico=15_000,
+                             apr=100_000, contingentes=5_000, riesgo_mercado=2_000)
+        r = calc_solvencia(d)
+        assert r["raw"] == pytest.approx(14.0187, abs=0.01)  # ignoró el negativo
+
 
 class TestTier1Ratio:
     def test_healthy_bank(self, healthy_bank):
@@ -156,6 +164,15 @@ class TestTier1Ratio:
         r = calc_tier1_ratio(d)
         # 4% < 4.5% → score = 0
         assert r["score"] == 0.0
+
+    def test_negative_sib_ratio_falls_back_to_structural(self):
+        # Regresión: el SIB envió tier1_pct NEGADO (≈ -valor real) en algunos
+        # períodos; un ratio de capital negativo es espurio → usar capital/APR.
+        d = BankingDataInput(tier1_pct=-13.54, capital_primario=122_340.79, apr=887_814.15)
+        r = calc_tier1_ratio(d)
+        assert r["raw"] > 0          # no propaga el negativo del SIB
+        assert round(r["raw"], 1) == 13.8   # = capital_primario/apr*100
+        assert r["score"] == 100.0
 
 
 class TestLeverage:
