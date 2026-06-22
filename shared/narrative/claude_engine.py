@@ -236,7 +236,8 @@ THIN_TEMPLATES = {
         "Analiza EN PROFUNDIDAD UN sub-componente del rating —NO todo el banco— (datos SIB).\n"
         "Contexto (solo los indicadores de este sub-componente):\n{context}\n\n"
         "Máximo 200 palabras, enfocado EXCLUSIVAMENTE en este sub-componente. Cubre: qué "
-        "refleja su score, el indicador que más lo sube y el que más lo baja (con valores), "
+        "refleja su score, el indicador que más lo sube y el que más lo baja (con sus valores "
+        "y scores), "
         "posición vs pares si se provee, y un veredicto puntual con qué vigilar. NO repitas el "
         "panorama global del banco ni otros sub-componentes."
     ),
@@ -394,10 +395,13 @@ class NarrativeEngine:
         max_tokens = 2048 if mode == "detailed" else 1024
 
         if axis:  # ── ruta cerebro: system ensamblado + template thin ──
-            from shared.narrative.cerebro import build_system
+            from shared.narrative.cerebro import AXIS_DOCTRINE, build_system
             thin = THIN_TEMPLATES.get(template)
-            if not thin:
-                logger.warning("Template '%s' sin versión thin; ruta legacy", template)
+            if not thin or axis not in AXIS_DOCTRINE:
+                # axis sin doctrina o template sin thin → ruta legacy (nunca KeyError:
+                # generate_report_narratives no tiene try/except propio).
+                logger.warning("Cerebro no aplicable (axis=%s, template=%s); ruta legacy",
+                               axis, template)
             else:
                 system = build_system(axis, audience, mode)
                 user = _apply_lang(thin.format(context=context_str), lang)

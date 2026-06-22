@@ -81,6 +81,14 @@ def test_axis_with_non_thin_template_stays_legacy(monkeypatch):
     assert "system" not in captured
 
 
+def test_unknown_axis_falls_back_to_legacy_without_keyerror(monkeypatch):
+    """Un axis con thin pero SIN doctrina no debe lanzar KeyError; cae a legacy.
+    (Protege a generate_report_narratives, que no tiene try/except propio.)"""
+    eng, captured = _engine_capturing(monkeypatch)
+    asyncio.run(eng.generate({"x": 1}, template="entity_rating", axis="__sin_doctrina__"))
+    assert "system" not in captured  # ruta legacy, sin romper
+
+
 def test_cache_key_differs_by_axis_and_audience():
     eng = NarrativeEngine()
     ctx = {"a": 1}
