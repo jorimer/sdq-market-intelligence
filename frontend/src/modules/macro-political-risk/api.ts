@@ -49,15 +49,22 @@ export async function getDataset(period?: string): Promise<IrmpDataset> {
   return data;
 }
 
+export const MPR_AUDIENCES = [
+  "inversionista",
+  "gobierno",
+  "multilateral",
+  "empresa",
+] as const;
+
 export async function scoreCountry(
   countryCode: string,
   dataset: RegionalDataset,
-  opts?: { withAi?: boolean; countryName?: string },
+  opts?: { withAi?: boolean; countryName?: string; audience?: string },
 ): Promise<IRMPResult> {
   const { data } = await client.post(
     "/macro-political-risk/score",
     { country_code: countryCode, dataset, country_name: opts?.countryName },
-    { params: opts?.withAi ? { with_ai: true } : undefined },
+    { params: opts?.withAi ? { with_ai: true, audience: opts.audience } : undefined },
   );
   return data;
 }

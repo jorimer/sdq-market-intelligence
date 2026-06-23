@@ -273,6 +273,21 @@ THIN_TEMPLATES = {
         "coincida con lo servido. Si una relación no está precalculada, exprésala en palabras sin "
         "número."
     ),
+    "risk_assessment": (
+        "Explica el FUNDAMENTO del riesgo macro-político (IRMP) de este país.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. DIRECCIÓN: mayor score = MENOR riesgo (un score alto es bueno; la "
+        "dimensión de mayor gap al techo es la que MÁS aporta al riesgo). No cubras las cinco "
+        "dimensiones por igual: ve profundo en la que más condiciona la decisión de la audiencia, "
+        "ponderando por su peso vía 'cifras_derivadas'. Sitúa al país en su panel regional. "
+        "PROCEDENCIA: apóyate con firmeza en lo real (WGI/oficial); sobre lo de 'rúbrica "
+        "declarada' no construyas conclusión fuerte y nómbralo cuando sea material.\n\n"
+        "CIFRAS DERIVADAS: 'cifras_derivadas' YA trae el aporte y el gap al techo por dimensión, "
+        "el líder vs la suma del resto, la dimensión de mayor gap y el orden por peso. Copiá esos "
+        "valores; NO recalcules aportes ni declares un superlativo (mayor/menor/el más…) que no "
+        "coincida con lo servido. Si una relación no está precalculada, exprésala en palabras sin "
+        "número."
+    ),
 }
 
 # Static fallback templates when API key is not available

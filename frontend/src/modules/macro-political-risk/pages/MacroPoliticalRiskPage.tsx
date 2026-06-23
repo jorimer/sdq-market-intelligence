@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Scale, ListOrdered, SlidersHorizontal, ShieldAlert } from "lucide-react";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
+import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import {
   PageHead,
   Card,
@@ -22,6 +24,7 @@ import {
   getWeights,
   getDataset,
   scoreCountry,
+  MPR_AUDIENCES,
   saveSnapshot,
   IRMPResult,
   IRMPWeights,
@@ -58,6 +61,7 @@ export function MacroPoliticalRiskPage() {
   const [results, setResults] = useState<Record<string, IRMPResult>>({});
   const [weights, setWeights] = useState<IRMPWeights | null>(null);
   const [selected, setSelected] = useState("DO");
+  const [audience, setAudience] = useAudiencePref("sdq.mpr.audience", MPR_AUDIENCES);
   const [tab, setTab] = useState("desglose");
   const [saved, setSaved] = useState<string | null>(null);
   const [dataset, setDataset] = useState<Dataset>(SAMPLE_REGIONAL);
@@ -344,12 +348,22 @@ export function MacroPoliticalRiskPage() {
             title={t("mpr.insightTitle")}
             subtitle={t("mpr.insightSubtitle", { country: COUNTRY_NAMES[selected] ?? selected, score: fmtNum(cur.irmp_score, 1), band: band.label })}
             icon={ShieldAlert}
-            depsKey={`${selected}:${liveInfo.period ?? "fix"}`}
+            depsKey={`${selected}:${liveInfo.period ?? "fix"}:${audience}`}
             fetcher={() =>
               scoreCountry(selected, dataset, {
                 withAi: true,
                 countryName: COUNTRY_NAMES[selected],
+                audience,
               }).then((r) => r.ai_insight ?? null)
+            }
+            actions={
+              <AudienceTabs
+                value={audience}
+                onChange={setAudience}
+                options={MPR_AUDIENCES}
+                labelPrefix="mpr.audience"
+                ariaLabelKey="mpr.audienceLabel"
+              />
             }
           />
         </div>

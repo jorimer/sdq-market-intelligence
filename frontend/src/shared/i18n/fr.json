@@ -344,6 +344,13 @@
     "weightsTitle": "Pond\u00e9rations de l'indice",
     "insightTitle": "\u00c9valuation du risque (IA)",
     "insightSubtitle": "{{country}} \u00b7 IRMP {{score}} \u00b7 {{band}}",
+    "audienceLabel": "Audience",
+    "audience": {
+      "inversionista": "Investisseur",
+      "gobierno": "Gouvernement",
+      "multilateral": "Multilat\u00e9ral",
+      "empresa": "Entreprise"
+    },
     "dims": {
       "macro": "Macro\u00e9conomique",
       "external": "Externe",

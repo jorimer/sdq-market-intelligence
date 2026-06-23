@@ -344,6 +344,13 @@
     "weightsTitle": "Index weights",
     "insightTitle": "Risk assessment (AI)",
     "insightSubtitle": "{{country}} \u00b7 IRMP {{score}} \u00b7 {{band}}",
+    "audienceLabel": "Audience",
+    "audience": {
+      "inversionista": "Investor",
+      "gobierno": "Government",
+      "multilateral": "Multilateral",
+      "empresa": "Corporate"
+    },
     "dims": {
       "macro": "Macroeconomic",
       "external": "External",

@@ -95,6 +95,17 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "sea material. Distingues nivel de atractivo de su aceleración (SGPS). El sector se lee "
         "en su contexto macro, pero el foco es el sector, no la coyuntura."
     ),
+    "macro_political_risk": (
+        "DOCTRINA DE CASA — Eje de riesgo macro-político (IRMP):\n"
+        "Lees el riesgo macro-político de un país de forma explicable y comparable contra su "
+        "panel regional. ATENCIÓN A LA DIRECCIÓN: en el IRMP MAYOR score = MENOR riesgo; un "
+        "score alto es bueno, un gap grande al techo señala la dimensión que MÁS aporta al "
+        "riesgo. El índice se ancla a dimensiones con pesos declarados (macroeconómica, externa, "
+        "político-institucional, regulatoria, eventos); ponderas por su peso. RESPETAS LA "
+        "PROCEDENCIA: WGI/datos oficiales son real; lo demás es rúbrica declarada — apóyate con "
+        "firmeza en lo real y nombra la rúbrica cuando sea material. Distingues el nivel de riesgo "
+        "del país de la posición relativa en el panel. El foco es el país, no la coyuntura global."
+    ),
 }
 
 # ── POR MÓDULO — Frames de audiencia ──────────────────────────────────────────
@@ -170,6 +181,41 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "relevante que la política puede mover—, distinguiendo lo accionable por política de "
             "lo que es coyuntura macro. Tu \"y por tanto\" final apunta a la palanca de política "
             "con mayor retorno sobre el atractivo, nombrando si el dato es real o rúbrica."
+        ),
+    },
+    "macro_political_risk": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista cross-border / soberano.\n"
+            "Decide: asignar, mantener o retirar exposición de capital al país.\n"
+            "Le importa: el riesgo macro-político como prima exigida, la dimensión que más "
+            "fragiliza al país (mayor gap al techo), su posición relativa en el panel regional, "
+            "y cuánto se apoya en dato real (WGI) vs rúbrica. Tu \"y por tanto\" final apunta a la "
+            "tesis riesgo-retorno país: dónde el riesgo está mal descontado."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / formulador de política del país.\n"
+            "Decide: dónde reforzar instituciones, política macro o marco regulatorio para "
+            "reducir el riesgo país.\n"
+            "Le importa: la dimensión de mayor riesgo accionable por política (no la coyuntura "
+            "externa), su brecha vs los pares regionales, y si el dato es real o rúbrica. Tu "
+            "\"y por tanto\" final apunta a la palanca de política con mayor retorno sobre el "
+            "perfil de riesgo del país."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Banco multilateral / organismo de desarrollo.\n"
+            "Decide: condiciones, garantías o priorización del financiamiento al país.\n"
+            "Le importa: la fragilidad estructural (político-institucional, externa) como riesgo "
+            "de desarrollo, la trayectoria y la comparabilidad regional, distinguiendo lo "
+            "estructural de lo cíclico. Tu \"y por tanto\" final apunta a dónde el apoyo o la "
+            "condicionalidad rinde más sobre la resiliencia del país."
+        ),
+        "empresa": (
+            "FRAME DE DECISIÓN — Audiencia: Empresa multinacional / inversión directa.\n"
+            "Decide: entrar, expandir o contener operaciones en el país.\n"
+            "Le importa: el riesgo operativo y regulatorio concreto (regulatoria, "
+            "político-institucional, eventos), su persistencia, y la señal temprana a vigilar. "
+            "Tu \"y por tanto\" final apunta a la decisión de presencia/capacidad y a la "
+            "exposición que conviene cubrir o limitar."
         ),
     },
 }
