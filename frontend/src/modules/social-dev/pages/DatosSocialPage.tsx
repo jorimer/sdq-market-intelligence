@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Users } from "lucide-react";
 import { Card, CardHead, StatTile, StateBlock, Chip } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import { OperationsConsole } from "@/shared/ops/OperationsConsole";
 import { getIndicators, getDataset, IndicatorsResult, IdmDataset } from "../api";
-import { DIM_LABELS, IDM_DIM_VARS } from "../data";
+import { IDM_DIM_VARS } from "../data";
 
 // The social-dev data operations.
 const SOCIAL_OPS = new Set([
@@ -15,17 +17,18 @@ const SOCIAL_OPS = new Set([
 ]);
 
 /** real / parcial / rúbrica for an IDM dimension, from the dataset's source map. */
-function dimProvenance(dimKey: string, sources: Record<string, string> | undefined) {
+function dimProvenance(t: TFunction, dimKey: string, sources: Record<string, string> | undefined) {
   const vars = IDM_DIM_VARS[dimKey] ?? [];
   if (!sources || vars.length === 0) return { text: "—", tone: "muted" as const };
   const live = vars.filter((v) => sources[v] === "live").length;
-  if (live === 0) return { text: "rúbrica", tone: "muted" as const };
-  if (live === vars.length) return { text: "real", tone: "ok" as const };
-  return { text: "parcial", tone: "warn" as const };
+  if (live === 0) return { text: t("datos.social.provRubric"), tone: "muted" as const };
+  if (live === vars.length) return { text: t("datos.social.provReal"), tone: "ok" as const };
+  return { text: t("datos.social.provPartial"), tone: "warn" as const };
 }
 
 /** "Estado del dato" panel: coverage + per-dimension provenance of the IDM. */
 function SocialOverview() {
+  const { t } = useTranslation();
   const [ind, setInd] = useState<IndicatorsResult | null>(null);
   const [ds, setDs] = useState<IdmDataset | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -37,9 +40,9 @@ function SocialOverview() {
   }, []);
 
   if (state === "loading")
-    return <Card><StateBlock kind="loading" message="Cargando estado del dato…" /></Card>;
+    return <Card><StateBlock kind="loading" message={t("datos.social.ovLoading")} /></Card>;
   if (state === "error")
-    return <Card><StateBlock kind="error" message="No se pudo leer el estado del dato social." /></Card>;
+    return <Card><StateBlock kind="error" message={t("datos.social.ovError")} /></Card>;
 
   const count = ind?.count ?? 0;
   // Provenance is uniform across regions; sample the first region's source map.
@@ -50,40 +53,36 @@ function SocialOverview() {
     <Card>
       <CardHead
         icon={Users}
-        title="Estado del dato"
-        subtitle="Cobertura del IDM y procedencia real-vs-rúbrica por dimensión"
-        right={<Chip tone={count > 0 ? "ok" : "muted"}>{count > 0 ? "IDM calculado" : "Sin dato"}</Chip>}
+        title={t("datos.social.ovTitle")}
+        subtitle={t("datos.social.ovSub")}
+        right={<Chip tone={count > 0 ? "ok" : "muted"}>{count > 0 ? t("datos.social.idmComputed") : t("datos.social.noData")}</Chip>}
       />
       {count === 0 ? (
         <p className="text-sm text-muted mt-3">
-          Aún no hay IDM. Ejecuta «Sincronizar social (ONE)» y luego «Backfill del IDM» abajo.
+          {t("datos.social.ovEmptyHint")}
         </p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
-            <StatTile label="Regiones" value={count} />
-            <StatTile label="Período" value={ind?.period ?? "—"} />
-            <StatTile label="IDM promedio" value={fmtNum(ind?.distribution?.mean ?? null, 1)} />
-            <StatTile label="Dispersión" value={fmtNum(ind?.distribution?.spread ?? null, 1)} />
+            <StatTile label={t("datos.social.statRegions")} value={count} />
+            <StatTile label={t("datos.social.statPeriod")} value={ind?.period ?? "—"} />
+            <StatTile label={t("datos.social.statIdmMean")} value={fmtNum(ind?.distribution?.mean ?? null, 1)} />
+            <StatTile label={t("datos.social.statSpread")} value={fmtNum(ind?.distribution?.spread ?? null, 1)} />
           </div>
           <div className="mt-4">
-            <div className="text-xs text-muted mb-2">Procedencia por dimensión</div>
+            <div className="text-xs text-muted mb-2">{t("datos.social.provByDim")}</div>
             <div className="flex flex-wrap gap-2">
               {Object.keys(IDM_DIM_VARS).map((dim) => {
-                const p = dimProvenance(dim, sources);
+                const p = dimProvenance(t, dim, sources);
                 return (
                   <Chip key={dim} tone={p.tone}>
-                    {DIM_LABELS[dim] ?? dim}: {p.text}
+                    {t(`social.dims.${dim}`, { defaultValue: dim })}: {p.text}
                   </Chip>
                 );
               })}
             </div>
             <p className="mt-2 text-[11px] text-faint">
-              Ingreso = proxy real (ingreso laboral por hora, ONE/BCRD ENCFT), no ingreso per cápita
-              del hogar. Informalidad = dato exacto (ONE/BCRD ENCFT), nacional. Educación añade
-              cobertura neta secundaria por región y año (ONE, 2010-2024) al logro del ENHOGAR.
-              Inclusión financiera = proxy de acceso (cajeros/100k adultos, BM Findex) — el IDM
-              queda con sus 8 variables en dato real.
+              {t("datos.social.ovNote")}
             </p>
           </div>
         </>
@@ -94,13 +93,14 @@ function SocialOverview() {
 
 /** Datos · Social (ONE): estado del dato + operaciones de ingesta/cálculo. */
 export function DatosSocialPage() {
+  const { t } = useTranslation();
   return (
     <OperationsConsole
-      eyebrow="Datos · Social"
-      title="Social · ONE"
-      sub="Ingesta y cálculo del desarrollo social: pobreza por región (ONE), salud (WDI), informalidad e ingreso nacionales (ONE/BCRD), educación del ENHOGAR e índice IDM."
+      eyebrow={t("datos.social.eyebrow")}
+      title={t("datos.social.title")}
+      sub={t("datos.social.sub")}
       filter={(op) => SOCIAL_OPS.has(op.name)}
-      emptyMessage="No hay operaciones de Social registradas."
+      emptyMessage={t("datos.social.empty")}
       overview={<SocialOverview />}
     />
   );
