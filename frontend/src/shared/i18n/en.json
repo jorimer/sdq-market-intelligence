@@ -715,6 +715,14 @@
     "fiscalError": "Could not load the fiscal pulse.",
     "fiscalEmpty": "No fiscal data yet. Run the \u00abSync fiscal pulse\u00bb operation in Operations."
   },
+  "deal": {
+    "audienceLabel": "Audience",
+    "audience": {
+      "comite_inversion": "Investment committee",
+      "asesor": "Advisor",
+      "promotor": "Sponsor"
+    }
+  },
   "banking": {
     "tab": {
       "dashboard": "Dashboard",

@@ -715,6 +715,14 @@
     "fiscalError": "No se pudo cargar el pulso fiscal.",
     "fiscalEmpty": "A\u00fan no hay datos fiscales. Corre la operaci\u00f3n \u00abSincronizar pulso fiscal\u00bb en Operaciones."
   },
+  "deal": {
+    "audienceLabel": "Audiencia",
+    "audience": {
+      "comite_inversion": "Comit\u00e9 de inversi\u00f3n",
+      "asesor": "Asesor",
+      "promotor": "Promotor"
+    }
+  },
   "banking": {
     "tab": {
       "dashboard": "Dashboard",

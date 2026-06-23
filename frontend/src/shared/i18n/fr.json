@@ -715,6 +715,14 @@
     "fiscalError": "Impossible de charger le pouls fiscal.",
     "fiscalEmpty": "Pas encore de donn\u00e9es fiscales. Lancez l'op\u00e9ration \u00ab Synchroniser le pouls fiscal \u00bb dans Op\u00e9rations."
   },
+  "deal": {
+    "audienceLabel": "Audience",
+    "audience": {
+      "comite_inversion": "Comit\u00e9 d'investissement",
+      "asesor": "Conseiller",
+      "promotor": "Promoteur"
+    }
+  },
   "banking": {
     "tab": {
       "dashboard": "Tableau de bord",
