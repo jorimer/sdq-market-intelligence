@@ -16,7 +16,9 @@ import { bandFor } from "@/shared/lib/bands";
 import { fmtNum, fmtPct } from "@/shared/lib/format";
 import { Treemap } from "@/shared/charts/Treemap";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
-import { getTradeScore, getTradeInsight, TradeScore } from "../api";
+import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { useAudiencePref } from "@/shared/lib/useAudiencePref";
+import { getTradeScore, getTradeInsight, TRADE_AUDIENCES, TradeScore } from "../api";
 import { ValidationTab } from "../components/ValidationTab";
 import { PartnersTab } from "../components/PartnersTab";
 
@@ -27,6 +29,7 @@ export function TradeIntelPage() {
   const [status, setStatus] = useState<Status>("loading");
   const [score, setScore] = useState<TradeScore | null>(null);
   const [tab, setTab] = useState("panorama");
+  const [audience, setAudience] = useAudiencePref("sdq.trade.audience", TRADE_AUDIENCES);
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -152,8 +155,17 @@ export function TradeIntelPage() {
             <AiInsightCard
               title={t("trade.insightTitle")}
               subtitle={t("trade.insightSubtitle", { period: s.period ?? "" })}
-              depsKey={s.period ?? "trade"}
-              fetcher={getTradeInsight}
+              depsKey={`${s.period ?? "trade"}:${audience}`}
+              fetcher={() => getTradeInsight(audience)}
+              actions={
+                <AudienceTabs
+                  value={audience}
+                  onChange={setAudience}
+                  options={TRADE_AUDIENCES}
+                  labelPrefix="trade.audience"
+                  ariaLabelKey="trade.audienceLabel"
+                />
+              }
             />
           </div>
         </>

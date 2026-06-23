@@ -1,9 +1,13 @@
 import client from "@/shared/api/client";
 import type { AiInsight } from "@/shared/ui/insight-types";
 
-/** Contextual AI insight for the trade-resilience picture. Best-effort. */
-export async function getTradeInsight(): Promise<AiInsight | null> {
-  const { data } = await client.get("/trade-intel/insight");
+export const TRADE_AUDIENCES = ["exportador", "gobierno", "inversionista"] as const;
+
+/** Contextual AI insight for the trade-resilience picture, oriented by audience. */
+export async function getTradeInsight(
+  audience: string = TRADE_AUDIENCES[0],
+): Promise<AiInsight | null> {
+  const { data } = await client.get("/trade-intel/insight", { params: { audience } });
   return (data.ai_insight as AiInsight | null) ?? null;
 }
 

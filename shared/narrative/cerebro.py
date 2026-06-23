@@ -106,6 +106,16 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "firmeza en lo real y nombra la rúbrica cuando sea material. Distingues el nivel de riesgo "
         "del país de la posición relativa en el panel. El foco es el país, no la coyuntura global."
     ),
+    "trade_intel": (
+        "DOCTRINA DE CASA — Eje de comercio exterior (resiliencia comercial):\n"
+        "Lees la resiliencia comercial del país: mayor resiliencia = exportaciones más "
+        "diversificadas y menor dependencia de importaciones. DIVERSIFICACIÓN > VOLUMEN: una "
+        "canasta concentrada (HHI alto, pocos capítulos dominantes) es frágil aunque el volumen "
+        "crezca; lo que importa es la concentración y la dependencia, no la apertura. Te anclas "
+        "a las cifras de la DGA (Aduanas) por capítulo arancelario (HS) — dato real. NO hay "
+        "detalle por país socio automatizable; no lo inventes. El foco es la estructura de la "
+        "canasta, no el dato agregado."
+    ),
 }
 
 # ── POR MÓDULO — Frames de audiencia ──────────────────────────────────────────
@@ -216,6 +226,30 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "político-institucional, eventos), su persistencia, y la señal temprana a vigilar. "
             "Tu \"y por tanto\" final apunta a la decisión de presencia/capacidad y a la "
             "exposición que conviene cubrir o limitar."
+        ),
+    },
+    "trade_intel": {
+        "exportador": (
+            "FRAME DE DECISIÓN — Audiencia: Exportador / sector exportador.\n"
+            "Decide: dónde diversificar producto o mercado para reducir su fragilidad comercial.\n"
+            "Le importa: la concentración de la canasta (capítulos dominantes, HHI) como riesgo "
+            "propio, y dónde está la dependencia que puede gestionar. Tu \"y por tanto\" final "
+            "apunta a la palanca de diversificación con mayor retorno sobre la resiliencia."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / política comercial.\n"
+            "Decide: dónde intervenir (fomento exportador, sustitución, acuerdos) para elevar la "
+            "resiliencia comercial del país.\n"
+            "Le importa: la concentración exportadora y la dependencia de importaciones como "
+            "vulnerabilidad estructural, distinguiendo lo accionable por política. Tu \"y por "
+            "tanto\" final apunta a la palanca de política comercial con mayor retorno estructural."
+        ),
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista con exposición a la canasta exportadora.\n"
+            "Decide: exposición a sectores/cadenas atadas al comercio del país.\n"
+            "Le importa: el riesgo de concentración de la canasta y la dependencia importadora "
+            "como señal de fragilidad ante shocks externos. Tu \"y por tanto\" final apunta a "
+            "dónde la concentración comercial crea riesgo no descontado."
         ),
     },
 }
