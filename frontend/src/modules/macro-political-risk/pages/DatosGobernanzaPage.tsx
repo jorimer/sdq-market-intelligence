@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { OperationsConsole } from "@/shared/ops/OperationsConsole";
 
 // The governance/IRMP data operations (WGI ingest, IRMP snapshot + backtest,
@@ -12,13 +13,14 @@ const GOV_OPS = new Set([
 
 /** Datos · Gobernanza (WGI): trigger/monitor/schedule the IRMP data operations. */
 export function DatosGobernanzaPage() {
+  const { t } = useTranslation();
   return (
     <OperationsConsole
-      eyebrow="Datos · Gobernanza"
-      title="Gobernanza · WGI"
-      sub="Ingesta de gobernanza (Worldwide Governance Indicators del Banco Mundial), cálculo del IRMP por país, eventos de inestabilidad (GDELT) y backtest de la metodología."
+      eyebrow={t("datos.gobernanza.eyebrow")}
+      title={t("datos.gobernanza.title")}
+      sub={t("datos.gobernanza.sub")}
       filter={(op) => GOV_OPS.has(op.name)}
-      emptyMessage="No hay operaciones de Gobernanza registradas."
+      emptyMessage={t("datos.gobernanza.empty")}
     />
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Upload, Download, RefreshCw } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import client from "@/shared/api/client";
@@ -31,6 +32,7 @@ interface RawPeriod {
 }
 
 export function DataPage() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<BankStats | null>(null);
   const [periodCount, setPeriodCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
@@ -72,14 +74,14 @@ export function DataPage() {
       const { data } = await client.post("/banking-score/data/upload", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setUploadMsg({ ok: true, text: data.message || "Carga exitosa." });
+      setUploadMsg({ ok: true, text: data.message || t("datos.banca.uploadOk") });
       refresh();
     } catch (err: any) {
-      setUploadMsg({ ok: false, text: err?.response?.data?.detail || "Error al subir." });
+      setUploadMsg({ ok: false, text: err?.response?.data?.detail || t("datos.banca.uploadError") });
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [t]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -106,10 +108,10 @@ export function DataPage() {
     setActionMsg(null);
     try {
       const { data } = await client.post(`/banking-score/data/sib-backfill?force=${force}`);
-      setActionMsg(data.message || "Proceso iniciado.");
+      setActionMsg(data.message || t("datos.banca.processStarted"));
       refresh();
     } catch (err: any) {
-      setActionMsg(err?.response?.data?.detail || "Error al iniciar el backfill.");
+      setActionMsg(err?.response?.data?.detail || t("datos.banca.backfillError"));
     } finally {
       setSyncing(false);
     }
@@ -120,10 +122,10 @@ export function DataPage() {
     setActionMsg(null);
     try {
       const { data } = await client.post("/banking-score/data/seed-banks");
-      setActionMsg(data?.detail ? "Seed completado." : "Seed ejecutado.");
+      setActionMsg(data?.detail ? t("datos.banca.seedDone") : t("datos.banca.seedRun"));
       refresh();
     } catch (err: any) {
-      setActionMsg(err?.response?.data?.detail || "Error en el seed.");
+      setActionMsg(err?.response?.data?.detail || t("datos.banca.seedError"));
     } finally {
       setSeeding(false);
     }
@@ -139,26 +141,26 @@ export function DataPage() {
   return (
     <div>
       <PageHead
-        eyebrow="SIB · SIMBAD"
-        title="Datos"
-        sub="Carga, sincronización y exploración de los estados financieros por entidad."
+        eyebrow={t("datos.banca.eyebrow")}
+        title={t("datos.banca.title")}
+        sub={t("datos.banca.sub")}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <StatTile label="Registros" value={stats?.total_records ?? 0} />
-        <StatTile label="Entidades" value={stats?.total_entities ?? 0} />
-        <StatTile label="Períodos" value={periodCount} />
-        <StatTile label="Ratings" value={stats?.total_ratings ?? 0} />
+        <StatTile label={t("datos.banca.statRecords")} value={stats?.total_records ?? 0} />
+        <StatTile label={t("datos.banca.statEntities")} value={stats?.total_entities ?? 0} />
+        <StatTile label={t("datos.banca.statPeriods")} value={periodCount} />
+        <StatTile label={t("datos.banca.statRatings")} value={stats?.total_ratings ?? 0} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5 mb-5">
         <Card>
           <CardHead
             icon={Upload}
-            title="Cargar datos"
+            title={t("datos.banca.uploadTitle")}
             right={
               <button onClick={downloadTemplate} className="text-sm text-accent-ink hover:underline flex items-center gap-1">
-                <Download className="w-3.5 h-3.5" /> Plantilla CSV
+                <Download className="w-3.5 h-3.5" /> {t("datos.banca.csvTemplate")}
               </button>
             }
           />
@@ -170,11 +172,11 @@ export function DataPage() {
           >
             <input {...getInputProps()} />
             <Upload className="w-8 h-8 mx-auto mb-3 text-faint" />
-            <p className="text-sm text-muted">Arrastra un CSV/XLSX o haz clic para seleccionar.</p>
+            <p className="text-sm text-muted">{t("datos.banca.dropzone")}</p>
           </div>
           {uploading && (
             <div className="flex items-center gap-2 text-sm text-body mt-3">
-              <RefreshCw className="w-4 h-4 animate-spin" /> Subiendo…
+              <RefreshCw className="w-4 h-4 animate-spin" /> {t("datos.banca.uploading")}
             </div>
           )}
           {uploadMsg && (
@@ -187,11 +189,11 @@ export function DataPage() {
         <Card>
           <CardHead
             icon={RefreshCw}
-            title="Sincronización SIB"
-            subtitle="Reemplaza datos de muestra por datos reales de la API del SIB"
+            title={t("datos.banca.syncTitle")}
+            subtitle={t("datos.banca.syncSub")}
             right={
               <span className={`chip ${syncStatus?.is_running ? "text-warn" : "text-ok"}`}>
-                {syncStatus?.is_running ? "En progreso" : "Inactivo"}
+                {syncStatus?.is_running ? t("datos.banca.inProgress") : t("datos.banca.inactive")}
               </span>
             }
           />
@@ -201,10 +203,10 @@ export function DataPage() {
                 <div className="rounded-[10px] border border-accent/40 bg-accent-soft p-3">
                   <div className="flex items-center gap-2 text-sm text-accent-ink font-medium">
                     <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-                    <span className="truncate">{syncStatus.phase || "En progreso…"}</span>
+                    <span className="truncate">{syncStatus.phase || t("datos.banca.inProgressFull")}</span>
                     {syncStatus.started_at && (
                       <span className="ml-auto mono text-xs text-muted shrink-0">
-                        {Math.max(0, Math.round((Date.now() - new Date(syncStatus.started_at).getTime()) / 60000))} min
+                        {t("datos.banca.minutes", { n: Math.max(0, Math.round((Date.now() - new Date(syncStatus.started_at).getTime()) / 60000)) })}
                       </span>
                     )}
                   </div>
@@ -213,19 +215,19 @@ export function DataPage() {
                     <div className="h-full w-1/3 rounded-full bg-accent animate-pulse" />
                   </div>
                   <p className="text-xs text-muted mt-2">
-                    La extracción del SIB puede tardar 10–20 min. Puedes salir de esta pantalla; el proceso sigue.
+                    {t("datos.banca.extractionNote")}
                   </p>
                 </div>
               )}
               <div className="flex justify-between text-sm">
-                <span className="text-muted">Última sincronización</span>
+                <span className="text-muted">{t("datos.banca.lastSync")}</span>
                 <span className="mono text-ink">{syncStatus.last_sync?.slice(0, 19).replace("T", " ") || "—"}</span>
               </div>
               {syncStatus.last_sync_result && (
                 <div className="text-xs text-muted">
-                  Último resultado: {syncStatus.last_sync_result.status} ·{" "}
-                  {syncStatus.last_sync_result.entities_matched ?? 0} entidades ·{" "}
-                  {(syncStatus.last_sync_result.records_created ?? 0) + (syncStatus.last_sync_result.records_updated ?? 0)} registros
+                  {t("datos.banca.lastResultPrefix")} {syncStatus.last_sync_result.status} ·{" "}
+                  {syncStatus.last_sync_result.entities_matched ?? 0} {t("datos.banca.entities")} ·{" "}
+                  {(syncStatus.last_sync_result.records_created ?? 0) + (syncStatus.last_sync_result.records_updated ?? 0)} {t("datos.banca.records")}
                 </div>
               )}
               {actionMsg && <div className="text-xs text-body bg-surface2 px-3 py-2 rounded-[10px]">{actionMsg}</div>}
@@ -239,23 +241,23 @@ export function DataPage() {
                   className="btn btn-primary justify-center"
                 >
                   <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-                  {syncing ? "Iniciando…" : "Sincronizar con SIB"}
+                  {syncing ? t("datos.banca.starting") : t("datos.banca.syncWithSib")}
                 </button>
                 <button
                   onClick={() => triggerBackfill(true)}
                   disabled={syncing || syncStatus.is_running}
                   className="btn btn-ghost justify-center"
-                  title="Reemplaza todos los registros con datos reales del SIB"
+                  title={t("datos.banca.backfillForceTitle")}
                 >
-                  Backfill (forzar)
+                  {t("datos.banca.backfillForce")}
                 </button>
                 <button
                   onClick={seedBanks}
                   disabled={seeding || syncStatus.is_running}
                   className="btn btn-ghost justify-center"
-                  title="Crea las 35 entidades + datos históricos de muestra"
+                  title={t("datos.banca.seedBanksTitle")}
                 >
-                  {seeding ? "Sembrando…" : "Sembrar bancos"}
+                  {seeding ? t("datos.banca.seeding") : t("datos.banca.seedBanks")}
                 </button>
               </div>
             </div>
@@ -266,23 +268,23 @@ export function DataPage() {
       </div>
 
       <Card>
-        <CardHead title="Explorar datos crudos" subtitle="Períodos cargados por entidad" />
+        <CardHead title={t("datos.banca.exploreTitle")} subtitle={t("datos.banca.exploreSub")} />
         <div className="w-64 mb-4">
           <BankSelector value={rawBank} onChange={(id) => setRawBank(id)} />
         </div>
         {rawBank && rawLoading ? (
           <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
         ) : rawBank && rawData.length === 0 ? (
-          <p className="text-sm text-muted py-4 text-center">Sin registros para esta entidad.</p>
+          <p className="text-sm text-muted py-4 text-center">{t("datos.banca.noRecords")}</p>
         ) : rawData.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-line">
-                  <th className="py-2 px-2 font-medium">Período</th>
-                  <th className="py-2 px-2 font-medium">Tipo</th>
-                  <th className="py-2 px-2 font-medium">Fuente</th>
-                  <th className="py-2 px-2 font-medium text-right">Creado</th>
+                  <th className="py-2 px-2 font-medium">{t("datos.banca.colPeriod")}</th>
+                  <th className="py-2 px-2 font-medium">{t("datos.banca.colType")}</th>
+                  <th className="py-2 px-2 font-medium">{t("datos.banca.colSource")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{t("datos.banca.colCreated")}</th>
                 </tr>
               </thead>
               <tbody>

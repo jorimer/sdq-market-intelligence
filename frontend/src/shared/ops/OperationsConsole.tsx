@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Wrench, RefreshCw, Play, Clock, History } from "lucide-react";
 import { PageHead, Card, CardHead, StateBlock, Chip } from "@/shared/ui/primitives";
 import {
@@ -9,120 +11,69 @@ import {
   OperationInfo,
 } from "@/shared/ops/api";
 
-const CADENCES: { label: string; hours: number }[] = [
-  { label: "Diario", hours: 24 },
-  { label: "Semanal", hours: 168 },
-  { label: "Quincenal", hours: 336 },
-  { label: "Mensual", hours: 720 },
-  { label: "Trimestral", hours: 2160 },
-  { label: "Anual", hours: 8760 },
+const LOCALES: Record<string, string> = { es: "es-DO", en: "en-US", fr: "fr-FR" };
+
+const CADENCES: { key: string; hours: number }[] = [
+  { key: "daily", hours: 24 },
+  { key: "weekly", hours: 168 },
+  { key: "biweekly", hours: 336 },
+  { key: "monthly", hours: 720 },
+  { key: "quarterly", hours: 2160 },
+  { key: "annual", hours: 8760 },
 ];
 
-function fmtDateTime(iso: string | null): string {
+function fmtDateTime(iso: string | null, locale: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" });
+  return d.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
-// Known result keys → human label (Spanish). Unknown keys fall back to a
-// humanized version of the key, so a runner that adds a field never breaks.
-const RESULT_LABELS: Record<string, string> = {
-  // rescore / scoring
-  periods_scored: "Períodos calificados",
-  ratings_written: "Ratings escritos",
-  ratings_total: "Ratings totales",
-  scored_periods: "Períodos calculados",
-  per_period: "Detalle por período",
-  // prune / purge
-  data_deleted: "Datos borrados",
-  ratings_deleted: "Ratings borrados",
-  actions_deleted: "Acciones borradas",
-  purged: "Scores purgados",
-  purged_periods: "Períodos purgados",
-  synthetic_deleted: "Sintéticos borrados",
-  orphan_ratings_deleted: "Ratings huérfanos borrados",
-  orphan_actions_deleted: "Acciones huérfanas borradas",
-  scores_deleted: "Scores borrados",
-  flows_deleted: "Flujos borrados",
-  // overview
-  entities: "Entidades",
-  records: "Registros",
-  ratings: "Ratings",
-  sib_records: "Registros SIB",
-  period_start: "Inicio del período",
-  period_end: "Fin del período",
-  // backtest
-  gini: "Gini",
-  n_observations: "Observaciones",
-  n_events: "Eventos",
-  monotonic: "Monótona",
-  // sync (WGI / ONE / DGA)
-  synced: "Valores sincronizados",
-  health_synced: "Salud (WDI) sincronizada",
-  periods: "Períodos",
-  period: "Período",
-  countries: "Países",
-  variables: "Variables",
-  regions: "Regiones",
-  regions_with_data: "Regiones con dato",
-  themes: "Indicadores",
-  latest: "Último",
-  periods_ingested: "Trimestres ingeridos",
-  ingested_ok: "Ingeridos OK",
-  total: "Total",
-  results: "Resultados",
-  // common
-  errors: "Errores",
-  error: "Error",
-  status: "Estado",
-  message: "Mensaje",
-};
-
-function resultLabel(key: string): string {
-  if (RESULT_LABELS[key]) return RESULT_LABELS[key];
+/** Known result key → localized label; unknown keys fall back to a humanized
+ * version of the key, so a runner that adds a field never breaks. */
+function resultLabel(t: TFunction, key: string): string {
   const spaced = key.replace(/_/g, " ");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return t(`ops.results.${key}`, { defaultValue: spaced.charAt(0).toUpperCase() + spaced.slice(1) });
 }
 
-function fmtResultValue(key: string, value: unknown): string {
+function fmtResultValue(t: TFunction, locale: string, key: string, value: unknown): string {
   if (value === null || value === undefined) return "—";
-  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (typeof value === "boolean") return value ? t("ops.yes") : t("ops.no");
   if (typeof value === "number") {
-    if (Number.isInteger(value)) return value.toLocaleString("es-DO");
-    return value.toLocaleString("es-DO", { maximumFractionDigits: 3 });
+    if (Number.isInteger(value)) return value.toLocaleString(locale);
+    return value.toLocaleString(locale, { maximumFractionDigits: 3 });
   }
   if (Array.isArray(value)) {
-    if (value.length === 0) return key === "errors" ? "ninguno" : "—";
+    if (value.length === 0) return key === "errors" ? t("ops.none") : "—";
     if (value.every((v) => v === null || ["string", "number", "boolean"].includes(typeof v))) {
       return value.map((v) => String(v)).join(", ");
     }
-    return `${value.length} ítem${value.length === 1 ? "" : "s"}`;
+    return t("ops.items", { count: value.length });
   }
   if (typeof value === "object") {
     const n = Object.keys(value as Record<string, unknown>).length;
-    return `${n} campo${n === 1 ? "" : "s"}`;
+    return t("ops.fields", { count: n });
   }
   return String(value);
 }
 
-function ResultDetail({ result, when }: { result: Record<string, unknown>; when: string | null }) {
+function ResultDetail({ result, when, t, locale }: { result: Record<string, unknown>; when: string | null; t: TFunction; locale: string }) {
   const entries = Object.entries(result);
   return (
     <div className="mt-3">
       <div className="text-xs text-muted">
-        Último resultado · <span className="mono text-body">{fmtDateTime(when)}</span>
+        {t("ops.lastResult")} · <span className="mono text-body">{fmtDateTime(when, locale)}</span>
       </div>
       <dl className="mt-1.5 divide-y divide-line/40">
         {entries.map(([k, v]) => (
           <div key={k} className="flex items-baseline justify-between gap-3 py-1">
-            <dt className="text-xs text-muted min-w-0 flex-1 truncate" title={resultLabel(k)}>
-              {resultLabel(k)}
+            <dt className="text-xs text-muted min-w-0 flex-1 truncate" title={resultLabel(t, k)}>
+              {resultLabel(t, k)}
             </dt>
             <dd
               className="text-xs mono text-body tabular-nums shrink-0 text-right max-w-[60%] truncate"
-              title={fmtResultValue(k, v)}
+              title={fmtResultValue(t, locale, k, v)}
             >
-              {fmtResultValue(k, v)}
+              {fmtResultValue(t, locale, k, v)}
             </dd>
           </div>
         ))}
@@ -131,15 +82,17 @@ function ResultDetail({ result, when }: { result: Record<string, unknown>; when:
   );
 }
 
-function statusChip(op: OperationInfo) {
+function statusChip(op: OperationInfo, t: TFunction) {
   const s = op.status;
-  if (s.is_running) return <Chip tone="accent">En curso</Chip>;
-  if (s.error || s.phase === "error") return <Chip tone="alert">Error</Chip>;
-  if (s.phase === "completado") return <Chip tone="ok">Completado</Chip>;
-  return <Chip tone="muted">Inactivo</Chip>;
+  if (s.is_running) return <Chip tone="accent">{t("ops.running")}</Chip>;
+  if (s.error || s.phase === "error") return <Chip tone="alert">{t("ops.errorChip")}</Chip>;
+  if (s.phase === "completado") return <Chip tone="ok">{t("ops.completed")}</Chip>;
+  return <Chip tone="muted">{t("ops.inactive")}</Chip>;
 }
 
 function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => void }) {
+  const { t, i18n } = useTranslation();
+  const locale = LOCALES[i18n.language] ?? "es-DO";
   const [busy, setBusy] = useState(false);
   const [period, setPeriod] = useState("");
   const [msg, setMsg] = useState<{ tone: "ok" | "alert"; text: string } | null>(null);
@@ -151,11 +104,11 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
     try {
       const params = needsPeriod ? { period } : undefined;
       const res = await triggerOperation(op.name, params);
-      if (!res.started) setMsg({ tone: "alert", text: res.reason ?? "No se pudo iniciar." });
-      else setMsg({ tone: "ok", text: "Operación iniciada." });
+      if (!res.started) setMsg({ tone: "alert", text: res.reason ?? t("ops.couldNotStart") });
+      else setMsg({ tone: "ok", text: t("ops.startedOk") });
       onChanged();
     } catch {
-      setMsg({ tone: "alert", text: "Error al iniciar la operación." });
+      setMsg({ tone: "alert", text: t("ops.startError") });
     } finally {
       setBusy(false);
     }
@@ -169,7 +122,7 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
       });
       onChanged();
     } catch {
-      setMsg({ tone: "alert", text: "No se pudo guardar el agendado." });
+      setMsg({ tone: "alert", text: t("ops.scheduleError") });
     }
   };
 
@@ -178,22 +131,22 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
 
   return (
     <Card>
-      <CardHead icon={Wrench} title={op.label} subtitle={op.description} right={statusChip(op)} />
+      <CardHead icon={Wrench} title={op.label} subtitle={op.description} right={statusChip(op, t)} />
 
       {s.is_running && (
         <div className="mt-3 flex items-center gap-2 text-sm text-accent">
           <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-          <span className="truncate">{s.phase || "procesando…"}</span>
+          <span className="truncate">{s.phase || t("ops.processing")}</span>
         </div>
       )}
 
-      {!s.is_running && result && <ResultDetail result={result} when={s.last_run} />}
+      {!s.is_running && result && <ResultDetail result={result} when={s.last_run} t={t} locale={locale} />}
       {!s.is_running && s.error && <div className="mt-2 text-xs text-alert">{s.error}</div>}
 
       <div className="mt-4 flex flex-wrap items-end gap-2">
         {needsPeriod && (
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">Trimestre (YYYY-MM)</label>
+            <label className="block text-xs font-medium text-muted mb-1">{t("ops.quarterLabel")}</label>
             <input
               className="field !py-1.5 !px-2.5 text-sm w-32 mono"
               placeholder="2025-12"
@@ -207,7 +160,7 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
           disabled={busy || s.is_running || (needsPeriod && !period)}
           className="btn btn-primary !py-1.5"
         >
-          <Play className="w-3.5 h-3.5" /> Ejecutar
+          <Play className="w-3.5 h-3.5" /> {t("ops.run")}
         </button>
       </div>
 
@@ -219,7 +172,7 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
       <div className="mt-4 pt-3 border-t border-line/60">
         <div className="flex items-center gap-2 mb-2">
           <Clock className="w-3.5 h-3.5 text-muted shrink-0" />
-          <span className="text-xs font-medium text-ink">Agendar</span>
+          <span className="text-xs font-medium text-ink">{t("ops.schedule")}</span>
           <label className="ml-auto inline-flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"
@@ -227,7 +180,7 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
               onChange={(e) => toggleSchedule(e.target.checked)}
               className="accent-[var(--accent)]"
             />
-            <span className="text-xs text-muted">{op.schedule.enabled ? "Activo" : "Inactivo"}</span>
+            <span className="text-xs text-muted">{op.schedule.enabled ? t("ops.schedActive") : t("ops.schedInactive")}</span>
           </label>
         </div>
         {op.schedule.enabled && (
@@ -238,16 +191,16 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
               className="field !py-1 !px-2 text-xs w-32"
             >
               {CADENCES.map((c) => (
-                <option key={c.hours} value={c.hours}>{c.label}</option>
+                <option key={c.hours} value={c.hours}>{t(`ops.cadence.${c.key}`)}</option>
               ))}
               {!CADENCES.some((c) => c.hours === op.schedule.interval_hours) && (
                 <option value={op.schedule.interval_hours}>
-                  Cada {op.schedule.interval_hours}h
+                  {t("ops.everyHours", { hours: op.schedule.interval_hours })}
                 </option>
               )}
             </select>
             <span className="text-xs text-muted">
-              Próximo: <span className="mono text-body">{fmtDateTime(op.schedule.next_run_at)}</span>
+              {t("ops.next")} <span className="mono text-body">{fmtDateTime(op.schedule.next_run_at, locale)}</span>
             </span>
           </div>
         )}
@@ -273,6 +226,8 @@ interface Props {
  * from the UI (no terminal). Reused by the global console and the per-source
  * Datos pages, narrowed via *filter*. */
 export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, overview }: Props) {
+  const { t, i18n } = useTranslation();
+  const locale = LOCALES[i18n.language] ?? "es-DO";
   const [data, setData] = useState<OperationsStatus | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready" | "forbidden">("loading");
   const timer = useRef<number | null>(null);
@@ -311,18 +266,18 @@ export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, o
 
       {overview && <div className="mb-5">{overview}</div>}
 
-      {status === "loading" && <StateBlock kind="loading" message="Cargando operaciones…" />}
+      {status === "loading" && <StateBlock kind="loading" message={t("ops.loading")} />}
       {status === "forbidden" && (
-        <StateBlock kind="forbidden" message="Se requiere rol admin para la consola de operación." />
+        <StateBlock kind="forbidden" message={t("ops.forbidden")} />
       )}
       {status === "error" && (
-        <StateBlock kind="error" message="No se pudo cargar el estado de las operaciones." />
+        <StateBlock kind="error" message={t("ops.loadError")} />
       )}
 
       {status === "ready" && (
         <div className="space-y-5">
           {ops.length === 0 ? (
-            <StateBlock kind="empty" message={emptyMessage ?? "No hay operaciones para esta fuente."} />
+            <StateBlock kind="empty" message={emptyMessage ?? t("ops.emptyDefault")} />
           ) : (
             <div className="grid lg:grid-cols-3 gap-5">
               {ops.map((op) => (
@@ -333,19 +288,19 @@ export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, o
 
           {ops.length > 0 && (
             <Card>
-              <CardHead icon={History} title="Historial" subtitle="Últimas corridas" />
+              <CardHead icon={History} title={t("ops.history")} subtitle={t("ops.historySub")} />
               {history.length === 0 ? (
-                <StateBlock kind="empty" message="Aún no hay corridas registradas." />
+                <StateBlock kind="empty" message={t("ops.historyEmpty")} />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted border-b border-line">
-                        <th className="py-2 px-2">Operación</th>
-                        <th className="py-2 px-2">Origen</th>
-                        <th className="py-2 px-2">Estado</th>
-                        <th className="py-2 px-2">Inicio</th>
-                        <th className="py-2 px-2">Fin</th>
+                        <th className="py-2 px-2">{t("ops.colOperation")}</th>
+                        <th className="py-2 px-2">{t("ops.colOrigin")}</th>
+                        <th className="py-2 px-2">{t("ops.colStatus")}</th>
+                        <th className="py-2 px-2">{t("ops.colStart")}</th>
+                        <th className="py-2 px-2">{t("ops.colEnd")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -362,8 +317,8 @@ export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, o
                               {h.status}
                             </Chip>
                           </td>
-                          <td className="py-2 px-2 mono text-body">{fmtDateTime(h.started_at)}</td>
-                          <td className="py-2 px-2 mono text-body">{fmtDateTime(h.finished_at)}</td>
+                          <td className="py-2 px-2 mono text-body">{fmtDateTime(h.started_at, locale)}</td>
+                          <td className="py-2 px-2 mono text-body">{fmtDateTime(h.finished_at, locale)}</td>
                         </tr>
                       ))}
                     </tbody>
