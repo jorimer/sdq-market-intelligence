@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Wrench, Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { Card, CardHead, Chip, StateBlock } from "@/shared/ui/primitives";
 import { getIndicators, deleteSeries, MacroIndicator } from "@/modules/macro-monitor/api";
@@ -15,6 +16,7 @@ function isOrphan(code: string): boolean {
  * `ingest_series` upserts by (series_code, period) and never prunes codes the parser
  * stopped emitting, so a schema change can leave orphan rows duplicating the monitor. */
 export function SeriesMaintenanceSection() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<MacroIndicator[]>([]);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [selected, setSelected] = useState("");
@@ -41,12 +43,7 @@ export function SeriesMaintenanceSection() {
 
   async function remove() {
     if (!selected) return;
-    if (
-      !confirm(
-        `¿Eliminar TODAS las observaciones de la serie "${selected}"? Esta acción no se puede deshacer.`,
-      )
-    )
-      return;
+    if (!confirm(t("platform.series.confirmDelete", { code: selected }))) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -55,13 +52,13 @@ export function SeriesMaintenanceSection() {
         tone: "ok",
         text:
           deleted > 0
-            ? `Serie "${selected}" eliminada: ${deleted} ${deleted === 1 ? "observación" : "observaciones"}.`
-            : `La serie "${selected}" no tenía observaciones (no había nada que borrar).`,
+            ? t("platform.series.deleted", { count: deleted, code: selected })
+            : t("platform.series.deletedEmpty", { code: selected }),
       });
       setSelected("");
       await load();
     } catch {
-      setMsg({ tone: "alert", text: "No se pudo eliminar la serie. Reintenta en unos segundos." });
+      setMsg({ tone: "alert", text: t("platform.series.deleteError") });
     } finally {
       setBusy(false);
     }
@@ -71,8 +68,8 @@ export function SeriesMaintenanceSection() {
     <Card>
       <CardHead
         icon={Wrench}
-        title="Mantenimiento de series macro"
-        subtitle="Elimina series huérfanas que el parser dejó de producir (BCRD)"
+        title={t("platform.series.title")}
+        subtitle={t("platform.series.sub")}
       />
 
       {status === "loading" && <StateBlock kind="loading" />}
@@ -80,17 +77,17 @@ export function SeriesMaintenanceSection() {
       {status === "error" && (
         <StateBlock
           kind="error"
-          message="No se pudieron cargar las series macro."
+          message={t("platform.series.loadError")}
           action={
             <button className="btn btn-soft" onClick={load}>
-              Reintentar
+              {t("platform.series.retry")}
             </button>
           }
         />
       )}
 
       {status === "ready" && items.length === 0 && (
-        <StateBlock kind="empty" message="Aún no hay series macro ingeridas." />
+        <StateBlock kind="empty" message={t("platform.series.empty")} />
       )}
 
       {status === "ready" && items.length > 0 && (
@@ -100,9 +97,9 @@ export function SeriesMaintenanceSection() {
               <AlertTriangle size={16} className="text-alert shrink-0 mt-0.5" />
               <div className="text-xs text-body">
                 <span className="font-semibold text-ink">
-                  {orphans.length} {orphans.length === 1 ? "serie huérfana detectada" : "series huérfanas detectadas"}
+                  {t("platform.series.orphansDetected", { count: orphans.length })}
                 </span>{" "}
-                (código termina en año). Suelen ser duplicados de un cambio de esquema:
+                {t("platform.series.orphanHint")}
                 <ul className="mt-1 space-y-0.5">
                   {orphans.map((o) => (
                     <li key={o.series_code} className="mono text-faint">
@@ -115,17 +112,17 @@ export function SeriesMaintenanceSection() {
           )}
 
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">Serie a eliminar</label>
+            <label className="block text-xs font-medium text-muted mb-1">{t("platform.series.seriesToDelete")}</label>
             <select
               className="field mono"
               value={selected}
               onChange={(e) => setSelected(e.target.value)}
             >
-              <option value="">Selecciona una serie…</option>
+              <option value="">{t("platform.series.chooseSeries")}</option>
               {items.map((i) => (
                 <option key={i.series_code} value={i.series_code}>
                   {i.series_code}
-                  {isOrphan(i.series_code) ? "  — ⚠ huérfana" : i.label ? `  · ${i.label}` : ""}
+                  {isOrphan(i.series_code) ? t("platform.series.orphanTag") : i.label ? `  · ${i.label}` : ""}
                 </option>
               ))}
             </select>
@@ -133,7 +130,7 @@ export function SeriesMaintenanceSection() {
 
           {selected && isOrphan(selected) && (
             <Chip tone="alert">
-              <AlertTriangle size={12} /> Serie huérfana
+              <AlertTriangle size={12} /> {t("platform.series.orphanChip")}
             </Chip>
           )}
 
@@ -144,7 +141,7 @@ export function SeriesMaintenanceSection() {
               onClick={remove}
             >
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-              Eliminar serie
+              {t("platform.series.deleteSeries")}
             </button>
             {msg && (
               <p className={`text-xs ${msg.tone === "alert" ? "text-alert" : "text-muted"}`}>
