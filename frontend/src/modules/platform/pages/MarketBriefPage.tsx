@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Sparkles, RefreshCw, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   PageHead,
@@ -22,9 +23,11 @@ import { getMarketBrief, runMarketBrief, type MarketBriefReport, type BriefAxis 
 
 const IRMP_EJE = "Regulatorio & político";
 
-function fmtDate(iso?: string): string {
+const LOCALES: Record<string, string> = { es: "es-DO", en: "en-US", fr: "fr-FR" };
+
+function fmtDate(iso: string | undefined, lang: string): string {
   return iso
-    ? new Date(iso).toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" })
+    ? new Date(iso).toLocaleString(LOCALES[lang] ?? "es-DO", { dateStyle: "medium", timeStyle: "short" })
     : "—";
 }
 
@@ -68,12 +71,13 @@ function DirIcon({ direction }: { direction?: string }) {
 
 /* ── Tile por eje ────────────────────────────────────────────────── */
 function AxisTile({ axis }: { axis: BriefAxis }) {
+  const { t } = useTranslation();
   if (!axis.available) {
     return (
       <Card className="flex flex-col">
         <div className="text-sm font-semibold text-ink truncate">{axis.eje}</div>
         <div className="flex-1 grid place-items-center py-4">
-          <Chip tone="muted">Sin dato</Chip>
+          <Chip tone="muted">{t("platform.marketBrief.noData")}</Chip>
         </div>
       </Card>
     );
@@ -149,6 +153,7 @@ function AxisTile({ axis }: { axis: BriefAxis }) {
 
 /* ── Página ──────────────────────────────────────────────────────── */
 export function MarketBriefPage() {
+  const { t, i18n } = useTranslation();
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
   const [report, setReport] = useState<MarketBriefReport | null>(null);
@@ -217,15 +222,15 @@ export function MarketBriefPage() {
   const regenBtn = isAdmin && (
     <button onClick={regenerate} disabled={busy} className="btn btn-ghost !py-1.5">
       <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
-      {busy ? "Generando…" : "Regenerar"}
+      {busy ? t("platform.marketBrief.generating") : t("platform.marketBrief.regenerate")}
     </button>
   );
 
   const head = (
     <PageHead
-      eyebrow="Herramientas"
-      title="Market Brief"
-      sub="Síntesis ejecutiva del estado de República Dominicana a través de los 7 ejes, generada con Claude. Se genera y agenda como operación; aquí ves el último brief."
+      eyebrow={t("platform.marketBrief.eyebrow")}
+      title={t("platform.marketBrief.title")}
+      sub={t("platform.marketBrief.sub")}
       right={status === "ready" && report?.computed ? regenBtn : undefined}
     />
   );
@@ -242,7 +247,7 @@ export function MarketBriefPage() {
     );
 
   if (status === "error")
-    return <div>{head}<StateBlock kind="error" message="No se pudo cargar el Market Brief." /></div>;
+    return <div>{head}<StateBlock kind="error" message={t("platform.marketBrief.error")} /></div>;
 
   if (!report?.computed) {
     return (
@@ -250,16 +255,12 @@ export function MarketBriefPage() {
         {head}
         <StateBlock
           kind="empty"
-          title="Aún no hay brief"
-          message={
-            isAdmin
-              ? "Genera el primer Market Brief para ver la síntesis cross-eje."
-              : "El Market Brief todavía no se ha generado. Un administrador puede generarlo."
-          }
+          title={t("platform.marketBrief.emptyTitle")}
+          message={isAdmin ? t("platform.marketBrief.emptyAdmin") : t("platform.marketBrief.emptyViewer")}
           action={isAdmin ? (
             <button onClick={regenerate} disabled={busy} className="btn btn-primary">
               <Sparkles className="w-4 h-4" />
-              {busy ? "Generando…" : "Generar Market Brief"}
+              {busy ? t("platform.marketBrief.generating") : t("platform.marketBrief.generate")}
             </button>
           ) : undefined}
         />
@@ -275,8 +276,8 @@ export function MarketBriefPage() {
 
       <div className="flex items-center justify-between gap-3 mb-3">
         <span className="text-xs text-muted">
-          {report.snapshot?.pais} · {report.n_ejes_con_dato ?? axes.filter((a) => a.available).length} ejes con dato
-          {report.generated_at && <> · generado {fmtDate(report.generated_at)}</>}
+          {report.snapshot?.pais} · {t("platform.marketBrief.axesWithData", { count: report.n_ejes_con_dato ?? axes.filter((a) => a.available).length })}
+          {report.generated_at && <> · {t("platform.marketBrief.generatedAt", { date: fmtDate(report.generated_at, i18n.language) })}</>}
         </span>
       </div>
 
@@ -289,13 +290,13 @@ export function MarketBriefPage() {
       <Card>
         <CardHead
           icon={Sparkles}
-          title="Brief de mercado (IA)"
-          subtitle="Síntesis cross-eje generada con Claude — anclada en las cifras del pulso, no las reemplaza."
+          title={t("platform.marketBrief.briefTitle")}
+          subtitle={t("platform.marketBrief.briefSubtitle")}
         />
         <AiInsightBody
           loading={false}
           ai={report.brief ?? null}
-          unavailableHint="El brief de IA no está disponible (clave de Anthropic no configurada). El pulso por eje de arriba es dato real."
+          unavailableHint={t("platform.marketBrief.unavailable")}
         />
       </Card>
     </div>

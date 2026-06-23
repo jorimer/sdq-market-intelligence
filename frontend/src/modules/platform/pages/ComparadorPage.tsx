@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { GitCompare, Plus, X, Landmark, ArrowRight } from "lucide-react";
 import client from "@/shared/api/client";
 import {
@@ -30,45 +32,39 @@ import { getCompareInsight, type CompareInsightItem } from "../api";
 
 const MAX = 4;
 
-const DIM_LABELS: Record<string, string> = {
-  macro: "Macroeconómica", external: "Externa", political: "Político-institucional",
-  regulatory: "Regulatoria", regulation: "Regulación", events: "Eventos", business: "Negocios",
-  talent: "Talento", sector: "Sector", health: "Salud", education: "Educación",
-  living_standards: "Nivel de vida", inclusion: "Inclusión",
-  physical_risk: "Riesgo físico", transition_risk: "Riesgo de transición",
-  adaptive_capacity: "Capacidad de adaptación", governance: "Gobernanza",
-  solidez: "Solidez", calidad: "Calidad", eficiencia: "Eficiencia", liquidez: "Liquidez",
-  diversificacion: "Diversificación",
-};
-const dimLabel = (k: string) => DIM_LABELS[k] ?? k.replace(/_/g, " ");
+/** Etiqueta de dimensión traducida (fallback humanizado si falta la clave). */
+function dimLabel(t: TFunction, key: string): string {
+  return t(`platform.comparador.dims.${key}`, { defaultValue: key.replace(/_/g, " ") });
+}
 
 interface CompItem { id: string; name: string; }
-interface Dim { key: string; label: string; score: number; weight: number; contribution: number; }
+interface Dim { key: string; score: number; weight: number; contribution: number; }
 interface Scored { score: number; band: Band; dims: Dim[]; }
 
 type RawDims = Record<string, { score: number; weight: number; contribution: number }>;
 function mapDims(rec: RawDims): Dim[] {
   return Object.entries(rec || {}).map(([k, v]) => ({
-    key: k, label: dimLabel(k), score: v.score, weight: v.weight, contribution: v.contribution,
+    key: k, score: v.score, weight: v.weight, contribution: v.contribution,
   }));
 }
 
 type ScoreFn = (id: string) => Promise<Scored | null>;
 interface Domain {
   key: string;
-  tab: string;
-  eyebrow: string;
-  noun: string;       // plural, p. ej. "sectores"
-  singular: string;   // p. ej. "sector"
-  ejeLabel: string;
+  tabKey: string;
+  eyebrow: string;       // código de fuente (proper noun) — sin traducir
+  nounKey: string;       // plural
+  singularKey: string;
+  ejeKey: string;
   load: () => Promise<{ items: CompItem[]; score: ScoreFn }>;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const DOMAINS: Domain[] = [
   {
-    key: "sectorial", tab: "Sectorial", eyebrow: "BCRD · IAI", noun: "sectores", singular: "sector",
-    ejeLabel: "Sectorial — IAI (atractivo de inversión)",
+    key: "sectorial", tabKey: "platform.comparador.tabSectorial", eyebrow: "BCRD · IAI",
+    nounKey: "platform.comparador.nounSectores", singularKey: "platform.comparador.singularSector",
+    ejeKey: "platform.comparador.ejeSectorial",
     load: async () => {
       const { data } = await client.get("/sector-intel/sectors");
       const items = ((data.sectors as any[]) || [])
@@ -85,8 +81,9 @@ const DOMAINS: Domain[] = [
     },
   },
   {
-    key: "regulatorio", tab: "Regulatorio", eyebrow: "WGI · IRMP", noun: "países", singular: "país",
-    ejeLabel: "Regulatorio & político — IRMP (mayor score = menor riesgo)",
+    key: "regulatorio", tabKey: "platform.comparador.tabRegulatorio", eyebrow: "WGI · IRMP",
+    nounKey: "platform.comparador.nounPaises", singularKey: "platform.comparador.singularPais",
+    ejeKey: "platform.comparador.ejeRegulatorio",
     load: async () => {
       const { data } = await client.get("/macro-political-risk/dataset");
       const ds = (data.dataset as Record<string, Record<string, number>>) || {};
@@ -106,8 +103,9 @@ const DOMAINS: Domain[] = [
     },
   },
   {
-    key: "social", tab: "Social", eyebrow: "ONE · IDM", noun: "regiones", singular: "región",
-    ejeLabel: "Social & desarrollo — IDM",
+    key: "social", tabKey: "platform.comparador.tabSocial", eyebrow: "ONE · IDM",
+    nounKey: "platform.comparador.nounRegiones", singularKey: "platform.comparador.singularRegion",
+    ejeKey: "platform.comparador.ejeSocial",
     load: async () => {
       const { data } = await client.get("/social-dev/indicators");
       const rows = (data.indicators as any[]) || [];
@@ -126,8 +124,9 @@ const DOMAINS: Domain[] = [
     },
   },
   {
-    key: "esg", tab: "ESG", eyebrow: "ND-GAIN · IRC", noun: "países", singular: "país",
-    ejeLabel: "ESG & clima — IRC (resiliencia climática)",
+    key: "esg", tabKey: "platform.comparador.tabEsg", eyebrow: "ND-GAIN · IRC",
+    nounKey: "platform.comparador.nounPaises", singularKey: "platform.comparador.singularPais",
+    ejeKey: "platform.comparador.ejeEsg",
     load: async () => {
       const { data } = await client.get("/esg-climate/indicators");
       const items = ((data.indicators as any[]) || [])
@@ -149,8 +148,12 @@ const DOMAINS: Domain[] = [
 interface ResultRow { item: CompItem; scored: Scored | null; }
 
 export function ComparadorPage() {
+  const { t } = useTranslation();
   const [domainKey, setDomainKey] = useState<string>(DOMAINS[0].key);
   const domain = DOMAINS.find((d) => d.key === domainKey) ?? DOMAINS[0];
+  const noun = t(domain.nounKey);
+  const singular = t(domain.singularKey);
+  const ejeLabel = t(domain.ejeKey);
 
   const [items, setItems] = useState<CompItem[]>([]);
   const scoreFnRef = useRef<ScoreFn | null>(null);
@@ -215,21 +218,21 @@ export function ComparadorPage() {
     nombre: r.item.name,
     score: r.scored!.score,
     banda: r.scored!.band.label,
-    dimensiones: Object.fromEntries(r.scored!.dims.map((d) => [d.label, Number(d.score.toFixed(1))])),
+    dimensiones: Object.fromEntries(r.scored!.dims.map((d) => [dimLabel(t, d.key), Number(d.score.toFixed(1))])),
   }));
   const aiKey = `${domainKey}|${results.map((r) => r.item.id).join("-")}`;
 
   return (
     <div>
       <PageHead
-        eyebrow="Herramientas"
-        title="Comparador"
-        sub="Compara 2–4 sectores, países o regiones por su score de índice y su desglose por dimensión, con una lectura comparativa de IA."
+        eyebrow={t("platform.comparador.eyebrow")}
+        title={t("platform.comparador.title")}
+        sub={t("platform.comparador.sub")}
       />
 
       <div className="mb-5">
         <Tabs
-          tabs={DOMAINS.map((d) => ({ id: d.key, label: d.tab }))}
+          tabs={DOMAINS.map((d) => ({ id: d.key, label: t(d.tabKey) }))}
           active={domainKey}
           onChange={setDomainKey}
         />
@@ -239,7 +242,7 @@ export function ComparadorPage() {
       <Card className="mb-5">
         <div className="flex items-center justify-between gap-3 mb-3">
           <p className="text-sm text-muted">
-            Selecciona 2–4 {domain.noun} <span className="text-faint">· {domain.eyebrow}</span>
+            {t("platform.comparador.selectN", { noun })} <span className="text-faint">· {domain.eyebrow}</span>
           </p>
         </div>
 
@@ -249,7 +252,7 @@ export function ComparadorPage() {
             <Skeleton className="h-9 w-72" />
           </div>
         ) : listStatus === "error" ? (
-          <StateBlock kind="error" message={`No se pudieron cargar los ${domain.noun}.`} />
+          <StateBlock kind="error" message={t("platform.comparador.loadError", { noun })} />
         ) : (
           <>
             <div className="space-y-2.5 mb-4">
@@ -257,11 +260,11 @@ export function ComparadorPage() {
                 <div key={idx} className="flex items-center gap-3">
                   <select
                     className="field w-72"
-                    aria-label={`${domain.singular} ${idx + 1}`}
+                    aria-label={t("platform.comparador.slotAria", { singular, n: idx + 1 })}
                     value={slot}
                     onChange={(e) => setSlot(idx, e.target.value)}
                   >
-                    <option value="">— elegir —</option>
+                    <option value="">{t("platform.comparador.choose")}</option>
                     {items.map((it) => (
                       <option
                         key={it.id}
@@ -276,8 +279,8 @@ export function ComparadorPage() {
                     <button
                       onClick={() => setSlots((s) => s.filter((_, i) => i !== idx))}
                       className="text-faint hover:text-alert"
-                      title="Quitar"
-                      aria-label="Quitar"
+                      title={t("platform.comparador.remove")}
+                      aria-label={t("platform.comparador.remove")}
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -291,12 +294,12 @@ export function ComparadorPage() {
                   onClick={() => setSlots((s) => [...s, ""])}
                   className="text-sm text-accent-ink hover:underline flex items-center gap-1"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Añadir {domain.singular}
+                  <Plus className="w-3.5 h-3.5" /> {t("platform.comparador.addOne", { singular })}
                 </button>
               )}
               <button onClick={run} disabled={!canCompare || comparing} className="btn btn-primary">
                 <GitCompare className="w-4 h-4" />
-                {comparing ? "Comparando…" : "Comparar"}
+                {comparing ? t("platform.comparador.comparing") : t("platform.comparador.compare")}
               </button>
             </div>
           </>
@@ -307,7 +310,7 @@ export function ComparadorPage() {
       {results.length === 0 ? (
         <StateBlock
           kind="empty"
-          message={`Selecciona al menos dos ${domain.noun} y ejecuta la comparación.`}
+          message={t("platform.comparador.emptySelect", { noun })}
         />
       ) : (
         <div className="space-y-5">
@@ -328,8 +331,8 @@ export function ComparadorPage() {
                   </>
                 ) : (
                   <div className="py-6">
-                    <Chip tone="muted">Sin score</Chip>
-                    <p className="text-xs text-faint mt-2">No hay score persistido para este período.</p>
+                    <Chip tone="muted">{t("platform.comparador.noScore")}</Chip>
+                    <p className="text-xs text-faint mt-2">{t("platform.comparador.noScoreHint")}</p>
                   </div>
                 )}
               </Card>
@@ -338,12 +341,12 @@ export function ComparadorPage() {
 
           {dimRows.length > 0 && (
             <Card>
-              <CardHead icon={GitCompare} title="Detalle por dimensión" subtitle={domain.ejeLabel} />
+              <CardHead icon={GitCompare} title={t("platform.comparador.dimDetailTitle")} subtitle={ejeLabel} />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-muted border-b border-line">
-                      <th className="py-2 px-2 font-medium">Dimensión</th>
+                      <th className="py-2 px-2 font-medium">{t("platform.comparador.colDimension")}</th>
                       {results.map(({ item }) => (
                         <th key={item.id} className="py-2 px-2 font-medium text-right truncate">
                           {item.name}
@@ -354,7 +357,7 @@ export function ComparadorPage() {
                   <tbody>
                     {dimRows.map((dim) => (
                       <tr key={dim.key} className="border-b border-line/60">
-                        <td className="py-2 px-2 text-body">{dim.label}</td>
+                        <td className="py-2 px-2 text-body">{dimLabel(t, dim.key)}</td>
                         {results.map(({ item, scored }) => {
                           const v = scored?.dims.find((d) => d.key === dim.key)?.score;
                           return (
@@ -366,7 +369,7 @@ export function ComparadorPage() {
                       </tr>
                     ))}
                     <tr className="border-t-2 border-line">
-                      <td className="py-2 px-2 font-semibold text-ink">Score general</td>
+                      <td className="py-2 px-2 font-semibold text-ink">{t("platform.comparador.colOverall")}</td>
                       {results.map(({ item, scored }) => (
                         <td key={item.id} className="py-2 px-2 text-right mono font-bold text-ink tabular-nums">
                           {scored ? fmtNum(scored.score, 1) : "—"}
@@ -381,11 +384,11 @@ export function ComparadorPage() {
 
           {aiItems.length >= 2 && (
             <AiInsightCard
-              title="Análisis comparativo (IA)"
-              subtitle={`Fortalezas y debilidades relativas · ${domain.ejeLabel}`}
+              title={t("platform.comparador.aiTitle")}
+              subtitle={t("platform.comparador.aiSubtitle", { eje: ejeLabel })}
               icon={GitCompare}
               depsKey={aiKey}
-              fetcher={() => getCompareInsight(domain.ejeLabel, aiItems)}
+              fetcher={() => getCompareInsight(ejeLabel, aiItems)}
             />
           )}
         </div>
@@ -398,16 +401,16 @@ export function ComparadorPage() {
             <Landmark size={16} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-ink">¿Comparar entidades bancarias?</div>
+            <div className="text-sm font-semibold text-ink">{t("platform.comparador.bankCardTitle")}</div>
             <p className="text-xs text-muted mt-0.5">
-              La banca tiene su comparador dedicado, con radar y sub-componentes del rating.
+              {t("platform.comparador.bankCardBody")}
             </p>
           </div>
           <Link
             to="/banking-score/compare"
             className="shrink-0 text-sm text-accent-ink hover:underline flex items-center gap-1"
           >
-            Abrir <ArrowRight className="w-3.5 h-3.5" />
+            {t("platform.comparador.open")} <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
       </Card>
