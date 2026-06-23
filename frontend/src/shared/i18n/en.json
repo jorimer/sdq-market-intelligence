@@ -1506,6 +1506,45 @@
       "deleted_other": "Series \"{{code}}\" deleted: {{count}} observations.",
       "deletedEmpty": "Series \"{{code}}\" had no observations (nothing to delete).",
       "deleteError": "Could not delete the series. Retry in a few seconds."
+    },
+    "productMonitor": {
+      "eyebrow": "PLATFORM",
+      "title": "Product Monitor",
+      "sub": "Readiness by sector and level (Pulse \u00b7 Insight \u00b7 Deep Dive) and control of public access activation. A product is published only if it clears the quality threshold.",
+      "forbidden": "This section requires an administrator role.",
+      "loadError": "Could not load the product monitor.",
+      "empty": "No products in the catalog.",
+      "gridTitle": "Product catalog",
+      "gridSubtitle": "10 sectors \u00d7 3 levels. Readiness is computed from each product's real signals.",
+      "recompute": "Recompute",
+      "recomputeError": "Could not recompute readiness.",
+      "legendPublished": "Published",
+      "legendWired": "Wired \u00b7 not published",
+      "legendNotWired": "Not wired",
+      "legendNote": "A product can be operational internally without being published.",
+      "activateBlocked": "Readiness does not clear the threshold: the product is not publishable yet.",
+      "toggleError": "Could not change publication.",
+      "colSector": "Sector",
+      "thresholdShort": "threshold {{v}}",
+      "notWired": "Not wired",
+      "published": "Published",
+      "wired": "Not published",
+      "unpublish": "Unpublish",
+      "publish": "Publish",
+      "belowThreshold": "Readiness {{r}} < threshold {{v}}",
+      "toggleDetail": "Show breakdown",
+      "tier": {
+        "pulse": "Pulse",
+        "insight": "Insight",
+        "deep_dive": "Deep Dive"
+      },
+      "gate": {
+        "g1": "G1 \u00b7 Data",
+        "g2": "G2 \u00b7 Engine",
+        "g3": "G3 \u00b7 Narrative",
+        "g4": "G4 \u00b7 Template",
+        "g5": "G5 \u00b7 Validation"
+      }
     }
   },
   "ops": {

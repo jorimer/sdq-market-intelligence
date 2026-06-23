@@ -160,3 +160,47 @@ export async function resolveOutcome(
   );
   return data;
 }
+
+/* ── Monitor de Productos (readiness + activación pública) ── */
+export interface ProductLevel {
+  tier: string; // "pulse" | "insight" | "deep_dive"
+  readiness: number; // 0–1
+  gates: { g1: number; g2: number; g3: number; g4: number; g5: number } | null;
+  detail: Record<string, string> | null;
+  threshold: number;
+  can_activate: boolean;
+  is_active: boolean;
+  computed_at: string | null;
+}
+export interface ProductSector {
+  sector_key: string;
+  display_name: string;
+  source: string;
+  module_hint: string;
+  implemented: boolean;
+  levels: ProductLevel[];
+}
+export interface ProductMatrix {
+  sectors: ProductSector[];
+  thresholds: Record<string, number>;
+}
+
+export async function getProductReadiness(): Promise<ProductMatrix> {
+  const { data } = await client.get("/products/readiness");
+  return data;
+}
+
+export async function recomputeProductReadiness(): Promise<{ recomputed: number; matrix: ProductMatrix }> {
+  const { data } = await client.post("/products/readiness/recompute");
+  return data;
+}
+
+export async function activateProduct(sector: string, tier: string): Promise<{ is_active: boolean }> {
+  const { data } = await client.post(`/products/${sector}/${tier}/activate`);
+  return data;
+}
+
+export async function deactivateProduct(sector: string, tier: string): Promise<{ is_active: boolean }> {
+  const { data } = await client.post(`/products/${sector}/${tier}/deactivate`);
+  return data;
+}

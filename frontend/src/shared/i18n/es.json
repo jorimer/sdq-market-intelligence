@@ -1506,6 +1506,45 @@
       "deleted_other": "Serie \"{{code}}\" eliminada: {{count}} observaciones.",
       "deletedEmpty": "La serie \"{{code}}\" no ten\u00eda observaciones (no hab\u00eda nada que borrar).",
       "deleteError": "No se pudo eliminar la serie. Reintenta en unos segundos."
+    },
+    "productMonitor": {
+      "eyebrow": "PLATAFORMA",
+      "title": "Monitor de Productos",
+      "sub": "Readiness por sector y nivel (Pulse \u00b7 Insight \u00b7 Deep Dive) y control de la activaci\u00f3n de acceso p\u00fablico. Un producto se publica solo si cruza el umbral de calidad.",
+      "forbidden": "Esta secci\u00f3n requiere rol de administrador.",
+      "loadError": "No se pudo cargar el monitor de productos.",
+      "empty": "Sin productos en el cat\u00e1logo.",
+      "gridTitle": "Cat\u00e1logo de productos",
+      "gridSubtitle": "10 sectores \u00d7 3 niveles. El readiness se calcula desde las se\u00f1ales reales de cada producto.",
+      "recompute": "Recalcular",
+      "recomputeError": "No se pudo recalcular el readiness.",
+      "legendPublished": "Publicado",
+      "legendWired": "Cableado \u00b7 no publicado",
+      "legendNotWired": "Sin cablear",
+      "legendNote": "Un producto puede estar operativo internamente sin estar publicado.",
+      "activateBlocked": "El readiness no cruza el umbral: el producto no es publicable todav\u00eda.",
+      "toggleError": "No se pudo cambiar la publicaci\u00f3n.",
+      "colSector": "Sector",
+      "thresholdShort": "umbral {{v}}",
+      "notWired": "Sin cablear",
+      "published": "Publicado",
+      "wired": "No publicado",
+      "unpublish": "Retirar",
+      "publish": "Publicar",
+      "belowThreshold": "Readiness {{r}} < umbral {{v}}",
+      "toggleDetail": "Ver desglose",
+      "tier": {
+        "pulse": "Pulse",
+        "insight": "Insight",
+        "deep_dive": "Deep Dive"
+      },
+      "gate": {
+        "g1": "G1 \u00b7 Datos",
+        "g2": "G2 \u00b7 Motor",
+        "g3": "G3 \u00b7 Narrativa",
+        "g4": "G4 \u00b7 Plantilla",
+        "g5": "G5 \u00b7 Validaci\u00f3n"
+      }
     }
   },
   "ops": {
