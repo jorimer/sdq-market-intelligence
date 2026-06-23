@@ -659,6 +659,13 @@
     "watch": "watch",
     "coyunturaTitle": "Conjuncture reading (AI)",
     "coyunturaSubtitle": "Risks and opportunities of the current macro environment (BCRD)",
+    "audienceLabel": "Audience",
+    "audience": {
+      "comite": "Committee",
+      "inversionista": "Investor",
+      "gobierno": "Government",
+      "empresa": "Corporate"
+    },
     "tableTitleAll": "All series",
     "tableTitleMovers": "Indicators on the move",
     "tableSubAll": "{{n}} series monitored",

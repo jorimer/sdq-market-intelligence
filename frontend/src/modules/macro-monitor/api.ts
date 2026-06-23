@@ -58,19 +58,27 @@ export async function getSeries(code: string, withAi = false): Promise<SeriesDet
   return data;
 }
 
+export const MACRO_AUDIENCES = ["comite", "inversionista", "gobierno", "empresa"] as const;
+
 /** Insight de IA de la serie (fase 2 — para AiInsightCard). */
-export async function getSeriesInsight(code: string): Promise<AiInsight | null> {
+export async function getSeriesInsight(
+  code: string,
+  audience: string = MACRO_AUDIENCES[0],
+): Promise<AiInsight | null> {
   const { data } = await client.get<SeriesDetail>(`/macro-monitor/series/${code}`, {
-    params: { with_ai: true },
+    params: { with_ai: true, audience },
   });
   return data.ai_insight ?? null;
 }
 
 /** Lectura de coyuntura (IA) del snapshot macro (fase 2 — para AiInsightCard). */
-export async function getMacroSnapshotInsight(period?: string): Promise<AiInsight | null> {
+export async function getMacroSnapshotInsight(
+  period?: string,
+  audience: string = MACRO_AUDIENCES[0],
+): Promise<AiInsight | null> {
   const { data } = await client.get<{ ai_insight: AiInsight | null }>(
     "/macro-monitor/snapshot",
-    { params: { with_ai: true, ...(period ? { period } : {}) } },
+    { params: { with_ai: true, audience, ...(period ? { period } : {}) } },
   );
   return data.ai_insight ?? null;
 }
@@ -279,7 +287,10 @@ export async function getFiscalPulse(): Promise<FiscalPulse> {
   return data;
 }
 
-export async function getFiscalInsight(): Promise<AiInsight | null> {
-  const { data } = await client.get<{ ai_insight: AiInsight | null }>("/macro-monitor/fiscal/insight");
+export async function getFiscalInsight(
+  audience: string = MACRO_AUDIENCES[0],
+): Promise<AiInsight | null> {
+  const { data } = await client.get<{ ai_insight: AiInsight | null }>(
+    "/macro-monitor/fiscal/insight", { params: { audience } });
   return data.ai_insight ?? null;
 }

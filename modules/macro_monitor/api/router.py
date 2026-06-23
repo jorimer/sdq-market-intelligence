@@ -48,19 +48,24 @@ logger = logging.getLogger("sdq.api.macro_monitor")
 router = APIRouter()
 
 
-def _ai_insight(context: Dict[str, Any], template: str) -> Optional[Dict[str, Any]]:
-    """Generate a Claude narrative from *context* using *template*; best-effort
+def _ai_insight(
+    context: Dict[str, Any], template: str, audience: str = "comite",
+) -> Optional[Dict[str, Any]]:
+    """Generate a Claude narrative via the cerebro route (axis=macro_monitor); best-effort
     (returns None on any failure so the endpoint never breaks).
 
-    These endpoints are sync ``def`` (threadpool), so we drive the async engine
-    with ``asyncio.run`` in this worker thread — the blocking Anthropic call runs
-    off the main event loop. Without an API key the engine returns a static
-    fallback (``model_used == "static_fallback"``), which we pass through.
+    These endpoints are sync ``def`` (threadpool), so we drive the async engine with
+    ``asyncio.run`` in this worker thread — the blocking Anthropic call runs off the main
+    event loop. Without an API key the engine returns a static fallback
+    (``model_used == "static_fallback"``), which we pass through.
     """
     import asyncio
     try:
         from shared.narrative.claude_engine import narrative_engine
-        res = asyncio.run(narrative_engine.generate(context, template=template, mode="detailed"))
+        res = asyncio.run(narrative_engine.generate(
+            context, template=template, mode="detailed",
+            axis="macro_monitor", audience=audience,
+        ))
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
     except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
         logger.warning("AI insight macro (%s) no disponible: %s", template, e)
@@ -105,6 +110,11 @@ def indicators(
 def series_detail(
     series_code: str,
     with_ai: bool = Query(False, description="Incluir insight de IA (Claude) — fase 2, lento (~10-15s)"),
+    audience: str = Query(
+        "comite",
+        description="Audiencia para orientar el insight (comite·inversionista·gobierno·empresa); "
+                    "una clave desconocida cae al default.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -113,7 +123,7 @@ def series_detail(
     if with_ai and detail.get("observations"):
         from modules.macro_monitor.ai_context import series_ai_context
         meta = next((i for i in get_indicators(db) if i.get("series_code") == series_code), None)
-        detail["ai_insight"] = _ai_insight(series_ai_context(detail, meta), "trend_analysis")
+        detail["ai_insight"] = _ai_insight(series_ai_context(detail, meta), "macro_trend", audience)
     return detail
 
 
@@ -155,12 +165,17 @@ def fiscal(
     "recaudación) con Claude. Best-effort: cae a fallback estático sin clave.",
 )
 def fiscal_insight(
+    audience: str = Query(
+        "comite",
+        description="Audiencia para orientar el insight (comite·inversionista·gobierno·empresa).",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     from modules.macro_monitor.ai_context import fiscal_ai_context
 
-    return {"ai_insight": _ai_insight(fiscal_ai_context(get_fiscal_pulse(db)), "executive_summary")}
+    return {"ai_insight": _ai_insight(
+        fiscal_ai_context(get_fiscal_pulse(db)), "fiscal_pulse", audience)}
 
 
 @router.get(
@@ -171,6 +186,10 @@ def fiscal_insight(
 def snapshot(
     period: Optional[str] = Query(None, description="Período (YYYY, YYYY-Qn, YYYY-MM). Si se omite, el último."),
     with_ai: bool = Query(False, description="Incluir lectura de coyuntura de IA (Claude) — fase 2, lento (~10-15s)"),
+    audience: str = Query(
+        "comite",
+        description="Audiencia para orientar el insight (comite·inversionista·gobierno·empresa).",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -189,7 +208,8 @@ def snapshot(
     }
     if with_ai:
         from modules.macro_monitor.ai_context import snapshot_ai_context
-        out["ai_insight"] = _ai_insight(snapshot_ai_context(out, get_indicators(db)), "executive_summary")
+        out["ai_insight"] = _ai_insight(
+            snapshot_ai_context(out, get_indicators(db)), "macro_snapshot", audience)
     return out
 
 

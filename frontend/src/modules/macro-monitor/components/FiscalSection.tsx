@@ -13,8 +13,10 @@ import {
 import { Landmark, RefreshCw } from "lucide-react";
 import { Card, CardHead, StatTile, StateBlock } from "@/shared/ui/primitives";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
+import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { fmtNum } from "@/shared/lib/format";
-import { FiscalPulse, getFiscalInsight, getFiscalPulse } from "../api";
+import { FiscalPulse, getFiscalInsight, getFiscalPulse, MACRO_AUDIENCES } from "../api";
 
 function fmtMM(v: number | null | undefined, t: TFunction): string {
   return v == null ? "—" : t("macro.fiscalMM", { v: fmtNum(v, 0) });
@@ -32,6 +34,7 @@ function mergeTimeline(p: FiscalPulse, months = 36) {
 
 export function FiscalSection() {
   const { t } = useTranslation();
+  const [audience, setAudience] = useAudiencePref("sdq.macro.audience", MACRO_AUDIENCES);
   const [pulse, setPulse] = useState<FiscalPulse | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
 
@@ -131,8 +134,17 @@ export function FiscalSection() {
         title={t("macro.fiscalInsightTitle")}
         subtitle={t("macro.fiscalInsightSubtitle", { period: pulse.latest_period ?? "" })}
         icon={Landmark}
-        depsKey={`fiscal:${pulse.latest_period ?? ""}`}
-        fetcher={getFiscalInsight}
+        depsKey={`fiscal:${pulse.latest_period ?? ""}:${audience}`}
+        fetcher={() => getFiscalInsight(audience)}
+        actions={
+          <AudienceTabs
+            value={audience}
+            onChange={setAudience}
+            options={MACRO_AUDIENCES}
+            labelPrefix="macro.audience"
+            ariaLabelKey="macro.audienceLabel"
+          />
+        }
       />
 
       <p className="flex items-center gap-1.5 text-xs text-faint">

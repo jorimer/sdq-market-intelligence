@@ -311,6 +311,30 @@ THIN_TEMPLATES = {
         "valores; NO recalcules aportes ni declares un superlativo (mayor/menor/el más…) que no "
         "coincida con lo servido. Si una relación no está precalculada, exprésala sin número."
     ),
+    "macro_trend": (
+        "Analiza la tendencia de UNA serie macroeconómica (dato real BCRD).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. Distingue NIVEL de MOMENTUM (cambio y aceleración); lee la "
+        "dirección correcta de la serie (si subir es bueno o malo). Usá EXCLUSIVAMENTE las "
+        "cifras del contexto (latest_value, change, pct_change, acceleration, recent_observations); "
+        "NO inventes valores ni proyecciones. Conectá con la implicación para la audiencia."
+    ),
+    "macro_snapshot": (
+        "Analiza la COYUNTURA macroeconómica del período (dato real BCRD).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. No repases todas las series: ve a las señales tempranas "
+        "('signals') y a los 'top_movers' que más mueven la aguja por aceleración, y conectá con "
+        "la decisión de la audiencia. Usá EXCLUSIVAMENTE las cifras del contexto; NO inventes "
+        "valores. Si hay 'contexto_oficial_bcrd', úsalo como telón y cítalo breve."
+    ),
+    "fiscal_pulse": (
+        "Analiza el PULSO FISCAL del Gobierno Central (dato real Hacienda/DGII).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. Foco en la trayectoria del déficit (deficit_ultimos_12m), el "
+        "balance entre ingresos y gastos y las top líneas de recaudación — no cada punto "
+        "mensual. Usá EXCLUSIVAMENTE las cifras del contexto; NO inventes valores. Si "
+        "'has_data' es falso, dilo en una línea. Conectá con la implicación para la audiencia."
+    ),
     "climate_outlook": (
         "Explica el FUNDAMENTO de la resiliencia climática (IRC) de este país.\n"
         "Contexto:\n{context}\n\n"

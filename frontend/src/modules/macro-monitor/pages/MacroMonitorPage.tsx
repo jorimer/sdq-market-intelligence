@@ -12,6 +12,8 @@ import {
   LoadingGrid,
 } from "@/shared/ui/primitives";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
+import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { FiscalSection } from "../components/FiscalSection";
 import { ScenarioFan } from "@/shared/charts/ScenarioFan";
 import { fmtNum } from "@/shared/lib/format";
@@ -22,6 +24,7 @@ import {
   getSeries,
   getSeriesInsight,
   getMacroSnapshotInsight,
+  MACRO_AUDIENCES,
   refresh,
   MacroIndicator,
   MacroSignal,
@@ -46,6 +49,7 @@ const SEVERITY_TONE: Record<string, Tone> = {
 export function MacroMonitorPage() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
+  const [audience, setAudience] = useAudiencePref("sdq.macro.audience", MACRO_AUDIENCES);
   const [indicators, setIndicators] = useState<MacroIndicator[]>([]);
   const [signals, setSignals] = useState<MacroSignal[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -181,8 +185,17 @@ export function MacroMonitorPage() {
           title={t("macro.coyunturaTitle")}
           subtitle={t("macro.coyunturaSubtitle")}
           icon={Sparkles}
-          depsKey={`coyuntura:${latestPeriod}:${indicators.length}`}
-          fetcher={() => getMacroSnapshotInsight()}
+          depsKey={`coyuntura:${latestPeriod}:${indicators.length}:${audience}`}
+          fetcher={() => getMacroSnapshotInsight(undefined, audience)}
+          actions={
+            <AudienceTabs
+              value={audience}
+              onChange={setAudience}
+              options={MACRO_AUDIENCES}
+              labelPrefix="macro.audience"
+              ariaLabelKey="macro.audienceLabel"
+            />
+          }
         />
       </div>
 
@@ -346,8 +359,8 @@ export function MacroMonitorPage() {
             title={t("macro.seriesInsightTitle")}
             subtitle={series?.series_code ?? seriesCode}
             icon={Activity}
-            depsKey={`serie:${seriesCode}`}
-            fetcher={() => getSeriesInsight(seriesCode)}
+            depsKey={`serie:${seriesCode}:${audience}`}
+            fetcher={() => getSeriesInsight(seriesCode, audience)}
           />
         </div>
       )}
