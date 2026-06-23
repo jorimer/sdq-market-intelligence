@@ -84,6 +84,9 @@ NARRATIVE_SECTION_TITLES = {
     "recommendation": "Recomendación",
     "trend_analysis": "Análisis de Tendencias",
     "sector_outlook": "Perspectiva Sectorial",
+    "system_overview": "Panorama del Sistema",
+    "scenario_analysis": "Análisis de Escenarios",
+    "limitations": "Limitaciones",
 }
 
 
