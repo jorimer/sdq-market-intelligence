@@ -315,7 +315,8 @@
     "tagRubric": "bar\u00e8me",
     "tagPartialLive": "{{n}}/{{total}} en direct",
     "insightFull": "Voir l'analyse compl\u00e8te",
-    "insightBrief": "Voir la version br\u00e8ve"
+    "insightBrief": "Voir la version br\u00e8ve",
+    "downloadPdf": "T\u00e9l\u00e9charger le PDF"
   },
   "bands": {
     "noData": "Aucune donn\u00e9e",

@@ -4,6 +4,7 @@ import { Sparkles, type LucideIcon } from "lucide-react";
 import { Card, CardHead } from "@/shared/ui/primitives";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
 import { DeepToggle } from "@/shared/ui/DeepToggle";
+import { DownloadInsightButton } from "@/shared/ui/DownloadInsightButton";
 import type { AiInsight } from "@/shared/ui/insight-types";
 
 interface Props {
@@ -72,9 +73,16 @@ export function AiInsightCard({ title, subtitle, icon = Sparkles, depsKey, fetch
   const depthToggle = deepFetcher
     ? <DeepToggle deep={deep} onToggle={() => setDeep((d) => !d)} disabled={loading} />
     : null;
+  const canPdf = !!(ai?.text && ai.model_used !== "static_fallback");
 
-  const right = (actions || depthToggle)
-    ? <div className="flex items-center gap-3">{actions}{depthToggle}</div>
+  const right = (actions || depthToggle || canPdf)
+    ? (
+      <div className="flex items-center gap-3">
+        {actions}
+        {depthToggle}
+        {canPdf && <DownloadInsightButton ai={ai} title={title} subtitle={subtitle} />}
+      </div>
+    )
     : undefined;
 
   return (

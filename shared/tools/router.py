@@ -9,14 +9,16 @@ never touches any module's DB/models, so it stays purely transversal.
 """
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
+from shared.narrative.lang_context import get_request_lang
 from shared.settings.models import AppSetting
 
 logger = logging.getLogger("sdq.api.tools")
@@ -26,6 +28,55 @@ router = APIRouter()
 # KV key escrito por la Operación market-brief (app/market_brief.py). Se hardcodea
 # para no importar app/ desde shared/ (dirección de dependencia: app → shared).
 MARKET_BRIEF_KEY = "market_brief_report"
+
+
+def _slug(text: Optional[str], fallback: str = "insight") -> str:
+    """ASCII-safe filename stem from a (possibly accented) title."""
+    import unicodedata
+    base = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode()
+    base = re.sub(r"[^a-zA-Z0-9]+", "-", base).strip("-").lower()
+    return f"sdq-{base[:60]}" if base else f"sdq-{fallback}"
+
+
+@router.post(
+    "/insight-pdf",
+    summary="Descargar un insight de IA como PDF branded",
+    description="Recibe el texto (Markdown) que ya está en el cliente + metadatos y "
+    "devuelve un PDF SDQ. No regenera con Claude ni toca la DB — es puro render.",
+)
+async def insight_pdf(
+    body: Dict[str, Any] = Body(
+        ...,
+        examples=[{
+            "title": "Turismo — IAI + aceleración",
+            "eyebrow": "BCRD · Sectorial",
+            "subtitle": "Inversionista",
+            "text": "## Lectura\nEl sector...",
+        }],
+    ),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    text = str(body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Se requiere el texto del insight.")
+    from shared.reports.insight_pdf import build_insight_pdf
+    try:
+        pdf = build_insight_pdf(
+            title=str(body.get("title") or "Insight"),
+            body_md=text,
+            eyebrow=str(body["eyebrow"]) if body.get("eyebrow") else None,
+            subtitle=str(body["subtitle"]) if body.get("subtitle") else None,
+            meta=str(body["meta"]) if body.get("meta") else None,
+            lang=get_request_lang() or "es",
+        )
+    except Exception as e:  # noqa: BLE001 — render best-effort: error limpio, no traceback 500
+        logger.warning("insight-pdf render falló: %s", e)
+        raise HTTPException(status_code=500, detail="No se pudo generar el PDF.")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{_slug(body.get("title"))}.pdf"'},
+    )
 
 
 async def _ai_insight(context: Dict[str, Any], template: str) -> Optional[Dict[str, Any]]:

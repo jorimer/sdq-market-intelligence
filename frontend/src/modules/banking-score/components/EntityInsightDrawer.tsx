@@ -9,6 +9,7 @@ import { StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
 import { DeepToggle } from "@/shared/ui/DeepToggle";
+import { DownloadInsightButton } from "@/shared/ui/DownloadInsightButton";
 import { useTwoPhaseInsight } from "@/shared/ui/useTwoPhaseInsight";
 import { fmtNum } from "@/shared/lib/format";
 import { getEntityInsight, type EntityInsight } from "../api";
@@ -149,6 +150,7 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
                   <span className="truncate">{t("banking.entAiTitle")}</span>
                 </div>
                 <div className="flex items-center gap-3">
+                  <DownloadInsightButton ai={ai} title={detail.bank_name} eyebrow="SDQ · Financiero" subtitle={t("banking.entAiTitle")} />
                   <DeepToggle deep={deep} onToggle={() => setDeep((d) => !d)} disabled={aiLoading} />
                   <AudienceSelector value={audience} onChange={setAudience} />
                 </div>
