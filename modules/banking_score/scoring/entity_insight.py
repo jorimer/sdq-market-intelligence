@@ -178,6 +178,16 @@ def _derived_figures(detail: Dict[str, Any], window: list) -> Dict[str, Any]:
             "lider": lider["componente"], "aporte_lider": lider["aporte_pts"],
             "suma_resto": resto, "lider_supera_al_resto": lider["aporte_pts"] > resto,
         }
+        # superlativos de componente YA resueltos — el modelo tiende a olvidar
+        # Diversificación (peso bajo) al rankear gaps. Servir la respuesta correcta.
+        mg = max(aportes, key=lambda a: a["gap_al_techo_pts"])
+        out["componente_mayor_gap_al_techo"] = {
+            "componente": mg["componente"], "gap_al_techo_pts": mg["gap_al_techo_pts"],
+        }
+        # orden de peso (para ordinales tipo "el 2º de mayor peso"): de mayor a menor
+        out["componentes_por_peso_desc"] = [
+            s["label"] for s in sorted(subs, key=lambda s: -(s["weight"] or 0))
+        ]
 
     peers = detail.get("peers") or {}
     et = peers.get("entity_type") or {}
@@ -216,6 +226,13 @@ def _derived_figures(detail: Dict[str, Any], window: list) -> Dict[str, Any]:
         if len(scores) >= 5:
             var["vs_mismo_trimestre_ano_previo"] = round(cur - scores[-5][1], 2)
         out["variacion_score_actual"] = var
+        # mayor caída entre trimestres consecutivos de la ventana — evita el "esta es
+        # la mayor caída" superlativo mal comparado.
+        drops = [(scores[i - 1][0], scores[i][0], round(scores[i - 1][1] - scores[i][1], 2))
+                 for i in range(1, len(scores)) if scores[i - 1][1] > scores[i][1]]
+        if drops:
+            de, a, caida = max(drops, key=lambda d: d[2])
+            out["mayor_caida_intertrimestral"] = {"de": de, "a": a, "caida": caida}
     cortes_q1 = [{"periodo": t["period_end"], "score": t["score"]}
                  for t in window if str(t.get("period_end") or "")[5:7] == "03"]
     if cortes_q1:

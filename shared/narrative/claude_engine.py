@@ -233,7 +233,12 @@ THIN_TEMPLATES = {
         "serie, distancia al techo). Usá EXCLUSIVAMENTE el valor servido en 'cifras_derivadas' "
         "o 'tendencia_score'. Si la relación que querés expresar no está precalculada, decila "
         "en palabras SIN número (p. ej. 'está en el tope de su grupo', no 'lo superan 3'). Al "
-        "citar el score de un período usá EXACTAMENTE el de 'tendencia_score' para ese período."
+        "citar el score de un período usá EXACTAMENTE el de 'tendencia_score' para ese período.\n\n"
+        "SUPERLATIVOS: para 'el mayor gap / el más débil / la mayor pérdida potencial' entre "
+        "sub-componentes usá 'componente_mayor_gap_al_techo'; para ordinales de peso ('el 2º "
+        "de mayor peso') leé 'componentes_por_peso_desc' completo (no omitas Diversificación "
+        "aunque pese poco); para 'la mayor caída' usá 'mayor_caida_intertrimestral'. NO "
+        "declares un superlativo (mayor/menor/el más…) que no coincida con el valor servido."
     ),
     "indicator_insight": (
         "Analiza EN DETALLE un único indicador financiero de la entidad (datos reales SIB).\n"
