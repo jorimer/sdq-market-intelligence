@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { RefreshCw, Database, History, ListTree } from "lucide-react";
 import { Card, CardHead, StatTile, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { SeriesMaintenanceSection } from "@/modules/platform/components/SeriesMaintenanceSection";
@@ -28,6 +29,7 @@ function fmt(v: number | null): string {
 /** Operational console for the BCRD live API connector: live ingest, historical
  * backfill (IPC + FX), the series inventory, and orphan-series maintenance. */
 export function MacroApiSection() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<MacroIndicator[]>([]);
   const [signals, setSignals] = useState<MacroSignal[]>([]);
   const [status, setStatus] = useState<Status>("loading");
@@ -57,13 +59,13 @@ export function MacroApiSection() {
     setMsg(null);
     try {
       await refreshLive();
-      setMsg({ tone: "ok", text: "Ingesta live completada y snapshot recomputado." });
+      setMsg({ tone: "ok", text: t("datos.macro.api.ingestOk") });
       await load();
     } catch (e: unknown) {
       const s = (e as { response?: { status?: number } })?.response?.status;
       setMsg({
         tone: "alert",
-        text: s === 403 ? "Requiere rol de administrador." : "No se pudo ingerir. Reintenta.",
+        text: s === 403 ? t("datos.macro.adminRequired") : t("datos.macro.api.ingestError"),
       });
     } finally {
       setBusy("");
@@ -77,7 +79,7 @@ export function MacroApiSection() {
       const r = await backfillHistorico(yearFrom, yearTo);
       setMsg({
         tone: "ok",
-        text: `Backfill: ${r.touched.toLocaleString("es-DO")} observaciones (${r.period_min ?? "—"} → ${r.period_max ?? "—"}).`,
+        text: t("datos.macro.api.backfillOk", { touched: r.touched.toLocaleString("es-DO"), min: r.period_min ?? "—", max: r.period_max ?? "—" }),
       });
       await load();
     } catch (e: unknown) {
@@ -86,10 +88,10 @@ export function MacroApiSection() {
         tone: "alert",
         text:
           s === 403
-            ? "Requiere rol de administrador."
+            ? t("datos.macro.adminRequired")
             : s === 400
-              ? "Falta el token del BCRD o la fuente está deshabilitada (Configuración → BCRD)."
-              : "No se pudo correr el backfill. Reintenta.",
+              ? t("datos.macro.api.backfillNoToken")
+              : t("datos.macro.api.backfillError"),
       });
     } finally {
       setBusy("");
@@ -100,10 +102,10 @@ export function MacroApiSection() {
     return (
       <StateBlock
         kind="error"
-        message="No se pudieron cargar las series macro. Reintenta en unos segundos."
+        message={t("datos.macro.api.loadError")}
         action={
           <button className="btn btn-ghost" onClick={load}>
-            Reintentar
+            {t("datos.macro.api.retry")}
           </button>
         }
       />
@@ -116,38 +118,37 @@ export function MacroApiSection() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatTile label="Series" value={items.length} />
-        <StatTile label="Observaciones" value={totalObs} />
-        <StatTile label="Con histórico" value={withHistory} />
-        <StatTile label="Señales activas" value={signals.length} />
+        <StatTile label={t("datos.macro.api.statSeries")} value={items.length} />
+        <StatTile label={t("datos.macro.api.statObs")} value={totalObs} />
+        <StatTile label={t("datos.macro.api.statWithHistory")} value={withHistory} />
+        <StatTile label={t("datos.macro.api.statSignals")} value={signals.length} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
         <Card>
           <CardHead
             icon={Database}
-            title="Ingesta live (API BCRD)"
-            subtitle="Trae el último valor de las series del conector y recomputa el snapshot"
+            title={t("datos.macro.api.liveTitle")}
+            subtitle={t("datos.macro.api.liveSub")}
           />
           <p className="text-sm text-muted mb-4">
-            La mayoría de las series del API son <span className="text-ink">snapshot</span> (solo el
-            último valor); para profundidad histórica usa el backfill o el motor de Excel.
+            {t("datos.macro.api.liveNote")}
           </p>
           <button onClick={runLive} disabled={busy !== ""} className="btn btn-primary">
             <RefreshCw className={`w-4 h-4 ${busy === "live" ? "animate-spin" : ""}`} />
-            {busy === "live" ? "Ingiriendo…" : "Refrescar series live"}
+            {busy === "live" ? t("datos.macro.api.ingesting") : t("datos.macro.api.refreshLive")}
           </button>
         </Card>
 
         <Card>
           <CardHead
             icon={History}
-            title="Backfill histórico (IPC + tipo de cambio)"
-            subtitle="Las dos únicas series con profundidad vía API (mensual)"
+            title={t("datos.macro.api.backfillTitle")}
+            subtitle={t("datos.macro.api.backfillSub")}
           />
           <div className="flex items-end gap-3 mb-4">
             <label className="block">
-              <span className="block text-xs font-medium text-muted mb-1">Desde</span>
+              <span className="block text-xs font-medium text-muted mb-1">{t("datos.macro.api.from")}</span>
               <input
                 type="number"
                 className="field mono w-24"
@@ -158,7 +159,7 @@ export function MacroApiSection() {
               />
             </label>
             <label className="block">
-              <span className="block text-xs font-medium text-muted mb-1">Hasta</span>
+              <span className="block text-xs font-medium text-muted mb-1">{t("datos.macro.api.to")}</span>
               <input
                 type="number"
                 className="field mono w-24"
@@ -170,7 +171,7 @@ export function MacroApiSection() {
           </div>
           <button onClick={runBackfill} disabled={busy !== ""} className="btn btn-soft">
             <History className={`w-4 h-4 ${busy === "backfill" ? "animate-spin" : ""}`} />
-            {busy === "backfill" ? "Corriendo…" : "Correr backfill"}
+            {busy === "backfill" ? t("datos.macro.api.running") : t("datos.macro.api.runBackfill")}
           </button>
         </Card>
       </div>
@@ -184,7 +185,7 @@ export function MacroApiSection() {
       )}
 
       <Card>
-        <CardHead icon={ListTree} title="Inventario de series" subtitle={`${items.length} series ingeridas`} />
+        <CardHead icon={ListTree} title={t("datos.macro.api.inventoryTitle")} subtitle={t("datos.macro.api.inventorySub", { count: items.length })} />
         {status === "loading" ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -192,18 +193,18 @@ export function MacroApiSection() {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <StateBlock kind="empty" message="Aún no hay series ingeridas. Refresca las series live para empezar." />
+          <StateBlock kind="empty" message={t("datos.macro.api.inventoryEmpty")} />
         ) : (
           <div className="overflow-x-auto -mx-1">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-line">
-                  <th className="py-2 px-1 font-medium">Serie</th>
-                  <th className="py-2 px-1 font-medium">Unidad</th>
-                  <th className="py-2 px-1 font-medium text-right">Obs.</th>
-                  <th className="py-2 px-1 font-medium">Último período</th>
-                  <th className="py-2 px-1 font-medium text-right">Último valor</th>
-                  <th className="py-2 px-1 font-medium">Tendencia</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.api.colSeries")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.api.colUnit")}</th>
+                  <th className="py-2 px-1 font-medium text-right">{t("datos.macro.api.colObs")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.api.colLastPeriod")}</th>
+                  <th className="py-2 px-1 font-medium text-right">{t("datos.macro.api.colLastValue")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.api.colTrend")}</th>
                 </tr>
               </thead>
               <tbody>

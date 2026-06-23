@@ -1,28 +1,23 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { BookMarked, Loader2, ChevronRight, Link2 } from "lucide-react";
 import { Card, CardHead, StatTile, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { getCanonical, ingestCanonical, CanonicalSeries } from "../api";
 
-const SECTOR_LABEL: Record<string, string> = {
-  precios: "Precios",
-  sector_real: "Sector real",
-  sector_externo: "Sector externo",
-  sector_monetario_financiero: "Monetario y financiero",
-  mercado_cambiario: "Mercado cambiario",
-  mercado_de_trabajo: "Mercado de trabajo",
-  sector_turismo: "Turismo",
-};
+const sectorLabel = (t: TFunction, key: string) => t(`datos.macro.sectors.${key}`, { defaultValue: key });
 
-const ROBUSTNESS: Record<string, { tone: "ok" | "warn" | "alert"; label: string }> = {
-  green: { tone: "ok", label: "robusto" },
-  yellow: { tone: "warn", label: "revisar" },
-  red: { tone: "alert", label: "pendiente" },
+const ROBUSTNESS: Record<string, { tone: "ok" | "warn" | "alert"; key: string }> = {
+  green: { tone: "ok", key: "robust" },
+  yellow: { tone: "warn", key: "review" },
+  red: { tone: "alert", key: "pending" },
 };
 
 /** The canonical registry — the base-homogeneous selection (~25 series) an analyst
  * cites in reports: source, base, frequency, homogenization, economist rationale,
  * robustness and the API series it ties to. This is the documentation surface. */
 export function MacroCanonicalSection() {
+  const { t } = useTranslation();
   const [series, setSeries] = useState<CanonicalSeries[]>([]);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [open, setOpen] = useState<string | null>(null);
@@ -54,7 +49,7 @@ export function MacroCanonicalSection() {
       setTimeout(load, 4000);
     } catch (e: unknown) {
       const s = (e as { response?: { status?: number } })?.response?.status;
-      setNote(s === 403 ? "Requiere rol de administrador." : "No se pudo ingerir el set canónico.");
+      setNote(s === 403 ? t("datos.macro.adminRequired") : t("datos.macro.canonical.ingestError"));
     } finally {
       setBusy(false);
     }
@@ -70,15 +65,15 @@ export function MacroCanonicalSection() {
     <Card>
       <CardHead
         icon={BookMarked}
-        title="Catálogo canónico de series"
-        subtitle="Selección base-homogénea del BCRD (708 archivos → un set citable, atado al API)"
+        title={t("datos.macro.canonical.title")}
+        subtitle={t("datos.macro.canonical.sub")}
         right={
           <div className="flex gap-2">
             <button onClick={() => ingest(false)} disabled={busy} className="btn btn-soft">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : null} Analizar
+              {busy ? <Loader2 size={14} className="animate-spin" /> : null} {t("datos.macro.canonical.analyze")}
             </button>
             <button onClick={() => ingest(true)} disabled={busy} className="btn btn-primary">
-              Ingerir set
+              {t("datos.macro.canonical.ingestSet")}
             </button>
           </div>
         }
@@ -87,8 +82,8 @@ export function MacroCanonicalSection() {
       {status === "error" && (
         <StateBlock
           kind="error"
-          message="No se pudo cargar el catálogo canónico."
-          action={<button onClick={load} className="btn btn-ghost">Reintentar</button>}
+          message={t("datos.macro.canonical.loadError")}
+          action={<button onClick={load} className="btn btn-ghost">{t("datos.macro.canonical.retry")}</button>}
         />
       )}
 
@@ -99,10 +94,10 @@ export function MacroCanonicalSection() {
       {status === "ready" && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <StatTile label="Series canónicas" value={series.length} />
-            <StatTile label="Robustas" value={counts.green} />
-            <StatTile label="A revisar" value={counts.yellow} />
-            <StatTile label="Pendientes" value={counts.red} />
+            <StatTile label={t("datos.macro.canonical.statCanonical")} value={series.length} />
+            <StatTile label={t("datos.macro.canonical.statRobust")} value={counts.green} />
+            <StatTile label={t("datos.macro.canonical.statReview")} value={counts.yellow} />
+            <StatTile label={t("datos.macro.canonical.statPending")} value={counts.red} />
           </div>
 
           {note && <div className="text-xs text-muted bg-surface2 px-3 py-2 rounded-[10px] mb-3">{note}</div>}
@@ -111,12 +106,12 @@ export function MacroCanonicalSection() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-line">
-                  <th className="py-2 px-1 font-medium">Serie</th>
-                  <th className="py-2 px-1 font-medium">Sector</th>
-                  <th className="py-2 px-1 font-medium">Base</th>
-                  <th className="py-2 px-1 font-medium">Frec.</th>
-                  <th className="py-2 px-1 font-medium">API</th>
-                  <th className="py-2 px-1 font-medium">Robustez</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.canonical.colSeries")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.canonical.colSector")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.canonical.colBase")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.canonical.colFreq")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.canonical.colApi")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.canonical.colRobustness")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,20 +136,20 @@ export function MacroCanonicalSection() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-2 px-1 text-xs text-body">{SECTOR_LABEL[s.sector] ?? s.sector}</td>
+                        <td className="py-2 px-1 text-xs text-body">{sectorLabel(t, s.sector)}</td>
                         <td className="py-2 px-1 text-xs text-body">{s.base}</td>
                         <td className="py-2 px-1 text-xs text-body">{s.frequency}</td>
                         <td className="py-2 px-1">
                           {s.api_series ? (
                             <span className="inline-flex items-center gap-1 text-xs text-accent">
-                              <Link2 size={12} /> {s.api_transform === "yoy" ? "YoY" : "sí"}
+                              <Link2 size={12} /> {s.api_transform === "yoy" ? t("datos.macro.canonical.apiYoy") : t("datos.macro.canonical.apiYes")}
                             </span>
                           ) : (
                             <span className="text-xs text-faint">—</span>
                           )}
                         </td>
                         <td className="py-2 px-1">
-                          <Chip tone={r.tone}>{r.label}</Chip>
+                          <Chip tone={r.tone}>{t(`datos.macro.canonical.${r.key}`)}</Chip>
                         </td>
                       </tr>
                       {isOpen && (
@@ -162,33 +157,33 @@ export function MacroCanonicalSection() {
                           <td colSpan={6} className="py-3 px-3">
                             <div className="space-y-2 text-xs">
                               <div>
-                                <span className="font-semibold text-muted">Razón (economista): </span>
+                                <span className="font-semibold text-muted">{t("datos.macro.canonical.rationale")} </span>
                                 <span className="text-body">{s.rationale}</span>
                               </div>
                               <div>
-                                <span className="font-semibold text-muted">Homogeneización: </span>
+                                <span className="font-semibold text-muted">{t("datos.macro.canonical.homogenization")} </span>
                                 <span className="text-body">{s.homogenization}</span>
                               </div>
                               {s.api_series && (
                                 <div>
-                                  <span className="font-semibold text-muted">Serie API: </span>
+                                  <span className="font-semibold text-muted">{t("datos.macro.canonical.apiSeries")} </span>
                                   <span className="mono text-body">{s.api_series}</span>
                                   <span className="text-faint">
                                     {" "}
-                                    · comparación {s.api_transform === "yoy" ? "por variación interanual" : "directa"}
+                                    · {s.api_transform === "yoy" ? t("datos.macro.canonical.compareYoy") : t("datos.macro.canonical.compareDirect")}
                                   </span>
                                 </div>
                               )}
                               {s.extraction ? (
                                 <div>
-                                  <span className="font-semibold text-muted">Extracción: </span>
+                                  <span className="font-semibold text-muted">{t("datos.macro.canonical.extraction")} </span>
                                   <span className="text-body">
                                     {s.extraction.status} · {s.extraction.n_series} series ·{" "}
                                     {s.extraction.orientation} · {s.extraction.method}
                                   </span>
                                 </div>
                               ) : (
-                                <div className="text-faint">Aún no extraída (corre "Analizar" o el barrido).</div>
+                                <div className="text-faint">{t("datos.macro.canonical.notExtracted")}</div>
                               )}
                             </div>
                           </td>

@@ -1,22 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Layers, Play, Loader2, AlertTriangle, XCircle } from "lucide-react";
 import { Card, CardHead, StatTile, Chip, StateBlock } from "@/shared/ui/primitives";
 import { getExcelCoverage, runExcelBatch, ExcelCoverage } from "../api";
 
-const SECTOR_LABEL: Record<string, string> = {
-  sector_real: "Sector real",
-  precios: "Precios",
-  sector_externo: "Sector externo",
-  sector_monetario_financiero: "Monetario y financiero",
-  sector_turismo: "Turismo",
-  mercado_cambiario: "Mercado cambiario",
-  mercado_de_trabajo: "Mercado de trabajo",
-};
+const sectorLabel = (t: TFunction, key: string) => t(`datos.macro.sectors.${key}`, { defaultValue: key });
 
 /** Corpus-wide coverage: run the engine over the catalog (background) and report
  * how it resolved — heuristic vs Claude, by frequency — plus the files flagged
  * for review or that failed. */
 export function MacroCoverageSection() {
+  const { t } = useTranslation();
   const [cov, setCov] = useState<ExcelCoverage | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState(false);
@@ -88,14 +83,14 @@ export function MacroCoverageSection() {
       await load();
     } catch (e: unknown) {
       const s = (e as { response?: { status?: number } })?.response?.status;
-      setNote(s === 403 ? "Requiere rol de administrador." : "No se pudo lanzar el barrido.");
+      setNote(s === 403 ? t("datos.macro.adminRequired") : t("datos.macro.coverage.launchError"));
     } finally {
       setBusy(false);
     }
   };
 
   if (status === "error") {
-    return <StateBlock kind="error" message="No se pudo cargar la cobertura del corpus." />;
+    return <StateBlock kind="error" message={t("datos.macro.coverage.loadError")} />;
   }
 
   const st = cov?.status;
@@ -115,24 +110,24 @@ export function MacroCoverageSection() {
     <Card>
       <CardHead
         icon={Layers}
-        title="Cobertura del corpus"
-        subtitle="Barrido del motor sobre el catálogo: qué resolvió y qué quedó para revisión"
+        title={t("datos.macro.coverage.title")}
+        subtitle={t("datos.macro.coverage.sub")}
         right={
           active ? (
             <span className="chip text-warn flex items-center gap-1">
               <Loader2 size={12} className="animate-spin" /> {reported}/{total}
             </span>
           ) : (
-            <span className="chip text-muted">{reported}/{total} reportados</span>
+            <span className="chip text-muted">{t("datos.macro.coverage.reported", { reported, total })}</span>
           )
         }
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-        <StatTile label="Reportados" value={cov?.reported ?? 0} />
-        <StatTile label="OK" value={byStatus.ok ?? 0} />
-        <StatTile label="Marcados" value={byStatus.flagged ?? 0} />
-        <StatTile label="Fallidos" value={byStatus.failed ?? 0} />
+        <StatTile label={t("datos.macro.coverage.statReported")} value={cov?.reported ?? 0} />
+        <StatTile label={t("datos.macro.coverage.statOk")} value={byStatus.ok ?? 0} />
+        <StatTile label={t("datos.macro.coverage.statFlagged")} value={byStatus.flagged ?? 0} />
+        <StatTile label={t("datos.macro.coverage.statFailed")} value={byStatus.failed ?? 0} />
       </div>
 
       {/* método + frecuencia */}
@@ -140,7 +135,7 @@ export function MacroCoverageSection() {
         <div className="flex flex-wrap gap-2 mb-4 text-xs">
           {Object.entries(cov.by_method).map(([m, n]) => (
             <span key={m} className="rounded-full bg-surface2 px-2.5 py-1">
-              {m === "claude" ? "vía Claude" : m === "heuristic" ? "heurística" : m}:{" "}
+              {m === "claude" ? t("datos.macro.coverage.viaClaude") : m === "heuristic" ? t("datos.macro.coverage.heuristic") : m}:{" "}
               <span className="mono text-ink font-semibold">{n}</span>
             </span>
           ))}
@@ -158,7 +153,7 @@ export function MacroCoverageSection() {
             <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
           </div>
           <p className="text-xs text-muted mt-2">
-            Barrido en progreso ({reported}/{total} · {pct}%). Puedes salir de esta pantalla; el proceso sigue.
+            {t("datos.macro.coverage.progress", { reported, total, pct })}
           </p>
         </div>
       )}
@@ -166,13 +161,13 @@ export function MacroCoverageSection() {
       {/* controles */}
       <div className="flex flex-wrap items-center gap-3 mb-2">
         <label className="flex items-center gap-2 text-xs text-muted">
-          Límite
+          {t("datos.macro.coverage.limit")}
           <input
             type="number"
             className="field mono w-20"
             value={limit}
             min={1}
-            placeholder="todos"
+            placeholder={t("datos.macro.coverage.all")}
             onChange={(e) => setLimit(e.target.value === "" ? "" : Number(e.target.value))}
           />
         </label>
@@ -183,11 +178,11 @@ export function MacroCoverageSection() {
             onChange={(e) => setPersist(e.target.checked)}
             className="accent-[var(--accent)]"
           />
-          Persistir series (bcrd.xls.*)
+          {t("datos.macro.coverage.persist")}
         </label>
         <button onClick={run} disabled={busy || active} className="btn btn-primary">
           {busy || active ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          {active ? "En progreso…" : limit === "" ? "Correr todo el catálogo" : `Correr barrido (${limit})`}
+          {active ? t("datos.macro.coverage.inProgress") : limit === "" ? t("datos.macro.coverage.runAll") : t("datos.macro.coverage.runBatch", { limit })}
         </button>
       </div>
       {note && <p className="text-xs text-muted bg-surface2 px-3 py-2 rounded-[10px] mb-2">{note}</p>}
@@ -196,16 +191,16 @@ export function MacroCoverageSection() {
       {cov && cov.attention.length > 0 && (
         <div className="mt-4">
           <div className="text-xs font-semibold text-muted mb-2">
-            Para revisión ({cov.attention.length})
+            {t("datos.macro.coverage.forReview", { count: cov.attention.length })}
           </div>
           <div className="overflow-x-auto -mx-1 max-h-80 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-surface">
                 <tr className="text-left text-xs text-muted border-b border-line">
-                  <th className="py-2 px-1 font-medium">Archivo</th>
-                  <th className="py-2 px-1 font-medium">Sector</th>
-                  <th className="py-2 px-1 font-medium">Estado</th>
-                  <th className="py-2 px-1 font-medium">Detalle</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.coverage.colFile")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.coverage.colSector")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.coverage.colStatus")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.coverage.colDetail")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -213,16 +208,16 @@ export function MacroCoverageSection() {
                   <tr key={i} className="border-b border-line/60 last:border-0 align-top">
                     <td className="py-2 px-1 mono text-[12px] text-ink">{a.filename}</td>
                     <td className="py-2 px-1 text-xs text-body">
-                      {a.sector ? SECTOR_LABEL[a.sector] ?? a.sector : "—"}
+                      {a.sector ? sectorLabel(t, a.sector) : "—"}
                     </td>
                     <td className="py-2 px-1">
                       {a.status === "failed" ? (
                         <Chip tone="alert">
-                          <XCircle size={12} /> fallido
+                          <XCircle size={12} /> {t("datos.macro.coverage.failed")}
                         </Chip>
                       ) : (
                         <Chip tone="warn">
-                          <AlertTriangle size={12} /> marcado
+                          <AlertTriangle size={12} /> {t("datos.macro.coverage.flagged")}
                         </Chip>
                       )}
                     </td>
@@ -234,8 +229,8 @@ export function MacroCoverageSection() {
                             .map((f) => `${f.code.split(".").slice(-1)[0]}: ${f.flags.join(", ")}`)
                             .join(" · ") ||
                           (a.n_series === 0
-                            ? "sin series extraídas (revisar layout)"
-                            : `${a.n_flagged} de ${a.n_series} series marcadas`)}
+                            ? t("datos.macro.coverage.noSeries")
+                            : t("datos.macro.coverage.flaggedDetail", { flagged: a.n_flagged, total: a.n_series }))}
                     </td>
                   </tr>
                 ))}
