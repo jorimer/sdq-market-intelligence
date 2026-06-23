@@ -33,12 +33,15 @@ auditando cada cifra contra su contexto (subagente verificador + verificación m
 | Juez Haiku (#258) | 1/20 | — | — |
 | Juez Sonnet, prompt endurecido (#259) | varias | 2 | 2 |
 | Determinista + inyección (#260) | **0** | **0** | 3 |
-| + modos relacionales (#261) | **0** | **0** | 6 (modos nuevos) |
-| + prevención de derivados (#262) — **v5** | **0** | **0** | **4** |
+| + modos relacionales (#261) — v3 | **0** | **0** | 3 |
+| + prevención de derivados (#262) — v5 | **0** | **0** | 4 |
+| + prevención superlativos (#265) — **v6** | **0** | 1 | 8 (modos nuevos) |
 
-**El no-negociable del spec ("cero cifras inventadas") está MET y estable:** tipo (a)
-—cifra que no existe en la serie, el fallo original "83.42"— y tipo (b) —valor real
-atribuido a un período equivocado— son **0** en v3, v4 y v5.
+**El no-negociable del spec ("cero cifras inventadas", tipo a) está MET y estable: 0 en
+todas las corridas (v3–v6).** El tipo (b) (valor real atribuido a período equivocado) fue 0
+en v3–v5 y tuvo 1 caso en v6 ("diciembre 2025 (90.60)", real 89.82), en una forma de prosa
+("período (valor)") que el detector no cubría → ahora cubierta con la **forma C estricta
+parentética** (validada offline contra 144 textos reales, 0 falsos positivos).
 
 Hallazgo metodológico clave: **un juez LLM de una sola pasada (aun Sonnet, con ejemplos
 explícitos) no recomputa de forma fiable** — en v2 marcó 0/24 dejando pasar 4 defectos.
@@ -54,16 +57,22 @@ La solución que cierra el no-negociable es **mecánica**, en dos capas:
    aporte, dirección vs P75 y conteo bajo umbral. Corre junto al juez LLM (unión → regenera
    1 vez). Validado offline contra 96 textos reales: 0 falsos positivos.
 
-### Residual conocido (tipo c) — calidad, no fabricación
+### Residual ACEPTADO (tipo c) — rigor relacional, no fabricación
 
-v5 deja **4/24** claims **superlativos** errados ("el mayor gap / el más débil / la mayor
-caída") — el modelo olvida **Diversificación** (peso 0.05) al rankear gaps, o no compara
-contra toda la serie de caídas. **Todos los números base son correctos**; el error es la
-comparación de superlativos. No es una cifra inventada ni mal atribuida → no viola el
-no-negociable; es un ítem de rigor relacional. El espacio de estos claims en prosa libre es
-ilimitado (cada re-run surge un fraseo nuevo): perseguirlos con regex es whack-a-mole. Fix
-futuro barato y acotado: inyectar el **ranking de gaps** (componente de mayor gap) y la
-**mayor caída Q1** en `cifras_derivadas` para que el modelo copie el superlativo correcto.
+Decisión del dueño tras 4 rondas de medición (v3–v6): **blindar (a/b)=0 y aceptar el tipo
+(c) como residual inherente.** El tipo (c) son claims **relativos/superlativos** con el
+**número base correcto pero el calificativo mal** ("el doble", "el segundo", "exactamente
+igual", "el más bajo de los 3 marzos", "lo superan 6"). Probado empíricamente que NO
+converge a cero por inyección+regex: cada ronda elimina los modos vistos y el modelo
+inventa formas nuevas (v3→v6: 3·3·4·8; se inyectaron sucesivamente líder-vs-resto,
+percentil→conteo, mayor-gap, orden-de-peso, mayor-caída — y aun así surgieron suma-vs-3,
+ratio-de-gaps, resta mal, igualdad falsa). La razón de fondo: es un error **semántico**
+(palabra calificativa), no numérico — no hay cifra fuera de rango que un check determinista
+pueda marcar, y el espacio de comparaciones en prosa libre es ilimitado. Cerrarlo del todo
+exigiría salida estructurada (sacrificando la prosa decision-grade que es el valor del
+Cerebro) o un juez semántico LLM (ya probado poco fiable). La inyección de `cifras_derivadas`
+**reduce** el tipo (c) y, sobre todo, **previene los modos numéricos duros (a/b)**, que es
+lo que importa para no tergiversar el dato.
 
 ## 4. No-regresión / costo — PASA
 
@@ -74,9 +83,11 @@ verificado: fallo de API/parseo → no rompe el endpoint.
 
 ## Veredicto
 
-El cerebro entrega **juicio decision-grade con orientación por audiencia genuina**. El
-**no-negociable anti-alucinación (cifras inventadas / mal atribuidas) está CERRADO** y
-verificado en prod (v3/v4/v5 = 0), mediante prevención (inyección) + garantía determinista.
-Residual de calidad acotado: 4/24 superlativos relacionales (números correctos), con fix
-futuro barato identificado. Pendiente del piloto: **Fase 4 — selector de audiencia en
-frontend**.
+El cerebro entrega **juicio decision-grade con orientación por audiencia genuina** (Fase 4
+selector frontend MERGEADA, #264). El **no-negociable anti-alucinación (tipo a: cifra
+inventada) está CERRADO**: 0 en v3–v6, verificado en prod, mediante prevención (inyección de
+`cifras_derivadas`) + garantía determinista. El tipo (b) (período equivocado) está blindado
+con la forma C estricta del detector (0 FP en 144 textos). El tipo (c) (superlativos/
+comparaciones relacionales, números base correctos) se **acepta como residual** por decisión
+del dueño: es semántico, no converge por inyección+regex, y cerrarlo sacrificaría la prosa.
+**Piloto CERRADO.**

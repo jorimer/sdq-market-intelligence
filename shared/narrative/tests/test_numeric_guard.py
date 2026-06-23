@@ -93,6 +93,22 @@ def test_valor_periodo_explicito_incorrecto_se_marca():
     assert any("90.00" in f for f in bad)
 
 
+def test_valor_periodo_parentetico_incorrecto_se_marca():
+    # forma 'mes AAAA (VALUE)': 90.42 no es de diciembre 2026 (no existe; el de jun es 90.42)
+    ctx = _ctx(tendencia_score=[
+        {"periodo": "2025-12", "score": 89.27}, {"periodo": "2026-03", "score": 88.96}])
+    bad = deterministic_unsupported(ctx, "cayó desde diciembre 2025 (90.42) hasta hoy")
+    assert any("90.42" in f and "diciembre" in f for f in bad)
+
+
+def test_valor_periodo_parentetico_no_cruza_clausula():
+    # 'mes 2024) y 90.42' NO debe atribuir 90.42 a 2024 (está en la cláusula siguiente)
+    ctx = _ctx(tendencia_score=[
+        {"periodo": "2024-03", "score": 88.67}, {"periodo": "2023-06", "score": 90.42}])
+    assert deterministic_unsupported(
+        ctx, "osciló entre 88.67 (mínimo, marzo 2024) y 90.42 (máximo, junio 2023)") == []
+
+
 def test_secuencia_corte_de_marzo_con_valor_de_otro_mes_se_marca():
     # 90.42 es de junio; ponerlo como corte de marzo → se marca
     bad = deterministic_unsupported(

@@ -204,27 +204,40 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
                         f"rango {m.group(1)}–{m.group(2)}: real {round(lo_w, 2)}–{round(hi_w, 2)} "
                         f"en la ventana")
 
-        # (3) valor atado a mes/trimestre contra la serie de ese mes
-        #     forma A: 'VALUE (mes-AAAA)' / 'VALUE en mes AAAA' (período explícito)
+        # (3) valor atado a mes contra la serie de ese mes. Formas conservadoras (mes
+        #     completo, adyacencia estricta) para no falsear las descripciones de trend
+        #     donde períodos y valores se alternan en secuencia.
+        series = {str(t.get("periodo") or "")[:7]: t.get("score") for t in trend}
+        _MONTHS = "|".join(_MONTH_TO_MM)
+
+        #     forma A: 'VALUE (mes-AAAA)' / 'VALUE en mes AAAA' (valor → período inmediato)
         for m in re.finditer(
-            r"(\d{2,3}\.\d+)\s*\(?(?:en\s+|de\s+)?(" + "|".join(_MONTH_TO_MM) + r")"
-            r"[ \-]?(\d{4})", text, re.I):
+            r"(\d{2,3}\.\d+)\s*\(?(?:en\s+|de\s+)?(" + _MONTHS + r")[ \-]?(\d{4})",
+            text, re.I):
             val, month, year = float(m.group(1)), m.group(2).lower(), m.group(3)
-            mm = _MONTH_TO_MM[month]
-            period = f"{year}-{mm}"
-            series = {str(t.get("periodo") or "")[:7]: t.get("score") for t in trend}
-            if period in series and series[period] is not None:
-                if not _close(val, float(series[period])):
-                    flags.append(
-                        f"{m.group(1)} en {month}-{year}: real {series[period]} en ese período")
+            period = f"{year}-{_MONTH_TO_MM[month]}"
+            if period in series and series[period] is not None \
+                    and not _close(val, float(series[period])):
+                flags.append(
+                    f"{m.group(1)} en {month}-{year}: real {series[period]} en ese período")
+        #     forma C: 'mes AAAA (VALUE)' (período → valor PARENTÉTICO inmediato; estricta
+        #     para no cruzar fronteras de cláusula)
+        for m in re.finditer(
+            r"(" + _MONTHS + r")[ \-]?(\d{4})\s*\((\d{2,3}\.\d+)\)", text, re.I):
+            month, year, val = m.group(1).lower(), m.group(2), float(m.group(3))
+            period = f"{year}-{_MONTH_TO_MM[month]}"
+            if period in series and series[period] is not None \
+                    and not _close(val, float(series[period])):
+                flags.append(
+                    f"{m.group(3)} atribuido a {month}-{year}: real {series[period]} "
+                    f"en ese período")
         #     forma B: 'corte(s)/cierre(s) de marzo (V→V→V)' (mes sin año, secuencia)
         for m in re.finditer(
-            r"(?:cortes?|cierres?)\s+de\s+(" + "|".join(_MONTH_TO_MM) + r")\s*[^()\n]{0,20}"
-            r"\(([^)]*)\)", text, re.I):
+            r"(?:cortes?|cierres?)\s+de\s+(" + _MONTHS + r")\s*[^()\n]{0,20}\(([^)]*)\)",
+            text, re.I):
             month = m.group(1).lower()
-            seq = _nums(m.group(2))
             month_scores = _trend_by_month(trend, _MONTH_TO_MM[month])
-            for v in seq:
+            for v in _nums(m.group(2)):
                 if 40.0 <= v <= 100.0 and month_scores and \
                         not any(_close(v, ms) for ms in month_scores):
                     flags.append(

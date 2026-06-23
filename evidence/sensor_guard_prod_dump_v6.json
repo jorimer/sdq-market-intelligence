@@ -1,0 +1,1580 @@
+[
+  {
+    "entity": "popular",
+    "name": "Asociación Popular de Ahorros y Préstamos",
+    "bank_id": "35fbcf02-9183-465e-b865-51e96a08c53e",
+    "audience": "comite_credito",
+    "text": "**Popular de Ahorros y Préstamos — SDQ-AA− (80.18 pts)**\n\nEl rating descansa sobre un pilar único y desproporcionado: Solidez financiera aporta 40.0 pts de los 80.18 totales —más que la suma del resto de sub-componentes (39.89 pts)— y llega con score perfecto (100.0/100). El impulsor declarado es Patrimonio/activos, con el Índice de solvencia como único lastre dentro del sub-componente. En términos de decisión: si ese pilar erosiona, el rating cae sin red.\n\nEl problema es que el restante 60% del score deja mucho sobre la mesa. Eficiencia y rentabilidad —tercer sub-componente por peso (0.15)— marca 45.14 pts, con un gap al techo de 54.86 pts, el mayor de toda la estructura. El lastre identificado es ROE (anualizado), lo que sugiere que la entidad genera margen de intermediación pero no lo convierte eficientemente en retorno patrimonial. En el contexto sistémico, el BCRD reporta un ROE de 21.0% para el sistema en 2025; Popular de Ahorros opera visiblemente por debajo de ese referente. Liquidez (58.63 pts, peso 0.1) suma otro gap relevante, con Liquidez inmediata como lastre: la entidad transforma bien los depósitos en cartera (LtD favorable), pero no mantiene colchón disponible proporcional.\n\n**Trayectoria: patrón estacional que encubre deterioro sostenido.** Los cortes de marzo entregan 79.16 (2024), 79.52 (2025) y 80.18 (2026): mejora secuencial leve y consistente en Q1. Pero la comparación real importa más: el score actual cae 2.16 pts respecto al trimestre anterior (dic-2025: 82.34) y se ubica 3.27 pts bajo el máximo de la serie (83.45 en jun-2023). La mayor caída intertrimestral registrada fue −3.88 pts entre dic-2023 y mar-2024 —mismo patrón estacional—, lo que indica que el cierre de año infla el score y el Q1 lo deflacta. El score actual de 80.18 está en el piso de esa oscilación recurrente.\n\n**Posición vs pares:** en el universo AAP (10 entidades), ocupa el percentil 80, con solo aproximadamente 2 entidades por encima. En el sector amplio (81 entidades), está exactamente en la mediana (percentil 50.6). La entidad es fuerte dentro de su tipo, mediana en el sistema.\n\n**Para el comité:** la exposición está respaldada por capital real y concentración baja en los 10 mayores deudores, lo que limita el riesgo de cola inmediato. La señal a vigilar antes del próximo corte es si Eficiencia/rentabilidad revierte hacia 50+ pts —sin eso, el score estructural no escapa del rango 79–82 y cualquier presión sobre el capital desencadena una caída sin amortiguador operativo.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "popular",
+    "name": "Asociación Popular de Ahorros y Préstamos",
+    "bank_id": "35fbcf02-9183-465e-b865-51e96a08c53e",
+    "audience": "entidad",
+    "text": "**Asociación Popular de Ahorros y Préstamos — SDQ-AA− | 80.18 pts | Marzo 2026**\n\nEl rating descansa sobre una base extraordinariamente concentrada: Solidez financiera aporta 40.0 de los 80.18 puntos, exactamente lo mismo que todos los demás componentes combinados (39.89 pts según cifras derivadas). Patrimonio/activos es el impulsor declarado; el score de 100.0 en ese bloque es el techo absoluto. La entidad llega al AA− no porque sea fuerte en todo, sino porque un componente de alto peso opera en máximo y sostiene a los demás.\n\nEl problema está en Eficiencia y rentabilidad (peso 0.15, score 45.14). Es el componente con el mayor gap al techo de todo el modelo: 54.86 puntos potenciales sin capturar. El lastre declarado es el ROE anualizado, lo que señala que el margen de intermediación es competitivo pero la generación de utilidades sobre capital propio es insuficiente. En un modelo donde ese bloque pesa 0.15, un puntaje 45 le cuesta a la entidad aproximadamente 8.2 puntos sobre el total posible que le corresponde —diferencia que, recuperada incluso parcialmente, empujaría el score por encima del P75 de su tipo (80.18 actualmente coincide con ese percentil).\n\nLiquidez refuerza el patrón: score 58.63 con gap de 41.37 pts, aunque su peso (0.10) limita el impacto directo. El LtD juega a favor pero la liquidez inmediata es el lastre —señal de que la cartera se financia con depósitos de manera eficiente, pero el colchón inmediato es ajustado.\n\n**Posición vs pares**: entre las 10 AAP, está en el percentil 80 —solo aproximadamente 2 entidades la superan. Frente al sistema (n=81), está en el percentil 50.6, en la mediana exacta. La fortaleza patrimonial la diferencia dentro de su tipo; fuera de él, se pierde en la masa.\n\n**Trayectoria**: el score máximo de los últimos 12 trimestres fue 83.45 (jun-2023); el actual es 80.18, una caída de 3.27 pts desde ese pico. Los cortes de marzo muestran recuperación secuencial: 79.16 → 79.52 → 80.18. El patrón estacional de caída en Q1 se está atenuando, pero no revirtiendo.\n\n**La palanca**: cerrar el gap en Eficiencia/rentabilidad —específicamente mejorar ROE— es la única acción que mueve el rating de forma material. Solidez ya está en techo; Calidad de activos tiene gap (6.05 pts potenciales en ese peso) pero menor retorno marginal. Si ROE no mejora, el AA− tiene techo estructural donde está hoy.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "popular",
+    "name": "Asociación Popular de Ahorros y Préstamos",
+    "bank_id": "35fbcf02-9183-465e-b865-51e96a08c53e",
+    "audience": "inversionista",
+    "text": "**Asociación Popular de Ahorros y Préstamos — SDQ-AA- | Score 80.18 | Q1 2026**\n\nEl rating descansa sobre un pilar que no tiene paralelo en la estructura: Solidez financiera aporta 40.0 pts de los 80.18 totales, superando la suma de los cuatro componentes restantes (39.89 pts). Ese es el dato que define la tesis —y también su riesgo central.\n\n**El pilar que sostiene el edificio.** Un score perfecto (100/100) en el componente de mayor peso (0.40) señala que la relación patrimonio/activos está en terreno sólido. El lastre interno es el índice de solvencia, pero el componente igual llega al techo, lo que indica que ese lastre no es crítico aquí. Para un inversionista, esto implica un piso de protección patrimonial genuino.\n\n**La tensión que condiciona la decisión.** Eficiencia y rentabilidad (peso 0.15) marca 45.14/100 —el gap al techo es 54.86 pts, el mayor de toda la estructura según cifras_derivadas. El lastre es el ROE anualizado. A ese peso de 0.15, el componente solo aporta 6.77 pts; si alcanzara el techo, aportaría 15 pts adicionales, lo que elevaría el score global por encima de 95 y cambiaría la categoría de rating. El mecanismo: el margen de intermediación impulsa el componente, pero la escala o la estructura de costos erosiona la conversión a rentabilidad sobre patrimonio. Esto no es ruido operativo: refleja que la entidad genera spread, pero no lo traduce en retorno para el accionista al ritmo que el nivel de capitalización justificaría. El contexto sistémico —ROE del sistema en 21.0% al cierre de 2025 (BCRD)— hace más legible la brecha.\n\n**Trayectoria: patrón estacional con deterioro contenido.** Los cortes de marzo muestran mejora progresiva: 79.16 (mar-24) → 79.52 (mar-25) → 80.18 (mar-26). Pero el score actual cae 2.16 pts vs. el trimestre anterior (dic-25: 82.34), patrón que se repite cada Q1 sin excepción en la serie. No es deterioro estructural; es efecto estacional. La caída más grande registrada fue de 3.88 pts (dic-23 → mar-24), y el patrón ya se recuperó entonces.\n\n**Posición vs. pares.** Entre las 10 AAP, está en el percentil 80.0 —solo aproximadamente 2 entidades la superan. En el sector amplio (81 entidades), está exactamente en la mediana.\n\n**Veredicto.** La fortaleza patrimonial es real y verificable; la debilidad en rentabilidad es el riesgo no descontado. La señal que cambiaría la lectura: que el ROE no recupere terreno en Q2-Q3 2026, rompiendo el patrón histórico de recuperación post-Q1.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "popular",
+    "name": "Asociación Popular de Ahorros y Préstamos",
+    "bank_id": "35fbcf02-9183-465e-b865-51e96a08c53e",
+    "audience": "supervisor",
+    "text": "**Asociación Popular de Ahorros y Préstamos — SDQ-AA− | Fundamento del rating**\n\nEl score de 80.18 sitúa a Popular en el percentil 80 dentro de las diez asociaciones de ahorro y préstamo (AAP), lo que significa que solo dos entidades de su mismo tipo la superan. Frente al sector amplio (81 entidades), está exactamente en la mediana. El rating SDQ-AA− es coherente con esa posición: sólida dentro de su categoría, pero sin margen de holgura frente al sistema.\n\n**El pilar que sostiene todo —y el riesgo que eso implica**\n\nSolidez financiera aporta 40.0 puntos de 100 posibles —su techo— y supera por sí solo la suma de los cuatro componentes restantes (39.89 pts). El impulsor es patrimonio/activos; el lastre, el índice de solvencia. Esto crea una estructura frágil en su base: el rating descansa en un único componente que ya no tiene margen de mejora. Si la solidez se deteriora —por expansión agresiva de activos, distribución de excedentes o deterioro patrimonial— el score cae sin amortiguación desde los otros pilares.\n\n**El déficit operativo que el supervisor debe vigilar**\n\nEficiencia y rentabilidad (45.14, peso 0.15) es el componente con el mayor gap al techo: 54.86 puntos ponderados sin capturar. El lastre es el ROE anualizado. El mecanismo: una asociación con margen de intermediación saludable que no convierte ese spread en retorno sobre patrimonio revela costos operativos elevados o una base patrimonial sobredimensionada respecto a su generación de ingreso neto. Esto no es solo ineficiencia; es una señal de que el modelo de negocio no escala de forma rentable. En un entorno donde el PIB dominicano desaceleró a 2.1% en 2025 (BCRD) y la construcción —actividad típica de una AAP— contrajo 1.8%, la presión sobre márgenes puede acentuarse.\n\n**Trayectoria: el patrón estacional como señal de alerta**\n\nLos cortes de marzo muestran una mejora sostenida: 79.16 (2024-03), 79.52 (2025-03), 80.18 (2026-03). Sin embargo, el score actual cayó 2.16 puntos respecto al trimestre anterior (dic-2025: 82.34). Este patrón —cierre de año fuerte, primer trimestre débil— se repite con consistencia en la serie. El supervisor debe verificar si esa caída trimestral responde a estacionalidad en provisiones o a deterioro real de liquidez inmediata, el lastre declarado del componente de liquidez (score 58.63).\n\n**Señal supervisora:** monitorear si el ROE se comprime adicionalmente en 2026 ante la desaceleración macro, y si la liquidez inmediata cruza hacia territorio que exija acción correctiva.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "popular",
+    "name": "Asociación Popular de Ahorros y Préstamos",
+    "context": {
+      "bank_id": "35fbcf02-9183-465e-b865-51e96a08c53e",
+      "bank_name": "Asociación Popular de Ahorros y Préstamos",
+      "entity_type": "aap",
+      "latest": {
+        "period_end": "2026-03-31",
+        "overall_score": 80.18,
+        "rating_tier": "SDQ-AA-",
+        "band": "adecuado"
+      },
+      "sub_components": [
+        {
+          "key": "solidez",
+          "label": "Solidez financiera",
+          "score": 100.0,
+          "weight": 0.4,
+          "band": "fuerte",
+          "drag": {
+            "key": "solvencia",
+            "label": "Índice de solvencia",
+            "score": 100.0
+          },
+          "driver": {
+            "key": "patrimonio_activos",
+            "label": "Patrimonio / activos",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "calidad",
+          "label": "Calidad de activos",
+          "score": 79.83,
+          "weight": 0.3,
+          "band": "adecuado",
+          "drag": {
+            "key": "hhi_sectorial",
+            "label": "HHI sectorial de cartera",
+            "score": 0.0
+          },
+          "driver": {
+            "key": "concentracion_top10",
+            "label": "Concentración top-10",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "eficiencia",
+          "label": "Eficiencia y rentabilidad",
+          "score": 45.14,
+          "weight": 0.15,
+          "band": "débil",
+          "drag": {
+            "key": "roe",
+            "label": "ROE (anualizado)",
+            "score": 18.94
+          },
+          "driver": {
+            "key": "margen_financiero",
+            "label": "Margen de intermediación",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "liquidez",
+          "label": "Liquidez",
+          "score": 58.63,
+          "weight": 0.1,
+          "band": "moderado",
+          "drag": {
+            "key": "liquidez_inmediata",
+            "label": "Liquidez inmediata",
+            "score": 31.97
+          },
+          "driver": {
+            "key": "ltd",
+            "label": "Cartera / depósitos (LtD)",
+            "score": 97.36
+          }
+        },
+        {
+          "key": "diversificacion",
+          "label": "Diversificación",
+          "score": 66.18,
+          "weight": 0.05,
+          "band": "moderado",
+          "drag": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 66.18
+          },
+          "driver": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 66.18
+          }
+        }
+      ],
+      "trend": [
+        {
+          "period_end": "2021-03-31",
+          "score": 73.55,
+          "tier": "SDQ-A"
+        },
+        {
+          "period_end": "2021-06-30",
+          "score": 80.58,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2021-09-30",
+          "score": 81.33,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2021-12-31",
+          "score": 79.23,
+          "tier": "SDQ-A+"
+        },
+        {
+          "period_end": "2022-03-31",
+          "score": 80.62,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2022-06-30",
+          "score": 82.8,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2022-09-30",
+          "score": 83.21,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2022-12-31",
+          "score": 83.0,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2023-03-31",
+          "score": 83.12,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2023-06-30",
+          "score": 83.45,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2023-09-30",
+          "score": 82.04,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2023-12-31",
+          "score": 83.04,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2024-03-31",
+          "score": 79.16,
+          "tier": "SDQ-A+"
+        },
+        {
+          "period_end": "2024-06-30",
+          "score": 80.88,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2024-09-30",
+          "score": 81.35,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2024-12-31",
+          "score": 82.21,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2025-03-31",
+          "score": 79.52,
+          "tier": "SDQ-A+"
+        },
+        {
+          "period_end": "2025-06-30",
+          "score": 80.78,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2025-09-30",
+          "score": 81.31,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2025-12-31",
+          "score": 82.34,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2026-03-31",
+          "score": 80.18,
+          "tier": "SDQ-AA-"
+        }
+      ],
+      "peers": {
+        "period_end": "2026-03-31",
+        "sector": {
+          "n": 81,
+          "median_score": 80.18,
+          "p25_score": 76.62,
+          "p75_score": 85.25,
+          "percentile": 50.6
+        },
+        "entity_type": {
+          "n": 10,
+          "median_score": 79.08,
+          "p25_score": 78.93,
+          "p75_score": 80.18,
+          "percentile": 80.0
+        },
+        "entity_type_label": "aap"
+      }
+    }
+  },
+  {
+    "entity": "reservas",
+    "name": "Banco de Reservas de la República Dominicana",
+    "bank_id": "b9e54e9b-a36b-409d-b738-6d390dcd9f40",
+    "audience": "comite_credito",
+    "text": "El Banreservas cierra marzo 2026 con un score de 85.25, exactamente en el percentil 75 de la banca múltiple. Eso lo coloca en el límite superior de su cuartil: solo aproximadamente 4 de 16 bancos múltiples lo superan. El rating SDQ-AA sostiene, pero la posición es el techo del grupo, no el interior cómodo.\n\n**El motor real es Solidez financiera.** Con un score de 96.3 y peso de 40%, aporta 38.52 puntos al score global — casi el aporte agregado de los cuatro componentes restantes (46.73 pts). El impulsor es la cobertura de cartera vencida, que señala provisiones robustas frente al stock de crédito deteriorado. El lastre interno —patrimonio/activos— no es una alarma, pero sí apunta a que la palanca de capital es ajustada para el tamaño del balance: el gap al techo en este componente es solo 3.7 puntos, lo que significa que la solidez ya opera cerca de su máximo posible bajo el modelo.\n\n**La tensión decisiva está en Eficiencia y rentabilidad (peso 15%, score 53.69).** Ese 53.69 tiene el mayor gap al techo del modelo: 46.31 puntos. El lastre es el cost-to-income, estructuralmente elevado en una institución con mandato estatal que absorbe costos de red, nómina pública y funciones parafiscales que un banco privado no carga. El problema no es una anomalía transitoria; es una consecuencia del modelo de negocio. Con el 15% de peso que le asigna la rúbrica, el componente arrastra 8.05 puntos en vez de los 15 que capturaría un banco eficiente — una pérdida latente de ~7 puntos en el score global que explica por qué el Banreservas opera en el p75 y no más arriba.\n\n**La trayectoria muestra estabilidad con estacionalidad de primer trimestre.** Los cortes de marzo arrojan 84.35 (2024), 85.28 (2025) y 85.25 (2026): prácticamente plano año sobre año. La caída de 2.53 puntos frente al trimestre anterior (diciembre 2025: 87.78) replica el patrón de 2024-2025 (mayor caída intertrimestral registrada fue la de diciembre 2024 a marzo 2025, con 2.67 puntos). No es deterioro; es un ciclo conocido.\n\n**Para el comité de crédito:** la exposición al Banreservas está respaldada por solidez financiera de primer nivel y calidad de activos sólida. El riesgo de contraparte no es inmediato. La señal a vigilar es el cost-to-income: si la presión fiscal del entorno 2025-2026 (PIB desacelerado a 2.1% según el BCRD) fuerza mayor gasto operativo sin incremento proporcional de ingresos, el componente de eficiencia podría presionar el score por debajo del piso de 12 trimestres (84.35, marzo 2024). Ese es el umbral de alerta, no el nivel actual.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "reservas",
+    "name": "Banco de Reservas de la República Dominicana",
+    "bank_id": "b9e54e9b-a36b-409d-b738-6d390dcd9f40",
+    "audience": "entidad",
+    "text": "**Banco de Reservas — SDQ-AA | Score 85.25 | Q1 2026**\n\nEl Banreservas cierra marzo 2026 exactamente en el p75 de la banca múltiple (score 85.25 frente a una mediana de par de 82.65), con aproximadamente 4 de 16 bancos múltiples por encima. Eso lo fija en el techo del cuartil superior, pero sin penetrarlo: un banco de su tamaño y mandato que no lidera su propio grupo de pares merece explicación.\n\n**El pilar que sostiene el rating es Solidez Financiera.** Con score 96.3 y peso 40%, aporta 38.52 pts al score global —más que la suma de los tres componentes siguientes juntos, aunque por definición no supera la suma de todos los demás (46.73 pts). La cobertura de cartera vencida es su impulsor declarado; el lastre es patrimonio/activos, lo que es coherente con un banco de propiedad estatal que distribuye capital de forma distinta a un banco comercial privado. El gap al techo en este componente es de apenas 3.7 pts: está prácticamente en su techo.\n\n**La tensión que más condiciona la decisión está en Eficiencia y Rentabilidad.** Score 53.69 con un gap al techo de 46.31 pts —el mayor de todo el modelo— en el tercer componente de mayor peso (15%). El lastre es el cost-to-income. Este no es un problema técnico: el Banreservas carga una estructura de costos que refleja su rol de banca pública (red territorial, nómina institucional, mandatos sociales). La pregunta para la gestión es si ese gap es estructural e irreducible o si hay eficiencia recuperable sin comprometer el mandato. Si es lo primero, el banco tiene un techo de rating implícito de aproximadamente 91-92 por los pesos actuales; si hay compresión de costos posible, cada punto que cierre en este componente vale 0.15 pts en el score global.\n\n**La trayectoria confirma la meseta.** El score osciló entre 84.35 (mínimo en Q1 2024) y 88.54 (máximo en Q2 2025). Hoy está en 85.25, con una caída de 2.53 pts respecto al trimestre anterior —la misma dinámica que se repite cada primer trimestre (Q1 2025 fue 85.28, Q1 2024 fue 84.35). El patrón es estacional, no deterioro estructural, y el telón sistémico del BCRD (solvencia 17.4%, morosidad 1.7% al cierre 2025) no añade presión externa.\n\n**La palanca de mayor retorno:** cualquier iniciativa que comprima el cost-to-income tiene un multiplicador directo sobre el score y es el único camino para superar el p75 de forma sostenida.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "reservas",
+    "name": "Banco de Reservas de la República Dominicana",
+    "bank_id": "b9e54e9b-a36b-409d-b738-6d390dcd9f40",
+    "audience": "inversionista",
+    "text": "El Banreservas llega a marzo 2026 con un score de 85.25, exactamente en el P75 de la banca múltiple —lo superan aproximadamente 4 de 16 bancos múltiples— y 5.07 puntos sobre la mediana del sector completo. Rating SDQ-AA justificado, pero la pregunta de inversión no es si el nivel es sólido: es si la trayectoria sostiene esa posición o la está cediendo.\n\n**La tensión que importa: solidez real vs. rentabilidad estructuralmente débil.**\n\nEl pilar que sostiene el rating es la solidez financiera (peso 0.4), con score de 96.3 y un gap al techo de apenas 3.7 puntos: aporta 38.52 pts al score global, prácticamente el techo de lo que ese componente puede dar. La cobertura de cartera vencida es el impulsor; el lastre es la palanca patrimonial. Calidad de activos (peso 0.3) añade otros 27.16 pts con HHI sectorial favorable, aunque la concentración en top-10 deja un gap de 9.47 pts —manejable pero no trivial. Juntos, estos dos componentes cargan el edificio.\n\nDonde se destruye valor potencial: Eficiencia y rentabilidad (peso 0.15) puntúa 53.69, con un gap al techo de **46.31 puntos** —el mayor de todos los sub-componentes. El cost-to-income es el lastre explícito. El mecanismo es directo: una estructura de costos operativos elevada absorbe el margen de intermediación que el banco genera bien. Para un inversionista, esto no es solo ineficiencia operativa; es rentabilidad sostenible cuestionada. El ROE y el ROA del sistema (21.0% y 1.7% en 2025, según el BCRD) reflejan un entorno razonable —el Banreservas opera en ese mismo macro— pero si el cost-to-income no comprime, la distancia frente a competidores privados más eficientes se amplía con el tiempo.\n\n**Trayectoria: corrección de primer trimestre, patrón conocido.**\n\nLos cortes de marzo muestran 84.35 (2024), 85.28 (2025), 85.25 (2026): estabilidad con drift casi nulo. La caída de 2.53 puntos desde diciembre 2025 (87.78) replica el patrón de la mayor caída intertrimestral registrada (2.67 pts entre 2024-12-31 y 2025-03-31). El Q1 drena sistemáticamente; el banco recupera en Q2-Q3. El score máximo de los últimos 12 trimestres fue 88.54 (2025-06-30); el actual está 3.29 pts por debajo.\n\n**Veredicto:** posición de mantenimiento con vigilancia activa sobre eficiencia operativa. Si el cost-to-income no muestra compresión en los próximos dos trimestres, la tesis de creación de valor se debilita —el banco consolida solidez sin convertirla en rentabilidad superior.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "reservas",
+    "name": "Banco de Reservas de la República Dominicana",
+    "bank_id": "b9e54e9b-a36b-409d-b738-6d390dcd9f40",
+    "audience": "supervisor",
+    "text": "El Banreservas cierra marzo 2026 con un score de 85.25 y rating SDQ-AA. Está exactamente en el percentil 75 entre los 16 bancos múltiples —cuatro entidades lo superan— y 5.07 puntos por encima de la mediana del sector amplio. No es el líder de su grupo, pero está en el techo del mismo.\n\n**La arquitectura del score es asimétrica por diseño.** Solidez financiera (peso 40%) entrega 38.52 puntos de los 85.25 totales, con un gap al techo de apenas 3.7 puntos: prácticamente no hay margen de mejora allí, pero tampoco hay riesgo de derrumbe. La cobertura de cartera vencida es el impulsor; el lastre —patrimonio/activos— indica que el banco opera con apalancamiento más alto que lo que su cobertura sugiere, lo cual es estructural en una institución de su tamaño. Calidad de activos (peso 30%) aporta otros 27.16 puntos con un score de 90.53: la diversificación sectorial de cartera (HHI bajo) sostiene ese resultado, pero la concentración en los top-10 deudores acota el upside con un gap de 9.47 puntos. Juntos, estos dos componentes explican el 77% del score total.\n\n**La tensión que condiciona la supervisión no está allí. Está en Eficiencia y rentabilidad (peso 15%), con score 53.69 —el mayor gap al techo en términos absolutos: 46.31 puntos.** El margen de intermediación es el impulsor, lo que señala que el banco genera spread, pero el cost-to-income la anula como lastre dominante. Para un banco de esta envergadura, ineficiencia operativa sostenida tiene una lectura doble: absorbe capital que podría reforzar solvencia bajo estrés, y es la señal más temprana de fragilidad estructural que no se ve en los ratios de solvencia actuales. Si el entorno macro se deteriora —la desaceleración del PIB a 2.1% en 2025 ya comprime el ciclo crediticio— el margen de intermediación se estrecha mientras los costos fijos permanecen: la eficiencia empeora antes de que la cartera lo refleje.\n\n**La trayectoria confirma el diagnóstico.** El score bajó 2.53 puntos respecto al trimestre anterior (desde 87.78 en diciembre 2025). Comparando los cortes de marzo: 84.35 en marzo 2024, 85.28 en marzo 2025, 85.25 en marzo 2026 —estancamiento estructural. El máximo de la serie fue 88.54 en junio 2025; la caída desde ese pico es de 3.29 puntos.\n\n**Para el supervisor:** la prioridad no es el riesgo inmediato —Solidez y Calidad de activos ofrecen colchón— sino la trayectoria de Eficiencia. Si el cost-to-income continúa deteriorando un componente que ya está en la mitad inferior de la escala, el rating tiene techo natural en AA y el siguiente movimiento probable es a la baja, no al alza.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "reservas",
+    "name": "Banco de Reservas de la República Dominicana",
+    "context": {
+      "bank_id": "b9e54e9b-a36b-409d-b738-6d390dcd9f40",
+      "bank_name": "Banco de Reservas de la República Dominicana",
+      "entity_type": "banca_multiple",
+      "latest": {
+        "period_end": "2026-03-31",
+        "overall_score": 85.25,
+        "rating_tier": "SDQ-AA",
+        "band": "fuerte"
+      },
+      "sub_components": [
+        {
+          "key": "solidez",
+          "label": "Solidez financiera",
+          "score": 96.3,
+          "weight": 0.4,
+          "band": "fuerte",
+          "drag": {
+            "key": "patrimonio_activos",
+            "label": "Patrimonio / activos",
+            "score": 81.5
+          },
+          "driver": {
+            "key": "cobertura_provisiones",
+            "label": "Cobertura de cartera vencida",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "calidad",
+          "label": "Calidad de activos",
+          "score": 90.53,
+          "weight": 0.3,
+          "band": "fuerte",
+          "drag": {
+            "key": "concentracion_top10",
+            "label": "Concentración top-10",
+            "score": 77.96
+          },
+          "driver": {
+            "key": "hhi_sectorial",
+            "label": "HHI sectorial de cartera",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "eficiencia",
+          "label": "Eficiencia y rentabilidad",
+          "score": 53.69,
+          "weight": 0.15,
+          "band": "débil",
+          "drag": {
+            "key": "cost_to_income",
+            "label": "Eficiencia operativa (cost-to-income)",
+            "score": 23.27
+          },
+          "driver": {
+            "key": "margen_financiero",
+            "label": "Margen de intermediación",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "liquidez",
+          "label": "Liquidez",
+          "score": 82.27,
+          "weight": 0.1,
+          "band": "adecuado",
+          "drag": {
+            "key": "liquidez_ajustada",
+            "label": "Liquidez ajustada",
+            "score": 64.72
+          },
+          "driver": {
+            "key": "ltd",
+            "label": "Cartera / depósitos (LtD)",
+            "score": 98.13
+          }
+        },
+        {
+          "key": "diversificacion",
+          "label": "Diversificación",
+          "score": 65.75,
+          "weight": 0.05,
+          "band": "moderado",
+          "drag": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 65.75
+          },
+          "driver": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 65.75
+          }
+        }
+      ],
+      "trend": [
+        {
+          "period_end": "2021-03-31",
+          "score": 77.26,
+          "tier": "SDQ-A+"
+        },
+        {
+          "period_end": "2021-06-30",
+          "score": 86.56,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2021-09-30",
+          "score": 86.52,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2021-12-31",
+          "score": 85.8,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-03-31",
+          "score": 84.41,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2022-06-30",
+          "score": 87.2,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-09-30",
+          "score": 86.68,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-12-31",
+          "score": 87.36,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-03-31",
+          "score": 85.02,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-06-30",
+          "score": 87.64,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-09-30",
+          "score": 85.79,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-12-31",
+          "score": 86.13,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-03-31",
+          "score": 84.35,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2024-06-30",
+          "score": 87.53,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-09-30",
+          "score": 87.86,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-12-31",
+          "score": 87.95,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-03-31",
+          "score": 85.28,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-06-30",
+          "score": 88.54,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-09-30",
+          "score": 87.7,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-12-31",
+          "score": 87.78,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2026-03-31",
+          "score": 85.25,
+          "tier": "SDQ-AA"
+        }
+      ],
+      "peers": {
+        "period_end": "2026-03-31",
+        "sector": {
+          "n": 81,
+          "median_score": 80.18,
+          "p25_score": 76.62,
+          "p75_score": 85.25,
+          "percentile": 75.3
+        },
+        "entity_type": {
+          "n": 16,
+          "median_score": 82.65,
+          "p25_score": 78.1,
+          "p75_score": 85.25,
+          "percentile": 75.0
+        },
+        "entity_type_label": "banca_multiple"
+      }
+    }
+  },
+  {
+    "entity": "bdi",
+    "name": "Banco Múltiple BDI",
+    "bank_id": "4e088334-fe24-4f9e-afd4-4b1ed7125da3",
+    "audience": "comite_credito",
+    "text": "**BDI sostiene un SDQ-AA sobre la base de un único pilar que carga demasiado.**\n\nCon 85.35 puntos, BDI supera la mediana de bancos múltiples (82.65) y se sitúa en el percentil 81.2 dentro de su grupo: solo aproximadamente 3 de los 16 bancos múltiples lo superan. El rating es sólido, pero su arquitectura tiene una asimetría que la audiencia debe entender antes de fijar exposición.\n\n**El motor: Solidez financiera aporta 39.48 de los 85.35 puntos** —prácticamente la mitad del score global con un 40% del peso— y su gap al techo es de apenas 1.3 puntos. La cobertura de cartera vencida es el impulsor declarado; el banco provisiona con holgura. El problema no es que el pilar falle; es que el resto del edificio es más débil de lo que el título SDQ-AA sugiere a primera lectura.\n\n**El lastre de peso: Eficiencia y rentabilidad (peso 15%) score 53.42.** El cost-to-income es el freno. Con 46.58 puntos de gap al techo, este sub-componente tiene el segundo mayor gap del modelo —y aunque pesa 15%, arrastra hacia abajo un componente que debería actuar como señal de sostenibilidad del margen en el ciclo. El margen de intermediación impulsa, pero no compensa una estructura de costos que consume ese spread. El mecanismo: si el entorno de tasas se comprime —el BCRD redujo 200 pbs de política monetaria desde mayo 2023 y el PIB desaceleró a 2.1% en 2025— el margen se estrecha justo cuando la eficiencia operativa ya no tiene colchón. Ese escenario erosiona el score de rentabilidad sin que Solidez Financiera pueda compensarlo proporcionalmente.\n\n**Trayectoria: patrón estacional con piso en Q1 y caída reciente que merece atención.** Los tres cortes de marzo son 85.31 (2024), 86.78 (2025) y 85.35 (2026): BDI retrocede año contra año en el primer trimestre. La mayor caída intertrimestral del período ocurrió precisamente en el último corte: −4.47 puntos desde diciembre 2025 (89.82) a marzo 2026. No es el mínimo histórico de la ventana —ese fue 85.31 en marzo 2024— pero la dirección importa.\n\n**Veredicto para la audiencia:** BDI es contraparte sólida mientras Solidez Financiera no se deteriore. La señal a vigilar antes del próximo corte es el cost-to-income: si sigue por encima del umbral que lo mantiene en 53 puntos, cualquier compresión de margen en un entorno de menor crecimiento convierte el rating en techo, no en piso.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "bdi",
+    "name": "Banco Múltiple BDI",
+    "bank_id": "4e088334-fe24-4f9e-afd4-4b1ed7125da3",
+    "audience": "entidad",
+    "text": "BDI cierra marzo 2026 con 85.35 puntos y rating SDQ-AA. Está en el percentil 81.2 dentro de su grupo de 16 bancos múltiples —solo aproximadamente 3 pares lo superan— y 2.7 puntos sobre la mediana del tipo. El rating está bien fundamentado, pero la trayectoria exige atención: el score cayó 4.47 puntos respecto a diciembre 2025, la mayor caída intertrimestral de la serie, y se ubica en el piso de los últimos doce trimestres (mínimo: 85.31 en 2024-03-31). El patrón de los cortes de marzo —85.31 → 86.78 → 85.35— revela que el primer trimestre es estructuralmente el punto débil del ciclo.\n\n**La tensión central no está donde parece.** Solidez financiera aporta 39.48 de los 85.35 puntos con un gap al techo de apenas 1.3 puntos: prácticamente techo en el componente de mayor peso (0.4). Ahí no hay palanca. El problema está en Eficiencia y rentabilidad (peso 0.15, score 53.42, gap al techo 46.58 pts, aporte real 8.01 pts). El lastre es el cost-to-income: el margen de intermediación es sólido, lo que descarta un problema de pricing; el banco captura bien el spread pero no lo convierte en resultado neto porque la estructura de costos operativos lo absorbe. En un entorno donde el BCRD reporta ROE sistémico del 21% (2025), un cost-to-income deteriorado en BDI señala que la ineficiencia es idiosincrática, no cíclica.\n\n**Lo que está en juego:** cerrar la mitad del gap en Eficiencia y rentabilidad —digamos, de 53.42 a ~77— agregaría aproximadamente 3.5 puntos al score global, suficiente para separarse del p75 del tipo y blindar el rating ante la volatilidad estacional de Q1. No resolverlo deja al banco dependiente de que Solidez financiera y Calidad de activos no retrocedan para mantenerse sobre 85.\n\n**La señal de alerta:** si en el cierre de junio 2026 el score no recupera al menos el rango 87-88 (consistente con el patrón histórico de rebote post-Q1), significará que la caída de diciembre-marzo no fue estacional sino estructural. Eso sería la primera señal para revisar el rating a la baja.\n\nLa palanca prioritaria es reducir el cost-to-income. Todo lo demás ya está bien gestionado.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "bdi",
+    "name": "Banco Múltiple BDI",
+    "bank_id": "4e088334-fe24-4f9e-afd4-4b1ed7125da3",
+    "audience": "inversionista",
+    "text": "BDI cierra marzo 2026 con un score de 85.35 y rating SDQ-AA. Ocupa el percentil 81.2 dentro de la banca múltiple —solo tres de sus 16 pares lo superan— y el percentil 76.5 frente al sector financiero completo. El número es sólido, pero la trayectoria exige lectura: el score actual está a 0.04 puntos de su mínimo de los últimos 12 trimestres (85.31 en marzo 2024) y registra la mayor caída intertrimestral de la serie, -4.47 puntos desde diciembre 2025 (90.60) a marzo 2026. Ese patrón estacional existe —los cortes de marzo 2024 y 2025 también acusaron compresión— pero la magnitud de esta caída es la más pronunciada del período analizado.\n\n**La tesis descansa sobre un pilar casi perfecto con un talón de Aquiles estructural.**\n\nSolidez financiera (peso 0.40) aporta 39.48 de los 85.35 puntos. Con score de 98.7, su gap al techo es apenas 1.3 puntos: prácticamente no hay margen de mejora porque prácticamente tampoco hay riesgo aquí. La cobertura de cartera vencida es excepcional; el lastre —patrimonio/activos— es manejable dado que el sistema opera con solvencia de 17.4% (BCRD, ago 2024), muy por encima del mínimo regulatorio. Calidad de activos (peso 0.30, score 88.97) complementa bien: diversificación sectorial de cartera es el impulsor, aunque la concentración top-10 de deudores deja un gap de 11.03 puntos al techo.\n\nEl problema es Eficiencia y rentabilidad (peso 0.15, score 53.42). Un score que no llega al 55 en un componente de segundo mayor peso después de Calidad de activos deja 46.58 puntos sobre la mesa. El cost-to-income es el canal causal: el banco genera margen de intermediación competitivo pero no lo convierte en rentabilidad neta porque la base de costos operativos lo consume. En un entorno donde el PIB dominicano desaceleró a 2.1% en 2025 (vs. 5.0% en 2024) y la inversión privada se contrajo, sostener ingresos sin reducir costos unitarios presiona aún más este componente. Si el ciclo macro sigue comprimido, la eficiencia operativa no se corrige sola.\n\n**Para el inversionista:** la posición en BDI está respaldada por una solidez crediticia que roza el techo posible —destrucción de valor por deterioro de cartera es el escenario menos probable de la muestra. El riesgo no descontado está en el otro lado: si el banco no resuelve el cost-to-income, el ROA/ROE sistémico (ROE 21.0%, BCRD 2025) seguirá siendo un referente que BDI difícilmente alcanza. La señal de alerta a vigilar es si el score de eficiencia cede por debajo de 50 en el próximo corte trimestral —eso haría colapsar el argumento de valor.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "bdi",
+    "name": "Banco Múltiple BDI",
+    "bank_id": "4e088334-fe24-4f9e-afd4-4b1ed7125da3",
+    "audience": "supervisor",
+    "text": "BDI sostiene un SDQ-AA con score de 85.35, en el percentil 81.2 dentro de la banca múltiple —solo tres de sus 16 pares lo superan— y 2.7 puntos sobre la mediana del grupo. El rating descansa sobre una base técnicamente sólida, pero la trayectoria de este trimestre introduce una señal que el supervisor no debe pasar por alto.\n\n**El pilar es real y dominante.** Solidez financiera (peso 40%) aporta 39.48 puntos —casi tanto como los cuatro componentes restantes juntos (45.87 pts)— con un score de 98.7 y un gap al techo de apenas 1.3 puntos. El impulsor es la cobertura de cartera vencida: BDI opera con colchón de provisiones que prácticamente no deja pérdida esperada sin cubrir. El único lastre en este componente —patrimonio/activos— refleja estructura de apalancamiento, no deterioro de calidad.\n\n**La tensión decisiva está en eficiencia.** Con score 53.42 y peso del 15%, Eficiencia y rentabilidad es el componente más débil con peso material. El cost-to-income actúa como lastre estructural: el banco genera margen de intermediación pero lo consume en estructura operativa. Esto importa más de lo que su peso sugiere, porque un banco que no convierte spreads en utilidad neta es vulnerable cuando los márgenes se comprimen —exactamente el escenario que emerge con la desaceleración del PIB dominicano a 2.1% en 2025 y condiciones financieras que el BCRD ha ido normalizando.\n\n**La caída de 4.47 puntos entre diciembre 2025 y marzo 2026 es la señal a vigilar.** Es la mayor caída intertrimestral de la serie. El patrón es conocido —los cortes de marzo del SIB muestran scores de 85.31 (2024), 86.78 (2025) y 85.35 (2026), con un rebote típico hacia mediados de año— pero la magnitud de esta caída supera la estacionalidad observada. Si el rebote de Q2 no recupera al menos el rango 88-89, la hipótesis de estacionalidad cae y el deterioro sería tendencial.\n\n**Lectura para supervisión:** BDI no genera señal de alerta sistémica. Pero el score está a 0.1 puntos del P75 de la banca múltiple: cualquier deterioro adicional en eficiencia o calidad de activos (concentración top-10 es el lastre ahí) lo desplaza por debajo del cuartil superior. El foco de seguimiento es el cost-to-income en Q2 2026 y la evolución de exposición en los deudores de mayor tamaño.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "bdi",
+    "name": "Banco Múltiple BDI",
+    "context": {
+      "bank_id": "4e088334-fe24-4f9e-afd4-4b1ed7125da3",
+      "bank_name": "Banco Múltiple BDI",
+      "entity_type": "banca_multiple",
+      "latest": {
+        "period_end": "2026-03-31",
+        "overall_score": 85.35,
+        "rating_tier": "SDQ-AA",
+        "band": "fuerte"
+      },
+      "sub_components": [
+        {
+          "key": "solidez",
+          "label": "Solidez financiera",
+          "score": 98.7,
+          "weight": 0.4,
+          "band": "fuerte",
+          "drag": {
+            "key": "patrimonio_activos",
+            "label": "Patrimonio / activos",
+            "score": 95.18
+          },
+          "driver": {
+            "key": "cobertura_provisiones",
+            "label": "Cobertura de cartera vencida",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "calidad",
+          "label": "Calidad de activos",
+          "score": 88.97,
+          "weight": 0.3,
+          "band": "fuerte",
+          "drag": {
+            "key": "concentracion_top10",
+            "label": "Concentración top-10",
+            "score": 56.93
+          },
+          "driver": {
+            "key": "hhi_sectorial",
+            "label": "HHI sectorial de cartera",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "eficiencia",
+          "label": "Eficiencia y rentabilidad",
+          "score": 53.42,
+          "weight": 0.15,
+          "band": "débil",
+          "drag": {
+            "key": "cost_to_income",
+            "label": "Eficiencia operativa (cost-to-income)",
+            "score": 20.94
+          },
+          "driver": {
+            "key": "margen_financiero",
+            "label": "Margen de intermediación",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "liquidez",
+          "label": "Liquidez",
+          "score": 85.15,
+          "weight": 0.1,
+          "band": "fuerte",
+          "drag": {
+            "key": "liquidez_ajustada",
+            "label": "Liquidez ajustada",
+            "score": 55.91
+          },
+          "driver": {
+            "key": "liquidez_inmediata",
+            "label": "Liquidez inmediata",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "diversificacion",
+          "label": "Diversificación",
+          "score": 53.08,
+          "weight": 0.05,
+          "band": "débil",
+          "drag": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 53.08
+          },
+          "driver": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 53.08
+          }
+        }
+      ],
+      "trend": [
+        {
+          "period_end": "2021-03-31",
+          "score": 77.59,
+          "tier": "SDQ-A+"
+        },
+        {
+          "period_end": "2021-06-30",
+          "score": 85.36,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2021-09-30",
+          "score": 87.2,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2021-12-31",
+          "score": 85.83,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-03-31",
+          "score": 85.07,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-06-30",
+          "score": 88.67,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-09-30",
+          "score": 89.08,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-12-31",
+          "score": 89.88,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-03-31",
+          "score": 83.82,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2023-06-30",
+          "score": 89.68,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-09-30",
+          "score": 88.55,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-12-31",
+          "score": 89.26,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-03-31",
+          "score": 85.31,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-06-30",
+          "score": 88.45,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-09-30",
+          "score": 89.28,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-12-31",
+          "score": 90.6,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2025-03-31",
+          "score": 86.78,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-06-30",
+          "score": 88.5,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-09-30",
+          "score": 89.07,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-12-31",
+          "score": 89.82,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2026-03-31",
+          "score": 85.35,
+          "tier": "SDQ-AA"
+        }
+      ],
+      "peers": {
+        "period_end": "2026-03-31",
+        "sector": {
+          "n": 81,
+          "median_score": 80.18,
+          "p25_score": 76.62,
+          "p75_score": 85.25,
+          "percentile": 76.5
+        },
+        "entity_type": {
+          "n": 16,
+          "median_score": 82.65,
+          "p25_score": 78.1,
+          "p75_score": 85.25,
+          "percentile": 81.2
+        },
+        "entity_type_label": "banca_multiple"
+      }
+    }
+  },
+  {
+    "entity": "bhd",
+    "name": "Banco Múltiple BHD",
+    "bank_id": "0a7b9a38-1d1d-4964-94ef-0ab26efda440",
+    "audience": "comite_credito",
+    "text": "BHD cierra marzo 2026 en 86.42, SDQ-AA, en el percentil 93.8 dentro de los 16 bancos múltiples — solo uno lo supera en su grupo. El número parece cómodo; la trayectoria exige más atención.\n\n**El pilar que sostiene el rating es también el que oculta la tensión real.**\n\nSolidez financiera (peso 0.40) aporta 39.14 de los 86.42 puntos con un score de 97.84 y apenas 2.16 puntos de gap al techo. Su impulsor —cobertura de cartera vencida— opera como escudo estructural: BHD no solo tiene pocas pérdidas, tiene las pérdidas sobreprovisioadas. Ese sub-componente solo no gana el juego, pero su deterioro lo perdería de inmediato.\n\n**El problema no está donde el score es bajo; está donde el peso es material.**\n\nCalidad de activos (peso 0.30, score 88.41) es el segundo sub-componente de mayor peso y tiene un gap al techo de 11.59 puntos — el doble del de Solidez. Su lastre es morosidad >90 días, no la concentración sectorial. Eso importa porque el contexto macro presiona: el PIB dominicano desaceleró a 2.1% en 2025 (vs. 5.0% en 2024) y la morosidad del sistema ya subió de 1.4% a 1.7% entre sep-2024 y cierre-2025. Si el ciclo continúa deteriorando la cartera tardía, este sub-componente — con 0.30 de peso — erosiona el score más que cualquier otro movimiento plausible a corto plazo.\n\n**La trayectoria confirma la presión: hay un quiebre estructural a identificar.**\n\nEl score se mantuvo en el rango 88–89 durante todo 2023-2024. La mayor caída intertrimestral del período ocurrió entre dic-2024 y mar-2025 (caída de 3.44 puntos hasta 85.46). El rebote parcial a 88.16 en jun-2025 no se sostuvo: el score cerró dic-2025 en 87.47 y cayó otro punto hasta 86.42 en el corte actual. Comparando cortes Q1: 88.35 (mar-2024) → 85.46 (mar-2025) → 86.42 (mar-2026). La recuperación interanual es de apenas 0.96 puntos; el nivel sigue por debajo del rango histórico previo.\n\n**Veredicto para el comité:** la exposición a BHD es sostenible — el colchón de provisiones es robusto y la posición competitiva es sólida. Pero la línea de vigilancia correcta no es el score global; es la trayectoria de morosidad >90 días en el próximo corte. Si ese lastre de Calidad de activos no se estabiliza en un entorno de menor crecimiento, el score tiene más recorrido a la baja que al alza.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "bhd",
+    "name": "Banco Múltiple BHD",
+    "bank_id": "0a7b9a38-1d1d-4964-94ef-0ab26efda440",
+    "audience": "entidad",
+    "text": "BHD llega a marzo 2026 con un SDQ-AA soportado por una solidez financiera casi perfecta —97.84 sobre 100— que aporta 39.14 puntos al score global de 86.42. Eso lo coloca en el percentil 93.8 entre los 16 bancos múltiples: prácticamente solo uno lo supera en su grupo de pares. El rating no es frágil en su base; es frágil en su trayectoria.\n\n**La tensión que decide:** BHD ha perdido 2.75 puntos desde su máximo de 89.17 (junio 2023), y el deterioro está acelerando. La caída más abrupta en la serie —3.44 puntos en un solo trimestre, de diciembre 2024 a marzo 2025— es la señal más relevante para gestión: no fue ruido, fue una ruptura. El rebote parcial de los trimestres posteriores no la compensa; marzo 2026 cierra en 86.42, por debajo de todos los cierres de 2023 y 2024. Comparando cortes de Q1 en los últimos tres años: 88.35 → 85.46 → 86.42. La dirección estructural es descendente.\n\n**Dónde vive el retorno sobre el rating:** El mayor gap al techo no está en Diversificación (35.63 pts, peso 5%) sino en Eficiencia y rentabilidad: 34.03 puntos de gap con un peso de 15%, lo que lo convierte en la palanca de gestión de mayor rendimiento ponderado disponible. El lastre declarado es el cost-to-income. Un banco que genera spread —el impulsor de ese bloque es el margen de intermediación— pero destruye parte de ese valor en gasto operativo tiene un problema de estructura de costos, no de negocio. Con PIB desacelerando a 2.1% en 2025 y crédito creciendo más lento que en años anteriores, expandir ingresos para compensar el costo se hace más difícil; la palanca tiene que ser el denominador.\n\nCalidad de activos (peso 30%) suma 11.59 puntos de gap con la morosidad >90 días como lastre. En un contexto de desaceleración económica, ese indicador es el que más puede moverse en contra: la morosidad rezagada suele manifestarse 2–4 trimestres después del enfriamiento del ciclo.\n\n**Señal de alerta:** si el cost-to-income no cede en los próximos dos trimestres y la morosidad >90 días sube, BHD puede perder los 1.17 puntos que lo separan del p75 de su grupo y comprometer el SDQ-AA. Eso, ponderado, importa más que cualquier mejora en Diversificación.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "bhd",
+    "name": "Banco Múltiple BHD",
+    "bank_id": "0a7b9a38-1d1d-4964-94ef-0ab26efda440",
+    "audience": "inversionista",
+    "text": "BHD cierra marzo 2026 con 86.42 puntos y rating SDQ-AA, posicionado en el percentil 93.8 entre los 16 bancos múltiples —solo un par lo supera en su grupo— y en el percentil 80.2 frente al sector completo. El número es sólido, pero la trayectoria importa más que el nivel: desde 89.17 en junio 2023 el score acumula una caída de 2.75 puntos, y el trimestre actual registra –1.05 puntos respecto a diciembre 2025, continuando una tendencia bajista que ya lleva cinco períodos consecutivos de deterioro desde ese mismo diciembre.\n\n**La tensión que manda: eficiencia erosionando una base de solidez excepcional**\n\nSolidez financiera (peso 0.40) funciona como el ancla estructural del rating: aporta 39.14 de los 86.42 puntos totales, con un gap al techo de apenas 2.16 puntos —la cobertura de cartera vencida es el impulsor, y casi no hay margen para mejorar aquí. El problema es que este desempeño casi perfecto en el componente más pesado coexiste con una eficiencia operativa que arrastra el tercer bloque al 65.97, el peor score entre los cuatro componentes con peso material. El cost-to-income es el lastre explícito: BHD genera margen de intermediación competitivo, pero no lo convierte en rentabilidad neta con eficiencia. Esto no es un problema de volumen sino de estructura de costos, y en un entorno de desaceleración —PIB dominicano a 2.1% en 2025 contra 5.0% en 2024— la presión sobre ingresos hace ese lastre más difícil de compensar. El gap al techo en Eficiencia y Rentabilidad es 34.03 puntos sobre un peso de 0.15: matemáticamente no mueve el rating hoy, pero sí señala dónde se destruye valor relativo frente a pares.\n\n**La señal que vigilar**\n\nLa mayor caída intertrimestral de la serie ocurrió entre diciembre 2024 y marzo 2025 (–3.44 puntos), seguida de una recuperación parcial y un nuevo descenso. El patrón sugiere que los cierres de año ocultan presión que aflora en el primer trimestre. Si el corte de marzo 2027 repite esa dinámica sin que Eficiencia mejore, el score podría acercarse al piso observado (85.46 en marzo 2025) y la distancia al P75 de los bancos múltiples —hoy solo 1.17 puntos— desaparecería.\n\n**Para el inversionista:** BHD es un banco con solidez de activos de primera línea y morosidad contenida en un sistema que el BCRD califica sin vulnerabilidades críticas. La tesis de entrada se sostiene, pero el riesgo no descontado está en la rentabilidad: si el cost-to-income no cede mientras el ciclo crediticio se enfría, el SDQ-AA es defensivo, no generador de alfa.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "bhd",
+    "name": "Banco Múltiple BHD",
+    "bank_id": "0a7b9a38-1d1d-4964-94ef-0ab26efda440",
+    "audience": "supervisor",
+    "text": "BHD obtiene SDQ-AA con 86.42 puntos, percentil 93.8 dentro de la banca múltiple: solo una entidad del grupo de 16 lo supera. Frente al sistema más amplio (81 entidades), está en el percentil 80.2. La calificación es sólida y la posición relativa, genuinamente distinguida dentro de su categoría.\n\n**La arquitectura del rating descansa en un solo pilar**\n\nSolidez financiera aporta 39.14 de los 86.42 puntos (45% del score total) y deja apenas 2.16 puntos de gap al techo de su componente. El impulsor es cobertura de cartera vencida —BHD provisiona con holgura sobre su cartera deteriorada— y el lastre es patrimonio/activos, lo que sugiere que el banco trabaja con apalancamiento relativamente alto para su tamaño. La suma de los cuatro componentes restantes (47.29 puntos) supera al líder, pero ninguno de ellos por sí solo es comparable en peso y desempeño.\n\n**La tensión que condiciona la supervisión: el rating vive de una fortaleza mientras los componentes operativos se debilitan**\n\nEficiencia y rentabilidad (score 65.97, peso 0.15) y Diversificación (score 64.37, peso 0.05) son los bloques más rezagados, pero su peso conjunto es modesto. El problema real está en la **trayectoria**: el score cayó de 88.90 en dic-2024 a 85.46 en marzo-2025 —la mayor caída intertrimestral del período analizado, 3.44 puntos— y el corte actual de marzo-2026 (86.42) muestra una recuperación parcial pero no recupera el nivel prepandémico del grupo. Comparando los cortes de marzo: 88.35 (2024) → 85.46 (2025) → 86.42 (2026). La dirección año-a-año es positiva (+0.96 vs marzo-2025), pero el nivel sigue 2.75 puntos por debajo del máximo observado (89.17, jun-2023).\n\nEl cost-to-income es el lastre nombrado en eficiencia. Si el margen de intermediación sostiene la rentabilidad pero la eficiencia operativa no mejora, BHD depende de ingresos financieros para compensar una estructura de costos pesada —mecanismo que se vuelve frágil si el ciclo crediticio se modera. El BCRD reporta desaceleración del PIB a 2.1% en 2025 frente al 5.0% de 2024; ese contexto de menor dinamismo presiona precisamente el volumen de intermediación que financia la eficiencia del banco.\n\n**Señal al supervisor:** BHD no amerita atención prudencial inmediata, pero la combinación de apalancamiento patrimonial como lastre en el componente de mayor peso + deterioro de eficiencia operativa + score en tendencia descendente desde mediados-2023 justifica monitoreo activo del ratio patrimonio/activos y del cost-to-income trimestre a trimestre. La señal de reversión sería un score de eficiencia superando 70 con trayectoria sostenida.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "bhd",
+    "name": "Banco Múltiple BHD",
+    "context": {
+      "bank_id": "0a7b9a38-1d1d-4964-94ef-0ab26efda440",
+      "bank_name": "Banco Múltiple BHD",
+      "entity_type": "banca_multiple",
+      "latest": {
+        "period_end": "2026-03-31",
+        "overall_score": 86.42,
+        "rating_tier": "SDQ-AA",
+        "band": "fuerte"
+      },
+      "sub_components": [
+        {
+          "key": "solidez",
+          "label": "Solidez financiera",
+          "score": 97.84,
+          "weight": 0.4,
+          "band": "fuerte",
+          "drag": {
+            "key": "patrimonio_activos",
+            "label": "Patrimonio / activos",
+            "score": 89.94
+          },
+          "driver": {
+            "key": "cobertura_provisiones",
+            "label": "Cobertura de cartera vencida",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "calidad",
+          "label": "Calidad de activos",
+          "score": 88.41,
+          "weight": 0.3,
+          "band": "fuerte",
+          "drag": {
+            "key": "morosidad",
+            "label": "Morosidad >90 días",
+            "score": 78.0
+          },
+          "driver": {
+            "key": "hhi_sectorial",
+            "label": "HHI sectorial de cartera",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "eficiencia",
+          "label": "Eficiencia y rentabilidad",
+          "score": 65.97,
+          "weight": 0.15,
+          "band": "moderado",
+          "drag": {
+            "key": "cost_to_income",
+            "label": "Eficiencia operativa (cost-to-income)",
+            "score": 32.64
+          },
+          "driver": {
+            "key": "margen_financiero",
+            "label": "Margen de intermediación",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "liquidez",
+          "label": "Liquidez",
+          "score": 76.48,
+          "weight": 0.1,
+          "band": "adecuado",
+          "drag": {
+            "key": "liquidez_ajustada",
+            "label": "Liquidez ajustada",
+            "score": 52.15
+          },
+          "driver": {
+            "key": "ltd",
+            "label": "Cartera / depósitos (LtD)",
+            "score": 99.99
+          }
+        },
+        {
+          "key": "diversificacion",
+          "label": "Diversificación",
+          "score": 64.37,
+          "weight": 0.05,
+          "band": "moderado",
+          "drag": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 64.37
+          },
+          "driver": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 64.37
+          }
+        }
+      ],
+      "trend": [
+        {
+          "period_end": "2021-03-31",
+          "score": 79.69,
+          "tier": "SDQ-A+"
+        },
+        {
+          "period_end": "2021-06-30",
+          "score": 89.74,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2021-09-30",
+          "score": 89.33,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2021-12-31",
+          "score": 89.13,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-03-31",
+          "score": 86.36,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-06-30",
+          "score": 90.43,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2022-09-30",
+          "score": 88.53,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-12-31",
+          "score": 89.98,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-03-31",
+          "score": 87.85,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-06-30",
+          "score": 89.17,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-09-30",
+          "score": 88.71,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-12-31",
+          "score": 88.37,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-03-31",
+          "score": 88.35,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-06-30",
+          "score": 88.62,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-09-30",
+          "score": 88.86,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-12-31",
+          "score": 88.9,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-03-31",
+          "score": 85.46,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-06-30",
+          "score": 88.16,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-09-30",
+          "score": 87.8,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-12-31",
+          "score": 87.47,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2026-03-31",
+          "score": 86.42,
+          "tier": "SDQ-AA"
+        }
+      ],
+      "peers": {
+        "period_end": "2026-03-31",
+        "sector": {
+          "n": 81,
+          "median_score": 80.18,
+          "p25_score": 76.62,
+          "p75_score": 85.25,
+          "percentile": 80.2
+        },
+        "entity_type": {
+          "n": 16,
+          "median_score": 82.65,
+          "p25_score": 78.1,
+          "p75_score": 85.25,
+          "percentile": 93.8
+        },
+        "entity_type_label": "banca_multiple"
+      }
+    }
+  },
+  {
+    "entity": "santa cruz",
+    "name": "Banco Múltiple Santa Cruz",
+    "bank_id": "a9472e5e-a78b-49c2-abe5-95c72e1fccb1",
+    "audience": "comite_credito",
+    "text": "Banco Múltiple Santa Cruz llega a marzo 2026 con un score de 85.4 y rating SDQ-AA, ubicado en el percentil 87.5 dentro de su grupo de 16 bancos múltiples —solo aproximadamente 2 entidades lo superan. Frente al sector amplio (81 entidades), supera la mediana en 5.22 puntos. El número no es el problema; el problema es de dónde viene y qué lo limita.\n\n**El techo lo pone solidez patrimonial; el piso lo ponen eficiencia y diversificación.**\n\nSolidez financiera entrega los 40 puntos completos de su peso —máximo teórico, sin gap. El impulsor es el ratio Patrimonio/Activos; el índice de solvencia actúa de lastre interno pero no alcanza a bajar el sub-componente del 100. Esto no es un logro operativo: refleja una base de capital estructuralmente robusta que protege al acreedor ante escenarios de estrés. En el entorno sistémico actual —solvencia del sector en 17.4%, morosidad en 1.7% según el BCRD— ese piso es cómodo, no excepcional.\n\nCalidad de activos (peso 0.3) aporta 23.74 puntos sobre un máximo posible de 30, con un gap de 20.88 puntos al techo. El lastre es concentración sectorial de cartera (HHI alto): el banco presta bien en términos de morosidad —cartera vigente como impulsor— pero lo hace de forma poco diversificada. En un ciclo de desaceleración como el que registró 2025 (PIB real 2.1% vs. 5.0% en 2024, construcción en contracción), esa concentración no es trivial: si el sector o sectores dominantes en cartera se deterioran, el colchón de calidad se comprime más rápido que en un par más diversificado.\n\nLa tensión que más condiciona la decisión es la siguiente: **Eficiencia y rentabilidad** (peso 0.15, score 63.86) deja 36.14 puntos sobre la mesa. El lastre es el cost-to-income. Este sub-componente pesa poco en el score global —aporta solo 9.58 puntos de 85.4— pero su debilidad señala un modelo de negocio con margen de intermediación sólido que no se traduce en rentabilidad eficiente. Si el entorno comprime spreads —más probable con tasas a la baja y crecimiento moderado— el ratio se deteriora sin amortiguador de eficiencia operativa.\n\n**Trayectoria:** el score lleva oscilando entre 83.59 (mínimo en marzo 2024) y 87.0 (máximo en diciembre 2025). El corte actual de 85.4 es el valor más bajo de los últimos tres Q1 de marzo pero 1.81 puntos sobre el piso. No hay deterioro estructural; hay estabilización con ligera reversión desde el pico reciente.\n\n**Para el comité de crédito:** la exposición está respaldada por un balance patrimonial sin fisura. La señal a vigilar es el cost-to-income: si sigue deteriorándose en un ciclo de menor crecimiento crediticio, la rentabilidad absorbe el margen que hoy protege al acreedor. Eso, combinado con concentración sectorial en cartera, define el downside asimétrico real de esta contraparte.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "santa cruz",
+    "name": "Banco Múltiple Santa Cruz",
+    "bank_id": "a9472e5e-a78b-49c2-abe5-95c72e1fccb1",
+    "audience": "entidad",
+    "text": "**Banco Múltiple Santa Cruz — Fundamento del Rating SDQ-AA (85.4 pts, marzo 2026)**\n\nEl rating se sostiene sobre una base real y no es un promedio de partes iguales. Solidez financiera puntúa 100/100 y, con peso 0.40, aporta 40 puntos al score global —la misma magnitud que los cuatro componentes restantes juntos (45.4 pts). El gap al techo de solidez es cero: el banco ya extrajo el máximo de ese bloque. El impulsor es patrimonio/activos; el índice de solvencia figura como lastre interno, lo que sugiere que la capitalización patrimonial es robusta pero el colchón regulatorio sobre activos ponderados por riesgo deja menos margen que la relación contable simple.\n\n**La tensión que importa está en eficiencia, no en calidad de activos.** Calidad de activos puntúa 79.12 con peso 0.30 —el segundo de mayor peso— y deja un gap de 20.88 pts al techo (6.26 pts ponderados). Pero eficiencia y rentabilidad puntúa 63.86 con peso 0.15 y arrastra un gap de 36.14 pts (5.42 pts ponderados). Ambos gaps ponderados son similares, pero el lastre de eficiencia —cost-to-income elevado contra un margen de intermediación que es el impulsor— revela un problema de estructura de costos, no de spread. El margen existe; la ineficiencia operativa se lo come. Eso es una palanca de gestión directa, no una función de ciclo crediticio. Corregir el denominador del ratio cost-to-income (escala) o el numerador (gasto operativo) produce retorno inmediato sobre el score sin requerir un cambio de entorno.\n\n**Posición vs. pares:** el banco está en el percentil 87.5 entre los 16 bancos múltiples y en el percentil 79 frente al sector (81 entidades). Solo aproximadamente 2 de 16 pares del mismo tipo lo superan. El score de 85.4 está por encima del p75 de su grupo (85.25), a 2.75 puntos sobre la mediana de bancos múltiples.\n\n**Trayectoria:** el rango en 12 trimestres va de 83.59 (marzo 2024) a 87.0 (diciembre 2025). El cierre actual de 85.4 representa una caída de 1.6 pts desde ese máximo, aunque mejora 0.35 pts respecto a marzo 2025. El patrón de cortes de marzo muestra recuperación sostenida: 83.59 → 85.05 → 85.4.\n\n**Palanca de gestión:** eficiencia operativa. Es el único sub-componente donde el canal causal es interno, el gap ponderado es material, y la dirección de mejora no depende del ciclo sistémico. El contexto BCRD confirma un sistema estable —solvencia 17.4%, morosidad 1.7%— que no presiona desde afuera; la restricción es endógena.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "santa cruz",
+    "name": "Banco Múltiple Santa Cruz",
+    "bank_id": "a9472e5e-a78b-49c2-abe5-95c72e1fccb1",
+    "audience": "inversionista",
+    "text": "Banco Múltiple Santa Cruz recibe un **SDQ-AA con score 85.4**, posicionándose en el percentil 87.5 dentro de su grupo de bancos múltiples: solo 2 de 16 pares lo superan. Eso no es decorativo; es una entidad que opera en el cuartil superior sostenido.\n\n**El fundamento real del rating es estructural, no cíclico.** El componente de Solidez Financiera —el de mayor peso con 40%— aporta los 40 puntos posibles: score perfecto, gap cero al techo. El impulsor es patrimonio/activos, lo que indica que el banco llega a esta capitalización por construcción de base propia, no por apalancamiento optimizado. El lastre declarado dentro de ese mismo componente es el índice de solvencia, pero su impacto ya está absorbido dentro de un score de 100: la solidez de balance es el piso inviolable del rating.\n\n**La tensión que más condiciona la decisión está en Eficiencia y Rentabilidad.** Con peso 15%, este componente entrega solo 9.58 puntos de 15 posibles —un gap de 6.42 puntos al techo— y su lastre es el cost-to-income. El mecanismo: el margen de intermediación es fuerte (impulsor), pero los costos operativos consumen ese spread antes de que se traduzca en ROA/ROE competitivo. Para un inversionista, esto importa porque **rentabilidad ajustada al riesgo**, no solo solidez, es lo que sostiene la creación de valor en el tiempo. Un banco muy capitalizado con costos altos genera capital lentamente; la reinversión futura depende de resolver esa ineficiencia operativa.\n\n**La trayectoria no alarma, pero sí señala.** El score tocó 87.0 en diciembre 2025 y cae 1.6 puntos al cierre de marzo 2026. Los cortes de Q1-marzo muestran progresión positiva (83.59 → 85.05 → 85.4), pero el retroceso desde el máximo reciente es real. La mayor caída intertrimestral registrada fue de 2.86 puntos entre diciembre 2023 y marzo 2024 —patrón estacional que se repite, aunque con menor intensidad esta vez.\n\n**Diversificación (score 54.05, peso 5%) tiene el mayor gap al techo de todos los sub-componentes**, pero su peso limita el daño: con 2.7 puntos aportados, no mueve el rating. El riesgo es estratégico, no inmediato.\n\n**Tesis de inversión:** La solidez de balance elimina el riesgo de deterioro abrupto. El valor no descontado —positivo o negativo— está en si la entidad resuelve la estructura de costos operativos. Si el cost-to-income mejora, el salto de AA a AAA es mecánico. Si se mantiene, el score queda anclado en este rango con upside limitado. Esa es la variable a vigilar en los próximos dos cierres trimestrales.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "santa cruz",
+    "name": "Banco Múltiple Santa Cruz",
+    "bank_id": "a9472e5e-a78b-49c2-abe5-95c72e1fccb1",
+    "audience": "supervisor",
+    "text": "Banco Múltiple Santa Cruz: SDQ-AA sostenido por un pilar de solidez que no comparte el edificio completo.\n\n**La posición es sólida pero frágil en su geometría.** El score de 85.4 ubica al banco en el percentil 87.5 dentro de la banca múltiple —solo aproximadamente 2 de 16 pares lo superan— y en el percentil 79 del sector completo. El rating SDQ-AA está bien fundado en el dato puntual. El problema es cómo se construye ese número.\n\n**Solidez financiera es el único techo alcanzado.** Con score 100 y peso 0.40, aporta 40.0 puntos al global —exactamente igual que la suma de los cuatro componentes restantes (45.4 pts). El impulsor declarado es Patrimonio/Activos; el lastre dentro del mismo componente es el índice de solvencia. Esto señala capitalización alta en términos relativos, pero con una composición que el propio componente castiga internamente. Para un supervisor, la pregunta es si ese patrimonio absorbe riesgo o simplemente refleja baja apalancamiento operativo.\n\n**Calidad de activos (peso 0.30) es donde la decisión prudencial se juega.** Aporta 23.74 pts con un gap al techo de 20.88 pts. El lastre es concentración sectorial (HHI de cartera): cartera vigente fuerte, pero portafolio concentrado. En el contexto sistémico de desaceleración a 2.1% del PIB en 2025 y construcción contrayéndose 1.8%, la concentración sectorial amplifica la sensibilidad cíclica. Si la cartera tiene peso en construcción o consumo, el deterioro sistémico ya en marcha eleva la probabilidad de migración de categoría. Ese HHI alto es la señal de monitoreo más urgente.\n\n**Eficiencia y diversificación son los techos más lejanos, pero su peso conjunto no mueve el rating hoy.** Eficiencia/rentabilidad tiene el segundo mayor gap (36.14 pts) con peso 0.15; diversificación el mayor gap absoluto (45.95 pts) con peso apenas 0.05. El cost-to-income es el lastre operativo real; la concentración de ingresos lo confirma. No amenazan el SDQ-AA de forma inmediata, pero comprimen el upside.\n\n**La trayectoria no genera alarma, pero sí disciplina.** Desde el máximo de 87.0 en diciembre 2025, el score cayó 1.6 puntos en un trimestre. La mayor caída registrada en la serie fue de 2.86 puntos entre diciembre 2023 y marzo 2024 —mismo corte estacional. El patrón Q1 existe: 83.59 (mar-24), 85.05 (mar-25), 85.4 (mar-26). Hay recuperación tendencial, pero el piso del ciclo estacional es real.\n\n**Veredicto para supervisión:** entidad de atención ordinaria, no prioritaria. El foco debe ser el HHI sectorial de cartera frente al ciclo económico actual. Si ese indicador se deteriora un trimestre más, el componente de calidad de activos —el de mayor peso después de solidez— puede arrastrar el score bajo la mediana del tipo.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "santa cruz",
+    "name": "Banco Múltiple Santa Cruz",
+    "context": {
+      "bank_id": "a9472e5e-a78b-49c2-abe5-95c72e1fccb1",
+      "bank_name": "Banco Múltiple Santa Cruz",
+      "entity_type": "banca_multiple",
+      "latest": {
+        "period_end": "2026-03-31",
+        "overall_score": 85.4,
+        "rating_tier": "SDQ-AA",
+        "band": "fuerte"
+      },
+      "sub_components": [
+        {
+          "key": "solidez",
+          "label": "Solidez financiera",
+          "score": 100.0,
+          "weight": 0.4,
+          "band": "fuerte",
+          "drag": {
+            "key": "solvencia",
+            "label": "Índice de solvencia",
+            "score": 100.0
+          },
+          "driver": {
+            "key": "patrimonio_activos",
+            "label": "Patrimonio / activos",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "calidad",
+          "label": "Calidad de activos",
+          "score": 79.12,
+          "weight": 0.3,
+          "band": "adecuado",
+          "drag": {
+            "key": "hhi_sectorial",
+            "label": "HHI sectorial de cartera",
+            "score": 61.19
+          },
+          "driver": {
+            "key": "pct_cartera_a",
+            "label": "Cartera vigente",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "eficiencia",
+          "label": "Eficiencia y rentabilidad",
+          "score": 63.86,
+          "weight": 0.15,
+          "band": "moderado",
+          "drag": {
+            "key": "cost_to_income",
+            "label": "Eficiencia operativa (cost-to-income)",
+            "score": 36.61
+          },
+          "driver": {
+            "key": "margen_financiero",
+            "label": "Margen de intermediación",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "liquidez",
+          "label": "Liquidez",
+          "score": 93.84,
+          "weight": 0.1,
+          "band": "fuerte",
+          "drag": {
+            "key": "liquidez_ajustada",
+            "label": "Liquidez ajustada",
+            "score": 81.9
+          },
+          "driver": {
+            "key": "liquidez_inmediata",
+            "label": "Liquidez inmediata",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "diversificacion",
+          "label": "Diversificación",
+          "score": 54.05,
+          "weight": 0.05,
+          "band": "débil",
+          "drag": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 54.05
+          },
+          "driver": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 54.05
+          }
+        }
+      ],
+      "trend": [
+        {
+          "period_end": "2021-03-31",
+          "score": 77.57,
+          "tier": "SDQ-A+"
+        },
+        {
+          "period_end": "2021-06-30",
+          "score": 87.89,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2021-09-30",
+          "score": 87.68,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2021-12-31",
+          "score": 88.65,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-03-31",
+          "score": 86.22,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-06-30",
+          "score": 89.1,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-09-30",
+          "score": 89.15,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-12-31",
+          "score": 89.12,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-03-31",
+          "score": 88.61,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-06-30",
+          "score": 86.7,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-09-30",
+          "score": 86.93,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-12-31",
+          "score": 86.45,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-03-31",
+          "score": 83.59,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2024-06-30",
+          "score": 85.5,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-09-30",
+          "score": 85.98,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-12-31",
+          "score": 85.26,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-03-31",
+          "score": 85.05,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-06-30",
+          "score": 85.24,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-09-30",
+          "score": 86.8,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-12-31",
+          "score": 87.0,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2026-03-31",
+          "score": 85.4,
+          "tier": "SDQ-AA"
+        }
+      ],
+      "peers": {
+        "period_end": "2026-03-31",
+        "sector": {
+          "n": 81,
+          "median_score": 80.18,
+          "p25_score": 76.62,
+          "p75_score": 85.25,
+          "percentile": 79.0
+        },
+        "entity_type": {
+          "n": 16,
+          "median_score": 82.65,
+          "p25_score": 78.1,
+          "p75_score": 85.25,
+          "percentile": 87.5
+        },
+        "entity_type_label": "banca_multiple"
+      }
+    }
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+    "audience": "comite_credito",
+    "text": "Banco Popular Dominicano cierra Q1-2026 con un score de 88.96 y rating SDQ-AA, posicionándose en el percentil 100 dentro de la banca múltiple —ningún par del grupo lo supera— y en el percentil 84 del sistema. La prima sobre la mediana de su tipo es 6.31 puntos. Eso no es un empate técnico con el resto del segmento: es separación estructural.\n\n**El fundamento del rating es un solo sub-componente: Solidez financiera.** Con score perfecto de 100 y peso de 40%, aporta 40.0 puntos al score global —la totalidad del techo posible para ese componente, con gap cero. Patrimonio/activos es el impulsor; el índice de solvencia es el lastre interno, pero no alcanza a quebrar el techo. Esto significa que el balance del Popular resiste antes que el resto del sistema, y esa resistencia ya está capturada en el precio del rating, no en una promesa.\n\n**La tensión que importa para la decisión de exposición está en los tres componentes medios.** Calidad de activos (peso 30%) aporta 26.63 pts con un gap de 11.24; Eficiencia y rentabilidad (peso 15%) aporta 11.58 con gap de 22.79; Liquidez (peso 10%) aporta 7.50 con gap de 25.03. El cost-to-income lastra eficiencia: un banco que genera bien por spread pero consume en estructura operativa no está optimizado para ciclos de compresión de margen. La liquidez ajustada —no el ratio bruto LtD, que es el impulsor— señala que los colchones líquidos de calidad son más ajustados de lo que el ratio de superficie sugiere. En un año de desaceleración del PIB a 2.1% (BCRD 2025) y contracción de la inversión privada, esa brecha entre liquidez bruta y ajustada merece vigilancia.\n\n**La trayectoria no genera alarma, pero registra dirección descendente.** El score pico fue 90.42 en junio 2023; el actual 88.96 representa una caída de 1.46 puntos desde ese máximo. Comparado con el mismo corte del año previo (89.29 en marzo 2025), la variación es -0.33. El movimiento es gradual, no disruptivo, pero el vector apunta a una erosión lenta —no a consolidación.\n\n**Veredicto para el comité:** exposición confortable dentro de límites ordinarios. El ancla patrimonial es real y dominante. La señal a monitorear antes del próximo corte es la liquidez ajustada: si ese lastre se profundiza con crédito privado desacelerando, el gap de 25 puntos en Liquidez puede presionar el score global de forma desproporcionada dado el piso ya bajo en Eficiencia.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+    "audience": "entidad",
+    "text": "## Banco Popular Dominicano — SDQ-AA | Fundamento del Rating\n\n**Posición vs. pares: sin competencia dentro de su grupo.** Popular ocupa el percentil 100 entre los 16 bancos múltiples y el percentil 84 entre las 81 entidades del sistema. Ningún par de su tipo lo supera. La pregunta relevante no es si merece el AA —lo justifica—, sino qué impide el salto a AA+ o superior.\n\n---\n\n**El techo lo pone Solidez financiera, el piso lo pone Liquidez y Eficiencia.**\n\nSolidez (peso 0.40) cotiza en 100/100 y aporta 40 puntos exactos al score —su contribución es perfecta y no hay gap. El impulsor es Patrimonio/activos; el índice de solvencia actúa de lastre relativo dentro del componente, aunque el sistema de referencia (17.4% sistémico según el IEF sep-2024) ya es holgado. Este pilar ancla el rating y lo hace difícilmente reversible en el corto plazo.\n\n**La tensión que más condiciona la gestión está en Eficiencia y rentabilidad (peso 0.15, score 77.21).** El gap al techo es 22.79 puntos, equivalente a 3.42 puntos de score global sin explotar. El lastre es el cost-to-income: Popular genera margen de intermediación superior al promedio, pero la estructura de costos erosiona esa ventaja. En una banca múltiple de esta escala, el canal causal es claro: red física amplia + nómina pesada → eficiencia operativa rezagada. Cerrar ese gap es el ejercicio de mayor retorno marginal sobre el rating ponderado por peso.\n\nLiquidez (peso 0.10, score 74.97) suma otros 2.5 puntos de gap ponderado. El LtD impulsa, pero la liquidez ajustada lastra: esto sugiere que el banco mantiene una cartera robusta relativa a depósitos, pero la cobertura de pasivos con activos líquidos de alta calidad es más ajustada. En el entorno 2025 —PIB real desacelerado a 2.1%, crédito privado más moderado— esa liquidez ajustada merece vigilancia si el fondeo mayorista reprice.\n\n---\n\n**Trayectoria: compresión leve, no deterioro.** El score tocó 90.42 en junio-2023 y cotiza hoy en 88.96, con una caída desde el máximo de 1.46 puntos en 12 trimestres. En los cortes de marzo: 88.67 (2024) → 89.29 (2025) → 88.96 (2026); la tendencia interanual es prácticamente plana. No hay señal de deterioro estructural, pero tampoco de recuperación hacia el máximo histórico.\n\n**Palanca de gestión prioritaria:** reducción del cost-to-income. Es el único sub-componente donde el peso, el gap y la controlabilidad operativa convergen. Una mejora de eficiencia estructural —no cíclica— es el camino más directo hacia SDQ-AA+.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+    "audience": "inversionista",
+    "text": "**Banco Popular Dominicano — SDQ-AA | Fundamento del rating**\n\nEl Popular lidera su categoría: ninguno de los 16 bancos múltiples lo supera en score al cierre de marzo 2026, con 88.96 puntos y 3.71 puntos sobre el P75 del grupo. El rating SDQ-AA descansa en una arquitectura desequilibrada pero sólida —un sub-componente carga el techo, el resto contribuye pero deja margen.\n\n**El ancla es la solidez financiera, y es contundente.** Score perfecto (100/100) en el componente de mayor peso (40%), con patrimonio/activos como impulsor. Aporta 40 puntos al score global —más que cualquier sub-componente y sin gap al techo. El lastre declarado es el índice de solvencia, pero no arrastra: el componente cierra en 100. En el contexto sistémico, el sector opera con solvencia de 17.4% (ago 2024), ya holgada; el Popular la refleja y la supera en la lectura patrimonial. Esta solidez es el piso estructural de la tesis de inversión: el capital absorbe shocks antes de que lleguen a los acreedores o accionistas minoritarios.\n\n**La tensión real que condiciona la decisión está en eficiencia y liquidez.** Eficiencia y rentabilidad pesa 15% y tiene el segundo mayor gap al techo ponderado relevante: 22.79 puntos de brecha, con cost-to-income como lastre. Un banco del tamaño del Popular con margen de intermediación fuerte pero estructura de costos pesada sugiere que la rentabilidad se sostiene por volumen y precio, no por palanca operativa. Si el ciclo crediticio se modera —en 2025 el PIB cayó a 2.1% y la construcción contrajo 1.8%— el cost-to-income se vuelve más difícil de sostener y el ROE comprime. Liquidez ajustada también lastra (score 74.97/100, peso 10%), con 25 puntos de brecha al techo: señal de que el banco financia crecimiento con depósitos de forma eficiente pero con colchón ajustado en escenario de estrés.\n\n**La trayectoria no alarma, pero sí informa.** El score cayó desde 90.42 (jun-2023) hasta 88.96 hoy —caída de 1.46 puntos desde el máximo. La serie de los últimos doce trimestres muestra banda estrecha (mínimo 88.67 en mar-2024), sin recuperación sostenida. No es deterioro; es estancamiento cerca del techo alcanzable con la estructura actual.\n\n**Tesis:** posición de mantener con vigilancia activa en cost-to-income. El Popular no destruye valor, pero el upside de rating requiere una mejora en eficiencia operativa que los datos aún no muestran. La señal de alerta sería aceleración del cost-to-income combinada con moderación del margen ante caída de tasas.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+    "audience": "supervisor",
+    "text": "El SDQ-AA de Banco Popular Dominicano descansa sobre un fundamento estructural claro: solidez financiera perfecta que compra espacio para tolerar debilidades en los componentes de menor peso. Con un score global de 88.96 y en el percentil 100 entre los 16 bancos múltiples —ningún par lo supera—, la pregunta supervisora no es si el banco es sólido, sino dónde está cediendo terreno.\n\n**El anclaje y su límite**\n\nSolidez financiera aporta los 40 puntos posibles de su peso, el único sub-componente en techo. El impulsor es patrimonio/activos; el lastre es el índice de solvencia, lo que sugiere que el capital está bien distribuido en relación al balance pero el buffer regulatorio —medido contra activos ponderados por riesgo— tiene menos holgura relativa. Este 40/40 sostiene el rating; sin él, los demás sub-componentes no construyen AA.\n\n**La tensión que más importa para supervisión**\n\nEficiencia y rentabilidad (peso 0.15) marca 77.21, con un gap al techo de 22.79 puntos ponderados. El lastre explícito es el cost-to-income: para el banco de mayor escala del sistema, una estructura de costos operativos elevada implica que el margen de intermediación —su impulsor— no se convierte eficientemente en utilidad neta. En un entorno donde el PIB desaceleró a 2.1% en 2025 y la morosidad sistémica subió a 1.7% (BCRD), una compresión adicional de ingresos encontraría un piso de costos inflexible. Ahí está el riesgo de segundo orden: no quiebra de solvencia, sino erosión gradual de rentabilidad que reduce la generación interna de capital.\n\n**Trayectoria: deriva lenta, no ruptura**\n\nEl score máximo en los 12 trimestres fue 90.42 (2023-06-30); el mínimo, 88.67 (2024-03-31). El actual 88.96 se ubica 1.46 puntos por debajo del pico y 0.29 sobre el piso, con una caída de 0.33 puntos respecto al mismo trimestre del año previo. No es caída libre —el rango es estrecho—, pero el vector apunta hacia el piso histórico, no hacia el techo.\n\n**Señal a monitorear**\n\nSi el cost-to-income continúa deteriorando eficiencia mientras la cartera crece sobre una base macro más débil, la rentabilidad absorberá el golpe antes que la solvencia. La señal de alerta no es el score global —que permanece en AA por el blindaje del 40/40—, sino un deterioro adicional en el sub-componente de eficiencia que lleve su aporte por debajo de 11 puntos. Ahí el supervisor debe profundizar.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "context": {
+      "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+      "bank_name": "Banco Popular Dominicano",
+      "entity_type": "banca_multiple",
+      "latest": {
+        "period_end": "2026-03-31",
+        "overall_score": 88.96,
+        "rating_tier": "SDQ-AA",
+        "band": "fuerte"
+      },
+      "sub_components": [
+        {
+          "key": "solidez",
+          "label": "Solidez financiera",
+          "score": 100.0,
+          "weight": 0.4,
+          "band": "fuerte",
+          "drag": {
+            "key": "solvencia",
+            "label": "Índice de solvencia",
+            "score": 100.0
+          },
+          "driver": {
+            "key": "patrimonio_activos",
+            "label": "Patrimonio / activos",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "calidad",
+          "label": "Calidad de activos",
+          "score": 88.76,
+          "weight": 0.3,
+          "band": "fuerte",
+          "drag": {
+            "key": "concentracion_top10",
+            "label": "Concentración top-10",
+            "score": 71.64
+          },
+          "driver": {
+            "key": "hhi_sectorial",
+            "label": "HHI sectorial de cartera",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "eficiencia",
+          "label": "Eficiencia y rentabilidad",
+          "score": 77.21,
+          "weight": 0.15,
+          "band": "adecuado",
+          "drag": {
+            "key": "cost_to_income",
+            "label": "Eficiencia operativa (cost-to-income)",
+            "score": 40.68
+          },
+          "driver": {
+            "key": "margen_financiero",
+            "label": "Margen de intermediación",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "liquidez",
+          "label": "Liquidez",
+          "score": 74.97,
+          "weight": 0.1,
+          "band": "adecuado",
+          "drag": {
+            "key": "liquidez_ajustada",
+            "label": "Liquidez ajustada",
+            "score": 51.26
+          },
+          "driver": {
+            "key": "ltd",
+            "label": "Cartera / depósitos (LtD)",
+            "score": 99.36
+          }
+        },
+        {
+          "key": "diversificacion",
+          "label": "Diversificación",
+          "score": 64.98,
+          "weight": 0.05,
+          "band": "moderado",
+          "drag": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 64.98
+          },
+          "driver": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 64.98
+          }
+        }
+      ],
+      "trend": [
+        {
+          "period_end": "2021-03-31",
+          "score": 82.36,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2021-06-30",
+          "score": 90.07,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2021-09-30",
+          "score": 90.22,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2021-12-31",
+          "score": 89.36,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-03-31",
+          "score": 88.38,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-06-30",
+          "score": 91.15,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2022-09-30",
+          "score": 89.99,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-12-31",
+          "score": 90.16,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2023-03-31",
+          "score": 89.99,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-06-30",
+          "score": 90.42,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2023-09-30",
+          "score": 88.98,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-12-31",
+          "score": 89.17,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-03-31",
+          "score": 88.67,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-06-30",
+          "score": 89.79,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-09-30",
+          "score": 89.61,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-12-31",
+          "score": 89.93,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-03-31",
+          "score": 89.29,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-06-30",
+          "score": 89.74,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-09-30",
+          "score": 89.34,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-12-31",
+          "score": 89.27,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2026-03-31",
+          "score": 88.96,
+          "tier": "SDQ-AA"
+        }
+      ],
+      "peers": {
+        "period_end": "2026-03-31",
+        "sector": {
+          "n": 81,
+          "median_score": 80.18,
+          "p25_score": 76.62,
+          "p75_score": 85.25,
+          "percentile": 84.0
+        },
+        "entity_type": {
+          "n": 16,
+          "median_score": 82.65,
+          "p25_score": 78.1,
+          "p75_score": 85.25,
+          "percentile": 100.0
+        },
+        "entity_type_label": "banca_multiple"
+      }
+    }
+  }
+]
