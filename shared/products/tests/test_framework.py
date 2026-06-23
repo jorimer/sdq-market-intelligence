@@ -122,6 +122,23 @@ def test_assemble_pulse_blocks_entity_leak(tmp_path):
             FakeSector(leak=True), ProductTier.pulse, period="2024-Q4", output_dir=str(tmp_path)))
 
 
+def test_assemble_system_with_entity_name_raises_anonymization(tmp_path):
+    """Un nivel system con entity_name seteado es una fuga → AnonymizationError
+    (no AssertionError: doctrina uniforme, no se desactiva con python -O)."""
+    sec = FakeSector()
+    orig = sec.snapshot
+
+    def named_system(tier, period, scope=None):
+        snap = orig(tier, period, scope)
+        return ProductSnapshot(tier=snap.tier, period=snap.period, payload=snap.payload,
+                               entity_name="Banco X", entity_roster=snap.entity_roster)
+
+    sec.snapshot = named_system
+    with pytest.raises(AnonymizationError):
+        asyncio.run(assemble_product_report(
+            sec, ProductTier.pulse, period="2024-Q4", output_dir=str(tmp_path)))
+
+
 def test_assemble_unknown_tier_is_spanish_error(tmp_path):
     with pytest.raises(ValueError, match="no ofrece el nivel"):
         asyncio.run(assemble_product_report(

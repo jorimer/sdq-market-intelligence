@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from shared.products.anonymization import enforce_anonymized
+from shared.products.anonymization import AnonymizationError, enforce_anonymized
 from shared.products.contract import SectorProduct
 from shared.products.tiers import Granularity, ProductTier
 
@@ -41,15 +41,21 @@ async def assemble_product_report(
     snapshot = product.snapshot(tier, period, scope)
 
     # Doctrina: un nivel de sistema (Pulse) jamás emite identificadores de entidad.
-    if level.granularity == Granularity.system:
+    is_system = level.granularity == Granularity.system
+    if is_system:
         if snapshot.entity_name is not None:
-            raise AssertionError(
-                f"Snapshot de sistema de '{product.sector_key}' no debe nombrar "
+            raise AnonymizationError(
+                f"Un nivel de sistema de '{product.sector_key}' no debe nombrar "
                 f"entidad (entity_name='{snapshot.entity_name}')."
             )
         enforce_anonymized(snapshot.payload, entity_roster=snapshot.entity_roster)
 
     narratives = await product.narratives(tier, snapshot, lang)
+
+    # Defensa en profundidad: el TEXTO narrado de un Pulse tampoco puede nombrar
+    # entidad (aunque el guard del motor ya lo limita, lo verificamos antes de render).
+    if is_system:
+        enforce_anonymized(narratives, entity_roster=snapshot.entity_roster)
 
     return await product.render(
         tier, snapshot, narratives,

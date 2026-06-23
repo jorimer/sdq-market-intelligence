@@ -210,8 +210,11 @@ class BankingProduct:
                 "score_promedio_sistema": snapshot.payload.get("system_avg_score"),
                 "scope": "Sistema bancario dominicano (agregado, sin entidades nombradas)",
             }
-            res = await narrative_engine.generate(context=ctx, template="sector_outlook",
-                                                  mode="standard")
+            # axis="banking" → ruta cerebro con numeric_guard (G3). Pulse es el nivel
+            # ABIERTO: jamás narra cifras sin gobernanza. Audiencia de mercado.
+            res = await narrative_engine.generate(
+                context=ctx, template="sector_outlook", mode="standard",
+                axis="banking", audience="inversionista")
             return {"system_overview": res.text}
 
         scoring_result = snapshot.payload["scoring_result"]

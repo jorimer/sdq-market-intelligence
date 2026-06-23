@@ -17,6 +17,12 @@ _FORBIDDEN_KEYS = frozenset({
 })
 
 
+# Longitud mínima de un nombre del roster para hacer match por substring. Nombres
+# muy cortos (acrónimos de 1-3 letras o palabras genéricas como "Banco") generarían
+# falsos positivos contra prosa legítima. Trade-off precisión/recall documentado.
+_MIN_ROSTER_LEN = 4
+
+
 class AnonymizationError(ValueError):
     """Se filtró un identificador de entidad en un producto Pulse."""
 
@@ -26,10 +32,11 @@ def enforce_anonymized(payload: object, *, entity_roster: Iterable[str] = ()) ->
 
     Dos verificaciones:
       1. Claves reservadas (``_FORBIDDEN_KEYS``) presentes en cualquier nivel.
-      2. Cualquier nombre del roster del sector contenido (case-insensitive) en un
-         valor de texto.
+      2. Cualquier nombre del roster del sector (de longitud ≥ ``_MIN_ROSTER_LEN``)
+         contenido (case-insensitive) en un valor de texto.
     """
-    roster = [n.strip() for n in entity_roster if n and n.strip()]
+    roster = [n.strip() for n in entity_roster
+              if n and len(n.strip()) >= _MIN_ROSTER_LEN]
     roster_lower = [n.lower() for n in roster]
 
     def walk(node: object, path: str) -> None:
