@@ -84,6 +84,9 @@ NARRATIVE_SECTION_TITLES = {
     "recommendation": "Recomendación",
     "trend_analysis": "Análisis de Tendencias",
     "sector_outlook": "Perspectiva Sectorial",
+    "system_overview": "Panorama del Sistema",
+    "scenario_analysis": "Análisis de Escenarios",
+    "limitations": "Limitaciones",
 }
 
 
@@ -396,6 +399,92 @@ def _build_disclaimer(styles) -> List:
     return elements
 
 
+# ── Tier building blocks (Pulse band table · peer block) ──────────
+# Opt-in: solo se renderizan cuando el ensamblador de nivel pasa el dato. No alteran
+# el comportamiento de los 7 reportes base (que no los pasan).
+
+def _build_band_distribution_table(band_distribution: Dict[str, int], styles) -> List:
+    """Tabla de distribución del sistema por banda (Pulse — SIN nombres de entidad)."""
+    elements: List = [Paragraph("Distribución del Sistema por Banda", styles["SDQHeading"])]
+    total = sum(int(v) for v in band_distribution.values()) or 1
+    rows = [["Banda", "Entidades", "% del sistema"]]
+    for band, count in band_distribution.items():
+        rows.append([str(band), str(int(count)), f"{int(count) / total * 100:.1f}%"])
+    table = Table(rows, colWidths=[2.8 * inch, 1.4 * inch, 1.6 * inch])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(table)
+    return elements
+
+
+def _build_peer_block(peer_block: Dict, styles) -> List:
+    """Posición competitiva del sistema (CR5/CR10/HHI). Para Insight/Deep Dive."""
+    label = peer_block.get("metric_label", "Activos")
+    elements: List = [Paragraph(f"Estructura de Mercado — {label}", styles["SDQHeading"])]
+    rows = [["Métrica", "Valor"]]
+    spec = [("CR5 (5 mayores)", "cr5", "%"), ("CR10 (10 mayores)", "cr10", "%"),
+            ("HHI (concentración)", "hhi", "")]
+    for disp, key, suffix in spec:
+        val = peer_block.get(key)
+        if val is not None:
+            rows.append([disp, f"{val}{suffix}"])
+    if len(rows) == 1:
+        return []
+    table = Table(rows, colWidths=[3.5 * inch, 2.0 * inch])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(table)
+    return elements
+
+
+def _make_page_decorator(watermark: Optional[str], sample: bool):
+    """Footer/marca por nivel dibujada en cada página. None si no hay marca."""
+    text = "MUESTRA — DATA ILUSTRATIVA" if sample else watermark
+    if not text:
+        return None
+    color = HexColor("#991B1B") if sample else GRAY
+
+    def _decorate(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica-Bold" if sample else "Helvetica", 8)
+        canvas.setFillColor(color)
+        canvas.drawCentredString(A4[0] / 2, 0.4 * inch, text)
+        canvas.restoreState()
+
+    return _decorate
+
+
+def _order_narratives(narratives: Dict[str, str],
+                      sections: Optional[List[str]]) -> Dict[str, str]:
+    """Filtra/ordena las narrativas por `sections` (manifiesto del nivel).
+
+    Default (`sections=None`) = comportamiento actual: las narrativas tal cual.
+    """
+    if not sections:
+        return narratives
+    ordered = {s: narratives[s] for s in sections if s in narratives}
+    # Preserva cualquier sección extra no listada (no perder contenido inadvertidamente).
+    for k, v in narratives.items():
+        ordered.setdefault(k, v)
+    return ordered
+
+
 # ── Public API ────────────────────────────────────────────────────
 
 async def generate_pdf_report(
@@ -405,16 +494,31 @@ async def generate_pdf_report(
     period: str,
     narratives: Optional[Dict[str, str]] = None,
     output_dir: Optional[str] = None,
+    *,
+    sections: Optional[List[str]] = None,
+    tier: Optional[str] = None,
+    watermark: Optional[str] = None,
+    sample: bool = False,
+    band_distribution: Optional[Dict[str, int]] = None,
+    peer_block: Optional[Dict] = None,
 ) -> str:
     """Generate a branded PDF report and return the file path.
 
     Args:
         report_type: One of the 7 report type keys.
-        bank_name: Display name of the bank.
+        bank_name: Display name of the bank (or system label for Pulse).
         scoring_result: Output from ``run_scoring()`` or equivalent.
         period: Period string (e.g. ``"2024-Q4"``).
         narratives: ``{section_key: text}``. If ``None``, no narrative pages.
         output_dir: Override for ``settings.REPORTS_DIR``.
+
+    Extensiones de productización (NO-ROTURA — defaults = comportamiento actual):
+        sections: si viene, filtra/ordena las secciones narrativas (manifiesto del nivel).
+        tier: nivel comercial (metadato del título). No altera la estructura por sí solo.
+        watermark: pie de marca por nivel (p.ej. "Vista abierta · SDQMIP").
+        sample: estampa "MUESTRA — DATA ILUSTRATIVA" en cada página.
+        band_distribution: ``{banda: conteo}`` → tabla de sistema anonimizada (Pulse).
+        peer_block: ``{metric_label, cr5, cr10, hhi}`` → estructura de mercado (Insight/DD).
 
     Returns:
         Absolute path to the generated PDF file.
@@ -465,14 +569,28 @@ async def generate_pdf_report(
         elements.extend(_build_indicators_table(indicators, styles))
         elements.append(PageBreak())
 
-    # 5. Narrative sections
+    # 4b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
+    if band_distribution:
+        elements.extend(_build_band_distribution_table(band_distribution, styles))
+        elements.append(Spacer(1, 0.3 * inch))
+
+    # 4c. Bloque de pares — estructura de mercado (opt-in; Insight/Deep Dive).
+    if peer_block:
+        elements.extend(_build_peer_block(peer_block, styles))
+        elements.append(Spacer(1, 0.3 * inch))
+
+    # 5. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`).
     if narratives:
-        elements.extend(_build_narrative_sections(narratives, styles))
+        elements.extend(_build_narrative_sections(
+            _order_narratives(narratives, sections), styles))
 
     # 6. Disclaimer
     elements.extend(_build_disclaimer(styles))
 
-    # Build PDF
+    # Build PDF (marca por nivel / muestra dibujada en cada página si aplica).
+    title_label = REPORT_TYPE_LABELS.get(report_type, report_type)
+    if tier:
+        title_label = f"{title_label} · {tier}"
     doc = SimpleDocTemplate(
         filepath,
         pagesize=A4,
@@ -480,9 +598,13 @@ async def generate_pdf_report(
         rightMargin=MARGIN,
         topMargin=MARGIN,
         bottomMargin=MARGIN,
-        title=f"SDQ — {REPORT_TYPE_LABELS.get(report_type, report_type)} — {bank_name}",
+        title=f"SDQ — {title_label} — {bank_name}",
         author="SDQ Market Intelligence",
     )
-    doc.build(elements)
+    decorate = _make_page_decorator(watermark, sample)
+    if decorate is not None:
+        doc.build(elements, onFirstPage=decorate, onLaterPages=decorate)
+    else:
+        doc.build(elements)
     logger.info("PDF generated: %s", filepath)
     return filepath

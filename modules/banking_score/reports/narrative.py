@@ -167,3 +167,29 @@ async def generate_report_narratives(
         narratives[section] = result.text
 
     return narratives
+
+
+async def generate_named_narratives(
+    sections: list,
+    bank_name: str,
+    scoring_result: Dict,
+    period: str,
+    benchmarks: Optional[Dict] = None,
+    mode: str = "detailed",
+) -> Dict[str, str]:
+    """Genera narrativas para una lista EXPLÍCITA de secciones (driven por el manifiesto
+    de nivel del producto), reutilizando el mapeo sección→template y el contexto
+    enfocado existentes. No reemplaza ``generate_report_narratives`` (keyed por
+    report_type); es la vía de la productización por niveles.
+    """
+    narratives: Dict[str, str] = {}
+    for section in sections:
+        template = _SECTION_TO_TEMPLATE.get(section, "executive_summary")
+        context = _build_section_context(section, bank_name, scoring_result, period, benchmarks)
+        cerebro = {"axis": "banking", "audience": "comite_credito"} \
+            if template == "subcomponent_focus" else {}
+        result: NarrativeResult = await narrative_engine.generate(
+            context=context, template=template, mode=mode, **cerebro,
+        )
+        narratives[section] = result.text
+    return narratives
