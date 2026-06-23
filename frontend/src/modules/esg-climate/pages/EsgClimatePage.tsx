@@ -15,9 +15,11 @@ import {
 } from "@/shared/ui/primitives";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
+import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { Band } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
-import { getIndicators, getCountryScore, getCountryInsight, getBacktest, IRCIndicator, IRCCountryDetail, IRCBacktest } from "../api";
+import { getIndicators, getCountryScore, getCountryInsight, getBacktest, CLIMATE_AUDIENCES, IRCIndicator, IRCCountryDetail, IRCBacktest } from "../api";
 import { IRC_DIM_VARS } from "../data";
 
 type Status = "loading" | "error" | "ready";
@@ -50,6 +52,7 @@ export function EsgClimatePage() {
   const [countries, setCountries] = useState<IRCIndicator[]>([]);
   const [detail, setDetail] = useState<IRCCountryDetail | null>(null);
   const [selected, setSelected] = useState("DOM");
+  const [audience, setAudience] = useAudiencePref("sdq.esg.audience", CLIMATE_AUDIENCES);
   const [tab, setTab] = useState("desglose");
   const [backtest, setBacktest] = useState<IRCBacktest | null>(null);
 
@@ -270,8 +273,17 @@ export function EsgClimatePage() {
         <AiInsightCard
           title={t("esg.insightTitle")}
           subtitle={t("esg.insightSubtitle", { country: nameOf(selected) })}
-          depsKey={selected}
-          fetcher={() => getCountryInsight(selected)}
+          depsKey={`${selected}:${audience}`}
+          fetcher={() => getCountryInsight(selected, audience)}
+          actions={
+            <AudienceTabs
+              value={audience}
+              onChange={setAudience}
+              options={CLIMATE_AUDIENCES}
+              labelPrefix="esg.audience"
+              ariaLabelKey="esg.audienceLabel"
+            />
+          }
         />
       </div>
     </div>

@@ -288,6 +288,13 @@
     "monotonicHint": "plus de r\u00e9silience \u2192 moins de d\u00e9c\u00e8s dus aux catastrophes climatiques",
     "insightTitle": "Perspective climatique (IA)",
     "insightSubtitle": "{{country}} \u00b7 IRC + position dans le panel \u00b7 SCQA",
+    "audienceLabel": "Audience",
+    "audience": {
+      "inversionista": "Investisseur",
+      "gobierno": "Gouvernement",
+      "asegurador": "Assureur",
+      "multilateral": "Multilat\u00e9ral"
+    },
     "dims": {
       "physical_risk": "Risque physique",
       "transition_risk": "Risque de transition",

@@ -7,6 +7,8 @@ focused. National (per country), mirrors :mod:`macro_political_risk.ai_context`.
 """
 from typing import Any, Dict, List, Optional
 
+from shared.narrative.derived import derived_figures
+
 _DIM_LABELS = {
     "physical_risk": "Riesgo físico (huracán/clima)",
     "transition_risk": "Riesgo de transición (fósil/carbono)",
@@ -64,6 +66,17 @@ def climate_ai_context(
         "dimensions": rows,
         "strongest_dimension": strongest,
         "weakest_dimension": weakest,
+        # ── canónico (cerebro) ── (pares por rank/distribution en contexto)
+        "score_global": score.get("esg_score"),
+        "sub_componentes": [
+            {"componente": r["dimension"], "score": r["score"], "peso": r["weight"]}
+            for r in rows
+        ],
+        "cifras_derivadas": derived_figures(
+            score=score.get("esg_score"),
+            subcomponents=[{"componente": r["dimension"], "score": r["score"],
+                            "peso": r["weight"]} for r in rows],
+        ),
         "note": "IRC 100% dato real: físico = huracanes HURDAT2/NOAA; transición = "
                 "matriz eléctrica de Ember (fósil/carbono); adaptativa y gobernanza = "
                 "ND-GAIN. Panel Caribe/LatAm como conjunto de pares.",
