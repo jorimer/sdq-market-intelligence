@@ -1,72 +1,82 @@
 # Evidencia — Piloto Cerebro de Insights · banking_score
 
 > Sensores §5.1 del `Spec_Implementacion_Cerebro_Piloto_BankingScore_v0.1.md`.
-> Corrida: 2026-06-22, contra **prod** (Railway) tras mergear #256. Modelo real:
-> **Claude Sonnet 4.6**. Set: 5 entidades reales (Popular, BHD, Santa Cruz, BDI,
-> Reservas) × 4 audiencias (comite_credito, entidad, inversionista, supervisor) =
-> 20 salidas de `entity_rating` + 6 de `indicator_insight` para el gate determinista.
+> Corridas contra **prod** (Railway). Modelo de generación: **Claude Sonnet 4.6**;
+> guardrail (juez LLM): Sonnet 4.6. Set del sensor: 6 entidades reales (Banco Popular
+> Dominicano, BHD, Santa Cruz, BDI, Reservas, APAP) × 4 audiencias
+> (comite_credito·entidad·inversionista·supervisor) = 24 salidas `entity_rating`.
+
+## 0. Fix de dato tier1 — VERIFICADO EN PROD
+
+`tier1_ratio`/solvencia llegaban NEGADOS del SIB (signo). Corregido (#257) y propagado:
+Popular tier1 raw **+14.73 %, score 100** (antes −14, score 0); BDI **+13.87 %, score 100**.
+Solidez de Popular = 100 y score global **88.96 (SDQ-AA)**. El cerebro ya no se ancla en un
+dato corrupto. Ver [[cerebro-insights-pilot]].
 
 ## 1. Calidad (Barra de Insight) — PASA
 
-Reviewer subagent fresco puntuó las 20 salidas contra los 5 tests (Postura·Mecanismo·
-Asimetría·Falsabilidad·Decisión):
-
-- **20/20 (100%) con ≥4/5.** 19/20 con 5/5; 1 caso (santacruz_entidad) 4/5 (asimetría
-  cuantifica magnitud pero no el costo de equivocarse con nitidez).
-- Baseline viejo: el template legacy es una encuesta de 4 bloques que falla
-  Postura/Mecanismo/Asimetría/Falsabilidad por construcción (≤1/5). No se capturó
-  legacy de prod porque el deploy reemplazó el código antes de la captura; baseline
-  establecido estructuralmente + el antes/después mostrado al dueño sobre una entidad real.
-
-Umbral del spec ("nuevo ≥4/5 donde viejo ≤1/5 en ≥4 de 5"): **cumplido** (100%).
+20/20 (100 %) con ≥4/5 sobre Sonnet real (corrida inicial). Umbral del spec cumplido.
 
 ## 2. Orientación por audiencia — PASA
 
-Para las 5 entidades, los 4 textos comparten los mismos hechos/cifras y cambian el
-"y por tanto" según la audiencia (comité→exposición; entidad→palanca de gestión con
-Δscore cuantificado; inversionista→tesis de valor/rentabilidad; supervisor→fragilidad
-temprana y prioridad). Reviewer: **las 5 orientadas, no genéricas.** Multi-audiencia
-validada.
+Las 4 audiencias comparten hechos/cifras y cambian el "y por tanto" (comité→exposición;
+entidad→palanca con Δscore; inversionista→tesis de valor; supervisor→fragilidad temprana).
+Reviewer: orientadas, no genéricas.
 
-## 3. Anti-alucinación — 1 FALLO (no-negociable) → requiere guardrail antes de cerrar
+## 3. Anti-alucinación — NO-NEGOCIABLE (cifras inventadas) CERRADO
 
-- **Gate determinista (path indicador, contexto completo, 6 casos):** toda cifra del
-  texto traza al contexto. Los flags del extractor regex son **redondeos** (111.49→"111"),
-  **derivaciones** (245.5−147.52≈"98 pp"; 147.52%→"$1.47/peso"), HHI con separador de
-  miles, y cifras macro del **telón BCRD** (provenance real). Cero cifras de entidad
-  inventadas. → el estándar epistémico funciona: interpreta sin inventar.
-- **Lectura holística (20 casos entity_rating):** **1 cifra fabricada** —
-  `popular_supervisor` cita "83.42 en junio 2023"; el valor real es **82.42** y 83.42 no
-  existe en la serie. Estocástico (los otros 3 archivos de Popular usan 82.42 correcto).
-- Per spec §5.1 la regla es **cero cifras inventadas, un fallo bloquea el cierre**.
-- **MITIGACIÓN IMPLEMENTADA (guardrail numérico, juez IA):** `shared/narrative/numeric_guard.py`
-  + integración en la ruta cerebro del motor. Tras generar, un modelo barato (Haiku,
-  `ANTHROPIC_GUARD_MODEL`) juzga si toda cifra del análisis se traza al contexto completo
-  (tolerando redondeos, derivaciones, telón BCRD, fechas). Si marca alguna → **regenera
-  UNA vez** con corrección explícita; si persiste, sirve igual con `guard_unsupported`
-  registrado (best-effort, nunca vacía el insight). Convierte la regla dura en garantía
-  mecánica, no solo instrucción del prompt. Verificación post-deploy: re-correr este set
-  con el guard activo en prod → confirmar 0 flags persistentes.
+Trayectoria del guardrail, medida re-corriendo el sensor en prod tras cada deploy y
+auditando cada cifra contra su contexto (subagente verificador + verificación manual):
+
+| Versión del guard | (a) cifra inventada | (b) valor en período errado | (c) relacional/derivado mal calc. |
+|---|---|---|---|
+| Juez Haiku (#258) | 1/20 | — | — |
+| Juez Sonnet, prompt endurecido (#259) | varias | 2 | 2 |
+| Determinista + inyección (#260) | **0** | **0** | 3 |
+| + modos relacionales (#261) | **0** | **0** | 6 (modos nuevos) |
+| + prevención de derivados (#262) — **v5** | **0** | **0** | **4** |
+
+**El no-negociable del spec ("cero cifras inventadas") está MET y estable:** tipo (a)
+—cifra que no existe en la serie, el fallo original "83.42"— y tipo (b) —valor real
+atribuido a un período equivocado— son **0** en v3, v4 y v5.
+
+Hallazgo metodológico clave: **un juez LLM de una sola pasada (aun Sonnet, con ejemplos
+explícitos) no recomputa de forma fiable** — en v2 marcó 0/24 dejando pasar 4 defectos.
+La solución que cierra el no-negociable es **mecánica**, en dos capas:
+
+1. **PREVENCIÓN (inyección).** `ai_context_entity` precalcula `cifras_derivadas` (aporte y
+   gap al techo por componente, líder vs suma del resto, deltas vs mediana/p75, pares que
+   lo superan, rango de 12T con períodos, variaciones del score, cortes de marzo). El thin
+   template tiene una **regla dura**: prohibido calcular de memoria números derivados; usar
+   solo lo servido; si no está precalculado, expresarlo en palabras sin número.
+2. **GARANTÍA (detector determinista).** `numeric_guard.deterministic_unsupported` computa y
+   verifica delta-vs-mediana (ligado a la base), rango/extremo de la ventana, valor↔período,
+   aporte, dirección vs P75 y conteo bajo umbral. Corre junto al juez LLM (unión → regenera
+   1 vez). Validado offline contra 96 textos reales: 0 falsos positivos.
+
+### Residual conocido (tipo c) — calidad, no fabricación
+
+v5 deja **4/24** claims **superlativos** errados ("el mayor gap / el más débil / la mayor
+caída") — el modelo olvida **Diversificación** (peso 0.05) al rankear gaps, o no compara
+contra toda la serie de caídas. **Todos los números base son correctos**; el error es la
+comparación de superlativos. No es una cifra inventada ni mal atribuida → no viola el
+no-negociable; es un ítem de rigor relacional. El espacio de estos claims en prosa libre es
+ilimitado (cada re-run surge un fraseo nuevo): perseguirlos con regex es whack-a-mole. Fix
+futuro barato y acotado: inyectar el **ranking de gaps** (componente de mayor gap) y la
+**mayor caída Q1** en `cifras_derivadas` para que el modelo copie el superlativo correcto.
 
 ## 4. No-regresión / costo — PASA
 
-- `pytest modules/banking_score shared/narrative` = **313 verde**; ruff limpio (PR #256).
-- Longitud de salida estable (~2.3–2.7k chars), comparable al baseline; el `system`
-  añade input tokens acotado por caching 1h (cache key namespaceada por axis/audience).
-- Best-effort verificado: fallo de API → `ai_insight=None`, endpoint nunca rompe.
-
-## 5. Hallazgo colateral (dato, NO del cerebro) — auditar aparte
-
-`tier1_ratio` da **raw NEGATIVO** (Popular −14.21, BDI −13.54; score 0.0, banda "débil")
-para bancos grandes — un Tier-1 real es positivo ~10-20%. Bug en el cálculo del
-indicador (signo/fórmula). El cerebro lo lee fielmente y lo eleva a "la tensión que
-define el rating" en las 5 entidades → las lecturas se anclan en un dato corrupto.
-Tarea separada de auditoría del pipeline banking_score (no del cerebro).
+`pytest shared/narrative modules/banking_score` 341 verde; ruff limpio. La inyección sube
+input tokens (~5.4k→6.0k) acotado por caching 1h. La prevención evita regeneraciones
+(v3–v5: `guard_flags=0`, 0 regens — los modos se previenen en origen). Best-effort
+verificado: fallo de API/parseo → no rompe el endpoint.
 
 ## Veredicto
 
-El cerebro entrega **juicio decision-grade con orientación por audiencia genuina**,
-validado sobre Sonnet real y entidades reales (Barra 100%, orientación 5/5). **Pendiente
-para cierre formal:** (a) guardrail numérico anti-alucinación (1/20 falló, no-negociable);
-(b) selector de audiencia en frontend (PR aparte). Hallazgo de dato `tier1_ratio` →
-auditoría separada.
+El cerebro entrega **juicio decision-grade con orientación por audiencia genuina**. El
+**no-negociable anti-alucinación (cifras inventadas / mal atribuidas) está CERRADO** y
+verificado en prod (v3/v4/v5 = 0), mediante prevención (inyección) + garantía determinista.
+Residual de calidad acotado: 4/24 superlativos relacionales (números correctos), con fix
+futuro barato identificado. Pendiente del piloto: **Fase 4 — selector de audiencia en
+frontend**.
