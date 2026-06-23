@@ -288,6 +288,13 @@
     "monotonicHint": "higher resilience \u2192 fewer deaths from climate disasters",
     "insightTitle": "Climate outlook (AI)",
     "insightSubtitle": "{{country}} \u00b7 IRC + panel position \u00b7 SCQA",
+    "audienceLabel": "Audience",
+    "audience": {
+      "inversionista": "Investor",
+      "gobierno": "Government",
+      "asegurador": "Insurer",
+      "multilateral": "Multilateral"
+    },
     "dims": {
       "physical_risk": "Physical risk",
       "transition_risk": "Transition risk",

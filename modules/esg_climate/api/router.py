@@ -28,13 +28,18 @@ logger = logging.getLogger("sdq.api.esg_climate")
 router = APIRouter()
 
 
-async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
-    """Generate a Claude narrative from *context*; best-effort (returns None on any
-    failure so the endpoint never breaks). Without an API key the engine returns a
-    static fallback (``model_used == "static_fallback"``), passed through."""
+async def _ai_insight(
+    context: Dict[str, Any], template: str, audience: str = "inversionista",
+) -> Dict[str, Any] | None:
+    """Generate a Claude narrative via the cerebro route (axis=esg_climate); best-effort
+    (returns None on any failure so the endpoint never breaks). Without an API key the
+    engine returns a static fallback (``model_used == "static_fallback"``)."""
     try:
         from shared.narrative.claude_engine import narrative_engine
-        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        res = await narrative_engine.generate(
+            context, template=template, mode="detailed",
+            axis="esg_climate", audience=audience,
+        )
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
     except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
         logger.warning("AI insight clima (%s) no disponible: %s", template, e)
@@ -124,6 +129,11 @@ async def latest(
 )
 async def insight(
     entity_key: str,
+    audience: str = Query(
+        "inversionista",
+        description="Audiencia para orientar el insight (inversionista·gobierno·asegurador·"
+                    "multilateral); una clave desconocida cae al default.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -146,7 +156,7 @@ async def insight(
     ctx = climate_ai_context(entity_key, score, country_name=IRC_PANEL.get(entity_key),
                              rank=rank, n_countries=len(peers), distribution=dist)
     return {"has_score": True, "entity_key": entity_key,
-            "ai_insight": await _ai_insight(ctx, "climate_outlook")}
+            "ai_insight": await _ai_insight(ctx, "climate_outlook", audience)}
 
 
 @router.delete(

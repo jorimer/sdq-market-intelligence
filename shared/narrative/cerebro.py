@@ -127,6 +127,15 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "que la diferenciación regional viene solo de las variables regionales (pobreza, "
         "alfabetización, cobertura). Nómbralo cuando sea material. El foco es la región."
     ),
+    "esg_climate": (
+        "DOCTRINA DE CASA — Eje ESG/clima (Índice de Resiliencia Climática, IRC):\n"
+        "Lees la resiliencia climática de un país: mayor score = mayor resiliencia / MENOR "
+        "riesgo climático. El IRC se ancla a dimensiones con pesos declarados (riesgo físico "
+        "huracán/clima, riesgo de transición fósil/carbono, capacidad adaptativa, gobernanza); "
+        "ponderas por su peso. El IRC es 100% DATO REAL (HURDAT2/NOAA, Ember, ND-GAIN) — no hay "
+        "rúbrica que descontar; apóyate con firmeza. LEE DISTRIBUCIÓN, NO SOLO LA MEDIA: sitúa "
+        "al país en el panel Caribe/LatAm (rank, dispersión). El foco es el país."
+    ),
 }
 
 # ── POR MÓDULO — Frames de audiencia ──────────────────────────────────────────
@@ -292,6 +301,36 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Le importa: la dimensión con mayor brecha y peso (mayor potencial de impacto), la "
             "posición de la región en la distribución, y la calidad del dato. Tu \"y por tanto\" "
             "final apunta a dónde el capital de impacto mueve más la aguja del desarrollo."
+        ),
+    },
+    "esg_climate": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / asignador de capital.\n"
+            "Decide: exposición a activos/países según su resiliencia climática.\n"
+            "Le importa: el riesgo climático como factor de valor (físico y de transición), la "
+            "dimensión que más fragiliza al país (mayor gap al techo) y su posición en el panel. "
+            "Tu \"y por tanto\" final apunta a dónde el riesgo climático está mal descontado."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / política climática y de adaptación.\n"
+            "Decide: dónde invertir en adaptación, transición energética o gobernanza climática.\n"
+            "Le importa: la dimensión de menor resiliencia accionable por política (capacidad "
+            "adaptativa, transición), su brecha vs el panel, y la señal a monitorear. Tu \"y por "
+            "tanto\" final apunta a la palanca de política climática con mayor retorno."
+        ),
+        "asegurador": (
+            "FRAME DE DECISIÓN — Audiencia: Asegurador / reasegurador.\n"
+            "Decide: tarificación y apetito de cobertura ante riesgo físico climático.\n"
+            "Le importa: el riesgo físico (huracán/clima, HURDAT2) y la capacidad adaptativa "
+            "como determinantes de la siniestralidad esperada, y la posición del país en el "
+            "panel. Tu \"y por tanto\" final apunta a la exposición/tarifa prudente al riesgo físico."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Banco multilateral / finanzas climáticas.\n"
+            "Decide: dónde dirigir financiamiento climático (adaptación/mitigación).\n"
+            "Le importa: la fragilidad climática estructural del país, la transición energética "
+            "(matriz fósil/carbono) y la comparabilidad regional. Tu \"y por tanto\" final apunta "
+            "a dónde el financiamiento climático rinde más sobre la resiliencia del país."
         ),
     },
 }

@@ -288,6 +288,13 @@
     "monotonicHint": "mayor resiliencia \u2192 menos muertes por desastre clim\u00e1tico",
     "insightTitle": "Perspectiva clim\u00e1tica (IA)",
     "insightSubtitle": "{{country}} \u00b7 IRC + posici\u00f3n en el panel \u00b7 SCQA",
+    "audienceLabel": "Audiencia",
+    "audience": {
+      "inversionista": "Inversionista",
+      "gobierno": "Gobierno",
+      "asegurador": "Asegurador",
+      "multilateral": "Multilateral"
+    },
     "dims": {
       "physical_risk": "Riesgo f\u00edsico",
       "transition_risk": "Riesgo de transici\u00f3n",

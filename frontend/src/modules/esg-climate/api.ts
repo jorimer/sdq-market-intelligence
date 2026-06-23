@@ -1,9 +1,21 @@
 import client from "@/shared/api/client";
 import type { AiInsight } from "@/shared/ui/insight-types";
 
-/** Contextual AI insight for one country's IRC (climate narrative). Best-effort. */
-export async function getCountryInsight(entityKey: string): Promise<AiInsight | null> {
-  const { data } = await client.get(`/esg-climate/${entityKey}/insight`);
+export const CLIMATE_AUDIENCES = [
+  "inversionista",
+  "gobierno",
+  "asegurador",
+  "multilateral",
+] as const;
+
+/** Contextual AI insight for one country's IRC (climate narrative), by audience. */
+export async function getCountryInsight(
+  entityKey: string,
+  audience: string = CLIMATE_AUDIENCES[0],
+): Promise<AiInsight | null> {
+  const { data } = await client.get(`/esg-climate/${entityKey}/insight`, {
+    params: { audience },
+  });
   return (data.ai_insight as AiInsight | null) ?? null;
 }
 
