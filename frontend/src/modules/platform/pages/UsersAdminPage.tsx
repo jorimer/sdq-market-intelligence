@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { ShieldCheck, UserPlus, Pencil, Trash2, X } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
-  ROLE_LABELS, TIER_LABELS, ROLE_OPTIONS, TIER_OPTIONS, roleSatisfies,
+  TIER_LABELS, ROLE_OPTIONS, TIER_OPTIONS, roleSatisfies,
 } from "@/shared/auth/roles";
 import {
   listUsers, createUser, updateUser, resetUserPassword, deleteUser,
@@ -13,6 +15,10 @@ import {
 const ROLE_TONE: Record<string, "ok" | "warn" | "muted" | "accent"> = {
   super_admin: "warn", admin: "accent", analyst: "ok", viewer: "muted",
 };
+
+/** Etiqueta de rol localizada (fallback al key crudo). */
+const roleLabel = (t: TFunction, role: string) =>
+  t(`platform.users.roles.${role}`, { defaultValue: role });
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -29,6 +35,7 @@ interface ModalState {
 }
 
 export function UsersAdminPage() {
+  const { t } = useTranslation();
   const { user: me } = useAuth();
   const isSuper = me?.role === "super_admin";
   const [users, setUsers] = useState<AdminUser[] | null>(null);
@@ -54,27 +61,27 @@ export function UsersAdminPage() {
     isSuper || (roleSatisfies(me?.role, "admin") && !roleSatisfies(target.role, "admin"));
 
   const onDelete = async (u: AdminUser) => {
-    if (!window.confirm(`¿Eliminar definitivamente a ${u.email}? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(t("platform.users.confirmDelete", { email: u.email }))) return;
     try { await deleteUser(u.id); load(); }
-    catch (e) { setBanner(errMsg(e, "No se pudo eliminar.")); }
+    catch (e) { setBanner(errMsg(e, t("platform.users.deleteError"))); }
   };
 
   const onToggleActive = async (u: AdminUser) => {
-    const verb = u.is_active ? "desactivar" : "activar";
-    if (!window.confirm(`¿${verb[0].toUpperCase() + verb.slice(1)} a ${u.email}?`)) return;
-    try { await updateUser(u.id, { is_active: !u.is_active }); load(); }
-    catch (e) { setBanner(errMsg(e, `No se pudo ${verb}.`)); }
+    const active = u.is_active;
+    if (!window.confirm(t(active ? "platform.users.confirmDeactivate" : "platform.users.confirmActivate", { email: u.email }))) return;
+    try { await updateUser(u.id, { is_active: !active }); load(); }
+    catch (e) { setBanner(errMsg(e, t(active ? "platform.users.deactivateError" : "platform.users.activateError"))); }
   };
 
   return (
     <div>
       <PageHead
-        eyebrow="Administración"
-        title="Usuarios y accesos"
-        sub="Gestión de usuarios, roles (qué puede administrar) y tier (nivel de acceso para monetización)."
+        eyebrow={t("platform.users.eyebrow")}
+        title={t("platform.users.title")}
+        sub={t("platform.users.sub")}
         right={
           <button className="btn btn-primary" onClick={() => setModal({ mode: "create" })}>
-            <UserPlus className="w-4 h-4" /> Nuevo usuario
+            <UserPlus className="w-4 h-4" /> {t("platform.users.newUser")}
           </button>
         }
       />
@@ -87,23 +94,23 @@ export function UsersAdminPage() {
       )}
 
       <Card>
-        <CardHead icon={ShieldCheck} title="Usuarios" subtitle="Rol jerárquico: super_admin ⊇ admin ⊇ analyst ⊇ viewer." />
+        <CardHead icon={ShieldCheck} title={t("platform.users.cardTitle")} subtitle={t("platform.users.cardSub")} />
         {status === "loading" && <Skeleton className="h-48" />}
-        {status === "error" && <StateBlock kind="error" message="No se pudo cargar la lista de usuarios." />}
+        {status === "error" && <StateBlock kind="error" message={t("platform.users.loadError")} />}
         {status === "ok" && users && users.length === 0 && (
-          <StateBlock kind="empty" message="No hay usuarios todavía." />
+          <StateBlock kind="empty" message={t("platform.users.empty")} />
         )}
         {status === "ok" && users && users.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-faint border-b border-line">
-                  <th className="py-2 pr-3 font-medium">Usuario</th>
-                  <th className="py-2 pr-3 font-medium">Rol</th>
-                  <th className="py-2 pr-3 font-medium">Tier</th>
-                  <th className="py-2 pr-3 font-medium">Estado</th>
-                  <th className="py-2 pr-3 font-medium">Alta</th>
-                  <th className="py-2 pr-3 font-medium text-right">Acciones</th>
+                  <th className="py-2 pr-3 font-medium">{t("platform.users.colUser")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("platform.users.colRole")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("platform.users.colTier")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("platform.users.colStatus")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("platform.users.colCreated")}</th>
+                  <th className="py-2 pr-3 font-medium text-right">{t("platform.users.colActions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -114,12 +121,12 @@ export function UsersAdminPage() {
                     <tr key={u.id} className="border-b border-line/60 hover:bg-surface2/40">
                       <td className="py-2.5 pr-3">
                         <div className="font-medium text-ink truncate max-w-[260px]">{u.full_name}</div>
-                        <div className="text-xs text-muted truncate max-w-[260px]">{u.email}{isSelf && " · vos"}</div>
+                        <div className="text-xs text-muted truncate max-w-[260px]">{u.email}{isSelf && ` · ${t("platform.users.self")}`}</div>
                       </td>
-                      <td className="py-2.5 pr-3"><Chip tone={ROLE_TONE[u.role] ?? "muted"}>{ROLE_LABELS[u.role] ?? u.role}</Chip></td>
+                      <td className="py-2.5 pr-3"><Chip tone={ROLE_TONE[u.role] ?? "muted"}>{roleLabel(t, u.role)}</Chip></td>
                       <td className="py-2.5 pr-3"><Chip tone="muted">{TIER_LABELS[u.tier] ?? u.tier}</Chip></td>
                       <td className="py-2.5 pr-3">
-                        <Chip tone={u.is_active ? "ok" : "warn"}>{u.is_active ? "Activo" : "Inactivo"}</Chip>
+                        <Chip tone={u.is_active ? "ok" : "warn"}>{u.is_active ? t("platform.users.active") : t("platform.users.inactive")}</Chip>
                       </td>
                       <td className="py-2.5 pr-3 text-xs text-muted tabular-nums">{u.created_at ? u.created_at.slice(0, 10) : "—"}</td>
                       <td className="py-2.5 pr-3">
@@ -127,18 +134,18 @@ export function UsersAdminPage() {
                           <button
                             className="btn btn-ghost !py-1 !px-2 disabled:opacity-40"
                             disabled={!manage}
-                            title={manage ? "Editar" : "No podés administrar este usuario"}
+                            title={manage ? t("platform.users.edit") : t("platform.users.cannotManage")}
                             onClick={() => setModal({ mode: "edit", user: u })}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           {!isSelf && manage && (
                             <button className="btn btn-ghost !py-1 !px-2" onClick={() => onToggleActive(u)}>
-                              {u.is_active ? "Desactivar" : "Activar"}
+                              {u.is_active ? t("platform.users.deactivate") : t("platform.users.activate")}
                             </button>
                           )}
                           {isSuper && !isSelf && (
-                            <button className="btn btn-ghost !py-1 !px-2 text-alert" title="Eliminar" onClick={() => onDelete(u)}>
+                            <button className="btn btn-ghost !py-1 !px-2 text-alert" title={t("platform.users.delete")} onClick={() => onDelete(u)}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -177,6 +184,7 @@ function UserModal({
   onSaved: (msg: string) => void;
   onError: (msg: string) => void;
 }) {
+  const { t } = useTranslation();
   const editing = state.mode === "edit";
   const u = state.user;
   const [fullName, setFullName] = useState(u?.full_name ?? "");
@@ -201,13 +209,13 @@ function UserModal({
           is_active: u.is_active,
         });
         if (password) await resetUserPassword(u.id, password);
-        onSaved(`Usuario ${email} actualizado.`);
+        onSaved(t("platform.users.updated", { email }));
       } else {
         await createUser({ email, password, full_name: fullName, role, tier });
-        onSaved(`Usuario ${email} creado.`);
+        onSaved(t("platform.users.created", { email }));
       }
     } catch (e) {
-      onError(errMsg(e, "No se pudo guardar el usuario."));
+      onError(errMsg(e, t("platform.users.saveError")));
       setSaving(false);
     }
   };
@@ -220,47 +228,47 @@ function UserModal({
       <div className="card w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-[15px] font-bold text-ink">
-            {editing ? "Editar usuario" : "Nuevo usuario"}
+            {editing ? t("platform.users.modalEdit") : t("platform.users.modalNew")}
           </h3>
           <button onClick={onClose} className="text-faint hover:text-ink"><X className="w-4 h-4" /></button>
         </div>
         <div className="space-y-3">
-          <Field label="Nombre completo">
+          <Field label={t("platform.users.fullName")}>
             <input className="field w-full" value={fullName} onChange={(e) => setFullName(e.target.value)} />
           </Field>
-          <Field label="Email">
+          <Field label={t("platform.users.fEmail")}>
             <input className="field w-full disabled:opacity-60" type="email" value={email}
                    disabled={editing} onChange={(e) => setEmail(e.target.value)} />
           </Field>
-          <Field label={editing ? "Nueva contraseña (opcional)" : "Contraseña"}>
+          <Field label={editing ? t("platform.users.newPassword") : t("platform.users.password")}>
             <input className="field w-full" type="password" value={password}
-                   placeholder={editing ? "Dejar vacío para no cambiar" : "Mínimo 8 caracteres"}
+                   placeholder={editing ? t("platform.users.phKeepPassword") : t("platform.users.phMinChars")}
                    onChange={(e) => setPassword(e.target.value)} />
-            {pwTooShort && <span className="text-[11px] text-alert">Mínimo 8 caracteres.</span>}
+            {pwTooShort && <span className="text-[11px] text-alert">{t("platform.users.pwTooShort")}</span>}
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Rol">
+            <Field label={t("platform.users.fRole")}>
               <select className="field w-full disabled:opacity-60" value={role}
-                      disabled={isSelf} title={isSelf ? "No podés cambiar tu propio rol" : ""}
+                      disabled={isSelf} title={isSelf ? t("platform.users.cannotChangeOwnRole") : ""}
                       onChange={(e) => setRole(e.target.value)}>
                 {roleChoices.map((r) => (
                   <option key={r} value={r} disabled={!assignableRoles.includes(r)}>
-                    {ROLE_LABELS[r] ?? r}
+                    {roleLabel(t, r)}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Tier (acceso)">
+            <Field label={t("platform.users.fTier")}>
               <select className="field w-full" value={tier} onChange={(e) => setTier(e.target.value)}>
-                {TIER_OPTIONS.map((t) => <option key={t} value={t}>{TIER_LABELS[t]}</option>)}
+                {TIER_OPTIONS.map((opt) => <option key={opt} value={opt}>{TIER_LABELS[opt]}</option>)}
               </select>
             </Field>
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-5">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-ghost" onClick={onClose}>{t("platform.users.cancel")}</button>
           <button className="btn btn-primary" disabled={!canSubmit} onClick={submit}>
-            {saving ? "Guardando…" : editing ? "Guardar" : "Crear"}
+            {saving ? t("platform.users.saving") : editing ? t("platform.users.save") : t("platform.users.create")}
           </button>
         </div>
       </div>

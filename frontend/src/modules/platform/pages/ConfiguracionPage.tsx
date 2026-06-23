@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Moon, Sun, SlidersHorizontal, UserCircle } from "lucide-react";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
 import { useApp, SCOPES, Scope } from "@/shared/context/AppContext";
@@ -6,6 +7,7 @@ import { DataSourcesSection } from "../components/DataSourcesSection";
 import { SeriesMaintenanceSection } from "../components/SeriesMaintenanceSection";
 
 export function ConfiguracionPage() {
+  const { t } = useTranslation();
   const { dark, toggleDark, period, setPeriod, periods, scope, setScope } = useApp();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -13,9 +15,9 @@ export function ConfiguracionPage() {
   return (
     <div>
       <PageHead
-        eyebrow="Plataforma"
-        title="Configuración"
-        sub="Preferencias de la sesión y fuentes de datos. El tema, el período y el ámbito se conservan en este navegador."
+        eyebrow={t("platform.config.eyebrow")}
+        title={t("platform.config.title")}
+        sub={t("platform.config.sub")}
       />
 
       {/* Fuentes de datos y claves de API — solo admin */}
@@ -28,7 +30,7 @@ export function ConfiguracionPage() {
         ) : (
           <StateBlock
             kind="forbidden"
-            message="La configuración de claves de API y fuentes de datos requiere rol de administrador."
+            message={t("platform.config.forbidden")}
           />
         )}
       </div>
@@ -36,9 +38,9 @@ export function ConfiguracionPage() {
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Apariencia */}
         <Card>
-          <CardHead icon={dark ? Moon : Sun} title="Apariencia" subtitle="Tema claro u oscuro" />
+          <CardHead icon={dark ? Moon : Sun} title={t("platform.config.appearance")} subtitle={t("platform.config.appearanceSub")} />
           <div className="flex items-center justify-between">
-            <span className="text-sm text-body">Modo {dark ? "oscuro" : "claro"}</span>
+            <span className="text-sm text-body">{dark ? t("platform.config.modeDark") : t("platform.config.modeLight")}</span>
             <button
               onClick={toggleDark}
               role="switch"
@@ -54,16 +56,16 @@ export function ConfiguracionPage() {
 
         {/* Preferencias de datos */}
         <Card>
-          <CardHead icon={SlidersHorizontal} title="Preferencias de datos" subtitle="Período y ámbito por defecto" />
+          <CardHead icon={SlidersHorizontal} title={t("platform.config.dataPrefs")} subtitle={t("platform.config.dataPrefsSub")} />
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">Período</label>
+              <label className="block text-xs font-medium text-muted mb-1">{t("platform.config.period")}</label>
               <select value={period} onChange={(e) => setPeriod(e.target.value)} className="field mono">
                 {periods.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">Ámbito</label>
+              <label className="block text-xs font-medium text-muted mb-1">{t("platform.config.scope")}</label>
               <select value={scope} onChange={(e) => setScope(e.target.value as Scope)} className="field">
                 {SCOPES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -73,18 +75,18 @@ export function ConfiguracionPage() {
 
         {/* Cuenta */}
         <Card className="lg:col-span-2">
-          <CardHead icon={UserCircle} title="Cuenta" subtitle="Sesión actual" />
+          <CardHead icon={UserCircle} title={t("platform.config.account")} subtitle={t("platform.config.accountSub")} />
           <div className="grid sm:grid-cols-3 gap-4">
             <div>
-              <div className="text-xs text-muted">Nombre</div>
+              <div className="text-xs text-muted">{t("platform.config.name")}</div>
               <div className="text-sm text-ink mt-0.5 truncate">{user?.full_name || "—"}</div>
             </div>
             <div>
-              <div className="text-xs text-muted">Correo</div>
+              <div className="text-xs text-muted">{t("platform.config.email")}</div>
               <div className="text-sm text-ink mt-0.5 truncate">{user?.email || "—"}</div>
             </div>
             <div>
-              <div className="text-xs text-muted">Rol</div>
+              <div className="text-xs text-muted">{t("platform.config.role")}</div>
               <div className="text-sm text-ink mt-0.5 mono uppercase">{user?.role || "—"}</div>
             </div>
           </div>
