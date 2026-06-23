@@ -35,13 +35,19 @@ auditando cada cifra contra su contexto (subagente verificador + verificación m
 | Determinista + inyección (#260) | **0** | **0** | 3 |
 | + modos relacionales (#261) — v3 | **0** | **0** | 3 |
 | + prevención de derivados (#262) — v5 | **0** | **0** | 4 |
-| + prevención superlativos (#265) — **v6** | **0** | 1 | 8 (modos nuevos) |
+| + prevención superlativos (#265) — v6 | **0** | 1 | 8 (modos nuevos) |
+| + blindaje período forma C (#266) — **v7** | **0** | **0** | 10 |
 
 **El no-negociable del spec ("cero cifras inventadas", tipo a) está MET y estable: 0 en
-todas las corridas (v3–v6).** El tipo (b) (valor real atribuido a período equivocado) fue 0
-en v3–v5 y tuvo 1 caso en v6 ("diciembre 2025 (90.60)", real 89.82), en una forma de prosa
-("período (valor)") que el detector no cubría → ahora cubierta con la **forma C estricta
-parentética** (validada offline contra 144 textos reales, 0 falsos positivos).
+todas las corridas (v3–v7).** El tipo (b) (valor real atribuido a período equivocado) fue 0
+en v3–v5, tuvo 1 caso en v6 ("diciembre 2025 (90.60)", real 89.82) en una forma de prosa
+("período (valor)") que el detector no cubría → cubierta con la **forma C estricta
+parentética** (validada offline contra 144 textos reales, 0 falsos positivos), y **v7
+post-deploy confirmó (a/b)=0 en prod**. El tipo (c) subió a 10/24 en v7 (de 8 en v6) pese a
+la prevención de superlativos (#265): **confirma empíricamente que el tipo (c) no converge**
+— misma familia de errores (falsa igualdad "Solidez = suma del resto", superlativos de
+serie, ponderado vs absoluto) en fraseos nuevos. Es la evidencia que respalda aceptarlo
+como residual.
 
 Hallazgo metodológico clave: **un juez LLM de una sola pasada (aun Sonnet, con ejemplos
 explícitos) no recomputa de forma fiable** — en v2 marcó 0/24 dejando pasar 4 defectos.
