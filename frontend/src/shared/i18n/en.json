@@ -315,7 +315,8 @@
     "tagRubric": "rubric",
     "tagPartialLive": "{{n}}/{{total}} live",
     "insightFull": "View full analysis",
-    "insightBrief": "View brief version"
+    "insightBrief": "View brief version",
+    "downloadPdf": "Download PDF"
   },
   "bands": {
     "noData": "No data",

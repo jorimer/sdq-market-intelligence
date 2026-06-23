@@ -10,6 +10,7 @@ import {
   Skeleton,
 } from "@/shared/ui/primitives";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
+import { DownloadInsightButton } from "@/shared/ui/DownloadInsightButton";
 import { bandFor, riskBandFor, type Band, type Tone } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
 import { useAuth } from "@/shared/auth/AuthContext";
@@ -292,6 +293,7 @@ export function MarketBriefPage() {
           icon={Sparkles}
           title={t("platform.marketBrief.briefTitle")}
           subtitle={t("platform.marketBrief.briefSubtitle")}
+          right={<DownloadInsightButton ai={report.brief} title={t("platform.marketBrief.title")} eyebrow="SDQ · Market Intelligence" subtitle={report.snapshot?.pais} />}
         />
         <AiInsightBody
           loading={false}

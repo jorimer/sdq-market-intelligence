@@ -315,7 +315,8 @@
     "tagRubric": "r\u00fabrica",
     "tagPartialLive": "{{n}}/{{total}} en vivo",
     "insightFull": "Ver an\u00e1lisis completo",
-    "insightBrief": "Ver versi\u00f3n breve"
+    "insightBrief": "Ver versi\u00f3n breve",
+    "downloadPdf": "Descargar PDF"
   },
   "bands": {
     "noData": "Sin dato",

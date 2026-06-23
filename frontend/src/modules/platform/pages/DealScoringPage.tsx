@@ -15,6 +15,7 @@ import {
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
 import { AudienceTabs } from "@/shared/ui/AudienceTabs";
 import { DeepToggle } from "@/shared/ui/DeepToggle";
+import { DownloadInsightButton } from "@/shared/ui/DownloadInsightButton";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
@@ -254,6 +255,7 @@ export function DealScoringPage() {
                   subtitle={t("platform.dealScoring.aiSubtitle")}
                   right={
                     <div className="flex items-center gap-3">
+                      <DownloadInsightButton ai={result.ai_insight} title={t("platform.dealScoring.title")} eyebrow="SDQ · Deal Scoring" subtitle={form.deal_name || undefined} />
                       <DeepToggle deep={deep} onToggle={() => { const nd = !deep; setDeep(nd); run(audience, nd); }} disabled={status === "loading"} />
                       <AudienceTabs
                         value={audience}

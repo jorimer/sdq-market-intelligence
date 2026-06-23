@@ -7,6 +7,7 @@ import { StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
 import { DeepToggle } from "@/shared/ui/DeepToggle";
+import { DownloadInsightButton } from "@/shared/ui/DownloadInsightButton";
 import { useTwoPhaseInsight } from "@/shared/ui/useTwoPhaseInsight";
 import { fmtNum } from "@/shared/lib/format";
 import { getIndicatorDetail, type IndicatorDetail } from "../api";
@@ -152,6 +153,7 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, entityType, onClos
               </div>
               {detail.latest.available && (
                 <div className="flex items-center gap-3">
+                  <DownloadInsightButton ai={ai} title={t(`indicators.${detail.indicator}`, detail.label)} eyebrow="SDQ · Financiero" subtitle={detail.bank_name} />
                   <DeepToggle deep={deep} onToggle={() => setDeep((d) => !d)} disabled={aiLoading} />
                   <AudienceSelector value={audience} onChange={setAudience} />
                 </div>
