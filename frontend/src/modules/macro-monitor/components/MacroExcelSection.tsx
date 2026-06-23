@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { FileSpreadsheet, Sparkles, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardHead, StatTile, Chip, StateBlock } from "@/shared/ui/primitives";
 import { MacroCanonicalSection } from "./MacroCanonicalSection";
@@ -11,21 +13,12 @@ import {
   ExcelIngestResult,
 } from "../api";
 
-const SECTOR_LABEL: Record<string, string> = {
-  sector_real: "Sector real",
-  precios: "Precios",
-  sector_externo: "Sector externo",
-  sector_monetario_financiero: "Monetario y financiero",
-  sector_turismo: "Turismo",
-  mercado_cambiario: "Mercado cambiario",
-  mercado_de_trabajo: "Mercado de trabajo",
-  sector_fiscal: "Fiscal",
-  sistemas_de_pago: "Sistemas de pago",
-};
+const sectorLabel = (t: TFunction, key: string) => t(`datos.macro.sectors.${key}`, { defaultValue: key });
 
 /** Console for the AI-native Excel ingestion engine: catalog coverage, a one-file
  * ingest (dry-run by default) and the extracted series with their validation. */
 export function MacroExcelSection() {
+  const { t } = useTranslation();
   const [catalog, setCatalog] = useState<ExcelCatalog | null>(null);
   const [catStatus, setCatStatus] = useState<"loading" | "error" | "ready">("loading");
   const [key, setKey] = useState("");
@@ -56,8 +49,8 @@ export function MacroExcelSection() {
       const resp = (e as { response?: { status?: number; data?: { detail?: string } } })?.response;
       setError(
         resp?.status === 403
-          ? "Requiere rol de administrador."
-          : resp?.data?.detail || "No se pudo ingerir el Excel. Reintenta.",
+          ? t("datos.macro.adminRequired")
+          : resp?.data?.detail || t("datos.macro.excel.ingestError"),
       );
     } finally {
       setBusy(false);
@@ -79,10 +72,9 @@ export function MacroExcelSection() {
 
       {/* ── Secondary: full-corpus discovery & diagnostics (708 archivos) ── */}
       <div className="pt-2">
-        <h3 className="font-display text-sm font-bold text-ink">Inventario y diagnóstico del corpus</h3>
+        <h3 className="font-display text-sm font-bold text-ink">{t("datos.macro.excel.corpusTitle")}</h3>
         <p className="text-xs text-muted mt-0.5">
-          Los 708 Excel descubiertos y el barrido del motor — herramienta de descubrimiento y
-          revisión, no el dato de producción (eso es el catálogo canónico de arriba).
+          {t("datos.macro.excel.corpusNote")}
         </p>
       </div>
 
@@ -91,13 +83,13 @@ export function MacroExcelSection() {
 
       {/* Catalog stats */}
       {catStatus === "error" ? (
-        <StateBlock kind="error" message="No se pudo cargar el catálogo de Excel del BCRD." />
+        <StateBlock kind="error" message={t("datos.macro.excel.catalogError")} />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatTile label="Archivos en catálogo" value={catalog?.total ?? 0} />
-          <StatTile label="Formato .xls" value={catalog?.by_ext?.[".xls"] ?? 0} />
-          <StatTile label="Formato .xlsx" value={catalog?.by_ext?.[".xlsx"] ?? 0} />
-          <StatTile label="Sectores" value={catalog ? Object.keys(catalog.by_sector).length : 0} />
+          <StatTile label={t("datos.macro.excel.statFiles")} value={catalog?.total ?? 0} />
+          <StatTile label={t("datos.macro.excel.statXls")} value={catalog?.by_ext?.[".xls"] ?? 0} />
+          <StatTile label={t("datos.macro.excel.statXlsx")} value={catalog?.by_ext?.[".xlsx"] ?? 0} />
+          <StatTile label={t("datos.macro.excel.statSectors")} value={catalog ? Object.keys(catalog.by_sector).length : 0} />
         </div>
       )}
 
@@ -105,8 +97,8 @@ export function MacroExcelSection() {
         <Card>
           <CardHead
             icon={FileSpreadsheet}
-            title="Cobertura del catálogo"
-            subtitle="Excel históricos del BCRD descubiertos, por sector"
+            title={t("datos.macro.excel.coverageTitle")}
+            subtitle={t("datos.macro.excel.coverageSub")}
           />
           <div className="flex flex-wrap gap-2">
             {Object.entries(catalog.by_sector)
@@ -116,7 +108,7 @@ export function MacroExcelSection() {
                   key={sector}
                   className="inline-flex items-center gap-2 rounded-full bg-surface2 px-3 py-1 text-xs"
                 >
-                  <span className="text-body">{SECTOR_LABEL[sector] ?? sector}</span>
+                  <span className="text-body">{sectorLabel(t, sector)}</span>
                   <span className="mono tabular-nums text-ink font-semibold">{n}</span>
                 </span>
               ))}
@@ -128,13 +120,13 @@ export function MacroExcelSection() {
       <Card>
         <CardHead
           icon={Sparkles}
-          title="Ingesta con el motor AI-native"
-          subtitle="Infiere la estructura del Excel, extrae las series y las valida"
+          title={t("datos.macro.excel.ingestTitle")}
+          subtitle={t("datos.macro.excel.ingestSub")}
         />
 
         {catalog && catalog.featured.length > 0 && (
           <div className="mb-4">
-            <div className="text-xs font-medium text-muted mb-2">Archivos cabecera</div>
+            <div className="text-xs font-medium text-muted mb-2">{t("datos.macro.excel.featured")}</div>
             <div className="flex flex-wrap gap-2">
               {catalog.featured.map((f) => (
                 <button
@@ -156,7 +148,7 @@ export function MacroExcelSection() {
 
         <div className="grid sm:grid-cols-2 gap-3 mb-3">
           <label className="block">
-            <span className="block text-xs font-medium text-muted mb-1">Archivo del catálogo</span>
+            <span className="block text-xs font-medium text-muted mb-1">{t("datos.macro.excel.fileFromCatalog")}</span>
             <input
               className="field mono"
               placeholder="imae.xlsx"
@@ -168,7 +160,7 @@ export function MacroExcelSection() {
             />
           </label>
           <label className="block">
-            <span className="block text-xs font-medium text-muted mb-1">…o URL directa del CDN</span>
+            <span className="block text-xs font-medium text-muted mb-1">{t("datos.macro.excel.orUrl")}</span>
             <input
               className="field mono"
               placeholder="https://cdn.bancentral.gov.do/…"
@@ -189,7 +181,7 @@ export function MacroExcelSection() {
               onChange={(e) => setDryRun(e.target.checked)}
               className="accent-[var(--accent)]"
             />
-            Solo analizar (dry-run, no escribe en MacroSeries)
+            {t("datos.macro.excel.dryRun")}
           </label>
           <button onClick={run} disabled={busy || (!key && !url)} className="btn btn-primary">
             {busy ? (
@@ -197,7 +189,7 @@ export function MacroExcelSection() {
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-            {busy ? "Procesando…" : dryRun ? "Analizar" : "Ingerir a MacroSeries"}
+            {busy ? t("datos.macro.excel.processing") : dryRun ? t("datos.macro.excel.analyze") : t("datos.macro.excel.ingestToSeries")}
           </button>
         </div>
 
@@ -210,28 +202,28 @@ export function MacroExcelSection() {
           <CardHead
             icon={result.validation_ok ? CheckCircle2 : AlertTriangle}
             title={result.file.split("/").pop() || result.file}
-            subtitle={`${result.orientation} · inferido por ${result.method} (confianza ${result.confidence})`}
+            subtitle={t("datos.macro.excel.inferredBy", { orientation: result.orientation, method: result.method, confidence: result.confidence })}
             right={
               <Chip tone={result.validation_ok ? "ok" : "warn"}>
-                {result.validation_ok ? "validación OK" : "con marcas"}
+                {result.validation_ok ? t("datos.macro.excel.validationOk") : t("datos.macro.excel.withFlags")}
               </Chip>
             }
           />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <StatTile label="Observaciones" value={result.records} />
-            <StatTile label="Series" value={result.series_count} />
-            <StatTile label="Modo" value={result.dry_run ? "dry-run" : "persistido"} />
-            <StatTile label="Upserted" value={result.touched} />
+            <StatTile label={t("datos.macro.excel.statObs")} value={result.records} />
+            <StatTile label={t("datos.macro.excel.statSeries")} value={result.series_count} />
+            <StatTile label={t("datos.macro.excel.statMode")} value={result.dry_run ? t("datos.macro.excel.modeDryRun") : t("datos.macro.excel.modePersisted")} />
+            <StatTile label={t("datos.macro.excel.statUpserted")} value={result.touched} />
           </div>
 
           <div className="overflow-x-auto -mx-1">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-line">
-                  <th className="py-2 px-1 font-medium">Serie</th>
-                  <th className="py-2 px-1 font-medium text-right">Obs.</th>
-                  <th className="py-2 px-1 font-medium">Rango</th>
-                  <th className="py-2 px-1 font-medium">Estado</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.excel.colSeries")}</th>
+                  <th className="py-2 px-1 font-medium text-right">{t("datos.macro.excel.colObs")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.excel.colRange")}</th>
+                  <th className="py-2 px-1 font-medium">{t("datos.macro.excel.colStatus")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -244,7 +236,7 @@ export function MacroExcelSection() {
                     </td>
                     <td className="py-2 px-1">
                       {s.ok ? (
-                        <Chip tone="ok">OK</Chip>
+                        <Chip tone="ok">{t("datos.macro.excel.statusOk")}</Chip>
                       ) : (
                         <div className="flex flex-col gap-1">
                           {s.flags.map((f, i) => (
@@ -263,8 +255,7 @@ export function MacroExcelSection() {
 
           {!result.dry_run && (
             <p className="mt-3 text-xs text-muted">
-              Persistido bajo códigos <span className="mono">bcrd.xls.*</span>. El cruce contra el API
-              y la alineación con las series canónicas llega en la siguiente fase.
+              {t("datos.macro.excel.persistedNote")}
             </p>
           )}
         </Card>

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   FileText,
   Calendar,
@@ -24,12 +26,12 @@ type Status = "loading" | "error" | "empty" | "ready";
 
 const SECTOR_TONE: Record<string, Tone> = { banca: "ok", macro: "muted" };
 
-function SectorChips({ sectors }: { sectors: string[] }) {
+function SectorChips({ sectors, t }: { sectors: string[]; t: TFunction }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {sectors.map((s) => (
         <Chip key={s} tone={SECTOR_TONE[s] ?? "muted"}>
-          {s === "banca" ? "Banca" : s === "macro" ? "Macro" : s}
+          {s === "banca" ? t("datos.publications.secBanca") : s === "macro" ? t("datos.publications.secMacro") : s}
         </Chip>
       ))}
     </div>
@@ -39,6 +41,7 @@ function SectorChips({ sectors }: { sectors: string[] }) {
 /** BCRD official reports (PDF → AI digest), embeddable inside the Datos·Macro
  * console. Self-loading; no page chrome of its own. */
 export function PublicationsSection() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [pubs, setPubs] = useState<PublicationSummary[]>([]);
   const [catalog, setCatalog] = useState<CatalogReport[]>([]);
@@ -83,14 +86,14 @@ export function PublicationsSection() {
     setRefreshNote("");
     try {
       const res = await refreshPublications();
-      setRefreshNote(`Revisión completa · ${res.ingested_ok} informe(s) al día.`);
+      setRefreshNote(t("datos.publications.refreshOk", { count: res.ingested_ok }));
       await load();
     } catch (e: unknown) {
       const s = (e as { response?: { status?: number } })?.response?.status;
       setRefreshNote(
         s === 403
-          ? "Actualizar requiere rol de administrador."
-          : "No se pudo actualizar. Reintenta en unos segundos.",
+          ? t("datos.publications.refreshForbidden")
+          : t("datos.publications.refreshError"),
       );
     } finally {
       setRefreshing(false);
@@ -105,11 +108,10 @@ export function PublicationsSection() {
   const actionBar = (
     <div className="flex items-center justify-between mb-4">
       <p className="text-sm text-muted max-w-2xl">
-        Informes del Banco Central analizados con IA: resumen, hallazgos, cifras y riesgos. Alimentan
-        los insights de Macro y Banca.
+        {t("datos.publications.intro")}
       </p>
       <button onClick={doRefresh} disabled={refreshing} className="btn btn-soft shrink-0">
-        {refreshing ? "Revisando…" : "Buscar nuevas ediciones"}
+        {refreshing ? t("datos.publications.checking") : t("datos.publications.findNew")}
       </button>
     </div>
   );
@@ -129,10 +131,10 @@ export function PublicationsSection() {
         {actionBar}
         <StateBlock
           kind="error"
-          message="No se pudieron cargar las publicaciones. Reintenta en unos segundos."
+          message={t("datos.publications.loadError")}
           action={
             <button onClick={load} className="btn btn-ghost">
-              Reintentar
+              {t("datos.publications.retry")}
             </button>
           }
         />
@@ -146,10 +148,10 @@ export function PublicationsSection() {
         {actionBar}
         <StateBlock
           kind="empty"
-          message="Aún no hay publicaciones ingeridas. Busca las últimas ediciones del BCRD para empezar."
+          message={t("datos.publications.empty")}
           action={
             <button onClick={doRefresh} disabled={refreshing} className="btn btn-primary">
-              {refreshing ? "Buscando…" : "Buscar ediciones"}
+              {refreshing ? t("datos.publications.searching") : t("datos.publications.findEditions")}
             </button>
           }
         />
@@ -169,27 +171,27 @@ export function PublicationsSection() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <StatTile label="Informes en catálogo" value={catalog.length} />
-        <StatTile label="Ediciones ingeridas" value={okCount} />
-        <StatTile label="Con análisis IA" value={digestCount} />
-        <StatTile label="Cadencia" value="Semestral" />
+        <StatTile label={t("datos.publications.statCatalog")} value={catalog.length} />
+        <StatTile label={t("datos.publications.statIngested")} value={okCount} />
+        <StatTile label={t("datos.publications.statDigest")} value={digestCount} />
+        <StatTile label={t("datos.publications.statCadence")} value={t("datos.publications.cadenceValue")} />
       </div>
 
       <Card className="mb-5">
         <CardHead
           icon={Calendar}
-          title="Catálogo & calendario"
-          subtitle="Informes recurrentes del BCRD y su última edición disponible"
+          title={t("datos.publications.calendarTitle")}
+          subtitle={t("datos.publications.calendarSub")}
         />
         <div className="overflow-x-auto -mx-1">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted border-b border-line">
-                <th className="py-2 px-1 font-medium">Informe</th>
-                <th className="py-2 px-1 font-medium">Cadencia</th>
-                <th className="py-2 px-1 font-medium">Sectores</th>
-                <th className="py-2 px-1 font-medium">Última edición</th>
-                <th className="py-2 px-1 font-medium text-right">BCRD</th>
+                <th className="py-2 px-1 font-medium">{t("datos.publications.colReport")}</th>
+                <th className="py-2 px-1 font-medium">{t("datos.publications.colCadence")}</th>
+                <th className="py-2 px-1 font-medium">{t("datos.publications.colSectors")}</th>
+                <th className="py-2 px-1 font-medium">{t("datos.publications.colLastEdition")}</th>
+                <th className="py-2 px-1 font-medium text-right">{t("datos.publications.colBcrd")}</th>
               </tr>
             </thead>
             <tbody>
@@ -198,7 +200,7 @@ export function PublicationsSection() {
                   <td className="py-2.5 px-1 text-ink font-medium">{c.name}</td>
                   <td className="py-2.5 px-1 text-body capitalize">{c.cadence}</td>
                   <td className="py-2.5 px-1">
-                    <SectorChips sectors={c.sectors} />
+                    <SectorChips sectors={c.sectors} t={t} />
                   </td>
                   <td className="py-2.5 px-1 mono text-body">{latestPeriodByKey[c.key] ?? "—"}</td>
                   <td className="py-2.5 px-1 text-right">
@@ -208,7 +210,7 @@ export function PublicationsSection() {
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
                     >
-                      Ver <ExternalLink size={12} />
+                      {t("datos.publications.view")} <ExternalLink size={12} />
                     </a>
                   </td>
                 </tr>
@@ -221,7 +223,7 @@ export function PublicationsSection() {
       <div className="grid lg:grid-cols-3 gap-5">
         <div>
           <Card>
-            <CardHead icon={FileText} title="Informes" subtitle={`${pubs.length} ediciones`} />
+            <CardHead icon={FileText} title={t("datos.publications.reportsTitle")} subtitle={t("datos.publications.reportsSub", { count: pubs.length })} />
             <ul className="space-y-2">
               {pubs.map((p) => {
                 const active = p.id === selectedId;
@@ -240,7 +242,7 @@ export function PublicationsSection() {
                           <div className="text-sm font-semibold text-ink truncate">{p.report_name}</div>
                           <div className="text-xs text-muted mt-0.5 mono">{p.period}</div>
                         </div>
-                        {p.status !== "ok" && <Chip tone="alert">error</Chip>}
+                        {p.status !== "ok" && <Chip tone="alert">{t("datos.publications.errorChip")}</Chip>}
                       </div>
                     </button>
                   </li>
@@ -253,12 +255,12 @@ export function PublicationsSection() {
         <div className="lg:col-span-2">
           <Card>
             {detailLoading ? (
-              <StateBlock kind="loading" message="Cargando análisis…" />
+              <StateBlock kind="loading" message={t("datos.publications.analysisLoading")} />
             ) : detail ? (
-              <DigestView detail={detail} />
+              <DigestView detail={detail} t={t} />
             ) : (
               <p className="text-sm text-muted py-6 text-center">
-                Selecciona un informe para ver su análisis.
+                {t("datos.publications.selectReport")}
               </p>
             )}
           </Card>
@@ -268,14 +270,14 @@ export function PublicationsSection() {
   );
 }
 
-function DigestView({ detail }: { detail: PublicationDetail }) {
+function DigestView({ detail, t }: { detail: PublicationDetail; t: TFunction }) {
   const d = detail.digest;
   return (
     <div>
       <CardHead
         icon={FileText}
         title={detail.report_name}
-        subtitle={`Período ${detail.period}`}
+        subtitle={t("datos.publications.periodPrefix", { period: detail.period })}
         right={
           <a
             href={detail.source_url}
@@ -283,13 +285,13 @@ function DigestView({ detail }: { detail: PublicationDetail }) {
             rel="noreferrer"
             className="inline-flex items-center gap-1 text-xs text-accent hover:underline shrink-0"
           >
-            PDF <ExternalLink size={12} />
+            {t("datos.publications.pdf")} <ExternalLink size={12} />
           </a>
         }
       />
 
       <div className="mb-4">
-        <SectorChips sectors={detail.sectors} />
+        <SectorChips sectors={detail.sectors} t={t} />
       </div>
 
       {d?.resumen && <p className="text-sm text-body leading-relaxed mb-5">{d.resumen}</p>}
@@ -297,7 +299,7 @@ function DigestView({ detail }: { detail: PublicationDetail }) {
       {d?.cifras?.length > 0 && (
         <div className="mb-5">
           <div className="flex items-center gap-2 text-xs font-semibold text-muted mb-2">
-            <BarChart3 size={14} /> Cifras clave
+            <BarChart3 size={14} /> {t("datos.publications.keyFigures")}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {d.cifras.map((c, i) => (
@@ -315,7 +317,7 @@ function DigestView({ detail }: { detail: PublicationDetail }) {
       {d?.hallazgos?.length > 0 && (
         <div className="mb-5">
           <div className="flex items-center gap-2 text-xs font-semibold text-muted mb-2">
-            <ListChecks size={14} /> Hallazgos
+            <ListChecks size={14} /> {t("datos.publications.findings")}
           </div>
           <ul className="space-y-1.5">
             {d.hallazgos.map((h, i) => (
@@ -331,7 +333,7 @@ function DigestView({ detail }: { detail: PublicationDetail }) {
       {d?.riesgos?.length > 0 && (
         <div className="mb-5">
           <div className="flex items-center gap-2 text-xs font-semibold text-muted mb-2">
-            <AlertTriangle size={14} /> Riesgos
+            <AlertTriangle size={14} /> {t("datos.publications.risks")}
           </div>
           <ul className="space-y-1.5">
             {d.riesgos.map((r, i) => (
@@ -347,13 +349,13 @@ function DigestView({ detail }: { detail: PublicationDetail }) {
       {d?.relevancia && Object.keys(d.relevancia).length > 0 && (
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-muted mb-2">
-            <TrendingUp size={14} /> Relevancia por sector
+            <TrendingUp size={14} /> {t("datos.publications.relevanceBySector")}
           </div>
           <div className="space-y-2">
             {Object.entries(d.relevancia).map(([sector, txt]) => (
               <div key={sector} className="rounded-[10px] bg-surface2 p-3">
                 <div className="mb-1">
-                  <SectorChips sectors={[sector]} />
+                  <SectorChips sectors={[sector]} t={t} />
                 </div>
                 <p className="text-sm text-body leading-relaxed">{txt}</p>
               </div>

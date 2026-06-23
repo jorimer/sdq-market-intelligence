@@ -1,15 +1,10 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { PageHead, Tabs } from "@/shared/ui/primitives";
 import { MacroApiSection } from "../components/MacroApiSection";
 import { MacroExcelSection } from "../components/MacroExcelSection";
 import { PublicationsSection } from "@/modules/publications/components/PublicationsSection";
-
-const TABS = [
-  { id: "api", label: "Series · API" },
-  { id: "excel", label: "Histórico · Excel" },
-  { id: "publicaciones", label: "Publicaciones" },
-];
 
 const STORAGE_KEY = "datos-macro-tab";
 
@@ -17,10 +12,16 @@ const STORAGE_KEY = "datos-macro-tab";
  * source: live API series, the AI-native Excel history engine, and the official
  * publications (PDF → AI digest). */
 export function DatosMacroPage() {
+  const { t } = useTranslation();
+  const TABS = [
+    { id: "api", label: t("datos.macro.tabApi") },
+    { id: "excel", label: t("datos.macro.tabExcel") },
+    { id: "publicaciones", label: t("datos.macro.tabPublications") },
+  ];
   const [params, setParams] = useSearchParams();
   const initial =
     params.get("tab") || localStorage.getItem(STORAGE_KEY) || "api";
-  const [tab, setTab] = useState(TABS.some((t) => t.id === initial) ? initial : "api");
+  const [tab, setTab] = useState(TABS.some((tb) => tb.id === initial) ? initial : "api");
 
   const change = (id: string) => {
     setTab(id);
@@ -34,9 +35,9 @@ export function DatosMacroPage() {
   return (
     <div>
       <PageHead
-        eyebrow="BCRD · Fuente de datos"
-        title="Datos · Macroeconómico"
-        sub="Consola operativa del Banco Central: series por API, histórico vía Excel (motor AI-native) y publicaciones oficiales."
+        eyebrow={t("datos.macro.eyebrow")}
+        title={t("datos.macro.title")}
+        sub={t("datos.macro.sub")}
       />
 
       <div className="mb-5">
