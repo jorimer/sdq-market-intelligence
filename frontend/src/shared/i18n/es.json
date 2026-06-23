@@ -344,6 +344,13 @@
     "weightsTitle": "Ponderaciones del \u00edndice",
     "insightTitle": "Evaluaci\u00f3n de riesgo (IA)",
     "insightSubtitle": "{{country}} \u00b7 IRMP {{score}} \u00b7 {{band}}",
+    "audienceLabel": "Audiencia",
+    "audience": {
+      "inversionista": "Inversionista",
+      "gobierno": "Gobierno",
+      "multilateral": "Multilateral",
+      "empresa": "Empresa"
+    },
     "dims": {
       "macro": "Macroecon\u00f3mica",
       "external": "Externa",

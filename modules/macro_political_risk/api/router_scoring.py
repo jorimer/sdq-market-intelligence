@@ -36,15 +36,18 @@ logger = logging.getLogger("sdq.api.macro_political_risk")
 router = APIRouter()
 
 
-async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
-    """Generate a Claude narrative from *context*; best-effort (returns None on any
-    failure so the endpoint never breaks). These endpoints are ``async def``, so we
-    await the engine directly. Without an API key it returns a static fallback
-    (``model_used == "static_fallback"``), passed through.
-    """
+async def _ai_insight(
+    context: Dict[str, Any], template: str, audience: str = "inversionista",
+) -> Dict[str, Any] | None:
+    """Generate a Claude narrative via the cerebro route (axis=macro_political_risk);
+    best-effort (returns None on any failure so the endpoint never breaks). Without an
+    API key it returns a static fallback (``model_used == "static_fallback"``)."""
     try:
         from shared.narrative.claude_engine import narrative_engine
-        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        res = await narrative_engine.generate(
+            context, template=template, mode="detailed",
+            axis="macro_political_risk", audience=audience,
+        )
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
     except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
         logger.warning("AI insight IRMP (%s) no disponible: %s", template, e)
@@ -86,6 +89,11 @@ async def score_country(
         }],
     ),
     with_ai: bool = Query(False, description="Incluir evaluación de riesgo de IA (Claude) — fase 2, lento (~10-15s)"),
+    audience: str = Query(
+        "inversionista",
+        description="Audiencia para orientar el insight (inversionista·gobierno·"
+                    "multilateral·empresa); una clave desconocida cae al default.",
+    ),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     country_code = payload.get("country_code")
@@ -99,7 +107,7 @@ async def score_country(
     result["ai_insight"] = None
     if with_ai:
         ctx = irmp_ai_context(result, payload.get("country_name"))
-        result["ai_insight"] = await _ai_insight(ctx, "risk_assessment")
+        result["ai_insight"] = await _ai_insight(ctx, "risk_assessment", audience)
     return result
 
 

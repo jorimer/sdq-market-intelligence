@@ -7,6 +7,7 @@ whole peer dataset — so prompts stay cheap and focused (plan §5.2). Module-lo
 from typing import Any, Dict, List
 
 from modules.macro_political_risk.scoring.weights import DIMENSION_VARIABLES
+from shared.narrative.derived import derived_figures
 
 _DIM_LABELS = {
     "macro": "Macroeconómica",
@@ -40,6 +41,8 @@ def irmp_ai_context(result: Dict[str, Any], country_name: str | None = None) -> 
     weakest = min(scored, key=lambda r: r["score"], default=None)
     rows.sort(key=lambda r: (r["contribution"] is None, -(r["contribution"] or 0)))
 
+    subcomp = [{"componente": r["dimension"], "score": r["score"], "peso": r["weight"]}
+               for r in rows]
     return {
         "country_code": result.get("country_code"),
         "country_name": country_name,
@@ -50,4 +53,10 @@ def irmp_ai_context(result: Dict[str, Any], country_name: str | None = None) -> 
         "dimensions": rows,
         "strongest_dimension": strongest,
         "weakest_dimension": weakest,
+        # ── canónico (cerebro) ── OJO: dirección invertida (mayor score = menor riesgo);
+        # gap_al_techo grande = dimensión que MÁS aporta al riesgo.
+        "score_global": result.get("irmp_score"),
+        "sub_componentes": subcomp,
+        "cifras_derivadas": derived_figures(score=result.get("irmp_score"),
+                                            subcomponents=subcomp),
     }
