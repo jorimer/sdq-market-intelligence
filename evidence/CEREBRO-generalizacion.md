@@ -25,18 +25,24 @@
 5. Frontend: `AudienceTabs` + `useAudiencePref` cableados al fetcher + `depsKey`; i18n es/en/fr.
 6. Verificar post-deploy: sensor (voz cerebro + orientación por audiencia + detector + a/b=0).
 
-## Estado por eje
+## Estado por eje — GENERALIZACIÓN COMPLETA (7/7)
 
 | Eje | Audiencias | Estado |
 |---|---|---|
 | banking_score | comite_credito·entidad·inversionista·supervisor | ✅ piloto (PRs #256–#267) |
-| **sector_intel** | inversionista·empresa·financiador·formulador_politica | ✅ **#268, verificado en prod** |
-| macro_political_risk | — | pendiente |
-| trade_intel | — | pendiente |
-| social_dev | — | pendiente |
-| esg_climate | — | pendiente |
-| macro_monitor | — | pendiente (call-site sync) |
-| deal_scoring | — | pendiente (extraer builder) |
+| sector_intel | inversionista·empresa·financiador·formulador_politica | ✅ #268, verificado prod |
+| macro_political_risk | inversionista·gobierno·multilateral·empresa | ✅ #270 (dirección invertida) |
+| trade_intel | exportador·gobierno·inversionista | ✅ #271 (sin canónico → juez LLM) |
+| social_dev | formulador_politica·gobierno_regional·multilateral·inversionista_impacto | ✅ #272 |
+| esg_climate | inversionista·gobierno·asegurador·multilateral | ✅ #273 |
+| macro_monitor | comite·inversionista·gobierno·empresa | ✅ #274 (coyuntural, 3 superficies) |
+| deal_scoring | comite_inversion·asesor·promotor | ✅ #275 (rúbrica anclada) |
+
+**Smoke de cierre en prod** (`scripts/smoke_cerebro_axes.py`, dump `smoke_cerebro_axes.json`):
+trade/social/esg/macro → voz cerebro (Sonnet, fresco) + **orientación por audiencia distinta
+confirmada** en los 4; logs muestran la ruta cerebro activa (guard corriendo) por template.
+IRMP y deal_scoring comparten el mismo cableado (POST, no smoke-ables sin dataset),
+verificados por sus tests unitarios. Cross-eje (tools/compare, market-brief) NO se generalizan.
 
 ## sector_intel — verificación en prod (#268)
 
