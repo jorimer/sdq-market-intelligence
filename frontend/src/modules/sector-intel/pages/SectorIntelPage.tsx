@@ -17,6 +17,8 @@ import {
 import { ValidationTab } from "../components/ValidationTab";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
+import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { Heatmap, HeatmapData } from "@/shared/charts/Heatmap";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
@@ -26,6 +28,7 @@ import {
   getLatest,
   getMacroContext,
   getSectorInsight,
+  SECTOR_AUDIENCES,
   SectorInfo,
   SectorLatest,
   IaiDataset,
@@ -114,6 +117,7 @@ export function SectorIntelPage() {
   const [ds, setDs] = useState<IaiDataset | null>(null);
   const [details, setDetails] = useState<Record<string, SectorLatest>>({});
   const [selected, setSelected] = useState("turismo");
+  const [audience, setAudience] = useAudiencePref("sdq.sector.audience", SECTOR_AUDIENCES);
   const [tab, setTab] = useState("desglose");
   const [macroCtx, setMacroCtx] = useState<MacroContext | null>(null);
 
@@ -428,8 +432,17 @@ export function SectorIntelPage() {
         <AiInsightCard
           title={t("sector.insightTitle")}
           subtitle={t("sector.insightSubtitle", { sector: nameOf(selected) })}
-          depsKey={selected}
-          fetcher={() => getSectorInsight(selected)}
+          depsKey={`${selected}:${audience}`}
+          fetcher={() => getSectorInsight(selected, audience)}
+          actions={
+            <AudienceTabs
+              value={audience}
+              onChange={setAudience}
+              options={SECTOR_AUDIENCES}
+              labelPrefix="sector.audience"
+              ariaLabelKey="sector.audienceLabel"
+            />
+          }
         />
       </div>
     </div>

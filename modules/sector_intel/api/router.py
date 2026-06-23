@@ -5,7 +5,7 @@ prefix: /api/v1/sector-intel
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
@@ -30,13 +30,18 @@ logger = logging.getLogger("sdq.api.sector_intel")
 router = APIRouter()
 
 
-async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
-    """Generate a Claude narrative from *context*; best-effort (returns None on any
-    failure so the endpoint never breaks). Without an API key the engine returns a
-    static fallback (``model_used == "static_fallback"``), passed through."""
+async def _ai_insight(
+    context: Dict[str, Any], template: str, audience: str = "inversionista",
+) -> Dict[str, Any] | None:
+    """Generate a Claude narrative from *context* via the cerebro route (axis=sector_intel);
+    best-effort (returns None on any failure so the endpoint never breaks). Without an API
+    key the engine returns a static fallback (``model_used == "static_fallback"``)."""
     try:
         from shared.narrative.claude_engine import narrative_engine
-        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        res = await narrative_engine.generate(
+            context, template=template, mode="detailed",
+            axis="sector_intel", audience=audience,
+        )
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
     except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
         logger.warning("AI insight sector (%s) no disponible: %s", template, e)
@@ -198,6 +203,11 @@ async def latest(
 )
 async def insight(
     sector_code: str,
+    audience: str = Query(
+        "inversionista",
+        description="Audiencia para orientar el insight (inversionista·empresa·"
+                    "financiador·formulador_politica); una clave desconocida cae al default.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -213,4 +223,4 @@ async def insight(
     }
     ctx = sector_ai_context(latest, sector_name=name, sgps_detail=s.sgps_breakdown)
     return {"has_score": True, "sector_code": sector_code,
-            "ai_insight": await _ai_insight(ctx, "sector_outlook")}
+            "ai_insight": await _ai_insight(ctx, "sector_outlook", audience)}

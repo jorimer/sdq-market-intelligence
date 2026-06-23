@@ -416,6 +416,13 @@
     "accelEmpty": "Sin se\u00f1ales upstream a\u00fan. Genera snapshots de IRMP/comercio/macro para alimentar la aceleraci\u00f3n.",
     "insightTitle": "Perspectiva del sector (IA)",
     "insightSubtitle": "{{sector}} \u00b7 IAI + aceleraci\u00f3n, marco SCQA",
+    "audienceLabel": "Audiencia",
+    "audience": {
+      "inversionista": "Inversionista",
+      "empresa": "Empresa del sector",
+      "financiador": "Financiador",
+      "formulador_politica": "Pol\u00edtica"
+    },
     "iai": {
       "macro": "Macro",
       "business": "Negocios",

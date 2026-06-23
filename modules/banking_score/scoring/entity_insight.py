@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.narrative.derived import derived_figures
+
 from modules.banking_score.models.models import Bank, ModelType, RatingResult
 from modules.banking_score.scoring.indicator_detail import INDICATOR_META, _band, _peer_stats
 from modules.banking_score.scoring.weights import (
@@ -150,91 +152,13 @@ def ai_context_entity(detail: Dict[str, Any]) -> Dict[str, Any]:
         "pares": detail.get("peers"),
         "tendencia_score": [{"periodo": t["period_end"], "score": t["score"]}
                             for t in window],
-        # Cifras derivadas YA CALCULADAS — el analista DEBE copiarlas, no recomputarlas
-        # (el LLM erraba deltas, aportes y rangos). Ver _derived_figures.
-        "cifras_derivadas": _derived_figures(detail, window),
+        # Cifras derivadas YA CALCULADAS (precompute canónico compartido) — el analista
+        # DEBE copiarlas, no recomputarlas (el LLM erraba deltas, aportes y rangos).
+        "cifras_derivadas": derived_figures(
+            score=detail["latest"].get("overall_score"),
+            subcomponents=[{"componente": s["label"], "score": s["score"],
+                            "peso": s["weight"]} for s in detail["sub_components"]],
+            trend=[{"periodo": t["period_end"], "score": t["score"]} for t in window],
+            peers=detail.get("peers"),
+        ),
     }
-
-
-def _derived_figures(detail: Dict[str, Any], window: list) -> Dict[str, Any]:
-    """Pre-compute the derived figures the model tends to miscompute, so it COPIES
-    instead of calculating: weighted contribution per sub-component (+ leader vs the
-    rest), deltas vs peer medians/p75, approx peers that outrank it, the 12-quarter
-    range and recent variations (with periods), per-component gap to ceiling, and the
-    Q1/March closes. Each maps to a relational mode the sensor caught the LLM botching."""
-    out: Dict[str, Any] = {}
-    score = detail["latest"].get("overall_score")
-    subs = detail["sub_components"]
-
-    aportes = [{"componente": s["label"],
-                "aporte_pts": round((s["score"] or 0) * (s["weight"] or 0), 2),
-                "gap_al_techo_pts": round(100 - (s["score"] or 0), 2)}
-               for s in subs]
-    out["aporte_por_componente"] = aportes
-    if aportes:
-        lider = max(aportes, key=lambda a: a["aporte_pts"])
-        resto = round(sum(a["aporte_pts"] for a in aportes) - lider["aporte_pts"], 2)
-        out["aporte_lider_vs_resto"] = {
-            "lider": lider["componente"], "aporte_lider": lider["aporte_pts"],
-            "suma_resto": resto, "lider_supera_al_resto": lider["aporte_pts"] > resto,
-        }
-        # superlativos de componente YA resueltos — el modelo tiende a olvidar
-        # Diversificación (peso bajo) al rankear gaps. Servir la respuesta correcta.
-        mg = max(aportes, key=lambda a: a["gap_al_techo_pts"])
-        out["componente_mayor_gap_al_techo"] = {
-            "componente": mg["componente"], "gap_al_techo_pts": mg["gap_al_techo_pts"],
-        }
-        # orden de peso (para ordinales tipo "el 2º de mayor peso"): de mayor a menor
-        out["componentes_por_peso_desc"] = [
-            s["label"] for s in sorted(subs, key=lambda s: -(s["weight"] or 0))
-        ]
-
-    peers = detail.get("peers") or {}
-    et = peers.get("entity_type") or {}
-    sec = peers.get("sector") or {}
-    if score is not None:
-        deltas: Dict[str, Any] = {}
-        if et.get("median_score") is not None:
-            deltas["vs_mediana_tipo"] = round(score - et["median_score"], 2)
-        if et.get("p75_score") is not None:
-            deltas["vs_p75_tipo"] = round(score - et["p75_score"], 2)
-        if sec.get("median_score") is not None:
-            deltas["vs_mediana_sector"] = round(score - sec["median_score"], 2)
-        if deltas:
-            out["delta_score"] = deltas
-    # ~pares que lo superan (de percentil y n) — evita el "N entidades lo superan" errado
-    if et.get("percentile") is not None and et.get("n"):
-        out["pares_tipo_que_lo_superan_aprox"] = {
-            "aprox": round((1 - et["percentile"] / 100) * et["n"]), "de_n": et["n"],
-        }
-
-    scores = [(t["period_end"], t["score"]) for t in window if t.get("score") is not None]
-    if scores:
-        lo = min(scores, key=lambda x: x[1])
-        hi = max(scores, key=lambda x: x[1])
-        out["rango_score_12t"] = {
-            "min": {"periodo": lo[0], "score": lo[1]},
-            "max": {"periodo": hi[0], "score": hi[1]},
-            "n_periodos": len(scores),
-        }
-        # variaciones del score actual vs hitos — evita deltas entre períodos mal restados
-        cur_p, cur = scores[-1]
-        var: Dict[str, Any] = {"caida_desde_max": round(hi[1] - cur, 2),
-                               "subida_desde_min": round(cur - lo[1], 2)}
-        if len(scores) >= 2:
-            var["vs_trimestre_anterior"] = round(cur - scores[-2][1], 2)
-        if len(scores) >= 5:
-            var["vs_mismo_trimestre_ano_previo"] = round(cur - scores[-5][1], 2)
-        out["variacion_score_actual"] = var
-        # mayor caída entre trimestres consecutivos de la ventana — evita el "esta es
-        # la mayor caída" superlativo mal comparado.
-        drops = [(scores[i - 1][0], scores[i][0], round(scores[i - 1][1] - scores[i][1], 2))
-                 for i in range(1, len(scores)) if scores[i - 1][1] > scores[i][1]]
-        if drops:
-            de, a, caida = max(drops, key=lambda d: d[2])
-            out["mayor_caida_intertrimestral"] = {"de": de, "a": a, "caida": caida}
-    cortes_q1 = [{"periodo": t["period_end"], "score": t["score"]}
-                 for t in window if str(t.get("period_end") or "")[5:7] == "03"]
-    if cortes_q1:
-        out["cortes_q1_marzo"] = cortes_q1
-    return out

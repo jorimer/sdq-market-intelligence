@@ -1,9 +1,22 @@
 import client from "@/shared/api/client";
 import type { AiInsight } from "@/shared/ui/insight-types";
 
-/** Contextual AI insight for one sector (IAI/SGPS narrative). Best-effort. */
-export async function getSectorInsight(sectorCode: string): Promise<AiInsight | null> {
-  const { data } = await client.get(`/sector-intel/${sectorCode}/insight`);
+export const SECTOR_AUDIENCES = [
+  "inversionista",
+  "empresa",
+  "financiador",
+  "formulador_politica",
+] as const;
+
+/** Contextual AI insight for one sector (IAI/SGPS narrative), oriented by audience.
+ * Best-effort. */
+export async function getSectorInsight(
+  sectorCode: string,
+  audience: string = SECTOR_AUDIENCES[0],
+): Promise<AiInsight | null> {
+  const { data } = await client.get(`/sector-intel/${sectorCode}/insight`, {
+    params: { audience },
+  });
   return (data.ai_insight as AiInsight | null) ?? null;
 }
 

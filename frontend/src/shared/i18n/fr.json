@@ -416,6 +416,13 @@
     "accelEmpty": "Pas encore de signaux amont. G\u00e9n\u00e9rez des instantan\u00e9s IRMP/commerce/macro pour alimenter l'acc\u00e9l\u00e9ration.",
     "insightTitle": "Perspective du secteur (IA)",
     "insightSubtitle": "{{sector}} \u00b7 IAI + acc\u00e9l\u00e9ration, cadre SCQA",
+    "audienceLabel": "Audience",
+    "audience": {
+      "inversionista": "Investisseur",
+      "empresa": "Entreprise du secteur",
+      "financiador": "Bailleur",
+      "formulador_politica": "Politique"
+    },
     "iai": {
       "macro": "Macro",
       "business": "Affaires",
