@@ -1,4 +1,5 @@
 import client from "@/shared/api/client";
+import { type Audience, DEFAULT_AUDIENCE } from "./audience";
 
 export interface BankRef {
   id: string;
@@ -141,12 +142,14 @@ export async function getIndicatorDetail(
   bankId: string,
   indicatorKey: string,
   withAi = true,
+  audience: Audience = DEFAULT_AUDIENCE,
 ): Promise<IndicatorDetail> {
   // The AI insight takes ~10-15s (Claude detailed); fetch the data with_ai=false
   // for an instant render, then re-fetch with_ai=true to fill the insight in.
+  // `audience` orients only the AI insight (same facts, different "y por tanto").
   const { data } = await client.get<IndicatorDetail>(
     `/banking-score/${bankId}/indicator/${indicatorKey}`,
-    { params: { with_ai: withAi } },
+    { params: { with_ai: withAi, audience } },
   );
   return data;
 }
@@ -179,9 +182,13 @@ export interface EntityInsight {
   ai_insight: { text: string; model_used: string; from_cache: boolean } | null;
 }
 
-export async function getEntityInsight(bankId: string, withAi = true): Promise<EntityInsight> {
+export async function getEntityInsight(
+  bankId: string,
+  withAi = true,
+  audience: Audience = DEFAULT_AUDIENCE,
+): Promise<EntityInsight> {
   const { data } = await client.get<EntityInsight>(`/banking-score/${bankId}/insight`, {
-    params: { with_ai: withAi },
+    params: { with_ai: withAi, audience },
   });
   return data;
 }

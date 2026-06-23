@@ -924,6 +924,13 @@
     "entWeight": "peso {{n}}%",
     "entTrendTitle": "Tendencia (score global)",
     "entAiTitle": "Fundamento del rating (IA)",
+    "audienceLabel": "Audiencia",
+    "audience": {
+      "comite_credito": "Comité de crédito",
+      "entidad": "Entidad",
+      "inversionista": "Inversionista",
+      "supervisor": "Supervisor"
+    },
     "entAiUnavailable": "El an\u00e1lisis de IA no est\u00e1 disponible (clave de Anthropic no configurada). El detalle de arriba es completo.",
     "indEyebrowFallback": "Indicador",
     "indTitleFallback": "Detalle del indicador",

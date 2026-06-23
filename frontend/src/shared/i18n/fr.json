@@ -924,6 +924,13 @@
     "entWeight": "poids {{n}} %",
     "entTrendTitle": "Tendance (score global)",
     "entAiTitle": "Justification de la notation (IA)",
+    "audienceLabel": "Audience",
+    "audience": {
+      "comite_credito": "Comité de crédit",
+      "entidad": "L'entité",
+      "inversionista": "Investisseur",
+      "supervisor": "Superviseur"
+    },
     "entAiUnavailable": "L'analyse IA est indisponible (cl\u00e9 Anthropic non configur\u00e9e). Le d\u00e9tail ci-dessus est complet.",
     "indEyebrowFallback": "Indicateur",
     "indTitleFallback": "D\u00e9tail de l'indicateur",

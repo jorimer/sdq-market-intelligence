@@ -924,6 +924,13 @@
     "entWeight": "weight {{n}}%",
     "entTrendTitle": "Trend (global score)",
     "entAiTitle": "Rating rationale (AI)",
+    "audienceLabel": "Audience",
+    "audience": {
+      "comite_credito": "Credit committee",
+      "entidad": "The entity",
+      "inversionista": "Investor",
+      "supervisor": "Supervisor"
+    },
     "entAiUnavailable": "AI analysis is unavailable (Anthropic key not configured). The detail above is complete.",
     "indEyebrowFallback": "Indicator",
     "indTitleFallback": "Indicator detail",

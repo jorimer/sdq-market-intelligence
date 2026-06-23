@@ -8,6 +8,8 @@ import { AiInsightBody } from "@/shared/ui/AiInsightBody";
 import { useTwoPhaseInsight } from "@/shared/ui/useTwoPhaseInsight";
 import { fmtNum } from "@/shared/lib/format";
 import { getIndicatorDetail, type IndicatorDetail } from "../api";
+import { useAudience } from "../audience";
+import { AudienceSelector } from "./AudienceSelector";
 
 interface Props {
   bankId: string;
@@ -63,9 +65,10 @@ function PeerRow({ label, stats, score }: { label: string; stats: { n: number; m
 
 export function IndicatorDetailDrawer({ bankId, indicatorKey, entityType, onClose }: Props) {
   const { t } = useTranslation();
+  const [audience, setAudience] = useAudience();
   const { data: detail, ai, loading, aiLoading, error } = useTwoPhaseInsight<IndicatorDetail>(
-    (withAi) => getIndicatorDetail(bankId, indicatorKey, withAi),
-    `${bankId}:${indicatorKey}`,
+    (withAi) => getIndicatorDetail(bankId, indicatorKey, withAi, audience),
+    `${bankId}:${indicatorKey}:${audience}`,
     { pickAi: (d) => d.ai_insight, shouldFetchAi: (d) => d.latest.available },
   );
 
@@ -139,8 +142,14 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, entityType, onClos
 
           {/* AI insight */}
           <section>
-            <div className="flex items-center gap-2 mb-2 text-sm font-medium text-ink">
-              <Sparkles className="w-4 h-4 text-accent" /> {t("banking.indAiTitle")}
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <div className="flex items-center gap-2 text-sm font-medium text-ink min-w-0">
+                <Sparkles className="w-4 h-4 text-accent shrink-0" />
+                <span className="truncate">{t("banking.indAiTitle")}</span>
+              </div>
+              {detail.latest.available && (
+                <AudienceSelector value={audience} onChange={setAudience} />
+              )}
             </div>
             <AiInsightBody
               loading={aiLoading}
