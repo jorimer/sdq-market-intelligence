@@ -659,6 +659,13 @@
     "watch": "vigilar",
     "coyunturaTitle": "Lectura de coyuntura (IA)",
     "coyunturaSubtitle": "Riesgos y oportunidades del entorno macro actual (BCRD)",
+    "audienceLabel": "Audiencia",
+    "audience": {
+      "comite": "Comité",
+      "inversionista": "Inversionista",
+      "gobierno": "Gobierno",
+      "empresa": "Empresa"
+    },
     "tableTitleAll": "Todas las series",
     "tableTitleMovers": "Indicadores en movimiento",
     "tableSubAll": "{{n}} series monitoreadas",
