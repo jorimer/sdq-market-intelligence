@@ -116,6 +116,17 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "detalle por país socio automatizable; no lo inventes. El foco es la estructura de la "
         "canasta, no el dato agregado."
     ),
+    "social_dev": (
+        "DOCTRINA DE CASA — Eje de desarrollo social (Índice de Desarrollo Multidimensional, IDM):\n"
+        "Lees el desarrollo/bienestar de una región de forma explicable y comparable: mayor "
+        "score = mayor desarrollo. El IDM se ancla a dimensiones con pesos declarados (salud, "
+        "educación, nivel de vida, inclusión); ponderas por su peso. LEE DESIGUALDAD, NO SOLO LA "
+        "MEDIA: sitúa la región en la distribución (rank, dispersión entre regiones). RESPETAS LA "
+        "PROCEDENCIA: variables 'real', 'parcial' o 'rúbrica declarada' según la fuente (ONE/WDI/"
+        "Findex) — y OJO: varias variables nacionales se aplican planas a todas las regiones, así "
+        "que la diferenciación regional viene solo de las variables regionales (pobreza, "
+        "alfabetización, cobertura). Nómbralo cuando sea material. El foco es la región."
+    ),
 }
 
 # ── POR MÓDULO — Frames de audiencia ──────────────────────────────────────────
@@ -250,6 +261,37 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Le importa: el riesgo de concentración de la canasta y la dependencia importadora "
             "como señal de fragilidad ante shocks externos. Tu \"y por tanto\" final apunta a "
             "dónde la concentración comercial crea riesgo no descontado."
+        ),
+    },
+    "social_dev": {
+        "formulador_politica": (
+            "FRAME DE DECISIÓN — Audiencia: Formulador de política social (nacional).\n"
+            "Decide: dónde focalizar el gasto/política social entre regiones y dimensiones.\n"
+            "Le importa: la dimensión de mayor rezago accionable por política y su peso, la "
+            "desigualdad entre regiones (no solo la media), y qué diferenciación es real vs "
+            "aplicada plana. Tu \"y por tanto\" final apunta a la palanca de política con mayor "
+            "retorno sobre el desarrollo de la región."
+        ),
+        "gobierno_regional": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno regional / local.\n"
+            "Decide: dónde concentrar el esfuerzo propio para cerrar su brecha de desarrollo.\n"
+            "Le importa: el rezago de la región frente a las demás (rank), su dimensión más "
+            "débil ponderada, y si esa brecha la captura un dato regional real o uno nacional "
+            "plano. Tu \"y por tanto\" final apunta a la prioridad local con mayor retorno."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Banco multilateral / financiador del desarrollo.\n"
+            "Decide: dónde dirigir financiamiento o programas de desarrollo.\n"
+            "Le importa: la fragilidad estructural de la región, la desigualdad del panel, y la "
+            "solidez del dato (real vs rúbrica) para condicionar el apoyo. Tu \"y por tanto\" "
+            "final apunta a dónde el financiamiento rinde más sobre el bienestar."
+        ),
+        "inversionista_impacto": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista de impacto.\n"
+            "Decide: dónde desplegar capital de impacto con retorno social medible.\n"
+            "Le importa: la dimensión con mayor brecha y peso (mayor potencial de impacto), la "
+            "posición de la región en la distribución, y la calidad del dato. Tu \"y por tanto\" "
+            "final apunta a dónde el capital de impacto mueve más la aguja del desarrollo."
         ),
     },
 }

@@ -527,6 +527,13 @@
     "studyLink": "voir sur ONE \u2197",
     "insightTitle": "Perspective du d\u00e9veloppement (IA)",
     "insightSubtitle": "{{region}} \u00b7 IDM et in\u00e9galit\u00e9 \u00b7 SCQA",
+    "audienceLabel": "Audience",
+    "audience": {
+      "formulador_politica": "Politique",
+      "gobierno_regional": "Gouv. r\u00e9gional",
+      "multilateral": "Multilat\u00e9ral",
+      "inversionista_impacto": "Invest. d'impact"
+    },
     "dims": {
       "health": "Sant\u00e9",
       "education": "\u00c9ducation",

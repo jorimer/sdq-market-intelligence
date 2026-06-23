@@ -527,6 +527,13 @@
     "studyLink": "ver en ONE \u2197",
     "insightTitle": "Perspectiva del desarrollo (IA)",
     "insightSubtitle": "{{region}} \u00b7 IDM y desigualdad \u00b7 SCQA",
+    "audienceLabel": "Audiencia",
+    "audience": {
+      "formulador_politica": "Pol\u00edtica",
+      "gobierno_regional": "Gobierno regional",
+      "multilateral": "Multilateral",
+      "inversionista_impacto": "Inversi\u00f3n de impacto"
+    },
     "dims": {
       "health": "Salud",
       "education": "Educaci\u00f3n",
