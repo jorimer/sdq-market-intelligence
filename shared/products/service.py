@@ -15,7 +15,12 @@ from sqlalchemy.orm import Session
 from shared.products.activation import ACTIVATION_THRESHOLD, can_activate
 from shared.products.models import ProductActivation, ProductReadiness
 from shared.products.readiness import compute_readiness, empty_readiness
-from shared.products.registry import CATALOG_BY_KEY, PRODUCT_CATALOG, get_product
+from shared.products.registry import (
+    CATALOG_BY_KEY,
+    PRODUCT_CATALOG,
+    get_product,
+    is_implemented,
+)
 from shared.products.tiers import ProductTier
 
 # Los 3 niveles estándar (para sectores aún sin manifiesto propio).
@@ -65,7 +70,7 @@ def build_matrix(db: Session) -> Dict[str, Any]:
 
     sectors: List[Dict[str, Any]] = []
     for entry in PRODUCT_CATALOG:
-        implemented = get_product(entry.sector_key, db) is not None
+        implemented = is_implemented(entry.sector_key)  # sin instanciar el producto
         levels = []
         for tier in _STD_TIERS:
             pr = readiness.get((entry.sector_key, tier.value))

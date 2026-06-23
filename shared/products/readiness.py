@@ -8,6 +8,15 @@ señal que lo originó) para trazabilidad.
 
 Pesos (spec §3.1): G1 Data 30% · G2 Motor 25% · G3 Narrativa 15% · G4 Plantilla 15%
 · G5 Validación 15%.
+
+**Honestidad sobre qué mide cada gate hoy (P1):** G1 (datos) y G5 (validación) son
+señales sustantivas (cobertura×frescura real; outcomes/QA del sector). G2/G3/G4 son, en
+esta fase, señales **declarativas de presencia**: motor operativo (booleano), templates
+del nivel declarados, y plantilla completa (secciones + reporte base). El ejercicio real
+—correr el `numeric_guard` (G3), un smoke render del nivel (G4) y el último scoring OK
+(G2)— se ejerce al GENERAR el producto, no en el cálculo de readiness en reposo, y queda
+como refinamiento de una fase posterior. Es decir: un readiness alto dice "está cableado
+y configurado", y el guard/render efectivos se validan en la producción del reporte.
 """
 from __future__ import annotations
 
@@ -51,15 +60,18 @@ def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, An
     g1_detail = (f"cobertura={data.coverage:.2f} · frescura={data.freshness_days}d · "
                  f"{data.detail or ', '.join(data.sources)}")
 
-    # G2 · Motor — índice explicable operativo.
+    # G2 · Motor — señal declarativa: índice explicable operativo (booleano). El
+    # "último scoring OK" efectivo se evidencia al generar, no acá.
     has_engine = bool(product.has_engine())
     g2 = 1.0 if has_engine else 0.0
 
-    # G3 · Narrativa — templates declarados para el nivel (el guard se ejerce al generar).
+    # G3 · Narrativa — señal declarativa: templates del nivel presentes. El numeric_guard
+    # (0 violaciones) se ejerce al GENERAR la narrativa, no en el cálculo en reposo.
     g3 = 1.0 if level.narrative_templates else 0.0
     g3_detail = f"{len(level.narrative_templates)} templates declarados"
 
-    # G4 · Plantilla — el nivel tiene secciones + reporte base para renderizar.
+    # G4 · Plantilla — señal declarativa: el nivel tiene secciones + reporte base. El
+    # smoke render efectivo del PDF se evidencia al generar.
     if level.sections and level.base_report_type:
         g4 = 1.0
     elif level.sections:
