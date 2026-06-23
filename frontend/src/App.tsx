@@ -45,6 +45,7 @@ import { MarketBriefPage } from "@/modules/platform/pages/MarketBriefPage";
 import { DealScoringPage } from "@/modules/platform/pages/DealScoringPage";
 import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 import { UsersAdminPage } from "@/modules/platform/pages/UsersAdminPage";
+import { ProductMonitorPage } from "@/modules/platform/pages/ProductMonitorPage";
 
 export default function App() {
   return (
@@ -112,6 +113,14 @@ export default function App() {
             element={<ComparadorPage />}
           />
           <Route path="/methodology" element={<MetodologiaPage />} />
+          <Route
+            path="/products"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <ProductMonitorPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/settings" element={<ConfiguracionPage />} />
 
           {/* Administración (gateado por rol) */}

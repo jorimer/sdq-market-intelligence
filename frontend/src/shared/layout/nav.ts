@@ -14,6 +14,7 @@ import {
   BookOpen,
   Settings,
   ShieldCheck,
+  Boxes,
   type LucideIcon,
 } from "lucide-react";
 
@@ -72,6 +73,7 @@ export const NAV: NavGroup[] = [
       { to: "/overview", label: "Resumen ejecutivo", icon: LayoutDashboard },
       { to: "/compare", label: "Comparador", icon: GitCompare },
       { to: "/methodology", label: "Metodología", icon: BookOpen },
+      { to: "/products", label: "Monitor de productos", icon: Boxes, minRole: "admin" },
       { to: "/settings", label: "Configuración", icon: Settings },
     ],
   },

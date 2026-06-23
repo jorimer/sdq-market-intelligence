@@ -1506,6 +1506,46 @@
       "deleted_other": "S\u00e9rie \u00ab {{code}} \u00bb supprim\u00e9e : {{count}} observations.",
       "deletedEmpty": "La s\u00e9rie \u00ab {{code}} \u00bb n'avait aucune observation (rien \u00e0 supprimer).",
       "deleteError": "Impossible de supprimer la s\u00e9rie. R\u00e9essayez dans quelques secondes."
+    },
+    "productMonitor": {
+      "eyebrow": "PLATEFORME",
+      "title": "Moniteur de Produits",
+      "sub": "Readiness par secteur et niveau (Pulse \u00b7 Insight \u00b7 Deep Dive) et contr\u00f4le de l'activation de l'acc\u00e8s public. Un produit n'est publi\u00e9 que s'il franchit le seuil de qualit\u00e9.",
+      "forbidden": "Cette section requiert un r\u00f4le d'administrateur.",
+      "loadError": "Impossible de charger le moniteur de produits.",
+      "empty": "Aucun produit au catalogue.",
+      "gridTitle": "Catalogue de produits",
+      "gridSubtitle": "10 secteurs \u00d7 3 niveaux. Le readiness est calcul\u00e9 \u00e0 partir des signaux r\u00e9els de chaque produit.",
+      "recompute": "Recalculer",
+      "recomputeError": "Impossible de recalculer le readiness.",
+      "legendPublished": "Publi\u00e9",
+      "legendWired": "C\u00e2bl\u00e9 \u00b7 non publi\u00e9",
+      "legendNotWired": "Non c\u00e2bl\u00e9",
+      "legendNote": "Un produit peut \u00eatre op\u00e9rationnel en interne sans \u00eatre publi\u00e9.",
+      "activateBlocked": "Le readiness ne franchit pas le seuil : le produit n'est pas encore publiable.",
+      "toggleError": "Impossible de changer la publication.",
+      "colSector": "Secteur",
+      "thresholdShort": "seuil {{v}}",
+      "notWired": "Non c\u00e2bl\u00e9",
+      "published": "Publi\u00e9",
+      "wired": "Non publi\u00e9",
+      "unpublish": "Retirer",
+      "publish": "Publier",
+      "belowThreshold": "Readiness {{r}} < seuil {{v}}",
+      "toggleDetail": "Voir le d\u00e9tail",
+      "tier": {
+        "pulse": "Pulse",
+        "insight": "Insight",
+        "deep_dive": "Deep Dive"
+      },
+      "gate": {
+        "g1": "G1 \u00b7 Donn\u00e9es",
+        "g2": "G2 \u00b7 Moteur",
+        "g3": "G3 \u00b7 Narratif",
+        "g4": "G4 \u00b7 Gabarit",
+        "g5": "G5 \u00b7 Validation"
+      },
+      "missingGate": "manque {{g}}"
     }
   },
   "ops": {
