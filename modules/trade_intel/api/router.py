@@ -26,14 +26,16 @@ router = APIRouter()
 
 async def _ai_insight(
     context: Dict[str, Any], template: str, audience: str = "exportador",
+    deep: bool = False,
 ) -> Dict[str, Any] | None:
     """Generate a Claude narrative via the cerebro route (axis=trade_intel); best-effort
     (returns None on any failure so the endpoint never breaks). Without an API key the
-    engine returns a static fallback (``model_used == "static_fallback"``)."""
+    engine returns a static fallback (``model_used == "static_fallback"``).
+    ``deep`` → the opt-in extended "full analysis" version."""
     try:
         from shared.narrative.claude_engine import narrative_engine
         res = await narrative_engine.generate(
-            context, template=template, mode="detailed",
+            context, template=template, mode="deep" if deep else "detailed",
             axis="trade_intel", audience=audience,
         )
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
@@ -186,6 +188,7 @@ async def insight(
         description="Audiencia para orientar el insight (exportador·gobierno·inversionista); "
                     "una clave desconocida cae al default.",
     ),
+    deep: bool = Query(False, description="Versión extendida (análisis completo, ~700-1000 palabras)."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -204,7 +207,7 @@ async def insight(
         "top_export_products": bd.get("top_export_products", []),
     }
     return {"has_score": True, "period": s.period,
-            "ai_insight": await _ai_insight(trade_ai_context(score), "trade_outlook", audience)}
+            "ai_insight": await _ai_insight(trade_ai_context(score), "trade_outlook", audience, deep)}
 
 
 @router.get(

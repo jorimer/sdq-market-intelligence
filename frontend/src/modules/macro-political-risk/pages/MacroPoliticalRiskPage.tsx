@@ -356,6 +356,14 @@ export function MacroPoliticalRiskPage() {
                 audience,
               }).then((r) => r.ai_insight ?? null)
             }
+            deepFetcher={(deep) =>
+              scoreCountry(selected, dataset, {
+                withAi: true,
+                countryName: COUNTRY_NAMES[selected],
+                audience,
+                deep,
+              }).then((r) => r.ai_insight ?? null)
+            }
             actions={
               <AudienceTabs
                 value={audience}

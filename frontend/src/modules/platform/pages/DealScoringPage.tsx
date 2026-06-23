@@ -14,6 +14,7 @@ import {
 } from "@/shared/ui/primitives";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
 import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { DeepToggle } from "@/shared/ui/DeepToggle";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
@@ -72,6 +73,7 @@ export function DealScoringPage() {
   const isAdmin = hasRole("admin");
   const [form, setForm] = useState<FormState>(EMPTY);
   const [audience, setAudience] = useAudiencePref("sdq.deal.audience", DEAL_AUDIENCES);
+  const [deep, setDeep] = useState(false);
   const [result, setResult] = useState<DealScoreResult | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [curve, setCurve] = useState<LearningCurve | null>(null);
@@ -120,7 +122,7 @@ export function DealScoringPage() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const run = async (aud: string = audience) => {
+  const run = async (aud: string = audience, dp: boolean = deep) => {
     setStatus("loading");
     setResult(null);
     try {
@@ -131,7 +133,7 @@ export function DealScoringPage() {
         deal_size_usd: num(form.deal_size_usd), equity_required_pct: num(form.equity_required_pct),
         promoter_track_record: num(form.promoter_track_record), financial_quality: num(form.financial_quality),
         market_validation: num(form.market_validation), regulatory_readiness: num(form.regulatory_readiness),
-        days_since_first_contact: num(form.days_since_first_contact), with_ai: true, audience: aud,
+        days_since_first_contact: num(form.days_since_first_contact), with_ai: true, audience: aud, deep: dp,
       });
       setResult(r);
       setStatus("idle");
@@ -251,13 +253,16 @@ export function DealScoringPage() {
                   title={t("platform.dealScoring.aiTitle")}
                   subtitle={t("platform.dealScoring.aiSubtitle")}
                   right={
-                    <AudienceTabs
-                      value={audience}
-                      onChange={(a) => { setAudience(a); run(a); }}
-                      options={DEAL_AUDIENCES}
-                      labelPrefix="deal.audience"
-                      ariaLabelKey="deal.audienceLabel"
-                    />
+                    <div className="flex items-center gap-3">
+                      <DeepToggle deep={deep} onToggle={() => { const nd = !deep; setDeep(nd); run(audience, nd); }} disabled={status === "loading"} />
+                      <AudienceTabs
+                        value={audience}
+                        onChange={(a) => { setAudience(a); run(a); }}
+                        options={DEAL_AUDIENCES}
+                        labelPrefix="deal.audience"
+                        ariaLabelKey="deal.audienceLabel"
+                      />
+                    </div>
                   }
                 />
                 <AiInsightBody

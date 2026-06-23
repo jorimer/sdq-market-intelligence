@@ -275,6 +275,7 @@ export function EsgClimatePage() {
           subtitle={t("esg.insightSubtitle", { country: nameOf(selected) })}
           depsKey={`${selected}:${audience}`}
           fetcher={() => getCountryInsight(selected, audience)}
+          deepFetcher={(deep) => getCountryInsight(selected, audience, deep)}
           actions={
             <AudienceTabs
               value={audience}

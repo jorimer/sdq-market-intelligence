@@ -59,12 +59,12 @@ export const MPR_AUDIENCES = [
 export async function scoreCountry(
   countryCode: string,
   dataset: RegionalDataset,
-  opts?: { withAi?: boolean; countryName?: string; audience?: string },
+  opts?: { withAi?: boolean; countryName?: string; audience?: string; deep?: boolean },
 ): Promise<IRMPResult> {
   const { data } = await client.post(
     "/macro-political-risk/score",
     { country_code: countryCode, dataset, country_name: opts?.countryName },
-    { params: opts?.withAi ? { with_ai: true, audience: opts.audience } : undefined },
+    { params: opts?.withAi ? { with_ai: true, audience: opts.audience, ...(opts.deep ? { deep: true } : {}) } : undefined },
   );
   return data;
 }

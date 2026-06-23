@@ -157,6 +157,7 @@ export function TradeIntelPage() {
               subtitle={t("trade.insightSubtitle", { period: s.period ?? "" })}
               depsKey={`${s.period ?? "trade"}:${audience}`}
               fetcher={() => getTradeInsight(audience)}
+              deepFetcher={(deep) => getTradeInsight(audience, deep)}
               actions={
                 <AudienceTabs
                   value={audience}

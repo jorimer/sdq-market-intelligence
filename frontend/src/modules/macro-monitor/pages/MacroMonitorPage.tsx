@@ -187,6 +187,7 @@ export function MacroMonitorPage() {
           icon={Sparkles}
           depsKey={`coyuntura:${latestPeriod}:${indicators.length}:${audience}`}
           fetcher={() => getMacroSnapshotInsight(undefined, audience)}
+          deepFetcher={(deep) => getMacroSnapshotInsight(undefined, audience, deep)}
           actions={
             <AudienceTabs
               value={audience}
@@ -361,6 +362,7 @@ export function MacroMonitorPage() {
             icon={Activity}
             depsKey={`serie:${seriesCode}:${audience}`}
             fetcher={() => getSeriesInsight(seriesCode, audience)}
+            deepFetcher={(deep) => getSeriesInsight(seriesCode, audience, deep)}
           />
         </div>
       )}

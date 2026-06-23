@@ -8,6 +8,7 @@ import { entityTypeLabel } from "../entityTypes";
 import { StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
+import { DeepToggle } from "@/shared/ui/DeepToggle";
 import { useTwoPhaseInsight } from "@/shared/ui/useTwoPhaseInsight";
 import { fmtNum } from "@/shared/lib/format";
 import { getEntityInsight, type EntityInsight } from "../api";
@@ -45,9 +46,10 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
   const { t } = useTranslation();
   const [indicatorKey, setIndicatorKey] = useState<string | null>(null);
   const [audience, setAudience] = useAudience();
+  const [deep, setDeep] = useState(false);
   const { data: detail, ai, loading, aiLoading, error } = useTwoPhaseInsight<EntityInsight>(
-    (withAi) => getEntityInsight(bankId, withAi, audience),
-    `${bankId}:${audience}`,
+    (withAi) => getEntityInsight(bankId, withAi, audience, deep),
+    `${bankId}:${audience}:${deep}`,
     { pickAi: (d) => d.ai_insight },
   );
 
@@ -146,7 +148,10 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
                   <Sparkles className="w-4 h-4 text-accent shrink-0" />
                   <span className="truncate">{t("banking.entAiTitle")}</span>
                 </div>
-                <AudienceSelector value={audience} onChange={setAudience} />
+                <div className="flex items-center gap-3">
+                  <DeepToggle deep={deep} onToggle={() => setDeep((d) => !d)} disabled={aiLoading} />
+                  <AudienceSelector value={audience} onChange={setAudience} />
+                </div>
               </div>
               <AiInsightBody
                 loading={aiLoading}

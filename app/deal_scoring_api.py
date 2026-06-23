@@ -69,12 +69,12 @@ def _fetch_anchors(db: Session, country_iso2: Optional[str], sector: Optional[st
 
 
 async def _narrative(
-    context: Dict[str, Any], audience: str = "comite_inversion",
+    context: Dict[str, Any], audience: str = "comite_inversion", deep: bool = False,
 ) -> Optional[Dict[str, Any]]:
     try:
         from shared.narrative.claude_engine import narrative_engine
         res = await narrative_engine.generate(
-            context, template="deal_outlook", mode="detailed",
+            context, template="deal_outlook", mode="deep" if deep else "detailed",
             axis="deal_scoring", audience=audience,
         )
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
@@ -124,6 +124,6 @@ async def score(
     if body.get("with_ai", True):
         from modules.deal_scoring.ai_context import deal_ai_context
         ctx = deal_ai_context(body, result, anchors["sources"], country=country, sector=sector)
-        ai = await _narrative(ctx, body.get("audience") or "comite_inversion")
+        ai = await _narrative(ctx, body.get("audience") or "comite_inversion", bool(body.get("deep")))
     result["ai_insight"] = ai
     return result

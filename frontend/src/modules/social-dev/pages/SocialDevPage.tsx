@@ -337,6 +337,7 @@ export function SocialDevPage() {
           subtitle={t("social.insightSubtitle", { region: nameOf(selected) })}
           depsKey={`${selected}:${audience}`}
           fetcher={() => getRegionInsight(selected, audience)}
+          deepFetcher={(deep) => getRegionInsight(selected, audience, deep)}
           actions={
             <AudienceTabs
               value={audience}

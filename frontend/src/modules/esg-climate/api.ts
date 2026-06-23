@@ -12,9 +12,10 @@ export const CLIMATE_AUDIENCES = [
 export async function getCountryInsight(
   entityKey: string,
   audience: string = CLIMATE_AUDIENCES[0],
+  deep = false,
 ): Promise<AiInsight | null> {
   const { data } = await client.get(`/esg-climate/${entityKey}/insight`, {
-    params: { audience },
+    params: { audience, ...(deep ? { deep: true } : {}) },
   });
   return (data.ai_insight as AiInsight | null) ?? null;
 }

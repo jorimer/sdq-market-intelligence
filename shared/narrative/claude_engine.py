@@ -539,7 +539,9 @@ class NarrativeEngine:
         Args:
             context: Dictionary with data to include in the narrative.
             template: One of the predefined template names.
-            mode: 'standard' or 'detailed' for longer outputs.
+            mode: 'standard' (1024 tok) · 'detailed' (2048, default per page) ·
+                'deep' (4096 + DEEP_DIRECTIVE, the opt-in "full analysis" version that
+                overrides the thin template's word cap). Cache key namespaces by mode.
             lang: 'es'|'en'|'fr'. If None, uses the request language (X-Lang header
                 via the global dependency), defaulting to 'es'.
             axis: when set, activates the "cerebro" route — an assembled `system`
@@ -568,10 +570,10 @@ class NarrativeEngine:
             return result
 
         context_str = json.dumps(context, indent=2, ensure_ascii=False, default=str)
-        max_tokens = 2048 if mode == "detailed" else 1024
+        max_tokens = 4096 if mode == "deep" else 2048 if mode == "detailed" else 1024
 
         if axis:  # ── ruta cerebro: system ensamblado + template thin ──
-            from shared.narrative.cerebro import AXIS_DOCTRINE, build_system
+            from shared.narrative.cerebro import AXIS_DOCTRINE, DEEP_DIRECTIVE, build_system
             thin = THIN_TEMPLATES.get(template)
             if not thin or axis not in AXIS_DOCTRINE:
                 # axis sin doctrina o template sin thin → ruta legacy (nunca KeyError:
@@ -580,7 +582,10 @@ class NarrativeEngine:
                                axis, template)
             else:
                 system = build_system(axis, audience, mode)
-                user = _apply_lang(thin.format(context=context_str), lang)
+                user_body = thin.format(context=context_str)
+                if mode == "deep":  # override de longitud al final → gana sobre el tope del thin
+                    user_body = f"{user_body}\n\n{DEEP_DIRECTIVE}"
+                user = _apply_lang(user_body, lang)
                 try:
                     return self._generate_guarded(
                         client, system, user, max_tokens, context_str, cache_key, template,

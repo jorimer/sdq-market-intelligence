@@ -6,8 +6,11 @@ export const TRADE_AUDIENCES = ["exportador", "gobierno", "inversionista"] as co
 /** Contextual AI insight for the trade-resilience picture, oriented by audience. */
 export async function getTradeInsight(
   audience: string = TRADE_AUDIENCES[0],
+  deep = false,
 ): Promise<AiInsight | null> {
-  const { data } = await client.get("/trade-intel/insight", { params: { audience } });
+  const { data } = await client.get("/trade-intel/insight", {
+    params: { audience, ...(deep ? { deep: true } : {}) },
+  });
   return (data.ai_insight as AiInsight | null) ?? null;
 }
 

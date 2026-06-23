@@ -64,9 +64,10 @@ export const MACRO_AUDIENCES = ["comite", "inversionista", "gobierno", "empresa"
 export async function getSeriesInsight(
   code: string,
   audience: string = MACRO_AUDIENCES[0],
+  deep = false,
 ): Promise<AiInsight | null> {
   const { data } = await client.get<SeriesDetail>(`/macro-monitor/series/${code}`, {
-    params: { with_ai: true, audience },
+    params: { with_ai: true, audience, ...(deep ? { deep: true } : {}) },
   });
   return data.ai_insight ?? null;
 }
@@ -75,10 +76,11 @@ export async function getSeriesInsight(
 export async function getMacroSnapshotInsight(
   period?: string,
   audience: string = MACRO_AUDIENCES[0],
+  deep = false,
 ): Promise<AiInsight | null> {
   const { data } = await client.get<{ ai_insight: AiInsight | null }>(
     "/macro-monitor/snapshot",
-    { params: { with_ai: true, audience, ...(period ? { period } : {}) } },
+    { params: { with_ai: true, audience, ...(period ? { period } : {}), ...(deep ? { deep: true } : {}) } },
   );
   return data.ai_insight ?? null;
 }
@@ -289,8 +291,9 @@ export async function getFiscalPulse(): Promise<FiscalPulse> {
 
 export async function getFiscalInsight(
   audience: string = MACRO_AUDIENCES[0],
+  deep = false,
 ): Promise<AiInsight | null> {
   const { data } = await client.get<{ ai_insight: AiInsight | null }>(
-    "/macro-monitor/fiscal/insight", { params: { audience } });
+    "/macro-monitor/fiscal/insight", { params: { audience, ...(deep ? { deep: true } : {}) } });
   return data.ai_insight ?? null;
 }
