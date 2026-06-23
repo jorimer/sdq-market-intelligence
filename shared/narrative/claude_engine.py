@@ -348,6 +348,19 @@ THIN_TEMPLATES = {
         "valores; NO recalcules aportes ni declares un superlativo (mayor/menor/el más…) que no "
         "coincida con lo servido. Si una relación no está precalculada, exprésala sin número."
     ),
+    "deal_outlook": (
+        "Explica el FUNDAMENTO del score de atractivo/cierre de este deal.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. Es una RÚBRICA declarada anclada a IRMP/IAI/IRC, NO una "
+        "probabilidad ni modelo entrenado — dilo si es material. Ve profundo en el driver que "
+        "más condiciona la decisión de la audiencia, ponderando por su peso vía "
+        "'cifras_derivadas'. SÉ HONESTO con la confianza: nombra qué drivers son juicio del "
+        "analista vs dato de eje, y si falta un driver clave.\n\n"
+        "CIFRAS DERIVADAS: 'cifras_derivadas' YA trae el aporte y el gap al techo por driver, "
+        "el líder vs la suma del resto, el de mayor gap y el orden por peso. Copiá esos valores; "
+        "NO recalcules aportes ni declares un superlativo que no coincida con lo servido. NO "
+        "inventes cifras del deal que no estén en el contexto."
+    ),
 }
 
 # Static fallback templates when API key is not available

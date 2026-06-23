@@ -11,11 +11,13 @@ import {
   Skeleton,
 } from "@/shared/ui/primitives";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
+import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
-  scoreDeal, saveDeal, importDeals, getLearningCurve,
+  scoreDeal, saveDeal, importDeals, getLearningCurve, DEAL_AUDIENCES,
   type DealScoreResult, type LearningCurve,
 } from "../api";
 
@@ -67,6 +69,7 @@ export function DealScoringPage() {
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [audience, setAudience] = useAudiencePref("sdq.deal.audience", DEAL_AUDIENCES);
   const [result, setResult] = useState<DealScoreResult | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [curve, setCurve] = useState<LearningCurve | null>(null);
@@ -115,7 +118,7 @@ export function DealScoringPage() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const run = async () => {
+  const run = async (aud: string = audience) => {
     setStatus("loading");
     setResult(null);
     try {
@@ -126,7 +129,7 @@ export function DealScoringPage() {
         deal_size_usd: num(form.deal_size_usd), equity_required_pct: num(form.equity_required_pct),
         promoter_track_record: num(form.promoter_track_record), financial_quality: num(form.financial_quality),
         market_validation: num(form.market_validation), regulatory_readiness: num(form.regulatory_readiness),
-        days_since_first_contact: num(form.days_since_first_contact), with_ai: true,
+        days_since_first_contact: num(form.days_since_first_contact), with_ai: true, audience: aud,
       });
       setResult(r);
       setStatus("idle");
@@ -172,7 +175,7 @@ export function DealScoringPage() {
             </div>
           </div>
           <div className="mt-4">
-            <button onClick={run} disabled={status === "loading"} className="btn btn-primary">
+            <button onClick={() => run()} disabled={status === "loading"} className="btn btn-primary">
               <Target className="w-4 h-4" /> {status === "loading" ? "Scoreando…" : "Scorear deal"}
             </button>
           </div>
@@ -241,7 +244,20 @@ export function DealScoringPage() {
               </Card>
 
               <Card>
-                <CardHead icon={Sparkles} title="Lectura ejecutiva (IA)" subtitle="Análisis del deal anclado en los drivers y el contexto de eje" />
+                <CardHead
+                  icon={Sparkles}
+                  title="Lectura ejecutiva (IA)"
+                  subtitle="Análisis del deal anclado en los drivers y el contexto de eje"
+                  right={
+                    <AudienceTabs
+                      value={audience}
+                      onChange={(a) => { setAudience(a); run(a); }}
+                      options={DEAL_AUDIENCES}
+                      labelPrefix="deal.audience"
+                      ariaLabelKey="deal.audienceLabel"
+                    />
+                  }
+                />
                 <AiInsightBody
                   loading={false}
                   ai={result.ai_insight}

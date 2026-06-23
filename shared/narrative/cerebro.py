@@ -146,6 +146,15 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "pocas que mueven la aguja (top movers, señales) y conecta con la decisión. El foco es "
         "la lectura de coyuntura accionable, no el repaso de indicadores."
     ),
+    "deal_scoring": (
+        "DOCTRINA DE CASA — Eje Deal Scoring (atractivo/cierre de una operación):\n"
+        "Lees el atractivo de un deal como índice explicable: mayor score = deal más atractivo. "
+        "Es una RÚBRICA DECLARADA (cold-start) anclada a los ejes (IRMP del país, IAI del "
+        "sector, IRC) — NO una probabilidad ni un modelo entrenado; dilo si es material. "
+        "Ponderas por el peso de cada driver. SÉ HONESTO CON LA CONFIANZA: varios drivers son "
+        "juicio del analista, no dato; cuando la confianza es baja o un driver clave falta, "
+        "nómbralo. El foco es la decisión sobre el deal, no el repaso de los drivers."
+    ),
 }
 
 # ── POR MÓDULO — Frames de audiencia ──────────────────────────────────────────
@@ -370,6 +379,30 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Decide: decisiones de inversión, precios o financiamiento ante la coyuntura.\n"
             "Le importa: las variables que afectan costo de fondeo, demanda y tipo de cambio, y "
             "su momentum. Tu \"y por tanto\" final apunta a la implicación operativa concreta."
+        ),
+    },
+    "deal_scoring": {
+        "comite_inversion": (
+            "FRAME DE DECISIÓN — Audiencia: Comité de inversión.\n"
+            "Decide: avanzar, condicionar o declinar la operación.\n"
+            "Le importa: el driver que más sostiene o debilita el atractivo (ponderado), la "
+            "confianza del score (cuánto es dato de eje vs juicio del analista) y el riesgo de "
+            "cierre. Tu \"y por tanto\" final apunta a la recomendación de avanzar/condicionar/"
+            "declinar y a la condición que la cambiaría."
+        ),
+        "asesor": (
+            "FRAME DE DECISIÓN — Audiencia: Asesor / originador del deal.\n"
+            "Decide: dónde reforzar el caso para mejorar la probabilidad de cierre.\n"
+            "Le importa: el driver de mayor brecha accionable y la información faltante que "
+            "subiría la confianza del score. Tu \"y por tanto\" final apunta a la palanca con "
+            "mayor retorno sobre el atractivo del deal."
+        ),
+        "promotor": (
+            "FRAME DE DECISIÓN — Audiencia: Promotor / sponsor del deal.\n"
+            "Decide: cómo presentar y fortalecer su operación.\n"
+            "Le importa: la debilidad que más penaliza su score y qué evidencia la mitigaría, "
+            "siendo claro sobre qué es juicio y qué es dato de eje. Tu \"y por tanto\" final "
+            "apunta a lo que el promotor debe demostrar para elevar el atractivo."
         ),
     },
 }

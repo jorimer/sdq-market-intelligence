@@ -68,10 +68,15 @@ def _fetch_anchors(db: Session, country_iso2: Optional[str], sector: Optional[st
     return {"values": {"country_irmp": irmp, "country_irc": irc, "sector_iai": iai}, "sources": src}
 
 
-async def _narrative(context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def _narrative(
+    context: Dict[str, Any], audience: str = "comite_inversion",
+) -> Optional[Dict[str, Any]]:
     try:
         from shared.narrative.claude_engine import narrative_engine
-        res = await narrative_engine.generate(context, template="deal_outlook", mode="detailed")
+        res = await narrative_engine.generate(
+            context, template="deal_outlook", mode="detailed",
+            axis="deal_scoring", audience=audience,
+        )
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
     except Exception as e:  # noqa: BLE001
         logger.warning("deal narrative no disponible: %s", e)
@@ -117,17 +122,8 @@ async def score(
 
     ai = None
     if body.get("with_ai", True):
-        ctx = {
-            "deal": {
-                "nombre": body.get("deal_name"), "tipo": body.get("deal_type"),
-                "sector": sector, "pais": country, "etapa": body.get("deal_stage"),
-                "tamano_usd": body.get("deal_size_usd"), "equity_pct": body.get("equity_required_pct"),
-            },
-            "score": result["score"], "confianza": result["confidence"],
-            "drivers": result["key_factors"],
-            "contexto_ejes": anchors["sources"],
-            "metodo": result["method"],
-        }
-        ai = await _narrative(ctx)
+        from modules.deal_scoring.ai_context import deal_ai_context
+        ctx = deal_ai_context(body, result, anchors["sources"], country=country, sector=sector)
+        ai = await _narrative(ctx, body.get("audience") or "comite_inversion")
     result["ai_insight"] = ai
     return result

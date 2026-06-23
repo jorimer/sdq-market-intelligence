@@ -75,6 +75,8 @@ export interface DealScoreResult {
   anchor_sources: Record<string, string>;
   ai_insight: AiInsight | null;
 }
+export const DEAL_AUDIENCES = ["comite_inversion", "asesor", "promotor"] as const;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function scoreDeal(input: Record<string, any>): Promise<DealScoreResult> {
   const { data } = await client.post("/deal-scoring/score", input);
