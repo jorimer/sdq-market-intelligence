@@ -575,6 +575,12 @@
     "concentrationSubtitle": "Share by chapter (HHI \u00b7 diversification > volume)",
     "insightTitle": "Trade outlook (AI)",
     "insightSubtitle": "Resilience, concentration and dependency \u00b7 {{period}} \u00b7 SCQA",
+    "audienceLabel": "Audience",
+    "audience": {
+      "exportador": "Exporter",
+      "gobierno": "Government",
+      "inversionista": "Investor"
+    },
     "blockSubtitle": "{{n}} partners \u00b7 diversification > volume",
     "hhiPartners": "Partners HHI",
     "total": "Total",

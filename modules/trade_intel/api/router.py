@@ -24,13 +24,18 @@ logger = logging.getLogger("sdq.api.trade_intel")
 router = APIRouter()
 
 
-async def _ai_insight(context: Dict[str, Any], template: str) -> Dict[str, Any] | None:
-    """Generate a Claude narrative from *context*; best-effort (returns None on any
-    failure so the endpoint never breaks). Without an API key the engine returns a
-    static fallback (``model_used == "static_fallback"``), passed through."""
+async def _ai_insight(
+    context: Dict[str, Any], template: str, audience: str = "exportador",
+) -> Dict[str, Any] | None:
+    """Generate a Claude narrative via the cerebro route (axis=trade_intel); best-effort
+    (returns None on any failure so the endpoint never breaks). Without an API key the
+    engine returns a static fallback (``model_used == "static_fallback"``)."""
     try:
         from shared.narrative.claude_engine import narrative_engine
-        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        res = await narrative_engine.generate(
+            context, template=template, mode="detailed",
+            axis="trade_intel", audience=audience,
+        )
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
     except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
         logger.warning("AI insight comercio (%s) no disponible: %s", template, e)
@@ -176,6 +181,11 @@ async def latest_score(
 )
 async def insight(
     period: Optional[str] = Query(None),
+    audience: str = Query(
+        "exportador",
+        description="Audiencia para orientar el insight (exportador·gobierno·inversionista); "
+                    "una clave desconocida cae al default.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -194,7 +204,7 @@ async def insight(
         "top_export_products": bd.get("top_export_products", []),
     }
     return {"has_score": True, "period": s.period,
-            "ai_insight": await _ai_insight(trade_ai_context(score), "trade_outlook")}
+            "ai_insight": await _ai_insight(trade_ai_context(score), "trade_outlook", audience)}
 
 
 @router.get(

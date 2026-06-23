@@ -288,6 +288,16 @@ THIN_TEMPLATES = {
         "coincida con lo servido. Si una relación no está precalculada, exprésala en palabras sin "
         "número."
     ),
+    "trade_outlook": (
+        "Explica el FUNDAMENTO de la resiliencia comercial del país.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. DIVERSIFICACIÓN > VOLUMEN: ve profundo en la concentración de la "
+        "canasta exportadora (HHI, capítulos dominantes y sus shares) y en la dependencia de "
+        "importaciones, según lo que más condiciona la decisión de la audiencia — no restates "
+        "los totales. Usá EXCLUSIVAMENTE las cifras del contexto (resilience_score, hhi_exports, "
+        "export_diversification, import_dependency, shares de los top capítulos); NO inventes "
+        "cifras ni detalle por país socio (no disponible). Si una cifra no está, dilo."
+    ),
 }
 
 # Static fallback templates when API key is not available

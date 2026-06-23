@@ -29,6 +29,9 @@ def trade_ai_context(score: Dict[str, Any]) -> Dict[str, Any]:
             {"chapter": p.get("product"), "share": p.get("share")} for p in top[:5]
         ],
         "direction": "mayor resiliencia = más diversificado y menos dependiente",
+        # canónico (cerebro): el score; sin sub-componentes ponderados, serie ni pares en
+        # este eje → el detector determinista no aplica y el guard es el juez LLM.
+        "score_global": score.get("resilience_score"),
         "source": "DGA (Aduanas), por capítulo arancelario (HS)",
         "unit": "USD millones",
         "note": "Diversificación > volumen; medir dependencia, no solo apertura. "

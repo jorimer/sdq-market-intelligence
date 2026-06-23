@@ -575,6 +575,12 @@
     "concentrationSubtitle": "Part par chapitre (HHI \u00b7 diversification > volume)",
     "insightTitle": "Perspective du commerce (IA)",
     "insightSubtitle": "R\u00e9silience, concentration et d\u00e9pendance \u00b7 {{period}} \u00b7 SCQA",
+    "audienceLabel": "Audience",
+    "audience": {
+      "exportador": "Exportateur",
+      "gobierno": "Gouvernement",
+      "inversionista": "Investisseur"
+    },
     "blockSubtitle": "{{n}} partenaires \u00b7 diversification > volume",
     "hhiPartners": "HHI partenaires",
     "total": "Total",
