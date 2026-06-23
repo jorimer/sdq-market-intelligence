@@ -70,6 +70,20 @@ DEPTH_DIRECTIVE = (
     "análisis final, sin exponer ese razonamiento ni encabezados de los tests."
 )
 
+# Override de longitud para la "versión extendida" (opt-in del usuario). Se anexa al
+# FINAL del mensaje de tarea (gana sobre el tope de palabras del thin template). NO
+# relaja la anti-fabricación: solo amplía la cobertura y el desarrollo.
+DEEP_DIRECTIVE = (
+    "VERSIÓN EXTENDIDA (análisis completo solicitado por el usuario): IGNORA el tope de "
+    "palabras indicado arriba. Objetivo 700–1000 palabras. Desarrolla en profundidad CADA "
+    "dimensión o sub-componente material —no solo la tensión principal—, explicando el "
+    "mecanismo y la evidencia con las cifras del contexto, y cerrando con implicaciones y "
+    "qué vigilar. Estructura en secciones Markdown con encabezados. Mantén INTACTO el rigor: "
+    "toda cifra debe venir del contexto (ninguna inventada), respeta la procedencia "
+    "(real vs rúbrica declarada) y la dirección del índice. Más extensión NO es relleno: "
+    "cada párrafo agrega una lectura o implicación que la versión breve omitió."
+)
+
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────
 
 AXIS_DOCTRINE: Dict[str, str] = {
@@ -445,6 +459,6 @@ def build_system(axis: str, audience: Optional[str], mode: str) -> str:
     if resolved:
         parts.append(AUDIENCE_FRAMES[axis][resolved])
     parts.append(BARRA_DE_INSIGHT)
-    if mode == "detailed":
+    if mode in ("detailed", "deep"):
         parts.append(DEPTH_DIRECTIVE)
     return "\n\n".join(parts)

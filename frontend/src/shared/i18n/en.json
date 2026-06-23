@@ -313,7 +313,9 @@
     "aiUnavailable": "AI analysis is unavailable (Anthropic key not configured).",
     "tagLive": "live",
     "tagRubric": "rubric",
-    "tagPartialLive": "{{n}}/{{total}} live"
+    "tagPartialLive": "{{n}}/{{total}} live",
+    "insightFull": "View full analysis",
+    "insightBrief": "View brief version"
   },
   "bands": {
     "noData": "No data",

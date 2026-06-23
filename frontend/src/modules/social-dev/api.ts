@@ -12,9 +12,10 @@ export const SOCIAL_AUDIENCES = [
 export async function getRegionInsight(
   entityKey: string,
   audience: string = SOCIAL_AUDIENCES[0],
+  deep = false,
 ): Promise<AiInsight | null> {
   const { data } = await client.get(`/social-dev/${entityKey}/insight`, {
-    params: { audience },
+    params: { audience, ...(deep ? { deep: true } : {}) },
   });
   return (data.ai_insight as AiInsight | null) ?? null;
 }

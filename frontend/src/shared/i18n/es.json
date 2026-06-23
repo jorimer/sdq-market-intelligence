@@ -313,7 +313,9 @@
     "aiUnavailable": "El an\u00e1lisis de IA no est\u00e1 disponible (clave de Anthropic no configurada).",
     "tagLive": "en vivo",
     "tagRubric": "r\u00fabrica",
-    "tagPartialLive": "{{n}}/{{total}} en vivo"
+    "tagPartialLive": "{{n}}/{{total}} en vivo",
+    "insightFull": "Ver an\u00e1lisis completo",
+    "insightBrief": "Ver versi\u00f3n breve"
   },
   "bands": {
     "noData": "Sin dato",

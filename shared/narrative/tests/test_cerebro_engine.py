@@ -9,6 +9,7 @@ from shared.narrative.cerebro import (
     AUDIENCE_FRAMES,
     BARRA_DE_INSIGHT,
     CEREBRO_IDENTITY,
+    DEEP_DIRECTIVE,
 )
 from shared.narrative.numeric_guard import _parse_unsupported
 
@@ -100,6 +101,29 @@ def test_cerebro_route_uses_system_and_thin(monkeypatch):
     # guardrail corrió (1 juez) y quedó limpio
     assert len(_judge_calls(calls)) == 1
     assert res.guard_unsupported == []
+
+
+def test_deep_mode_appends_directive_and_raises_max_tokens(monkeypatch):
+    """`mode="deep"`: el override de longitud (DEEP_DIRECTIVE) se anexa al FINAL del
+    mensaje de tarea (gana sobre el tope del thin) y max_tokens sube a 4096. En
+    `detailed` no aparece y max_tokens=2048."""
+    eng, calls = _engine_capturing(monkeypatch)
+    asyncio.run(eng.generate(
+        {"x": 1}, template="entity_rating", mode="deep",
+        axis="banking", audience="comite_credito"))
+    gen = _gen_calls(calls)[0]
+    user = gen["messages"][0]["content"]
+    assert DEEP_DIRECTIVE in user
+    assert user.rstrip().endswith(DEEP_DIRECTIVE.rstrip()[-40:])  # va al final
+    assert gen["max_tokens"] == 4096
+
+    eng2, calls2 = _engine_capturing(monkeypatch)
+    asyncio.run(eng2.generate(
+        {"x": 1}, template="entity_rating", mode="detailed",
+        axis="banking", audience="comite_credito"))
+    gen2 = _gen_calls(calls2)[0]
+    assert DEEP_DIRECTIVE not in gen2["messages"][0]["content"]
+    assert gen2["max_tokens"] == 2048
 
 
 def test_cerebro_unknown_audience_falls_back_to_default(monkeypatch):

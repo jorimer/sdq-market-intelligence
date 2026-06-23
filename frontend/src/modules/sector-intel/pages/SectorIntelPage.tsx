@@ -434,6 +434,7 @@ export function SectorIntelPage() {
           subtitle={t("sector.insightSubtitle", { sector: nameOf(selected) })}
           depsKey={`${selected}:${audience}`}
           fetcher={() => getSectorInsight(selected, audience)}
+          deepFetcher={(deep) => getSectorInsight(selected, audience, deep)}
           actions={
             <AudienceTabs
               value={audience}

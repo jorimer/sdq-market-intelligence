@@ -136,6 +136,7 @@ export function FiscalSection() {
         icon={Landmark}
         depsKey={`fiscal:${pulse.latest_period ?? ""}:${audience}`}
         fetcher={() => getFiscalInsight(audience)}
+        deepFetcher={(deep) => getFiscalInsight(audience, deep)}
         actions={
           <AudienceTabs
             value={audience}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles, TrendingUp, Users } from "lucide-react";
 import { TrendChart } from "./TrendChart";
@@ -5,6 +6,7 @@ import { entityTypeLabel } from "../entityTypes";
 import { StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { AiInsightBody } from "@/shared/ui/AiInsightBody";
+import { DeepToggle } from "@/shared/ui/DeepToggle";
 import { useTwoPhaseInsight } from "@/shared/ui/useTwoPhaseInsight";
 import { fmtNum } from "@/shared/lib/format";
 import { getIndicatorDetail, type IndicatorDetail } from "../api";
@@ -66,9 +68,10 @@ function PeerRow({ label, stats, score }: { label: string; stats: { n: number; m
 export function IndicatorDetailDrawer({ bankId, indicatorKey, entityType, onClose }: Props) {
   const { t } = useTranslation();
   const [audience, setAudience] = useAudience();
+  const [deep, setDeep] = useState(false);
   const { data: detail, ai, loading, aiLoading, error } = useTwoPhaseInsight<IndicatorDetail>(
-    (withAi) => getIndicatorDetail(bankId, indicatorKey, withAi, audience),
-    `${bankId}:${indicatorKey}:${audience}`,
+    (withAi) => getIndicatorDetail(bankId, indicatorKey, withAi, audience, deep),
+    `${bankId}:${indicatorKey}:${audience}:${deep}`,
     { pickAi: (d) => d.ai_insight, shouldFetchAi: (d) => d.latest.available },
   );
 
@@ -148,7 +151,10 @@ export function IndicatorDetailDrawer({ bankId, indicatorKey, entityType, onClos
                 <span className="truncate">{t("banking.indAiTitle")}</span>
               </div>
               {detail.latest.available && (
-                <AudienceSelector value={audience} onChange={setAudience} />
+                <div className="flex items-center gap-3">
+                  <DeepToggle deep={deep} onToggle={() => setDeep((d) => !d)} disabled={aiLoading} />
+                  <AudienceSelector value={audience} onChange={setAudience} />
+                </div>
               )}
             </div>
             <AiInsightBody

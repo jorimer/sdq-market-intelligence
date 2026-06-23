@@ -13,9 +13,10 @@ export const SECTOR_AUDIENCES = [
 export async function getSectorInsight(
   sectorCode: string,
   audience: string = SECTOR_AUDIENCES[0],
+  deep = false,
 ): Promise<AiInsight | null> {
   const { data } = await client.get(`/sector-intel/${sectorCode}/insight`, {
-    params: { audience },
+    params: { audience, ...(deep ? { deep: true } : {}) },
   });
   return (data.ai_insight as AiInsight | null) ?? null;
 }

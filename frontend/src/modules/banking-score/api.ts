@@ -143,13 +143,15 @@ export async function getIndicatorDetail(
   indicatorKey: string,
   withAi = true,
   audience: Audience = DEFAULT_AUDIENCE,
+  deep = false,
 ): Promise<IndicatorDetail> {
   // The AI insight takes ~10-15s (Claude detailed); fetch the data with_ai=false
   // for an instant render, then re-fetch with_ai=true to fill the insight in.
-  // `audience` orients only the AI insight (same facts, different "y por tanto").
+  // `audience` orients only the AI insight (same facts, different "y por tanto");
+  // `deep` requests the extended "full analysis" version.
   const { data } = await client.get<IndicatorDetail>(
     `/banking-score/${bankId}/indicator/${indicatorKey}`,
-    { params: { with_ai: withAi, audience } },
+    { params: { with_ai: withAi, audience, ...(deep ? { deep: true } : {}) } },
   );
   return data;
 }
@@ -186,9 +188,10 @@ export async function getEntityInsight(
   bankId: string,
   withAi = true,
   audience: Audience = DEFAULT_AUDIENCE,
+  deep = false,
 ): Promise<EntityInsight> {
   const { data } = await client.get<EntityInsight>(`/banking-score/${bankId}/insight`, {
-    params: { with_ai: withAi, audience },
+    params: { with_ai: withAi, audience, ...(deep ? { deep: true } : {}) },
   });
   return data;
 }

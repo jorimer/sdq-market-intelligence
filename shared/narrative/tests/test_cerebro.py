@@ -70,6 +70,12 @@ def test_detailed_mode_adds_depth_directive():
     assert DEPTH_DIRECTIVE not in build_system("banking", "comite_credito", "standard")
 
 
+def test_deep_mode_adds_depth_directive_too():
+    # deep is a superset of detailed at the system level (internal-reasoning directive);
+    # the length override (DEEP_DIRECTIVE) lives in the task message, not the system.
+    assert DEPTH_DIRECTIVE in build_system("banking", "comite_credito", "deep")
+
+
 def test_axis_without_frames_skips_frame_section():
     # an axis present in doctrine but with no audience frames must not crash.
     AXIS_DOCTRINE["__test_axis__"] = "doctrina de prueba"
