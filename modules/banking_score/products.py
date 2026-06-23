@@ -250,3 +250,10 @@ class BankingProduct:
             sections=list(level.sections), tier=tier.value, watermark=level.watermark,
             sample=sample, peer_block=snapshot.payload.get("peer_block"),
         )
+
+
+# Auto-registro en el catálogo de productos (anti-Frankenstein: el módulo se registra
+# a sí mismo; shared/products nunca importa banking). Idempotente.
+from shared.products.registry import register_product  # noqa: E402
+
+register_product(SECTOR_KEY, lambda db: BankingProduct(db))
