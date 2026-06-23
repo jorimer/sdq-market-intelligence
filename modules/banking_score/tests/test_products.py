@@ -142,6 +142,25 @@ def test_sample_insight_renders(tmp_path):
     assert os.path.exists(path)
 
 
+def test_pulse_pdf_emits_zero_entity_names(tmp_path):
+    """Sensor de anonimización END-TO-END: el PDF Pulse renderizado no contiene ningún
+    nombre del roster, y sí las bandas (doctrina: Pulse nunca nombra entidad)."""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        PdfReader = pytest.importorskip("PyPDF2").PdfReader
+    snap = ProductSnapshot(
+        tier=ProductTier.pulse, period="2024-12-31",
+        payload={"band_distribution": {"Fuerte": 6, "Adecuado": 8, "Vigilancia": 3, "Crítico": 1},
+                 "n_entities": 18, "system_avg_score": 71.8, "period": "2024-12-31"},
+        entity_name=None, entity_roster=("Banco Demo, S.A.", "Banco Secreto"))
+    path = _render_tier(ProductTier.pulse, snap, tmp_path)
+    text = "\n".join((p.extract_text() or "") for p in PdfReader(path).pages)
+    assert "Banco Demo" not in text and "Banco Secreto" not in text
+    for band in ("Fuerte", "Adecuado", "Vigilancia", "Crítico"):
+        assert band in text
+
+
 def test_sample_deep_dive_has_limitations(tmp_path):
     snap = ProductSnapshot(
         tier=ProductTier.deep_dive, period="2024-12-31",
