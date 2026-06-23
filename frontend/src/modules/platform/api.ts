@@ -124,3 +124,39 @@ export async function importDeals(file: File): Promise<{ inserted: number; updat
   });
   return data;
 }
+
+export interface DealRow {
+  deal_name: string;
+  deal_type: string | null;
+  sector: string | null;
+  country: string;
+  deal_stage: string | null;
+  closed_successfully: boolean | null;
+  outcome_date: string | null;
+  retrospective: boolean;
+  label_confidence: string | null;
+}
+export interface DealRegistry {
+  count: number;
+  n_labeled: number;
+  n_ex_ante: number;
+  n_open: number;
+  deals: DealRow[];
+}
+export async function getDeals(): Promise<DealRegistry> {
+  const { data } = await client.get("/deal-scoring/deals");
+  return data;
+}
+
+/** Cierra el lazo de cosecha: registra el desenlace de un deal ya en el registro.
+ * `closed` true=cerró / false=se perdió. Preserva ex-ante/retrospectivo en el backend. */
+export async function resolveOutcome(
+  dealName: string,
+  closed: boolean,
+): Promise<{ resolved: boolean; closed_successfully: boolean; outcome_date: string; retrospective: boolean }> {
+  const { data } = await client.patch(
+    `/deal-scoring/deals/${encodeURIComponent(dealName)}/outcome`,
+    { closed_successfully: closed },
+  );
+  return data;
+}

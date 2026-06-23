@@ -2,10 +2,12 @@
 
 Module-local: lee/escribe SOLO `HistoricalDeal` (su propia tabla), sin acople
 cross-módulo. El scorer cross-eje vive aparte en `app/deal_scoring_api.py`.
-  - POST /import    — carga masiva por CSV (admin) del set validado, sin versionar datos.
-  - POST /deals     — guarda un deal scoreado (cosecha going-forward).
-  - GET  /deals     — lista el registro.
-  - GET  /learning-curve — ¿ya vale la pena el modelo entrenado? (CV-AUC + IC).
+  - POST  /import    — carga masiva por CSV (admin) del set validado, sin versionar datos.
+  - POST  /deals     — guarda un deal scoreado (cosecha going-forward).
+  - GET   /deals     — lista el registro.
+  - PATCH /deals/{name}/outcome — registra el desenlace de un deal (admin), cerrando
+                                  el lazo de cosecha ex-ante (preserva `retrospective`).
+  - GET   /learning-curve — ¿ya vale la pena el modelo entrenado? (CV-AUC + IC).
 """
 import csv
 import io
@@ -16,7 +18,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from shared.auth.dependencies import get_current_user
+from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
 from shared.database.session import get_db
 from modules.deal_scoring.models.models import (
@@ -66,7 +68,7 @@ def _equity(val):
 async def import_csv(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
     """Upsert por `deal_name`. Columnas: deal_name, deal_type, sector, country,
     deal_size_usd, equity_required_pct, deal_stage, closed_successfully,
@@ -74,9 +76,10 @@ async def import_csv(
 
     Una carga masiva es curación histórica → los labels se marcan RETROSPECTIVOS por
     defecto (no gradúan el modelo; ver learning_curve). Una columna `retrospective`
-    explícita en el CSV puede sobreescribirlo."""
-    if current_user.role != UserRole.admin:
-        raise HTTPException(status_code=403, detail="Se requiere rol admin")
+    explícita en el CSV puede sobreescribirlo.
+
+    `require_role` es jerárquico: super_admin también pasa (no quedar fuera al activar
+    SUPERADMIN_EMAIL en go-live)."""
     raw = await file.read()
     try:
         text = raw.decode("utf-8-sig")
@@ -175,16 +178,66 @@ async def list_deals(
 ) -> Dict[str, Any]:
     rows = db.query(HistoricalDeal).order_by(HistoricalDeal.created_at.desc()).all()
     n_labeled = sum(1 for d in rows if d.closed_successfully is not None)
+    n_ex_ante = sum(1 for d in rows if not d.retrospective)
     return {
-        "count": len(rows), "n_labeled": n_labeled,
+        "count": len(rows), "n_labeled": n_labeled, "n_ex_ante": n_ex_ante,
+        "n_open": sum(1 for d in rows if d.closed_successfully is None),
         "deals": [{
             "deal_name": d.deal_name, "deal_type": d.deal_type.value if d.deal_type else None,
             "sector": d.sector.value if d.sector else None, "country": d.country,
             "deal_stage": d.deal_stage.value if d.deal_stage else None,
             "closed_successfully": d.closed_successfully,
+            "outcome_date": d.outcome_date.isoformat() if d.outcome_date else None,
+            "retrospective": d.retrospective,
             "label_confidence": d.label_confidence.value if d.label_confidence else None,
         } for d in rows],
     }
+
+
+@router.patch("/deals/{deal_name}/outcome", summary="Registrar el desenlace de un deal (admin)")
+async def resolve_outcome(
+    deal_name: str,
+    body: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    """Cierra el lazo de cosecha: fija `closed_successfully` (+ `outcome_date`) sobre un
+    deal ya en el registro. **Preserva `retrospective` tal cual** — un deal scoreado
+    ex-ante (cosecha going-forward) sigue siendo ex-ante al conocerse su desenlace, así
+    que GRADÚA; uno retrospectivo (backfill) sigue retrospectivo y solo nutre el
+    diagnóstico. Nunca flipear esa marca acá: hacerlo reintroduciría la fuga que el
+    gate de graduación previene.
+
+    `require_role` jerárquico: super_admin también pasa (alinea con el front, que muestra
+    los botones con `hasRole("admin")` jerárquico → evita 403 silenciosos en go-live)."""
+    d = db.query(HistoricalDeal).filter_by(deal_name=deal_name).one_or_none()
+    if d is None:
+        raise HTTPException(status_code=404, detail="No existe un deal con ese nombre.")
+    closed = _bool(body.get("closed_successfully"))
+    if closed is None:
+        raise HTTPException(status_code=400,
+                            detail="Se requiere closed_successfully (cerró=true / se perdió=false).")
+    d.closed_successfully = closed
+    # outcome_date: lo provisto (ISO) o hoy. No falla si viene mal formado → hoy.
+    raw_date = (str(body.get("outcome_date")).strip() if body.get("outcome_date") else "")
+    parsed = None
+    if raw_date:
+        try:
+            parsed = date.fromisoformat(raw_date)
+        except ValueError:
+            parsed = None
+    d.outcome_date = parsed or date.today()
+    conf = _enum(LabelConfidence, body.get("label_confidence"))
+    if conf is not None:
+        d.label_confidence = conf
+    note = (body.get("note") or "").strip()
+    if note:
+        d.note = note
+    db.commit()
+    return {"resolved": True, "deal_name": d.deal_name,
+            "closed_successfully": d.closed_successfully,
+            "outcome_date": d.outcome_date.isoformat(),
+            "retrospective": d.retrospective}
 
 
 @router.get("/learning-curve", summary="Estado del modelo: ¿rúbrica o entrenado? (CV-AUC + IC)")
