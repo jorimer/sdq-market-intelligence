@@ -8,37 +8,35 @@
 
 ---
 
-## ★ TAREA ACTIVA — Piloto Cerebro de Insights (banking_score, MULTI-AUDIENCIA)
+## ✅ COMPLETADO — Cerebro de Insights (7 ejes, MULTI-AUDIENCIA)
 > Spec: `Spec_Implementacion_Cerebro_Piloto_BankingScore_v0.1.md` + arquitectura.
-> **Desvío aprobado del spec:** multi-audiencia DESDE el piloto (4 audiencias banking,
-> default Comité de crédito) + selector frontend + propagar `audience` por API (el spec
-> los difería a la generalización). Aprobado por el dueño 2026-06-21.
-> **Corrección al spec §5:** los call-sites reales de los 3 templates en alcance son
-> `router_scoring.py:339` (indicator_insight), `:384` (entity_rating) y
-> `reports/narrative.py:148` (subcomponent_focus, solo esa rama del map de secciones).
-> `_ai_insight` sirve comparative/sector/recommendation → FUERA de alcance, queda legacy.
+> Evidencia: piloto en `evidence/PILOTO-banking-cerebro.md`; generalización + receta en
+> `evidence/CEREBRO-generalizacion.md`. Memoria viva: [[cerebro-insights-pilot]].
 
-### Fase 1 — Cerebro (núcleo + doctrina + 4 frames) · `shared/narrative/cerebro.py` (NUEVO)
-- [ ] Textos literales del spec §2: `CEREBRO_IDENTITY`, `EPISTEMIC_STANDARD`, `BARRA_DE_INSIGHT`, `AXIS_DOCTRINE["banking"]`, `DEPTH_DIRECTIVE`.
-- [ ] `AUDIENCE_FRAMES["banking"]` con las **4** aprobadas: `comite_credito` (default, spec §2.5) + `entidad` + `inversionista` + `supervisor` (texto aprobado por el dueño en chat).
-- [ ] `build_system(axis, audience, mode)` (spec §2.6) + `DEFAULT_AUDIENCE` por eje.
-- [ ] Test `shared/narrative/tests/test_cerebro.py`: núcleo siempre presente; doctrina/frame según axis/audience; audience inválida cae al default; `mode='detailed'` añade DEPTH.
+**Piloto banking — CERRADO (PRs #256–#267):** núcleo+doctrina+4 frames (`cerebro.py`),
+motor con ruta `axis=` no-rotura + `THIN_TEMPLATES` (`claude_engine.py`), 3 call-sites
+cableados, selector frontend (Fase 4), sensores en prod. **No-negociable anti-alucinación
+CERRADO**: tipo (a) cifra inventada = 0 y tipo (b) período equivocado = 0 (vía PREVENCIÓN
+—inyección de `cifras_derivadas`— + DETECTOR DETERMINISTA `numeric_guard.deterministic_unsupported`
++ juez LLM). Tipo (c) relacional/superlativo (números base correctos) ACEPTADO como residual
+inherente (no converge por inyección+regex; semántico).
 
-### Fase 2 — Motor · `shared/narrative/claude_engine.py` (EDIT)
-- [ ] `THIN_TEMPLATES` (3 banking, texto spec §3.1) + `axis`/`audience` en `generate()` + `system=` en la llamada + `axis`/`audience` en `_cache_key`. Ruta legacy (sin axis) IDÉNTICA. Test snapshot: sin axis, prompt byte-igual al actual.
+**Generalización — COMPLETA 7/7 (PRs #268–#276):**
+- [x] Fundación compartida: `shared/narrative/derived.py` (precompute canónico, banking
+  byte-idéntico) + frontend genérico `shared/ui/AudienceTabs.tsx` + `shared/lib/useAudiencePref.ts`
+  + slot `actions` en `AiInsightCard`.
+- [x] `sector_intel` #268 (verificado prod) · `macro_political_risk` #270 (dirección invertida)
+  · `trade_intel` #271 (sin canónico → juez LLM) · `social_dev` #272 · `esg_climate` #273
+  · `macro_monitor` #274 (coyuntural, 3 superficies, sync) · `deal_scoring` #275 (rúbrica anclada).
+- [x] Cada eje: AXIS_DOCTRINE + AUDIENCE_FRAMES (3-4 audiencias) + thin template + contexto
+  canónico + Query `audience` en API + selector frontend + i18n es/en/fr.
+- [x] Verificación prod (smoke `scripts/smoke_cerebro_axes.py` #276): voz Sonnet + orientación
+  por audiencia distinta en trade/social/esg/macro; logs muestran la ruta cerebro activa.
 
-### Fase 3 — Router/Reportes + API audience · (EDIT)
-- [ ] `router_scoring.py`: endpoints `/{bank}/insight` y `/{bank}/indicator/{k}` ganan `audience` (Query, default comité, validado contra las 4); pasar `axis="banking", audience=` a `generate()`. Best-effort intacto.
-- [ ] `reports/narrative.py`: cuando `template=="subcomponent_focus"` pasar `axis="banking", audience="comite_credito"` (reportes = lector fijo). El resto, legacy.
-
-### Fase 4 — Frontend selector · (EDIT)
-- [ ] Selector de audiencia (4 opciones, default comité) en `EntityInsightDrawer`/`IndicatorDetailDrawer`; propagar `audience` a `getEntityInsight`/`getIndicatorDetail` (api.ts); persistir elección (localStorage). i18n es/en/fr de las etiquetas.
-
-### Fase 5 — Sensores (criterio de cierre, spec §5.1) → `evidence/PILOTO-banking-cerebro.md`
-- [ ] Calidad: 5 entidades reales × audiencias, viejo vs nuevo, puntuado por reviewer subagent contra los 5 tests de la Barra. Nuevo ≥4/5 donde viejo ≤1/5, en ≥4 de 5.
-- [ ] Anti-alucinación: cero cifras fuera del context (script). NO-NEGOCIABLE.
-- [ ] No-regresión `pytest modules/banking_score/ -q` 100%. Costo/latencia ±25%. Best-effort (API caída → ai_insight=None).
-- [ ] Si calidad < umbral: iterar el TEXTO del cerebro (§2), no los datos. Reviewer subagent final sobre el diff.
+Pendiente opcional (no bloqueante): el detector determinista solo aplica a ejes con
+sub-componentes ponderados (banking/sector/IRMP/social/ESG/deal); comercio y macro usan solo
+el juez LLM (no hay descomposición ponderada que guardar). Cross-eje (tools/compare,
+market-brief) NO se generalizan.
 
 ---
 
@@ -63,8 +61,8 @@ BCRD ✅ → WGI/Eje 4 ✅ → **ONE/Eje 3 (en curso)** → DGA → DGII (diferi
 > (identidad + estándar epistémico + Barra de Insight) + doctrina/audiencia/templates por eje.
 > Specs: `../Arquitectura_del_Cerebro_SDQMIP_v0.1.md` + `../Spec_Implementacion_Cerebro_Piloto_BankingScore_v0.1.md`.
 > **Plan fino paso-a-paso: `tasks/PLAN_CEREBRO_PILOTO_BANKING.md`.**
-- [ ] **Piloto `banking_score`** (audiencia única `comite_credito`). Cerebro en `shared/narrative/cerebro.py`, ruta `axis=` no-rotura en el motor, 3 call-sites cableados, sensores de calidad/anti-alucinación sobre 5 entidades reales. Texto del cerebro aprobado por dueño 2026-06-22.
-- [ ] **Generalización** (post-piloto, contrato spec §8): `sector_intel` → IRMP → macro → trade → social → ESG; `deal_scoring` al final. Selector de audiencia entra aquí.
+- [x] **Piloto `banking_score`** ✅ MULTI-AUDIENCIA (4 frames). Cerebro + ruta `axis=` no-rotura + 3 call-sites + selector frontend + sensores en prod. No-negociable anti-alucinación CERRADO (a/b=0; tipo c residual aceptado). PRs #256–#267.
+- [x] **Generalización** ✅ COMPLETA 7/7 (contrato spec §8): sector·IRMP·comercio·social·ESG·macro·deal con doctrina+audiencias+thin+contexto canónico+selector frontend. Fundación `shared/narrative/derived.py`. PRs #268–#276. Ver `evidence/CEREBRO-generalizacion.md`.
 
 ## HOUSEKEEPING UI (pre-go-live) — 4 secciones del menú incompletas
 > Los 7 ejes están cerrados A–F. Antes del endurecimiento de seguridad, completar las 4 superficies del menú que aún eran placeholder/parciales. Una a la vez (plan fino → confirmación → implementar → verificar prod → reviewer → merge `--no-ff`).
