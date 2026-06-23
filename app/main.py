@@ -82,11 +82,16 @@ app.include_router(deal_scoring_router, prefix="/api/v1/deal-scoring", tags=["De
 from modules.deal_scoring.api.router import router as deal_registry_router
 app.include_router(deal_registry_router, prefix="/api/v1/deal-scoring", tags=["Deal Scoring"])
 
+from shared.products.router import router as products_router
+app.include_router(products_router, prefix="/api/v1/products", tags=["Productos"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
+from shared.products.events import subscribe_product_events
 
 register_sector_subscribers()  # sector_intel ← macro/irmp/trade .updated (SGPS acceleration)
 register_banking_subscribers()  # banking_score ← irmp.updated (outlook overlay)
+subscribe_product_events()  # monitor de productos ← *.updated (recálculo de readiness)
 
 # Operation Console: each module registers its operations at import time into the
 # shared registry (shared.operations). Import the register modules so the console
@@ -99,6 +104,11 @@ import modules.social_dev.operations  # noqa: F401 — registers one-social-sync
 import modules.trade_intel.operations  # noqa: F401 — registers dga-trade-sync
 import modules.esg_climate.operations  # noqa: F401 — registers esg-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
+import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
+
+# Product catalog: each sector registers its SectorProduct into shared.products at
+# import time (anti-Frankenstein: shared/products never imports a sector).
+import modules.banking_score.products  # noqa: F401 — registers banking SectorProduct
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":
