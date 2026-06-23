@@ -1,0 +1,606 @@
+[
+  {
+    "sector": "administracion_publica",
+    "latest": {
+      "has_score": true,
+      "sector_code": "administracion_publica",
+      "period": "2025",
+      "iai_score": 34.95,
+      "iai_band": "Bajo",
+      "sgps_score": 50.0,
+      "iai_breakdown": {
+        "macro": {
+          "score": 0.0,
+          "weight": 0.25,
+          "contribution": 0.0,
+          "variables": {
+            "macro_exposure": {
+              "raw": 47.0,
+              "normalized": 0.0,
+              "inverted": false
+            }
+          }
+        },
+        "business": {
+          "score": 60.44,
+          "weight": 0.25,
+          "contribution": 15.11,
+          "variables": {
+            "ease_of_business": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": false
+            },
+            "operating_cost": {
+              "raw": 41651.87,
+              "normalized": 70.88,
+              "inverted": true
+            }
+          }
+        },
+        "talent": {
+          "score": 34.27,
+          "weight": 0.2,
+          "contribution": 6.85,
+          "variables": {
+            "labor_availability": {
+              "raw": 302164.053,
+              "normalized": 18.53,
+              "inverted": false
+            },
+            "skills_index": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": false
+            }
+          }
+        },
+        "regulation": {
+          "score": 50.0,
+          "weight": 0.15,
+          "contribution": 7.5,
+          "variables": {
+            "regulatory_quality": {
+              "raw": 58.132649,
+              "normalized": 50.0,
+              "inverted": false
+            },
+            "regulatory_volatility": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": true
+            }
+          }
+        },
+        "sector": {
+          "score": 36.56,
+          "weight": 0.15,
+          "contribution": 5.48,
+          "variables": {
+            "sector_growth": {
+              "raw": 1.6,
+              "normalized": 36.76,
+              "inverted": false
+            },
+            "sector_size": {
+              "raw": 5.52,
+              "normalized": 36.36,
+              "inverted": false
+            }
+          }
+        }
+      },
+      "sgps_breakdown": {
+        "sgps_score": 50.0,
+        "factors": {
+          "historical": {
+            "value": 50.0,
+            "weight": 0.4,
+            "contribution": 20.0,
+            "imputed": false
+          },
+          "structural": {
+            "value": 50.0,
+            "weight": 0.35,
+            "contribution": 17.5,
+            "imputed": false
+          },
+          "acceleration": {
+            "value": 50.0,
+            "weight": 0.25,
+            "contribution": 12.5,
+            "imputed": false
+          }
+        },
+        "acceleration_detail": {
+          "acceleration": 50.0,
+          "base": 50.0,
+          "components": {},
+          "inputs_present": []
+        }
+      },
+      "model_version": "1.0"
+    }
+  },
+  {
+    "sector": "administracion_publica",
+    "audience": "inversionista",
+    "text": "El IAI de Administración Pública cierra en 34,95 —banda Baja— y el número tiene una causa estructural, no coyuntural: Exposición macro pesa 25% en el modelo y aporta exactamente 0,0 puntos. Ese cero real (BCRD) significa que el ciclo macroeconómico dominicano no transmite impulso al sector, es decir, el crecimiento agregado no se traduce en mayor atractivo de inversión privada aquí. Con un gap de 100 puntos al techo y un peso equivalente al de la dimensión líder, este solo componente le recorta al score todo lo que podría ganar por otro lado.\n\nEl sector (tamaño y crecimiento, BCRD) —también real— refuerza la lectura: score de 36,56 y apenas 5,48 pts de aporte con un gap de 63,44 pts al techo. El sector es pequeño dentro de la economía dominicana y crece poco en términos de masa invertible privada. Dos dimensiones reales, dos señales débiles: el fundamento objetivo del IAI bajo es sólido.\n\nEl único número que sostiene el score es Entorno de negocios (rúbrica declarada): 60,44 de score y 15,11 pts de aporte, más que la suma de las otras tres dimensiones no-líderes combinadas (19,83 pts). Pero hay que nombrarlo como rúbrica: ese score refleja supuestos de la casa, no datos BCRD o SIB verificados. No lo descarto —es la dimensión de mayor peso relativo que aporta— pero no es base para una tesis de inversión firme.\n\nLa aceleración (SGPS = 50,0) no tiene componentes presentes: es el valor base por defecto, sin señal de momentum real. El sector no acelera ni desacelera; simplemente no hay datos que tracen trayectoria.\n\n**Postura para el asignador de capital:** este no es un sector de entrada para capital privado orientado a retorno. El mecanismo es estructural —la Administración Pública dominicana no ofrece el contrato de transmisión macro-sectorial que justifica exposición—, y la única dimensión con score relevante descansa en rúbrica. El riesgo de sobreponderar es asimétrico: el upside requiere reforma institucional profunda; el downside es capital estacionado en un sector que el ciclo ignora.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "administracion_publica",
+    "audience": "empresa",
+    "text": "El IAI de Administración Pública cierra en 34,95 — banda Baja — y el número no es sorprendente: lo define una sola fractura estructural, no una suma de debilidades moderadas.\n\n**La exposición macro destruye el piso del score.** Con peso 0,25 y aporte 0,0 pts sobre un posible 25, esta dimensión — dato real BCRD — anula de forma completa lo que las demás intentan construir. El mecanismo es directo: el sector no captura el impulso del ciclo macroeconómico dominicano. En una economía que ha crecido por encima del 5 % sostenido, el hecho de que la transmisión macro→sectorial marque cero implica que la expansión del PIB no se traduce en mayor demanda privada por servicios de este sector ni en mejora del margen operativo para quienes operen en él. Para una empresa que evalúa expandir capacidad, esto equivale a decir que el viento de cola de la economía dominicana no llega aquí.\n\nEl resto del cuadro es marginal frente a esa fractura. El líder en score es Entorno de negocios con 15,11 pts aportados, pero es **rúbrica declarada** — no una conclusión sobre la que construir postura. Las demás dimensiones reales disponibles refuerzan la señal negativa: el sector (tamaño y crecimiento, BCRD) aporta solo 5,48 pts, con un gap al techo de 63,44 pts. La base sectorial es pequeña y su crecimiento no compensa.\n\nLa aceleración (SGPS 50,0, base 50,0, sin componentes informados) es neutra por ausencia de datos, no por evidencia de impulso. No ofrece corrección al nivel bajo.\n\n**La decisión de capacidad es clara:** no expandir. El cuello de botella no es operable desde adentro — ninguna mejora en talento o entorno de negocios desvía el resultado mientras la exposición macro permanezca en cero. La señal que cambiaría esta lectura es un rediseño del contrato fiscal-regulatorio que abra participación privada formal en la provisión de servicios públicos con tracción macroeconómica directa; mientras eso no ocurra, este sector no absorbe capital privado con retorno justificable.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "administracion_publica",
+    "audience": "financiador",
+    "text": "El IAI de Administración Pública se ubica en **34.95 — banda Baja**. El número no sorprende; el mecanismo que lo produce sí merece atención para quien tiene exposición crediticia al sector.\n\n**El fallo estructural está en exposición macro.** Con peso 0.25 —empatado en mayor peso con Entorno de negocios— la dimensión registra score 0.0 y contribuye 0 puntos al IAI. Su gap al techo es 100 puntos. Esto no es ruido: es el dato más sólido del análisis (fuente real, BCRD) y actúa como ancla que impide que ninguna fortaleza en las demás dimensiones eleve materialmente el IAI global. El mecanismo es directo: la Administración Pública no capta el contrato macro→sectorial que vincula crecimiento agregado con expansión del sector porque opera fuera de la lógica de mercado. El ingreso del sector depende del ciclo fiscal, no del ciclo económico general; cuando el macro se expande, el privado absorbe el dividendo, no el gasto público corriente. Para un financiador, eso significa que la resiliencia del sector ante una desaceleración económica no viene del mercado sino de la capacidad de ajuste presupuestario del Estado —una fuente de repago cualitativamente distinta y más volátil en años electorales.\n\n**El resto del IAI es básicamente rúbrica declarada.** Entorno de negocios lidera con 15.11 puntos aportados, pero no supera la suma del resto (19.83 pts). Las dimensiones de Talento (6.85 pts, gap 65.73) y Sector/tamaño-crecimiento (5.48 pts, gap 63.44 — dato real) muestran una base estrecha. El score de Sector en 36.56 confirma que el tamaño y crecimiento del sector en las cuentas nacionales son modestos, dato verificable en BCRD.\n\n**La aceleración (SGPS 50.0) es neutra:** no hay inputs de tendencia que señalen mejora ni deterioro inminente. La posición es estable en lo bajo, no en recuperación.\n\n**Por tanto:** para un banco, la señal de vigilancia no es el IAI en sí —ya es bajo— sino el comportamiento del balance fiscal. Un deterioro del resultado primario es el indicador adelantado de estrés en la capacidad de repago de cualquier exposición vinculada al sector público. Ampliar apetito aquí requiere, mínimo, cobertura explícita sobre el ciclo fiscal, no sobre el ciclo económico general.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "administracion_publica",
+    "audience": "formulador_politica",
+    "text": "El IAI de Administración Pública cierra en 34.95 —banda Baja— y el número se explica con un mecanismo simple: una dimensión de peso máximo entrega cero.\n\n**El problema estructural es la exposición macro.** Con peso de 0.25 —el más alto del modelo, empatado con Entorno de negocios— esta dimensión aporta 0.0 puntos y acumula el mayor gap al techo del sistema: 100 puntos de distancia. Este es dato real (BCRD), no supuesto de rúbrica. El mecanismo causal es directo: Administración Pública no capta el ciclo macro dominicano. El crecimiento del PIB, la dinámica del crédito, el flujo de IED —los aceleradores que traccionan a turismo, manufactura o construcción— no se transmiten a este sector con la misma intensidad. El sector es absorbedor de presupuesto, no de capital privado que surfee el ciclo. Eso destruye 25 puntos potenciales antes de que ninguna otra dimensión empiece a contar.\n\nLa dimensión sectorial (real, BCRD) tampoco rescata: score de 36.56, aporte de apenas 5.48 puntos sobre un techo posible de 15. Tamaño y crecimiento limitados refuerzan la misma lectura: el sector no genera el volumen ni la velocidad que justifican capital privado orientado a retorno.\n\nLo que sí mueve el marcador —Entorno de negocios con 15.11 puntos aportados— es rúbrica declarada. Nombrar esto es obligatorio: esos 15.11 puntos son el mayor aporte individual al IAI, pero descansan en un supuesto de la casa pendiente de validación con WGI/ONE, no en datos observados. Una conclusión de atractivo no puede cargarse sobre ese pilar.\n\nLa aceleración SGPS en 50.0 es punto muerto: sin componentes activos, no hay señal de trayectoria. El sector no está empeorando, pero tampoco mostrando momentum.\n\n**Para el formulador de política:** la palanca de mayor retorno sobre el IAI no es regulatoria ni talento —dimensiones de peso menor y rúbrica—. Es rediseñar los mecanismos de participación privada que conecten el ciclo macro con flujos concretos al sector: concesiones, APP, financiamiento mixto. Sin ese canal, la exposición macro seguirá en cero y el IAI no sale de la banda baja independientemente de lo que mejore en las otras dimensiones.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "agropecuario",
+    "latest": {
+      "has_score": true,
+      "sector_code": "agropecuario",
+      "period": "2025",
+      "iai_score": 43.92,
+      "iai_band": "Medio",
+      "sgps_score": 50.0,
+      "iai_breakdown": {
+        "macro": {
+          "score": 16.67,
+          "weight": 0.25,
+          "contribution": 4.17,
+          "variables": {
+            "macro_exposure": {
+              "raw": 50.0,
+              "normalized": 16.67,
+              "inverted": false
+            }
+          }
+        },
+        "business": {
+          "score": 72.73,
+          "weight": 0.25,
+          "contribution": 18.18,
+          "variables": {
+            "ease_of_business": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": false
+            },
+            "operating_cost": {
+              "raw": 28537.27,
+              "normalized": 95.46,
+              "inverted": true
+            }
+          }
+        },
+        "talent": {
+          "score": 36.24,
+          "weight": 0.2,
+          "contribution": 7.25,
+          "variables": {
+            "labor_availability": {
+              "raw": 359781.035,
+              "normalized": 22.49,
+              "inverted": false
+            },
+            "skills_index": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": false
+            }
+          }
+        },
+        "regulation": {
+          "score": 50.0,
+          "weight": 0.15,
+          "contribution": 7.5,
+          "variables": {
+            "regulatory_quality": {
+              "raw": 58.132649,
+              "normalized": 50.0,
+              "inverted": false
+            },
+            "regulatory_volatility": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": true
+            }
+          }
+        },
+        "sector": {
+          "score": 45.48,
+          "weight": 0.15,
+          "contribution": 6.82,
+          "variables": {
+            "sector_growth": {
+              "raw": 3.68,
+              "normalized": 59.24,
+              "inverted": false
+            },
+            "sector_size": {
+              "raw": 4.943,
+              "normalized": 31.73,
+              "inverted": false
+            }
+          }
+        }
+      },
+      "sgps_breakdown": {
+        "sgps_score": 50.0,
+        "factors": {
+          "historical": {
+            "value": 50.0,
+            "weight": 0.4,
+            "contribution": 20.0,
+            "imputed": false
+          },
+          "structural": {
+            "value": 50.0,
+            "weight": 0.35,
+            "contribution": 17.5,
+            "imputed": false
+          },
+          "acceleration": {
+            "value": 50.0,
+            "weight": 0.25,
+            "contribution": 12.5,
+            "imputed": false
+          }
+        },
+        "acceleration_detail": {
+          "acceleration": 50.0,
+          "base": 50.0,
+          "components": {},
+          "inputs_present": []
+        }
+      },
+      "model_version": "1.0"
+    }
+  },
+  {
+    "sector": "agropecuario",
+    "audience": "inversionista",
+    "text": "El agropecuario dominicano entra a 2025 con un IAI de 43.92, banda Media, y ahí está el problema: el número no es accidental, es estructural.\n\n**El techo lo pone lo que los datos reales dicen, no la rúbrica.**\n\nLas dos dimensiones con dato real suman el 40% del peso del modelo y producen juntas apenas 10.99 puntos de los 43.92 totales. El sector en sí (BCRD) aporta 6.82 pts con un gap al techo de 54.52 pts —tamaño y crecimiento por debajo de la mitad del potencial—. Pero el daño mayor viene de exposición macro: 16.67 de score, 4.17 pts de aporte, y un gap al techo de 83.33 pts. Ese 16.67 no es ruido: indica que el contrato entre el ciclo macro dominicano y el desempeño sectorial es débil o adverso. El agro no capta el viento de cola de la economía nacional; cuando el país crece, este sector no amplifica. Eso es lo que le cuesta el band de atractivo.\n\n**El entorno de negocios salva el score, pero hay que leerlo con cautela.**\n\nCon 72.73 pts y un peso de 0.25, aporta 18.18 pts —más que la suma de las cuatro dimensiones restantes combinada, aunque sin superarla—. El problema: es rúbrica declarada. No hay que descartarla, pero tampoco construir la tesis de entrada sobre ella. Si la rúbrica sobreestima el entorno operativo real, el IAI se desinfla hacia los 25–30 pts; ese es el downside no descontado.\n\n**Aceleración neutral, señal ambigua.**\n\nSGPS en 50.0 sobre base 50.0, sin inputs presentes. No hay señal de aceleración real: el sector no está ganando momentum. Para un asignador de capital, un IAI medio sin aceleración confirmada es esperar sin catalizador visible.\n\n**Veredicto:** el agropecuario está limitado en lo real (exposición macro crítica, sector por debajo del potencial) y sostenido artificialmente en lo declarado. Mantener subponderado hasta que la exposición macro mejore o la aceleración muestre inputs reales.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "agropecuario",
+    "audience": "empresa",
+    "text": "El IAI del sector agropecuario cae en **banda Media con 43.92 puntos**, y el número dice algo preciso: el sector no es un caso de inversión rotunda ni una trampa evidente. Es un atractivo contenido por una fractura estructural en su contrato con la macroeconomía dominicana.\n\n**El mecanismo que explica el techo**\n\nLa dimensión que más condiciona el atractivo —y la decisión de capacidad— es **Exposición macro**, con peso 0.25, el más alto del modelo junto a Entorno de negocios. Aporta solo 4.17 puntos de un máximo posible de 25: su gap al techo es 83.33 puntos, el mayor de todas las dimensiones. Esto es dato real (BCRD). Lo que dice es estructural: cuando la macroeconomía dominicana acelera, el agropecuario no lo capta de forma proporcional. El crecimiento del PIB no se transmite al sector con la misma intensidad que a turismo, manufactura o servicios. Para una empresa que evalúa expandir capacidad, esto significa que el viento macro no lleva el barco: el sector tiene que generar su propio empuje o depender de políticas sectoriales específicas.\n\n**Lo que sostiene el piso**\n\nEntorno de negocios —rúbrica declarada— aporta 18.18 puntos con score de 72.73, el único componente que opera con holgura. Es el pilar que evita que el IAI caiga a banda Baja. Pero es rúbrica: no construyo una conclusión fuerte sobre él sin respaldo de WGI o estudios ONE.\n\n**Talento, el cuello de botella gestionable**\n\nCon score 36.24 y gap de 63.76 puntos, Talento es la segunda grieta por magnitud de gap y tiene peso 0.20. A diferencia de la exposición macro —que la empresa no controla—, el déficit de talento es una palanca que sí puede mover internamente: formación técnica, retención, acuerdos con INFOTEP.\n\n**Lectura de aceleración**\n\nSGPS en 50.0 sobre base 50.0 sin componentes informados: aceleración neutral. El sector no está ganando momentum; el nivel es el nivel.\n\n**Veredicto para la decisión:** sostener con selectividad, no expandir de forma amplia. La exposición macro limita el upside sistémico; la apuesta rentable es posicionarse en subsegmentos con tracción exportadora propia, donde el sector genera su propio contrato con la demanda externa en vez de esperar el rebote macro doméstico.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "agropecuario",
+    "audience": "financiador",
+    "text": "El agropecuario entra a 2025 con un IAI de 43.92 —banda Media— y el problema estructural está concentrado en una sola dimensión que los datos reales confirman sin ambigüedad.\n\n**La exposición macro es el ancla que hunde el score.**\n\nCon peso de 0.25 —empatado con Entorno de negocios como la dimensión de mayor ponderación— la exposición macro aporta apenas 4.17 puntos sobre un techo posible de 25. Su gap al techo es 83.33 puntos, el mayor de todo el modelo. Esto no es una lectura débil en una dimensión secundaria: es el peor desempeño en la dimensión que más pesa. El mecanismo es claro: el contrato macro→sectorial del agropecuario dominicano es históricamente frágil. El sector no captura el crecimiento macroeconómico general de forma proporcional —no lo impulsa el crédito formal en la misma escala que otros sectores, no está indexado a los motores de divisa (turismo, remesas), y su vínculo con la política fiscal es vía subsidios discrecionales, no estructural. Cuando el macro va bien, el agropecuario no necesariamente sube con él; cuando va mal, absorbe shocks de precios de insumos importados (agroquímicos, combustible) sin amortiguadores sólidos. Ese desacoplamiento asimétrico es lo que el score de 16.67 está midiendo.\n\n**Entorno de negocios es la única dimensión que sostiene el IAI**, con 18.18 puntos aportados. Pero es rúbrica declarada: refleja el juicio de la casa sobre condiciones habilitantes, no datos BCRD verificados. Para una decisión crediticia, ese aporte —aunque real en el score— no puede cargar el peso de una conclusión fuerte sobre resiliencia del sector.\n\n**La aceleración (SGPS 50.0) es neutral por ausencia de señal**, no por estabilidad genuina. No hay inputs presentes que indiquen momentum ni deterioro; el 50 es un valor base, no una lectura.\n\n**Para el financiador:** el riesgo de cartera en agropecuario no viene de que el sector sea pequeño —45.48 en tamaño/crecimiento es razonable— sino de que su comportamiento no está acoplado al ciclo macro general. Ampliar exposición crediticia en este sector exige señales de mejora en el contrato macro→sectorial (política de crédito subsidiado, mecanismos de cobertura de precios, integración a cadenas de exportación formales). La señal a vigilar: si el crédito agropecuario del sistema financiero como proporción del crédito total muestra tendencia ascendente sostenida, el score de exposición macro debería moverse; si no se mueve, el 16.67 es el piso estructural.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "agropecuario",
+    "audience": "formulador_politica",
+    "text": "El agropecuario llega a 2025 con un IAI de 43,92 —banda Media— sostenido principalmente por una rúbrica y frenado por la dimensión real de mayor peso.\n\n**La exposición macro es el lastre estructural que define el techo real del sector.**\n\nCon score 16,67 y peso 0,25 —el mismo peso que el líder de negocios—, esta dimensión aporta solo 4,17 puntos al IAI total y acumula un gap al techo de 83,33 puntos: el mayor del modelo. El mecanismo es directo: el agropecuario dominicano absorbe mal el ciclo macro favorable. Cuando la economía crece, el \"contrato\" entre la expansión agregada y el desempeño sectorial no se cumple con la misma intensidad que en turismo, manufactura o servicios. Eso implica que incluso en un entorno macro positivo, el inversor no captura el upside proporcional. La asimetría aquí es costosa: no intervenir significa que cada punto de crecimiento del PIB genera poco arrastre sectorial, perpetuando el score bajo en la dimensión que tiene el mayor peso relativo conjunto con negocios.\n\n**Entorno de negocios (rúbrica) no rescata el cuadro.**\n\nEs la dimensión más alta: 72,73, aporte de 18,18 puntos. Pero es rúbrica declarada, y el gap al techo aún es de 27,27 puntos. No construyo una conclusión fuerte sobre esto; lo señalo como el piso declarado sobre el cual opera el sector, sujeto a validación con datos reales.\n\n**Talento es el cuello de botella accionable por política.**\n\nScore 36,24, peso 0,20, gap al techo de 63,76 puntos. Es la segunda mayor brecha en términos absolutos y el único componente de bajo score donde la política de fomento tiene palanca directa: formación técnica agropecuaria, certificación de oficios, programas de extensión rural. También es rúbrica, pero el mecanismo es plausible y la intervención es tangible.\n\n**Aceleración neutral (SGPS = 50,0, sin componentes registrados)**: el sector no muestra trayectoria medible en este ciclo. El IAI de 43,92 refleja un nivel estático, no momentum.\n\n**La palanca de política con mayor retorno sobre el IAI es reducir la desconexión entre ciclo macro y desempeño sectorial** —infraestructura de riego, acceso a mercados, integración a cadenas exportadoras—, porque opera sobre la dimensión real de mayor peso y mayor gap. Talento es la segunda prioridad accionable.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "comercio",
+    "latest": {
+      "has_score": true,
+      "sector_code": "comercio",
+      "period": "2025",
+      "iai_score": 71.22,
+      "iai_band": "Alto",
+      "sgps_score": 50.0,
+      "iai_breakdown": {
+        "macro": {
+          "score": 100.0,
+          "weight": 0.25,
+          "contribution": 25.0,
+          "variables": {
+            "macro_exposure": {
+              "raw": 65.0,
+              "normalized": 100.0,
+              "inverted": false
+            }
+          }
+        },
+        "business": {
+          "score": 67.25,
+          "weight": 0.25,
+          "contribution": 16.81,
+          "variables": {
+            "ease_of_business": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": false
+            },
+            "operating_cost": {
+              "raw": 34380.79,
+              "normalized": 84.51,
+              "inverted": true
+            }
+          }
+        },
+        "talent": {
+          "score": 58.78,
+          "weight": 0.2,
+          "contribution": 11.76,
+          "variables": {
+            "labor_availability": {
+              "raw": 1016020.093,
+              "normalized": 67.56,
+              "inverted": false
+            },
+            "skills_index": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": false
+            }
+          }
+        },
+        "regulation": {
+          "score": 50.0,
+          "weight": 0.15,
+          "contribution": 7.5,
+          "variables": {
+            "regulatory_quality": {
+              "raw": 58.132649,
+              "normalized": 50.0,
+              "inverted": false
+            },
+            "regulatory_volatility": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": true
+            }
+          }
+        },
+        "sector": {
+          "score": 67.65,
+          "weight": 0.15,
+          "contribution": 10.15,
+          "variables": {
+            "sector_growth": {
+              "raw": 2.06,
+              "normalized": 41.73,
+              "inverted": false
+            },
+            "sector_size": {
+              "raw": 12.649,
+              "normalized": 93.57,
+              "inverted": false
+            }
+          }
+        }
+      },
+      "sgps_breakdown": {
+        "sgps_score": 50.0,
+        "factors": {
+          "historical": {
+            "value": 50.0,
+            "weight": 0.4,
+            "contribution": 20.0,
+            "imputed": false
+          },
+          "structural": {
+            "value": 50.0,
+            "weight": 0.35,
+            "contribution": 17.5,
+            "imputed": false
+          },
+          "acceleration": {
+            "value": 50.0,
+            "weight": 0.25,
+            "contribution": 12.5,
+            "imputed": false
+          }
+        },
+        "acceleration_detail": {
+          "acceleration": 50.0,
+          "base": 50.0,
+          "components": {},
+          "inputs_present": []
+        }
+      },
+      "model_version": "1.0"
+    }
+  },
+  {
+    "sector": "comercio",
+    "audience": "inversionista",
+    "text": "El IAI de Comercio marca 71.22 puntos —banda Alta— y su fundamento real es claro: la exposición macro aporta exactamente 25 puntos sobre 25 posibles, el único componente que llega al techo en todo el modelo. Ese máximo no es cosmético; significa que el contrato macro dominicano —crecimiento sostenido, demanda interna activa, base de consumidores en expansión— se traslada de forma plena al sector. Para un inversionista, esto implica que el viento de cola macroeconómico ya está capturado en el precio del atractivo y no requiere apuesta adicional sobre la dirección del ciclo.\n\nEl problema está en lo que viene después. La dimensión Sector (tamaño y crecimiento, BCRD) —también real— aporta 10.15 puntos con un gap al techo de 32.35. Eso dice que el sector, medido en sus propios fundamentales de escala y dinámica, no corre al mismo ritmo que el entorno macro que lo sostiene. Comercio se beneficia del ciclo, pero no lo lidera: hay margen de crecimiento estructural sin explotar, lo que es upside real si el capital entra con tesis de desarrollo de mercado más que de extracción de renta inmediata.\n\nLas tres dimensiones restantes son rúbrica declarada —negocios (16.81 pts aportados), talento (11.76 pts) y regulatoria (7.5 pts)— y sobre ellas no construyo conclusión fuerte. Lo que sí señalo: el mayor gap al techo del modelo corresponde a Regulatoria (50 puntos de distancia), pero su peso de 15% limita cuánto puede mover el IAI total. La restricción que más duele en términos ponderados es la combinación Entorno de negocios + Talento, que juntos pesan 45% y arrastran con scores moderados.\n\nLa aceleración (SGPS 50.0) está en nivel base, sin señal de momentum diferencial. El sector atrae, pero no acelera: el IAI Alto refleja posición, no trayectoria.\n\n**Veredicto:** Comercio es un sector para mantener o entrar con convicción moderada, anclado en la solidez macro real. El upside incremental requiere que los fundamentos sectoriales propios —hoy rezagados respecto al techo— cierren brecha. La señal de alerta a vigilar: si el crecimiento del PIB sectorial (BCRD) empieza a divergir negativamente del PIB global, el componente que hoy sostiene el score con 25 puntos exactos pierde su argumento central.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "comercio",
+    "audience": "empresa",
+    "text": "El Comercio llega a 71.22 (banda Alta) montado sobre un pilar que los datos confirman sin ambigüedad: la exposición macro puntúa 100 y aporta 25 puntos al IAI, el máximo posible para esa dimensión. El mecanismo es directo — una economía dominicana que crece sostenido con consumo privado robusto se traduce, casi mecánicamente, en volumen de transacciones comerciales. Ese contrato macro→sectorial no tiene gap al techo; ninguna otra dimensión puede decir lo mismo.\n\nEl problema está en lo que ese techo esconde: los 46.22 puntos restantes provienen de tres dimensiones en rúbrica declarada y una real con recorrido limitado. El sector (tamaño y crecimiento, BCRD) aporta 10.15 puntos reales, con un gap de 32.35 puntos al techo — lo que sugiere, con los datos disponibles, que el sector no está capturando de forma completa la tracción macro que lo favorece. Esa brecha entre el contrato macro perfecto y el desempeño sectorial medido es la tensión central del IAI.\n\nLa dimensión que más lastra en términos de gap absoluto es Regulatoria: 50 puntos de distancia al techo con solo 0.15 de peso. Por ser rúbrica declarada, no construyo conclusión fuerte sobre su magnitud real — pero es la señal de mayor vulnerabilidad estructural si esa rúbrica subestima fricciones reales de entrada, licencias o cumplimiento.\n\nTalento (rúbrica, peso 0.20) aporta 11.76 puntos con un gap de 41.22. Para una empresa que evalúa expandir capacidad comercial, este es el cuello de botella más accionable: es la dimensión de mayor peso entre las que no son reales y la que más comprimen la escala operativa sin depender de decisión regulatoria externa.\n\nLa aceleración en 50 — base neutral, sin inputs adicionales que la muevan — indica que el sector no tiene momentum documentado. El IAI está elevado por nivel, no por trayectoria.\n\n**Veredicto:** sostener o expandir capacidad se justifica por el macro; el límite lo pone el talento, que la empresa puede gestionar, no el regulatorio, que no controla.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "comercio",
+    "audience": "financiador",
+    "text": "El comercio dominicano entra a 2025 con un IAI de 71.22 (banda Alta), pero el fundamento de ese número no está repartido de forma equilibrada: una sola dimensión real lo ancla, y lo que queda por ganar depende casi íntegramente de rúbricas que aún no tienen el peso probatorio para sostener una tesis crediticia fuerte.\n\n**La exposición macro es el motor, no el sector en sí.**\n\nLa dimensión de Exposición Macro aporta 25.0 pts sobre 71.22, con score perfecto de 100 y gap cero al techo. El mecanismo es directo: el comercio es el canal de transmisión más inmediato del consumo privado dominicano. Cuando el ciclo macro es favorable —ingresos reales al alza, crédito fluyendo, turismo sostenido generando efecto ingreso— el comercio absorbe ese impulso antes que cualquier otro sector. Este vínculo es estructural, no circunstancial, y los datos del BCRD lo respaldan. Para un financiador con cartera en el sector, esto implica que la resiliencia del comercio es, en parte, resiliencia del ciclo macro dominicano: el riesgo sectorial y el riesgo macro están correlacionados, no diversificados.\n\n**El sector como masa crítica: sólido pero no el determinante.**\n\nLa dimensión Sector (BCRD) aporta 10.15 pts con un score de 67.65 y un gap de 32.35 al techo. Tamaño y crecimiento dan confort operativo, pero no elevan el atractivo hacia la banda máxima por sí solos.\n\n**Las rúbricas muestran el techo, no lo garantizan.**\n\nNegocios, talento y regulatoria suman 36.07 pts de aporte, pero las tres son rúbrica declarada. La regulatoria es la que más lastra: score de 50.0, el menor de todas las dimensiones, con un gap de 50.0 al techo —el mayor del modelo. El ambiente regulatorio en comercio acumula fricciones conocidas (informalidad, asimetría de fiscalización, márgenes comprimidos por competencia importada). Sin datos duros que validen esta dimensión, no se puede construir una tesis de mejora sobre ella.\n\n**La aceleración no suma ni resta.**\n\nSGPS en 50.0 (base neutral, sin componentes cargados) significa que el IAI refleja nivel, no trayectoria. El sector no muestra señal de aceleración confirmada.\n\n**Para la audiencia:** el apetito crediticio hacia el comercio es defensible mientras el ciclo macro dominicano se mantenga. La señal a vigilar no es el sector: es el consumo privado real y el crédito al consumo. Si ese contrato macro→sectorial se quiebra, el piso del IAI cae con él.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "comercio",
+    "audience": "formulador_politica",
+    "text": "El Comercio entra a 2025 con un IAI de 71,22 —banda Alta— pero con una base frágil: 25 de sus 71,22 puntos los pone una sola dimensión, y el resto del edificio descansa mayoritariamente en rúbrica.\n\n**El motor real es la exposición macro, y es el único motor sin fisuras.** Score perfecto (100,0), aporte de 25,0 pts, gap al techo de cero. El mecanismo es directo: el ciclo económico dominicano —consumo privado robusto, empleo formal en expansión, remesas sostenidas— se traduce casi mecánicamente en demanda comercial. Cuando el macro marcha, el Comercio recoge; cuando frena, lo siente antes que otros sectores. Eso le da atractivo cíclico alto, pero también dependencia: el sector no genera su propio impulso, lo toma prestado del macro.\n\n**La dimensión sectorial (real, BCRD) confirma masa crítica sin alarma.** Score de 67,65, aporte de 10,15 pts. El sector tiene tamaño y crecimiento suficientes para sustentar tesis de inversión, pero su gap al techo (32,35 pts) indica que ni el crecimiento ni la escala son excepcionales dentro del universo comparable.\n\n**El cuello de botella estructural es Regulatoria, y aquí es donde la política tiene palanca.** Score de 50,0 —el más bajo—, gap al techo de 50,0 pts: el mayor gap del IAI. Con peso de 0,15, su contribución actual es apenas 7,5 pts sobre un máximo posible de 15,0. Pero siendo rúbrica declarada, esta lectura es un supuesto de la casa, no un dato BCRD. La señal de alarma es real en dirección; la magnitud requiere validación con WGI y estudios ONE. Para el formulador de política: si la rúbrica subestima el problema regulatorio, el IAI real es menor de 71,22; si lo sobreestima, el atractivo es más sólido de lo que parece. La asimetría importa —operar bajo un IAI inflado por supuestos de rúbrica genera decisiones de fomento mal calibradas.\n\n**SGPS en 50,0 (base neutral)** señala que el sector no acumula momentum propio: el atractivo existe pero no acelera. La política que eleva Regulatoria de 50 a 75 añade 3,75 pts al IAI —modesto, pero es la única palanca accionable que no depende del ciclo macro.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "comunicaciones",
+    "latest": {
+      "has_score": true,
+      "sector_code": "comunicaciones",
+      "period": "2025",
+      "iai_score": 34.78,
+      "iai_band": "Bajo",
+      "sgps_score": 50.0,
+      "iai_breakdown": {
+        "macro": {
+          "score": 16.67,
+          "weight": 0.25,
+          "contribution": 4.17,
+          "variables": {
+            "macro_exposure": {
+              "raw": 50.0,
+              "normalized": 16.67,
+              "inverted": false
+            }
+          }
+        },
+        "business": {
+          "score": 56.68,
+          "weight": 0.25,
+          "contribution": 14.17,
+          "variables": {
+            "ease_of_business": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": false
+            },
+            "operating_cost": {
+              "raw": 45666.36,
+              "normalized": 63.36,
+              "inverted": true
+            }
+          }
+        },
+        "talent": {
+          "score": 35.94,
+          "weight": 0.2,
+          "contribution": 7.19,
+          "variables": {
+            "labor_availability": {
+              "raw": 350958.051,
+              "normalized": 21.88,
+              "inverted": false
+            },
+            "skills_index": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": false
+            }
+          }
+        },
+        "regulation": {
+          "score": 50.0,
+          "weight": 0.15,
+          "contribution": 7.5,
+          "variables": {
+            "regulatory_quality": {
+              "raw": 58.132649,
+              "normalized": 50.0,
+              "inverted": false
+            },
+            "regulatory_volatility": {
+              "raw": 50.0,
+              "normalized": 50.0,
+              "inverted": true
+            }
+          }
+        },
+        "sector": {
+          "score": 11.68,
+          "weight": 0.15,
+          "contribution": 1.75,
+          "variables": {
+            "sector_growth": {
+              "raw": 0.36,
+              "normalized": 23.35,
+              "inverted": false
+            },
+            "sector_size": {
+              "raw": 0.99,
+              "normalized": 0.0,
+              "inverted": false
+            }
+          }
+        }
+      },
+      "sgps_breakdown": {
+        "sgps_score": 50.0,
+        "factors": {
+          "historical": {
+            "value": 50.0,
+            "weight": 0.4,
+            "contribution": 20.0,
+            "imputed": false
+          },
+          "structural": {
+            "value": 50.0,
+            "weight": 0.35,
+            "contribution": 17.5,
+            "imputed": false
+          },
+          "acceleration": {
+            "value": 50.0,
+            "weight": 0.25,
+            "contribution": 12.5,
+            "imputed": false
+          }
+        },
+        "acceleration_detail": {
+          "acceleration": 50.0,
+          "base": 50.0,
+          "components": {},
+          "inputs_present": []
+        }
+      },
+      "model_version": "1.0"
+    }
+  },
+  {
+    "sector": "comunicaciones",
+    "audience": "inversionista",
+    "text": "El IAI de Comunicaciones cierra 2025 en 34.78 —banda Baja— y el dato que más importa no es el número sino su arquitectura interna: el score lo sostiene casi por completo una dimensión de rúbrica, mientras las dos dimensiones con respaldo real hunden el promedio.\n\n**El problema estructural está en los datos duros.** Exposición macro aporta solo 4.17 puntos sobre un peso del 25%, con un gap al techo de 83.33 puntos. Sector (tamaño y crecimiento, BCRD) aporta 1.75 puntos con un gap de 88.32 —el mayor de todo el modelo. Juntas, estas dos dimensiones reales representan el 40% del peso del IAI y generan apenas 5.92 puntos combinados. El mecanismo es claro: el sector no está creciendo a una velocidad que compense su tamaño relativo, y el entorno macro no le está transmitiendo impulso. En un sector como comunicaciones —con infraestructura intensiva en capital y dependencia de volumen para rentabilizar— un score sectorial de 11.68 sugiere que la ecuación de retorno sobre activos no cierra en las condiciones actuales.\n\n**El líder de score no rescata.** Entorno de negocios lidera con 56.68 y aporta 14.17 puntos, pero es rúbrica declarada —no dato real— y aun así no supera la suma del resto (20.61 puntos). Es la dimensión más fuerte y no alcanza para dominar el IAI. Eso limita cuánto puede construirse sobre ella; trataré esa lectura como señal de contexto, no como tesis de entrada.\n\n**La aceleración no aclara el panorama.** El SGPS en 50.0 con inputs vacíos indica que no hay señal de trayectoria calculable: el score de momentum es un neutro técnico, no una promesa de recuperación.\n\n**Tesis para el asignador de capital:** las dos anclas reales del modelo apuntan en la misma dirección negativa y pesan el 40% del IAI. Si el sector revierte —nueva penetración de banda ancha, consolidación que mejore ARPU, o aceleración del PIB sectorial en el BCRD— el score tiene espacio material para subir, pero hoy no hay esa señal. La postura es no sobreponderar; vigilar la revisión del dato BCRD del crecimiento sectorial como primer indicador de cambio de tesis.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "comunicaciones",
+    "audience": "empresa",
+    "text": "El IAI de Comunicaciones cae en banda **Bajo** con 34.78 puntos. Eso ya es un veredicto operativo: el sector no ofrece hoy condiciones que justifiquen expansión de capacidad bajo criterios normales de retorno ajustado al riesgo.\n\nEl diagnóstico de fondo es estructural, no coyuntural. Las dos únicas dimensiones con datos reales del BCRD —Sector y Exposición macro— aportan en conjunto apenas 5.92 puntos sobre 34.78. Sector registra el score más bajo del modelo (11.68) con un gap al techo de 88.32 puntos; Exposición macro suma 16.67 con un gap de 83.33. Ambas coinciden en la misma señal: el sector es pequeño, crece poco dentro del contexto macroeconómico dominicano, y su contrato con la dinámica agregada es débil. Eso no es una lectura interpretativa —es lo que miden los datos duros.\n\nEl score global de 34.78 descansa entonces en las tres dimensiones de **rúbrica declarada**, que aportan 29.86 puntos combinados. Entorno de negocios lidera con 14.17 puntos (score 56.68, peso 0.25), pero no supera la suma del resto por sí solo. Regulatoria y Talento suman 14.69 puntos adicionales. Usar estas dimensiones para sostener una tesis de atractivo real sería un error metodológico: son supuestos de casa, aún no respaldados por WGI ni estudios ONE, y su lectura es provisional.\n\nLa aceleración SGPS en 50.0 sin inputs presentes es neutral por defecto, no confirmada. No hay señal de aceleración que modifique la lectura de nivel.\n\n**La tensión que condicionará la decisión es Talento**: con un score de 35.94 y gap al techo de 64.06 puntos en una industria que requiere perfiles técnicos especializados, la restricción de capital humano puede exceder lo que la empresa gestiona internamente. Si los datos de rúbrica se validan con evidencia dura y el score de Talento se confirma deprimido, ese es el cuello de botella que impone el límite superior a cualquier expansión.\n\n**Postura**: contener nueva capacidad hasta que los datos reales del BCRD muestren aceleración en el tamaño sectorial. La señal a vigilar es la tasa de crecimiento del sector en las cuentas nacionales.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "comunicaciones",
+    "audience": "financiador",
+    "text": "El IAI de Comunicaciones marca 34.78 —banda Baja— y el fundamento no es ambiguo: las dos dimensiones con evidencia real (BCRD) son las que peor puntúan y juntas pesan el 40% del índice.\n\n**El ancla estructural es la debilidad sectorial verificada.** Sector (tamaño y crecimiento, BCRD) aporta apenas 1.75 pts sobre un techo posible de 15 pts —gap de 88.32 pts al techo, el mayor del modelo. Exposición macro suma 4.17 pts sobre un techo de 25 pts —gap de 83.33 pts. Ambas dimensiones son datos reales; no hay incertidumbre de rúbrica aquí. Lo que dicen: el sector no crece a un ritmo que justifique exposición, y su vínculo con el ciclo macroeconómico dominicano lo perjudica, no lo protege. Un banco que amplíe cartera en este sector no está apostando a un motor de la economía; está apostando a que factores blandos compensen una base dura débil.\n\n**El \"mejor\" lado del IAI descansa enteramente en rúbricas declaradas.** Entorno de negocios lidera con 14.17 pts y es, en papel, la dimensión más sólida. Pero es rúbrica declarada: ese score refleja supuestos de la casa, no datos BCRD ni SIB. No construyo conclusión fuerte sobre él. La dimensión regulatoria (7.5 pts, rúbrica) y talento (7.19 pts, rúbrica) siguen el mismo patrón. Los tres juntos aportan 28.86 pts —más de ocho de cada diez puntos del IAI total— sobre supuestos, no sobre evidencia. Eso es un riesgo metodológico que el financiador debe internalizar.\n\n**La aceleración (SGPS = 50.0, base 50.0, sin insumos presentes) es neutral por defecto**, no por señal. No hay datos que indiquen aceleración ni desaceleración; el modelo la dejó en punto medio. Eso no es tranquilizador: la ausencia de señal en un sector que ya está en banda Baja no aporta tesis de mejora.\n\n**Por tanto:** la exposición crediticia prudente al sector Comunicaciones es limitada y selectiva. La señal a vigilar es cualquier revisión de los datos reales de crecimiento sectorial BCRD —es el único insumo que podría mover el IAI desde la base, no desde los supuestos.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "sector": "comunicaciones",
+    "audience": "formulador_politica",
+    "text": "El IAI de Comunicaciones marca 34.78 —banda Baja— y el diagnóstico es estructural, no coyuntural: las dos dimensiones con datos reales (BCRD, exposición macro) son las que más hunden el score.\n\n**El cuello de botella está en los fundamentos reales del sector.**\n\nExposición macro aporta solo 4.17 pts sobre un peso de 0.25 —uno de los pesos más altos del modelo— con un gap al techo de 83.33 pts. Eso significa que el contrato entre el ciclo macroeconómico dominicano y el desempeño sectorial de Comunicaciones es débil: cuando la economía crece, el sector no captura ese crecimiento de forma proporcional. El canal causal más plausible es que las telecomunicaciones dominicanas operan en un mercado de penetración ya avanzada para los servicios básicos de voz y datos móviles, donde el upside del ciclo no se traduce en expansión de ingresos sino en compresión de márgenes vía precio.\n\nSector (tamaño y crecimiento, BCRD) es la dimensión más débil del modelo: 11.68 pts de score, contribución de 1.75 pts, gap al techo de 88.32 pts. El sector sencillamente no está creciendo con la masa crítica que justifique atractivo de inversión bajo los parámetros del modelo.\n\nEstas dos dimensiones —las únicas reales— juntas aportan menos de 6 pts al IAI total. Ahí está el veredicto.\n\nLas dimensiones de rúbrica declarada (Entorno de negocios: 14.17 pts de aporte; Regulatoria: 7.50 pts; Talento: 7.19 pts) sostienen el score por encima de cero, pero construir política sobre ellas tiene límite epistémico: son supuestos de la casa, no medición verificada.\n\n**La aceleración (SGPS = 50.0, base 50.0, sin componentes presentes) no añade señal.** No hay datos de trayectoria que modifiquen la lectura estática. El 50.0 es un neutral técnico, no un indicador de momentum.\n\n**Para el formulador de política:** la palanca accionable no es mejorar el entorno de negocios —ya es la dimensión más fuerte y es rúbrica—. Es atacar la débil captura macro del sector: inversión en infraestructura de fibra y espectro que abra mercados de servicios empresariales y cloud, donde el ciclo económico sí transmite demanda. Esa es la única vía, con datos reales, para mover el IAI desde su piso estructural.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  }
+]
