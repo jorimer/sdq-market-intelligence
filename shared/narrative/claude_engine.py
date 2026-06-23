@@ -257,6 +257,22 @@ THIN_TEMPLATES = {
         "posición vs pares si se provee, y un veredicto puntual con qué vigilar. NO repitas el "
         "panorama global del banco ni otros sub-componentes."
     ),
+    "sector_outlook": (
+        "Explica el FUNDAMENTO del atractivo de inversión (IAI) de este sector.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. No cubras las cinco dimensiones por igual: ve profundo en la que "
+        "más condiciona la decisión de la audiencia. Apóyate en: lectura del IAI y su banda, "
+        "la(s) dimensión(es) que más impulsan y las que más lastran (pondera por su peso vía "
+        "'cifras_derivadas'), y la aceleración (SGPS) como nivel vs trayectoria. PROCEDENCIA: "
+        "apóyate con firmeza en las dimensiones 'real' (sector, exposición macro); sobre las de "
+        "'rúbrica declarada' (negocios, talento, regulatoria) no construyas conclusión fuerte y "
+        "nómbralas como rúbrica cuando sean material.\n\n"
+        "CIFRAS DERIVADAS: 'cifras_derivadas' YA trae el aporte y el gap al techo por dimensión, "
+        "el líder vs la suma del resto, la dimensión de mayor gap y el orden por peso. Copiá esos "
+        "valores; NO recalcules aportes ni declares un superlativo (mayor/menor/el más…) que no "
+        "coincida con lo servido. Si una relación no está precalculada, exprésala en palabras sin "
+        "número."
+    ),
 }
 
 # Static fallback templates when API key is not available

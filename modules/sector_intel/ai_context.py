@@ -7,6 +7,8 @@ focused (plan §5.2). Module-local, mirrors :mod:`macro_political_risk.ai_contex
 """
 from typing import Any, Dict, List, Optional
 
+from shared.narrative.derived import derived_figures
+
 _DIM_LABELS = {
     "sector": "Sector (tamaño y crecimiento, BCRD)",
     "macro": "Exposición macro (contrato macro→sectorial)",
@@ -44,6 +46,11 @@ def sector_ai_context(
     weakest = min(scored, key=lambda r: r["score"], default=None)
     rows.sort(key=lambda r: (r["contribution"] is None, -(r["contribution"] or 0)))
 
+    # Forma canónica para la ruta cerebro: score_global + sub_componentes (con peso) +
+    # cifras_derivadas (precompute compartido). Sin serie ni pares en este eje → el
+    # precompute solo emite aportes/gaps/superlativos de dimensión.
+    subcomp = [{"componente": r["dimension"], "score": r["score"], "peso": r["weight"],
+                "procedencia": r["provenance"]} for r in rows]
     return {
         "sector_code": latest.get("sector_code"),
         "sector_name": sector_name,
@@ -58,4 +65,12 @@ def sector_ai_context(
         "acceleration": (sgps_detail or {}).get("acceleration_detail"),
         "note": "Real: sector (BCRD) y exposición macro. Rúbrica declarada: "
                 "negocios, talento, regulatoria (suben a real con WGI/estudios ONE).",
+        # ── canónico (cerebro) ──
+        "score_global": latest.get("iai_score"),
+        "sub_componentes": subcomp,
+        "cifras_derivadas": derived_figures(
+            score=latest.get("iai_score"),
+            subcomponents=[{"componente": s["componente"], "score": s["score"],
+                            "peso": s["peso"]} for s in subcomp],
+        ),
     }

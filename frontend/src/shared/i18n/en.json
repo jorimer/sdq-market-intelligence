@@ -416,6 +416,13 @@
     "accelEmpty": "No upstream signals yet. Generate IRMP/trade/macro snapshots to feed the acceleration.",
     "insightTitle": "Sector outlook (AI)",
     "insightSubtitle": "{{sector}} \u00b7 IAI + acceleration, SCQA framework",
+    "audienceLabel": "Audience",
+    "audience": {
+      "inversionista": "Investor",
+      "empresa": "Sector firm",
+      "financiador": "Lender",
+      "formulador_politica": "Policy"
+    },
     "iai": {
       "macro": "Macro",
       "business": "Business",

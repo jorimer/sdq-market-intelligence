@@ -83,6 +83,18 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "es mejor). El contexto oficial del BCRD (p. ej. Estabilidad Financiera) es telón de "
         "fondo sistémico, no el foco: el foco es la entidad."
     ),
+    "sector_intel": (
+        "DOCTRINA DE CASA — Eje sectorial (Índice de Atractivo de Inversión, IAI):\n"
+        "Lees el atractivo de inversión de un sector económico de forma explicable: el IAI se "
+        "ancla a dimensiones con pesos declarados (sector, exposición macro, negocios, talento, "
+        "regulatoria), nunca a una caja negra. Ponderas por el peso de cada dimensión; una "
+        "dimensión fuerte de bajo peso no define el atractivo. RESPETAS LA PROCEDENCIA con rigor: "
+        "el contexto marca cada dimensión como 'real' (sector y exposición macro, datos BCRD) o "
+        "'rúbrica declarada' (negocios, talento, regulatoria). Apóyate con firmeza en lo real; "
+        "sobre lo de rúbrica NO construyas una conclusión fuerte y nómbralo como rúbrica cuando "
+        "sea material. Distingues nivel de atractivo de su aceleración (SGPS). El sector se lee "
+        "en su contexto macro, pero el foco es el sector, no la coyuntura."
+    ),
 }
 
 # ── POR MÓDULO — Frames de audiencia ──────────────────────────────────────────
@@ -123,6 +135,41 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "de activos antes de volverse crítico), el cumplimiento de umbrales prudenciales, y el "
             "riesgo que la entidad aporta al sistema. Tu \"y por tanto\" final apunta a la prioridad "
             "de supervisión y la señal a monitorear, no a una decisión de negocio."
+        ),
+    },
+    "sector_intel": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / asignador de capital.\n"
+            "Decide: entrar, sobreponderar, mantener o salir de una exposición al sector.\n"
+            "Le importa: el atractivo y su aceleración como señal de retorno ajustado por riesgo, "
+            "qué dimensión —ponderada por su peso— sostiene o limita el atractivo, y cuánto del "
+            "score se apoya en dato real vs rúbrica. Tu \"y por tanto\" final apunta a la tesis de "
+            "inversión sectorial: dónde está el valor o el riesgo no descontado."
+        ),
+        "empresa": (
+            "FRAME DE DECISIÓN — Audiencia: Empresa que opera en el sector.\n"
+            "Decide: expandir, sostener o contener capacidad/inversión en el sector.\n"
+            "Le importa: la dimensión que más condiciona la viabilidad operativa (costo, talento, "
+            "regulación), su trayectoria, y dónde está el cuello de botella que puede gestionar o "
+            "que la excede. Tu \"y por tanto\" final apunta a la decisión de capacidad y a la "
+            "palanca con mayor retorno sobre la competitividad en el sector."
+        ),
+        "financiador": (
+            "FRAME DE DECISIÓN — Audiencia: Financiador / banco con exposición al sector.\n"
+            "Decide: ampliar, limitar o ajustar el apetito crediticio hacia el sector.\n"
+            "Le importa: la resiliencia del sector como riesgo de cartera, la dimensión que más "
+            "lo fragiliza (exposición macro, regulación), y la aceleración como señal temprana de "
+            "deterioro o mejora. Tu \"y por tanto\" final apunta a la exposición crediticia "
+            "prudente al sector y la señal a vigilar."
+        ),
+        "formulador_politica": (
+            "FRAME DE DECISIÓN — Audiencia: Formulador de política / fomento sectorial.\n"
+            "Decide: dónde intervenir (regulación, incentivos, infraestructura) para elevar el "
+            "atractivo del sector.\n"
+            "Le importa: el cuello de botella estructural —la dimensión de bajo score y peso "
+            "relevante que la política puede mover—, distinguiendo lo accionable por política de "
+            "lo que es coyuntura macro. Tu \"y por tanto\" final apunta a la palanca de política "
+            "con mayor retorno sobre el atractivo, nombrando si el dato es real o rúbrica."
         ),
     },
 }
