@@ -1544,7 +1544,8 @@
         "g3": "G3 \u00b7 Narrativa",
         "g4": "G4 \u00b7 Plantilla",
         "g5": "G5 \u00b7 Validaci\u00f3n"
-      }
+      },
+      "missingGate": "falta {{g}}"
     }
   },
   "ops": {

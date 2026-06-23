@@ -35,6 +35,15 @@ function readinessTone(level: ProductLevel, implemented: boolean): "ok" | "warn"
 function pct(x: number): string {
   return `${fmtNum(x * 100, 0)}%`;
 }
+/** % con 1 decimal — para el tooltip de bloqueo (evita "75% < 75%" en casos límite). */
+function pct1(x: number): string {
+  return `${fmtNum(x * 100, 1)}%`;
+}
+/** Gate G1-G5 más débil de un nivel (para nombrar el faltante en el tooltip). */
+function weakestGate(level: ProductLevel): typeof GATES[number] | null {
+  if (!level.gates) return null;
+  return GATES.reduce((a, b) => (level.gates![b] < level.gates![a] ? b : a));
+}
 
 export function ProductMonitorPage() {
   const { t } = useTranslation();
@@ -209,8 +218,12 @@ function SectorRow({ sector, isAdmin, busy, expanded, onExpand, onToggle, t }: {
                   ) : (
                     <button onClick={() => onToggle(sector.sector_key, level)}
                       disabled={busy === key || !level.can_activate}
-                      title={level.can_activate ? undefined
-                        : t("platform.productMonitor.belowThreshold", { r: pct(level.readiness), v: pct(level.threshold) })}
+                      title={level.can_activate ? undefined : (() => {
+                        const base = t("platform.productMonitor.belowThreshold",
+                          { r: pct1(level.readiness), v: pct1(level.threshold) });
+                        const w = weakestGate(level);
+                        return w ? `${base} · ${t("platform.productMonitor.missingGate", { g: t(`platform.productMonitor.gate.${w}`) })}` : base;
+                      })()}
                       className="btn btn-ghost !py-1 !px-2 text-xs disabled:opacity-40">
                       <Check className="w-3 h-3" /> {t("platform.productMonitor.publish")}
                     </button>
@@ -227,7 +240,7 @@ function SectorRow({ sector, isAdmin, busy, expanded, onExpand, onToggle, t }: {
         </td>
       </tr>
       {expanded && (
-        <tr className="bg-subtle/40">
+        <tr className="bg-surface2/60">
           <td colSpan={5} className="px-2 py-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {TIERS.map((tier) => {
