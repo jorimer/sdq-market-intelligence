@@ -298,6 +298,19 @@ THIN_TEMPLATES = {
         "export_diversification, import_dependency, shares de los top capítulos); NO inventes "
         "cifras ni detalle por país socio (no disponible). Si una cifra no está, dilo."
     ),
+    "social_outlook": (
+        "Explica el FUNDAMENTO del desarrollo (IDM) de esta región.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. Ve profundo en la dimensión que más condiciona la decisión de la "
+        "audiencia, ponderando por su peso vía 'cifras_derivadas'. LEE DESIGUALDAD: sitúa la "
+        "región en la distribución (rank, dispersión). PROCEDENCIA: apóyate en lo 'real'; sobre "
+        "lo 'parcial'/'rúbrica declarada' no construyas conclusión fuerte, y aclara cuando una "
+        "brecha venga de un dato nacional aplicado plano (no diferenciación regional real).\n\n"
+        "CIFRAS DERIVADAS: 'cifras_derivadas' YA trae el aporte y el gap al techo por dimensión, "
+        "el líder vs la suma del resto, la dimensión de mayor gap y el orden por peso. Copiá esos "
+        "valores; NO recalcules aportes ni declares un superlativo (mayor/menor/el más…) que no "
+        "coincida con lo servido. Si una relación no está precalculada, exprésala sin número."
+    ),
 }
 
 # Static fallback templates when API key is not available

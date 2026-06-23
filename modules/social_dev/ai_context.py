@@ -8,6 +8,8 @@ mirrors :mod:`macro_political_risk.ai_context`.
 """
 from typing import Any, Dict, List, Optional
 
+from shared.narrative.derived import derived_figures
+
 _DIM_LABELS = {
     "health": "Salud",
     "education": "Educación",
@@ -77,6 +79,18 @@ def social_ai_context(
         "dimensions": rows,
         "strongest_dimension": strongest,
         "weakest_dimension": weakest,
+        # ── canónico (cerebro) ── (pares por rank/distribution en contexto, no en la
+        # forma que espera derived_figures → cifras_derivadas solo aportes/superlativos)
+        "score_global": score.get("development_score"),
+        "sub_componentes": [
+            {"componente": r["dimension"], "score": r["score"], "peso": r["weight"],
+             "procedencia": r["provenance"]} for r in rows
+        ],
+        "cifras_derivadas": derived_figures(
+            score=score.get("development_score"),
+            subcomponents=[{"componente": r["dimension"], "score": r["score"],
+                            "peso": r["weight"]} for r in rows],
+        ),
         "note": "Dato real: pobreza, alfabetización y cobertura secundaria (ONE por "
                 "región); salud (WDI nacional); ingreso, informalidad y escolaridad (ONE "
                 "nacional); inclusión financiera (BM Findex). Las 9 variables del IDM en "

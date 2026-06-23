@@ -1,9 +1,21 @@
 import client from "@/shared/api/client";
 import type { AiInsight } from "@/shared/ui/insight-types";
 
-/** Contextual AI insight for one region's IDM (development narrative). Best-effort. */
-export async function getRegionInsight(entityKey: string): Promise<AiInsight | null> {
-  const { data } = await client.get(`/social-dev/${entityKey}/insight`);
+export const SOCIAL_AUDIENCES = [
+  "formulador_politica",
+  "gobierno_regional",
+  "multilateral",
+  "inversionista_impacto",
+] as const;
+
+/** Contextual AI insight for one region's IDM (development narrative), by audience. */
+export async function getRegionInsight(
+  entityKey: string,
+  audience: string = SOCIAL_AUDIENCES[0],
+): Promise<AiInsight | null> {
+  const { data } = await client.get(`/social-dev/${entityKey}/insight`, {
+    params: { audience },
+  });
   return (data.ai_insight as AiInsight | null) ?? null;
 }
 

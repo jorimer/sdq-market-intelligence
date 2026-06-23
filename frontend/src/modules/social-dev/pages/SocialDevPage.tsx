@@ -16,6 +16,8 @@ import {
 } from "@/shared/ui/primitives";
 import { DimensionBreakdown, DimensionRow } from "@/shared/ui/DimensionBreakdown";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
+import { AudienceTabs } from "@/shared/ui/AudienceTabs";
+import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { bandFor, toneVar } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
 import {
@@ -23,6 +25,7 @@ import {
   getDataset,
   getPublications,
   getRegionInsight,
+  SOCIAL_AUDIENCES,
   IndicatorsResult,
   IdmDataset,
   OnePublication,
@@ -52,6 +55,7 @@ export function SocialDevPage() {
   const [data, setData] = useState<IndicatorsResult | null>(null);
   const [ds, setDs] = useState<IdmDataset | null>(null);
   const [selected, setSelected] = useState("ozama");
+  const [audience, setAudience] = useAudiencePref("sdq.social.audience", SOCIAL_AUDIENCES);
   const [tab, setTab] = useState("distribucion");
   const [pubs, setPubs] = useState<OnePublication[]>([]);
 
@@ -331,8 +335,17 @@ export function SocialDevPage() {
         <AiInsightCard
           title={t("social.insightTitle")}
           subtitle={t("social.insightSubtitle", { region: nameOf(selected) })}
-          depsKey={selected}
-          fetcher={() => getRegionInsight(selected)}
+          depsKey={`${selected}:${audience}`}
+          fetcher={() => getRegionInsight(selected, audience)}
+          actions={
+            <AudienceTabs
+              value={audience}
+              onChange={setAudience}
+              options={SOCIAL_AUDIENCES}
+              labelPrefix="social.audience"
+              ariaLabelKey="social.audienceLabel"
+            />
+          }
         />
       </div>
     </div>
