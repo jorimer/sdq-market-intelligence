@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Target, Sparkles, Anchor, Database, Save, Upload, GraduationCap } from "lucide-react";
+import { Target, Sparkles, Anchor, Database, Save, Upload, GraduationCap, Check, X } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -21,8 +21,8 @@ import { bandFor } from "@/shared/lib/bands";
 import { fmtNum } from "@/shared/lib/format";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
-  scoreDeal, saveDeal, importDeals, getLearningCurve, DEAL_AUDIENCES,
-  type DealScoreResult, type LearningCurve,
+  scoreDeal, saveDeal, importDeals, getLearningCurve, getDeals, resolveOutcome, DEAL_AUDIENCES,
+  type DealScoreResult, type LearningCurve, type DealRegistry,
 } from "../api";
 
 /* ──────────────────────────────────────────────────────────────────
@@ -80,10 +80,30 @@ export function DealScoringPage() {
   const [curve, setCurve] = useState<LearningCurve | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [registry, setRegistry] = useState<DealRegistry | null>(null);
+  const [regLoaded, setRegLoaded] = useState(false);
+  const [openOnly, setOpenOnly] = useState(true);
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [regMsg, setRegMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadCurve = () => getLearningCurve().then(setCurve).catch(() => setCurve(null));
-  useEffect(() => { loadCurve(); }, []);
+  const loadRegistry = () =>
+    getDeals().then(setRegistry).catch(() => setRegistry(null)).finally(() => setRegLoaded(true));
+  useEffect(() => { loadCurve(); loadRegistry(); }, []);
+
+  const onResolve = async (dealName: string, closed: boolean) => {
+    setResolving(dealName);
+    setRegMsg(null);
+    try {
+      await resolveOutcome(dealName, closed);
+      await Promise.all([loadRegistry(), loadCurve()]);
+    } catch {
+      setRegMsg(t("platform.dealScoring.regResolveError"));
+    } finally {
+      setResolving(null);
+    }
+  };
 
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -103,6 +123,7 @@ export function DealScoringPage() {
       const r = await saveDeal(payload);
       setSavedMsg(t("platform.dealScoring.saved", { total: r.total }));
       loadCurve();
+      loadRegistry();
     } catch (e) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setSavedMsg((e as any)?.response?.status === 409 ? t("platform.dealScoring.saveConflict") : t("platform.dealScoring.saveError"));
@@ -117,6 +138,7 @@ export function DealScoringPage() {
       const r = await importDeals(file);
       setImportMsg(t("platform.dealScoring.imported", { inserted: r.inserted, updated: r.updated, skipped: r.skipped, total: r.total }));
       loadCurve();
+      loadRegistry();
     } catch {
       setImportMsg(t("platform.dealScoring.importError"));
     }
@@ -338,6 +360,127 @@ export function DealScoringPage() {
                 </div>
               )}
               {importMsg && <p className="text-xs text-muted mt-3">{importMsg}</p>}
+            </>
+          )}
+        </Card>
+      </div>
+
+      {/* Registro de deals — cosecha + resolución de desenlaces (cierra el lazo) */}
+      <div className="mt-5">
+        <Card>
+          <CardHead
+            icon={Database}
+            title={t("platform.dealScoring.regTitle")}
+            subtitle={t("platform.dealScoring.regSubtitle")}
+            right={
+              <div className="flex shrink-0 rounded-lg border border-line overflow-hidden text-xs">
+                <button
+                  onClick={() => setOpenOnly(true)}
+                  className={`px-3 py-1.5 ${openOnly ? "bg-accent/15 text-accent" : "text-muted"}`}
+                >
+                  {t("platform.dealScoring.regOpenOnly")}
+                </button>
+                <button
+                  onClick={() => setOpenOnly(false)}
+                  className={`px-3 py-1.5 ${!openOnly ? "bg-accent/15 text-accent" : "text-muted"}`}
+                >
+                  {t("platform.dealScoring.regAll")}
+                </button>
+              </div>
+            }
+          />
+          {!regLoaded ? (
+            <Skeleton className="h-32" />
+          ) : !registry ? (
+            <StateBlock kind="error" message={t("platform.dealScoring.regError")} />
+          ) : registry.count === 0 ? (
+            <StateBlock kind="empty" message={t("platform.dealScoring.regEmpty")} />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <Chip tone="muted">{t("platform.dealScoring.regCount", { n: registry.count })}</Chip>
+                <Chip tone="ok">{t("platform.dealScoring.regExAnte", { n: registry.n_ex_ante })}</Chip>
+                <Chip tone="warn">{t("platform.dealScoring.regOpen", { n: registry.n_open })}</Chip>
+                {isAdmin && registry.n_open > 0 && (
+                  <span className="text-xs text-faint">{t("platform.dealScoring.regHint")}</span>
+                )}
+              </div>
+              {regMsg && <p className="text-xs text-alert mb-3" role="alert">{regMsg}</p>}
+              {(() => {
+                const rows = registry.deals.filter((d) => !openOnly || d.closed_successfully === null);
+                if (rows.length === 0)
+                  return <StateBlock kind="empty" message={t("platform.dealScoring.regNoneOpen")} />;
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-muted border-b border-line">
+                          <th className="py-2 px-2 font-medium">{t("platform.dealScoring.regColDeal")}</th>
+                          <th className="py-2 px-2 font-medium">{t("platform.dealScoring.regColSector")}</th>
+                          <th className="py-2 px-2 font-medium">{t("platform.dealScoring.regColCountry")}</th>
+                          <th className="py-2 px-2 font-medium">{t("platform.dealScoring.regColStage")}</th>
+                          <th className="py-2 px-2 font-medium">{t("platform.dealScoring.regColProvenance")}</th>
+                          <th className="py-2 px-2 font-medium">{t("platform.dealScoring.regColOutcome")}</th>
+                          {isAdmin && <th className="py-2 px-2 font-medium text-right">{t("platform.dealScoring.regColAction")}</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((d) => {
+                          const outcomeChip =
+                            d.closed_successfully === null
+                              ? <Chip tone="muted">{t("platform.dealScoring.ocOpen")}</Chip>
+                              : d.closed_successfully
+                                ? <Chip tone="ok">{t("platform.dealScoring.ocClosed")}</Chip>
+                                : <Chip tone="alert">{t("platform.dealScoring.ocLost")}</Chip>;
+                          return (
+                            <tr key={d.deal_name} className="border-b border-line/60 align-top">
+                              <td className="py-2 px-2 text-ink max-w-[22rem]">
+                                <div className="truncate" title={d.deal_name}>{d.deal_name}</div>
+                                <div className="text-[11px] text-faint">{d.deal_type}</div>
+                              </td>
+                              <td className="py-2 px-2 text-xs text-muted">{d.sector}</td>
+                              <td className="py-2 px-2 text-xs text-muted tabular-nums">{d.country}</td>
+                              <td className="py-2 px-2 text-xs text-muted">{d.deal_stage ?? "—"}</td>
+                              <td className="py-2 px-2">
+                                {d.retrospective
+                                  ? <Chip tone="warn">{t("platform.dealScoring.provRetro")}</Chip>
+                                  : <Chip tone="accent">{t("platform.dealScoring.provExAnte")}</Chip>}
+                              </td>
+                              <td className="py-2 px-2">{outcomeChip}</td>
+                              {isAdmin && (
+                                <td className="py-2 px-2 text-right">
+                                  {d.closed_successfully === null ? (
+                                    <div className="inline-flex gap-1.5">
+                                      <button
+                                        onClick={() => onResolve(d.deal_name, true)}
+                                        disabled={resolving === d.deal_name}
+                                        className="btn btn-ghost !py-1 !px-2 text-xs"
+                                        title={t("platform.dealScoring.ocClosed")}
+                                      >
+                                        <Check className="w-3.5 h-3.5" /> {t("platform.dealScoring.regMarkClosed")}
+                                      </button>
+                                      <button
+                                        onClick={() => onResolve(d.deal_name, false)}
+                                        disabled={resolving === d.deal_name}
+                                        className="btn btn-ghost !py-1 !px-2 text-xs"
+                                        title={t("platform.dealScoring.ocLost")}
+                                      >
+                                        <X className="w-3.5 h-3.5" /> {t("platform.dealScoring.regMarkLost")}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-faint tabular-nums">{d.outcome_date ?? ""}</span>
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </>
           )}
         </Card>
