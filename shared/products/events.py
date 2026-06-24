@@ -13,9 +13,10 @@ from shared.products.service import recompute_readiness
 
 logger = logging.getLogger("sdq.products.events")
 
-# Eventos de datos existentes en la plataforma. Al agregar un sector con su propio
-# evento (p.ej. "banking.updated" en P4), añadirlo aquí.
-_TRACKED = ("macro.updated", "irmp.updated", "trade.updated", "sector.updated")
+# Eventos de datos existentes en la plataforma. Al cablear un sector cuyo módulo
+# publica su propio "*.updated" (como esg.updated en P4), añadirlo aquí para que su
+# readiness se refresque solo. (banking aún no emite evento propio → manual/recompute.)
+_TRACKED = ("macro.updated", "irmp.updated", "trade.updated", "sector.updated", "esg.updated")
 
 
 def _on_data_updated(payload: dict) -> None:
