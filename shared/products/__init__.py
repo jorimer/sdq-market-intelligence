@@ -14,7 +14,11 @@ from shared.products.access import (
     require_product_access,
 )
 from shared.products.anonymization import AnonymizationError, enforce_anonymized
-from shared.products.assembler import assemble_product_report
+from shared.products.assembler import (
+    ProductContent,
+    assemble_product_content,
+    assemble_product_report,
+)
 from shared.products.contract import (
     DataHealth,
     ProductSnapshot,
@@ -46,6 +50,8 @@ __all__ = [
     "ProductSnapshot",
     "required_signal_methods",
     "assemble_product_report",
+    "assemble_product_content",
+    "ProductContent",
     "enforce_anonymized",
     "AnonymizationError",
     "compute_readiness",
