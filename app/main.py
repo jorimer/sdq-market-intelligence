@@ -111,6 +111,7 @@ import shared.products.operations  # noqa: F401 — registers products-readiness
 import modules.banking_score.products  # noqa: F401 — registers banking SectorProduct
 import modules.trade_intel.products  # noqa: F401 — registers trade SectorProduct
 import modules.esg_climate.products  # noqa: F401 — registers esg SectorProduct
+import modules.sector_intel.products  # noqa: F401 — registers tourism/free_zones/construction/agribusiness
 # Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
 # (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)
 from app import products_macro as _products_macro  # noqa: F401 — registers macro SectorProduct
