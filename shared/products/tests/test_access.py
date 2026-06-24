@@ -203,6 +203,8 @@ def test_dependency_requires_auth(db):
         return {"ok": True}
 
     app.dependency_overrides[get_db] = lambda: db
-    # sin override de get_current_user → HTTPBearer exige credenciales
+    # sin override de get_current_user → HTTPBearer exige credenciales. El código
+    # exacto (401/403) depende de la versión de Starlette; lo que importa es que NO
+    # es anónima (4xx de auth, nunca 200).
     r = TestClient(app).get("/api/v1/products/banking/pulse/report")
-    assert r.status_code == 403  # HTTPBearer sin credenciales
+    assert r.status_code in (401, 403)
