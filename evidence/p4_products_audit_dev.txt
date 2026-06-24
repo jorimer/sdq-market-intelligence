@@ -1,0 +1,110 @@
+IRSE no disponible: (sqlite3.OperationalError) no such table: en_scores
+[SQL: SELECT en_scores.period AS en_scores_period, en_scores.energy_score AS en_scores_energy_score, en_scores.band AS en_scores_band, en_scores.coverage AS en_scores_coverage, en_scores.capacity_mw AS en_scores_capacity_mw, en_scores.capacity_score AS en_scores_capacity_score, en_scores.service_score AS en_scores_service_score, en_scores.breakdown AS en_scores_breakdown, en_scores.model_version AS en_scores_model_version, en_scores.id AS en_scores_id, en_scores.created_at AS en_scores_created_at, en_scores.updated_at AS en_scores_updated_at 
+FROM en_scores ORDER BY en_scores.period DESC
+ LIMIT ? OFFSET ?]
+[parameters: (1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+IDT no disponible: (sqlite3.OperationalError) no such table: tel_scores
+[SQL: SELECT tel_scores.period AS tel_scores_period, tel_scores.telecom_score AS tel_scores_telecom_score, tel_scores.band AS tel_scores_band, tel_scores.coverage AS tel_scores_coverage, tel_scores.mobile_penetration AS tel_scores_mobile_penetration, tel_scores.internet_penetration AS tel_scores_internet_penetration, tel_scores.broadband_share AS tel_scores_broadband_share, tel_scores.breakdown AS tel_scores_breakdown, tel_scores.model_version AS tel_scores_model_version, tel_scores.id AS tel_scores_id, tel_scores.created_at AS tel_scores_created_at, tel_scores.updated_at AS tel_scores_updated_at 
+FROM tel_scores ORDER BY tel_scores.period DESC
+ LIMIT ? OFFSET ?]
+[parameters: (1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+IRC no disponible: (sqlite3.OperationalError) no such column: esg_scores.entity_key
+[SQL: SELECT esg_scores.entity_key AS esg_scores_entity_key, esg_scores.period AS esg_scores_period, esg_scores.esg_score AS esg_scores_esg_score, esg_scores.band AS esg_scores_band, esg_scores.material AS esg_scores_material, esg_scores.materiality_level AS esg_scores_materiality_level, esg_scores.breakdown AS esg_scores_breakdown, esg_scores.model_version AS esg_scores_model_version, esg_scores.id AS esg_scores_id, esg_scores.created_at AS esg_scores_created_at, esg_scores.updated_at AS esg_scores_updated_at 
+FROM esg_scores 
+WHERE esg_scores.entity_key = ? ORDER BY esg_scores.period DESC
+ LIMIT ? OFFSET ?]
+[parameters: ('DOM', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+==========================================================================================
+AUDITORÍA P4 — 10 productos sectoriales × 3 niveles (read-only, motor real)
+==========================================================================================
+
+[A] Catálogo: 10 sectores · registrados: 10/10
+    [OK   ] banking       SDQ Banking Intelligence
+    [OK   ] macro         SDQ Macro & Country Risk
+    [OK   ] trade         SDQ Trade & Logistics
+    [OK   ] tourism       SDQ Tourism Intelligence
+    [OK   ] free_zones    SDQ Free Zones & Manufacturing
+    [OK   ] energy        SDQ Energy Intelligence
+    [OK   ] telecom       SDQ Telecom Intelligence
+    [OK   ] construction  SDQ Construction & Real Estate
+    [OK   ] agribusiness  SDQ Agribusiness
+    [OK   ] esg           SDQ ESG & Climate
+
+[B] Umbrales: pulse=0.75  insight=0.85  deep_dive=0.85
+
+sector        nivel       ready umbral act     g1   g2   g3   g4   g5  cuello / nota
+----------------------------------------------------------------------------------------------------
+banking       pulse        0.94   0.75 SÍ    0.80 1.00 1.00 1.00 1.00  g1=0.80 | cobertura=1.00 · frescura=175d (quarterly) · 3
+banking       insight      0.94   0.85 SÍ    0.80 1.00 1.00 1.00 1.00  g1=0.80 | cobertura=1.00 · frescura=175d (quarterly) · 3
+banking       deep_dive    0.94   0.85 SÍ    0.80 1.00 1.00 1.00 1.00  g1=0.80 | cobertura=1.00 · frescura=175d (quarterly) · 3
+macro         pulse        0.92   0.75 SÍ    0.80 1.00 1.00 1.00 0.85  g1=0.80 | cobertura=1.00 · frescura=175d (quarterly) · 2
+macro         insight      0.92   0.85 SÍ    0.80 1.00 1.00 1.00 0.85  g1=0.80 | cobertura=1.00 · frescura=175d (quarterly) · 2
+macro         deep_dive    0.92   0.85 SÍ    0.80 1.00 1.00 1.00 0.85  g1=0.80 | cobertura=1.00 · frescura=175d (quarterly) · 2
+trade         pulse        0.81   0.75 SÍ    0.50 1.00 1.00 1.00 0.70  g1=0.50 | cobertura=1.00 · frescura=Noned (quarterly) · 
+trade         insight      0.81   0.85 no    0.50 1.00 1.00 1.00 0.70  g1=0.50 | cobertura=1.00 · frescura=Noned (quarterly) · 
+trade         deep_dive    0.81   0.85 no    0.50 1.00 1.00 1.00 0.70  g1=0.50 | cobertura=1.00 · frescura=Noned (quarterly) · 
+tourism       pulse        0.74   0.75 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+tourism       insight      0.74   0.85 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+tourism       deep_dive    0.74   0.85 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+free_zones    pulse        0.74   0.75 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+free_zones    insight      0.74   0.85 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+free_zones    deep_dive    0.74   0.85 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+energy        pulse        0.37   0.75 no    0.00 0.00 1.00 1.00 0.45  g1=0.00 | cobertura=0.00 · frescura=Noned (annual) · Sin
+energy        insight      0.37   0.85 no    0.00 0.00 1.00 1.00 0.45  g1=0.00 | cobertura=0.00 · frescura=Noned (annual) · Sin
+energy        deep_dive    0.37   0.85 no    0.00 0.00 1.00 1.00 0.45  g1=0.00 | cobertura=0.00 · frescura=Noned (annual) · Sin
+telecom       pulse        0.38   0.75 no    0.00 0.00 1.00 1.00 0.55  g1=0.00 | cobertura=0.00 · frescura=Noned (quarterly) · 
+telecom       insight      0.38   0.85 no    0.00 0.00 1.00 1.00 0.55  g1=0.00 | cobertura=0.00 · frescura=Noned (quarterly) · 
+telecom       deep_dive    0.38   0.85 no    0.00 0.00 1.00 1.00 0.55  g1=0.00 | cobertura=0.00 · frescura=Noned (quarterly) · 
+construction  pulse        0.74   0.75 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+construction  insight      0.74   0.85 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+construction  deep_dive    0.74   0.85 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+agribusiness  pulse        0.74   0.75 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+agribusiness  insight      0.74   0.85 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+agribusiness  deep_dive    0.74   0.85 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 | cobertura=0.40 · frescura=175d (annual) · IAI 
+esg           pulse        0.41   0.75 no    0.00 0.00 1.00 1.00 0.75  g1=0.00 | cobertura=0.00 · frescura=Noned (annual) · Sin
+esg           insight      0.41   0.85 no    0.00 0.00 1.00 1.00 0.75  g1=0.00 | cobertura=0.00 · frescura=Noned (annual) · Sin
+esg           deep_dive    0.41   0.85 no    0.00 0.00 1.00 1.00 0.75  g1=0.00 | cobertura=0.00 · frescura=Noned (annual) · Sin
+
+[C] Resumen:
+    Cableados (registrados): 10/10
+    Publicables (readiness ≥ umbral): 7
+        + banking/pulse (0.94)
+        + banking/insight (0.94)
+        + banking/deep_dive (0.94)
+        + macro/pulse (0.92)
+        + macro/insight (0.92)
+        + macro/deep_dive (0.92)
+        + trade/pulse (0.81)
+    Cableados-pero-no-publicables (honesto): 23
+        · trade/insight (0.81)
+        · trade/deep_dive (0.81)
+        · tourism/pulse (0.74)
+        · tourism/insight (0.74)
+        · tourism/deep_dive (0.74)
+        · free_zones/pulse (0.74)
+        · free_zones/insight (0.74)
+        · free_zones/deep_dive (0.74)
+        · energy/pulse (0.37)
+        · energy/insight (0.37)
+        · energy/deep_dive (0.37)
+        · telecom/pulse (0.38)
+        · telecom/insight (0.38)
+        · telecom/deep_dive (0.38)
+        · construction/pulse (0.74)
+        · construction/insight (0.74)
+        · construction/deep_dive (0.74)
+        · agribusiness/pulse (0.74)
+        · agribusiness/insight (0.74)
+        · agribusiness/deep_dive (0.74)
+        · esg/pulse (0.41)
+        · esg/insight (0.41)
+        · esg/deep_dive (0.41)
+
+[D] Gate sano: 0 fugas (publicable con readiness<umbral) — debe ser 0
+
+FIN.
+tests:
+115 passed, 1 warning in 10.02s

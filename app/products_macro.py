@@ -171,8 +171,12 @@ class MacroProduct:
             "factores": factors, "irmp_score": snapshot.payload.get("irmp_score"),
             "irmp_band": snapshot.payload.get("irmp_band"),
         }
+        # 'recommendation' NO es thin → narraría cifras por la ruta legacy SIN numeric_guard
+        # (lección 2026-06-23). Se enruta por el thin del MISMO eje (risk_assessment, bajo
+        # macro_political_risk) con un 'enfoque' accionable en el contexto (patrón trade),
+        # nunca por un template no-thin.
         tmpl_for = {"macro_pulse": "macro_snapshot", "macro_trend": "macro_trend",
-                    "risk_assessment": "risk_assessment", "recommendation": "recommendation"}
+                    "risk_assessment": "risk_assessment", "recommendation": "risk_assessment"}
         # axis POR SECCIÓN: las secciones que leen el IRMP (riesgo país) usan la doctrina
         # macro_political_risk — su regla direccional es OPUESTA ("mayor IRMP = MENOR
         # riesgo"); enrutarlas por macro_monitor invertiría la lectura. La coyuntura BCRD
@@ -185,8 +189,13 @@ class MacroProduct:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
                 continue
+            ctx = dict(base_ctx)
+            if section == "recommendation":
+                ctx["enfoque"] = ("Cierre ACCIONABLE: prioriza la palanca de política o gestión "
+                                  "de riesgo país con mayor retorno sobre la resiliencia macro, "
+                                  "dado el cuadro anterior. No repitas el diagnóstico; recomienda.")
             res = await narrative_engine.generate(
-                context=base_ctx, template=tmpl_for.get(section, "macro_trend"),
+                context=ctx, template=tmpl_for.get(section, "macro_trend"),
                 mode="detailed" if tier == ProductTier.deep_dive else "standard",
                 axis=axis_for.get(section, "macro_monitor"), audience="inversionista")
             out[section] = res.text

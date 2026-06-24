@@ -1,0 +1,34 @@
+AUDITORÍA P4 — readiness REAL contra PROD (2026-06-24)
+Fuente: scripts/audit_p4_products.py vía `railway run --service Postgres` con DATABASE_PUBLIC_URL
+(proxy público temporal — DESACTIVADO tras la corrida). Motor real, read-only.
+
+Umbrales: pulse=0.75  insight=0.85  deep_dive=0.85
+
+sector        nivel       ready umbral act     g1   g2   g3   g4   g5  cuello
+----------------------------------------------------------------------------------------------------
+banking       pulse        1.00   0.75 SÍ    1.00 1.00 1.00 1.00 1.00  g1=1.00  (cobertura 1.00 · 85d)
+banking       insight      1.00   0.85 SÍ    1.00 1.00 1.00 1.00 1.00
+banking       deep_dive    1.00   0.85 SÍ    1.00 1.00 1.00 1.00 1.00
+macro         pulse        0.92   0.75 SÍ    0.80 1.00 1.00 1.00 0.85  g1=0.80
+macro         insight      0.92   0.85 SÍ    0.80 1.00 1.00 1.00 0.85
+macro         deep_dive    0.92   0.85 SÍ    0.80 1.00 1.00 1.00 0.85
+trade         pulse        0.81   0.75 SÍ    0.50 1.00 1.00 1.00 0.75  g1=0.50 (frescura None)
+trade         insight      0.81   0.85 no    0.50 1.00 1.00 1.00 0.75  ← bloqueado (umbral 0.85)
+trade         deep_dive    0.81   0.85 no    0.50 1.00 1.00 1.00 0.75
+tourism       pulse        0.74   0.75 no    0.40 1.00 1.00 1.00 0.50  g1=0.40 (2/5 dims IAI) — a 1 centésima
+free_zones    pulse        0.74   0.75 no    0.40 1.00 1.00 1.00 0.50
+construction  pulse        0.74   0.75 no    0.40 1.00 1.00 1.00 0.50
+agribusiness  pulse        0.74   0.75 no    0.40 1.00 1.00 1.00 0.50
+energy        pulse        0.37   0.75 no    0.00 0.00 1.00 1.00 0.45  ← en_scores VACÍA en prod (sync pendiente)
+telecom       pulse        0.38   0.75 no    0.00 0.00 1.00 1.00 0.55  ← tel_scores VACÍA + boletín congelado 2022-Q1
+esg           pulse        0.93   0.75 SÍ    0.88 1.00 1.00 1.00 0.80  g5=0.80 (IRC real, cobertura 1.00, anual 906d)
+esg           insight      0.93   0.85 SÍ    0.88 1.00 1.00 1.00 0.80
+esg           deep_dive    0.93   0.85 SÍ    0.88 1.00 1.00 1.00 0.80
+(insight/deep_dive de tourism/free_zones/construction/agri = mismos números que su pulse)
+
+RESUMEN: 10/10 registrados · publicables hoy = 10 niveles-producto
+  (banking×3, esg×3, macro×3, trade/pulse) · gate sano 0 fugas.
+
+HALLAZGO: energy/telecom mergeados+migrados pero su backfill de datos NO corrió en prod.
+  - energy: correr sync SIE en prod → ~0.81 → Pulse publicable.
+  - telecom: dato congelado 2022-Q1 → se queda ~0.38 (honesto por diseño).

@@ -17,8 +17,9 @@ from shared.auth.models import User  # noqa: F401 — registra la tabla 'users' 
 from shared.database.base import Base
 from shared.products import ProductSnapshot, ProductTier, SectorProduct, assemble_product_report
 from shared.products.anonymization import AnonymizationError
-from modules.banking_score.models.models import Bank, BankType, ModelType, RatingResult
-from modules.banking_score.products import BankingProduct, banking_manifest
+from modules.banking_score.models.models import (
+    Bank, BankingData, BankType, ModelType, RatingResult)
+from modules.banking_score.products import BankingProduct, banking_manifest, _parse_period
 from modules.banking_score.scoring.system_aggregate import band_for_score
 
 
@@ -57,7 +58,8 @@ def db():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
                            poolclass=StaticPool)
     Base.metadata.create_all(
-        engine, tables=[User.__table__, Bank.__table__, RatingResult.__table__])
+        engine, tables=[User.__table__, Bank.__table__, RatingResult.__table__,
+                        BankingData.__table__])
     s = sessionmaker(bind=engine)()
     try:
         yield s
@@ -102,6 +104,104 @@ def test_pulse_assembler_blocks_leak(db):
     prod.snapshot = leaky
     with pytest.raises(AnonymizationError):
         asyncio.run(assemble_product_report(prod, ProductTier.pulse, period="2024-12-31"))
+
+
+# ── Señales de readiness que leen DB (G1/G2/G5) ──
+
+def test_parse_period_helper():
+    assert _parse_period(None) is None
+    assert _parse_period("no-es-fecha") is None         # ValueError → None
+    assert _parse_period("2024-12-31") == date(2024, 12, 31)
+
+
+def test_signals_require_db_raises():
+    """Sin sesión de DB, las señales que la necesitan fallan explícitas (no silenciosas)."""
+    with pytest.raises(RuntimeError):
+        BankingProduct().data_signals()
+
+
+def test_data_signals_and_engine_with_ratings(db):
+    _seed_rating(db, "Banco Uno SA", 80)
+    _seed_rating(db, "Banco Dos SA", 65)
+    prod = BankingProduct(db)
+    health = prod.data_signals()
+    assert health.coverage == 1.0
+    assert isinstance(health.freshness_days, int) and health.freshness_days > 0
+    assert "SIB" in health.sources
+    assert "2" in health.detail  # 2 entidades calificadas
+    assert prod.has_engine() is True
+    val = prod.validation_state()
+    assert val.approved is True and val.score == 1.0
+
+
+def test_data_signals_empty_is_honest(db):
+    """DB vacía → cobertura 0, sin frescura, sin motor (no hardcode)."""
+    prod = BankingProduct(db)
+    health = prod.data_signals()
+    assert health.coverage == 0.0 and health.freshness_days is None
+    assert prod.has_engine() is False
+
+
+# ── Snapshot de nivel nombrado (Insight/Deep Dive) ──
+
+def test_named_snapshot_by_name_and_id(db):
+    bank = _seed_rating(db, "Banco Nombrado SA", 77, "SDQ-A+")
+    prod = BankingProduct(db)
+    # Por nombre, período explícito.
+    snap = prod.snapshot(ProductTier.insight, "2024-12-31", scope="Banco Nombrado SA")
+    assert snap.entity_name == "Banco Nombrado SA"
+    assert snap.payload["scoring_result"]["overall_score"] == 77.0
+    assert "peer_block" in snap.payload  # None si no hay BankingData (cobertura de la rama)
+    # Por id, sin período → cae al último rating.
+    snap2 = prod.snapshot(ProductTier.deep_dive, "", scope=bank.id)
+    assert snap2.entity_name == "Banco Nombrado SA"
+
+
+def test_named_snapshot_errors(db):
+    prod = BankingProduct(db)
+    with pytest.raises(ValueError):                       # falta scope
+        prod.snapshot(ProductTier.insight, "2024-12-31")
+    with pytest.raises(ValueError):                       # entidad inexistente
+        prod.snapshot(ProductTier.insight, "2024-12-31", scope="Fantasma SA")
+    # Entidad existe pero sin calificación → error de dominio.
+    nb = Bank(name="Banco Sin Rating SA", bank_type=BankType.banca_multiple)
+    db.add(nb)
+    db.commit()
+    with pytest.raises(ValueError):
+        prod.snapshot(ProductTier.insight, "2024-12-31", scope="Banco Sin Rating SA")
+
+
+# ── Sensor guard §5: el Pulse abierto narra cifras CON numeric_guard ──
+
+def test_banking_pulse_narrative_is_guarded(monkeypatch):
+    """El Pulse (nivel ABIERTO/público) narra cifras del sistema por un template thin +
+    axis en doctrina → numeric_guard (lección 2026-06-23, BLOCKER de P0). Los niveles
+    nombrados usan el generador de narrativa establecido de Banca (su propia ruta
+    gobernada), no la ruta thin del cerebro."""
+    from shared.narrative import claude_engine
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+    from shared.narrative.cerebro import AXIS_DOCTRINE
+
+    calls = []
+
+    class _Res:
+        text = "ok"
+
+    async def _fake_generate(*, context, template, mode, axis, audience):
+        calls.append((template, axis))
+        return _Res()
+
+    monkeypatch.setattr(claude_engine.narrative_engine, "generate", _fake_generate)
+    snap = ProductSnapshot(
+        tier=ProductTier.pulse, period="2024-12-31",
+        payload={"band_distribution": {"Fuerte": 1, "Adecuado": 0, "Vigilancia": 0, "Crítico": 0},
+                 "n_entities": 1, "system_avg_score": 80.0, "period": "2024-12-31"},
+        entity_name=None, entity_roster=())
+    asyncio.run(BankingProduct().narratives(ProductTier.pulse, snap))
+    assert calls, "el Pulse debe narrar al menos una sección con cifras"
+    for template, axis in calls:
+        assert template in THIN_TEMPLATES, f"{template} no es thin → Pulse narraría sin guard"
+        assert axis in AXIS_DOCTRINE, f"{axis} sin doctrina → sin guard"
 
 
 # ── Render sintético de los 3 niveles (SIN DB — vía muestras) ──
