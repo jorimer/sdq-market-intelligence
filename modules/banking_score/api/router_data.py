@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
-from shared.auth.models import User, UserRole
+from shared.auth.models import User, UserRole, role_satisfies
 from shared.database.session import get_db
 from modules.banking_score.models.models import (
     Bank,
@@ -217,7 +217,7 @@ async def seed_banks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
 
     try:
@@ -241,7 +241,7 @@ async def sib_backfill(
     tipos: Optional[str] = Query(None, description="Re-ingesta dirigida: lista de tipos separados por coma (p.ej. 'BAC,AAP'). Omite los demás tipos y el fallback SIMBAD."),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.sib_sync import start_backfill_background
     only_tipos = [t.strip() for t in tipos.split(",") if t.strip()] if tipos else None
@@ -255,7 +255,7 @@ async def sync_from_sib(
     tipos: Optional[str] = Query(None, description="Re-ingesta dirigida: lista de tipos separados por coma (p.ej. 'BAC,AAP')."),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.sib_sync import start_backfill_background
     only_tipos = [t.strip() for t in tipos.split(",") if t.strip()] if tipos else None
@@ -273,7 +273,7 @@ async def rescore(
     only_sib: bool = Query(True, description="Solo períodos con datos del SIB (omite datos sintéticos)"),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from shared import operations
     return operations.trigger("rescore", origin="manual", user_id=current_user.id,
@@ -288,7 +288,7 @@ async def rescore(
 async def prune_future(
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from shared import operations
     return operations.trigger("prune-future", origin="manual", user_id=current_user.id)
@@ -332,7 +332,7 @@ async def sib_page_test(
 ):
     """Single raw page from the SIB API — to learn if `paginas`/`registros` are
     honored (compare pages, try big registros). Returns count + a fingerprint."""
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.external.sib_data_client import get_sib_data_client, _norm
     import httpx as _httpx
@@ -435,7 +435,7 @@ async def sib_explore(
     tipos: str = Query("", description="Códigos tipoEntidad a probar (coma). Vacío = lista por defecto."),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.external.sib_data_client import get_sib_data_client
 
@@ -537,7 +537,7 @@ async def fiduciaria_pdf_test(
     trust: str = Query(None, description="Nombre del fideicomiso (en vez de la entidad)"),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Requiere rol de administrador.")
 
     import os as _os
@@ -604,7 +604,7 @@ async def fiduciaria_sync(
     only_latest: bool = Query(False, description="Solo el último año por entidad (más rápido)"),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Requiere rol de administrador.")
     from modules.banking_score.fiduciaria_sync import start_fiduciaria_sync_background
 
@@ -636,7 +636,7 @@ async def recompute_carteras(
     period: str = Query(..., description="Trimestre YYYY-MM (p. ej. 2025-12)"),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Requiere rol de administrador.")
     from shared import operations
     return operations.trigger("recompute-carteras", origin="manual",

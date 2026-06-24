@@ -9,8 +9,8 @@ import { SeriesMaintenanceSection } from "../components/SeriesMaintenanceSection
 export function ConfiguracionPage() {
   const { t } = useTranslation();
   const { dark, toggleDark, period, setPeriod, periods, scope, setScope } = useApp();
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const { user, hasRole } = useAuth();
+  const isAdmin = hasRole("admin");  // jerárquico: super_admin también cumple
 
   return (
     <div>
