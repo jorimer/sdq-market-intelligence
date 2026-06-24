@@ -199,11 +199,13 @@ def test_recompute_and_matrix_with_banking(db):
     matrix = build_matrix(db)
     assert len(matrix["sectors"]) == 10
     banking = next(s for s in matrix["sectors"] if s["sector_key"] == "banking")
-    energy = next(s for s in matrix["sectors"] if s["sector_key"] == "energy")
     assert banking["implemented"] is True
-    assert energy["implemented"] is False
-    # Energy (no cableado) → readiness 0 en los 3 niveles, no activable.
-    assert all(lv["readiness"] == 0.0 and lv["can_activate"] is False for lv in energy["levels"])
+    # Cualquier sector NO cableado → readiness 0 en los 3 niveles, no activable
+    # (robusto al avance de P4: no hardcodea cuál sector falta por cablear).
+    for s in matrix["sectors"]:
+        if not s["implemented"]:
+            assert all(lv["readiness"] == 0.0 and lv["can_activate"] is False
+                       for lv in s["levels"])
     # Banking calcula gates reales (G3/G4 del manifiesto = 1.0).
     bp = next(lv for lv in banking["levels"] if lv["tier"] == "pulse")
     assert bp["gates"]["g3"] == 1.0 and bp["gates"]["g4"] == 1.0

@@ -39,6 +39,7 @@ from modules.social_dev.models.models import (  # noqa: F401
 from modules.esg_climate.models.models import (  # noqa: F401
     EnvIndicator, ESGScore,
 )
+from modules.energy_intel.models.models import EnergyScore  # noqa: F401
 # Solo la clase mapeada (los enums Sector/DealType no van aquí: 'Sector' colisiona
 # con sector_intel y Alembic solo necesita la tabla).
 from modules.deal_scoring.models.models import HistoricalDeal  # noqa: F401

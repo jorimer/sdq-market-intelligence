@@ -130,6 +130,17 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "detalle por país socio automatizable; no lo inventes. El foco es la estructura de la "
         "canasta, no el dato agregado."
     ),
+    "energy_intel": (
+        "DOCTRINA DE CASA — Eje del sector eléctrico (resiliencia, IRSE):\n"
+        "Lees la resiliencia del sector eléctrico de RD: mayor score = más resiliente. Te anclas "
+        "a los datos abiertos de la SIE — adecuación de capacidad (ritmo de expansión del parque "
+        "instalado del SENI vs el crecimiento de demanda) y calidad de servicio (backlog de "
+        "reclamaciones en meses). La TRANSICIÓN energética (penetración renovable, intensidad de "
+        "carbono) es una BRECHA declarada: el dato confiable de generación por tecnología está en "
+        "OC-SENI (pendiente) y el consumo de combustible publicado tiene un quiebre de unidades — "
+        "NO afirmes nada cuantitativo sobre renovables/carbono ni lo inventes. Distingues nivel "
+        "de capacidad de calidad de servicio; el índice cubre 2 de 3 dimensiones (dilo)."
+    ),
     "social_dev": (
         "DOCTRINA DE CASA — Eje de desarrollo social (Índice de Desarrollo Multidimensional, IDM):\n"
         "Lees el desarrollo/bienestar de una región de forma explicable y comparable: mayor "
@@ -303,6 +314,36 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Le importa: el riesgo de concentración de la canasta y la dependencia importadora "
             "como señal de fragilidad ante shocks externos. Tu \"y por tanto\" final apunta a "
             "dónde la concentración comercial crea riesgo no descontado."
+        ),
+    },
+    "energy_intel": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / desarrollador eléctrico.\n"
+            "Decide: exposición o entrada al sector eléctrico (generación, distribución).\n"
+            "Le importa: la adecuación del parque (ritmo de expansión vs demanda) como espacio "
+            "de mercado, y la calidad de servicio (backlog de reclamaciones) como señal de salud "
+            "institucional del subsector. Tu \"y por tanto\" final apunta a dónde la holgura o el "
+            "deterioro crea oportunidad o riesgo no descontado."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / política energética.\n"
+            "Decide: dónde intervenir para asegurar suministro y calidad (capacidad, regulación).\n"
+            "Le importa: si la expansión de capacidad sigue a la demanda y si el servicio al "
+            "usuario mejora o se deteriora. Tu \"y por tanto\" final apunta a la palanca de "
+            "política con mayor retorno sobre la resiliencia eléctrica."
+        ),
+        "empresa": (
+            "FRAME DE DECISIÓN — Audiencia: Empresa usuaria intensiva en energía.\n"
+            "Decide: confiabilidad del suministro para su operación/expansión.\n"
+            "Le importa: la holgura de capacidad y la calidad de servicio como riesgo operativo. "
+            "Tu \"y por tanto\" final apunta a la exposición de continuidad que conviene cubrir."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Financiador multilateral / banca de desarrollo.\n"
+            "Decide: dónde el financiamiento eleva la resiliencia del sector eléctrico.\n"
+            "Le importa: adecuación de capacidad y calidad de servicio como base, y el avance de "
+            "la transición (cuando haya dato). Tu \"y por tanto\" final apunta a la brecha "
+            "estructural con mayor retorno sobre la resiliencia."
         ),
     },
     "social_dev": {

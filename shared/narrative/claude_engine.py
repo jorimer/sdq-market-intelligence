@@ -298,6 +298,19 @@ THIN_TEMPLATES = {
         "export_diversification, import_dependency, shares de los top capítulos); NO inventes "
         "cifras ni detalle por país socio (no disponible). Si una cifra no está, dilo."
     ),
+    "energy_outlook": (
+        "Explica el FUNDAMENTO de la resiliencia del sector eléctrico (IRSE).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. Ve profundo en lo que más condiciona la decisión de la audiencia "
+        "entre las DOS dimensiones con dato real: adecuación de capacidad (ritmo de expansión "
+        "del parque vs demanda ~4%/año) y calidad de servicio (backlog de reclamaciones en "
+        "meses). Usá EXCLUSIVAMENTE las cifras del contexto (irse_score, coverage, capacity_mw, "
+        "capacity_growth_cagr_3y, service_backlog_months, contribuciones por dimensión). "
+        "PROCEDENCIA/HONESTIDAD: la TRANSICIÓN energética (renovable/carbono) es BRECHA declarada "
+        "sin dato confiable — NO afirmes nada cuantitativo sobre renovables ni intensidad de "
+        "carbono, y aclara que el índice cubre 2 de 3 dimensiones (coverage). Si una cifra no "
+        "está, dilo; no inventes."
+    ),
     "social_outlook": (
         "Explica el FUNDAMENTO del desarrollo (IDM) de esta región.\n"
         "Contexto:\n{context}\n\n"
