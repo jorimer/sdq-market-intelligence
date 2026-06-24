@@ -74,3 +74,47 @@ def test_macro_deep_dive_has_limitations(tmp_path):
     assert "limitations" in narr and "IRMP" in narr["limitations"]
     path = asyncio.run(prod.render(ProductTier.deep_dive, snap, narr, output_dir=str(tmp_path)))
     assert os.path.exists(path)
+
+
+def test_macro_narratives_are_guarded(monkeypatch):
+    """Sensor guard §5: toda sección con cifras narra por un template thin + axis en
+    doctrina → numeric_guard. 'recommendation' NO es thin: debe enrutarse por el thin del
+    eje (risk_assessment), nunca por un template homónimo (caería a la ruta legacy sin
+    guard). Regresión de task_fcc7a6b3 (bug latente destapado en P4-trade)."""
+    from shared.narrative import claude_engine
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+    from shared.narrative.cerebro import AXIS_DOCTRINE
+
+    calls = []
+
+    class _Res:
+        text = "ok"
+
+    async def _fake_generate(*, context, template, mode, axis, audience):
+        calls.append((template, axis))
+        return _Res()
+
+    monkeypatch.setattr(claude_engine.narrative_engine, "generate", _fake_generate)
+    snap = ProductSnapshot(tier=ProductTier.deep_dive, period="2024-Q4",
+                           payload={"irmp_score": 38.3, "irmp_band": "Moderado", "factors": _factors()},
+                           entity_name="República Dominicana")
+    asyncio.run(MacroProduct().narratives(ProductTier.deep_dive, snap))
+    assert calls, "se esperaba al menos una sección con cifras narrada"
+    for template, axis in calls:
+        assert template in THIN_TEMPLATES, f"{template} no es thin → narraría sin guard"
+        assert axis in AXIS_DOCTRINE, f"{axis} sin doctrina → sin guard"
+    # La recomendación NO debe enrutarse por el template no-thin 'recommendation'.
+    assert "recommendation" not in {t for t, _ in calls}
+
+
+def test_macro_pulse_is_anonymous():
+    """Sensor anonimización §5: el Pulse macro es nacional/agregado — nunca nombra
+    entidad (entity_name None) y su payload pasa el enforce del framework."""
+    from shared.products.anonymization import enforce_anonymized
+    m = MacroProduct().product_manifest()
+    assert m.require_level(ProductTier.pulse).granularity.value == "system"
+    snap = ProductSnapshot(tier=ProductTier.pulse, period="2024-Q4",
+                           payload={"factors": _factors(), "n_factors": 2, "irmp_band": "Moderado"},
+                           entity_name=None)
+    assert snap.entity_name is None
+    enforce_anonymized(snap.payload, entity_roster=snap.entity_roster)  # no debe levantar
