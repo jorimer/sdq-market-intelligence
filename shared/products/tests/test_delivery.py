@@ -156,6 +156,48 @@ def test_report_anonymization_error_is_500(db, monkeypatch):
 
 # ─── Descarga PDF ──────────────────────────────────────────────────────
 
+# ─── Catálogo de consumo ───────────────────────────────────────────────
+
+def _catalog_client(db, user_tier):
+    """Cliente con el producto REAL de Banca registrado (manifiesto sin DB)."""
+    import modules.banking_score.products  # noqa: F401 — registra banking
+    app = FastAPI()
+    app.include_router(prod_router.router, prefix="/api/v1/products")
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: _User(user_tier)
+    return TestClient(app)
+
+
+def test_catalog_empty_when_nothing_published(db):
+    r = _catalog_client(db, AccessTier.enterprise).get("/api/v1/products/catalog")
+    assert r.status_code == 200
+    assert r.json()["sectors"] == []
+    assert r.json()["user_tier"] == "enterprise"
+
+
+def test_catalog_shows_only_published_with_lock_state(db):
+    _activate(db, "banking", ProductTier.pulse)
+    _activate(db, "banking", ProductTier.insight)
+    # deep_dive NO activado → no debe aparecer.
+    r = _catalog_client(db, AccessTier.free).get("/api/v1/products/catalog")
+    assert r.status_code == 200
+    sectors = r.json()["sectors"]
+    assert len(sectors) == 1 and sectors[0]["sector_key"] == "banking"
+    levels = {lv["tier"]: lv for lv in sectors[0]["levels"]}
+    assert set(levels) == {"pulse", "insight"}  # deep_dive no publicado, ausente
+    assert levels["pulse"]["unlocked"] is True
+    assert levels["pulse"]["price_band"] == "abierto"
+    assert levels["insight"]["unlocked"] is False  # free no alcanza insight
+    assert levels["insight"]["required_tier"] == "pro"
+
+
+def test_catalog_unlocks_with_higher_tier(db):
+    _activate(db, "banking", ProductTier.insight)
+    r = _catalog_client(db, AccessTier.enterprise).get("/api/v1/products/catalog")
+    levels = {lv["tier"]: lv for lv in r.json()["sectors"][0]["levels"]}
+    assert levels["insight"]["unlocked"] is True  # enterprise ⊇ pro
+
+
 def test_download_returns_pdf(db, monkeypatch, tmp_path):
     _activate(db, "banking", ProductTier.pulse)
     pdf = tmp_path / "demo.pdf"

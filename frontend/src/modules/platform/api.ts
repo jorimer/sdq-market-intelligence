@@ -204,3 +204,73 @@ export async function deactivateProduct(sector: string, tier: string): Promise<{
   const { data } = await client.post(`/products/${sector}/${tier}/deactivate`);
   return data;
 }
+
+/* ── Catálogo de consumo (monetización: solo niveles publicados, con estado de
+ *    acceso resuelto por el backend según el tier del usuario) ── */
+export interface CatalogLevel {
+  tier: string; // "pulse" | "insight" | "deep_dive"
+  unlocked: boolean; // el tier del usuario alcanza este nivel
+  required_tier: string; // "free" | "pro" | "enterprise"
+  price_band: string | null;
+  audience: string;
+}
+export interface CatalogSector {
+  sector_key: string;
+  display_name: string;
+  levels: CatalogLevel[];
+}
+export interface ProductCatalog {
+  sectors: CatalogSector[];
+  user_tier: string;
+}
+
+export async function getProductCatalog(): Promise<ProductCatalog> {
+  const { data } = await client.get("/products/catalog");
+  return data;
+}
+
+/** Contenido in-app de un producto (gateado por tier+activación en el backend). */
+export interface ProductReport {
+  sector_key: string;
+  tier: string;
+  period: string | null;
+  entity_name: string | null;
+  payload: Record<string, unknown>;
+  narratives: Record<string, string>;
+  commercial: {
+    price_band: string | null;
+    watermark: string | null;
+    audience: string;
+    cadence: string;
+    sections: string[];
+  };
+}
+
+export async function getProductReport(
+  sector: string,
+  tier: string,
+  opts: { period?: string; scope?: string } = {},
+): Promise<ProductReport> {
+  const { data } = await client.get(`/products/${sector}/${tier}/report`, { params: opts });
+  return data;
+}
+
+/** Descarga el PDF del producto (respeta el mismo gate que la vista in-app). */
+export async function downloadProductPdf(
+  sector: string,
+  tier: string,
+  opts: { period?: string; scope?: string } = {},
+): Promise<void> {
+  const r = await client.get(`/products/${sector}/${tier}/download`, {
+    params: opts,
+    responseType: "blob",
+  });
+  const cd = (r.headers["content-disposition"] as string) || "";
+  const filename = /filename="?([^"]+)"?/.exec(cd)?.[1] ?? `SDQ_${sector}_${tier}.pdf`;
+  const url = URL.createObjectURL(r.data as Blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

@@ -1546,6 +1546,34 @@
         "g5": "G5 \u00b7 Validation"
       },
       "missingGate": "missing {{g}}"
+    },
+    "catalog": {
+      "eyebrow": "PLATFORM",
+      "title": "Product catalog",
+      "sub": "Published products available on your plan. Pulse open · Insight (Pro) · Deep Dive (Enterprise).",
+      "loadError": "Could not load the catalog.",
+      "empty": "No products published yet.",
+      "yourPlan": "Your plan:",
+      "view": "View",
+      "download": "Download PDF",
+      "requestAccess": "Request access",
+      "requiresPlan": "Requires {{plan}} plan",
+      "reportError": "Could not load the product.",
+      "period": "Period: {{v}}",
+      "scopeLabel": "Entity to analyze",
+      "scopePlaceholder": "Entity name",
+      "mailSubject": "Access to {{product}} — {{level}}",
+      "mailBody": "Hi, I'm interested in accessing {{product}} at the {{level}} level (requires {{plan}} plan). Could you reach out with the options?",
+      "tier": {
+        "pulse": "Pulse",
+        "insight": "Insight",
+        "deep_dive": "Deep Dive"
+      },
+      "plan": {
+        "free": "Free",
+        "pro": "Pro",
+        "enterprise": "Enterprise"
+      }
     }
   },
   "ops": {

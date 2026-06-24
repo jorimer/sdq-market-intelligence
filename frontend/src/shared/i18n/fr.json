@@ -1546,6 +1546,34 @@
         "g5": "G5 \u00b7 Validation"
       },
       "missingGate": "manque {{g}}"
+    },
+    "catalog": {
+      "eyebrow": "PLATEFORME",
+      "title": "Catalogue de produits",
+      "sub": "Produits publiés disponibles selon votre offre. Pulse ouvert · Insight (Pro) · Deep Dive (Enterprise).",
+      "loadError": "Impossible de charger le catalogue.",
+      "empty": "Aucun produit publié pour l'instant.",
+      "yourPlan": "Votre offre :",
+      "view": "Voir",
+      "download": "Télécharger le PDF",
+      "requestAccess": "Demander l'accès",
+      "requiresPlan": "Nécessite l'offre {{plan}}",
+      "reportError": "Impossible de charger le produit.",
+      "period": "Période : {{v}}",
+      "scopeLabel": "Entité à analyser",
+      "scopePlaceholder": "Nom de l'entité",
+      "mailSubject": "Accès à {{product}} — {{level}}",
+      "mailBody": "Bonjour, je souhaite accéder au produit {{product}} au niveau {{level}} (nécessite l'offre {{plan}}). Pourriez-vous me contacter avec les options ?",
+      "tier": {
+        "pulse": "Pulse",
+        "insight": "Insight",
+        "deep_dive": "Deep Dive"
+      },
+      "plan": {
+        "free": "Free",
+        "pro": "Pro",
+        "enterprise": "Enterprise"
+      }
     }
   },
   "ops": {

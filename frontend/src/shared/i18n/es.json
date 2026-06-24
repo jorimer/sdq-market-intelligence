@@ -1546,6 +1546,34 @@
         "g5": "G5 \u00b7 Validaci\u00f3n"
       },
       "missingGate": "falta {{g}}"
+    },
+    "catalog": {
+      "eyebrow": "PLATAFORMA",
+      "title": "Catálogo de productos",
+      "sub": "Los productos publicados disponibles según tu plan. Pulse abierto · Insight (Pro) · Deep Dive (Enterprise).",
+      "loadError": "No se pudo cargar el catálogo.",
+      "empty": "Aún no hay productos publicados.",
+      "yourPlan": "Tu plan:",
+      "view": "Ver",
+      "download": "Descargar PDF",
+      "requestAccess": "Solicitar acceso",
+      "requiresPlan": "Requiere plan {{plan}}",
+      "reportError": "No se pudo cargar el producto.",
+      "period": "Período: {{v}}",
+      "scopeLabel": "Entidad a analizar",
+      "scopePlaceholder": "Nombre de la entidad",
+      "mailSubject": "Acceso a {{product}} — {{level}}",
+      "mailBody": "Hola, me interesa acceder al producto {{product}} en su nivel {{level}} (requiere plan {{plan}}). ¿Podrían contactarme con las opciones?",
+      "tier": {
+        "pulse": "Pulse",
+        "insight": "Insight",
+        "deep_dive": "Deep Dive"
+      },
+      "plan": {
+        "free": "Free",
+        "pro": "Pro",
+        "enterprise": "Enterprise"
+      }
     }
   },
   "ops": {

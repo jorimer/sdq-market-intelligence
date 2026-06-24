@@ -46,6 +46,7 @@ import { DealScoringPage } from "@/modules/platform/pages/DealScoringPage";
 import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 import { UsersAdminPage } from "@/modules/platform/pages/UsersAdminPage";
 import { ProductMonitorPage } from "@/modules/platform/pages/ProductMonitorPage";
+import { ProductCatalogPage } from "@/modules/platform/pages/ProductCatalogPage";
 
 export default function App() {
   return (
@@ -113,6 +114,7 @@ export default function App() {
             element={<ComparadorPage />}
           />
           <Route path="/methodology" element={<MetodologiaPage />} />
+          <Route path="/catalog" element={<ProductCatalogPage />} />
           <Route
             path="/products"
             element={
