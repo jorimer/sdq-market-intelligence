@@ -33,6 +33,11 @@ class DataHealth:
     freshness_days: Optional[int] = None  # antigüedad del dato más reciente (días)
     sources: Tuple[str, ...] = ()         # fuentes que respaldan el dato
     detail: str = ""                      # nota legible (trazabilidad)
+    # Cadencia de publicación de la fuente — escala los umbrales de frescura del
+    # monitor. Default "quarterly" = comportamiento histórico (banking/trade). Las
+    # fuentes anuales rezagadas por naturaleza (ND-GAIN, WGI, cuentas nacionales)
+    # declaran "annual" para no ser falsamente penalizadas como obsoletas.
+    cadence: str = "quarterly"            # "monthly" | "quarterly" | "annual"
 
 
 @dataclass(frozen=True)

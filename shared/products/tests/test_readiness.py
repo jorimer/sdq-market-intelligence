@@ -95,6 +95,28 @@ def test_readiness_reflects_weak_data_not_hardcode():
     assert weak["readiness"] == pytest.approx(0.70, abs=1e-6)
 
 
+def test_freshness_factor_is_cadence_aware():
+    """Una fuente ANUAL a ~2 años NO es obsoleta (lo sería con la curva trimestral).
+    Mejora de framework para sectores con dato anual rezagado (ESG/WGI/cuentas nac.)."""
+    from shared.products.readiness import _freshness_factor
+    # 730 días (2 años): obsoleto en trimestral, pleno en anual.
+    assert _freshness_factor(730, "quarterly") == 0.0
+    assert _freshness_factor(730, "annual") == 1.0
+    # Cadencia desconocida cae al default trimestral (no rompe).
+    assert _freshness_factor(10, "weekly") == 1.0
+    # Default sin cadencia = trimestral (back-compat).
+    assert _freshness_factor(400) == 0.0
+
+
+def test_readiness_annual_cadence_not_falsely_stale():
+    """G1 de un sector anual con dato de ~2 años se sostiene (no cae a 0)."""
+    class _AnnualSector(FakeSector):
+        def data_signals(self):
+            return DataHealth(coverage=1.0, freshness_days=700, cadence="annual", sources=("ND-GAIN",))
+    rep = compute_readiness(_AnnualSector(), ProductTier.insight)
+    assert rep["g1"] == 1.0  # 700d anual ≤ 730 → pleno
+
+
 def test_readiness_no_engine_drops_g2():
     rep = compute_readiness(FakeSector(engine=False), ProductTier.insight)
     assert rep["g2"] == 0.0

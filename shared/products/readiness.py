@@ -27,23 +27,32 @@ from shared.products.tiers import ProductTier
 
 GATE_WEIGHTS: Dict[str, float] = {"g1": 0.30, "g2": 0.25, "g3": 0.15, "g4": 0.15, "g5": 0.15}
 
-# Frescura: dato ≤ FRESH_DAYS = pleno; decae linealmente a 0 en STALE_DAYS.
-FRESH_DAYS = 120
+# Frescura: dato ≤ fresh = pleno; decae linealmente a 0 en stale. Los umbrales se
+# escalan por la CADENCIA de la fuente: una fuente trimestral obsoleta a los ~400d,
+# pero una ANUAL (ND-GAIN, WGI, cuentas nacionales) está al día con ~1-2 años de
+# rezago por naturaleza — penalizarla con la curva trimestral sería un falso-stale.
+FRESH_DAYS = 120          # back-compat: umbral "quarterly" (referenciado en tests)
 STALE_DAYS = 400
+_CADENCE_THRESHOLDS: Dict[str, tuple] = {
+    "monthly": (45, 150),
+    "quarterly": (FRESH_DAYS, STALE_DAYS),
+    "annual": (730, 2190),   # pleno ≤ 2 años; obsoleto ≥ 6 años
+}
 
 
 def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
 
 
-def _freshness_factor(freshness_days: Optional[int]) -> float:
+def _freshness_factor(freshness_days: Optional[int], cadence: str = "quarterly") -> float:
     if freshness_days is None:
         return 0.5  # sin fecha → señal a medias (honesto, no 0 ni 1)
-    if freshness_days <= FRESH_DAYS:
+    fresh, stale = _CADENCE_THRESHOLDS.get(cadence, (FRESH_DAYS, STALE_DAYS))
+    if freshness_days <= fresh:
         return 1.0
-    if freshness_days >= STALE_DAYS:
+    if freshness_days >= stale:
         return 0.0
-    return _clamp01((STALE_DAYS - freshness_days) / (STALE_DAYS - FRESH_DAYS))
+    return _clamp01((stale - freshness_days) / (stale - fresh))
 
 
 def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, Any]:
@@ -56,9 +65,10 @@ def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, An
 
     # G1 · Data — cobertura × frescura de la fuente autoritativa.
     data = product.data_signals()
-    g1 = _clamp01(data.coverage) * _freshness_factor(data.freshness_days)
-    g1_detail = (f"cobertura={data.coverage:.2f} · frescura={data.freshness_days}d · "
-                 f"{data.detail or ', '.join(data.sources)}")
+    cadence = getattr(data, "cadence", "quarterly")
+    g1 = _clamp01(data.coverage) * _freshness_factor(data.freshness_days, cadence)
+    g1_detail = (f"cobertura={data.coverage:.2f} · frescura={data.freshness_days}d "
+                 f"({cadence}) · {data.detail or ', '.join(data.sources)}")
 
     # G2 · Motor — señal declarativa: índice explicable operativo (booleano). El
     # "último scoring OK" efectivo se evidencia al generar, no acá.
