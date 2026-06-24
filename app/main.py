@@ -109,6 +109,9 @@ import shared.products.operations  # noqa: F401 — registers products-readiness
 # Product catalog: each sector registers its SectorProduct into shared.products at
 # import time (anti-Frankenstein: shared/products never imports a sector).
 import modules.banking_score.products  # noqa: F401 — registers banking SectorProduct
+# Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
+# (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)
+from app import products_macro as _products_macro  # noqa: F401 — registers macro SectorProduct
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":

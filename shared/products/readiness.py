@@ -70,15 +70,13 @@ def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, An
     g3 = 1.0 if level.narrative_templates else 0.0
     g3_detail = f"{len(level.narrative_templates)} templates declarados"
 
-    # G4 · Plantilla — señal declarativa: el nivel tiene secciones + reporte base. El
-    # smoke render efectivo del PDF se evidencia al generar.
-    if level.sections and level.base_report_type:
-        g4 = 1.0
-    elif level.sections:
-        g4 = 0.5
-    else:
-        g4 = 0.0
-    g4_detail = f"{len(level.sections)} secciones · base={level.base_report_type or '—'}"
+    # G4 · Plantilla — señal declarativa: el nivel declara secciones para renderizar.
+    # El contrato GARANTIZA render() (banking con su generador rico; otros con el
+    # renderer genérico), así que `base_report_type` es opcional y NO penaliza G4
+    # (era un sesgo de banking). El smoke render efectivo se evidencia al generar.
+    g4 = 1.0 if level.sections else 0.0
+    g4_detail = (f"{len(level.sections)} secciones · "
+                 + (f"base={level.base_report_type}" if level.base_report_type else "render genérico"))
 
     # G5 · Validación — outcomes/QA + doctrina firmada.
     val = product.validation_state()
