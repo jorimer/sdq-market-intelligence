@@ -1557,6 +1557,7 @@
       "view": "Ver",
       "download": "Descargar PDF",
       "requestAccess": "Solicitar acceso",
+      "sample": "Descargar muestra",
       "requiresPlan": "Requiere plan {{plan}}",
       "reportError": "No se pudo cargar el producto.",
       "period": "Período: {{v}}",

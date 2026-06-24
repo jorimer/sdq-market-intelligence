@@ -31,23 +31,15 @@ class ProductContent:
     narratives: Dict[str, str]
 
 
-async def assemble_product_content(
+async def _content_from_snapshot(
     product: SectorProduct,
     tier: ProductTier,
-    *,
-    period: str,
-    scope: Optional[str] = None,
-    lang: str = "es",
+    snapshot: ProductSnapshot,
+    lang: str,
 ) -> ProductContent:
-    """Produce el contenido (snapshot + narrativas) de un (sector, nivel) aplicando el
-    sensor de anonimización Pulse. NO renderiza — es el núcleo compartido entre la vista
-    in-app y el PDF. Lanza ``ValueError`` (español) si el sector no ofrece el nivel o el
-    snapshot no es resoluble, y ``AnonymizationError`` si un Pulse filtra identificadores.
-    """
-    manifest = product.product_manifest()
-    level = manifest.require_level(tier)  # error en español si no existe
-
-    snapshot = product.snapshot(tier, period, scope)
+    """Núcleo compartido: a partir de un snapshot (real o de muestra), aplica el sensor
+    de anonimización Pulse y produce las narrativas. NO renderiza."""
+    level = product.product_manifest().require_level(tier)
 
     # Doctrina: un nivel de sistema (Pulse) jamás emite identificadores de entidad.
     is_system = level.granularity == Granularity.system
@@ -67,6 +59,23 @@ async def assemble_product_content(
         enforce_anonymized(narratives, entity_roster=snapshot.entity_roster)
 
     return ProductContent(level=level, snapshot=snapshot, narratives=narratives)
+
+
+async def assemble_product_content(
+    product: SectorProduct,
+    tier: ProductTier,
+    *,
+    period: str,
+    scope: Optional[str] = None,
+    lang: str = "es",
+) -> ProductContent:
+    """Produce el contenido (snapshot + narrativas) de un (sector, nivel) aplicando el
+    sensor de anonimización Pulse. NO renderiza — es el núcleo compartido entre la vista
+    in-app y el PDF. Lanza ``ValueError`` (español) si el sector no ofrece el nivel o el
+    snapshot no es resoluble, y ``AnonymizationError`` si un Pulse filtra identificadores.
+    """
+    snapshot = product.snapshot(tier, period, scope)
+    return await _content_from_snapshot(product, tier, snapshot, lang)
 
 
 async def assemble_product_report(
@@ -91,4 +100,32 @@ async def assemble_product_report(
     return await product.render(
         tier, content.snapshot, content.narratives,
         sample=sample, lang=lang, output_dir=output_dir,
+    )
+
+
+def supports_sample(product: SectorProduct) -> bool:
+    """¿El producto ofrece muestra sintética? (``sample_snapshot`` es opcional en el
+    contrato; un sector que aún no lo implementa simplemente no ofrece muestra)."""
+    return callable(getattr(product, "sample_snapshot", None))
+
+
+async def assemble_sample_report(
+    product: SectorProduct,
+    tier: ProductTier,
+    *,
+    lang: str = "es",
+    output_dir: Optional[str] = None,
+) -> str:
+    """Ensambla la MUESTRA (sector, nivel) con datos demo sintéticos del producto y la
+    estampa ``sample=True`` ("MUESTRA — DATA ILUSTRATIVA"). No toca la DB ni datos reales:
+    muestra el formato y la profundidad del nivel sin entregar inteligencia real. Lanza
+    ``ValueError`` (español) si el producto no ofrece muestra para ese nivel."""
+    snap_fn = getattr(product, "sample_snapshot", None)
+    if not callable(snap_fn):
+        raise ValueError(f"'{product.sector_key}' no ofrece muestra todavía.")
+    snapshot = snap_fn(tier)
+    content = await _content_from_snapshot(product, tier, snapshot, lang)
+    return await product.render(
+        tier, content.snapshot, content.narratives,
+        sample=True, lang=lang, output_dir=output_dir,
     )

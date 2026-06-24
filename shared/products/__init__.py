@@ -18,6 +18,8 @@ from shared.products.assembler import (
     ProductContent,
     assemble_product_content,
     assemble_product_report,
+    assemble_sample_report,
+    supports_sample,
 )
 from shared.products.contract import (
     DataHealth,
@@ -51,6 +53,8 @@ __all__ = [
     "required_signal_methods",
     "assemble_product_report",
     "assemble_product_content",
+    "assemble_sample_report",
+    "supports_sample",
     "ProductContent",
     "enforce_anonymized",
     "AnonymizationError",

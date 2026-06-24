@@ -6,20 +6,33 @@ Transversal (vive en ``shared/``). Dos planos:
   ``require_product_access`` (activación + tier, sin bypass de rol). Errores en español.
 """
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
 from shared.database.session import get_db
 from shared.narrative.lang_context import resolve_request_lang
-from shared.products.access import AccessDecision, can_access, require_product_access
+from shared.products.access import (
+    AccessDecision,
+    AccessOutcome,
+    can_access,
+    require_product_access,
+)
 from shared.products.activation import ActivationError, activate, deactivate
 from shared.products.anonymization import AnonymizationError
-from shared.products.assembler import assemble_product_content, assemble_product_report
+from shared.products.assembler import (
+    assemble_product_content,
+    assemble_product_report,
+    assemble_sample_report,
+    supports_sample,
+)
+from shared.products.models import SampleGrant
 from shared.products.registry import CATALOG_BY_KEY, PRODUCT_CATALOG, get_product
 from shared.products.service import build_matrix, recompute_readiness, sector_detail
 from shared.products.tiers import ProductTier
@@ -90,24 +103,37 @@ async def get_catalog(db: Session = Depends(get_db),
     Un nivel no publicado no aparece (no se revela). ``unlocked`` indica si el tier del
     usuario lo alcanza; si no, ``required_tier``+``price_band`` alimentan el upsell."""
     user_tier = (current_user.tier.value if current_user.tier else "free")
+    # Muestras ya descargadas por el usuario: set de (sector, nivel) en una sola query.
+    used_samples = {
+        (g.sector_key, g.tier)
+        for g in db.query(SampleGrant).filter_by(user_id=current_user.id).all()
+    }
     sectors = []
     for entry in PRODUCT_CATALOG:
         product = get_product(entry.sector_key, db)
         if product is None:
             continue
         manifest = product.product_manifest()
+        has_sample = supports_sample(product)
         levels = []
         for tier in manifest.tiers():
             decision = can_access(db, current_user, entry.sector_key, tier)
             if decision.outcome.value == "not_published":
                 continue  # consumo solo ve lo publicado
             spec = manifest.require_level(tier)
+            # La muestra solo aplica a niveles bloqueados, si el producto la ofrece y el
+            # usuario no la gastó todavía (una por sector/nivel).
+            sample_available = (
+                not decision.allowed and has_sample
+                and (entry.sector_key, tier.value) not in used_samples
+            )
             levels.append({
                 "tier": tier.value,
                 "unlocked": decision.allowed,
                 "required_tier": decision.required_tier.value,
                 "price_band": spec.price_band,
                 "audience": spec.audience,
+                "sample_available": sample_available,
             })
         if levels:
             sectors.append({"sector_key": entry.sector_key,
@@ -186,4 +212,51 @@ async def get_product_pdf(
     # interpola `period` del query: lo saneamos a [A-Za-z0-9_-] por higiene del header.
     safe_period = re.sub(r"[^A-Za-z0-9_-]", "", period or "latest") or "latest"
     filename = f"SDQ_{sector}_{access.tier.value}_{safe_period}.pdf"
+    return FileResponse(path=path, media_type="application/pdf", filename=filename)
+
+
+@router.get("/{sector}/{tier}/sample", summary="Descargar la muestra (una vez por nivel)")
+async def get_product_sample(
+    sector: str, tier: str,
+    db: Session = Depends(get_db),
+    lang: str = Depends(resolve_request_lang),
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    """Muestra de conversión: PDF watermarked con datos demo sintéticos de un nivel que el
+    usuario NO tiene desbloqueado. Limitada a **una vez por (usuario, sector, nivel)**.
+    Disponible solo para productos publicados; si el usuario ya tiene acceso, no gasta la
+    muestra (409, que descargue el real). Errores en español."""
+    sector = _require_sector(sector)
+    pt = _parse_tier(tier)
+    decision = can_access(db, current_user, sector, pt)
+    if decision.outcome is AccessOutcome.not_published:
+        raise HTTPException(status_code=404, detail="Producto no disponible.")
+    if decision.allowed:
+        raise HTTPException(status_code=409,
+                            detail="Ya tienes acceso a este nivel; descarga el reporte completo.")
+    product = _resolve_product(sector, db)
+    if not supports_sample(product):
+        raise HTTPException(status_code=404, detail="Muestra no disponible para este producto.")
+    # ¿ya descargó la muestra de este (sector, nivel)? (chequeo barato antes de generar)
+    already = (db.query(SampleGrant)
+               .filter_by(user_id=current_user.id, sector_key=sector, tier=pt.value).one_or_none())
+    if already is not None:
+        raise HTTPException(status_code=409, detail="Ya descargaste la muestra de este producto.")
+    try:
+        path = await assemble_sample_report(product, pt, lang=lang)
+    except AnonymizationError:
+        raise HTTPException(status_code=500,
+                            detail="Error de gobernanza al ensamblar la muestra.")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    # Registrar el grant: la unicidad (user, sector, tier) cierra la carrera entre dos
+    # descargas concurrentes (la segunda choca con la constraint → 409).
+    db.add(SampleGrant(user_id=current_user.id, sector_key=sector, tier=pt.value,
+                       downloaded_at=datetime.now(timezone.utc)))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Ya descargaste la muestra de este producto.")
+    filename = f"SDQ_muestra_{sector}_{pt.value}.pdf"
     return FileResponse(path=path, media_type="application/pdf", filename=filename)

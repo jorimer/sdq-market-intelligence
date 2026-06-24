@@ -213,6 +213,8 @@ export interface CatalogLevel {
   required_tier: string; // "free" | "pro" | "enterprise"
   price_band: string | null;
   audience: string;
+  /** Solo en niveles bloqueados: muestra demo disponible (no descargada aún). */
+  sample_available: boolean;
 }
 export interface CatalogSector {
   sector_key: string;
@@ -255,22 +257,29 @@ export async function getProductReport(
   return data;
 }
 
+/** Dispara la descarga de un blob PDF de `url` (con auth vía interceptor). */
+async function downloadPdfBlob(url: string, fallback: string, params = {}): Promise<void> {
+  const r = await client.get(url, { params, responseType: "blob" });
+  const cd = (r.headers["content-disposition"] as string) || "";
+  const filename = /filename="?([^"]+)"?/.exec(cd)?.[1] ?? fallback;
+  const blobUrl = URL.createObjectURL(r.data as Blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(blobUrl);
+}
+
 /** Descarga el PDF del producto (respeta el mismo gate que la vista in-app). */
 export async function downloadProductPdf(
   sector: string,
   tier: string,
   opts: { period?: string; scope?: string } = {},
 ): Promise<void> {
-  const r = await client.get(`/products/${sector}/${tier}/download`, {
-    params: opts,
-    responseType: "blob",
-  });
-  const cd = (r.headers["content-disposition"] as string) || "";
-  const filename = /filename="?([^"]+)"?/.exec(cd)?.[1] ?? `SDQ_${sector}_${tier}.pdf`;
-  const url = URL.createObjectURL(r.data as Blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  await downloadPdfBlob(`/products/${sector}/${tier}/download`, `SDQ_${sector}_${tier}.pdf`, opts);
+}
+
+/** Descarga la muestra demo (una vez por sector/nivel; 409 si ya se descargó). */
+export async function downloadProductSample(sector: string, tier: string): Promise<void> {
+  await downloadPdfBlob(`/products/${sector}/${tier}/sample`, `SDQ_muestra_${sector}_${tier}.pdf`);
 }
