@@ -16,11 +16,11 @@ from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
 from shared.database.session import get_db
 from shared.narrative.lang_context import resolve_request_lang
-from shared.products.access import AccessDecision, require_product_access
+from shared.products.access import AccessDecision, can_access, require_product_access
 from shared.products.activation import ActivationError, activate, deactivate
 from shared.products.anonymization import AnonymizationError
 from shared.products.assembler import assemble_product_content, assemble_product_report
-from shared.products.registry import CATALOG_BY_KEY, get_product
+from shared.products.registry import CATALOG_BY_KEY, PRODUCT_CATALOG, get_product
 from shared.products.service import build_matrix, recompute_readiness, sector_detail
 from shared.products.tiers import ProductTier
 
@@ -80,6 +80,39 @@ async def post_deactivate(sector: str, tier: str, db: Session = Depends(get_db),
     pt = _parse_tier(tier)
     row = deactivate(db, sector, pt)
     return {"sector_key": sector, "tier": pt.value, "is_active": row.is_active}
+
+
+@router.get("/catalog", summary="Catálogo de consumo del usuario (productos publicados)")
+async def get_catalog(db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Vista de consumo del usuario: solo los niveles PUBLICADOS, con su estado de
+    acceso resuelto por ``can_access`` (sin duplicar el mapeo nivel→tier en el cliente).
+    Un nivel no publicado no aparece (no se revela). ``unlocked`` indica si el tier del
+    usuario lo alcanza; si no, ``required_tier``+``price_band`` alimentan el upsell."""
+    user_tier = (current_user.tier.value if current_user.tier else "free")
+    sectors = []
+    for entry in PRODUCT_CATALOG:
+        product = get_product(entry.sector_key, db)
+        if product is None:
+            continue
+        manifest = product.product_manifest()
+        levels = []
+        for tier in manifest.tiers():
+            decision = can_access(db, current_user, entry.sector_key, tier)
+            if decision.outcome.value == "not_published":
+                continue  # consumo solo ve lo publicado
+            spec = manifest.require_level(tier)
+            levels.append({
+                "tier": tier.value,
+                "unlocked": decision.allowed,
+                "required_tier": decision.required_tier.value,
+                "price_band": spec.price_band,
+                "audience": spec.audience,
+            })
+        if levels:
+            sectors.append({"sector_key": entry.sector_key,
+                            "display_name": entry.display_name, "levels": levels})
+    return {"sectors": sectors, "user_tier": user_tier}
 
 
 # ─── Entrega comercial (gateada por tier + activación) ──────────────────
