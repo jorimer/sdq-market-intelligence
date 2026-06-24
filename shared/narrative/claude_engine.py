@@ -311,6 +311,17 @@ THIN_TEMPLATES = {
         "carbono, y aclara que el índice cubre 2 de 3 dimensiones (coverage). Si una cifra no "
         "está, dilo; no inventes."
     ),
+    "telecom_outlook": (
+        "Explica el FUNDAMENTO del desarrollo del sector telecom (IDT).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. Distingue ALCANCE (penetración) de CALIDAD (banda ancha) según lo "
+        "que más condiciona la decisión de la audiencia. Usá EXCLUSIVAMENTE las cifras del "
+        "contexto (idt_score, mobile_penetration, internet_penetration, broadband_share, "
+        "revenue_growth, contribuciones por dimensión). La móvil suele estar saturada (>100/100) "
+        "y el margen está en internet/banda ancha — léelo así. HONESTIDAD: sé explícito con la "
+        "ANTIGÜEDAD del boletín (período del contexto); no proyectes ni inventes cifras más "
+        "recientes. Si una cifra no está, dilo."
+    ),
     "social_outlook": (
         "Explica el FUNDAMENTO del desarrollo (IDM) de esta región.\n"
         "Contexto:\n{context}\n\n"

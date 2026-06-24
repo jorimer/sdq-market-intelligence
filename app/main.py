@@ -53,6 +53,7 @@ from modules.sector_intel.events import register_subscribers as register_sector_
 from modules.social_dev.api.router import router as social_dev_router
 from modules.esg_climate.api.router import router as esg_climate_router
 from modules.energy_intel.api.router import router as energy_intel_router
+from modules.telecom_intel.api.router import router as telecom_intel_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users_admin_router, prefix="/api/v1/admin/users", tags=["User Admin"])
@@ -68,6 +69,7 @@ app.include_router(sector_intel_router, prefix="/api/v1/sector-intel", tags=["Se
 app.include_router(social_dev_router, prefix="/api/v1/social-dev", tags=["Social Dev"])
 app.include_router(esg_climate_router, prefix="/api/v1/esg-climate", tags=["ESG & Climate"])
 app.include_router(energy_intel_router, prefix="/api/v1/energy-intel", tags=["Energy Intel"])
+app.include_router(telecom_intel_router, prefix="/api/v1/telecom-intel", tags=["Telecom Intel"])
 
 from shared.settings.router import router as settings_router
 app.include_router(settings_router, prefix="/api/v1/settings", tags=["Settings"])
@@ -106,6 +108,7 @@ import modules.social_dev.operations  # noqa: F401 — registers one-social-sync
 import modules.trade_intel.operations  # noqa: F401 — registers dga-trade-sync
 import modules.esg_climate.operations  # noqa: F401 — registers esg-sync
 import modules.energy_intel.operations  # noqa: F401 — registers sie-energy-sync
+import modules.telecom_intel.operations  # noqa: F401 — registers indotel-telecom-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
 
@@ -116,6 +119,7 @@ import modules.trade_intel.products  # noqa: F401 — registers trade SectorProd
 import modules.esg_climate.products  # noqa: F401 — registers esg SectorProduct
 import modules.sector_intel.products  # noqa: F401 — registers tourism/free_zones/construction/agribusiness
 import modules.energy_intel.products  # noqa: F401 — registers energy SectorProduct
+import modules.telecom_intel.products  # noqa: F401 — registers telecom SectorProduct
 # Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
 # (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)
 from app import products_macro as _products_macro  # noqa: F401 — registers macro SectorProduct

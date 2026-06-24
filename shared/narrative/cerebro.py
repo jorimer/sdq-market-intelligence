@@ -141,6 +141,16 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "NO afirmes nada cuantitativo sobre renovables/carbono ni lo inventes. Distingues nivel "
         "de capacidad de calidad de servicio; el índice cubre 2 de 3 dimensiones (dilo)."
     ),
+    "telecom_intel": (
+        "DOCTRINA DE CASA — Eje de telecomunicaciones (desarrollo/conectividad, IDT):\n"
+        "Lees el desarrollo del sector telecom de RD: mayor score = más conectividad. Te anclas "
+        "a los datos abiertos de INDOTEL (boletín trimestral) — penetración móvil/telefónica "
+        "(líneas por 100 hab.), penetración de internet (suscripciones por 100 hab.) y calidad "
+        "vía banda ancha (% del internet). La penetración usa la población censal de la ONE "
+        "(real). Distingues alcance (penetración) de calidad (banda ancha). Sé honesto con la "
+        "ANTIGÜEDAD del boletín (el público más reciente es anterior al período actual); no "
+        "inventes cifras ni proyectes lo no publicado."
+    ),
     "social_dev": (
         "DOCTRINA DE CASA — Eje de desarrollo social (Índice de Desarrollo Multidimensional, IDM):\n"
         "Lees el desarrollo/bienestar de una región de forma explicable y comparable: mayor "
@@ -344,6 +354,34 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Le importa: adecuación de capacidad y calidad de servicio como base, y el avance de "
             "la transición (cuando haya dato). Tu \"y por tanto\" final apunta a la brecha "
             "estructural con mayor retorno sobre la resiliencia."
+        ),
+    },
+    "telecom_intel": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / operador telecom.\n"
+            "Decide: exposición o entrada al mercado de telecomunicaciones.\n"
+            "Le importa: la penetración (móvil saturada vs internet con espacio) como tamaño de "
+            "mercado y la calidad (banda ancha) como frontera de valor. Tu \"y por tanto\" final "
+            "apunta a dónde la brecha de conectividad o calidad crea oportunidad."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / política digital.\n"
+            "Decide: dónde intervenir para cerrar la brecha digital (acceso, banda ancha).\n"
+            "Le importa: la penetración de internet y la calidad de banda ancha como brecha de "
+            "inclusión. Tu \"y por tanto\" final apunta a la palanca de política con mayor "
+            "retorno sobre la conectividad."
+        ),
+        "empresa": (
+            "FRAME DE DECISIÓN — Audiencia: Empresa que depende de conectividad.\n"
+            "Decide: confiabilidad/alcance de la conectividad para su operación.\n"
+            "Le importa: penetración y calidad de banda ancha como habilitador. Tu \"y por "
+            "tanto\" final apunta a la exposición de conectividad que conviene cubrir."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Financiador multilateral / desarrollo digital.\n"
+            "Decide: dónde el financiamiento eleva la conectividad e inclusión digital.\n"
+            "Le importa: penetración de internet y banda ancha como base de desarrollo. Tu \"y "
+            "por tanto\" final apunta a la brecha de conectividad con mayor retorno social."
         ),
     },
     "social_dev": {
