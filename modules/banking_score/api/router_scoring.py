@@ -893,8 +893,8 @@ async def get_backtest_report(
 async def run_backtest(
     current_user: User = Depends(get_current_user),
 ):
-    from shared.auth.models import UserRole
-    if current_user.role != UserRole.admin:
+    from shared.auth.models import UserRole, role_satisfies
+    if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     # Ensure the banking operations are registered before triggering.
     import modules.banking_score.operations  # noqa: F401

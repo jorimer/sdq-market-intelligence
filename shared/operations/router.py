@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
-from shared.auth.models import User, UserRole
+from shared.auth.models import User, UserRole, role_satisfies
 from shared.database.session import get_db
 from shared.operations import service as ops
 
@@ -18,7 +18,9 @@ router = APIRouter()
 
 
 def _require_admin(user: User) -> None:
-    if user.role != UserRole.admin:
+    # Jerárquico: super_admin ⊇ admin (un chequeo plano `!= admin` dejaba afuera a
+    # super_admin, que debe poder todo lo de admin).
+    if not role_satisfies(user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
 
 
