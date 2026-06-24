@@ -53,7 +53,10 @@ sector solo aporta **datos + manifiesto + señales + narrativa + render**.
    **Pasá siempre `axis`** para enrutar por el `numeric_guard` (anti-alucinación); el
    template debe estar en `THIN_TEMPLATES` y el axis en `AXIS_DOCTRINE`, si no NO hay
    guard (ver `tasks/lessons.md` 2026-06-23). Secciones estáticas (limitaciones) sin
-   cifras → texto fijo.
+   cifras → texto fijo. **Sector que abarca varios ejes doctrinales** (macro =
+   coyuntura BCRD + IRMP): elegí el `axis` **por sección**, no global — p.ej. las
+   secciones que leen el IRMP usan `axis="macro_political_risk"` (su regla direccional
+   es opuesta: mayor score = menor riesgo), no `macro_monitor`.
 
 6. **Render** (`async render(...) -> path`): usá el **renderer genérico**
    `shared/products/render.py::render_product_pdf` (portada + tablas + narrativas +

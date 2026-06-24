@@ -72,23 +72,30 @@ def macro_manifest() -> SectorProductManifest:
 
 
 def _macro_factors(db: Session) -> List[Dict]:
-    """Factores macro con dato (vía el getter público de macro_monitor)."""
+    """Factores macro con dato (vía el getter público de macro_monitor).
+
+    En un SAVEPOINT (``begin_nested``): si la lectura falla (p.ej. tabla ausente, o
+    transacción abortada en Postgres) se revierte SOLO el savepoint, sin tumbar la
+    transacción externa (el recompute escribe en la misma sesión)."""
     try:
-        from modules.macro_monitor.macro_context import build_macro_context
-        ctx = build_macro_context(db)
-        return [{"label": f.label, "value": f.value, "unit": f.unit,
-                 "direction": f.direction, "reading": f.reading}
-                for f in (ctx.factors or []) if f.value is not None]
+        with db.begin_nested():
+            from modules.macro_monitor.macro_context import build_macro_context
+            ctx = build_macro_context(db)
+            return [{"label": f.label, "value": f.value, "unit": f.unit,
+                     "direction": f.direction, "reading": f.reading}
+                    for f in (ctx.factors or []) if f.value is not None]
     except Exception as e:  # noqa: BLE001
         logger.warning("macro factors no disponibles: %s", e)
         return []
 
 
 def _irmp(db: Session):
-    """Snapshot IRMP de RD (vía el getter público de macro_political_risk), o None."""
+    """Snapshot IRMP de RD (vía el getter público de macro_political_risk), o None.
+    En SAVEPOINT (ver ``_macro_factors``)."""
     try:
-        from modules.macro_political_risk import service as irmp_svc
-        return irmp_svc.get_latest(db, COUNTRY_ISO)
+        with db.begin_nested():
+            from modules.macro_political_risk import service as irmp_svc
+            return irmp_svc.get_latest(db, COUNTRY_ISO)
     except Exception as e:  # noqa: BLE001
         logger.warning("IRMP no disponible: %s", e)
         return None
@@ -99,20 +106,27 @@ class MacroProduct:
 
     def __init__(self, db: Optional[Session] = None):
         self._db = db
+        self._cache: Optional[tuple] = None  # (factors, irmp_snap) — 1 lectura por instancia
 
     def _require_db(self) -> Session:
         if self._db is None:
             raise RuntimeError("MacroProduct requiere una sesión de DB para esta operación.")
         return self._db
 
+    def _signals(self) -> tuple:
+        """(factores, snapshot IRMP) leídos UNA vez por instancia (evita 2-3 queries por
+        ciclo de readiness)."""
+        if self._cache is None:
+            db = self._require_db()
+            self._cache = (_macro_factors(db), _irmp(db))
+        return self._cache
+
     def product_manifest(self) -> SectorProductManifest:
         return macro_manifest()
 
     # ── Señales de readiness ──
     def data_signals(self) -> DataHealth:
-        db = self._require_db()
-        factors = _macro_factors(db)
-        snap = _irmp(db)
+        factors, snap = self._signals()
         # Frescura: período del IRMP (date); cobertura: factores con dato.
         freshness = None
         if snap is not None and getattr(snap, "period_end", None):
@@ -124,8 +138,8 @@ class MacroProduct:
                                  + (f" · IRMP {snap.period_end}" if snap is not None else ""))
 
     def has_engine(self) -> bool:
-        db = self._require_db()
-        return bool(_macro_factors(db)) or _irmp(db) is not None
+        factors, snap = self._signals()
+        return bool(factors) or snap is not None
 
     def validation_state(self) -> ValidationState:
         # IRMP con metodología validada (Eje 4 cerrado, Gate A-F); momentum macro operativo.
@@ -135,9 +149,7 @@ class MacroProduct:
     # ── Snapshot ──
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
-        db = self._require_db()
-        factors = _macro_factors(db)
-        snap = _irmp(db)
+        factors, snap = self._signals()
         irmp_score = float(snap.irmp_score) if snap is not None and snap.irmp_score is not None else None
         irmp_band = (snap.risk_band.value if snap is not None and snap.risk_band else None)
         per = (str(snap.period_end) if snap is not None and getattr(snap, "period_end", None) else period)
@@ -161,6 +173,13 @@ class MacroProduct:
         }
         tmpl_for = {"macro_pulse": "macro_snapshot", "macro_trend": "macro_trend",
                     "risk_assessment": "risk_assessment", "recommendation": "recommendation"}
+        # axis POR SECCIÓN: las secciones que leen el IRMP (riesgo país) usan la doctrina
+        # macro_political_risk — su regla direccional es OPUESTA ("mayor IRMP = MENOR
+        # riesgo"); enrutarlas por macro_monitor invertiría la lectura. La coyuntura BCRD
+        # (pulse/trend) sí usa macro_monitor.
+        axis_for = {"macro_pulse": "macro_monitor", "macro_trend": "macro_monitor",
+                    "risk_assessment": "macro_political_risk",
+                    "recommendation": "macro_political_risk"}
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -169,7 +188,7 @@ class MacroProduct:
             res = await narrative_engine.generate(
                 context=base_ctx, template=tmpl_for.get(section, "macro_trend"),
                 mode="detailed" if tier == ProductTier.deep_dive else "standard",
-                axis="macro_monitor", audience="inversionista")
+                axis=axis_for.get(section, "macro_monitor"), audience="inversionista")
             out[section] = res.text
         return out
 
