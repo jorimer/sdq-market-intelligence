@@ -91,7 +91,13 @@ class SectorProduct(Protocol):
     # ── Producción de reporte por nivel ──
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
-        """Datos del nivel: agregado anonimizado (Pulse) o entidad nombrada."""
+        """Datos del nivel: agregado anonimizado (Pulse) o entidad nombrada.
+
+        Invariante del contrato: ``period`` vacío (``""``) o no resoluble significa
+        "último período disponible" (la entrega comercial pasa ``""`` cuando el cliente
+        no especifica). Un ``scope`` ausente en un nivel nombrado debe lanzar
+        ``ValueError`` (español); el ensamblador lo traduce a 422.
+        """
         ...
 
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
