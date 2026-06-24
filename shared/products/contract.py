@@ -111,6 +111,12 @@ class SectorProduct(Protocol):
         """Renderiza el reporte del nivel y devuelve el path. Reusa building blocks."""
         ...
 
+    # ── Muestra de conversión (OPCIONAL) ──
+    # Un sector PUEDE implementar ``sample_snapshot(tier) -> ProductSnapshot`` con datos
+    # demo SINTÉTICOS (sin DB, sin entidad real) para la muestra descargable watermarked.
+    # No está en el Protocol como obligatorio: ``assembler.supports_sample`` lo detecta y
+    # los sectores que aún no lo implementan simplemente no ofrecen muestra.
+
 
 def required_signal_methods() -> List[str]:
     """Métodos que un sector debe implementar para el monitor (test de contrato)."""

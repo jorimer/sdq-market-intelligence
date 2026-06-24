@@ -1557,6 +1557,7 @@
       "view": "View",
       "download": "Download PDF",
       "requestAccess": "Request access",
+      "sample": "Download sample",
       "requiresPlan": "Requires {{plan}} plan",
       "reportError": "Could not load the product.",
       "period": "Period: {{v}}",

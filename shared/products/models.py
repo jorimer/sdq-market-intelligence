@@ -46,6 +46,24 @@ class ProductReadiness(UUIDMixin, Base):
     )
 
 
+class SampleGrant(UUIDMixin, Base):
+    """Registro de muestra descargada: un usuario puede bajar UNA muestra por
+    (sector, nivel). La unicidad ``(user_id, sector_key, tier)`` enforca el límite
+    "una única vez" por producto/nivel (mecanismo de conversión)."""
+
+    __tablename__ = "sample_grant"
+
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    sector_key = Column(String(40), nullable=False)
+    tier = Column(String(20), nullable=False)
+    downloaded_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "sector_key", "tier", name="uq_sample_grant_user_sector_tier"),
+        Index("ix_sample_grant_user", "user_id"),
+    )
+
+
 class ProductActivation(UUIDMixin, Base):
     """Estado de activación de ACCESO PÚBLICO de un (sector, nivel).
 
