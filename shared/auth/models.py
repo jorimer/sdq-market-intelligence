@@ -16,7 +16,8 @@ class UserRole(str, enum.Enum):
 
 class AccessTier(str, enum.Enum):
     """Tier = nivel de ACCESO a contenido, eje independiente del rol (monetización).
-    Declarado para habilitar planes pagos a futuro; hoy no restringe contenido."""
+    A partir de la Fase A1 de monetización restringe la superficie comercial de
+    productos (Pulse/Insight/Deep Dive); ver ``shared/products/access.py``."""
     free = "free"
     pro = "pro"
     enterprise = "enterprise"
@@ -35,6 +36,22 @@ ROLE_RANK = {
 def role_satisfies(user_role: UserRole, required: UserRole) -> bool:
     """¿`user_role` cumple (es >= que) el rol `required`?"""
     return ROLE_RANK.get(user_role, -1) >= ROLE_RANK.get(required, 99)
+
+
+# Jerarquía de tiers de acceso (monetización), análoga a ROLE_RANK pero en el eje
+# de contenido: número mayor = más acceso. enterprise ⊇ pro ⊇ free. Un tier
+# "satisface" un requerimiento si su rank es >= al del tier requerido.
+TIER_RANK = {
+    AccessTier.free: 0,
+    AccessTier.pro: 1,
+    AccessTier.enterprise: 2,
+}
+
+
+def tier_satisfies(user_tier: AccessTier, required: AccessTier) -> bool:
+    """¿`user_tier` cumple (es >= que) el tier `required`? Fail-closed: un tier
+    desconocido no satisface nada y un requerimiento desconocido no lo cumple nadie."""
+    return TIER_RANK.get(user_tier, -1) >= TIER_RANK.get(required, 99)
 
 
 class User(UUIDMixin, Base):

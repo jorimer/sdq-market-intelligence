@@ -4,6 +4,15 @@ Vive en ``shared/`` como transversal (igual que el Cerebro de Insights). Cada
 sector implementa el ``Protocol`` ``SectorProduct`` + su ``SectorProductManifest``
 y se cablea sin tocar este framework. Ver ``docs/SPEC_PLATFORM_PRODUCTIZATION.md``.
 """
+from shared.products.access import (
+    AccessDecision,
+    AccessOutcome,
+    TIER_FOR_LEVEL,
+    can_access,
+    enforce_access,
+    required_tier_for,
+    require_product_access,
+)
 from shared.products.anonymization import AnonymizationError, enforce_anonymized
 from shared.products.assembler import assemble_product_report
 from shared.products.contract import (
@@ -49,4 +58,11 @@ __all__ = [
     "get_product",
     "is_implemented",
     "registered_sectors",
+    "AccessDecision",
+    "AccessOutcome",
+    "TIER_FOR_LEVEL",
+    "can_access",
+    "enforce_access",
+    "required_tier_for",
+    "require_product_access",
 ]
