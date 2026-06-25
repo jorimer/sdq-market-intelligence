@@ -24,7 +24,7 @@ from shared.products.access import (
     required_tier_for,
     require_product_access,
 )
-from shared.products.models import ProductActivation
+from shared.products.models import ProductActivation, ProductEntitlement
 from shared.products.tiers import ProductTier
 
 
@@ -32,7 +32,8 @@ from shared.products.tiers import ProductTier
 def db():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
                            poolclass=StaticPool)
-    Base.metadata.create_all(engine, tables=[User.__table__, ProductActivation.__table__])
+    Base.metadata.create_all(engine, tables=[User.__table__, ProductActivation.__table__,
+                                             ProductEntitlement.__table__])
     s = sessionmaker(bind=engine)()
     try:
         yield s

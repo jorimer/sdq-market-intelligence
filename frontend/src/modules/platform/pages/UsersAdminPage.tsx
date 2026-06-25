@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { ShieldCheck, UserPlus, Pencil, Trash2, X } from "lucide-react";
+import { ShieldCheck, UserPlus, Pencil, Trash2, X, KeyRound } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
@@ -11,6 +11,10 @@ import {
   listUsers, createUser, updateUser, resetUserPassword, deleteUser,
   type AdminUser,
 } from "../usersApi";
+import {
+  getProductReadiness, getUserEntitlements, grantEntitlement, revokeEntitlement,
+  type UserEntitlement,
+} from "../api";
 
 const ROLE_TONE: Record<string, "ok" | "warn" | "muted" | "accent"> = {
   super_admin: "warn", admin: "accent", analyst: "ok", viewer: "muted",
@@ -41,6 +45,7 @@ export function UsersAdminPage() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [entUser, setEntUser] = useState<AdminUser | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
 
   // Roles que el usuario actual puede ASIGNAR (espejo de la baranda del backend).
@@ -139,6 +144,12 @@ export function UsersAdminPage() {
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
+                          {manage && (
+                            <button className="btn btn-ghost !py-1 !px-2" title={t("platform.users.entitlements.action")}
+                              onClick={() => setEntUser(u)}>
+                              <KeyRound className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {!isSelf && manage && (
                             <button className="btn btn-ghost !py-1 !px-2" onClick={() => onToggleActive(u)}>
                               {u.is_active ? t("platform.users.deactivate") : t("platform.users.activate")}
@@ -170,6 +181,134 @@ export function UsersAdminPage() {
           onError={setBanner}
         />
       )}
+
+      {entUser && (
+        <EntitlementsModal user={entUser} onClose={() => setEntUser(null)} t={t} />
+      )}
+    </div>
+  );
+}
+
+/** Panel admin: acceso por-producto (compra/otorgamiento manual) de un usuario. */
+function EntitlementsModal({ user, onClose, t }: {
+  user: AdminUser;
+  onClose: () => void;
+  t: TFunction;
+}) {
+  const [rows, setRows] = useState<UserEntitlement[] | null>(null);
+  const [sectors, setSectors] = useState<{ key: string; name: string }[]>([]);
+  const [sector, setSector] = useState("");
+  const [tier, setTier] = useState("insight");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = () => getUserEntitlements(user.id).then(setRows).catch(() => setRows([]));
+  useEffect(() => {
+    load();
+    getProductReadiness()
+      .then((m) => {
+        const s = m.sectors.map((x) => ({ key: x.sector_key, name: x.display_name }));
+        setSectors(s);
+        if (s.length) setSector(s[0].key);
+      })
+      .catch(() => setSectors([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onGrant = async () => {
+    if (!sector) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await grantEntitlement({ user_id: user.id, sector, tier, note: note.trim() || undefined });
+      setNote("");
+      await load();
+    } catch (e) {
+      setErr(errMsg(e, t("platform.users.entitlements.grantError")));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRevoke = async (id: string) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await revokeEntitlement(id);
+      await load();
+    } catch (e) {
+      setErr(errMsg(e, t("platform.users.entitlements.grantError")));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const active = (rows ?? []).filter((r) => r.active);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button aria-label="Cerrar" onClick={onClose} className="absolute inset-0 bg-ink/40 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg bg-surface border border-line rounded-xl shadow-pop p-5 max-h-[85vh] overflow-y-auto">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs text-muted truncate">{t("platform.users.entitlements.title")}</div>
+            <h2 className="text-base font-semibold text-ink font-display truncate">{user.full_name}</h2>
+          </div>
+          <button onClick={onClose} className="btn btn-ghost shrink-0 -mr-2" aria-label="Cerrar">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-xs text-muted mb-3">{t("platform.users.entitlements.help")}</p>
+
+        {/* Grant */}
+        <div className="rounded-lg border border-line p-3 space-y-2 mb-4">
+          <div className="grid grid-cols-2 gap-2">
+            <Field label={t("platform.users.entitlements.sector")}>
+              <select className="field" value={sector} onChange={(e) => setSector(e.target.value)}>
+                {sectors.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
+              </select>
+            </Field>
+            <Field label={t("platform.users.entitlements.tier")}>
+              <select className="field" value={tier} onChange={(e) => setTier(e.target.value)}>
+                <option value="pulse">Pulse</option>
+                <option value="insight">Insight</option>
+                <option value="deep_dive">Deep Dive</option>
+              </select>
+            </Field>
+          </div>
+          <Field label={t("platform.users.entitlements.note")}>
+            <input className="field" value={note} maxLength={255} onChange={(e) => setNote(e.target.value)}
+              placeholder={t("platform.users.entitlements.notePlaceholder")} />
+          </Field>
+          {err && <p className="text-xs text-alert" role="alert">{err}</p>}
+          <button className="btn btn-primary w-full" disabled={busy || !sector} onClick={onGrant}>
+            {t("platform.users.entitlements.grant")}
+          </button>
+        </div>
+
+        {/* Activos */}
+        <div className="text-xs font-medium text-ink mb-2">{t("platform.users.entitlements.activeTitle")}</div>
+        {rows === null ? (
+          <Skeleton className="h-16" />
+        ) : active.length === 0 ? (
+          <p className="text-xs text-faint">{t("platform.users.entitlements.empty")}</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {active.map((r) => (
+              <li key={r.id} className="flex items-center gap-2 rounded-lg border border-line p-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-ink truncate">{r.sector_key} · {r.tier}</div>
+                  <div className="text-[11px] text-faint truncate">{r.note || r.source}</div>
+                </div>
+                <button className="btn btn-ghost !py-1 !px-2 text-xs text-alert shrink-0"
+                  disabled={busy} onClick={() => onRevoke(r.id)}>
+                  {t("platform.users.entitlements.revoke")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

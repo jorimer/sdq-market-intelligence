@@ -205,6 +205,36 @@ export async function deactivateProduct(sector: string, tier: string): Promise<{
   return data;
 }
 
+/* ── Entitlements por-producto (monetización: compra/otorgamiento manual, admin) ── */
+export interface UserEntitlement {
+  id: string;
+  user_id: string;
+  sector_key: string;
+  tier: string;
+  source: string;
+  granted_by: string | null;
+  granted_at: string | null;
+  expires_at: string | null;
+  active: boolean;
+  note: string | null;
+}
+
+export async function getUserEntitlements(userId: string): Promise<UserEntitlement[]> {
+  const { data } = await client.get(`/products/entitlements/${encodeURIComponent(userId)}`);
+  return data.entitlements as UserEntitlement[];
+}
+
+export async function grantEntitlement(input: {
+  user_id: string; sector: string; tier: string; note?: string;
+}): Promise<UserEntitlement> {
+  const { data } = await client.post("/products/entitlements", input);
+  return data as UserEntitlement;
+}
+
+export async function revokeEntitlement(id: string): Promise<void> {
+  await client.post(`/products/entitlements/${encodeURIComponent(id)}/revoke`);
+}
+
 /* ── Catálogo de consumo (monetización: solo niveles publicados, con estado de
  *    acceso resuelto por el backend según el tier del usuario) ── */
 export interface CatalogLevel {

@@ -30,7 +30,12 @@ from shared.products import (
     registered_sectors,
     supports_sample,
 )
-from shared.products.models import ProductActivation, ProductReadiness, SampleGrant
+from shared.products.models import (
+    ProductActivation,
+    ProductEntitlement,
+    ProductReadiness,
+    SampleGrant,
+)
 from shared.products.tiers import ProductTier
 
 # Sectores con exemplar curado. Hoy los 10 (cada sector tiene su narrativa tier-1).
@@ -97,7 +102,8 @@ def _app():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
                            poolclass=StaticPool)
     Base.metadata.create_all(engine, tables=[ProductActivation.__table__,
-                                             ProductReadiness.__table__, SampleGrant.__table__])
+                                             ProductReadiness.__table__, SampleGrant.__table__,
+                                             ProductEntitlement.__table__])
     db = sessionmaker(bind=engine)()
     app = FastAPI()
     app.include_router(prod_router.router, prefix="/api/v1/products")
