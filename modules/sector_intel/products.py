@@ -81,6 +81,67 @@ _NO_DATA = (
     "cobertura (G1) es insuficiente para publicar. No se fabrican cifras."
 )
 
+# Narrativa CURADA tier-1 de la muestra (exemplar). Coherente con los datos demo
+# (IAI 55.75 «Media», SGPS 62; breakdown sector 70/macro 55, negocios/talento/regulación
+# 50 = rúbrica; SGPS histórico 60/estructural 64). El sector concreto lo nombra el título
+# del PDF (render usa display); la prosa es válida para los 4 sub-sectores.
+_SAMPLE_NARRATIVES = {
+    "sector_pulse": (
+        "El sector cierra el período con un **Índice de Atractivo de Inversión (IAI) de "
+        "55.75/100 —banda Media—**, un perfil de potencial sólido con desarrollo desigual "
+        "entre sus pilares. La fortaleza está en el **desempeño del propio sector (score "
+        "70)**, que refleja un crecimiento real y una contribución consistente a la "
+        "economía dominicana, reforzado por un **entorno macro favorable (55)**: el alto "
+        "crecimiento y la estabilidad nominal del país juegan a favor. El momentum "
+        "acompaña: un **SGPS de 62** indica que la trayectoria reciente sostiene al nivel. "
+        "Los pilares de **clima de negocios, talento y marco regulatorio** se evalúan sobre "
+        "rúbrica declarada —no dato vivo—, por lo que el índice debe leerse como una señal "
+        "direccional, no como un veredicto pleno, hasta ampliar esas fuentes. La lectura de "
+        "mercado: un sector con fundamentos atractivos y viento macro a favor, cuya tesis "
+        "de inversión se fortalece a medida que maduran las dimensiones de entorno."
+    ),
+    "sector_assessment": (
+        "El atractivo de inversión del sector se evalúa en **55.75/100 (banda Media)**, una "
+        "posición que combina fortalezas reales con dimensiones aún por consolidar. El "
+        "pilar más sólido es el desempeño sectorial (70): el sector crece en términos "
+        "reales y aporta de forma consistente al PIB, una base tangible para la tesis de "
+        "inversión. El entorno macroeconómico (55) refuerza el cuadro —la economía "
+        "dominicana ofrece un contexto de crecimiento y estabilidad poco común en la "
+        "región. La cautela viene de las dimensiones de entorno —clima de negocios, talento "
+        "y regulación—, que hoy se sostienen sobre rúbrica declarada y no sobre dato vivo; "
+        "es ahí donde reside tanto la incertidumbre como el mayor potencial de revaluación "
+        "del índice. Para un inversionista, el sector ofrece fundamentos atractivos "
+        "respaldados por un macro favorable, con la salvedad honesta de que el cuadro "
+        "completo de entorno operativo requiere profundizar la base de datos."
+    ),
+    "momentum": (
+        "El momentum del sector —medido por el Score de Generación de Potencial Sostenible "
+        "(SGPS) de 62— confirma una trayectoria favorable que acompaña al nivel del índice. "
+        "La descomposición es reveladora: un **componente estructural de 64** algo por "
+        "encima del **histórico de 60** sugiere que la dinámica reciente no es solo inercia "
+        "sino que incorpora una mejora de fundamentos —el sector no solo viene creciendo, "
+        "sino que la calidad de ese crecimiento tiende a fortalecerse. Para una tesis de "
+        "inversión esta distinción importa: un momentum estructural superior al histórico "
+        "es la señal de un sector en fase de consolidación más que de pico cíclico, lo que "
+        "reduce el riesgo de entrar en la cresta de la ola. La lectura: la trayectoria "
+        "respalda la exposición de mediano plazo, con un perfil de momentum que premia la "
+        "paciencia sobre el timing."
+    ),
+    "recommendation": (
+        "Para un inversionista o comité evaluando exposición al sector, la recomendación es "
+        "de **interés constructivo con diligencia sobre el entorno operativo**. Los "
+        "fundamentos —desempeño sectorial real y un macro favorable— justifican la tesis; "
+        "el momentum estructural la refuerza. La palanca de mayor retorno sobre el atractivo "
+        "no está en el desempeño (ya sólido) sino en la **maduración de las dimensiones de "
+        "entorno**: clima de negocios, disponibilidad de talento y marco regulatorio son "
+        "las variables que hoy se evalúan sobre rúbrica y que, al consolidarse con dato "
+        "vivo, definirán el atractivo real del sector. La recomendación operativa: avanzar "
+        "en la tesis aprovechando el viento macro, mientras se profundiza la diligencia "
+        "sobre las condiciones operativas específicas del sector —el factor que separa un "
+        "buen sector de una buena inversión."
+    ),
+}
+
 
 def sector_manifest(product_key: str, display_name: str) -> SectorProductManifest:
     return SectorProductManifest(
@@ -236,6 +297,13 @@ class SectorIntelProduct:
         if tier == ProductTier.deep_dive:
             payload["sgps_detail"] = {"historical": 60.0, "structural": 64.0}
         return ProductSnapshot(tier=tier, period="2025", payload=payload, entity_name=self._display)
+
+    def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
+        """Narrativa CURADA tier-1 de la muestra (exemplar). NO usa el motor IA. El sector
+        concreto lo nombra el título del PDF (render usa ``self._display``)."""
+        sections = self.product_manifest().require_level(tier).sections
+        return {sec: (_LIMITATIONS if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
+                for sec in sections}
 
     # ── Narrativas (sin DB — operan sobre el snapshot) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,

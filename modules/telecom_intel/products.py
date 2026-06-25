@@ -61,6 +61,55 @@ _NO_DATA = (
     "insuficiente para publicar. No se fabrican cifras."
 )
 
+# Narrativa CURADA tier-1 de la muestra (exemplar). Coherente con los datos demo
+# (IDT 91.7 «Fuerte», móvil 104.7/100 hab., internet 89.1%, banda ancha 86.9%,
+# crecimiento de ingresos 6.95%, 11.3 M líneas, 9.6 M usuarios de internet).
+_SAMPLE_NARRATIVES = {
+    "telecom_pulse": (
+        "El sector de telecomunicaciones dominicano cierra el período con un **Índice de "
+        "Desarrollo de Telecomunicaciones de 91.7/100 —banda Fuerte—**, uno de los "
+        "perfiles de conectividad más sólidos de la región. La **penetración móvil de "
+        "104.7 líneas por cada 100 habitantes** indica un mercado maduro y saturado, donde "
+        "el celular es ubicuo. La **penetración de internet (89.1%)** y la **calidad de "
+        "banda ancha (86.9%)** confirman que la conectividad no es solo amplia sino "
+        "crecientemente de calidad, con más de 9.5 millones de usuarios de internet. El "
+        "crecimiento de ingresos del sector (6.95%) sugiere un mercado que sigue "
+        "monetizando el dato pese a la madurez de la voz. La lectura de mercado: RD tiene "
+        "una infraestructura digital de primer nivel regional —un habilitador competitivo "
+        "para los servicios, el comercio electrónico y la transformación digital. La "
+        "frontera ya no es cobertura, sino profundidad: velocidad, fibra y cierre de las "
+        "brechas de calidad que persisten."
+    ),
+    "telecom_assessment": (
+        "El desarrollo de las telecomunicaciones en la República Dominicana se evalúa en "
+        "**91.7/100 (banda Fuerte)**, un perfil de alcance casi universal. La penetración "
+        "móvil supera el 100% (104.7 por 100 habitantes), señal de un mercado saturado "
+        "donde el crecimiento ya no viene de nuevos usuarios de voz sino de la "
+        "profundización del dato: internet en 89.1% y banda ancha de calidad en 86.9%, con "
+        "9.6 millones de usuarios de internet sobre una base de 11.3 millones de líneas. El "
+        "crecimiento de ingresos (6.95%) confirma que el sector sigue capturando valor de "
+        "los servicios de datos. Para un inversionista, RD ofrece un mercado de "
+        "telecomunicaciones maduro y rentable cuya próxima frontera de valor está en la "
+        "calidad —fibra, velocidad, latencia— y en el cierre de las brechas que aún "
+        "separan la cobertura nominal de la experiencia efectiva, sobre todo fuera de los "
+        "grandes centros urbanos."
+    ),
+    "recommendation": (
+        "Para un inversionista o comité con exposición al sector de telecomunicaciones "
+        "dominicano, la tesis ya no es de penetración —el mercado está saturado en "
+        "alcance— sino de **calidad y profundidad**. La palanca de mayor retorno está en "
+        "la **infraestructura de banda ancha**: el despliegue de fibra, el aumento de "
+        "velocidades y el cierre de la brecha de calidad (banda ancha en 86.9%, con margen "
+        "claro al 100%) es donde coinciden la mayor demanda insatisfecha y el mayor valor "
+        "competitivo para la economía digital. La segunda frontera es la **brecha "
+        "geográfica**: la conectividad de calidad fuera de los centros urbanos es tanto "
+        "oportunidad de mercado como palanca de desarrollo. La recomendación: priorizar "
+        "inversión en infraestructura de datos de alta capacidad sobre expansión de "
+        "cobertura básica, y tratar la calidad de servicio —no el alcance— como el "
+        "diferenciador competitivo del próximo ciclo."
+    ),
+}
+
 
 def telecom_manifest() -> SectorProductManifest:
     return SectorProductManifest(
@@ -199,6 +248,12 @@ class TelecomProduct:
             return ProductSnapshot(tier=tier, period="2022-Q1", payload=payload,
                                    entity_name=None, entity_roster=())
         return ProductSnapshot(tier=tier, period="2022-Q1", payload=payload, entity_name=DISPLAY)
+
+    def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
+        """Narrativa CURADA tier-1 de la muestra (exemplar). NO usa el motor IA."""
+        sections = self.product_manifest().require_level(tier).sections
+        return {sec: (_LIMITATIONS if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
+                for sec in sections}
 
     # ── Narrativas (sin DB) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,

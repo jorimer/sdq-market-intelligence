@@ -50,6 +50,65 @@ _LIMITATIONS = (
     "posteriores al período."
 )
 
+# Narrativa CURADA tier-1 de la muestra (exemplar). Coherente con SAMPLE_* (PIB 5.1%,
+# inflación 3.8%, reservas USD 14,200 MM, TC 59.8, déficit -3.1%, IRMP 38.3 «Moderado»).
+# IRMP: mayor = MENOR riesgo (no invertir la lectura). Sin cursivas de un asterisco.
+_SAMPLE_NARRATIVES = {
+    "macro_pulse": (
+        "La coyuntura macroeconómica dominicana cierra el período con señales ordenadas. "
+        "El **crecimiento del PIB de 5.1% interanual** ubica a RD entre las economías más "
+        "dinámicas de la región, sostenido por turismo, remesas e inversión. La "
+        "**inflación de 3.8%** se sitúa dentro del rango meta del Banco Central, lo que "
+        "da margen a la política monetaria. Las **reservas internacionales (USD 14,200 "
+        "millones)** ofrecen un colchón externo cómodo frente a shocks de balanza de "
+        "pagos, y el **tipo de cambio (RD$ 59.8/US$)** sigue una depreciación gradual y "
+        "predecible. El contrapunto es fiscal: un **déficit de -3.1% del PIB** que, sin "
+        "ser alarmante, exige disciplina para no erosionar la sostenibilidad de la deuda. "
+        "La lectura de conjunto: una economía en expansión con anclas nominales bajo "
+        "control y un frente fiscal como principal punto de atención."
+    ),
+    "macro_trend": (
+        "La trayectoria macroeconómica de la República Dominicana describe una economía "
+        "en fase expansiva con fundamentos sólidos. El crecimiento de 5.1% no es un "
+        "repunte puntual sino la continuación de una de las tasas más altas y consistentes "
+        "de América Latina, apoyada en una base diversificada —turismo, zonas francas, "
+        "remesas y construcción— que reduce la dependencia de un solo motor. La inflación "
+        "controlada en 3.8% y unas reservas robustas configuran un marco de estabilidad "
+        "nominal que sostiene la confianza de inversión. El vector a vigilar es la "
+        "consolidación fiscal: el déficit de -3.1% del PIB es manejable en un contexto de "
+        "crecimiento, pero su trayectoria determina el espacio de política ante un "
+        "eventual giro del ciclo. Para un inversionista, RD ofrece una combinación poco "
+        "común —alto crecimiento con estabilidad macro— que premia la exposición de "
+        "mediano plazo."
+    ),
+    "risk_assessment": (
+        "El riesgo macro-político de la República Dominicana se evalúa como **moderado** "
+        "(IRMP 38.3, escala donde un valor más alto indica MENOR riesgo). El índice "
+        "integra gobernanza, estabilidad institucional, sostenibilidad fiscal y exposición "
+        "externa, y ubica a RD en una franja intermedia que combina fortalezas claras con "
+        "vulnerabilidades acotadas. Del lado positivo: estabilidad política, continuidad "
+        "institucional y un historial de cumplimiento de obligaciones que anclan la "
+        "percepción de riesgo soberano. Del lado de atención: la dependencia de ingresos "
+        "externos —turismo, remesas, inversión extranjera— expone a la economía a shocks "
+        "globales, y el frente fiscal limita el margen de maniobra contracíclico. Ninguno "
+        "configura un riesgo de cola elevado; definen un perfil medio, gestionable, "
+        "coherente con una economía emergente en consolidación."
+    ),
+    "recommendation": (
+        "Para un comité de inversión o una contraparte con exposición a la República "
+        "Dominicana, la recomendación es de **exposición constructiva con cobertura "
+        "selectiva**. El perfil de alto crecimiento y estabilidad nominal justifica "
+        "posiciones de mediano plazo; el riesgo no está en los fundamentos sino en la "
+        "sensibilidad externa y fiscal. La palanca de mayor retorno sobre la resiliencia "
+        "del país es la **consolidación fiscal**: un sendero creíble de reducción del "
+        "déficit ampliaría el espacio de política y mejoraría el perfil soberano de forma "
+        "estructural. Conviene dimensionar la exposición monitoreando dos indicadores "
+        "adelantados: la trayectoria del déficit y la evolución de las reservas frente a "
+        "un eventual endurecimiento de las condiciones financieras globales. RD es un "
+        "crédito de mejora gradual, no de ruptura."
+    ),
+}
+
 
 def macro_manifest() -> SectorProductManifest:
     return SectorProductManifest(
@@ -172,6 +231,12 @@ class MacroProduct:
             return ProductSnapshot(tier=tier, period="2025-Q1", payload=payload, entity_name=None)
         payload = {"irmp_score": 38.3, "irmp_band": "Moderado", "factors": factors}
         return ProductSnapshot(tier=tier, period="2025-Q1", payload=payload, entity_name=COUNTRY_NAME)
+
+    def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
+        """Narrativa CURADA tier-1 de la muestra (exemplar). NO usa el motor IA."""
+        sections = self.product_manifest().require_level(tier).sections
+        return {sec: (_LIMITATIONS if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
+                for sec in sections}
 
     # ── Narrativas (sin DB) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
