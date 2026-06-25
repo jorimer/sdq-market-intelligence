@@ -32,8 +32,12 @@ class _TariffBody(BaseModel):
     sku: str = Field(..., description="insight | deep_dive:{sector} | special:{slug}")
     amount: Decimal = Field(..., description="Monto en la moneda (envíe string para exactitud)")
     currency: str = "USD"
-    effective_from: Optional[datetime] = None  # None = rige desde ahora
-    effective_to: Optional[datetime] = None    # None = abierto
+    # Fechas en UTC. Un ISO sin offset se interpreta como UTC (no hora local): para
+    # programar a una hora local de RD (UTC-4), enviar el offset explícito.
+    effective_from: Optional[datetime] = Field(
+        None, description="Inicio de vigencia en UTC (None = rige desde ahora)")
+    effective_to: Optional[datetime] = Field(
+        None, description="Fin de vigencia en UTC (None = abierto)")
     label: Optional[str] = None
     note: Optional[str] = None
 
