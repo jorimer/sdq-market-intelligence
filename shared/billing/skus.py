@@ -69,6 +69,21 @@ def validate_sku(sku: str) -> Tuple[str, Optional[str]]:
     return kind, ref
 
 
+def sku_label(sku: str) -> str:
+    """Etiqueta legible (español) de un SKU para mensajes al usuario. Best-effort: si el
+    SKU es inválido, devuelve el propio string."""
+    try:
+        kind, ref = parse_sku(sku)
+    except SkuError:
+        return sku
+    if kind == "insight":
+        return "plan Insight"
+    if kind == "deep_dive":
+        entry = CATALOG_BY_KEY.get(ref)
+        return f"Deep Dive de {entry.display_name}" if entry else f"Deep Dive de {ref}"
+    return f"informe especial «{ref}»"  # parse_sku garantiza kind ∈ {insight, deep_dive, special}
+
+
 def entitlement_for_sku(sku: str) -> Optional[Tuple[str, ProductTier]]:
     """Si el SKU corresponde a una compra por-producto (Deep Dive), devuelve el
     ``(sector_key, ProductTier.deep_dive)`` que el webhook otorgará vía

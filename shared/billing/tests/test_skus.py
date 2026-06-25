@@ -7,6 +7,7 @@ from shared.billing.skus import (
     deep_dive_sku,
     entitlement_for_sku,
     parse_sku,
+    sku_label,
     special_sku,
     validate_sku,
 )
@@ -46,3 +47,11 @@ def test_entitlement_for_sku_only_for_deep_dive():
     assert entitlement_for_sku("deep_dive:banking") == ("banking", ProductTier.deep_dive)
     assert entitlement_for_sku("insight") is None
     assert entitlement_for_sku("special:algo") is None
+
+
+def test_sku_label_human_readable():
+    assert sku_label("insight") == "plan Insight"
+    assert "Deep Dive" in sku_label("deep_dive:banking")
+    assert sku_label("deep_dive:no_existe") == "Deep Dive de no_existe"  # parse ok, sin catálogo
+    assert "informe especial" in sku_label("special:riesgo-2026")
+    assert sku_label("basura") == "basura"  # inválido → best-effort
