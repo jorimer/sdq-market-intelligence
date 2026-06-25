@@ -21,14 +21,16 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import AccessTier, User, tier_satisfies
 from shared.database.session import get_db
-from shared.products.models import ProductActivation
+from shared.products.models import ProductActivation, ProductEntitlement
 from shared.products.tiers import ProductTier
 
 # Mapeo nivel comercial → tier de acceso mínimo requerido (decisión del dueño):
@@ -74,15 +76,39 @@ def _is_activated(db: Session, sector_key: str, tier: ProductTier) -> bool:
     return bool(row and row.is_active)
 
 
+def has_product_entitlement(db: Session, user_id: str, sector_key: str,
+                            tier: ProductTier) -> bool:
+    """¿El usuario tiene una compra/otorgamiento ACTIVO y vigente de este (sector, nivel)?
+    Honra la expiración (``expires_at`` None = perpetuo) y la revocación (``active``).
+    Es el eje de monetización por-producto, independiente del tier de suscripción."""
+    if not user_id:
+        return False
+    # UTC naive: las columnas DateTime son naive (parity SQLite↔Postgres). Comparar contra
+    # un naive UTC evita el TIMESTAMP-WITHOUT-TIME-ZONE vs timestamptz en el lado SQL.
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return db.query(
+        db.query(ProductEntitlement)
+        .filter(ProductEntitlement.user_id == user_id,
+                ProductEntitlement.sector_key == sector_key,
+                ProductEntitlement.tier == tier.value,
+                ProductEntitlement.active.is_(True),
+                or_(ProductEntitlement.expires_at.is_(None),
+                    ProductEntitlement.expires_at > now))
+        .exists()
+    ).scalar()
+
+
 def can_access(db: Session, user: User, sector_key: str, tier: ProductTier) -> AccessDecision:
     """Resuelve el acceso de ``user`` al producto (sector, nivel). Puro de HTTP:
-    devuelve una ``AccessDecision`` (no levanta). El orden es activación → tier para
-    no filtrar la existencia de productos no publicados a quien no llega al tier."""
+    devuelve una ``AccessDecision`` (no levanta). El orden es activación → (tier OR
+    compra por-producto) para no filtrar la existencia de productos no publicados a quien
+    no tiene acceso. El acceso lo concede el tier de suscripción O un entitlement comprado."""
     required = TIER_FOR_LEVEL[tier]
     user_tier = user.tier or AccessTier.free
     if not _is_activated(db, sector_key, tier):
         outcome = AccessOutcome.not_published
-    elif tier_satisfies(user_tier, required):
+    elif (tier_satisfies(user_tier, required)
+          or has_product_entitlement(db, getattr(user, "id", None), sector_key, tier)):
         outcome = AccessOutcome.allowed
     else:
         outcome = AccessOutcome.tier_required

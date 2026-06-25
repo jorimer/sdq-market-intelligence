@@ -16,7 +16,12 @@ from shared.database.base import Base
 from shared.database.session import get_db
 from shared.products.assembler import ProductContent
 from shared.products.contract import ProductSnapshot
-from shared.products.models import ProductActivation, ProductReadiness, SampleGrant
+from shared.products.models import (
+    ProductActivation,
+    ProductEntitlement,
+    ProductReadiness,
+    SampleGrant,
+)
 from shared.products.tiers import Granularity, ProductTier, TierLevelSpec
 
 
@@ -26,7 +31,8 @@ def db():
                            poolclass=StaticPool)
     Base.metadata.create_all(engine, tables=[ProductActivation.__table__,
                                              ProductReadiness.__table__,
-                                             SampleGrant.__table__])
+                                             SampleGrant.__table__,
+                                             ProductEntitlement.__table__])
     s = sessionmaker(bind=engine)()
     try:
         yield s

@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,12 @@ from shared.products.access import (
 )
 from shared.products.activation import ActivationError, activate, deactivate
 from shared.products.anonymization import AnonymizationError
+from shared.products.entitlements import (
+    EntitlementError,
+    grant_entitlement,
+    list_user_entitlements,
+    revoke_entitlement,
+)
 from shared.products.assembler import (
     assemble_product_content,
     assemble_product_report,
@@ -260,3 +267,44 @@ async def get_product_sample(
         raise HTTPException(status_code=409, detail="Ya descargaste la muestra de este producto.")
     filename = f"SDQ_muestra_{sector}_{pt.value}.pdf"
     return FileResponse(path=path, media_type="application/pdf", filename=filename)
+
+
+# ─── Entitlements por-producto (aprovisionamiento manual, admin) ───────
+#
+# La "compra puntual" de un (sector, nivel). En B0 lo otorga el admin a mano (cobro fuera
+# de plataforma); en B1 lo creará el webhook de pago. `can_access` ya los honra.
+
+class _GrantBody(BaseModel):
+    user_id: str
+    sector: str
+    tier: str
+    expires_at: Optional[datetime] = None
+    note: Optional[str] = None
+
+
+@router.get("/entitlements/{user_id}", summary="Entitlements de un usuario (admin)")
+async def get_entitlements(user_id: str, db: Session = Depends(get_db),
+                           current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    return {"user_id": user_id, "entitlements": list_user_entitlements(db, user_id)}
+
+
+@router.post("/entitlements", summary="Otorgar acceso por-producto (admin)")
+async def post_grant_entitlement(body: _GrantBody, db: Session = Depends(get_db),
+                                 current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    target = db.query(User).filter(User.id == body.user_id).one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    try:
+        return grant_entitlement(
+            db, user_id=body.user_id, sector_key=body.sector, tier=body.tier,
+            granted_by=current_user.id, expires_at=body.expires_at, note=body.note)
+    except EntitlementError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/entitlements/{entitlement_id}/revoke", summary="Revocar entitlement (admin)")
+async def post_revoke_entitlement(entitlement_id: str, db: Session = Depends(get_db),
+                                  current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    if not revoke_entitlement(db, entitlement_id):
+        raise HTTPException(status_code=404, detail="Entitlement no encontrado.")
+    return {"id": entitlement_id, "active": False}
