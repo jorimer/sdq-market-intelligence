@@ -89,6 +89,9 @@ app.include_router(deal_registry_router, prefix="/api/v1/deal-scoring", tags=["D
 from shared.products.router import router as products_router
 app.include_router(products_router, prefix="/api/v1/products", tags=["Productos"])
 
+from shared.billing.router import router as billing_router
+app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
 from shared.products.events import subscribe_product_events
