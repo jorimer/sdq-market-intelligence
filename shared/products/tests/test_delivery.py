@@ -284,7 +284,9 @@ def _sample_client(db, user_tier, monkeypatch, pdf_path=None, has_sample=True, u
         sector_key = "banking"
     prod = _Prod()
     if has_sample:
-        prod.sample_snapshot = lambda tier: object()  # supports_sample → True
+        # supports_sample exige exemplar curado: snapshot (datos) + narratives (prosa).
+        prod.sample_snapshot = lambda tier: object()
+        prod.sample_narratives = lambda tier: {}
     monkeypatch.setattr(prod_router, "get_product", lambda sector, db: prod)
 
     async def _fake_sample(product, tier, *, lang="es", **kw):

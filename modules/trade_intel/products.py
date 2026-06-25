@@ -251,6 +251,20 @@ class TradeProduct:
         return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                entity_name=COUNTRY_NAME)
 
+    # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
+    def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
+        score = {"period": "2025", "resilience_score": 60.6, "export_diversification": 63.0,
+                 "import_dependency": 0.475, "hhi_exports": 0.37, "total_exports": 4200.0,
+                 "total_imports": 3800.0, "n_products_export": 3, "n_products_import": 5,
+                 "top_export_products": [{"product": "instrumentos médicos", "share": 0.5}]}
+        payload: Dict[str, Any] = {"has_score": True, "score": score}
+        if tier == ProductTier.pulse:
+            return ProductSnapshot(tier=tier, period="2025", payload=payload,
+                                   entity_name=None, entity_roster=())
+        if tier == ProductTier.deep_dive:
+            payload["partners"] = None
+        return ProductSnapshot(tier=tier, period="2025", payload=payload, entity_name=COUNTRY_NAME)
+
     # ── Narrativas (sin DB — operan sobre el snapshot) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:

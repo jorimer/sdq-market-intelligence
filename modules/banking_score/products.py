@@ -60,6 +60,129 @@ SAMPLE_SYSTEM = {"band_distribution": {"Fuerte": 6, "Adecuado": 8, "Vigilancia":
                  "n_entities": 18, "system_avg_score": 71.8, "period": SAMPLE_PERIOD}
 SAMPLE_PEER = {"metric_label": "Activos", "cr5": 71.2, "cr10": 87.4, "hhi": 1380}
 
+# Narrativa CURADA tier-1 de la muestra (exemplar, no generada al vuelo). Es la pieza de
+# conversión: su calidad no depende del motor IA en runtime. Coherente con los SAMPLE_*.
+SAMPLE_NARRATIVES = {
+    "system_overview": (
+        "El sistema bancario dominicano cierra el período con un **score promedio de "
+        "71.8/100**, en la franja alta de la banda Adecuado y a las puertas de Fuerte. "
+        "La distribución es reveladora: de las **18 entidades** evaluadas, **6 califican "
+        "como Fuerte** (≥80) y **8 como Adecuado**, mientras **3 permanecen en Vigilancia** "
+        "y **1 en estado Crítico**. Es un sistema de dos velocidades — un núcleo sólido y "
+        "bien capitalizado convive con una cola de entidades cuya solvencia o calidad de "
+        "activos exige monitoreo activo. La concentración refuerza la lectura: los cinco "
+        "mayores actores controlan cerca del **71% de los activos**, de modo que la "
+        "estabilidad agregada depende, en buena medida, de la disciplina de ese núcleo. "
+        "Para un inversionista o contraparte, el mensaje es claro: el promedio esconde "
+        "dispersión, y la selección de entidad pesa más que la exposición al sistema."
+    ),
+    "executive_summary": (
+        "**Banco Demo, S.A. obtiene una calificación SDQ-AA- (score 80.3/100)**, en la "
+        "banda Fuerte y entre las entidades mejor calificadas del sistema. El rating se sostiene "
+        "sobre dos pilares de calidad excepcional —**solidez financiera (85)** y **calidad "
+        "de activos (82)**—, que describen un banco bien capitalizado y con una cartera "
+        "sana. El perfil no está exento de matices: la **diversificación (62)** es el "
+        "componente más rezagado y, por lo tanto, la principal vía de mejora del rating. "
+        "En términos llanos, Banco Demo es una entidad de riesgo crediticio bajo, con "
+        "holgura de capital para absorber shocks y una morosidad contenida, cuya próxima "
+        "frontera de valor no está en reforzar lo que ya hace bien, sino en ampliar la "
+        "base de ingresos y exposiciones. El veredicto: contraparte de alta calidad, con "
+        "un techo de calificación alcanzable si ejecuta su agenda de diversificación."
+    ),
+    "solidez_financiera": (
+        "La solidez financiera es el ancla del perfil de Banco Demo (**score 85/100**). El "
+        "índice de solvencia se ubica en **16.8%**, holgadamente por encima del mínimo "
+        "regulatorio (10%) y del promedio del sistema, lo que otorga al banco un colchón de "
+        "capital equivalente a varios años de pérdidas esperadas. No es una holgura "
+        "cosmética: es lo que le permite sostener crecimiento, absorber un deterioro de "
+        "cartera y resistir un escenario de estrés sin comprometer su viabilidad. Para un "
+        "comité de crédito, una solvencia de este orden marca la diferencia entre una "
+        "contraparte que «aguanta» un ciclo adverso y una que lo «amplifica». La lectura es "
+        "de fortaleza estructural, no coyuntural."
+    ),
+    "calidad_activos": (
+        "Con un **score de 82/100**, la calidad de activos confirma una gestión de riesgo "
+        "crediticio disciplinada. La morosidad se sitúa en **1.9%**, baja tanto en términos "
+        "absolutos como frente a la media del sistema, y sugiere originación prudente y "
+        "seguimiento efectivo de la cartera vencida. Lo relevante no es solo el dato puntual "
+        "sino lo que implica: una cartera de bajo deterioro reduce la presión sobre "
+        "provisiones, libera resultado para capitalización y abarata el fondeo al señalar "
+        "menor riesgo a depositantes y acreedores. El punto de atención —más prospectivo "
+        "que actual— es la sensibilidad de esa morosidad a un giro del ciclo; con la "
+        "solvencia que exhibe, el banco tiene margen para absorber un repunte sin tensionar "
+        "su calificación."
+    ),
+    "eficiencia_rentabilidad": (
+        "La eficiencia y rentabilidad (**score 72/100**) son sólidas, aunque marcan el "
+        "contraste con los pilares de capital y activos. El **ROE de 19.4%** es atractivo y "
+        "supera el costo de capital típico del sector: el banco crea valor para sus "
+        "accionistas. El índice de eficiencia de **56%** —costos sobre ingresos— es "
+        "razonable pero deja recorrido: cada punto de mejora operativa se traduce directo "
+        "en rentabilidad y en capitalización orgánica. La lectura para un inversionista es "
+        "la de un banco rentable que aún no ha exprimido del todo su apalancamiento "
+        "operativo; esta palanca, a diferencia de la diversificación, depende más de "
+        "ejecución interna que de condiciones de mercado."
+    ),
+    "liquidez": (
+        "La liquidez obtiene un **score de 78/100**, con un ratio de activos líquidos del "
+        "**31%**. Es una posición cómoda: el banco puede honrar retiros y vencimientos sin "
+        "recurrir a fondeo de emergencia ni liquidar activos a descuento, lo que en un "
+        "sistema concentrado y sensible a la confianza es un activo en sí mismo. El "
+        "equilibrio es fino —demasiada liquidez deprime el margen, demasiado poca expone a "
+        "riesgo de refinanciación— y el 31% sugiere una tesorería bien calibrada: defensiva "
+        "sin ser improductiva. Para una contraparte, este perfil reduce materialmente el "
+        "riesgo de incumplimiento de corto plazo."
+    ),
+    "diversificacion": (
+        "La diversificación es el componente más rezagado del perfil (**score 62/100**) y, "
+        "por eso, la oportunidad de mayor retorno sobre la calificación. Un score en este "
+        "rango suele apuntar a una base de ingresos o de cartera más concentrada de lo "
+        "óptimo —por segmento de cliente, por producto o por geografía—, lo que aumenta la "
+        "sensibilidad del banco a un shock localizado. La oportunidad es asimétrica: "
+        "mientras capital y activos ya están cerca de su techo y ofrecen poco margen, la "
+        "diversificación es la dimensión donde una agenda deliberada —ampliar fuentes de "
+        "ingreso, equilibrar la cartera— puede mover la aguja del rating. Es, en síntesis, "
+        "la frontera de creación de valor de Banco Demo."
+    ),
+    "comparative": (
+        "Frente al sistema, Banco Demo se ubica con claridad en el grupo de cabeza: su "
+        "score de 80.3 supera el promedio del sistema (71.8) y lo coloca entre las 6 "
+        "entidades en banda Fuerte de un universo de 18. El contexto competitivo importa: "
+        "los cinco mayores bancos concentran el **71.2% de los activos** (CR5) y los diez "
+        "mayores el **87.4%** (CR10), con un HHI de **1.380** que describe un mercado "
+        "moderadamente concentrado. En ese tablero, Banco Demo compite en el segmento "
+        "premium por calidad crediticia, no por tamaño. La implicación estratégica es "
+        "doble: tiene el perfil de riesgo para ganar negocio de contrapartes exigentes, "
+        "pero crece en un mercado donde el núcleo concentrado fija el ritmo. Diferenciarse "
+        "por solidez —no por volumen— es su ventaja sostenible."
+    ),
+    "risk_assessment": (
+        "El perfil de riesgo de Banco Demo se clasifica como **bajo**. Los dos vectores que "
+        "dominan la calificación —capital y calidad de activos— actúan como amortiguadores: "
+        "una solvencia de 16.8% y una morosidad de 1.9% configuran una entidad con amplia "
+        "capacidad de absorción de pérdidas y baja probabilidad de deterioro abrupto. Los "
+        "riesgos materiales son de segundo orden y, sobre todo, prospectivos. Primero, "
+        "**concentración**: la diversificación rezagada (62) implica que un shock sectorial "
+        "tendría un impacto desproporcionado sobre la cartera. Segundo, **sensibilidad "
+        "cíclica de la morosidad**: el 1.9% es un dato de período benigno; un giro del "
+        "ciclo lo presionaría, aunque la solvencia da margen para absorberlo. Tercero, "
+        "**eficiencia**: un índice de 56% deja la rentabilidad expuesta a presiones de "
+        "costos. Ninguno amenaza la viabilidad; definen la agenda de gestión, no la solvencia."
+    ),
+    "recommendation": (
+        "Para una contraparte o comité de crédito, Banco Demo es una **aprobación clara** "
+        "dentro de su segmento de riesgo: capital holgado, cartera sana y liquidez cómoda "
+        "lo sitúan entre las contrapartes de mayor calidad del sistema. La decisión "
+        "operativa no es «si» exponerse, sino «cómo» dimensionar: dada su concentración de "
+        "negocio, conviene monitorear la evolución de su diversificación como indicador "
+        "adelantado de resiliencia. Para el propio banco, la palanca de mayor retorno sobre "
+        "la calificación es inequívoca —**diversificación**—: con capital y activos cerca de "
+        "su techo, es la única dimensión donde una agenda deliberada puede elevar el rating "
+        "desde SDQ-AA- hacia la franja superior. La eficiencia operativa es la palanca "
+        "secundaria, de ejecución interna. Ahí está el valor."
+    ),
+}
+
 # Secciones por nivel (manifiesto). Insight = pilares + comparativo (monitoreo
 # recurrente); Deep Dive añade riesgo/escenarios + recomendación + limitaciones.
 _INSIGHT_SECTIONS = (
@@ -228,6 +351,13 @@ class BankingProduct:
             tier=tier, period=SAMPLE_PERIOD,
             payload={"scoring_result": dict(SAMPLE_SCORING), "peer_block": dict(SAMPLE_PEER)},
             entity_name=SAMPLE_NAME)
+
+    def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
+        """Narrativa CURADA tier-1 de la muestra (exemplar). Devuelve las secciones del
+        nivel; ``limitations`` reusa el disclaimer estático. NO usa el motor IA."""
+        sections = self.product_manifest().require_level(tier).sections
+        return {sec: (_LIMITATIONS_TEXT if sec == "limitations" else SAMPLE_NARRATIVES[sec])
+                for sec in sections}
 
     # ── Narrativas (sin DB — operan sobre el snapshot) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,

@@ -220,6 +220,23 @@ class SectorIntelProduct:
         return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                entity_name=self._display)
 
+    # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
+    def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
+        latest = {"sector_code": self._sector_code, "period": "2025", "iai_score": 55.75,
+                  "iai_band": "Media", "sgps_score": 62.0, "iai_breakdown": {
+                      "sector": {"score": 70.0, "weight": 0.25, "contribution": 17.5},
+                      "macro": {"score": 55.0, "weight": 0.15, "contribution": 8.25},
+                      "business": {"score": 50.0, "weight": 0.20, "contribution": 10.0},
+                      "talent": {"score": 50.0, "weight": 0.20, "contribution": 10.0},
+                      "regulation": {"score": 50.0, "weight": 0.20, "contribution": 10.0}}}
+        payload: Dict[str, Any] = {"has_score": True, "latest": latest}
+        if tier == ProductTier.pulse:
+            return ProductSnapshot(tier=tier, period="2025", payload=payload,
+                                   entity_name=None, entity_roster=())
+        if tier == ProductTier.deep_dive:
+            payload["sgps_detail"] = {"historical": 60.0, "structural": 64.0}
+        return ProductSnapshot(tier=tier, period="2025", payload=payload, entity_name=self._display)
+
     # ── Narrativas (sin DB — operan sobre el snapshot) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:

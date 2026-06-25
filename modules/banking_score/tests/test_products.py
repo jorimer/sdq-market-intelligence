@@ -271,3 +271,32 @@ def test_sample_deep_dive_has_limitations(tmp_path):
     assert "limitations" in narr and "SDQ Consulting" in narr["limitations"]
     path = asyncio.run(prod.render(ProductTier.deep_dive, snap, narr, sample=True, output_dir=str(tmp_path)))
     assert os.path.exists(path)
+
+
+# ── Muestra: exemplar curado tier-1 (no generado al vuelo) ──
+
+def test_sample_narratives_are_curated_and_clean():
+    """La muestra usa narrativa CURADA: cubre todas las secciones del nivel, con prosa
+    real (no fallback) y sin tokens crudos ni cursivas que el render de Banca no soporta."""
+    prod = BankingProduct()
+    for tier in (ProductTier.pulse, ProductTier.insight, ProductTier.deep_dive):
+        sections = banking_manifest().require_level(tier).sections
+        narr = prod.sample_narratives(tier)
+        assert set(narr) == set(sections), f"{tier.value}: faltan secciones"
+        for sec, text in narr.items():
+            assert text and "{" not in text, f"{tier.value}/{sec}: placeholder crudo"
+            assert "ANTHROPIC_API_KEY" not in text and "automáticamente" not in text
+            # El render de Banca solo soporta **negrita**; una cursiva *así* dejaría el
+            # asterisco literal en el PDF. El exemplar no debe contener '*' sueltos.
+            assert "*" not in text.replace("**", ""), f"{tier.value}/{sec}: cursiva suelta"
+    # Coherente con los datos demo (calificación del exemplar).
+    assert "SDQ-AA-" in prod.sample_narratives(ProductTier.insight)["executive_summary"]
+
+
+def test_assemble_sample_uses_curated_narratives(tmp_path):
+    """assemble_sample_report toma la narrativa curada (no el motor): el PDF contiene la
+    prosa del exemplar, no el texto de fallback."""
+    from shared.products.assembler import assemble_sample_report
+    path = asyncio.run(assemble_sample_report(BankingProduct(), ProductTier.insight,
+                                              output_dir=str(tmp_path)))
+    assert os.path.exists(path)

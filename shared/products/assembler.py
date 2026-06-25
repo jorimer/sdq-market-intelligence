@@ -31,6 +31,27 @@ class ProductContent:
     narratives: Dict[str, str]
 
 
+def _assert_system_payload(product: SectorProduct, tier: ProductTier,
+                           snapshot: ProductSnapshot):
+    """Doctrina: un nivel de sistema (Pulse) jamás emite identificadores. Verifica el
+    snapshot ANTES de narrar y devuelve el ``level`` (para reusar la granularidad)."""
+    level = product.product_manifest().require_level(tier)
+    if level.granularity == Granularity.system:
+        if snapshot.entity_name is not None:
+            raise AnonymizationError(
+                f"Un nivel de sistema de '{product.sector_key}' no debe nombrar "
+                f"entidad (entity_name='{snapshot.entity_name}')."
+            )
+        enforce_anonymized(snapshot.payload, entity_roster=snapshot.entity_roster)
+    return level
+
+
+def _assert_system_narratives(level, snapshot: ProductSnapshot, narratives) -> None:
+    """Defensa en profundidad: el TEXTO de un Pulse tampoco puede nombrar entidad."""
+    if level.granularity == Granularity.system:
+        enforce_anonymized(narratives, entity_roster=snapshot.entity_roster)
+
+
 async def _content_from_snapshot(
     product: SectorProduct,
     tier: ProductTier,
@@ -38,26 +59,10 @@ async def _content_from_snapshot(
     lang: str,
 ) -> ProductContent:
     """Núcleo compartido: a partir de un snapshot (real o de muestra), aplica el sensor
-    de anonimización Pulse y produce las narrativas. NO renderiza."""
-    level = product.product_manifest().require_level(tier)
-
-    # Doctrina: un nivel de sistema (Pulse) jamás emite identificadores de entidad.
-    is_system = level.granularity == Granularity.system
-    if is_system:
-        if snapshot.entity_name is not None:
-            raise AnonymizationError(
-                f"Un nivel de sistema de '{product.sector_key}' no debe nombrar "
-                f"entidad (entity_name='{snapshot.entity_name}')."
-            )
-        enforce_anonymized(snapshot.payload, entity_roster=snapshot.entity_roster)
-
+    de anonimización Pulse y produce las narrativas vía el motor. NO renderiza."""
+    level = _assert_system_payload(product, tier, snapshot)
     narratives = await product.narratives(tier, snapshot, lang)
-
-    # Defensa en profundidad: el TEXTO narrado de un Pulse tampoco puede nombrar
-    # entidad (aunque el guard del motor ya lo limita, lo verificamos antes de servir).
-    if is_system:
-        enforce_anonymized(narratives, entity_roster=snapshot.entity_roster)
-
+    _assert_system_narratives(level, snapshot, narratives)
     return ProductContent(level=level, snapshot=snapshot, narratives=narratives)
 
 
@@ -104,9 +109,12 @@ async def assemble_product_report(
 
 
 def supports_sample(product: SectorProduct) -> bool:
-    """¿El producto ofrece muestra sintética? (``sample_snapshot`` es opcional en el
-    contrato; un sector que aún no lo implementa simplemente no ofrece muestra)."""
-    return callable(getattr(product, "sample_snapshot", None))
+    """¿El producto ofrece una MUESTRA curada tier-1? La muestra es la pieza de conversión:
+    exige el exemplar CURADO (``sample_narratives``) + los datos demo (``sample_snapshot``).
+    NO basta con datos demo: no se sirve generación al vuelo como muestra. Un sector sin
+    exemplar aún no ofrece muestra (botón apagado, honesto)."""
+    return (callable(getattr(product, "sample_narratives", None))
+            and callable(getattr(product, "sample_snapshot", None)))
 
 
 async def assemble_sample_report(
@@ -116,16 +124,19 @@ async def assemble_sample_report(
     lang: str = "es",
     output_dir: Optional[str] = None,
 ) -> str:
-    """Ensambla la MUESTRA (sector, nivel) con datos demo sintéticos del producto y la
-    estampa ``sample=True`` ("MUESTRA — DATA ILUSTRATIVA"). No toca la DB ni datos reales:
-    muestra el formato y la profundidad del nivel sin entregar inteligencia real. Lanza
-    ``ValueError`` (español) si el producto no ofrece muestra para ese nivel."""
+    """Ensambla la MUESTRA (sector, nivel): datos demo sintéticos (``sample_snapshot``) +
+    narrativa CURADA tier-1 (``sample_narratives``, exemplar — NO el motor IA), con la
+    estampa ``sample=True`` ("MUESTRA — DATA ILUSTRATIVA"). No toca la DB ni datos reales.
+    La calidad de la muestra no depende del motor en runtime. Corre el sensor de
+    anonimización. Lanza ``ValueError`` (español) si el producto no ofrece exemplar."""
     snap_fn = getattr(product, "sample_snapshot", None)
-    if not callable(snap_fn):
-        raise ValueError(f"'{product.sector_key}' no ofrece muestra todavía.")
+    curated_fn = getattr(product, "sample_narratives", None)
+    if not callable(snap_fn) or not callable(curated_fn):
+        raise ValueError(f"'{product.sector_key}' no ofrece muestra curada todavía.")
     snapshot = snap_fn(tier)
-    content = await _content_from_snapshot(product, tier, snapshot, lang)
+    level = _assert_system_payload(product, tier, snapshot)
+    narratives = curated_fn(tier)
+    _assert_system_narratives(level, snapshot, narratives)
     return await product.render(
-        tier, content.snapshot, content.narratives,
-        sample=True, lang=lang, output_dir=output_dir,
+        tier, snapshot, narratives, sample=True, lang=lang, output_dir=output_dir,
     )
