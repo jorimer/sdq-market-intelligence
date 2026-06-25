@@ -387,19 +387,22 @@ THIN_TEMPLATES = {
     ),
 }
 
-# Static fallback templates when API key is not available
+# Static fallback prose for when the API key is unavailable or a call fails. Self-
+# contained (NO `{}` placeholders → nunca se filtran tokens crudos a un PDF) y sin
+# encabezado redundante (el render ya rotula la sección). Texto profesional y neutro.
 STATIC_FALLBACKS = {
     "executive_summary": (
-        "**Resumen Ejecutivo**\n\n"
-        "El análisis de los indicadores financieros muestra un desempeño {performance} "
-        "del banco en el período evaluado. Los principales hallazgos incluyen "
-        "niveles de solvencia {solvency_status} y calidad de activos {asset_quality_status}."
+        "Este resumen integra los indicadores financieros del período evaluado en una "
+        "lectura ejecutiva del perfil de la entidad: solidez de capital, calidad de la "
+        "cartera, eficiencia, liquidez y diversificación, ponderados según la metodología "
+        "de calificación SDQ. El detalle por dimensión se desarrolla en las secciones "
+        "siguientes."
     ),
     "risk_assessment": (
-        "**Evaluación de Riesgo**\n\n"
-        "El perfil de riesgo del banco se clasifica como {risk_level}. "
-        "Los indicadores de solidez financiera y calidad de cartera se encuentran "
-        "{benchmark_comparison} los benchmarks del sector."
+        "El perfil de riesgo se evalúa integrando la solidez financiera, la calidad de la "
+        "cartera, la liquidez y la diversificación de la entidad, contrastados con los "
+        "parámetros del sector según la metodología SDQ. El detalle se desarrolla en las "
+        "secciones de este informe."
     ),
 }
 
@@ -535,15 +538,16 @@ class NarrativeEngine:
         """Generate narrative from static templates when API key is unavailable."""
         fallback = STATIC_FALLBACKS.get(template)
         if fallback:
-            try:
-                text = fallback.format(**context)
-            except KeyError:
-                text = fallback
+            text = fallback
         else:
-            text = (
-                f"Narrativa generada automáticamente para template '{template}'. "
-                f"Configure ANTHROPIC_API_KEY para narrativas AI completas."
-            )
+            # Texto neutro y profesional (NUNCA instrucciones de dev ni tokens crudos en
+            # un PDF de cliente). El aviso para el desarrollador va al log, no al render.
+            logger.warning("Narrativa sin motor IA (template=%s): se sirvió texto estático "
+                           "neutro. Configurar ANTHROPIC_API_KEY para narrativa completa.",
+                           template)
+            text = ("Esta sección sintetiza la información cuantitativa del período "
+                    "presentada en este informe. El análisis cualitativo ampliado se "
+                    "incorpora en la versión completa del producto.")
         return NarrativeResult(
             text=text,
             model_used="static_fallback",

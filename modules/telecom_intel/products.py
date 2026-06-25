@@ -181,6 +181,25 @@ class TelecomProduct:
                                    entity_name=None, entity_roster=())
         return ProductSnapshot(tier=tier, period=s.period, payload=payload, entity_name=DISPLAY)
 
+    # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
+    def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
+        index = {"telecom_score": 91.7, "band": "Fuerte", "coverage": 1.0,
+                 "dimensions": {
+                     "mobile_penetration": {"score": 100.0, "weight": 0.30,
+                                            "provenance": "real", "contribution": 30.0},
+                     "internet_penetration": {"score": 89.1, "weight": 0.40,
+                                              "provenance": "real", "contribution": 35.6},
+                     "broadband_quality": {"score": 86.9, "weight": 0.30,
+                                           "provenance": "real", "contribution": 26.1}},
+                 "metrics": {"mobile_penetration": 104.7, "internet_penetration": 89.1,
+                             "broadband_share": 86.9, "revenue_growth": 6.95,
+                             "lines_total": 11265937, "internet_total": 9584953}}
+        payload = {"has_score": True, "index": index}
+        if tier == ProductTier.pulse:
+            return ProductSnapshot(tier=tier, period="2022-Q1", payload=payload,
+                                   entity_name=None, entity_roster=())
+        return ProductSnapshot(tier=tier, period="2022-Q1", payload=payload, entity_name=DISPLAY)
+
     # ── Narrativas (sin DB) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:

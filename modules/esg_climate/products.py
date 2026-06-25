@@ -253,6 +253,24 @@ class ESGProduct:
         return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                entity_name=COUNTRY_NAME)
 
+    # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
+    def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
+        score = {"entity_key": "DOM", "period": "2023", "esg_score": 35.65, "band": "Baja",
+                 "breakdown": {"dimensions": {
+                     "physical_risk": {"score": 40.0, "weight": 0.3, "contribution": 12.0},
+                     "governance": {"score": 50.0, "weight": 0.2, "contribution": 10.0}},
+                     "sources": {"governance_quality": "live"}}}
+        payload: Dict[str, Any] = {"has_score": True, "score": score}
+        if tier == ProductTier.pulse:
+            payload["rank"] = 22
+            payload["n_countries"] = 24
+            return ProductSnapshot(tier=tier, period="2023", payload=payload,
+                                   entity_name=None, entity_roster=())
+        if tier == ProductTier.deep_dive:
+            payload["position"] = {"rank": 22, "n_countries": 24,
+                                   "distribution": {"mean": 48.0, "max": 70.0, "min": 20.0}}
+        return ProductSnapshot(tier=tier, period="2023", payload=payload, entity_name=COUNTRY_NAME)
+
     # ── Narrativas (sin DB — operan sobre el snapshot) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:

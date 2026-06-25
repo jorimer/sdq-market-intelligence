@@ -160,6 +160,19 @@ class MacroProduct:
         payload = {"irmp_score": irmp_score, "irmp_band": irmp_band, "factors": factors}
         return ProductSnapshot(tier=tier, period=per, payload=payload, entity_name=COUNTRY_NAME)
 
+    # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
+    def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
+        factors = [{"label": "Crecimiento del PIB", "reading": "5.1% interanual"},
+                   {"label": "Inflación", "reading": "3.8%"},
+                   {"label": "Reservas internacionales", "reading": "USD 14,200 MM"},
+                   {"label": "Tipo de cambio", "reading": "RD$ 59.8 / US$"},
+                   {"label": "Déficit fiscal", "reading": "-3.1% del PIB"}]
+        if tier == ProductTier.pulse:
+            payload = {"factors": factors, "n_factors": len(factors), "irmp_band": "Moderado"}
+            return ProductSnapshot(tier=tier, period="2025-Q1", payload=payload, entity_name=None)
+        payload = {"irmp_score": 38.3, "irmp_band": "Moderado", "factors": factors}
+        return ProductSnapshot(tier=tier, period="2025-Q1", payload=payload, entity_name=COUNTRY_NAME)
+
     # ── Narrativas (sin DB) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:

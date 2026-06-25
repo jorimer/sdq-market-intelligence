@@ -1,0 +1,116 @@
+"""Estado del rollout de la muestra + sensor de gate (A3, doctrina curada).
+
+La muestra es un EXEMPLAR CURADO tier-1 (no generación al vuelo). Un sector la ofrece
+solo si tiene la narrativa curada (`sample_narratives`); los datos demo (`sample_snapshot`)
+son la base, ya cableada en los 10, pero no bastan por sí solos.
+
+- Los 10 sectores tienen `sample_snapshot` (datos demo listos para curar).
+- Hoy SOLO los sectores con exemplar curado ofrecen muestra (Banca); los demás quedan
+  apagados, honestos, hasta que se redacte su exemplar.
+- Banca renderiza su muestra curada en los 3 niveles (con el sensor de anonimización).
+- Ninguna superficie de ENTREGA de producto (report / download / sample / catalog) es anónima.
+"""
+import asyncio
+import os
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+import shared.products.router as prod_router
+from shared.database.base import Base
+from shared.database.session import get_db
+from shared.products import (
+    PRODUCT_CATALOG,
+    assemble_sample_report,
+    get_product,
+    registered_sectors,
+    supports_sample,
+)
+from shared.products.models import ProductActivation, ProductReadiness, SampleGrant
+from shared.products.tiers import ProductTier
+
+# Sectores con exemplar curado HOY (se amplía a medida que se redactan).
+_CURATED = {"banking"}
+
+
+def _register_all():
+    """Importa los módulos de sector → se auto-registran en el catálogo de productos."""
+    import app.products_macro  # noqa: F401
+    import modules.banking_score.products  # noqa: F401
+    import modules.energy_intel.products  # noqa: F401
+    import modules.esg_climate.products  # noqa: F401
+    import modules.sector_intel.products  # noqa: F401
+    import modules.telecom_intel.products  # noqa: F401
+    import modules.trade_intel.products  # noqa: F401
+
+
+def test_all_ten_sectors_have_demo_data():
+    """Los 10 sectores tienen datos demo (`sample_snapshot`) — base del exemplar."""
+    _register_all()
+    sectors = registered_sectors()
+    assert len(sectors) == len(PRODUCT_CATALOG) == 10
+    for key in sectors:
+        product = get_product(key, None)
+        assert callable(getattr(product, "sample_snapshot", None)), f"{key} sin datos demo"
+
+
+def test_only_curated_sectors_offer_sample():
+    """`supports_sample` exige exemplar curado: hoy solo los sectores en _CURATED."""
+    _register_all()
+    for key in registered_sectors():
+        product = get_product(key, None)
+        assert supports_sample(product) == (key in _CURATED), f"{key}: gate de muestra incorrecto"
+
+
+@pytest.mark.parametrize("tier", [ProductTier.pulse, ProductTier.insight, ProductTier.deep_dive])
+def test_curated_sample_renders(tier, tmp_path):
+    """Cada sector curado renderiza su muestra (exemplar) en cada nivel, con el sensor de
+    anonimización corriendo sobre el Pulse (sin DB, sin fuga de identificadores)."""
+    _register_all()
+    for key in sorted(_CURATED):
+        product = get_product(key, None)
+        path = asyncio.run(assemble_sample_report(product, tier, output_dir=str(tmp_path)))
+        assert os.path.exists(path) and path.endswith(".pdf"), f"{key}/{tier.value} no renderizó"
+
+
+def test_uncurated_sector_sample_raises():
+    """Un sector sin exemplar curado no produce muestra (ValueError, español)."""
+    _register_all()
+    product = get_product("trade", None)  # tiene datos demo pero no exemplar curado
+    with pytest.raises(ValueError, match="muestra curada"):
+        asyncio.run(assemble_sample_report(product, ProductTier.insight))
+
+
+# ─── Sensor de gate: ninguna superficie de producto es anónima ─────────
+
+@pytest.fixture()
+def _app():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    Base.metadata.create_all(engine, tables=[ProductActivation.__table__,
+                                             ProductReadiness.__table__, SampleGrant.__table__])
+    db = sessionmaker(bind=engine)()
+    app = FastAPI()
+    app.include_router(prod_router.router, prefix="/api/v1/products")
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        yield app
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize("path", [
+    "/api/v1/products/banking/insight/report",
+    "/api/v1/products/banking/insight/download",
+    "/api/v1/products/banking/insight/sample",
+    "/api/v1/products/catalog",
+])
+def test_product_surfaces_require_auth(_app, path):
+    """Sin credenciales, ninguna superficie de producto/consumo responde 200 (HTTPBearer
+    rechaza con 401/403). Si una ruta nueva se sirviera anónima, este sensor falla."""
+    r = TestClient(_app).get(path)
+    assert r.status_code in (401, 403), f"{path} respondió {r.status_code} sin auth"

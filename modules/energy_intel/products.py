@@ -170,6 +170,24 @@ class EnergyProduct:
                                    entity_name=None, entity_roster=())
         return ProductSnapshot(tier=tier, period=s.period, payload=payload, entity_name=DISPLAY)
 
+    # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
+    def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
+        index = {"energy_score": 63.08, "band": "Adecuado", "coverage": 0.65,
+                 "dimensions": {
+                     "capacity_adequacy": {"score": 100.0, "weight": 0.35,
+                                           "provenance": "real", "contribution": 35.0},
+                     "service_quality": {"score": 20.0, "weight": 0.30,
+                                         "provenance": "real", "contribution": 6.0},
+                     "energy_transition": {"score": None, "weight": 0.35,
+                                           "provenance": "brecha", "contribution": None}},
+                 "capacity": {"capacity_mw": 7054.05, "cagr_3y": 7.9, "score": 100.0},
+                 "service": {"backlog_months": 7.8, "score": 20.0}}
+        payload = {"has_score": True, "index": index}
+        if tier == ProductTier.pulse:
+            return ProductSnapshot(tier=tier, period="2026", payload=payload,
+                                   entity_name=None, entity_roster=())
+        return ProductSnapshot(tier=tier, period="2026", payload=payload, entity_name=DISPLAY)
+
     # ── Narrativas (sin DB) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:
