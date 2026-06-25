@@ -65,6 +65,67 @@ _NO_DATA = (
     "(G1) es insuficiente para publicar. No se fabrican cifras."
 )
 
+# Narrativa CURADA tier-1 de la muestra (exemplar). Coherente con los datos demo
+# (IRC 35.65 «Baja», riesgo físico 40, gobernanza 50, puesto 22 de 24; media del panel
+# 48, máx 70). IRC bajo = MENOR resiliencia = MAYOR vulnerabilidad (lectura de riesgo).
+_SAMPLE_NARRATIVES = {
+    "irc_pulse": (
+        "El Índice de Resiliencia Climática de la República Dominicana cierra el período "
+        "en **35.65/100 —banda Baja—**, una lectura que sitúa al país en posición de "
+        "vulnerabilidad relativa. A diferencia de los índices donde un valor alto es "
+        "deseable, aquí el dato es una señal de alerta: RD enfrenta una exposición física "
+        "elevada (huracanes, eventos extremos, riesgo costero) que su capacidad adaptativa "
+        "e institucional aún no compensa del todo. En el panel de referencia Caribe/LatAm "
+        "se ubica en el **puesto 22 de 24**, entre los más expuestos. La gobernanza "
+        "climática (50) es el componente más maduro y la principal vía de mejora; el "
+        "riesgo físico (40) es el factor estructural que pesa sobre el índice. La lectura "
+        "de mercado: el clima es un riesgo material para la economía dominicana, y su "
+        "gestión —adaptación, infraestructura resiliente, marco institucional— es una "
+        "variable de inversión, no un asunto reputacional."
+    ),
+    "irc_assessment": (
+        "La resiliencia climática de la República Dominicana se evalúa en **35.65/100 "
+        "(banda Baja)**, un perfil que refleja la tensión entre una exposición física alta "
+        "y una capacidad de respuesta en construcción. La condición de Estado insular "
+        "caribeño impone una vulnerabilidad estructural —temporada ciclónica, erosión "
+        "costera, estrés hídrico— que sitúa al riesgo físico (40) como el principal lastre "
+        "del índice. El contrapeso es la gobernanza (50): un marco institucional climático "
+        "que avanza, pero que aún no traduce intención en resiliencia medible. Para un "
+        "inversionista o financiador la lectura es doble: el riesgo climático es material "
+        "y debe incorporarse al costo de capital de proyectos expuestos; pero también "
+        "define una agenda de inversión —adaptación, infraestructura, energía limpia— con "
+        "respaldo institucional creciente. RD es un caso donde la resiliencia climática es, "
+        "a la vez, el riesgo y la oportunidad."
+    ),
+    "panel_position": (
+        "En el panel de referencia Caribe/LatAm de 24 países, la República Dominicana se "
+        "ubica en el **puesto 22**, por debajo de la media del panel (48.0) y lejos del "
+        "líder (70.0). La posición no es anecdótica: confirma que la vulnerabilidad "
+        "climática de RD no es solo absoluta sino relativa. Varios pares de la región —con "
+        "exposición física comparable— han logrado índices más altos, lo que indica que el "
+        "gap es, en parte, gestionable vía política e inversión, no únicamente geográfico. "
+        "La distancia a la media (≈12 puntos) cuantifica el espacio de mejora; la brecha "
+        "frente al máximo (≈34 puntos) marca el techo de ambición. Para un comité, esta "
+        "posición relativa es la métrica más útil: separa lo que es destino geográfico de "
+        "lo que es resultado de política, y señala que converger hacia la media del panel "
+        "es un objetivo alcanzable."
+    ),
+    "recommendation": (
+        "Para un inversionista, financiador o comité con exposición a la República "
+        "Dominicana, la resiliencia climática debe tratarse como un riesgo material de "
+        "mediano plazo —incorporado al costo de capital de activos expuestos— y, a la vez, "
+        "como una agenda de inversión con respaldo institucional. La palanca de mayor "
+        "retorno sobre el índice es la **capacidad adaptativa e institucional**: a "
+        "diferencia del riesgo físico, estructural, la gobernanza y la inversión en "
+        "infraestructura resiliente son dimensiones donde una agenda deliberada puede "
+        "cerrar la brecha frente a la media del panel. La recomendación operativa: ponderar "
+        "el riesgo físico en la selección y el dimensionamiento de proyectos, y favorecer "
+        "exposiciones alineadas con la agenda de adaptación y transición —energía limpia, "
+        "infraestructura costera, gestión hídrica— donde el riesgo climático se convierte "
+        "en tesis de inversión."
+    ),
+}
+
 
 def esg_manifest() -> SectorProductManifest:
     return SectorProductManifest(
@@ -270,6 +331,12 @@ class ESGProduct:
             payload["position"] = {"rank": 22, "n_countries": 24,
                                    "distribution": {"mean": 48.0, "max": 70.0, "min": 20.0}}
         return ProductSnapshot(tier=tier, period="2023", payload=payload, entity_name=COUNTRY_NAME)
+
+    def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
+        """Narrativa CURADA tier-1 de la muestra (exemplar). NO usa el motor IA."""
+        sections = self.product_manifest().require_level(tier).sections
+        return {sec: (_LIMITATIONS if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
+                for sec in sections}
 
     # ── Narrativas (sin DB — operan sobre el snapshot) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,

@@ -33,8 +33,9 @@ from shared.products import (
 from shared.products.models import ProductActivation, ProductReadiness, SampleGrant
 from shared.products.tiers import ProductTier
 
-# Sectores con exemplar curado HOY (se amplía a medida que se redactan).
-_CURATED = {"banking"}
+# Sectores con exemplar curado. Hoy los 10 (cada sector tiene su narrativa tier-1).
+# Si se agrega un sector nuevo al catálogo, debe redactarse su exemplar o salir de aquí.
+_CURATED = {e.sector_key for e in PRODUCT_CATALOG}
 
 
 def _register_all():
@@ -77,12 +78,16 @@ def test_curated_sample_renders(tier, tmp_path):
         assert os.path.exists(path) and path.endswith(".pdf"), f"{key}/{tier.value} no renderizó"
 
 
-def test_uncurated_sector_sample_raises():
-    """Un sector sin exemplar curado no produce muestra (ValueError, español)."""
-    _register_all()
-    product = get_product("trade", None)  # tiene datos demo pero no exemplar curado
+def test_product_without_curated_exemplar_raises():
+    """Un producto sin exemplar curado (sample_narratives) no produce muestra: ValueError
+    en español. Blinda la doctrina aunque hoy los 10 sectores estén curados."""
+    class _NoExemplar:
+        sector_key = "x"
+
+        def sample_snapshot(self, tier):  # datos demo pero SIN narrativa curada
+            return None
     with pytest.raises(ValueError, match="muestra curada"):
-        asyncio.run(assemble_sample_report(product, ProductTier.insight))
+        asyncio.run(assemble_sample_report(_NoExemplar(), ProductTier.insight))
 
 
 # ─── Sensor de gate: ninguna superficie de producto es anónima ─────────

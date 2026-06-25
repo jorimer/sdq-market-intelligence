@@ -64,6 +64,53 @@ _NO_DATA = (
     "insuficiente para publicar. No se fabrican cifras."
 )
 
+# Narrativa CURADA tier-1 de la muestra (exemplar). Coherente con los datos demo
+# (IRSE 63.08 «Adecuado», ~7,054 MW, CAGR 7.9%, capacidad score 100, servicio backlog
+# 7.8 meses score 20, transición = brecha declarada).
+_SAMPLE_NARRATIVES = {
+    "energy_pulse": (
+        "El sistema eléctrico dominicano cierra el período con un **Índice de Resiliencia "
+        "del Sector Eléctrico de 63.08/100 —banda Adecuado—**, un perfil de dos caras. La "
+        "fortaleza es la **adecuación de capacidad**: con cerca de **7,054 MW instalados** "
+        "y un crecimiento anual de 7.9%, la oferta de generación supera holgadamente la "
+        "demanda y se expande a buen ritmo (score 100 en esta dimensión). El lastre es la "
+        "**calidad de servicio**: un backlog de reclamaciones de 7.8 meses (score 20) "
+        "revela cuellos de botella en distribución y atención que la capacidad instalada "
+        "no resuelve por sí sola. La transición energética queda como **brecha declarada** "
+        "—el dato de generación renovable por tecnología no está disponible con la "
+        "granularidad necesaria, y no se fabrica. La lectura de mercado: RD tiene resuelto "
+        "cuánta energía puede generar; su frontera de resiliencia está en la confiabilidad "
+        "de la entrega y en la descarbonización de la matriz."
+    ),
+    "energy_assessment": (
+        "La resiliencia del sector eléctrico dominicano se evalúa en **63.08/100 (banda "
+        "Adecuado)**, sostenida por una holgura de capacidad notable y limitada por la "
+        "calidad del servicio. Los ~7,054 MW instalados, creciendo a 7.9% anual, "
+        "configuran un sistema con margen de reserva amplio —un activo en una economía en "
+        "expansión que demanda energía creciente. El contrapunto es operativo: un backlog "
+        "de reclamaciones de 7.8 meses señala que la distribución y los procesos de "
+        "atención no acompañan a la generación, lo que se traduce en pérdidas, "
+        "interrupciones y un costo implícito para la actividad productiva. La transición "
+        "energética es la dimensión no medida —una brecha honesta, no un cero—: la "
+        "descarbonización de la matriz es la variable estructural pendiente. Para un "
+        "inversionista, el sector ofrece oportunidad tanto en generación (incluida "
+        "renovable) como, sobre todo, en la modernización de la distribución."
+    ),
+    "recommendation": (
+        "Para un inversionista o comité con exposición al sector eléctrico dominicano, la "
+        "palanca de mayor retorno sobre la resiliencia no está en sumar capacidad —ya es "
+        "holgada— sino en la **calidad de servicio**: la modernización de la distribución "
+        "y la reducción del backlog de reclamaciones es donde el score más bajo (20) y el "
+        "mayor impacto sobre la actividad productiva coinciden. La segunda frontera, "
+        "estructural, es la **transición energética**: avanzar en generación renovable y "
+        "en la medición de la matriz no solo mejora la resiliencia ambiental, sino que "
+        "reduce la exposición a precios de combustibles importados. La recomendación: "
+        "priorizar inversión y supervisión en distribución y confiabilidad por sobre nueva "
+        "capacidad térmica, y tratar la renovable como tesis de mediano plazo con doble "
+        "retorno —resiliencia operativa y descarbonización."
+    ),
+}
+
 
 def energy_manifest() -> SectorProductManifest:
     return SectorProductManifest(
@@ -187,6 +234,12 @@ class EnergyProduct:
             return ProductSnapshot(tier=tier, period="2026", payload=payload,
                                    entity_name=None, entity_roster=())
         return ProductSnapshot(tier=tier, period="2026", payload=payload, entity_name=DISPLAY)
+
+    def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
+        """Narrativa CURADA tier-1 de la muestra (exemplar). NO usa el motor IA."""
+        sections = self.product_manifest().require_level(tier).sections
+        return {sec: (_LIMITATIONS if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
+                for sec in sections}
 
     # ── Narrativas (sin DB) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,

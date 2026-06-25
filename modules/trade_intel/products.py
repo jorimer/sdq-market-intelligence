@@ -63,6 +63,64 @@ _LIMITATIONS = (
     "anticipa shocks externos no realizados ni reclasificaciones arancelarias "
     "posteriores al período. Validación direccional (Gate E), no grado-Basilea."
 )
+# Narrativa CURADA tier-1 de la muestra (exemplar). Coherente con los datos demo
+# (resiliencia 60.6, diversificación 63%, dependencia importadora 0.475, HHI 0.37,
+# exportaciones USD 4,200 MM, instrumentos médicos ~50% de la canasta).
+_SAMPLE_NARRATIVES = {
+    "trade_pulse": (
+        "El comercio exterior dominicano cierra el período con un **índice de resiliencia "
+        "de 60.6/100** —una posición intermedia que refleja tanto la fortaleza de su "
+        "inserción global como sus puntos de concentración. Las exportaciones (USD 4,200 "
+        "millones) muestran una **diversificación de 63%**, sostenida por capítulos de "
+        "alto valor agregado como instrumentos médicos, que sin embargo concentran cerca "
+        "de la mitad de la canasta. Esa concentración —un HHI de 0.37— es la principal "
+        "vulnerabilidad: un shock en un capítulo clave tendría un impacto desproporcionado. "
+        "Del lado importador, una **dependencia de 0.475** indica una economía abierta y "
+        "conectada a cadenas globales, lo que aporta eficiencia pero también exposición a "
+        "precios y disrupciones externas. La lectura de mercado: una plataforma comercial "
+        "competitiva, cuya resiliencia depende de seguir ampliando la base de productos y "
+        "destinos."
+    ),
+    "trade_assessment": (
+        "La resiliencia comercial de la República Dominicana se evalúa en **60.6/100**, un "
+        "perfil sólido pero con margen claro de mejora. La fortaleza está en la calidad de "
+        "su canasta exportadora: la presencia de instrumentos médicos y manufactura de "
+        "zonas francas posiciona a RD en segmentos de alto valor y demanda estable, menos "
+        "sensibles a los ciclos de commodities. El talón de Aquiles es la **concentración**: "
+        "con los principales capítulos cerca del 50% de las exportaciones, la economía "
+        "queda expuesta a un shock sectorial o regulatorio en un destino clave. La "
+        "**dependencia importadora (0.475)** completa el cuadro: insumos, energía y bienes "
+        "de capital importados son la contraparte de una economía manufacturera integrada "
+        "a cadenas globales. Para un exportador o inversionista, RD ofrece una plataforma "
+        "comercial madura cuya próxima frontera de valor es diversificar canasta y "
+        "mercados, no aumentar volumen."
+    ),
+    "geographic_concentration": (
+        "La dimensión geográfica concentra un riesgo distinto al de producto: la "
+        "**dependencia de mercados de destino**. Una parte sustancial de las exportaciones "
+        "se dirige a un puñado de socios —Estados Unidos a la cabeza—, de modo que la "
+        "resiliencia comercial está atada no solo a qué se exporta, sino a quién lo "
+        "compra. Esa concentración amplifica la exposición a ciclos de demanda y a "
+        "decisiones de política comercial en esos destinos. La contracara es que el acceso "
+        "preferencial (acuerdos como DR-CAFTA) ancla esos flujos y reduce la fricción. "
+        "Para una contraparte, el mensaje es que la diversificación de destinos —ampliar "
+        "la presencia en mercados europeos y regionales— es tan relevante para la "
+        "resiliencia como la diversificación de productos."
+    ),
+    "recommendation": (
+        "Para un exportador, inversionista o comité con exposición al comercio exterior "
+        "dominicano, la palanca de mayor retorno sobre la resiliencia es inequívoca: "
+        "**diversificación**, tanto de canasta como de destinos. Con una resiliencia de "
+        "60.6, el sistema no tiene un problema de competitividad —tiene un problema de "
+        "concentración. Reforzar lo que ya funciona (instrumentos médicos, zonas francas) "
+        "consolida la posición, pero el salto de resiliencia vendrá de ampliar la base: "
+        "nuevos capítulos exportables y nuevos mercados de destino que reduzcan la "
+        "sensibilidad a un shock localizado. La reducción de la dependencia importadora en "
+        "insumos críticos —vía sustitución selectiva o integración local— es la palanca "
+        "secundaria. La recomendación: priorizar diversificación sobre volumen, con "
+        "seguimiento en el HHI de exportaciones y la concentración por socio."
+    ),
+}
 _NO_DATA = (
     "No hay dato comercial persistido para el período: el producto está cableado pero "
     "su cobertura (G1) es insuficiente para publicar. No se fabrican cifras."
@@ -264,6 +322,12 @@ class TradeProduct:
         if tier == ProductTier.deep_dive:
             payload["partners"] = None
         return ProductSnapshot(tier=tier, period="2025", payload=payload, entity_name=COUNTRY_NAME)
+
+    def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
+        """Narrativa CURADA tier-1 de la muestra (exemplar). NO usa el motor IA."""
+        sections = self.product_manifest().require_level(tier).sections
+        return {sec: (_LIMITATIONS if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
+                for sec in sections}
 
     # ── Narrativas (sin DB — operan sobre el snapshot) ──
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
