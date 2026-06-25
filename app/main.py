@@ -92,13 +92,18 @@ app.include_router(products_router, prefix="/api/v1/products", tags=["Productos"
 from shared.billing.router import router as billing_router
 app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
 
+from shared.notifications.router import router as notifications_router
+app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["Notificaciones"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
 from shared.products.events import subscribe_product_events
+from shared.billing.events import subscribe_billing_events
 
 register_sector_subscribers()  # sector_intel ← macro/irmp/trade .updated (SGPS acceleration)
 register_banking_subscribers()  # banking_score ← irmp.updated (outlook overlay)
 subscribe_product_events()  # monitor de productos ← *.updated (recálculo de readiness)
+subscribe_billing_events()  # alerta de tarifa ← tariff.published (notifica a suscriptos)
 
 # Operation Console: each module registers its operations at import time into the
 # shared registry (shared.operations). Import the register modules so the console

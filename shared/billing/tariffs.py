@@ -22,8 +22,10 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from shared.billing.events import TARIFF_PUBLISHED
 from shared.billing.models import Tariff
 from shared.billing.skus import SkuError, validate_sku
+from shared.events.event_bus import event_bus
 
 
 class TariffError(ValueError):
@@ -99,12 +101,23 @@ def create_tariff(db: Session, *, sku: str, amount: Any, currency: str = "USD",
     if eff_to is not None and eff_to <= eff_from:
         raise TariffError("La vigencia 'hasta' debe ser posterior a 'desde'.")
 
+    # ¿Es un CAMBIO sobre un precio actualmente vigente? (no la primera fijación del SKU).
+    # Se resuelve ANTES de insertar para alertar a los suscriptos (B2) solo ante cambios.
+    is_change = price_for(db, sku) is not None
+
     row = Tariff(sku=sku, currency=cur, amount=value, effective_from=eff_from,
                  effective_to=eff_to, active=True, label=label, note=note,
                  created_by=created_by)
     db.add(row)
     db.commit()
-    return _serialize(row)
+    out = _serialize(row)
+    # Publicar tras el commit (la alerta corre en su propia sesión; un fallo de notificación
+    # no revierte la tarifa ya persistida). Los handlers se suscriben solo en runtime.
+    event_bus.publish(TARIFF_PUBLISHED, {
+        "sku": sku, "currency": cur, "amount": format(value, "f"),
+        "effective_from": eff_from.isoformat(), "is_change": is_change,
+    })
+    return out
 
 
 def withdraw_tariff(db: Session, tariff_id: str) -> bool:
