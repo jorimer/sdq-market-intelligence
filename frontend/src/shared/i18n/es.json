@@ -198,6 +198,13 @@
     "soon": "pronto",
     "loading": "Cargando..."
   },
+  "notifications": {
+    "title": "Notificaciones",
+    "markAll": "Marcar todas",
+    "loading": "Cargando…",
+    "error": "No se pudieron cargar las notificaciones.",
+    "empty": "No tienes notificaciones."
+  },
   "lang": {
     "label": "Idioma",
     "es": "Espa\u00f1ol",

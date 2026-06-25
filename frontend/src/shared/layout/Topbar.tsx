@@ -5,6 +5,7 @@ import { useApp, SCOPES, Scope } from "@/shared/context/AppContext";
 import { useAuth } from "@/shared/auth/AuthContext";
 import { ROUTE_LABELS } from "./nav";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { NotificationsBell } from "./NotificationsBell";
 
 function Breadcrumbs() {
   const { pathname } = useLocation();
@@ -97,6 +98,9 @@ export function Topbar() {
 
       {/* Language */}
       <LanguageSwitcher />
+
+      {/* Notifications */}
+      <NotificationsBell />
 
       {/* Theme toggle */}
       <button
