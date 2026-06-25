@@ -53,7 +53,10 @@ class NotificationService:
         q = db.query(Notification).filter(Notification.user_id == user_id)
         if unread_only:
             q = q.filter(Notification.read.is_(False))
-        rows = q.order_by(Notification.created_at.desc()).limit(limit).all()
+        # Desempate por id: created_at tiene resolución de segundos en SQLite, varias del
+        # mismo segundo quedarían en orden no determinista sin el segundo criterio.
+        rows = (q.order_by(Notification.created_at.desc(), Notification.id.desc())
+                .limit(limit).all())
         return [_serialize(r) for r in rows]
 
     def unread_count(self, db: Session, user_id: str) -> int:
