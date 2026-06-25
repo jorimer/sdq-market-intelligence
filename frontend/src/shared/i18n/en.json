@@ -198,6 +198,13 @@
     "soon": "soon",
     "loading": "Loading..."
   },
+  "notifications": {
+    "title": "Notifications",
+    "markAll": "Mark all read",
+    "loading": "Loading…",
+    "error": "Couldn't load notifications.",
+    "empty": "You have no notifications."
+  },
   "lang": {
     "label": "Language",
     "es": "Espa\u00f1ol",

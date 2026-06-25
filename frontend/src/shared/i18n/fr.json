@@ -198,6 +198,13 @@
     "soon": "bient\u00f4t",
     "loading": "Chargement..."
   },
+  "notifications": {
+    "title": "Notifications",
+    "markAll": "Tout marquer comme lu",
+    "loading": "Chargement\u2026",
+    "error": "Impossible de charger les notifications.",
+    "empty": "Vous n'avez aucune notification."
+  },
   "lang": {
     "label": "Langue",
     "es": "Espa\u00f1ol",
