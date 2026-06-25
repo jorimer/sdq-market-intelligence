@@ -21,6 +21,7 @@ from shared.products.models import (
     ProductEntitlement,
     ProductReadiness,
     SampleGrant,
+    Subscription,
 )
 from shared.products.tiers import Granularity, ProductTier, TierLevelSpec
 
@@ -32,7 +33,8 @@ def db():
     Base.metadata.create_all(engine, tables=[ProductActivation.__table__,
                                              ProductReadiness.__table__,
                                              SampleGrant.__table__,
-                                             ProductEntitlement.__table__])
+                                             ProductEntitlement.__table__,
+                                             Subscription.__table__])
     s = sessionmaker(bind=engine)()
     try:
         yield s

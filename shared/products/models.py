@@ -92,6 +92,39 @@ class ProductEntitlement(UUIDMixin, Base):
     )
 
 
+class Subscription(UUIDMixin, Base):
+    """Suscripción recurrente que concede un ``AccessTier`` mientras está vigente
+    (monetización Fase B3). Modela el plan Insight: un pago recurrente que desbloquea el
+    nivel correspondiente plataforma-wide.
+
+    **No muta ``User.tier``** a propósito: el tier de suscripción es un eje aparte que se
+    compone en ``can_access`` (tier manual OR suscripción-activa OR entitlement), para no
+    pisar un tier puesto a mano por el admin (p.ej. enterprise) con uno pagado (pro), ni
+    degradar al expirar. Una suscripción concede su tier ssi ``status == 'active'`` y está
+    dentro del período (``current_period_end`` None = abierto, o futuro).
+
+    Provider-agnóstico: en B3b el webhook de PayPal hace upsert por
+    ``provider_subscription_id``. Soporta los estados típicos del proveedor."""
+
+    __tablename__ = "subscription"
+
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    provider = Column(String(20), nullable=False)              # paypal | azul | manual
+    provider_subscription_id = Column(String(128), nullable=False)  # id del proveedor
+    tier = Column(String(20), nullable=False)                  # AccessTier concedido (pro/enterprise)
+    status = Column(String(20), nullable=False)                # active|cancelled|expired|suspended|past_due
+    current_period_end = Column(DateTime, nullable=True)       # naive UTC; None = abierto
+    started_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    note = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_subscription_id",
+                         name="uq_subscription_provider_id"),
+        Index("ix_subscription_user", "user_id"),
+    )
+
+
 class ProductActivation(UUIDMixin, Base):
     """Estado de activación de ACCESO PÚBLICO de un (sector, nivel).
 

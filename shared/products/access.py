@@ -31,6 +31,7 @@ from shared.auth.dependencies import get_current_user
 from shared.auth.models import AccessTier, User, tier_satisfies
 from shared.database.session import get_db
 from shared.products.models import ProductActivation, ProductEntitlement
+from shared.products.subscriptions import active_subscription_tier
 from shared.products.tiers import ProductTier
 
 # Mapeo nivel comercial → tier de acceso mínimo requerido (decisión del dueño):
@@ -101,13 +102,20 @@ def has_product_entitlement(db: Session, user_id: str, sector_key: str,
 def can_access(db: Session, user: User, sector_key: str, tier: ProductTier) -> AccessDecision:
     """Resuelve el acceso de ``user`` al producto (sector, nivel). Puro de HTTP:
     devuelve una ``AccessDecision`` (no levanta). El orden es activación → (tier OR
-    compra por-producto) para no filtrar la existencia de productos no publicados a quien
-    no tiene acceso. El acceso lo concede el tier de suscripción O un entitlement comprado."""
+    suscripción OR compra por-producto) para no filtrar la existencia de productos no
+    publicados a quien no tiene acceso.
+
+    El acceso lo concede CUALQUIERA de tres ejes independientes (se componen, no se pisan):
+    el tier manual del usuario, una **suscripción recurrente activa** (plan Insight, B3), o
+    un **entitlement por-producto** comprado (Deep Dive on-demand, B0). El tier efectivo es
+    el máximo entre el manual y el de la suscripción vigente."""
     required = TIER_FOR_LEVEL[tier]
     user_tier = user.tier or AccessTier.free
+    sub_tier = active_subscription_tier(db, getattr(user, "id", None))
     if not _is_activated(db, sector_key, tier):
         outcome = AccessOutcome.not_published
     elif (tier_satisfies(user_tier, required)
+          or (sub_tier is not None and tier_satisfies(sub_tier, required))
           or has_product_entitlement(db, getattr(user, "id", None), sector_key, tier)):
         outcome = AccessOutcome.allowed
     else:
