@@ -32,6 +32,18 @@ IRC_PANEL: Dict[str, str] = {
     "VEN": "Venezuela",
 }
 
+# Panel country → region slug (canonical, shared with the catalog i18n
+# `platform.catalog.region.*`). Powers the two-step region→country selector.
+IRC_REGION: Dict[str, str] = {
+    "DOM": "caribe", "HTI": "caribe", "JAM": "caribe", "TTO": "caribe",
+    "BLZ": "centroamerica", "CRI": "centroamerica", "PAN": "centroamerica",
+    "GTM": "centroamerica", "SLV": "centroamerica", "HND": "centroamerica",
+    "NIC": "centroamerica", "MEX": "norteamerica",
+    "GUY": "sudamerica", "SUR": "sudamerica", "COL": "sudamerica", "ECU": "sudamerica",
+    "PER": "sudamerica", "BOL": "sudamerica", "CHL": "sudamerica", "ARG": "sudamerica",
+    "BRA": "sudamerica", "PRY": "sudamerica", "URY": "sudamerica", "VEN": "sudamerica",
+}
+
 # IRC variable ← ND-GAIN component (real). Transition vars are declared rubric;
 # hurricane_exposure (physical) comes from HURDAT2 (Gate B), ND-GAIN as fallback.
 _NDGAIN_MAP = {
@@ -170,6 +182,24 @@ def get_scores(db: Session, period: Optional[str] = None) -> List[ESGScore]:
     if period:
         q = q.filter_by(period=period)
     return q.order_by(ESGScore.esg_score.desc().nullslast()).all()  # most resilient first
+
+
+def get_scored_entities(db: Session) -> List[str]:
+    """Distinct country ISO3 codes with at least one persisted IRC score, in panel
+    order. The catalog offers only countries that actually produce a report (never an
+    option that would 422)."""
+    keys = {k for (k,) in db.query(ESGScore.entity_key).distinct().all()}
+    return [iso for iso in IRC_PANEL if iso in keys]
+
+
+def get_for_entity_period(db: Session, entity_key: str, period: str) -> Optional[ESGScore]:
+    """IRC for *entity_key* at *period*, or the entity's most recent if absent (the
+    panel may lag the global period). Per-country analog of ``get_latest``."""
+    if period:
+        hit = db.query(ESGScore).filter_by(entity_key=entity_key, period=period).first()
+        if hit is not None:
+            return hit
+    return get_latest(db, entity_key)
 
 
 def get_latest(db: Session, entity_key: str) -> Optional[ESGScore]:

@@ -1600,6 +1600,9 @@
         "macro_pulse": "Pulso macroeconómico",
         "risk_assessment": "Evaluación de riesgo",
         "peer_position": "Posición en el panel",
+        "irc_pulse": "Pulso de resiliencia climática",
+        "irc_assessment": "Evaluación de resiliencia (IRC)",
+        "panel_position": "Posición en el panel",
         "recommendation": "Recomendación",
         "limitations": "Limitaciones"
       },
