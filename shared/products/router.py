@@ -24,6 +24,7 @@ from shared.products.access import (
     AccessOutcome,
     can_access,
     require_product_access,
+    staff_can_preview,
 )
 from shared.products.activation import ActivationError, activate, deactivate
 from shared.products.anonymization import AnonymizationError
@@ -110,6 +111,9 @@ async def get_catalog(db: Session = Depends(get_db),
     Un nivel no publicado no aparece (no se revela). ``unlocked`` indica si el tier del
     usuario lo alcanza; si no, ``required_tier``+``price_band`` alimentan el upsell."""
     user_tier = (current_user.tier.value if current_user.tier else "free")
+    # Staff interno (super_admin) ve los productos publicados como "vista interna" aunque
+    # su tier no los alcance (QA del catálogo sin auto-concederse un tier comercial).
+    is_staff = staff_can_preview(current_user)
     # Muestras ya descargadas por el usuario: set de (sector, nivel) en una sola query.
     used_samples = {
         (g.sector_key, g.tier)
@@ -125,18 +129,24 @@ async def get_catalog(db: Session = Depends(get_db),
         levels = []
         for tier in manifest.tiers():
             decision = can_access(db, current_user, entry.sector_key, tier)
-            if decision.outcome.value == "not_published":
+            if decision.outcome is AccessOutcome.not_published:
                 continue  # consumo solo ve lo publicado
             spec = manifest.require_level(tier)
-            # La muestra solo aplica a niveles bloqueados, si el producto la ofrece y el
-            # usuario no la gastó todavía (una por sector/nivel).
+            # Vista interna: un nivel bloqueado por tier se desbloquea para el staff, marcado
+            # como staff_preview (no es compra del cliente). No aplica a lo no-publicado.
+            staff_preview = (not decision.allowed
+                             and decision.outcome is AccessOutcome.tier_required and is_staff)
+            unlocked = decision.allowed or staff_preview
+            # La muestra solo aplica a niveles bloqueados (no para quien ya los ve), si el
+            # producto la ofrece y el usuario no la gastó todavía (una por sector/nivel).
             sample_available = (
-                not decision.allowed and has_sample
+                not unlocked and has_sample
                 and (entry.sector_key, tier.value) not in used_samples
             )
             levels.append({
                 "tier": tier.value,
-                "unlocked": decision.allowed,
+                "unlocked": unlocked,
+                "staff_preview": staff_preview,
                 "required_tier": decision.required_tier.value,
                 "price_band": spec.price_band,
                 "audience": spec.audience,
@@ -205,6 +215,7 @@ async def get_product_report(
             "price_band": level.price_band, "watermark": level.watermark,
             "audience": level.audience, "cadence": level.cadence,
             "sections": list(level.sections),
+            "staff_preview": access.staff_preview,
         },
     }
 

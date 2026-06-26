@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shared.auth.dependencies import get_current_user
-from shared.auth.models import AccessTier, User, tier_satisfies
+from shared.auth.models import AccessTier, User, UserRole, tier_satisfies
 from shared.database.base import Base
 from shared.database.session import get_db
 from shared.products.access import (
@@ -23,6 +23,7 @@ from shared.products.access import (
     enforce_access,
     required_tier_for,
     require_product_access,
+    staff_can_preview,
 )
 from shared.products.models import ProductActivation, ProductEntitlement, Subscription
 from shared.products.tiers import ProductTier
@@ -43,10 +44,11 @@ def db():
 
 
 class _User:
-    """Stub liviano: ``can_access`` solo lee ``.tier``."""
+    """Stub liviano: ``can_access`` lee ``.tier``; ``staff_can_preview`` lee ``.role``."""
 
-    def __init__(self, tier):
+    def __init__(self, tier, role=None):
         self.tier = tier
+        self.role = role
 
 
 def _activate(db, sector, tier, is_active=True):
@@ -161,15 +163,16 @@ def test_enforce_tier_required_raises_402_with_upsell(db):
 
 # ─── Dependency require_product_access sobre una app mínima ─────────────
 
-def _client(db, user_tier=AccessTier.free):
+def _client(db, user_tier=AccessTier.free, role=None):
     app = FastAPI()
 
     @app.get("/api/v1/products/{sector}/{tier}/report")
     async def _serve(decision=Depends(require_product_access)):
-        return {"outcome": decision.outcome.value, "sector": decision.sector_key}
+        return {"outcome": decision.outcome.value, "sector": decision.sector_key,
+                "staff_preview": decision.staff_preview}
 
     app.dependency_overrides[get_db] = lambda: db
-    app.dependency_overrides[get_current_user] = lambda: _User(user_tier)
+    app.dependency_overrides[get_current_user] = lambda: _User(user_tier, role)
     return TestClient(app)
 
 
@@ -194,6 +197,48 @@ def test_dependency_allowed_200(db):
 def test_dependency_invalid_tier_400(db):
     r = _client(db).get("/api/v1/products/banking/nope/report")
     assert r.status_code == 400
+
+
+# ─── Vista interna de staff (super_admin) ──────────────────────────────
+
+def test_staff_can_preview_only_super_admin():
+    assert staff_can_preview(_User(AccessTier.free, UserRole.super_admin)) is True
+    # Por doctrina (#3 de monetización) admin NO bypassa la superficie comercial.
+    for r in (UserRole.admin, UserRole.analyst, UserRole.viewer, None):
+        assert staff_can_preview(_User(AccessTier.free, r)) is False
+
+
+def test_can_access_unchanged_by_role(db):
+    """can_access (gate del cliente) NO mira el rol: super_admin free sigue sin acceso a
+    insight por can_access — el staff preview es una costura de SUPERFICIE, no del gate."""
+    _activate(db, "banking", ProductTier.insight)
+    d = can_access(db, _User(AccessTier.free, UserRole.super_admin), "banking", ProductTier.insight)
+    assert d.outcome is AccessOutcome.tier_required
+    assert d.staff_preview is False
+
+
+def test_dependency_staff_previews_tier_required(db):
+    """super_admin previsualiza un producto PUBLICADO cuyo tier no alcanza: 200 + flag."""
+    _activate(db, "banking", ProductTier.insight)
+    r = _client(db, AccessTier.free, UserRole.super_admin).get(
+        "/api/v1/products/banking/insight/report")
+    assert r.status_code == 200
+    assert r.json()["staff_preview"] is True
+
+
+def test_dependency_staff_not_published_still_404(db):
+    """La vista interna NO desbloquea lo no-publicado (eso va por el monitor): 404 se mantiene."""
+    r = _client(db, AccessTier.free, UserRole.super_admin).get(
+        "/api/v1/products/banking/insight/report")
+    assert r.status_code == 404
+
+
+def test_dependency_non_staff_still_402(db):
+    """admin (no super_admin) sigue viendo la experiencia real del cliente: 402, sin preview."""
+    _activate(db, "banking", ProductTier.insight)
+    r = _client(db, AccessTier.free, UserRole.admin).get(
+        "/api/v1/products/banking/insight/report")
+    assert r.status_code == 402
 
 
 def test_dependency_requires_auth(db):

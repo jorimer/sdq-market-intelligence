@@ -1585,6 +1585,8 @@
       "scopeLabel": "Entity to analyze",
       "scopePlaceholder": "Entity name",
       "scopeSelectPlaceholder": "Choose an entity…",
+      "staffPreview": "Internal view",
+      "staffPreviewBanner": "Staff internal view — not the customer experience.",
       "mailSubject": "Access to {{product}} — {{level}}",
       "mailBody": "Hi, I'm interested in accessing {{product}} at the {{level}} level (requires {{plan}} plan). Could you reach out with the options?",
       "tier": {

@@ -239,7 +239,9 @@ export async function revokeEntitlement(id: string): Promise<void> {
  *    acceso resuelto por el backend según el tier del usuario) ── */
 export interface CatalogLevel {
   tier: string; // "pulse" | "insight" | "deep_dive"
-  unlocked: boolean; // el tier del usuario alcanza este nivel
+  unlocked: boolean; // el tier del usuario alcanza este nivel (o vista interna de staff)
+  /** Desbloqueado por ser staff interno (super_admin), no por compra/tier del cliente. */
+  staff_preview: boolean;
   required_tier: string; // "free" | "pro" | "enterprise"
   price_band: string | null;
   audience: string;
@@ -275,6 +277,7 @@ export interface ProductReport {
     audience: string;
     cadence: string;
     sections: string[];
+    staff_preview: boolean;
   };
 }
 
