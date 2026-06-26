@@ -104,11 +104,33 @@ def test_esg_pulse_snapshot_is_anonymous(db):
     assert snap.payload["rank"] == 2 and snap.payload["n_countries"] == 3  # RD 2º de 3
 
 
-def test_esg_named_snapshot_is_country(db):
+def test_esg_named_snapshot_is_chosen_country(db):
     _seed_panel(db)
-    snap = ESGProduct(db).snapshot(ProductTier.deep_dive, "2023")
-    assert snap.entity_name == "República Dominicana"
-    assert snap.payload["position"]["rank"] == 2
+    # País elegido (Costa Rica), NO RD prestado.
+    snap = ESGProduct(db).snapshot(ProductTier.deep_dive, "2023", scope="CRI")
+    assert snap.entity_name == "Costa Rica"
+    assert snap.payload["score"]["entity_key"] == "CRI"
+    assert snap.payload["score"]["esg_score"] == 62.0
+    assert snap.payload["position"]["rank"] == 1          # CRI(62) > DOM(35.65) > HTI(20)
+
+
+def test_esg_named_snapshot_requires_scope(db):
+    _seed_panel(db)
+    with pytest.raises(ValueError, match="país"):
+        ESGProduct(db).snapshot(ProductTier.insight, "2023", scope=None)
+
+
+def test_esg_scope_options_lists_scored_countries(db):
+    _seed_panel(db)
+    p = ESGProduct(db)
+    assert p.scope_kind() == "country"
+    opts = p.scope_options()
+    isos = {o["value"] for o in opts}
+    assert isos == {"DOM", "CRI", "HTI"}                  # solo países con IRC
+    do = next(o for o in opts if o["value"] == "DOM")
+    assert do["label"] == "República Dominicana" and do["group"] == "caribe"
+    cr = next(o for o in opts if o["value"] == "CRI")
+    assert cr["group"] == "centroamerica"
 
 
 def test_esg_pulse_assemble_and_render(db, tmp_path):

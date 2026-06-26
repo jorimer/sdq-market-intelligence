@@ -34,7 +34,14 @@ from shared.products import (
 from shared.products.render import render_product_pdf
 from modules.esg_climate.ai_context import climate_ai_context
 from modules.esg_climate.models.models import ESGScore
-from modules.esg_climate.service import get_latest, get_scores
+from modules.esg_climate.service import (
+    IRC_PANEL,
+    IRC_REGION,
+    get_for_entity_period,
+    get_latest,
+    get_scored_entities,
+    get_scores,
+)
 
 logger = logging.getLogger("sdq.products.esg")
 
@@ -165,19 +172,8 @@ def _latest_irc(db: Session) -> Optional[ESGScore]:
         return None
 
 
-def get_latest_for_period(db: Session, period: str) -> Optional[ESGScore]:
-    """IRC de RD para un período específico, en SAVEPOINT (snapshot por período)."""
-    try:
-        with db.begin_nested():
-            return (db.query(ESGScore)
-                    .filter_by(entity_key=COUNTRY_ISO, period=period).first())
-    except Exception as e:  # noqa: BLE001
-        logger.warning("IRC del período %s no disponible: %s", period, e)
-        return None
-
-
-def _panel_position(db: Session, period: str) -> Dict[str, Any]:
-    """Rank de RD y distribución del panel para el período, en SAVEPOINT."""
+def _panel_position(db: Session, period: str, iso3: str = COUNTRY_ISO) -> Dict[str, Any]:
+    """Rank de *iso3* y distribución del panel para el período, en SAVEPOINT."""
     try:
         with db.begin_nested():
             rows = get_scores(db, period)
@@ -188,7 +184,7 @@ def _panel_position(db: Session, period: str) -> Dict[str, Any]:
     if not scored:
         return {}
     ordered = sorted(scored, key=lambda r: r.esg_score, reverse=True)
-    rank = next((i + 1 for i, r in enumerate(ordered) if r.entity_key == COUNTRY_ISO), None)
+    rank = next((i + 1 for i, r in enumerate(ordered) if r.entity_key == iso3), None)
     vals = [r.esg_score for r in ordered]
     mean = round(sum(vals) / len(vals), 2)
     return {"rank": rank, "n_countries": len(ordered),
@@ -290,29 +286,54 @@ class ESGProduct:
                      + (" (significativo)." if sig else " (inconcluso)."))
         return ValidationState(approved=True, score=score, notes=notes)
 
+    # ── Universo de países del panel (alimenta el selector del catálogo) ──
+    def scope_options(self) -> List[Dict[str, str]]:
+        """Países elegibles para el Insight/Deep Dive de resiliencia climática: ``value`` =
+        ISO3 (lo que ``snapshot(scope=…)`` resuelve), ``label`` = nombre del panel, ``group``
+        = slug de región. Solo países CON un IRC persistido (ofrecer únicamente los que
+        producen reporte evita opciones que darían 422). Requiere DB."""
+        db = self._require_db()
+        return [{"value": iso, "label": IRC_PANEL.get(iso, iso),
+                 "group": IRC_REGION.get(iso, "otros")}
+                for iso in get_scored_entities(db)]
+
+    def scope_kind(self) -> str:
+        return "country"
+
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
         db = self._require_db()
-        s = _latest_irc(db) if not period else (get_latest_for_period(db, period) or _latest_irc(db))
-        if s is None:
-            entity = None if tier == ProductTier.pulse else COUNTRY_NAME
-            return ProductSnapshot(tier=tier, period=period or "—",
-                                   payload={"has_score": False}, entity_name=entity,
-                                   entity_roster=())
-        payload: Dict[str, Any] = {"has_score": True, "score": _score_dict(s)}
+        # Pulse = resiliencia climática NACIONAL (RD), sin elegir país. Niveles nombrados =
+        # el país del panel elegido (no RD prestado).
         if tier == ProductTier.pulse:
+            s = get_for_entity_period(db, COUNTRY_ISO, period) if period else _latest_irc(db)
+            if s is None:
+                return ProductSnapshot(tier=tier, period=period or "—",
+                                       payload={"has_score": False}, entity_name=None,
+                                       entity_roster=())
             # Nacional/agregado: NO se nombran países pares → roster vacío (sensor de
             # anonimización trivial). Solo el headline de RD + su posición.
             pos = _panel_position(db, s.period)
-            payload["rank"] = pos.get("rank")
-            payload["n_countries"] = pos.get("n_countries")
+            payload: Dict[str, Any] = {"has_score": True, "score": _score_dict(s),
+                                       "rank": pos.get("rank"), "n_countries": pos.get("n_countries")}
             return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                    entity_name=None, entity_roster=())
+
+        iso3 = (scope or "").strip().upper()
+        if not iso3:
+            raise ValueError("Seleccioná un país del panel para el Insight/Deep Dive de ESG.")
+        s = get_for_entity_period(db, iso3, period)
+        country_name = IRC_PANEL.get(iso3, iso3)
+        if s is None:
+            return ProductSnapshot(tier=tier, period=period or "—",
+                                   payload={"has_score": False}, entity_name=country_name,
+                                   entity_roster=())
+        payload = {"has_score": True, "score": _score_dict(s)}
         if tier == ProductTier.deep_dive:
-            payload["position"] = _panel_position(db, s.period)
+            payload["position"] = _panel_position(db, s.period, iso3)
         return ProductSnapshot(tier=tier, period=s.period, payload=payload,
-                               entity_name=COUNTRY_NAME)
+                               entity_name=country_name)
 
     # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
     def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
@@ -349,8 +370,11 @@ class ESGProduct:
         from shared.narrative.claude_engine import narrative_engine
         score = snapshot.payload["score"]
         pos = snapshot.payload.get("position") or {}
+        # País del snapshot (Pulse = RD nacional; niveles nombrados = país elegido).
+        entity_key = score.get("entity_key", COUNTRY_ISO)
+        country_name = snapshot.entity_name or COUNTRY_NAME
         base_ctx = climate_ai_context(
-            COUNTRY_ISO, score, country_name=COUNTRY_NAME,
+            entity_key, score, country_name=country_name,
             rank=snapshot.payload.get("rank") or pos.get("rank"),
             n_countries=snapshot.payload.get("n_countries") or pos.get("n_countries"),
             distribution=pos.get("distribution"))
@@ -364,8 +388,18 @@ class ESGProduct:
                 continue
             ctx = dict(base_ctx)
             if section == "panel_position":
-                ctx["enfoque"] = ("Posición RELATIVA de RD en el panel Caribe/LatAm: rank y "
-                                  "distancia a la media del panel; qué pares la superan y por qué.")
+                # Precalcular las distancias (media/líder) para que el modelo cite cifras
+                # EXACTAS guardadas, no las derive (regla del thin: número solo si está
+                # precalculado). Mayor IRC = mayor resiliencia.
+                dist = pos.get("distribution") or {}
+                sc = score.get("esg_score")
+                if sc is not None and dist.get("mean") is not None:
+                    ctx["delta_vs_media"] = round(sc - dist["mean"], 2)
+                if sc is not None and dist.get("max") is not None:
+                    ctx["delta_vs_lider"] = round(sc - dist["max"], 2)
+                ctx["enfoque"] = (f"Posición RELATIVA de {country_name} en el panel Caribe/LatAm: "
+                                  "rank y distancias precalculadas (delta_vs_media, delta_vs_lider); "
+                                  "qué pares la superan y por qué.")
             elif section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la dimensión con mayor brecha "
                                   "(físico/transición/adaptativa/gobernanza) y la palanca de "
@@ -384,7 +418,7 @@ class ESGProduct:
         title = {"pulse": "Pulse ESG & Clima", "insight": "Insight ESG & Clima",
                  "deep_dive": "Deep Dive ESG & Clima"}.get(tier.value, "ESG & Clima")
         display = ("Resiliencia Climática Nacional · RD" if tier == ProductTier.pulse
-                   else COUNTRY_NAME)
+                   else (snapshot.entity_name or COUNTRY_NAME))
         tables: List = []
         score = (snapshot.payload or {}).get("score") or {}
         dims = (score.get("breakdown") or {}).get("dimensions") or {}
