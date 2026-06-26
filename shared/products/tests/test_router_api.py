@@ -129,3 +129,27 @@ def test_manual_recompute_operation(db, monkeypatch):
     res = ops._run_recompute(params={}, user_id=None, set_phase=lambda *_: None)
     assert res["recomputed"] == 30
     assert db.query(ProductReadiness).count() == 30
+
+
+def test_scope_options_endpoint_banking(db):
+    """GET /{sector}/scope-options devuelve las entidades activas CON rating del sector para
+    el selector del catálogo; un sector inexistente → 404."""
+    from datetime import date
+
+    import modules.banking_score.products  # noqa: F401 — registra banking
+    from modules.banking_score.models.models import BankType, ModelType
+    activo = Bank(name="Banco Selector SA", bank_type=BankType.banca_multiple, is_active=True)
+    db.add(activo)
+    db.add(Bank(name="Banco Apagado SA", bank_type=BankType.aap, is_active=False))
+    db.flush()
+    db.add(RatingResult(bank_id=activo.id, period_end=date(2024, 12, 31), overall_score=80,
+                        rating_tier="SDQ-AA", model_type=ModelType.deterministic, model_version="1.0"))
+    db.commit()
+    c = _client(db, role=UserRole.viewer)  # cualquier autenticado
+    r = c.get("/api/v1/products/banking/scope-options")
+    assert r.status_code == 200, r.text
+    options = r.json()["options"]
+    assert [o["label"] for o in options] == ["Banco Selector SA"]  # activo con rating
+    assert options[0]["group"] == "banca_multiple"
+    # Sector fuera del catálogo → 404 (no revela).
+    assert c.get("/api/v1/products/inexistente/scope-options").status_code == 404

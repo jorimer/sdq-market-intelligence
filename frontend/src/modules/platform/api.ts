@@ -287,6 +287,20 @@ export async function getProductReport(
   return data;
 }
 
+/** Entidad elegible de un nivel nombrado (alimenta el selector del catálogo). */
+export interface ScopeOption {
+  value: string; // id o nombre que acepta el backend como scope
+  label: string; // visible
+  group?: string; // agrupador (p.ej. tipo de entidad)
+}
+
+/** Entidades elegibles de los niveles nombrados de un sector. Vacío si el sector no las
+ *  expone (el catálogo cae al input libre). */
+export async function getProductScopeOptions(sector: string): Promise<ScopeOption[]> {
+  const { data } = await client.get(`/products/${sector}/scope-options`);
+  return data.options ?? [];
+}
+
 /** Dispara la descarga de un blob PDF de `url` (con auth vía interceptor). */
 async function downloadPdfBlob(url: string, fallback: string, params = {}): Promise<void> {
   const r = await client.get(url, { params, responseType: "blob" });

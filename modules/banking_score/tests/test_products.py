@@ -236,6 +236,27 @@ def test_named_snapshot_by_name_and_id(db):
     assert snap2.entity_name == "Banco Nombrado SA"
 
 
+def test_scope_options_lists_active_entities(db):
+    """scope_options alimenta el selector del catálogo: id (value), nombre (label) y tipo
+    (group) de las entidades activas CON rating, ordenadas por nombre. value resuelve en
+    snapshot(); excluye inactivos y activos sin calificación (que darían 422 al elegirlos)."""
+    b1 = _seed_rating(db, "Banco Zeta SA", 80)
+    _seed_rating(db, "Banco Alfa SA", 70)
+    db.add(Bank(name="Banco Inactivo SA", bank_type=BankType.aap, is_active=False))
+    # Activo pero SIN rating → no debe aparecer (snapshot daría 422).
+    db.add(Bank(name="Banco Sin Rating SA", bank_type=BankType.banca_multiple, is_active=True))
+    db.commit()
+    opts = BankingProduct(db).scope_options()
+    labels = [o["label"] for o in opts]
+    assert labels == ["Banco Alfa SA", "Banco Zeta SA"]   # orden alfabético; sin inactivo ni sin-rating
+    assert all(set(o) == {"value", "label", "group"} for o in opts)
+    # El value (id) es lo que snapshot(scope=…) resuelve.
+    by_value = {o["label"]: o["value"] for o in opts}
+    assert by_value["Banco Zeta SA"] == b1.id
+    snap = BankingProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope=by_value["Banco Zeta SA"])
+    assert snap.entity_name == "Banco Zeta SA"
+
+
 def test_named_snapshot_errors(db):
     prod = BankingProduct(db)
     with pytest.raises(ValueError):                       # falta scope

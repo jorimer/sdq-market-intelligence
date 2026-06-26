@@ -14,12 +14,14 @@ import { Markdown } from "@/shared/ui/Markdown";
 import {
   getProductCatalog,
   getProductReport,
+  getProductScopeOptions,
   downloadProductPdf,
   downloadProductSample,
   type ProductCatalog,
   type CatalogSector,
   type CatalogLevel,
   type ProductReport,
+  type ScopeOption,
 } from "../api";
 
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
@@ -188,6 +190,7 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
 }) {
   const named = isNamed(level.tier);
   const [scope, setScope] = useState("");
+  const [options, setOptions] = useState<ScopeOption[]>([]);
   const [report, setReport] = useState<ProductReport | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(named ? "idle" : "loading");
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -206,11 +209,25 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
       });
   };
 
-  // Pulse (sin entidad) carga directo; los niveles nombrados esperan el scope.
+  // Pulse (sin entidad) carga directo; los niveles nombrados esperan el scope y, si el
+  // sector expone su universo, ofrecen un selector (en vez de obligar a escribir el nombre).
   useEffect(() => {
-    if (!named) fetchReport();
+    if (!named) {
+      fetchReport();
+      return;
+    }
+    getProductScopeOptions(sector.sector_key)
+      .then(setOptions)
+      .catch(() => setOptions([])); // sin opciones → input libre (fallback)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Agrupa las opciones por `group` (tipo de entidad) para el <optgroup>.
+  const groupedOptions = options.reduce<Record<string, ScopeOption[]>>((acc, o) => {
+    const g = o.group || "";
+    (acc[g] = acc[g] || []).push(o);
+    return acc;
+  }, {});
 
   return (
     <InsightDrawerShell
@@ -225,12 +242,31 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
         >
           <label className="text-xs text-muted block">{t("platform.catalog.scopeLabel")}</label>
           <div className="flex gap-2">
-            <input
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              placeholder={t("platform.catalog.scopePlaceholder")}
-              className="field flex-1"
-            />
+            {options.length > 0 ? (
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                className="field flex-1"
+              >
+                <option value="">{t("platform.catalog.scopeSelectPlaceholder")}</option>
+                {Object.entries(groupedOptions).map(([group, opts]) =>
+                  group ? (
+                    <optgroup key={group} label={t(`banking.entityType.${group}`, group)}>
+                      {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </optgroup>
+                  ) : (
+                    opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
+                  ),
+                )}
+              </select>
+            ) : (
+              <input
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                placeholder={t("platform.catalog.scopePlaceholder")}
+                className="field flex-1"
+              />
+            )}
             <button type="submit" disabled={!scope.trim()} className="btn btn-primary shrink-0 disabled:opacity-40">
               {t("platform.catalog.view")}
             </button>

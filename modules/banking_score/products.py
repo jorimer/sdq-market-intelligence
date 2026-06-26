@@ -347,6 +347,24 @@ class BankingProduct:
             entity_name=bank.name,
         )
 
+    # ── Entidades elegibles de los niveles nombrados (alimenta el selector del catálogo) ──
+    def scope_options(self) -> list[Dict[str, str]]:
+        """Entidades para el selector de Insight/Deep Dive: ``value`` = id (lo que
+        ``snapshot(scope=…)`` resuelve), ``label`` = nombre, ``group`` = tipo de entidad.
+        Ordenadas por nombre. Requiere DB (catálogo real).
+
+        Solo se ofrecen entidades activas CON una calificación determinista: ``snapshot``
+        de un nivel nombrado exige un ``RatingResult`` (si no, 422). Ofrecer únicamente las
+        que producen reporte evita opciones que fallarían al elegirlas."""
+        db = self._require_db()
+        banks = (db.query(Bank)
+                 .filter(Bank.is_active.is_(True),
+                         Bank.id.in_(db.query(RatingResult.bank_id)
+                                     .filter(RatingResult.model_type == ModelType.deterministic)))
+                 .order_by(Bank.name).all())
+        return [{"value": b.id, "label": b.name,
+                 "group": b.bank_type.value if b.bank_type else ""} for b in banks]
+
     # ── Muestra sintética (sin DB — datos demo ilustrativos, para el PDF watermarked) ──
     def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
         if tier == ProductTier.pulse:

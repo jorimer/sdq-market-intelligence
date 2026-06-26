@@ -1584,6 +1584,7 @@
       "period": "Período: {{v}}",
       "scopeLabel": "Entidad a analizar",
       "scopePlaceholder": "Nombre de la entidad",
+      "scopeSelectPlaceholder": "Elegí una entidad…",
       "mailSubject": "Acceso a {{product}} — {{level}}",
       "mailBody": "Hola, me interesa acceder al producto {{product}} en su nivel {{level}} (requiere plan {{plan}}). ¿Podrían contactarme con las opciones?",
       "tier": {
