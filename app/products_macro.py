@@ -6,15 +6,20 @@ independencia de módulos (no se importan entre sí), su producto se ensambla a 
 y se auto-registra en ``shared.products``. NO modifica el framework: solo implementa el
 ``Protocol SectorProduct`` + su manifiesto + sus señales (la prueba de la receta).
 
-Naturaleza nacional: Macro no tiene múltiples entidades. El nivel nombrado es el PAÍS
-(República Dominicana); el Pulse es el pulso macro nacional (sin entidades → el sensor
-de anonimización pasa trivialmente con roster vacío).
+Naturaleza MULTIPAÍS (re-encuadrado 2026-06-26). El producto tiene DOS lecturas:
+  - **Pulse** = coyuntura macroeconómica NACIONAL (RD, series BCRD); agregado de sistema
+    sin entidades (el sensor de anonimización pasa trivialmente con roster vacío).
+  - **Insight / Deep Dive** = RIESGO-PAÍS por el país elegido del panel IRMP (score,
+    banda, dimensiones y posición relativa). El nivel nombrado es el PAÍS del panel
+    (no RD prestado): su lectura sale del ``IRMPSnapshot`` de ESE país, con su
+    ``breakdown`` dimensional, vía ``irmp_ai_context`` (regla direccional: mayor IRMP =
+    MENOR riesgo). Las series de coyuntura BCRD son RD-only y quedan SOLO en el Pulse.
 """
 from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -36,22 +41,50 @@ SECTOR_KEY = "macro"
 COUNTRY_NAME = "República Dominicana"
 COUNTRY_ISO = "DO"
 
+# Etiquetas en español de las dimensiones del IRMP (réplica local; ai_context las
+# tiene private). Para la tabla del reporte de riesgo-país.
+_DIM_LABELS = {
+    "macro": "Macroeconómica",
+    "external": "Externa",
+    "political": "Político-institucional",
+    "regulatory": "Regulatoria",
+    "events": "Eventos",
+}
+
+# Región (display, ES) → slug canónico i18n del catálogo (compartido con ESG). El front
+# resuelve ``platform.catalog.region.<slug>`` en ES/EN/FR.
+_REGION_SLUG = {
+    "Caribe": "caribe",
+    "Centroamérica": "centroamerica",
+    "Centroamerica": "centroamerica",
+    "Sudamérica": "sudamerica",
+    "Sudamerica": "sudamerica",
+    "Norteamérica": "norteamerica",
+    "Norteamerica": "norteamerica",
+}
+
+
+def _region_slug(region: Optional[str]) -> str:
+    return _REGION_SLUG.get((region or "").strip(), "otros")
+
+
 _SECTION_TITLES = {
     "macro_pulse": "Pulso Macroeconómico",
-    "macro_trend": "Tendencia Macroeconómica",
-    "risk_assessment": "Evaluación de Riesgos",
+    "risk_assessment": "Evaluación de Riesgo-País (IRMP)",
+    "peer_position": "Posición en el Panel Regional",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Lectura macro basada en las series oficiales publicadas a la fecha de corte (BCRD, "
-    "DIGEPRES/Crédito Público) y en el índice de riesgo regulatorio-político (IRMP, "
-    "fuentes WGI/WDI); no anticipa shocks no publicados ni decisiones de política "
-    "posteriores al período."
+    "Lectura de riesgo-país basada en el Índice de Riesgo Macro-Político (IRMP, fuentes "
+    "WGI/WDI/IMF) del país a la fecha de corte; la coyuntura macroeconómica del Pulse usa "
+    "las series oficiales publicadas (BCRD, DIGEPRES/Crédito Público) y es nacional (RD). "
+    "El panel regional es conjunto de pares; no anticipa shocks no publicados ni "
+    "decisiones de política posteriores al período."
 )
 
-# Narrativa CURADA tier-1 de la muestra (exemplar). Coherente con SAMPLE_* (PIB 5.1%,
-# inflación 3.8%, reservas USD 14,200 MM, TC 59.8, déficit -3.1%, IRMP 38.3 «Moderado»).
+# Narrativa CURADA tier-1 de la muestra (exemplar), riesgo-país de RD. Coherente con
+# SAMPLE_* (IRMP 38.3 «Moderado», posición 3 de 5 en el panel, media 50.7).
 # IRMP: mayor = MENOR riesgo (no invertir la lectura). Sin cursivas de un asterisco.
 _SAMPLE_NARRATIVES = {
     "macro_pulse": (
@@ -67,20 +100,6 @@ _SAMPLE_NARRATIVES = {
         "La lectura de conjunto: una economía en expansión con anclas nominales bajo "
         "control y un frente fiscal como principal punto de atención."
     ),
-    "macro_trend": (
-        "La trayectoria macroeconómica de la República Dominicana describe una economía "
-        "en fase expansiva con fundamentos sólidos. El crecimiento de 5.1% no es un "
-        "repunte puntual sino la continuación de una de las tasas más altas y consistentes "
-        "de América Latina, apoyada en una base diversificada —turismo, zonas francas, "
-        "remesas y construcción— que reduce la dependencia de un solo motor. La inflación "
-        "controlada en 3.8% y unas reservas robustas configuran un marco de estabilidad "
-        "nominal que sostiene la confianza de inversión. El vector a vigilar es la "
-        "consolidación fiscal: el déficit de -3.1% del PIB es manejable en un contexto de "
-        "crecimiento, pero su trayectoria determina el espacio de política ante un "
-        "eventual giro del ciclo. Para un inversionista, RD ofrece una combinación poco "
-        "común —alto crecimiento con estabilidad macro— que premia la exposición de "
-        "mediano plazo."
-    ),
     "risk_assessment": (
         "El riesgo macro-político de la República Dominicana se evalúa como **moderado** "
         "(IRMP 38.3, escala donde un valor más alto indica MENOR riesgo). El índice "
@@ -93,6 +112,18 @@ _SAMPLE_NARRATIVES = {
         "globales, y el frente fiscal limita el margen de maniobra contracíclico. Ninguno "
         "configura un riesgo de cola elevado; definen un perfil medio, gestionable, "
         "coherente con una economía emergente en consolidación."
+    ),
+    "peer_position": (
+        "En el panel regional de referencia, la República Dominicana se ubica en una "
+        "**posición intermedia (3.ª de 5)**, por encima de pares con mayor fragilidad "
+        "institucional y por debajo de las economías de la región con marcos de gobernanza "
+        "más consolidados. La lectura relativa es tan informativa como el nivel absoluto: "
+        "el diferencial frente al líder del panel está explicado, sobre todo, por la "
+        "dimensión político-institucional y por el espacio fiscal, no por la trayectoria "
+        "de crecimiento —donde RD aventaja a la mayoría de sus pares—. La distancia a la "
+        "media del panel es acotada y, en buena medida, gestionable vía política: separa "
+        "lo que es estructura de lo que es resultado de gestión, y señala que converger "
+        "hacia el cuartil superior regional es un objetivo alcanzable."
     ),
     "recommendation": (
         "Para un comité de inversión o una contraparte con exposición a la República "
@@ -120,12 +151,12 @@ def macro_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("macro_trend",), narrative_templates=("macro_trend",),
+                sections=("risk_assessment",), narrative_templates=("risk_assessment",),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("macro_trend", "risk_assessment", "recommendation", "limitations"),
-                narrative_templates=("macro_trend", "risk_assessment", "recommendation"),
+                sections=("risk_assessment", "peer_position", "recommendation", "limitations"),
+                narrative_templates=("risk_assessment",),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
 
@@ -150,7 +181,7 @@ def _macro_factors(db: Session) -> List[Dict]:
 
 def _irmp(db: Session):
     """Snapshot IRMP de RD (vía el getter público de macro_political_risk), o None.
-    En SAVEPOINT (ver ``_macro_factors``)."""
+    En SAVEPOINT (ver ``_macro_factors``). Alimenta SOLO las señales de readiness."""
     try:
         with db.begin_nested():
             from modules.macro_political_risk import service as irmp_svc
@@ -158,6 +189,27 @@ def _irmp(db: Session):
     except Exception as e:  # noqa: BLE001
         logger.warning("IRMP no disponible: %s", e)
         return None
+
+
+def _parse_period(period: str) -> Optional[date]:
+    """Período del topbar ('YYYY-MM-DD') → date, o None si no es resoluble."""
+    try:
+        return date.fromisoformat((period or "").strip()) if period else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _snapshot_result(snap) -> Dict[str, Any]:
+    """``IRMPSnapshot`` persistido → dict con el shape de ``run_irmp`` (lo que espera
+    ``irmp_ai_context``). El ``breakdown`` ya ES ``result['dimensions']``; no se
+    re-corre el motor."""
+    return {
+        "country_code": (snap.country.iso_code if snap.country else None),
+        "irmp_score": snap.irmp_score,
+        "risk_band": (snap.risk_band.value if snap.risk_band else None),
+        "dimensions": snap.breakdown or {},
+        "peer_set_size": snap.peer_set_size,
+    }
 
 
 class MacroProduct:
@@ -205,31 +257,93 @@ class MacroProduct:
         return ValidationState(approved=True, score=0.85,
                                notes="IRMP validado (Gate A-F); momentum macro operativo.")
 
+    # ── Universo de países del panel (alimenta el selector del catálogo) ──
+    def scope_options(self) -> List[Dict[str, str]]:
+        """Países elegibles para el Insight/Deep Dive de riesgo-país: ``value`` = ISO
+        (lo que ``snapshot(scope=…)`` resuelve), ``label`` = nombre, ``group`` = slug de
+        región. Solo países CON un ``IRMPSnapshot`` persistido (ofrecer únicamente los que
+        producen reporte evita opciones que darían 422). Requiere DB."""
+        from modules.macro_political_risk import service as irmp_svc
+        db = self._require_db()
+        return [{"value": c.iso_code, "label": c.name, "group": _region_slug(c.region)}
+                for c in irmp_svc.get_scored_countries(db)]
+
+    def scope_kind(self) -> str:
+        return "country"
+
+    # ── Posición relativa en el panel del período ──
+    def _peer_position(self, db: Session, iso: str, period_end) -> Dict[str, Any]:
+        """Rank del país y distribución del panel para su período, en SAVEPOINT."""
+        from modules.macro_political_risk import service as irmp_svc
+        try:
+            with db.begin_nested():
+                panel = irmp_svc.get_panel(db, period_end)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Panel IRMP no disponible: %s", e)
+            return {}
+        scored = [s for s in panel if s.irmp_score is not None]
+        if not scored:
+            return {}
+        rank = next((i + 1 for i, s in enumerate(scored)
+                     if s.country and s.country.iso_code == iso), None)
+        vals = [s.irmp_score for s in scored]
+        mean = round(sum(vals) / len(vals), 2)
+        return {"rank": rank, "n_countries": len(scored),
+                "distribution": {"mean": mean, "max": max(vals), "min": min(vals)}}
+
     # ── Snapshot ──
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
-        factors, snap = self._signals()
-        irmp_score = float(snap.irmp_score) if snap is not None and snap.irmp_score is not None else None
-        irmp_band = (snap.risk_band.value if snap is not None and snap.risk_band else None)
-        per = (str(snap.period_end) if snap is not None and getattr(snap, "period_end", None) else period)
+        db = self._require_db()
         if tier == ProductTier.pulse:
-            # Nacional, sin entidades. Solo lecturas de factores agregados.
+            # Coyuntura NACIONAL (RD), sin entidades. Series BCRD agregadas.
+            factors, snap = self._signals()
+            per = (str(snap.period_end) if snap is not None
+                   and getattr(snap, "period_end", None) else period)
+            irmp_band = (snap.risk_band.value if snap is not None and snap.risk_band else None)
             payload = {"factors": factors, "n_factors": len(factors), "irmp_band": irmp_band}
             return ProductSnapshot(tier=tier, period=per, payload=payload, entity_name=None)
-        payload = {"irmp_score": irmp_score, "irmp_band": irmp_band, "factors": factors}
-        return ProductSnapshot(tier=tier, period=per, payload=payload, entity_name=COUNTRY_NAME)
+
+        # Niveles nombrados: riesgo-país del PAÍS elegido (no RD prestado).
+        iso = (scope or "").strip().upper()
+        if not iso:
+            raise ValueError("Seleccioná un país del panel para el Insight/Deep Dive de Macro.")
+        from modules.macro_political_risk import service as irmp_svc
+        snap = irmp_svc.get_snapshot(db, iso, _parse_period(period))
+        if snap is None:
+            raise ValueError(f"No hay IRMP persistido para el país '{iso}'.")
+        result = _snapshot_result(snap)
+        country_name = (snap.country.name if snap.country else iso)
+        payload: Dict[str, Any] = {
+            "country_code": iso, "irmp_score": result["irmp_score"],
+            "irmp_band": result["risk_band"], "dimensions": result["dimensions"],
+            "peer_set_size": result["peer_set_size"],
+        }
+        if tier == ProductTier.deep_dive:
+            payload["peer_position"] = self._peer_position(db, iso, snap.period_end)
+        return ProductSnapshot(tier=tier, period=str(snap.period_end),
+                               payload=payload, entity_name=country_name)
 
     # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
     def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
-        factors = [{"label": "Crecimiento del PIB", "reading": "5.1% interanual"},
-                   {"label": "Inflación", "reading": "3.8%"},
-                   {"label": "Reservas internacionales", "reading": "USD 14,200 MM"},
-                   {"label": "Tipo de cambio", "reading": "RD$ 59.8 / US$"},
-                   {"label": "Déficit fiscal", "reading": "-3.1% del PIB"}]
         if tier == ProductTier.pulse:
+            factors = [{"label": "Crecimiento del PIB", "reading": "5.1% interanual"},
+                       {"label": "Inflación", "reading": "3.8%"},
+                       {"label": "Reservas internacionales", "reading": "USD 14,200 MM"},
+                       {"label": "Tipo de cambio", "reading": "RD$ 59.8 / US$"},
+                       {"label": "Déficit fiscal", "reading": "-3.1% del PIB"}]
             payload = {"factors": factors, "n_factors": len(factors), "irmp_band": "Moderado"}
             return ProductSnapshot(tier=tier, period="2025-Q1", payload=payload, entity_name=None)
-        payload = {"irmp_score": 38.3, "irmp_band": "Moderado", "factors": factors}
+        dims = {"political": {"score": 32.0, "weight": 0.25, "contribution": 8.0},
+                "regulatory": {"score": 36.0, "weight": 0.20, "contribution": 7.2},
+                "macro": {"score": 52.0, "weight": 0.25, "contribution": 13.0},
+                "external": {"score": 40.0, "weight": 0.20, "contribution": 8.0},
+                "events": {"score": 30.0, "weight": 0.10, "contribution": 3.0}}
+        payload = {"country_code": COUNTRY_ISO, "irmp_score": 38.3, "irmp_band": "Moderado",
+                   "dimensions": dims, "peer_set_size": 5}
+        if tier == ProductTier.deep_dive:
+            payload["peer_position"] = {"rank": 3, "n_countries": 5,
+                                        "distribution": {"mean": 50.7, "max": 64.9, "min": 36.3}}
         return ProductSnapshot(tier=tier, period="2025-Q1", payload=payload, entity_name=COUNTRY_NAME)
 
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
@@ -243,39 +357,61 @@ class MacroProduct:
                          lang: str = "es") -> Dict[str, str]:
         from shared.narrative.claude_engine import narrative_engine
         sections = self.product_manifest().require_level(tier).sections
-        factors = snapshot.payload.get("factors", [])
-        base_ctx = {
-            "pais": COUNTRY_NAME, "period": snapshot.period,
-            "factores": factors, "irmp_score": snapshot.payload.get("irmp_score"),
-            "irmp_band": snapshot.payload.get("irmp_band"),
+
+        if tier == ProductTier.pulse:
+            # Coyuntura BCRD nacional (RD) — eje macro_monitor.
+            factors = snapshot.payload.get("factors", [])
+            ctx = {"pais": COUNTRY_NAME, "period": snapshot.period, "factores": factors,
+                   "irmp_band": snapshot.payload.get("irmp_band")}
+            res = await narrative_engine.generate(
+                context=ctx, template="macro_snapshot", mode="standard",
+                axis="macro_monitor", audience="inversionista")
+            return {"macro_pulse": res.text}
+
+        # Niveles nombrados: riesgo-país (IRMP por país) — eje macro_political_risk.
+        # Contexto compacto pre-digerido (dimensiones, fuerte/débil, cifras derivadas).
+        from modules.macro_political_risk.ai_context import irmp_ai_context
+        result = {
+            "country_code": snapshot.payload.get("country_code"),
+            "irmp_score": snapshot.payload.get("irmp_score"),
+            "risk_band": snapshot.payload.get("irmp_band"),
+            "dimensions": snapshot.payload.get("dimensions") or {},
+            "peer_set_size": snapshot.payload.get("peer_set_size"),
         }
-        # 'recommendation' NO es thin → narraría cifras por la ruta legacy SIN numeric_guard
-        # (lección 2026-06-23). Se enruta por el thin del MISMO eje (risk_assessment, bajo
-        # macro_political_risk) con un 'enfoque' accionable en el contexto (patrón trade),
-        # nunca por un template no-thin.
-        tmpl_for = {"macro_pulse": "macro_snapshot", "macro_trend": "macro_trend",
-                    "risk_assessment": "risk_assessment", "recommendation": "risk_assessment"}
-        # axis POR SECCIÓN: las secciones que leen el IRMP (riesgo país) usan la doctrina
-        # macro_political_risk — su regla direccional es OPUESTA ("mayor IRMP = MENOR
-        # riesgo"); enrutarlas por macro_monitor invertiría la lectura. La coyuntura BCRD
-        # (pulse/trend) sí usa macro_monitor.
-        axis_for = {"macro_pulse": "macro_monitor", "macro_trend": "macro_monitor",
-                    "risk_assessment": "macro_political_risk",
-                    "recommendation": "macro_political_risk"}
+        base_ctx = irmp_ai_context(result, country_name=snapshot.entity_name)
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
                 continue
             ctx = dict(base_ctx)
-            if section == "recommendation":
+            if section == "peer_position":
+                pos = dict(snapshot.payload.get("peer_position") or {})
+                # Precalcular las distancias (media/líder) para que el modelo cite cifras
+                # EXACTAS guardadas, no las derive (regla del thin: número solo si está
+                # precalculado). El score del país es la referencia.
+                dist = pos.get("distribution") or {}
+                score = snapshot.payload.get("irmp_score")
+                if score is not None and dist.get("mean") is not None:
+                    pos["delta_vs_media"] = round(score - dist["mean"], 2)
+                if score is not None and dist.get("max") is not None:
+                    pos["delta_vs_lider"] = round(score - dist["max"], 2)
+                ctx["posicion_panel"] = pos
+                ctx["enfoque"] = ("Posición RELATIVA del país en el panel regional: usa el rank "
+                                  "y las distancias precalculadas (delta_vs_media, delta_vs_lider; "
+                                  "recordá: mayor IRMP = menor riesgo) para ubicarlo; qué dimensión "
+                                  "explica el diferencial frente al líder. No repitas el score; ubícalo.")
+            elif section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: prioriza la palanca de política o gestión "
                                   "de riesgo país con mayor retorno sobre la resiliencia macro, "
                                   "dado el cuadro anterior. No repitas el diagnóstico; recomienda.")
+            # TODAS las secciones con cifras narran por el thin del eje (risk_assessment,
+            # axis macro_political_risk) → numeric_guard. El "foco" va por contexto, nunca
+            # por un template homónimo no-thin (caería a la ruta legacy sin guard).
             res = await narrative_engine.generate(
-                context=ctx, template=tmpl_for.get(section, "macro_trend"),
+                context=ctx, template="risk_assessment",
                 mode="detailed" if tier == ProductTier.deep_dive else "standard",
-                axis=axis_for.get(section, "macro_monitor"), audience="inversionista")
+                axis="macro_political_risk", audience="inversionista")
             out[section] = res.text
         return out
 
@@ -284,15 +420,27 @@ class MacroProduct:
                      narratives: Dict[str, str], *, sample: bool = False,
                      lang: str = "es", output_dir: Optional[str] = None) -> str:
         level = self.product_manifest().require_level(tier)
-        title = {"pulse": "Pulse Macro", "insight": "Insight Macro",
-                 "deep_dive": "Deep Dive Macro"}.get(tier.value, "Macro")
-        display = "Sistema Macroeconómico · RD" if tier == ProductTier.pulse else COUNTRY_NAME
-        # Tabla de factores (label · lectura) como contexto de datos.
-        factors = snapshot.payload.get("factors", [])
-        tables = []
-        if factors:
-            rows = [["Factor", "Lectura"]] + [[f["label"], f.get("reading") or "—"] for f in factors[:10]]
-            tables.append(("Factores macro", rows))
+        title = {"pulse": "Pulse Macro", "insight": "Insight Riesgo-País",
+                 "deep_dive": "Deep Dive Riesgo-País"}.get(tier.value, "Macro")
+        tables: List = []
+        if tier == ProductTier.pulse:
+            display = "Sistema Macroeconómico · RD"
+            # Tabla de factores BCRD (label · lectura) como contexto de datos.
+            factors = snapshot.payload.get("factors", [])
+            if factors:
+                rows = [["Factor", "Lectura"]] + [[f["label"], f.get("reading") or "—"]
+                                                  for f in factors[:10]]
+                tables.append(("Factores macro (RD)", rows))
+        else:
+            display = snapshot.entity_name or COUNTRY_NAME
+            # Tabla de dimensiones del IRMP (label · score) del país.
+            dims = snapshot.payload.get("dimensions") or {}
+            if dims:
+                rows = [["Dimensión", "Score"]] + [
+                    [_DIM_LABELS.get(k, k),
+                     (f"{d.get('score'):.1f}" if isinstance(d, dict) and d.get("score") is not None else "—")]
+                    for k, d in dims.items()]
+                tables.append(("Dimensiones del IRMP", rows))
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title, period=snapshot.period,
             narratives=narratives, section_titles=_SECTION_TITLES, tables=tables,

@@ -6,11 +6,14 @@ vacía los getters fallan limpio → cobertura 0, honesto), y render sintético.
 """
 import asyncio
 import os
+from datetime import date
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from shared.database.base import Base
 from shared.products import (
     ProductSnapshot,
     ProductTier,
@@ -18,6 +21,12 @@ from shared.products import (
     compute_readiness,
     get_product,
     is_implemented,
+)
+from modules.macro_political_risk.models.models import (
+    Country,
+    DimensionScore,
+    IRMPSnapshot,
+    RiskBand,
 )
 from app.products_macro import MacroProduct
 
@@ -105,6 +114,82 @@ def test_macro_narratives_are_guarded(monkeypatch):
         assert axis in AXIS_DOCTRINE, f"{axis} sin doctrina → sin guard"
     # La recomendación NO debe enrutarse por el template no-thin 'recommendation'.
     assert "recommendation" not in {t for t, _ in calls}
+
+
+@pytest.fixture()
+def db():
+    """DB en memoria con el panel IRMP sembrado (RD + 2 pares, 1 período)."""
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    Base.metadata.create_all(engine, tables=[Country.__table__, IRMPSnapshot.__table__,
+                                             DimensionScore.__table__])
+    s = sessionmaker(bind=engine)()
+    try:
+        yield s
+    finally:
+        s.close()
+
+
+def _bd():
+    return {"political": {"score": 32.0, "weight": 0.25, "contribution": 8.0},
+            "macro": {"score": 52.0, "weight": 0.25, "contribution": 13.0},
+            "external": {"score": 40.0, "weight": 0.20, "contribution": 8.0}}
+
+
+def _seed_panel(db):
+    per = date(2024, 12, 31)
+    rows = [("DO", "República Dominicana", "Caribe", 38.3, RiskBand.moderado),
+            ("JM", "Jamaica", "Caribe", 36.3, RiskBand.alto),
+            ("CR", "Costa Rica", "Centroamérica", 64.9, RiskBand.moderado)]
+    for iso, name, region, score, band in rows:
+        c = Country(iso_code=iso, name=name, region=region, is_active=True)
+        db.add(c)
+        db.flush()
+        db.add(IRMPSnapshot(country_id=c.id, period_end=per, irmp_score=score,
+                            risk_band=band, peer_set_size=3, breakdown=_bd()))
+    db.commit()
+
+
+def test_macro_scope_options_lists_scored_countries(db):
+    _seed_panel(db)
+    opts = MacroProduct(db).scope_options()
+    assert MacroProduct(db).scope_kind() == "country"
+    isos = {o["value"] for o in opts}
+    assert isos == {"DO", "JM", "CR"}                 # solo países con snapshot
+    do = next(o for o in opts if o["value"] == "DO")
+    assert do["label"] == "República Dominicana" and do["group"] == "caribe"
+    cr = next(o for o in opts if o["value"] == "CR")
+    assert cr["group"] == "centroamerica"             # región → slug i18n
+
+
+def test_macro_named_snapshot_is_chosen_country(db):
+    _seed_panel(db)
+    snap = MacroProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope="JM")
+    assert snap.entity_name == "Jamaica"              # país elegido, NO RD prestado
+    assert snap.payload["country_code"] == "JM"
+    assert snap.payload["irmp_score"] == 36.3
+    assert snap.payload["dimensions"]                 # breakdown del país
+
+
+def test_macro_deep_dive_has_peer_position(db):
+    _seed_panel(db)
+    snap = MacroProduct(db).snapshot(ProductTier.deep_dive, "2024-12-31", scope="DO")
+    pos = snap.payload["peer_position"]
+    assert pos["n_countries"] == 3
+    assert pos["rank"] == 2                            # CR(64.9) > DO(38.3) > JM(36.3)
+    assert pos["distribution"]["max"] == 64.9
+
+
+def test_macro_named_snapshot_requires_scope(db):
+    _seed_panel(db)
+    with pytest.raises(ValueError, match="país"):
+        MacroProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope=None)
+
+
+def test_macro_unknown_country_raises(db):
+    _seed_panel(db)
+    with pytest.raises(ValueError, match="IRMP"):
+        MacroProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope="ZZ")
 
 
 def test_macro_pulse_is_anonymous():

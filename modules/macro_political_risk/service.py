@@ -196,6 +196,51 @@ def assemble_irmp_dataset(db: Session, period: Optional[str] = None) -> Dict[str
     }
 
 
+def get_snapshot(
+    db: Session, country_code: str, period_end: Optional[date] = None
+) -> Optional[IRMPSnapshot]:
+    """Snapshot for *country_code* at *period_end*, or the most recent if *period_end*
+    is None or has no snapshot (commercial delivery passes the global period; a country
+    may lag it). Lets the catalog serve a country's risk read at the chosen period."""
+    if period_end is not None:
+        hit = (
+            db.query(IRMPSnapshot)
+            .join(Country, Country.id == IRMPSnapshot.country_id)
+            .filter(Country.iso_code == country_code,
+                    IRMPSnapshot.period_end == period_end)
+            .first()
+        )
+        if hit is not None:
+            return hit
+    return get_latest(db, country_code)
+
+
+def get_panel(db: Session, period_end: date) -> List[IRMPSnapshot]:
+    """All persisted snapshots for *period_end*, most resilient first (higher IRMP =
+    lower risk). The peer set as actually scored that period — powers a country's
+    relative position (rank within the panel) without re-running the engine."""
+    return (
+        db.query(IRMPSnapshot)
+        .filter(IRMPSnapshot.period_end == period_end)
+        .order_by(IRMPSnapshot.irmp_score.desc())
+        .all()
+    )
+
+
+def get_scored_countries(db: Session) -> List[Country]:
+    """Active countries that have at least one persisted IRMP snapshot, by name.
+
+    The catalog offers only countries that actually produce a risk report (the
+    banking-scope doctrine: never offer an option that would 422)."""
+    return (
+        db.query(Country)
+        .filter(Country.is_active.is_(True),
+                Country.id.in_(db.query(IRMPSnapshot.country_id)))
+        .order_by(Country.name)
+        .all()
+    )
+
+
 def get_history(db: Session, country_code: str, limit: int = 20) -> List[IRMPSnapshot]:
     """Snapshot history for *country_code*, most recent first."""
     return (

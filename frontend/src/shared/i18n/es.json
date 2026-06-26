@@ -1589,6 +1589,20 @@
       "scopeLabelCountry": "País a analizar",
       "countrySelectPlaceholder": "Elegí un país…",
       "regionSelectPlaceholder": "Elegí una región…",
+      "region": {
+        "caribe": "Caribe",
+        "centroamerica": "Centroamérica",
+        "sudamerica": "Sudamérica",
+        "norteamerica": "Norteamérica",
+        "otros": "Otros"
+      },
+      "section": {
+        "macro_pulse": "Pulso macroeconómico",
+        "risk_assessment": "Evaluación de riesgo",
+        "peer_position": "Posición en el panel",
+        "recommendation": "Recomendación",
+        "limitations": "Limitaciones"
+      },
       "staffPreview": "Vista interna",
       "staffPreviewBanner": "Vista interna del equipo — no refleja la experiencia del cliente.",
       "mailSubject": "Acceso a {{product}} — {{level}}",
