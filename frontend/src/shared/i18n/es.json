@@ -1585,6 +1585,8 @@
       "scopeLabel": "Entidad a analizar",
       "scopePlaceholder": "Nombre de la entidad",
       "scopeSelectPlaceholder": "Elegí una entidad…",
+      "staffPreview": "Vista interna",
+      "staffPreviewBanner": "Vista interna del equipo — no refleja la experiencia del cliente.",
       "mailSubject": "Acceso a {{product}} — {{level}}",
       "mailBody": "Hola, me interesa acceder al producto {{product}} en su nivel {{level}} (requiere plan {{plan}}). ¿Podrían contactarme con las opciones?",
       "tier": {

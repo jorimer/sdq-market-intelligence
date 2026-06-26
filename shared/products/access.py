@@ -13,14 +13,19 @@ Composición de la decisión para servir (sector, nivel) a un usuario:
    (``TIER_FOR_LEVEL``). Si no, ``tier_required`` → 402 (upsell).
 
 Doctrina de esta fase (decisiones del dueño 2026-06-24): Pulse = login + tier free
-(sin ruta anónima); **sin bypass de admin** en la superficie comercial (la
-previsualización interna va por los routers de módulo y el monitor); el tier-gate
-aplica SOLO a la superficie comercial, no a los endpoints analíticos internos.
+(sin ruta anónima); el rol NO entra en ``can_access`` (el equipo ve la experiencia real
+del cliente); el tier-gate aplica SOLO a la superficie comercial, no a los endpoints
+analíticos internos.
+
+Excepción acotada (2026-06-26): ``staff_can_preview`` da a **super_admin** una VISTA
+INTERNA de un producto ya PUBLICADO cuyo tier no alcanza (QA del catálogo). Es una costura
+de SUPERFICIE —fuera de ``can_access``, que sigue puro— marcada como ``staff_preview``; NO
+desbloquea lo no-publicado (404 se mantiene) ni aplica a admin (sigue viendo 402).
 """
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -28,7 +33,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
-from shared.auth.models import AccessTier, User, tier_satisfies
+from shared.auth.models import AccessTier, User, UserRole, role_satisfies, tier_satisfies
 from shared.database.session import get_db
 from shared.products.models import ProductActivation, ProductEntitlement
 from shared.products.subscriptions import active_subscription_tier
@@ -60,10 +65,24 @@ class AccessDecision:
     tier: ProductTier
     required_tier: AccessTier
     user_tier: AccessTier
+    # Vista interna de staff: el acceso NO viene del tier/suscripción/compra del usuario,
+    # sino de una previsualización interna (super_admin) de un producto ACTIVADO. Se marca
+    # para que la superficie lo etiquete como "vista interna", no como compra del cliente.
+    staff_preview: bool = False
 
     @property
     def allowed(self) -> bool:
         return self.outcome is AccessOutcome.allowed
+
+
+def staff_can_preview(user: User) -> bool:
+    """¿El usuario es staff interno (super_admin) habilitado a previsualizar un producto
+    PUBLICADO aunque su tier no lo alcance? Es una costura de SUPERFICIE, deliberadamente
+    fuera de ``can_access`` (el gate del cliente, sin rama de rol): el equipo interno hace
+    QA de todo el catálogo sin auto-concederse un tier comercial, y la experiencia real del
+    cliente bloqueado sigue intacta. NO desbloquea lo no-publicado (eso va por el monitor)."""
+    role = getattr(user, "role", None)
+    return role is not None and role_satisfies(role, UserRole.super_admin)
 
 
 def required_tier_for(tier: ProductTier) -> AccessTier:
@@ -167,5 +186,10 @@ async def require_product_access(
     validados). Análoga a ``require_role`` pero en el eje de contenido/tier."""
     pt = _parse_tier(tier)
     decision = can_access(db, current_user, sector, pt)
+    # Vista interna de staff: super_admin previsualiza un producto PUBLICADO cuyo tier no
+    # alcanza (402). NO aplica a lo no-publicado (404 se mantiene: eso va por el monitor).
+    if (decision.outcome is AccessOutcome.tier_required
+            and staff_can_preview(current_user)):
+        return replace(decision, staff_preview=True)
     enforce_access(decision)
     return decision

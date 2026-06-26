@@ -147,6 +147,11 @@ function LevelRow({ sector, level, planLabel, onView, onDownload, onSampleDownlo
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-ink truncate">{tierLabel}</span>
           {level.price_band && <Chip tone="muted">{level.price_band}</Chip>}
+          {level.staff_preview && (
+            <Chip tone="warn">
+              <Eye className="w-3 h-3" /> {t("platform.catalog.staffPreview")}
+            </Chip>
+          )}
         </div>
         <div className="text-[11px] text-faint truncate" title={level.audience}>{level.audience}</div>
       </div>
@@ -279,6 +284,11 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
 
       {status === "ready" && report && (
         <>
+          {report.commercial.staff_preview && (
+            <div className="flex items-center gap-1.5 text-[11px] text-warn bg-warn-soft rounded-[8px] px-2.5 py-1.5">
+              <Eye className="w-3.5 h-3.5 shrink-0" /> {t("platform.catalog.staffPreviewBanner")}
+            </div>
+          )}
           {report.commercial.watermark && (
             <p className="text-[11px] text-faint">{report.commercial.watermark}</p>
           )}
