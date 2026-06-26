@@ -66,6 +66,23 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "sector_outlook": "sector_outlook",
 }
 
+# Secciones de PANORAMA (no enfocadas): largas por diseño — sus plantillas piden 500-700
+# palabras y el comparativo además emite tablas markdown (muy verbosas en tokens). Con el
+# tope de "standard" (1024) o "detailed" (2048) la generación se corta a mitad de frase.
+# Van por ruta legacy (sin axis), donde subir a "deep" SOLO eleva el tope a 4096 tokens
+# (no agrega la DEEP_DIRECTIVE, que es exclusiva de la ruta cerebro) — el tope de palabras
+# de cada plantilla sigue acotando el largo, así que terminan la idea sin divagar.
+_LONG_SECTIONS = frozenset({
+    "executive_summary", "comparative", "recommendation", "risk_assessment", "trend_analysis",
+})
+
+
+def _section_mode(section: str, base_mode: str) -> str:
+    """Presupuesto de tokens por sección: las de panorama necesitan 'deep' (4096) para
+    cerrar; las enfocadas (sub-componentes, ~200 palabras) caben en el mode pedido."""
+    return "deep" if section in _LONG_SECTIONS else base_mode
+
+
 # Sub-component key lookup for focused sections
 _SUB_COMPONENT_MAP: Dict[str, str] = {
     "solidez_financiera": "solidez",
@@ -150,8 +167,10 @@ async def generate_report_narratives(
             section, bank_name, scoring_result, period, benchmarks,
         )
 
-        # Use 'detailed' mode for full_rating to get longer outputs
-        mode = "detailed" if report_type == "full_rating" else "standard"
+        # Use 'detailed' mode for full_rating to get longer outputs; las secciones de
+        # panorama suben a 'deep' (4096) para no truncarse (ver _section_mode).
+        base_mode = "detailed" if report_type == "full_rating" else "standard"
+        mode = _section_mode(section, base_mode)
 
         # Cerebro route only for the in-scope banking template; el reporte tiene un
         # lector fijo (comité de crédito). El resto de secciones queda en ruta legacy.
@@ -188,8 +207,10 @@ async def generate_named_narratives(
         context = _build_section_context(section, bank_name, scoring_result, period, benchmarks)
         cerebro = {"axis": "banking", "audience": "comite_credito"} \
             if template == "subcomponent_focus" else {}
+        # Las secciones de panorama (resumen ejecutivo, comparativo con tablas, riesgo,
+        # recomendación) suben a 'deep' (4096) para no cortarse a mitad de frase.
         result: NarrativeResult = await narrative_engine.generate(
-            context=context, template=template, mode=mode, **cerebro,
+            context=context, template=template, mode=_section_mode(section, mode), **cerebro,
         )
         narratives[section] = result.text
     return narratives
