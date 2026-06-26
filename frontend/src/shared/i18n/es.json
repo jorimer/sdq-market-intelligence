@@ -1585,6 +1585,7 @@
       "scopeLabel": "Entidad a analizar",
       "scopePlaceholder": "Nombre de la entidad",
       "scopeSelectPlaceholder": "Elegí una entidad…",
+      "typeSelectPlaceholder": "Elegí un tipo de entidad…",
       "staffPreview": "Vista interna",
       "staffPreviewBanner": "Vista interna del equipo — no refleja la experiencia del cliente.",
       "mailSubject": "Acceso a {{product}} — {{level}}",

@@ -1585,6 +1585,7 @@
       "scopeLabel": "Entité à analyser",
       "scopePlaceholder": "Nom de l'entité",
       "scopeSelectPlaceholder": "Choisissez une entité…",
+      "typeSelectPlaceholder": "Choisissez un type d'entité…",
       "staffPreview": "Vue interne",
       "staffPreviewBanner": "Vue interne de l'équipe — pas l'expérience client.",
       "mailSubject": "Accès à {{product}} — {{level}}",
