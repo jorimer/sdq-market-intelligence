@@ -96,8 +96,13 @@ jobs:
             -e ENVIRONMENT=test \
             -p 8000:8000 \
             sdq-market-intelligence:test
-          sleep 5
-          curl -f http://localhost:8000/api/v1/health || exit 1
+          # Reintento con timeout: uvicorn + imports pesados (xgboost) a veces
+          # tardan más de 5s en aceptar conexiones; un sleep fijo es frágil.
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8000/api/v1/health && break
+            sleep 2
+          done
+          curl -fsS http://localhost:8000/api/v1/health || { docker logs smoke-test; exit 1; }
           docker stop smoke-test
 
   # El despliegue a producción lo maneja la integración nativa Railway↔GitHub
