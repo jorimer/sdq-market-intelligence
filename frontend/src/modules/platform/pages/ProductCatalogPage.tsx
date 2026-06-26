@@ -195,6 +195,7 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
 }) {
   const named = isNamed(level.tier);
   const [scope, setScope] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [options, setOptions] = useState<ScopeOption[]>([]);
   const [report, setReport] = useState<ProductReport | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(named ? "idle" : "loading");
@@ -227,12 +228,16 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Agrupa las opciones por `group` (tipo de entidad) para el <optgroup>.
-  const groupedOptions = options.reduce<Record<string, ScopeOption[]>>((acc, o) => {
+  // Selección en dos pasos: primero el TIPO de entidad (de `group`), luego la entidad de
+  // ese tipo. Tipos en orden de aparición; si las opciones no traen `group`, se cae a un
+  // solo selector de entidad.
+  const entityTypes = options.reduce<string[]>((acc, o) => {
     const g = o.group || "";
-    (acc[g] = acc[g] || []).push(o);
+    if (g && !acc.includes(g)) acc.push(g);
     return acc;
-  }, {});
+  }, []);
+  const hasTypes = entityTypes.length > 0;
+  const entitiesForType = options.filter((o) => (o.group || "") === typeFilter);
 
   return (
     <InsightDrawerShell
@@ -246,36 +251,52 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
           className="space-y-2"
         >
           <label className="text-xs text-muted block">{t("platform.catalog.scopeLabel")}</label>
-          <div className="flex gap-2">
-            {options.length > 0 ? (
-              <select
-                value={scope}
-                onChange={(e) => setScope(e.target.value)}
-                className="field flex-1"
-              >
-                <option value="">{t("platform.catalog.scopeSelectPlaceholder")}</option>
-                {Object.entries(groupedOptions).map(([group, opts]) =>
-                  group ? (
-                    <optgroup key={group} label={t(`banking.entityType.${group}`, group)}>
-                      {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </optgroup>
-                  ) : (
-                    opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
-                  ),
-                )}
-              </select>
-            ) : (
+          {options.length > 0 ? (
+            <div className="space-y-2">
+              {/* Paso 1: tipo de entidad (solo si las opciones traen tipo). */}
+              {hasTypes && (
+                <select
+                  value={typeFilter}
+                  onChange={(e) => { setTypeFilter(e.target.value); setScope(""); }}
+                  className="field w-full"
+                >
+                  <option value="">{t("platform.catalog.typeSelectPlaceholder")}</option>
+                  {entityTypes.map((g) => (
+                    <option key={g} value={g}>{t(`banking.entityType.${g}`, g)}</option>
+                  ))}
+                </select>
+              )}
+              {/* Paso 2: entidad del tipo elegido (deshabilitado hasta elegir tipo). */}
+              <div className="flex gap-2">
+                <select
+                  value={scope}
+                  onChange={(e) => setScope(e.target.value)}
+                  disabled={hasTypes && !typeFilter}
+                  className="field flex-1 disabled:opacity-50"
+                >
+                  <option value="">{t("platform.catalog.scopeSelectPlaceholder")}</option>
+                  {(hasTypes ? entitiesForType : options).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <button type="submit" disabled={!scope.trim()} className="btn btn-primary shrink-0 disabled:opacity-40">
+                  {t("platform.catalog.view")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
               <input
                 value={scope}
                 onChange={(e) => setScope(e.target.value)}
                 placeholder={t("platform.catalog.scopePlaceholder")}
                 className="field flex-1"
               />
-            )}
-            <button type="submit" disabled={!scope.trim()} className="btn btn-primary shrink-0 disabled:opacity-40">
-              {t("platform.catalog.view")}
-            </button>
-          </div>
+              <button type="submit" disabled={!scope.trim()} className="btn btn-primary shrink-0 disabled:opacity-40">
+                {t("platform.catalog.view")}
+              </button>
+            </div>
+          )}
         </form>
       )}
 

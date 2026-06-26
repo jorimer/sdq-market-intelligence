@@ -1585,6 +1585,7 @@
       "scopeLabel": "Entity to analyze",
       "scopePlaceholder": "Entity name",
       "scopeSelectPlaceholder": "Choose an entity…",
+      "typeSelectPlaceholder": "Choose an entity type…",
       "staffPreview": "Internal view",
       "staffPreviewBanner": "Staff internal view — not the customer experience.",
       "mailSubject": "Access to {{product}} — {{level}}",
