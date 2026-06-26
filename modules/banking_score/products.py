@@ -33,7 +33,7 @@ from modules.banking_score.models.models import Bank, ModelType, RatingResult
 from modules.banking_score.reports.narrative import generate_named_narratives
 from modules.banking_score.reports.pdf_generator import generate_pdf_report
 from modules.banking_score.scoring.market_concentration import compute_market_concentration
-from modules.banking_score.scoring.system_aggregate import system_band_distribution
+from modules.banking_score.scoring.system_aggregate import system_pulse_aggregate
 
 SECTOR_KEY = "banking"
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
@@ -208,7 +208,7 @@ def banking_manifest() -> SectorProductManifest:
         levels={
             ProductTier.pulse: TierLevelSpec(
                 tier=ProductTier.pulse, granularity=Granularity.system,
-                sections=("system_overview",), narrative_templates=("sector_outlook",),
+                sections=("system_overview",), narrative_templates=("system_pulse",),
                 audience="mercado / abierto", cadence="periodic",
                 watermark="Vista abierta · SDQMIP", base_report_type="sector_outlook",
                 price_band="abierto",
@@ -296,13 +296,18 @@ class BankingProduct:
                  scope: Optional[str] = None) -> ProductSnapshot:
         db = self._require_db()
         if tier == ProductTier.pulse:
-            agg = system_band_distribution(db, _parse_period(period))
+            agg = system_pulse_aggregate(db, _parse_period(period))
             payload = {
                 "band_distribution": agg["band_distribution"],
                 "n_entities": agg["n_entities"],
                 "period": agg["period"],
                 "system_avg_score": agg["system_avg_score"],
             }
+            # Cifras derivadas de sistema (anonimizadas) para que el Pulse ancle su lectura.
+            if agg.get("cifras_derivadas"):
+                payload["cifras_derivadas"] = agg["cifras_derivadas"]
+            if agg.get("tendencia_score"):
+                payload["tendencia_score"] = agg["tendencia_score"]
             return ProductSnapshot(
                 tier=tier, period=agg["period"] or period, payload=payload,
                 entity_name=None, entity_roster=tuple(agg["roster"]),
@@ -372,10 +377,18 @@ class BankingProduct:
                 "score_promedio_sistema": snapshot.payload.get("system_avg_score"),
                 "scope": "Sistema bancario dominicano (agregado, sin entidades nombradas)",
             }
-            # axis="banking" → ruta cerebro con numeric_guard (G3). Pulse es el nivel
-            # ABIERTO: jamás narra cifras sin gobernanza. Audiencia de mercado.
+            # Cifras derivadas de sistema (share por banda, cola de riesgo, concentración,
+            # trayectoria) cuando el snapshot las trae: dan al modelo de qué agarrarse en
+            # lugar de enumerar lo que falta. Degradan con gracia si no están (muestras/tests).
+            if snapshot.payload.get("cifras_derivadas"):
+                ctx["cifras_derivadas"] = snapshot.payload["cifras_derivadas"]
+            if snapshot.payload.get("tendencia_score"):
+                ctx["tendencia_score"] = snapshot.payload["tendencia_score"]
+            # axis="banking" + thin "system_pulse" (agregado de sistema, NO el IAI de
+            # sector_intel) → ruta cerebro con numeric_guard (G3). Pulse es el nivel ABIERTO:
+            # jamás narra cifras sin gobernanza. Audiencia de mercado.
             res = await narrative_engine.generate(
-                context=ctx, template="sector_outlook", mode="standard",
+                context=ctx, template="system_pulse", mode="standard",
                 axis="banking", audience="inversionista")
             return {"system_overview": res.text}
 

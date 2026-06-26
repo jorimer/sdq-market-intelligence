@@ -67,12 +67,16 @@ def db():
         s.close()
 
 
-def _seed_rating(db, name, score, tier="SDQ-A"):
-    b = Bank(name=name, bank_type=BankType.banca_multiple)
-    db.add(b)
-    db.flush()
-    db.add(RatingResult(bank_id=b.id, period_end=date(2024, 12, 31), overall_score=score,
+def _seed_rating(db, name, score, tier="SDQ-A", period=date(2024, 12, 31), activos=None):
+    b = (db.query(Bank).filter(Bank.name == name).one_or_none()
+         or Bank(name=name, bank_type=BankType.banca_multiple))
+    if b.id is None:
+        db.add(b)
+        db.flush()
+    db.add(RatingResult(bank_id=b.id, period_end=period, overall_score=score,
                         rating_tier=tier, model_type=ModelType.deterministic, model_version="1.0"))
+    if activos is not None:
+        db.add(BankingData(bank_id=b.id, period_end=period, activos_totales=activos))
     db.commit()
     return b
 
@@ -88,6 +92,81 @@ def test_pulse_snapshot_bands_and_roster(db):
     # El roster (nombres) viaja aparte para el sensor, NO en el payload narrado.
     assert "Banco Fuerte SA" in snap.entity_roster
     assert "Banco Fuerte SA" not in str(snap.payload)
+
+
+# ── Pulse ENRIQUECIDO: cifras derivadas de sistema (lección artefacto degradado 2026-06-26) ──
+
+def test_pulse_aggregate_enriched_figures(db):
+    """El agregado Pulse sirve cifras derivadas de SISTEMA precalculadas (share por banda,
+    núcleo/cola, concentración) + trayectoria vs. período previo — para que la narrativa
+    ancle en datos en vez de enumerar lo que le falta."""
+    from modules.banking_score.scoring.system_aggregate import system_pulse_aggregate
+    # Período previo (promedio más bajo) y actual (más alto) → tendencia ascendente.
+    prev = date(2024, 9, 30)
+    _seed_rating(db, "Banco Uno SA", 60, period=prev)
+    _seed_rating(db, "Banco Dos SA", 64, period=prev)
+    _seed_rating(db, "Banco Uno SA", 88, period=date(2024, 12, 31), activos=1000)
+    _seed_rating(db, "Banco Dos SA", 70, period=date(2024, 12, 31), activos=400)
+    _seed_rating(db, "Banco Tres SA", 40, period=date(2024, 12, 31), activos=100)
+
+    agg = system_pulse_aggregate(db, date(2024, 12, 31))
+    cd = agg["cifras_derivadas"]
+    assert cd["share_por_banda_pct"] == {"Fuerte": 33.3, "Adecuado": 33.3,
+                                         "Vigilancia": 0.0, "Crítico": 33.3}
+    assert cd["nucleo_solido_pct"] == 66.7 and cd["cola_de_riesgo_pct"] == 33.3
+    # Concentración agregada presente, SIN top10 nominal (anonimización).
+    assert cd["concentracion_activos"]["cr5"] is not None
+    assert "top10" not in cd["concentracion_activos"]
+    # Trayectoria: promedio sube (62 → 66) → dirección 'asciende' y delta precalculado.
+    t = agg["tendencia_score"]
+    assert t["periodo_previo"] == "2024-09-30" and t["direccion"] == "asciende"
+    assert t["delta_pts"] == round(agg["system_avg_score"] - 62.0, 2)
+    # Forma canónica que el numeric_guard ya entiende.
+    assert cd["variacion_score_actual"]["vs_trimestre_anterior"] == t["delta_pts"]
+
+
+def test_pulse_aggregate_no_prior_is_honest(db):
+    """Un único período → sin trayectoria (None), sin reventar; las cifras de corte siguen."""
+    from modules.banking_score.scoring.system_aggregate import system_pulse_aggregate
+    _seed_rating(db, "Banco Solo SA", 82, period=date(2024, 12, 31))
+    agg = system_pulse_aggregate(db, date(2024, 12, 31))
+    assert agg["tendencia_score"] is None
+    assert agg["cifras_derivadas"]["nucleo_solido_pct"] == 100.0
+    # Sin BankingData sembrada → concentración no disponible, sin reventar (ramas independientes).
+    assert "concentracion_activos" not in agg["cifras_derivadas"]
+
+
+def test_pulse_enriched_payload_stays_anonymized(db):
+    """Defensa: las cifras derivadas enriquecidas NO filtran ningún nombre del roster."""
+    from shared.products.anonymization import enforce_anonymized
+    _seed_rating(db, "Banco Reservas Secreto SA", 88, period=date(2024, 12, 31), activos=900)
+    _seed_rating(db, "Banco Popular Secreto SA", 70, period=date(2024, 12, 31), activos=500)
+    snap = BankingProduct(db).snapshot(ProductTier.pulse, "2024-12-31")
+    assert "cifras_derivadas" in snap.payload
+    # No levanta: ningún identificador del roster aparece en el payload narrado.
+    enforce_anonymized(snap.payload, entity_roster=snap.entity_roster)
+
+
+def test_pulse_narrative_passes_enriched_context(db, monkeypatch):
+    """La narrativa del Pulse usa el thin 'system_pulse' (no el 'sector_outlook' del IAI) y
+    le pasa cifras_derivadas + tendencia_score al motor."""
+    from shared.narrative import claude_engine
+    captured = {}
+
+    class _Res:
+        text = "ok"
+
+    async def _fake_generate(*, context, template, mode, axis, audience):
+        captured.update(template=template, axis=axis, ctx=context)
+        return _Res()
+
+    monkeypatch.setattr(claude_engine.narrative_engine, "generate", _fake_generate)
+    _seed_rating(db, "Banco A SA", 60, period=date(2024, 9, 30))
+    _seed_rating(db, "Banco A SA", 88, period=date(2024, 12, 31), activos=700)
+    snap = BankingProduct(db).snapshot(ProductTier.pulse, "2024-12-31")
+    asyncio.run(BankingProduct(db).narratives(ProductTier.pulse, snap))
+    assert captured["template"] == "system_pulse" and captured["axis"] == "banking"
+    assert "cifras_derivadas" in captured["ctx"] and "tendencia_score" in captured["ctx"]
 
 
 def test_pulse_assembler_blocks_leak(db):

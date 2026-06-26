@@ -1,0 +1,265 @@
+[
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "context": {
+      "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+      "bank_name": "Banco Popular Dominicano",
+      "entity_type": "banca_multiple",
+      "latest": {
+        "period_end": "2026-03-31",
+        "overall_score": 88.96,
+        "rating_tier": "SDQ-AA",
+        "band": "fuerte"
+      },
+      "sub_components": [
+        {
+          "key": "solidez",
+          "label": "Solidez financiera",
+          "score": 100.0,
+          "weight": 0.4,
+          "band": "fuerte",
+          "drag": {
+            "key": "solvencia",
+            "label": "Índice de solvencia",
+            "score": 100.0
+          },
+          "driver": {
+            "key": "patrimonio_activos",
+            "label": "Patrimonio / activos",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "calidad",
+          "label": "Calidad de activos",
+          "score": 88.76,
+          "weight": 0.3,
+          "band": "fuerte",
+          "drag": {
+            "key": "concentracion_top10",
+            "label": "Concentración top-10",
+            "score": 71.64
+          },
+          "driver": {
+            "key": "hhi_sectorial",
+            "label": "HHI sectorial de cartera",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "eficiencia",
+          "label": "Eficiencia y rentabilidad",
+          "score": 77.21,
+          "weight": 0.15,
+          "band": "adecuado",
+          "drag": {
+            "key": "cost_to_income",
+            "label": "Eficiencia operativa (cost-to-income)",
+            "score": 40.68
+          },
+          "driver": {
+            "key": "margen_financiero",
+            "label": "Margen de intermediación",
+            "score": 100.0
+          }
+        },
+        {
+          "key": "liquidez",
+          "label": "Liquidez",
+          "score": 74.97,
+          "weight": 0.1,
+          "band": "adecuado",
+          "drag": {
+            "key": "liquidez_ajustada",
+            "label": "Liquidez ajustada",
+            "score": 51.26
+          },
+          "driver": {
+            "key": "ltd",
+            "label": "Cartera / depósitos (LtD)",
+            "score": 99.36
+          }
+        },
+        {
+          "key": "diversificacion",
+          "label": "Diversificación",
+          "score": 64.98,
+          "weight": 0.05,
+          "band": "moderado",
+          "drag": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 64.98
+          },
+          "driver": {
+            "key": "hhi_ingresos",
+            "label": "HHI de ingresos",
+            "score": 64.98
+          }
+        }
+      ],
+      "trend": [
+        {
+          "period_end": "2021-03-31",
+          "score": 82.36,
+          "tier": "SDQ-AA-"
+        },
+        {
+          "period_end": "2021-06-30",
+          "score": 90.07,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2021-09-30",
+          "score": 90.22,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2021-12-31",
+          "score": 89.36,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-03-31",
+          "score": 88.38,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-06-30",
+          "score": 91.15,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2022-09-30",
+          "score": 89.99,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2022-12-31",
+          "score": 90.16,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2023-03-31",
+          "score": 89.99,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-06-30",
+          "score": 90.42,
+          "tier": "SDQ-AA+"
+        },
+        {
+          "period_end": "2023-09-30",
+          "score": 88.98,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2023-12-31",
+          "score": 89.17,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-03-31",
+          "score": 88.67,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-06-30",
+          "score": 89.79,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-09-30",
+          "score": 89.61,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2024-12-31",
+          "score": 89.93,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-03-31",
+          "score": 89.29,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-06-30",
+          "score": 89.74,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-09-30",
+          "score": 89.34,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2025-12-31",
+          "score": 89.27,
+          "tier": "SDQ-AA"
+        },
+        {
+          "period_end": "2026-03-31",
+          "score": 88.96,
+          "tier": "SDQ-AA"
+        }
+      ],
+      "peers": {
+        "period_end": "2026-03-31",
+        "sector": {
+          "n": 81,
+          "median_score": 80.18,
+          "p25_score": 76.62,
+          "p75_score": 85.25,
+          "percentile": 84.0
+        },
+        "entity_type": {
+          "n": 16,
+          "median_score": 82.65,
+          "p25_score": 78.1,
+          "p75_score": 85.25,
+          "percentile": 100.0
+        },
+        "entity_type_label": "banca_multiple"
+      }
+    }
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+    "audience": "comite_credito",
+    "text": "## Banco Popular Dominicano — Fundamento SDQ-AA (88.96)\n\nPopular ocupa el **percentil 100 entre los 16 bancos múltiples** del sistema, lo que significa que no tiene par por encima en su categoría. En el universo completo de 81 entidades supervisadas, está en el percentil 84. El rating SDQ-AA es un techo de grupo, no una posición media.\n\n**El ancla es Solidez Financiera (peso 0.40, score 100).** Con score perfecto en el componente de mayor ponderación, la ecuación de capital sostiene el rating casi sin importar lo que ocurra en los otros cuatro sub-componentes. El impulsor declarado —patrimonio/activos— señala una base patrimonial que no depende de apalancamiento agresivo. El lastre en este mismo componente es el índice de solvencia: esto sugiere que la eficiencia de capital está subutilizada, posiblemente porque Popular sobrepondera recursos propios frente a activos ponderados por riesgo. Para un acreedor, ese \"defecto\" es protección.\n\n**La tensión real está en Eficiencia & Rentabilidad (0.15) y Liquidez (0.10).** Individualmente pesan poco, pero su lectura conjunta importa: un cost-to-income que lastra la eficiencia junto a una liquidez ajustada débil apuntan al mismo canal — estructura de fondeo y base de costos operativos que no ha absorbido bien el ciclo de tasas. El sistema registra ROE de 21.0% en 2025 (BCRD) con desaceleración desde 24.3% en 2024; si Popular sigue esa trayectoria, el score de eficiencia tiene presión descendente.\n\n**La trayectoria confirma estabilidad, no momentum.** El score osciló entre 88.67 y 90.42 en los últimos 12 períodos —rango de 1.75 puntos— sin tendencia clara. Popular no está mejorando ni deteriorándose; está estacionario cerca de su techo. Para una decisión de exposición, eso es señal positiva de consistencia, pero también indica que una mejora de rating por encima de SDQ-AA requeriría un cambio estructural en eficiencia o diversificación, no optimización marginal.\n\n**Lectura para el comité:** la línea está respaldada por un colchón patrimonial sin equivalente en su categoría. El riesgo de exposición no viene de insolvencia sino de compresión de rentabilidad si el costo operativo no cede en un entorno de crecimiento de PIB moderado (2.1% en 2025 vs. 5.0% en 2024). **La señal a monitorear antes del próximo corte es el cost-to-income:** si sigue siendo el lastre dominante en eficiencia mientras el margen de intermediación se estrecha con la normalización de tasas, el score global puede deslizarse hacia 87–88 sin tocar la calidad de activos.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+    "audience": "entidad",
+    "text": "**Banco Popular Dominicano — Fundamento del rating SDQ-AA (88.96 puntos, Q1-2026)**\n\nEl rating se sostiene sobre una base real y estrecha: Solidez financiera con score perfecto (100.0) y peso de 40% es el ancla. Sin ese sub-componente, el score global caería materialmente. El impulsor —patrimonio/activos— señala una posición de capital robusta; el lastre declarado es el índice de solvencia, lo que sugiere que la entidad optimiza capital de forma más agresiva de lo que su ratio regulatorio final refleja. Esa tensión interna dentro del sub-componente de mayor peso es el primer dato que la gestión debe vigilar.\n\n**La palanca que más importa ahora no es la más débil en puntos absolutos, sino la que tiene mayor producto peso × rezago.** Calidad de activos (88.76, peso 0.30) es el segundo sub-componente por peso y el segundo más alto en score: bien posicionado, pero su lastre —concentración top-10— es un riesgo de cola, no de promedio. Si ese grupo se deteriora en un entorno de PIB al 2.1% (2025, vs. 5.0% en 2024) y con construcción contrayéndose 1.8%, el efecto sobre el score ponderado sería desproporcionado. Esto es la asimetría crítica: el daño potencial de una concentración crediticia en desaceleración supera en magnitud el beneficio marginal de mejorar Eficiencia (peso 0.15) o Liquidez (peso 0.10).\n\nEficiencia y rentabilidad (77.21, peso 0.15) tiene el lastre más operacionalmente accionable: cost-to-income. Con margen de intermediación como impulsor, Popular captura bien el spread, pero no lo convierte eficientemente en utilidad. Cerrar ese gap mejoraría el score en este sub-componente, aunque su peso limita el retorno sobre el rating global.\n\nDiversificación (64.98, peso 0.05) es el piso del perfil. Score bajo, pero peso mínimo: su contribución ponderada al score global es marginal. No es la palanca.\n\n**Posición vs. pares:** percentil 100 dentro de banca múltiple (16 entidades) y percentil 84 en el sector amplio (81 entidades). Popular es el techo de su categoría natural.\n\n**Trayectoria:** el score cedió 1.46 puntos desde junio 2023 (90.42) hasta marzo 2026 (88.96) en doce períodos, con oscilaciones dentro de una banda estrecha. No hay colapso, pero la dirección es levemente descendente y consistente. El rating aguanta; el score no recupera.\n\n**Veredicto de gestión:** la palanca con mayor retorno sobre el rating es contener la concentración top-10 antes de que el ciclo macroeconómico la active, y reducir cost-to-income para defender el score de Eficiencia. El techo del rating —SDQ-AA— está justificado hoy; sostenerlo en un entorno de menor crecimiento requiere que Calidad de activos no retroceda.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+    "audience": "inversionista",
+    "text": "## Banco Popular Dominicano — Fundamento del Rating SDQ-AA\n\nEl rating descansa en un hecho estructural: Banco Popular es la entidad mejor posicionada dentro de su universo de comparación directo. Percentil 100 entre los 16 bancos múltiples al cierre de marzo 2026; percentil 84 en el sistema amplio de 81 entidades. Eso no se construye en un trimestre —la trayectoria desde junio 2023 muestra un score que nunca baja de 88.67, con un rango de operación de 88.67–90.42 en doce períodos consecutivos. La señal es estabilidad estructural, no momentum puntual.\n\n**El motor real está donde pesa más.** Solidez financiera (40% del score) cierra en 100/100, impulsada por la relación patrimonio/activos. Ese puntaje perfecto en el sub-componente de mayor peso es lo que ancla el AA. El lastre dentro de ese mismo bloque —el índice de solvencia— sugiere que el banco opera relativamente ajustado al umbral regulatorio en ese indicador específico, aunque el sistema reporta 17.4% de solvencia agregada (IEF sept. 2024). Calidad de activos (30%) aporta 88.76: la diversificación sectorial de cartera (HHI) es el impulsor; la concentración en los top-10 deudores es el freno. Juntos, estos dos bloques representan el 70% del score y ambos están por encima de 88 —ese es el fundamento cuantitativo del AA.\n\n**La tensión que debe vigilar el inversionista está en el 15% de eficiencia.** Score de 77.21, con el cost-to-income como lastre explícito. En un entorno de desaceleración económica —el PIB dominicano cayó de 5.0% en 2024 a 2.1% en 2025— la presión sobre ingresos reduce el margen para absorber estructura de costos rígida. Si el margen de intermediación se comprime antes de que mejore la eficiencia operativa, ese sub-componente puede deteriorarse y arrastrar el score total hacia el rango bajo de los 88, aproximándose al umbral donde el diferencial vs. la mediana del sector (80.18) se vuelve menos holgado. Ese es el downside no descontado: no una crisis de capital, sino una erosión lenta de rentabilidad que reencuadra la historia de valor.\n\n**Tesis de inversión:** capitalización sólida y calidad de cartera bien diversificada sostienen el perfil de riesgo. El riesgo accionable es el costo operativo frente a un ciclo de menor crecimiento del crédito. La señal de alerta sería un deterioro sostenido del score de eficiencia por debajo de 72 en los próximos dos trimestres —eso cambiaría la lectura de \"mantener con convicción\" a \"revisar\".",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  },
+  {
+    "entity": "banco_popular_dominicano",
+    "name": "Banco Popular Dominicano",
+    "bank_id": "4997e543-d846-4600-a5de-a07355f1a756",
+    "audience": "supervisor",
+    "text": "## Banco Popular Dominicano — Fundamento SDQ-AA (marzo 2026)\n\nEl SDQ-AA descansa casi enteramente en un pilar: **solidez financiera**. Con score 100 y peso 0.40, ese sub-componente solo aporta 40 puntos al score global de 88.96. El impulsor declarado es patrimonio/activos; el lastre, el índice de solvencia. La tensión interna aquí es la que más debe ocupar al supervisor: un banco puede mostrar una base patrimonial robusta en términos relativos al activo total y al mismo tiempo presionar hacia abajo su solvencia regulatoria, señal típica de expansión de activos ponderados por riesgo más rápida que la capitalización. Si ese es el mecanismo —y los datos son consistentes con ello— el score perfecto en solidez es real hoy pero contiene una fragilidad direccional que el IEF de septiembre 2024 no contradice: el sistema reporta 17.4% de solvencia, holgado sobre el 10% regulatorio, pero esa brecha sistémica no garantiza que Popular en particular no esté comprimiendo su colchón.\n\n**Calidad de activos** (score 88.76, peso 0.30) aporta el segundo bloque más pesado. El HHI sectorial alto como impulsor indica cartera bien distribuida entre sectores; la concentración top-10 como lastre apunta a riesgo nombre. Para el supervisor, esto traduce: el riesgo no está en el sector, está en los grandes acreditados. Un estrés crediticio en dos o tres grupos corporativos puede mover la aguja más que una recesión sectorial amplia.\n\nLos tres sub-componentes restantes —eficiencia/rentabilidad (77.21, peso 0.15), liquidez (74.97, peso 0.10) y diversificación (64.98, peso 0.05)— pesan en conjunto 0.30 y arrastran el score hacia abajo, pero su impacto aritmético es limitado. El cost-to-income como lastre en eficiencia y la liquidez ajustada como lastre en liquidez merecen seguimiento, no alerta inmediata.\n\n**Posición vs pares**: percentil 100 entre los 16 bancos múltiples, percentil 84 en el sector amplio de 81 entidades. Popular no tiene competidor interno que lo supere en su categoría.\n\n**Trayectoria**: el score cayó de 90.42 (jun-2023) a 88.96 hoy, una erosión de ~1.5 puntos en tres años con movimiento lateral desde 2024. No es deterioro agudo, pero la dirección es negativa y consistente.\n\n**Para el supervisor**: la señal a monitorear no es el rating —es si el índice de solvencia sigue comprimiéndose mientras el balance crece. Ese es el único escenario donde SDQ-AA se vuelve una lectura rezagada.",
+    "model_used": "claude-sonnet-4-6",
+    "from_cache": false
+  }
+]

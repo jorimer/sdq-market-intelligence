@@ -273,6 +273,26 @@ THIN_TEMPLATES = {
         "coincida con lo servido. Si una relación no está precalculada, exprésala en palabras sin "
         "número."
     ),
+    "system_pulse": (
+        "Entrega una PERSPECTIVA DE SISTEMA del sector bancario dominicano (nivel abierto, "
+        "audiencia de mercado), a partir del agregado anonimizado:\n{context}\n\n"
+        "Es una lectura de SISTEMA, no de una entidad: NUNCA nombres ni perfiles una entidad "
+        "individual; no hay identificadores en el contexto y no debes inventarlos. Máximo 350 "
+        "palabras, formato SCQA.\n"
+        "Lee en este orden de prioridad: (1) SALUD AGREGADA — el score promedio del sistema y el "
+        "peso del núcleo sólido (bandas Fuerte/Adecuado) frente a la cola de riesgo "
+        "(Vigilancia/Crítico); (2) TRAYECTORIA — usa 'tendencia_score' (nivel actual vs. período "
+        "previo) para distinguir un techo estabilizado de un piso en ascenso; (3) ESTRUCTURA — la "
+        "concentración ('concentracion_activos': CR5/CR10/HHI) como condicionante de la estabilidad "
+        "sistémica. Cierra con el 'y por tanto' para un inversionista: qué dice el agregado sobre el "
+        "riesgo de contagio y dónde mirar.\n\n"
+        "CIFRAS DERIVADAS: 'cifras_derivadas' YA trae el share por banda, la cola de riesgo, el "
+        "núcleo sólido, la variación del score vs. el período previo y la concentración. Copia esos "
+        "valores; NO recalcules porcentajes ni declares un superlativo (mayor/menor/el más…) que no "
+        "coincida con lo servido. Si una relación no está precalculada, exprésala en palabras sin "
+        "número. Trabajas con un AGREGADO: no exijas ni supongas desglose por entidad ni por "
+        "dimensión que el sistema no provee — lee con firmeza lo que el agregado sí permite."
+    ),
     "risk_assessment": (
         "Explica el FUNDAMENTO del riesgo macro-político (IRMP) de este país.\n"
         "Contexto:\n{context}\n\n"

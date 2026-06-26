@@ -21,6 +21,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from modules.banking_score.models.models import Bank, ModelType, RatingResult
+from modules.banking_score.scoring.market_concentration import compute_market_concentration
+from shared.narrative.derived import derived_figures
 
 # (nombre de banda, umbral inferior inclusivo de score). Orden descendente.
 PULSE_BANDS: List[Tuple[str, float]] = [
@@ -86,3 +88,96 @@ def system_band_distribution(
         "system_avg_score": round(total / n, 2) if n else None,
         "roster": roster,
     }
+
+
+# Umbral de score (puntos) para llamar a una variación del promedio una tendencia y no ruido.
+_TREND_EPS = 0.5
+
+
+def _prior_det_period(db: Session, period_end: date) -> Optional[date]:
+    """Período determinista inmediatamente anterior a *period_end* (None si es el primero)."""
+    return (
+        db.query(func.max(RatingResult.period_end))
+        .filter(RatingResult.model_type == ModelType.deterministic,
+                RatingResult.period_end < period_end)
+        .scalar()
+    )
+
+
+def _band_shares(distribution: Dict[str, int], n: int) -> Dict[str, float]:
+    """Share (%) de cada banda sobre el total. Se sirve precalculado para que la narrativa
+    lo COPIE (el modelo erra al dividir conteos)."""
+    return {name: round(distribution.get(name, 0) / n * 100, 1) for name in BAND_NAMES}
+
+
+def system_pulse_aggregate(
+    db: Session, period_end: Optional[date] = None,
+) -> Dict[str, Any]:
+    """Agregado Pulse ENRIQUECIDO con cifras derivadas de SISTEMA (anonimizadas).
+
+    Extiende ``system_band_distribution`` con lo que la narrativa de sistema necesita para
+    anclar una lectura —en vez de enumerar lo que le falta—, todo sin identificadores:
+
+      - ``cifras_derivadas``: share por banda, núcleo sólido (Fuerte+Adecuado), cola de
+        riesgo (Vigilancia+Crítico), concentración de activos (CR5/CR10/HHI) y la variación
+        del score promedio vs. el período previo (vía ``derived_figures``).
+      - ``tendencia_score``: nivel actual vs. previo del promedio del sistema y su dirección
+        (asciende / desciende / estable), para distinguir techo de piso en ascenso.
+
+    Devuelve siempre ``roster`` aparte (solo para el sensor de anonimización, nunca narrado).
+    Si no hay datos, replica el contrato vacío de ``system_band_distribution`` (sin enriquecer).
+    """
+    base = system_band_distribution(db, period_end)
+    if not base["available"]:
+        return base
+
+    n = base["n_entities"]
+    dist = base["band_distribution"]
+    avg = base["system_avg_score"]
+    resolved = date.fromisoformat(base["period"])
+
+    shares = _band_shares(dist, n)
+    nucleo = round((dist.get("Fuerte", 0) + dist.get("Adecuado", 0)) / n * 100, 1)
+    cola = round((dist.get("Vigilancia", 0) + dist.get("Crítico", 0)) / n * 100, 1)
+
+    cifras: Dict[str, Any] = {
+        "share_por_banda_pct": shares,
+        "nucleo_solido_pct": nucleo,      # Fuerte + Adecuado
+        "cola_de_riesgo_pct": cola,       # Vigilancia + Crítico
+    }
+
+    # Concentración de activos (estructura del sistema). Solo cifras agregadas — NUNCA el
+    # top10 nominal que devuelve el cálculo (filtraría identificadores). OJO: el universo de
+    # concentración son las EIF con activos > 0, no necesariamente las mismas entidades que
+    # la distribución de bandas (todos los ratings deterministas) — por eso se sirve como
+    # bloque de "estructura" aparte, no como un % sobre n_entities.
+    conc = compute_market_concentration(db, resolved, "activos")
+    if conc.get("available"):
+        cifras["concentracion_activos"] = {
+            "metric_label": conc["metric_label"], "cr5": conc["cr5"],
+            "cr10": conc["cr10"], "hhi": conc["hhi"],
+        }
+
+    # Trayectoria vs. período previo (aceleración: techo estabilizado vs. piso en ascenso).
+    tendencia: Optional[Dict[str, Any]] = None
+    prior = _prior_det_period(db, resolved)
+    if prior is not None and avg is not None:
+        prev = system_band_distribution(db, prior)
+        prev_avg = prev["system_avg_score"]
+        if prev["available"] and prev_avg is not None:
+            delta = round(avg - prev_avg, 2)
+            direccion = ("asciende" if delta > _TREND_EPS
+                         else "desciende" if delta < -_TREND_EPS else "estable")
+            tendencia = {
+                "periodo_actual": base["period"], "periodo_previo": prev["period"],
+                "score_actual": avg, "score_previo": prev_avg,
+                "delta_pts": delta, "direccion": direccion,
+            }
+            # Forma canónica que el numeric_guard ya entiende (variacion_score_actual).
+            trend = [{"periodo": prev["period"], "score": prev_avg},
+                     {"periodo": base["period"], "score": avg}]
+            cifras.update(derived_figures(score=avg, subcomponents=[], trend=trend))
+
+    base["cifras_derivadas"] = cifras
+    base["tendencia_score"] = tendencia
+    return base
