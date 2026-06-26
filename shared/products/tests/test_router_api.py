@@ -153,3 +153,52 @@ def test_scope_options_endpoint_banking(db):
     assert options[0]["group"] == "banca_multiple"
     # Sector fuera del catálogo → 404 (no revela).
     assert c.get("/api/v1/products/inexistente/scope-options").status_code == 404
+
+
+def test_catalog_requires_scope_and_kind(db):
+    """El catálogo marca por nivel si pide elegir sujeto (`requires_scope`) y de qué tipo
+    (`scope_kind`). Banca pide ENTIDAD (banco, scope_options); los productos de sujeto fijo
+    (sin scope_options) cargan directo. Pulse nunca pide entidad."""
+    from datetime import date
+
+    import modules.banking_score.products  # noqa: F401 — registra banking
+    from modules.banking_score.models.models import BankType, ModelType
+    from shared.auth.models import AccessTier
+    from shared.products.access import TIER_FOR_LEVEL
+    from shared.products.models import (
+        ProductActivation, ProductEntitlement, SampleGrant, Subscription)
+    from shared.products.tiers import Granularity
+
+    # Tablas que el catálogo/can_access consultan, además de las del fixture base.
+    Base.metadata.create_all(db.bind, tables=[
+        Subscription.__table__, ProductEntitlement.__table__, SampleGrant.__table__])
+    # Entidad activa con rating (para scope_options) + activar pulse e insight de banca.
+    b = Bank(name="Banco Cat SA", bank_type=BankType.banca_multiple, is_active=True)
+    db.add(b)
+    db.flush()
+    db.add(RatingResult(bank_id=b.id, period_end=date(2024, 12, 31), overall_score=80,
+                        rating_tier="SDQ-AA", model_type=ModelType.deterministic, model_version="1.0"))
+    for tier in (ProductTier.pulse, ProductTier.insight):
+        db.add(ProductActivation(sector_key="banking", tier=tier.value, is_active=True))
+    db.commit()
+
+    # Usuario enterprise (alcanza insight) con stub que can_access entiende (.tier).
+    class _UT:
+        id = "u-cat"
+        role = UserRole.viewer
+        tier = AccessTier.enterprise
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1/products")
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: _UT()
+    levels = {lv["tier"]: lv for lv in TestClient(app).get("/api/v1/products/catalog")
+              .json()["sectors"][0]["levels"]}
+    assert levels["insight"]["requires_scope"] is True       # banca pide banco
+    assert levels["insight"]["scope_kind"] == "entity"
+    assert levels["pulse"]["requires_scope"] is False        # Pulse nunca pide entidad
+    # Sanity: insight es nivel nombrado (named_entity), pulse es de sistema.
+    from shared.products.registry import get_product
+    m = get_product("banking", db).product_manifest()
+    assert m.require_level(ProductTier.insight).granularity is Granularity.named_entity
+    assert TIER_FOR_LEVEL[ProductTier.insight] is AccessTier.pro

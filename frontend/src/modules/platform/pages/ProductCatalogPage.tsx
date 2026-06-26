@@ -11,6 +11,7 @@ import {
 } from "@/shared/ui/primitives";
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { Markdown } from "@/shared/ui/Markdown";
+import { useApp, periodToDate } from "@/shared/context/AppContext";
 import {
   getProductCatalog,
   getProductReport,
@@ -27,13 +28,11 @@ import {
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
 const SALES_EMAIL = "ventas@sdqconsulting.com.do";
 
-/** ¿El nivel necesita una entidad nombrada (Insight / Deep Dive)? */
-function isNamed(tier: string): boolean {
-  return tier === "insight" || tier === "deep_dive";
-}
-
 export function ProductCatalogPage() {
   const { t } = useTranslation();
+  // El catálogo respeta el período global del topbar (antes salía siempre el último).
+  const { period } = useApp();
+  const periodEnd = periodToDate(period);
   const [catalog, setCatalog] = useState<ProductCatalog | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [viewing, setViewing] = useState<{ sector: CatalogSector; level: CatalogLevel } | null>(null);
@@ -81,7 +80,8 @@ export function ProductCatalogPage() {
                       planLabel={planLabel}
                       onView={() => setViewing({ sector, level })}
                       onDownload={(scope) =>
-                        downloadProductPdf(sector.sector_key, level.tier, scope ? { scope } : {})
+                        downloadProductPdf(sector.sector_key, level.tier,
+                          { period: periodEnd, ...(scope ? { scope } : {}) })
                       }
                       onSampleDownloaded={load}
                       t={t}
@@ -100,6 +100,7 @@ export function ProductCatalogPage() {
         <ProductReportDrawer
           sector={viewing.sector}
           level={viewing.level}
+          periodEnd={periodEnd}
           onClose={() => setViewing(null)}
           t={t}
         />
@@ -160,7 +161,8 @@ function LevelRow({ sector, level, planLabel, onView, onDownload, onSampleDownlo
           <button onClick={onView} className="btn btn-ghost !py-1 !px-2 text-xs">
             <Eye className="w-3.5 h-3.5" /> {t("platform.catalog.view")}
           </button>
-          {!isNamed(level.tier) && (
+          {/* Descarga directa cuando no hay que elegir entidad (Pulse o sujeto fijo). */}
+          {!level.requires_scope && (
             <button onClick={() => onDownload()} className="btn btn-ghost !py-1 !px-2 text-xs">
               <Download className="w-3.5 h-3.5" /> {t("platform.catalog.download")}
             </button>
@@ -186,26 +188,36 @@ function LevelRow({ sector, level, planLabel, onView, onDownload, onSampleDownlo
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ProductReportDrawer({ sector, level, onClose, t }: {
+function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   sector: CatalogSector;
   level: CatalogLevel;
+  periodEnd: string;
   onClose: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   t: any;
 }) {
-  const named = isNamed(level.tier);
+  // Pide entidad solo si el producto la necesita (banca); los de sujeto fijo cargan directo.
+  const needsScope = level.requires_scope;
+  // Rótulos según QUÉ se elige: "country" (país, panel: macro/ESG) o "entity" (banco).
+  const isCountry = level.scope_kind === "country";
+  const scopeLabel = t(isCountry ? "platform.catalog.scopeLabelCountry" : "platform.catalog.scopeLabel");
+  const typePlaceholder = t(isCountry ? "platform.catalog.regionSelectPlaceholder" : "platform.catalog.typeSelectPlaceholder");
+  const entityPlaceholder = t(isCountry ? "platform.catalog.countrySelectPlaceholder" : "platform.catalog.scopeSelectPlaceholder");
+  const groupLabel = (g: string) =>
+    isCountry ? t(`platform.catalog.region.${g}`, g) : t(`banking.entityType.${g}`, g);
   const [scope, setScope] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [options, setOptions] = useState<ScopeOption[]>([]);
   const [report, setReport] = useState<ProductReport | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(named ? "idle" : "loading");
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(needsScope ? "idle" : "loading");
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const tierLabel = t(`platform.catalog.tier.${level.tier}`, { defaultValue: level.tier });
 
   const fetchReport = (s?: string) => {
     setStatus("loading");
     setErrMsg(null);
-    getProductReport(sector.sector_key, level.tier, s ? { scope: s } : {})
+    getProductReport(sector.sector_key, level.tier,
+      { period: periodEnd, ...(s ? { scope: s } : {}) })
       .then((r) => { setReport(r); setStatus("ready"); })
       .catch((e) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -215,10 +227,10 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
       });
   };
 
-  // Pulse (sin entidad) carga directo; los niveles nombrados esperan el scope y, si el
-  // sector expone su universo, ofrecen un selector (en vez de obligar a escribir el nombre).
+  // Sin entidad a elegir (Pulse o sujeto fijo: país/sector) → carga directo. Si la necesita
+  // (banca), trae el universo y muestra el selector en dos pasos.
   useEffect(() => {
-    if (!named) {
+    if (!needsScope) {
       fetchReport();
       return;
     }
@@ -245,28 +257,28 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
       title={report?.entity_name || sector.display_name}
       onClose={onClose}
     >
-      {named && status !== "ready" && (
+      {needsScope && status !== "ready" && (
         <form
           onSubmit={(e) => { e.preventDefault(); if (scope.trim()) fetchReport(scope.trim()); }}
           className="space-y-2"
         >
-          <label className="text-xs text-muted block">{t("platform.catalog.scopeLabel")}</label>
+          <label className="text-xs text-muted block">{scopeLabel}</label>
           {options.length > 0 ? (
             <div className="space-y-2">
-              {/* Paso 1: tipo de entidad (solo si las opciones traen tipo). */}
+              {/* Paso 1: tipo/región (solo si las opciones traen agrupador). */}
               {hasTypes && (
                 <select
                   value={typeFilter}
                   onChange={(e) => { setTypeFilter(e.target.value); setScope(""); }}
                   className="field w-full"
                 >
-                  <option value="">{t("platform.catalog.typeSelectPlaceholder")}</option>
+                  <option value="">{typePlaceholder}</option>
                   {entityTypes.map((g) => (
-                    <option key={g} value={g}>{t(`banking.entityType.${g}`, g)}</option>
+                    <option key={g} value={g}>{groupLabel(g)}</option>
                   ))}
                 </select>
               )}
-              {/* Paso 2: entidad del tipo elegido (deshabilitado hasta elegir tipo). */}
+              {/* Paso 2: sujeto del grupo elegido (deshabilitado hasta elegir grupo). */}
               <div className="flex gap-2">
                 <select
                   value={scope}
@@ -274,7 +286,7 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
                   disabled={hasTypes && !typeFilter}
                   className="field flex-1 disabled:opacity-50"
                 >
-                  <option value="">{t("platform.catalog.scopeSelectPlaceholder")}</option>
+                  <option value="">{entityPlaceholder}</option>
                   {(hasTypes ? entitiesForType : options).map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
@@ -330,7 +342,8 @@ function ProductReportDrawer({ sector, level, onClose, t }: {
           })}
           <div className="pt-2 border-t border-line">
             <button
-              onClick={() => downloadProductPdf(sector.sector_key, level.tier, named && scope ? { scope } : {})}
+              onClick={() => downloadProductPdf(sector.sector_key, level.tier,
+                { period: periodEnd, ...(needsScope && scope ? { scope } : {}) })}
               className="btn btn-ghost text-sm"
             >
               <Download className="w-4 h-4" /> {t("platform.catalog.download")}
