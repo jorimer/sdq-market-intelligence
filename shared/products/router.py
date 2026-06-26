@@ -148,6 +148,19 @@ async def get_catalog(db: Session = Depends(get_db),
     return {"sectors": sectors, "user_tier": user_tier}
 
 
+@router.get("/{sector}/scope-options", summary="Entidades elegibles de los niveles nombrados")
+async def get_scope_options(sector: str, db: Session = Depends(get_db),
+                            current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Opciones de entidad para el selector de Insight/Deep Dive del catálogo. Vacío si el
+    sector no expone ``scope_options`` (el front cae al input libre). No revela acceso: son
+    los nombres del universo del sector, ya disponibles en su selector interno."""
+    _require_sector(sector)
+    product = get_product(sector, db)
+    fn = getattr(product, "scope_options", None) if product is not None else None
+    options = fn() if callable(fn) else []
+    return {"sector": sector, "options": options}
+
+
 # ─── Entrega comercial (gateada por tier + activación) ──────────────────
 #
 # Un único handler genérico sirve los 10 sectores vía el contrato uniforme

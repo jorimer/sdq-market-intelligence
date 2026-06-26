@@ -117,6 +117,14 @@ class SectorProduct(Protocol):
     # No está en el Protocol como obligatorio: ``assembler.supports_sample`` lo detecta y
     # los sectores que aún no lo implementan simplemente no ofrecen muestra.
 
+    # ── Entidades elegibles de los niveles nombrados (OPCIONAL) ──
+    # Un sector con niveles nombrados (Insight / Deep Dive) PUEDE implementar
+    # ``scope_options() -> List[ScopeOption]`` para alimentar el selector de entidad del
+    # catálogo (en vez de obligar al usuario a escribir el nombre exacto). Cada opción es
+    # ``{"value": <id o nombre que acepta snapshot(scope=…)>, "label": <visible>,
+    # "group": <agrupador, p.ej. tipo>}``. No está en el Protocol como obligatorio: el
+    # router lo detecta por ``getattr``; un sector que no lo implemente cae al input libre.
+
 
 def required_signal_methods() -> List[str]:
     """Métodos que un sector debe implementar para el monitor (test de contrato)."""
