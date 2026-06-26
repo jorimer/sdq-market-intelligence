@@ -290,11 +290,26 @@ _GLYPH_RE = re.compile(
 )
 
 
+# Cursiva *así*: el asterisco de apertura no puede estar precedido por carácter de palabra
+# o por otro '*' (descarta '5*8' de multiplicación y los '**' de negrita), el contenido va
+# pegado a los asteriscos (no abre/cierra contra un espacio), y el de cierre no puede ir
+# seguido de palabra/'*'. El char de frontera previo se captura y se re-emite.
+_ITALIC_RE = re.compile(r"(^|[^\w*])\*([^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])")
+
+
+def _italicize(text: str) -> str:
+    return _ITALIC_RE.sub(r"\1<i>\2</i>", text)
+
+
 def _md_inline(text: str) -> str:
-    """Escape XML, then convert **bold** → <b> for a ReportLab Paragraph."""
+    """Escape XML, then convert **bold** → <b> y *cursiva* → <i> para un Paragraph de
+    ReportLab. La negrita se procesa primero y puede contener cursiva ANIDADA (se recursa
+    en su contenido); luego la cursiva en el resto. Antes solo se soportaba negrita, así
+    que la cursiva salía con el asterisco literal."""
     text = _GLYPH_RE.sub("", text)
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", lambda m: "<b>" + _italicize(m.group(1)) + "</b>", text)
+    text = _italicize(text)
     return text.strip()
 
 

@@ -281,6 +281,16 @@ def test_md_renderer_handles_headings_bold_tables_and_glyphs():
     assert _md_inline("Posición **sólida**") == "Posición <b>sólida</b>"
     # XML special chars escaped.
     assert _md_inline("a < b & c") == "a &lt; b &amp; c"
+    # *cursiva* → <i> (antes dejaba el asterisco literal); negrita y cursiva conviven.
+    assert _md_inline("el *cost-to-income* sube") == "el <i>cost-to-income</i> sube"
+    assert _md_inline("**fuerte** y *débil*") == "<b>fuerte</b> y <i>débil</i>"
+    # Un asterisco suelto (sin texto pegado) NO se toca — no es cursiva.
+    assert _md_inline("margen 5 * 3 pts") == "margen 5 * 3 pts"
+    # Multiplicación SIN espacios (5*8): el '*' va precedido de dígito → no abre cursiva,
+    # y no se come una cursiva legítima posterior.
+    assert _md_inline("rango 5*8 y *cursiva*") == "rango 5*8 y <i>cursiva</i>"
+    # Cursiva ANIDADA dentro de negrita: ambas se resuelven, sin asteriscos crudos.
+    assert _md_inline("**núcleo *sólido* hoy**") == "<b>núcleo <i>sólido</i> hoy</b>"
 
 
 def test_subcomponent_sections_get_focused_context():
@@ -307,3 +317,45 @@ def test_subcomponent_sections_get_focused_context():
     # Executive summary keeps the full picture.
     exec_ctx = _build_section_context("executive_summary", "Banreservas", sr, "2025-12")
     assert "sub_components" in exec_ctx and "indicators" in exec_ctx
+
+
+def test_panorama_sections_get_deep_token_budget():
+    """Las secciones de panorama (largas, con tope 500-700 palabras + tablas) suben a 'deep'
+    (4096 tokens) para no truncarse; las enfocadas (~200 palabras) mantienen su mode."""
+    from modules.banking_score.reports.narrative import _section_mode, _LONG_SECTIONS
+    assert _section_mode("executive_summary", "standard") == "deep"
+    assert _section_mode("comparative", "standard") == "deep"
+    assert _section_mode("recommendation", "detailed") == "deep"
+    assert _section_mode("risk_assessment", "standard") == "deep"
+    # Las enfocadas no se tocan: caben en su mode.
+    assert _section_mode("solidez_financiera", "standard") == "standard"
+    assert _section_mode("liquidez", "detailed") == "detailed"
+    assert {"executive_summary", "comparative", "recommendation"} <= _LONG_SECTIONS
+
+
+def test_named_narratives_routes_long_sections_to_deep(monkeypatch):
+    """generate_named_narratives pide presupuesto 'deep' al motor en las secciones de
+    panorama y conserva el mode en las enfocadas — sin truncar el resumen ni el comparativo."""
+    import asyncio
+
+    from shared.narrative import claude_engine
+    from modules.banking_score.reports.narrative import generate_named_narratives
+
+    seen = {}
+
+    class _Res:
+        text = "ok"
+
+    async def _fake_generate(*, context, template, mode, **kw):
+        seen[context.get("sub_componente") or template] = mode
+        return _Res()
+
+    monkeypatch.setattr(claude_engine.narrative_engine, "generate", _fake_generate)
+    sr = {"overall_score": 80, "rating_tier": "SDQ-AA", "sub_components": {"solidez": 75},
+          "indicators": {"solvencia": {"score": 100, "raw": 16, "available": True}}}
+    asyncio.run(generate_named_narratives(
+        ["executive_summary", "comparative", "solidez_financiera"], "BanReservas", sr,
+        "2025-12-31", mode="standard"))
+    assert seen["executive_summary"] == "deep"   # panorama → deep
+    assert seen["comparative"] == "deep"
+    assert seen["Solidez Financiera"] == "standard"  # enfocada → mode pedido

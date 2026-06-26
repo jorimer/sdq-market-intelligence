@@ -5,13 +5,32 @@ import { Fragment, type ReactNode } from "react";
  * paragraphs). Renders React elements (no HTML injection), styled with design tokens. */
 
 function inline(text: string): ReactNode[] {
-  // bold (**…**); everything else is plain text
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={i} className="font-semibold text-ink">{part.slice(2, -2)}</strong>;
+  // Énfasis: **negrita** (puede contener *cursiva* anidada) y *cursiva* suelta. La negrita
+  // va primero en la alternancia (gana sobre la cursiva en los `**`); la cursiva exige
+  // asteriscos pegados a texto y NO precedidos/seguidos de carácter de palabra → no captura
+  // un `*` de multiplicación (5*8) ni rompe una negrita. Sin lookbehind (compat Safari): el
+  // char de frontera previo se captura (grupo 2) y se re-emite como texto plano.
+  // Regex local por llamada: la recursión de la negrita reusaría `lastIndex` y se pisaría.
+  const re = /\*\*(.+?)\*\*|(^|[^\w*])\*([^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])/g;
+  const out: ReactNode[] = [];
+  let last = 0;
+  let k = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m[1] !== undefined) {
+      // **negrita** — recursa para resolver cursiva anidada.
+      if (m.index > last) out.push(<Fragment key={k++}>{text.slice(last, m.index)}</Fragment>);
+      out.push(<strong key={k++} className="font-semibold text-ink">{inline(m[1])}</strong>);
+    } else {
+      // *cursiva*: m[2] es el char de frontera (re-emitir como texto), m[3] el contenido.
+      const emStart = m.index + (m[2] ?? "").length;
+      if (emStart > last) out.push(<Fragment key={k++}>{text.slice(last, emStart)}</Fragment>);
+      out.push(<em key={k++}>{m[3]}</em>);
     }
-    return <Fragment key={i}>{part}</Fragment>;
-  });
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(<Fragment key={k++}>{text.slice(last)}</Fragment>);
+  return out;
 }
 
 /** Split a GFM table row "| a | b |" into trimmed cells ["a", "b"]. */
