@@ -1647,6 +1647,7 @@
     "schedActive": "On",
     "schedInactive": "Off",
     "scheduleError": "Could not save the schedule.",
+    "scheduleSaved": "Schedule updated.",
     "next": "Next:",
     "loading": "Loading operations\u2026",
     "forbidden": "Admin role required for the operation console.",
@@ -1668,6 +1669,10 @@
     "fields_one": "{{count}} field",
     "fields_other": "{{count}} fields",
     "results": {
+      "checked": "Sources checked",
+      "n_overdue": "Overdue sources",
+      "overdue": "Overdue",
+      "notified": "Alerts sent",
       "periods_scored": "Periods scored",
       "ratings_written": "Ratings written",
       "ratings_total": "Total ratings",

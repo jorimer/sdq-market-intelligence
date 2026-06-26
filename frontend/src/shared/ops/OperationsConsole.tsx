@@ -96,6 +96,12 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
   const [busy, setBusy] = useState(false);
   const [period, setPeriod] = useState("");
   const [msg, setMsg] = useState<{ tone: "ok" | "alert"; text: string } | null>(null);
+  // Estado OPTIMISTA del agendado: refleja el clic al instante (sin esperar el reload),
+  // así el toggle nunca se ve "muerto". Se sincroniza desde props y revierte si el PUT falla.
+  const [sched, setSched] = useState({ enabled: op.schedule.enabled, hours: op.schedule.interval_hours });
+  useEffect(() => {
+    setSched({ enabled: op.schedule.enabled, hours: op.schedule.interval_hours });
+  }, [op.schedule.enabled, op.schedule.interval_hours]);
   const needsPeriod = op.needs_params.includes("period");
 
   const run = async () => {
@@ -115,13 +121,16 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
   };
 
   const toggleSchedule = async (enabled: boolean, hours?: number) => {
+    const intervalHours = hours ?? sched.hours;
+    const prev = sched;
+    setSched({ enabled, hours: intervalHours });  // optimista: feedback inmediato
+    setMsg(null);
     try {
-      await setOperationSchedule(op.name, {
-        enabled,
-        interval_hours: hours ?? op.schedule.interval_hours,
-      });
+      await setOperationSchedule(op.name, { enabled, interval_hours: intervalHours });
+      setMsg({ tone: "ok", text: t("ops.scheduleSaved") });
       onChanged();
     } catch {
+      setSched(prev);  // revertir si el guardado falló
       setMsg({ tone: "alert", text: t("ops.scheduleError") });
     }
   };
@@ -176,26 +185,26 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
           <label className="ml-auto inline-flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"
-              checked={op.schedule.enabled}
+              checked={sched.enabled}
               onChange={(e) => toggleSchedule(e.target.checked)}
               className="accent-[var(--accent)]"
             />
-            <span className="text-xs text-muted">{op.schedule.enabled ? t("ops.schedActive") : t("ops.schedInactive")}</span>
+            <span className="text-xs text-muted">{sched.enabled ? t("ops.schedActive") : t("ops.schedInactive")}</span>
           </label>
         </div>
-        {op.schedule.enabled && (
+        {sched.enabled && (
           <div className="flex flex-wrap items-center gap-2">
             <select
-              value={op.schedule.interval_hours}
+              value={sched.hours}
               onChange={(e) => toggleSchedule(true, Number(e.target.value))}
               className="field !py-1 !px-2 text-xs w-32"
             >
               {CADENCES.map((c) => (
                 <option key={c.hours} value={c.hours}>{t(`ops.cadence.${c.key}`)}</option>
               ))}
-              {!CADENCES.some((c) => c.hours === op.schedule.interval_hours) && (
-                <option value={op.schedule.interval_hours}>
-                  {t("ops.everyHours", { hours: op.schedule.interval_hours })}
+              {!CADENCES.some((c) => c.hours === sched.hours) && (
+                <option value={sched.hours}>
+                  {t("ops.everyHours", { hours: sched.hours })}
                 </option>
               )}
             </select>

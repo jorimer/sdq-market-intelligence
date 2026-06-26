@@ -1647,6 +1647,7 @@
     "schedActive": "Activo",
     "schedInactive": "Inactivo",
     "scheduleError": "No se pudo guardar el agendado.",
+    "scheduleSaved": "Agendado actualizado.",
     "next": "Pr\u00f3ximo:",
     "loading": "Cargando operaciones\u2026",
     "forbidden": "Se requiere rol admin para la consola de operaci\u00f3n.",
@@ -1668,6 +1669,10 @@
     "fields_one": "{{count}} campo",
     "fields_other": "{{count}} campos",
     "results": {
+      "checked": "Fuentes revisadas",
+      "n_overdue": "Fuentes atrasadas",
+      "overdue": "Atrasadas",
+      "notified": "Avisos enviados",
       "periods_scored": "Per\u00edodos calificados",
       "ratings_written": "Ratings escritos",
       "ratings_total": "Ratings totales",

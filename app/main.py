@@ -119,6 +119,7 @@ import modules.energy_intel.operations  # noqa: F401 — registers sie-energy-sy
 import modules.telecom_intel.operations  # noqa: F401 — registers indotel-telecom-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
+import shared.operations.freshness  # noqa: F401 — registers data-freshness-audit (alerta dato viejo)
 
 # Product catalog: each sector registers its SectorProduct into shared.products at
 # import time (anti-Frankenstein: shared/products never imports a sector).
@@ -134,7 +135,10 @@ from app import products_macro as _products_macro  # noqa: F401 — registers ma
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":
-    from shared.operations import start_scheduler
+    from shared.operations import seed_default_schedules, start_scheduler
+    # Activa por defecto las agendas que falten (todas las syncs recurrentes corren
+    # solas tras el deploy; idempotente, respeta cambios manuales) y arranca el tick.
+    seed_default_schedules()
     start_scheduler()
 
 # Serve frontend in production.

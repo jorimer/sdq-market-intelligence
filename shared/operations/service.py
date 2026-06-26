@@ -261,19 +261,65 @@ def set_schedule(db: Session, op_name: str, enabled: bool,
                  interval_hours: Optional[int] = None, params: Optional[Dict] = None) -> Dict:
     if op_name not in OPERATIONS:
         raise ValueError(f"Operación desconocida: {op_name}")
-    r = db.query(OperationSchedule).filter_by(operation=op_name).first()
-    if not r:
-        r = OperationSchedule(operation=op_name, enabled=False,
-                              interval_hours=OPERATIONS[op_name].default_interval_hours)
-        db.add(r)
-    r.enabled = bool(enabled)
-    if interval_hours is not None:
-        r.interval_hours = max(1, int(interval_hours))
-    if params is not None:
-        r.params = params
-    r.next_run_at = (_dt() + timedelta(hours=r.interval_hours)) if r.enabled else None
-    db.commit()
-    return get_schedules(db)[op_name]
+    try:
+        r = db.query(OperationSchedule).filter_by(operation=op_name).first()
+        if not r:
+            r = OperationSchedule(operation=op_name, enabled=False,
+                                  interval_hours=OPERATIONS[op_name].default_interval_hours)
+            db.add(r)
+        r.enabled = bool(enabled)
+        if interval_hours is not None:
+            r.interval_hours = max(1, int(interval_hours))
+        if params is not None:
+            r.params = params
+        r.next_run_at = (_dt() + timedelta(hours=r.interval_hours)) if r.enabled else None
+        db.commit()
+        return get_schedules(db)[op_name]
+    except Exception as e:  # noqa: BLE001 — el toggle nunca debe 500 mudo (la UI sólo
+        # vería "no pasa nada"); devolvemos un error legible (→ 400 en el router) y
+        # dejamos rastro para diagnosticar (p.ej. tabla ausente pre-migración).
+        db.rollback()
+        logger.exception("set_schedule falló para %s", op_name)
+        raise ValueError(f"No se pudo guardar el agendado de '{op_name}': {e}")
+
+
+def seed_default_schedules(db: Optional[Session] = None) -> int:
+    """Activa una agenda por defecto para cada operación recurrente que aún no tenga una.
+
+    Idempotente: solo CREA las que faltan (respeta lo que el admin haya configurado a
+    mano después), activadas con la cadencia recomendada de cada operación. Omite las
+    on-demand (cadencia 0) y las que necesitan parámetros. Devuelve cuántas creó.
+
+    Permite que un deploy nuevo corra todas las syncs solo, sin togglear a mano. Seguro
+    con múltiples workers: el INSERT compite por la unique constraint y el perdedor
+    revierte sin duplicar.
+    """
+    own = db is None
+    db = db or SessionLocal()
+    try:
+        try:
+            existing = {r.operation for r in db.query(OperationSchedule).all()}
+        except Exception:  # noqa: BLE001 — tabla ausente (pre-migración/tests)
+            db.rollback()
+            return 0
+        created = 0
+        for name, op in OPERATIONS.items():
+            if name in existing or op.default_interval_hours <= 0 or op.needs_params:
+                continue
+            db.add(OperationSchedule(
+                operation=name, enabled=True, interval_hours=op.default_interval_hours,
+                next_run_at=_dt() + timedelta(hours=op.default_interval_hours)))
+            try:
+                db.commit()
+                created += 1
+            except Exception:  # noqa: BLE001 — otro worker tomó el slot (unique)
+                db.rollback()
+        if created:
+            logger.info("seed_default_schedules: %d agendas creadas", created)
+        return created
+    finally:
+        if own:
+            db.close()
 
 
 def run_due_schedules(db: Optional[Session] = None) -> int:
