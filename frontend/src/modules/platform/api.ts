@@ -247,6 +247,11 @@ export interface CatalogLevel {
   audience: string;
   /** Solo en niveles bloqueados: muestra demo disponible (no descargada aún). */
   sample_available: boolean;
+  /** El nivel nombrado necesita que el usuario ELIJA un sujeto. Los productos de sujeto
+   *  fijo (sector nacional) cargan directo, sin pedir nada. */
+  requires_scope: boolean;
+  /** Qué se elige cuando requires_scope: "entity" (banco) | "country" (país, panel). */
+  scope_kind: string;
 }
 export interface CatalogSector {
   sector_key: string;

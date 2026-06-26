@@ -43,7 +43,7 @@ from shared.products.assembler import (
 from shared.products.models import SampleGrant
 from shared.products.registry import CATALOG_BY_KEY, PRODUCT_CATALOG, get_product
 from shared.products.service import build_matrix, recompute_readiness, sector_detail
-from shared.products.tiers import ProductTier
+from shared.products.tiers import Granularity, ProductTier
 
 router = APIRouter()
 
@@ -126,6 +126,14 @@ async def get_catalog(db: Session = Depends(get_db),
             continue
         manifest = product.product_manifest()
         has_sample = supports_sample(product)
+        # ¿El nivel nombrado necesita que el usuario ELIJA una entidad? Solo si el producto
+        # expone su universo (``scope_options``). Los productos de sujeto FIJO (sector
+        # nacional: trade, energía…) ignoran el scope → no deben pedir nada.
+        requires_scope = callable(getattr(product, "scope_options", None))
+        # Tipo de sujeto a elegir → rótulo correcto en el catálogo: "entity" (banco) por
+        # defecto, "country" (país, panel) para los índices de riesgo-país (macro/ESG).
+        _sk = getattr(product, "scope_kind", None)
+        scope_kind = (_sk() if callable(_sk) else _sk) or "entity"
         levels = []
         for tier in manifest.tiers():
             decision = can_access(db, current_user, entry.sector_key, tier)
@@ -143,6 +151,8 @@ async def get_catalog(db: Session = Depends(get_db),
                 not unlocked and has_sample
                 and (entry.sector_key, tier.value) not in used_samples
             )
+            # Solo los niveles nombrados (no Pulse) pueden requerir una entidad elegida.
+            named = spec.granularity is not Granularity.system
             levels.append({
                 "tier": tier.value,
                 "unlocked": unlocked,
@@ -151,6 +161,8 @@ async def get_catalog(db: Session = Depends(get_db),
                 "price_band": spec.price_band,
                 "audience": spec.audience,
                 "sample_available": sample_available,
+                "requires_scope": named and requires_scope,
+                "scope_kind": scope_kind,
             })
         if levels:
             sectors.append({"sector_key": entry.sector_key,

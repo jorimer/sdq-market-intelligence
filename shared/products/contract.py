@@ -118,12 +118,16 @@ class SectorProduct(Protocol):
     # los sectores que aún no lo implementan simplemente no ofrecen muestra.
 
     # ── Entidades elegibles de los niveles nombrados (OPCIONAL) ──
-    # Un sector con niveles nombrados (Insight / Deep Dive) PUEDE implementar
-    # ``scope_options() -> List[ScopeOption]`` para alimentar el selector de entidad del
-    # catálogo (en vez de obligar al usuario a escribir el nombre exacto). Cada opción es
-    # ``{"value": <id o nombre que acepta snapshot(scope=…)>, "label": <visible>,
-    # "group": <agrupador, p.ej. tipo>}``. No está en el Protocol como obligatorio: el
-    # router lo detecta por ``getattr``; un sector que no lo implemente cae al input libre.
+    # Un sector con un sujeto ELEGIBLE en sus niveles nombrados (Insight / Deep Dive) PUEDE
+    # implementar ``scope_options() -> List[ScopeOption]`` para alimentar el selector del
+    # catálogo. Cada opción es ``{"value": <lo que acepta snapshot(scope=…)>, "label":
+    # <visible>, "group": <agrupador key, p.ej. tipo o región>}``. No está en el Protocol
+    # como obligatorio: el catálogo lo detecta por ``getattr``. Un producto de sujeto FIJO
+    # (sector/país nacional único) NO lo implementa → su nivel nombrado carga directo.
+    #
+    # ``scope_kind() -> str`` (OPCIONAL, default "entity") declara QUÉ se elige, para el
+    # rótulo correcto del catálogo: "entity" (banco) o "country" (país de un panel: macro/ESG,
+    # índices de riesgo-país). El catálogo lo detecta por ``getattr``.
 
 
 def required_signal_methods() -> List[str]:
