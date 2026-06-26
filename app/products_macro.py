@@ -386,11 +386,21 @@ class MacroProduct:
                 continue
             ctx = dict(base_ctx)
             if section == "peer_position":
-                pos = snapshot.payload.get("peer_position") or {}
+                pos = dict(snapshot.payload.get("peer_position") or {})
+                # Precalcular las distancias (media/líder) para que el modelo cite cifras
+                # EXACTAS guardadas, no las derive (regla del thin: número solo si está
+                # precalculado). El score del país es la referencia.
+                dist = pos.get("distribution") or {}
+                score = snapshot.payload.get("irmp_score")
+                if score is not None and dist.get("mean") is not None:
+                    pos["delta_vs_media"] = round(score - dist["mean"], 2)
+                if score is not None and dist.get("max") is not None:
+                    pos["delta_vs_lider"] = round(score - dist["max"], 2)
                 ctx["posicion_panel"] = pos
-                ctx["enfoque"] = ("Posición RELATIVA del país en el panel regional: rank y "
-                                  "distancia a la media del panel; qué dimensión explica el "
-                                  "diferencial frente al líder. No repitas el score; ubícalo.")
+                ctx["enfoque"] = ("Posición RELATIVA del país en el panel regional: usa el rank "
+                                  "y las distancias precalculadas (delta_vs_media, delta_vs_lider; "
+                                  "recordá: mayor IRMP = menor riesgo) para ubicarlo; qué dimensión "
+                                  "explica el diferencial frente al líder. No repitas el score; ubícalo.")
             elif section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: prioriza la palanca de política o gestión "
                                   "de riesgo país con mayor retorno sobre la resiliencia macro, "
