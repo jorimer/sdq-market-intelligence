@@ -9,7 +9,7 @@ insight endpoints land in F1/F2.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user, require_role
@@ -244,3 +244,36 @@ async def trigger_sync(
     """Trigger the SIPEN sync (admin only)."""
     from shared.operations.service import trigger
     return trigger("sipen-sync", origin="api", user_id=current_user.id)
+
+
+@router.post("/financials/upload")
+async def upload_financials(
+    afp_slug: str = Form(..., description="AFP slug, p.ej. afp_popular"),
+    file: UploadFile = File(..., description="Estado financiero (PDF o XLSX)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Manual upload of one AFP's estados financieros (PDF/XLSX) → ingest + recompute ISA.
+
+    The always-works path when the live sync can't get past SIPEN's bot wall. Extracts
+    patrimonio/activos with the AI-native engine → activates the AFP's solvency dimension.
+    """
+    from modules.pension_intel.financials_sync import ingest_financials
+    content = await file.read()
+    try:
+        result = ingest_financials(db, afp_slug, content, file.filename or "upload.pdf")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Carga de estados financieros falló")
+        raise HTTPException(status_code=500, detail=f"No se pudo procesar el archivo: {e}")
+    return {"ok": True, **result}
+
+
+@router.post("/financials/sync")
+async def trigger_financials_sync(
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Trigger the live estados-financieros sync (admin only). Runs from Railway."""
+    from shared.operations.service import trigger
+    return trigger("sipen-financials-sync", origin="api", user_id=current_user.id)
