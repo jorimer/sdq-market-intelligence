@@ -249,31 +249,37 @@ class AuditedPdfExtractor:
     def extract_statements(self, file_path: str) -> Dict[str, Any]:  # pragma: no cover - I/O + AI
         """Return {company_info, balance_general[], estado_resultados[]} for a PDF.
 
-        Digital / OCR-text-layer PDFs go through the proven text path. Image-only scans
-        (e.g. SIPEN's AFP statements, some SIB fiduciary PDFs) go through Claude VISION on
-        the page images — far more reliable on scanned tables than Tesseract OCR, which
-        mangled the "Total activos" line. OCR text remains the last-resort fallback."""
+        Digital / OCR-text-layer PDFs → the proven text path. Image-only scans (e.g.
+        SIPEN's AFP statements, some SIB fiduciary PDFs) → OCR→Claude, which reads the
+        regulatory grand totals reliably (the missing figures were a label-mapping bug,
+        not OCR quality — see fiduciaria_pdf_client). Claude VISION on the page images is
+        kept only as a fallback for the rare scan too poor for OCR (no image-token cost
+        on the common path)."""
         text, n_pages = _pdfplumber_text(file_path)
         if _has_text_layer(text, n_pages):
             return self._extract_with_fallback(text[:180_000])
 
+        # Scanned: OCR→Claude is the default (cheap; reads the totals fine).
+        ocr_text = extract_pdf_text(file_path)
+        if ocr_text and len(ocr_text.strip()) >= 400:
+            return self._extract_with_fallback(ocr_text)
+
+        # Vision fallback only when OCR yields too little to parse.
         if pdf_render_available():
             try:
                 images = render_pdf_images(file_path)
                 if images:
-                    logger.info("[AuditedPdf] PDF escaneado (%d pág, sin capa de texto) → visión Claude (%d imgs)",
-                                n_pages, len(images))
+                    logger.info("[AuditedPdf] OCR pobre (%d chars) → visión Claude (%d imgs)",
+                                len(ocr_text or ""), len(images))
                     return self._extract_from_images(images)
-            except Exception as e:  # noqa: BLE001 — fall back to OCR text
-                logger.warning("[AuditedPdf] visión falló (%s) → OCR de respaldo", e)
+            except Exception as e:  # noqa: BLE001 — keep whatever OCR we have
+                logger.warning("[AuditedPdf] visión de respaldo falló: %s", e)
 
-        ocr_text = extract_pdf_text(file_path)
-        if not ocr_text or len(ocr_text.strip()) < 100:
-            raise ValueError(
-                "No se pudo extraer texto suficiente del PDF "
-                "(puede estar vacío, dañado o protegido)."
-            )
-        return self._extract_with_fallback(ocr_text)
+        if ocr_text and len(ocr_text.strip()) >= 100:
+            return self._extract_with_fallback(ocr_text)
+        raise ValueError(
+            "No se pudo extraer texto suficiente del PDF (puede estar vacío, dañado o protegido)."
+        )
 
     def _extract_from_images(self, images_b64: List[str]) -> Dict[str, Any]:  # pragma: no cover - network
         """Claude-vision extraction: send the page images + the JSON contract, parse/repair."""
