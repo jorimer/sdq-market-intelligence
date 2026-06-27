@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -35,11 +35,25 @@ _BROWSER_HEADERS = {
                   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
-# Confirmed SIPEN download shape: /descarga/<concepto>_<YYYY>_<MM>_<timestamp>.{pdf,xlsx}
-_DESCARGA_RE = re.compile(
-    r"/descarga/[^\"'> ]*estados-financieros[^\"'> ]*\.(?:pdf|xlsx)", re.IGNORECASE)
+_SITE = "https://sipen.gob.do"
+# Verified site structure (live probe 2026-06-27): the estados-financieros portal is a
+# 4-level hierarchy, NOT a flat landing — AFP index → per-AFP page → per-year page →
+# the actual /descarga/ files (scanned monthly PDFs). Per-AFP attribution comes from the
+# PATH (reliable), and the period from the file's "_YYYY_MM_" timestamp suffix. The files
+# are named "<afp-token>-<year>_<YYYY>_<MM>_<ts>.pdf" — they do NOT contain the literal
+# "estados-financieros", so file discovery keys on /descarga/ + the period stamp only.
+EF_AFP_INDEX = f"{_SITE}/estadisticas/estados-financieros-afp/estados-financieros"
+_FILE_RE = re.compile(r"/descarga/[^\"'> ]+\.(?:pdf|xlsx)", re.IGNORECASE)
 _PERIOD_RE = re.compile(r"_(\d{4})_(\d{2})_")
-EF_AFP_LANDING = "https://www.sipen.gob.do/estadisticas/estados-financieros-afp"
+
+
+def _abs(url: str) -> str:
+    return url if url.startswith("http") else _SITE + url
+
+
+def _afp_token(slug: str) -> str:
+    """Our slug → the site's path token: afp_jmmb_bdi → afp-jmmb-bdi."""
+    return "afp-" + slug[len("afp_"):].replace("_", "-")
 
 
 def _upsert_series(db: Session, slug: str, code: str, period: str,
@@ -100,67 +114,89 @@ def ingest_financials(
 
 
 # ── Live discovery (Railway: static egress + browser UA) ──────────────────────
+# Pure HTML parsers (offline-testable); the orchestrator does the network I/O.
 
-def discover_ef_links(html_text: str) -> List[Tuple[str, str]]:
-    """``[(period "YYYY-MM", url)]`` for the estados-financieros downloads in a landing.
+def afp_page_links(index_html: str) -> Dict[str, str]:
+    """``{afp_slug: url}`` of the per-AFP pages, from the estados-financieros index.
 
-    Best-effort over the confirmed ``/descarga/…estados-financieros…`` URL shape; the
-    latest file per period wins (timestamp suffix). Verifies on the first real run."""
-    seen: Dict[str, str] = {}
-    for raw in _DESCARGA_RE.findall(html_text):
+    Keys only AFPs in our catalog (site token afp-jmmb-bdi → slug afp_jmmb_bdi). The
+    URL is built from the verified index path, so it's independent of relative/abs hrefs."""
+    known = {_afp_token(slug): slug for slug, _ in afp_catalog()}
+    out: Dict[str, str] = {}
+    for token in re.findall(r"/estados-financieros/(afp-[a-z0-9-]+)", index_html, re.IGNORECASE):
+        slug = known.get(token.lower())
+        if slug:
+            out[slug] = f"{EF_AFP_INDEX}/{token.lower()}"
+    return out
+
+
+def year_links(afp_html: str, token: str) -> Dict[int, str]:
+    """``{year: url}`` of the per-year sub-pages on an AFP page (e.g. .../afp-popular-2026)."""
+    out: Dict[int, str] = {}
+    pat = re.compile(rf'["\']([^"\']*/{re.escape(token)}/[^"\']*?(20\d{{2}}))["\']', re.IGNORECASE)
+    for url, year in pat.findall(afp_html):
+        out[int(year)] = _abs(url)
+    return out
+
+
+def file_links(year_html: str) -> Dict[str, str]:
+    """``{period "YYYY-MM": url}`` of the /descarga/ statement files on a per-year page.
+
+    The latest file per period wins (timestamped). Files without a "_YYYY_MM_" stamp are
+    skipped (we never guess a period)."""
+    out: Dict[str, str] = {}
+    for raw in _FILE_RE.findall(year_html):
         m = _PERIOD_RE.search(raw)
-        period = f"{m.group(1)}-{m.group(2)}" if m else None
-        if period:
-            seen[period] = raw  # later match (sorted by appearance) overwrites; ok
-    base = "https://www.sipen.gob.do"
-    return [(p, (u if u.startswith("http") else base + u)) for p, u in sorted(seen.items())]
+        if m:
+            out[f"{m.group(1)}-{m.group(2)}"] = _abs(raw)
+    return out
 
 
 def sipen_financials_sync(
     db: Session, set_phase: Optional[Callable[[str], None]] = None,
     only_latest: bool = True,
 ) -> Dict:  # pragma: no cover - network I/O (verifies on Railway)
-    """LIVE: scrape the estados-financieros landing, download + ingest each file.
+    """LIVE: crawl SIPEN's estados-financieros hierarchy and ingest each AFP's statement.
 
-    Best-effort and per-AFP attribution is approximate (the landing groups by AFP/period);
-    a failed file never aborts the run. Runs from Railway where the static egress IPs and
-    a browser UA may pass SIPEN's bot wall."""
+    For each AFP: latest-year page → its files. ``only_latest`` (default) ingests just the
+    most recent month per AFP; otherwise every month of the latest year. Per-AFP attribution
+    is by PATH (reliable). A failed file/AFP never aborts the run. Runs from Railway (static
+    egress IPs + browser UA pass SIPEN's bot wall)."""
     import httpx
 
     set_phase = set_phase or (lambda _m: None)
     sipen_client.check_license()
-    set_phase("Descubriendo estados financieros (SIPEN)")
+    set_phase("Descubriendo AFP (SIPEN)")
     errors: List[str] = []
     ingested = 0
     try:
-        with httpx.Client(timeout=60, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
-            html = http.get(EF_AFP_LANDING).text
-            links = discover_ef_links(html)
-            if only_latest:
-                links = links[-1:]
-            for period, url in links:
-                set_phase(f"Descargando {period}")
+        with httpx.Client(timeout=90, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
+            afps = afp_page_links(http.get(EF_AFP_INDEX).text)
+            if not afps:
+                return {"error": "no se descubrieron páginas de AFP en el índice de SIPEN",
+                        "ingested": 0, "errors": []}
+            names = {slug: name for slug, name in afp_catalog()}
+            for slug, afp_url in afps.items():
                 try:
-                    content = http.get(url).content
-                    fname = url.rsplit("/", 1)[-1]
-                    # Attribution by AFP is resolved from the document itself (company_info);
-                    # we map to the matching slug by name when possible.
-                    slug = _slug_from_doc_or_default(content, fname)
-                    ingest_financials(db, slug, content, fname, set_phase=set_phase)
-                    ingested += 1
-                except Exception as e:  # noqa: BLE001
-                    errors.append(f"{period}: {e}")
+                    years = year_links(http.get(afp_url).text, _afp_token(slug))
+                    if not years:
+                        errors.append(f"{slug}: sin años")
+                        continue
+                    files = file_links(http.get(years[max(years)]).text)
+                    if not files:
+                        errors.append(f"{slug}: sin archivos en {max(years)}")
+                        continue
+                    periods = sorted(files)
+                    chosen = periods[-1:] if only_latest else periods
+                    for period in chosen:
+                        url = files[period]
+                        set_phase(f"{names[slug]} · {period}")
+                        content = http.get(url).content
+                        ingest_financials(db, slug, content, url.rsplit("/", 1)[-1],
+                                          set_phase=set_phase)
+                        ingested += 1
+                except Exception as e:  # noqa: BLE001 — best-effort per AFP
+                    errors.append(f"{slug}: {e}")
     except Exception as e:  # noqa: BLE001
         return {"error": str(e), "ingested": ingested, "errors": errors}
     return {"ingested": ingested, "errors": errors}
-
-
-def _slug_from_doc_or_default(content: bytes, filename: str) -> str:  # pragma: no cover
-    """Best-effort AFP slug from the filename; falls back to the first AFP. The live
-    path's attribution is refined once the real landing/file naming is observed."""
-    low = (filename or "").lower()
-    for slug, name in afp_catalog():
-        token = slug.replace("afp_", "")
-        if token in low:
-            return slug
-    return afp_catalog()[0][0]
