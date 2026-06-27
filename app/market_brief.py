@@ -194,6 +194,39 @@ def assemble_snapshot(db) -> Dict[str, Any]:
         logger.warning("brief: sectorial no disponible: %s", e)
         axes.append({"eje": "Sectorial", "available": False})
 
+    # ── Pensiones (SIPEN) — pulso del sistema + dispersión/ISA por AFP ──
+    try:
+        from modules.pension_intel.scoring.isa import compute_isa
+        from modules.pension_intel.service import build_system_pulse
+        pulse = build_system_pulse(db)
+        head = pulse.get("headline") or {}
+        afp = pulse.get("afp_rentabilidad") or {}
+        cci = head.get("sipen.rentabilidad.cci_nominal_anual")
+        isa = [r for r in compute_isa(db) if r.get("overall_score") is not None]
+        if cci is not None or isa:
+            ranked = sorted(isa, key=lambda r: r["overall_score"], reverse=True)
+            detail: Dict[str, Any] = {
+                "rentabilidad_cci_nominal": _round(cci),
+                "rentabilidad_sdp_nominal": _round(head.get("sipen.rentabilidad.sdp_nominal_anual")),
+                "brecha_rentabilidad_pp": _round(afp.get("spread"), 2),
+                "n_afp_calificables": len(isa),
+            }
+            if ranked:
+                detail["isa_lider"] = {"afp": ranked[0]["name"], "isa": _round(ranked[0]["overall_score"])}
+                detail["isa_rezagada"] = {"afp": ranked[-1]["name"], "isa": _round(ranked[-1]["overall_score"])}
+            axes.append({
+                "eje": "Pensiones", "available": True, "period": pulse.get("period"),
+                "headline": "Sistema de pensiones (SIPEN)",
+                "score": _round(cci), "score_label": "rentabilidad nominal CCI (%)",
+                "detail": detail,
+                "nota": "ISA relativo y PARCIAL: solvencia = brecha declarada, bandas absolutas diferidas.",
+            })
+        else:
+            axes.append({"eje": "Pensiones", "available": False})
+    except Exception as e:  # noqa: BLE001
+        logger.warning("brief: pensiones no disponible: %s", e)
+        axes.append({"eje": "Pensiones", "available": False})
+
     return {"pais": "República Dominicana", "axes": axes}
 
 
@@ -242,9 +275,9 @@ def _run_market_brief(params, user_id, set_phase) -> Dict[str, Any]:
 def register() -> None:
     register_operation(Operation(
         "market-brief", "Generar Market Brief",
-        "Ensambla el estado de los 7 ejes (financiero, macro-fiscal, regulatorio, "
-        "comercio, social, ESG, sectorial) y genera un brief de mercado ejecutivo de "
-        "RD con Claude. Cachea el resultado; agendable para un brief recurrente.",
+        "Ensambla el estado de los ejes (financiero, macro-fiscal, regulatorio, "
+        "comercio, social, ESG, sectorial, pensiones) y genera un brief de mercado "
+        "ejecutivo de RD con Claude. Cachea el resultado; agendable para un brief recurrente.",
         _run_market_brief, default_interval_hours=168,  # semanal
     ))
 
