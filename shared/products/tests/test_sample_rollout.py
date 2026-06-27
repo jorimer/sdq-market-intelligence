@@ -52,13 +52,14 @@ def _register_all():
     import modules.sector_intel.products  # noqa: F401
     import modules.telecom_intel.products  # noqa: F401
     import modules.trade_intel.products  # noqa: F401
+    import modules.pension_intel.products  # noqa: F401
 
 
 def test_all_ten_sectors_have_demo_data():
     """Los 10 sectores tienen datos demo (`sample_snapshot`) — base del exemplar."""
     _register_all()
     sectors = registered_sectors()
-    assert len(sectors) == len(PRODUCT_CATALOG) == 10
+    assert len(sectors) == len(PRODUCT_CATALOG)
     for key in sectors:
         product = get_product(key, None)
         assert callable(getattr(product, "sample_snapshot", None)), f"{key} sin datos demo"

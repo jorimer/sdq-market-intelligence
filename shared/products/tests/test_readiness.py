@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from shared.auth.models import User  # noqa: F401 — FK de product_activation
 from shared.database.base import Base
 from shared.products import (
+    PRODUCT_CATALOG,
     DataHealth,
     Granularity,
     ProductSnapshot,
@@ -195,9 +196,9 @@ def test_recompute_and_matrix_with_banking(db):
     # banking lee sus tablas (data_signals/has_engine) → crearlas en la misma DB.
     Base.metadata.create_all(db.get_bind(), tables=[Bank.__table__, RatingResult.__table__])
     res = recompute_readiness(db)
-    assert res["recomputed"] == 30  # 10 sectores × 3 niveles
+    assert res["recomputed"] == len(PRODUCT_CATALOG) * 3  # sectores × 3 niveles
     matrix = build_matrix(db)
-    assert len(matrix["sectors"]) == 10
+    assert len(matrix["sectors"]) == len(PRODUCT_CATALOG)
     banking = next(s for s in matrix["sectors"] if s["sector_key"] == "banking")
     assert banking["implemented"] is True
     # Cualquier sector NO cableado → readiness 0 en los 3 niveles, no activable

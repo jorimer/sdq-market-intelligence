@@ -10,6 +10,7 @@ from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import User, UserRole
 from shared.database.base import Base
 from shared.database.session import get_db
+from shared.products import PRODUCT_CATALOG
 from shared.products.models import ProductActivation, ProductReadiness
 from shared.products.router import router
 from shared.products.tiers import ProductTier
@@ -70,7 +71,7 @@ def test_get_readiness_matrix(db):
     c = _client(db)
     r = c.get("/api/v1/products/readiness")
     assert r.status_code == 200
-    assert len(r.json()["sectors"]) == 10
+    assert len(r.json()["sectors"]) == len(PRODUCT_CATALOG)
 
 
 def test_get_sector_detail_and_404(db):
@@ -109,7 +110,7 @@ def test_recompute_admin_ok(db):
     c = _client(db)
     r = c.post("/api/v1/products/readiness/recompute")
     assert r.status_code == 200
-    assert r.json()["recomputed"] == 30
+    assert r.json()["recomputed"] == len(PRODUCT_CATALOG) * 3
 
 
 def test_event_recompute_refreshes(db, monkeypatch):
@@ -118,7 +119,7 @@ def test_event_recompute_refreshes(db, monkeypatch):
     monkeypatch.setattr(ev, "SessionLocal", lambda: db)
     import modules.banking_score.products  # noqa: F401
     ev._on_data_updated({"any": "payload"})
-    assert db.query(ProductReadiness).count() == 30
+    assert db.query(ProductReadiness).count() == len(PRODUCT_CATALOG) * 3
 
 
 def test_manual_recompute_operation(db, monkeypatch):
@@ -127,8 +128,8 @@ def test_manual_recompute_operation(db, monkeypatch):
     monkeypatch.setattr(ops, "SessionLocal", lambda: db)
     import modules.banking_score.products  # noqa: F401
     res = ops._run_recompute(params={}, user_id=None, set_phase=lambda *_: None)
-    assert res["recomputed"] == 30
-    assert db.query(ProductReadiness).count() == 30
+    assert res["recomputed"] == len(PRODUCT_CATALOG) * 3
+    assert db.query(ProductReadiness).count() == len(PRODUCT_CATALOG) * 3
 
 
 def test_scope_options_endpoint_banking(db):
