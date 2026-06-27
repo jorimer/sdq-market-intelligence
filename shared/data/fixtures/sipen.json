@@ -1,0 +1,24 @@
+{
+  "_meta": {
+    "note": "Muestra REAL y citada del sistema previsional dominicano (SIPEN). F0 — pendiente cableado live por canal (CKAN/XLSX/boletín). Solo cifras verificables; los agregados solo disponibles de forma aproximada se omiten (vacío honesto, sin inventar precisión).",
+    "sources": [
+      "SIPEN — Rentabilidad del sistema de pensiones (nota, abril 2025): https://www.sipen.gob.do/noticias/rentabilidad-del-sistema-de-pensiones-se-mantiene-en-torno-a-su-promedio-historico",
+      "ADAFP/Infobae — comisiones AFP 2025 (RD$ 11,500 MM): https://www.infobae.com/republica-dominicana/2026/02/23/administradoras-de-fondos-de-pensiones-de-republica-dominicana-alcanzan-ingresos-de-11500-millones-de-pesos-en-comisiones-durante-2025/"
+    ]
+  },
+  "sipen.rentabilidad.cci_nominal_anual": {
+    "unit": "%",
+    "frequency": "monthly",
+    "observations": {"2025-04": 9.4}
+  },
+  "sipen.rentabilidad.sdp_nominal_anual": {
+    "unit": "%",
+    "frequency": "monthly",
+    "observations": {"2025-04": 9.6}
+  },
+  "sipen.comisiones.total_anual": {
+    "unit": "RD$ MM",
+    "frequency": "annual",
+    "observations": {"2025": 11500}
+  }
+}

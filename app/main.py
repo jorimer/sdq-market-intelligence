@@ -54,6 +54,7 @@ from modules.social_dev.api.router import router as social_dev_router
 from modules.esg_climate.api.router import router as esg_climate_router
 from modules.energy_intel.api.router import router as energy_intel_router
 from modules.telecom_intel.api.router import router as telecom_intel_router
+from modules.pension_intel.api.router import router as pension_intel_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users_admin_router, prefix="/api/v1/admin/users", tags=["User Admin"])
@@ -70,6 +71,7 @@ app.include_router(social_dev_router, prefix="/api/v1/social-dev", tags=["Social
 app.include_router(esg_climate_router, prefix="/api/v1/esg-climate", tags=["ESG & Climate"])
 app.include_router(energy_intel_router, prefix="/api/v1/energy-intel", tags=["Energy Intel"])
 app.include_router(telecom_intel_router, prefix="/api/v1/telecom-intel", tags=["Telecom Intel"])
+app.include_router(pension_intel_router, prefix="/api/v1/pension-intel", tags=["Pension Intel"])
 
 from shared.settings.router import router as settings_router
 app.include_router(settings_router, prefix="/api/v1/settings", tags=["Settings"])
@@ -117,6 +119,7 @@ import modules.trade_intel.operations  # noqa: F401 — registers dga-trade-sync
 import modules.esg_climate.operations  # noqa: F401 — registers esg-sync
 import modules.energy_intel.operations  # noqa: F401 — registers sie-energy-sync
 import modules.telecom_intel.operations  # noqa: F401 — registers indotel-telecom-sync
+import modules.pension_intel.operations  # noqa: F401 — registers sipen-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
 import shared.operations.freshness  # noqa: F401 — registers data-freshness-audit (alerta dato viejo)
