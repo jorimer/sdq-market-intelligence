@@ -118,29 +118,91 @@ Return a JSON object: {{"estado_resultados": [{{"original_text": "...", "categor
 
 Rules: null for missing amounts; () = negative; include ALL line items including Total ingresos, Total gastos operacionales and the net result."""
 
+# Vision path: the attached page images ARE the statement (scanned/image-only PDF).
+# Same JSON contract as the text prompt; Claude reads the figures directly from the
+# images (far more reliable on scanned tables than Tesseract OCR text).
+VISION_EXTRACT_PROMPT = """The attached images are the scanned pages of an audited financial statement (balance general + estado de resultados). Read the figures directly from the images and extract ALL financial data.
+
+Return ONLY a JSON object with this EXACT structure:
+{
+  "company_info": {"name": "Entity/trust name as shown", "period_end": "YYYY-MM-DD", "prior_period_end": "YYYY-MM-DD or null", "currency": "DOP|USD|EUR", "currency_unit": "units|thousands|millions"},
+  "balance_general": [{"original_text": "Exact account name", "category": "assets|liabilities|equity", "subcategory": "current_assets|non_current_assets|current_liabilities|non_current_liabilities|equity", "amount_current": 0, "amount_prior": 0, "is_total": false, "is_subtotal": false}],
+  "estado_resultados": [{"original_text": "Exact account name", "category": "revenue|cogs|opex|other_income|other_expense|tax|net_income", "amount_current": 0, "amount_prior": 0, "is_total": false, "is_subtotal": false}]
+}
+
+IMPORTANT RULES:
+- Read numbers carefully from the scan; amounts in parentheses () are negative; null when a value is absent.
+- Include ALL line items, and ALWAYS mark the grand totals: "Total activos"/"Total de activos" (is_total, assets), "Total pasivos" (is_total, liabilities), "Total patrimonio" (is_total, equity), and the net result (category net_income, is_total). The grand totals are the most important — do not omit Total activos.
+- If amounts are in thousands/millions, set currency_unit accordingly but keep values exactly as shown.
+- Return ONLY the JSON object, no prose."""
+
 
 # Below this many extracted chars/page the PDF is treated as an image-only scan.
 _TEXT_LAYER_MIN_CHARS = 200
+# Vision rendering caps: enough pages to cover the core statements, downscaled to
+# Anthropic's optimal long edge to keep the payload/token cost in check.
+MAX_VISION_PAGES = 20
+_VISION_MAX_EDGE = 1568
 
 
-def extract_pdf_text(file_path: str, max_chars: int = 180_000) -> str:  # pragma: no cover - pdfplumber I/O
-    """Extract text from a PDF. Tries pdfplumber (digital / OCR-text-layer scans);
-    if the result is too sparse (image-only scan), falls back to Tesseract OCR.
-    Truncates very long docs to stay within Claude's context window."""
+def _pdfplumber_text(file_path: str) -> Tuple[str, int]:  # pragma: no cover - pdfplumber I/O
+    """Raw pdfplumber text + page count (no OCR). Shared by the digital-text check."""
     import pdfplumber
 
     parts: List[str] = []
-    n_pages = 0
     with pdfplumber.open(file_path) as pdf:
         n_pages = len(pdf.pages)
         for page in pdf.pages:
             txt = page.extract_text() or ""
             if txt:
                 parts.append(txt)
-    text = "\n".join(parts)
+    return "\n".join(parts), n_pages
+
+
+def _has_text_layer(text: str, n_pages: int) -> bool:
+    """A digital / OCR-text-layer PDF clears a per-page char floor; below it = image scan."""
+    return len(text.strip()) >= _TEXT_LAYER_MIN_CHARS * max(min(n_pages, 3), 1)
+
+
+def pdf_render_available() -> bool:
+    """True if PDF→image rendering (pdf2image + poppler) is available for the vision path."""
+    try:
+        import pdf2image  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def render_pdf_images(file_path: str, max_pages: int = MAX_VISION_PAGES,
+                      dpi: int = 150) -> List[str]:  # pragma: no cover - poppler/PIL I/O
+    """Render the first pages of a PDF to base64 PNGs, downscaled to Anthropic's optimal
+    long edge — the input to the Claude-vision extraction path for scanned statements."""
+    import base64
+    import io
+
+    from pdf2image import convert_from_path
+
+    images = convert_from_path(file_path, dpi=dpi, fmt="png", first_page=1, last_page=max_pages)
+    out: List[str] = []
+    for im in images:
+        w, h = im.size
+        scale = min(1.0, _VISION_MAX_EDGE / max(w, h))
+        if scale < 1.0:
+            im = im.resize((max(int(w * scale), 1), max(int(h * scale), 1)))
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        out.append(base64.standard_b64encode(buf.getvalue()).decode())
+    return out
+
+
+def extract_pdf_text(file_path: str, max_chars: int = 180_000) -> str:  # pragma: no cover - pdfplumber I/O
+    """Extract text from a PDF. Tries pdfplumber (digital / OCR-text-layer scans);
+    if the result is too sparse (image-only scan), falls back to Tesseract OCR.
+    Truncates very long docs to stay within Claude's context window."""
+    text, n_pages = _pdfplumber_text(file_path)
 
     # Image-only scan (no text layer) → OCR fallback.
-    if len(text.strip()) < _TEXT_LAYER_MIN_CHARS * max(min(n_pages, 3), 1):
+    if not _has_text_layer(text, n_pages):
         from modules.banking_score.external.ocr_processor import ocr_available, ocr_pdf_text
 
         if ocr_available():
@@ -185,14 +247,60 @@ class AuditedPdfExtractor:
     # ─── Public API ──────────────────────────────────────────────
 
     def extract_statements(self, file_path: str) -> Dict[str, Any]:  # pragma: no cover - I/O + AI
-        """Return {company_info, balance_general[], estado_resultados[]} for a PDF."""
-        text = extract_pdf_text(file_path)
-        if not text or len(text.strip()) < 100:
+        """Return {company_info, balance_general[], estado_resultados[]} for a PDF.
+
+        Digital / OCR-text-layer PDFs go through the proven text path. Image-only scans
+        (e.g. SIPEN's AFP statements, some SIB fiduciary PDFs) go through Claude VISION on
+        the page images — far more reliable on scanned tables than Tesseract OCR, which
+        mangled the "Total activos" line. OCR text remains the last-resort fallback."""
+        text, n_pages = _pdfplumber_text(file_path)
+        if _has_text_layer(text, n_pages):
+            return self._extract_with_fallback(text[:180_000])
+
+        if pdf_render_available():
+            try:
+                images = render_pdf_images(file_path)
+                if images:
+                    logger.info("[AuditedPdf] PDF escaneado (%d pág, sin capa de texto) → visión Claude (%d imgs)",
+                                n_pages, len(images))
+                    return self._extract_from_images(images)
+            except Exception as e:  # noqa: BLE001 — fall back to OCR text
+                logger.warning("[AuditedPdf] visión falló (%s) → OCR de respaldo", e)
+
+        ocr_text = extract_pdf_text(file_path)
+        if not ocr_text or len(ocr_text.strip()) < 100:
             raise ValueError(
                 "No se pudo extraer texto suficiente del PDF "
                 "(puede estar vacío, dañado o protegido)."
             )
-        return self._extract_with_fallback(text)
+        return self._extract_with_fallback(ocr_text)
+
+    def _extract_from_images(self, images_b64: List[str]) -> Dict[str, Any]:  # pragma: no cover - network
+        """Claude-vision extraction: send the page images + the JSON contract, parse/repair."""
+        blocks: List[Dict[str, Any]] = [
+            {"type": "image",
+             "source": {"type": "base64", "media_type": "image/png", "data": b64}}
+            for b64 in images_b64
+        ]
+        blocks.append({"type": "text", "text": VISION_EXTRACT_PROMPT})
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=self.MAX_TOKENS_SINGLE,
+                temperature=0.1,
+                system=AUDITED_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": blocks}],
+            )
+        except self._anthropic.APIError as e:
+            raise RuntimeError(f"Error de la API de Claude (visión): {e}") from e
+        text = response.content[0].text
+        if response.stop_reason == "end_turn":
+            return self._parse_json_response(text)
+        logger.warning("[AuditedPdf] visión truncada (stop=%s), reparando JSON…", response.stop_reason)
+        repaired = self._repair_truncated_json(text)
+        if repaired and (repaired.get("balance_general") or repaired.get("estado_resultados")):
+            return repaired
+        return self._parse_json_response(text)
 
     # ─── Extraction with fallback ────────────────────────────────
 
