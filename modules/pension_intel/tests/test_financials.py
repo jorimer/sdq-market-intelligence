@@ -11,7 +11,12 @@ from sqlalchemy.pool import StaticPool
 
 from shared.database.base import Base
 from modules.pension_intel import financials_sync
-from modules.pension_intel.financials_sync import discover_ef_links, ingest_financials
+from modules.pension_intel.financials_sync import (
+    afp_page_links,
+    file_links,
+    ingest_financials,
+    year_links,
+)
 from modules.pension_intel.models.models import PensionSeries
 from modules.pension_intel.scoring.isa import compute_isa
 from modules.pension_intel.sipen_sync import sipen_pension_sync
@@ -80,14 +85,38 @@ def test_ingest_rejects_empty_extraction(db, monkeypatch):
         ingest_financials(db, "afp_popular", b"x", "x.pdf")
 
 
-def test_discover_ef_links_parses_descarga_pattern():
-    html = """
-      <a href="/descarga/estados-financieros-afp_2024_12_20250115101010.pdf">EF dic 2024</a>
-      <a href="/descarga/estados-financieros-afp_2024_09_20241015101010.xlsx">EF sep 2024</a>
-      <a href="/descarga/otra-cosa_2024_12_x.pdf">no</a>
+# ── Live discovery: real 4-level hierarchy (shapes observed on sipen.gob.do 2026-06-27) ──
+
+def test_afp_page_links_maps_site_tokens_to_slugs():
+    # The estados-financieros index links one page per AFP.
+    index_html = """
+      <a href="https://sipen.gob.do/estadisticas/estados-financieros-afp/estados-financieros/afp-popular">Popular</a>
+      <a href="https://sipen.gob.do/estadisticas/estados-financieros-afp/estados-financieros/afp-jmmb-bdi">JMMB BDI</a>
+      <a href="https://sipen.gob.do/estadisticas/estados-financieros-fondos-de-pensiones">Fondos</a>
     """
-    links = discover_ef_links(html)
-    periods = [p for p, _ in links]
-    assert "2024-12" in periods and "2024-09" in periods
-    assert all("estados-financieros" in u for _, u in links)
-    assert all(u.startswith("https://www.sipen.gob.do/descarga/") for _, u in links)
+    pages = afp_page_links(index_html)
+    assert pages["afp_popular"].endswith("/estados-financieros/afp-popular")
+    assert "afp_jmmb_bdi" in pages  # afp-jmmb-bdi → afp_jmmb_bdi
+    assert all(slug.startswith("afp_") for slug in pages)  # the fondos link is not an AFP
+
+
+def test_year_links_picks_latest_year():
+    afp_html = """
+      <a href="/estadisticas/estados-financieros-afp/estados-financieros/afp-popular/afp-popular-2010">2010</a>
+      <a href="/estadisticas/estados-financieros-afp/estados-financieros/afp-popular/963-afp-popular-2026">2026</a>
+    """
+    years = year_links(afp_html, "afp-popular")
+    assert max(years) == 2026
+    assert years[2026].startswith("https://sipen.gob.do/")
+
+
+def test_file_links_parses_period_from_timestamp():
+    # Real download names carry NO "estados-financieros" token — only the _YYYY_MM_ stamp.
+    year_html = """
+      <a href="/descarga/afp-popular-2026_2026_06_1781532253.pdf">jun</a>
+      <a href="/descarga/afp-popular-2026_2026_01_20260211101018.pdf">ene</a>
+      <a href="/descarga/algo-sin-periodo.pdf">no period</a>
+    """
+    files = file_links(year_html)
+    assert set(files) == {"2026-06", "2026-01"}
+    assert files["2026-06"] == "https://sipen.gob.do/descarga/afp-popular-2026_2026_06_1781532253.pdf"
