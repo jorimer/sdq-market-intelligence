@@ -142,6 +142,35 @@ const DOMAINS: Domain[] = [
       };
     },
   },
+  {
+    // Pensiones: el ISA es un score RELATIVO y PARCIAL (solvencia = brecha). Solo se
+    // ofrecen las AFP calificables; las dimensiones ausentes (solvencia) no entran a
+    // la comparación (no se fabrica). Misma forma que Sectorial/Social (score 0-100).
+    key: "pensiones", tabKey: "platform.comparador.tabPensiones", eyebrow: "SIPEN · ISA",
+    nounKey: "platform.comparador.nounAfps", singularKey: "platform.comparador.singularAfp",
+    ejeKey: "platform.comparador.ejePensiones",
+    load: async () => {
+      const { data } = await client.get("/pension-intel/rankings");
+      const items = ((data.rankings as any[]) || [])
+        .filter((r) => r.overall_score != null)
+        .map((r) => ({ id: r.slug, name: r.name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return {
+        items,
+        score: async (id) => {
+          const { data: d } = await client.get(`/pension-intel/${id}/detail`);
+          if (!d?.found || d.overall_score == null) return null;
+          const dims: Dim[] = ((d.dimensions as any[]) || [])
+            .filter((dim) => dim.present && dim.score != null)
+            .map((dim) => ({
+              key: dim.key, score: dim.score, weight: dim.weight,
+              contribution: dim.weight * dim.score,
+            }));
+          return { score: d.overall_score, band: bandFor(d.overall_score), dims };
+        },
+      };
+    },
+  },
 ];
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

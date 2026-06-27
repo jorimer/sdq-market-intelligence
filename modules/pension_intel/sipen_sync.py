@@ -143,8 +143,12 @@ def sipen_pension_sync(
         entity_rows += _upsert_series(db, recs, lineage=lineage, entity_slug=slug)
 
     set_phase("Snapshot del sistema")
-    db.flush()  # make upserts visible to the snapshot query (SessionLocal autoflush=False)
+    db.flush()  # make upserts visible to the snapshot/scoring queries (autoflush=False)
     snapshot_period = _compute_snapshot(db)
+
+    set_phase("Índice de Solidez de AFP (ISA)")
+    from modules.pension_intel.scoring.batch import score_and_persist
+    ratings = score_and_persist(db)
 
     db.commit()
     set_phase("Completado")
@@ -153,6 +157,7 @@ def sipen_pension_sync(
         "system_rows": system_rows,
         "entity_rows": entity_rows,
         "snapshot_period": snapshot_period,
+        "ratings_written": ratings["ratings_written"],
         "source": sipen_client.source,
         "mode": sipen_client.mode,
     }

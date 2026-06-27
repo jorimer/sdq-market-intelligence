@@ -293,6 +293,37 @@ THIN_TEMPLATES = {
         "número. Trabajas con un AGREGADO: no exijas ni supongas desglose por entidad ni por "
         "dimensión que el sistema no provee — lee con firmeza lo que el agregado sí permite."
     ),
+    "pension_pulse": (
+        "Entrega una PERSPECTIVA DE SISTEMA del sistema dominicano de pensiones (SIPEN), a "
+        "partir del agregado y de la dispersión entre AFP:\n{context}\n\n"
+        "Máximo 350 palabras, formato SCQA. Es una lectura de SISTEMA con su dispersión, no un "
+        "ranking del mes.\n"
+        "Lee en este orden de prioridad: (1) SALUD AGREGADA — la rentabilidad del sistema (CCI/SDP) "
+        "leída CONTRA SU PROMEDIO HISTÓRICO y AJUSTADA POR RIESGO, y el tamaño/trayectoria del fondo "
+        "si se provee; (2) DISPERSIÓN ENTRE AFP — usa 'afp_rentabilidad' (líder, rezagada y la brecha "
+        "entre ambas) como diferenciación competitiva, sin convertirlo en una carrera mensual; "
+        "(3) ESTRUCTURA — cobertura y densidad de cotización como fragilidad del modelo si están en "
+        "el contexto. Cierra con el 'y por tanto' para la audiencia.\n\n"
+        "RENTABILIDAD NOMINAL: no afirmes rentabilidad real ni descuentes inflación si no está en "
+        "el contexto. CIFRAS: usa solo las del contexto; si una relación (brecha, promedio) no está "
+        "precalculada, exprésala en palabras sin número. Trabajas con un agregado + dispersión: no "
+        "exijas desglose que el contexto no provee."
+    ),
+    "pension_entity": (
+        "Explica el FUNDAMENTO del Índice de Solidez (ISA) de esta AFP, con dato real de SIPEN.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. NO es un rating crediticio NI un veredicto absoluto de salud: es un "
+        "score de POSICIÓN RELATIVA (0-100) entre las AFP con dato suficiente, y es PARCIAL. Las "
+        "bandas absolutas de solidez (Sólida/Frágil) están DIFERIDAS hasta tener la solvencia — no "
+        "afirmes que la AFP es 'sólida' o 'frágil' en términos absolutos. Apóyate en: la posición "
+        "relativa (rank) y el score, la(s) dimensión(es) que más la impulsan y las que más la lastran "
+        "(pondera por su peso), y dónde lidera o rezaga frente a sus pares. PROCEDENCIA: rentabilidad, "
+        "escala y costo son dato SIPEN real; la SOLVENCIA es una BRECHA declarada (sin estados "
+        "financieros) — dilo con claridad y NO inventes cifras de solvencia.\n\n"
+        "COBERTURA: el 'coverage' (< 1) indica que el índice es PARCIAL; nómbralo si es material. "
+        "RENTABILIDAD NOMINAL: léela ajustada por riesgo y vs su promedio, no como ranking del mes. "
+        "Usa solo cifras del contexto; si una relación no está precalculada, exprésala sin número."
+    ),
     "risk_assessment": (
         "Explica el FUNDAMENTO del riesgo macro-político (IRMP) de este país.\n"
         "Contexto:\n{context}\n\n"

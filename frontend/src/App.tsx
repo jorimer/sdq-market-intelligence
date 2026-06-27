@@ -37,6 +37,9 @@ import { SocialDevPage } from "@/modules/social-dev/pages/SocialDevPage";
 import { TradeIntelPage } from "@/modules/trade-intel/pages/TradeIntelPage";
 // ESG & Climate (Eje 7)
 import { EsgClimatePage } from "@/modules/esg-climate/pages/EsgClimatePage";
+// Pensiones (SIPEN)
+import { PensionIntelPage } from "@/modules/pension-intel/pages/PensionIntelPage";
+import { DatosPensionesPage } from "@/modules/pension-intel/pages/DatosPensionesPage";
 // Plataforma
 import { OverviewPage } from "@/modules/platform/pages/OverviewPage";
 import { MetodologiaPage } from "@/modules/platform/pages/MetodologiaPage";
@@ -83,6 +86,7 @@ export default function App() {
           <Route path="/datos/social" element={<DatosSocialPage />} />
           <Route path="/datos/comercio" element={<DatosComercioPage />} />
           <Route path="/datos/gobernanza" element={<DatosGobernanzaPage />} />
+          <Route path="/datos/pensiones" element={<DatosPensionesPage />} />
 
           {/* Eje 2 — Macroeconómico */}
           <Route path="/macro-monitor" element={<MacroMonitorPage />} />
@@ -96,6 +100,7 @@ export default function App() {
           <Route path="/social-dev" element={<SocialDevPage />} />
           <Route path="/trade-intel" element={<TradeIntelPage />} />
           <Route path="/esg-climate" element={<EsgClimatePage />} />
+          <Route path="/pension-intel" element={<PensionIntelPage />} />
 
           {/* Herramientas */}
           <Route

@@ -27,7 +27,7 @@ class CatalogEntry:
     source: str             # fuente autoritativa (el foso)
 
 
-# Los 10 productos sectoriales del spec §2. Orden = orden de ejecución de P4.
+# Los productos sectoriales (10 del spec §2 + pensiones/SIPEN). Orden = ejecución de P4.
 PRODUCT_CATALOG: List[CatalogEntry] = [
     CatalogEntry("banking", "SDQ Banking Intelligence", "banking_score", "SIB · fiduciaria · BCRD"),
     CatalogEntry("macro", "SDQ Macro & Country Risk", "macro_monitor · macro_political_risk",
@@ -45,6 +45,7 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
     CatalogEntry("agribusiness", "SDQ Agribusiness", "sector_intel (o propio)",
                  "Min. Agricultura · BAGRÍCOLA · ONE"),
     CatalogEntry("esg", "SDQ ESG & Climate", "esg_climate", "ONE · Medio Ambiente · IPCC · SIE"),
+    CatalogEntry("pension", "SDQ Pensiones (SIPEN)", "pension_intel", "SIPEN · ADAFP"),
 ]
 
 CATALOG_BY_KEY: Dict[str, CatalogEntry] = {e.sector_key: e for e in PRODUCT_CATALOG}

@@ -181,6 +181,20 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "pocas que mueven la aguja (top movers, señales) y conecta con la decisión. El foco es "
         "la lectura de coyuntura accionable, no el repaso de indicadores."
     ),
+    "pension_intel": (
+        "DOCTRINA DE CASA — Eje de pensiones (sistema previsional, SIPEN):\n"
+        "Lees la SALUD del sistema dominicano de pensiones (SDP, capitalización individual) "
+        "y de sus administradoras (AFP): mayor cobertura, mayor fondo acumulado y rentabilidad "
+        "sostenible = sistema más sólido. Te anclas a los datos públicos de la SIPEN — dato real. "
+        "RENTABILIDAD: léela AJUSTADA POR RIESGO y CONTRA SU PROMEDIO HISTÓRICO, no como carrera "
+        "mensual; los rendimientos revierten a la media y un mes alto no define a una AFP. Es "
+        "rentabilidad NOMINAL: la real depende de la inflación —no la inventes si no está en el "
+        "contexto—. LEE LA DISPERSIÓN ENTRE AFP, no solo el promedio del sistema (quién lidera y "
+        "quién rezaga, y por cuánto). Distingues el SISTEMA (agregado: afiliados, cotizantes, "
+        "densidad, fondo total) de una AFP individual. La densidad de cotización y la cobertura "
+        "(afiliados que efectivamente cotizan) son la fragilidad estructural del modelo. El foco "
+        "es la sostenibilidad del sistema y la posición relativa de cada AFP, no el ranking del mes."
+    ),
     "deal_scoring": (
         "DOCTRINA DE CASA — Eje Deal Scoring (atractivo/cierre de una operación):\n"
         "Lees el atractivo de un deal como índice explicable: mayor score = deal más atractivo. "
@@ -472,6 +486,39 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Decide: decisiones de inversión, precios o financiamiento ante la coyuntura.\n"
             "Le importa: las variables que afectan costo de fondeo, demanda y tipo de cambio, y "
             "su momentum. Tu \"y por tanto\" final apunta a la implicación operativa concreta."
+        ),
+    },
+    "pension_intel": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / mercado de capitales.\n"
+            "Decide: cómo leer al sistema de pensiones como el mayor bloque institucional del "
+            "país (fondo acumulado, crecimiento de AUM, ingreso por comisiones de las AFP).\n"
+            "Le importa: la trayectoria del fondo y de la rentabilidad ajustada por riesgo como "
+            "señal de valor, y la dispersión entre AFP como diferenciación competitiva. Tu \"y "
+            "por tanto\" final apunta a dónde el sistema o una AFP crea valor o riesgo no descontado, "
+            "sin inventar precios ni rendimientos reales que no estén en los datos."
+        ),
+        "regulador": (
+            "FRAME DE DECISIÓN — Audiencia: Regulador / SIPEN.\n"
+            "Decide: dónde poner el foco prudencial sobre el sistema y las AFP.\n"
+            "Le importa: la solvencia y la sostenibilidad del sistema, la cobertura y la densidad "
+            "de cotización como fragilidad estructural, y la AFP rezagada que amerita atención. Tu "
+            "\"y por tanto\" final apunta a la prioridad de supervisión y la señal a monitorear."
+        ),
+        "afiliado": (
+            "FRAME DE DECISIÓN — Audiencia: Afiliado / trabajador cotizante.\n"
+            "Decide: en qué AFP estar, leyendo más allá del ranking del mes.\n"
+            "Le importa: la rentabilidad sostenida y ajustada por riesgo de su AFP frente a las "
+            "demás (no el pico mensual) y el costo (comisiones). Tu \"y por tanto\" final apunta a "
+            "qué AFP conviene por desempeño consistente, siendo claro en que el pasado no garantiza "
+            "el futuro y que la rentabilidad es nominal."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / política previsional.\n"
+            "Decide: dónde intervenir para ampliar cobertura y solidez del sistema.\n"
+            "Le importa: la brecha de cobertura y la densidad de cotización (informalidad) como "
+            "límite estructural del modelo, y el crecimiento del fondo. Tu \"y por tanto\" final "
+            "apunta a la palanca de política con mayor retorno sobre la cobertura y la sostenibilidad."
         ),
     },
     "deal_scoring": {
