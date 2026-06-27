@@ -71,12 +71,13 @@ def _recently_notified(db: Session, op_name: str, interval_hours: int) -> bool:
 
 def _mark_notified(db: Session, op_name: str) -> None:
     key = _alert_key(op_name)
+    now_iso = datetime.now(timezone.utc).isoformat()
     row = db.query(AppSetting).filter(AppSetting.key == key).first()
     if row:
-        row.value = datetime.now(timezone.utc).isoformat()
+        row.value = now_iso
         row.is_secret = False
     else:
-        db.add(AppSetting(key=key, value=datetime.now(timezone.utc).isoformat(), is_secret=False))
+        db.add(AppSetting(key=key, value=now_iso, is_secret=False))
     db.commit()
 
 
@@ -146,10 +147,16 @@ def run_freshness_audit(db: Session) -> Dict:
             days = int(elapsed_h // 24)
             body = (f"«{op.label}» no se actualiza hace ~{days} día(s) "
                     f"(cadencia esperada: cada {interval} h).")
-        for uid in admin_ids:
-            notification_service.create(db, user_id=uid, type="warning", title=title, body=body)
-        _mark_notified(db, name)
-        notified += 1
+        # Aislado por fuente: una falla al notificar (p.ej. un transitorio de DB) no debe
+        # abortar la auditoría de las demás ni dejar avisos a medias sin marcar (re-spam).
+        try:
+            for uid in admin_ids:
+                notification_service.create(db, user_id=uid, type="warning", title=title, body=body)
+            _mark_notified(db, name)
+            notified += 1
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            logger.warning("no se pudo notificar la frescura de %s: %s", name, e)
 
     return {"checked": checked, "n_overdue": len(overdue),
             "overdue": overdue, "notified": notified}

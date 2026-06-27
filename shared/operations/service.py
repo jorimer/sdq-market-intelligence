@@ -275,12 +275,12 @@ def set_schedule(db: Session, op_name: str, enabled: bool,
         r.next_run_at = (_dt() + timedelta(hours=r.interval_hours)) if r.enabled else None
         db.commit()
         return get_schedules(db)[op_name]
-    except Exception as e:  # noqa: BLE001 — el toggle nunca debe 500 mudo (la UI sólo
-        # vería "no pasa nada"); devolvemos un error legible (→ 400 en el router) y
-        # dejamos rastro para diagnosticar (p.ej. tabla ausente pre-migración).
+    except Exception:  # noqa: BLE001 — rastro para diagnóstico + sesión limpia; el error
+        # real sube (500), señal correcta para monitoreo. La UI lo muestra igual (el toggle
+        # es optimista y revierte mostrando el error).
         db.rollback()
         logger.exception("set_schedule falló para %s", op_name)
-        raise ValueError(f"No se pudo guardar el agendado de '{op_name}': {e}")
+        raise
 
 
 def seed_default_schedules(db: Optional[Session] = None) -> int:
@@ -303,12 +303,18 @@ def seed_default_schedules(db: Optional[Session] = None) -> int:
             db.rollback()
             return 0
         created = 0
+        idx = 0
         for name, op in OPERATIONS.items():
             if name in existing or op.default_interval_hours <= 0 or op.needs_params:
                 continue
+            # Escalonar los PRIMEROS disparos a los pocos minutos del arranque (no a una
+            # cadencia entera: una fuente anual no debe esperar un año para su 1ª corrida).
+            # Así los datos viejos se ponen al día pronto, sin avalancha (3 min entre cada
+            # una). De ahí en más cada operación sigue su cadencia normal.
+            idx += 1
             db.add(OperationSchedule(
                 operation=name, enabled=True, interval_hours=op.default_interval_hours,
-                next_run_at=_dt() + timedelta(hours=op.default_interval_hours)))
+                next_run_at=_dt() + timedelta(minutes=3 * idx)))
             try:
                 db.commit()
                 created += 1
