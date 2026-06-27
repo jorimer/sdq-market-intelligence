@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -150,6 +150,23 @@ def file_links(year_html: str) -> Dict[str, str]:
         if m:
             out[f"{m.group(1)}-{m.group(2)}"] = _abs(raw)
     return out
+
+
+def latest_statement_url(slug: str) -> Optional[Tuple[str, str]]:  # pragma: no cover - network I/O
+    """``(period, url)`` of the most recent estados-financieros file for an AFP, or None."""
+    import httpx
+
+    token = _afp_token(slug)
+    afp_url = f"{EF_AFP_INDEX}/{token}"
+    with httpx.Client(timeout=60, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
+        years = year_links(http.get(afp_url).text, token)
+        if not years:
+            return None
+        files = file_links(http.get(years[max(years)]).text)
+        if not files:
+            return None
+        period = sorted(files)[-1]
+        return period, files[period]
 
 
 def sipen_financials_sync(

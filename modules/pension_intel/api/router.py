@@ -277,6 +277,52 @@ async def upload_financials(
     return {"ok": True, **result}
 
 
+@router.get("/financials/debug")
+async def debug_financials(
+    slug: str = Query(..., description="AFP slug, p.ej. afp_popular"),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Diagnóstico (admin, NO persiste): baja el último estado financiero de una AFP, lo
+    extrae y devuelve las filas-clave del balance + el mapeo, para ver por qué falta
+    activos_totales (mapeo de etiqueta vs extracción)."""
+    import httpx
+    from modules.pension_intel.financials_sync import (
+        _BROWSER_HEADERS, latest_statement_url,
+    )
+    from modules.pension_intel.external.financials_extractor import (
+        extract_financials, map_afp_financials, statement_period,
+    )
+    found = latest_statement_url(slug)
+    if not found:
+        raise HTTPException(status_code=404, detail="No se encontró estado financiero para esa AFP.")
+    period, url = found
+    with httpx.Client(timeout=90, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
+        content = http.get(url).content
+    fname = url.rsplit("/", 1)[-1]
+    try:
+        statements = extract_financials(content, fname)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Extracción falló: {e}")
+    bg = statements.get("balance_general") or []
+
+    def _row(r: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: r.get(k) for k in
+                ("original_text", "category", "subcategory", "amount_current", "is_total", "is_subtotal")}
+
+    def _key(r: Dict[str, Any]) -> bool:
+        txt = str(r.get("original_text", "")).lower()
+        return bool(r.get("is_total")) or any(w in txt for w in ("activo", "pasivo", "patrimonio"))
+
+    return {
+        "slug": slug, "file": fname, "period_file": period,
+        "company_info": statements.get("company_info"),
+        "n_balance_rows": len(bg),
+        "key_rows": [_row(r) for r in bg if _key(r)],
+        "mapped": map_afp_financials(statements),
+        "statement_period": statement_period(statements),
+    }
+
+
 @router.post("/financials/sync")
 async def trigger_financials_sync(
     current_user: User = Depends(require_role(UserRole.admin)),
