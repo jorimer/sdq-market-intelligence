@@ -35,6 +35,26 @@ def test_band_for_boundaries():
     assert band_for(None) is None
 
 
+def test_rankings_collapse_to_latest_period_per_afp(db):
+    """An AFP with ratings at two periods must appear ONCE (the latest) in the ranking —
+    a re-score at a newer statement period supersedes the older row, never duplicates it."""
+    from modules.pension_intel.api.router import _ranked_ratings
+
+    # Start from a clean slate for this AFP (the base sync may have scored it already).
+    db.query(PensionRating).filter(PensionRating.entity_slug == "afp_jmmb_bdi").delete()
+    # Two ratings for the same AFP: an old base period and a newer financials period.
+    db.add(PensionRating(entity_slug="afp_jmmb_bdi", period="2025-04",
+                         overall_score=None, band=None, coverage=0.3))
+    db.add(PensionRating(entity_slug="afp_jmmb_bdi", period="2026-06",
+                         overall_score=72.6, band="Adecuada", coverage=0.65))
+    db.flush()
+
+    ranked = _ranked_ratings(db)
+    jmmb = [p for p in ranked if p["slug"] == "afp_jmmb_bdi"]
+    assert len(jmmb) == 1, "the AFP must not appear twice"
+    assert jmmb[0]["period"] == "2026-06" and jmmb[0]["band"] == "Adecuada"
+
+
 def test_solvency_absent_until_financials_caps_coverage(db):
     """Without estados financieros, solvency is absent → coverage ≤ 0.65, bands deferred."""
     results = compute_isa(db)

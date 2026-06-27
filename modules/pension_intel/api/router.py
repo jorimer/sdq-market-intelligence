@@ -155,8 +155,15 @@ def _rating_payload(r: PensionRating, name: str) -> Dict[str, Any]:
 
 def _ranked_ratings(db: Session) -> List[Dict[str, Any]]:
     names = {e.slug: e.name for e in db.query(PensionEntity).all()}
-    rows = db.query(PensionRating).all()
-    payloads = [_rating_payload(r, names.get(r.entity_slug, r.entity_slug)) for r in rows]
+    # One rating per AFP: the latest period. A re-score at a newer statement period
+    # (e.g. financials "2026-06" superseding the base "2025-04") must replace the older
+    # row in the ranking, not appear twice. Period labels are "YYYY-MM" → lexical max.
+    latest: Dict[str, PensionRating] = {}
+    for r in db.query(PensionRating).all():
+        cur = latest.get(r.entity_slug)
+        if cur is None or (r.period or "") > (cur.period or ""):
+            latest[r.entity_slug] = r
+    payloads = [_rating_payload(r, names.get(r.entity_slug, r.entity_slug)) for r in latest.values()]
     payloads.sort(
         key=lambda p: (p["overall_score"] is not None, p["overall_score"] or 0),
         reverse=True,
