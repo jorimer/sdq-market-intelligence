@@ -108,6 +108,32 @@ export async function getPensionEntityInsight(
   return (data.ai_insight as AiInsight | null) ?? null;
 }
 
+export interface PensionEntityRow {
+  slug: string;
+  name: string;
+  afp_code: string | null;
+  is_active: boolean;
+}
+
+export async function getPensionEntities(): Promise<PensionEntityRow[]> {
+  const { data } = await client.get("/pension-intel/entities");
+  return (data.entities as PensionEntityRow[]) ?? [];
+}
+
+/** Manual upload of one AFP's estados financieros (PDF/XLSX) → ingest + recompute ISA. */
+export async function uploadPensionFinancials(
+  afpSlug: string,
+  file: File,
+): Promise<{ ok: boolean; afp: string; period: string; patrimonio: number | null; activos_totales: number | null }> {
+  const form = new FormData();
+  form.append("afp_slug", afpSlug);
+  form.append("file", file);
+  const { data } = await client.post("/pension-intel/financials/upload", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
 // Headline series codes (system level) — stable keys from the backend.
 export const HEADLINE_CCI = "sipen.rentabilidad.cci_nominal_anual";
 export const HEADLINE_SDP = "sipen.rentabilidad.sdp_nominal_anual";

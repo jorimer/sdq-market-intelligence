@@ -35,14 +35,16 @@ def test_band_for_boundaries():
     assert band_for(None) is None
 
 
-def test_solvency_is_a_declared_gap_capping_coverage(db):
+def test_solvency_absent_until_financials_caps_coverage(db):
+    """Without estados financieros, solvency is absent → coverage ≤ 0.65, bands deferred."""
     results = compute_isa(db)
     assert results, "expected ISA results"
     for r in results:
         solv = next(d for d in r["dimensions"] if d["key"] == "solvencia")
-        assert solv["present"] is False and solv["provenance"] == "brecha"
-        # Solvency (0.35 weight) never has data → coverage can't exceed 0.65.
+        # Solvency is a real ratio dim, but absent (no patrimonio/activos series yet).
+        assert solv["present"] is False
         assert r["coverage"] <= 0.65 + 1e-9
+        assert r["band"] is None  # no absolute band until solvency lands
 
 
 def test_full_vs_thin_coverage(db):

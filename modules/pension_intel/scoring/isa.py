@@ -55,9 +55,12 @@ def band_for(score: Optional[float]) -> Optional[str]:
 # `direction`: "higher" = more is better, "lower" = less is better.
 DIMENSIONS: List[Dict[str, Any]] = [
     {
-        "key": "solvencia", "label": "Solvencia", "weight": 0.35,
-        "direction": "higher", "provenance": "brecha",
-        "metric": None,  # GAP — estados financieros (canal D) pendientes
+        "key": "solvencia", "label": "Solvencia (patrimonio/activos)", "weight": 0.35,
+        "direction": "higher", "provenance": "real",
+        # Real once the AFP's estados financieros are ingested (financials_sync →
+        # patrimonio + activos_totales series). Absent (present=False) until then — the
+        # AFP stays relative/partial; with it, the ISA emits its ABSOLUTE band.
+        "ratio": ("patrimonio", "activos_totales"),
     },
     {
         "key": "rentabilidad", "label": "Rentabilidad", "weight": 0.30,
@@ -178,14 +181,17 @@ def compute_isa(db: Session) -> List[Dict[str, Any]]:
         # left unscored (no score/rank), never given a verdict it can't support.
         scoreable = present_weight > 0 and coverage >= MIN_COVERAGE
         overall = round(weighted_sum / present_weight, 2) if scoreable else None
+        # ABSOLUTE band emits ONLY when solvency (estados financieros) is present: until
+        # then the score is a RELATIVE peer position and an absolute "Sólida/Frágil"
+        # verdict would overclaim (owner decision 2026-06-27). Once an AFP's financials
+        # land, its solvency dimension turns present → it graduates to an absolute band.
+        solvency_present = any(d["key"] == "solvencia" and d["present"] for d in breakdown)
+        emit_band = scoreable and solvency_present
         results.append({
             "slug": slug, "name": names[slug],
-            # RELATIVE peer-position score (0-100), PARTIAL (solvency is a gap). Absolute
-            # health BANDS (Sólida/Frágil) are DEFERRED until estados financieros land
-            # (owner decision 2026-06-27): applying absolute bands to a relative score on
-            # 3 AFPs would mislabel (e.g. brand a large AFP "Frágil" for placing last of 3).
-            "overall_score": overall, "score_kind": "relative_partial",
-            "band": None,  # deferred to F3 (band_for/BANDS kept for then)
+            "overall_score": overall,
+            "score_kind": "absolute" if emit_band else "relative_partial",
+            "band": band_for(overall) if emit_band else None,
             "coverage": round(coverage, 4),
             "scoreable": scoreable,
             "period": max(periods) if periods else None,
