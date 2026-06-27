@@ -22,23 +22,18 @@ def test_has_text_layer_threshold():
     assert ape._has_text_layer("", 6) is False
 
 
-def test_scanned_pdf_routes_to_vision(monkeypatch):
+def test_scanned_pdf_uses_ocr_by_default(monkeypatch):
+    # Scanned PDF with usable OCR → OCR→Claude (the cheap default); vision NOT used.
     ex = _extractor()
     monkeypatch.setattr(ape, "_pdfplumber_text", lambda p: ("", 6))      # no text layer → scan
-    monkeypatch.setattr(ape, "pdf_render_available", lambda: True)
-    monkeypatch.setattr(ape, "render_pdf_images", lambda p, **k: ["imgA", "imgB"])
-    seen = {}
-
-    def fake_vision(imgs):
-        seen["vision"] = imgs
-        return {"via": "vision"}
-
-    monkeypatch.setattr(ex, "_extract_from_images", fake_vision)
-    monkeypatch.setattr(ex, "_extract_with_fallback",
-                        lambda t: {"via": "text"})  # must NOT be called
+    monkeypatch.setattr(ape, "extract_pdf_text", lambda p: "TOTAL ACTIVO ... " * 50)  # good OCR
+    rendered = {}
+    monkeypatch.setattr(ape, "render_pdf_images",
+                        lambda *a, **k: rendered.setdefault("rendered", True))  # must NOT render
+    monkeypatch.setattr(ex, "_extract_with_fallback", lambda t: {"via": "ocr-text"})
     out = ex.extract_statements("scan.pdf")
-    assert out == {"via": "vision"}
-    assert seen["vision"] == ["imgA", "imgB"]
+    assert out == {"via": "ocr-text"}
+    assert "rendered" not in rendered  # vision was never invoked
 
 
 def test_digital_pdf_routes_to_text(monkeypatch):
@@ -53,11 +48,38 @@ def test_digital_pdf_routes_to_text(monkeypatch):
     assert "rendered" not in called
 
 
-def test_scanned_pdf_falls_back_to_ocr_when_render_unavailable(monkeypatch):
+def test_map_entity_fields_matches_singular_total_activo():
+    """SIPEN's AFP balance labels the grand totals 'TOTAL ACTIVO'/'TOTAL PASIVO' (singular).
+    The mapper must catch them — and must NOT grab the off-balance managed-fund assets."""
+    from modules.banking_score.external.fiduciaria_pdf_client import map_entity_fields
+
+    statements = {
+        "balance_general": [
+            {"original_text": "TOTAL ACTIVO", "category": "assets",
+             "amount_current": 8_572_098_109, "is_total": True},
+            # The managed fund (RD$439B, off-balance) — must be ignored, not taken as "assets".
+            {"original_text": "Activos de los Fondos Administrados", "category": "assets",
+             "amount_current": 439_020_658_625, "is_total": False},
+            {"original_text": "TOTAL PASIVO", "category": "liabilities",
+             "amount_current": 1_341_276_481, "is_total": True},
+            {"original_text": "TOTAL PATRIMONIO", "category": "equity",
+             "amount_current": 7_230_821_628, "is_total": True},
+        ],
+        "estado_resultados": [],
+    }
+    f = map_entity_fields(statements)
+    assert f["activos_totales"] == 8_572_098_109  # singular label matched; fund row ignored
+    assert f["pasivos_exigibles"] == 1_341_276_481
+    assert f["patrimonio_tecnico"] == 7_230_821_628
+
+
+def test_poor_ocr_falls_back_to_vision(monkeypatch):
+    # Scan whose OCR is too sparse to parse → vision fallback kicks in.
     ex = _extractor()
     monkeypatch.setattr(ape, "_pdfplumber_text", lambda p: ("", 6))
-    monkeypatch.setattr(ape, "pdf_render_available", lambda: False)        # no poppler
-    monkeypatch.setattr(ape, "extract_pdf_text", lambda p: "OCR text " * 50)
-    monkeypatch.setattr(ex, "_extract_with_fallback", lambda t: {"via": "ocr-text"})
-    out = ex.extract_statements("scan.pdf")
-    assert out == {"via": "ocr-text"}
+    monkeypatch.setattr(ape, "extract_pdf_text", lambda p: "  ")          # near-empty OCR
+    monkeypatch.setattr(ape, "pdf_render_available", lambda: True)
+    monkeypatch.setattr(ape, "render_pdf_images", lambda p, **k: ["imgA"])
+    monkeypatch.setattr(ex, "_extract_from_images", lambda imgs: {"via": "vision"})
+    out = ex.extract_statements("bad-scan.pdf")
+    assert out == {"via": "vision"}

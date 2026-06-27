@@ -237,8 +237,10 @@ def map_entity_fields(statements: Dict[str, Any]) -> Dict[str, Optional[float]]:
     bg = statements.get("balance_general", [])
     er = statements.get("estado_resultados", [])
 
-    activos = _find_total(bg, "assets", "total activos", "total de activos")
-    pasivos = _find_total(bg, "liabilities", "total pasivos", "total de pasivos")
+    # Singular "total activo"/"total pasivo" are SIB-regulatory labels (e.g. SIPEN's AFP
+    # statements). They're substrings of the plural forms, so one keyword covers both.
+    activos = _find_total(bg, "assets", "total activos", "total de activos", "total activo")
+    pasivos = _find_total(bg, "liabilities", "total pasivos", "total de pasivos", "total pasivo")
     patrimonio = _find_total(
         bg, "equity", "total patrimonio", "patrimonio fideicom", "total de patrimonio",
         "patrimonio neto", "patrimonio de los accionistas", "capital contable", "total capital",
@@ -284,8 +286,10 @@ def map_trust_fields(statements: Dict[str, Any]) -> Dict[str, Optional[float]]:
     bg = statements.get("balance_general", [])
     er = statements.get("estado_resultados", [])
 
-    activos = _find_total(bg, "assets", "total activos", "total de activos")
-    pasivos = _find_total(bg, "liabilities", "total pasivos", "total de pasivos")
+    # Singular "total activo"/"total pasivo" are SIB-regulatory labels (e.g. SIPEN's AFP
+    # statements). They're substrings of the plural forms, so one keyword covers both.
+    activos = _find_total(bg, "assets", "total activos", "total de activos", "total activo")
+    pasivos = _find_total(bg, "liabilities", "total pasivos", "total de pasivos", "total pasivo")
     patrimonio = _find_total(bg, "equity", "total patrimonio fideicom", "patrimonio fideicom", "total patrimonio")
     pasivos_circ = _find_total(bg, "liabilities", "total pasivos circulantes", "total pasivos corrientes")
     liquidos = _sum_matching(bg, "efectivo", "equivalentes de efectivo", "depósitos a plazo", "depositos a plazo", "inversiones")
