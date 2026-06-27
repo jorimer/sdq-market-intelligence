@@ -13,6 +13,7 @@ from shared.operations.service import (
     recent_runs,
     register_operation,
     run_due_schedules,
+    seed_default_schedules,
     set_schedule,
     start_scheduler,
     trigger,
@@ -22,6 +23,6 @@ from shared.operations.service import (
 __all__ = [
     "OperationRun", "OperationSchedule", "OPERATIONS", "Operation",
     "register_operation", "trigger", "all_status", "get_status", "write_status",
-    "get_schedules", "set_schedule", "run_due_schedules", "start_scheduler",
-    "recent_runs",
+    "get_schedules", "set_schedule", "run_due_schedules", "seed_default_schedules",
+    "start_scheduler", "recent_runs",
 ]

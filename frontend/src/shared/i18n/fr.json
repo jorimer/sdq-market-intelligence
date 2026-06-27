@@ -1647,6 +1647,7 @@
     "schedActive": "Actif",
     "schedInactive": "Inactif",
     "scheduleError": "Impossible d'enregistrer la planification.",
+    "scheduleSaved": "Planification mise à jour.",
     "next": "Prochain :",
     "loading": "Chargement des op\u00e9rations\u2026",
     "forbidden": "R\u00f4le admin requis pour la console d'op\u00e9ration.",
@@ -1668,6 +1669,10 @@
     "fields_one": "{{count}} champ",
     "fields_other": "{{count}} champs",
     "results": {
+      "checked": "Sources v\u00e9rifi\u00e9es",
+      "n_overdue": "Sources en retard",
+      "overdue": "En retard",
+      "notified": "Alertes envoy\u00e9es",
       "periods_scored": "P\u00e9riodes not\u00e9es",
       "ratings_written": "Notations \u00e9crites",
       "ratings_total": "Notations totales",
