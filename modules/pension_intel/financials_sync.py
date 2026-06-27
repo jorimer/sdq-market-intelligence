@@ -100,6 +100,10 @@ def ingest_financials(
     _upsert_series(db, afp_slug, "activos_totales", period, fields["activos_totales"], "RD$")
     if fields["resultado"] is not None:
         _upsert_series(db, afp_slug, "resultado_neto", period, fields["resultado"], "RD$")
+    # AUM (administered funds) → the ISA's escala/costo dimensions. Real figure from the
+    # statement itself, so all AFPs share one consistent source (peer-normalized → unit-invariant).
+    if fields.get("fondos_administrados") is not None:
+        _upsert_series(db, afp_slug, "fondos_administrados", period, fields["fondos_administrados"], "RD$")
 
     set_phase("Recalculando ISA (con solvencia)")
     db.flush()

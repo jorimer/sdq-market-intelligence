@@ -12,7 +12,7 @@
     "series": {
       "rentabilidad_nominal_anual": {"unit": "%", "observations": {"2025-02": 9.59}},
       "comisiones_anual": {"unit": "RD$ MM", "observations": {"2025": 3790.9}},
-      "patrimonio_gestionado": {"unit": "RD$ MM", "observations": {"2025-12": 428449.7}},
+      "fondos_administrados": {"unit": "RD$", "observations": {"2025-12": 428449700000}},
       "afiliados": {"unit": "personas", "observations": {"2023-12": 1517491}}
     }
   },
@@ -21,7 +21,7 @@
     "series": {
       "rentabilidad_nominal_anual": {"unit": "%", "observations": {"2025-02": 8.72}},
       "comisiones_anual": {"unit": "RD$ MM", "observations": {"2025": 2617.5}},
-      "patrimonio_gestionado": {"unit": "RD$ MM", "observations": {"2025-12": 299052.8}},
+      "fondos_administrados": {"unit": "RD$", "observations": {"2025-12": 299052800000}},
       "afiliados": {"unit": "personas", "observations": {"2023-12": 1436966}}
     }
   },
@@ -37,7 +37,7 @@
     "series": {
       "rentabilidad_nominal_anual": {"unit": "%", "observations": {"2025-02": 10.27}},
       "comisiones_anual": {"unit": "RD$ MM", "observations": {"2025": 2441.3}},
-      "patrimonio_gestionado": {"unit": "RD$ MM", "observations": {"2025-12": 276445}},
+      "fondos_administrados": {"unit": "RD$", "observations": {"2025-12": 276445000000}},
       "afiliados": {"unit": "personas", "observations": {"2023-12": 1027194}}
     }
   },
