@@ -280,17 +280,26 @@ async def upload_financials(
 @router.get("/financials/debug")
 async def debug_financials(
     slug: str = Query(..., description="AFP slug, p.ej. afp_popular"),
+    mode: str = Query("vision", description="vision | ocr — qué path de extracción usar"),
     current_user: User = Depends(require_role(UserRole.admin)),
 ):
     """Diagnóstico (admin, NO persiste): baja el último estado financiero de una AFP, lo
-    extrae y devuelve las filas-clave del balance + el mapeo, para ver por qué falta
-    activos_totales (mapeo de etiqueta vs extracción)."""
+    extrae por el path elegido (visión Claude o OCR→texto→Claude) y devuelve las filas-clave
+    del balance + el mapeo + un extracto del texto OCR alrededor de 'activo'. Sirve para ver
+    si falta activos_totales por mapeo o por extracción, y comparar visión vs OCR (costo)."""
+    import os
+    import tempfile
+
     import httpx
+
     from modules.pension_intel.financials_sync import (
         _BROWSER_HEADERS, latest_statement_url,
     )
     from modules.pension_intel.external.financials_extractor import (
-        extract_financials, map_afp_financials, statement_period,
+        map_afp_financials, statement_period,
+    )
+    from modules.banking_score.external.audited_pdf_extractor import (
+        AuditedPdfExtractor, extract_pdf_text, render_pdf_images,
     )
     found = latest_statement_url(slug)
     if not found:
@@ -299,10 +308,27 @@ async def debug_financials(
     with httpx.Client(timeout=90, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
         content = http.get(url).content
     fname = url.rsplit("/", 1)[-1]
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as fh:
+        fh.write(content)
+        path = fh.name
+    ocr_excerpt = None
     try:
-        statements = extract_financials(content, fname)
+        ex = AuditedPdfExtractor()
+        if mode == "ocr":
+            text = extract_pdf_text(path)
+            # lines mentioning 'activo' — to judge whether a no-API parse is feasible.
+            ocr_excerpt = [ln.strip() for ln in text.splitlines()
+                           if "activo" in ln.lower()][:12]
+            statements = ex._extract_with_fallback(text)  # noqa: SLF001 — diagnostic
+        else:
+            statements = ex._extract_from_images(render_pdf_images(path))  # noqa: SLF001
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"Extracción falló: {e}")
+        raise HTTPException(status_code=500, detail=f"Extracción ({mode}) falló: {e}")
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
+
     bg = statements.get("balance_general") or []
 
     def _row(r: Dict[str, Any]) -> Dict[str, Any]:
@@ -314,10 +340,11 @@ async def debug_financials(
         return bool(r.get("is_total")) or any(w in txt for w in ("activo", "pasivo", "patrimonio"))
 
     return {
-        "slug": slug, "file": fname, "period_file": period,
+        "slug": slug, "file": fname, "period_file": period, "mode": mode,
         "company_info": statements.get("company_info"),
         "n_balance_rows": len(bg),
         "key_rows": [_row(r) for r in bg if _key(r)],
+        "ocr_activo_lines": ocr_excerpt,
         "mapped": map_afp_financials(statements),
         "statement_period": statement_period(statements),
     }
