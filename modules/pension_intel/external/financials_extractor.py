@@ -65,12 +65,28 @@ def extract_financials(content: bytes, filename: str) -> Dict[str, Any]:
     raise ValueError("Formato no soportado: sube un PDF o XLSX de estados financieros.")
 
 
+def _managed_funds(statements: Dict[str, Any]) -> Optional[float]:
+    """AUM = 'Activos de los Fondos Administrados' (the AFP's scale), an off-balance line
+    in its own statement. Take the ASSETS-side positive amount, never the same-amount
+    contra-account (liabilities/equity). The label varies across AFPs ('… Nota 11',
+    'CUENTA DE ORDEN (DEBE) - Activos de los Fondos Administrados') but always contains
+    'fondos administrad'. Multiple asset matches → the largest (the grand line)."""
+    best: Optional[float] = None
+    for r in statements.get("balance_general") or []:
+        txt = str(r.get("original_text", "")).lower()
+        if "fondos administrad" in txt and r.get("category") == "assets":
+            v = r.get("amount_current")
+            if isinstance(v, (int, float)) and v > 0:
+                best = v if best is None else max(best, v)
+    return best
+
+
 def map_afp_financials(statements: Dict[str, Any]) -> Dict[str, Optional[float]]:
     """Extracted statements → AFP balance-sheet figures, reusing banking's field mapper.
 
-    ``map_entity_fields`` already pulls Total activos / Total pasivos / Total patrimonio
-    (with the accounting-identity fallback Patrimonio = Activos − Pasivos) and the net
-    result — exactly the figures the ISA solvency dimension needs.
+    ``map_entity_fields`` pulls Total activos / Total pasivos / Total patrimonio (with the
+    accounting-identity fallback) and the net result — the ISA solvency dimension. We also
+    pull the administered-funds total (AUM) for the ISA's scale/cost dimensions.
     """
     from modules.banking_score.external.fiduciaria_pdf_client import map_entity_fields
 
@@ -80,6 +96,7 @@ def map_afp_financials(statements: Dict[str, Any]) -> Dict[str, Optional[float]]
         "activos_totales": f.get("activos_totales"),
         "pasivos_totales": f.get("pasivos_exigibles"),
         "resultado": f.get("utilidad_neta"),
+        "fondos_administrados": _managed_funds(statements),
     }
 
 

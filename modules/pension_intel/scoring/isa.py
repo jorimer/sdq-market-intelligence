@@ -68,14 +68,16 @@ DIMENSIONS: List[Dict[str, Any]] = [
         "metric": "rentabilidad_nominal_anual",
     },
     {
-        "key": "escala", "label": "Escala (patrimonio)", "weight": 0.20,
+        "key": "escala", "label": "Escala (fondos administrados / AUM)", "weight": 0.20,
         "direction": "higher", "provenance": "real",
-        "metric": "patrimonio_gestionado",
+        # AUM from each AFP's own estados financieros ('Activos de los Fondos Administrados'),
+        # so all AFPs share one consistent source → present once financials are ingested.
+        "metric": "fondos_administrados",
     },
     {
-        "key": "costo", "label": "Costo (comisión/patrimonio)", "weight": 0.15,
+        "key": "costo", "label": "Costo (comisión/AUM)", "weight": 0.15,
         "direction": "lower", "provenance": "real",
-        "ratio": ("comisiones_anual", "patrimonio_gestionado"),
+        "ratio": ("comisiones_anual", "fondos_administrados"),
     },
 ]
 _TOTAL_WEIGHT = sum(d["weight"] for d in DIMENSIONS)

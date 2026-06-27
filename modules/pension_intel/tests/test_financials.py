@@ -28,6 +28,9 @@ _STATEMENTS = {
         {"original_text": "Total activos", "category": "assets", "amount_current": 5000.0, "is_total": True},
         {"original_text": "Total pasivos", "category": "liabilities", "amount_current": 1000.0, "is_total": True},
         {"original_text": "Total patrimonio", "category": "equity", "amount_current": 4000.0, "is_total": True},
+        # AUM (administered funds) — assets side; the same-amount contra below must be ignored.
+        {"original_text": "Activos de los Fondos Administrados", "category": "assets", "amount_current": 200000.0, "is_total": False},
+        {"original_text": "Contracuenta de los Activos de los Fondos Administrados", "category": "liabilities", "amount_current": 200000.0, "is_total": False},
     ],
     "estado_resultados": [
         {"original_text": "Resultado del ejercicio", "category": "net_income", "amount_current": 800.0, "is_total": True},
@@ -41,7 +44,7 @@ def db():
                            poolclass=StaticPool)
     Base.metadata.create_all(engine)
     s = sessionmaker(bind=engine, autoflush=False)()
-    sipen_pension_sync(s)  # base data (rentabilidad/escala/costo per AFP)
+    sipen_pension_sync(s)  # base data (rentabilidad + comisiones per AFP; AUM comes from financials)
     try:
         yield s
     finally:
@@ -59,17 +62,42 @@ def test_ingest_financials_persists_and_activates_solvency(db, monkeypatch):
     assert res["period"] == "2024-12"
     assert res["patrimonio"] == 4000.0 and res["activos_totales"] == 5000.0
 
-    # Series persisted.
+    # Series persisted — incl. AUM (assets-side managed funds, contra ignored).
     pat = (db.query(PensionSeries)
            .filter_by(entity_slug="afp_popular", series_code="patrimonio", period="2024-12").one())
     assert pat.value == 4000.0 and pat.source == "SIPEN"
+    aum = (db.query(PensionSeries)
+           .filter_by(entity_slug="afp_popular", series_code="fondos_administrados", period="2024-12").one())
+    assert aum.value == 200000.0  # not the 200000 contra in liabilities — same value, assets side
 
-    # After: Popular's solvency dimension is present → it graduates to an ABSOLUTE band.
+    # After: solvency AND scale/cost (from AUM) present → ABSOLUTE band, full coverage.
     after = {r["slug"]: r for r in compute_isa(db)}["afp_popular"]
     solv = next(d for d in after["dimensions"] if d["key"] == "solvencia")
+    escala = next(d for d in after["dimensions"] if d["key"] == "escala")
     assert solv["present"] is True and solv["raw"] == pytest.approx(0.8)  # 4000/5000
+    assert escala["present"] is True  # AUM filled the scale dimension
     assert after["band"] is not None and after["score_kind"] == "absolute"
     assert after["coverage"] == pytest.approx(1.0)  # all four dimensions present
+
+
+def test_managed_funds_picks_assets_side_across_label_variants():
+    """AUM extraction: assets-side 'fondos administrados', never the contra; label varies."""
+    from modules.pension_intel.external.financials_extractor import _managed_funds
+
+    # Reservas-style plain label.
+    assert _managed_funds({"balance_general": [
+        {"original_text": "Activos de los Fondos Administrados", "category": "assets", "amount_current": 348007034642},
+        {"original_text": "Contracuenta de los Activos de los Fondos Administrados", "category": "liabilities", "amount_current": 348007034642},
+    ]}) == 348007034642
+    # Atlántico-style "CUENTA DE ORDEN (DEBE) - …" and Romana-style "… Nota 11".
+    assert _managed_funds({"balance_general": [
+        {"original_text": "CUENTA DE ORDEN (DEBE) - Activos de los Fondos Administrados", "category": "assets", "amount_current": 24831829948},
+        {"original_text": "CUENTAS DE ORDEN (HABER) - Activos de los Fondos Administrados", "category": "equity", "amount_current": 24831829948},
+    ]}) == 24831829948
+    # None when the line is absent.
+    assert _managed_funds({"balance_general": [
+        {"original_text": "Total activos", "category": "assets", "amount_current": 5000},
+    ]}) is None
 
 
 def test_ingest_rejects_unknown_afp(db, monkeypatch):
