@@ -1718,7 +1718,57 @@
       "message": "Mensaje"
     }
   },
+  "pension": {
+    "eyebrow": "SIPEN · Sistema de pensiones",
+    "title": "Pensiones",
+    "subDefault": "Salud del sistema dominicano de pensiones y dispersión por AFP (SIPEN).",
+    "subScored": "Pulso del sistema · {{period}}.",
+    "errorLoad": "No se pudo cargar el pulso de pensiones. Reintenta.",
+    "emptyNoData": "Aún no hay datos de pensiones. Corre «Sincronizar pensiones (SIPEN)» para ingerir.",
+    "cciNominal": "Rentabilidad CCI (nominal)",
+    "sdpNominal": "Rentabilidad SDP (nominal)",
+    "commissions": "Comisiones del sistema",
+    "nAfp": "AFP",
+    "unitPct": "% anual",
+    "unitRdMm": "RD$ MM",
+    "dispersionTitle": "Dispersión por AFP",
+    "dispersionSubtitle": "Rentabilidad nominal anual por administradora · {{period}}",
+    "leader": "Líder",
+    "laggard": "Rezagada",
+    "spread": "Brecha",
+    "average": "Promedio simple",
+    "nominalNote": "Rentabilidad nominal; léela vs su promedio histórico y ajustada por riesgo, no como ranking del mes.",
+    "insightTitle": "Análisis del sistema de pensiones",
+    "insightSubtitle": "Lectura de sistema y dispersión por AFP (SIPEN). {{period}}",
+    "audienceLabel": "Orientación",
+    "audience": {
+      "inversionista": "Inversionista",
+      "regulador": "Regulador",
+      "afiliado": "Afiliado",
+      "gobierno": "Gobierno"
+    }
+  },
   "datos": {
+    "pensiones": {
+      "eyebrow": "Datos · Pensiones",
+      "title": "Pensiones · SIPEN",
+      "sub": "Ingesta de estadísticas del sistema dominicano de pensiones (SIPEN): series nacionales y por AFP.",
+      "empty": "No hay operaciones de Pensiones registradas.",
+      "ovLoading": "Cargando estado del dato…",
+      "ovError": "No se pudo leer el estado del dato de pensiones.",
+      "ovTitle": "Estado del dato",
+      "ovSub": "Cobertura y procedencia del último snapshot de SIPEN",
+      "realChip": "Dato real (SIPEN)",
+      "noData": "Sin dato",
+      "ovEmptyHint": "Aún no hay datos. Ejecuta «Sincronizar pensiones (SIPEN)» abajo para ingerir las series del sistema y por AFP.",
+      "statPeriod": "Último período",
+      "statCci": "Rentab. CCI",
+      "statSdp": "Rentab. SDP",
+      "statCommissions": "Comisiones",
+      "statAfp": "AFP",
+      "statSource": "Fuente",
+      "sourceValue": "SIPEN"
+    },
     "operaciones": {
       "eyebrow": "Datos \u00b7 operaci\u00f3n",
       "title": "Consola de Operaci\u00f3n",

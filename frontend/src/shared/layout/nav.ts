@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Boxes,
   Store,
+  PiggyBank,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ export const NAV: NavGroup[] = [
       { to: "/social-dev", label: "Social & desarrollo", icon: Users, ready: true },
       { to: "/trade-intel", label: "Comercio exterior", icon: Ship, ready: true },
       { to: "/esg-climate", label: "ESG & clima", icon: Leaf, ready: true },
+      { to: "/pension-intel", label: "Pensiones", icon: PiggyBank, ready: true },
     ],
   },
   {
@@ -57,6 +59,7 @@ export const NAV: NavGroup[] = [
       { to: "/datos/social", label: "Social · ONE", icon: Users, ready: true },
       { to: "/datos/comercio", label: "Comercio · DGA", icon: Ship, ready: true },
       { to: "/datos/gobernanza", label: "Gobernanza · WGI", icon: Scale, ready: true },
+      { to: "/datos/pensiones", label: "Pensiones · SIPEN", icon: PiggyBank, ready: true },
     ],
   },
   {

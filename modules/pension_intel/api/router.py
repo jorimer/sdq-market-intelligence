@@ -25,6 +25,27 @@ logger = logging.getLogger("sdq.api.pension_intel")
 
 router = APIRouter()
 
+# Audiences served by the pension pulse narrative (see cerebro AUDIENCE_FRAMES).
+_AUDIENCES = {"inversionista", "regulador", "afiliado", "gobierno"}
+
+
+async def _ai_insight(
+    context: Dict[str, Any], audience: str = "inversionista", deep: bool = False,
+) -> Dict[str, Any] | None:
+    """Claude narrative via the cerebro route (axis=pension_intel); best-effort
+    (returns None on any failure so the endpoint never breaks). Without an API key
+    the engine serves a static fallback."""
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = await narrative_engine.generate(
+            context, template="pension_pulse", mode="deep" if deep else "detailed",
+            axis="pension_intel", audience=audience,
+        )
+        return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
+        logger.warning("AI insight pensiones no disponible: %s", e)
+        return None
+
 
 def _serialize(s: PensionSeries) -> Dict[str, Any]:
     return {
@@ -93,6 +114,34 @@ async def latest_snapshot(
             "model_version": snap.model_version,
         }
     }
+
+
+@router.get("/pulse")
+async def system_pulse(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The national pension pulse: system headline + per-AFP rentabilidad dispersion."""
+    from modules.pension_intel.service import build_system_pulse
+    return build_system_pulse(db)
+
+
+@router.get("/insight")
+async def insight(
+    audience: str = Query("inversionista"),
+    deep: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """AI narrative (Cerebro) over the pension pulse. Best-effort."""
+    from modules.pension_intel.ai_context import pension_ai_context
+    from modules.pension_intel.service import build_system_pulse
+    aud = audience if audience in _AUDIENCES else "inversionista"
+    context = pension_ai_context(build_system_pulse(db))
+    result = await _ai_insight(context, audience=aud, deep=deep)
+    # Same contract as the other axes: the narrative travels under `ai_insight`
+    # (the frontend AiInsightCard reads `data.ai_insight`).
+    return {"audience": aud, "ai_insight": result}
 
 
 @router.get("/sync-status")

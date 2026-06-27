@@ -293,6 +293,22 @@ THIN_TEMPLATES = {
         "número. Trabajas con un AGREGADO: no exijas ni supongas desglose por entidad ni por "
         "dimensión que el sistema no provee — lee con firmeza lo que el agregado sí permite."
     ),
+    "pension_pulse": (
+        "Entrega una PERSPECTIVA DE SISTEMA del sistema dominicano de pensiones (SIPEN), a "
+        "partir del agregado y de la dispersión entre AFP:\n{context}\n\n"
+        "Máximo 350 palabras, formato SCQA. Es una lectura de SISTEMA con su dispersión, no un "
+        "ranking del mes.\n"
+        "Lee en este orden de prioridad: (1) SALUD AGREGADA — la rentabilidad del sistema (CCI/SDP) "
+        "leída CONTRA SU PROMEDIO HISTÓRICO y AJUSTADA POR RIESGO, y el tamaño/trayectoria del fondo "
+        "si se provee; (2) DISPERSIÓN ENTRE AFP — usa 'afp_rentabilidad' (líder, rezagada y la brecha "
+        "entre ambas) como diferenciación competitiva, sin convertirlo en una carrera mensual; "
+        "(3) ESTRUCTURA — cobertura y densidad de cotización como fragilidad del modelo si están en "
+        "el contexto. Cierra con el 'y por tanto' para la audiencia.\n\n"
+        "RENTABILIDAD NOMINAL: no afirmes rentabilidad real ni descuentes inflación si no está en "
+        "el contexto. CIFRAS: usa solo las del contexto; si una relación (brecha, promedio) no está "
+        "precalculada, exprésala en palabras sin número. Trabajas con un agregado + dispersión: no "
+        "exijas desglose que el contexto no provee."
+    ),
     "risk_assessment": (
         "Explica el FUNDAMENTO del riesgo macro-político (IRMP) de este país.\n"
         "Contexto:\n{context}\n\n"

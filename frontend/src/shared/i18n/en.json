@@ -1718,7 +1718,57 @@
       "message": "Message"
     }
   },
+  "pension": {
+    "eyebrow": "SIPEN · Pension system",
+    "title": "Pensions",
+    "subDefault": "Health of the Dominican pension system and per-AFP dispersion (SIPEN).",
+    "subScored": "System pulse · {{period}}.",
+    "errorLoad": "Could not load the pension pulse. Retry.",
+    "emptyNoData": "No pension data yet. Run “Sync pensions (SIPEN)” to ingest.",
+    "cciNominal": "CCI return (nominal)",
+    "sdpNominal": "SDP return (nominal)",
+    "commissions": "System commissions",
+    "nAfp": "AFPs",
+    "unitPct": "% annual",
+    "unitRdMm": "RD$ MM",
+    "dispersionTitle": "Dispersion by AFP",
+    "dispersionSubtitle": "Nominal annual return by administrator · {{period}}",
+    "leader": "Leader",
+    "laggard": "Laggard",
+    "spread": "Spread",
+    "average": "Simple average",
+    "nominalNote": "Nominal return; read it vs its historical average and risk-adjusted, not as a monthly ranking.",
+    "insightTitle": "Pension system analysis",
+    "insightSubtitle": "System reading and per-AFP dispersion (SIPEN). {{period}}",
+    "audienceLabel": "Orientation",
+    "audience": {
+      "inversionista": "Investor",
+      "regulador": "Regulator",
+      "afiliado": "Member",
+      "gobierno": "Government"
+    }
+  },
   "datos": {
+    "pensiones": {
+      "eyebrow": "Data · Pensions",
+      "title": "Pensions · SIPEN",
+      "sub": "Ingestion of Dominican pension-system statistics (SIPEN): national and per-AFP series.",
+      "empty": "No Pension operations registered.",
+      "ovLoading": "Loading data status…",
+      "ovError": "Could not read the pension data status.",
+      "ovTitle": "Data status",
+      "ovSub": "Coverage and provenance of the latest SIPEN snapshot",
+      "realChip": "Real data (SIPEN)",
+      "noData": "No data",
+      "ovEmptyHint": "No data yet. Run “Sync pensions (SIPEN)” below to ingest the system and per-AFP series.",
+      "statPeriod": "Latest period",
+      "statCci": "CCI return",
+      "statSdp": "SDP return",
+      "statCommissions": "Commissions",
+      "statAfp": "AFPs",
+      "statSource": "Source",
+      "sourceValue": "SIPEN"
+    },
     "operaciones": {
       "eyebrow": "Data \u00b7 operation",
       "title": "Operation Console",

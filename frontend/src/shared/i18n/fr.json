@@ -1718,7 +1718,57 @@
       "message": "Message"
     }
   },
+  "pension": {
+    "eyebrow": "SIPEN · Système de pensions",
+    "title": "Pensions",
+    "subDefault": "Santé du système de pensions dominicain et dispersion par AFP (SIPEN).",
+    "subScored": "Pouls du système · {{period}}.",
+    "errorLoad": "Impossible de charger le pouls des pensions. Réessayez.",
+    "emptyNoData": "Pas encore de données de pensions. Lancez « Synchroniser les pensions (SIPEN) » pour ingérer.",
+    "cciNominal": "Rendement CCI (nominal)",
+    "sdpNominal": "Rendement SDP (nominal)",
+    "commissions": "Commissions du système",
+    "nAfp": "AFP",
+    "unitPct": "% annuel",
+    "unitRdMm": "RD$ MM",
+    "dispersionTitle": "Dispersion par AFP",
+    "dispersionSubtitle": "Rendement nominal annuel par administrateur · {{period}}",
+    "leader": "Leader",
+    "laggard": "Retardataire",
+    "spread": "Écart",
+    "average": "Moyenne simple",
+    "nominalNote": "Rendement nominal ; à lire vs sa moyenne historique et ajusté du risque, pas comme un classement mensuel.",
+    "insightTitle": "Analyse du système de pensions",
+    "insightSubtitle": "Lecture du système et dispersion par AFP (SIPEN). {{period}}",
+    "audienceLabel": "Orientation",
+    "audience": {
+      "inversionista": "Investisseur",
+      "regulador": "Régulateur",
+      "afiliado": "Affilié",
+      "gobierno": "Gouvernement"
+    }
+  },
   "datos": {
+    "pensiones": {
+      "eyebrow": "Données · Pensions",
+      "title": "Pensions · SIPEN",
+      "sub": "Ingestion des statistiques du système de pensions dominicain (SIPEN) : séries nationales et par AFP.",
+      "empty": "Aucune opération de Pensions enregistrée.",
+      "ovLoading": "Chargement de l'état des données…",
+      "ovError": "Impossible de lire l'état des données de pensions.",
+      "ovTitle": "État des données",
+      "ovSub": "Couverture et provenance du dernier instantané SIPEN",
+      "realChip": "Données réelles (SIPEN)",
+      "noData": "Pas de données",
+      "ovEmptyHint": "Pas encore de données. Lancez « Synchroniser les pensions (SIPEN) » ci-dessous pour ingérer les séries du système et par AFP.",
+      "statPeriod": "Dernière période",
+      "statCci": "Rend. CCI",
+      "statSdp": "Rend. SDP",
+      "statCommissions": "Commissions",
+      "statAfp": "AFP",
+      "statSource": "Source",
+      "sourceValue": "SIPEN"
+    },
     "operaciones": {
       "eyebrow": "Donn\u00e9es \u00b7 op\u00e9ration",
       "title": "Console d'op\u00e9ration",
