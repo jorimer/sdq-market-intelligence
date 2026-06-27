@@ -43,7 +43,7 @@ from modules.esg_climate.models.models import (  # noqa: F401
 from modules.energy_intel.models.models import EnergyScore  # noqa: F401
 from modules.telecom_intel.models.models import TelecomScore  # noqa: F401
 from modules.pension_intel.models.models import (  # noqa: F401
-    PensionEntity, PensionSeries, PensionSnapshot,
+    PensionEntity, PensionRating, PensionSeries, PensionSnapshot,
 )
 # Solo la clase mapeada (los enums Sector/DealType no van aquí: 'Sector' colisiona
 # con sector_intel y Alembic solo necesita la tabla).

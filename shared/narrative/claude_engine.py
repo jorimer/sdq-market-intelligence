@@ -309,6 +309,21 @@ THIN_TEMPLATES = {
         "precalculada, exprésala en palabras sin número. Trabajas con un agregado + dispersión: no "
         "exijas desglose que el contexto no provee."
     ),
+    "pension_entity": (
+        "Explica el FUNDAMENTO del Índice de Solidez (ISA) de esta AFP, con dato real de SIPEN.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. NO es un rating crediticio NI un veredicto absoluto de salud: es un "
+        "score de POSICIÓN RELATIVA (0-100) entre las AFP con dato suficiente, y es PARCIAL. Las "
+        "bandas absolutas de solidez (Sólida/Frágil) están DIFERIDAS hasta tener la solvencia — no "
+        "afirmes que la AFP es 'sólida' o 'frágil' en términos absolutos. Apóyate en: la posición "
+        "relativa (rank) y el score, la(s) dimensión(es) que más la impulsan y las que más la lastran "
+        "(pondera por su peso), y dónde lidera o rezaga frente a sus pares. PROCEDENCIA: rentabilidad, "
+        "escala y costo son dato SIPEN real; la SOLVENCIA es una BRECHA declarada (sin estados "
+        "financieros) — dilo con claridad y NO inventes cifras de solvencia.\n\n"
+        "COBERTURA: el 'coverage' (< 1) indica que el índice es PARCIAL; nómbralo si es material. "
+        "RENTABILIDAD NOMINAL: léela ajustada por riesgo y vs su promedio, no como ranking del mes. "
+        "Usa solo cifras del contexto; si una relación no está precalculada, exprésala sin número."
+    ),
     "risk_assessment": (
         "Explica el FUNDAMENTO del riesgo macro-político (IRMP) de este país.\n"
         "Contexto:\n{context}\n\n"

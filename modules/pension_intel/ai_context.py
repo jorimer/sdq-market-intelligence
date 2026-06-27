@@ -5,7 +5,39 @@ The narrative engine receives a SMALL, pre-digested context — the system headl
 laggard, spread) — never the full series set, so prompts stay cheap and focused.
 Mirrors :mod:`trade_intel.ai_context`. Source: SIPEN (dato real).
 """
-from typing import Any, Dict
+from typing import Any, Dict, List
+
+
+def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compact context for one AFP's ISA narrative (template ``pension_entity``).
+
+    *rating* is the AFP's ISA result (overall, band, coverage, dimensions); *peers* is
+    the full ranking so the narrative can place the AFP against its peers without
+    recomputing. Solvency travels as a named gap, never a fabricated figure.
+    """
+    dims = rating.get("dimensions") or []
+    ranked = [r for r in peers if r.get("overall_score") is not None]
+    rank = next((i + 1 for i, r in enumerate(ranked) if r["slug"] == rating.get("slug")), None)
+    return {
+        "afp": rating.get("name"),
+        "isa_score_relativo": rating.get("overall_score"),
+        "coverage": rating.get("coverage"),
+        "rank": rank,
+        "n_afp_rankeadas": len(ranked),
+        "periodo": rating.get("period"),
+        "dimensiones": [
+            {
+                "dimension": d["label"], "score": d["score"], "peso": d["weight"],
+                "valor_real": d["raw"], "procedencia": d["provenance"],
+                "presente": d["present"],
+            }
+            for d in dims
+        ],
+        "direction": "mayor score = mejor POSICIÓN RELATIVA entre las AFP (no veredicto absoluto)",
+        "source": "SIPEN — dato público real",
+        "note": "Score de posición RELATIVA y PARCIAL: solvencia = brecha declarada (estados "
+                "financieros pendientes), bandas absolutas DIFERIDAS. Rentabilidad nominal.",
+    }
 
 
 def pension_ai_context(pulse: Dict[str, Any]) -> Dict[str, Any]:

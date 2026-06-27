@@ -48,6 +48,66 @@ export async function getPensionInsight(
   return (data.ai_insight as AiInsight | null) ?? null;
 }
 
+/** One AFP row in the ISA ranking (relative, partial score; bands deferred). */
+export interface PensionRankRow {
+  rank: number | null;
+  slug: string;
+  name: string;
+  overall_score: number | null;
+  band: string | null;
+  coverage: number | null;
+  period: string | null;
+}
+
+export async function getPensionRankings(): Promise<{
+  rankings: PensionRankRow[];
+  count: number;
+  scale: string;
+}> {
+  const { data } = await client.get("/pension-intel/rankings");
+  return data;
+}
+
+/** One ISA dimension in an AFP's breakdown. */
+export interface PensionDimension {
+  key: string;
+  label: string;
+  weight: number;
+  direction: "higher" | "lower";
+  provenance: string; // "real" | "brecha"
+  present: boolean;
+  raw: number | null;
+  score: number | null;
+}
+
+export interface PensionDetail {
+  found: boolean;
+  slug: string;
+  name: string;
+  period: string | null;
+  overall_score: number | null;
+  band: string | null;
+  coverage: number | null;
+  dimensions: PensionDimension[];
+  model_version: string;
+}
+
+export async function getPensionEntityDetail(slug: string): Promise<PensionDetail> {
+  const { data } = await client.get(`/pension-intel/${slug}/detail`);
+  return data;
+}
+
+export async function getPensionEntityInsight(
+  slug: string,
+  audience: string = PENSION_AUDIENCES[0],
+  deep = false,
+): Promise<AiInsight | null> {
+  const { data } = await client.get(`/pension-intel/entity-insight/${slug}`, {
+    params: { audience, ...(deep ? { deep: true } : {}) },
+  });
+  return (data.ai_insight as AiInsight | null) ?? null;
+}
+
 // Headline series codes (system level) — stable keys from the backend.
 export const HEADLINE_CCI = "sipen.rentabilidad.cci_nominal_anual";
 export const HEADLINE_SDP = "sipen.rentabilidad.sdp_nominal_anual";

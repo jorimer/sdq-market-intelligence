@@ -67,6 +67,28 @@ class PensionSeries(UUIDMixin, Base):
     license = Column(String(160), nullable=True)
 
 
+class PensionRating(UUIDMixin, Base):
+    """Computed Índice de Solidez de AFP (ISA) for an AFP/period.
+
+    A 0-100 band index (Sólida/Adecuada/En vigilancia/Frágil), NOT a credit rating —
+    solvency is a declared gap (see scoring/isa.py). ``coverage`` is the share of the
+    declared methodology backed by real data (< 1.0 until estados financieros land).
+    """
+    __tablename__ = "pension_ratings"
+    __table_args__ = (
+        UniqueConstraint("entity_slug", "period", name="uq_pension_rating_entity_period"),
+        Index("ix_pension_rating_entity_period", "entity_slug", "period"),
+    )
+
+    entity_slug = Column(String(40), nullable=False)
+    period = Column(String(10), nullable=False)        # as-of label (latest input period)
+    overall_score = Column(Float, nullable=True)       # 0-100, NULL = no scoreable data
+    band = Column(String(20), nullable=True)           # Sólida / Adecuada / En vigilancia / Frágil
+    coverage = Column(Float, nullable=True)            # [0,1] share of methodology with real data
+    dimensions = Column(JSON, nullable=True)           # per-dimension breakdown (raw/score/weight/provenance)
+    model_version = Column(String(10), default="0.1", nullable=False)
+
+
 class PensionSnapshot(UUIDMixin, Base):
     """Computed system aggregate for one period (the pulse's output).
 

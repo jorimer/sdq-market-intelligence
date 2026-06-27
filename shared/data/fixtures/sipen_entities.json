@@ -3,7 +3,7 @@
     "note": "Muestra REAL y citada por AFP (SIPEN/ADAFP). F0 — pendiente cableado live (estados financieros = Fase 2). Observaciones solo donde hay cifra verificable; el resto se omite (None, nunca interpolado).",
     "sources": [
       "Rentabilidad nominal anual por AFP (feb 2025) — Diario Financiero: https://diariofinanciero.do/finanzas-y-negocios/inversiones/cual-afp-logro-mayor-rentabilidad-en-republica-dominicana-en-febrero/",
-      "Comisiones 2025 y patrimonio gestionado AFP Siembra — Infobae/ADAFP: https://www.infobae.com/republica-dominicana/2026/02/23/administradoras-de-fondos-de-pensiones-de-republica-dominicana-alcanzan-ingresos-de-11500-millones-de-pesos-en-comisiones-durante-2025/",
+      "Comisiones 2025 por AFP (Popular 3790.9 · Crecer 2617.5 · Siembra 2441.3 · Reservas 2265.7 · Atlántico 217.1 · JMMB 114 · Romana 99.2) y patrimonio gestionado fin-2025 (Popular 428449.7 · Crecer 299052.8 · Siembra 276445) — Diario Libre/ADAFP: https://www.diariolibre.com/economia/finanzas/2026/02/20/cuanto-cobraron-en-comisiones-las-afp-en-2025/3443899",
       "Afiliados por AFP (dic 2023) — Hoy/ADAFP"
     ]
   },
@@ -11,6 +11,8 @@
     "name": "AFP Popular",
     "series": {
       "rentabilidad_nominal_anual": {"unit": "%", "observations": {"2025-02": 9.59}},
+      "comisiones_anual": {"unit": "RD$ MM", "observations": {"2025": 3790.9}},
+      "patrimonio_gestionado": {"unit": "RD$ MM", "observations": {"2025-12": 428449.7}},
       "afiliados": {"unit": "personas", "observations": {"2023-12": 1517491}}
     }
   },
@@ -18,6 +20,8 @@
     "name": "AFP Crecer",
     "series": {
       "rentabilidad_nominal_anual": {"unit": "%", "observations": {"2025-02": 8.72}},
+      "comisiones_anual": {"unit": "RD$ MM", "observations": {"2025": 2617.5}},
+      "patrimonio_gestionado": {"unit": "RD$ MM", "observations": {"2025-12": 299052.8}},
       "afiliados": {"unit": "personas", "observations": {"2023-12": 1436966}}
     }
   },

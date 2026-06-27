@@ -9,11 +9,13 @@ import {
   StateBlock,
   LoadingGrid,
   Chip,
+  Tabs,
 } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { AudienceTabs } from "@/shared/ui/AudienceTabs";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
+import { AfpRankingTab } from "../components/AfpRankingTab";
 import {
   getPensionPulse,
   getPensionInsight,
@@ -83,6 +85,7 @@ export function PensionIntelPage() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [pulse, setPulse] = useState<PensionPulse | null>(null);
+  const [tab, setTab] = useState("sistema");
   const [audience, setAudience] = useAudiencePref("sdq.pension.audience", PENSION_AUDIENCES);
 
   const load = useCallback(async () => {
@@ -130,9 +133,22 @@ export function PensionIntelPage() {
         sub={p.period ? t("pension.subScored", { period: p.period }) : t("pension.subDefault")}
       />
 
-      {!has && <StateBlock kind="empty" message={t("pension.emptyNoData")} />}
+      <Card className="mb-5">
+        <Tabs
+          tabs={[
+            { id: "sistema", label: t("pension.tabSystem") },
+            { id: "afp", label: t("pension.tabAfp") },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      </Card>
 
-      {has && (
+      {tab === "afp" && <AfpRankingTab />}
+
+      {tab === "sistema" && !has && <StateBlock kind="empty" message={t("pension.emptyNoData")} />}
+
+      {tab === "sistema" && has && (
         <>
           <div className="grid lg:grid-cols-3 gap-5">
             {/* Hero: system return */}
