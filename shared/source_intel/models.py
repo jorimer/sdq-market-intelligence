@@ -53,9 +53,12 @@ class SourceSuggestion(UUIDMixin, Base):
     target_gate = Column(String(8), nullable=True)     # g1..g5
 
     status = Column(String(20), nullable=False, default=STATUS_PROPOSED)
-    # Evaluación del sistema: {score, criteria{}, gate_closed, rationale, plan}. La llena
-    # el evaluador (Increment 2); en la fundación queda None hasta evaluar.
+    # Evaluación del sistema: {score, criteria{}, gate_closed, rationale}. La llena el
+    # evaluador (Increment 2); None hasta evaluar.
     evaluation = Column(JSON, nullable=True)
+    # Plan de integración andamiado (Increment 4): {data_access, connector, crosswalk,
+    # target, steps[], risks[], effort, method}. None hasta andamiar. El build es manual.
+    integration_plan = Column(JSON, nullable=True)
     decision_note = Column(Text, nullable=True)        # nota del dueño al aprobar/rechazar
 
     __table_args__ = (

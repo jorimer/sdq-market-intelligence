@@ -111,6 +111,25 @@ def test_evaluate_does_not_overwrite_decision(db, monkeypatch):
     assert out["evaluation"] is not None       # pero sí adjunta la evaluación
 
 
+# ── andamiaje de integración (Increment 4) — path heurístico determinista ──
+
+def _force_heuristic_scaffold(monkeypatch):
+    import shared.source_intel.scaffolder as sc
+    monkeypatch.setattr(sc.settings, "ANTHROPIC_API_KEY", None, raising=False)
+
+
+def test_scaffold_heuristic_plan(db, monkeypatch):
+    _force_heuristic_scaffold(monkeypatch)
+    s = svc.create_suggestion(db, kind="source", title="Boletín INDOTEL",
+                              target_axis="telecom", target_gate="g1")
+    svc.set_status(db, s["id"], "approved")
+    out = svc.scaffold(db, s["id"])
+    plan = out["integration_plan"]
+    assert plan["method"].startswith("heuristic")
+    assert "telecom" in plan["target"] and plan["steps"]
+    assert out["status"] == "approved"  # andamiar no cambia el estado
+
+
 # ── API ───────────────────────────────────────────────────────────────
 
 def _client(db, role=UserRole.admin):
@@ -174,3 +193,14 @@ def test_api_evaluate(db, monkeypatch):
 def test_api_requires_admin(db):
     c = _client(db, role=UserRole.analyst)
     assert c.get("/api/v1/source-intel/suggestions").status_code == 403
+
+
+def test_api_scaffold(db, monkeypatch):
+    _force_heuristic_scaffold(monkeypatch)
+    c = _client(db)
+    sid = c.post("/api/v1/source-intel/suggestions",
+                 json={"kind": "source", "title": "X", "target_axis": "telecom",
+                       "target_gate": "g1"}).json()["id"]
+    r = c.post(f"/api/v1/source-intel/suggestions/{sid}/scaffold")
+    assert r.status_code == 200
+    assert r.json()["integration_plan"]["method"].startswith("heuristic")
