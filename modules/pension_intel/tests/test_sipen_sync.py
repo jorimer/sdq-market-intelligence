@@ -205,6 +205,40 @@ def test_sync_ingests_rentabilidad_live(db, monkeypatch):
     assert snap.headline.get("sipen.rentabilidad.sdp_nominal_anual") == 7.98
 
 
+def test_sync_dedupes_live_records_colliding_with_fixture(db, monkeypatch):
+    """A live rentabilidad Record sharing (code, period, slug) with the fixture must
+    upsert the existing row, not add a second. On a FRESH DB the fixture row is only
+    pending (autoflush=False), so without an intra-sync flush this raised a UNIQUE
+    failure for the per-AFP key and silently doubled the NULL-slug system key."""
+    from datetime import date
+
+    from shared.data.base_client import Record
+    from shared.data.lineage import Lineage
+
+    lin = Lineage(source="SIPEN", license="x", fetched_at=date.today())
+    # System CCI collides with fixture's 2025-04; per-AFP collides with afp_popular 2025-02.
+    sys_recs = [Record(series="sipen.rentabilidad.cci_nominal_anual", period="2025-04",
+                       value=9.55, lineage=lin, unit="%")]
+    ent_recs = [Record(series="rentabilidad_nominal_anual", period="2025-02", value=9.71,
+                       lineage=lin, unit="%", dimension="afp_popular")]
+    monkeypatch.setattr(
+        "modules.pension_intel.sipen_sync.fetch_sipen_rentabilidad",
+        lambda period=None: (sys_recs, ent_recs),
+    )
+
+    sipen_pension_sync(db)  # must not raise
+
+    # Exactly one row per colliding key, carrying the live (overwritten) value.
+    sys_rows = (db.query(PensionSeries)
+                .filter_by(series_code="sipen.rentabilidad.cci_nominal_anual",
+                           period="2025-04", entity_slug=None).all())
+    assert len(sys_rows) == 1 and sys_rows[0].value == 9.55
+    pop_rows = (db.query(PensionSeries)
+                .filter_by(series_code="rentabilidad_nominal_anual",
+                           period="2025-02", entity_slug="afp_popular").all())
+    assert len(pop_rows) == 1 and pop_rows[0].value == 9.71
+
+
 def test_sync_ingests_ckan_series_and_snapshot_uses_latest_per_code(db, monkeypatch):
     """Live CKAN records land as system series, and the snapshot keeps each indicator's
     latest value (fresh afiliados doesn't drop the older fixture rentabilidad)."""
