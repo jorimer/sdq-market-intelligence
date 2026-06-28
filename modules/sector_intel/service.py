@@ -337,6 +337,49 @@ def _load_labor_availability(db: Session, target: Optional[str]) -> Dict[str, fl
     return out
 
 
+def _load_enae_profitability(db: Session) -> Dict[str, float]:
+    """Per-slug ``profitability`` (ENAE return-on-revenue) for the slugs the ENAE frame
+    covers — un insumo REAL per-sector de atractividad (utilidad/ingresos).
+
+    Agrega los NIVELES aditivos (ingresos, utilidad) del último año ENAE de los sectores
+    ENAE que alimentan cada slug BCRD y RECOMPUTA el ratio por slug (la rentabilidad NO
+    es aditiva → nunca se promedia): el bundle (manufactura→manufactura_local+zonas_
+    francas) comparte el ratio; el partial (electricidad+agua→energia) suma ambos antes
+    del ratio. Snapshot del año más reciente, aplicado a todos los períodos (patrón TSS).
+
+    NO es all-or-nothing: ENAE cubre ~9 de 17 slugs. Los no cubiertos quedan AUSENTES (el
+    motor omite variables faltantes — sin rúbrica-50 falsa), así la cobertura parcial es
+    honesta y libre de distorsión min-max (a diferencia de operating_cost/labor, que sí
+    llevan rúbrica y deben ser todo-17). ``{}`` si no hay dato ENAE."""
+    from modules.sector_intel.models.models import SectorVariable
+    from modules.sector_intel.sectors_sync import ENAE_DIMENSION
+    from shared.data.enae_activity import VAR_INGRESOS, VAR_UTILIDAD
+    from shared.data.sector_crosswalk import ENAE_SECTORS
+
+    rows = (db.query(SectorVariable)
+            .filter(SectorVariable.dimension == ENAE_DIMENSION,
+                    SectorVariable.variable.in_([VAR_INGRESOS, VAR_UTILIDAD])).all())
+    levels: Dict[str, Dict[str, Dict[str, float]]] = {}  # {enae_key: {year: {var: value}}}
+    for r in rows:
+        if r.value is not None and r.period:
+            levels.setdefault(r.sector_code, {}).setdefault(r.period, {})[r.variable] = r.value
+    years = {y for per_year in levels.values() for y in per_year if str(y).isdigit()}
+    if not years:
+        return {}
+    latest = max(years, key=int)  # foto del año más reciente (comparable cross-sección)
+    agg: Dict[str, Dict[str, float]] = {}  # slug -> {ingresos, utilidad} sumados
+    for sec in ENAE_SECTORS:
+        yv = levels.get(sec.key, {}).get(latest)
+        if not yv or yv.get(VAR_INGRESOS) is None or yv.get(VAR_UTILIDAD) is None:
+            continue
+        for slug in sec.members:
+            a = agg.setdefault(slug, {"ingresos": 0.0, "utilidad": 0.0})
+            a["ingresos"] += float(yv[VAR_INGRESOS])
+            a["utilidad"] += float(yv[VAR_UTILIDAD])
+    return {slug: a["utilidad"] / a["ingresos"]
+            for slug, a in agg.items() if a["ingresos"] > 0}
+
+
 def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Full IAI dataset per sector for *period*: declared rubric (doctrine) + real
     data (BCRD sector dim, contract-derived macro_exposure). Single source of truth
@@ -374,6 +417,9 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     # min-max distortion. operating_cost is risk-increasing (inverted by the engine).
     op_cost = _load_operating_cost(db)
     labor = _load_labor_availability(db, target)
+    # profitability (ENAE rentabilidad, real per-sector) — cobertura PARCIAL honesta:
+    # solo los slugs del marco ENAE; el resto la deja ausente (el motor la omite).
+    enae_profit = _load_enae_profitability(db)
 
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
@@ -407,6 +453,10 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
         if labor.get(slug) is not None:
             merged["labor_availability"] = labor[slug]
             smap["labor_availability"] = "live"
+        # profitability (ENAE) — solo donde el marco ENAE llega; ausente → omitida.
+        if enae_profit.get(slug) is not None:
+            merged["profitability"] = enae_profit[slug]
+            smap["profitability"] = "live"
         dataset[slug] = merged
         sources[slug] = smap
         sgps_inputs[slug] = {
