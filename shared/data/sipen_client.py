@@ -161,6 +161,161 @@ def parse_mes_ano_xlsx(content: bytes) -> List[Tuple[str, float]]:
         wb.close()
 
 
+# ── Live rentabilidad (XLSX "Estadística Previsional") ──────────────────────────
+# SIPEN publishes the system & per-fund return series as an XLSX in its "Estadística
+# Previsional" section. Discovery is label-based (robust to the timestamped filenames):
+# each download card carries aria-label="Descargar documento <Title>", so we pick the
+# "Rentabilidad" .xlsx by its label, not its position. The workbook has two sheets:
+#   * "Por SISTEMA": Mes | Promedio CCI | Promedio Sistema (trailing-12m nominal, fraction)
+#   * "Por FONDO":   Mes | <one column per AFP> (same metric; discontinued AFPs are 0)
+# Values are fractions (0.0775 = 7.75%); we carry them as percent (×100, 2 dp) to match
+# the cited fixture sample exactly (verified: XLSX 2025-02/2025-04 == fixture figures).
+_PREVISIONAL_PAGE = (
+    "https://sipen.gob.do/estadisticas/estadistica-previsional/estadisticas-previsionales"
+)
+# Site header token (lowercased, footnote digits stripped) → AFP slug. Only the 7 live
+# administrators map; discontinued funds (Camino/Caribálico/León/Porvenir) and the
+# non-AFP fondos (Solidaridad Social, Reparto, INABIMA) have no slug → skipped.
+_RENT_AFP_BY_HEADER: Dict[str, str] = {
+    "atlántico": "afp_atlantico",
+    "crecer": "afp_crecer",
+    "jmmb-bdi": "afp_jmmb_bdi",
+    "popular": "afp_popular",
+    "reservas": "afp_reservas",
+    "romana": "afp_romana",
+    "siembra": "afp_siembra",
+}
+
+
+def previsional_xlsx_links(html: str) -> Dict[str, str]:
+    """``{label_lower: url}`` of the labelled .xlsx downloads on the Estadística
+    Previsional page (e.g. ``{"rentabilidad": ".../…_1781293450.xlsx", …}``).
+
+    Keys on the card's ``aria-label="Descargar documento <Title>"`` — stable against the
+    timestamped, otherwise-undistinguishable filenames. Pure (no network)."""
+    import re
+
+    pat = re.compile(
+        r'href="(https://sipen\.gob\.do/descarga/[^"]+\.xlsx)"[^>]*'
+        r'aria-label="Descargar documento ([^"]+)"',
+        re.IGNORECASE,
+    )
+    return {label.strip().lower(): url for url, label in pat.findall(html)}
+
+
+def _rent_pct(v) -> Optional[float]:
+    """Fraction → percent (2 dp); non-numeric / 0 (fund not operating) → None."""
+    return round(float(v) * 100, 2) if isinstance(v, (int, float)) and v else None
+
+
+def _norm_afp_header(cell) -> str:
+    """Header cell → lookup key: lowercase, trimmed, trailing footnote digits removed
+    (``'Camino1'`` → ``'camino'``, ``'JMMB-BDI'`` → ``'jmmb-bdi'``)."""
+    import re
+
+    return re.sub(r"\d+$", "", str(cell).strip().lower()) if cell is not None else ""
+
+
+def parse_rentabilidad_xlsx(
+    content: bytes,
+) -> Tuple[List[Tuple[str, Optional[float], Optional[float]]], Dict[str, List[Tuple[str, float]]]]:
+    """Parse the Rentabilidad workbook → ``(system, per_afp)``.
+
+    ``system`` = ``[(period 'YYYY-MM', cci_pct|None, sistema_pct|None)]`` from "Por SISTEMA".
+    ``per_afp`` = ``{afp_slug: [(period, pct)]}`` from "Por FONDO" (only the 7 live AFPs;
+    0/blank cells skipped — never an invented 0% return). Pure (no network); the unit under
+    test. A data row is any row whose 2nd column is a date."""
+    import datetime
+    import io
+
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    try:
+        names = set(wb.sheetnames)
+
+        system: List[Tuple[str, Optional[float], Optional[float]]] = []
+        sys_sheet = "Por SISTEMA" if "Por SISTEMA" in names else wb.sheetnames[0]
+        for row in wb[sys_sheet].iter_rows(values_only=True):
+            d = row[1] if len(row) > 1 else None
+            if isinstance(d, datetime.datetime):
+                cci = _rent_pct(row[2]) if len(row) > 2 else None
+                sdp = _rent_pct(row[3]) if len(row) > 3 else None
+                if cci is not None or sdp is not None:
+                    system.append((d.strftime("%Y-%m"), cci, sdp))
+
+        per_afp: Dict[str, List[Tuple[str, float]]] = {}
+        if "Por FONDO" in names:
+            rows = list(wb["Por FONDO"].iter_rows(values_only=True))
+            colmap: Dict[int, str] = {}
+            for row in rows:  # locate the header row (≥3 known AFP names)
+                hits = {
+                    j: _RENT_AFP_BY_HEADER[_norm_afp_header(c)]
+                    for j, c in enumerate(row)
+                    if _norm_afp_header(c) in _RENT_AFP_BY_HEADER
+                }
+                if len(hits) >= 3:
+                    colmap = hits
+                    break
+            if colmap:
+                for row in rows:
+                    d = row[1] if len(row) > 1 else None
+                    if not isinstance(d, datetime.datetime):
+                        continue
+                    period = d.strftime("%Y-%m")
+                    for j, slug in colmap.items():
+                        v = _rent_pct(row[j]) if len(row) > j else None
+                        if v is not None:
+                            per_afp.setdefault(slug, []).append((period, v))
+        return system, per_afp
+    finally:
+        wb.close()
+
+
+def fetch_sipen_rentabilidad(  # pragma: no cover - network I/O
+    period: Optional[str] = None,
+) -> Tuple[List[Record], List[Record]]:
+    """LIVE: the SIPEN return series (system + per-AFP) from the Estadística Previsional
+    XLSX → ``(system_records, entity_records)``.
+
+    System Records carry the same codes as the fixture (``sipen.rentabilidad.cci_nominal_anual``
+    / ``…sdp_nominal_anual``); entity Records carry ``rentabilidad_nominal_anual`` with the AFP
+    slug in ``dimension``. Best-effort: discovery/parse failure returns ``([], [])`` and the
+    sync keeps the fixture floor. Runs in the sync; offline/tests stay on the fixture."""
+    import httpx
+
+    lineage = Lineage(
+        source=SIPENClient.source, license=SIPENClient.license, fetched_at=date.today(),
+        url=_PREVISIONAL_PAGE,
+        note="Rentabilidad nominal (sistema + por AFP) — XLSX Estadística Previsional",
+    )
+    system_out: List[Record] = []
+    entity_out: List[Record] = []
+    with httpx.Client(timeout=60, headers=_CKAN_HEADERS, follow_redirects=True) as http:
+        url = previsional_xlsx_links(http.get(_PREVISIONAL_PAGE).text).get("rentabilidad")
+        if not url:
+            logger.warning("[SIPEN] no se halló el XLSX de Rentabilidad en %s", _PREVISIONAL_PAGE)
+            return [], []
+        content = http.get(url).content
+    system, per_afp = parse_rentabilidad_xlsx(content)
+    for per, cci, sdp in system:
+        if period and per != period:
+            continue
+        if cci is not None:
+            system_out.append(Record(series="sipen.rentabilidad.cci_nominal_anual",
+                                      period=per, value=cci, lineage=lineage, unit="%"))
+        if sdp is not None:
+            system_out.append(Record(series="sipen.rentabilidad.sdp_nominal_anual",
+                                      period=per, value=sdp, lineage=lineage, unit="%"))
+    for slug, obs in per_afp.items():
+        for per, val in obs:
+            if period and per != period:
+                continue
+            entity_out.append(Record(series="rentabilidad_nominal_anual", period=per,
+                                     value=val, lineage=lineage, unit="%", dimension=slug))
+    return system_out, entity_out
+
+
 def fetch_sipen_ckan(period: Optional[str] = None) -> List[Record]:  # pragma: no cover - network I/O
     """LIVE: the three SIPEN national series from CKAN datos.gob.do → ``Record``\\ s.
 
