@@ -92,8 +92,10 @@ def scaffold_plan(db: Session, suggestion: Dict[str, Any]) -> Dict[str, Any]:
     )
     try:
         client = anthropic.Anthropic(api_key=api_key)
+        # 2500: un plan rico (conector + crosswalk + pasos + riesgos) supera 1100 tokens y
+        # se truncaba → JSON inválido → siempre caía a heurística (visto en prod). Holgura.
         resp = client.messages.create(
-            model=settings.ANTHROPIC_MODEL, max_tokens=1100,
+            model=settings.ANTHROPIC_MODEL, max_tokens=2500,
             system=_SYSTEM, messages=[{"role": "user", "content": user}])
         text = resp.content[0].text.strip()
         if text.startswith("```"):
