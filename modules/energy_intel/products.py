@@ -184,7 +184,9 @@ class EnergyProduct:
         coverage = s.coverage if s.coverage is not None else 0.0
         freshness = None
         try:
-            freshness = (date.today() - date(int(str(s.period)[:4]), 12, 31)).days
+            # Dato anual: fin de año del período. Si el año aún no cierra (período actual),
+            # la frescura es 0 (es el dato más reciente disponible), no negativa.
+            freshness = max(0, (date.today() - date(int(str(s.period)[:4]), 12, 31)).days)
         except (ValueError, TypeError):
             pass
         return DataHealth(coverage=coverage, freshness_days=freshness, cadence="annual",
