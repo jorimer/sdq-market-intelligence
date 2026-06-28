@@ -98,7 +98,8 @@ def _gate_diagnosis(sector: str, gate: str, value: float, data, val) -> Dict[str
                 "accion": action or "Declarar las secciones del nivel en el manifiesto."}
     # g5
     estado = "no aprobada" if not val.approved else f"parcial (score {val.score:.2f})"
-    return {"falta": f"Validación {estado}: {val.notes or 'sin backtest de outcomes'}.",
+    nota = (val.notes or "sin backtest de outcomes").strip().rstrip(".")
+    return {"falta": f"Validación {estado}: {nota}.",
             "accion": action or "Backtest de outcomes / QA firmado del sector."}
 
 
