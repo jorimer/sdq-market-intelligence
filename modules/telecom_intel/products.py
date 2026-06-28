@@ -1,16 +1,17 @@
 """Telecom Intelligence como ``SectorProduct`` — sector #7.
 
-Mono-módulo (patrón Energy): ``telecom_intel`` tiene conector real (INDOTEL, boletín
-trimestral XLSX) + índice IDT (desarrollo telecom). Implementa el ``Protocol``
-``SectorProduct`` SIN tocar el framework de productos, reusando el motor de narrativa
-y los getters PÚBLICOS del propio módulo (``service``/``ai_context``).
+Mono-módulo (patrón Energy): ``telecom_intel`` tiene conector real + índice IDT
+(desarrollo telecom). Fuente VIGENTE = ITU DataHub (API abierta, penetración móvil/banda
+ancha móvil/fija, fresca hasta 2024); INDOTEL (boletín trimestral XLSX) quedó congelado
+en 2022-Q1 → histórico. Implementa el ``Protocol`` ``SectorProduct`` SIN tocar el
+framework, reusando el motor de narrativa y los getters PÚBLICOS (``service``/``ai_context``).
 
 Naturaleza NACIONAL: el "entity" es el sector telecom de RD; no hay firmas →
 ``entity_roster=()``. El Pulse es el pulso nacional; el nivel nombrado nombra al sector.
 
-Cobertura plena (3 dims reales: penetración móvil/internet + calidad banda ancha);
-la ANTIGÜEDAD del boletín público (2022-Q1) la refleja la FRESCURA, no la cobertura →
-honesto: cableado-pero-no-publicable hasta que INDOTEL actualice. NUNCA inventar data.
+Cobertura plena (3 dims reales: penetración móvil, banda ancha móvil y fija). Con ITU el
+dato es fresco (2024) → publicable; la fuente y la cadencia se infieren del período (con
+"Q" = INDOTEL histórico; sin "Q" = ITU anual). NUNCA inventar data.
 
 Eje doctrinal ÚNICO: ``telecom_intel`` + thin ``telecom_outlook`` → numeric_guard.
 """
@@ -49,12 +50,12 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Desarrollo Telecom (IDT) sobre los datos abiertos de INDOTEL (boletín "
-    "trimestral de indicadores): penetración móvil/telefónica y de internet (por 100 "
-    "habitantes, población censal ONE) y calidad vía banda ancha (% del internet). El "
-    "boletín público más reciente es 2022-Q1, por lo que la lectura corresponde a esa "
-    "fecha de corte (la frescura del producto lo refleja); no se proyectan cifras más "
-    "recientes. Índice de alcance/calidad, no un veredicto financiero del sector."
+    "Índice de Desarrollo Telecom (IDT) sobre los datos abiertos de ITU DataHub (API "
+    "pública, licencia CC): penetración de telefonía móvil, banda ancha móvil y banda "
+    "ancha fija (por 100 habitantes / % de hogares), serie anual fresca hasta 2024. "
+    "Reemplaza al boletín de INDOTEL, cuya serie pública quedó congelada en 2022-Q1 "
+    "(se conserva como histórico). Índice de alcance/penetración, no un veredicto "
+    "financiero del sector; sin backtest de outcomes."
 )
 _NO_DATA = (
     "No hay IDT persistido: el producto está cableado pero su cobertura (G1) es "
@@ -185,35 +186,43 @@ class TelecomProduct:
         from datetime import date
         s = self._latest()
         if s is None:
-            return DataHealth(coverage=0.0, freshness_days=None, cadence="quarterly",
-                              sources=("INDOTEL",), detail="Sin IDT persistido.")
+            return DataHealth(coverage=0.0, freshness_days=None, cadence="annual",
+                              sources=("ITU DataHub",), detail="Sin IDT persistido.")
         coverage = s.coverage if s.coverage is not None else 0.0
-        # Cadencia TRIMESTRAL: el boletín público más reciente (2022-Q1) está rezagado →
-        # la frescura cae honestamente (cableado-pero-no-publicable hasta actualización).
+        # La FUENTE se infiere del período: con "Q" = boletín INDOTEL (trimestral, congelado
+        # en 2022-Q1, histórico); sin "Q" = ITU DataHub (anual, vigente hasta 2024). La
+        # cadencia correcta evita un falso-stale al medir dato anual con curva trimestral.
+        is_quarterly = "Q" in str(s.period)
+        cadence = "quarterly" if is_quarterly else "annual"
+        source = "INDOTEL" if is_quarterly else "ITU DataHub"
         freshness = None
         yr = _period_year(s.period)
         if yr is not None:
-            q = 1
-            if "Q" in str(s.period):
+            if is_quarterly:
+                q = 1
                 try:
                     q = int(str(s.period).split("Q")[1])
                 except (ValueError, IndexError):
                     q = 1
-            quarter_end = date(yr, min(3 * q, 12), 28)
-            freshness = (date.today() - quarter_end).days
-        return DataHealth(coverage=coverage, freshness_days=freshness, cadence="quarterly",
-                          sources=("INDOTEL",),
-                          detail=f"IDT {_fmt(s.telecom_score)} ({s.band}) en {s.period}")
+                end = date(yr, min(3 * q, 12), 28)
+            else:
+                end = date(yr, 12, 31)
+            freshness = (date.today() - end).days
+        return DataHealth(coverage=coverage, freshness_days=freshness, cadence=cadence,
+                          sources=(source,),
+                          detail=f"IDT {_fmt(s.telecom_score)} ({s.band}) en {s.period} · {source}")
 
     def has_engine(self) -> bool:
         return self._latest() is not None
 
     def validation_state(self) -> ValidationState:
-        # Índice de alcance/calidad sobre dato real INDOTEL; sin backtest (no aplica un
-        # outcome de shock como en otros ejes) → validación parcial honesta.
+        # Índice de alcance/calidad sobre dato real (ITU vigente o INDOTEL histórico); sin
+        # backtest (no aplica un outcome de shock como en otros ejes) → validación parcial.
+        s = self._latest()
+        src = "INDOTEL (2022-Q1)" if (s and "Q" in str(s.period)) else "ITU DataHub"
         return ValidationState(approved=True, score=0.55,
-                               notes="IDT sobre dato real INDOTEL (penetración + banda ancha); "
-                                     "sin backtest. Boletín público más reciente: 2022-Q1.")
+                               notes=f"IDT sobre dato real de {src} (penetración móvil + banda "
+                                     "ancha); sin backtest de outcomes.")
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,
