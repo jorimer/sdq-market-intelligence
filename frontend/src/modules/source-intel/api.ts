@@ -10,7 +10,7 @@ export interface Suggestion {
   kind: SuggestionKind;
   title: string;
   description: string;
-  origin: "manual" | "agent";
+  origin: "manual" | "agent" | "catalog";
   proposed_by: string | null;
   target_axis: string | null;
   target_gate: string | null;
@@ -65,6 +65,20 @@ export async function agentStatus(): Promise<{ running: boolean; lastResult: { c
   const { data } = await client.get("/operations/status");
   const op = (data.operations || []).find(
     (o: { name: string }) => o.name === "source-research-agent");
+  return { running: Boolean(op?.status?.is_running), lastResult: op?.status?.last_result ?? null };
+}
+
+/** Descubridor de catálogos: consulta APIs reales (CKAN datos.gob.do) y crea sugerencias
+ * de datasets verificados. Operación async. */
+export async function runCatalogDiscovery(): Promise<{ started: boolean; reason?: string }> {
+  const { data } = await client.post("/operations/catalog-discovery/run", {});
+  return data;
+}
+
+export async function discoveryStatus(): Promise<{ running: boolean; lastResult: { created?: number; capped?: boolean } | null }> {
+  const { data } = await client.get("/operations/status");
+  const op = (data.operations || []).find(
+    (o: { name: string }) => o.name === "catalog-discovery");
   return { running: Boolean(op?.status?.is_running), lastResult: op?.status?.last_result ?? null };
 }
 

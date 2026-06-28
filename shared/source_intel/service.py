@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 
 from shared.source_intel.models import (
     KINDS,
-    ORIGIN_AGENT,
     ORIGIN_MANUAL,
+    ORIGINS,
     STATUSES,
     STATUS_PROPOSED,
     SourceSuggestion,
@@ -54,7 +54,7 @@ def create_suggestion(
         raise SuggestionError(f"Tipo inválido '{kind}'. Use: {', '.join(KINDS)}.")
     if not (title or "").strip():
         raise SuggestionError("El título es obligatorio.")
-    if origin not in (ORIGIN_MANUAL, ORIGIN_AGENT):
+    if origin not in ORIGINS:
         raise SuggestionError(f"Origen inválido '{origin}'.")
     row = SourceSuggestion(
         kind=kind, title=title.strip(), description=(description or "").strip(),
