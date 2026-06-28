@@ -268,6 +268,32 @@ def _load_wgi_regulatory(db: Session, target: Optional[str]) -> Optional[float]:
     return float(series[max(series, key=int)])  # latest available (e.g. current period)
 
 
+def _load_wgi_volatility(db: Session) -> Optional[float]:
+    """National regulatory VOLATILITY = desviación estándar de la serie WGI de calidad
+    regulatoria (percentil 0-100, ~12 años). Señal nacional REAL de inestabilidad
+    regulatoria (risk-increasing). Igual para los 17 sectores: NO diferencia el ranking
+    (constante → normaliza al medio), pero sube la dimensión regulación de rúbrica a dato
+    real (completa su procedencia). Lee la misma serie que ``_load_wgi_regulatory``;
+    ``None`` si hay <2 años (sin varianza computable)."""
+    import json
+    import statistics
+
+    from modules.sector_intel.sectors_sync import WGI_REGULATORY_KEY
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == WGI_REGULATORY_KEY).first()
+    if row is None or not row.value:
+        return None
+    try:
+        series = json.loads(row.value).get("series", {})
+    except (ValueError, TypeError):
+        return None
+    vals = [float(v) for v in series.values() if v is not None]
+    if len(vals) < 2:
+        return None
+    return statistics.pstdev(vals)
+
+
 def _load_operating_cost(db: Session) -> Dict[str, float]:
     """Per-slug ``operating_cost`` (TSS salary snapshot) from the AppSetting written
     by ``tss_salario_sync``. ``{}`` if absent → operating_cost stays declared rubric.
@@ -411,6 +437,9 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     # WGI regulatory quality (national, 0-100) — same for every sector (does not
     # discriminate sectors, but real instead of declared rubric).
     reg_quality = _load_wgi_regulatory(db, target)
+    # regulatory_volatility (real, nacional) — std de la serie WGI; completa la dim
+    # regulación. Constante entre sectores (como reg_quality): sube cobertura, no ranking.
+    reg_vol = _load_wgi_volatility(db)
     # operating_cost (TSS salary snapshot, per slug) + labor_availability (ENCFT
     # employment, per period) — real business/talent inputs, raise these dims out of
     # declared rubric. Both cover all 17 slugs (crosswalk), so no partial-override
@@ -440,6 +469,10 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
         if reg_quality is not None:
             merged["regulatory_quality"] = reg_quality
             smap["regulatory_quality"] = "live"
+        # regulatory_volatility (real, nacional) — overrides la rúbrica para los 17.
+        if reg_vol is not None:
+            merged["regulatory_volatility"] = reg_vol
+            smap["regulatory_volatility"] = "live"
         # sector dimension (real) from si_variables — overrides any rubric.
         sv = live["sectors"].get(slug, {})
         for var in SECTOR_LIVE_VARS:
