@@ -134,6 +134,53 @@ export async function uploadPensionFinancials(
   return data;
 }
 
+/** One row of the funds' investment portfolio (Cuadro 6.1): an issuer or a sub-sector
+ * subtotal. `is_subtotal` rows are group headers (amount = sum of their children). */
+export interface PensionHolding {
+  sub_sector: string | null;
+  issuer: string;
+  issuer_slug: string;
+  amount: number | null;
+  pct: number | null;
+  is_subtotal: boolean;
+  macro_class: string | null; // "deuda_publica" | "bcrd" | null
+  bank_entity_slug: string | null;
+}
+
+export interface PensionCartera {
+  found: boolean;
+  fund: string;
+  period?: string | null;
+  total?: number;
+  summary?: {
+    public_debt_amount: number;
+    public_debt_pct: number | null;
+    bcrd_amount: number;
+    bcrd_pct: number | null;
+    issuer_count: number;
+  };
+  holdings: PensionHolding[];
+}
+
+/** Portfolio composition by issuer (SIPEN bulletin Cuadro 6.1). Latest period by default. */
+export async function getPensionCartera(period?: string, fund = "cci"): Promise<PensionCartera> {
+  const { data } = await client.get("/pension-intel/cartera", {
+    params: { fund, ...(period ? { period } : {}) },
+  });
+  return data;
+}
+
+/** Contextual AI insight over the portfolio composition, oriented by audience. */
+export async function getPensionCarteraInsight(
+  audience: string = PENSION_AUDIENCES[0],
+  deep = false,
+): Promise<AiInsight | null> {
+  const { data } = await client.get("/pension-intel/cartera/insight", {
+    params: { audience, ...(deep ? { deep: true } : {}) },
+  });
+  return (data.ai_insight as AiInsight | null) ?? null;
+}
+
 // Headline series codes (system level) — stable keys from the backend.
 export const HEADLINE_CCI = "sipen.rentabilidad.cci_nominal_anual";
 export const HEADLINE_SDP = "sipen.rentabilidad.sdp_nominal_anual";

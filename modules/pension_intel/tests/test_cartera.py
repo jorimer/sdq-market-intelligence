@@ -90,6 +90,43 @@ def test_reconciliation_fails_closed():
         parse_cartera_words(words)
 
 
+def test_pension_cartera_context_top_level_partitions_total():
+    """The narrative context's top-level categories partition the total exactly and carry
+    the sovereign concentration + the largest bank exposures (no full 77-issuer dump)."""
+    from modules.pension_intel.ai_context import pension_cartera_context
+
+    holdings = parse_cartera_words(_real_words())
+    # Mimic the /cartera payload shape the context consumes.
+    leaves = [h for h in holdings if not h.is_subtotal]
+    total = sum(h.amount for h in leaves if h.amount)
+    payload = {
+        "found": True, "fund": "cci", "period": "2026-Q1", "total": total,
+        "summary": {"public_debt_pct": 56.04, "bcrd_pct": 8.69, "issuer_count": len(leaves)},
+        "holdings": [{"sub_sector": h.sub_sector, "issuer": h.issuer, "amount": h.amount,
+                      "pct": h.pct, "is_subtotal": h.is_subtotal, "macro_class": h.macro_class}
+                     for h in holdings],
+    }
+    ctx = pension_cartera_context(payload)
+    assert ctx["deuda_publica_pct"] == 56.04 and ctx["bcrd_pct"] == 8.69
+    # Top-level rows partition the total (within rounding).
+    s = sum(c["monto_rd"] for c in ctx["composicion_por_categoria"])
+    assert abs(s - total) < 1.0
+    # Hacienda leads; bank exposures are surfaced for the (future) Banca cross-link.
+    assert ctx["composicion_por_categoria"][0]["categoria"] == "Ministerio de Hacienda"
+    assert any("Reservas" in b["banco"] for b in ctx["top_bancos"])
+
+
+def test_cartera_insight_returns_none_without_data(db):
+    """No cartera ingested → the insight endpoint is a clean no-op (ai_insight None)."""
+    import asyncio
+
+    from modules.pension_intel.api.router import cartera_insight
+
+    res = asyncio.run(cartera_insight(audience="inversionista", deep=False,
+                                      period=None, fund="cci", db=db, current_user=None))
+    assert res["ai_insight"] is None
+
+
 def test_persist_cartera_upserts_idempotently(db):
     holdings = parse_cartera_words(_real_words())
     n = persist_cartera(db, "2026-Q1", holdings)

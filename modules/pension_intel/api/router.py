@@ -377,17 +377,8 @@ def _holding_payload(h) -> Dict[str, Any]:
     }
 
 
-@router.get("/cartera")
-async def cartera(
-    period: Optional[str] = Query(None, description="Trimestre, p.ej. 2026-Q1 (por defecto el último)"),
-    fund: str = Query("cci", description="Fondo (cci)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Composición de la cartera de inversiones de los fondos por emisor (Cuadro 6.1).
-
-    Devuelve las tenencias (emisores + subtotales por sub-sector) del fondo y período, más
-    un resumen con las concentraciones clave (deuda pública / BCRD). Sin período → el último."""
+def _build_cartera(db: Session, period: Optional[str], fund: str) -> Dict[str, Any]:
+    """Portfolio composition payload (Cuadro 6.1) for a fund/period. Latest if period=None."""
     from modules.pension_intel.models.models import PensionHolding
 
     q = db.query(PensionHolding).filter(PensionHolding.fund == fund)
@@ -422,6 +413,49 @@ async def cartera(
         },
         "holdings": [_holding_payload(r) for r in rows],
     }
+
+
+@router.get("/cartera")
+async def cartera(
+    period: Optional[str] = Query(None, description="Trimestre, p.ej. 2026-Q1 (por defecto el último)"),
+    fund: str = Query("cci", description="Fondo (cci)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Composición de la cartera de inversiones de los fondos por emisor (Cuadro 6.1).
+
+    Devuelve las tenencias (emisores + subtotales por sub-sector) del fondo y período, más
+    un resumen con las concentraciones clave (deuda pública / BCRD). Sin período → el último."""
+    return _build_cartera(db, period, fund)
+
+
+@router.get("/cartera/insight")
+async def cartera_insight(
+    audience: str = Query("inversionista"),
+    deep: bool = Query(False),
+    period: Optional[str] = Query(None),
+    fund: str = Query("cci"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """AI narrative (Cerebro) over the portfolio composition. Best-effort."""
+    from modules.pension_intel.ai_context import pension_cartera_context
+    data = _build_cartera(db, period, fund)
+    if not data.get("found"):
+        return {"audience": audience, "ai_insight": None}
+    aud = audience if audience in _AUDIENCES else "inversionista"
+    context = pension_cartera_context(data)
+    try:
+        from shared.narrative.claude_engine import narrative_engine
+        res = await narrative_engine.generate(
+            context, template="pension_cartera", mode="deep" if deep else "detailed",
+            axis="pension_intel", audience=aud,
+        )
+        ai = {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
+    except Exception as e:  # noqa: BLE001 — best-effort, never break the endpoint
+        logger.warning("AI insight cartera no disponible: %s", e)
+        ai = None
+    return {"audience": aud, "ai_insight": ai}
 
 
 @router.post("/cartera/upload")

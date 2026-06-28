@@ -16,6 +16,7 @@ import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { AudienceTabs } from "@/shared/ui/AudienceTabs";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { AfpRankingTab } from "../components/AfpRankingTab";
+import { CarteraTab } from "../components/CarteraTab";
 import {
   getPensionPulse,
   getPensionInsight,
@@ -138,6 +139,7 @@ export function PensionIntelPage() {
           tabs={[
             { id: "sistema", label: t("pension.tabSystem") },
             { id: "afp", label: t("pension.tabAfp") },
+            { id: "cartera", label: t("pension.tabCartera") },
           ]}
           active={tab}
           onChange={setTab}
@@ -145,6 +147,8 @@ export function PensionIntelPage() {
       </Card>
 
       {tab === "afp" && <AfpRankingTab />}
+
+      {tab === "cartera" && <CarteraTab />}
 
       {tab === "sistema" && !has && <StateBlock kind="empty" message={t("pension.emptyNoData")} />}
 
