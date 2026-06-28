@@ -40,6 +40,49 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
     }
 
 
+def pension_cartera_context(cartera: Dict[str, Any]) -> Dict[str, Any]:
+    """Compact context for the portfolio-composition narrative (template ``pension_cartera``).
+
+    *cartera* is the ``/cartera`` payload. Surfaces the top-level composition (sub-sector
+    rollups + the sovereign leaves Hacienda/BCRD), the sovereign concentration, and the
+    largest individual bank exposures — never the full 77-issuer list, so prompts stay
+    cheap. All figures are copied from the reconciled real table.
+    """
+    holdings = cartera.get("holdings") or []
+    summary = cartera.get("summary") or {}
+    # Top-level rows partition the total: sub-sector headers + standalone leaves (Hacienda,
+    # BCRD, which have no parent group).
+    top_level = [
+        h for h in holdings
+        if h.get("amount") is not None and (h.get("is_subtotal") or h.get("sub_sector") is None)
+    ]
+    composicion = sorted(
+        ({"categoria": h["issuer"], "monto_rd": h["amount"], "pct": h["pct"]} for h in top_level),
+        key=lambda x: x["monto_rd"], reverse=True,
+    )
+    bancos = sorted(
+        ({"banco": h["issuer"], "monto_rd": h["amount"], "pct": h["pct"]}
+         for h in holdings
+         if not h.get("is_subtotal") and h.get("sub_sector") == "Bancos Múltiples"
+         and h.get("amount") is not None),
+        key=lambda x: x["monto_rd"], reverse=True,
+    )[:5]
+    return {
+        "periodo": cartera.get("period"),
+        "fondo": cartera.get("fund"),
+        "total_cartera_rd": cartera.get("total"),
+        "deuda_publica_pct": summary.get("public_debt_pct"),
+        "bcrd_pct": summary.get("bcrd_pct"),
+        "n_emisores": summary.get("issuer_count"),
+        "composicion_por_categoria": composicion,
+        "top_bancos": bancos,
+        "source": "SIPEN — Cuadro 6.1 del boletín trimestral (dato real)",
+        "unit": "RD$ corrientes y % del fondo",
+        "note": "FOTO trimestral de la cartera; montos en RD$ corrientes. No es serie ni "
+                "juicio de riesgo crediticio de un emisor; lee concentración y rol institucional.",
+    }
+
+
 def pension_ai_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
     """Compact context for the national pension-system assessment.
 

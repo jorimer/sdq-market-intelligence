@@ -324,6 +324,23 @@ THIN_TEMPLATES = {
         "RENTABILIDAD NOMINAL: léela ajustada por riesgo y vs su promedio, no como ranking del mes. "
         "Usa solo cifras del contexto; si una relación no está precalculada, exprésala sin número."
     ),
+    "pension_cartera": (
+        "Lee la COMPOSICIÓN DE LA CARTERA DE INVERSIONES de los fondos de pensiones "
+        "(SIPEN, Cuadro 6.1 del boletín — dato real), por emisor y sub-sector:\n{context}\n\n"
+        "Máximo 350 palabras, formato SCQA. Es la lectura de DÓNDE está invertido el ahorro "
+        "previsional del país (el mayor bloque institucional), no un ranking ni un juicio "
+        "crediticio de un emisor.\n"
+        "Lee en este orden: (1) CONCENTRACIÓN SOBERANA — el peso de la deuda pública (Ministerio "
+        "de Hacienda) y del Banco Central: los fondos como tenedor dominante de papel del Estado, "
+        "y qué implica para la profundidad financiera y la exposición soberana del ahorro; "
+        "(2) EXPOSICIÓN AL SISTEMA FINANCIERO — bancos y asociaciones (fondeo institucional a la "
+        "banca); (3) SECTOR PRIVADO/REAL — empresas, fideicomisos y fondos de inversión como "
+        "diversificación. Cierra con el 'y por tanto' para la audiencia.\n\n"
+        "CIFRAS: usa solo las del contexto (montos RD$ y %); NO recalcules porcentajes ni declares "
+        "un superlativo (mayor/menor/el más…) que no coincida con lo servido. Es una FOTO trimestral "
+        "(no una serie). No emitas juicio de riesgo crediticio de un emisor individual; lee "
+        "concentración, diversificación y rol institucional."
+    ),
     "risk_assessment": (
         "Explica el FUNDAMENTO del riesgo macro-político (IRMP) de este país.\n"
         "Contexto:\n{context}\n\n"
