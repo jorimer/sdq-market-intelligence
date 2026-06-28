@@ -43,8 +43,10 @@ _AUDIT = {"sectors": [
 def _wire(monkeypatch):
     monkeypatch.setattr(agent.settings, "ANTHROPIC_API_KEY", "test-key", raising=False)
     monkeypatch.setattr(audit_mod, "build_audit", lambda db: _AUDIT)
+    # El proposer devuelve un target_gate DISTINTO al de la brecha (drift del modelo): el
+    # agente debe IGNORARLO y anclar al gate de la brecha.
     monkeypatch.setattr(agent, "_propose_sources", lambda axis, disp, gap: [
-        {"kind": "source", "title": f"Boletín {axis}", "description": "d", "target_gate": gap["gate"]}])
+        {"kind": "source", "title": f"Boletín {axis}", "description": "d", "target_gate": "g3"}])
     # auto-eval sin red: el evaluador devuelve una evaluación canned
     monkeypatch.setattr(evaluator, "evaluate_suggestion", lambda db, s: {
         "score": 0.6, "criteria": {}, "gate_closed": s.get("target_gate"),
@@ -66,8 +68,20 @@ def test_agent_creates_evaluates_and_notifies(db, monkeypatch):
     assert len(rows) == 1
     s = rows[0]
     assert s.origin == "agent" and s.target_axis == "telecom" and s.status == "evaluated"
+    assert s.target_gate == "g1"  # ANCLADO a la brecha (telecom/g1), no al g3 del modelo
     assert s.evaluation and s.evaluation["method"] == "ai"
     assert db.query(Notification).count() == 1  # avisó a la admin
+    assert res["capped"] is False  # 1 brecha < tope → no truncó
+
+
+def test_agent_reports_cap(db, monkeypatch):
+    _wire(monkeypatch)
+    # 2 propuestas por brecha + tope 1 → crea 1 y marca capped (no trunca en silencio).
+    monkeypatch.setattr(agent, "_propose_sources", lambda axis, disp, gap: [
+        {"kind": "source", "title": f"A {axis}", "description": "d"},
+        {"kind": "source", "title": f"B {axis}", "description": "d"}])
+    res = agent.run_research_agent(db, max_create=1)
+    assert res["created"] == 1 and res["capped"] is True
 
 
 def test_agent_is_idempotent_per_gap(db, monkeypatch):
