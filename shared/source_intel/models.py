@@ -32,8 +32,10 @@ STATUS_DEFERRED = "deferred"
 STATUSES = (STATUS_PROPOSED, STATUS_EVALUATING, STATUS_EVALUATED, STATUS_APPROVED,
             STATUS_INTEGRATING, STATUS_INTEGRATED, STATUS_REJECTED, STATUS_DEFERRED)
 
-ORIGIN_MANUAL = "manual"
-ORIGIN_AGENT = "agent"
+ORIGIN_MANUAL = "manual"     # tipeada por una persona
+ORIGIN_AGENT = "agent"       # propuesta por el agente IA (conocimiento del modelo)
+ORIGIN_CATALOG = "catalog"   # descubierta en una API de catálogo real (dataset verificado)
+ORIGINS = (ORIGIN_MANUAL, ORIGIN_AGENT, ORIGIN_CATALOG)
 
 
 class SourceSuggestion(UUIDMixin, Base):

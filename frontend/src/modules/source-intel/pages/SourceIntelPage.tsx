@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Compass, Plus, Trash2, Bot, User as UserIcon, Sparkles } from "lucide-react";
+import { Compass, Plus, Trash2, Bot, User as UserIcon, Sparkles, Database } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
   listSuggestions, createSuggestion, setSuggestionStatus, deleteSuggestion, evaluateSuggestion,
-  runResearchAgent, agentStatus,
+  runResearchAgent, agentStatus, runCatalogDiscovery, discoveryStatus,
   type Suggestion, type SuggestionStatus, type SuggestionKind, type Evaluation,
 } from "../api";
 
@@ -135,6 +135,25 @@ export function SourceIntelPage() {
     } finally { setBusy(null); }
   };
 
+  const onDiscover = async () => {
+    setBusy("discover"); setMsg(t("sourceIntel.discoverWorking"));
+    try {
+      const r = await runCatalogDiscovery();
+      if (!r.started) { setMsg(t("sourceIntel.agentBusy")); return; }
+      let last: { capped?: boolean } | null = null;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((res) => setTimeout(res, 3000));
+        const st = await discoveryStatus();
+        last = st.lastResult;
+        if (!st.running) break;
+      }
+      await load();
+      setMsg(last?.capped ? t("sourceIntel.agentCapped") : t("sourceIntel.discoverDone"));
+    } catch {
+      setMsg(t("sourceIntel.discoverError"));
+    } finally { setBusy(null); }
+  };
+
   if (!isAdmin) {
     return (
       <div>
@@ -196,10 +215,16 @@ export function SourceIntelPage() {
         <CardHead icon={Compass} title={t("sourceIntel.boardTitle")}
           subtitle={t("sourceIntel.boardSub", { n: items.length })}
           right={
-            <button onClick={onGenerate} disabled={busy === "agent"} className="btn btn-ghost !py-1.5 shrink-0">
-              <Bot className={`w-3.5 h-3.5 ${busy === "agent" ? "animate-pulse" : ""}`} />
-              {t("sourceIntel.generate")}
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={onDiscover} disabled={busy === "discover"} className="btn btn-ghost !py-1.5 shrink-0">
+                <Database className={`w-3.5 h-3.5 ${busy === "discover" ? "animate-pulse" : ""}`} />
+                {t("sourceIntel.discover")}
+              </button>
+              <button onClick={onGenerate} disabled={busy === "agent"} className="btn btn-ghost !py-1.5 shrink-0">
+                <Bot className={`w-3.5 h-3.5 ${busy === "agent" ? "animate-pulse" : ""}`} />
+                {t("sourceIntel.generate")}
+              </button>
+            </div>
           } />
         <div className="flex flex-wrap gap-2 mb-3 text-xs">
           {STATUSES.filter((s) => summary[s]).map((s) => (
@@ -224,6 +249,8 @@ export function SourceIntelPage() {
                       <span className="text-sm text-ink truncate" title={s.title}>{s.title}</span>
                       {s.origin === "agent"
                         ? <span title={t("sourceIntel.originAgent")}><Bot className="w-3.5 h-3.5 text-muted" /></span>
+                        : s.origin === "catalog"
+                        ? <span title={t("sourceIntel.originCatalog")}><Database className="w-3.5 h-3.5 text-muted" /></span>
                         : <span title={t("sourceIntel.originManual")}><UserIcon className="w-3.5 h-3.5 text-faint" /></span>}
                     </div>
                     {s.description && <div className="text-[11px] text-muted mt-0.5">{s.description}</div>}
