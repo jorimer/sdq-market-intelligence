@@ -287,6 +287,7 @@
     "generate": "Generar propuestas (IA)",
     "agentWorking": "El agente está leyendo las brechas y proponiendo fuentes…",
     "agentDone": "Listo: las propuestas del agente están en el tablero.",
+    "agentCapped": "Listo (parcial): se alcanzó el tope por corrida; quedan brechas. Corré de nuevo para cubrir el resto.",
     "agentBusy": "El agente ya está corriendo; esperá a que termine.",
     "agentError": "No se pudo correr el agente.",
     "status": {

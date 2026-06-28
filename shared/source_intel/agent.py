@@ -65,8 +65,7 @@ def _propose_sources(axis: str, display: str, gap: Dict[str, Any]) -> List[Dict[
         "Propón hasta 2 fuentes/tipos de información candidatas de RD para cerrarla. "
         "Devuelve SOLO este arreglo JSON: "
         "[{\"kind\": \"source|info_type\", \"title\": \"nombre concreto de la fuente\", "
-        "\"description\": \"qué aporta y por qué cierra la brecha\", "
-        "\"target_gate\": \"g1|g2|g3|g4|g5\"}]."
+        "\"description\": \"qué aporta y por qué cierra la brecha\"}]."
     )
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     resp = client.messages.create(
@@ -95,12 +94,16 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
     open_keys = _open_agent_keys(db)
     created: List[str] = []
     skipped_gaps = 0
+    hit_cap = False
 
     for sector in audit.get("sectors", []):
+        if hit_cap:
+            break
         if not sector.get("implemented"):
             continue
         for gap in sector.get("gaps", []):
             if len(created) >= max_create:
+                hit_cap = True
                 break
             axis, gate = sector["sector_key"], gap.get("gate")
             if (axis, gate) in open_keys:
@@ -115,15 +118,19 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
             open_keys.add((axis, gate))  # marcar aunque haya 0, para no reintentar este run
             for p in proposals[:2]:
                 if len(created) >= max_create:
+                    hit_cap = True
                     break
                 kind = p.get("kind") if p.get("kind") in KINDS else KIND_SOURCE
                 title = (p.get("title") or "").strip()
                 if not title:
                     continue
+                # El gate se ANCLA a la brecha que generó la propuesta — NO al que el modelo
+                # elija (que deriva: macro/g1 → el modelo proponía g2/g3). Anclarlo mantiene
+                # la idempotencia entre corridas (la sugerencia persiste con el gate real).
                 s = create_suggestion(
                     db, kind=kind, title=title[:200],
                     description=(p.get("description") or "")[:1000], origin=ORIGIN_AGENT,
-                    target_axis=axis, target_gate=(p.get("target_gate") or gate))
+                    target_axis=axis, target_gate=gate)
                 try:
                     evaluate(db, s["id"])  # que llegue evaluada
                 except Exception as e:  # noqa: BLE001 — la eval no debe perder la sugerencia
@@ -132,7 +139,10 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
 
     if created:
         _notify_agent_proposals(db, len(created))
-    return {"created": len(created), "evaluated": len(created), "skipped_gaps": skipped_gaps}
+    # ``capped``: hubo más brechas que el tope por corrida → no se truncó en silencio
+    # (correr de nuevo cubre el resto; el dedup salta lo ya propuesto).
+    return {"created": len(created), "evaluated": len(created),
+            "skipped_gaps": skipped_gaps, "capped": hit_cap}
 
 
 def _notify_agent_proposals(db: Session, n: int) -> None:

@@ -58,12 +58,13 @@ export async function runResearchAgent(): Promise<{ started: boolean; reason?: s
   return data;
 }
 
-/** ¿La operación del agente sigue corriendo? (para refrescar el tablero al terminar). */
-export async function agentRunning(): Promise<boolean> {
+/** Estado de la operación del agente: si corre + su último resultado (para refrescar el
+ * tablero al terminar y avisar si topó el cap por corrida). */
+export async function agentStatus(): Promise<{ running: boolean; lastResult: { created?: number; capped?: boolean } | null }> {
   const { data } = await client.get("/operations/status");
   const op = (data.operations || []).find(
     (o: { name: string }) => o.name === "source-research-agent");
-  return Boolean(op?.status?.is_running);
+  return { running: Boolean(op?.status?.is_running), lastResult: op?.status?.last_result ?? null };
 }
 
 export async function deleteSuggestion(id: string): Promise<void> {

@@ -287,6 +287,7 @@
     "generate": "G\u00e9n\u00e9rer des propositions (IA)",
     "agentWorking": "L'agent lit les lacunes et propose des sources\u2026",
     "agentDone": "Termin\u00e9 : les propositions de l'agent sont sur le tableau.",
+    "agentCapped": "Termin\u00e9 (partiel) : le plafond par ex\u00e9cution a \u00e9t\u00e9 atteint ; des lacunes subsistent. Relancez pour couvrir le reste.",
     "agentBusy": "L'agent est d\u00e9j\u00e0 en cours ; attendez qu'il finisse.",
     "agentError": "Impossible d'ex\u00e9cuter l'agent.",
     "status": {

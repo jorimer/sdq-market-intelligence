@@ -5,7 +5,7 @@ import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/u
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
   listSuggestions, createSuggestion, setSuggestionStatus, deleteSuggestion, evaluateSuggestion,
-  runResearchAgent, agentRunning,
+  runResearchAgent, agentStatus,
   type Suggestion, type SuggestionStatus, type SuggestionKind, type Evaluation,
 } from "../api";
 
@@ -120,12 +120,16 @@ export function SourceIntelPage() {
       const r = await runResearchAgent();
       if (!r.started) { setMsg(t("sourceIntel.agentBusy")); return; }
       // Sondeo: el agente corre async (varias llamadas IA); refrescar al terminar.
-      for (let i = 0; i < 20; i++) {
+      let last: { capped?: boolean } | null = null;
+      for (let i = 0; i < 30; i++) {
         await new Promise((res) => setTimeout(res, 3000));
-        if (!(await agentRunning())) break;
+        const st = await agentStatus();
+        last = st.lastResult;
+        if (!st.running) break;
       }
       await load();
-      setMsg(t("sourceIntel.agentDone"));
+      // Honesto: si topó el cap por corrida, avisar que quedan brechas (correr de nuevo).
+      setMsg(last?.capped ? t("sourceIntel.agentCapped") : t("sourceIntel.agentDone"));
     } catch {
       setMsg(t("sourceIntel.agentError"));
     } finally { setBusy(null); }
