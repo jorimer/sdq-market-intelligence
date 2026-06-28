@@ -40,6 +40,43 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
     }
 
 
+def pension_peer_context(
+    afp_name: str, rating: Dict[str, Any], peers: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Compact context for the AFP-vs-peers section (template ``pension_peer_positioning``).
+
+    Serves the FULL peer table (each AFP's overall + per-dimension raw/score) so the
+    narrative can cite concrete peer numbers (leader, average, gap) instead of vague
+    'frente a sus pares'. Only AFPs with a score are ranked for position."""
+    dims = ["solvencia", "rentabilidad", "escala", "costo"]
+
+    def _row(r: Dict[str, Any]) -> Dict[str, Any]:
+        by = {d["key"]: d for d in r.get("dimensions") or []}
+        out: Dict[str, Any] = {"afp": r.get("name"), "isa": r.get("overall_score")}
+        for k in dims:
+            d = by.get(k) or {}
+            out[k] = {"valor_real": d.get("raw"), "score": d.get("score")}
+        return out
+
+    table = [_row(r) for r in peers]
+    ranked = sorted([r for r in peers if r.get("overall_score") is not None],
+                    key=lambda r: r["overall_score"], reverse=True)
+    rank = next((i + 1 for i, r in enumerate(ranked) if r.get("name") == afp_name), None)
+    return {
+        "afp": afp_name,
+        "isa": rating.get("overall_score"),
+        "rank": rank,
+        "n_afp_rankeadas": len(ranked),
+        "tabla_pares": table,
+        "lider_isa": ranked[0]["name"] if ranked else None,
+        "promedio_isa": round(sum(r["overall_score"] for r in ranked) / len(ranked), 2) if ranked else None,
+        "source": "SIPEN — dato real",
+        "note": "Cada score de dimensión es POSICIÓN RELATIVA (peer min-max). Cita números de "
+                "la tabla (líder, promedio, brecha); no inventes valores de pares ausentes. "
+                "Solvencia = brecha declarada (sin estados financieros auditados).",
+    }
+
+
 def pension_cartera_context(cartera: Dict[str, Any]) -> Dict[str, Any]:
     """Compact context for the portfolio-composition narrative (template ``pension_cartera``).
 
