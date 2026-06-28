@@ -284,6 +284,11 @@
     "evaluateHint": "El sistema puntúa la sugerencia contra los criterios y la mapea a la brecha",
     "evalError": "No se pudo evaluar.",
     "evalScore": "Idoneidad",
+    "generate": "Generar propuestas (IA)",
+    "agentWorking": "El agente está leyendo las brechas y proponiendo fuentes…",
+    "agentDone": "Listo: las propuestas del agente están en el tablero.",
+    "agentBusy": "El agente ya está corriendo; esperá a que termine.",
+    "agentError": "No se pudo correr el agente.",
     "status": {
       "proposed": "Propuesta", "evaluating": "Evaluando", "evaluated": "Evaluada",
       "approved": "Aprobada", "integrating": "Integrando", "integrated": "Integrada",

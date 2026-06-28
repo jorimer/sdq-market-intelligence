@@ -51,6 +51,21 @@ export async function evaluateSuggestion(id: string): Promise<Suggestion> {
   return data;
 }
 
+/** Dispara el agente de descubrimiento (operación async); las propuestas aparecen en
+ * el tablero al terminar. Devuelve si arrancó. */
+export async function runResearchAgent(): Promise<{ started: boolean; reason?: string }> {
+  const { data } = await client.post("/operations/source-research-agent/run", {});
+  return data;
+}
+
+/** ¿La operación del agente sigue corriendo? (para refrescar el tablero al terminar). */
+export async function agentRunning(): Promise<boolean> {
+  const { data } = await client.get("/operations/status");
+  const op = (data.operations || []).find(
+    (o: { name: string }) => o.name === "source-research-agent");
+  return Boolean(op?.status?.is_running);
+}
+
 export async function deleteSuggestion(id: string): Promise<void> {
   await client.delete(`/source-intel/suggestions/${id}`);
 }

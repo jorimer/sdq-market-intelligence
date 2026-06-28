@@ -125,6 +125,7 @@ import modules.telecom_intel.operations  # noqa: F401 — registers indotel-tele
 import modules.pension_intel.operations  # noqa: F401 — registers sipen-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
+import shared.source_intel.operations  # noqa: F401 — registers source-research-agent (Capa 3)
 import shared.operations.freshness  # noqa: F401 — registers data-freshness-audit (alerta dato viejo)
 
 # Product catalog: each sector registers its SectorProduct into shared.products at

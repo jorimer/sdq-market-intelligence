@@ -5,6 +5,7 @@ import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/u
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
   listSuggestions, createSuggestion, setSuggestionStatus, deleteSuggestion, evaluateSuggestion,
+  runResearchAgent, agentRunning,
   type Suggestion, type SuggestionStatus, type SuggestionKind, type Evaluation,
 } from "../api";
 
@@ -113,6 +114,23 @@ export function SourceIntelPage() {
     finally { setBusy(null); }
   };
 
+  const onGenerate = async () => {
+    setBusy("agent"); setMsg(t("sourceIntel.agentWorking"));
+    try {
+      const r = await runResearchAgent();
+      if (!r.started) { setMsg(t("sourceIntel.agentBusy")); return; }
+      // Sondeo: el agente corre async (varias llamadas IA); refrescar al terminar.
+      for (let i = 0; i < 20; i++) {
+        await new Promise((res) => setTimeout(res, 3000));
+        if (!(await agentRunning())) break;
+      }
+      await load();
+      setMsg(t("sourceIntel.agentDone"));
+    } catch {
+      setMsg(t("sourceIntel.agentError"));
+    } finally { setBusy(null); }
+  };
+
   if (!isAdmin) {
     return (
       <div>
@@ -172,7 +190,13 @@ export function SourceIntelPage() {
       {/* Tablero */}
       <Card>
         <CardHead icon={Compass} title={t("sourceIntel.boardTitle")}
-          subtitle={t("sourceIntel.boardSub", { n: items.length })} />
+          subtitle={t("sourceIntel.boardSub", { n: items.length })}
+          right={
+            <button onClick={onGenerate} disabled={busy === "agent"} className="btn btn-ghost !py-1.5 shrink-0">
+              <Bot className={`w-3.5 h-3.5 ${busy === "agent" ? "animate-pulse" : ""}`} />
+              {t("sourceIntel.generate")}
+            </button>
+          } />
         <div className="flex flex-wrap gap-2 mb-3 text-xs">
           {STATUSES.filter((s) => summary[s]).map((s) => (
             <Chip key={s} tone={statusTone(s)}>{t(`sourceIntel.status.${s}`)}: {summary[s]}</Chip>

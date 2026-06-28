@@ -284,6 +284,11 @@
     "evaluateHint": "The system scores the suggestion against the criteria and maps it to the gap",
     "evalError": "Could not evaluate.",
     "evalScore": "Fit",
+    "generate": "Generate proposals (AI)",
+    "agentWorking": "The agent is reading the gaps and proposing sources…",
+    "agentDone": "Done: the agent's proposals are on the board.",
+    "agentBusy": "The agent is already running; wait for it to finish.",
+    "agentError": "Could not run the agent.",
     "status": {
       "proposed": "Proposed", "evaluating": "Evaluating", "evaluated": "Evaluated",
       "approved": "Approved", "integrating": "Integrating", "integrated": "Integrated",

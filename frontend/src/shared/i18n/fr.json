@@ -284,6 +284,11 @@
     "evaluateHint": "Le syst\u00e8me note la suggestion selon les crit\u00e8res et la relie \u00e0 la lacune",
     "evalError": "Impossible d'\u00e9valuer.",
     "evalScore": "Ad\u00e9quation",
+    "generate": "G\u00e9n\u00e9rer des propositions (IA)",
+    "agentWorking": "L'agent lit les lacunes et propose des sources\u2026",
+    "agentDone": "Termin\u00e9 : les propositions de l'agent sont sur le tableau.",
+    "agentBusy": "L'agent est d\u00e9j\u00e0 en cours ; attendez qu'il finisse.",
+    "agentError": "Impossible d'ex\u00e9cuter l'agent.",
     "status": {
       "proposed": "Propos\u00e9e", "evaluating": "En \u00e9valuation", "evaluated": "\u00c9valu\u00e9e",
       "approved": "Approuv\u00e9e", "integrating": "Int\u00e9gration", "integrated": "Int\u00e9gr\u00e9e",
