@@ -64,13 +64,19 @@ def _spawn(target: Callable[[], None]) -> None:
 
 class Operation:
     def __init__(self, name: str, label: str, description: str, runner: Callable,
-                 default_interval_hours: int, needs_params: Optional[List[str]] = None):
+                 default_interval_hours: int, needs_params: Optional[List[str]] = None,
+                 triggers: Optional[List[str]] = None):
         self.name = name
         self.label = label
         self.description = description
         self.runner = runner
         self.default_interval_hours = default_interval_hours
         self.needs_params = needs_params or []
+        # Operaciones a DISPARAR cuando esta termina con éxito (cascada por dependencia):
+        # el dato nuevo fluye solo aguas abajo (re-score → re-valida) sin intervención
+        # manual. El grafo debe ser ACÍCLICO; el guard de "ya en curso" deduplica disparos
+        # concurrentes (varias fuentes que alimentan el mismo re-score).
+        self.triggers = list(triggers or [])
 
 
 OPERATIONS: Dict[str, Operation] = {}
@@ -169,6 +175,24 @@ def recent_runs(db: Session, limit: int = 20) -> List[Dict]:
 
 # ── Trigger ───────────────────────────────────────────────────────
 
+def _fire_cascade(op_name: str) -> None:
+    """Dispara las operaciones aguas abajo declaradas por *op_name* tras un éxito.
+
+    El lazo de auto-mejora: una fuente que termina re-puntúa y re-valida sola, sin que
+    un humano dispare la cadena. ``origin="cascade"`` la distingue en el historial. Un
+    fallo al encadenar no debe romper la corrida que ya terminó bien (aislado)."""
+    op = OPERATIONS.get(op_name)
+    if not op or not op.triggers:
+        return
+    for dep in op.triggers:
+        try:
+            res = trigger(dep, origin="cascade", user_id=None)
+            if not res.get("started"):
+                logger.info("cascada %s→%s no disparó: %s", op_name, dep, res.get("reason"))
+        except Exception:  # noqa: BLE001 — una cascada fallida no rompe el éxito previo
+            logger.exception("cascada %s→%s falló", op_name, dep)
+
+
 def trigger(op_name: str, origin: str = "manual", user_id: Optional[str] = None,
             params: Optional[Dict] = None) -> Dict:
     """Start an operation in the background. Guards against concurrent runs."""
@@ -207,6 +231,7 @@ def trigger(op_name: str, origin: str = "manual", user_id: Optional[str] = None,
                 write_status(db2, op_name, is_running=False, phase="completado",
                              last_run=_now(), last_result=result, error=None)
                 _finish_run(db2, run_id, "completed", summary=result)
+                _fire_cascade(op_name)
         except Exception as e:  # noqa: BLE001 — report into status + history
             logger.exception("Operación %s falló", op_name)
             msg = str(e)
