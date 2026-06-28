@@ -212,8 +212,27 @@ class PensionProduct:
         return out
 
     # ── Señales de readiness ──
+    def _freshness_days(self, db: Session) -> Optional[int]:
+        """Días desde la última actualización del dato que alimenta el ISA (max
+        ``published_at`` de las series por-AFP). Señal REAL de recencia (G1); ``None``
+        solo si no hay nada que fechar."""
+        from datetime import date
+
+        from modules.pension_intel.models.models import PensionSeries
+        try:
+            with db.begin_nested():
+                latest = (db.query(PensionSeries.published_at)
+                          .filter(PensionSeries.entity_slug.isnot(None),
+                                  PensionSeries.published_at.isnot(None))
+                          .order_by(PensionSeries.published_at.desc()).first())
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Frescura de pensiones no disponible: %s", e)
+            return None
+        return (date.today() - latest[0]).days if latest and latest[0] else None
+
     def data_signals(self) -> DataHealth:
-        results = _isa_results(self._require_db())
+        db = self._require_db()
+        results = _isa_results(db)
         if not results:
             return DataHealth(coverage=0.0, freshness_days=None, sources=("SIPEN", "ADAFP"),
                               detail="Sin ISA de AFP computado.", cadence="quarterly")
@@ -221,8 +240,9 @@ class PensionProduct:
         # de solvencia): honesto, no hardcode.
         cov = sum(r["coverage"] for r in results) / len(results)
         n_scoreable = sum(1 for r in results if r["overall_score"] is not None)
+        fresh = self._freshness_days(db)
         return DataHealth(
-            coverage=round(cov, 4), freshness_days=None, sources=("SIPEN", "ADAFP"),
+            coverage=round(cov, 4), freshness_days=fresh, sources=("SIPEN", "ADAFP"),
             detail=f"{n_scoreable}/{len(results)} AFP calificables · solvencia = brecha declarada",
             cadence="quarterly")
 
