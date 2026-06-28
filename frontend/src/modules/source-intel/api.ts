@@ -16,6 +16,7 @@ export interface Suggestion {
   target_gate: string | null;
   status: SuggestionStatus;
   evaluation: Record<string, unknown> | null;
+  integration_plan: Record<string, unknown> | null;
   decision_note: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -67,8 +68,24 @@ export async function agentStatus(): Promise<{ running: boolean; lastResult: { c
   return { running: Boolean(op?.status?.is_running), lastResult: op?.status?.last_result ?? null };
 }
 
+export async function scaffoldSuggestion(id: string): Promise<Suggestion> {
+  const { data } = await client.post(`/source-intel/suggestions/${id}/scaffold`);
+  return data;
+}
+
 export async function deleteSuggestion(id: string): Promise<void> {
   await client.delete(`/source-intel/suggestions/${id}`);
+}
+
+export interface IntegrationPlan {
+  data_access: string;
+  connector: string;
+  crosswalk: string;
+  target: string;
+  steps: string[];
+  risks: string[];
+  effort: string;
+  method: string;
 }
 
 export interface Evaluation {

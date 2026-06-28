@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Compass, Plus, Trash2, Bot, User as UserIcon, Sparkles } from "lucide-react";
+import { Compass, Plus, Trash2, Bot, User as UserIcon, Sparkles, Wrench } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
   listSuggestions, createSuggestion, setSuggestionStatus, deleteSuggestion, evaluateSuggestion,
-  runResearchAgent, agentStatus,
+  scaffoldSuggestion, runResearchAgent, agentStatus,
   type Suggestion, type SuggestionStatus, type SuggestionKind, type Evaluation,
+  type IntegrationPlan,
 } from "../api";
 
 const KINDS: SuggestionKind[] = ["source", "info_type", "sector"];
@@ -49,6 +50,32 @@ function EvaluationBlock({ ev, t }: { ev: Evaluation; t: any }) {
           <span key={k} className="tabular-nums">{t(`sourceIntel.crit.${k}`)}: {Math.round((v?.score ?? 0) * 100)}%</span>
         ))}
       </div>
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function PlanBlock({ plan, t }: { plan: IntegrationPlan; t: any }) {
+  return (
+    <div className="mt-2 rounded-md border border-line bg-surface px-3 py-2">
+      <div className="flex items-center gap-2 text-xs">
+        <Wrench className="w-3.5 h-3.5 text-muted" />
+        <span className="font-medium text-ink">{t("sourceIntel.planTitle")}</span>
+        <Chip tone={plan.method === "ai" ? "ok" : "muted"}>{t(`sourceIntel.method.${plan.method === "ai" ? "ai" : "heuristic"}`)}</Chip>
+        {plan.effort && <span className="text-[10px] text-faint">· {t("sourceIntel.planEffort")}: {plan.effort}</span>}
+      </div>
+      <div className="text-[11px] text-muted mt-1 space-y-0.5">
+        {plan.connector && <div><span className="text-faint">{t("sourceIntel.planConnector")}:</span> {plan.connector}</div>}
+        {plan.crosswalk && <div><span className="text-faint">{t("sourceIntel.planCrosswalk")}:</span> {plan.crosswalk}</div>}
+      </div>
+      {plan.steps?.length > 0 && (
+        <ol className="mt-1 text-[11px] text-muted list-decimal ml-4 space-y-0.5">
+          {plan.steps.map((s, i) => <li key={i}>{s}</li>)}
+        </ol>
+      )}
+      {plan.risks?.length > 0 && (
+        <div className="mt-1 text-[10px] text-faint">{t("sourceIntel.planRisks")}: {plan.risks.join(" · ")}</div>
+      )}
     </div>
   );
 }
@@ -111,6 +138,13 @@ export function SourceIntelPage() {
     setBusy(id); setMsg(null);
     try { await evaluateSuggestion(id); await load(); }
     catch { setMsg(t("sourceIntel.evalError")); }
+    finally { setBusy(null); }
+  };
+
+  const onScaffold = async (id: string) => {
+    setBusy(id); setMsg(null);
+    try { await scaffoldSuggestion(id); await load(); }
+    catch { setMsg(t("sourceIntel.scaffoldError")); }
     finally { setBusy(null); }
   };
 
@@ -237,6 +271,10 @@ export function SourceIntelPage() {
                       className="btn btn-ghost !py-1 !px-2 text-xs" title={t("sourceIntel.evaluateHint")}>
                       <Sparkles className={`w-3.5 h-3.5 ${busy === s.id ? "animate-pulse" : ""}`} /> {t("sourceIntel.evaluate")}
                     </button>
+                    <button onClick={() => onScaffold(s.id)} disabled={busy === s.id}
+                      className="btn btn-ghost !py-1 !px-2 text-xs" title={t("sourceIntel.scaffoldHint")}>
+                      <Wrench className={`w-3.5 h-3.5 ${busy === s.id ? "animate-pulse" : ""}`} /> {t("sourceIntel.scaffold")}
+                    </button>
                     <select className="field !py-1 !text-xs" value={s.status} disabled={busy === s.id}
                       onChange={(e) => onStatus(s.id, e.target.value as SuggestionStatus)}
                       aria-label={t("sourceIntel.moveStatus")}>
@@ -249,6 +287,7 @@ export function SourceIntelPage() {
                   </div>
                 </div>
                 {s.evaluation && <EvaluationBlock ev={s.evaluation as unknown as Evaluation} t={t} />}
+                {s.integration_plan && <PlanBlock plan={s.integration_plan as unknown as IntegrationPlan} t={t} />}
               </div>
             ))}
           </div>
