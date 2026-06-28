@@ -50,6 +50,7 @@ import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 import { UsersAdminPage } from "@/modules/platform/pages/UsersAdminPage";
 import { ProductMonitorPage } from "@/modules/platform/pages/ProductMonitorPage";
 import { ProductCatalogPage } from "@/modules/platform/pages/ProductCatalogPage";
+import { SourceIntelPage } from "@/modules/source-intel/pages/SourceIntelPage";
 
 export default function App() {
   return (
@@ -125,6 +126,14 @@ export default function App() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <ProductMonitorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/source-intel"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <SourceIntelPage />
               </ProtectedRoute>
             }
           />
