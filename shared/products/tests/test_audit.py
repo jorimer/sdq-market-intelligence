@@ -39,6 +39,14 @@ def test_g5_diagnosis_uses_validation_notes():
     assert "ESTRUCTURAL" in d["accion"]
 
 
+def test_g5_diagnosis_no_double_period():
+    """Tier-1: una nota que ya termina en punto no produce '..' en el documento."""
+    d = _gate_diagnosis("trade", "g5", 0.75, _data(),
+                        _val(approved=True, score=0.75, notes="Gini 0.232 (significativo)."))
+    assert ".." not in d["falta"]
+    assert d["falta"].endswith(".")
+
+
 def test_g2_diagnosis_generic_when_no_overlay():
     d = _gate_diagnosis("banking", "g2", 0.0, _data(), _val())
     assert "Motor" in d["falta"] and d["accion"]
