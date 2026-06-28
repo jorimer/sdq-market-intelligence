@@ -89,3 +89,53 @@ def test_fixture_has_no_invented_precision():
     # Per-AFP rentabilidad present for all 7 administrators.
     ent = sipen_client.fetch_entities(series="rentabilidad_nominal_anual")
     assert {r.dimension for r in ent} == {slug for slug, _ in afp_catalog()}
+
+
+def test_parse_mes_ano_xlsx_maps_spanish_months():
+    """The CKAN 'Mes | Año | valor' workbook → [(YYYY-MM, value)]; junk rows skipped."""
+    import io
+
+    import openpyxl
+
+    from shared.data.sipen_client import parse_mes_ano_xlsx
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Mes", "Año", "Afiliados"])      # header (no month) → skipped
+    ws.append(["Septiembre", "2003", 927082])
+    ws.append(["Diciembre", "2025", 5600000])
+    ws.append(["Totales", "", "x"])             # junk → skipped
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    rows = dict(parse_mes_ano_xlsx(buf.getvalue()))
+    assert rows == {"2003-09": 927082.0, "2025-12": 5600000.0}
+
+
+def test_sync_ingests_ckan_series_and_snapshot_uses_latest_per_code(db, monkeypatch):
+    """Live CKAN records land as system series, and the snapshot keeps each indicator's
+    latest value (fresh afiliados doesn't drop the older fixture rentabilidad)."""
+    from datetime import date
+
+    from shared.data.lineage import Lineage
+    from shared.data.base_client import Record
+
+    lin = Lineage(source="SIPEN", license="x", fetched_at=date.today())
+    fake = [
+        Record(series="sipen.afiliados.total", period="2026-05", value=5649211.0, lineage=lin, unit="personas"),
+        Record(series="sipen.cotizantes.total", period="2026-05", value=2213058.0, lineage=lin, unit="personas"),
+    ]
+    monkeypatch.setattr("modules.pension_intel.sipen_sync.fetch_sipen_ckan", lambda period=None: fake)
+
+    res = sipen_pension_sync(db)
+    assert res["ckan_rows"] == 2
+
+    afi = (db.query(PensionSeries)
+           .filter_by(entity_slug=None, series_code="sipen.afiliados.total", period="2026-05").one())
+    assert afi.value == 5649211.0 and afi.source == "SIPEN"
+
+    # Snapshot is at the newest period but still carries the older fixture rentabilidad.
+    snap = db.query(PensionSnapshot).order_by(PensionSnapshot.period.desc()).first()
+    assert snap.period == "2026-05"
+    assert snap.headline.get("sipen.afiliados.total") == 5649211.0
+    assert "sipen.rentabilidad.cci_nominal_anual" in snap.headline  # older series retained

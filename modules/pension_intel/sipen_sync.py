@@ -12,7 +12,7 @@ from typing import Callable, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.data.lineage import Lineage
-from shared.data.sipen_client import afp_catalog, sipen_client
+from shared.data.sipen_client import afp_catalog, fetch_sipen_ckan, sipen_client
 from modules.pension_intel.models.models import (
     PensionEntity,
     PensionSeries,
@@ -78,19 +78,26 @@ def _upsert_series(
 
 
 def _compute_snapshot(db: Session) -> Optional[str]:
-    """Capture the latest system period's headline figures into a snapshot row.
+    """Capture each system indicator's LATEST value into a snapshot row.
 
-    Returns the snapshot period, or None if there are no system series yet.
+    Headline = the most recent value of every system series (not just those at one shared
+    period), so a freshly-updated indicator (e.g. CKAN afiliados to 2026-05) doesn't drop
+    a slower one (e.g. fixture rentabilidad at 2025-04) from the headline. The snapshot
+    period is the newest period across them. None if there are no system series yet.
     """
-    system = (
-        db.query(PensionSeries)
-        .filter(PensionSeries.entity_slug.is_(None))
-        .all()
-    )
+    system = [
+        s for s in db.query(PensionSeries).filter(PensionSeries.entity_slug.is_(None)).all()
+        if s.value is not None
+    ]
     if not system:
         return None
-    latest = max(s.period for s in system)
-    headline = {s.series_code: s.value for s in system if s.period == latest}
+    latest_by_code: Dict[str, PensionSeries] = {}
+    for s in system:
+        cur = latest_by_code.get(s.series_code)
+        if cur is None or s.period > cur.period:
+            latest_by_code[s.series_code] = s
+    headline = {code: s.value for code, s in latest_by_code.items()}
+    latest = max(s.period for s in latest_by_code.values())
     entity_count = db.query(PensionEntity).count()
     series_count = db.query(PensionSeries).count()
 
@@ -133,6 +140,18 @@ def sipen_pension_sync(
         db, sipen_client.fetch(), lineage=lineage, entity_slug=None,
     )
 
+    # Live national series from CKAN datos.gob.do (afiliados/cotizantes/salario, monthly
+    # 2003-…) — moves the pulse off the fixture sample. Best-effort: a network failure
+    # leaves the fixture floor intact and never aborts the sync.
+    set_phase("Series live (CKAN datos.gob.do)")
+    try:
+        ckan = fetch_sipen_ckan(period=None)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[SIPEN] ingesta CKAN falló: %s", e)
+        ckan = []
+    if ckan:
+        system_rows += _upsert_series(db, ckan, lineage=lineage, entity_slug=None)
+
     set_phase("Series por AFP")
     entity_records: List = sipen_client.fetch_entities()
     by_slug: Dict[str, list] = {}
@@ -155,6 +174,7 @@ def sipen_pension_sync(
     return {
         "entities_created": entities_created,
         "system_rows": system_rows,
+        "ckan_rows": len(ckan),
         "entity_rows": entity_rows,
         "snapshot_period": snapshot_period,
         "ratings_written": ratings["ratings_written"],
