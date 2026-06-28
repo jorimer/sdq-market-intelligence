@@ -145,7 +145,14 @@ export function AfpRankingTab() {
     try {
       const data = await getPensionRankings();
       setRows(data.rankings);
-      setSelected((prev) => prev ?? data.rankings.find((r) => r.overall_score != null)?.slug ?? null);
+      // Always select an AFP so the detail + AI insight always render: prefer the first
+      // scored one, but fall back to the first row when none is scoreable yet (e.g. during
+      // a data re-sync) — otherwise the detail/insight card silently disappears.
+      setSelected((prev) =>
+        prev
+        ?? data.rankings.find((r) => r.overall_score != null)?.slug
+        ?? data.rankings[0]?.slug
+        ?? null);
       setStatus("ready");
     } catch {
       setStatus("error");
