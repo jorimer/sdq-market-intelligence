@@ -29,6 +29,15 @@ def _run_financials_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_cartera_sync(params, user_id, set_phase) -> Dict:
+    from modules.pension_intel.cartera_sync import sipen_cartera_sync
+    db = SessionLocal()
+    try:
+        return sipen_cartera_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "sipen-sync", "Sincronizar pensiones (SIPEN)",
@@ -46,6 +55,15 @@ def register() -> None:
         "SOLVENCIA del ISA y, con ella, la banda absoluta. Corre desde Railway (egress "
         "de IPs estáticas + UA de navegador). También hay carga manual en la sección Datos.",
         _run_financials_sync, default_interval_hours=2160,  # trimestral
+    ))
+    register_operation(Operation(
+        "sipen-cartera-sync", "Sincronizar cartera de inversiones (SIPEN)",
+        "Descubre el último Boletín Trimestral de SIPEN (PDF), extrae el Cuadro 6.1 "
+        "—composición de la cartera de inversiones de los fondos por emisor— con un "
+        "parser determinístico que cuadra con el TOTAL (falla cerrado si no), y persiste "
+        "las tenencias por emisor (Hacienda/BCRD/bancos/privados). Dato público real, sin "
+        "OCR (el boletín es texto). Trimestral.",
+        _run_cartera_sync, default_interval_hours=2160,  # trimestral
     ))
 
 

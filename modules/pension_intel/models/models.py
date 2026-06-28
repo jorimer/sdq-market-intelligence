@@ -106,3 +106,42 @@ class PensionSnapshot(UUIDMixin, Base):
     series_count = Column(Float, nullable=True)
     entity_count = Column(Float, nullable=True)
     model_version = Column(String(10), default="0.1", nullable=False)
+
+
+class PensionHolding(UUIDMixin, Base):
+    """One line of the pension funds' investment portfolio (cartera de inversiones).
+
+    Source: the SIPEN quarterly bulletin, *Cuadro 6.1 — Composición de la cartera de
+    inversiones de los fondos de pensiones por emisor (RD$)*. Each row is an issuer
+    (``issuer``) grouped under a regulatory sub-sector (``sub_sector``); group-header
+    rows carry ``is_subtotal=True`` and their amount equals the sum of their children
+    (detected structurally, so the leaves reconcile to the table TOTAL).
+
+    This is the cross-module gem: ``Ministerio de Hacienda`` / ``Banco Central`` =
+    public-debt holdings (Macro/BCRD), bank issuers = pension-fund exposure per bank
+    (Banca). Cross keys are resolved at ingest from public data — never by reading
+    another module's tables (modules talk via events). Missing amounts stay NULL.
+    """
+    __tablename__ = "pension_holdings"
+    __table_args__ = (
+        UniqueConstraint("period", "fund", "issuer_slug",
+                         name="uq_pension_holding_period_fund_issuer"),
+        Index("ix_pension_holding_period_fund", "period", "fund"),
+        Index("ix_pension_holding_issuer", "issuer_slug"),
+    )
+
+    period = Column(String(10), nullable=False)        # "2026-Q1" (quarterly, from the bulletin)
+    fund = Column(String(40), nullable=False)          # "cci" (PR1) | per-complementary fund (later)
+    sub_sector = Column(String(120), nullable=True)    # "Ministerio de Hacienda" | "Bancos Múltiples" | …
+    issuer = Column(String(200), nullable=False)       # issuer label, verbatim from the bulletin
+    issuer_slug = Column(String(80), nullable=False)   # stable normalized key
+    amount = Column(Float, nullable=True)              # RD$ (NULL = absent, never interpolated)
+    pct = Column(Float, nullable=True)                 # share of the fund (%)
+    is_subtotal = Column(Boolean, default=False, nullable=False)  # sub-sector group header (sum of children)
+    # Cross-module keys (resolved at ingest from public data, see cartera crosswalk)
+    bank_entity_slug = Column(String(40), nullable=True)   # banking_score match, when the issuer is a bank
+    macro_class = Column(String(20), nullable=True)        # "deuda_publica" (Hacienda) | "bcrd" | None
+    # Lineage
+    source = Column(String(40), nullable=True)         # "SIPEN"
+    published_at = Column(Date, nullable=True)
+    license = Column(String(160), nullable=True)
