@@ -280,11 +280,18 @@
     "originManual": "Propuesta manual",
     "moveStatus": "Cambiar estado",
     "delete": "Eliminar",
+    "evaluate": "Evaluar",
+    "evaluateHint": "El sistema puntúa la sugerencia contra los criterios y la mapea a la brecha",
+    "evalError": "No se pudo evaluar.",
+    "evalScore": "Idoneidad",
     "status": {
       "proposed": "Propuesta", "evaluating": "Evaluando", "evaluated": "Evaluada",
       "approved": "Aprobada", "integrating": "Integrando", "integrated": "Integrada",
       "rejected": "Rechazada", "deferred": "Diferida"
-    }
+    },
+    "rec": { "approve": "Aprobar", "investigate": "Investigar", "reject": "Rechazar", "defer": "Diferir" },
+    "method": { "ai": "IA", "heuristic": "heurística" },
+    "crit": { "coverage": "cobertura", "cadence": "cadencia", "format": "formato", "license": "licencia" }
   },
   "common_retry": "Reintentar",
   "esg": {

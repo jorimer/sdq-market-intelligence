@@ -101,6 +101,30 @@ def set_status(db: Session, suggestion_id: str, status: str,
     return _serialize(row)
 
 
+def evaluate(db: Session, suggestion_id: str) -> Dict[str, Any]:
+    """Evalúa la sugerencia con IA (o heurística) y persiste el resultado + estado.
+
+    Mueve a ``evaluated`` si venía de un estado temprano (proposed/evaluating); no
+    pisa una decisión ya tomada (approved/rejected/…)."""
+    from shared.source_intel.evaluator import evaluate_suggestion
+    from shared.source_intel.models import (
+        STATUS_EVALUATED,
+        STATUS_EVALUATING,
+        STATUS_PROPOSED,
+    )
+
+    row = db.query(SourceSuggestion).filter_by(id=suggestion_id).one_or_none()
+    if row is None:
+        raise SuggestionError("Sugerencia no encontrada.")
+    row.evaluation = evaluate_suggestion(db, _serialize(row))
+    if row.status in (STATUS_PROPOSED, STATUS_EVALUATING):
+        row.status = STATUS_EVALUATED
+    row.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+    return _serialize(row)
+
+
 def delete_suggestion(db: Session, suggestion_id: str) -> bool:
     row = db.query(SourceSuggestion).filter_by(id=suggestion_id).one_or_none()
     if row is None:

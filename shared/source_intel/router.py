@@ -17,6 +17,7 @@ from shared.source_intel.service import (
     board_summary,
     create_suggestion,
     delete_suggestion,
+    evaluate,
     get_suggestion,
     list_suggestions,
     set_status,
@@ -83,6 +84,19 @@ async def patch_status(
     except SuggestionError as e:
         code = 404 if "no encontrada" in str(e) else 400
         raise HTTPException(status_code=code, detail=str(e))
+
+
+@router.post("/suggestions/{suggestion_id}/evaluate", summary="Evaluar con IA (o heurística)")
+async def post_evaluate(
+    suggestion_id: str, db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    """Puntúa la sugerencia contra los criterios + la mapea a la brecha. Si no hay IA
+    disponible, evaluación heurística honesta (``method``)."""
+    try:
+        return evaluate(db, suggestion_id)
+    except SuggestionError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/suggestions/{suggestion_id}", summary="Eliminar una sugerencia")
