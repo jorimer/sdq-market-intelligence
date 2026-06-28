@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Compass, Plus, Trash2, Bot, User as UserIcon } from "lucide-react";
+import { Compass, Plus, Trash2, Bot, User as UserIcon, Sparkles } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
-  listSuggestions, createSuggestion, setSuggestionStatus, deleteSuggestion,
-  type Suggestion, type SuggestionStatus, type SuggestionKind,
+  listSuggestions, createSuggestion, setSuggestionStatus, deleteSuggestion, evaluateSuggestion,
+  type Suggestion, type SuggestionStatus, type SuggestionKind, type Evaluation,
 } from "../api";
 
 const KINDS: SuggestionKind[] = ["source", "info_type", "sector"];
@@ -22,6 +22,34 @@ function statusTone(s: SuggestionStatus): "ok" | "warn" | "alert" | "muted" {
   if (s === "rejected") return "alert";
   if (s === "evaluated" || s === "evaluating") return "warn";
   return "muted";
+}
+
+function recTone(r: Evaluation["recommendation"]): "ok" | "warn" | "alert" | "muted" {
+  if (r === "approve") return "ok";
+  if (r === "reject") return "alert";
+  if (r === "defer") return "muted";
+  return "warn";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function EvaluationBlock({ ev, t }: { ev: Evaluation; t: any }) {
+  return (
+    <div className="mt-2 rounded-md border border-line bg-surface2/50 px-3 py-2">
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <span className="font-medium text-ink">{t("sourceIntel.evalScore")}</span>
+        <span className="mono tabular-nums text-ink">{Math.round((ev.score ?? 0) * 100)}%</span>
+        <Chip tone={recTone(ev.recommendation)}>{t(`sourceIntel.rec.${ev.recommendation}`)}</Chip>
+        {ev.gate_closed && <Chip tone="muted">{ev.gate_closed.toUpperCase()}</Chip>}
+        <Chip tone={ev.method === "ai" ? "ok" : "muted"}>{t(`sourceIntel.method.${ev.method}`)}</Chip>
+      </div>
+      {ev.fit_rationale && <div className="text-[11px] text-muted mt-1">{ev.fit_rationale}</div>}
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-[10px] text-faint">
+        {Object.entries(ev.criteria || {}).map(([k, v]) => (
+          <span key={k} className="tabular-nums">{t(`sourceIntel.crit.${k}`)}: {Math.round((v?.score ?? 0) * 100)}%</span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function SourceIntelPage() {
@@ -75,6 +103,13 @@ export function SourceIntelPage() {
     setBusy(id); setMsg(null);
     try { await deleteSuggestion(id); await load(); }
     catch { setMsg(t("sourceIntel.deleteError")); }
+    finally { setBusy(null); }
+  };
+
+  const onEvaluate = async (id: string) => {
+    setBusy(id); setMsg(null);
+    try { await evaluateSuggestion(id); await load(); }
+    catch { setMsg(t("sourceIntel.evalError")); }
     finally { setBusy(null); }
   };
 
@@ -170,6 +205,10 @@ export function SourceIntelPage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Chip tone={statusTone(s.status)}>{t(`sourceIntel.status.${s.status}`)}</Chip>
+                    <button onClick={() => onEvaluate(s.id)} disabled={busy === s.id}
+                      className="btn btn-ghost !py-1 !px-2 text-xs" title={t("sourceIntel.evaluateHint")}>
+                      <Sparkles className={`w-3.5 h-3.5 ${busy === s.id ? "animate-pulse" : ""}`} /> {t("sourceIntel.evaluate")}
+                    </button>
                     <select className="field !py-1 !text-xs" value={s.status} disabled={busy === s.id}
                       onChange={(e) => onStatus(s.id, e.target.value as SuggestionStatus)}
                       aria-label={t("sourceIntel.moveStatus")}>
@@ -181,6 +220,7 @@ export function SourceIntelPage() {
                     </button>
                   </div>
                 </div>
+                {s.evaluation && <EvaluationBlock ev={s.evaluation as unknown as Evaluation} t={t} />}
               </div>
             ))}
           </div>

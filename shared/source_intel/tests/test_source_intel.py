@@ -64,6 +64,53 @@ def test_delete(db):
     assert svc.delete_suggestion(db, s["id"]) is False
 
 
+# ── evaluación IA (Increment 2) — path heurístico determinista ──────────
+
+def _force_heuristic(monkeypatch):
+    import shared.source_intel.evaluator as ev
+    monkeypatch.setattr(ev.settings, "ANTHROPIC_API_KEY", None, raising=False)
+
+
+def test_evaluator_heuristic_without_key(db, monkeypatch):
+    from shared.source_intel.evaluator import evaluate_suggestion
+    _force_heuristic(monkeypatch)
+    ev = evaluate_suggestion(db, {"kind": "source", "title": "X", "target_gate": "g1",
+                                  "target_axis": None})
+    assert ev["method"] == "heuristic"
+    assert ev["gate_closed"] == "g1" and ev["recommendation"] == "investigate"
+    assert set(ev["criteria"]) == {"coverage", "cadence", "format", "license"}
+
+
+def test_coerce_normalizes_drift():
+    from shared.source_intel.evaluator import _coerce
+    out = _coerce({"score": 5, "recommendation": "bogus", "gate_closed": "gZ",
+                   "criteria": {"coverage": {"score": "x"}}}, {"target_gate": "g3"})
+    assert out["score"] == 1.0                 # clamp
+    assert out["recommendation"] == "investigate"
+    assert out["gate_closed"] == "g3"          # cae al target del suggestion
+    assert out["criteria"]["coverage"]["score"] == 0.5  # no parseable → 0.5
+    assert out["method"] == "ai"
+
+
+def test_evaluate_persists_and_sets_status(db, monkeypatch):
+    _force_heuristic(monkeypatch)
+    s = svc.create_suggestion(db, kind="source", title="Boletín INDOTEL",
+                              target_axis="telecom", target_gate="g1")
+    out = svc.evaluate(db, s["id"])
+    assert out["status"] == "evaluated"
+    assert out["evaluation"]["method"] == "heuristic"
+    assert out["evaluation"]["gate_closed"] == "g1"
+
+
+def test_evaluate_does_not_overwrite_decision(db, monkeypatch):
+    _force_heuristic(monkeypatch)
+    s = svc.create_suggestion(db, kind="source", title="X")
+    svc.set_status(db, s["id"], "approved")
+    out = svc.evaluate(db, s["id"])
+    assert out["status"] == "approved"         # no pisa una decisión ya tomada
+    assert out["evaluation"] is not None       # pero sí adjunta la evaluación
+
+
 # ── API ───────────────────────────────────────────────────────────────
 
 def _client(db, role=UserRole.admin):
@@ -110,6 +157,18 @@ def test_api_invalid_kind_400(db):
     c = _client(db)
     assert c.post("/api/v1/source-intel/suggestions",
                   json={"kind": "x", "title": "y"}).status_code == 400
+
+
+def test_api_evaluate(db, monkeypatch):
+    _force_heuristic(monkeypatch)
+    c = _client(db)
+    sid = c.post("/api/v1/source-intel/suggestions",
+                 json={"kind": "source", "title": "Boletín INDOTEL", "target_axis": "telecom",
+                       "target_gate": "g1"}).json()["id"]
+    r = c.post(f"/api/v1/source-intel/suggestions/{sid}/evaluate")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "evaluated" and body["evaluation"]["method"] == "heuristic"
 
 
 def test_api_requires_admin(db):

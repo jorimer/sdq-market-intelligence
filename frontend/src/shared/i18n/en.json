@@ -280,11 +280,18 @@
     "originManual": "Manually proposed",
     "moveStatus": "Change status",
     "delete": "Delete",
+    "evaluate": "Evaluate",
+    "evaluateHint": "The system scores the suggestion against the criteria and maps it to the gap",
+    "evalError": "Could not evaluate.",
+    "evalScore": "Fit",
     "status": {
       "proposed": "Proposed", "evaluating": "Evaluating", "evaluated": "Evaluated",
       "approved": "Approved", "integrating": "Integrating", "integrated": "Integrated",
       "rejected": "Rejected", "deferred": "Deferred"
-    }
+    },
+    "rec": { "approve": "Approve", "investigate": "Investigate", "reject": "Reject", "defer": "Defer" },
+    "method": { "ai": "AI", "heuristic": "heuristic" },
+    "crit": { "coverage": "coverage", "cadence": "cadence", "format": "format", "license": "license" }
   },
   "common_retry": "Retry",
   "esg": {

@@ -280,11 +280,18 @@
     "originManual": "Propos\u00e9e manuellement",
     "moveStatus": "Changer le statut",
     "delete": "Supprimer",
+    "evaluate": "\u00c9valuer",
+    "evaluateHint": "Le syst\u00e8me note la suggestion selon les crit\u00e8res et la relie \u00e0 la lacune",
+    "evalError": "Impossible d'\u00e9valuer.",
+    "evalScore": "Ad\u00e9quation",
     "status": {
       "proposed": "Propos\u00e9e", "evaluating": "En \u00e9valuation", "evaluated": "\u00c9valu\u00e9e",
       "approved": "Approuv\u00e9e", "integrating": "Int\u00e9gration", "integrated": "Int\u00e9gr\u00e9e",
       "rejected": "Rejet\u00e9e", "deferred": "Diff\u00e9r\u00e9e"
-    }
+    },
+    "rec": { "approve": "Approuver", "investigate": "Enqu\u00eater", "reject": "Rejeter", "defer": "Diff\u00e9rer" },
+    "method": { "ai": "IA", "heuristic": "heuristique" },
+    "crit": { "coverage": "couverture", "cadence": "cadence", "format": "format", "license": "licence" }
   },
   "common_retry": "R\u00e9essayer",
   "esg": {

@@ -46,6 +46,20 @@ export async function setSuggestionStatus(
   return data;
 }
 
+export async function evaluateSuggestion(id: string): Promise<Suggestion> {
+  const { data } = await client.post(`/source-intel/suggestions/${id}/evaluate`);
+  return data;
+}
+
 export async function deleteSuggestion(id: string): Promise<void> {
   await client.delete(`/source-intel/suggestions/${id}`);
+}
+
+export interface Evaluation {
+  score: number;
+  criteria: Record<string, { score: number; note: string }>;
+  gate_closed: string | null;
+  fit_rationale: string;
+  recommendation: "approve" | "investigate" | "reject" | "defer";
+  method: "ai" | "heuristic";
 }
