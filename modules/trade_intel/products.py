@@ -197,6 +197,26 @@ def _latest_published(db: Session, period: str):
         return None
 
 
+def _period_end_date(period: str):
+    """Fin del período como fecha — fallback de frescura cuando los flujos no traen
+    ``published_at``: ``'2026-Q1'``→2026-03-31, ``'2026-05'``→fin de mes, ``'2026'``→2026-12-31."""
+    import calendar
+    try:
+        s = str(period)
+        if "-Q" in s:
+            y, q = s.split("-Q")
+            m = int(q) * 3
+            return date(int(y), m, calendar.monthrange(int(y), m)[1])
+        if "-" in s:
+            y, m = s.split("-")[:2]
+            return date(int(y), int(m), calendar.monthrange(int(y), int(m))[1])
+        if len(s) == 4 and s.isdigit():
+            return date(int(s), 12, 31)
+    except (ValueError, TypeError):
+        return None
+    return None
+
+
 def _backtest_export_collapse(db: Session) -> Optional[Dict[str, Any]]:
     """Bloque ``export_collapse`` del backtest persistido (Gate E), o None. SAVEPOINT."""
     import json
@@ -263,8 +283,10 @@ class TradeProduct:
         # Cobertura: fracción de las 3 métricas núcleo con dato (sin hardcode; DB vacía → 0).
         core = [s.resilience_score, s.export_diversification, s.import_dependency]
         coverage = sum(1 for v in core if v is not None) / len(core)
-        latest_pub = _latest_published(self._require_db(), s.period)
-        freshness = (date.today() - latest_pub).days if latest_pub else None
+        # Frescura: published_at de los flujos; si no lo traen, se deriva del PERÍODO
+        # (señal real de recencia del dato, no None → evita penalizar G1 con factor 0.5).
+        latest_pub = _latest_published(self._require_db(), s.period) or _period_end_date(s.period)
+        freshness = max(0, (date.today() - latest_pub).days) if latest_pub else None
         n_ch = (s.breakdown or {}).get("n_products_export")
         return DataHealth(coverage=coverage, freshness_days=freshness,
                           sources=("DGA", "UN Comtrade", "BCRD"),
