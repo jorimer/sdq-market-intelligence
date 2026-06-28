@@ -5,8 +5,21 @@ from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
 
 
+def _run_itu_telecom_sync(params, user_id, set_phase) -> Dict:
+    """Fetch ITU DataHub telecom penetration (live source) and persist the IDT."""
+    from modules.telecom_intel.service import compute_and_persist_itu
+
+    set_phase("descargando penetración telecom de RD (ITU DataHub API)")
+    db = SessionLocal()
+    try:
+        set_phase("calculando IDT (desarrollo telecom)")
+        return compute_and_persist_itu(db)
+    finally:
+        db.close()
+
+
 def _run_indotel_telecom_sync(params, user_id, set_phase) -> Dict:
-    """Fetch INDOTEL's latest quarterly bulletin and persist the IDT."""
+    """Fetch INDOTEL's frozen 2022-Q1 bulletin and persist the IDT (histórico)."""
     from modules.telecom_intel.service import compute_and_persist
 
     set_phase("descargando boletín trimestral de indicadores (INDOTEL)")
@@ -19,13 +32,21 @@ def _run_indotel_telecom_sync(params, user_id, set_phase) -> Dict:
 
 
 def register() -> None:
+    # Fuente VIGENTE: ITU DataHub (INDOTEL congelado en 2022-Q1). Anual, API abierta.
     register_operation(Operation(
-        "indotel-telecom-sync", "Sincronizar telecom (INDOTEL)",
-        "Descarga el boletín trimestral de indicadores de telecomunicaciones de "
-        "INDOTEL (XLSX: líneas, suscripciones a internet, banda ancha, ingresos) y "
-        "persiste el Índice de Desarrollo Telecom (IDT). Dato público real; el boletín "
-        "público más reciente es 2022-Q1 (la frescura lo refleja honestamente).",
-        _run_indotel_telecom_sync, default_interval_hours=2160,
+        "itu-telecom-sync", "Sincronizar telecom (ITU DataHub)",
+        "Descarga la penetración telecom de RD de la API abierta de ITU DataHub "
+        "(móvil, banda ancha móvil/fija, hogares con internet; per-100/%, fresca hasta "
+        "2024) y persiste el Índice de Desarrollo Telecom (IDT). Reemplaza a INDOTEL, "
+        "cuyo boletín público quedó congelado en 2022-Q1.",
+        _run_itu_telecom_sync, default_interval_hours=8760,  # anual
+    ))
+    # Histórico/on-demand: el boletín INDOTEL (2022-Q1), conservado para trazabilidad.
+    register_operation(Operation(
+        "indotel-telecom-sync", "Sincronizar telecom (INDOTEL · histórico 2022-Q1)",
+        "Descarga el boletín trimestral de INDOTEL (XLSX), congelado en 2022-Q1, y "
+        "persiste su IDT. Histórico: la fuente vigente es ITU (itu-telecom-sync).",
+        _run_indotel_telecom_sync, default_interval_hours=0,  # on-demand (histórico)
     ))
 
 

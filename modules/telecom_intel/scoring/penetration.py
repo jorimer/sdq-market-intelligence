@@ -33,6 +33,50 @@ def _band(score: Optional[float]) -> Optional[str]:
     return "Crítico"
 
 
+def compute_telecom_index_itu(mobile_pen: Optional[float],
+                              mobile_broadband_pen: Optional[float],
+                              fixed_broadband_pen: Optional[float],
+                              households_internet: Optional[float] = None) -> Dict:
+    """IDT sobre PENETRACIÓN ITU (per-100/%), estándar y comparable. Tres pilares reales:
+    móvil, banda ancha móvil (= acceso a internet dominante en RD) y banda ancha fija.
+    Reusa los pesos y bandas del IDT; pondera solo las dims con dato. ``households_internet``
+    se reporta como contexto (no se puntúa)."""
+    def _score(p: Optional[float]) -> Optional[float]:
+        return round(_clamp(p), 2) if p is not None else None
+
+    dims = {
+        "mobile_penetration": {"score": _score(mobile_pen), "weight": W_MOBILE, "provenance": "real"},
+        "internet_penetration": {"score": _score(mobile_broadband_pen), "weight": W_INTERNET, "provenance": "real"},
+        "broadband_quality": {"score": _score(fixed_broadband_pen), "weight": W_BROADBAND, "provenance": "real"},
+    }
+    measured = [(d["score"], d["weight"]) for d in dims.values() if d["score"] is not None]
+    total_w = sum(d["weight"] for d in dims.values())
+    if measured:
+        wsum = sum(w for _, w in measured)
+        telecom_score = round(sum(s * w for s, w in measured) / wsum, 2)
+        coverage = round(sum(w for _, w in measured) / total_w, 4)
+    else:
+        telecom_score, coverage = None, 0.0
+    for d in dims.values():
+        d["contribution"] = (round(d["score"] * d["weight"], 2) if d["score"] is not None else None)
+
+    return {
+        "telecom_score": telecom_score,
+        "band": _band(telecom_score),
+        "coverage": coverage,
+        "dimensions": dims,
+        "metrics": {
+            # Mismas columnas del modelo, con la lectura ITU: penetración móvil, banda ancha
+            # móvil (col internet_penetration) y banda ancha fija (col broadband_share).
+            "mobile_penetration": mobile_pen,
+            "internet_penetration": mobile_broadband_pen,
+            "broadband_share": fixed_broadband_pen,
+            "households_internet": households_internet,
+            "revenue_latest": None, "revenue_growth": None,
+        },
+    }
+
+
 def compute_telecom_index(indicators: Dict[str, Optional[float]],
                           population: int) -> Dict:
     """IDT desde los indicadores INDOTEL + población. Pondera SOLO las dimensiones con
