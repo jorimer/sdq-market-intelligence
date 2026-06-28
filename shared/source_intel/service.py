@@ -37,6 +37,7 @@ def _serialize(s: SourceSuggestion) -> Dict[str, Any]:
         "target_gate": s.target_gate,
         "status": s.status,
         "evaluation": s.evaluation,
+        "integration_plan": s.integration_plan,
         "decision_note": s.decision_note,
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
@@ -119,6 +120,21 @@ def evaluate(db: Session, suggestion_id: str) -> Dict[str, Any]:
     row.evaluation = evaluate_suggestion(db, _serialize(row))
     if row.status in (STATUS_PROPOSED, STATUS_EVALUATING):
         row.status = STATUS_EVALUATED
+    row.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+    return _serialize(row)
+
+
+def scaffold(db: Session, suggestion_id: str) -> Dict[str, Any]:
+    """Genera y persiste el plan de integración de una sugerencia (Increment 4). No
+    cambia el estado ni construye nada — es una propuesta para que el dueño/dev ejecute."""
+    from shared.source_intel.scaffolder import scaffold_plan
+
+    row = db.query(SourceSuggestion).filter_by(id=suggestion_id).one_or_none()
+    if row is None:
+        raise SuggestionError("Sugerencia no encontrada.")
+    row.integration_plan = scaffold_plan(db, _serialize(row))
     row.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)

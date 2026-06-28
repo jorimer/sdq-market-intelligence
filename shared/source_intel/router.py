@@ -20,6 +20,7 @@ from shared.source_intel.service import (
     evaluate,
     get_suggestion,
     list_suggestions,
+    scaffold,
     set_status,
 )
 
@@ -95,6 +96,19 @@ async def post_evaluate(
     disponible, evaluación heurística honesta (``method``)."""
     try:
         return evaluate(db, suggestion_id)
+    except SuggestionError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/suggestions/{suggestion_id}/scaffold", summary="Andamiar plan de integración")
+async def post_scaffold(
+    suggestion_id: str, db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    """Genera un plan de integración (conector, crosswalk, pasos, riesgos) para la
+    sugerencia. Es una propuesta; el build lo ejecuta el dueño/dev (compuerta humana)."""
+    try:
+        return scaffold(db, suggestion_id)
     except SuggestionError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
