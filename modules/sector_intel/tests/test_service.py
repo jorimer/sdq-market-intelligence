@@ -78,6 +78,28 @@ def test_compute_and_persist_scores_each_sector(db):
     assert turismo.sgps_score is not None
 
 
+def test_provenance_stamped_into_breakdown(db):
+    """Cuando se pasan ``sources``, cada variable del breakdown persistido lleva su
+    procedencia (live|rubric) — lo que el monitor de readiness usa para G1 honesto."""
+    sources = {"turismo": {"operating_cost": "live", "labor_availability": "live",
+                           "sector_growth": "live", "sector_size": "live",
+                           "ease_of_business": "rubric"}}
+    compute_and_persist(db, "2025", DATASET, SGPS_INPUTS, sources=sources)
+    bd = get_latest(db, "turismo").iai_breakdown
+    biz = bd["business"]["variables"]
+    assert biz["operating_cost"]["source"] == "live"
+    assert biz["ease_of_business"]["source"] == "rubric"
+    # Variable sin entrada en sources → "rubric" por defecto (nunca se asume real).
+    assert bd["regulation"]["variables"]["regulatory_quality"]["source"] == "rubric"
+
+
+def test_no_sources_leaves_no_provenance(db):
+    """Sin ``sources`` (p.ej. /snapshot manual) el breakdown no estampa procedencia."""
+    compute_and_persist(db, "2025", DATASET, SGPS_INPUTS)
+    bd = get_latest(db, "turismo").iai_breakdown
+    assert "source" not in bd["sector"]["variables"]["sector_growth"]
+
+
 def test_publishes_sector_updated(db):
     received = []
     event_bus.subscribe(SECTOR_UPDATED, lambda p: received.append(p))

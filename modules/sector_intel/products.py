@@ -18,9 +18,12 @@ Naturaleza NACIONAL/AGREGADA: el "entity" es el SECTOR económico de RD; no hay
 firmas → ``entity_roster=()`` (el sensor de anonimización pasa trivialmente). El
 Pulse es el pulso del sector; el nivel nombrado nombra al sector (no a una empresa).
 
-Cobertura HONESTA: hoy solo 2 de 5 dimensiones del IAI son dato real (sector + macro);
-negocios/talento/regulatoria son rúbrica declarada → G1 parcial. Estos productos
-quedan **cableados pero no publicables** hasta ampliar la fuente. NUNCA inventar data.
+Cobertura HONESTA por PROCEDENCIA (no hardcode): G1 acredita el peso del IAI que el
+motor consumió con dato real. Hoy 6/9 variables son live —sector (BCRD ×2), macro
+(contrato), operating_cost (TSS), labor_availability (ENCFT), regulatory_quality
+(WGI nacional)— y 3 siguen rúbrica (ease_of_business, skills_index,
+regulatory_volatility). Cada dimensión a medias acredita media cobertura → ~0.70, no
+0.40. NUNCA inventar data: las rúbricas restantes suben con su conector (no se fingen).
 
 Eje doctrinal ÚNICO: ``sector_intel`` + thin ``sector_outlook`` → numeric_guard.
 """
@@ -57,8 +60,9 @@ SECTOR_PRODUCTS: Dict[str, tuple] = {
     "construction": ("construccion", "Construcción · RD"),
     "agribusiness": ("agropecuario", "Agropecuario · RD"),
 }
-# Dimensiones del IAI con dato real hoy (espeja ai_context._LIVE_DIMS). El resto es
-# rúbrica declarada → la cobertura (G1) cuenta solo el peso respaldado por dato real.
+# Dims históricamente reales — usadas SOLO como fallback conservador cuando el
+# breakdown es legacy (sin procedencia por-variable). El cálculo vigente lee la
+# procedencia real de cada variable (``_real_coverage``), no este conjunto fijo.
 _REAL_DIMS = ("sector", "macro")
 _UNSET = object()  # centinela "aún no leído" (distingue de None = leído y vacío)
 
@@ -71,10 +75,12 @@ _SECTION_TITLES = {
 }
 _LIMITATIONS = (
     "Índice de Atractividad de Inversión (IAI) + momentum (SGPS) por sector, a la fecha "
-    "de corte. Dato real: tamaño y crecimiento del sector (valor agregado BCRD) y "
-    "exposición macro (contrato macro→sectorial). Las dimensiones de negocios, talento y "
-    "regulatoria son rúbrica declarada (suben a real con WGI/estudios ONE), por lo que el "
-    "IAI es una lectura PRELIMINAR de atractividad, no un veredicto sobre cobertura completa."
+    "de corte. Dato real (6 de 9 variables): tamaño y crecimiento del sector (valor "
+    "agregado BCRD), exposición macro (contrato macro→sectorial), costo operativo (salario "
+    "TSS por actividad), disponibilidad de mano de obra (empleo ENCFT por rama) y calidad "
+    "regulatoria (WGI nacional). Quedan sobre rúbrica declarada tres variables —facilidad "
+    "de negocios, índice de competencias y volatilidad regulatoria—, por lo que el IAI es "
+    "una lectura sólida pero aún no plena: esas tres suben a real con su fuente (no se fingen)."
 )
 _NO_DATA = (
     "No hay score persistido para este sector: el producto está cableado pero su "
@@ -191,15 +197,47 @@ def _latest_dict(s: SectorScore) -> Dict[str, Any]:
             "iai_breakdown": s.iai_breakdown or {}}
 
 
+def _live_vars(breakdown: Dict[str, Any]) -> tuple:
+    """``(live, total)`` conteo de variables del IAI con procedencia ``source=="live"``.
+    Solo cuenta dimensiones que llevan ``variables`` con ``source`` (breakdown moderno)."""
+    live = total = 0
+    for d in (breakdown or {}).values():
+        for v in ((d or {}).get("variables") or {}).values():
+            if "source" not in (v or {}):
+                continue
+            total += 1
+            if v.get("source") == "live":
+                live += 1
+    return live, total
+
+
 def _real_coverage(breakdown: Dict[str, Any]) -> float:
-    """Fracción del PESO del IAI respaldado por dimensiones con dato real (sector+macro).
-    Cobertura honesta: hoy ~0.4 (no se acredita la rúbrica declarada)."""
+    """Fracción del PESO del IAI respaldada por dato real, honesta a la procedencia
+    por-variable persistida (``variables[var]["source"] == "live"``).
+
+    Cada dimensión aporta ``peso × (variables live / variables totales)``: una
+    dimensión a medias (p.ej. business = operating_cost live + ease_of_business
+    rúbrica) acredita la mitad de su peso —ni 0 ni el total—, reflejando el dato que
+    el motor REALMENTE consumió. Si el breakdown es legacy (sin procedencia por
+    variable), cae al conteo por-dimensión-completa de las dims históricamente reales
+    (sector+macro) para no regresar antes del re-backfill que estampa la procedencia.
+    """
     dims = breakdown or {}
     total = sum((d or {}).get("weight") or 0.0 for d in dims.values())
     if total <= 0:
         return 0.0
-    real = sum((d or {}).get("weight") or 0.0 for k, d in dims.items()
-               if k in _REAL_DIMS and (d or {}).get("score") is not None)
+    if _live_vars(dims)[1] == 0:  # legacy: sin procedencia → conteo conservador
+        real = sum((d or {}).get("weight") or 0.0 for k, d in dims.items()
+                   if k in _REAL_DIMS and (d or {}).get("score") is not None)
+        return real / total
+    real = 0.0
+    for d in dims.values():
+        vars_ = (d or {}).get("variables") or {}
+        sourced = [v for v in vars_.values() if "source" in (v or {})]
+        if not sourced:
+            continue
+        live = sum(1 for v in sourced if v.get("source") == "live")
+        real += ((d or {}).get("weight") or 0.0) * (live / len(sourced))
     return real / total
 
 
@@ -239,6 +277,8 @@ class SectorIntelProduct:
             return DataHealth(coverage=0.0, freshness_days=None, cadence="annual",
                               sources=("BCRD",), detail=f"Sin score de '{self._sector_code}'.")
         coverage = _real_coverage(s.iai_breakdown)
+        live, total = _live_vars(s.iai_breakdown)
+        prov = f"{live}/{total} variables reales" if total else f"{len(_REAL_DIMS)}/5 dims reales"
         # Cadencia ANUAL: el valor agregado BCRD por sector es la cifra de año completo.
         freshness = None
         try:
@@ -246,9 +286,8 @@ class SectorIntelProduct:
         except (ValueError, TypeError):
             pass
         return DataHealth(coverage=coverage, freshness_days=freshness, cadence="annual",
-                          sources=("BCRD", "contrato macro→sectorial"),
-                          detail=f"IAI {_fmt(s.iai_score)} ({s.iai_band}) en {s.period} · "
-                                 f"{len(_REAL_DIMS)}/5 dims reales")
+                          sources=("BCRD", "contrato macro→sectorial", "TSS", "ENCFT", "WGI"),
+                          detail=f"IAI {_fmt(s.iai_score)} ({s.iai_band}) en {s.period} · {prov}")
 
     def has_engine(self) -> bool:
         return self._latest() is not None
@@ -257,8 +296,9 @@ class SectorIntelProduct:
         # Gate E sectorial DEFERIDO (lo desbloquea dato por sector, no backtest); el IAI
         # corre sobre 2/5 dims reales → validación parcial honesta, no veredicto pleno.
         return ValidationState(approved=True, score=0.5,
-                               notes="Gate E sectorial diferido; IAI sobre 2/5 dims reales "
-                                     "(sector+macro). SGPS (momentum) sobre crecimiento real BCRD.")
+                               notes="Gate E sectorial diferido; IAI sobre 6/9 variables reales "
+                                     "(sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS "
+                                     "(momentum) sobre crecimiento real BCRD.")
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,

@@ -45,12 +45,26 @@ def seed_sectors(db: Session) -> int:
     return created
 
 
+def _stamp_provenance(dimensions: Dict[str, Any], smap: Dict[str, str]) -> None:
+    """Annotate each variable in the IAI breakdown with its ``source`` (live|rubric).
+
+    Mutates ``dimensions`` in place. A variable absent from ``smap`` defaults to
+    "rubric" (conservative: an unsourced value is declared, never assumed real).
+    The readiness monitor reads this to credit cobertura by the real fraction of
+    the index — honest to the data the engine actually consumed.
+    """
+    for dim in dimensions.values():
+        for var, detail in (dim.get("variables") or {}).items():
+            detail["source"] = smap.get(var, "rubric")
+
+
 def compute_and_persist(
     db: Session,
     period: str,
     sector_dataset: Dict[str, Dict[str, float]],
     sgps_inputs: Optional[Dict[str, Dict[str, float]]] = None,
     country_code: str = "DO",
+    sources: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """Compute IAI + SGPS for every sector in *sector_dataset*, persist, publish.
 
@@ -59,17 +73,27 @@ def compute_and_persist(
         sector_dataset: ``{sector_code: {variable: value}}`` (IAI peer set).
         sgps_inputs: ``{sector_code: {"historical": x, "structural": y}}``.
         country_code: country whose IRMP feeds the acceleration factor.
+        sources: ``{sector_code: {variable: "live"|"rubric"}}`` from
+            ``assemble_iai_dataset``. When given, each variable in the persisted
+            ``iai_breakdown`` is stamped with its provenance, so the readiness
+            monitor (G1) can credit cobertura honestly — the real fraction of the
+            index backed by live data, not a hardcoded dimension set. Optional: the
+            manual ``/snapshot`` endpoint passes none (those rows keep no source).
     """
     if not sector_dataset:
         raise ValueError("Se requiere 'sector_dataset' con al menos un sector.")
 
     sgps_inputs = sgps_inputs or {}
+    sources = sources or {}
     # The acceleration factor is the macro environment — shared across sectors.
     acceleration = compute_acceleration(acceleration_context, country_code)
 
     results: List[Dict[str, Any]] = []
     for sector_code in sector_dataset:
         iai = compute_iai(sector_code, sector_dataset)
+        smap = sources.get(sector_code)
+        if smap:  # sin procedencia → breakdown legacy (el monitor usa su fallback)
+            _stamp_provenance(iai["dimensions"], smap)
         si = sgps_inputs.get(sector_code, {})
         sgps = compute_sgps(
             historical=si.get("historical"),
@@ -412,7 +436,8 @@ def backfill_sector_scores(db: Session, set_phase: Optional[Callable[[str], None
     for i, p in enumerate(periods, 1):
         set_phase(f"backfill IAI/SGPS {p} ({i}/{len(periods)})")
         asm = assemble_iai_dataset(db, period=p)
-        compute_and_persist(db, period=p, sector_dataset=asm["dataset"], sgps_inputs=asm["sgps_inputs"])
+        compute_and_persist(db, period=p, sector_dataset=asm["dataset"],
+                            sgps_inputs=asm["sgps_inputs"], sources=asm["sources"])
 
     set_phase("purgando scores fuera del backfill (fixture/seed)")
     keep = set(periods)
