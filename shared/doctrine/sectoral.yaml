@@ -22,8 +22,13 @@ dimension_variables:
                             # 0-100, mayor = mejor. Reemplaza gdp_growth/inflation_stability
                             # (económica-wide, no discriminaban entre sectores).
   business:
-    - ease_of_business      # facilidad de hacer negocios 0-100 mayor = mejor
-    - operating_cost        # costo operativo (índice)    mayor = peor
+    - ease_of_business      # facilidad de hacer negocios 0-100 mayor = mejor   [rúbrica]
+    - operating_cost        # costo operativo (índice)    mayor = peor          [TSS real]
+    - profitability         # rentabilidad = utilidad/ingresos (ENAE)  mayor = mejor.
+                            # Dato REAL per-sector. SIN rúbrica default: los sectores
+                            # fuera del marco ENAE (≈9 de 17) la dejan AUSENTE y el motor
+                            # la omite (no se falsea a 50 → cero distorsión min-max). Es la
+                            # excepción honesta al "all-or-nothing" de operating_cost/labor.
   talent:
     - labor_availability    # disponibilidad de mano de obra 0-100 mayor = mejor
     - skills_index          # nivel de competencias 0-100 mayor = mejor

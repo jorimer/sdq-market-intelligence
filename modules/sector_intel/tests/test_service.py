@@ -16,6 +16,7 @@ from modules.sector_intel.models.models import (  # noqa: F401 — register tabl
     SectorScore,
     SectorVariable,
 )
+from shared.settings.models import AppSetting  # noqa: F401 — registra app_setting (assemble lee WGI/TSS)
 from modules.sector_intel.service import (
     compute_and_persist,
     get_latest,
@@ -129,3 +130,56 @@ def test_idempotent_per_sector_period(db):
 def test_empty_dataset_raises(db):
     with pytest.raises(ValueError):
         compute_and_persist(db, "2025", {})
+
+
+# ─── ENAE profitability (dim negocios, real per-sector con fallback honesto) ───
+
+def _seed_enae(db, enae_key, year, ingresos, utilidad):
+    db.add(SectorVariable(sector_code=enae_key, dimension="enae", variable="ingresos",
+                          period=year, value=ingresos))
+    db.add(SectorVariable(sector_code=enae_key, dimension="enae", variable="utilidad",
+                          period=year, value=utilidad))
+
+
+def test_enae_profitability_ratio_bundle_and_partial(db):
+    from modules.sector_intel.service import _load_enae_profitability
+    # direct: alojamiento→turismo (utilidad/ingresos = 20/100 = 0.20)
+    _seed_enae(db, "alojamiento", "2022", 100.0, 20.0)
+    # bundle: manufactura→manufactura_local + zonas_francas (comparten el ratio 0.10)
+    _seed_enae(db, "manufactura", "2022", 200.0, 20.0)
+    # partial: electricidad+agua→energia (suma niveles, recomputa: (5+1)/(50+10)=0.10)
+    _seed_enae(db, "electricidad", "2022", 50.0, 5.0)
+    _seed_enae(db, "agua", "2022", 10.0, 1.0)
+    db.commit()
+    prof = _load_enae_profitability(db)
+    assert prof["turismo"] == pytest.approx(0.20)
+    assert prof["manufactura_local"] == pytest.approx(0.10)
+    assert prof["zonas_francas"] == pytest.approx(0.10)
+    assert prof["energia"] == pytest.approx(0.10)  # combinado, no promediado
+    # slug fuera del marco ENAE → ausente (no se inventa)
+    assert "agropecuario" not in prof
+
+
+def test_enae_uses_latest_year(db):
+    from modules.sector_intel.service import _load_enae_profitability
+    _seed_enae(db, "alojamiento", "2021", 100.0, 5.0)   # viejo
+    _seed_enae(db, "alojamiento", "2022", 100.0, 25.0)  # más reciente → gana
+    db.commit()
+    assert _load_enae_profitability(db)["turismo"] == pytest.approx(0.25)
+
+
+def test_enae_wired_into_assemble_with_provenance(db):
+    """assemble_iai_dataset marca profitability live solo donde ENAE cubre; ausente
+    (no rúbrica-50) en los no cubiertos → el motor la omite, sin distorsión."""
+    from modules.sector_intel.service import assemble_iai_dataset
+    seed_sectors(db)
+    compute_and_persist(db, "2022", DATASET, SGPS_INPUTS)  # da un período al grid
+    _seed_enae(db, "alojamiento", "2022", 100.0, 18.0)
+    db.commit()
+    asm = assemble_iai_dataset(db, period="2022")
+    # turismo (cubierto): profitability presente y marcada live
+    assert asm["dataset"]["turismo"].get("profitability") == pytest.approx(0.18)
+    assert asm["sources"]["turismo"]["profitability"] == "live"
+    # agropecuario (no cubierto): profitability AUSENTE (ni valor ni rúbrica)
+    assert "profitability" not in asm["dataset"]["agropecuario"]
+    assert "profitability" not in asm["sources"]["agropecuario"]
