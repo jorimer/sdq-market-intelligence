@@ -68,6 +68,16 @@ async def get_readiness(db: Session = Depends(get_db),
     return build_matrix(db)
 
 
+@router.get("/readiness/audit", summary="Readiness Audit — qué falta por eje + acción")
+async def get_readiness_audit(db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Evaluación multi-eje: por sector × nivel, readiness + cada gate + qué falta + la
+    acción concreta para cerrarlo. Mismo dato del monitor (no recalcula ni inventa).
+    Incluye ``markdown`` para exportar el documento."""
+    from shared.products.audit import build_audit
+    return build_audit(db)
+
+
 @router.get("/readiness/{sector}", summary="Detalle de readiness de un sector")
 async def get_sector_readiness(sector: str, db: Session = Depends(get_db),
                                current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
