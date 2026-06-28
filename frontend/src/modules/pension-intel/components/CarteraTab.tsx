@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { PiggyBank, Landmark, Info } from "lucide-react";
+import { PiggyBank, Landmark, Info, ChevronRight } from "lucide-react";
 import {
   Card,
   CardHead,
@@ -16,10 +16,12 @@ import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import {
   getPensionCartera,
   getPensionCarteraInsight,
+  getPensionCarteraHolding,
   PENSION_AUDIENCES,
   PensionCartera,
   PensionHolding,
 } from "../api";
+import { PensionDrillDrawer } from "./PensionDrillDrawer";
 
 type Status = "loading" | "error" | "ready";
 
@@ -38,7 +40,7 @@ function SnapshotNote() {
 }
 
 /** Top-level composition (sub-sector rollups + sovereign leaves) as horizontal bars. */
-function CompositionBars({ cartera }: { cartera: PensionCartera }) {
+function CompositionBars({ cartera, onPick }: { cartera: PensionCartera; onPick: (slug: string) => void }) {
   const { t } = useTranslation();
   const total = cartera.total ?? 0;
   // Top-level rows partition the total: sub-sector headers + standalone leaves (Hacienda/BCRD).
@@ -60,8 +62,14 @@ function CompositionBars({ cartera }: { cartera: PensionCartera }) {
           const w = max > 0 ? ((h.amount ?? 0) / max) * 100 : 0;
           const sovereign = h.macro_class === "deuda_publica" || h.macro_class === "bcrd";
           return (
-            <div key={h.issuer} className="flex items-center gap-3">
-              <div className="w-44 shrink-0 truncate text-sm text-body" title={h.issuer}>
+            <button
+              key={h.issuer}
+              type="button"
+              onClick={() => onPick(h.issuer_slug)}
+              className="flex w-full items-center gap-3 rounded-[8px] px-1.5 py-1 text-left transition-colors hover:bg-surface2/60"
+              title={t("pension.drillOpen")}
+            >
+              <div className="w-40 shrink-0 truncate text-sm text-body" title={h.issuer}>
                 {h.issuer}
               </div>
               <div className="relative h-5 flex-1 min-w-0 rounded-[6px] bg-surface2">
@@ -73,10 +81,11 @@ function CompositionBars({ cartera }: { cartera: PensionCartera }) {
               <div className="w-24 shrink-0 text-right font-display text-sm font-extrabold text-ink mono">
                 {toMM(h.amount)}
               </div>
-              <div className="w-16 shrink-0 text-right text-sm text-muted mono">
+              <div className="w-14 shrink-0 text-right text-sm text-muted mono">
                 {h.pct != null ? `${fmtNum(h.pct, 1)}%` : "—"}
               </div>
-            </div>
+              <ChevronRight size={14} className="shrink-0 text-faint" />
+            </button>
           );
         })}
       </div>
@@ -85,7 +94,7 @@ function CompositionBars({ cartera }: { cartera: PensionCartera }) {
 }
 
 /** Largest individual issuers (leaves) — the granular exposure behind the rollups. */
-function TopIssuers({ holdings }: { holdings: PensionHolding[] }) {
+function TopIssuers({ holdings, onPick }: { holdings: PensionHolding[]; onPick: (slug: string) => void }) {
   const { t } = useTranslation();
   const leaves = holdings
     .filter((h) => !h.is_subtotal && h.amount != null)
@@ -97,7 +106,13 @@ function TopIssuers({ holdings }: { holdings: PensionHolding[] }) {
       <CardHead icon={Landmark} title={t("pension.carteraTopTitle")} subtitle={t("pension.carteraTopSubtitle")} />
       <div className="mt-3 divide-y divide-line">
         {leaves.map((h) => (
-          <div key={h.issuer_slug} className="flex items-center gap-3 py-2.5">
+          <button
+            key={h.issuer_slug}
+            type="button"
+            onClick={() => onPick(h.issuer_slug)}
+            className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-surface2/50"
+            title={t("pension.drillOpen")}
+          >
             <div className="flex-1 min-w-0">
               <div className="truncate text-sm text-body" title={h.issuer}>{h.issuer}</div>
               {h.sub_sector && <div className="truncate text-[11px] text-muted">{h.sub_sector}</div>}
@@ -107,10 +122,11 @@ function TopIssuers({ holdings }: { holdings: PensionHolding[] }) {
             <div className="w-24 shrink-0 text-right font-display text-sm font-extrabold text-ink mono">
               {toMM(h.amount)}
             </div>
-            <div className="w-16 shrink-0 text-right text-sm text-muted mono">
+            <div className="w-14 shrink-0 text-right text-sm text-muted mono">
               {h.pct != null ? `${fmtNum(h.pct, 1)}%` : "—"}
             </div>
-          </div>
+            <ChevronRight size={14} className="shrink-0 text-faint" />
+          </button>
         ))}
       </div>
     </Card>
@@ -121,6 +137,7 @@ export function CarteraTab() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [cartera, setCartera] = useState<PensionCartera | null>(null);
+  const [drillSlug, setDrillSlug] = useState<string | null>(null);
   const [audience, setAudience] = useAudiencePref("sdq.pension.audience", PENSION_AUDIENCES);
 
   const load = useCallback(async () => {
@@ -155,9 +172,38 @@ export function CarteraTab() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
-        <CompositionBars cartera={c} />
-        <TopIssuers holdings={c.holdings} />
+        <CompositionBars cartera={c} onPick={setDrillSlug} />
+        <TopIssuers holdings={c.holdings} onPick={setDrillSlug} />
       </div>
+
+      {drillSlug && (() => {
+        const h = c.holdings.find((x) => x.issuer_slug === drillSlug);
+        return (
+          <PensionDrillDrawer
+            eyebrow={`${t("pension.carteraTotal")} · ${c.period ?? ""}`}
+            title={h?.issuer ?? drillSlug}
+            depsKey={`cartera:${c.period ?? ""}:${drillSlug}`}
+            fetcher={(withAi, aud, deep) => getPensionCarteraHolding(drillSlug, withAi, aud, deep, c.period ?? undefined)}
+            onClose={() => setDrillSlug(null)}
+            renderDetail={(data) => {
+              const hd = data.holding;
+              const sovereign = hd.macro_class === "deuda_publica" || hd.macro_class === "bcrd";
+              return (
+                <div className="flex items-end justify-between gap-4">
+                  <div className="min-w-0">
+                    {hd.sub_sector && <div className="text-xs text-muted mb-1 truncate">{hd.sub_sector}</div>}
+                    <div className="text-3xl font-semibold text-ink mono tabular-nums">{toMM(hd.amount)} <span className="text-base text-muted">{t("pension.unitRdMm")}</span></div>
+                    <div className="text-xs text-muted mt-1">{hd.pct != null ? `${fmtNum(hd.pct, 2)}% ${t("pension.carteraOfPortfolio")}` : "—"}</div>
+                  </div>
+                  {hd.macro_class === "deuda_publica" && <Chip tone="accent">{t("pension.carteraSovereign")}</Chip>}
+                  {hd.macro_class === "bcrd" && <Chip tone="accent">{t("pension.carteraBcrd")}</Chip>}
+                  {!sovereign && hd.is_subtotal && <Chip tone="muted">{t("pension.carteraSubSector")}</Chip>}
+                </div>
+              );
+            }}
+          />
+        );
+      })()}
 
       <AiInsightCard
         title={t("pension.carteraInsightTitle")}

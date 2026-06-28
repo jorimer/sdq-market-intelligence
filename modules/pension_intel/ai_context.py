@@ -83,6 +83,78 @@ def pension_cartera_context(cartera: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def pension_indicator_context(
+    code: str, label: str, unit: str, points: List[tuple],
+) -> Dict[str, Any]:
+    """Compact context for one SYSTEM indicator's drill-down (template
+    ``pension_system_indicator``). *points* = ``[(period, value)]`` ascending."""
+    latest = points[-1] if points else (None, None)
+    first = points[0] if points else (None, None)
+    return {
+        "indicador": label, "code": code, "unit": unit,
+        "valor_actual": latest[1], "periodo": latest[0],
+        "desde": first[0], "n_obs": len(points),
+        "serie_reciente": [{"periodo": p, "valor": v} for p, v in points[-12:]],
+        "source": "SIPEN — sistema dominicano de pensiones (dato real)",
+        "note": "Lee la TENDENCIA de la serie, no un solo mes. Si es rentabilidad, es NOMINAL.",
+    }
+
+
+def pension_dimension_context(
+    afp_name: str, dim: Dict[str, Any], peers: List[Dict[str, Any]],
+    trend: List[tuple],
+) -> Dict[str, Any]:
+    """Compact context for one AFP DIMENSION drill-down (template ``pension_afp_dimension``).
+
+    *dim* is this AFP's dimension breakdown (label/raw/score/weight/direction/provenance/present);
+    *peers* = ``[{afp, raw, score}]`` across the panel; *trend* = ``[(period, raw)]`` ascending."""
+    ranked = sorted(
+        [p for p in peers if p.get("score") is not None],
+        key=lambda p: p["score"], reverse=True,
+    )
+    rank = next((i + 1 for i, p in enumerate(ranked) if p["afp"] == afp_name), None)
+    return {
+        "afp": afp_name,
+        "dimension": dim.get("label"),
+        "peso": dim.get("weight"),
+        "direccion": "mayor es mejor" if dim.get("direction") == "higher" else "menor es mejor",
+        "procedencia": dim.get("provenance"),
+        "presente": dim.get("present"),
+        "valor_real": dim.get("raw"),
+        "score_relativo": dim.get("score"),
+        "rank": rank,
+        "n_afp_con_dato": len(ranked),
+        "pares": [{"afp": p["afp"], "valor_real": p["raw"], "score": p["score"]} for p in peers],
+        "serie_reciente": [{"periodo": p, "valor": v} for p, v in trend[-12:]],
+        "source": "SIPEN — dato real",
+        "note": "Score = POSICIÓN RELATIVA (peer min-max), no veredicto absoluto. Si la dimensión "
+                "es solvencia y es brecha declarada, dilo y no inventes cifra.",
+    }
+
+
+def pension_cartera_item_context(
+    holding: Dict[str, Any], total: float, period: str,
+) -> Dict[str, Any]:
+    """Compact context for one cartera POSITION drill-down (template ``pension_cartera_item``)."""
+    macro = holding.get("macro_class")
+    naturaleza = ("deuda pública (exposición soberana del ahorro)" if macro == "deuda_publica"
+                  else "Banco Central" if macro == "bcrd"
+                  else "sub-sector / emisor de la cartera")
+    return {
+        "posicion": holding.get("issuer"),
+        "sub_sector": holding.get("sub_sector"),
+        "es_subtotal": holding.get("is_subtotal"),
+        "naturaleza": naturaleza,
+        "monto_rd": holding.get("amount"),
+        "pct_cartera": holding.get("pct"),
+        "cartera_total_rd": total,
+        "periodo": period,
+        "source": "SIPEN — Cuadro 6.1 del boletín trimestral (dato real)",
+        "unit": "RD$ corrientes y % del fondo",
+        "note": "FOTO trimestral; no juicio de riesgo crediticio del emisor. Lee concentración y rol.",
+    }
+
+
 def pension_ai_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
     """Compact context for the national pension-system assessment.
 
