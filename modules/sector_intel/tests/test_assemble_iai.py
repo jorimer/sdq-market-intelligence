@@ -141,12 +141,17 @@ def test_wgi_regulatory_quality_live_and_uniform_across_sectors(db):
     _set_wgi(db, {"2023": 56.0, "2024": 58.1})
     db.commit()
 
+    import statistics
+
     asm = assemble_iai_dataset(db, period="2024")
     for slug in ("turismo", "mineria", "salud"):                 # national → same for all
         assert asm["dataset"][slug]["regulatory_quality"] == 58.1
         assert asm["sources"][slug]["regulatory_quality"] == "live"
-    assert asm["dataset"]["turismo"]["regulatory_volatility"] == 50  # still rubric
-    assert asm["sources"]["turismo"]["regulatory_volatility"] == "rubric"
+    # regulatory_volatility ahora también es real: std de la serie WGI, nacional (uniforme).
+    vol = statistics.pstdev([56.0, 58.1])
+    for slug in ("turismo", "mineria", "salud"):
+        assert asm["dataset"][slug]["regulatory_volatility"] == pytest.approx(vol)
+        assert asm["sources"][slug]["regulatory_volatility"] == "live"
 
 
 def test_wgi_regulatory_latest_fallback_for_current_period(db):

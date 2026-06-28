@@ -34,7 +34,9 @@ dimension_variables:
     - skills_index          # nivel de competencias 0-100 mayor = mejor
   regulation:
     - regulatory_quality    # calidad regulatoria 0-100   mayor = mejor  [WGI nacional]
-    - regulatory_volatility # volatilidad regulatoria     mayor = peor   [rúbrica]
+    - regulatory_volatility # volatilidad regulatoria     mayor = peor   [WGI nacional:
+                            # std de la serie de calidad regulatoria. Nacional/constante
+                            # (no diferencia ranking; completa la procedencia real)]
   sector:
     - sector_growth         # crecimiento del sector (%)  mayor = mejor   [BCRD real]
     - sector_size           # tamaño relativo del sector  mayor = mejor   [BCRD real]

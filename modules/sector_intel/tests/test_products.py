@@ -143,6 +143,22 @@ def test_readiness_honest_coverage_by_provenance(db):
     assert rep["readiness"] >= 0.75
 
 
+def test_live_vars_counts_national_signal():
+    """_live_vars separa las live nacionales (regulatory_*) de las per-sector, para que
+    el linaje no sobre-venda el cruce de umbral como profundidad real."""
+    from modules.sector_intel.products import _live_vars
+    bd = {
+        "sector": {"variables": {"sector_growth": {"source": "live"},
+                                 "sector_size": {"source": "live"}}},
+        "regulation": {"variables": {"regulatory_quality": {"source": "live"},
+                                     "regulatory_volatility": {"source": "live"}}},
+        "talent": {"variables": {"labor_availability": {"source": "live"},
+                                 "skills_index": {"source": "rubric"}}},
+    }
+    live, total, national = _live_vars(bd)
+    assert (live, total, national) == (5, 6, 2)  # 2 nacionales: regulatory_quality/volatility
+
+
 def test_readiness_legacy_breakdown_fallback(db):
     """Breakdown legacy (sin procedencia) → fallback conservador sector+macro = 0.40,
     para no inflar la cobertura antes del re-backfill que estampa la procedencia."""

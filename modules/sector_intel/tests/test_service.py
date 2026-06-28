@@ -168,6 +168,51 @@ def test_enae_uses_latest_year(db):
     assert _load_enae_profitability(db)["turismo"] == pytest.approx(0.25)
 
 
+def test_wgi_volatility_is_series_stddev(db):
+    import json
+    import statistics
+
+    from modules.sector_intel.sectors_sync import WGI_REGULATORY_KEY
+    from modules.sector_intel.service import _load_wgi_volatility
+    from shared.settings.models import AppSetting
+
+    serie = {"2020": 50.0, "2021": 54.0, "2022": 58.0, "2023": 56.0}
+    db.add(AppSetting(key=WGI_REGULATORY_KEY, value=json.dumps({"series": serie})))
+    db.commit()
+    assert _load_wgi_volatility(db) == pytest.approx(statistics.pstdev(serie.values()))
+
+
+def test_wgi_volatility_needs_two_years(db):
+    import json
+
+    from modules.sector_intel.sectors_sync import WGI_REGULATORY_KEY
+    from modules.sector_intel.service import _load_wgi_volatility
+    from shared.settings.models import AppSetting
+
+    db.add(AppSetting(key=WGI_REGULATORY_KEY, value=json.dumps({"series": {"2023": 58.0}})))
+    db.commit()
+    assert _load_wgi_volatility(db) is None  # sin varianza computable
+
+
+def test_wgi_volatility_wired_all_17(db):
+    """regulatory_volatility (nacional) se aplica a TODOS los slugs como dato real."""
+    import json
+
+    from modules.sector_intel.sectors_sync import WGI_REGULATORY_KEY
+    from modules.sector_intel.service import assemble_iai_dataset
+    from shared.settings.models import AppSetting
+
+    seed_sectors(db)
+    compute_and_persist(db, "2022", DATASET, SGPS_INPUTS)
+    db.add(AppSetting(key=WGI_REGULATORY_KEY,
+                      value=json.dumps({"series": {"2021": 50.0, "2022": 56.0, "2023": 58.0}})))
+    db.commit()
+    asm = assemble_iai_dataset(db, period="2022")
+    for slug in ("turismo", "agropecuario", "construccion"):
+        assert asm["sources"][slug]["regulatory_volatility"] == "live"
+        assert asm["dataset"][slug]["regulatory_volatility"] > 0
+
+
 def test_enae_wired_into_assemble_with_provenance(db):
     """assemble_iai_dataset marca profitability live solo donde ENAE cubre; ausente
     (no rúbrica-50) en los no cubiertos → el motor la omite, sin distorsión."""

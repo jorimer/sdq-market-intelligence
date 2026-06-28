@@ -74,13 +74,15 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Atractividad de Inversión (IAI) + momentum (SGPS) por sector, a la fecha "
-    "de corte. Dato real (6 de 9 variables): tamaño y crecimiento del sector (valor "
-    "agregado BCRD), exposición macro (contrato macro→sectorial), costo operativo (salario "
-    "TSS por actividad), disponibilidad de mano de obra (empleo ENCFT por rama) y calidad "
-    "regulatoria (WGI nacional). Quedan sobre rúbrica declarada tres variables —facilidad "
-    "de negocios, índice de competencias y volatilidad regulatoria—, por lo que el IAI es "
-    "una lectura sólida pero aún no plena: esas tres suben a real con su fuente (no se fingen)."
+    "Índice de Atractividad de Inversión (IAI) + momentum (SGPS) por sector, a la fecha de "
+    "corte. Dato real per-sector: tamaño y crecimiento (valor agregado BCRD), exposición "
+    "macro (contrato macro→sectorial), costo operativo (salario TSS por actividad), mano de "
+    "obra (empleo ENCFT por rama) y, donde la ENAE cubre el sector, rentabilidad real "
+    "(utilidad/ingresos). Dato real nacional (igual para todos, no diferencia el ranking): "
+    "calidad y volatilidad regulatoria (WGI). Quedan sobre rúbrica declarada la facilidad de "
+    "negocios y el índice de competencias —suben a real con su fuente, no se fingen—. La "
+    "rentabilidad ENAE no cubre todos los sectores: donde falta, esa variable se OMITE (no "
+    "se inventa), por lo que el atractivo de esos sectores se lee sobre menos profundidad."
 )
 _NO_DATA = (
     "No hay score persistido para este sector: el producto está cableado pero su "
@@ -197,18 +199,29 @@ def _latest_dict(s: SectorScore) -> Dict[str, Any]:
             "iai_breakdown": s.iai_breakdown or {}}
 
 
+# Variables live que son NACIONALES (constantes entre sectores): suben cobertura pero
+# no diferencian el ranking (normalizan al medio bajo min-max). El resto del dato live
+# es per-sector (BCRD, ENAE, ENCFT, TSS, contrato macro→sectorial). La distinción se
+# declara en el linaje para no sobre-vender el cruce de umbral como profundidad real.
+_NATIONAL_LIVE_VARS = ("regulatory_quality", "regulatory_volatility")
+
+
 def _live_vars(breakdown: Dict[str, Any]) -> tuple:
-    """``(live, total)`` conteo de variables del IAI con procedencia ``source=="live"``.
-    Solo cuenta dimensiones que llevan ``variables`` con ``source`` (breakdown moderno)."""
-    live = total = 0
+    """``(live, total, national_live)`` de las variables del IAI con procedencia
+    ``source=="live"``. ``national_live`` = cuántas de las live son señal nacional
+    constante (no diferencian ranking). Solo cuenta dimensiones con ``variables`` que
+    llevan ``source`` (breakdown moderno)."""
+    live = total = national = 0
     for d in (breakdown or {}).values():
-        for v in ((d or {}).get("variables") or {}).values():
+        for var, v in ((d or {}).get("variables") or {}).items():
             if "source" not in (v or {}):
                 continue
             total += 1
             if v.get("source") == "live":
                 live += 1
-    return live, total
+                if var in _NATIONAL_LIVE_VARS:
+                    national += 1
+    return live, total, national
 
 
 def _real_coverage(breakdown: Dict[str, Any]) -> float:
@@ -277,8 +290,13 @@ class SectorIntelProduct:
             return DataHealth(coverage=0.0, freshness_days=None, cadence="annual",
                               sources=("BCRD",), detail=f"Sin score de '{self._sector_code}'.")
         coverage = _real_coverage(s.iai_breakdown)
-        live, total = _live_vars(s.iai_breakdown)
-        prov = f"{live}/{total} variables reales" if total else f"{len(_REAL_DIMS)}/5 dims reales"
+        live, total, national = _live_vars(s.iai_breakdown)
+        if total:
+            per_sector = live - national
+            prov = (f"{live}/{total} variables reales "
+                    f"({per_sector} per-sector + {national} nacional)")
+        else:
+            prov = f"{len(_REAL_DIMS)}/5 dims reales"
         # Cadencia ANUAL: el valor agregado BCRD por sector es la cifra de año completo.
         freshness = None
         try:
