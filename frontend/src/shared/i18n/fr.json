@@ -1543,6 +1543,8 @@
       "gridSubtitle": "10 secteurs \u00d7 3 niveaux. Le readiness est calcul\u00e9 \u00e0 partir des signaux r\u00e9els de chaque produit.",
       "recompute": "Recalculer",
       "recomputeError": "Impossible de recalculer le readiness.",
+      "exportAudit": "Exporter le Readiness Audit",
+      "auditError": "Impossible de g\u00e9n\u00e9rer le Readiness Audit.",
       "legendPublished": "Publi\u00e9",
       "legendWired": "C\u00e2bl\u00e9 \u00b7 non publi\u00e9",
       "legendNotWired": "Non c\u00e2bl\u00e9",

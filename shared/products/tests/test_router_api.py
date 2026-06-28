@@ -80,6 +80,18 @@ def test_get_sector_detail_and_404(db):
     assert c.get("/api/v1/products/readiness/nope").status_code == 404
 
 
+def test_readiness_audit_endpoint(db):
+    """GET /readiness/audit responde 200 con markdown + el catálogo completo, y NO se
+    confunde 'audit' con un {sector} (la ruta va antes que /readiness/{sector})."""
+    c = _client(db)
+    r = c.get("/api/v1/products/readiness/audit")
+    assert r.status_code == 200
+    body = r.json()
+    assert "markdown" in body and "# SDQ·MIP — Readiness Audit" in body["markdown"]
+    assert len(body["sectors"]) == len(PRODUCT_CATALOG)
+    assert set(body["summary"]) == {"full", "pulse_only", "blocked", "pending"}
+
+
 def test_activate_below_threshold_409(db):
     _seed(db, "banking", ProductTier.insight, 0.80)  # < 0.85
     c = _client(db)

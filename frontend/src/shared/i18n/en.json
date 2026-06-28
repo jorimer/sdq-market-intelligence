@@ -1543,6 +1543,8 @@
       "gridSubtitle": "10 sectors \u00d7 3 levels. Readiness is computed from each product's real signals.",
       "recompute": "Recompute",
       "recomputeError": "Could not recompute readiness.",
+      "exportAudit": "Export Readiness Audit",
+      "auditError": "Could not generate the Readiness Audit.",
       "legendPublished": "Published",
       "legendWired": "Wired \u00b7 not published",
       "legendNotWired": "Not wired",

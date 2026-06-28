@@ -195,6 +195,40 @@ export async function recomputeProductReadiness(): Promise<{ recomputed: number;
   return data;
 }
 
+/* ── Readiness Audit (qué falta por eje + acción, exportable) ── */
+export interface AuditGap {
+  gate: string;
+  label: string;
+  value: number;
+  weight: number;
+  points_lost: number;
+  lineage: string;
+  falta: string;
+  accion: string;
+}
+export interface AuditSector {
+  sector_key: string;
+  display_name: string;
+  implemented: boolean;
+  source: string;
+  readiness: Record<string, number>;
+  levels: { tier: string; readiness: number; threshold: number; can_publish: boolean }[];
+  gaps: AuditGap[];
+  headline: string;
+}
+export interface ReadinessAudit {
+  generated_at: string;
+  thresholds: Record<string, number>;
+  summary: { full: string[]; pulse_only: string[]; blocked: string[]; pending: string[] };
+  sectors: AuditSector[];
+  markdown: string;
+}
+
+export async function getReadinessAudit(): Promise<ReadinessAudit> {
+  const { data } = await client.get("/products/readiness/audit");
+  return data;
+}
+
 export async function activateProduct(sector: string, tier: string): Promise<{ is_active: boolean }> {
   const { data } = await client.post(`/products/${sector}/${tier}/activate`);
   return data;

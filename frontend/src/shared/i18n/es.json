@@ -1543,6 +1543,8 @@
       "gridSubtitle": "10 sectores \u00d7 3 niveles. El readiness se calcula desde las se\u00f1ales reales de cada producto.",
       "recompute": "Recalcular",
       "recomputeError": "No se pudo recalcular el readiness.",
+      "exportAudit": "Exportar Readiness Audit",
+      "auditError": "No se pudo generar el Readiness Audit.",
       "legendPublished": "Publicado",
       "legendWired": "Cableado \u00b7 no publicado",
       "legendNotWired": "Sin cablear",

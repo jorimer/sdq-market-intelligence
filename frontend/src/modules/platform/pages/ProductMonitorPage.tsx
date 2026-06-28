@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, RefreshCw, ChevronDown, Check, X } from "lucide-react";
+import { Boxes, RefreshCw, ChevronDown, Check, X, Download } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -14,6 +14,7 @@ import { useAuth } from "@/shared/auth/AuthContext";
 import {
   getProductReadiness,
   recomputeProductReadiness,
+  getReadinessAudit,
   activateProduct,
   deactivateProduct,
   type ProductMatrix,
@@ -76,6 +77,27 @@ export function ProductMonitorPage() {
     }
   };
 
+  const onExportAudit = async () => {
+    setBusy("audit");
+    setMsg(null);
+    try {
+      const audit = await getReadinessAudit();
+      const blob = new Blob([audit.markdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `SDQ_Readiness_Audit_${audit.generated_at.slice(0, 10)}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setMsg(t("platform.productMonitor.auditError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const onToggle = async (sector: string, level: ProductLevel) => {
     const key = `${sector}:${level.tier}`;
     setBusy(key);
@@ -119,10 +141,16 @@ export function ProductMonitorPage() {
             title={t("platform.productMonitor.gridTitle")}
             subtitle={t("platform.productMonitor.gridSubtitle")}
             right={
-              <button onClick={onRecompute} disabled={busy === "recompute"} className="btn btn-ghost !py-1.5 shrink-0">
-                <RefreshCw className={`w-3.5 h-3.5 ${busy === "recompute" ? "animate-spin" : ""}`} />
-                {t("platform.productMonitor.recompute")}
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={onExportAudit} disabled={busy === "audit"} className="btn btn-ghost !py-1.5 shrink-0">
+                  <Download className={`w-3.5 h-3.5 ${busy === "audit" ? "animate-pulse" : ""}`} />
+                  {t("platform.productMonitor.exportAudit")}
+                </button>
+                <button onClick={onRecompute} disabled={busy === "recompute"} className="btn btn-ghost !py-1.5 shrink-0">
+                  <RefreshCw className={`w-3.5 h-3.5 ${busy === "recompute" ? "animate-spin" : ""}`} />
+                  {t("platform.productMonitor.recompute")}
+                </button>
+              </div>
             }
           />
 
