@@ -77,7 +77,9 @@ def _upsert_series(
         row.frequency = _frequency_for(r.period)
         row.source = lineage.source
         row.license = lineage.license
-        row.published_at = lineage.published_at
+        # Stamp a real refresh date (the source rarely dates each point) so the product
+        # readiness G1 has a freshness signal — consistent with financials/cartera syncs.
+        row.published_at = lineage.published_at or lineage.fetched_at
         touched += 1
     return touched
 
