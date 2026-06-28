@@ -112,6 +112,99 @@ def test_parse_mes_ano_xlsx_maps_spanish_months():
     assert rows == {"2003-09": 927082.0, "2025-12": 5600000.0}
 
 
+def test_previsional_xlsx_links_keys_on_aria_label():
+    """The Estadística Previsional page maps each .xlsx to its document label."""
+    from shared.data.sipen_client import previsional_xlsx_links
+
+    html = (
+        '<a href="https://sipen.gob.do/descarga/x_2026_06_111.xlsx" target="_blank" '
+        'aria-label="Descargar documento Rentabilidad"><div>…</div></a>'
+        '<a href="https://sipen.gob.do/descarga/x_2026_06_222.pdf" '
+        'aria-label="Descargar documento Rentabilidad"></a>'  # pdf ignored
+        '<a href="https://sipen.gob.do/descarga/x_2026_06_333.xlsx" '
+        'aria-label="Descargar documento Patrimonio"></a>'
+    )
+    links = previsional_xlsx_links(html)
+    assert links["rentabilidad"].endswith("111.xlsx")
+    assert links["patrimonio"].endswith("333.xlsx")
+    assert all(u.endswith(".xlsx") for u in links.values())
+
+
+def test_parse_rentabilidad_xlsx_system_and_per_afp():
+    """Fraction → percent; per-AFP column→slug; discontinued/0 cells skipped."""
+    import datetime
+    import io
+
+    import openpyxl
+
+    from shared.data.sipen_client import parse_rentabilidad_xlsx
+
+    wb = openpyxl.Workbook()
+    wsys = wb.active
+    wsys.title = "Por SISTEMA"
+    wsys.append([None, "Rentabilidad Nominal por Sistema"])
+    wsys.append([None, "Mes", "Promedio CCI", "Promedio Sistema"])
+    wsys.append([None, datetime.datetime(2025, 4, 30), 0.09398, 0.09604])
+    wsys.append([None, datetime.datetime(2026, 5, 31), 0.0775, 0.0798])
+
+    wf = wb.create_sheet("Por FONDO")
+    wf.append([None, "Mes", "AFP"])
+    wf.append([None, None, "Atlántico", "Camino1", "Crecer", "Popular", "Siembra"])
+    wf.append([None, datetime.datetime(2026, 5, 31), 0.0599, 0, 0.0766, 0.0769, 0.0798])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    system, per_afp = parse_rentabilidad_xlsx(buf.getvalue())
+
+    assert system == [("2025-04", 9.4, 9.6), ("2026-05", 7.75, 7.98)]
+    # Discontinued "Camino1" (0) dropped; the 4 live AFPs map to slugs.
+    assert per_afp["afp_atlantico"] == [("2026-05", 5.99)]
+    assert per_afp["afp_crecer"] == [("2026-05", 7.66)]
+    assert per_afp["afp_popular"] == [("2026-05", 7.69)]
+    assert per_afp["afp_siembra"] == [("2026-05", 7.98)]
+    assert "afp_camino" not in per_afp
+
+
+def test_sync_ingests_rentabilidad_live(db, monkeypatch):
+    """Live rentabilidad Records (system + per-AFP) land and extend the fixture: the
+    snapshot headline and an AFP's return both move to the newer live period."""
+    from datetime import date
+
+    from shared.data.base_client import Record
+    from shared.data.lineage import Lineage
+
+    lin = Lineage(source="SIPEN", license="x", fetched_at=date.today())
+    sys_recs = [
+        Record(series="sipen.rentabilidad.cci_nominal_anual", period="2026-05",
+               value=7.75, lineage=lin, unit="%"),
+        Record(series="sipen.rentabilidad.sdp_nominal_anual", period="2026-05",
+               value=7.98, lineage=lin, unit="%"),
+    ]
+    ent_recs = [
+        Record(series="rentabilidad_nominal_anual", period="2026-05", value=7.98,
+               lineage=lin, unit="%", dimension="afp_siembra"),
+    ]
+    monkeypatch.setattr(
+        "modules.pension_intel.sipen_sync.fetch_sipen_rentabilidad",
+        lambda period=None: (sys_recs, ent_recs),
+    )
+
+    res = sipen_pension_sync(db)
+    assert res["rentabilidad_rows"] == 3
+
+    # The newer live value lands for the AFP (alongside the fixture's 2025-02).
+    siembra_live = (db.query(PensionSeries)
+                    .filter_by(entity_slug="afp_siembra",
+                               series_code="rentabilidad_nominal_anual", period="2026-05").one())
+    assert siembra_live.value == 7.98
+
+    # Snapshot headline picks up the live 2026-05 CCI (latest per code).
+    snap = db.query(PensionSnapshot).order_by(PensionSnapshot.period.desc()).first()
+    assert snap.period == "2026-05"
+    assert snap.headline.get("sipen.rentabilidad.cci_nominal_anual") == 7.75
+    assert snap.headline.get("sipen.rentabilidad.sdp_nominal_anual") == 7.98
+
+
 def test_sync_ingests_ckan_series_and_snapshot_uses_latest_per_code(db, monkeypatch):
     """Live CKAN records land as system series, and the snapshot keeps each indicator's
     latest value (fresh afiliados doesn't drop the older fixture rentabilidad)."""

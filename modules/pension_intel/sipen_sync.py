@@ -12,7 +12,12 @@ from typing import Callable, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.data.lineage import Lineage
-from shared.data.sipen_client import afp_catalog, fetch_sipen_ckan, sipen_client
+from shared.data.sipen_client import (
+    afp_catalog,
+    fetch_sipen_ckan,
+    fetch_sipen_rentabilidad,
+    sipen_client,
+)
 from modules.pension_intel.models.models import (
     PensionEntity,
     PensionSeries,
@@ -161,6 +166,25 @@ def sipen_pension_sync(
     for slug, recs in by_slug.items():
         entity_rows += _upsert_series(db, recs, lineage=lineage, entity_slug=slug)
 
+    # Live rentabilidad (system CCI/Sistema + per-AFP) from the Estadística Previsional
+    # XLSX — moves the return series off the fixture sample onto the full monthly history
+    # (2003-…). Best-effort: a network/parse failure leaves the fixture floor intact.
+    set_phase("Rentabilidad live (XLSX Estadística Previsional)")
+    try:
+        rent_sys, rent_ent = fetch_sipen_rentabilidad(period=None)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[SIPEN] ingesta rentabilidad XLSX falló: %s", e)
+        rent_sys, rent_ent = [], []
+    rentabilidad_rows = 0
+    if rent_sys:
+        rentabilidad_rows += _upsert_series(db, rent_sys, lineage=lineage, entity_slug=None)
+    if rent_ent:
+        rent_by_slug: Dict[str, list] = {}
+        for r in rent_ent:
+            rent_by_slug.setdefault(r.dimension, []).append(r)
+        for slug, recs in rent_by_slug.items():
+            rentabilidad_rows += _upsert_series(db, recs, lineage=lineage, entity_slug=slug)
+
     set_phase("Snapshot del sistema")
     db.flush()  # make upserts visible to the snapshot/scoring queries (autoflush=False)
     snapshot_period = _compute_snapshot(db)
@@ -176,6 +200,7 @@ def sipen_pension_sync(
         "system_rows": system_rows,
         "ckan_rows": len(ckan),
         "entity_rows": entity_rows,
+        "rentabilidad_rows": rentabilidad_rows,
         "snapshot_period": snapshot_period,
         "ratings_written": ratings["ratings_written"],
         "source": sipen_client.source,
