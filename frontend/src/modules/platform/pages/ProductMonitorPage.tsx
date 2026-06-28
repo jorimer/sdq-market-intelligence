@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, RefreshCw, ChevronDown, Check, X, Download } from "lucide-react";
+import { Boxes, RefreshCw, ChevronDown, Check, X, Download, BellRing } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -44,6 +44,20 @@ function pct1(x: number): string {
 function weakestGate(level: ProductLevel): typeof GATES[number] | null {
   if (!level.gates) return null;
   return GATES.reduce((a, b) => (level.gates![b] < level.gates![a] ? b : a));
+}
+
+/** Niveles LISTOS para activar pero aún no publicados — la cola de revisión del monitor.
+ * Derivada de la matriz (can_activate && !is_active), sin estado nuevo: refleja en vivo
+ * lo que la Capa 2 también empuja por notificación. Mayor readiness primero. */
+function pendingActivations(matrix: ProductMatrix): { sector: ProductSector; level: ProductLevel }[] {
+  const out: { sector: ProductSector; level: ProductLevel }[] = [];
+  for (const sector of matrix.sectors) {
+    if (!sector.implemented) continue;
+    for (const level of sector.levels) {
+      if (level.can_activate && !level.is_active) out.push({ sector, level });
+    }
+  }
+  return out.sort((a, b) => b.level.readiness - a.level.readiness);
 }
 
 export function ProductMonitorPage() {
@@ -135,6 +149,43 @@ export function ProductMonitorPage() {
       ) : status === "error" ? (
         <StateBlock kind="error" message={t("platform.productMonitor.loadError")} />
       ) : matrix ? (
+        <>
+          {(() => {
+            const pending = pendingActivations(matrix);
+            if (pending.length === 0) return null;
+            return (
+              <Card className="mb-4 border-warn/40 bg-warn/5">
+                <CardHead
+                  icon={BellRing}
+                  title={t("platform.productMonitor.pendingTitle", { n: pending.length })}
+                  subtitle={t("platform.productMonitor.pendingSubtitle")}
+                />
+                <div className="flex flex-col gap-2">
+                  {pending.map(({ sector, level }) => {
+                    const key = `${sector.sector_key}:${level.tier}`;
+                    return (
+                      <div key={key} className="flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm text-ink truncate" title={sector.display_name}>
+                            {sector.display_name}
+                          </div>
+                          <div className="text-[11px] text-faint">
+                            {t(`platform.productMonitor.tier.${level.tier}`)} · {t("platform.productMonitor.pendingReadiness", { v: pct(level.readiness) })}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => onToggle(sector.sector_key, level)}
+                          disabled={busy === key}
+                          className="btn btn-primary !py-1.5 !px-3 text-xs shrink-0">
+                          <Check className="w-3.5 h-3.5" /> {t("platform.productMonitor.publish")}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })()}
         <Card>
           <CardHead
             icon={Boxes}
@@ -196,6 +247,7 @@ export function ProductMonitorPage() {
             </table>
           </div>
         </Card>
+        </>
       ) : (
         <StateBlock kind="empty" message={t("platform.productMonitor.empty")} />
       )}
