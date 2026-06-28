@@ -309,6 +309,29 @@ THIN_TEMPLATES = {
         "precalculada, exprésala en palabras sin número. Trabajas con un agregado + dispersión: no "
         "exijas desglose que el contexto no provee."
     ),
+    "pension_peer_positioning": (
+        "Sitúa a esta AFP frente a las 7 del sistema usando la TABLA DE PARES servida "
+        "(dato real SIPEN), dimensión por dimensión:\n{context}\n\n"
+        "Máximo 300 palabras. NO repitas el fundamento del ISA; aquí el foco es la POSICIÓN "
+        "COMPETITIVA con NÚMEROS de los pares. Lee: (1) en qué dimensiones LIDERA y en cuáles "
+        "REZAGA, citando el valor de los pares relevantes (líder y promedio del grupo), no en "
+        "abstracto; (2) la BRECHA concreta con el líder donde más rezaga y qué la explica; (3) "
+        "qué la diferencia estructuralmente del resto. El score de cada dimensión es POSICIÓN "
+        "RELATIVA (peer min-max). Usa SOLO las cifras de la tabla; no inventes valores de pares "
+        "que no estén. Cierra con el 'y por tanto' competitivo para la audiencia."
+    ),
+    "pension_portfolio_context": (
+        "Lee la COMPOSICIÓN DE LA CARTERA de inversiones del sistema de pensiones (SIPEN, "
+        "Cuadro 6.1 — dato real) como CONTEXTO DE RIESGO del ahorro que administra esta AFP:\n"
+        "{context}\n\n"
+        "Máximo 300 palabras. Es dónde está invertido el fondo del afiliado (nivel sistema, no "
+        "por-AFP). Lee: (1) la CONCENTRACIÓN SOBERANA (Ministerio de Hacienda + Banco Central) y "
+        "qué implica para la exposición del ahorro al riesgo del Estado y la profundidad financiera; "
+        "(2) la exposición al SISTEMA FINANCIERO (banca) como fondeo institucional; (3) la "
+        "DIVERSIFICACIÓN al sector privado/real (empresas, fideicomisos, fondos de inversión). "
+        "Cierra con el 'y por tanto' para la audiencia. FOTO trimestral; NO juicio crediticio de "
+        "un emisor. Usa solo las cifras del contexto (montos RD$ y %)."
+    ),
     "pension_entity": (
         "Explica el FUNDAMENTO del Índice de Solidez (ISA) de esta AFP, con dato real de SIPEN.\n"
         "Contexto:\n{context}\n\n"
