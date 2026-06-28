@@ -228,7 +228,16 @@ async def entity_detail(
 ):
     """Full ISA breakdown for one AFP (dimensions, provenance, coverage, band)."""
     names = {e.slug: e.name for e in db.query(PensionEntity).all()}
-    row = db.query(PensionRating).filter(PensionRating.entity_slug == slug).first()
+    # Latest rating period for this AFP. A re-score at a newer statement/rentabilidad
+    # period adds a fresh row (upsert is per slug+period), so the read MUST pick the
+    # newest — otherwise an unordered .first() returns a stale older-period rating
+    # (matches the latest-period rule in _ranked_ratings used by /rankings).
+    row = (
+        db.query(PensionRating)
+        .filter(PensionRating.entity_slug == slug)
+        .order_by(PensionRating.period.desc())
+        .first()
+    )
     if row is None:
         return {"slug": slug, "found": False}
     return {"found": True, **_rating_payload(row, names.get(slug, slug))}

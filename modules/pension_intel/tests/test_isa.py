@@ -55,6 +55,25 @@ def test_rankings_collapse_to_latest_period_per_afp(db):
     assert jmmb[0]["period"] == "2026-06" and jmmb[0]["band"] == "Adecuada"
 
 
+def test_entity_detail_returns_latest_period(db):
+    """The detail endpoint must return the AFP's newest rating, not a stale older-period
+    row — an unordered .first() would surface the pre-financials 2025 rating."""
+    import asyncio
+
+    from modules.pension_intel.api.router import entity_detail
+
+    db.query(PensionRating).filter(PensionRating.entity_slug == "afp_jmmb_bdi").delete()
+    db.add(PensionRating(entity_slug="afp_jmmb_bdi", period="2025-04",
+                         overall_score=None, band=None, coverage=0.3))
+    db.add(PensionRating(entity_slug="afp_jmmb_bdi", period="2026-06",
+                         overall_score=72.6, band="Adecuada", coverage=0.65))
+    db.flush()
+
+    res = asyncio.run(entity_detail("afp_jmmb_bdi", db=db, current_user=None))
+    assert res["found"] is True
+    assert res["period"] == "2026-06" and res["band"] == "Adecuada"
+
+
 def test_solvency_absent_until_financials_caps_coverage(db):
     """Without estados financieros, solvency is absent → coverage ≤ 0.65, bands deferred."""
     results = compute_isa(db)
