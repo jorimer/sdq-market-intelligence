@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { PiggyBank, Info } from "lucide-react";
+import { PiggyBank, Info, ChevronRight } from "lucide-react";
 import {
   Card,
   CardHead,
@@ -17,10 +17,20 @@ import {
   getPensionRankings,
   getPensionEntityDetail,
   getPensionEntityInsight,
+  getPensionDimension,
   PENSION_AUDIENCES,
   PensionRankRow,
   PensionDetail,
 } from "../api";
+import { PensionDrillDrawer, PensionTrend, PeerBars } from "./PensionDrillDrawer";
+
+/** Raw-value formatter for an ISA dimension (rentabilidad=%, ratios=2dp, AUM=number). */
+function fmtDimRaw(key: string, raw: number | null): string {
+  if (raw == null) return "—";
+  if (key === "rentabilidad") return `${fmtNum(raw, 2)}%`;
+  if (key === "escala") return fmtNum(raw, 0);
+  return fmtNum(raw, 4);
+}
 
 type Status = "loading" | "error" | "ready";
 
@@ -40,6 +50,7 @@ function DetailCard({ slug }: { slug: string }) {
   const { t } = useTranslation();
   const [detail, setDetail] = useState<PensionDetail | null>(null);
   const [state, setState] = useState<Status>("loading");
+  const [drillKey, setDrillKey] = useState<string | null>(null);
   const [audience, setAudience] = useAudiencePref("sdq.pension.audience", PENSION_AUDIENCES);
 
   useEffect(() => {
@@ -76,13 +87,19 @@ function DetailCard({ slug }: { slug: string }) {
             </div>
           }
         />
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-1">
           {d.dimensions.map((dim) => {
             const isGap = dim.provenance === "brecha";
             const pct = dim.score ?? 0;
             return (
-              <div key={dim.key} className="flex items-center gap-3">
-                <div className="w-44 shrink-0 truncate text-sm text-body" title={dim.label}>
+              <button
+                key={dim.key}
+                type="button"
+                onClick={() => setDrillKey(dim.key)}
+                className="flex w-full items-center gap-3 rounded-[8px] px-2 py-1.5 text-left transition-colors hover:bg-surface2/60"
+                title={t("pension.drillOpen")}
+              >
+                <div className="w-44 shrink-0 truncate text-sm text-body">
                   {dim.label}
                   <span className="ml-1 text-[11px] text-muted">({fmtPct(dim.weight * 100, 0)})</span>
                 </div>
@@ -105,12 +122,53 @@ function DetailCard({ slug }: { slug: string }) {
                   ) : (
                     <Chip tone="muted">{t("pension.noData")}</Chip>
                   )}
+                  <ChevronRight size={14} className="ml-1 inline text-faint" />
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </Card>
+
+      {drillKey && (
+        <PensionDrillDrawer
+          eyebrow={`${d.name} · ${d.period ?? ""}`}
+          title={d.dimensions.find((x) => x.key === drillKey)?.label ?? drillKey}
+          depsKey={`${slug}:${drillKey}`}
+          fetcher={(withAi, audience, deep) => getPensionDimension(slug, drillKey, withAi, audience, deep)}
+          shouldFetchAi={(data) => data.dimension?.present === true}
+          onClose={() => setDrillKey(null)}
+          renderDetail={(data) => {
+            const dim = data.dimension;
+            return (
+              <>
+                <div className="flex items-end justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-xs text-muted mb-1">
+                      {t("pension.drillWeight", { n: fmtPct(dim.weight * 100, 0) })} · {dim.direction === "higher" ? t("pension.dirHigher") : t("pension.dirLower")}
+                    </div>
+                    <div className="text-3xl font-semibold text-ink mono tabular-nums">{fmtDimRaw(dim.key, dim.raw)}</div>
+                    <div className="text-xs text-muted mt-1">{t("pension.drillRelScore")}: <span className="mono text-body">{dim.present ? fmtNum(dim.score, 1) : "—"}</span></div>
+                  </div>
+                  {dim.provenance === "brecha"
+                    ? <Chip tone="warn">{t("pension.provGap")}</Chip>
+                    : dim.present ? <Chip tone="ok">{t("pension.provReal")}</Chip> : <Chip tone="muted">{t("pension.noData")}</Chip>}
+                </div>
+                {data.trend.length > 1 && (
+                  <section>
+                    <div className="mb-2 text-sm font-medium text-ink">{t("pension.drillTrend")}</div>
+                    <PensionTrend points={data.trend} unit={dim.key === "rentabilidad" ? "%" : undefined} />
+                  </section>
+                )}
+                <section>
+                  <div className="mb-2 text-sm font-medium text-ink">{t("pension.drillPeers")}</div>
+                  <PeerBars peers={data.peers} focusAfp={data.afp} unit={dim.key === "rentabilidad" ? "%" : undefined} />
+                </section>
+              </>
+            );
+          }}
+        />
+      )}
 
       <div className="mt-5">
         <AiInsightCard

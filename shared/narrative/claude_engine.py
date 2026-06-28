@@ -341,6 +341,34 @@ THIN_TEMPLATES = {
         "(no una serie). No emitas juicio de riesgo crediticio de un emisor individual; lee "
         "concentración, diversificación y rol institucional."
     ),
+    "pension_system_indicator": (
+        "Explica EN PROFUNDIDAD un SOLO indicador del sistema dominicano de pensiones "
+        "(SIPEN, dato real), no el sistema entero:\n{context}\n\n"
+        "Máximo 220 palabras. Lee: (1) el nivel actual y qué significa para la salud del "
+        "sistema; (2) la TENDENCIA (la serie provista) — dirección, aceleración o reversión a "
+        "la media, sin sobre-leer un mes; (3) el 'y por tanto' para la audiencia. RENTABILIDAD "
+        "es NOMINAL (no afirmes real ni descuentes inflación si no está en el contexto). Usa solo "
+        "las cifras del contexto; si una relación no está precalculada, exprésala sin número."
+    ),
+    "pension_afp_dimension": (
+        "Explica EN PROFUNDIDAD una SOLA dimensión del Índice de Solidez (ISA) de una AFP "
+        "(SIPEN, dato real), no el ISA completo:\n{context}\n\n"
+        "Máximo 220 palabras. NO es un rating crediticio ni un veredicto absoluto: el score de la "
+        "dimensión es POSICIÓN RELATIVA (peer min-max) entre las AFP. Lee: (1) el valor real de la "
+        "AFP en esta dimensión y su POSICIÓN frente a los pares (rank); (2) la TENDENCIA si se "
+        "provee; (3) qué implica para la solidez relativa y el 'y por tanto' para la audiencia. "
+        "PROCEDENCIA: si la dimensión es SOLVENCIA y es brecha declarada (sin estados financieros), "
+        "dilo y NO inventes cifra. Usa solo las cifras del contexto."
+    ),
+    "pension_cartera_item": (
+        "Explica EN PROFUNDIDAD una SOLA posición de la cartera de inversiones de los fondos de "
+        "pensiones (SIPEN, Cuadro 6.1 del boletín — dato real), no la cartera entera:\n{context}\n\n"
+        "Máximo 220 palabras. Lee: (1) el peso de esta posición (emisor o sub-sector) en la cartera "
+        "y qué implica su concentración; (2) su NATURALEZA — deuda pública (exposición soberana del "
+        "ahorro), Banco Central, banca (fondeo institucional) o sector privado/real (diversificación); "
+        "(3) el 'y por tanto' para la audiencia. Es una FOTO trimestral; NO emitas juicio de riesgo "
+        "crediticio del emisor. Usa solo las cifras del contexto (montos RD$ y %)."
+    ),
     "risk_assessment": (
         "Explica el FUNDAMENTO del riesgo macro-político (IRMP) de este país.\n"
         "Contexto:\n{context}\n\n"

@@ -181,6 +181,71 @@ export async function getPensionCarteraInsight(
   return (data.ai_insight as AiInsight | null) ?? null;
 }
 
+// ── Drill-down por indicador (estilo banca: detalle + tendencia + pares + insight IA) ──
+export interface PensionTrendPoint { period: string; value: number }
+
+/** System-indicator drill-down: level + full trend + its own AI insight. */
+export interface PensionIndicatorDetail {
+  found: boolean;
+  code: string;
+  label: string;
+  unit: string | null;
+  latest: { value: number; period: string };
+  trend: PensionTrendPoint[];
+  ai_insight: AiInsight | null;
+}
+
+export async function getPensionIndicator(
+  code: string, withAi: boolean, audience: string, deep = false,
+): Promise<PensionIndicatorDetail> {
+  const { data } = await client.get("/pension-intel/indicator", {
+    params: { code, with_ai: withAi, audience, ...(deep ? { deep: true } : {}) },
+  });
+  return data;
+}
+
+export interface PensionDimPeer { afp: string; raw: number | null; score: number | null }
+
+/** AFP-dimension drill-down: value + score + peer panel + trend + its own AI insight. */
+export interface PensionDimensionDetail {
+  found: boolean;
+  slug: string;
+  afp: string;
+  period: string | null;
+  dimension: PensionDimension;
+  peers: PensionDimPeer[];
+  trend: PensionTrendPoint[];
+  ai_insight: AiInsight | null;
+}
+
+export async function getPensionDimension(
+  slug: string, key: string, withAi: boolean, audience: string, deep = false,
+): Promise<PensionDimensionDetail> {
+  const { data } = await client.get(`/pension-intel/${slug}/dimension`, {
+    params: { key, with_ai: withAi, audience, ...(deep ? { deep: true } : {}) },
+  });
+  return data;
+}
+
+/** Cartera-position drill-down: weight + nature + its own AI insight. */
+export interface PensionCarteraHoldingDetail {
+  found: boolean;
+  period: string | null;
+  fund: string;
+  total: number;
+  holding: PensionHolding;
+  ai_insight: AiInsight | null;
+}
+
+export async function getPensionCarteraHolding(
+  issuerSlug: string, withAi: boolean, audience: string, deep = false, period?: string,
+): Promise<PensionCarteraHoldingDetail> {
+  const { data } = await client.get("/pension-intel/cartera/holding", {
+    params: { issuer_slug: issuerSlug, with_ai: withAi, audience, ...(period ? { period } : {}), ...(deep ? { deep: true } : {}) },
+  });
+  return data;
+}
+
 // Headline series codes (system level) — stable keys from the backend.
 export const HEADLINE_CCI = "sipen.rentabilidad.cci_nominal_anual";
 export const HEADLINE_SDP = "sipen.rentabilidad.sdp_nominal_anual";

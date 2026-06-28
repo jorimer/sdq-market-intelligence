@@ -32,6 +32,7 @@ _AUDIENCES = {"inversionista", "regulador", "afiliado", "gobierno"}
 
 async def _ai_insight(
     context: Dict[str, Any], audience: str = "inversionista", deep: bool = False,
+    template: str = "pension_pulse",
 ) -> Dict[str, Any] | None:
     """Claude narrative via the cerebro route (axis=pension_intel); best-effort
     (returns None on any failure so the endpoint never breaks). Without an API key
@@ -39,12 +40,12 @@ async def _ai_insight(
     try:
         from shared.narrative.claude_engine import narrative_engine
         res = await narrative_engine.generate(
-            context, template="pension_pulse", mode="deep" if deep else "detailed",
+            context, template=template, mode="deep" if deep else "detailed",
             axis="pension_intel", audience=audience,
         )
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
     except Exception as e:  # noqa: BLE001 — AI is best-effort, never break the endpoint
-        logger.warning("AI insight pensiones no disponible: %s", e)
+        logger.warning("AI insight pensiones (%s) no disponible: %s", template, e)
         return None
 
 
@@ -485,3 +486,134 @@ async def trigger_cartera_sync(
     """Trigger the live cartera sync (admin only). Discovers the latest bulletin on SIPEN."""
     from shared.operations.service import trigger
     return trigger("sipen-cartera-sync", origin="api", user_id=current_user.id)
+
+
+# ── Drill-down por indicador (estilo banca: detalle + tendencia + pares + insight IA) ──
+# Two-phase: el frontend pide con ?with_ai=false el detalle instantáneo (valor/tendencia/
+# pares) y luego con ?with_ai=true la narrativa Cerebro de ESE indicador/dimensión/posición.
+
+# Etiquetas legibles de los indicadores del sistema (para el contexto IA; la UI i18n por code).
+_SYSTEM_INDICATORS: Dict[str, str] = {
+    "sipen.rentabilidad.cci_nominal_anual": "Rentabilidad nominal CCI",
+    "sipen.rentabilidad.sdp_nominal_anual": "Rentabilidad nominal del sistema (SDP)",
+    "sipen.comisiones.total_anual": "Comisiones del sistema",
+    "sipen.afiliados.total": "Afiliados",
+    "sipen.cotizantes.total": "Cotizantes",
+    "sipen.salario_minimo_cotizable": "Salario mínimo cotizable",
+    "sipen.patrimonio.crecimiento_anual": "Crecimiento del patrimonio",
+}
+# AFP dimension key → the per-AFP PensionSeries metric whose history is the trend (ratio
+# dims have no single series → no trend line).
+_DIM_TREND_METRIC: Dict[str, str] = {
+    "rentabilidad": "rentabilidad_nominal_anual",
+    "escala": "fondos_administrados",
+}
+
+
+@router.get("/indicator")
+async def system_indicator(
+    code: str = Query(..., description="Código de serie del sistema, p.ej. sipen.rentabilidad.cci_nominal_anual"),
+    with_ai: bool = Query(False),
+    audience: str = Query("inversionista"),
+    deep: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Drill-down de UN indicador del sistema: nivel actual + tendencia + insight IA propio."""
+    rows = (db.query(PensionSeries)
+            .filter(PensionSeries.entity_slug.is_(None), PensionSeries.series_code == code,
+                    PensionSeries.value.isnot(None))
+            .order_by(PensionSeries.period.asc()).all())
+    if not rows:
+        return {"found": False, "code": code}
+    points = [(r.period, r.value) for r in rows]
+    label = _SYSTEM_INDICATORS.get(code, code)
+    unit = rows[-1].unit
+    ai = None
+    if with_ai:
+        from modules.pension_intel.ai_context import pension_indicator_context
+        aud = audience if audience in _AUDIENCES else "inversionista"
+        ai = await _ai_insight(pension_indicator_context(code, label, unit, points),
+                               audience=aud, deep=deep, template="pension_system_indicator")
+    return {
+        "found": True, "code": code, "label": label, "unit": unit,
+        "latest": {"value": points[-1][1], "period": points[-1][0]},
+        "trend": [{"period": p, "value": v} for p, v in points],
+        "ai_insight": ai,
+    }
+
+
+@router.get("/{slug}/dimension")
+async def afp_dimension(
+    slug: str,
+    key: str = Query(..., description="Dimensión del ISA: solvencia | rentabilidad | escala | costo"),
+    with_ai: bool = Query(False),
+    audience: str = Query("inversionista"),
+    deep: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Drill-down de UNA dimensión del ISA de una AFP: valor + posición vs pares + tendencia + insight IA."""
+    from modules.pension_intel.scoring.isa import compute_isa
+    results = compute_isa(db)
+    me = next((r for r in results if r["slug"] == slug), None)
+    if me is None:
+        return {"found": False, "slug": slug}
+    dim = next((d for d in me["dimensions"] if d["key"] == key), None)
+    if dim is None:
+        return {"found": False, "slug": slug, "key": key}
+    peers = [{"afp": r["name"],
+              "raw": next((d["raw"] for d in r["dimensions"] if d["key"] == key), None),
+              "score": next((d["score"] for d in r["dimensions"] if d["key"] == key), None)}
+             for r in results]
+    trend: List = []
+    metric = _DIM_TREND_METRIC.get(key)
+    if metric:
+        trows = (db.query(PensionSeries)
+                 .filter(PensionSeries.entity_slug == slug, PensionSeries.series_code == metric,
+                         PensionSeries.value.isnot(None))
+                 .order_by(PensionSeries.period.asc()).all())
+        trend = [(r.period, r.value) for r in trows]
+    ai = None
+    if with_ai and dim["present"]:
+        from modules.pension_intel.ai_context import pension_dimension_context
+        aud = audience if audience in _AUDIENCES else "inversionista"
+        ai = await _ai_insight(pension_dimension_context(me["name"], dim, peers, trend),
+                               audience=aud, deep=deep, template="pension_afp_dimension")
+    return {
+        "found": True, "slug": slug, "afp": me["name"], "period": me["period"],
+        "dimension": dim,
+        "peers": peers,
+        "trend": [{"period": p, "value": v} for p, v in trend],
+        "ai_insight": ai,
+    }
+
+
+@router.get("/cartera/holding")
+async def cartera_holding(
+    issuer_slug: str = Query(..., description="issuer_slug de la posición de cartera"),
+    period: Optional[str] = Query(None),
+    fund: str = Query("cci"),
+    with_ai: bool = Query(False),
+    audience: str = Query("inversionista"),
+    deep: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Drill-down de UNA posición de la cartera (emisor o sub-sector): peso + naturaleza + insight IA."""
+    data = _build_cartera(db, period, fund)
+    if not data.get("found"):
+        return {"found": False, "issuer_slug": issuer_slug}
+    h = next((x for x in data["holdings"] if x["issuer_slug"] == issuer_slug), None)
+    if h is None:
+        return {"found": False, "issuer_slug": issuer_slug, "period": data["period"]}
+    ai = None
+    if with_ai:
+        from modules.pension_intel.ai_context import pension_cartera_item_context
+        aud = audience if audience in _AUDIENCES else "inversionista"
+        ai = await _ai_insight(pension_cartera_item_context(h, data["total"], data["period"]),
+                               audience=aud, deep=deep, template="pension_cartera_item")
+    return {
+        "found": True, "period": data["period"], "fund": fund,
+        "total": data["total"], "holding": h, "ai_insight": ai,
+    }
