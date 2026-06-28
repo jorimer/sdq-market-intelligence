@@ -366,3 +366,88 @@ async def trigger_financials_sync(
     """Trigger the live estados-financieros sync (admin only). Runs from Railway."""
     from shared.operations.service import trigger
     return trigger("sipen-financials-sync", origin="api", user_id=current_user.id)
+
+
+# ── Cartera de inversiones (portfolio composition, Cuadro 6.1 del boletín) ──────
+def _holding_payload(h) -> Dict[str, Any]:
+    return {
+        "sub_sector": h.sub_sector, "issuer": h.issuer, "issuer_slug": h.issuer_slug,
+        "amount": h.amount, "pct": h.pct, "is_subtotal": h.is_subtotal,
+        "macro_class": h.macro_class, "bank_entity_slug": h.bank_entity_slug,
+    }
+
+
+@router.get("/cartera")
+async def cartera(
+    period: Optional[str] = Query(None, description="Trimestre, p.ej. 2026-Q1 (por defecto el último)"),
+    fund: str = Query("cci", description="Fondo (cci)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Composición de la cartera de inversiones de los fondos por emisor (Cuadro 6.1).
+
+    Devuelve las tenencias (emisores + subtotales por sub-sector) del fondo y período, más
+    un resumen con las concentraciones clave (deuda pública / BCRD). Sin período → el último."""
+    from modules.pension_intel.models.models import PensionHolding
+
+    q = db.query(PensionHolding).filter(PensionHolding.fund == fund)
+    if period is None:
+        latest = q.order_by(PensionHolding.period.desc()).first()
+        if latest is None:
+            return {"found": False, "fund": fund, "holdings": []}
+        period = latest.period
+    rows = (q.filter(PensionHolding.period == period)
+            .order_by(PensionHolding.amount.desc().nullslast()).all())
+    if not rows:
+        return {"found": False, "fund": fund, "period": period, "holdings": []}
+
+    leaves = [r for r in rows if not r.is_subtotal]
+    total = sum(r.amount for r in leaves if r.amount is not None)
+
+    def _class_total(macro_class: str) -> float:
+        return sum(r.amount for r in leaves
+                   if r.macro_class == macro_class and r.amount is not None)
+
+    public_debt = _class_total("deuda_publica")
+    bcrd = _class_total("bcrd")
+    return {
+        "found": True, "fund": fund, "period": period,
+        "total": total,
+        "summary": {
+            "public_debt_amount": public_debt,
+            "public_debt_pct": round(public_debt / total * 100, 2) if total else None,
+            "bcrd_amount": bcrd,
+            "bcrd_pct": round(bcrd / total * 100, 2) if total else None,
+            "issuer_count": len(leaves),
+        },
+        "holdings": [_holding_payload(r) for r in rows],
+    }
+
+
+@router.post("/cartera/upload")
+async def upload_cartera(
+    file: UploadFile = File(..., description="Boletín Trimestral SIPEN (PDF)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Carga manual de un Boletín Trimestral (PDF) → extrae el Cuadro 6.1 → persiste cartera."""
+    from modules.pension_intel.cartera_sync import ingest_cartera
+    from modules.pension_intel.external.cartera_extractor import CarteraExtractionError
+    content = await file.read()
+    try:
+        result = ingest_cartera(db, content, file.filename or "boletin.pdf")
+    except CarteraExtractionError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Carga de boletín (cartera) falló")
+        raise HTTPException(status_code=500, detail=f"No se pudo procesar el boletín: {e}")
+    return {"ok": True, **result}
+
+
+@router.post("/cartera/sync")
+async def trigger_cartera_sync(
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Trigger the live cartera sync (admin only). Discovers the latest bulletin on SIPEN."""
+    from shared.operations.service import trigger
+    return trigger("sipen-cartera-sync", origin="api", user_id=current_user.id)

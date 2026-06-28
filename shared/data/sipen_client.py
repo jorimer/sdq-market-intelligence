@@ -272,6 +272,42 @@ def parse_rentabilidad_xlsx(
         wb.close()
 
 
+# ── Boletín Trimestral (cartera de inversiones, channel C) ──────────────────────
+# The quarterly bulletin (PDF) carries Cuadro 6.1 — the funds' portfolio by issuer.
+# Discovery is label-based (aria-label="Descargar documento Boletín Trimestral No. NN …"),
+# the latest = highest bulletin number. The PDF is machine-readable (parsed by
+# modules.pension_intel.external.cartera_extractor — no OCR).
+_BOLETIN_PAGE = "https://sipen.gob.do/publicaciones/boletines-trimestrales"
+
+
+def boletin_pdf_links(html: str) -> List[Tuple[int, str]]:
+    """``[(numero, url)]`` of the quarterly bulletins on the publications page.
+
+    Keys on the card aria-label "Boletín Trimestral No. NN - …"; the number lets the
+    caller pick the latest. Pure (no network)."""
+    import re
+
+    pat = re.compile(
+        r'href="(https://sipen\.gob\.do/descarga/[^"]+\.pdf)"[^>]*'
+        r'aria-label="Descargar documento Bolet[ií]n Trimestral No\.?\s*(\d+)',
+        re.IGNORECASE,
+    )
+    return [(int(num), url) for url, num in pat.findall(html)]
+
+
+def fetch_latest_boletin() -> Optional[Tuple[int, bytes]]:  # pragma: no cover - network I/O
+    """``(numero, pdf_bytes)`` of the most recent quarterly bulletin, or None."""
+    import httpx
+
+    with httpx.Client(timeout=90, headers=_CKAN_HEADERS, follow_redirects=True) as http:
+        links = boletin_pdf_links(http.get(_BOLETIN_PAGE).text)
+        if not links:
+            logger.warning("[SIPEN] no se hallaron boletines en %s", _BOLETIN_PAGE)
+            return None
+        num, url = max(links, key=lambda t: t[0])
+        return num, http.get(url).content
+
+
 def fetch_sipen_rentabilidad(  # pragma: no cover - network I/O
     period: Optional[str] = None,
 ) -> Tuple[List[Record], List[Record]]:
