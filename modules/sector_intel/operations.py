@@ -100,12 +100,17 @@ def _run_sector_gate_e(params, user_id, set_phase) -> Dict:
 
 
 def register() -> None:
+    # Grafo de dependencias (cascada): toda fuente del IAI, al sincronizar con éxito,
+    # dispara el re-score (sector-snapshot); este dispara el backtest (sector-gate-e); y
+    # el recompute de readiness ya corre por el evento sector.updated. Así el dato nuevo
+    # re-puntúa y re-valida SOLO, sin disparo manual (cierre del lazo de auto-mejora).
     register_operation(Operation(
         "bcrd-sectores-sync", "Sincronizar sectores (BCRD · valor agregado)",
         "Trae el valor agregado por actividad económica del BCRD (PIB por sectores "
         "de origen, base 2018): tamaño (share del VAB) y crecimiento real interanual "
         "para los ~17 sectores de la economía, y los persiste para el IAI.",
         _run_bcrd_sectores_sync, default_interval_hours=2160,  # cuentas nac. ~trimestral → trimestral
+        triggers=["sector-snapshot"],
     ))
     register_operation(Operation(
         "wgi-sectorial-sync", "Sincronizar regulación (WGI · calidad regulatoria)",
@@ -115,6 +120,7 @@ def register() -> None:
         "sectores (no cambia el ranking, mejora la procedencia). Corre antes del "
         "backfill del índice.",
         _run_wgi_regulatory_sync, default_interval_hours=2160,
+        triggers=["sector-snapshot"],
     ))
     register_operation(Operation(
         "encft-empleo-sync", "Sincronizar empleo (ONE · ENCFT por actividad)",
@@ -124,6 +130,7 @@ def register() -> None:
         "(crecimiento del empleo por rama) y el insumo del que luego se deriva la "
         "disponibilidad laboral del IAI. Anual.",
         _run_encft_empleo_sync, default_interval_hours=8760,  # serie anual → anual
+        triggers=["sector-snapshot"],
     ))
     register_operation(Operation(
         "enae-sync", "Sincronizar actividad económica (ONE · ENAE estructural)",
@@ -134,6 +141,7 @@ def register() -> None:
         "una señal de rentabilidad al IAI; cubre 9 de los 17 sectores (incluido "
         "Comercio). Anual.",
         _run_enae_sync, default_interval_hours=8760,  # serie anual → anual
+        triggers=["sector-snapshot"],
     ))
     register_operation(Operation(
         "tss-salario-sync", "Sincronizar costo operativo (TSS · salario por actividad)",
@@ -142,6 +150,7 @@ def register() -> None:
         "dimensión negocios del IAI. Es una foto transversal del último año completo, "
         "aplicada a todos los períodos (como la calidad regulatoria WGI). Anual.",
         _run_tss_salario_sync, default_interval_hours=8760,
+        triggers=["sector-snapshot"],
     ))
     register_operation(Operation(
         "sector-snapshot", "Backfill del índice sectorial (IAI/SGPS)",
@@ -150,6 +159,7 @@ def register() -> None:
         "período actual y rúbrica declarada para el resto, y purga cualquier score "
         "fuera del backfill (sin restos de fixture). Publica sector.updated.",
         _run_sector_snapshot, default_interval_hours=2160,
+        triggers=["sector-gate-e"],  # re-puntuar → re-validar (Gate E con la nueva varianza)
     ))
     register_operation(Operation(
         "sector-gate-e", "Backtest sectorial (Gate E · empleo formal)",
