@@ -147,6 +147,11 @@ def render_product_pdf(
     safe = re.sub(r"[^a-z0-9]+", "_", display_name.lower()).strip("_")
     path = os.path.join(out_dir, f"{sector_key}_{safe}_{ts}.pdf")
 
+    # Títulos de las secciones ESTÁNDAR auto-generadas (metodología/fuentes): se mergean
+    # como default para que el PDF las titule bien aunque el producto no las declare.
+    from shared.products.report_sections import STANDARD_SECTION_TITLES
+    section_titles = {**STANDARD_SECTION_TITLES, **(section_titles or {})}
+
     styles = _styles()
     el: List = [
         Spacer(1, 1.3 * inch),

@@ -1728,7 +1728,9 @@
         "irc_assessment": "Évaluation de la résilience (IRC)",
         "panel_position": "Position dans le panel",
         "recommendation": "Recommandation",
-        "limitations": "Limites"
+        "limitations": "Limites",
+        "std_methodology": "Méthodologie et sources",
+        "std_sources": "Sources et références"
       },
       "staffPreview": "Vue interne",
       "staffPreviewBanner": "Vue interne de l'équipe — pas l'expérience client.",

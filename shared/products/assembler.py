@@ -24,11 +24,16 @@ from shared.products.tiers import Granularity, ProductTier, TierLevelSpec
 class ProductContent:
     """Contenido estructurado de un (sector, nivel), ya con el sensor de anonimización
     aplicado. Lo comparten la vista in-app (JSON) y la descarga PDF: ambas parten del
-    MISMO snapshot + narrativas, sin re-implementar la doctrina de cada superficie."""
+    MISMO snapshot + narrativas, sin re-implementar la doctrina de cada superficie.
+
+    ``section_order`` es el orden canónico de secciones a renderizar: las del nivel del
+    producto + las secciones ESTÁNDAR auto-generadas (metodología/fuentes) anexadas al
+    final (ver docs/REPORT_STANDARD.md). Las superficies iteran este orden."""
 
     level: TierLevelSpec
     snapshot: ProductSnapshot
     narratives: Dict[str, str]
+    section_order: tuple = ()
 
 
 def _assert_system_payload(product: SectorProduct, tier: ProductTier,
@@ -62,8 +67,16 @@ async def _content_from_snapshot(
     de anonimización Pulse y produce las narrativas vía el motor. NO renderiza."""
     level = _assert_system_payload(product, tier, snapshot)
     narratives = await product.narratives(tier, snapshot, lang)
+    # Secciones ESTÁNDAR auto-generadas (metodología/fuentes) — nuestra ventaja honesta.
+    # Se anexan tras las del producto; las heredan online y PDF (docs/REPORT_STANDARD.md).
+    from shared.products.report_sections import standard_sections
+    std = standard_sections(product, tier)
+    if std:
+        narratives = {**narratives, **std}
     _assert_system_narratives(level, snapshot, narratives)
-    return ProductContent(level=level, snapshot=snapshot, narratives=narratives)
+    order = tuple(level.sections) + tuple(k for k in std if k not in level.sections)
+    return ProductContent(level=level, snapshot=snapshot, narratives=narratives,
+                          section_order=order)
 
 
 async def assemble_product_content(
