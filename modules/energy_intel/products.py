@@ -298,18 +298,27 @@ class EnergyProduct:
                  "deep_dive": "Deep Dive Energía"}.get(tier.value, "Energía")
         display = ("Sistema Eléctrico Nacional · RD" if tier == ProductTier.pulse else DISPLAY)
         tables: List = []
+        charts: List = []
         index = (snapshot.payload or {}).get("index") or {}
         dims = index.get("dimensions") or {}
         if dims:
+            labels = {"capacity_adequacy": "Adecuación de capacidad",
+                      "service_quality": "Calidad de servicio",
+                      "energy_transition": "Transición energética"}
             rows = [["Dimensión", "Score", "Peso"]] + [
-                [str(k), _fmt((d or {}).get("score")), _fmt((d or {}).get("weight"))]
+                [labels.get(k, k), _fmt((d or {}).get("score")), _fmt((d or {}).get("weight"))]
                 for k, d in dims.items()]
             tables.append(("Dimensiones del IRSE", rows))
+            items = [(labels.get(k, k), (d or {}).get("score")) for k, d in dims.items()]
+            charts.append({"title": "Dimensiones del IRSE (score 0-100)", "items": items})
+        sc = index.get("energy_score")
+        headline = (f"IRSE {_fmt(sc)} · {index.get('band')}" if sc is not None else None)
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
-            section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
-            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
+            section_titles=_SECTION_TITLES, tables=tables, charts=charts, headline=headline,
+            subtitle=None, watermark=level.watermark, sample=sample,
+            output_dir=output_dir, fmt=fmt)
 
 
 register_product(SECTOR_KEY, lambda db: EnergyProduct(db))
