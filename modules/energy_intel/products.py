@@ -31,6 +31,7 @@ from shared.products import (
     SectorProductManifest,
     TierLevelSpec,
     ValidationState,
+    distinct_periods,
     register_product,
 )
 from shared.products.render import render_product_pdf
@@ -203,6 +204,9 @@ class EnergyProduct:
 
     def has_engine(self) -> bool:
         return self._latest() is not None
+
+    def available_periods(self) -> List[str]:
+        return distinct_periods(self._require_db(), EnergyScore.period)
 
     def validation_state(self) -> ValidationState:
         # Índice PRELIMINAR: las 3 dimensiones sobre dato real, pero SIN backtest de

@@ -32,6 +32,7 @@ from shared.products import (
     SectorProductManifest,
     TierLevelSpec,
     ValidationState,
+    distinct_periods,
     register_product,
 )
 from shared.products.render import render_product_pdf
@@ -40,6 +41,7 @@ from modules.pension_intel.ai_context import (
     pension_entity_context,
     pension_peer_context,
 )
+from modules.pension_intel.models.models import PensionSnapshot
 from modules.pension_intel.scoring.isa import compute_isa
 from modules.pension_intel.service import build_system_pulse
 from shared.data.sipen_client import afp_catalog
@@ -390,6 +392,9 @@ class PensionProduct:
 
     def has_engine(self) -> bool:
         return bool(_isa_results(self._require_db()))
+
+    def available_periods(self) -> List[str]:
+        return distinct_periods(self._require_db(), PensionSnapshot.period)
 
     def validation_state(self) -> ValidationState:
         # Sin backtest de outcomes: el ISA es metodología parcial declarada, no validada

@@ -180,6 +180,18 @@ async def get_catalog(db: Session = Depends(get_db),
     return {"sectors": sectors, "user_tier": user_tier}
 
 
+@router.get("/{sector}/periods", summary="Períodos disponibles del producto (para el selector)")
+async def get_product_periods(sector: str, db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Períodos reales del producto (más reciente primero) para el selector del reporte.
+    Vacío si el producto no expone ``available_periods`` → el front cae al período global."""
+    _require_sector(sector)
+    product = get_product(sector, db)
+    fn = getattr(product, "available_periods", None) if product is not None else None
+    periods = fn() if callable(fn) else []
+    return {"sector": sector, "periods": periods}
+
+
 @router.get("/{sector}/scope-options", summary="Entidades elegibles de los niveles nombrados")
 async def get_scope_options(sector: str, db: Session = Depends(get_db),
                             current_user: User = Depends(get_current_user)) -> Dict[str, Any]:

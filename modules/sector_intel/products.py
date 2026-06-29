@@ -43,6 +43,7 @@ from shared.products import (
     SectorProductManifest,
     TierLevelSpec,
     ValidationState,
+    distinct_periods,
     register_product,
 )
 from shared.products.render import render_product_pdf
@@ -311,6 +312,10 @@ class SectorIntelProduct:
 
     def has_engine(self) -> bool:
         return self._latest() is not None
+
+    def available_periods(self) -> List[str]:
+        return distinct_periods(self._require_db(), SectorScore.period,
+                                where=SectorScore.sector_code == self._sector_code)
 
     def validation_state(self) -> ValidationState:
         # Gate E sectorial DEFERIDO (lo desbloquea dato por sector, no backtest); el IAI

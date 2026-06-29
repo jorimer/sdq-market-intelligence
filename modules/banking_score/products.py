@@ -15,7 +15,7 @@ verifica con el roster que ``snapshot`` adjunta).
 from __future__ import annotations
 
 from datetime import date
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -28,6 +28,7 @@ from shared.products import (
     SectorProductManifest,
     TierLevelSpec,
     ValidationState,
+    distinct_periods,
 )
 from modules.banking_score.models.models import Bank, ModelType, RatingResult
 from modules.banking_score.reports.narrative import generate_named_narratives
@@ -284,6 +285,9 @@ class BankingProduct:
     def has_engine(self) -> bool:
         db = self._require_db()
         return (db.query(func.count(RatingResult.id)).scalar() or 0) > 0
+
+    def available_periods(self) -> List[str]:
+        return distinct_periods(self._require_db(), RatingResult.period_end)
 
     def validation_state(self) -> ValidationState:
         # Banca es el eje "Listo" (en producción, metodología de 19 indicadores
