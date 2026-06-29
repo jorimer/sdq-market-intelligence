@@ -24,9 +24,10 @@ def _score_payload(s) -> Dict[str, Any]:
         "has_score": True, "period": s.period, "energy_score": s.energy_score,
         "band": s.band, "coverage": s.coverage, "capacity_mw": s.capacity_mw,
         "capacity_score": s.capacity_score, "service_score": s.service_score,
+        "transition_score": s.transition_score,
         "dimensions": bd.get("dimensions", {}), "capacity": bd.get("capacity", {}),
-        "service": bd.get("service", {}), "model_version": s.model_version,
-        "source": "SIE",
+        "service": bd.get("service", {}), "transition": bd.get("transition", {}),
+        "model_version": s.model_version, "source": "SIE + ONE",
     }
 
 
@@ -46,7 +47,8 @@ async def latest_score(
     "/insight",
     summary="Perspectiva de IA de la resiliencia eléctrica (IRSE) — fase 2, lento (~10-15s)",
     description="Narrativa que explica el IRSE: adecuación de capacidad y calidad de "
-    "servicio (dato real SIE); la transición renovable es brecha declarada.",
+    "servicio (SIE) y transición renovable de la matriz (ONE) — las 3 dimensiones con "
+    "dato real.",
 )
 async def insight(
     period: Optional[str] = Query(None),
@@ -65,7 +67,7 @@ async def insight(
     bd = s.breakdown or {}
     index = {"energy_score": s.energy_score, "band": s.band, "coverage": s.coverage,
              "dimensions": bd.get("dimensions", {}), "capacity": bd.get("capacity", {}),
-             "service": bd.get("service", {})}
+             "service": bd.get("service", {}), "transition": bd.get("transition", {})}
     ai = None
     try:
         from shared.narrative.claude_engine import narrative_engine
