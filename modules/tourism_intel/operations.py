@@ -6,14 +6,14 @@ from shared.operations import Operation, register_operation
 
 
 def _run_tourism_sync(params, user_id, set_phase) -> Dict:
-    """Fetch ONE open data (non-resident air arrivals) and persist the ITT."""
-    from modules.tourism_intel.service import compute_and_persist
+    """Fetch ONE open data (non-resident air arrivals) and persist the ITT for every year."""
+    from modules.tourism_intel.service import backfill_scores
 
     set_phase("descargando llegadas de no residentes (ONE, datos.gob.do)")
     db = SessionLocal()
     try:
-        set_phase("calculando ITT (tracción turística del destino RD)")
-        return compute_and_persist(db)
+        set_phase("calculando ITT por año (tracción turística del destino RD)")
+        return backfill_scores(db)
     finally:
         db.close()
 

@@ -6,14 +6,14 @@ from shared.operations import Operation, register_operation
 
 
 def _run_cnzfe_sync(params, user_id, set_phase) -> Dict:
-    """Fetch CNZFE open data (free-zone fundamentals) and persist the IZF."""
-    from modules.free_zones_intel.service import compute_and_persist
+    """Fetch CNZFE open data (free-zone fundamentals) and persist the IZF for every year."""
+    from modules.free_zones_intel.service import backfill_scores
 
     set_phase("descargando variables del sector zonas francas (CNZFE, datos.gob.do)")
     db = SessionLocal()
     try:
-        set_phase("calculando IZF (atractividad del sector zonas francas)")
-        return compute_and_persist(db)
+        set_phase("calculando IZF por año (atractividad del sector zonas francas)")
+        return backfill_scores(db)
     finally:
         db.close()
 

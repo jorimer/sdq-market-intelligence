@@ -72,6 +72,17 @@ def db():
         s.close()
 
 
+def test_backfill_scores_persists_per_year(db):
+    from modules.free_zones_intel.service import backfill_scores, get_scores
+    v = parse_free_zone_vars(_CSV)  # 2021-2024
+    r = backfill_scores(db, vars_by_year=v)
+    # solo 2024 tiene base de CAGR a 3 años (2021) dentro del subconjunto → 1 año
+    assert r["persisted_periods"] == ["2024"] and r["latest"] == "2024"
+    assert {s.period for s in get_scores(db)} == {"2024"}
+    backfill_scores(db, vars_by_year=v)  # idempotente
+    assert len(get_scores(db)) == 1
+
+
 def test_compute_and_persist_idempotent(db):
     v = parse_free_zone_vars(_CSV)
     r1 = compute_and_persist(db, vars_by_year=v)

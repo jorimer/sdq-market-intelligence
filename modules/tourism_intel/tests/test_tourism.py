@@ -108,6 +108,17 @@ def db():
         s.close()
 
 
+def test_backfill_scores_persists_per_year(db):
+    from modules.tourism_intel.service import backfill_scores, get_scores
+    a = parse_arrivals(_CSV)  # 2019, 2022, 2023, 2024, 2025
+    r = backfill_scores(db, arrivals_by_year=a)
+    # 2022 (base 2019) y 2025 (base 2022) tienen CAGR a 3 años; 2023/2024 no
+    assert r["persisted_periods"] == ["2022", "2025"] and r["latest"] == "2025"
+    assert {s.period for s in get_scores(db)} == {"2022", "2025"}
+    backfill_scores(db, arrivals_by_year=a)  # idempotente
+    assert len(get_scores(db)) == 2
+
+
 def test_compute_and_persist_idempotent(db):
     a = parse_arrivals(_CSV)
     r1 = compute_and_persist(db, arrivals_by_year=a)

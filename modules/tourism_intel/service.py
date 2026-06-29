@@ -35,16 +35,8 @@ def assemble_tourism_dataset(
     return {"period": period, "index": index}
 
 
-def compute_and_persist(
-    db: Session,
-    arrivals_by_year: Optional[Dict[int, Dict[str, object]]] = None,
-) -> Dict[str, Any]:
-    """Compute the ITT for the latest year, persist it and publish ``tourism.updated``.
-
-    Idempotent per period: re-running replaces the score in place."""
-    asm = assemble_tourism_dataset(arrivals_by_year)
-    period, index = asm["period"], asm["index"]
-
+def _write_score(db: Session, period: str, index: Dict[str, Any]) -> TourismScore:
+    """Upsert (sin commit) la fila ITT de un período. Reusado por compute y backfill."""
     row = db.query(TourismScore).filter_by(period=period).first()
     if row is None:
         row = TourismScore(period=period)
@@ -59,7 +51,20 @@ def compute_and_persist(
                      "foreign_demand": index["foreign_demand"], "recovery": index["recovery"],
                      "diversification": index["diversification"], "levels": levels}
     row.model_version = MODEL_VERSION
+    return row
 
+
+def compute_and_persist(
+    db: Session,
+    arrivals_by_year: Optional[Dict[int, Dict[str, object]]] = None,
+) -> Dict[str, Any]:
+    """Compute the ITT for the latest year, persist it and publish ``tourism.updated``.
+
+    Idempotent per period: re-running replaces the score in place."""
+    asm = assemble_tourism_dataset(arrivals_by_year)
+    period, index = asm["period"], asm["index"]
+
+    row = _write_score(db, period, index)
     db.commit()
     db.refresh(row)
     payload = {"period": period, "itt_score": index["itt_score"], "band": index["band"]}
@@ -68,6 +73,44 @@ def compute_and_persist(
                 period, index["itt_score"], index["band"], index["coverage"])
     return {"period": period, "score_id": row.id, **payload, "coverage": index["coverage"],
             "model_version": MODEL_VERSION}
+
+
+def backfill_scores(
+    db: Session,
+    arrivals_by_year: Optional[Dict[int, Dict[str, object]]] = None,
+) -> Dict[str, Any]:
+    """Compute & persist the ITT for EVERY computable year (the index *as of* each year).
+
+    Para cada año Y se computa el ITT sobre el subconjunto de llegadas ≤Y; el CAGR a 3 años
+    usa Y-3..Y. Los años sin base suficiente (score None) se omiten. Publica el evento UNA
+    vez (con el último año). Idempotente: upsert por período."""
+    if arrivals_by_year is None:
+        from shared.data.tourism_arrivals_client import tourism_arrivals_client
+        arrivals_by_year = tourism_arrivals_client.arrivals()
+    if not arrivals_by_year:
+        raise ValueError("ONE no devolvió llegadas de turismo.")
+
+    persisted: List[str] = []
+    last: Optional[Dict[str, Any]] = None
+    for y in sorted(arrivals_by_year):
+        subset = {yy: v for yy, v in arrivals_by_year.items() if yy <= y}
+        index = compute_tourism_index(subset)
+        # Exige la dimensión NÚCLEO (demanda total, CAGR 3y): sin ella el ITT se apoyaría
+        # solo en recuperación-vs-sí-mismo + diversificación → score alto engañoso en años
+        # tempranos. Persistimos solo desde que hay señal real de tracción de demanda.
+        if index["total_demand"]["score"] is None:
+            continue
+        _write_score(db, str(y), index)
+        persisted.append(str(y))
+        last = {"period": str(y), "itt_score": index["itt_score"], "band": index["band"]}
+    db.commit()
+    if last:
+        publish_tourism_updated(last)
+    logger.info("ITT backfill: %d años persistidos (%s..%s)",
+                len(persisted), persisted[0] if persisted else "—",
+                persisted[-1] if persisted else "—")
+    return {"persisted_periods": persisted, "latest": persisted[-1] if persisted else None,
+            "count": len(persisted), "model_version": MODEL_VERSION}
 
 
 def get_latest(db: Session, period: Optional[str] = None) -> Optional[TourismScore]:

@@ -35,16 +35,8 @@ def assemble_free_zone_dataset(
     return {"period": period, "index": index}
 
 
-def compute_and_persist(
-    db: Session,
-    vars_by_year: Optional[Dict[int, Dict[str, float]]] = None,
-) -> Dict[str, Any]:
-    """Compute the IZF for the latest year, persist it and publish ``free_zones.updated``.
-
-    Idempotent per period: re-running replaces the score in place."""
-    asm = assemble_free_zone_dataset(vars_by_year)
-    period, index = asm["period"], asm["index"]
-
+def _write_score(db: Session, period: str, index: Dict[str, Any]) -> FreeZoneScore:
+    """Upsert (sin commit) la fila IZF de un período. Reusado por compute y backfill."""
     row = db.query(FreeZoneScore).filter_by(period=period).first()
     if row is None:
         row = FreeZoneScore(period=period)
@@ -61,7 +53,20 @@ def compute_and_persist(
                      "investment": index["investment"], "employment": index["employment"],
                      "productivity": index["productivity"], "levels": levels}
     row.model_version = MODEL_VERSION
+    return row
 
+
+def compute_and_persist(
+    db: Session,
+    vars_by_year: Optional[Dict[int, Dict[str, float]]] = None,
+) -> Dict[str, Any]:
+    """Compute the IZF for the latest year, persist it and publish ``free_zones.updated``.
+
+    Idempotent per period: re-running replaces the score in place."""
+    asm = assemble_free_zone_dataset(vars_by_year)
+    period, index = asm["period"], asm["index"]
+
+    row = _write_score(db, period, index)
     db.commit()
     db.refresh(row)
     payload = {"period": period, "fz_score": index["fz_score"], "band": index["band"]}
@@ -70,6 +75,42 @@ def compute_and_persist(
                 period, index["fz_score"], index["band"], index["coverage"])
     return {"period": period, "score_id": row.id, **payload, "coverage": index["coverage"],
             "model_version": MODEL_VERSION}
+
+
+def backfill_scores(
+    db: Session,
+    vars_by_year: Optional[Dict[int, Dict[str, float]]] = None,
+) -> Dict[str, Any]:
+    """Compute & persist the IZF for EVERY computable year (the index *as of* each year).
+
+    Para cada año Y se computa el IZF sobre el subconjunto de variables ≤Y (igual que lo
+    haría la sync en ese año); el CAGR a 3 años usa Y-3..Y de ese subconjunto. Los años sin
+    base suficiente (score None) se omiten — no se persiste una fila vacía. Publica el evento
+    UNA vez (con el último año). Idempotente: upsert por período."""
+    if vars_by_year is None:
+        from shared.data.cnzfe_client import cnzfe_client
+        vars_by_year = cnzfe_client.free_zone_vars()
+    if not vars_by_year:
+        raise ValueError("CNZFE no devolvió variables del sector.")
+
+    persisted: List[str] = []
+    last: Optional[Dict[str, Any]] = None
+    for y in sorted(vars_by_year):
+        subset = {yy: v for yy, v in vars_by_year.items() if yy <= y}
+        index = compute_free_zone_index(subset)
+        if index["fz_score"] is None:  # sin base de CAGR aún → no se persiste fila vacía
+            continue
+        _write_score(db, str(y), index)
+        persisted.append(str(y))
+        last = {"period": str(y), "fz_score": index["fz_score"], "band": index["band"]}
+    db.commit()
+    if last:
+        publish_free_zones_updated(last)
+    logger.info("IZF backfill: %d años persistidos (%s..%s)",
+                len(persisted), persisted[0] if persisted else "—",
+                persisted[-1] if persisted else "—")
+    return {"persisted_periods": persisted, "latest": persisted[-1] if persisted else None,
+            "count": len(persisted), "model_version": MODEL_VERSION}
 
 
 def get_latest(db: Session, period: Optional[str] = None) -> Optional[FreeZoneScore]:
