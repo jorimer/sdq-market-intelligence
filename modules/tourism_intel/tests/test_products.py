@@ -65,6 +65,14 @@ def test_pulse_snapshot_national_anonymous(db):
     assert snap.payload["has_score"] and snap.payload["index"]["itt_score"] is not None
 
 
+def test_quarter_period_falls_back_to_latest_annual(db):
+    # Producto anual: un período trimestral de la UI cae al último año, no a blanco.
+    compute_and_persist(db, arrivals_by_year=_ARR)
+    snap = TourismProduct(db).snapshot(ProductTier.pulse, period="2026-Q1")
+    assert snap.payload["has_score"]
+    assert snap.payload["index"]["itt_score"] is not None
+
+
 def test_sample_and_no_data_narratives():
     p = TourismProduct()
     sample = p.sample_narratives(ProductTier.deep_dive)

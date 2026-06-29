@@ -135,7 +135,13 @@ def tourism_manifest() -> SectorProductManifest:
 def _latest_score(db: Session, period: Optional[str] = None) -> Optional[TourismScore]:
     try:
         with db.begin_nested():
-            return get_latest(db, period or None)
+            row = get_latest(db, period or None)
+            # Producto ANUAL: el selector de período de la UI es trimestral (p.ej.
+            # "2026-Q1") y nunca casa con el año del ITT → caer al último año disponible
+            # en vez de quedar en blanco. Un período anual que SÍ existe se respeta.
+            if row is None and period:
+                row = get_latest(db, None)
+            return row
     except Exception as e:  # noqa: BLE001
         logger.warning("ITT no disponible: %s", e)
         return None

@@ -512,6 +512,11 @@ def get_economic_structure(db: Session, period: Optional[str] = None) -> Dict[st
     from modules.sector_intel.scoring.structure import compute_economic_structure
 
     live = get_sector_variables(db, period=period)
+    # Producto ANUAL: el período de la UI es trimestral (p.ej. "2026-Q1") y el PIB por
+    # sectores es anual ("2025") → si el período pedido no trae dato, caer al último año
+    # disponible en vez de quedar en blanco. Un año que SÍ existe se respeta.
+    if not live.get("has_data") and period:
+        live = get_sector_variables(db, period=None)
     sectors = {
         slug: {"sector_size": vars_.get("sector_size"),
                "sector_growth": vars_.get("sector_growth")}
