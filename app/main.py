@@ -55,6 +55,7 @@ from modules.esg_climate.api.router import router as esg_climate_router
 from modules.energy_intel.api.router import router as energy_intel_router
 from modules.free_zones_intel.api.router import router as free_zones_intel_router
 from modules.telecom_intel.api.router import router as telecom_intel_router
+from modules.tourism_intel.api.router import router as tourism_intel_router
 from modules.pension_intel.api.router import router as pension_intel_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
@@ -74,6 +75,7 @@ app.include_router(energy_intel_router, prefix="/api/v1/energy-intel", tags=["En
 app.include_router(free_zones_intel_router, prefix="/api/v1/free-zones-intel",
                    tags=["Free Zones Intel"])
 app.include_router(telecom_intel_router, prefix="/api/v1/telecom-intel", tags=["Telecom Intel"])
+app.include_router(tourism_intel_router, prefix="/api/v1/tourism-intel", tags=["Tourism Intel"])
 app.include_router(pension_intel_router, prefix="/api/v1/pension-intel", tags=["Pension Intel"])
 
 from shared.settings.router import router as settings_router
@@ -126,6 +128,7 @@ import modules.esg_climate.operations  # noqa: F401 — registers esg-sync
 import modules.energy_intel.operations  # noqa: F401 — registers sie-energy-sync
 import modules.free_zones_intel.operations  # noqa: F401 — registers cnzfe-free-zones-sync
 import modules.telecom_intel.operations  # noqa: F401 — registers indotel-telecom-sync
+import modules.tourism_intel.operations  # noqa: F401 — registers one-tourism-sync
 import modules.pension_intel.operations  # noqa: F401 — registers sipen-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
