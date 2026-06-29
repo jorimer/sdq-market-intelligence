@@ -33,6 +33,7 @@ from shared.products import (
     SectorProductManifest,
     TierLevelSpec,
     ValidationState,
+    distinct_periods,
     register_product,
 )
 from shared.products.render import render_product_pdf
@@ -295,6 +296,9 @@ class TradeProduct:
 
     def has_engine(self) -> bool:
         return self._latest() is not None
+
+    def available_periods(self) -> List[str]:
+        return distinct_periods(self._require_db(), TradeScore.period)
 
     def validation_state(self) -> ValidationState:
         # G5 anclado al backtest real (Gate E) si está persistido; si no, doctrina firmada.

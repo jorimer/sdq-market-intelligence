@@ -31,6 +31,7 @@ from shared.products import (
     SectorProductManifest,
     TierLevelSpec,
     ValidationState,
+    distinct_periods,
     register_product,
 )
 from shared.products.render import render_product_pdf
@@ -251,6 +252,10 @@ class MacroProduct:
     def has_engine(self) -> bool:
         factors, snap = self._signals()
         return bool(factors) or snap is not None
+
+    def available_periods(self) -> List[str]:
+        from modules.macro_political_risk.models.models import IRMPSnapshot
+        return distinct_periods(self._require_db(), IRMPSnapshot.period_end)
 
     def validation_state(self) -> ValidationState:
         # IRMP con metodología validada (Eje 4 cerrado, Gate A-F); momentum macro operativo.

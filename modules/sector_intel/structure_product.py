@@ -25,11 +25,13 @@ from shared.products import (
     SectorProductManifest,
     TierLevelSpec,
     ValidationState,
+    distinct_periods,
     register_product,
 )
 from shared.products.render import render_product_pdf
 from modules.sector_intel.ai_context import economic_structure_ai_context
-from modules.sector_intel.service import get_economic_structure
+from modules.sector_intel.models.models import SectorVariable
+from modules.sector_intel.service import SECTOR_DIMENSION, get_economic_structure
 
 logger = logging.getLogger("sdq.products.economic_structure")
 
@@ -175,6 +177,11 @@ class EconomicStructureProduct:
 
     def has_engine(self) -> bool:
         return self._latest() is not None
+
+    def available_periods(self) -> List[str]:
+        # Períodos anuales con dato del PIB por sectores de origen (si_variables).
+        return distinct_periods(self._require_db(), SectorVariable.period,
+                                where=SectorVariable.dimension == SECTOR_DIMENSION)
 
     def validation_state(self) -> ValidationState:
         # Producto DESCRIPTIVO sobre dato real BCRD (no un índice predictivo) → no requiere

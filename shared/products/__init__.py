@@ -29,6 +29,7 @@ from shared.products.contract import (
     required_signal_methods,
 )
 from shared.products.manifest import SectorProductManifest
+from shared.products.periods import distinct_periods, period_sort_key
 from shared.products.readiness import GATE_WEIGHTS, compute_readiness, empty_readiness
 from shared.products.registry import (
     CATALOG_BY_KEY,
@@ -61,6 +62,8 @@ __all__ = [
     "compute_readiness",
     "empty_readiness",
     "GATE_WEIGHTS",
+    "distinct_periods",
+    "period_sort_key",
     "PRODUCT_CATALOG",
     "CATALOG_BY_KEY",
     "CatalogEntry",
