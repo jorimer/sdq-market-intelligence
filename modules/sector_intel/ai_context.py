@@ -20,6 +20,38 @@ _DIM_LABELS = {
 _LIVE_DIMS = {"sector", "macro"}
 
 
+def economic_structure_ai_context(structure: Dict[str, Any]) -> Dict[str, Any]:
+    """Compact context for the aggregate economic-structure narrative.
+
+    *structure* is the ``get_economic_structure`` output. Surfaces the structural weight
+    ranking, the growth drivers vs drags (by contribution) and the aggregate VA growth, so
+    the narrative explains which sectors move the economy — distinguishing SIZE (weight)
+    from CONTRIBUTION (weight × growth). Honest: real BCRD value-added, no synthetic score."""
+    def _slim(r: Dict[str, Any]) -> Dict[str, Any]:
+        return {"sector": r.get("sector"), "weight_pct": r.get("weight"),
+                "growth_pct": r.get("growth"), "contribution_pp": r.get("contribution"),
+                "share_of_growth": r.get("contribution_share")}
+
+    sectors = structure.get("sectors") or []
+    return {
+        "period": structure.get("period"),
+        "total_va_growth_pct": structure.get("total_va_growth"),
+        "coverage": structure.get("coverage"),
+        "concentration_hhi": structure.get("concentration_hhi"),
+        "n_sectors": structure.get("n_sectors"),
+        "direction": ("peso = importancia estructural (share del Valor Agregado); "
+                      "contribución = peso × crecimiento = aporte real al crecimiento"),
+        "structure_top_weight": [_slim(r) for r in sectors[:6]],
+        "growth_drivers": [_slim(r) for r in (structure.get("drivers") or [])[:6]],
+        "growth_drags": [_slim(r) for r in (structure.get("drags") or [])],
+        "source": structure.get("source"),
+        "note": ("Real: BCRD PIB por sectores de origen (Valor Agregado base 2018). Mide "
+                 "importancia económica y contribución al crecimiento — NO valor exportado "
+                 "(esa es otra lente, donde joyería/oro lideran) ni atractividad (IAI). "
+                 "Agregado nacional anual; sin score sintético. Si una cifra no está, dilo."),
+    }
+
+
 def sector_ai_context(
     latest: Dict[str, Any],
     sector_name: Optional[str] = None,

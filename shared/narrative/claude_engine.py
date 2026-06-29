@@ -273,6 +273,21 @@ THIN_TEMPLATES = {
         "coincida con lo servido. Si una relación no está precalculada, exprésala en palabras sin "
         "número."
     ),
+    "economic_structure_outlook": (
+        "Explica la ESTRUCTURA de la economía dominicana y QUÉ LA MUEVE.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. La idea rectora: distinguir TAMAÑO (peso en el Valor Agregado) de "
+        "APORTE (contribución al crecimiento = peso × crecimiento). Usá EXCLUSIVAMENTE las cifras "
+        "del contexto (total_va_growth_pct, structure_top_weight, growth_drivers, growth_drags, "
+        "concentration_hhi). Estructura la lectura: (1) los sectores que SOSTIENEN la economía por "
+        "tamaño; (2) los MOTORES del crecimiento (mayor contribución, con su cuota); (3) los "
+        "LASTRES (sectores grandes que se contraen y restan). Nombra explícitamente cuando un "
+        "sector es grande pero está restando (p. ej. construcción) y cuando uno mediano empuja "
+        "fuerte (p. ej. financiero). HONESTIDAD: esta es la lente de IMPORTANCIA ECONÓMICA y "
+        "CONTRIBUCIÓN — NO el valor exportado (donde joyería/oro lideran) ni la atractividad "
+        "(IAI); no las mezcles. Dato anual agregado del BCRD; sin score sintético. Si una cifra "
+        "no está, dilo; no inventes."
+    ),
     "system_pulse": (
         "Entrega una PERSPECTIVA DE SISTEMA del sector bancario dominicano (nivel abierto, "
         "audiencia de mercado), a partir del agregado anonimizado:\n{context}\n\n"

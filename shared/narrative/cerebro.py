@@ -109,6 +109,19 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "sea material. Distingues nivel de atractivo de su aceleración (SGPS). El sector se lee "
         "en su contexto macro, pero el foco es el sector, no la coyuntura."
     ),
+    "economic_structure": (
+        "DOCTRINA DE CASA — Estructura sectorial de la economía (vista agregada):\n"
+        "Lees la ESTRUCTURA de la economía dominicana por sector, no un sector aislado. Te "
+        "anclas al dato real del BCRD (PIB por sectores de origen): el PESO de cada sector en "
+        "el Valor Agregado y su CRECIMIENTO real. La métrica rectora es la CONTRIBUCIÓN al "
+        "crecimiento = peso × crecimiento: distingue SIEMPRE el TAMAÑO (un sector grande) del "
+        "APORTE (un sector grande que se contrae RESTA; uno mediano que crece rápido APORTA). "
+        "La suma de las contribuciones es el crecimiento del Valor Agregado total. NO confundas "
+        "esta lente con el valor EXPORTADO (donde joyería/oro lideran por ser export-intensivos, "
+        "no por su peso en el PIB) ni con la ATRACTIVIDAD (IAI). Es un producto DESCRIPTIVO: no "
+        "hay score sintético 0-100; expones la estructura real. Honestidad: dato anual agregado "
+        "nacional; si una cifra no está, dilo; no inventes."
+    ),
     "macro_political_risk": (
         "DOCTRINA DE CASA — Eje de riesgo macro-político (IRMP):\n"
         "Lees el riesgo macro-político de un país de forma explicable y comparable contra su "
@@ -306,6 +319,37 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "relevante que la política puede mover—, distinguiendo lo accionable por política de "
             "lo que es coyuntura macro. Tu \"y por tanto\" final apunta a la palanca de política "
             "con mayor retorno sobre el atractivo, nombrando si el dato es real o rúbrica."
+        ),
+    },
+    "economic_structure": {
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Institución del Estado / formulador de política económica.\n"
+            "Decide: dónde concentrar política sectorial, fomento e inversión pública.\n"
+            "Le importa: qué sectores SOSTIENEN la economía (peso) y cuáles la MUEVEN hoy "
+            "(contribución al crecimiento), y dónde un sector grande que se contrae arrastra al "
+            "agregado. Tu \"y por tanto\" final apunta a la palanca de política con mayor retorno "
+            "sobre el crecimiento: apuntalar un motor o revertir un lastre estructural."
+        ),
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / asignador de capital macro-sectorial.\n"
+            "Decide: hacia qué sectores de la economía inclinar la exposición.\n"
+            "Le importa: dónde está el crecimiento real (sectores de alta contribución y momentum) "
+            "y dónde el peso esconde estancamiento. Tu \"y por tanto\" final apunta a los sectores "
+            "con tracción de crecimiento real, no solo tamaño."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Multilateral / banca de desarrollo.\n"
+            "Decide: dónde el financiamiento eleva el crecimiento y diversifica la economía.\n"
+            "Le importa: la estructura (concentración por sector), los motores del crecimiento y "
+            "los lastres estructurales. Tu \"y por tanto\" final apunta a la brecha sectorial con "
+            "mayor retorno sobre el crecimiento sostenible y la diversificación."
+        ),
+        "empresa": (
+            "FRAME DE DECISIÓN — Audiencia: Empresa / estratega corporativo.\n"
+            "Decide: en qué sectores de la economía posicionarse o expandirse.\n"
+            "Le importa: qué sectores crecen y aportan (demanda y dinamismo) frente a los que se "
+            "contraen. Tu \"y por tanto\" final apunta al sector con tracción donde conviene "
+            "posicionarse."
         ),
     },
     "macro_political_risk": {

@@ -3,7 +3,7 @@
 prefix: /api/v1/sector-intel
 """
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -20,6 +20,7 @@ from modules.sector_intel.scoring.sgps import (
 from modules.sector_intel.service import (
     assemble_iai_dataset,
     compute_and_persist,
+    get_economic_structure,
     get_latest,
     get_sectors,
     seed_sectors,
@@ -173,6 +174,46 @@ async def validation(
     if not row:
         return {"has_report": False}
     return {"has_report": True, **json.loads(row.value)}
+
+
+@router.get(
+    "/structure",
+    summary="Estructura sectorial de la economía (peso + contribución al crecimiento)",
+    description="Vista AGREGADA de los 17 sectores: peso en el Valor Agregado, crecimiento "
+    "real y contribución al crecimiento (peso × crecimiento) — la lente de importancia "
+    "económica. Dato real BCRD. NO confundir con valor exportado ni con atractividad (IAI).",
+)
+async def structure(
+    period: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return get_economic_structure(db, period)
+
+
+@router.get(
+    "/structure/insight",
+    summary="Perspectiva de IA de la estructura económica — fase 2, lento",
+    description="Narrativa que explica qué sectores sostienen la economía (peso) y cuáles la "
+    "mueven (contribución al crecimiento), con frame institucional.",
+)
+async def structure_insight(
+    period: Optional[str] = Query(None),
+    audience: str = Query("gobierno",
+                          description="gobierno·inversionista·multilateral·empresa; "
+                                      "clave desconocida cae al default."),
+    deep: bool = Query(False, description="Versión extendida (análisis completo)."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.sector_intel.ai_context import economic_structure_ai_context
+
+    st = get_economic_structure(db, period)
+    if not st.get("has_data"):
+        return {"has_data": False, "period": st.get("period"), "ai_insight": None}
+    ctx = economic_structure_ai_context(st)
+    ai = await _ai_insight(ctx, "economic_structure_outlook", audience, deep)
+    return {"has_data": True, "period": st.get("period"), "structure": st, "ai_insight": ai}
 
 
 @router.get("/{sector_code}/latest", summary="Último IAI/SGPS persistido de un sector")

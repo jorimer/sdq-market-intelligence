@@ -501,6 +501,29 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
             "sgps_inputs": sgps_inputs, "has_live": live["has_data"]}
 
 
+def get_economic_structure(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
+    """Aggregate sectoral structure of the economy for *period* (latest if omitted).
+
+    Reads the real BCRD per-sector value-added inputs (``sector_size`` + ``sector_growth``
+    from ``si_variables``) and computes the structure view (weight ranking, growth drivers
+    vs drags, contribution to total VA growth). Pure read + pure compute — no new storage,
+    since the inputs are already persisted by ``bcrd-sectores-sync``."""
+    from shared.data.bcrd_sectors import sector_catalog
+    from modules.sector_intel.scoring.structure import compute_economic_structure
+
+    live = get_sector_variables(db, period=period)
+    sectors = {
+        slug: {"sector_size": vars_.get("sector_size"),
+               "sector_growth": vars_.get("sector_growth")}
+        for slug, vars_ in (live.get("sectors") or {}).items()
+    }
+    names = dict(sector_catalog())
+    structure = compute_economic_structure(sectors, names)
+    return {"period": live.get("period"), "has_data": live.get("has_data", False),
+            "source": "BCRD · PIB por sectores de origen (Valor Agregado)",
+            **structure}
+
+
 def backfill_sector_scores(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
     """Backfill the IAI/SGPS for EVERY period with real BCRD data, then purge any
     score outside that set (the SIB pattern: score_all_periods + prune).
