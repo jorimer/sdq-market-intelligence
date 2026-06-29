@@ -284,15 +284,24 @@ class EconomicStructureProduct:
         tables: List = []
         st = (snapshot.payload or {}).get("structure") or {}
         sectors = st.get("sectors") or []
+        charts: List = []
         if sectors:
             rows = [["Sector", "Peso %", "Crec. %", "Aporte pp"]] + [
                 [str(s.get("sector")), _fmt(s.get("weight")), _fmt(s.get("growth")),
                  _fmt(s.get("contribution"))] for s in sectors[:10]]
             tables.append(("Estructura sectorial (top por peso)", rows))
+            # Gráfico: contribución al crecimiento por sector (motores vs lastres), top por |aporte|.
+            ranked = sorted([s for s in sectors if s.get("contribution") is not None],
+                            key=lambda s: abs(s["contribution"]), reverse=True)[:10]
+            ranked.sort(key=lambda s: s["contribution"], reverse=True)
+            if ranked:
+                charts.append({"title": "Contribución al crecimiento por sector (pp)",
+                               "items": [(s.get("sector"), s.get("contribution")) for s in ranked],
+                               "signed": True})
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
-            section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
+            section_titles=_SECTION_TITLES, tables=tables, charts=charts, subtitle=None,
             watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
 
 
