@@ -12,9 +12,9 @@ energy resilience index (Eje Energía):
 DELIBERATELY EXCLUDED — the SIE *fuel consumption* CSV: it has a structural unit
 break at 2018 (fuel-oil columns jump ~30×) and the gas column's magnitude is
 inconsistent with "MMBTU" as labelled, so a carbon-intensity / transition metric
-built on it would be false precision. The authoritative transition signal
-(renewable generation share, GWh by technology) lives in the OC-SENI monthly
-reports (PDF/Dropbox) — a declared gap for a future OC connector, never fabricated.
+built on it would be false precision. The transition signal (renewable generation
+share by technology) is now ingested separately from the ONE generation-mix dataset
+— see ``shared/data/generation_client`` — so it is real data, no longer a gap.
 
 CSV URLs change when SIE republishes (the path carries a date), so we resolve the
 current CSV resource per dataset via the CKAN ``package_show`` API, then fetch it.

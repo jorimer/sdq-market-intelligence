@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 _DIM_LABELS = {
     "capacity_adequacy": "Adecuación de capacidad (parque instalado, SIE)",
     "service_quality": "Calidad de servicio (reclamaciones, SIE)",
-    "energy_transition": "Transición energética (renovable/carbono)",
+    "energy_transition": "Transición energética (penetración renovable, ONE)",
 }
 
 
@@ -32,6 +32,8 @@ def energy_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         })
     cap = index.get("capacity") or {}
     svc = index.get("service") or {}
+    tra = index.get("transition") or {}
+    transition_measured = tra.get("score") is not None
     return {
         "period": period,
         "irse_score": index.get("energy_score"),
@@ -42,12 +44,20 @@ def energy_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         "capacity_mw": cap.get("capacity_mw"),
         "capacity_growth_cagr_3y": cap.get("cagr_3y"),
         "service_backlog_months": svc.get("backlog_months"),
-        # canónico (cerebro): el score global; sin sub-componentes ponderados completos
-        # (1 dimensión es brecha) → el detector determinista no aplica, el guard es el LLM.
+        "renewable_share_pct": tra.get("renewable_share"),
+        "renewable_delta_5y_pp": tra.get("delta_5y"),
+        "renewable_year": tra.get("year"),
+        # canónico (cerebro): el score global; el detector determinista no aplica
+        # (cuando alguna dimensión es brecha) → el guard es el LLM.
         "score_global": index.get("energy_score"),
-        "source": "SIE (Superintendencia de Electricidad), datos abiertos",
-        "note": "Sobre dato real SIE: capacidad instalada + reclamaciones. La TRANSICIÓN "
-                "(penetración renovable / intensidad de carbono) es BRECHA declarada — el "
-                "dato confiable (generación por tecnología) está en OC-SENI (pendiente). "
-                "No se afirma transición sin dato.",
+        "source": "SIE (capacidad + reclamaciones) y ONE (generación por tecnología), datos abiertos",
+        "note": (
+            "Sobre dato real: capacidad instalada + reclamaciones (SIE) y penetración "
+            "renovable de la matriz (ONE, eólica+hidráulica+solar vs meta Ley 57-07 25 %). "
+            "Las 3 dimensiones del IRSE con dato real."
+            if transition_measured else
+            "Sobre dato real SIE: capacidad instalada + reclamaciones. La TRANSICIÓN "
+            "(penetración renovable) queda como BRECHA en este período (sin dato de "
+            "generación por tecnología). No se afirma transición sin dato."
+        ),
     }
