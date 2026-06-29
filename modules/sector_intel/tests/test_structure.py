@@ -85,5 +85,5 @@ def test_get_economic_structure_reads_real_inputs(db):
     # turismo es motor, construcción lastre
     assert st["top_driver"]["slug"] == "turismo"
     assert st["top_drag"]["slug"] == "construccion"
-    # nombres resueltos vía catálogo BCRD
-    assert "Turismo" in st["top_driver"]["name"]
+    # nombres resueltos vía catálogo BCRD (clave "sector", no "name")
+    assert "Turismo" in st["top_driver"]["sector"]

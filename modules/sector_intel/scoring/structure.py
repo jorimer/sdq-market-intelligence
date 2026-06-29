@@ -54,7 +54,9 @@ def compute_economic_structure(
         contribution = _contribution(weight, growth)
         rows.append({
             "slug": slug,
-            "name": names.get(slug, slug),
+            # clave "sector" (no "name"): es una categoría económica pública, no una firma —
+            # el sensor de anonimización del Pulse prohíbe la clave "name".
+            "sector": names.get(slug, slug),
             "weight": round(weight, 3) if weight is not None else None,
             "growth": round(growth, 2) if growth is not None else None,
             "contribution": contribution,

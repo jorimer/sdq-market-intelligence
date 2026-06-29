@@ -46,6 +46,10 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
                  "Min. Agricultura · BAGRÍCOLA · ONE"),
     CatalogEntry("esg", "SDQ ESG & Climate", "esg_climate", "ONE · Medio Ambiente · IPCC · SIE"),
     CatalogEntry("pension", "SDQ Pensiones (SIPEN)", "pension_intel", "SIPEN · ADAFP"),
+    # Producto AGREGADO (no un sector): la estructura de la economía por sector
+    # (importancia económica + contribución al crecimiento). Para clientes institucionales.
+    CatalogEntry("economic_structure", "SDQ Sectoral Structure · Estructura de la Economía",
+                 "sector_intel", "BCRD · PIB por sectores de origen (Valor Agregado)"),
 ]
 
 CATALOG_BY_KEY: Dict[str, CatalogEntry] = {e.sector_key: e for e in PRODUCT_CATALOG}
