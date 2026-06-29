@@ -286,17 +286,23 @@ class FreeZoneProduct:
                  "deep_dive": "Deep Dive Zonas Francas"}.get(tier.value, "Zonas Francas")
         display = ("Sector de Zonas Francas · RD" if tier == ProductTier.pulse else DISPLAY)
         tables: List = []
+        charts: List = []
         index = (snapshot.payload or {}).get("index") or {}
         dims = index.get("dimensions") or {}
         if dims:
+            labels = {"export_dynamism": "Dinamismo exportador",
+                      "investment_attraction": "Atracción de inversión",
+                      "employment": "Empleo", "productivity": "Productividad"}
             rows = [["Dimensión", "Score", "Peso"]] + [
-                [str(k), _fmt((d or {}).get("score")), _fmt((d or {}).get("weight"))]
+                [labels.get(k, k), _fmt((d or {}).get("score")), _fmt((d or {}).get("weight"))]
                 for k, d in dims.items()]
             tables.append(("Dimensiones del IZF", rows))
+            items = [(labels.get(k, k), (d or {}).get("score")) for k, d in dims.items()]
+            charts.append({"title": "Dimensiones del IZF (score 0-100)", "items": items})
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
-            section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
+            section_titles=_SECTION_TITLES, tables=tables, charts=charts, subtitle=None,
             watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
 
 
