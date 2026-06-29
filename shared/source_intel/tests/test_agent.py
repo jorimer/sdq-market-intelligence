@@ -35,7 +35,11 @@ _AUDIT = {"sectors": [
     {"sector_key": "telecom", "display_name": "Telecom", "implemented": True,
      "gaps": [{"gate": "g1", "label": "Datos", "value": 0.0,
                "falta": "INDOTEL congelado 2022", "accion": "cargar boletín vigente"}]},
-    {"sector_key": "energy", "display_name": "Energy", "implemented": True, "gaps": []},
+    # energy: g1 en pleno (sin brecha g1) pero CON brecha g5 → cubierto → el agente lo
+    # salta (no propone más datos para un sector cuyo dato base ya está).
+    {"sector_key": "energy", "display_name": "Energy", "implemented": True,
+     "gaps": [{"gate": "g5", "label": "Validación", "value": 0.45,
+               "falta": "sin backtest", "accion": "backtest"}]},
     {"sector_key": "x", "display_name": "X", "implemented": False, "gaps": []},
 ]}
 
@@ -72,6 +76,7 @@ def test_agent_creates_evaluates_and_notifies(db, monkeypatch):
     assert s.evaluation and s.evaluation["method"] == "ai"
     assert db.query(Notification).count() == 1  # avisó a la admin
     assert res["capped"] is False  # 1 brecha < tope → no truncó
+    assert res["skipped_covered"] == 1  # energy (g1 pleno) saltado: no se le proponen datos
 
 
 def test_agent_reports_cap(db, monkeypatch):
