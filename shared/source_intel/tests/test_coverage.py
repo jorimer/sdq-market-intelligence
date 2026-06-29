@@ -15,6 +15,7 @@ from shared.source_intel.coverage import coverage_status
 from shared.source_intel.models import SourceSuggestion
 from shared.source_intel.service import (
     create_suggestion,
+    flag_covered_decided,
     reflag_covered_suggestions,
     set_status,
 )
@@ -99,3 +100,23 @@ def test_reflag_is_idempotent(db):
                       origin="agent", target_axis="energy", target_gate="g5")
     assert len(reflag_covered_suggestions(db)) == 1
     assert reflag_covered_suggestions(db) == []  # ya diferida → no re-toca
+
+
+def test_flag_covered_decided_badges_without_moving(db):
+    # aprobada sobre eje cubierto → se marca (badge) pero NO cambia de estado
+    cov = create_suggestion(db, kind="source", title="Energy aprobada", description="d",
+                            origin="manual", target_axis="energy", target_gate="g1")
+    set_status(db, cov["id"], "approved")
+    # aprobada sobre eje con g1 abierto → no se marca
+    open_ax = create_suggestion(db, kind="source", title="Telecom aprobada", description="d",
+                                origin="manual", target_axis="telecom", target_gate="g1")
+    set_status(db, open_ax["id"], "approved")
+
+    flagged = flag_covered_decided(db)
+    assert flagged == [cov["id"]]
+    c = db.query(SourceSuggestion).filter_by(id=cov["id"]).one()
+    assert c.status == "approved"  # NO se mueve: el dueño confirma integrada/diferir
+    assert c.evaluation["already_covered"] is True
+    o = db.query(SourceSuggestion).filter_by(id=open_ax["id"]).one()
+    assert (o.evaluation or {}).get("already_covered") in (None, False)
+    assert flag_covered_decided(db) == []  # idempotente

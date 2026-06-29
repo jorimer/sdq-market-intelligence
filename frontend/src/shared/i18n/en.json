@@ -333,7 +333,16 @@
       "format": "format",
       "license": "license"
     },
-    "covered": "Already covered"
+    "covered": "Already covered",
+    "group": {
+      "decide": "To decide",
+      "approved": "Approved · integration queue",
+      "integrating": "Integrating",
+      "closed": "Closed"
+    },
+    "coveredDecidedHint": "This axis gap is already covered:",
+    "markIntegrated": "Integrated",
+    "markDeferred": "Defer"
   },
   "common_retry": "Retry",
   "esg": {

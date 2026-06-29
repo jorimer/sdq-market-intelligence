@@ -333,7 +333,16 @@
       "format": "format",
       "license": "licence"
     },
-    "covered": "Déjà couvert"
+    "covered": "Déjà couvert",
+    "group": {
+      "decide": "À décider",
+      "approved": "Approuvées · file d’intégration",
+      "integrating": "En intégration",
+      "closed": "Fermées"
+    },
+    "coveredDecidedHint": "La lacune de l’axe est déjà couverte :",
+    "markIntegrated": "Intégrée",
+    "markDeferred": "Différer"
   },
   "common_retry": "Réessayer",
   "esg": {

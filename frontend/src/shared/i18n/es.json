@@ -333,7 +333,16 @@
       "format": "formato",
       "license": "licencia"
     },
-    "covered": "Ya cubierto"
+    "covered": "Ya cubierto",
+    "group": {
+      "decide": "Por decidir",
+      "approved": "Aprobadas · cola de integración",
+      "integrating": "Integrando",
+      "closed": "Cerradas"
+    },
+    "coveredDecidedHint": "La brecha del eje ya está cubierta:",
+    "markIntegrated": "Integrada",
+    "markDeferred": "Diferir"
   },
   "common_retry": "Reintentar",
   "esg": {
