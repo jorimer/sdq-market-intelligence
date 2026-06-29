@@ -7,9 +7,9 @@ sirve a varios productos del catálogo, cada uno = un sector económico, registr
 bajo su propia ``product_key``:
 
     tourism      → turismo            (Hoteles/Bares/Restaurantes)
-    free_zones   → zonas_francas      (Manufactura Zonas Francas)
     construction → construccion
     agribusiness → agropecuario
+    (free_zones tiene producto dedicado: modules.free_zones_intel · IZF/CNZFE)
 
 Implementa el ``Protocol`` ``SectorProduct`` SIN tocar el framework, reusando el
 motor de narrativa y los getters PÚBLICOS del propio módulo (``service``/``ai_context``).
@@ -56,7 +56,9 @@ logger = logging.getLogger("sdq.products.sector")
 # productos sectoriales servidos por sector_intel.
 SECTOR_PRODUCTS: Dict[str, tuple] = {
     "tourism": ("turismo", "Turismo (Hoteles/Bares/Rest.) · RD"),
-    "free_zones": ("zonas_francas", "Manufactura Zonas Francas · RD"),
+    # free_zones tiene producto DEDICADO (modules.free_zones_intel · IZF/CNZFE) — ya no lo
+    # sirve el corte transversal del IAI. El sector sigue en el peer set del IAI
+    # (sector_catalog), solo cambia el producto consumible del slot.
     "construction": ("construccion", "Construcción · RD"),
     "agribusiness": ("agropecuario", "Agropecuario · RD"),
 }

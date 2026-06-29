@@ -53,6 +53,7 @@ from modules.sector_intel.events import register_subscribers as register_sector_
 from modules.social_dev.api.router import router as social_dev_router
 from modules.esg_climate.api.router import router as esg_climate_router
 from modules.energy_intel.api.router import router as energy_intel_router
+from modules.free_zones_intel.api.router import router as free_zones_intel_router
 from modules.telecom_intel.api.router import router as telecom_intel_router
 from modules.pension_intel.api.router import router as pension_intel_router
 
@@ -70,6 +71,8 @@ app.include_router(sector_intel_router, prefix="/api/v1/sector-intel", tags=["Se
 app.include_router(social_dev_router, prefix="/api/v1/social-dev", tags=["Social Dev"])
 app.include_router(esg_climate_router, prefix="/api/v1/esg-climate", tags=["ESG & Climate"])
 app.include_router(energy_intel_router, prefix="/api/v1/energy-intel", tags=["Energy Intel"])
+app.include_router(free_zones_intel_router, prefix="/api/v1/free-zones-intel",
+                   tags=["Free Zones Intel"])
 app.include_router(telecom_intel_router, prefix="/api/v1/telecom-intel", tags=["Telecom Intel"])
 app.include_router(pension_intel_router, prefix="/api/v1/pension-intel", tags=["Pension Intel"])
 
@@ -134,7 +137,8 @@ import shared.operations.freshness  # noqa: F401 — registers data-freshness-au
 import modules.banking_score.products  # noqa: F401 — registers banking SectorProduct
 import modules.trade_intel.products  # noqa: F401 — registers trade SectorProduct
 import modules.esg_climate.products  # noqa: F401 — registers esg SectorProduct
-import modules.sector_intel.products  # noqa: F401 — registers tourism/free_zones/construction/agribusiness
+import modules.sector_intel.products  # noqa: F401 — registers tourism/construction/agribusiness
+import modules.free_zones_intel.products  # noqa: F401 — registers free_zones (dedicado, IZF/CNZFE)
 import modules.energy_intel.products  # noqa: F401 — registers energy SectorProduct
 import modules.telecom_intel.products  # noqa: F401 — registers telecom SectorProduct
 import modules.pension_intel.products  # noqa: F401 — registers pension SectorProduct
