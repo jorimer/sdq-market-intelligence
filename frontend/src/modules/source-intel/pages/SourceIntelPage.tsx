@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Compass, Plus, Trash2, Bot, User as UserIcon, Sparkles, Wrench, Database } from "lucide-react";
+import { Compass, Plus, Trash2, Bot, User as UserIcon, Sparkles, Wrench, Database, RefreshCw } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
   listSuggestions, createSuggestion, setSuggestionStatus, deleteSuggestion, evaluateSuggestion,
   scaffoldSuggestion, runResearchAgent, agentStatus, runCatalogDiscovery, discoveryStatus,
+  runMaintenance,
   type Suggestion, type SuggestionStatus, type SuggestionKind, type Evaluation,
   type IntegrationPlan,
 } from "../api";
@@ -110,6 +111,7 @@ export function SourceIntelPage() {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [busy, setBusy] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<SuggestionStatus | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   // Form
@@ -169,6 +171,17 @@ export function SourceIntelPage() {
     finally { setBusy(null); }
   };
 
+  const onMaintenance = async () => {
+    setBusy("maintenance"); setMsg(null);
+    try {
+      const r = await runMaintenance();
+      await load();
+      setMsg(t("sourceIntel.maintenanceDone", { deferred: r.deferred, flagged: r.flagged }));
+    } catch {
+      setMsg(t("sourceIntel.maintenanceError"));
+    } finally { setBusy(null); }
+  };
+
   const onGenerate = async () => {
     setBusy("agent"); setMsg(t("sourceIntel.agentWorking"));
     try {
@@ -219,8 +232,10 @@ export function SourceIntelPage() {
   }
 
   // Items por grupo, ordenados por score desc (y el grupo cerrado por logro→pausa→rechazo).
+  // Si hay un chip-filtro activo, solo ese estado pasa.
+  const visible = filterStatus ? items.filter((s) => s.status === filterStatus) : items;
   const grouped = GROUPS.map((g) => {
-    let rows = items.filter((s) => g.statuses.includes(s.status));
+    let rows = visible.filter((s) => g.statuses.includes(s.status));
     if (g.key === "closed") {
       rows = [...rows].sort((a, b) =>
         CLOSED_ORDER.indexOf(a.status) - CLOSED_ORDER.indexOf(b.status) || scoreOf(b) - scoreOf(a));
@@ -341,6 +356,11 @@ export function SourceIntelPage() {
           subtitle={t("sourceIntel.boardSub", { n: items.length })}
           right={
             <div className="flex items-center gap-2 shrink-0">
+              <button onClick={onMaintenance} disabled={busy === "maintenance"}
+                className="btn btn-ghost !py-1.5 shrink-0" title={t("sourceIntel.maintenanceHint")}>
+                <RefreshCw className={`w-3.5 h-3.5 ${busy === "maintenance" ? "animate-spin" : ""}`} />
+                {t("sourceIntel.maintenance")}
+              </button>
               <button onClick={onDiscover} disabled={busy === "discover"} className="btn btn-ghost !py-1.5 shrink-0">
                 <Database className={`w-3.5 h-3.5 ${busy === "discover" ? "animate-pulse" : ""}`} />
                 {t("sourceIntel.discover")}
@@ -351,10 +371,23 @@ export function SourceIntelPage() {
               </button>
             </div>
           } />
-        <div className="flex flex-wrap gap-2 mb-3 text-xs">
-          {STATUSES.filter((s) => summary[s]).map((s) => (
-            <Chip key={s} tone={statusTone(s)}>{t(`sourceIntel.status.${s}`)}: {summary[s]}</Chip>
-          ))}
+        {/* Chips = filtros reales: clic para ver solo ese estado; clic de nuevo para quitar. */}
+        <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+          {STATUSES.filter((s) => summary[s]).map((s) => {
+            const active = filterStatus === s;
+            return (
+              <button key={s} onClick={() => setFilterStatus(active ? null : s)}
+                aria-pressed={active}
+                className={`rounded-full transition ${active ? "ring-2 ring-accent" : "opacity-80 hover:opacity-100"}`}>
+                <Chip tone={statusTone(s)}>{t(`sourceIntel.status.${s}`)}: {summary[s]}</Chip>
+              </button>
+            );
+          })}
+          {filterStatus && (
+            <button onClick={() => setFilterStatus(null)} className="text-faint hover:text-muted underline">
+              {t("sourceIntel.clearFilter")}
+            </button>
+          )}
         </div>
 
         {state === "loading" ? (
@@ -366,7 +399,7 @@ export function SourceIntelPage() {
         ) : (
           <div className="flex flex-col gap-4">
             {grouped.map((g) => {
-              const collapsed = g.closed && !showClosed;
+              const collapsed = g.closed && !showClosed && !filterStatus;
               return (
                 <div key={g.key} className="flex flex-col gap-2">
                   <button

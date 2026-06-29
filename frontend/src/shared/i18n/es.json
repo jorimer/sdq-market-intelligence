@@ -342,7 +342,12 @@
     },
     "coveredDecidedHint": "La brecha del eje ya está cubierta:",
     "markIntegrated": "Integrada",
-    "markDeferred": "Diferir"
+    "markDeferred": "Diferir",
+    "maintenance": "Actualizar estados",
+    "maintenanceHint": "Difiere las ya cubiertas y marca los badges (rápido, sin IA)",
+    "maintenanceDone": "Estados actualizados: {{deferred}} diferidas, {{flagged}} marcadas",
+    "maintenanceError": "No se pudo actualizar los estados",
+    "clearFilter": "Quitar filtro"
   },
   "common_retry": "Reintentar",
   "esg": {

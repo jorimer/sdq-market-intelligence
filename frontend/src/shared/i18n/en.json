@@ -342,7 +342,12 @@
     },
     "coveredDecidedHint": "This axis gap is already covered:",
     "markIntegrated": "Integrated",
-    "markDeferred": "Defer"
+    "markDeferred": "Defer",
+    "maintenance": "Refresh states",
+    "maintenanceHint": "Defers covered ones and marks badges (fast, no AI)",
+    "maintenanceDone": "States refreshed: {{deferred}} deferred, {{flagged}} flagged",
+    "maintenanceError": "Could not refresh states",
+    "clearFilter": "Clear filter"
   },
   "common_retry": "Retry",
   "esg": {
