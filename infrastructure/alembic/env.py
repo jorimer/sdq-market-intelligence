@@ -41,6 +41,7 @@ from modules.esg_climate.models.models import (  # noqa: F401
     EnvIndicator, ESGScore,
 )
 from modules.energy_intel.models.models import EnergyScore  # noqa: F401
+from modules.free_zones_intel.models.models import FreeZoneScore  # noqa: F401
 from modules.telecom_intel.models.models import TelecomScore  # noqa: F401
 from modules.pension_intel.models.models import (  # noqa: F401
     PensionEntity, PensionRating, PensionSeries, PensionSnapshot,
