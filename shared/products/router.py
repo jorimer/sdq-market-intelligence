@@ -248,7 +248,8 @@ async def get_product_report(
         "commercial": {
             "price_band": level.price_band, "watermark": level.watermark,
             "audience": level.audience, "cadence": level.cadence,
-            "sections": list(level.sections),
+            # Orden canónico: secciones del nivel + estándar (metodología/fuentes) anexadas.
+            "sections": list(content.section_order or level.sections),
             "staff_preview": access.staff_preview,
         },
     }
