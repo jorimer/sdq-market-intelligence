@@ -59,6 +59,7 @@ def tourism_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         "note": ("Sobre dato real ONE: llegadas anuales de no residentes vía aérea por "
                  "mercado de origen. Índice de tracción de DEMANDA (volumen, recuperación, "
                  "diversificación de mercados). NO cubre oferta hotelera, ocupación, ni "
-                 "ingresos por turismo (divisas) — esos viven en el BCRD, fuera de los datos "
-                 "abiertos; no los inventes. Sin backtest de outcomes."),
+                 "ingresos por turismo (divisas) — el BCRD discontinuó esas series "
+                 "estructuradas en 2018-2019 y hoy solo viven en PDFs narrativos, sin serie "
+                 "limpia; no los inventes. Sin backtest de outcomes."),
     }
