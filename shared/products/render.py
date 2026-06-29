@@ -135,21 +135,42 @@ def _data_table(heading: str, rows: Sequence[Sequence[str]], styles) -> List:
     return out
 
 
+def _draw_logo(canvas, x: float, y: float, s: float) -> None:
+    """Marca 'Arco' de SDQ·MIP: cuadrado redondeado de acento + arco blanco + punto.
+    Reproduce el logo del producto (frontend ArcMark) en el PDF. (x, y) = esquina inf-izq."""
+    canvas.saveState()
+    canvas.setFillColor(BLUE)
+    canvas.roundRect(x, y, s, s, s * 0.28, fill=1, stroke=0)
+    cx, cy, r = x + s / 2, y + s / 2, s * 0.27
+    canvas.setStrokeColor(WHITE)
+    canvas.setLineWidth(max(1.0, s * 0.11))
+    canvas.setLineCap(1)
+    p = canvas.beginPath()
+    p.arc(cx - r, cy - r, cx + r, cy + r, 130, 300)   # ~3/4 de anillo (hueco arriba)
+    canvas.drawPath(p, stroke=1, fill=0)
+    canvas.setFillColor(WHITE)
+    canvas.circle(cx, cy + r, s * 0.085, fill=1, stroke=0)   # punto superior
+    canvas.restoreState()
+
+
 def _furniture(header_line: str, watermark: Optional[str], sample: bool, *, first: bool):
-    """Guarnición de página: encabezado corrido + regla + nº de página (páginas interiores)
-    y watermark/estampa de muestra al pie (todas). La portada (first) va limpia, sin encabezado."""
+    """Guarnición de página: logo + encabezado corrido + regla + nº de página (interiores) y
+    watermark/estampa al pie (todas). La portada (first) lleva el logo grande, sin encabezado."""
     wm = "MUESTRA — DATA ILUSTRATIVA" if sample else watermark
     w, h = A4
 
     def _draw(canvas, doc):
         canvas.saveState()
-        if not first:
+        if first:
+            _draw_logo(canvas, MARGIN, h - 0.98 * inch, 0.46 * inch)
+        else:
+            _draw_logo(canvas, MARGIN, h - 0.52 * inch, 0.18 * inch)
             canvas.setFont("Helvetica-Bold", 8)
             canvas.setFillColor(NAVY)
-            canvas.drawString(MARGIN, h - 0.5 * inch, header_line[:110])
+            canvas.drawString(MARGIN + 0.27 * inch, h - 0.48 * inch, header_line[:104])
             canvas.setStrokeColor(RULE)
             canvas.setLineWidth(0.5)
-            canvas.line(MARGIN, h - 0.56 * inch, w - MARGIN, h - 0.56 * inch)
+            canvas.line(MARGIN, h - 0.6 * inch, w - MARGIN, h - 0.6 * inch)
             canvas.setFont("Helvetica", 8)
             canvas.setFillColor(GRAY)
             canvas.drawRightString(w - MARGIN, 0.45 * inch, str(canvas.getPageNumber()))
