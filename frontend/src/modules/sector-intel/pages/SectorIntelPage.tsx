@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { LayoutGrid, ListOrdered, Zap, Grid3x3, Activity } from "lucide-react";
+import { LayoutGrid, ListOrdered, Zap, Grid3x3, Activity, PieChart } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -28,12 +28,15 @@ import {
   getLatest,
   getMacroContext,
   getSectorInsight,
+  getEconomicStructure,
+  getStructureInsight,
   SECTOR_AUDIENCES,
   SectorInfo,
   SectorLatest,
   IaiDataset,
   MacroContext,
   MacroFactor,
+  EconomicStructure,
 } from "../api";
 import { IAI_DIM_VARS } from "../data";
 import { Tone } from "@/shared/lib/bands";
@@ -120,6 +123,7 @@ export function SectorIntelPage() {
   const [audience, setAudience] = useAudiencePref("sdq.sector.audience", SECTOR_AUDIENCES);
   const [tab, setTab] = useState("desglose");
   const [macroCtx, setMacroCtx] = useState<MacroContext | null>(null);
+  const [structure, setStructure] = useState<EconomicStructure | null>(null);
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -150,6 +154,15 @@ export function SectorIntelPage() {
     getMacroContext()
       .then((c) => { if (active) setMacroCtx(c); })
       .catch(() => { if (active) setMacroCtx(null); });
+    return () => { active = false; };
+  }, []);
+
+  // Estructura sectorial agregada (peso + contribución al crecimiento) — best-effort.
+  useEffect(() => {
+    let active = true;
+    getEconomicStructure()
+      .then((s) => { if (active) setStructure(s); })
+      .catch(() => { if (active) setStructure(null); });
     return () => { active = false; };
   }, []);
 
@@ -282,6 +295,7 @@ export function SectorIntelPage() {
                 { id: "contexto", label: t("sector.tabMacro") },
                 { id: "matriz", label: t("sector.tabMatrix") },
                 { id: "ranking", label: t("sector.tabRanking") },
+                { id: "estructura", label: t("sector.tabStructure") },
                 { id: "aceleracion", label: t("sector.tabAccel") },
                 { id: "validacion", label: t("sector.tabValidation") },
               ]}
@@ -387,6 +401,100 @@ export function SectorIntelPage() {
                       })}
                     </tbody>
                   </table>
+                </>
+              )}
+
+              {tab === "estructura" && (
+                <>
+                  <CardHead
+                    icon={PieChart}
+                    title={t("sector.structureTitle")}
+                    subtitle={t("sector.structureSubtitle")}
+                  />
+                  {!structure || !structure.has_data ? (
+                    <StateBlock kind="empty" message={t("sector.structureEmpty")} />
+                  ) : (
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-3 gap-3">
+                        <StatTile
+                          label={t("sector.structureGrowth")}
+                          value={`${structure.total_va_growth >= 0 ? "+" : ""}${fmtNum(structure.total_va_growth, 2)}%`}
+                        />
+                        <StatTile
+                          label={t("sector.structureHhi")}
+                          value={fmtNum(structure.concentration_hhi, 0)}
+                        />
+                        <StatTile label={t("sector.colSector")} value={String(structure.n_sectors)} />
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-xs text-muted mb-2">{t("sector.structureDrivers")}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {structure.drivers.slice(0, 4).map((d) => (
+                              <Chip key={d.slug} tone="ok">
+                                {d.sector} +{fmtNum(d.contribution, 2)}
+                              </Chip>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted mb-2">{t("sector.structureDrags")}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {structure.drags.length === 0 ? (
+                              <span className="text-sm text-muted">—</span>
+                            ) : (
+                              structure.drags.map((d) => (
+                                <Chip key={d.slug} tone="alert">
+                                  {d.sector} {fmtNum(d.contribution, 2)}
+                                </Chip>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-muted border-b border-line">
+                            <th className="py-2 px-1 font-medium">#</th>
+                            <th className="py-2 px-1 font-medium">{t("sector.colSector")}</th>
+                            <th className="py-2 px-1 font-medium text-right">{t("sector.colWeight")}</th>
+                            <th className="py-2 px-1 font-medium text-right">{t("sector.colGrowth")}</th>
+                            <th className="py-2 px-1 font-medium text-right">{t("sector.colContribution")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {structure.sectors.map((s, i) => (
+                            <tr key={s.slug} className="border-b border-line/60 last:border-0">
+                              <td className="py-2.5 px-1 mono text-muted">{i + 1}</td>
+                              <td className="py-2.5 px-1 text-ink truncate">{s.sector}</td>
+                              <td className="py-2.5 px-1 text-right mono font-semibold text-ink">
+                                {fmtNum(s.weight, 1)}
+                              </td>
+                              <td className="py-2.5 px-1 text-right mono text-body">
+                                {s.growth != null && s.growth >= 0 ? "+" : ""}{fmtNum(s.growth, 1)}
+                              </td>
+                              <td className="py-2.5 px-1 text-right">
+                                <Chip tone={s.contribution == null ? "muted" : s.contribution >= 0 ? "ok" : "alert"}>
+                                  {s.contribution != null && s.contribution >= 0 ? "+" : ""}{fmtNum(s.contribution, 2)}
+                                </Chip>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="text-xs text-muted">{t("sector.structureNote")}</p>
+
+                      <AiInsightCard
+                        title={t("sector.structureInsightTitle")}
+                        subtitle={t("sector.structureInsightSubtitle")}
+                        depsKey="structure:gobierno"
+                        fetcher={() => getStructureInsight("gobierno")}
+                        deepFetcher={(deep) => getStructureInsight("gobierno", deep)}
+                      />
+                    </div>
+                  )}
                 </>
               )}
 
