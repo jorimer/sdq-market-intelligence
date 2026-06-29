@@ -17,7 +17,8 @@ logger = logging.getLogger("sdq.products.events")
 # publica su propio "*.updated" (como esg.updated en P4), añadirlo aquí para que su
 # readiness se refresque solo. (banking aún no emite evento propio → manual/recompute.)
 _TRACKED = ("macro.updated", "irmp.updated", "trade.updated", "sector.updated",
-            "esg.updated", "energy.updated", "telecom.updated", "free_zones.updated")
+            "esg.updated", "energy.updated", "telecom.updated", "free_zones.updated",
+            "tourism.updated")
 
 
 def _on_data_updated(payload: dict) -> None:

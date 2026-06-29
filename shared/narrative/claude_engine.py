@@ -430,6 +430,22 @@ THIN_TEMPLATES = {
         "carbono, y aclara que el índice cubre 2 de 3 dimensiones (coverage). Si una cifra no "
         "está, dilo; no inventes."
     ),
+    "tourism_outlook": (
+        "Explica el FUNDAMENTO de la tracción de demanda del sector turismo (ITT).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. Ve profundo en lo que más condiciona la decisión de la "
+        "audiencia entre las dimensiones con dato real: demanda total y demanda extranjera "
+        "(CAGR a 3 años de las llegadas de no residentes), resiliencia/recuperación (nivel "
+        "vs pico pre-pandemia) y diversificación de mercados (concentración por región "
+        "emisora). Usá EXCLUSIVAMENTE las cifras del contexto (itt_score, coverage, "
+        "nonresident_arrivals, foreign_arrivals, recovery_vs_prepandemic_pct, "
+        "top_origin_region, top_origin_share_pct, y el CAGR/score por dimensión). Distingue "
+        "VOLUMEN/CRECIMIENTO de DIVERSIFICACIÓN (riesgo de origen): una demanda fuerte puede "
+        "convivir con alta concentración de un mercado. HONESTIDAD: el índice mide DEMANDA, "
+        "no oferta — NO hay ocupación hotelera, ingresos por turismo (divisas) ni gasto "
+        "(viven en el BCRD, fuera del dato abierto); no los afirmes. Dato anual agregado "
+        "nacional, sin backtest. Si una cifra no está, dilo; no inventes."
+    ),
     "telecom_outlook": (
         "Explica el FUNDAMENTO del desarrollo del sector telecom (IDT).\n"
         "Contexto:\n{context}\n\n"
