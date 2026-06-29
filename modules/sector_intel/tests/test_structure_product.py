@@ -74,6 +74,15 @@ def test_pulse_snapshot_national_anonymous(db):
     assert snap.payload["structure"]["top_driver"]["slug"] == "financiero"
 
 
+def test_quarter_period_falls_back_to_latest_annual(db):
+    # El selector de la UI manda un trimestre ("2026-Q1") pero el dato es anual ("2025").
+    # No debe quedar en blanco: cae al último año disponible.
+    _seed(db)
+    snap = EconomicStructureProduct(db).snapshot(ProductTier.pulse, period="2026-Q1")
+    assert snap.payload["has_data"]
+    assert snap.payload["structure"]["period"] == "2025"
+
+
 def test_data_signals_reports_growth(db):
     _seed(db)
     sig = EconomicStructureProduct(db).data_signals()
