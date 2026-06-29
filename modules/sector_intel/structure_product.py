@@ -298,11 +298,15 @@ class EconomicStructureProduct:
                 charts.append({"title": "Contribución al crecimiento por sector (pp)",
                                "items": [(s.get("sector"), s.get("contribution")) for s in ranked],
                                "signed": True})
+        g = st.get("total_va_growth")
+        headline = (f"Crecimiento del Valor Agregado {g:+.2f}% — {st.get('n_sectors', '')} sectores"
+                    if isinstance(g, (int, float)) else None)
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
-            section_titles=_SECTION_TITLES, tables=tables, charts=charts, subtitle=None,
-            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
+            section_titles=_SECTION_TITLES, tables=tables, charts=charts, headline=headline,
+            subtitle=None, watermark=level.watermark, sample=sample,
+            output_dir=output_dir, fmt=fmt)
 
 
 register_product(SECTOR_KEY, lambda db: EconomicStructureProduct(db))
