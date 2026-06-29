@@ -18,8 +18,10 @@ from shared.source_intel.service import (
     create_suggestion,
     delete_suggestion,
     evaluate,
+    flag_covered_decided,
     get_suggestion,
     list_suggestions,
+    reflag_covered_suggestions,
     scaffold,
     set_status,
 )
@@ -111,6 +113,21 @@ async def post_scaffold(
         return scaffold(db, suggestion_id)
     except SuggestionError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/maintenance", summary="Actualizar estados del tablero (sin IA)")
+async def post_maintenance(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    """Corre SOLO el mantenimiento de cobertura (rápido, sin IA): auto-difiere las
+    sugerencias abiertas ya cubiertas y marca el badge «ya cubierto» en las aprobadas/
+    integrando cuyo eje se cerró. Es lo que antes iba escondido dentro de «Generar
+    propuestas (IA)»; ahora es una acción propia y explícita."""
+    deferred = reflag_covered_suggestions(db)
+    flagged = flag_covered_decided(db)
+    return {"deferred": len(deferred), "flagged": len(flagged),
+            "summary": board_summary(db)}
 
 
 @router.delete("/suggestions/{suggestion_id}", summary="Eliminar una sugerencia")

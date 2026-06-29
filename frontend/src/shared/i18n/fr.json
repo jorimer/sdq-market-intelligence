@@ -342,7 +342,12 @@
     },
     "coveredDecidedHint": "La lacune de l’axe est déjà couverte :",
     "markIntegrated": "Intégrée",
-    "markDeferred": "Différer"
+    "markDeferred": "Différer",
+    "maintenance": "Actualiser les états",
+    "maintenanceHint": "Diffère les déjà couvertes et marque les badges (rapide, sans IA)",
+    "maintenanceDone": "États actualisés : {{deferred}} différées, {{flagged}} marquées",
+    "maintenanceError": "Impossible d’actualiser les états",
+    "clearFilter": "Retirer le filtre"
   },
   "common_retry": "Réessayer",
   "esg": {

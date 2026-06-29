@@ -91,6 +91,13 @@ export async function deleteSuggestion(id: string): Promise<void> {
   await client.delete(`/source-intel/suggestions/${id}`);
 }
 
+/** Mantenimiento del tablero (rápido, sin IA): auto-difiere cubiertas + marca badges.
+ * Síncrono — devuelve cuántas tocó. */
+export async function runMaintenance(): Promise<{ deferred: number; flagged: number }> {
+  const { data } = await client.post("/source-intel/maintenance");
+  return data;
+}
+
 export interface IntegrationPlan {
   data_access: string;
   connector: string;
