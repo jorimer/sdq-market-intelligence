@@ -103,12 +103,21 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
     open_keys = _open_agent_keys(db)
     created: List[str] = []
     skipped_gaps = 0
+    skipped_covered = 0
     hit_cap = False
+
+    from shared.source_intel.coverage import coverage_status
 
     for sector in audit.get("sectors", []):
         if hit_cap:
             break
         if not sector.get("implemented"):
+            continue
+        # No proponer fuentes nuevas para un sector cuyo gate de datos (g1) ya está en
+        # pleno: más datos no cierran su brecha (típicamente g5/backtest). Evita generar
+        # redundantes de raíz — la misma clase de propuesta que el reflag difiere.
+        if coverage_status(db, sector["sector_key"])["covered"]:
+            skipped_covered += 1
             continue
         for gap in sector.get("gaps", []):
             if len(created) >= max_create:
@@ -151,8 +160,8 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
     # ``capped``: hubo más brechas que el tope por corrida → no se truncó en silencio
     # (correr de nuevo cubre el resto; el dedup salta lo ya propuesto).
     return {"created": len(created), "evaluated": len(created),
-            "skipped_gaps": skipped_gaps, "capped": hit_cap,
-            "reflagged_covered": len(reflagged)}
+            "skipped_gaps": skipped_gaps, "skipped_covered": skipped_covered,
+            "capped": hit_cap, "reflagged_covered": len(reflagged)}
 
 
 def _notify_agent_proposals(db: Session, n: int) -> None:
