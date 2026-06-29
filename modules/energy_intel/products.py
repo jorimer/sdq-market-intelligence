@@ -180,7 +180,7 @@ class EnergyProduct:
         if s is None:
             return DataHealth(coverage=0.0, freshness_days=None, cadence="annual",
                               sources=("SIE",), detail="Sin IRSE persistido.")
-        # Cobertura honesta: la del índice (2/3 dims reales). Cadencia anual (capacidad SIE).
+        # Cobertura honesta: la del índice. Cadencia anual (capacidad SIE).
         coverage = s.coverage if s.coverage is not None else 0.0
         freshness = None
         try:
@@ -189,20 +189,33 @@ class EnergyProduct:
             freshness = max(0, (date.today() - date(int(str(s.period)[:4]), 12, 31)).days)
         except (ValueError, TypeError):
             pass
+        tr = (s.breakdown or {}).get("transition") or {}
+        transition_txt = (
+            f"transición = renovable {_fmt(tr.get('renewable_share'))}%"
+            if s.transition_score is not None else "transición = brecha")
+        sources = ["SIE (capacidad)", "SIE (reclamaciones)"]
+        if s.transition_score is not None:
+            sources.append("ONE (generación por tecnología)")
         return DataHealth(coverage=coverage, freshness_days=freshness, cadence="annual",
-                          sources=("SIE (capacidad)", "SIE (reclamaciones)"),
+                          sources=tuple(sources),
                           detail=f"IRSE {_fmt(s.energy_score)} ({s.band}) en {s.period} · "
-                                 f"transición = brecha")
+                                 f"{transition_txt}")
 
     def has_engine(self) -> bool:
         return self._latest() is not None
 
     def validation_state(self) -> ValidationState:
-        # Índice PRELIMINAR: sin backtest y con 1 dimensión (transición) como brecha →
-        # validación parcial honesta, no veredicto pleno.
-        return ValidationState(approved=True, score=0.45,
-                               notes="IRSE preliminar (sin backtest); transición declarada "
-                                     "como brecha. Capacidad y servicio sobre dato real SIE.")
+        # Índice PRELIMINAR: las 3 dimensiones sobre dato real, pero SIN backtest de
+        # outcomes (Gate E) → validación parcial honesta, no veredicto pleno.
+        s = self._latest()
+        full = s is not None and s.transition_score is not None
+        score = 0.55 if full else 0.45
+        notes = ("IRSE preliminar (sin backtest de outcomes). Las 3 dimensiones "
+                 "—capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real."
+                 if full else
+                 "IRSE preliminar (sin backtest); transición declarada como brecha. "
+                 "Capacidad y servicio sobre dato real SIE.")
+        return ValidationState(approved=True, score=score, notes=notes)
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,
