@@ -142,6 +142,7 @@ import modules.trade_intel.products  # noqa: F401 — registers trade SectorProd
 import modules.esg_climate.products  # noqa: F401 — registers esg SectorProduct
 import modules.sector_intel.products  # noqa: F401 — registers tourism/construction/agribusiness
 import modules.free_zones_intel.products  # noqa: F401 — registers free_zones (dedicado, IZF/CNZFE)
+import modules.tourism_intel.products  # noqa: F401 — registers tourism (dedicado, ITT/ONE)
 import modules.energy_intel.products  # noqa: F401 — registers energy SectorProduct
 import modules.telecom_intel.products  # noqa: F401 — registers telecom SectorProduct
 import modules.pension_intel.products  # noqa: F401 — registers pension SectorProduct

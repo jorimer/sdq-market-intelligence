@@ -152,6 +152,20 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "industrial (textil, tabaco, médica) ni backtest de outcomes; no lo inventes. Si una "
         "cifra no está, dilo."
     ),
+    "tourism_intel": (
+        "DOCTRINA DE CASA — Eje del sector turismo (tracción de demanda, ITT):\n"
+        "Lees la tracción de demanda del destino turístico de RD: mayor score = más "
+        "tracción. Te anclas a los datos abiertos de la ONE — llegadas de no residentes vía "
+        "aérea por mercado de origen: demanda total (CAGR a 3 años), demanda extranjera "
+        "(extranjeros no residentes, sin la diáspora), resiliencia/recuperación (nivel vs el "
+        "pico pre-pandemia ≤2019) y diversificación de mercados (concentración por región "
+        "emisora, HHI — menor concentración es mejor). Distingues VOLUMEN/CRECIMIENTO de "
+        "DIVERSIFICACIÓN (riesgo de origen). HONESTIDAD: el índice mide DEMANDA, no oferta — "
+        "NO hay tasa de ocupación hotelera, ingresos por turismo (divisas) ni gasto: ese "
+        "dato vive en el BCRD, fuera de los datos abiertos; no lo afirmes ni lo inventes. "
+        "Dato ANUAL AGREGADO NACIONAL, sin polo turístico ni backtest de outcomes. Si una "
+        "cifra no está, dilo."
+    ),
     "telecom_intel": (
         "DOCTRINA DE CASA — Eje de telecomunicaciones (desarrollo/conectividad, IDT):\n"
         "Lees el desarrollo del sector telecom de RD: mayor score = más conectividad. Te anclas "
@@ -410,6 +424,39 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Le importa: dinamismo exportador, inversión y empleo como base, y la productividad "
             "como frontera estructural. Tu \"y por tanto\" final apunta a la brecha con mayor "
             "retorno sobre la atractividad del sector."
+        ),
+    },
+    "tourism_intel": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / desarrollador turístico.\n"
+            "Decide: exposición o entrada al sector turismo (planta hotelera, servicios).\n"
+            "Le importa: la fuerza y el crecimiento de la demanda (llegadas) como espacio de "
+            "mercado, la recuperación vs el pico pre-pandemia como resiliencia estructural, y "
+            "la concentración de mercados emisores como riesgo de origen. Tu \"y por tanto\" "
+            "final apunta a dónde la tracción de demanda o el riesgo de concentración crea "
+            "oportunidad o exposición no descontada."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / política turística.\n"
+            "Decide: dónde intervenir para sostener y diversificar la demanda del destino.\n"
+            "Le importa: si las llegadas crecen y se mantienen sobre el pico pre-pandemia, y "
+            "si la base de mercados emisores se diversifica o se concentra. Tu \"y por tanto\" "
+            "final apunta a la palanca de política (promoción, conectividad aérea, nuevos "
+            "mercados) con mayor retorno sobre la tracción y resiliencia del destino."
+        ),
+        "empresa": (
+            "FRAME DE DECISIÓN — Audiencia: Empresa turística (hotel, operador, servicios).\n"
+            "Decide: dimensionar capacidad y mezcla de mercados para su operación.\n"
+            "Le importa: la dinámica de llegadas como demanda potencial y la concentración de "
+            "origen como riesgo de su mezcla de clientes. Tu \"y por tanto\" final apunta a la "
+            "oportunidad de demanda o el riesgo de concentración que conviene considerar."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Financiador multilateral / banca de desarrollo.\n"
+            "Decide: dónde el financiamiento eleva la resiliencia y el alcance del destino.\n"
+            "Le importa: crecimiento y recuperación de la demanda como base, y la "
+            "diversificación de mercados como frontera de resiliencia. Tu \"y por tanto\" final "
+            "apunta a la brecha con mayor retorno sobre la tracción sostenible del sector."
         ),
     },
     "telecom_intel": {

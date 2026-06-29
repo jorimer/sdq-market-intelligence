@@ -1,6 +1,8 @@
 """Tests de los productos sectoriales (sector_intel parametrizado) — #4,#5,#8,#9.
 
-Un mismo SectorIntelProduct sirve a tourism/free_zones/construction/agribusiness.
+Un mismo SectorIntelProduct sirve a construction/agribusiness (tourism y free_zones
+tienen producto dedicado: modules.tourism_intel · ITT/ONE y modules.free_zones_intel ·
+IZF/CNZFE — ya no los sirve el corte transversal del IAI).
 Cubren: conformidad, manifiesto, readiness desde señales reales (DB vacía/sin tablas
 → G1/G2 bajan; con dato G1 = peso del IAI con procedencia real por-variable, ~0.70 con
 6/9 live, NO hardcode; legacy sin procedencia cae al fallback 0.40), snapshot
@@ -31,10 +33,10 @@ from modules.sector_intel.products import (
     sector_manifest,
 )
 
-PRODUCT_KEYS = ("tourism", "construction", "agribusiness")
+PRODUCT_KEYS = ("construction", "agribusiness")
 
 
-def test_all_four_registered_and_contract():
+def test_all_registered_and_contract():
     for pk in PRODUCT_KEYS:
         assert is_implemented(pk)
         prod = get_product(pk, None)
@@ -49,7 +51,7 @@ def test_unknown_product_key_rejected():
 
 
 def test_manifest_three_tiers():
-    m = sector_manifest("tourism", "Turismo · RD")
+    m = sector_manifest("construction", "Construcción · RD")
     assert m.tiers() == [ProductTier.pulse, ProductTier.insight, ProductTier.deep_dive]
     assert m.require_level(ProductTier.pulse).granularity.value == "system"
     dd = set(m.require_level(ProductTier.deep_dive).sections)
@@ -116,7 +118,7 @@ def _seed(db, sector_code="turismo"):
 
 
 def test_readiness_empty_db(db):
-    rep = compute_readiness(SectorIntelProduct(db, "tourism"), ProductTier.insight)
+    rep = compute_readiness(SectorIntelProduct(db, "construction"), ProductTier.insight)
     assert rep["g1"] == 0.0 and rep["g2"] == 0.0
     assert rep["g3"] == 1.0 and rep["g4"] == 1.0
     assert rep["g5"] == 0.5  # Gate E sectorial diferido
@@ -134,8 +136,8 @@ def test_readiness_no_tables_does_not_crash():
 def test_readiness_honest_coverage_by_provenance(db):
     """G1 acredita el peso del IAI con dato real por PROCEDENCIA por-variable (6/9 live
     → ~0.70), no un conjunto fijo de dims. Con esa cobertura el Pulse cruza 0.75."""
-    _seed(db, "turismo")
-    rep = compute_readiness(SectorIntelProduct(db, "tourism"), ProductTier.pulse)
+    _seed(db, "construccion")
+    rep = compute_readiness(SectorIntelProduct(db, "construction"), ProductTier.pulse)
     assert rep["g1"] == pytest.approx(0.70, abs=1e-6)  # 0.70 real × frescura anual plena
     assert rep["g2"] == 1.0
     # 0.30·0.70 + 0.25 + 0.15 + 0.15 + 0.15·0.50 = 0.835 → cruza el umbral Pulse (0.75).
@@ -172,8 +174,8 @@ def test_readiness_legacy_breakdown_fallback(db):
 
 
 def test_pulse_snapshot_is_anonymous(db):
-    _seed(db, "turismo")
-    snap = SectorIntelProduct(db, "tourism").snapshot(ProductTier.pulse, "2025")
+    _seed(db, "construccion")
+    snap = SectorIntelProduct(db, "construction").snapshot(ProductTier.pulse, "2025")
     assert snap.entity_name is None and snap.entity_roster == ()
     assert snap.payload["latest"]["iai_score"] == 55.75
 
@@ -194,13 +196,13 @@ def test_pulse_assemble_and_render(db, tmp_path):
 
 
 def test_deep_dive_render_synthetic(tmp_path):
-    latest = {"sector_code": "turismo", "period": "2025", "iai_score": 55.75,
+    latest = {"sector_code": "construccion", "period": "2025", "iai_score": 55.75,
               "iai_band": "Media", "sgps_score": 62.0, "iai_breakdown": _breakdown()}
     snap = ProductSnapshot(tier=ProductTier.deep_dive, period="2025",
                            payload={"has_score": True, "latest": latest,
                                     "sgps_detail": {"historical": 60.0, "structural": 64.0}},
-                           entity_name="Turismo (Hoteles/Bares/Rest.) · RD")
-    prod = SectorIntelProduct(None, "tourism")
+                           entity_name="Construcción · RD")
+    prod = SectorIntelProduct(None, "construction")
     narr = asyncio.run(prod.narratives(ProductTier.deep_dive, snap))
     assert "limitations" in narr and "IAI" in narr["limitations"]
     path = asyncio.run(prod.render(ProductTier.deep_dive, snap, narr,
@@ -212,7 +214,7 @@ def test_templates_are_guarded():
     from shared.narrative.claude_engine import THIN_TEMPLATES
     from shared.narrative.cerebro import AXIS_DOCTRINE
     assert "sector_intel" in AXIS_DOCTRINE
-    m = sector_manifest("tourism", "Turismo · RD")
+    m = sector_manifest("construction", "Construcción · RD")
     for tier in m.tiers():
         for tmpl in m.require_level(tier).narrative_templates:
             assert tmpl in THIN_TEMPLATES, f"{tmpl} no es thin → sin guard"

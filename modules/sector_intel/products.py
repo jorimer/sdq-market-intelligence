@@ -6,10 +6,10 @@ contrato macro→sectorial. Un mismo ``SectorIntelProduct(product_key, sector_co
 sirve a varios productos del catálogo, cada uno = un sector económico, registrándose
 bajo su propia ``product_key``:
 
-    tourism      → turismo            (Hoteles/Bares/Restaurantes)
     construction → construccion
     agribusiness → agropecuario
     (free_zones tiene producto dedicado: modules.free_zones_intel · IZF/CNZFE)
+    (tourism tiene producto dedicado: modules.tourism_intel · ITT/ONE)
 
 Implementa el ``Protocol`` ``SectorProduct`` SIN tocar el framework, reusando el
 motor de narrativa y los getters PÚBLICOS del propio módulo (``service``/``ai_context``).
@@ -55,10 +55,10 @@ logger = logging.getLogger("sdq.products.sector")
 # product_key (catálogo) → (sector_code BCRD, display_name). Mapeo declarativo de los
 # productos sectoriales servidos por sector_intel.
 SECTOR_PRODUCTS: Dict[str, tuple] = {
-    "tourism": ("turismo", "Turismo (Hoteles/Bares/Rest.) · RD"),
-    # free_zones tiene producto DEDICADO (modules.free_zones_intel · IZF/CNZFE) — ya no lo
-    # sirve el corte transversal del IAI. El sector sigue en el peer set del IAI
-    # (sector_catalog), solo cambia el producto consumible del slot.
+    # free_zones y tourism tienen producto DEDICADO (modules.free_zones_intel · IZF/CNZFE;
+    # modules.tourism_intel · ITT/ONE) — ya no los sirve el corte transversal del IAI. Cada
+    # sector sigue en el peer set del IAI (sector_catalog/bcrd_sectors); solo cambia el
+    # producto consumible del slot.
     "construction": ("construccion", "Construcción · RD"),
     "agribusiness": ("agropecuario", "Agropecuario · RD"),
 }
