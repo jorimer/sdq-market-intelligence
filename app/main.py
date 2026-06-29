@@ -121,6 +121,7 @@ import modules.social_dev.operations  # noqa: F401 — registers one-social-sync
 import modules.trade_intel.operations  # noqa: F401 — registers dga-trade-sync
 import modules.esg_climate.operations  # noqa: F401 — registers esg-sync
 import modules.energy_intel.operations  # noqa: F401 — registers sie-energy-sync
+import modules.free_zones_intel.operations  # noqa: F401 — registers cnzfe-free-zones-sync
 import modules.telecom_intel.operations  # noqa: F401 — registers indotel-telecom-sync
 import modules.pension_intel.operations  # noqa: F401 — registers sipen-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
