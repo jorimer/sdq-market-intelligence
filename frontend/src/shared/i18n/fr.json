@@ -1705,6 +1705,7 @@
       "requiresPlan": "Nécessite l'offre {{plan}}",
       "reportError": "Impossible de charger le produit.",
       "period": "Période : {{v}}",
+      "periodLabel": "Période",
       "scopeLabel": "Entité à analyser",
       "scopePlaceholder": "Nom de l'entité",
       "scopeSelectPlaceholder": "Choisissez une entité…",
