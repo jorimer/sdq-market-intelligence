@@ -224,14 +224,23 @@ def render_product_pdf(
     watermark: Optional[str] = None,
     sample: bool = False,
     output_dir: Optional[str] = None,
+    fmt: str = "pdf",
 ) -> str:
-    """Renderiza el PDF de marca de un producto y devuelve el path (docs/REPORT_STANDARD.md).
+    """Renderiza el reporte de marca de un producto y devuelve el path (docs/REPORT_STANDARD.md).
 
-    Portada de marca (banda + título + sujeto + período [+ subtítulo/headline]) → tablas →
-    secciones narrativas numeradas (con pull-quotes) → disclaimer. Cada página interior lleva
-    encabezado corrido + nº de página; ``watermark``/``sample`` estampan el pie por tier.
-    ``headline`` es la cifra/banda clave para el pull-quote de portada (opcional).
+    Portada de marca (banda + logo + título + sujeto + período [+ subtítulo/headline]) →
+    tablas → secciones narrativas numeradas (con pull-quotes) → disclaimer. Cada página
+    interior lleva encabezado corrido + nº de página; ``watermark``/``sample`` estampan el
+    pie por tier. ``headline`` es la cifra/banda clave para el pull-quote de portada.
+    ``fmt="docx"`` produce el Word equivalente (misma anatomía) — punto de entrada único.
     """
+    if fmt == "docx":
+        from shared.products.render_docx import render_product_docx
+        return render_product_docx(
+            sector_key=sector_key, display_name=display_name, title=title, period=period,
+            narratives=narratives, section_titles=section_titles, tables=tables,
+            subtitle=subtitle, headline=headline, watermark=watermark, sample=sample,
+            output_dir=output_dir)
     out_dir = output_dir or settings.REPORTS_DIR
     os.makedirs(out_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

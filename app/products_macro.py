@@ -423,7 +423,7 @@ class MacroProduct:
     # ── Render (sin DB, renderer genérico) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
                      narratives: Dict[str, str], *, sample: bool = False,
-                     lang: str = "es", output_dir: Optional[str] = None) -> str:
+                     lang: str = "es", output_dir: Optional[str] = None, fmt: str = "pdf") -> str:
         level = self.product_manifest().require_level(tier)
         title = {"pulse": "Pulse Macro", "insight": "Insight Riesgo-País",
                  "deep_dive": "Deep Dive Riesgo-País"}.get(tier.value, "Macro")
@@ -449,7 +449,7 @@ class MacroProduct:
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title, period=snapshot.period,
             narratives=narratives, section_titles=_SECTION_TITLES, tables=tables,
-            subtitle=None, watermark=level.watermark, sample=sample, output_dir=output_dir)
+            subtitle=None, watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
 
 
 register_product(SECTOR_KEY, lambda db: MacroProduct(db))

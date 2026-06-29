@@ -107,8 +107,10 @@ class SectorProduct(Protocol):
 
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
                      narratives: Dict[str, str], *, sample: bool = False,
-                     lang: str = "es", output_dir: Optional[str] = None) -> str:
-        """Renderiza el reporte del nivel y devuelve el path. Reusa building blocks."""
+                     lang: str = "es", output_dir: Optional[str] = None,
+                     fmt: str = "pdf") -> str:
+        """Renderiza el reporte del nivel y devuelve el path. ``fmt`` = "pdf" | "docx"
+        (misma anatomía de marca, ver docs/REPORT_STANDARD.md). Reusa building blocks."""
         ...
 
     # ── Muestra de conversión (OPCIONAL) ──

@@ -276,7 +276,7 @@ class EconomicStructureProduct:
     # ── Render (sin DB, renderer genérico) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
                      narratives: Dict[str, str], *, sample: bool = False,
-                     lang: str = "es", output_dir: Optional[str] = None) -> str:
+                     lang: str = "es", output_dir: Optional[str] = None, fmt: str = "pdf") -> str:
         level = self.product_manifest().require_level(tier)
         title = {"pulse": "Pulse Estructura Sectorial", "insight": "Insight Estructura Sectorial",
                  "deep_dive": "Deep Dive Estructura Sectorial"}.get(tier.value, "Estructura Sectorial")
@@ -293,7 +293,7 @@ class EconomicStructureProduct:
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
             section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
-            watermark=level.watermark, sample=sample, output_dir=output_dir)
+            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
 
 
 register_product(SECTOR_KEY, lambda db: EconomicStructureProduct(db))

@@ -255,20 +255,28 @@ async def get_product_report(
     }
 
 
-@router.get("/{sector}/{tier}/download", summary="Descarga PDF del producto (gated por tier)")
+_DOC_FORMATS = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+@router.get("/{sector}/{tier}/download", summary="Descarga del producto PDF/Word (gated por tier)")
 async def get_product_pdf(
     sector: str, tier: str,
     period: Optional[str] = None, scope: Optional[str] = None,
+    format: str = "pdf",
     db: Session = Depends(get_db),
     lang: str = Depends(resolve_request_lang),
     access: AccessDecision = Depends(require_product_access),
 ) -> FileResponse:
-    """Ensambla y devuelve el PDF del (sector, nivel). Mismo gate y mismo contenido que
-    la vista in-app (vía ``assemble_product_report``, que reusa el snapshot+narrativas)."""
+    """Ensambla y devuelve el reporte del (sector, nivel) en ``format`` ("pdf" | "docx").
+    Mismo gate y mismo contenido que la vista in-app (vía ``assemble_product_report``)."""
+    fmt = format if format in _DOC_FORMATS else "pdf"
     product = _resolve_product(sector, db)
     try:
         path = await assemble_product_report(
-            product, access.tier, period=period or "", scope=scope, lang=lang)
+            product, access.tier, period=period or "", scope=scope, lang=lang, fmt=fmt)
     except AnonymizationError:
         raise HTTPException(status_code=500,
                             detail="Error de gobernanza al ensamblar el producto.")
@@ -277,8 +285,8 @@ async def get_product_pdf(
     # El path lo genera el ensamblador (nunca input del usuario). El filename sí
     # interpola `period` del query: lo saneamos a [A-Za-z0-9_-] por higiene del header.
     safe_period = re.sub(r"[^A-Za-z0-9_-]", "", period or "latest") or "latest"
-    filename = f"SDQ_{sector}_{access.tier.value}_{safe_period}.pdf"
-    return FileResponse(path=path, media_type="application/pdf", filename=filename)
+    filename = f"SDQ_{sector}_{access.tier.value}_{safe_period}.{fmt}"
+    return FileResponse(path=path, media_type=_DOC_FORMATS[fmt], filename=filename)
 
 
 @router.get("/{sector}/{tier}/sample", summary="Descargar la muestra (una vez por nivel)")

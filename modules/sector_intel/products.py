@@ -406,7 +406,7 @@ class SectorIntelProduct:
     # ── Render (sin DB, renderer genérico) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
                      narratives: Dict[str, str], *, sample: bool = False,
-                     lang: str = "es", output_dir: Optional[str] = None) -> str:
+                     lang: str = "es", output_dir: Optional[str] = None, fmt: str = "pdf") -> str:
         level = self.product_manifest().require_level(tier)
         title = {"pulse": "Pulse Sectorial", "insight": "Insight Sectorial",
                  "deep_dive": "Deep Dive Sectorial"}.get(tier.value, "Sectorial")
@@ -423,7 +423,7 @@ class SectorIntelProduct:
             sector_key=self.sector_key, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
             section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
-            watermark=level.watermark, sample=sample, output_dir=output_dir)
+            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
 
 
 # Auto-registro de cada producto sectorial (idempotente). Cada factory captura su
