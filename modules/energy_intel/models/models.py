@@ -24,5 +24,6 @@ class EnergyScore(UUIDMixin, Base):
     capacity_mw = Column(Float, nullable=True)
     capacity_score = Column(Float, nullable=True)
     service_score = Column(Float, nullable=True)
-    breakdown = Column(JSON, nullable=True)            # dimensions + capacity + service
+    transition_score = Column(Float, nullable=True)    # penetración renovable (ONE)
+    breakdown = Column(JSON, nullable=True)            # dimensions + capacity + service + transition
     model_version = Column(String(10), default="1.0", nullable=False)

@@ -51,13 +51,13 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Resiliencia del Sector Eléctrico (IRSE) sobre datos abiertos de la SIE: "
-    "adecuación de capacidad (parque instalado del SENI) y calidad de servicio (backlog "
-    "de reclamaciones). La TRANSICIÓN energética (penetración renovable, intensidad de "
-    "carbono) es una brecha declarada: el dato confiable de generación por tecnología "
-    "vive en OC-SENI (pendiente de conector) y el consumo de combustible CKAN tiene un "
-    "quiebre de unidades — no se computa para no fabricar precisión. Índice PRELIMINAR "
-    "(sin backtest), cubre 2 de 3 dimensiones."
+    "Índice de Resiliencia del Sector Eléctrico (IRSE) sobre datos abiertos: adecuación "
+    "de capacidad (parque instalado del SENI, SIE), calidad de servicio (backlog de "
+    "reclamaciones, SIE) y TRANSICIÓN energética (penetración renovable de la matriz de "
+    "generación, ONE) — las 3 dimensiones con dato real. La penetración renovable se "
+    "mide sobre la meta nacional de la Ley 57-07 (25 %); el consumo de combustible CKAN "
+    "sigue excluido (quiebre de unidades 2018) para no fabricar precisión. Índice "
+    "PRELIMINAR (sin backtest)."
 )
 _NO_DATA = (
     "No hay IRSE persistido: el producto está cableado pero su cobertura (G1) es "
@@ -147,7 +147,7 @@ def _index_dict(s: EnergyScore) -> Dict[str, Any]:
     bd = s.breakdown or {}
     return {"energy_score": s.energy_score, "band": s.band, "coverage": s.coverage,
             "dimensions": bd.get("dimensions", {}), "capacity": bd.get("capacity", {}),
-            "service": bd.get("service", {})}
+            "service": bd.get("service", {}), "transition": bd.get("transition", {})}
 
 
 def _fmt(v: Optional[float]) -> str:

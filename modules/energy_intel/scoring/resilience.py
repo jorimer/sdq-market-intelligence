@@ -6,24 +6,27 @@ Funciones puras sobre dato real de la SIE (datos.gob.do):
   * **Calidad de servicio**: backlog de reclamaciones (en proceso) en meses de
     recepción. Menos backlog = mejor servicio al usuario.
 
-Dimensión declarada como BRECHA (sin dato confiable hoy): la TRANSICIÓN energética
-(penetración renovable / intensidad de carbono). La generación renovable real (GWh
-por tecnología) vive en OC-SENI (PDF) y el consumo de combustible CKAN tiene un
-quiebre de unidades en 2018 → no se computa (nunca falsa precisión). El índice
-reporta sobre 2 de 3 dimensiones → cobertura parcial honesta (sube con un conector
-OC). Corolario de la lección "índice sobre cobertura parcial": pondera sobre lo medido.
+Tercera dimensión, antes BRECHA y ahora MEDIDA con dato real: la TRANSICIÓN
+energética (penetración renovable). La generación por tecnología (% de la matriz)
+se publica como dato abierto estructurado de la ONE (datos.gob.do) — ver
+``shared/data/generation_client``. La penetración renovable (eólica+hidráulica+solar)
+se puntúa contra la meta nacional de la Ley 57-07 (25 % renovable). El consumo de
+combustible CKAN sigue excluido (quiebre de unidades 2018 → no se computa, nunca
+falsa precisión). Con dato en las 3 dimensiones el índice alcanza cobertura plena;
+si alguna falta, el score pondera SOLO lo medido (cobertura parcial honesta).
 """
 from typing import Dict, List, Optional
 
-# Pesos conceptuales del IRSE. La transición no tiene dato hoy → su peso NO se
-# acredita: el score se reparte sobre las dimensiones con dato y la cobertura baja.
+# Pesos conceptuales del IRSE. Una dimensión sin dato NO acredita su peso: el score
+# se reparte sobre las dimensiones con dato y la cobertura baja en proporción.
 W_CAPACITY = 0.35
 W_SERVICE = 0.30
-W_TRANSITION = 0.35  # BRECHA declarada (sin dato confiable) — no se puntúa
+W_TRANSITION = 0.35  # penetración renovable (ONE) — medida con dato real
 
 DEMAND_GROWTH_TARGET = 4.0   # %/año — ritmo de demanda que la capacidad debe seguir
 BACKLOG_FREE_MONTHS = 1.0    # ≤1 mes de backlog = servicio pleno
 BACKLOG_ZERO_MONTHS = 9.0    # ≥9 meses de backlog = servicio colapsado
+RENEWABLE_TARGET_PCT = 25.0  # meta nacional Ley 57-07 (25 % renovable) → score 100
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
@@ -88,17 +91,41 @@ def service_metrics(claims: List[Dict[str, object]],
             "avg_received": round(avg_received, 1), "score": score}
 
 
+def transition_metrics(
+    renewable_share_by_year: Optional[Dict[int, float]]) -> Dict[str, Optional[float]]:
+    """Penetración renovable y score de transición desde {año: % renovable}.
+
+    Toma el último año con dato y puntúa contra la meta nacional (Ley 57-07, 25 %):
+    ``score = min(100, share/25 · 100)``. Reporta también la variación vs 5 años
+    antes (señal de avance). Sin dato → score None (la dimensión vuelve a ser brecha)."""
+    if not renewable_share_by_year:
+        return {"renewable_share": None, "delta_5y": None, "year": None, "score": None}
+    years = sorted(renewable_share_by_year)
+    latest = years[-1]
+    share = renewable_share_by_year[latest]
+    base = renewable_share_by_year.get(latest - 5)
+    delta = round(share - base, 2) if base is not None else None
+    score = round(_clamp(share / RENEWABLE_TARGET_PCT * 100), 2)
+    return {"renewable_share": round(share, 2), "delta_5y": delta,
+            "year": latest, "score": score}
+
+
 def compute_energy_index(capacity_by_year: Dict[int, float],
-                         claims: List[Dict[str, object]]) -> Dict:
-    """IRSE desde capacidad + reclamaciones (dato real SIE). El score pondera SOLO las
-    dimensiones con dato (mín. 1); la transición queda como brecha → cobertura < 1."""
+                         claims: List[Dict[str, object]],
+                         renewable_share_by_year: Optional[Dict[int, float]] = None) -> Dict:
+    """IRSE desde capacidad + reclamaciones + penetración renovable (dato real). El
+    score pondera SOLO las dimensiones con dato (mín. 1); una dimensión sin dato queda
+    como brecha y baja la cobertura."""
     cap = capacity_metrics(capacity_by_year)
     svc = service_metrics(claims)
+    tra = transition_metrics(renewable_share_by_year)
 
     dims = {
         "capacity_adequacy": {"score": cap["score"], "weight": W_CAPACITY, "provenance": "real"},
         "service_quality": {"score": svc["score"], "weight": W_SERVICE, "provenance": "real"},
-        "energy_transition": {"score": None, "weight": W_TRANSITION, "provenance": "brecha"},
+        "energy_transition": {
+            "score": tra["score"], "weight": W_TRANSITION,
+            "provenance": "real" if tra["score"] is not None else "brecha"},
     }
     measured = [(d["score"], d["weight"]) for d in dims.values() if d["score"] is not None]
     total_w = sum(d["weight"] for d in dims.values())
@@ -119,4 +146,5 @@ def compute_energy_index(capacity_by_year: Dict[int, float],
         "dimensions": dims,
         "capacity": cap,
         "service": svc,
+        "transition": tra,
     }
