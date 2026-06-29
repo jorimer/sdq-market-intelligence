@@ -363,13 +363,24 @@ async function downloadPdfBlob(url: string, fallback: string, params = {}): Prom
   URL.revokeObjectURL(blobUrl);
 }
 
-/** Descarga el PDF del producto (respeta el mismo gate que la vista in-app). */
+/** Descarga el reporte del producto en PDF o Word (mismo gate que la vista in-app). */
+export async function downloadProductReport(
+  sector: string,
+  tier: string,
+  fmt: "pdf" | "docx" = "pdf",
+  opts: { period?: string; scope?: string } = {},
+): Promise<void> {
+  await downloadPdfBlob(`/products/${sector}/${tier}/download`,
+    `SDQ_${sector}_${tier}.${fmt}`, { ...opts, format: fmt });
+}
+
+/** Atajo PDF (compat). */
 export async function downloadProductPdf(
   sector: string,
   tier: string,
   opts: { period?: string; scope?: string } = {},
 ): Promise<void> {
-  await downloadPdfBlob(`/products/${sector}/${tier}/download`, `SDQ_${sector}_${tier}.pdf`, opts);
+  await downloadProductReport(sector, tier, "pdf", opts);
 }
 
 /** Descarga la muestra demo (una vez por sector/nivel; 409 si ya se descargó). */

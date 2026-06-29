@@ -1700,6 +1700,8 @@
       "yourPlan": "Votre offre :",
       "view": "Voir",
       "download": "Télécharger le PDF",
+      "downloadPdf": "Télécharger le PDF",
+      "downloadWord": "Télécharger Word",
       "requestAccess": "Demander l'accès",
       "sample": "Télécharger l'échantillon",
       "requiresPlan": "Nécessite l'offre {{plan}}",
