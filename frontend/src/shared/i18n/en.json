@@ -1705,6 +1705,7 @@
       "requiresPlan": "Requires {{plan}} plan",
       "reportError": "Could not load the product.",
       "period": "Period: {{v}}",
+      "periodLabel": "Period",
       "scopeLabel": "Entity to analyze",
       "scopePlaceholder": "Entity name",
       "scopeSelectPlaceholder": "Choose an entity…",

@@ -16,6 +16,7 @@ import {
   getProductCatalog,
   getProductReport,
   getProductScopeOptions,
+  getProductPeriods,
   downloadProductPdf,
   downloadProductSample,
   type ProductCatalog,
@@ -208,16 +209,21 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   const [scope, setScope] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [options, setOptions] = useState<ScopeOption[]>([]);
+  // Períodos REALES del producto (más reciente primero); "" = usa el período global del topbar.
+  const [periods, setPeriods] = useState<string[]>([]);
+  const [selPeriod, setSelPeriod] = useState("");
+  const [activeScope, setActiveScope] = useState<string | undefined>(undefined);
   const [report, setReport] = useState<ProductReport | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(needsScope ? "idle" : "loading");
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const tierLabel = t(`platform.catalog.tier.${level.tier}`, { defaultValue: level.tier });
 
-  const fetchReport = (s?: string) => {
+  const runReport = (p: string, s?: string) => {
     setStatus("loading");
     setErrMsg(null);
+    setActiveScope(s);
     getProductReport(sector.sector_key, level.tier,
-      { period: periodEnd, ...(s ? { scope: s } : {}) })
+      { period: p || periodEnd, ...(s ? { scope: s } : {}) })
       .then((r) => { setReport(r); setStatus("ready"); })
       .catch((e) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,17 +232,31 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
         setStatus("error");
       });
   };
+  // Submit del selector de entidad (banca) → usa el período elegido.
+  const fetchReport = (s?: string) => runReport(selPeriod, s);
 
-  // Sin entidad a elegir (Pulse o sujeto fijo: país/sector) → carga directo. Si la necesita
-  // (banca), trae el universo y muestra el selector en dos pasos.
+  // Cambio de período: re-carga si ya hay reporte (no-scope siempre; scope solo tras elegir entidad).
+  const onPeriodChange = (p: string) => {
+    setSelPeriod(p);
+    if (!needsScope || activeScope) runReport(p, activeScope);
+  };
+
   useEffect(() => {
-    if (!needsScope) {
-      fetchReport();
-      return;
+    // Períodos del producto (best-effort) → selector; default = el más reciente.
+    getProductPeriods(sector.sector_key)
+      .then((ps) => {
+        setPeriods(ps);
+        const def = ps[0] || "";
+        setSelPeriod(def);
+        if (!needsScope) runReport(def);
+      })
+      .catch(() => { if (!needsScope) runReport(""); });
+    // Si necesita entidad (banca), trae el universo y muestra el selector en dos pasos.
+    if (needsScope) {
+      getProductScopeOptions(sector.sector_key)
+        .then(setOptions)
+        .catch(() => setOptions([])); // sin opciones → input libre (fallback)
     }
-    getProductScopeOptions(sector.sector_key)
-      .then(setOptions)
-      .catch(() => setOptions([])); // sin opciones → input libre (fallback)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -310,6 +330,21 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
             </div>
           )}
         </form>
+      )}
+
+      {periods.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <label className="text-xs text-muted shrink-0">{t("platform.catalog.periodLabel")}</label>
+          <select
+            value={selPeriod}
+            onChange={(e) => onPeriodChange(e.target.value)}
+            className="field"
+          >
+            {periods.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
       )}
 
       {status === "loading" && <Skeleton className="h-64" />}

@@ -343,6 +343,13 @@ export async function getProductScopeOptions(sector: string): Promise<ScopeOptio
   return data.options ?? [];
 }
 
+/** Períodos reales del producto (más reciente primero) para el selector del reporte.
+ * Vacío si el producto no los expone → el front cae al período global. */
+export async function getProductPeriods(sector: string): Promise<string[]> {
+  const { data } = await client.get(`/products/${sector}/periods`);
+  return data.periods ?? [];
+}
+
 /** Dispara la descarga de un blob PDF de `url` (con auth vía interceptor). */
 async function downloadPdfBlob(url: string, fallback: string, params = {}): Promise<void> {
   const r = await client.get(url, { params, responseType: "blob" });
