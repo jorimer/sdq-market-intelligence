@@ -443,7 +443,8 @@ THIN_TEMPLATES = {
         "VOLUMEN/CRECIMIENTO de DIVERSIFICACIÓN (riesgo de origen): una demanda fuerte puede "
         "convivir con alta concentración de un mercado. HONESTIDAD: el índice mide DEMANDA, "
         "no oferta — NO hay ocupación hotelera, ingresos por turismo (divisas) ni gasto "
-        "(viven en el BCRD, fuera del dato abierto); no los afirmes. Dato anual agregado "
+        "(el BCRD discontinuó esas series estructuradas en 2018-2019; hoy solo viven en PDFs "
+        "narrativos, sin serie limpia); no los afirmes. Dato anual agregado "
         "nacional, sin backtest. Si una cifra no está, dilo; no inventes."
     ),
     "telecom_outlook": (

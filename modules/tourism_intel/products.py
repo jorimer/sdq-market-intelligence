@@ -54,7 +54,9 @@ _LIMITATIONS = (
     "resiliencia/recuperación (nivel vs pico pre-pandemia) y diversificación de mercados "
     "(HHI por región emisora). Mide la tracción de DEMANDA (volumen, recuperación, "
     "concentración de origen) — NO cubre la oferta hotelera, la tasa de ocupación, ni los "
-    "ingresos por turismo (divisas US$), que viven en el BCRD fuera de los datos abiertos. "
+    "ingresos por turismo (divisas US$): el BCRD discontinuó esas series estructuradas en "
+    "2018-2019 (el Banco Mundial las espeja igual de desactualizadas) y hoy solo aparecen "
+    "como cifra suelta en informes PDF, sin serie limpia que publicar. "
     "Dato ANUAL AGREGADO NACIONAL, sin desglose por polo turístico (Punta Cana, Puerto "
     "Plata, etc.). Índice PRELIMINAR (sin backtest de outcomes)."
 )
@@ -104,7 +106,8 @@ _SAMPLE_NARRATIVES = {
         "solo mercado. Recomendación: priorizar tesis ancladas a la demanda probada, y "
         "ponderar el riesgo de concentración de origen al dimensionar la exposición. Nota: "
         "esta lectura es de DEMANDA; la rentabilidad por plaza depende también de ocupación "
-        "y tarifa (divisas), que requieren el dato del BCRD."
+        "y tarifa (divisas), serie que el BCRD discontinuó en 2018-2019 y hoy no publica "
+        "limpia."
     ),
 }
 

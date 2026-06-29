@@ -161,8 +161,10 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "pico pre-pandemia ≤2019) y diversificación de mercados (concentración por región "
         "emisora, HHI — menor concentración es mejor). Distingues VOLUMEN/CRECIMIENTO de "
         "DIVERSIFICACIÓN (riesgo de origen). HONESTIDAD: el índice mide DEMANDA, no oferta — "
-        "NO hay tasa de ocupación hotelera, ingresos por turismo (divisas) ni gasto: ese "
-        "dato vive en el BCRD, fuera de los datos abiertos; no lo afirmes ni lo inventes. "
+        "NO hay tasa de ocupación hotelera, ingresos por turismo (divisas) ni gasto: el BCRD "
+        "discontinuó esas series estructuradas en 2018-2019 (y el Banco Mundial las espeja "
+        "igual de viejas); hoy solo aparecen como cifra suelta en PDFs narrativos, sin serie "
+        "limpia; no lo afirmes ni lo inventes. "
         "Dato ANUAL AGREGADO NACIONAL, sin polo turístico ni backtest de outcomes. Si una "
         "cifra no está, dilo."
     ),
