@@ -15,8 +15,11 @@ from shared.source_intel.models import (
     KINDS,
     ORIGIN_MANUAL,
     ORIGINS,
-    STATUSES,
+    STATUS_DEFERRED,
+    STATUS_EVALUATED,
+    STATUS_EVALUATING,
     STATUS_PROPOSED,
+    STATUSES,
     SourceSuggestion,
 )
 
@@ -156,3 +159,34 @@ def board_summary(db: Session) -> Dict[str, int]:
     for r in db.query(SourceSuggestion).all():
         out[r.status] = out.get(r.status, 0) + 1
     return out
+
+
+def reflag_covered_suggestions(db: Session) -> List[str]:
+    """Auto-difiere las sugerencias ABIERTAS cuyo eje ya tiene su gate de datos cubierto.
+
+    El sistema marca (no rechaza): mueve a ``deferred`` con nota «ya cubierto» y estampa
+    ``already_covered`` en la evaluación. Reversible — el dueño puede reactivar o rechazar.
+    Idempotente: solo toca estados tempranos (proposed/evaluating/evaluated) con eje y g1
+    en pleno. Devuelve los ids afectados. Ver ``coverage.coverage_status``."""
+    from shared.source_intel.coverage import coverage_status
+
+    open_statuses = (STATUS_PROPOSED, STATUS_EVALUATING, STATUS_EVALUATED)
+    rows = db.query(SourceSuggestion).filter(
+        SourceSuggestion.status.in_(open_statuses),
+        SourceSuggestion.target_axis.isnot(None)).all()
+    changed: List[str] = []
+    for row in rows:
+        cov = coverage_status(db, row.target_axis)
+        if not cov["covered"]:
+            continue
+        ev = dict(row.evaluation or {})
+        ev["already_covered"] = True
+        ev["coverage_note"] = cov["note"]
+        row.evaluation = ev                      # reasignar → SQLAlchemy marca el JSON sucio
+        row.status = STATUS_DEFERRED
+        row.decision_note = f"Auto-diferida: {cov['note']}"[:1000]
+        row.updated_at = datetime.now(timezone.utc)
+        changed.append(row.id)
+    if changed:
+        db.commit()
+    return changed
