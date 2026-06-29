@@ -109,4 +109,6 @@ export interface Evaluation {
   fit_rationale: string;
   recommendation: "approve" | "investigate" | "reject" | "defer";
   method: "ai" | "heuristic";
+  already_covered?: boolean;
+  coverage_note?: string;
 }

@@ -86,8 +86,17 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
     Idempotente por brecha: no re-propone para una (axis, gate) que ya tiene propuestas
     del agente en estado abierto. Acota el total creado por corrida (costo IA)."""
     set_phase = set_phase or (lambda _m: None)
+
+    # Mantenimiento primero (no necesita IA): auto-difiere las sugerencias abiertas cuya
+    # brecha ya se cerró por otra vía (p.ej. boletines INDOTEL tras ITU, o energy tras la
+    # transición). El tablero se auto-limpia sin que el dueño rechace a mano las que envejecen.
+    from shared.source_intel.service import reflag_covered_suggestions
+    set_phase("revisando sugerencias ya cubiertas (auto-diferir)")
+    reflagged = reflag_covered_suggestions(db)
+
     if not getattr(settings, "ANTHROPIC_API_KEY", None):
-        return {"created": 0, "evaluated": 0, "reason": "sin IA (ANTHROPIC_API_KEY)"}
+        return {"created": 0, "evaluated": 0, "reflagged_covered": len(reflagged),
+                "reason": "sin IA (ANTHROPIC_API_KEY)"}
 
     from shared.products.audit import build_audit
     audit = build_audit(db)
@@ -142,7 +151,8 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
     # ``capped``: hubo más brechas que el tope por corrida → no se truncó en silencio
     # (correr de nuevo cubre el resto; el dedup salta lo ya propuesto).
     return {"created": len(created), "evaluated": len(created),
-            "skipped_gaps": skipped_gaps, "capped": hit_cap}
+            "skipped_gaps": skipped_gaps, "capped": hit_cap,
+            "reflagged_covered": len(reflagged)}
 
 
 def _notify_agent_proposals(db: Session, n: int) -> None:

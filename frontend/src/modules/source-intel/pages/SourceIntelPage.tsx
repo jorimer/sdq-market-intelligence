@@ -43,6 +43,9 @@ function EvaluationBlock({ ev, t }: { ev: Evaluation; t: any }) {
         <Chip tone={recTone(ev.recommendation)}>{t(`sourceIntel.rec.${ev.recommendation}`)}</Chip>
         {ev.gate_closed && <Chip tone="muted">{ev.gate_closed.toUpperCase()}</Chip>}
         <Chip tone={ev.method === "ai" ? "ok" : "muted"}>{t(`sourceIntel.method.${ev.method}`)}</Chip>
+        {ev.already_covered && (
+          <span title={ev.coverage_note || ""}><Chip tone="warn">{t("sourceIntel.covered")}</Chip></span>
+        )}
       </div>
       {ev.fit_rationale && <div className="text-[11px] text-muted mt-1">{ev.fit_rationale}</div>}
       <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-[10px] text-faint">

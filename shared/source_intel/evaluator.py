@@ -101,7 +101,23 @@ def _coerce(raw: Dict[str, Any], suggestion: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def evaluate_suggestion(db: Session, suggestion: Dict[str, Any]) -> Dict[str, Any]:
-    """Evalúa una sugerencia (dict serializado). Devuelve el objeto ``evaluation``."""
+    """Evalúa una sugerencia (dict serializado). Devuelve el objeto ``evaluation``.
+
+    Estampa además ``already_covered`` (+ ``coverage_note``): si el eje ya tiene su gate
+    de datos en pleno, la fuente es redundante y el sistema la auto-difiere (ver
+    ``coverage.py``). Es ortogonal al juicio de idoneidad — una fuente puede ser excelente
+    y aun así redundante porque la brecha ya se cerró por otra vía."""
+    result = _evaluate_core(db, suggestion)
+    from shared.source_intel.coverage import coverage_status
+    cov = coverage_status(db, suggestion.get("target_axis"))
+    result["already_covered"] = cov["covered"]
+    if cov["covered"]:
+        result["coverage_note"] = cov["note"]
+    return result
+
+
+def _evaluate_core(db: Session, suggestion: Dict[str, Any]) -> Dict[str, Any]:
+    """Juicio de idoneidad (IA o heurística) contra los criterios + la brecha."""
     api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
     if not api_key:
         return _heuristic(suggestion, "sin API key")
