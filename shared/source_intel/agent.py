@@ -90,13 +90,17 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
     # Mantenimiento primero (no necesita IA): auto-difiere las sugerencias abiertas cuya
     # brecha ya se cerró por otra vía (p.ej. boletines INDOTEL tras ITU, o energy tras la
     # transición). El tablero se auto-limpia sin que el dueño rechace a mano las que envejecen.
-    from shared.source_intel.service import reflag_covered_suggestions
-    set_phase("revisando sugerencias ya cubiertas (auto-diferir)")
-    reflagged = reflag_covered_suggestions(db)
+    from shared.source_intel.service import (
+        flag_covered_decided,
+        reflag_covered_suggestions,
+    )
+    set_phase("revisando sugerencias ya cubiertas (auto-diferir / badge)")
+    reflagged = reflag_covered_suggestions(db)        # abiertas → auto-difiere
+    flagged = flag_covered_decided(db)                # aprobadas/integrando → badge (sin mover)
 
     if not getattr(settings, "ANTHROPIC_API_KEY", None):
         return {"created": 0, "evaluated": 0, "reflagged_covered": len(reflagged),
-                "reason": "sin IA (ANTHROPIC_API_KEY)"}
+                "flagged_covered": len(flagged), "reason": "sin IA (ANTHROPIC_API_KEY)"}
 
     from shared.products.audit import build_audit
     audit = build_audit(db)
@@ -161,7 +165,8 @@ def run_research_agent(db: Session, set_phase=None, max_create: int = 12) -> Dic
     # (correr de nuevo cubre el resto; el dedup salta lo ya propuesto).
     return {"created": len(created), "evaluated": len(created),
             "skipped_gaps": skipped_gaps, "skipped_covered": skipped_covered,
-            "capped": hit_cap, "reflagged_covered": len(reflagged)}
+            "capped": hit_cap, "reflagged_covered": len(reflagged),
+            "flagged_covered": len(flagged)}
 
 
 def _notify_agent_proposals(db: Session, n: int) -> None:

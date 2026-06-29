@@ -127,7 +127,16 @@ def test_scaffold_heuristic_plan(db, monkeypatch):
     plan = out["integration_plan"]
     assert plan["method"].startswith("heuristic")
     assert "telecom" in plan["target"] and plan["steps"]
-    assert out["status"] == "approved"  # andamiar no cambia el estado
+    # andamiar una APROBADA arranca la integración → la app la mueve a integrating
+    assert out["status"] == "integrating"
+
+
+def test_scaffold_non_approved_keeps_status(db, monkeypatch):
+    _force_heuristic_scaffold(monkeypatch)
+    s = svc.create_suggestion(db, kind="source", title="X", target_axis="telecom",
+                              target_gate="g1")  # status proposed
+    out = svc.scaffold(db, s["id"])
+    assert out["status"] == "proposed"  # solo aprobadas avanzan a integrating
 
 
 # ── API ───────────────────────────────────────────────────────────────

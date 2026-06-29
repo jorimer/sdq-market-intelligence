@@ -15,9 +15,11 @@ from shared.source_intel.models import (
     KINDS,
     ORIGIN_MANUAL,
     ORIGINS,
+    STATUS_APPROVED,
     STATUS_DEFERRED,
     STATUS_EVALUATED,
     STATUS_EVALUATING,
+    STATUS_INTEGRATING,
     STATUS_PROPOSED,
     STATUSES,
     SourceSuggestion,
@@ -131,13 +133,17 @@ def evaluate(db: Session, suggestion_id: str) -> Dict[str, Any]:
 
 def scaffold(db: Session, suggestion_id: str) -> Dict[str, Any]:
     """Genera y persiste el plan de integración de una sugerencia (Increment 4). No
-    cambia el estado ni construye nada — es una propuesta para que el dueño/dev ejecute."""
+    construye nada — es una propuesta para que el dueño/dev ejecute. Si la sugerencia
+    está APROBADA, andamiar el plan es la señal de que arranca la integración → la mueve
+    a ``integrating`` (la app gestiona ese estado intermedio)."""
     from shared.source_intel.scaffolder import scaffold_plan
 
     row = db.query(SourceSuggestion).filter_by(id=suggestion_id).one_or_none()
     if row is None:
         raise SuggestionError("Sugerencia no encontrada.")
     row.integration_plan = scaffold_plan(db, _serialize(row))
+    if row.status == STATUS_APPROVED:
+        row.status = STATUS_INTEGRATING
     row.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
@@ -190,3 +196,38 @@ def reflag_covered_suggestions(db: Session) -> List[str]:
     if changed:
         db.commit()
     return changed
+
+
+def flag_covered_decided(db: Session) -> List[str]:
+    """Marca (sin cambiar estado) las sugerencias APROBADAS/INTEGRANDO cuyo eje ya está
+    cubierto, para que el tablero muestre el badge «brecha cubierta» y el dueño decida con
+    un clic: integrada (la construyó) o diferir (quedó redundante por otra fuente).
+
+    NO auto-avanza a ``integrated``: la cobertura es por eje, no prueba que ESTA fuente se
+    integrara (el eje pudo cubrirse por otra) — marcar «integrada» sola sería un falso
+    positivo. El sistema detecta y avisa; el dueño confirma el estado terminal. Devuelve
+    los ids cuyo flag cambió (idempotente)."""
+    from shared.source_intel.coverage import coverage_status
+
+    decided = (STATUS_APPROVED, STATUS_INTEGRATING)
+    rows = db.query(SourceSuggestion).filter(
+        SourceSuggestion.status.in_(decided),
+        SourceSuggestion.target_axis.isnot(None)).all()
+    flagged: List[str] = []
+    for row in rows:
+        cov = coverage_status(db, row.target_axis)
+        ev = dict(row.evaluation or {})
+        was = bool(ev.get("already_covered"))
+        if cov["covered"] == was:
+            continue                              # sin cambio → idempotente
+        ev["already_covered"] = cov["covered"]
+        if cov["covered"]:
+            ev["coverage_note"] = cov["note"]
+        else:
+            ev.pop("coverage_note", None)         # el eje se reabrió → limpiar
+        row.evaluation = ev
+        row.updated_at = datetime.now(timezone.utc)
+        flagged.append(row.id)
+    if flagged:
+        db.commit()
+    return flagged

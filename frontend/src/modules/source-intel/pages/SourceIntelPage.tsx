@@ -19,6 +19,23 @@ const AXES = ["banking", "macro", "trade", "tourism", "free_zones", "energy",
   "telecom", "construction", "agribusiness", "esg", "pension"];
 const GATES = ["g1", "g2", "g3", "g4", "g5"];
 
+// La lista se auto-prioriza por accionabilidad: lo que necesita al dueño arriba, lo
+// cerrado/archivado al fondo (rechazadas al final del todo). Los grupos "cerrados"
+// arrancan colapsados.
+type GroupKey = "decide" | "approved" | "integrating" | "closed";
+const GROUPS: { key: GroupKey; statuses: SuggestionStatus[]; closed?: boolean }[] = [
+  { key: "decide", statuses: ["evaluated", "evaluating", "proposed"] },
+  { key: "approved", statuses: ["approved"] },
+  { key: "integrating", statuses: ["integrating"] },
+  { key: "closed", statuses: ["integrated", "deferred", "rejected"], closed: true },
+];
+// Orden interno del grupo "cerrado": logro → pausa → rechazo (rechazadas al fondo).
+const CLOSED_ORDER: SuggestionStatus[] = ["integrated", "deferred", "rejected"];
+
+const scoreOf = (s: Suggestion): number =>
+  typeof (s.evaluation as { score?: number } | null)?.score === "number"
+    ? (s.evaluation as { score: number }).score : -1;
+
 function statusTone(s: SuggestionStatus): "ok" | "warn" | "alert" | "muted" {
   if (s === "integrated" || s === "approved" || s === "integrating") return "ok";
   if (s === "rejected") return "alert";
@@ -92,6 +109,7 @@ export function SourceIntelPage() {
   const [summary, setSummary] = useState<Record<string, number>>({});
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [busy, setBusy] = useState<string | null>(null);
+  const [showClosed, setShowClosed] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   // Form
@@ -200,6 +218,76 @@ export function SourceIntelPage() {
     );
   }
 
+  // Items por grupo, ordenados por score desc (y el grupo cerrado por logro→pausa→rechazo).
+  const grouped = GROUPS.map((g) => {
+    let rows = items.filter((s) => g.statuses.includes(s.status));
+    if (g.key === "closed") {
+      rows = [...rows].sort((a, b) =>
+        CLOSED_ORDER.indexOf(a.status) - CLOSED_ORDER.indexOf(b.status) || scoreOf(b) - scoreOf(a));
+    } else {
+      rows = [...rows].sort((a, b) => scoreOf(b) - scoreOf(a));
+    }
+    return { ...g, rows };
+  }).filter((g) => g.rows.length > 0);
+
+  const renderCard = (s: Suggestion) => {
+    const ev = s.evaluation as unknown as Evaluation | null;
+    const coveredDecided = !!ev?.already_covered && (s.status === "approved" || s.status === "integrating");
+    return (
+      <div key={s.id} className="rounded-lg border border-line bg-surface px-3 py-2">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Chip tone="muted">{t(`sourceIntel.kindOpt.${s.kind}`)}</Chip>
+              <span className="text-sm text-ink truncate" title={s.title}>{s.title}</span>
+              {s.origin === "agent"
+                ? <span title={t("sourceIntel.originAgent")}><Bot className="w-3.5 h-3.5 text-muted" /></span>
+                : s.origin === "catalog"
+                ? <span title={t("sourceIntel.originCatalog")}><Database className="w-3.5 h-3.5 text-muted" /></span>
+                : <span title={t("sourceIntel.originManual")}><UserIcon className="w-3.5 h-3.5 text-faint" /></span>}
+            </div>
+            {s.description && <div className="text-[11px] text-muted mt-0.5">{s.description}</div>}
+            <div className="text-[11px] text-faint mt-0.5">
+              {s.target_axis ? `${s.target_axis}${s.target_gate ? ` · ${s.target_gate.toUpperCase()}` : ""}` : t("sourceIntel.noTarget")}
+            </div>
+            {coveredDecided && (
+              <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[11px]">
+                <span title={ev?.coverage_note || ""}><Chip tone="warn">{t("sourceIntel.covered")}</Chip></span>
+                <span className="text-muted">{t("sourceIntel.coveredDecidedHint")}</span>
+                <button onClick={() => onStatus(s.id, "integrated")} disabled={busy === s.id}
+                  className="btn btn-ghost !py-0.5 !px-2 text-xs">{t("sourceIntel.markIntegrated")}</button>
+                <button onClick={() => onStatus(s.id, "deferred")} disabled={busy === s.id}
+                  className="btn btn-ghost !py-0.5 !px-2 text-xs">{t("sourceIntel.markDeferred")}</button>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Chip tone={statusTone(s.status)}>{t(`sourceIntel.status.${s.status}`)}</Chip>
+            <button onClick={() => onEvaluate(s.id)} disabled={busy === s.id}
+              className="btn btn-ghost !py-1 !px-2 text-xs" title={t("sourceIntel.evaluateHint")}>
+              <Sparkles className={`w-3.5 h-3.5 ${busy === s.id ? "animate-pulse" : ""}`} /> {t("sourceIntel.evaluate")}
+            </button>
+            <button onClick={() => onScaffold(s.id)} disabled={busy === s.id}
+              className="btn btn-ghost !py-1 !px-2 text-xs" title={t("sourceIntel.scaffoldHint")}>
+              <Wrench className={`w-3.5 h-3.5 ${busy === s.id ? "animate-pulse" : ""}`} /> {t("sourceIntel.scaffold")}
+            </button>
+            <select className="field !py-1 !text-xs" value={s.status} disabled={busy === s.id}
+              onChange={(e) => onStatus(s.id, e.target.value as SuggestionStatus)}
+              aria-label={t("sourceIntel.moveStatus")}>
+              {STATUSES.map((st) => <option key={st} value={st}>{t(`sourceIntel.status.${st}`)}</option>)}
+            </select>
+            <button onClick={() => onDelete(s.id)} disabled={busy === s.id}
+              className="btn btn-ghost !py-1 !px-2" aria-label={t("sourceIntel.delete")}>
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        {s.evaluation && <EvaluationBlock ev={s.evaluation as unknown as Evaluation} t={t} />}
+        {s.integration_plan && <PlanBlock plan={s.integration_plan as unknown as IntegrationPlan} t={t} />}
+      </div>
+    );
+  };
+
   return (
     <div>
       <PageHead eyebrow={t("sourceIntel.eyebrow")} title={t("sourceIntel.title")} sub={t("sourceIntel.sub")} />
@@ -276,50 +364,23 @@ export function SourceIntelPage() {
         ) : items.length === 0 ? (
           <StateBlock kind="empty" message={t("sourceIntel.empty")} />
         ) : (
-          <div className="flex flex-col gap-2">
-            {items.map((s) => (
-              <div key={s.id} className="rounded-lg border border-line bg-surface px-3 py-2">
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Chip tone="muted">{t(`sourceIntel.kindOpt.${s.kind}`)}</Chip>
-                      <span className="text-sm text-ink truncate" title={s.title}>{s.title}</span>
-                      {s.origin === "agent"
-                        ? <span title={t("sourceIntel.originAgent")}><Bot className="w-3.5 h-3.5 text-muted" /></span>
-                        : s.origin === "catalog"
-                        ? <span title={t("sourceIntel.originCatalog")}><Database className="w-3.5 h-3.5 text-muted" /></span>
-                        : <span title={t("sourceIntel.originManual")}><UserIcon className="w-3.5 h-3.5 text-faint" /></span>}
-                    </div>
-                    {s.description && <div className="text-[11px] text-muted mt-0.5">{s.description}</div>}
-                    <div className="text-[11px] text-faint mt-0.5">
-                      {s.target_axis ? `${s.target_axis}${s.target_gate ? ` · ${s.target_gate.toUpperCase()}` : ""}` : t("sourceIntel.noTarget")}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Chip tone={statusTone(s.status)}>{t(`sourceIntel.status.${s.status}`)}</Chip>
-                    <button onClick={() => onEvaluate(s.id)} disabled={busy === s.id}
-                      className="btn btn-ghost !py-1 !px-2 text-xs" title={t("sourceIntel.evaluateHint")}>
-                      <Sparkles className={`w-3.5 h-3.5 ${busy === s.id ? "animate-pulse" : ""}`} /> {t("sourceIntel.evaluate")}
-                    </button>
-                    <button onClick={() => onScaffold(s.id)} disabled={busy === s.id}
-                      className="btn btn-ghost !py-1 !px-2 text-xs" title={t("sourceIntel.scaffoldHint")}>
-                      <Wrench className={`w-3.5 h-3.5 ${busy === s.id ? "animate-pulse" : ""}`} /> {t("sourceIntel.scaffold")}
-                    </button>
-                    <select className="field !py-1 !text-xs" value={s.status} disabled={busy === s.id}
-                      onChange={(e) => onStatus(s.id, e.target.value as SuggestionStatus)}
-                      aria-label={t("sourceIntel.moveStatus")}>
-                      {STATUSES.map((st) => <option key={st} value={st}>{t(`sourceIntel.status.${st}`)}</option>)}
-                    </select>
-                    <button onClick={() => onDelete(s.id)} disabled={busy === s.id}
-                      className="btn btn-ghost !py-1 !px-2" aria-label={t("sourceIntel.delete")}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+          <div className="flex flex-col gap-4">
+            {grouped.map((g) => {
+              const collapsed = g.closed && !showClosed;
+              return (
+                <div key={g.key} className="flex flex-col gap-2">
+                  <button
+                    onClick={() => g.closed && setShowClosed((v) => !v)}
+                    className={`flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-faint ${g.closed ? "hover:text-muted" : "cursor-default"}`}
+                    aria-expanded={g.closed ? showClosed : undefined}>
+                    {t(`sourceIntel.group.${g.key}`)}
+                    <span className="tabular-nums">({g.rows.length})</span>
+                    {g.closed && <span>{collapsed ? "▸" : "▾"}</span>}
+                  </button>
+                  {!collapsed && g.rows.map((s) => renderCard(s))}
                 </div>
-                {s.evaluation && <EvaluationBlock ev={s.evaluation as unknown as Evaluation} t={t} />}
-                {s.integration_plan && <PlanBlock plan={s.integration_plan as unknown as IntegrationPlan} t={t} />}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
