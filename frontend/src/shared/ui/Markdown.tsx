@@ -116,6 +116,25 @@ export function Markdown({ text, className = "" }: { text: string; className?: s
 
     if (/^---+$/.test(line)) { flushPara(); flushList(); blocks.push(<hr key={blocks.length} className="border-line my-1" />); continue; }
 
+    // Blockquote `> …` → pull-quote de marca (barra de acento + texto destacado), paridad
+    // con el PDF/Word. Acumula líneas consecutivas en una sola cita.
+    const bq = line.match(/^>\s+(.*)$/);
+    if (bq) {
+      flushPara(); flushList();
+      const parts = [bq[1]];
+      while (i + 1 < lines.length && /^>\s+/.test(lines[i + 1].trim())) {
+        i++;
+        parts.push(lines[i].trim().replace(/^>\s+/, ""));
+      }
+      blocks.push(
+        <blockquote key={blocks.length}
+          className="border-l-[3px] border-alert pl-3 my-1 text-ink text-[15px] leading-relaxed">
+          {inline(parts.join(" "))}
+        </blockquote>,
+      );
+      continue;
+    }
+
     const h = line.match(/^(#{1,3})\s+(.*)$/);
     if (h) {
       flushPara(); flushList();

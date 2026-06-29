@@ -1700,6 +1700,8 @@
       "yourPlan": "Your plan:",
       "view": "View",
       "download": "Download PDF",
+      "downloadPdf": "Download PDF",
+      "downloadWord": "Download Word",
       "requestAccess": "Request access",
       "sample": "Download sample",
       "requiresPlan": "Requires {{plan}} plan",

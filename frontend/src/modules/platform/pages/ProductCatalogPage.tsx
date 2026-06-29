@@ -18,6 +18,7 @@ import {
   getProductScopeOptions,
   getProductPeriods,
   downloadProductPdf,
+  downloadProductReport,
   downloadProductSample,
   type ProductCatalog,
   type CatalogSector,
@@ -363,25 +364,33 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
           {report.period && (
             <p className="text-xs text-muted">{t("platform.catalog.period", { v: report.period })}</p>
           )}
-          {report.commercial.sections.map((sec) => {
+          {(() => { let n = 0; return report.commercial.sections.map((sec) => {
             const text = report.narratives[sec];
             if (!text) return null;
+            n += 1;
             return (
               <div key={sec} className="space-y-1.5">
                 <div className="text-[11px] uppercase tracking-wide text-faint">
-                  {t(`platform.catalog.section.${sec}`, { defaultValue: sec.replace(/_/g, " ") })}
+                  {n}. {t(`platform.catalog.section.${sec}`, { defaultValue: sec.replace(/_/g, " ") })}
                 </div>
                 <Markdown text={text} />
               </div>
             );
-          })}
-          <div className="pt-2 border-t border-line">
+          }); })()}
+          <div className="pt-2 border-t border-line flex flex-wrap gap-2">
             <button
-              onClick={() => downloadProductPdf(sector.sector_key, level.tier,
+              onClick={() => downloadProductReport(sector.sector_key, level.tier, "pdf",
                 { period: periodEnd, ...(needsScope && scope ? { scope } : {}) })}
               className="btn btn-ghost text-sm"
             >
-              <Download className="w-4 h-4" /> {t("platform.catalog.download")}
+              <Download className="w-4 h-4" /> {t("platform.catalog.downloadPdf")}
+            </button>
+            <button
+              onClick={() => downloadProductReport(sector.sector_key, level.tier, "docx",
+                { period: periodEnd, ...(needsScope && scope ? { scope } : {}) })}
+              className="btn btn-ghost text-sm"
+            >
+              <FileText className="w-4 h-4" /> {t("platform.catalog.downloadWord")}
             </button>
           </div>
         </>
