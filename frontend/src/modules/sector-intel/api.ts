@@ -190,6 +190,50 @@ export async function getSectorValidation(): Promise<SectorGateEReport> {
   return data;
 }
 
+// ── Estructura sectorial agregada (importancia económica + contribución) ──
+export interface StructureRow {
+  slug: string;
+  sector: string;
+  weight: number | null;          // % del Valor Agregado
+  growth: number | null;          // crecimiento real interanual %
+  contribution: number | null;    // peso × crecimiento (pp)
+  contribution_share: number | null;
+}
+export interface EconomicStructure {
+  period: string | null;
+  has_data: boolean;
+  source: string;
+  total_va_growth: number;
+  coverage: number;
+  contribution_coverage: number;
+  concentration_hhi: number | null;
+  n_sectors: number;
+  sectors: StructureRow[];         // ranking por peso
+  drivers: StructureRow[];         // motores (aporte +)
+  drags: StructureRow[];           // lastres (aporte −)
+  top_weight: StructureRow | null;
+  top_driver: StructureRow | null;
+  top_drag: StructureRow | null;
+}
+
+export async function getEconomicStructure(period?: string): Promise<EconomicStructure> {
+  const { data } = await client.get("/sector-intel/structure", {
+    params: period ? { period } : {},
+  });
+  return data;
+}
+
+/** AI narrative of the economic structure (institutional frame). Best-effort. */
+export async function getStructureInsight(
+  audience = "gobierno",
+  deep = false,
+): Promise<AiInsight | null> {
+  const { data } = await client.get("/sector-intel/structure/insight", {
+    params: { audience, ...(deep ? { deep: true } : {}) },
+  });
+  return (data.ai_insight as AiInsight | null) ?? null;
+}
+
 export async function runSectorGateE(): Promise<{ started: boolean; reason?: string }> {
   const { data } = await client.post("/operations/sector-gate-e/run", {});
   return data;
