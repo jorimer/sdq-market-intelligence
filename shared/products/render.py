@@ -33,10 +33,14 @@ from shared.config.settings import settings
 
 NAVY = HexColor("#1A365D")
 BLUE = HexColor("#2B6CB0")
+SIGNAL = HexColor("#E11D48")   # signal red — acento de marca (pull-quotes, barras)
 GRAY = HexColor("#718096")
 LIGHT_GRAY = HexColor("#F7FAFC")
+RULE = HexColor("#E2E8F0")
+SAMPLE_RED = HexColor("#991B1B")
 WHITE = HexColor("#FFFFFF")
 MARGIN = 0.75 * inch
+CONTENT_W = A4[0] - 2 * MARGIN
 
 DISCLAIMER_ES = (
     "Las opiniones expresadas en este informe son de SDQ Consulting y no constituyen "
@@ -60,6 +64,14 @@ def _styles():
     s.add(ParagraphStyle("PBullet", parent=s["Normal"], fontSize=10, leading=14,
                          leftIndent=12, spaceAfter=4))
     s.add(ParagraphStyle("PSmall", parent=s["Normal"], fontSize=8, textColor=GRAY, leading=10))
+    # Marca: kicker + título de portada (sobre banda navy, texto blanco) + pull-quote.
+    s.add(ParagraphStyle("CoverKicker", parent=s["Normal"], fontSize=11, textColor=WHITE,
+                         leading=14, spaceAfter=6))
+    s.add(ParagraphStyle("CoverTitle", parent=s["Title"], fontSize=26, textColor=WHITE,
+                         alignment=0, leading=30, spaceAfter=0))
+    s.add(ParagraphStyle("CoverMeta", parent=s["Normal"], fontSize=11, textColor=NAVY, leading=16))
+    s.add(ParagraphStyle("PullQuote", parent=s["Normal"], fontSize=13, textColor=NAVY,
+                         leading=18, leftIndent=10, spaceBefore=4, spaceAfter=4))
     return s
 
 
@@ -69,16 +81,33 @@ def _inline(text: str) -> str:
     return re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text).strip()
 
 
+def _pull_quote(text: str, styles) -> Table:
+    """Pull-quote de marca: barra de acento signal-red + texto grande (cifra/insight clave)."""
+    t = Table([["", Paragraph(_inline(text), styles["PullQuote"])]],
+              colWidths=[0.06 * inch, CONTENT_W - 0.06 * inch])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), SIGNAL),
+        ("LEFTPADDING", (1, 0), (1, 0), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    return t
+
+
 def _narrative_flowables(narratives: Dict[str, str], titles: Dict[str, str], styles) -> List:
     out: List = []
-    for key, text in narratives.items():
-        out.append(Paragraph(titles.get(key, key.replace("_", " ").title()), styles["PHead"]))
+    for n, (key, text) in enumerate(narratives.items(), start=1):
+        title = titles.get(key, key.replace("_", " ").title())
+        out.append(Paragraph(f"{n}.&nbsp; {_inline(title)}", styles["PHead"]))
         for raw in (text or "").replace("\r", "").split("\n"):
             line = raw.strip()
             if not line:
                 continue
+            q = re.match(r"^>\s+(.*)$", line)          # blockquote → pull-quote de marca
             h = re.match(r"^(#{1,3})\s+(.*)$", line)
-            if h:
+            if q:
+                out.append(_pull_quote(q.group(1), styles))
+            elif h:
                 out.append(Paragraph(_inline(h.group(2)), styles["PSub"]))
             elif re.match(r"^(?:[-*]|\d+[.)])\s+", line):
                 out.append(Paragraph("•&nbsp; " + _inline(re.sub(r"^(?:[-*]|\d+[.)])\s+", "", line)),
@@ -106,20 +135,58 @@ def _data_table(heading: str, rows: Sequence[Sequence[str]], styles) -> List:
     return out
 
 
-def _decorator(watermark: Optional[str], sample: bool):
-    text = "MUESTRA — DATA ILUSTRATIVA" if sample else watermark
-    if not text:
-        return None
-    color = HexColor("#991B1B") if sample else GRAY
+def _furniture(header_line: str, watermark: Optional[str], sample: bool, *, first: bool):
+    """Guarnición de página: encabezado corrido + regla + nº de página (páginas interiores)
+    y watermark/estampa de muestra al pie (todas). La portada (first) va limpia, sin encabezado."""
+    wm = "MUESTRA — DATA ILUSTRATIVA" if sample else watermark
+    w, h = A4
 
     def _draw(canvas, doc):
         canvas.saveState()
-        canvas.setFont("Helvetica-Bold" if sample else "Helvetica", 8)
-        canvas.setFillColor(color)
-        canvas.drawCentredString(A4[0] / 2, 0.4 * inch, text)
+        if not first:
+            canvas.setFont("Helvetica-Bold", 8)
+            canvas.setFillColor(NAVY)
+            canvas.drawString(MARGIN, h - 0.5 * inch, header_line[:110])
+            canvas.setStrokeColor(RULE)
+            canvas.setLineWidth(0.5)
+            canvas.line(MARGIN, h - 0.56 * inch, w - MARGIN, h - 0.56 * inch)
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(GRAY)
+            canvas.drawRightString(w - MARGIN, 0.45 * inch, str(canvas.getPageNumber()))
+        if wm:
+            canvas.setFont("Helvetica-Bold" if sample else "Helvetica", 8)
+            canvas.setFillColor(SAMPLE_RED if sample else GRAY)
+            canvas.drawCentredString(w / 2, 0.45 * inch, wm)
         canvas.restoreState()
 
     return _draw
+
+
+def _cover(title: str, display_name: str, period: str, subtitle: Optional[str],
+           headline: Optional[str], styles) -> List:
+    """Portada de marca: banda navy con 'MARKET INTELLIGENCE REPORT' + título, y metadatos."""
+    band = Table(
+        [[Paragraph("SDQ·MIP · MARKET INTELLIGENCE REPORT", styles["CoverKicker"])],
+         [Paragraph(_inline(title), styles["CoverTitle"])]],
+        colWidths=[CONTENT_W])
+    band.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), NAVY),
+        ("LEFTPADDING", (0, 0), (-1, -1), 18), ("RIGHTPADDING", (0, 0), (-1, -1), 18),
+        ("TOPPADDING", (0, 0), (0, 0), 18), ("BOTTOMPADDING", (0, 0), (0, 0), 2),
+        ("TOPPADDING", (0, 1), (0, 1), 2), ("BOTTOMPADDING", (0, 1), (0, 1), 20),
+    ]))
+    out: List = [Spacer(1, 1.1 * inch), band, Spacer(1, 0.45 * inch),
+                 Paragraph(_inline(display_name), styles["PTitle"])]
+    if subtitle:
+        out.append(Paragraph(_inline(subtitle), styles["PSub"]))
+    if headline:
+        out.append(Spacer(1, 0.1 * inch))
+        out.append(_pull_quote(headline, styles))
+    out += [Spacer(1, 0.4 * inch),
+            Paragraph(f"<b>Período:</b> {period}", styles["CoverMeta"]),
+            Paragraph(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}", styles["CoverMeta"]),
+            PageBreak()]
+    return out
 
 
 def render_product_pdf(
@@ -132,14 +199,17 @@ def render_product_pdf(
     section_titles: Optional[Dict[str, str]] = None,
     tables: Optional[List[Tuple[str, Sequence[Sequence[str]]]]] = None,
     subtitle: Optional[str] = None,
+    headline: Optional[str] = None,
     watermark: Optional[str] = None,
     sample: bool = False,
     output_dir: Optional[str] = None,
 ) -> str:
-    """Renderiza un PDF genérico de producto y devuelve el path.
+    """Renderiza el PDF de marca de un producto y devuelve el path (docs/REPORT_STANDARD.md).
 
-    Portada (display_name + título + período [+ subtítulo]) → tablas de datos →
-    secciones narrativas → disclaimer. ``watermark``/``sample`` dibujan marca por página.
+    Portada de marca (banda + título + sujeto + período [+ subtítulo/headline]) → tablas →
+    secciones narrativas numeradas (con pull-quotes) → disclaimer. Cada página interior lleva
+    encabezado corrido + nº de página; ``watermark``/``sample`` estampan el pie por tier.
+    ``headline`` es la cifra/banda clave para el pull-quote de portada (opcional).
     """
     out_dir = output_dir or settings.REPORTS_DIR
     os.makedirs(out_dir, exist_ok=True)
@@ -153,22 +223,7 @@ def render_product_pdf(
     section_titles = {**STANDARD_SECTION_TITLES, **(section_titles or {})}
 
     styles = _styles()
-    el: List = [
-        Spacer(1, 1.3 * inch),
-        Paragraph("SDQ Market Intelligence", styles["PTitle"]),
-        Spacer(1, 0.2 * inch),
-        Paragraph(title, styles["PHead"]),
-        Spacer(1, 0.3 * inch),
-        Paragraph(display_name, styles["PTitle"]),
-    ]
-    if subtitle:
-        el.append(Paragraph(subtitle, styles["PSub"]))
-    el += [
-        Spacer(1, 0.3 * inch),
-        Paragraph(f"Período: {period}", styles["PBody"]),
-        Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", styles["PBody"]),
-        PageBreak(),
-    ]
+    el: List = _cover(title, display_name, period, subtitle, headline, styles)
     for heading, rows in (tables or []):
         if rows:
             el += _data_table(heading, rows, styles)
@@ -176,12 +231,11 @@ def render_product_pdf(
     el += [Spacer(1, 0.4 * inch), Paragraph("Disclaimer", styles["PSub"]),
            Paragraph(DISCLAIMER_ES, styles["PSmall"])]
 
+    header_line = f"SDQ·MIP — {title} · {display_name}"
     doc = SimpleDocTemplate(path, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
                             topMargin=MARGIN, bottomMargin=MARGIN,
                             title=f"SDQ — {title} — {display_name}", author="SDQ Market Intelligence")
-    dec = _decorator(watermark, sample)
-    if dec:
-        doc.build(el, onFirstPage=dec, onLaterPages=dec)
-    else:
-        doc.build(el)
+    doc.build(el,
+              onFirstPage=_furniture(header_line, watermark, sample, first=True),
+              onLaterPages=_furniture(header_line, watermark, sample, first=False))
     return path
