@@ -81,7 +81,8 @@ class FakeSector:
         self.narrated = True
         return {s: f"texto {s}" for s in self.product_manifest().require_level(tier).sections}
 
-    async def render(self, tier, snapshot, narratives, *, sample=False, lang="es", output_dir=None):
+    async def render(self, tier, snapshot, narratives, *, sample=False, lang="es",
+                     output_dir=None, fmt="pdf"):
         out = output_dir or tempfile.gettempdir()
         os.makedirs(out, exist_ok=True)
         path = os.path.join(out, f"fake_{tier.value}.txt")

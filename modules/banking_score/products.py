@@ -429,8 +429,19 @@ class BankingProduct:
     # ── Render (sin DB) ──
     async def render(self, tier: ProductTier, snapshot: ProductSnapshot,
                      narratives: Dict[str, str], *, sample: bool = False,
-                     lang: str = "es", output_dir: Optional[str] = None) -> str:
+                     lang: str = "es", output_dir: Optional[str] = None, fmt: str = "pdf") -> str:
         level = self.product_manifest().require_level(tier)
+        if fmt == "docx":
+            # Banking usa su generador PDF propio (radar); para Word cae al renderer de marca
+            # genérico con las mismas narrativas (layout estándar, editable).
+            from shared.products.render import render_product_pdf
+            display = SYSTEM_LABEL if tier == ProductTier.pulse else (snapshot.entity_name or "Entidad")
+            ttl = {"pulse": "Pulse Banca", "insight": "Insight Banca",
+                   "deep_dive": "Deep Dive Banca"}.get(tier.value, "Banca")
+            return render_product_pdf(
+                sector_key=SECTOR_KEY, display_name=display, title=ttl, period=snapshot.period,
+                narratives=narratives, watermark=level.watermark, sample=sample,
+                output_dir=output_dir, fmt="docx")
         if tier == ProductTier.pulse:
             scoring_result = {"overall_score": snapshot.payload.get("system_avg_score") or 0,
                               "rating_tier": "Sistema", "sub_components": {}, "indicators": {}}

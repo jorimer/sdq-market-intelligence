@@ -105,19 +105,20 @@ async def assemble_product_report(
     sample: bool = False,
     lang: str = "es",
     output_dir: Optional[str] = None,
+    fmt: str = "pdf",
 ) -> str:
-    """Ensambla el reporte (sector, nivel) y devuelve el path del PDF.
+    """Ensambla el reporte (sector, nivel) y devuelve el path (PDF o Word según ``fmt``).
 
     Sector-agnóstico: cualquier ``SectorProduct`` produce su reporte sin que el
     framework conozca su implementación. Reusa ``assemble_product_content`` (mismo
     snapshot + narrativas + sensor de anonimización que la vista in-app) y solo añade
-    el render a PDF.
+    el render. ``fmt`` = "pdf" | "docx" — misma anatomía de marca.
     """
     content = await assemble_product_content(
         product, tier, period=period, scope=scope, lang=lang)
     return await product.render(
         tier, content.snapshot, content.narratives,
-        sample=sample, lang=lang, output_dir=output_dir,
+        sample=sample, lang=lang, output_dir=output_dir, fmt=fmt,
     )
 
 
