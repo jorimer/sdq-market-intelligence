@@ -28,7 +28,7 @@ def economic_structure_ai_context(structure: Dict[str, Any]) -> Dict[str, Any]:
     the narrative explains which sectors move the economy — distinguishing SIZE (weight)
     from CONTRIBUTION (weight × growth). Honest: real BCRD value-added, no synthetic score."""
     def _slim(r: Dict[str, Any]) -> Dict[str, Any]:
-        return {"sector": r.get("name"), "weight_pct": r.get("weight"),
+        return {"sector": r.get("sector"), "weight_pct": r.get("weight"),
                 "growth_pct": r.get("growth"), "contribution_pp": r.get("contribution"),
                 "share_of_growth": r.get("contribution_share")}
 

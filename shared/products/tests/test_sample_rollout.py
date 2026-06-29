@@ -49,8 +49,11 @@ def _register_all():
     import modules.banking_score.products  # noqa: F401
     import modules.energy_intel.products  # noqa: F401
     import modules.esg_climate.products  # noqa: F401
+    import modules.free_zones_intel.products  # noqa: F401
     import modules.sector_intel.products  # noqa: F401
+    import modules.sector_intel.structure_product  # noqa: F401 — economic_structure (agregado)
     import modules.telecom_intel.products  # noqa: F401
+    import modules.tourism_intel.products  # noqa: F401
     import modules.trade_intel.products  # noqa: F401
     import modules.pension_intel.products  # noqa: F401
 
