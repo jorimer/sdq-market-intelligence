@@ -31,7 +31,7 @@ from modules.sector_intel.products import (
     sector_manifest,
 )
 
-PRODUCT_KEYS = ("tourism", "free_zones", "construction", "agribusiness")
+PRODUCT_KEYS = ("tourism", "construction", "agribusiness")
 
 
 def test_all_four_registered_and_contract():
@@ -186,9 +186,9 @@ def test_named_snapshot_is_sector(db):
 
 
 def test_pulse_assemble_and_render(db, tmp_path):
-    _seed(db, "zonas_francas")
+    _seed(db, "construccion")
     path = asyncio.run(assemble_product_report(
-        SectorIntelProduct(db, "free_zones"), ProductTier.pulse, period="2025",
+        SectorIntelProduct(db, "construction"), ProductTier.pulse, period="2025",
         output_dir=str(tmp_path)))
     assert os.path.exists(path) and path.endswith(".pdf")
 

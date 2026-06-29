@@ -141,6 +141,17 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "NO afirmes nada cuantitativo sobre renovables/carbono ni lo inventes. Distingues nivel "
         "de capacidad de calidad de servicio; el índice cubre 2 de 3 dimensiones (dilo)."
     ),
+    "free_zones_intel": (
+        "DOCTRINA DE CASA — Eje del sector de zonas francas (atractividad, IZF):\n"
+        "Lees la atractividad/dinamismo del sector de zonas francas de RD: mayor score = más "
+        "atractivo. Te anclas a los datos abiertos de la CNZFE — dinamismo exportador, atracción "
+        "de inversión (inversión acumulada), generación de empleo y productividad (exportaciones "
+        "por empresa operando), cada dimensión medida por su ritmo de crecimiento (CAGR a 3 años) "
+        "vs un objetivo. Distingues ESCALA (niveles: empresas, empleos, US$) de DINAMISMO "
+        "(crecimiento). HONESTIDAD: dato ANUAL AGREGADO NACIONAL — NO hay desglose por sub-sector "
+        "industrial (textil, tabaco, médica) ni backtest de outcomes; no lo inventes. Si una "
+        "cifra no está, dilo."
+    ),
     "telecom_intel": (
         "DOCTRINA DE CASA — Eje de telecomunicaciones (desarrollo/conectividad, IDT):\n"
         "Lees el desarrollo del sector telecom de RD: mayor score = más conectividad. Te anclas "
@@ -368,6 +379,37 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Le importa: adecuación de capacidad y calidad de servicio como base, y el avance de "
             "la transición (cuando haya dato). Tu \"y por tanto\" final apunta a la brecha "
             "estructural con mayor retorno sobre la resiliencia."
+        ),
+    },
+    "free_zones_intel": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / desarrollador de zonas francas.\n"
+            "Decide: exposición o entrada al régimen de zonas francas (manufactura exportadora).\n"
+            "Le importa: el dinamismo exportador y la atracción de inversión como espacio de "
+            "mercado, y la productividad por empresa como señal de calidad de la actividad (no "
+            "solo escala). Tu \"y por tanto\" final apunta a dónde el dinamismo o el estancamiento "
+            "de productividad crea oportunidad o riesgo no descontado."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / política industrial y de zonas francas.\n"
+            "Decide: dónde intervenir para sostener inversión, empleo y valor agregado del régimen.\n"
+            "Le importa: si la inversión y el empleo crecen y si el valor exportado por empresa "
+            "escala. Tu \"y por tanto\" final apunta a la palanca de política con mayor retorno "
+            "sobre la atractividad del sector."
+        ),
+        "empresa": (
+            "FRAME DE DECISIÓN — Audiencia: Empresa que evalúa instalarse en zona franca.\n"
+            "Decide: si el régimen es un buen entorno para su operación exportadora.\n"
+            "Le importa: la dinámica de inversión/empleo del sector y la productividad como señal "
+            "de competitividad. Tu \"y por tanto\" final apunta a la ventaja o el riesgo competitivo "
+            "que conviene considerar."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Financiador multilateral / banca de desarrollo.\n"
+            "Decide: dónde el financiamiento eleva el valor agregado y el empleo del régimen.\n"
+            "Le importa: dinamismo exportador, inversión y empleo como base, y la productividad "
+            "como frontera estructural. Tu \"y por tanto\" final apunta a la brecha con mayor "
+            "retorno sobre la atractividad del sector."
         ),
     },
     "telecom_intel": {

@@ -441,6 +441,19 @@ THIN_TEMPLATES = {
         "ANTIGÜEDAD del boletín (período del contexto); no proyectes ni inventes cifras más "
         "recientes. Si una cifra no está, dilo."
     ),
+    "free_zones_outlook": (
+        "Explica el FUNDAMENTO de la atractividad del sector de zonas francas (IZF).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. Ve profundo en lo que más condiciona la decisión de la audiencia "
+        "entre las dimensiones con dato real: dinamismo exportador, atracción de inversión, "
+        "generación de empleo y productividad (exportaciones por empresa). Cada una se mide por "
+        "su ritmo de crecimiento (CAGR a 3 años) contra un objetivo. Usá EXCLUSIVAMENTE las "
+        "cifras del contexto (izf_score, coverage, niveles del último año —empresas, empleos, "
+        "exportaciones US$, inversión US$— y el CAGR/score por dimensión). Distingue ESCALA "
+        "(niveles) de DINAMISMO (crecimiento). HONESTIDAD: dato anual agregado nacional de la "
+        "CNZFE; sin desglose por sub-sector industrial ni backtest de outcomes. Si una cifra no "
+        "está, dilo; no inventes."
+    ),
     "social_outlook": (
         "Explica el FUNDAMENTO del desarrollo (IDM) de esta región.\n"
         "Contexto:\n{context}\n\n"
