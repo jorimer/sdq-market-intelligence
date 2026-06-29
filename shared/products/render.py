@@ -21,6 +21,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
+    Image,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -210,6 +211,16 @@ def _cover(title: str, display_name: str, period: str, subtitle: Optional[str],
     return out
 
 
+def _img_ratio(path: str) -> float:
+    """Alto/ancho de un PNG (para escalar a ancho de contenido sin deformar)."""
+    try:
+        from reportlab.lib.utils import ImageReader
+        w, h = ImageReader(path).getSize()
+        return (h / w) if w else 0.55
+    except Exception:  # noqa: BLE001
+        return 0.55
+
+
 def render_product_pdf(
     *,
     sector_key: str,
@@ -219,6 +230,7 @@ def render_product_pdf(
     narratives: Dict[str, str],
     section_titles: Optional[Dict[str, str]] = None,
     tables: Optional[List[Tuple[str, Sequence[Sequence[str]]]]] = None,
+    charts: Optional[List[dict]] = None,
     subtitle: Optional[str] = None,
     headline: Optional[str] = None,
     watermark: Optional[str] = None,
@@ -238,7 +250,7 @@ def render_product_pdf(
         from shared.products.render_docx import render_product_docx
         return render_product_docx(
             sector_key=sector_key, display_name=display_name, title=title, period=period,
-            narratives=narratives, section_titles=section_titles, tables=tables,
+            narratives=narratives, section_titles=section_titles, tables=tables, charts=charts,
             subtitle=subtitle, headline=headline, watermark=watermark, sample=sample,
             output_dir=output_dir)
     out_dir = output_dir or settings.REPORTS_DIR
@@ -254,6 +266,11 @@ def render_product_pdf(
 
     styles = _styles()
     el: List = _cover(title, display_name, period, subtitle, headline, styles)
+    # Gráficos de marca (barras de dimensión/contribución) — imagen PNG embebida.
+    from shared.products.charts import render_charts
+    for _ctitle, png in render_charts(charts, out_dir, f"{sector_key}_{ts}"):
+        el.append(Image(png, width=CONTENT_W, height=CONTENT_W * _img_ratio(png)))
+        el.append(Spacer(1, 0.2 * inch))
     for heading, rows in (tables or []):
         if rows:
             el += _data_table(heading, rows, styles)

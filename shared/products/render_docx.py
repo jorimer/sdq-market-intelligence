@@ -134,6 +134,7 @@ def render_product_docx(
     narratives: Dict[str, str],
     section_titles: Optional[Dict[str, str]] = None,
     tables: Optional[List[Tuple[str, Sequence[Sequence[str]]]]] = None,
+    charts: Optional[List[dict]] = None,
     subtitle: Optional[str] = None,
     headline: Optional[str] = None,
     watermark: Optional[str] = None,
@@ -174,6 +175,11 @@ def render_product_docx(
     _add_runs(doc.add_paragraph(), f"**Período:** {period}", color=_NAVY)
     _add_runs(doc.add_paragraph(), f"**Fecha:** {datetime.now().strftime('%d/%m/%Y')}", color=_NAVY)
     doc.add_page_break()
+
+    # ── Gráficos de marca (barras) ──
+    from shared.products.charts import render_charts
+    for _ctitle, png in render_charts(charts, out_dir, f"{sector_key}_{ts}"):
+        doc.add_picture(png, width=Inches(6.0))
 
     # ── Tablas de datos ──
     for heading, rows in (tables or []):
