@@ -53,7 +53,9 @@ EPISTEMIC_STANDARD = (
 BARRA_DE_INSIGHT = (
     "BARRA DE INSIGHT — antes de devolver, tu análisis debe pasar los cinco:\n"
     "1. POSTURA: ¿tomaste una posición o solo describiste? Llega a un veredicto o lectura "
-    "accionable, no a un resumen neutral.\n"
+    "accionable, no a un resumen neutral. Y ABRÍS CON ELLA: la PRIMERA frase es tu "
+    "veredicto/lectura, NO un dato de contexto ni el nivel del score —el número entra "
+    "después como respaldo, nunca como apertura.\n"
     "2. MECANISMO: ¿nombraste POR QUÉ pasa lo que pasa (el canal causal), no solo QUÉ pasa?\n"
     "3. ASIMETRÍA: ¿cuantificaste qué está en juego? Downside vs upside; qué tan caro es "
     "equivocarse en cada dirección.\n"
