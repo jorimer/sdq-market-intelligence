@@ -320,6 +320,41 @@ export interface ProductReport {
   };
 }
 
+/** Dimensión normalizada para el gráfico online (key i18n + score 0–100, o label crudo). */
+export interface ReportDimension {
+  key: string;
+  score: number;
+  label?: string; // si la fuente ya trae un label humano (p.ej. pension)
+}
+
+/**
+ * Extrae las dimensiones puntuadas del `payload` del reporte para el gráfico online,
+ * tolerando las distintas formas por producto (index.dimensions · score.breakdown ·
+ * latest.iai_breakdown · dimensions · rating.dimensions[]). Best-effort: devuelve []
+ * si no hay un set claro de dimensiones (p.ej. trade / pulse de pensiones).
+ */
+export function reportDimensions(report: ProductReport): ReportDimension[] {
+  const p = (report.payload ?? {}) as Record<string, any>;
+  const out: ReportDimension[] = [];
+  const pushObj = (dims: unknown) => {
+    if (!dims || typeof dims !== "object") return;
+    for (const [k, d] of Object.entries(dims as Record<string, any>)) {
+      const s = d?.score;
+      if (typeof s === "number") out.push({ key: k, score: s });
+    }
+  };
+  if (p.index?.dimensions) pushObj(p.index.dimensions);
+  else if (p.score?.breakdown?.dimensions) pushObj(p.score.breakdown.dimensions);
+  else if (p.latest?.iai_breakdown) pushObj(p.latest.iai_breakdown);
+  else if (p.dimensions) pushObj(p.dimensions);
+  else if (Array.isArray(p.rating?.dimensions)) {
+    for (const d of p.rating.dimensions as any[]) {
+      if (typeof d?.score === "number") out.push({ key: d.label ?? "", score: d.score, label: d.label });
+    }
+  }
+  return out;
+}
+
 export async function getProductReport(
   sector: string,
   tier: string,
