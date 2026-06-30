@@ -409,7 +409,8 @@ class ESGProduct:
                                   "(físico/transición/adaptativa/gobernanza) y la palanca de "
                                   "resiliencia con mayor retorno, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="climate_outlook",
+                context=ctx,
+                template="sector_decision" if section == "recommendation" else "climate_outlook",
                 mode=section_mode(tier, section, sections),
                 axis="esg_climate", audience=audience)
             out[section] = res.text

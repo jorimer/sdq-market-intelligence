@@ -273,6 +273,17 @@ THIN_TEMPLATES = {
         "coincida con lo servido. Si una relación no está precalculada, exprésala en palabras sin "
         "número."
     ),
+    "sector_decision": (
+        "CIERRE ACCIONABLE para la audiencia — corto y filoso. NO re-describas el índice ni "
+        "repitas el panorama ya expuesto (resumen, dimensiones, banda): eso ya se dijo.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 180 palabras. UNA postura clara: la palanca o decisión de MAYOR RETORNO dada la "
+        "tensión central ya identificada. Decí POR QUÉ es la de mayor retorno y, si aplica, qué la "
+        "ejecuta. Cerrá con la señal que confirmaría o refutaría que va por buen camino. Sin "
+        "recitar indicadores ni recorrer dimensiones; citá solo la cifra que justifica la "
+        "decisión. Usá SOLO las cifras del contexto; respetá la dirección del índice y la "
+        "procedencia (real vs rúbrica declarada)."
+    ),
     "economic_structure_outlook": (
         "Lee la ESTRUCTURA de la economía dominicana y QUÉ LA MUEVE — para una decisión, no un "
         "resumen neutral.\n"

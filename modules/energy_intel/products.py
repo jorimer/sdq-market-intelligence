@@ -294,7 +294,8 @@ class EnergyProduct:
                                   "servicio, la palanca con mayor retorno sobre la resiliencia "
                                   "eléctrica, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="energy_outlook",
+                context=ctx,
+                template="sector_decision" if section == "recommendation" else "energy_outlook",
                 mode=section_mode(tier, section, sections),
                 axis="energy_intel", audience=audience)
             out[section] = res.text

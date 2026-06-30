@@ -283,7 +283,9 @@ class FreeZoneProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "atractividad del sector de zonas francas, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="free_zones_outlook",
+                context=ctx,
+                template=("sector_decision" if section == "recommendation"
+                          else "free_zones_outlook"),
                 mode=section_mode(tier, section, sections),
                 axis="free_zones_intel", audience=audience)
             out[section] = res.text

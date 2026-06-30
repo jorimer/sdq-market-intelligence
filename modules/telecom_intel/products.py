@@ -302,7 +302,8 @@ class TelecomProduct:
                                   "calidad (banda ancha), la palanca de conectividad con mayor "
                                   "retorno, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="telecom_outlook",
+                context=ctx,
+                template="sector_decision" if section == "recommendation" else "telecom_outlook",
                 mode=section_mode(tier, section, sections),
                 axis="telecom_intel", audience=audience)
             out[section] = res.text
