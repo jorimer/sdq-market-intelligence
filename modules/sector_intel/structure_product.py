@@ -27,6 +27,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.sector_intel.ai_context import economic_structure_ai_context
@@ -42,6 +43,7 @@ _UNSET = object()
 _SECTION_TITLES = {
     "structure_overview": "Estructura de la Economía",
     "structure_assessment": "Importancia Sectorial y Contribución al Crecimiento",
+    "mechanism": "Mecanismo y Escenario: el Sector Bisagra",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
@@ -63,39 +65,60 @@ _NO_DATA = (
 # lastre: construcción −0.24pp pese a ser el sector más grande, 13.5% del VAB).
 _SAMPLE_NARRATIVES = {
     "structure_overview": (
-        "La economía dominicana crece **2.0% en Valor Agregado** en el período, sostenida por "
-        "una base sectorial diversificada (HHI ~807) donde ningún sector domina. Los pilares "
-        "por **tamaño** son **Construcción (13.5% del PIB)**, **Comercio (12.6%)**, "
-        "**Manufactura Local (9.9%)** y **Turismo (8.9%)**. Pero tamaño no es lo mismo que "
-        "tracción: el crecimiento lo **mueven** hoy el sector **financiero** (+0.34 pp, ~17% de "
-        "todo el crecimiento, creciendo 7.5%), **transporte** (+0.32 pp), **turismo** (+0.32 "
-        "pp) y **comercio** (+0.26 pp). El gran **lastre** es la **Construcción**: el sector "
-        "más grande de la economía, pero contrayéndose 1.8% y restando 0.24 pp al crecimiento. "
-        "La lectura: una economía de demanda interna y servicios en expansión, con la "
-        "inversión en construcción como el freno a revertir."
+        "El crecimiento dominicano de **2.0% en Valor Agregado** es real pero de composición "
+        "frágil: lo empujan servicios livianos —financiero, transporte, turismo— mientras el "
+        "sector más grande, la **Construcción (13.5% del PIB)**, se contrae 1.8% y resta 0.24 "
+        "pp. Esa es la tensión del período: el motor estructural de la economía está en reversa "
+        "y el agregado se sostiene porque la demanda interna de servicios lo compensa. El primer "
+        "motor es el **financiero**: pesa apenas 4.6% pero aporta ~17% de todo el crecimiento "
+        "(crece 7.5%). La lectura para decisión es directa: el mayor retorno no está en acelerar "
+        "lo que ya crece, sino en revertir el lastre de la construcción."
     ),
     "structure_assessment": (
-        "La importancia de cada sector se lee en dos planos. **Estructural** (peso en el Valor "
-        "Agregado): Construcción 13.5%, Comercio 12.6%, Manufactura Local 9.9%, Turismo 8.9%, "
-        "Inmobiliario 8.1%, Transporte 7.9% — esos seis concentran ~61% de la economía. "
-        "**Dinámico** (contribución al crecimiento = peso × crecimiento): el financiero, pese a "
-        "pesar solo 4.6%, es el primer motor (+0.34 pp) por su expansión de 7.5%; le siguen "
-        "transporte, turismo y comercio. El contraste lo da la Construcción: primer sector por "
-        "tamaño, pero su contracción (−1.8%) la convierte en el principal lastre (−0.24 pp). "
-        "Para una institución, esto separa los sectores que SOSTIENEN la economía de los que la "
-        "EMPUJAN —o la frenan— hoy, que es donde la política y la inversión rinden más."
+        "El veredicto estructural: esta es una economía que crece por **servicios** y se frena "
+        "por **inversión física** —tamaño y tracción apuntan en direcciones opuestas. Por "
+        "**tamaño**, la columna es Construcción (13.5%), Comercio (12.6%) y Manufactura (9.9%); "
+        "seis sectores concentran ~61% del Valor Agregado. Pero la **tracción** (contribución = "
+        "peso × crecimiento) la lidera el financiero: pesa solo 4.6% y es el primer motor "
+        "(+0.34 pp, ~17% del crecimiento) por su expansión de 7.5%. El contraste define el año: "
+        "la Construcción, primer sector por tamaño, es el principal lastre (−0.24 pp) porque se "
+        "contrae 1.8%. Lo que esto significa para una institución: el 2.0% esconde una economía "
+        "donde lo que SOSTIENE (servicios) y lo que FRENA (inversión física) se separaron —y la "
+        "política rinde más donde está el freno, no donde está el impulso."
+    ),
+    "mechanism": (
+        "El mecanismo detrás del cuadro tiene un solo nudo: la **Construcción**. No es un evento "
+        "sectorial aislado sino un lastre estructural, porque es el sector de mayor "
+        "encadenamiento hacia atrás de la economía: arrastra cemento, acero, comercio de "
+        "materiales, empleo de baja calificación y servicios profesionales en obra. Que "
+        "Servicios Profesionales y Salud también resten (−0.024 pp combinado, marginal) es "
+        "coherente con una desaceleración de la inversión privada que comprime la demanda de "
+        "valor añadido ligada a obra.\n\n"
+        "El canal exacto el dato no lo desglosa, pero las hipótesis plausibles son tres: tasas "
+        "de financiamiento aún por encima de mínimos históricos (canal crédito), contención del "
+        "gasto de capital público (canal fiscal) y sobrecapacidad residencial post-pandemia. La "
+        "política relevante difiere según el canal —subsidio de tasa vs. obra pública vs. "
+        "vivienda asequible—, así que distinguirlos es la tarea analítica pendiente.\n\n"
+        "La asimetría es la clave. Con un peso de 13.5%, si la Construcción pasara de −1.8% a "
+        "apenas +2%, su contribución saltaría de −0.24 pp a +0.27 pp: un swing de ~0.51 pp sobre "
+        "el crecimiento total, equivalente a replicar casi el aporte combinado del financiero "
+        "más el transporte. Ningún otro sector tiene esa palanca de reversión. Qué vigilar para "
+        "saber si el lastre cede en el próximo período: el crédito privado al sector, los "
+        "permisos de construcción y la ejecución del gasto de capital público. Si esos tres "
+        "siguen deprimidos, la contracción es estructural y la política de tasas sola no la "
+        "resuelve."
     ),
     "recommendation": (
-        "Para una institución del Estado o un comité con visión macro-sectorial, la lectura "
-        "accionable es doble. (1) El crecimiento se concentra en **servicios** (financiero, "
-        "transporte, turismo, comercio): apuntalar su dinamismo —conectividad, formalización, "
-        "promoción— protege el motor actual. (2) El mayor retorno está en **revertir el lastre "
-        "de la Construcción**: por su peso (13.5%), pasar de −1.8% a crecimiento positivo "
-        "aportaría más al PIB que cualquier otra palanca individual —ahí pesan la inversión "
-        "pública, el crédito hipotecario y los permisos—. Recomendación: sostener los motores "
-        "de servicios y priorizar la reactivación de la construcción como la intervención de "
-        "mayor impacto agregado. (Lente de importancia/contribución; el valor exportado y la "
-        "atractividad de inversión son análisis complementarios, no sustitutos.)"
+        "La palanca de mayor retorno sobre el crecimiento agregado es **revertir la contracción "
+        "de la Construcción**, no acelerar los servicios que ya crecen. La razón es aritmética: "
+        "por su peso (13.5%), pasar de −1.8% a crecimiento positivo aporta más al PIB que "
+        "cualquier otra intervención individual —un swing potencial de ~0.5 pp. El instrumento "
+        "es doble y está al alcance del Estado: destrabar la inversión pública en infraestructura "
+        "(control directo) y sostener el crédito hipotecario en coordinación con el BCRD "
+        "(segmento privado). Sostener los motores de servicios protege el piso, pero el techo lo "
+        "levanta la construcción. La señal que confirmaría que la palanca funciona: permisos y "
+        "ejecución de obra pública al alza en el segundo semestre; si siguen planos, el arrastre "
+        "es estructural y exige más que tasas."
     ),
 }
 
@@ -117,8 +140,9 @@ def economic_structure_manifest() -> SectorProductManifest:
                 audience="institución / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("structure_assessment", "recommendation", "limitations"),
-                narrative_templates=("economic_structure_outlook",),
+                sections=("structure_assessment", "mechanism", "recommendation", "limitations"),
+                narrative_templates=("economic_structure_outlook", "economic_structure_mechanism",
+                                     "economic_structure_decision"),
                 audience="institución / contraparte", cadence="on_demand", price_band="on-demand"),
         })
 
@@ -256,19 +280,24 @@ class EconomicStructureProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = economic_structure_ai_context(snapshot.payload["structure"])
         audience = "gobierno"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
+        # Cada sección tiene su propio brief; la PROFUNDIDAD la decide el helper central
+        # (section_mode): el assessment diagnostica (conclusión-primero), el mechanism abre
+        # la cadena causal y cuantifica el escenario (la capa profunda real, la única que se
+        # expande a 700-1000 palabras → deep_section), y la decisión cierra corta y accionable.
+        templates = {
+            "structure_overview": "economic_structure_outlook",
+            "structure_assessment": "economic_structure_outlook",
+            "mechanism": "economic_structure_mechanism",
+            "recommendation": "economic_structure_decision",
+        }
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
                 continue
-            ctx = dict(base_ctx)
-            if section == "recommendation":
-                ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre el "
-                                  "crecimiento agregado, dado el cuadro de motores y lastres.")
             res = await narrative_engine.generate(
-                context=ctx, template="economic_structure_outlook", mode=mode,
+                context=base_ctx, template=templates.get(section, "economic_structure_outlook"),
+                mode=section_mode(tier, section, sections, deep_section="mechanism"),
                 axis="economic_structure", audience=audience)
             out[section] = res.text
         return out

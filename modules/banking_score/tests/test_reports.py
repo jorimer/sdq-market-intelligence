@@ -319,43 +319,53 @@ def test_subcomponent_sections_get_focused_context():
     assert "sub_components" in exec_ctx and "indicators" in exec_ctx
 
 
-def test_panorama_sections_get_deep_token_budget():
-    """Las secciones de panorama (largas, con tope 500-700 palabras + tablas) suben a 'deep'
-    (4096 tokens) para no truncarse; las enfocadas (~200 palabras) mantienen su mode."""
-    from modules.banking_score.reports.narrative import _section_mode, _LONG_SECTIONS
-    assert _section_mode("executive_summary", "standard") == "deep"
-    assert _section_mode("comparative", "standard") == "deep"
-    assert _section_mode("recommendation", "detailed") == "deep"
-    assert _section_mode("risk_assessment", "standard") == "deep"
-    # Las enfocadas no se tocan: caben en su mode.
-    assert _section_mode("solidez_financiera", "standard") == "standard"
-    assert _section_mode("liquidez", "detailed") == "detailed"
-    assert {"executive_summary", "comparative", "recommendation"} <= _LONG_SECTIONS
+def test_section_depth_policy():
+    """Profundidad POR SECCIÓN: el cierre accionable (recommendation) corto, el riesgo forward
+    profundo (capa de profundidad causal), el resto al mode pedido — el deep dive profundiza
+    en vez de re-narrar."""
+    from modules.banking_score.reports.narrative import _DEEP_SECTIONS, _section_mode
+    assert _section_mode("recommendation", "detailed") == "standard"   # cierre → corto
+    assert _section_mode("risk_assessment", "standard") == "deep"      # riesgo → capa profunda
+    assert _section_mode("executive_summary", "detailed") == "detailed"
+    assert _section_mode("comparative", "detailed") == "detailed"
+    # Las enfocadas siguen el mode pedido.
+    assert _section_mode("solidez_financiera", "detailed") == "detailed"
+    assert _section_mode("liquidez", "standard") == "standard"
+    assert "risk_assessment" in _DEEP_SECTIONS
 
 
-def test_named_narratives_routes_long_sections_to_deep(monkeypatch):
-    """generate_named_narratives pide presupuesto 'deep' al motor en las secciones de
-    panorama y conserva el mode en las enfocadas — sin truncar el resumen ni el comparativo."""
+def test_named_narratives_section_depth(monkeypatch):
+    """generate_named_narratives aplica la profundidad por sección y rutea las plantillas
+    banking (resumen/comparativo/riesgo/decisión/sub-componentes) por la ruta cerebro."""
     import asyncio
 
     from shared.narrative import claude_engine
     from modules.banking_score.reports.narrative import generate_named_narratives
 
-    seen = {}
+    seen, seen_axis = {}, {}
 
     class _Res:
         text = "ok"
 
     async def _fake_generate(*, context, template, mode, **kw):
-        seen[context.get("sub_componente") or template] = mode
+        key = context.get("sub_componente") or template
+        seen[key] = mode
+        seen_axis[key] = kw.get("axis")
         return _Res()
 
     monkeypatch.setattr(claude_engine.narrative_engine, "generate", _fake_generate)
     sr = {"overall_score": 80, "rating_tier": "SDQ-AA", "sub_components": {"solidez": 75},
           "indicators": {"solvencia": {"score": 100, "raw": 16, "available": True}}}
     asyncio.run(generate_named_narratives(
-        ["executive_summary", "comparative", "solidez_financiera"], "BanReservas", sr,
-        "2025-12-31", mode="standard"))
-    assert seen["executive_summary"] == "deep"   # panorama → deep
-    assert seen["comparative"] == "deep"
-    assert seen["Solidez Financiera"] == "standard"  # enfocada → mode pedido
+        ["executive_summary", "comparative", "risk_assessment", "recommendation",
+         "solidez_financiera"], "BanReservas", sr, "2025-12-31", mode="detailed"))
+    # Profundidad por sección.
+    assert seen["banking_risk"] == "deep"               # riesgo → capa profunda
+    assert seen["banking_recommendation"] == "standard"  # cierre → corto
+    assert seen["banking_summary"] == "detailed"
+    assert seen["banking_comparative"] == "detailed"
+    assert seen["Solidez Financiera"] == "detailed"
+    # Ruta cerebro (axis="banking") en las plantillas banking.
+    assert seen_axis["banking_summary"] == "banking"
+    assert seen_axis["banking_risk"] == "banking"
+    assert seen_axis["Solidez Financiera"] == "banking"

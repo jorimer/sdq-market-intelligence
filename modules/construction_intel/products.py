@@ -33,6 +33,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.construction_intel.ai_context import construction_ai_context
@@ -274,8 +275,6 @@ class ConstructionProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = construction_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -286,7 +285,8 @@ class ConstructionProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "coyuntura del sector construcción, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="construction_outlook", mode=mode,
+                context=ctx, template="construction_outlook",
+                mode=section_mode(tier, section, sections),
                 axis="construction_intel", audience=audience)
             out[section] = res.text
         return out

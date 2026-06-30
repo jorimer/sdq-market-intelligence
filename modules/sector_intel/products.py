@@ -45,6 +45,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.sector_intel.ai_context import sector_ai_context
@@ -382,8 +383,6 @@ class SectorIntelProduct:
             snapshot.payload["latest"], sector_name=self._display,
             sgps_detail=snapshot.payload.get("sgps_detail"))
         audience = "inversionista"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -397,7 +396,8 @@ class SectorIntelProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la dimensión real con mayor brecha y la "
                                   "palanca de atractividad con mayor retorno, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="sector_outlook", mode=mode,
+                context=ctx, template="sector_outlook",
+                mode=section_mode(tier, section, sections),
                 axis="sector_intel", audience=audience)
             out[section] = res.text
         return out

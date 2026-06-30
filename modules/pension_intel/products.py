@@ -34,6 +34,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.pension_intel.ai_context import (
@@ -528,7 +529,6 @@ class PensionProduct:
         if trend:
             base_ctx["trayectoria_rentabilidad"] = [{"periodo": p, "valor": v} for p, v in trend[-12:]]
         cartera = snapshot.payload.get("cartera")
-        mode = "deep" if tier == ProductTier.deep_dive else "detailed"
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -537,7 +537,8 @@ class PensionProduct:
             if section == "peer_positioning":
                 res = await narrative_engine.generate(
                     context=pension_peer_context(entity, rating, peers),
-                    template="pension_peer_positioning", mode=mode,
+                    template="pension_peer_positioning",
+                    mode=section_mode(tier, section, sections),
                     axis="pension_intel", audience="inversionista")
                 out[section] = res.text
                 continue
@@ -547,7 +548,8 @@ class PensionProduct:
                     continue
                 res = await narrative_engine.generate(
                     context=pension_cartera_context(cartera),
-                    template="pension_portfolio_context", mode=mode,
+                    template="pension_portfolio_context",
+                    mode=section_mode(tier, section, sections),
                     axis="pension_intel", audience="inversionista")
                 out[section] = res.text
                 continue
@@ -558,7 +560,8 @@ class PensionProduct:
                                   "posición relativa, la señal a vigilar (procedencia de solvencia, "
                                   "trayectoria de rentabilidad) y el 'y por tanto' de decisión.")
             res = await narrative_engine.generate(
-                context=ctx, template="pension_entity", mode=mode,
+                context=ctx, template="pension_entity",
+                mode=section_mode(tier, section, sections),
                 axis="pension_intel", audience="inversionista")
             out[section] = res.text
         return out

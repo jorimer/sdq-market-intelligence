@@ -274,19 +274,99 @@ THIN_TEMPLATES = {
         "número."
     ),
     "economic_structure_outlook": (
-        "Explica la ESTRUCTURA de la economía dominicana y QUÉ LA MUEVE.\n"
+        "Lee la ESTRUCTURA de la economía dominicana y QUÉ LA MUEVE — para una decisión, no un "
+        "resumen neutral.\n"
         "Contexto:\n{context}\n\n"
-        "Máximo 350 palabras. La idea rectora: distinguir TAMAÑO (peso en el Valor Agregado) de "
-        "APORTE (contribución al crecimiento = peso × crecimiento). Usá EXCLUSIVAMENTE las cifras "
-        "del contexto (total_va_growth_pct, structure_top_weight, growth_drivers, growth_drags, "
-        "concentration_hhi). Estructura la lectura: (1) los sectores que SOSTIENEN la economía por "
-        "tamaño; (2) los MOTORES del crecimiento (mayor contribución, con su cuota); (3) los "
-        "LASTRES (sectores grandes que se contraen y restan). Nombra explícitamente cuando un "
-        "sector es grande pero está restando (p. ej. construcción) y cuando uno mediano empuja "
-        "fuerte (p. ej. financiero). HONESTIDAD: esta es la lente de IMPORTANCIA ECONÓMICA y "
-        "CONTRIBUCIÓN — NO el valor exportado (donde joyería/oro lideran) ni la atractividad "
-        "(IAI); no las mezcles. Dato anual agregado del BCRD; sin score sintético. Si una cifra "
-        "no está, dilo; no inventes."
+        "Máximo 350 palabras. EMPIEZA POR EL VEREDICTO: ¿qué TIPO de crecimiento es este y cuál es "
+        "la tensión central? (p. ej. «crecimiento real pero de composición frágil: lo empujan "
+        "servicios livianos mientras el sector más grande se contrae»). El dato RESPALDA esa "
+        "conclusión, no al revés. Idea rectora: TAMAÑO (peso en el Valor Agregado) ≠ APORTE "
+        "(contribución = peso × crecimiento). NO recorras los 17 sectores ni recites tres cifras "
+        "por cada uno: nombra SOLO los 2-3 que mueven la lectura —el motor que más aporta (con su "
+        "cuota del crecimiento) y el lastre grande que resta (p. ej. construcción)— y di QUÉ "
+        "SIGNIFICAN, no solo cuánto valen. Cierra con la implicación: qué hace frágil o robusto a "
+        "este crecimiento y qué lo cambiaría. Usá EXCLUSIVAMENTE las cifras del contexto "
+        "(total_va_growth_pct, structure_top_weight, growth_drivers, growth_drags, "
+        "concentration_hhi). HONESTIDAD: lente de IMPORTANCIA y CONTRIBUCIÓN — NO valor exportado "
+        "(joyería/oro) ni atractividad (IAI); no las mezcles. Dato anual agregado del BCRD; sin "
+        "score sintético. Si una cifra no está, dilo; no inventes."
+    ),
+    "economic_structure_mechanism": (
+        "PROFUNDIZA en el MECANISMO detrás del cuadro sectorial — la capa que la lectura breve no "
+        "abre. No repitas el panorama general; ASUME que ya se presentó.\n"
+        "Contexto:\n{context}\n\n"
+        "Toma la tensión central (típicamente el sector grande que arrastra —construcción— y el "
+        "motor mediano que empuja —financiero—) y desarrolla la CADENA CAUSAL: POR QUÉ se contrae "
+        "o se acelera (canales de crédito, inversión pública/fiscal, ciclo de tasas, demanda "
+        "post-pandemia) y QUÉ ARRASTRA CONSIGO por encadenamiento (materiales, empleo de baja "
+        "calificación, servicios profesionales en obra). CUANTIFICA LA ASIMETRÍA con las cifras "
+        "del contexto: si el lastre revierte a crecimiento +X%, su contribución pasa de A a B —un "
+        "swing de Y pp sobre el crecimiento total—; compáralo con el aporte de los motores y di "
+        "cuál palanca rinde más. Sé explícito sobre lo que el dato NO desglosa (p. ej. el canal "
+        "exacto de la contracción) y qué inferencia es plausible vs verificada. CIERRA con los "
+        "INDICADORES ADELANTADOS a vigilar (crédito privado, permisos de construcción, gasto de "
+        "capital público, llegadas de turistas) que confirmarían o refutarían la lectura. Usá SOLO "
+        "cifras del contexto; ninguna inventada. Estructura en secciones con encabezados Markdown."
+    ),
+    "economic_structure_decision": (
+        "CIERRE ACCIONABLE para el formulador de política — corto y filoso. NO re-describas la "
+        "estructura ni recites cifras sector por sector.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 200 palabras. UNA sola idea rectora: la palanca de MAYOR RETORNO sobre el "
+        "crecimiento agregado, dado el cuadro de motores y lastres ya expuesto. Nómbrala, di POR "
+        "QUÉ es la de mayor retorno (peso × reversión potencial) y qué la ejecuta (instrumentos "
+        "concretos: inversión pública, crédito hipotecario, permisos). Distingue «sostener los "
+        "motores» de «revertir el lastre» y TOMA PARTIDO por la de mayor impacto. Termina con la "
+        "señal que confirmaría o refutaría que la palanca está funcionando. Cita solo la cifra que "
+        "justifica la palanca. Usá SOLO cifras del contexto. Lente de contribución, no valor "
+        "exportado ni IAI."
+    ),
+    "banking_summary": (
+        "Resumen ejecutivo de la SOLIDEZ de esta entidad para una decisión de exposición.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. EMPIEZA POR EL VEREDICTO: el rating, qué tan sólida es la entidad y "
+        "cuál es la tensión que más condiciona su capacidad de pago. Luego respáldalo: el "
+        "sub-componente que más sostiene la solidez y el que más la limita (ponderá por su peso; "
+        "un indicador fuerte en un sub-componente de bajo peso no rescata el rating) y la "
+        "trayectoria del score (nivel vs dirección). NO recorras los cinco sub-componentes uno por "
+        "uno ni recites todos los indicadores: nombra los 2-3 que mueven la lectura e INTERPRETÁ "
+        "qué significan para la solidez —no cites el ratio suelto—. Cerrá con el 'y por tanto' para "
+        "el comité: qué implica para la exposición y qué señal vigilar antes del próximo corte. Usá "
+        "SOLO las cifras del contexto; ninguna inventada."
+    ),
+    "banking_comparative": (
+        "Posición RELATIVA de la entidad frente a sus pares —no su perfil aislado.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. La CONCLUSIÓN primero: ¿esta entidad lidera, está en la media o "
+        "rezagada frente a pares de su mismo tipo, y en QUÉ dimensión se juega la diferencia? "
+        "Respaldá con la comparación que importa (no toda la tabla): dónde su ventaja es real y "
+        "dónde su rezago es material para la solidez. INTERPRETÁ la diferencia (qué significa una "
+        "peor morosidad o cobertura frente al par), no solo el número. Si incluís una tabla "
+        "comparativa, que sea markdown estándar y corta. Usá SOLO las cifras del contexto; "
+        "ninguna inventada."
+    ),
+    "banking_risk": (
+        "PROFUNDIZA en el RIESGO forward de la entidad — la capa que el resumen no abre. No "
+        "repitas el panorama; asumí que ya se presentó.\n"
+        "Contexto:\n{context}\n\n"
+        "Tomá el sub-componente o indicador que más condiciona la solidez y desarrollá la CADENA "
+        "CAUSAL del riesgo: qué lo deteriora (calidad de cartera, presión de rentabilidad, "
+        "descalce de liquidez, concentración), por qué canal golpearía la capacidad de pago y qué "
+        "lo amortigua (mitigantes reales del contexto). CUANTIFICÁ LA ASIMETRÍA: qué tan caro es "
+        "equivocarse hacia cada lado para el comité y a qué umbral una señal pasa de vigilancia a "
+        "acción. Interpretá cada tecnicismo por su significado prudencial, no como cifra suelta. "
+        "Cerrá con los INDICADORES ADELANTADOS a vigilar antes del próximo corte y qué los movería. "
+        "Usá SOLO las cifras del contexto; ninguna inventada. Estructura en secciones con "
+        "encabezados Markdown."
+    ),
+    "banking_recommendation": (
+        "CIERRE ACCIONABLE para el comité de crédito — corto y filoso. NO re-describas la entidad.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 180 palabras. UNA postura clara de exposición: aprobar, ajustar/limitar o declinar "
+        "la línea, dado el cuadro de solidez y riesgo ya expuesto. Decí POR QUÉ (la tensión que la "
+        "condiciona) y, si aplica, qué condición la haría viable. Terminá con la señal que "
+        "confirmaría o refutaría la postura antes del próximo corte. Sin recitar ratios; citá solo "
+        "la cifra que justifica la decisión. Usá SOLO las cifras del contexto."
     ),
     "system_pulse": (
         "Entrega una PERSPECTIVA DE SISTEMA del sector bancario dominicano (nivel abierto, "
@@ -583,6 +663,28 @@ STATIC_FALLBACKS = {
         "cartera, la liquidez y la diversificación de la entidad, contrastados con los "
         "parámetros del sector según la metodología SDQ. El detalle se desarrolla en las "
         "secciones de este informe."
+    ),
+    "banking_summary": (
+        "Este resumen integra los indicadores financieros del período en una lectura ejecutiva "
+        "del perfil de la entidad: solidez de capital, calidad de la cartera, eficiencia, "
+        "liquidez y diversificación, ponderados según la metodología de calificación SDQ. El "
+        "detalle por dimensión se desarrolla en las secciones siguientes."
+    ),
+    "banking_comparative": (
+        "Esta sección sitúa a la entidad frente a sus pares del mismo tipo, contrastando los "
+        "sub-componentes de la calificación para distinguir sus ventajas relativas de sus "
+        "rezagos materiales, según la metodología SDQ."
+    ),
+    "banking_risk": (
+        "El perfil de riesgo se evalúa integrando la solidez financiera, la calidad de la "
+        "cartera, la liquidez y la diversificación de la entidad, contrastados con los "
+        "parámetros del sector según la metodología SDQ. El detalle se desarrolla en las "
+        "secciones de este informe."
+    ),
+    "banking_recommendation": (
+        "Esta sección sintetiza la lectura del período en una postura de exposición para el "
+        "comité, fundamentada en la solidez y el perfil de riesgo de la entidad según la "
+        "metodología SDQ."
     ),
 }
 
