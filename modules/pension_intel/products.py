@@ -572,6 +572,8 @@ class PensionProduct:
                  "deep_dive": "Deep Dive Pensiones"}.get(tier.value, "Pensiones")
         display = SYSTEM_NAME if tier == ProductTier.pulse else (snapshot.entity_name or "AFP")
         tables: List = []
+        charts: List = []
+        headline: Optional[str] = None
         payload = snapshot.payload or {}
         if tier == ProductTier.pulse and payload.get("has_data"):
             h = payload.get("headline") or {}
@@ -593,6 +595,10 @@ class PensionProduct:
             cart = _cartera_table(payload.get("cartera"))
             if cart:
                 tables.append(cart)
+            if isinstance(cci, (int, float)):
+                headline = (f"Rentabilidad CCI {cci:.1f}% (nominal)"
+                            + (f" · brecha {spread:.2f} pp entre AFP"
+                               if isinstance(spread, (int, float)) else ""))
         elif payload.get("has_data"):
             rating = payload.get("rating") or {}
             rows = [["Dimensión", "Peso", "Score", "Procedencia"]]
@@ -600,6 +606,16 @@ class PensionProduct:
                 score = "—" if d.get("score") is None else f"{d['score']:.0f}"
                 rows.append([d["label"], f"{d['weight']*100:.0f}%", score, d["provenance"]])
             tables.append(("Desglose del ISA (relativo, parcial)", rows))
+            # Gráfico SOLO de las dimensiones con dato real (las 'brecha' van nulas → se omiten,
+            # honestidad: no se grafica una dimensión sin medir).
+            present = [(d["label"], d.get("score")) for d in (rating.get("dimensions") or [])
+                       if isinstance(d.get("score"), (int, float))]
+            if len(present) >= 2:
+                charts.append({"title": "Dimensiones del ISA con dato (score 0-100)",
+                               "items": present})
+            ov = rating.get("overall_score")
+            if isinstance(ov, (int, float)):
+                headline = f"ISA {ov:.0f}/100 · {rating.get('name', 'AFP')} (relativo, parcial)"
             # Profundidad: pares (números reales), trayectoria, y cartera (deep dive).
             for tbl in (_peer_table(payload.get("peers")), _trend_table(payload.get("trend"))):
                 if tbl:
@@ -611,8 +627,9 @@ class PensionProduct:
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
-            section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
-            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
+            section_titles=_SECTION_TITLES, tables=tables, charts=charts, headline=headline,
+            subtitle=None, watermark=level.watermark, sample=sample,
+            output_dir=output_dir, fmt=fmt)
 
 
 register_product(SECTOR_KEY, lambda db: PensionProduct(db))

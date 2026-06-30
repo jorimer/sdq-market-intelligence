@@ -411,18 +411,27 @@ class SectorIntelProduct:
                  "deep_dive": "Deep Dive Sectorial"}.get(tier.value, "Sectorial")
         display = (f"Sector {self._display}" if tier == ProductTier.pulse else self._display)
         tables: List = []
+        charts: List = []
         latest = (snapshot.payload or {}).get("latest") or {}
         dims = latest.get("iai_breakdown") or {}
+        _labels = {"sector": "Sectorial (BCRD)", "macro": "Macro", "business": "Negocios",
+                   "talent": "Talento", "regulation": "Regulación"}
         if dims:
             rows = [["Dimensión", "Score", "Peso"]] + [
-                [str(k), _fmt((d or {}).get("score")), _fmt((d or {}).get("weight"))]
+                [_labels.get(k, str(k)), _fmt((d or {}).get("score")), _fmt((d or {}).get("weight"))]
                 for k, d in dims.items()]
             tables.append(("Dimensiones del IAI", rows))
+            items = [(_labels.get(k, str(k)), (d or {}).get("score")) for k, d in dims.items()]
+            charts.append({"title": "Dimensiones del IAI (score 0-100)", "items": items})
+        sc = latest.get("iai_score")
+        headline = (f"IAI {_fmt(sc)} · {latest.get('iai_band')}"
+                    if isinstance(sc, (int, float)) else None)
         return render_product_pdf(
             sector_key=self.sector_key, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
-            section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
-            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
+            section_titles=_SECTION_TITLES, tables=tables, charts=charts, headline=headline,
+            subtitle=None, watermark=level.watermark, sample=sample,
+            output_dir=output_dir, fmt=fmt)
 
 
 # Auto-registro de cada producto sectorial (idempotente). Cada factory captura su

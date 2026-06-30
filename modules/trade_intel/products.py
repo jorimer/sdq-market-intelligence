@@ -403,6 +403,7 @@ class TradeProduct:
         display = ("Sistema de Comercio Exterior · RD" if tier == ProductTier.pulse
                    else COUNTRY_NAME)
         tables: List = []
+        charts: List = []
         sd = (snapshot.payload or {}).get("score") or {}
         top = sd.get("top_export_products") or []
         if top:
@@ -416,11 +417,24 @@ class TradeProduct:
                 rows = [["País socio", "Participación export"]] + [
                     [str(t.get("partner")), _pct(t.get("share"))] for t in exp_top[:8]]
                 tables.append(("Concentración geográfica (top socios)", rows))
+        # Composición de la resiliencia (0-100): sus dos palancas explicables + el índice.
+        div = sd.get("export_diversification")
+        dep = sd.get("import_dependency")
+        res = sd.get("resilience_score")
+        comp = [("Diversificación export.", div),
+                ("Independencia import.", (1 - dep) * 100 if isinstance(dep, (int, float)) else None),
+                ("Resiliencia comercial", res)]
+        if any(isinstance(v, (int, float)) for _, v in comp):
+            charts.append({"title": "Composición de la resiliencia comercial (0-100)",
+                           "items": comp})
+        headline = (f"Resiliencia comercial {res:.1f}/100" if isinstance(res, (int, float))
+                    else None)
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
-            section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
-            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
+            section_titles=_SECTION_TITLES, tables=tables, charts=charts, headline=headline,
+            subtitle=None, watermark=level.watermark, sample=sample,
+            output_dir=output_dir, fmt=fmt)
 
 
 register_product(SECTOR_KEY, lambda db: TradeProduct(db))

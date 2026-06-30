@@ -425,17 +425,26 @@ class ESGProduct:
         display = ("Resiliencia Climática Nacional · RD" if tier == ProductTier.pulse
                    else (snapshot.entity_name or COUNTRY_NAME))
         tables: List = []
+        charts: List = []
         score = (snapshot.payload or {}).get("score") or {}
         dims = (score.get("breakdown") or {}).get("dimensions") or {}
+        _labels = {"physical_risk": "Riesgo físico", "transition_risk": "Riesgo transición",
+                   "adaptive_capacity": "Cap. adaptativa", "governance": "Gobernanza"}
         if dims:
             rows = [["Dimensión", "Score"]] + [
-                [str(k), _pct((d or {}).get("score"))] for k, d in dims.items()]
+                [_labels.get(k, str(k)), _pct((d or {}).get("score"))] for k, d in dims.items()]
             tables.append(("Dimensiones del IRC", rows))
+            items = [(_labels.get(k, str(k)), (d or {}).get("score")) for k, d in dims.items()]
+            charts.append({"title": "Dimensiones del IRC (score 0-100)", "items": items})
+        sc = score.get("esg_score")
+        headline = (f"IRC {sc:.1f} · {score.get('band')}" if isinstance(sc, (int, float))
+                    else None)
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
-            section_titles=_SECTION_TITLES, tables=tables, subtitle=None,
-            watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
+            section_titles=_SECTION_TITLES, tables=tables, charts=charts, headline=headline,
+            subtitle=None, watermark=level.watermark, sample=sample,
+            output_dir=output_dir, fmt=fmt)
 
 
 register_product(SECTOR_KEY, lambda db: ESGProduct(db))
