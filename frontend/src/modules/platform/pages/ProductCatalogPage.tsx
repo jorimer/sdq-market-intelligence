@@ -12,6 +12,7 @@ import {
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
 import { Markdown } from "@/shared/ui/Markdown";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
+import { DimensionBars } from "../components/DimensionBars";
 import {
   getProductCatalog,
   getProductReport,
@@ -20,6 +21,7 @@ import {
   downloadProductPdf,
   downloadProductReport,
   downloadProductSample,
+  reportDimensions,
   type ProductCatalog,
   type CatalogSector,
   type CatalogLevel,
@@ -364,6 +366,16 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
           {report.period && (
             <p className="text-xs text-muted">{t("platform.catalog.period", { v: report.period })}</p>
           )}
+          {(() => {
+            const dims = reportDimensions(report)
+              .map((d) => ({
+                label: d.label ?? t(`platform.catalog.dim.${d.key}`, { defaultValue: d.key }),
+                score: d.score,
+              }));
+            return dims.length >= 2 ? (
+              <DimensionBars title={t("platform.catalog.dimensionsTitle")} data={dims} />
+            ) : null;
+          })()}
           {(() => { let n = 0; return report.commercial.sections.map((sec) => {
             const text = report.narratives[sec];
             if (!text) return null;
