@@ -1,8 +1,9 @@
 """Tests de los productos sectoriales (sector_intel parametrizado) — #4,#5,#8,#9.
 
-Un mismo SectorIntelProduct sirve a construction/agribusiness (tourism y free_zones
-tienen producto dedicado: modules.tourism_intel · ITT/ONE y modules.free_zones_intel ·
-IZF/CNZFE — ya no los sirve el corte transversal del IAI).
+El mismo SectorIntelProduct sirve a agribusiness (tourism, free_zones y construction
+tienen producto dedicado: modules.tourism_intel · ITT/ONE, modules.free_zones_intel ·
+IZF/CNZFE y modules.construction_intel · ICC/MIVHED+BCRD — ya no los sirve el corte
+transversal del IAI).
 Cubren: conformidad, manifiesto, readiness desde señales reales (DB vacía/sin tablas
 → G1/G2 bajan; con dato G1 = peso del IAI con procedencia real por-variable, ~0.70 con
 6/9 live, NO hardcode; legacy sin procedencia cae al fallback 0.40), snapshot
@@ -33,7 +34,7 @@ from modules.sector_intel.products import (
     sector_manifest,
 )
 
-PRODUCT_KEYS = ("construction", "agribusiness")
+PRODUCT_KEYS = ("agribusiness",)
 
 
 def test_all_registered_and_contract():
@@ -51,7 +52,7 @@ def test_unknown_product_key_rejected():
 
 
 def test_manifest_three_tiers():
-    m = sector_manifest("construction", "Construcción · RD")
+    m = sector_manifest("agribusiness", "Agropecuario · RD")
     assert m.tiers() == [ProductTier.pulse, ProductTier.insight, ProductTier.deep_dive]
     assert m.require_level(ProductTier.pulse).granularity.value == "system"
     dd = set(m.require_level(ProductTier.deep_dive).sections)
@@ -118,7 +119,7 @@ def _seed(db, sector_code="turismo"):
 
 
 def test_readiness_empty_db(db):
-    rep = compute_readiness(SectorIntelProduct(db, "construction"), ProductTier.insight)
+    rep = compute_readiness(SectorIntelProduct(db, "agribusiness"), ProductTier.insight)
     assert rep["g1"] == 0.0 and rep["g2"] == 0.0
     assert rep["g3"] == 1.0 and rep["g4"] == 1.0
     assert rep["g5"] == 0.5  # Gate E sectorial diferido
@@ -128,7 +129,7 @@ def test_readiness_no_tables_does_not_crash():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
                            poolclass=StaticPool)
     s = sessionmaker(bind=engine)()
-    rep = compute_readiness(SectorIntelProduct(s, "construction"), ProductTier.pulse)
+    rep = compute_readiness(SectorIntelProduct(s, "agribusiness"), ProductTier.pulse)
     assert rep["g1"] == 0.0 and rep["g2"] == 0.0
     s.close()
 
@@ -136,8 +137,8 @@ def test_readiness_no_tables_does_not_crash():
 def test_readiness_honest_coverage_by_provenance(db):
     """G1 acredita el peso del IAI con dato real por PROCEDENCIA por-variable (6/9 live
     → ~0.70), no un conjunto fijo de dims. Con esa cobertura el Pulse cruza 0.75."""
-    _seed(db, "construccion")
-    rep = compute_readiness(SectorIntelProduct(db, "construction"), ProductTier.pulse)
+    _seed(db, "agropecuario")
+    rep = compute_readiness(SectorIntelProduct(db, "agribusiness"), ProductTier.pulse)
     assert rep["g1"] == pytest.approx(0.70, abs=1e-6)  # 0.70 real × frescura anual plena
     assert rep["g2"] == 1.0
     # 0.30·0.70 + 0.25 + 0.15 + 0.15 + 0.15·0.50 = 0.835 → cruza el umbral Pulse (0.75).
@@ -164,18 +165,18 @@ def test_live_vars_counts_national_signal():
 def test_readiness_legacy_breakdown_fallback(db):
     """Breakdown legacy (sin procedencia) → fallback conservador sector+macro = 0.40,
     para no inflar la cobertura antes del re-backfill que estampa la procedencia."""
-    db.add(SectorScore(sector_code="construccion", period="2025", iai_score=55.0,
+    db.add(SectorScore(sector_code="agropecuario", period="2025", iai_score=55.0,
                        iai_band="Media", sgps_score=60.0, iai_breakdown=_legacy_breakdown(),
                        sgps_breakdown={}, model_version="1.0"))
     db.commit()
-    rep = compute_readiness(SectorIntelProduct(db, "construction"), ProductTier.pulse)
+    rep = compute_readiness(SectorIntelProduct(db, "agribusiness"), ProductTier.pulse)
     assert rep["g1"] == pytest.approx(0.40, abs=1e-6)
     assert rep["readiness"] < 0.75  # sin procedencia: no publicable aún
 
 
 def test_pulse_snapshot_is_anonymous(db):
-    _seed(db, "construccion")
-    snap = SectorIntelProduct(db, "construction").snapshot(ProductTier.pulse, "2025")
+    _seed(db, "agropecuario")
+    snap = SectorIntelProduct(db, "agribusiness").snapshot(ProductTier.pulse, "2025")
     assert snap.entity_name is None and snap.entity_roster == ()
     assert snap.payload["latest"]["iai_score"] == 55.75
 
@@ -188,21 +189,21 @@ def test_named_snapshot_is_sector(db):
 
 
 def test_pulse_assemble_and_render(db, tmp_path):
-    _seed(db, "construccion")
+    _seed(db, "agropecuario")
     path = asyncio.run(assemble_product_report(
-        SectorIntelProduct(db, "construction"), ProductTier.pulse, period="2025",
+        SectorIntelProduct(db, "agribusiness"), ProductTier.pulse, period="2025",
         output_dir=str(tmp_path)))
     assert os.path.exists(path) and path.endswith(".pdf")
 
 
 def test_deep_dive_render_synthetic(tmp_path):
-    latest = {"sector_code": "construccion", "period": "2025", "iai_score": 55.75,
+    latest = {"sector_code": "agropecuario", "period": "2025", "iai_score": 55.75,
               "iai_band": "Media", "sgps_score": 62.0, "iai_breakdown": _breakdown()}
     snap = ProductSnapshot(tier=ProductTier.deep_dive, period="2025",
                            payload={"has_score": True, "latest": latest,
                                     "sgps_detail": {"historical": 60.0, "structural": 64.0}},
-                           entity_name="Construcción · RD")
-    prod = SectorIntelProduct(None, "construction")
+                           entity_name="Agropecuario · RD")
+    prod = SectorIntelProduct(None, "agribusiness")
     narr = asyncio.run(prod.narratives(ProductTier.deep_dive, snap))
     assert "limitations" in narr and "IAI" in narr["limitations"]
     path = asyncio.run(prod.render(ProductTier.deep_dive, snap, narr,
@@ -214,7 +215,7 @@ def test_templates_are_guarded():
     from shared.narrative.claude_engine import THIN_TEMPLATES
     from shared.narrative.cerebro import AXIS_DOCTRINE
     assert "sector_intel" in AXIS_DOCTRINE
-    m = sector_manifest("construction", "Construcción · RD")
+    m = sector_manifest("agribusiness", "Agropecuario · RD")
     for tier in m.tiers():
         for tmpl in m.require_level(tier).narrative_templates:
             assert tmpl in THIN_TEMPLATES, f"{tmpl} no es thin → sin guard"
@@ -222,8 +223,8 @@ def test_templates_are_guarded():
 
 def test_no_data_narratives_are_honest():
     snap = ProductSnapshot(tier=ProductTier.insight, period="—",
-                           payload={"has_score": False}, entity_name="Construcción · RD")
-    narr = asyncio.run(SectorIntelProduct(None, "construction").narratives(
+                           payload={"has_score": False}, entity_name="Agropecuario · RD")
+    narr = asyncio.run(SectorIntelProduct(None, "agribusiness").narratives(
         ProductTier.insight, snap))
     assert all(v for v in narr.values())
 

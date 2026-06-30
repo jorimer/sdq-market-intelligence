@@ -56,6 +56,7 @@ from modules.energy_intel.api.router import router as energy_intel_router
 from modules.free_zones_intel.api.router import router as free_zones_intel_router
 from modules.telecom_intel.api.router import router as telecom_intel_router
 from modules.tourism_intel.api.router import router as tourism_intel_router
+from modules.construction_intel.api.router import router as construction_intel_router
 from modules.pension_intel.api.router import router as pension_intel_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
@@ -76,6 +77,8 @@ app.include_router(free_zones_intel_router, prefix="/api/v1/free-zones-intel",
                    tags=["Free Zones Intel"])
 app.include_router(telecom_intel_router, prefix="/api/v1/telecom-intel", tags=["Telecom Intel"])
 app.include_router(tourism_intel_router, prefix="/api/v1/tourism-intel", tags=["Tourism Intel"])
+app.include_router(construction_intel_router, prefix="/api/v1/construction-intel",
+                   tags=["Construction Intel"])
 app.include_router(pension_intel_router, prefix="/api/v1/pension-intel", tags=["Pension Intel"])
 
 from shared.settings.router import router as settings_router
@@ -129,6 +132,7 @@ import modules.energy_intel.operations  # noqa: F401 — registers sie-energy-sy
 import modules.free_zones_intel.operations  # noqa: F401 — registers cnzfe-free-zones-sync
 import modules.telecom_intel.operations  # noqa: F401 — registers indotel-telecom-sync
 import modules.tourism_intel.operations  # noqa: F401 — registers one-tourism-sync
+import modules.construction_intel.operations  # noqa: F401 — registers mivhed-construction-sync
 import modules.pension_intel.operations  # noqa: F401 — registers sipen-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
@@ -140,10 +144,11 @@ import shared.operations.freshness  # noqa: F401 — registers data-freshness-au
 import modules.banking_score.products  # noqa: F401 — registers banking SectorProduct
 import modules.trade_intel.products  # noqa: F401 — registers trade SectorProduct
 import modules.esg_climate.products  # noqa: F401 — registers esg SectorProduct
-import modules.sector_intel.products  # noqa: F401 — registers tourism/construction/agribusiness
+import modules.sector_intel.products  # noqa: F401 — registers agribusiness (slot transversal)
 import modules.sector_intel.structure_product  # noqa: F401 — registers economic_structure (agregado)
 import modules.free_zones_intel.products  # noqa: F401 — registers free_zones (dedicado, IZF/CNZFE)
 import modules.tourism_intel.products  # noqa: F401 — registers tourism (dedicado, ITT/ONE)
+import modules.construction_intel.products  # noqa: F401 — registers construction (dedicado, ICC/MIVHED+BCRD)
 import modules.energy_intel.products  # noqa: F401 — registers energy SectorProduct
 import modules.telecom_intel.products  # noqa: F401 — registers telecom SectorProduct
 import modules.pension_intel.products  # noqa: F401 — registers pension SectorProduct

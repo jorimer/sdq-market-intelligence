@@ -486,6 +486,22 @@ THIN_TEMPLATES = {
         "CNZFE; sin desglose por sub-sector industrial ni backtest de outcomes. Si una cifra no "
         "está, dilo; no inventes."
     ),
+    "construction_outlook": (
+        "Explica el FUNDAMENTO de la coyuntura del sector construcción (ICC).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. Ve profundo en lo que más condiciona la decisión de la audiencia "
+        "entre las dimensiones con dato real: producción del sector (crecimiento real del PIB "
+        "de construcción, BCRD), pipeline de permisos (CAGR a 3 años de m² licenciados, MIVHED), "
+        "diversificación tipológica y amplitud geográfica (HHI). Usá EXCLUSIVAMENTE las cifras "
+        "del contexto (icc_score, coverage, construction_gdp_growth_3y_pct, los niveles del año "
+        "—permits, sqm_licensed, investment_licensed_mm_dop, top_typology/top_province— y el "
+        "score/metric por dimensión). Distingue actividad LÍDER (permisos, lo que viene) de "
+        "PRODUCCIÓN realizada (PIB, lo ya hecho): si divergen, esa divergencia es la lectura. "
+        "HONESTIDAD: dato anual agregado nacional; permisos MIVHED desde 2022 (historia corta "
+        "para el pipeline); la inversión licenciada es NOMINAL en RD$ (no ejecutada), no la "
+        "confundas con inversión real ni con el PIB; sin backtest de outcomes. Si una cifra no "
+        "está, dilo; no inventes."
+    ),
     "social_outlook": (
         "Explica el FUNDAMENTO del desarrollo (IDM) de esta región.\n"
         "Contexto:\n{context}\n\n"

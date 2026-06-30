@@ -46,9 +46,11 @@ _GAP_ACTIONS: Dict[str, Dict[str, str]] = {
     "free_zones": {"g1": "Idéntico a turismo: 3 variables en rúbrica (negocios/competencias/"
                          "volatilidad regulatoria) → su conector cierra la cobertura.",
                    "g5": "Gate E sectorial diferido (outcomes por sector)."},
-    "construction": {"g1": "3 variables en rúbrica (negocios/competencias/volatilidad "
-                          "regulatoria) → su conector cierra la cobertura.",
-                     "g5": "Gate E sectorial diferido (outcomes por sector)."},
+    "construction": {"g1": "Producto dedicado (ICC): cobertura del MIVHED (permisos) + BCRD "
+                          "(PIB construcción). El pipeline solo acredita su peso con ≥4 años "
+                          "de permisos (MIVHED desde 2022).",
+                     "g5": "Índice preliminar sin backtest de outcomes; sube con validación "
+                          "real del ciclo de construcción."},
     "agribusiness": {"g1": "3 variables en rúbrica (negocios/competencias/volatilidad "
                           "regulatoria) → su conector cierra la cobertura.",
                      "g5": "Gate E sectorial diferido (outcomes por sector)."},
