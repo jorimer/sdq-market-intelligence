@@ -77,17 +77,73 @@ def bar_chart_png(
         return None
 
 
-def render_charts(charts: Optional[List[dict]], out_dir: str, prefix: str) -> List[Tuple[str, str]]:
-    """Genera los PNG de *charts* (``[{title, items, signed?, unit?}]``) en *out_dir*.
+def line_chart_png(
+    title: str,
+    series: Sequence[Tuple[str, Optional[float]]],
+    path: str,
+    *,
+    unit: str = "",
+) -> Optional[str]:
+    """Línea de tendencia de marca → PNG en *path*. Devuelve el path o None.
 
-    Devuelve ``[(title, png_path)]`` solo de los que se generaron (defensivo)."""
+    *series* = ``[(period_label, value), …]`` en orden cronológico (izq→der). Se omiten los
+    puntos None; necesita ≥2 puntos con dato (una línea de 1 punto no es tendencia)."""
+    data = [(str(lbl), float(v)) for lbl, v in series if isinstance(v, (int, float))]
+    if len(data) < 2:
+        return None
+    try:
+        labels = [d[0] for d in data]
+        values = [d[1] for d in data]
+        x = list(range(len(data)))
+        fig, ax = plt.subplots(figsize=(6.4, 2.8), dpi=150)
+        ax.plot(x, values, color=_BLUE, linewidth=2.0, marker="o", markersize=5,
+                markerfacecolor=_NAVY, markeredgecolor="white", zorder=3)
+        ax.fill_between(x, values, min(values), color=_BLUE, alpha=0.08, zorder=1)
+        ax.set_title(title, fontsize=11, color=_NAVY, fontweight="bold", loc="left", pad=10)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=8, color=_NAVY,
+                           rotation=45 if len(data) > 8 else 0,
+                           ha="right" if len(data) > 8 else "center")
+        ax.tick_params(length=0)
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        for s in ("bottom", "left"):
+            ax.spines[s].set_color(_GRID)
+        ax.yaxis.grid(True, color=_GRID, linewidth=0.6, zorder=0)
+        ax.set_axisbelow(True)
+        # etiquetar el primer y último punto (contexto sin saturar)
+        for idx in {0, len(data) - 1}:
+            ax.annotate(f"{values[idx]:.1f}{unit}", (x[idx], values[idx]),
+                        textcoords="offset points", xytext=(0, 8), ha="center",
+                        fontsize=8, color=_NAVY, fontweight="bold")
+        ax.margins(y=0.22, x=0.04)
+        fig.tight_layout(pad=0.6)
+        fig.savefig(path, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        return path if os.path.exists(path) else None
+    except Exception:  # noqa: BLE001 — un gráfico nunca debe romper el reporte
+        try:
+            plt.close("all")
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
+
+def render_charts(charts: Optional[List[dict]], out_dir: str, prefix: str) -> List[Tuple[str, str]]:
+    """Genera los PNG de *charts* (``[{title, items, kind?, signed?, unit?}]``) en *out_dir*.
+
+    ``kind="line"`` dibuja una línea de tendencia; cualquier otro valor (o ausente) dibuja
+    barras. Devuelve ``[(title, png_path)]`` solo de los que se generaron (defensivo)."""
     out: List[Tuple[str, str]] = []
     for i, ch in enumerate(charts or []):
         if not ch or not ch.get("items"):
             continue
         path = os.path.join(out_dir, f"{prefix}_chart{i}.png")
-        png = bar_chart_png(ch.get("title", ""), ch["items"], path,
-                            signed=bool(ch.get("signed")), unit=ch.get("unit", ""))
+        if ch.get("kind") == "line":
+            png = line_chart_png(ch.get("title", ""), ch["items"], path, unit=ch.get("unit", ""))
+        else:
+            png = bar_chart_png(ch.get("title", ""), ch["items"], path,
+                                signed=bool(ch.get("signed")), unit=ch.get("unit", ""))
         if png:
             out.append((ch.get("title", ""), png))
     return out

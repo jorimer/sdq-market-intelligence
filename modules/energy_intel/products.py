@@ -37,7 +37,7 @@ from shared.products import (
 from shared.products.render import render_product_pdf
 from modules.energy_intel.ai_context import energy_ai_context
 from modules.energy_intel.models.models import EnergyScore
-from modules.energy_intel.service import get_latest
+from modules.energy_intel.service import get_latest, get_scores
 
 logger = logging.getLogger("sdq.products.energy")
 
@@ -153,6 +153,17 @@ def _index_dict(s: EnergyScore) -> Dict[str, Any]:
 
 def _fmt(v: Optional[float]) -> str:
     return "—" if v is None else f"{v:.1f}"
+
+
+def _trend_series(db: Optional[Session]):
+    """``[(period, energy_score), …]`` ascendente para la línea de tendencia. Best-effort."""
+    if db is None:
+        return []
+    try:
+        rows = get_scores(db)
+    except Exception:  # noqa: BLE001
+        return []
+    return [(r.period, r.energy_score) for r in reversed(rows) if r.energy_score is not None]
 
 
 class EnergyProduct:
@@ -311,6 +322,9 @@ class EnergyProduct:
             tables.append(("Dimensiones del IRSE", rows))
             items = [(labels.get(k, k), (d or {}).get("score")) for k, d in dims.items()]
             charts.append({"title": "Dimensiones del IRSE (score 0-100)", "items": items})
+        trend = _trend_series(None if sample else self._db)
+        if len(trend) >= 2:
+            charts.append({"kind": "line", "title": "Tendencia del IRSE (por año)", "items": trend})
         sc = index.get("energy_score")
         headline = (f"IRSE {_fmt(sc)} · {index.get('band')}" if sc is not None else None)
         return render_product_pdf(
