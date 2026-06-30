@@ -54,6 +54,7 @@ def _register_all():
     import modules.sector_intel.structure_product  # noqa: F401 — economic_structure (agregado)
     import modules.telecom_intel.products  # noqa: F401
     import modules.tourism_intel.products  # noqa: F401
+    import modules.construction_intel.products  # noqa: F401 — construction (dedicado, ICC)
     import modules.trade_intel.products  # noqa: F401
     import modules.pension_intel.products  # noqa: F401
 

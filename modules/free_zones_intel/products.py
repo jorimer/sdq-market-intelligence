@@ -35,7 +35,7 @@ from shared.products import (
 from shared.products.render import render_product_pdf
 from modules.free_zones_intel.ai_context import free_zones_ai_context
 from modules.free_zones_intel.models.models import FreeZoneScore
-from modules.free_zones_intel.service import get_latest
+from modules.free_zones_intel.service import get_latest, get_scores
 
 logger = logging.getLogger("sdq.products.free_zones")
 
@@ -152,6 +152,18 @@ def _index_dict(s: FreeZoneScore) -> Dict[str, Any]:
 
 def _fmt(v: Optional[float]) -> str:
     return "—" if v is None else f"{v:.1f}"
+
+
+def _trend_series(db: Optional[Session]):
+    """``[(period, fz_score), …]`` ascendente para la línea de tendencia. Best-effort:
+    sin DB (muestra) o ante cualquier fallo devuelve [] y el reporte va sin la línea."""
+    if db is None:
+        return []
+    try:
+        rows = get_scores(db)
+    except Exception:  # noqa: BLE001
+        return []
+    return [(r.period, r.fz_score) for r in reversed(rows) if r.fz_score is not None]
 
 
 class FreeZoneProduct:
@@ -299,6 +311,9 @@ class FreeZoneProduct:
             tables.append(("Dimensiones del IZF", rows))
             items = [(labels.get(k, k), (d or {}).get("score")) for k, d in dims.items()]
             charts.append({"title": "Dimensiones del IZF (score 0-100)", "items": items})
+        trend = _trend_series(None if sample else self._db)
+        if len(trend) >= 2:
+            charts.append({"kind": "line", "title": "Tendencia del IZF (por año)", "items": trend})
         sc = index.get("fz_score")
         headline = (f"IZF {_fmt(sc)} · {index.get('band')}" if sc is not None else None)
         return render_product_pdf(

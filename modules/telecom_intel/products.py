@@ -36,7 +36,7 @@ from shared.products import (
 from shared.products.render import render_product_pdf
 from modules.telecom_intel.ai_context import telecom_ai_context
 from modules.telecom_intel.models.models import TelecomScore
-from modules.telecom_intel.service import get_latest
+from modules.telecom_intel.service import get_latest, get_scores
 
 logger = logging.getLogger("sdq.products.telecom")
 
@@ -152,6 +152,17 @@ def _index_dict(s: TelecomScore) -> Dict[str, Any]:
 
 def _fmt(v: Optional[float]) -> str:
     return "—" if v is None else f"{v:.1f}"
+
+
+def _trend_series(db: Optional[Session]):
+    """``[(period, telecom_score), …]`` ascendente para la línea de tendencia. Best-effort."""
+    if db is None:
+        return []
+    try:
+        rows = get_scores(db)
+    except Exception:  # noqa: BLE001
+        return []
+    return [(r.period, r.telecom_score) for r in reversed(rows) if r.telecom_score is not None]
 
 
 def _period_year(period: str) -> Optional[int]:
@@ -319,6 +330,9 @@ class TelecomProduct:
             tables.append(("Dimensiones del IDT", rows))
             items = [(labels.get(k, k), (d or {}).get("score")) for k, d in dims.items()]
             charts.append({"title": "Dimensiones del IDT (score 0-100)", "items": items})
+        trend = _trend_series(None if sample else self._db)
+        if len(trend) >= 2:
+            charts.append({"kind": "line", "title": "Tendencia del IDT (por año)", "items": trend})
         sc = index.get("telecom_score")
         headline = (f"IDT {_fmt(sc)} · {index.get('band')}" if sc is not None else None)
         return render_product_pdf(

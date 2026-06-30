@@ -428,6 +428,8 @@ class MacroProduct:
         title = {"pulse": "Pulse Macro", "insight": "Insight Riesgo-País",
                  "deep_dive": "Deep Dive Riesgo-País"}.get(tier.value, "Macro")
         tables: List = []
+        charts: List = []
+        headline: Optional[str] = None
         if tier == ProductTier.pulse:
             display = "Sistema Macroeconómico · RD"
             # Tabla de factores BCRD (label · lectura) como contexto de datos.
@@ -436,9 +438,12 @@ class MacroProduct:
                 rows = [["Factor", "Lectura"]] + [[f["label"], f.get("reading") or "—"]
                                                   for f in factors[:10]]
                 tables.append(("Factores macro (RD)", rows))
+            band = snapshot.payload.get("irmp_band")
+            if band:
+                headline = f"Coyuntura macroeconómica · riesgo país {band}"
         else:
             display = snapshot.entity_name or COUNTRY_NAME
-            # Tabla de dimensiones del IRMP (label · score) del país.
+            # Tabla + gráfico de dimensiones del IRMP (label · score) del país.
             dims = snapshot.payload.get("dimensions") or {}
             if dims:
                 rows = [["Dimensión", "Score"]] + [
@@ -446,10 +451,19 @@ class MacroProduct:
                      (f"{d.get('score'):.1f}" if isinstance(d, dict) and d.get("score") is not None else "—")]
                     for k, d in dims.items()]
                 tables.append(("Dimensiones del IRMP", rows))
+                items = [(_DIM_LABELS.get(k, k),
+                          d.get("score") if isinstance(d, dict) else None) for k, d in dims.items()]
+                charts.append({"title": "Dimensiones del IRMP (score 0-100; mayor = menor riesgo)",
+                               "items": items})
+            sc = snapshot.payload.get("irmp_score")
+            band = snapshot.payload.get("irmp_band")
+            if isinstance(sc, (int, float)):
+                headline = f"IRMP {sc:.1f}" + (f" · {band}" if band else "")
         return render_product_pdf(
             sector_key=SECTOR_KEY, display_name=display, title=title, period=snapshot.period,
             narratives=narratives, section_titles=_SECTION_TITLES, tables=tables,
-            subtitle=None, watermark=level.watermark, sample=sample, output_dir=output_dir, fmt=fmt)
+            charts=charts, headline=headline, subtitle=None, watermark=level.watermark,
+            sample=sample, output_dir=output_dir, fmt=fmt)
 
 
 register_product(SECTOR_KEY, lambda db: MacroProduct(db))
