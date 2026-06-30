@@ -241,12 +241,17 @@ THIN_TEMPLATES = {
         "declares un superlativo (mayor/menor/el más…) que no coincida con el valor servido."
     ),
     "indicator_insight": (
-        "Analiza EN DETALLE un único indicador financiero de la entidad (datos reales SIB).\n"
+        "Analiza un único indicador financiero de la entidad (datos reales SIB) — para una "
+        "decisión, no un reporte de estado.\n"
         "Contexto:\n{context}\n\n"
-        "Máximo 350 palabras. Cubre nivel actual y su lectura, tendencia en los trimestres "
-        "provistos y drivers probables, posición vs la mediana del sector y del mismo tipo de "
-        "entidad (usa el percentil), e implicaciones para la decisión de la audiencia. Respeta "
-        "la dirección del indicador (si 'lower'/'higher'/'target' es mejor)."
+        "Máximo 350 palabras. EMPEZÁ por el veredicto: ¿qué dice este indicador sobre la "
+        "solidez o la capacidad de pago, y cuál es la tensión que importa? Recién después "
+        "respaldalo con el nivel y su lectura, la trayectoria (no un punto suelto) y la "
+        "posición vs la mediana del sector y del mismo tipo (usá el percentil). INTERPRETÁ el "
+        "tecnicismo por lo que significa, no como cifra suelta; no recorras los ángulos por "
+        "igual —ve profundo en el que más condiciona la decisión—. Cerrá con la implicación y "
+        "qué vigilar. Respetá la dirección del indicador (si 'lower'/'higher'/'target' es "
+        "mejor). Usá SOLO las cifras del contexto."
     ),
     "subcomponent_focus": (
         "Analiza EN PROFUNDIDAD UN sub-componente del rating —NO todo el banco— (datos SIB).\n"
@@ -378,6 +383,27 @@ THIN_TEMPLATES = {
         "condiciona) y, si aplica, qué condición la haría viable. Terminá con la señal que "
         "confirmaría o refutaría la postura antes del próximo corte. Sin recitar ratios; citá solo "
         "la cifra que justifica la decisión. Usá SOLO las cifras del contexto."
+    ),
+    "banking_compare": (
+        "Compará las entidades del contexto entre sí — para una decisión de asignación o "
+        "exposición.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 300 palabras. EMPEZÁ por el veredicto: cuál entidad lidera, cuál queda rezagada y "
+        "en QUÉ dimensión se juega la diferencia que importa para la solidez. Respaldá con la "
+        "comparación material (no toda la tabla); interpretá qué significa cada brecha para la "
+        "capacidad de pago, no solo el número. Cerrá con la implicación de decisión. Usá SOLO las "
+        "cifras del contexto; ninguna inventada."
+    ),
+    "banking_system": (
+        "Leé la SALUD del sistema bancario (o del tipo de entidad) del contexto — perspectiva de "
+        "sistema, no de una entidad.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras. EMPEZÁ por el veredicto: ¿qué tan sólido y disperso está el sistema "
+        "y cuál es la tensión que importa (concentración en la cola débil, dispersión "
+        "líder-rezagado)? Respaldá con la distribución (promedio, rango, líderes/rezagadas) "
+        "interpretando qué significa, no recitando el ranking. Si hay 'contexto_oficial_bcrd', "
+        "usalo como telón sistémico y citá breve. Cerrá con la señal a vigilar. Usá SOLO las "
+        "cifras del contexto."
     ),
     "system_pulse": (
         "Entrega una PERSPECTIVA DE SISTEMA del sector bancario dominicano (nivel abierto, "

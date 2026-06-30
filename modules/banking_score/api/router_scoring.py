@@ -47,12 +47,16 @@ logger = logging.getLogger("sdq.api.scoring")
 router = APIRouter()
 
 
-async def _ai_insight(context: Dict[str, Any], template: str) -> Optional[Dict[str, Any]]:
+async def _ai_insight(context: Dict[str, Any], template: str, *,
+                      axis: Optional[str] = None,
+                      audience: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Generate a Claude narrative from *context* using *template*; best-effort
-    (returns None on any failure so the endpoint never breaks)."""
+    (returns None on any failure so the endpoint never breaks). Con *axis* activa la
+    ruta cerebro (Barra de Insight + doctrina + guardrail) — usar siempre que haya thin."""
     try:
         from shared.narrative.claude_engine import narrative_engine
-        res = await narrative_engine.generate(context, template=template, mode="detailed")
+        res = await narrative_engine.generate(context, template=template, mode="detailed",
+                                              axis=axis, audience=audience)
         return {"text": res.text, "model_used": res.model_used, "from_cache": res.from_cache}
     except Exception as e:  # noqa: BLE001
         logger.warning("AI insight (%s) no disponible: %s", template, e)
@@ -462,7 +466,8 @@ async def compare_insight(
         raise HTTPException(status_code=404, detail="No hay calificaciones suficientes para comparar.")
 
     ctx = {"periodo": period_end or "último disponible", "entidades": entidades}
-    ai = await _ai_insight(ctx, "comparative") if body.get("with_ai", True) else None
+    ai = (await _ai_insight(ctx, "banking_compare", axis="banking", audience="comite_credito")
+          if body.get("with_ai", True) else None)
     return {"entities": [e["nombre"] for e in entidades], "ai_insight": ai}
 
 
@@ -521,7 +526,8 @@ async def sector_insight(
     pubs = publication_prompt_context(db, sector="banca")
     if pubs:
         ctx["contexto_oficial_bcrd"] = pubs
-    ai = await _ai_insight(ctx, "sector_outlook") if with_ai else None
+    ai = (await _ai_insight(ctx, "banking_system", axis="banking", audience="comite_credito")
+          if with_ai else None)
     return {"period_end": str(pe), "entity_type": entity_type, "n": len(rows),
             "score_promedio": avg, "ai_insight": ai}
 
@@ -549,7 +555,8 @@ async def scenario_insight(
         "rating_simulado": sim_tier,
         "base": body.get("base"),  # optional {sub_components, overall_score}
     }
-    ai = await _ai_insight(ctx, "recommendation") if body.get("with_ai", True) else None
+    ai = (await _ai_insight(ctx, "banking_recommendation", axis="banking", audience="entidad")
+          if body.get("with_ai", True) else None)
     return {"overall_score": sim_score, "rating_tier": sim_tier,
             "tier_color": get_tier_color(sim_tier), "ai_insight": ai}
 

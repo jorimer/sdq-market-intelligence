@@ -127,48 +127,57 @@ def _md_table_flowable(header: List[str], rows: Sequence[Sequence[str]], styles)
     return table
 
 
+def md_flowables(text: str, styles) -> List:
+    """Markdown de marca → flowables ReportLab: tablas branded, `---` divisor, `> `
+    pull-quote signal-red, `#` subtítulo, viñetas y párrafos. Reutilizable por cualquier
+    generador (catálogo + insight drill-down) para una salida 1:1 con el estándar."""
+    out: List = []
+    lines = (text or "").replace("\r", "").split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+        # Tabla markdown: fila de encabezado + fila separadora + cuerpo.
+        if "|" in line and i + 1 < len(lines) and _md_is_sep(lines[i + 1]):
+            header = _md_split_row(line)
+            body: List[List[str]] = []
+            j = i + 2
+            while j < len(lines) and "|" in lines[j] and lines[j].strip():
+                body.append(_md_split_row(lines[j]))
+                j += 1
+            out.append(_md_table_flowable(header, body, styles))
+            out.append(Spacer(1, 0.08 * inch))
+            i = j
+            continue
+        # Regla horizontal (`---`) → divisor fino, no texto literal.
+        if re.fullmatch(r"-{3,}", line):
+            out.append(HRFlowable(width="100%", thickness=0.5, color=RULE,
+                                  spaceBefore=4, spaceAfter=4))
+            i += 1
+            continue
+        q = re.match(r"^>\s+(.*)$", line)          # blockquote → pull-quote de marca
+        h = re.match(r"^(#{1,3})\s+(.*)$", line)
+        if q:
+            out.append(_pull_quote(q.group(1), styles))
+        elif h:
+            out.append(Paragraph(_inline(h.group(2)), styles["PSub"]))
+        elif re.match(r"^(?:[-*]|\d+[.)])\s+", line):
+            out.append(Paragraph("•&nbsp; " + _inline(re.sub(r"^(?:[-*]|\d+[.)])\s+", "", line)),
+                                 styles["PBullet"]))
+        else:
+            out.append(Paragraph(_inline(line), styles["PBody"]))
+        i += 1
+    return out
+
+
 def _narrative_flowables(narratives: Dict[str, str], titles: Dict[str, str], styles) -> List:
     out: List = []
     for n, (key, text) in enumerate(narratives.items(), start=1):
         title = titles.get(key, key.replace("_", " ").title())
         out.append(Paragraph(f"{n}.&nbsp; {_inline(title)}", styles["PHead"]))
-        lines = (text or "").replace("\r", "").split("\n")
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-            if not line:
-                i += 1
-                continue
-            # Tabla markdown: fila de encabezado + fila separadora + cuerpo.
-            if "|" in line and i + 1 < len(lines) and _md_is_sep(lines[i + 1]):
-                header = _md_split_row(line)
-                body: List[List[str]] = []
-                j = i + 2
-                while j < len(lines) and "|" in lines[j] and lines[j].strip():
-                    body.append(_md_split_row(lines[j]))
-                    j += 1
-                out.append(_md_table_flowable(header, body, styles))
-                out.append(Spacer(1, 0.08 * inch))
-                i = j
-                continue
-            # Regla horizontal (`---`) → divisor fino, no texto literal.
-            if re.fullmatch(r"-{3,}", line):
-                out.append(HRFlowable(width="100%", thickness=0.5, color=RULE,
-                                      spaceBefore=4, spaceAfter=4))
-                i += 1
-                continue
-            q = re.match(r"^>\s+(.*)$", line)          # blockquote → pull-quote de marca
-            h = re.match(r"^(#{1,3})\s+(.*)$", line)
-            if q:
-                out.append(_pull_quote(q.group(1), styles))
-            elif h:
-                out.append(Paragraph(_inline(h.group(2)), styles["PSub"]))
-            elif re.match(r"^(?:[-*]|\d+[.)])\s+", line):
-                out.append(Paragraph("•&nbsp; " + _inline(re.sub(r"^(?:[-*]|\d+[.)])\s+", "", line)),
-                                     styles["PBullet"]))
-            else:
-                out.append(Paragraph(_inline(line), styles["PBody"]))
-            i += 1
+        out += md_flowables(text, styles)
         out.append(Spacer(1, 0.15 * inch))
     return out
 
@@ -309,6 +318,27 @@ def build_branded_pdf(
               onFirstPage=_furniture(header_line, watermark, sample, first=True),
               onLaterPages=_furniture(header_line, watermark, sample, first=False))
     return path
+
+
+def build_insight_branded_pdf(
+    *,
+    path: str,
+    title: str,
+    display_name: str,
+    period: str = "",
+    body_md: str,
+    subtitle: Optional[str] = None,
+    headline: Optional[str] = None,
+    watermark: Optional[str] = None,
+) -> str:
+    """Insight drill-down de un eje → MISMO chrome de marca que el catálogo: portada (banda
+    navy + logo Arco), pull-quotes, subtítulos, tablas. El cuerpo llega en Markdown (ya
+    generado por Claude) y se convierte con ``md_flowables``. Escribe a *path* y lo devuelve."""
+    styles = _styles()
+    return build_branded_pdf(
+        path=path, title=title, display_name=display_name, period=period,
+        body=md_flowables(body_md, styles), subtitle=subtitle, headline=headline,
+        watermark=watermark)
 
 
 def render_product_pdf(

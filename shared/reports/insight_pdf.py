@@ -183,48 +183,29 @@ def build_insight_pdf(
     meta: Optional[str] = None,
     lang: str = "es",
 ) -> bytes:
-    """Render one insight (Markdown *body_md* + metadata) into a branded PDF; returns bytes.
+    """Render one drill-down insight (Markdown *body_md* + metadata) into a PDF; returns bytes.
 
-    *eyebrow* = the axis/source line; *subtitle* = entity/period; *meta* = audience etc.
+    Usa el MISMO chrome de marca que el catálogo de productos (portada con banda navy + logo
+    Arco, pull-quotes, subtítulos, tablas) vía ``build_insight_branded_pdf`` — paridad 1:1 con
+    los reportes Pulse/Insight/Deep. *eyebrow* = eje/fuente (sujeto de portada); *subtitle* =
+    entidad/audiencia; *meta* = profundidad/período.
     """
-    lang = lang if lang in DISCLAIMER else "es"
-    styles = _styles()
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4, topMargin=MARGIN, bottomMargin=MARGIN,
-        leftMargin=MARGIN, rightMargin=MARGIN,
-        title=title, author="SDQ Market Intelligence",
-    )
+    import os
+    import tempfile
 
-    el: List = []
-    # Brand header: wordmark + navy rule
-    el.append(Paragraph("SDQ · Market Intelligence", styles["InWordmark"]))
-    el.append(HRFlowable(width="100%", thickness=1.4, color=NAVY, spaceBefore=4, spaceAfter=12))
-    if eyebrow:
-        el.append(Paragraph(_md_inline(eyebrow.upper()), styles["InEyebrow"]))
-    el.append(Paragraph(_md_inline(title), styles["InTitle"]))
-    if subtitle:
-        el.append(Paragraph(_md_inline(subtitle), styles["InMeta"]))
-    meta_bits = [b for b in [meta, f"{GENERATED_LABEL[lang]} {_now_local(lang)}"] if b]
-    if meta_bits:
-        el.append(Paragraph(_md_inline(" · ".join(meta_bits)), styles["InMeta"]))
-    el.append(HRFlowable(width="100%", thickness=0.5, color=LIGHT_GRAY, spaceBefore=8, spaceAfter=12))
+    from shared.products.render import build_insight_branded_pdf
 
-    # Body
-    el.extend(_md_to_flowables(body_md, styles))
-
-    # Disclaimer
-    el.append(Spacer(1, 0.4 * inch))
-    el.append(Paragraph(DISCLAIMER_TITLE[lang], styles["InSubHeading"]))
-    el.append(Paragraph(DISCLAIMER[lang], styles["InSmall"]))
-
-    def _footer(canvas, _doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica", 7.5)
-        canvas.setFillColor(GRAY)
-        canvas.drawString(MARGIN, 0.5 * inch, "SDQ Consulting · SDQ Market Intelligence")
-        canvas.drawRightString(A4[0] - MARGIN, 0.5 * inch, f"{_doc.page}")
-        canvas.restoreState()
-
-    doc.build(el, onFirstPage=_footer, onLaterPages=_footer)
-    return buf.getvalue()
+    fd, path = tempfile.mkstemp(suffix=".pdf")
+    os.close(fd)
+    try:
+        build_insight_branded_pdf(
+            path=path, title=title,
+            display_name=eyebrow or "SDQ · Market Intelligence",
+            period=meta or "", body_md=body_md, subtitle=subtitle)
+        with open(path, "rb") as f:
+            return f.read()
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
