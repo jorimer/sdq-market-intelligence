@@ -31,6 +31,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.esg_climate.ai_context import climate_ai_context
@@ -384,8 +385,6 @@ class ESGProduct:
             n_countries=snapshot.payload.get("n_countries") or pos.get("n_countries"),
             distribution=pos.get("distribution"))
         audience = "inversionista"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -410,7 +409,8 @@ class ESGProduct:
                                   "(físico/transición/adaptativa/gobernanza) y la palanca de "
                                   "resiliencia con mayor retorno, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="climate_outlook", mode=mode,
+                context=ctx, template="climate_outlook",
+                mode=section_mode(tier, section, sections),
                 axis="esg_climate", audience=audience)
             out[section] = res.text
         return out

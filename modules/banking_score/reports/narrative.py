@@ -53,34 +53,44 @@ REPORT_SECTIONS: Dict[str, list] = {
 
 # Map each section to the NarrativeEngine template name
 _SECTION_TO_TEMPLATE: Dict[str, str] = {
-    "executive_summary": "executive_summary",
+    "executive_summary": "banking_summary",
     "solidez_financiera": "subcomponent_focus",
     "calidad_activos": "subcomponent_focus",
     "eficiencia_rentabilidad": "subcomponent_focus",
     "liquidez": "subcomponent_focus",
     "diversificacion": "subcomponent_focus",
-    "risk_assessment": "risk_assessment",
-    "comparative": "comparative",
-    "recommendation": "recommendation",
+    "risk_assessment": "banking_risk",
+    "comparative": "banking_comparative",
+    "recommendation": "banking_recommendation",
     "trend_analysis": "trend_analysis",
     "sector_outlook": "sector_outlook",
 }
 
-# Secciones de PANORAMA (no enfocadas): largas por diseño — sus plantillas piden 500-700
-# palabras y el comparativo además emite tablas markdown (muy verbosas en tokens). Con el
-# tope de "standard" (1024) o "detailed" (2048) la generación se corta a mitad de frase.
-# Van por ruta legacy (sin axis), donde subir a "deep" SOLO eleva el tope a 4096 tokens
-# (no agrega la DEEP_DIRECTIVE, que es exclusiva de la ruta cerebro) — el tope de palabras
-# de cada plantilla sigue acotando el largo, así que terminan la idea sin divagar.
-_LONG_SECTIONS = frozenset({
-    "executive_summary", "comparative", "recommendation", "risk_assessment", "trend_analysis",
+# Plantillas de banking que van por la RUTA CEREBRO (axis="banking"): obtienen la Barra de
+# Insight (conclusión-primero), la doctrina anti-jerga y el guardrail numérico. El resto
+# (trend_analysis, sector_outlook) sigue en ruta legacy.
+_CEREBRO_TEMPLATES = frozenset({
+    "subcomponent_focus", "banking_summary", "banking_comparative",
+    "banking_risk", "banking_recommendation",
 })
+
+# Profundidad POR SECCIÓN (alineada con shared.products.section_mode), para que el deep dive
+# PROFUNDICE en vez de re-narrar: el RIESGO forward es la capa profunda (deep → DEEP_DIRECTIVE
+# vía cerebro, 700-1000 palabras de cadena causal); el CIERRE accionable es corto (standard,
+# nunca inflado); el resto sigue el mode del nivel (detailed en niveles nombrados). Las
+# secciones de ruta legacy con tablas verbosas (trend_analysis) suben a 'deep' SOLO por
+# presupuesto de tokens (ahí 'deep' no agrega DEEP_DIRECTIVE).
+_DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis"})
 
 
 def _section_mode(section: str, base_mode: str) -> str:
-    """Presupuesto de tokens por sección: las de panorama necesitan 'deep' (4096) para
-    cerrar; las enfocadas (sub-componentes, ~200 palabras) caben en el mode pedido."""
-    return "deep" if section in _LONG_SECTIONS else base_mode
+    """Mode de narrativa por sección: el cierre accionable corto, el riesgo profundo, el
+    resto al mode pedido. Ver _DEEP_SECTIONS."""
+    if section == "recommendation":
+        return "standard"
+    if section in _DEEP_SECTIONS:
+        return "deep"
+    return base_mode
 
 
 # Sub-component key lookup for focused sections
@@ -162,7 +172,7 @@ async def generate_report_narratives(
     narratives: Dict[str, str] = {}
 
     for section in sections:
-        template = _SECTION_TO_TEMPLATE.get(section, "executive_summary")
+        template = _SECTION_TO_TEMPLATE.get(section, "banking_summary")
         context = _build_section_context(
             section, bank_name, scoring_result, period, benchmarks,
         )
@@ -172,10 +182,11 @@ async def generate_report_narratives(
         base_mode = "detailed" if report_type == "full_rating" else "standard"
         mode = _section_mode(section, base_mode)
 
-        # Cerebro route only for the in-scope banking template; el reporte tiene un
-        # lector fijo (comité de crédito). El resto de secciones queda en ruta legacy.
+        # Ruta cerebro para las plantillas banking (resumen, comparativo, riesgo, decisión y
+        # sub-componentes): Barra de Insight + doctrina anti-jerga + guardrail. El lector es
+        # fijo (comité de crédito). trend_analysis/sector_outlook quedan en ruta legacy.
         cerebro = {"axis": "banking", "audience": "comite_credito"} \
-            if template == "subcomponent_focus" else {}
+            if template in _CEREBRO_TEMPLATES else {}
 
         result: NarrativeResult = await narrative_engine.generate(
             context=context,
@@ -203,12 +214,12 @@ async def generate_named_narratives(
     """
     narratives: Dict[str, str] = {}
     for section in sections:
-        template = _SECTION_TO_TEMPLATE.get(section, "executive_summary")
+        template = _SECTION_TO_TEMPLATE.get(section, "banking_summary")
         context = _build_section_context(section, bank_name, scoring_result, period, benchmarks)
         cerebro = {"axis": "banking", "audience": "comite_credito"} \
-            if template == "subcomponent_focus" else {}
-        # Las secciones de panorama (resumen ejecutivo, comparativo con tablas, riesgo,
-        # recomendación) suben a 'deep' (4096) para no cortarse a mitad de frase.
+            if template in _CEREBRO_TEMPLATES else {}
+        # Profundidad por sección: riesgo profundo, cierre corto, resto al mode pedido
+        # (ver _section_mode).
         result: NarrativeResult = await narrative_engine.generate(
             context=context, template=template, mode=_section_mode(section, mode), **cerebro,
         )

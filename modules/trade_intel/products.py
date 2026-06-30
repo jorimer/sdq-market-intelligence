@@ -35,6 +35,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.trade_intel.ai_context import trade_ai_context
@@ -369,8 +370,6 @@ class TradeProduct:
         # Audiencia: Pulse abierto = inversionista (lector de mercado); niveles
         # nombrados = exportador (la audiencia de decisión primaria del eje).
         audience = "inversionista" if tier == ProductTier.pulse else "exportador"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -388,7 +387,8 @@ class TradeProduct:
                                   "canasta o reducción de dependencia importadora) con mayor "
                                   "retorno sobre la resiliencia, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="trade_outlook", mode=mode,
+                context=ctx, template="trade_outlook",
+                mode=section_mode(tier, section, sections),
                 axis="trade_intel", audience=audience)
             out[section] = res.text
         return out

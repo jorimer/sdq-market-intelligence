@@ -31,6 +31,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.tourism_intel.ai_context import tourism_ai_context
@@ -280,8 +281,6 @@ class TourismProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = tourism_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -292,7 +291,8 @@ class TourismProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "tracción del destino turístico, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="tourism_outlook", mode=mode,
+                context=ctx, template="tourism_outlook",
+                mode=section_mode(tier, section, sections),
                 axis="tourism_intel", audience=audience)
             out[section] = res.text
         return out

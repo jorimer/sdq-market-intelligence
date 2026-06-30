@@ -31,6 +31,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.free_zones_intel.ai_context import free_zones_ai_context
@@ -272,8 +273,6 @@ class FreeZoneProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = free_zones_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -284,7 +283,8 @@ class FreeZoneProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "atractividad del sector de zonas francas, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="free_zones_outlook", mode=mode,
+                context=ctx, template="free_zones_outlook",
+                mode=section_mode(tier, section, sections),
                 axis="free_zones_intel", audience=audience)
             out[section] = res.text
         return out

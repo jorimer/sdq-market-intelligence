@@ -75,13 +75,15 @@ DEPTH_DIRECTIVE = (
 # relaja la anti-fabricación: solo amplía la cobertura y el desarrollo.
 DEEP_DIRECTIVE = (
     "VERSIÓN EXTENDIDA (análisis completo solicitado por el usuario): IGNORA el tope de "
-    "palabras indicado arriba. Objetivo 700–1000 palabras. Desarrolla en profundidad CADA "
-    "dimensión o sub-componente material —no solo la tensión principal—, explicando el "
-    "mecanismo y la evidencia con las cifras del contexto, y cerrando con implicaciones y "
-    "qué vigilar. Estructura en secciones Markdown con encabezados. Mantén INTACTO el rigor: "
-    "toda cifra debe venir del contexto (ninguna inventada), respeta la procedencia "
-    "(real vs rúbrica declarada) y la dirección del índice. Más extensión NO es relleno: "
-    "cada párrafo agrega una lectura o implicación que la versión breve omitió."
+    "palabras indicado arriba. Objetivo 700–1000 palabras. La extensión es para PROFUNDIZAR, "
+    "no para enumerar: sigue la CADENA CAUSAL de las tensiones que MÁS importan y CUANTIFICA "
+    "la asimetría (qué está en juego, downside vs upside, qué tan caro es equivocarse). Cuando "
+    "cubras un componente material, LIDERA con la conclusión o la implicación y usa las cifras "
+    "como respaldo SELECTIVO —NO un inventario de tres cifras por componente—. Cierra con las "
+    "implicaciones y qué vigilar. Estructura en secciones Markdown con encabezados. Mantén "
+    "INTACTO el rigor: toda cifra debe venir del contexto (ninguna inventada), respeta la "
+    "procedencia (real vs rúbrica declarada) y la dirección del índice. Cada párrafo agrega "
+    "una lectura o implicación que la versión breve omitió; nada de relleno."
 )
 
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────
@@ -95,7 +97,13 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "de cada sub-componente; un indicador fuerte en un sub-componente de bajo peso no "
         "rescata un rating. Respetas la dirección de cada indicador (si menor/mayor/objetivo "
         "es mejor). El contexto oficial del BCRD (p. ej. Estabilidad Financiera) es telón de "
-        "fondo sistémico, no el foco: el foco es la entidad."
+        "fondo sistémico, no el foco: el foco es la entidad.\n"
+        "TRADUCÍ EL TECNICISMO: no recites ratios ni siglas como un volcado de datos. Cada "
+        "métrica (solvencia/ICAP, ROE/ROA, margen de interés, morosidad, cobertura de cartera, "
+        "liquidez) preséntala por lo que SIGNIFICA para la solidez y la capacidad de pago "
+        "—absorber pérdidas, generar utilidad sostenible, cubrir cartera mala, responder a "
+        "retiros— y solo entonces respáldala con la cifra. La conclusión va primero; el número "
+        "la sostiene, no la sustituye."
     ),
     "sector_intel": (
         "DOCTRINA DE CASA — Eje sectorial (Índice de Atractivo de Inversión, IAI):\n"

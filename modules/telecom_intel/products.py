@@ -32,6 +32,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.telecom_intel.ai_context import telecom_ai_context
@@ -290,8 +291,6 @@ class TelecomProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = telecom_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -303,7 +302,8 @@ class TelecomProduct:
                                   "calidad (banda ancha), la palanca de conectividad con mayor "
                                   "retorno, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="telecom_outlook", mode=mode,
+                context=ctx, template="telecom_outlook",
+                mode=section_mode(tier, section, sections),
                 axis="telecom_intel", audience=audience)
             out[section] = res.text
         return out

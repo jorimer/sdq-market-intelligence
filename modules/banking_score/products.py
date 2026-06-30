@@ -420,7 +420,9 @@ class BankingProduct:
         out = await generate_named_narratives(
             claude_sections, snapshot.entity_name or "Entidad", scoring_result,
             snapshot.period, benchmarks=peer_block,
-            mode="detailed" if tier == ProductTier.deep_dive else "standard",
+            # Base 'detailed' en niveles nombrados; _section_mode pone el riesgo en 'deep' y
+            # el cierre en 'standard' (profundidad por sección, no un mode único por tier).
+            mode="detailed",
         )
         if "limitations" in manifest.sections:
             out["limitations"] = _LIMITATIONS_TEXT

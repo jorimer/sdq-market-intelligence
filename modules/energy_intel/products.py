@@ -33,6 +33,7 @@ from shared.products import (
     ValidationState,
     distinct_periods,
     register_product,
+    section_mode,
 )
 from shared.products.render import render_product_pdf
 from modules.energy_intel.ai_context import energy_ai_context
@@ -282,8 +283,6 @@ class EnergyProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = energy_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
-        mode = ("standard" if tier == ProductTier.pulse
-                else "deep" if tier == ProductTier.deep_dive else "detailed")
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -295,7 +294,8 @@ class EnergyProduct:
                                   "servicio, la palanca con mayor retorno sobre la resiliencia "
                                   "eléctrica, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="energy_outlook", mode=mode,
+                context=ctx, template="energy_outlook",
+                mode=section_mode(tier, section, sections),
                 axis="energy_intel", audience=audience)
             out[section] = res.text
         return out

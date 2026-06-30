@@ -103,11 +103,57 @@ def _furniture(doc, header_line: str, watermark: Optional[str], sample: bool) ->
     _page_number_field(fp)
 
 
+def _md_split_row(line: str) -> List[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _md_is_sep(line: str) -> bool:
+    """Fila separadora de tabla markdown: `|---|:--:|---|`."""
+    t = line.strip()
+    return "-" in t and "|" in t and all(
+        re.fullmatch(r":?-{1,}:?", c) for c in _md_split_row(t))
+
+
+def _md_table(doc, header: List[str], rows: List[List[str]]) -> None:
+    """Tabla markdown → tabla branded (mismo look que las tablas de datos del Word)."""
+    ncol = len(header) or 1
+    data = [header] + [(r + [""] * ncol)[:ncol] for r in rows]
+    t = doc.add_table(rows=0, cols=ncol)
+    t.style = "Light Grid Accent 1"
+    for ri, row in enumerate(data):
+        cells = t.add_row().cells
+        for ci in range(ncol):
+            val = str(row[ci]) if ci < len(row) else ""
+            _add_runs(cells[ci].paragraphs[0], val,
+                      color=(_WHITE if ri == 0 else None), bold_all=(ri == 0))
+            if ri == 0:
+                _shade(cells[ci], _NAVY_HEX)
+
+
 def _md_body(doc, text: str) -> None:
-    """Cuerpo markdown-lite: ## subhead · > pull-quote · -/* viñeta · **negrita**."""
-    for raw in (text or "").replace("\r", "").split("\n"):
-        line = raw.strip()
+    """Cuerpo markdown-lite: tabla · --- regla · ## subhead · > pull-quote · -/* viñeta · **negrita**."""
+    lines = (text or "").replace("\r", "").split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
         if not line:
+            i += 1
+            continue
+        # Tabla markdown: fila de encabezado + fila separadora + cuerpo.
+        if "|" in line and i + 1 < len(lines) and _md_is_sep(lines[i + 1]):
+            header = _md_split_row(line)
+            body: List[List[str]] = []
+            j = i + 2
+            while j < len(lines) and "|" in lines[j] and lines[j].strip():
+                body.append(_md_split_row(lines[j]))
+                j += 1
+            _md_table(doc, header, body)
+            i = j
+            continue
+        # Regla horizontal (`---`): separador de párrafo, no texto literal.
+        if re.fullmatch(r"-{3,}", line):
+            doc.add_paragraph()
+            i += 1
             continue
         q = re.match(r"^>\s+(.*)$", line)
         h = re.match(r"^(#{1,3})\s+(.*)$", line)
@@ -123,6 +169,7 @@ def _md_body(doc, text: str) -> None:
             _add_runs(p, re.sub(r"^(?:[-*]|\d+[.)])\s+", "", line))
         else:
             _add_runs(doc.add_paragraph(), line)
+        i += 1
 
 
 def render_product_docx(
