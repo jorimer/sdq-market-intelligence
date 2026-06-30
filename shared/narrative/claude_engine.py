@@ -964,10 +964,16 @@ class NarrativeEngine:
 
         prompt = _apply_lang(prompt_template.format(context=context_str), lang)
 
+        # Aun en la ruta legacy (market_brief, cross_compare, deal_outlook, etc.) se aplica el
+        # registro de voz: español latinoamericano neutro corporativo-consultivo, sin la
+        # doctrina/Barra del cerebro pero con el MISMO tono que el resto de la plataforma.
+        from shared.narrative.cerebro import REGISTER_NEUTRO
+
         try:
             response = client.messages.create(
                 model=settings.ANTHROPIC_MODEL,
                 max_tokens=max_tokens,
+                system=REGISTER_NEUTRO,
                 messages=[{"role": "user", "content": prompt}],
             )
             return self._result_from_response(response, cache_key, template)
