@@ -49,6 +49,7 @@ _UNSET = object()
 _SECTION_TITLES = {
     "energy_pulse": "Pulso del Sector Eléctrico",
     "energy_assessment": "Evaluación de Resiliencia Eléctrica (IRSE)",
+    "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
@@ -98,6 +99,18 @@ _SAMPLE_NARRATIVES = {
         "inversionista, el sector ofrece oportunidad tanto en generación (incluida "
         "renovable) como, sobre todo, en la modernización de la distribución."
     ),
+    "positioning": (
+        "**El IRSE no solo es Adecuado: viene mejorando, y la mejora la empuja la capacidad, "
+        "no el servicio.** La trayectoria es la señal que el nivel esconde: el índice subió de "
+        "forma sostenida en los últimos períodos, traccionado por la expansión del parque "
+        "instalado (CAGR ~7.9%), mientras la calidad de servicio se mantiene plana en la cola. "
+        "En contexto, eso ubica a RD en una posición de **fortaleza estructural pero progreso "
+        "asimétrico**: la dimensión que más mueve la posición es la adecuación de capacidad —"
+        "que ya tocó techo de aporte— mientras la distribución sigue siendo el ancla. Para el "
+        "inversionista, la lectura de trayectoria importa tanto como la de nivel: el margen de "
+        "mejora futura ya no está donde estuvo el progreso reciente. (Sin panel regional: ésta "
+        "es una posición vs su propia historia, no un ranking entre países.)"
+    ),
     "recommendation": (
         "Para un inversionista o comité con exposición al sector eléctrico dominicano, la "
         "palanca de mayor retorno sobre la resiliencia no está en sumar capacidad —ya es "
@@ -124,12 +137,13 @@ def energy_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("energy_assessment",), narrative_templates=("energy_outlook",),
+                sections=("energy_assessment", "positioning"),
+                narrative_templates=("energy_outlook", "sector_positioning"),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("energy_assessment", "recommendation", "limitations"),
-                narrative_templates=("energy_outlook",),
+                sections=("energy_assessment", "positioning", "recommendation", "limitations"),
+                narrative_templates=("energy_outlook", "sector_positioning"),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
 
@@ -283,6 +297,8 @@ class EnergyProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = energy_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
+        trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
+        templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -293,9 +309,10 @@ class EnergyProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: entre adecuación de capacidad y calidad de "
                                   "servicio, la palanca con mayor retorno sobre la resiliencia "
                                   "eléctrica, dado el cuadro anterior.")
+            elif section == "positioning" and trend:
+                ctx["trayectoria"] = [{"periodo": p, "score": v} for p, v in trend]
             res = await narrative_engine.generate(
-                context=ctx,
-                template="sector_decision" if section == "recommendation" else "energy_outlook",
+                context=ctx, template=templates.get(section, "energy_outlook"),
                 mode=section_mode(tier, section, sections),
                 axis="energy_intel", audience=audience)
             out[section] = res.text
