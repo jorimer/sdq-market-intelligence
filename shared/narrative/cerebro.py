@@ -181,6 +181,22 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "Dato ANUAL AGREGADO NACIONAL, sin polo turístico ni backtest de outcomes. Si una "
         "cifra no está, dilo."
     ),
+    "construction_intel": (
+        "DOCTRINA DE CASA — Eje del sector construcción (coyuntura/capacidad, ICC):\n"
+        "Lees la coyuntura del sector construcción de RD: mayor score = mejor coyuntura. Te "
+        "anclas a DOS fuentes reales complementarias: PRODUCCIÓN efectiva (crecimiento real "
+        "del PIB de construcción del BCRD, ≈13.5% del VAB) y PIPELINE LÍDER (licencias del "
+        "MIVHED — el permiso precede a la obra). Cuatro dimensiones: producción (crec. real "
+        "promedio 3 años), pipeline de permisos (CAGR a 3 años de m² licenciados), "
+        "diversificación tipológica y amplitud geográfica (HHI — menor concentración es "
+        "mejor), cada una vs un objetivo. Distingues actividad LÍDER (permisos, lo que viene) "
+        "de PRODUCCIÓN realizada (PIB, lo ya hecho): pueden divergir, y esa divergencia ES "
+        "parte de la lectura. HONESTIDAD: dato ANUAL AGREGADO NACIONAL; los permisos del "
+        "MIVHED arrancan en 2022 (historia corta para el CAGR del pipeline); la inversión "
+        "licenciada es NOMINAL en RD$ (no ejecutada, no deflactada) — no la confundas con "
+        "inversión real ni con el PIB; sin backtest de outcomes. Si una cifra no está, dilo; "
+        "no inventes."
+    ),
     "telecom_intel": (
         "DOCTRINA DE CASA — Eje de telecomunicaciones (desarrollo/conectividad, IDT):\n"
         "Lees el desarrollo del sector telecom de RD: mayor score = más conectividad. Te anclas "
@@ -503,6 +519,40 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Le importa: crecimiento y recuperación de la demanda como base, y la "
             "diversificación de mercados como frontera de resiliencia. Tu \"y por tanto\" final "
             "apunta a la brecha con mayor retorno sobre la tracción sostenible del sector."
+        ),
+    },
+    "construction_intel": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / desarrollador inmobiliario.\n"
+            "Decide: timing y exposición al ciclo de la construcción (obra nueva, desarrollo).\n"
+            "Le importa: la producción efectiva (PIB) como estado del ciclo y, sobre todo, el "
+            "PIPELINE de permisos como adelanto de la actividad futura; la diversificación "
+            "tipológica y geográfica como dónde persiste la demanda. Tu \"y por tanto\" final "
+            "apunta a dónde el adelanto de permisos o el giro del ciclo crea oportunidad o "
+            "riesgo de timing no descontado."
+        ),
+        "gobierno": (
+            "FRAME DE DECISIÓN — Audiencia: Gobierno / política de vivienda e infraestructura.\n"
+            "Decide: dónde intervenir para sostener actividad, empleo y oferta de vivienda.\n"
+            "Le importa: si la producción del sector más grande de la economía se reactiva o "
+            "contrae, y si el pipeline de permisos anticipa recuperación o más debilidad. Tu "
+            "\"y por tanto\" final apunta a la palanca de política con mayor retorno sobre la "
+            "coyuntura del sector."
+        ),
+        "empresa": (
+            "FRAME DE DECISIÓN — Audiencia: Empresa constructora / proveedor de materiales.\n"
+            "Decide: dimensionar capacidad, inventario y plazas para su operación.\n"
+            "Le importa: el pipeline de permisos como demanda potencial y su distribución por "
+            "tipología y provincia como dónde colocar la oferta. Tu \"y por tanto\" final apunta "
+            "a la oportunidad de actividad o el riesgo de un ciclo a la baja que conviene "
+            "considerar."
+        ),
+        "multilateral": (
+            "FRAME DE DECISIÓN — Audiencia: Financiador multilateral / banca de desarrollo.\n"
+            "Decide: dónde el financiamiento sostiene actividad, empleo y vivienda asequible.\n"
+            "Le importa: producción y pipeline como estado del ciclo, y la amplitud geográfica "
+            "como alcance territorial del esfuerzo. Tu \"y por tanto\" final apunta a la brecha "
+            "con mayor retorno sobre la coyuntura sostenible del sector."
         ),
     },
     "telecom_intel": {

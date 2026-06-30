@@ -56,11 +56,10 @@ logger = logging.getLogger("sdq.products.sector")
 # product_key (catálogo) → (sector_code BCRD, display_name). Mapeo declarativo de los
 # productos sectoriales servidos por sector_intel.
 SECTOR_PRODUCTS: Dict[str, tuple] = {
-    # free_zones y tourism tienen producto DEDICADO (modules.free_zones_intel · IZF/CNZFE;
-    # modules.tourism_intel · ITT/ONE) — ya no los sirve el corte transversal del IAI. Cada
-    # sector sigue en el peer set del IAI (sector_catalog/bcrd_sectors); solo cambia el
-    # producto consumible del slot.
-    "construction": ("construccion", "Construcción · RD"),
+    # free_zones, tourism y construction tienen producto DEDICADO (modules.free_zones_intel ·
+    # IZF/CNZFE; modules.tourism_intel · ITT/ONE; modules.construction_intel · ICC/MIVHED+BCRD)
+    # — ya no los sirve el corte transversal del IAI. Cada sector sigue en el peer set del IAI
+    # (sector_catalog/bcrd_sectors); solo cambia el producto consumible del slot.
     "agribusiness": ("agropecuario", "Agropecuario · RD"),
 }
 # Dims históricamente reales — usadas SOLO como fallback conservador cuando el
