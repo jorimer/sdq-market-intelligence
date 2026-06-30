@@ -48,6 +48,7 @@ _UNSET = object()
 _SECTION_TITLES = {
     "telecom_pulse": "Pulso del Sector Telecom",
     "telecom_assessment": "Evaluación de Desarrollo Telecom (IDT)",
+    "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
@@ -98,6 +99,21 @@ _SAMPLE_NARRATIVES = {
         "aún separan la cobertura nominal de la experiencia efectiva, en particular fuera de "
         "los grandes centros urbanos."
     ),
+    "positioning": (
+        "**El IDT se ubica en banda Fuerte con una posición de madurez consolidada, donde la "
+        "trayectoria se sostiene en el dato más que en el alcance.** La lectura de trayectoria "
+        "aporta una señal que el nivel por sí solo no transmite: el índice se mantiene en la "
+        "parte alta de la escala período tras período, con la penetración móvil ya saturada "
+        "(104.7 líneas por 100 habitantes) y un avance reciente que proviene de la penetración "
+        "de internet (89.1%) y de la calidad de banda ancha (86.9%), no de nuevos usuarios de "
+        "voz. La dimensión que impulsa el movimiento es la profundización del dato, mientras la "
+        "penetración móvil aporta de forma estable su contribución máxima. El crecimiento de "
+        "ingresos del sector (6.95%) confirma que la monetización acompaña esa profundización. "
+        "Para el comité, ello ubica a la República Dominicana en una posición de fortaleza "
+        "estable con progreso concentrado en la calidad del servicio. Sin un panel regional "
+        "comparativo, esta es una posición frente a la propia historia del sector y no un "
+        "ordenamiento entre países."
+    ),
     "recommendation": (
         "Para un inversionista o comité con exposición al sector de telecomunicaciones "
         "dominicano, la tesis ya no descansa en la penetración —el mercado está saturado en "
@@ -125,12 +141,13 @@ def telecom_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("telecom_assessment",), narrative_templates=("telecom_outlook",),
+                sections=("telecom_assessment", "positioning"),
+                narrative_templates=("telecom_outlook", "sector_positioning"),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("telecom_assessment", "recommendation", "limitations"),
-                narrative_templates=("telecom_outlook",),
+                sections=("telecom_assessment", "positioning", "recommendation", "limitations"),
+                narrative_templates=("telecom_outlook", "sector_positioning"),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
 
@@ -292,6 +309,8 @@ class TelecomProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = telecom_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
+        trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
+        templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -302,9 +321,10 @@ class TelecomProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: entre alcance (penetración de internet) y "
                                   "calidad (banda ancha), la palanca de conectividad con mayor "
                                   "retorno, dado el cuadro anterior.")
+            elif section == "positioning" and trend:
+                ctx["trayectoria"] = [{"periodo": p, "score": v} for p, v in trend]
             res = await narrative_engine.generate(
-                context=ctx,
-                template="sector_decision" if section == "recommendation" else "telecom_outlook",
+                context=ctx, template=templates.get(section, "telecom_outlook"),
                 mode=section_mode(tier, section, sections),
                 axis="telecom_intel", audience=audience)
             out[section] = res.text

@@ -49,6 +49,7 @@ _UNSET = object()
 _SECTION_TITLES = {
     "construction_pulse": "Pulso del Sector Construcción",
     "construction_assessment": "Evaluación de Coyuntura (ICC)",
+    "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
@@ -101,6 +102,21 @@ _SAMPLE_NARRATIVES = {
         "cuadro corresponde a un **sector en corrección**: existe oportunidad selectiva "
         "donde la demanda estructural persiste, pero con el ciclo de permisos aún a la baja."
     ),
+    "positioning": (
+        "**El ICC se ubica en banda Crítico y su posición la define el contraste entre dos "
+        "dimensiones cíclicas débiles y un componente estructural sano.** Ordenadas por "
+        "aporte, las dimensiones que deprimen el índice son la producción (PIB real, "
+        "promedio 3 años +0.4% y último año −1.8%) y, sobre todo, el pipeline de permisos "
+        "(metros² licenciados a −7.5% anual), ambas en terreno cíclico negativo. En el polo "
+        "opuesto, la diversificación tipológica (apartamentos 59.6%) y la amplitud "
+        "geográfica (Santo Domingo 22.8%) obtienen puntajes elevados y sostienen la base de "
+        "actividad. La dimensión que define la posición es el pipeline de permisos: como "
+        "indicador adelantado, su contracción explica por qué el índice no toca fondo pese a "
+        "la solidez estructural. Cabe una nota de honestidad metodológica: los permisos "
+        "MIVHED arrancan en 2022, por lo que la serie histórica es corta y no permite leer "
+        "una trayectoria de varios ciclos, solo la posición relativa de las dimensiones en "
+        "el período medido."
+    ),
     "recommendation": (
         "Para un inversionista, desarrollador o decisor público con exposición a la "
         "construcción dominicana, la señal dominante es un **ciclo en contracción**: tanto "
@@ -128,13 +144,13 @@ def construction_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("construction_assessment",),
-                narrative_templates=("construction_outlook",),
+                sections=("construction_assessment", "positioning"),
+                narrative_templates=("construction_outlook", "sector_positioning"),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("construction_assessment", "recommendation", "limitations"),
-                narrative_templates=("construction_outlook",),
+                sections=("construction_assessment", "positioning", "recommendation", "limitations"),
+                narrative_templates=("construction_outlook", "sector_positioning"),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
 
@@ -278,6 +294,7 @@ class ConstructionProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = construction_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
+        templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -288,9 +305,7 @@ class ConstructionProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "coyuntura del sector construcción, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx,
-                template=("sector_decision" if section == "recommendation"
-                          else "construction_outlook"),
+                context=ctx, template=templates.get(section, "construction_outlook"),
                 mode=section_mode(tier, section, sections),
                 axis="construction_intel", audience=audience)
             out[section] = res.text

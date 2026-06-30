@@ -147,7 +147,8 @@ def esg_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("irc_assessment",), narrative_templates=("climate_outlook",),
+                sections=("irc_assessment", "panel_position"),
+                narrative_templates=("climate_outlook",),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
