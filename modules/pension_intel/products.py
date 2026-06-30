@@ -560,7 +560,8 @@ class PensionProduct:
                                   "posición relativa, la señal a vigilar (procedencia de solvencia, "
                                   "trayectoria de rentabilidad) y el 'y por tanto' de decisión.")
             res = await narrative_engine.generate(
-                context=ctx, template="pension_entity",
+                context=ctx,
+                template="sector_decision" if section == "recommendation" else "pension_entity",
                 mode=section_mode(tier, section, sections),
                 axis="pension_intel", audience="inversionista")
             out[section] = res.text

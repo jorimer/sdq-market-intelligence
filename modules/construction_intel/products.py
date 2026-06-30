@@ -285,7 +285,9 @@ class ConstructionProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "coyuntura del sector construcción, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="construction_outlook",
+                context=ctx,
+                template=("sector_decision" if section == "recommendation"
+                          else "construction_outlook"),
                 mode=section_mode(tier, section, sections),
                 axis="construction_intel", audience=audience)
             out[section] = res.text

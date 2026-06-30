@@ -291,7 +291,8 @@ class TourismProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "tracción del destino turístico, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="tourism_outlook",
+                context=ctx,
+                template="sector_decision" if section == "recommendation" else "tourism_outlook",
                 mode=section_mode(tier, section, sections),
                 axis="tourism_intel", audience=audience)
             out[section] = res.text

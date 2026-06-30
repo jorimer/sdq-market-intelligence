@@ -396,7 +396,8 @@ class SectorIntelProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la dimensión real con mayor brecha y la "
                                   "palanca de atractividad con mayor retorno, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="sector_outlook",
+                context=ctx,
+                template="sector_decision" if section == "recommendation" else "sector_outlook",
                 mode=section_mode(tier, section, sections),
                 axis="sector_intel", audience=audience)
             out[section] = res.text

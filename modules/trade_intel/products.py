@@ -387,7 +387,8 @@ class TradeProduct:
                                   "canasta o reducción de dependencia importadora) con mayor "
                                   "retorno sobre la resiliencia, dado el cuadro anterior.")
             res = await narrative_engine.generate(
-                context=ctx, template="trade_outlook",
+                context=ctx,
+                template="sector_decision" if section == "recommendation" else "trade_outlook",
                 mode=section_mode(tier, section, sections),
                 axis="trade_intel", audience=audience)
             out[section] = res.text
