@@ -18,7 +18,6 @@ import {
   getProductReport,
   getProductScopeOptions,
   getProductPeriods,
-  downloadProductPdf,
   downloadProductReport,
   downloadProductSample,
   reportDimensions,
@@ -83,10 +82,6 @@ export function ProductCatalogPage() {
                       level={level}
                       planLabel={planLabel}
                       onView={() => setViewing({ sector, level })}
-                      onDownload={(scope) =>
-                        downloadProductPdf(sector.sector_key, level.tier,
-                          { period: periodEnd, ...(scope ? { scope } : {}) })
-                      }
                       onSampleDownloaded={load}
                       t={t}
                     />
@@ -114,12 +109,11 @@ export function ProductCatalogPage() {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function LevelRow({ sector, level, planLabel, onView, onDownload, onSampleDownloaded, t }: {
+function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
   sector: CatalogSector;
   level: CatalogLevel;
   planLabel: (tier: string) => string;
   onView: () => void;
-  onDownload: (scope?: string) => void;
   onSampleDownloaded: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   t: any;
@@ -162,15 +156,14 @@ function LevelRow({ sector, level, planLabel, onView, onDownload, onSampleDownlo
       </div>
       {level.unlocked ? (
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* La descarga pasa SIEMPRE por el drawer (elige período/entidad antes de
+              generar) — nunca con el período global del topbar. */}
           <button onClick={onView} className="btn btn-ghost !py-1 !px-2 text-xs">
             <Eye className="w-3.5 h-3.5" /> {t("platform.catalog.view")}
           </button>
-          {/* Descarga directa cuando no hay que elegir entidad (Pulse o sujeto fijo). */}
-          {!level.requires_scope && (
-            <button onClick={() => onDownload()} className="btn btn-ghost !py-1 !px-2 text-xs">
-              <Download className="w-3.5 h-3.5" /> {t("platform.catalog.download")}
-            </button>
-          )}
+          <button onClick={onView} className="btn btn-ghost !py-1 !px-2 text-xs">
+            <Download className="w-3.5 h-3.5" /> {t("platform.catalog.download")}
+          </button>
         </div>
       ) : (
         <div className="flex flex-col items-end gap-1 shrink-0">
@@ -390,16 +383,18 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
             );
           }); })()}
           <div className="pt-2 border-t border-line flex flex-wrap gap-2">
+            {/* Descarga con el MISMO período/entidad que el reporte mostrado (selPeriod +
+                activeScope), nunca el período global del topbar. */}
             <button
               onClick={() => downloadProductReport(sector.sector_key, level.tier, "pdf",
-                { period: periodEnd, ...(needsScope && scope ? { scope } : {}) })}
+                { period: selPeriod || periodEnd, ...(activeScope ? { scope: activeScope } : {}) })}
               className="btn btn-ghost text-sm"
             >
               <Download className="w-4 h-4" /> {t("platform.catalog.downloadPdf")}
             </button>
             <button
               onClick={() => downloadProductReport(sector.sector_key, level.tier, "docx",
-                { period: periodEnd, ...(needsScope && scope ? { scope } : {}) })}
+                { period: selPeriod || periodEnd, ...(activeScope ? { scope: activeScope } : {}) })}
               className="btn btn-ghost text-sm"
             >
               <FileText className="w-4 h-4" /> {t("platform.catalog.downloadWord")}
