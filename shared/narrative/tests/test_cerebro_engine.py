@@ -10,6 +10,7 @@ from shared.narrative.cerebro import (
     BARRA_DE_INSIGHT,
     CEREBRO_IDENTITY,
     DEEP_DIRECTIVE,
+    REGISTER_NEUTRO,
 )
 from shared.narrative.numeric_guard import _parse_unsupported
 
@@ -57,14 +58,16 @@ def _judge_calls(calls):
 
 # ── Ruta legacy ───────────────────────────────────────────────────────────────
 def test_legacy_route_is_byte_identical(monkeypatch):
-    """Sin axis: un solo mensaje user, SIN system, con el template gordo + directiva lang,
-    y SIN guardrail (no hay llamada de juez)."""
+    """Sin axis: un solo mensaje user con el template gordo + directiva lang, y SIN guardrail
+    (no hay llamada de juez). El system es SOLO el registro de voz (REGISTER_NEUTRO), no la
+    doctrina/Barra del cerebro."""
     eng, calls = _engine_capturing(monkeypatch)
     ctx = {"score": 77}
     asyncio.run(eng.generate(ctx, template="entity_rating", mode="detailed", lang="es"))
 
     assert len(calls) == 1 and not _judge_calls(calls)   # legacy no invoca el guardrail
-    assert "system" not in calls[0]
+    assert calls[0].get("system") == REGISTER_NEUTRO     # registro de voz, no el cerebro
+    assert BARRA_DE_INSIGHT not in (calls[0].get("system") or "")  # no es la ruta cerebro
     context_str = claude_engine.json.dumps(ctx, indent=2, ensure_ascii=False, default=str)
     expected = _apply_lang(TEMPLATES["entity_rating"].format(context=context_str), "es")
     assert calls[0]["messages"][0]["content"] == expected
@@ -73,13 +76,18 @@ def test_legacy_route_is_byte_identical(monkeypatch):
 def test_axis_with_non_thin_template_stays_legacy(monkeypatch):
     eng, calls = _engine_capturing(monkeypatch)
     asyncio.run(eng.generate({"x": 1}, template="executive_summary", axis="banking"))
-    assert len(calls) == 1 and "system" not in calls[0]   # legacy, sin juez
+    # legacy (sin juez): solo el registro de voz, no la Barra de Insight del cerebro.
+    assert len(calls) == 1
+    assert calls[0].get("system") == REGISTER_NEUTRO
+    assert BARRA_DE_INSIGHT not in (calls[0].get("system") or "")
 
 
 def test_unknown_axis_falls_back_to_legacy_without_keyerror(monkeypatch):
     eng, calls = _engine_capturing(monkeypatch)
     asyncio.run(eng.generate({"x": 1}, template="entity_rating", axis="__sin_doctrina__"))
-    assert len(calls) == 1 and "system" not in calls[0]
+    assert len(calls) == 1
+    assert calls[0].get("system") == REGISTER_NEUTRO
+    assert BARRA_DE_INSIGHT not in (calls[0].get("system") or "")
 
 
 # ── Ruta cerebro ────────────────────────────────────────────────────────────────

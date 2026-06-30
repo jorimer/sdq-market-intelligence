@@ -59,7 +59,7 @@ def test_generate_uses_request_lang_context(monkeypatch):
     class _FakeClient:
         class messages:
             @staticmethod
-            def create(model, max_tokens, messages):
+            def create(model, max_tokens, messages, system=None):
                 captured["prompt"] = messages[0]["content"]
                 return _FakeMsg("ok")
 
