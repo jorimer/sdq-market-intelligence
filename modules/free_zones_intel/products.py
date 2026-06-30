@@ -47,6 +47,7 @@ _UNSET = object()
 _SECTION_TITLES = {
     "free_zones_pulse": "Pulso del Sector de Zonas Francas",
     "free_zones_assessment": "Evaluación de Atractividad (IZF)",
+    "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
@@ -95,6 +96,20 @@ _SAMPLE_NARRATIVES = {
         "segmentos de mayor valor agregado (manufactura médica, dispositivos, servicios) "
         "que eleven el valor exportado por operación."
     ),
+    "positioning": (
+        "**El IZF se ubica en banda Vigilancia y describe una trayectoria de expansión en "
+        "escala con dinamismo en moderación.** En los períodos recientes el índice se "
+        "sostiene en torno a 49 puntos: la inversión acumulada (~US$8,170 millones, +4.5% "
+        "anual) y las exportaciones (~US$8,549 millones, +3.0%) continúan en avance, "
+        "mientras el empleo (~200 mil puestos) crece a un ritmo más contenido (+1.3%). La "
+        "dimensión que impulsa la posición es la atracción de inversión —el componente de "
+        "mayor puntaje—, que confirma la confianza de capital en el régimen. El factor que "
+        "frena la trayectoria es la productividad: con el conteo de empresas (~858) "
+        "creciendo más rápido que el valor exportado por firma (−0.5%), el sector gana "
+        "presencia sin escalar valor por operación. Frente a su propia historia, el régimen "
+        "consolida su tamaño, pero su frontera de mejora se ubica en la eficiencia y el "
+        "valor agregado, no en el número de establecimientos."
+    ),
     "recommendation": (
         "Para un inversionista o comité con exposición al sector de zonas francas "
         "dominicano, la palanca de mayor retorno sobre la atractividad no reside en sumar "
@@ -120,12 +135,13 @@ def free_zones_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("free_zones_assessment",), narrative_templates=("free_zones_outlook",),
+                sections=("free_zones_assessment", "positioning"),
+                narrative_templates=("free_zones_outlook", "sector_positioning"),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("free_zones_assessment", "recommendation", "limitations"),
-                narrative_templates=("free_zones_outlook",),
+                sections=("free_zones_assessment", "positioning", "recommendation", "limitations"),
+                narrative_templates=("free_zones_outlook", "sector_positioning"),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
 
@@ -275,6 +291,8 @@ class FreeZoneProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = free_zones_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
+        trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
+        templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -284,10 +302,10 @@ class FreeZoneProduct:
             if section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "atractividad del sector de zonas francas, dado el cuadro anterior.")
+            elif section == "positioning" and trend:
+                ctx["trayectoria"] = [{"periodo": p, "score": v} for p, v in trend]
             res = await narrative_engine.generate(
-                context=ctx,
-                template=("sector_decision" if section == "recommendation"
-                          else "free_zones_outlook"),
+                context=ctx, template=templates.get(section, "free_zones_outlook"),
                 mode=section_mode(tier, section, sections),
                 axis="free_zones_intel", audience=audience)
             out[section] = res.text

@@ -47,6 +47,7 @@ _UNSET = object()
 _SECTION_TITLES = {
     "tourism_pulse": "Pulso del Sector Turismo",
     "tourism_assessment": "Evaluación de Tracción Turística (ITT)",
+    "positioning": "Posición y Trayectoria",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
@@ -98,6 +99,21 @@ _SAMPLE_NARRATIVES = {
         "es clara; el factor a vigilar es la exposición a Norteamérica y el avance hacia "
         "mercados europeos y suramericanos."
     ),
+    "positioning": (
+        "**El ITT se ubica en banda Fuerte con trayectoria ascendente, traccionada por el "
+        "volumen y la recuperación más que por la diversificación.** La lectura de trayectoria "
+        "aporta una señal que el nivel por sí solo no transmite: el índice avanza de forma "
+        "sostenida en los últimos períodos, impulsado por una demanda que crece por encima de "
+        "7% anual y que opera 35% por encima del pico pre-pandemia de 2018, un nuevo nivel "
+        "máximo y no una mera recuperación. La dimensión que impulsa el movimiento es la "
+        "tracción de demanda —total y extranjera, ambas en su aporte máximo— mientras la "
+        "diversificación de mercados permanece como la restricción rezagada (Norteamérica "
+        "origina el 62% de los turistas extranjeros). Para el comité, ello ubica al destino RD "
+        "en una posición de fortaleza estructural con progreso concentrado en el volumen y "
+        "margen de mejora futura en la diversificación del origen. Sin un panel regional "
+        "comparativo, esta es una posición frente a la propia historia del destino y no un "
+        "ordenamiento entre países."
+    ),
     "recommendation": (
         "Para un inversionista o comité con exposición al sector turismo dominicano, el "
         "cuadro corresponde a una demanda firme y resiliente: las llegadas crecen >7% anual "
@@ -125,12 +141,13 @@ def tourism_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("tourism_assessment",), narrative_templates=("tourism_outlook",),
+                sections=("tourism_assessment", "positioning"),
+                narrative_templates=("tourism_outlook", "sector_positioning"),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("tourism_assessment", "recommendation", "limitations"),
-                narrative_templates=("tourism_outlook",),
+                sections=("tourism_assessment", "positioning", "recommendation", "limitations"),
+                narrative_templates=("tourism_outlook", "sector_positioning"),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
 
@@ -282,6 +299,8 @@ class TourismProduct:
         from shared.narrative.claude_engine import narrative_engine
         base_ctx = tourism_ai_context(snapshot.payload["index"], snapshot.period)
         audience = "inversionista"
+        trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
+        templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
@@ -291,9 +310,10 @@ class TourismProduct:
             if section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "tracción del destino turístico, dado el cuadro anterior.")
+            elif section == "positioning" and trend:
+                ctx["trayectoria"] = [{"periodo": p, "score": v} for p, v in trend]
             res = await narrative_engine.generate(
-                context=ctx,
-                template="sector_decision" if section == "recommendation" else "tourism_outlook",
+                context=ctx, template=templates.get(section, "tourism_outlook"),
                 mode=section_mode(tier, section, sections),
                 axis="tourism_intel", audience=audience)
             out[section] = res.text

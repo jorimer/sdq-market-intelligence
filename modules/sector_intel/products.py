@@ -167,7 +167,8 @@ def sector_manifest(product_key: str, display_name: str) -> SectorProductManifes
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("sector_assessment",), narrative_templates=("sector_outlook",),
+                sections=("sector_assessment", "momentum"),
+                narrative_templates=("sector_outlook",),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
