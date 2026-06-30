@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from reportlab.lib.colors import HexColor
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
@@ -25,13 +24,11 @@ from reportlab.platypus import (
     Image as RLImage,
     PageBreak,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
 )
 
-from modules.banking_score.scoring.rating_scale import get_tier_color
 from modules.banking_score.scoring.weights import SUB_COMPONENT_WEIGHTS
 from shared.config.settings import settings
 
@@ -44,8 +41,7 @@ GREEN = HexColor("#38A169")
 LIGHT_GRAY = HexColor("#F7FAFC")
 GRAY = HexColor("#718096")
 WHITE = HexColor("#FFFFFF")
-
-MARGIN = 0.75 * inch
+SIGNAL = HexColor("#E11D48")   # signal red — acento de marca (pull-quotes)
 
 DISCLAIMER_ES = (
     "Las calificaciones y opiniones expresadas en este informe son las de "
@@ -136,6 +132,10 @@ def _get_styles():
         "SDQTableCell", parent=styles["Normal"],
         fontSize=8.5, leading=11,
     ))
+    styles.add(ParagraphStyle(
+        "SDQPullQuote", parent=styles["Normal"],
+        fontSize=12, textColor=NAVY, leading=16, fontName="Helvetica-Bold",
+    ))
     return styles
 
 
@@ -182,43 +182,9 @@ def generate_radar_chart(sub_scores: Dict[str, float], output_path: str) -> str:
 
 
 # ── PDF building blocks ───────────────────────────────────────────
-
-def _build_cover_page(
-    bank_name: str,
-    rating_tier: str,
-    overall_score: float,
-    period: str,
-    report_type: str,
-    styles,
-) -> List:
-    elements: List = []
-    elements.append(Spacer(1, 1.5 * inch))
-    elements.append(Paragraph("SDQ Market Intelligence", styles["SDQTitle"]))
-    elements.append(Spacer(1, 0.3 * inch))
-
-    title = REPORT_TYPE_LABELS.get(report_type, "Informe")
-    elements.append(Paragraph(title, styles["SDQHeading"]))
-    elements.append(Spacer(1, 0.5 * inch))
-    elements.append(Paragraph(bank_name, styles["SDQTitle"]))
-    elements.append(Spacer(1, 0.3 * inch))
-
-    tier_color = get_tier_color(rating_tier)
-    tier_style = ParagraphStyle(
-        "TierDisplay", fontSize=48,
-        textColor=HexColor(tier_color), alignment=TA_CENTER, spaceAfter=10,
-    )
-    elements.append(Paragraph(rating_tier, tier_style))
-    elements.append(Paragraph(
-        f"Score: {overall_score:.1f}/100", styles["SDQSubHeading"],
-    ))
-    elements.append(Spacer(1, 0.5 * inch))
-    elements.append(Paragraph(f"Período: {period}", styles["SDQBody"]))
-    elements.append(Paragraph(
-        f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", styles["SDQBody"],
-    ))
-    elements.append(PageBreak())
-    return elements
-
+# La portada y el chrome de página (banda navy + logo Arco + encabezado + nº de página +
+# watermark) los provee el shell de marca compartido (shared.products.render.build_branded_pdf);
+# este módulo solo arma el CUERPO (radar + tablas + narrativa) y la calificación va como headline.
 
 def _build_sub_scores_table(sub_scores: Dict[str, float], styles) -> List:
     elements: List = []
@@ -342,6 +308,18 @@ def _md_table(header: List[str], rows: List[List[str]], styles) -> Table:
     return table
 
 
+def _pull_quote(text: str, styles) -> Table:
+    """Pull-quote de marca: texto navy con barra de acento signal-red a la izquierda."""
+    t = Table([["", Paragraph(_md_inline(text), styles["SDQPullQuote"])]],
+              colWidths=[0.09 * inch, 6.4 * inch])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), SIGNAL),
+        ("LEFTPADDING", (1, 0), (1, 0), 10), ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    return t
+
+
 def _md_to_flowables(text: str, styles) -> List:
     """Convert a Markdown string into ReportLab flowables."""
     out: List = []
@@ -351,6 +329,12 @@ def _md_to_flowables(text: str, styles) -> List:
         raw = lines[i]
         line = raw.strip()
         if not line:
+            i += 1
+            continue
+        # Blockquote '> ' → pull-quote de marca (estándar de reporte).
+        if line.startswith(">"):
+            out.append(_pull_quote(line.lstrip(">").strip(), styles))
+            out.append(Spacer(1, 0.08 * inch))
             i += 1
             continue
         # GFM table: header row + separator row
@@ -396,11 +380,13 @@ def _md_to_flowables(text: str, styles) -> List:
 
 def _build_narrative_sections(narratives: Dict[str, str], styles) -> List:
     elements: List = []
+    n = 0
     for section_key, text in narratives.items():
         title = NARRATIVE_SECTION_TITLES.get(
             section_key, section_key.replace("_", " ").title(),
         )
-        elements.append(Paragraph(title, styles["SDQHeading"]))
+        n += 1
+        elements.append(Paragraph(f"{n}. {title}", styles["SDQHeading"]))
         elements.extend(_md_to_flowables(text or "", styles))
         elements.append(Spacer(1, 0.2 * inch))
     return elements
@@ -468,23 +454,6 @@ def _build_peer_block(peer_block: Dict, styles) -> List:
     return elements
 
 
-def _make_page_decorator(watermark: Optional[str], sample: bool):
-    """Footer/marca por nivel dibujada en cada página. None si no hay marca."""
-    text = "MUESTRA — DATA ILUSTRATIVA" if sample else watermark
-    if not text:
-        return None
-    color = HexColor("#991B1B") if sample else GRAY
-
-    def _decorate(canvas, doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica-Bold" if sample else "Helvetica", 8)
-        canvas.setFillColor(color)
-        canvas.drawCentredString(A4[0] / 2, 0.4 * inch, text)
-        canvas.restoreState()
-
-    return _decorate
-
-
 def _order_narratives(narratives: Dict[str, str],
                       sections: Optional[List[str]]) -> Dict[str, str]:
     """Filtra/ordena las narrativas por `sections` (manifiesto del nivel).
@@ -547,19 +516,14 @@ async def generate_pdf_report(
     filepath = os.path.join(output_dir, filename)
 
     styles = _get_styles()
-    elements: List = []
+    body: List = []
 
     overall_score = scoring_result.get("overall_score", 0)
     rating_tier = scoring_result.get("rating_tier", "N/A")
     sub_scores = scoring_result.get("sub_components", {})
     indicators = scoring_result.get("indicators", {})
 
-    # 1. Cover page
-    elements.extend(_build_cover_page(
-        bank_name, rating_tier, overall_score, period, report_type, styles,
-    ))
-
-    # 2. Radar chart (for full_rating, scorecard, datawatch)
+    # 1. Radar chart (for full_rating, scorecard, datawatch)
     if sub_scores and report_type in ("full_rating", "scorecard", "datawatch"):
         chart_dir = settings.CHARTS_DIR
         os.makedirs(chart_dir, exist_ok=True)
@@ -569,57 +533,55 @@ async def generate_pdf_report(
         try:
             generate_radar_chart(sub_scores, chart_path)
             img = RLImage(chart_path, width=5 * inch, height=5 * inch)
-            elements.append(img)
-            elements.append(Spacer(1, 0.3 * inch))
+            body.append(img)
+            body.append(Spacer(1, 0.3 * inch))
         except Exception as e:
             logger.warning("Radar chart failed: %s", e)
 
-    # 3. Sub-scores table
+    # 2. Sub-scores table
     if sub_scores:
-        elements.extend(_build_sub_scores_table(sub_scores, styles))
-        elements.append(Spacer(1, 0.3 * inch))
+        body.extend(_build_sub_scores_table(sub_scores, styles))
+        body.append(Spacer(1, 0.3 * inch))
 
-    # 4. Indicators table (detailed reports only)
+    # 3. Indicators table (detailed reports only)
     if indicators and report_type in ("full_rating", "scorecard", "datawatch"):
-        elements.extend(_build_indicators_table(indicators, styles))
-        elements.append(PageBreak())
+        body.extend(_build_indicators_table(indicators, styles))
+        body.append(PageBreak())
 
-    # 4b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
+    # 3b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
     if band_distribution:
-        elements.extend(_build_band_distribution_table(band_distribution, styles))
-        elements.append(Spacer(1, 0.3 * inch))
+        body.extend(_build_band_distribution_table(band_distribution, styles))
+        body.append(Spacer(1, 0.3 * inch))
 
-    # 4c. Bloque de pares — estructura de mercado (opt-in; Insight/Deep Dive).
+    # 3c. Bloque de pares — estructura de mercado (opt-in; Insight/Deep Dive).
     if peer_block:
-        elements.extend(_build_peer_block(peer_block, styles))
-        elements.append(Spacer(1, 0.3 * inch))
+        body.extend(_build_peer_block(peer_block, styles))
+        body.append(Spacer(1, 0.3 * inch))
 
-    # 5. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`).
+    # 4. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`).
     if narratives:
-        elements.extend(_build_narrative_sections(
+        body.extend(_build_narrative_sections(
             _order_narratives(narratives, sections), styles))
 
-    # 6. Disclaimer
-    elements.extend(_build_disclaimer(styles))
+    # 5. Disclaimer (texto propio de banking; el shell no lo añade).
+    body.extend(_build_disclaimer(styles))
 
-    # Build PDF (marca por nivel / muestra dibujada en cada página si aplica).
+    # Portada + chrome de marca compartidos (banda navy + logo Arco + encabezado corrido +
+    # nº de página + watermark/estampa) vía el shell de render.py — la calificación va como
+    # headline (pull-quote de portada), igual que los demás productos.
     title_label = REPORT_TYPE_LABELS.get(report_type, report_type)
     if tier:
         title_label = f"{title_label} · {tier}"
-    doc = SimpleDocTemplate(
-        filepath,
-        pagesize=A4,
-        leftMargin=MARGIN,
-        rightMargin=MARGIN,
-        topMargin=MARGIN,
-        bottomMargin=MARGIN,
-        title=f"SDQ — {title_label} — {bank_name}",
-        author="SDQ Market Intelligence",
-    )
-    decorate = _make_page_decorator(watermark, sample)
-    if decorate is not None:
-        doc.build(elements, onFirstPage=decorate, onLaterPages=decorate)
-    else:
-        doc.build(elements)
+    headline = None
+    if rating_tier and rating_tier not in ("N/A", "Sistema"):
+        headline = rating_tier + (f" · {overall_score:.1f}/100" if overall_score else "")
+    elif rating_tier == "Sistema" and overall_score:
+        headline = f"Sistema · {overall_score:.1f}/100"
+
+    from shared.products.render import build_branded_pdf
+    build_branded_pdf(
+        path=filepath, title=title_label, display_name=bank_name, period=period,
+        body=body, headline=headline, watermark=watermark, sample=sample,
+        add_disclaimer=False)
     logger.info("PDF generated: %s", filepath)
     return filepath

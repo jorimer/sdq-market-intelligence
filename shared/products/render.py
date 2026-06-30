@@ -221,6 +221,42 @@ def _img_ratio(path: str) -> float:
         return 0.55
 
 
+def build_branded_pdf(
+    *,
+    path: str,
+    title: str,
+    display_name: str,
+    period: str,
+    body: List,
+    subtitle: Optional[str] = None,
+    headline: Optional[str] = None,
+    watermark: Optional[str] = None,
+    sample: bool = False,
+    add_disclaimer: bool = True,
+) -> str:
+    """Shell de documento de marca: portada (banda navy + logo Arco + sujeto + headline) →
+    *body* (flowables ya armados por el llamador) → disclaimer opcional; cada página con
+    encabezado corrido + logo pequeño + nº de página + watermark/estampa de muestra.
+
+    Punto de unión del estándar de marca para generadores con CUERPO PROPIO (p.ej. banking,
+    que arma su radar y tablas con estilos propios) sin duplicar el chrome de ``render.py``.
+    Devuelve *path*."""
+    styles = _styles()
+    el: List = _cover(title, display_name, period, subtitle, headline, styles)
+    el += list(body or [])
+    if add_disclaimer:
+        el += [Spacer(1, 0.4 * inch), Paragraph("Disclaimer", styles["PSub"]),
+               Paragraph(DISCLAIMER_ES, styles["PSmall"])]
+    header_line = f"SDQ·MIP — {title} · {display_name}"
+    doc = SimpleDocTemplate(path, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
+                            topMargin=MARGIN, bottomMargin=MARGIN,
+                            title=f"SDQ — {title} — {display_name}", author="SDQ Market Intelligence")
+    doc.build(el,
+              onFirstPage=_furniture(header_line, watermark, sample, first=True),
+              onLaterPages=_furniture(header_line, watermark, sample, first=False))
+    return path
+
+
 def render_product_pdf(
     *,
     sector_key: str,
@@ -265,24 +301,17 @@ def render_product_pdf(
     section_titles = {**STANDARD_SECTION_TITLES, **(section_titles or {})}
 
     styles = _styles()
-    el: List = _cover(title, display_name, period, subtitle, headline, styles)
-    # Gráficos de marca (barras de dimensión/contribución) — imagen PNG embebida.
+    body: List = []
+    # Gráficos de marca (barras de dimensión/contribución, línea de tendencia) — PNG embebido.
     from shared.products.charts import render_charts
     for _ctitle, png in render_charts(charts, out_dir, f"{sector_key}_{ts}"):
-        el.append(Image(png, width=CONTENT_W, height=CONTENT_W * _img_ratio(png)))
-        el.append(Spacer(1, 0.2 * inch))
+        body.append(Image(png, width=CONTENT_W, height=CONTENT_W * _img_ratio(png)))
+        body.append(Spacer(1, 0.2 * inch))
     for heading, rows in (tables or []):
         if rows:
-            el += _data_table(heading, rows, styles)
-    el += _narrative_flowables(narratives, section_titles or {}, styles)
-    el += [Spacer(1, 0.4 * inch), Paragraph("Disclaimer", styles["PSub"]),
-           Paragraph(DISCLAIMER_ES, styles["PSmall"])]
+            body += _data_table(heading, rows, styles)
+    body += _narrative_flowables(narratives, section_titles or {}, styles)
 
-    header_line = f"SDQ·MIP — {title} · {display_name}"
-    doc = SimpleDocTemplate(path, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
-                            topMargin=MARGIN, bottomMargin=MARGIN,
-                            title=f"SDQ — {title} — {display_name}", author="SDQ Market Intelligence")
-    doc.build(el,
-              onFirstPage=_furniture(header_line, watermark, sample, first=True),
-              onLaterPages=_furniture(header_line, watermark, sample, first=False))
-    return path
+    return build_branded_pdf(
+        path=path, title=title, display_name=display_name, period=period, body=body,
+        subtitle=subtitle, headline=headline, watermark=watermark, sample=sample)
