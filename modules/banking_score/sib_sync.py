@@ -181,6 +181,53 @@ def prune_future_periods(db: Session) -> Dict[str, int]:
     return {"data_deleted": bd, "ratings_deleted": rr, "actions_deleted": ra}
 
 
+# Coverage below which the most-recent quarter is deemed "still partial" (the SIB
+# publishes quarterly statements with a lag, so a just-closed quarter is queried the
+# day after close with only a handful of early filers). Extreme (< half the prior
+# quarter) so it never trips on legitimate panel changes.
+_PARTIAL_QUARTER_COVERAGE = 0.5
+
+
+def prune_partial_latest_quarter(db: Session, min_coverage: float = _PARTIAL_QUARTER_COVERAGE) -> Dict:
+    """Drop the most-recent quarter(s) whose SIB data is still partial.
+
+    The ``period_end > today`` guard only catches genuinely future quarters. A
+    quarter that closed a day or two ago is *past* yet the SIB has only published a
+    fraction of the panel — an incomplete, inflated "latest" ranking (and, when the
+    carteras cube hasn't landed, N/D concentration/HHI that lifts calidad). We detect
+    it by coverage: a partial quarter has far fewer entities than the prior complete
+    one. Self-calibrating — no publication-lag magic number. Loops in case more than
+    one trailing quarter is partial.
+    """
+    from modules.banking_score.models.models import RatingAction
+
+    pruned = {"data_deleted": 0, "ratings_deleted": 0, "actions_deleted": 0, "periods": []}
+    while True:
+        counts = (
+            db.query(BankingData.period_end,
+                     func.count(func.distinct(BankingData.bank_id)))
+            .group_by(BankingData.period_end)
+            .order_by(BankingData.period_end.desc())
+            .all()
+        )
+        if len(counts) < 2:
+            break
+        (latest_pe, latest_n), (_, prev_n) = counts[0], counts[1]
+        if prev_n <= 0 or latest_n >= min_coverage * prev_n:
+            break  # latest quarter has adequate coverage → treat as complete
+        pruned["actions_deleted"] += db.query(RatingAction).filter(
+            RatingAction.period_end == latest_pe).delete(synchronize_session=False)
+        pruned["ratings_deleted"] += db.query(RatingResult).filter(
+            RatingResult.period_end == latest_pe).delete(synchronize_session=False)
+        pruned["data_deleted"] += db.query(BankingData).filter(
+            BankingData.period_end == latest_pe).delete(synchronize_session=False)
+        db.commit()
+        pruned["periods"].append(str(latest_pe))
+        logger.info("Pruned partial quarter %s (%d entities vs %d in the prior quarter)",
+                    latest_pe, latest_n, prev_n)
+    return pruned
+
+
 def purge_synthetic_data(db: Session) -> Dict[str, int]:
     """Delete all synthetic seed data (``source=manual``) and any ratings/actions
     left orphaned by the deletion.
@@ -481,6 +528,13 @@ def run_backfill(force: bool = False, period_start: str = "2021-01",
                 db.rollback()
                 logger.warning("SIMBAD fallback falló (no crítico): %s", e)
                 _write_status(db, phase="SIMBAD: fallback omitido (ver logs)")
+
+        # Drop any just-closed quarter the SIB has only partially published (queried
+        # the day after close). Runs AFTER ingest (the future-prune at the start can't
+        # catch it — the ingest re-adds it) and BEFORE scoring, so partial quarters
+        # never reach the rankings.
+        _write_status(db, phase="podando trimestre parcial (si lo hay)")
+        prune_partial_latest_quarter(db)
 
         # Recalculate ratings for the freshly-ingested SIB data. Without this the
         # platform has real data but stale/missing ratings (834 records vs 70
