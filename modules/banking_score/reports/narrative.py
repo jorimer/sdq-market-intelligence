@@ -151,6 +151,14 @@ def _build_section_context(
         "rating_tier": scoring_result.get("rating_tier", "N/A"),
         "sub_components": scoring_result.get("sub_components", {}),
         "indicators": all_indicators,
+        # Encuadre (Fase 3): mantiene la prosa consistente con las Limitaciones —
+        # el score es fortaleza financiera standalone, no un rating de crédito.
+        "encuadre": (
+            "La calificación SDQ mide FORTALEZA FINANCIERA STANDALONE sobre dato público "
+            "supervisado; NO es un rating de crédito ni mide probabilidad de incumplimiento, "
+            "y no incorpora soporte soberano ni techo país. No la describas como rating "
+            "crediticio ni la compares con las escalas de calificadoras internacionales."
+        ),
     }
     if benchmarks:
         ctx["benchmarks"] = benchmarks

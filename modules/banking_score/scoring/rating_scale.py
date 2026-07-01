@@ -1,6 +1,10 @@
-"""SDQ Rating Scale — 10-tier credit rating system.
+"""SDQ Rating Scale — 10-tier standalone financial-strength scale.
 
-Maps continuous scores [0-100] to rating tiers SDQ-AAA through SDQ-D.
+Maps continuous scores [0-100] to tiers SDQ-AAA through SDQ-D. Despite the
+credit-rating-style nomenclature, this is NOT a credit rating: it measures
+standalone financial strength from public supervised data and does not incorporate
+sovereign support, systemic importance or the sovereign ceiling. See the framing in
+``products._LIMITATIONS_TEXT``.
 Extracted from financial-analysis-agent/banking_scoring_service.py.
 """
 from typing import Dict, List, Optional, Tuple

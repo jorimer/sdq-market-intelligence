@@ -201,11 +201,23 @@ _INSIGHT_SECTIONS = (
 _DEEP_DIVE_SECTIONS = _INSIGHT_SECTIONS + ("risk_assessment", "recommendation", "limitations")
 
 # Limitaciones: texto estático (sin cifras → guard anti-alucinación trivialmente limpio).
+# Incluye el ENCUADRE del score (Fase 3, portado de pensiones): la calificación SDQ es
+# fortaleza financiera standalone sobre dato público real — NO un rating de crédito, y no
+# incorpora soporte soberano ni techo país. Evita que el lector confunda la escala
+# SDQ-AAA…D (nomenclatura tipo calificadora) con un rating crediticio comparable.
 _LIMITATIONS_TEXT = (
-    "Este análisis se basa en información pública supervisada a la fecha de corte "
-    "indicada; no incorpora información material no pública ni eventos posteriores al "
-    "período. Las calificaciones SDQ son opiniones independientes de SDQ Consulting y "
-    "no constituyen una recomendación para comprar, vender o mantener instrumentos."
+    "La calificación SDQ es una medida de FORTALEZA FINANCIERA STANDALONE, construida "
+    "íntegramente sobre información pública supervisada real (SIB/SIMBAD/BCRD) a la fecha "
+    "de corte indicada; no incorpora información material no pública ni eventos "
+    "posteriores al período. NO es un rating de crédito y no mide probabilidad de "
+    "incumplimiento. En particular, no incorpora soporte soberano, importancia sistémica "
+    "ni el techo soberano del país, por lo que no es directamente comparable con las "
+    "escalas de las calificadoras internacionales: la solvencia efectiva de una entidad "
+    "estatal o sistémica puede diferir de su perfil standalone —el soporte la eleva; el "
+    "techo soberano la acota—. La escala SDQ-AAA…D ordena fortaleza financiera relativa "
+    "dentro del sistema dominicano, no riesgo de crédito absoluto. Las calificaciones SDQ "
+    "son opiniones independientes de SDQ Consulting y no constituyen una recomendación "
+    "para comprar, vender o mantener instrumentos."
 )
 
 

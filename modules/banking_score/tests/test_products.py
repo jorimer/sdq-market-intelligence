@@ -400,3 +400,13 @@ def test_assemble_sample_uses_curated_narratives(tmp_path):
     path = asyncio.run(assemble_sample_report(BankingProduct(), ProductTier.insight,
                                               output_dir=str(tmp_path)))
     assert os.path.exists(path)
+
+
+def test_limitations_frame_score_as_standalone_not_credit_rating():
+    """Fase 3: las Limitaciones encuadran el SDQ como fortaleza financiera standalone,
+    no un rating de crédito, sin soporte soberano ni techo país."""
+    from modules.banking_score.products import _LIMITATIONS_TEXT
+    t = _LIMITATIONS_TEXT.lower()
+    assert "standalone" in t
+    assert "no es un rating de crédito" in t
+    assert "soporte soberano" in t and "techo soberano" in t

@@ -1,5 +1,18 @@
 # Paridad Deep-Dive vs Fitch — Workstream
 
+## Fase 3 — Framing/procedencia en banca (2026-07-01)
+
+Portado de pensiones (que ya lo hacía). Capa de presentación — no muta scores.
+- **Encuadre del score** (`products._LIMITATIONS_TEXT`, sección Limitaciones de cada deep dive):
+  la calificación SDQ es **fortaleza financiera standalone** sobre dato público real; **NO es un
+  rating de crédito**, no mide probabilidad de incumplimiento, y **no incorpora soporte soberano,
+  importancia sistémica ni techo país** → no comparable con calificadoras internacionales. La escala
+  SDQ-AAA…D ordena fortaleza relativa dentro del sistema RD, no riesgo de crédito absoluto.
+- **`rating_scale.py`** docstring corregido (decía "10-tier credit rating system").
+- **Nota de encuadre al cerebro** (`narrative._build_section_context`, secciones overview) para que la
+  prosa AI no describa el score como rating crediticio.
+- +1 test. Suite banca verde, ruff limpio.
+
 ## Fase 2 — Pensiones: costo del ISA (2026-07-01)
 
 **Corrección del diagnóstico:** el audit inicial dijo "falso perfecto comisión≈0 → score 100 (guarda
