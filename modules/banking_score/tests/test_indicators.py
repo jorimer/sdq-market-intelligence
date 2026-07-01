@@ -338,17 +338,32 @@ class TestMargenFinanciero:
 
 
 class TestCostToIncome:
+    # Fitch-style: opex / pre-provision operating revenue, calibrated curve
+    # (40% → 100, 90% → 0, linear): score = (90 - raw) / 0.50, clamped.
     def test_healthy_bank(self, healthy_bank):
         r = calc_cost_to_income(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 5000/12000 = 41.67% → 100 - 41.67 = 58.33
-        assert r["score"] == pytest.approx(58.33, abs=0.1)
+        # 5000/12000 = 41.67% → (90 - 41.67) / 0.5 = 96.66
+        assert r["score"] == pytest.approx(96.66, abs=0.1)
 
     def test_very_efficient(self):
         d = BankingDataInput(gastos_operacionales=2_000, ingresos_operacionales=10_000)
         r = calc_cost_to_income(d)
-        # 20% → 100 - 20 = 80
-        assert r["score"] == pytest.approx(80.0, abs=0.1)
+        # 20% → (90 - 20) / 0.5 = 140 → clamped to 100
+        assert r["score"] == pytest.approx(100.0, abs=0.1)
+
+    def test_high_cost_not_pinned_to_zero(self):
+        # 85% cost-to-income (high but plausible) → (90 - 85) / 0.5 = 10, not ~15.
+        d = BankingDataInput(gastos_operacionales=8_500, ingresos_operacionales=10_000)
+        r = calc_cost_to_income(d)
+        assert r["score"] == pytest.approx(10.0, abs=0.1)
+
+    def test_witness_banreservas_no_longer_alarmist(self):
+        # Banreservas 9M-2024 Fitch-style ≈ 60.2% (vs the old SIB-def 78% → score ~22).
+        d = BankingDataInput(gastos_operacionales=44_347, ingresos_operacionales=73_695)
+        r = calc_cost_to_income(d)
+        assert r["raw"] == pytest.approx(60.2, abs=0.5)
+        assert r["score"] == pytest.approx(59.6, abs=1.0)  # was ~22 under 100-raw
 
 
 # ─── LIQUIDEZ ────────────────────────────────────────────────────

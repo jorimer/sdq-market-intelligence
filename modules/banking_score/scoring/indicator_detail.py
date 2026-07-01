@@ -54,7 +54,9 @@ INDICATOR_META: Dict[str, Dict[str, str]] = {
     "margen_financiero": {"label": "Margen de intermediación", "sub": "eficiencia", "unit": "%", "direction": "higher",
                           "que": "Margen de intermediación neto. Spread del negocio de intermediación."},
     "cost_to_income": {"label": "Eficiencia operativa (cost-to-income)", "sub": "eficiencia", "unit": "%", "direction": "lower",
-                       "que": "Gastos operativos / ingresos operativos (menor es mejor)."},
+                       "que": "Gastos operativos / ingreso operativo pre-provisión (margen "
+                              "financiero bruto + otros ingresos operacionales). Definición "
+                              "comparable a calificadoras internacionales; menor es mejor."},
     # Liquidez
     "liquidez_inmediata": {"label": "Liquidez inmediata", "sub": "liquidez", "unit": "%", "direction": "higher",
                            "que": "Caja y valores / pasivos de corto plazo."},
