@@ -7,11 +7,15 @@ imports — they depend on the contract type, not on each other.
 """
 from shared.contracts.macro_sector import (
     APP_SETTING_KEY,
+    INFLATION_SERIES_CODE,
+    INFLATION_SERIES_KEY,
     MacroFactor,
     MacroSectorContract,
+    load_inflation_series,
     load_macro_contract,
     sector_macro_exposure,
 )
 
-__all__ = ["APP_SETTING_KEY", "MacroFactor", "MacroSectorContract",
+__all__ = ["APP_SETTING_KEY", "INFLATION_SERIES_CODE", "INFLATION_SERIES_KEY",
+           "MacroFactor", "MacroSectorContract", "load_inflation_series",
            "load_macro_contract", "sector_macro_exposure"]

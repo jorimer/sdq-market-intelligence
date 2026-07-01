@@ -18,7 +18,12 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
     dims = rating.get("dimensions") or []
     ranked = [r for r in peers if r.get("overall_score") is not None]
     rank = next((i + 1 for i, r in enumerate(ranked) if r["slug"] == rating.get("slug")), None)
-    return {
+    # Retorno real (Fase 5): la dimensión rentabilidad puede traer raw_real + inflación
+    # (deflactada por BCRD). Se expone aparte para que la narrativa lea la magnitud real.
+    rdim = next((d for d in dims if d.get("key") == "rentabilidad"), None)
+    rent_real = (rdim or {}).get("raw_real")
+    infl = (rdim or {}).get("inflacion")
+    ctx: Dict[str, Any] = {
         "afp": rating.get("name"),
         "isa_score_relativo": rating.get("overall_score"),
         "coverage": rating.get("coverage"),
@@ -36,8 +41,14 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
         "direction": "mayor score = mejor POSICIÓN RELATIVA entre las AFP (no veredicto absoluto)",
         "source": "SIPEN — dato público real",
         "note": "Score de posición RELATIVA y PARCIAL: solvencia = brecha declarada (estados "
-                "financieros pendientes), bandas absolutas DIFERIDAS. Rentabilidad nominal.",
+                "financieros pendientes), bandas absolutas DIFERIDAS. El ISA puntúa sobre "
+                "rentabilidad NOMINAL; se reporta además la REAL (deflactada por inflación BCRD).",
     }
+    if rent_real is not None:
+        ctx["rentabilidad_nominal_pct"] = (rdim or {}).get("raw")
+        ctx["rentabilidad_real_pct"] = rent_real
+        ctx["inflacion_interanual_pct"] = infl
+    return ctx
 
 
 def pension_peer_context(

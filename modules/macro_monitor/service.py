@@ -745,6 +745,10 @@ def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     # Persist to a shared AppSetting so sector_intel can read the contract without
     # a cross-module import (it derives each sector's macro_exposure from it).
     _persist_macro_contract(db, contract_dict)
+    # Persist the BCRD inflation series too, so pension_intel can deflate its nominal
+    # returns into real terms without importing this module (the contract carries only
+    # the latest value; deflating a trajectory needs the full history).
+    _persist_inflation_series(db, grouped)
 
     payload = {
         "period": period,
@@ -782,6 +786,28 @@ def _persist_macro_contract(db: Session, contract: Dict[str, Any]) -> None:
     payload = json.dumps(contract)
     if row is None:
         db.add(AppSetting(key=APP_SETTING_KEY, value=payload, is_secret=False))
+    else:
+        row.value = payload
+    db.commit()
+
+
+def _persist_inflation_series(db: Session, grouped: Dict[str, List[tuple]]) -> None:
+    """Upsert the BCRD year-over-year inflation series into a shared AppSetting so
+    pension_intel can deflate nominal returns without importing this module. No-op if
+    the series is absent (never writes an empty payload)."""
+    import json
+
+    from shared.contracts import INFLATION_SERIES_CODE, INFLATION_SERIES_KEY
+    from shared.settings.models import AppSetting
+
+    obs = grouped.get(INFLATION_SERIES_CODE) or []
+    series = [[p, v] for p, v in obs if v is not None]
+    if not series:
+        return
+    row = db.query(AppSetting).filter(AppSetting.key == INFLATION_SERIES_KEY).first()
+    payload = json.dumps(series)
+    if row is None:
+        db.add(AppSetting(key=INFLATION_SERIES_KEY, value=payload, is_secret=False))
     else:
         row.value = payload
     db.commit()

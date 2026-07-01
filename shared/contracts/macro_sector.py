@@ -21,6 +21,13 @@ from typing import Any, Dict, List, Optional
 # cross-module consumers (sector_intel) read it without importing the producer.
 APP_SETTING_KEY = "macro_sector_contract"
 
+# AppSetting key + series code for the BCRD year-over-year inflation SERIES, persisted
+# by macro_monitor alongside the contract so consumers (pension_intel) can deflate a
+# nominal series into real terms without importing the producer or touching mm_series.
+# The contract carries only the latest inflation value; this carries the full history.
+INFLATION_SERIES_KEY = "macro_inflation_series"
+INFLATION_SERIES_CODE = "bcrd.inflacion.inflacion.interanual"
+
 
 def load_macro_contract(db) -> Dict[str, Any]:
     """Read the latest macro→sectorial contract from the shared AppSetting
@@ -42,6 +49,28 @@ def load_macro_contract(db) -> Dict[str, Any]:
         return json.loads(row.value)
     except (ValueError, TypeError):
         return {}
+
+
+def load_inflation_series(db) -> Dict[str, float]:
+    """Read the BCRD year-over-year inflation series (``{period: value}``) from the
+    shared AppSetting written by ``macro_monitor``. Empty dict if none yet.
+
+    Lets a consumer (pension_intel) deflate a nominal series into real terms without
+    importing macro_monitor or reading ``mm_series`` directly. Never fabricates: sin
+    serie → ``{}`` (el consumidor deja el dato en nominal, declarado)."""
+    import json
+
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == INFLATION_SERIES_KEY).first()
+    if row is None or not row.value:
+        return {}
+    try:
+        data = json.loads(row.value)
+    except (ValueError, TypeError):
+        return {}
+    # Stored as [[period, value], ...]; drop null values.
+    return {str(p): float(v) for p, v in data if v is not None}
 
 # Allowed direction / magnitude values (kept as plain strings for JSON transport).
 FAVORABLE = "favorable"

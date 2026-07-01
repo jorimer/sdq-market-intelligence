@@ -511,8 +511,12 @@ THIN_TEMPLATES = {
         "escala y costo son dato SIPEN real; la SOLVENCIA es una BRECHA declarada (sin estados "
         "financieros) — dilo con claridad y NO inventes cifras de solvencia.\n\n"
         "COBERTURA: el 'coverage' (< 1) indica que el índice es PARCIAL; nómbralo si es material. "
-        "RENTABILIDAD NOMINAL: léela ajustada por riesgo y vs su promedio, no como ranking del mes. "
-        "Usa solo cifras del contexto; si una relación no está precalculada, exprésala sin número."
+        "RENTABILIDAD: si el contexto trae 'rentabilidad_real_pct' + 'inflacion_interanual_pct', "
+        "lee la rentabilidad en términos REALES (lo que gana el afiliado sobre la inflación), no "
+        "solo la nominal — es la magnitud económica que importa; cita nominal e inflación como "
+        "respaldo y usa 'trayectoria_rentabilidad_real' para la evolución. Léela vs su promedio, "
+        "no como ranking del mes. Usa solo cifras del contexto; si una relación no está "
+        "precalculada, exprésala sin número."
     ),
     "pension_cartera": (
         "Lee la COMPOSICIÓN DE LA CARTERA DE INVERSIONES de los fondos de pensiones "

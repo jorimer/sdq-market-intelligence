@@ -44,7 +44,9 @@ from modules.pension_intel.ai_context import (
 )
 from modules.pension_intel.models.models import PensionSnapshot
 from modules.pension_intel.scoring.isa import compute_isa
+from modules.pension_intel.scoring.real_return import deflate_trend, fisher_real, inflation_at
 from modules.pension_intel.service import build_system_pulse
+from shared.contracts import load_inflation_series
 from shared.data.sipen_client import afp_catalog
 
 logger = logging.getLogger("sdq.products.pension")
@@ -66,7 +68,11 @@ _LIMITATIONS = (
     "declarada y aún no entra al índice, por lo que la cobertura es inferior al 100% y las "
     "bandas absolutas de solidez (Sólida/Frágil) están diferidas hasta disponer de ella. "
     "El score ordena por POSICIÓN RELATIVA entre AFP con dato suficiente, no certifica "
-    "solvencia. La rentabilidad es nominal. No es un rating crediticio ni grado-Basilea."
+    "solvencia. La rentabilidad se expresa en términos REALES (deflactada por la inflación "
+    "interanual del BCRD) además del nominal; el ISA puntúa sobre el nominal —deflactar por "
+    "una inflación común a todas las AFP es neutral a la posición relativa—. No es un rating "
+    "crediticio ni grado-Basilea. El ajuste por riesgo (retorno por unidad de volatilidad) "
+    "está diferido."
 )
 _NO_DATA = (
     "No hay dato suficiente de SIPEN para publicar este nivel: el producto está cableado "
@@ -268,6 +274,42 @@ def _trend_table(trend: Optional[List[tuple]]) -> Optional[tuple]:
     return ("Trayectoria de rentabilidad nominal (SIPEN)", rows)
 
 
+def _real_trend_table(trend_real: Optional[List[tuple]]) -> Optional[tuple]:
+    """Trayectoria de rentabilidad REAL (deflactada por inflación BCRD): nominal vs real,
+    muestreo anual + último punto. Fase 5."""
+    if not trend_real or len(trend_real) < 2:
+        return None
+    by_year: Dict[str, tuple] = {}
+    for p, nom, real in trend_real:
+        by_year[str(p)[:4]] = (p, nom, real)
+    pts = sorted(by_year.values())
+    if trend_real[-1] not in pts:
+        pts.append(trend_real[-1])
+    rows = [["Período", "Nominal (anual)", "Real (deflact. BCRD)"]]
+    for p, nom, real in pts[-10:]:
+        rows.append([p, f"{nom:.2f}%", f"{real:+.2f}%"])
+    return ("Trayectoria de rentabilidad real vs nominal (SIPEN · BCRD)", rows)
+
+
+def _apply_real_return(rating: Dict[str, Any], trend: List[tuple],
+                       infl: Dict[str, float]) -> Dict[str, Any]:
+    """Enriquece la dimensión rentabilidad de *rating* con su retorno REAL (raw_real +
+    inflación) y devuelve la trayectoria real. Presentación — NO toca score/ISA.
+    Deflactar por inflación común es neutral al min-max entre pares."""
+    extra: Dict[str, Any] = {}
+    dim = next((d for d in rating.get("dimensions") or [] if d.get("key") == "rentabilidad"), None)
+    if dim and isinstance(dim.get("raw"), (int, float)):
+        i = inflation_at(infl, rating.get("period") or "")
+        if i is not None:
+            dim["raw_real"] = fisher_real(dim["raw"], i)
+            dim["inflacion"] = round(i, 2)
+            extra["inflacion_actual"] = round(i, 2)
+    tr = deflate_trend(trend, infl)
+    if tr:
+        extra["trend_real"] = tr
+    return extra
+
+
 def _cartera_table(cartera: Optional[Dict[str, Any]]) -> Optional[tuple]:
     """Composición de la cartera del sistema por sub-sector/emisor (top-level), RD$ MM + %."""
     if not cartera or not cartera.get("found"):
@@ -432,10 +474,16 @@ class PensionProduct:
         if rating is None or rating.get("overall_score") is None:
             return ProductSnapshot(tier=tier, period=period or "—",
                                    payload={"has_data": False}, entity_name=entity)
+        trend = _rentabilidad_trend(db, scope, n=60)  # trayectoria mensual (hasta 5 años)
         payload: Dict[str, Any] = {
-            "has_data": True, "rating": rating, "peers": results,
-            "trend": _rentabilidad_trend(db, scope, n=60),  # trayectoria real (hasta 5 años)
+            "has_data": True, "rating": rating, "peers": results, "trend": trend,
         }
+        # Retorno real (Fase 5): deflacta la rentabilidad por la inflación interanual del
+        # BCRD (serie del AppSetting compartido; sin importar macro). Presentación — NO
+        # muta el ISA (deflactar por inflación común es neutral al min-max entre pares).
+        infl = load_inflation_series(db)
+        if infl:
+            payload.update(_apply_real_return(rating, trend, infl))
         if tier == ProductTier.deep_dive:
             payload["cartera"] = _system_cartera(db)  # contexto de riesgo (dónde invierte el fondo)
         return ProductSnapshot(
@@ -528,6 +576,11 @@ class PensionProduct:
         trend = snapshot.payload.get("trend") or []
         if trend:
             base_ctx["trayectoria_rentabilidad"] = [{"periodo": p, "valor": v} for p, v in trend[-12:]]
+        # Trayectoria REAL (deflactada BCRD, Fase 5) cuando hay serie de inflación.
+        trend_real = snapshot.payload.get("trend_real") or []
+        if trend_real:
+            base_ctx["trayectoria_rentabilidad_real"] = [
+                {"periodo": p, "nominal": nom, "real": real} for p, nom, real in trend_real[-12:]]
         cartera = snapshot.payload.get("cartera")
         out: Dict[str, str] = {}
         for section in sections:
@@ -578,6 +631,7 @@ class PensionProduct:
         tables: List = []
         charts: List = []
         headline: Optional[str] = None
+        subtitle: Optional[str] = None
         payload = snapshot.payload or {}
         if tier == ProductTier.pulse and payload.get("has_data"):
             h = payload.get("headline") or {}
@@ -618,10 +672,23 @@ class PensionProduct:
                 charts.append({"title": "Dimensiones del ISA con dato (score 0-100)",
                                "items": present})
             ov = rating.get("overall_score")
+            # Retorno real (Fase 5): el titular lleva la rentabilidad REAL (deflactada por
+            # inflación BCRD) — la magnitud económica que importa al afiliado.
+            rdim = next((d for d in rating.get("dimensions") or []
+                         if d.get("key") == "rentabilidad"), None)
+            real = (rdim or {}).get("raw_real")
             if isinstance(ov, (int, float)):
                 headline = f"ISA {ov:.0f}/100 · {rating.get('name', 'AFP')} (relativo, parcial)"
-            # Profundidad: pares (números reales), trayectoria, y cartera (deep dive).
-            for tbl in (_peer_table(payload.get("peers")), _trend_table(payload.get("trend"))):
+                if isinstance(real, (int, float)):
+                    headline += f" · rentab. real {real:+.1f}%"
+            # Caveat al frente (Fase 5): sube el asterisco del §5 a la portada.
+            subtitle = ("Lectura RELATIVA y PARCIAL · solvencia (estados financieros) aún "
+                        "diferida · rentabilidad expresada en términos reales (deflactada "
+                        "por inflación interanual del BCRD)")
+            # Profundidad: pares, trayectoria (real vs nominal si hay inflación) y cartera.
+            trend_tbl = (_real_trend_table(payload.get("trend_real"))
+                         or _trend_table(payload.get("trend")))
+            for tbl in (_peer_table(payload.get("peers")), trend_tbl):
                 if tbl:
                     tables.append(tbl)
             if tier == ProductTier.deep_dive:
@@ -632,7 +699,7 @@ class PensionProduct:
             sector_key=SECTOR_KEY, display_name=display, title=title,
             period=snapshot.period, narratives=narratives,
             section_titles=_SECTION_TITLES, tables=tables, charts=charts, headline=headline,
-            subtitle=None, watermark=level.watermark, sample=sample,
+            subtitle=subtitle, watermark=level.watermark, sample=sample,
             output_dir=output_dir, fmt=fmt)
 
 
