@@ -40,10 +40,16 @@ Vía SIMBAD público (`simbad.sb.gob.do`, dataset 34 `FINANCIERO`, sin auth). Co
 - **Testigos vs Fitch:** Banreservas 60.2% (Fitch 64.5% ✓) · BDI 53.8% (hoy publicamos 80.85% → corrección 27pp).
 - **Distribución real del sistema** (n=43): p10=36.2 · mediana=61.7 · p90=91.0.
 - **Curva calibrada propuesta:** lineal `raw 36%→score 100` … `91%→score 0` (clamp). Reemplaza el `100−raw`.
-- **Impacto en tier (testigos):**
-  - Banreservas: cti score 22→56, overall 88.0→**89.3** (firma dentro de SDQ-AA).
-  - BDI: cti score 19→68, overall 89.3→**91.1** → **graduación SDQ-AA → SDQ-AA+**.
-- Confirma que Fase 1 NO es cosmética: cambia al menos un tier.
+- **Impacto en tier (testigos, contra baseline REAL de prod, período 2026-03-31):**
+  - Banreservas: cti 76.73 (score 23.3) → 60.2% (score 59.6) · overall **85.2 → ~86.6** (sigue SDQ-AA).
+  - BDI: cti 79.06 (score 20.9) → 53.8% (score 72.4) · overall **85.3 → ~87.2** (sigue SDQ-AA).
+  - ⚠️ Corrección: una estimación previa usó los scores del PDF (88.0/89.3, corte viejo) y proyectaba
+    "BDI → SDQ-AA+". Con el dato real de prod (85.x) NINGÚN testigo gradúa. El diff exacto de las ~40
+    afectadas lo da el batch post-deploy.
+- **Cambiarias NO afectadas:** su `cost_to_income` es N/D (sin estado de resultados) → la curva no las
+  toca. El "follow-up EIC" queda descartado como no-issue (verificado en prod: Agc Damos, Quezada).
+- Afectados ≈ 40 entidades con estado de resultados; suben ~+1 a +2 pts; los pegados a un umbral
+  (Popular 89.0, Scotiabank 83.2, varias AAyP/BAC ~80) cruzan tier hacia arriba — corrección esperada.
 
 ## Plan de fases
 
@@ -72,11 +78,11 @@ Leyenda: 🔍 = verificación en prod / fuente pública (bloqueante · read-only
   342 passed, ruff limpio.
 - ⏳ **Relabel del informe:** no requiere código — la narrativa es AI-generada; con el valor en ~60%
   el "media regional 55-65%" pasa a ser legítimo automáticamente.
-- ⏳ **Pre-deploy (pendiente):** re-batch contra dato real, diff de tiers de las ~43 entidades,
-  verificar Banreservas (→89.3, SDQ-AA) y BDI (→91.1, **SDQ-AA+**). La validación peso-a-peso contra
-  el API SIB en vivo ocurre en este gate (los tests locales usan fixtures modelados de SIMBAD).
-- ⚠️ **Follow-up:** las cambiarias (ruta EIC) aún no reciben el componente real; su `cost_to_income`
-  se beneficia de la curva nueva pero su valor viene de otro mapeo — corregir en un paso aparte.
+- ⏳ **Deploy (en curso):** merge #399 → re-SYNC banca en prod (re-ingesta componentes reales) →
+  re-score → diff de tiers vs baseline capturado. Validación peso-a-peso contra el API SIB en vivo
+  ocurre en este gate. Testigos esperados: Banreservas 85.2→~86.6, BDI 85.3→~87.2 (ambos SDQ-AA).
+- ✅ **Cambiarias (EIC): NO afectadas** (verificado en prod) — su `cost_to_income` es N/D, la curva no
+  las toca. No hay follow-up pendiente aquí.
 
 ### Fase 2 — Pensiones: guarda de integridad de comisión ⚠️
 - Extender la guarda para rechazar valores económicamente imposibles (comisión ≈ 0 → N/D, se cae la
