@@ -36,6 +36,7 @@ from modules.banking_score.reports.narrative import generate_named_narratives
 from modules.banking_score.reports.pdf_generator import generate_pdf_report
 from modules.banking_score.scoring.amplitude import entity_trajectories, period_percentiles
 from modules.banking_score.scoring.market_concentration import compute_market_concentration
+from modules.banking_score.scoring.sensitivity import sensitivity_table
 from modules.banking_score.scoring.system_aggregate import system_pulse_aggregate
 
 SECTOR_KEY = "banking"
@@ -390,13 +391,19 @@ class BankingProduct:
         # entidades con un solo período o sin pares.
         scoring_result["trayectorias"] = entity_trajectories(db, bank)
         scoring_result["percentiles"] = period_percentiles(db, bank, rr.period_end)
-        # Entorno Operativo (Fase 4): telón macro del BCRD vía el contrato compartido
-        # (sin importar macro_monitor). Solo los factores con dato real; si no hay
-        # contrato, se omite la sección (no se fabrica). Solo el Deep Dive lo consume.
-        macro = load_macro_contract(db)
-        factors = [f for f in (macro.get("factors") or []) if f.get("direction") != "n/d"]
-        if factors:
-            scoring_result["entorno_macro"] = {"period": macro.get("period"), "factors": factors}
+        entity_type = bank.bank_type.value if bank.bank_type else None
+        # Entorno Operativo + Sensibilidades (Fase 4) son amplitud EXCLUSIVA del Deep Dive
+        # (Insight se queda con trayectoria+percentil). Se gatean por nivel aquí.
+        if tier == ProductTier.deep_dive:
+            # Telón macro del BCRD vía el contrato compartido (sin importar macro_monitor).
+            # Solo factores con dato real; si no hay contrato, se omite (no se fabrica).
+            macro = load_macro_contract(db)
+            factors = [f for f in (macro.get("factors") or []) if f.get("direction") != "n/d"]
+            if factors:
+                scoring_result["entorno_macro"] = {"period": macro.get("period"), "factors": factors}
+            # Sensibilidades: qué sube / qué baja el score, con umbral en valor crudo.
+            scoring_result["sensibilidades"] = sensitivity_table(
+                scoring_result["indicators"], entity_type)
         conc = compute_market_concentration(db, rr.period_end, "activos")
         peer_block = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
                        "cr10": conc["cr10"], "hhi": conc["hhi"]} if conc.get("available") else None)

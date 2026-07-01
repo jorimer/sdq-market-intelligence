@@ -589,6 +589,60 @@ def _build_macro_table(entorno_macro: Dict, styles) -> List:
     return elements
 
 
+def _sensitivity_rows(rows: List[Dict], up: bool) -> List[List[str]]:
+    out: List[List[str]] = []
+    for r in rows:
+        delta = r.get("delta_overall", 0)
+        out.append([
+            r.get("label", r.get("indicador", "")),
+            f"{r.get('raw_actual', '')}",
+            r.get("umbral_fmt", ""),
+            str(r.get("banda_objetivo", "")).capitalize(),
+            f"{delta:+.1f}",
+        ])
+    return out
+
+
+def _build_sensitivity_table(sens: Dict, styles) -> List:
+    """Tabla de sensibilidades simétrica (Fase 4): palancas al alza / riesgos a la baja,
+    con umbral en valor crudo e impacto en el score global. Opt-in (Deep Dive)."""
+    up = sens.get("palancas_alza") or []
+    down = sens.get("riesgos_baja") or []
+    if not up and not down:
+        return []
+    elements: List = [Paragraph("Sensibilidad del Score — Palancas y Riesgos", styles["SDQHeading"])]
+    header = ["Indicador", "Actual", "Umbral", "Banda→", "Δ Score"]
+    col_widths = [2.2 * inch, 0.9 * inch, 1.1 * inch, 1.1 * inch, 0.9 * inch]
+
+    def _block(subtitle: str, rows: List[List[str]]):
+        if not rows:
+            return
+        elements.append(Paragraph(subtitle, styles["SDQSubHeading"]))
+        data = [header] + rows
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 0.12 * inch))
+
+    _block("Palancas al alza — mejorar a este umbral sube el score", _sensitivity_rows(up, True))
+    _block("Riesgos a la baja — deteriorarse a este umbral hace perder banda", _sensitivity_rows(down, False))
+    elements.append(Paragraph(
+        "Umbral = valor crudo del indicador que lleva su score a la frontera de banda "
+        "indicada; Δ Score = cambio resultante en el score global (recomputado con la "
+        "metodología, pesos por tipo de entidad). Lectura de sensibilidad, no proyección.",
+        styles["SDQSmall"]))
+    return elements
+
+
 def _order_narratives(narratives: Dict[str, str],
                       sections: Optional[List[str]]) -> Dict[str, str]:
     """Filtra/ordena las narrativas por `sections` (manifiesto del nivel).
@@ -711,6 +765,14 @@ async def generate_pdf_report(
         macro_els = _build_macro_table(entorno_macro, styles)
         if macro_els:
             body.extend(macro_els)
+            body.append(Spacer(1, 0.3 * inch))
+
+    # 3e. Sensibilidad del score — palancas al alza / riesgos a la baja (opt-in; Deep Dive).
+    sensibilidades = scoring_result.get("sensibilidades")
+    if sensibilidades:
+        sens_els = _build_sensitivity_table(sensibilidades, styles)
+        if sens_els:
+            body.extend(sens_els)
             body.append(Spacer(1, 0.3 * inch))
 
     # 4. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`). Un único
