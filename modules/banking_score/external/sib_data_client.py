@@ -1151,18 +1151,26 @@ class SIBDataClient:
         period_start: str = "2021-01",
         period_end: str = "",
         on_progress=None,
+        skip_carteras: bool = False,
     ) -> Dict[str, List[Dict]]:
         """Extract just one tipoEntidad — enables incremental, resumable backfills
         (write each type as it completes instead of one 20-min all-or-nothing pass).
 
         *on_progress(msg)* is forwarded to the carteras loop so the caller can keep
         the sync heartbeat fresh during the long per-quarter aggregation.
+
+        *skip_carteras* omits the expensive per-quarter loan-cube aggregation (the
+        504s-prone long pole). Use it when re-ingesting only the income/balance-derived
+        fields (e.g. a cost-to-income recalibration): the carteras-derived metrics
+        (hhi_sectorial_raw, cartera_total, suma_top10) are simply not emitted, so the
+        upsert preserves their existing values.
         """
         saved = list(self._discovered_tipo_codes)
         self._discovered_tipo_codes = [tipo]  # truthy → bulk skips re-discovery
         try:
             return self.extract_all_entities_bulk(
-                period_start=period_start, period_end=period_end, on_progress=on_progress)
+                period_start=period_start, period_end=period_end,
+                on_progress=on_progress, skip_carteras=skip_carteras)
         finally:
             self._discovered_tipo_codes = saved
 
@@ -1171,6 +1179,7 @@ class SIBDataClient:
         period_start: str = "2021-01",
         period_end: str = "",
         on_progress=None,
+        skip_carteras: bool = False,
     ) -> Dict[str, List[Dict]]:
         """
         BULK ETL: fetch data from ALL SIB endpoints using tipoEntidad filter
@@ -1243,9 +1252,14 @@ class SIBDataClient:
         # carteras/creditos is a huge loan-level cube; the full range at once 504s.
         # We aggregate sector HHI per (entity, quarter) by streaming ONE quarter at a
         # time and discarding the raw rows (memory-safe). Result keyed by short_name.
-        logger.info("  Computing carteras metrics from carteras/creditos (per-quarter)...")
-        carteras_metrics = self._compute_carteras_metrics(period_start, period_end, on_progress=on_progress)
-        logger.info(f"    → carteras metrics for {len(carteras_metrics)} entities")
+        if skip_carteras:
+            logger.info("  Skipping carteras/creditos (skip_carteras=True) — the "
+                        "carteras-derived metrics are left untouched (upsert preserves them).")
+            carteras_metrics: Dict[str, Dict] = {}
+        else:
+            logger.info("  Computing carteras metrics from carteras/creditos (per-quarter)...")
+            carteras_metrics = self._compute_carteras_metrics(period_start, period_end, on_progress=on_progress)
+            logger.info(f"    → carteras metrics for {len(carteras_metrics)} entities")
         loans: List[Dict] = []  # raw loan rows are never retained; metrics injected post-map
 
         all_data = income + balance + indicators + solvency + morosidad_estresada + riesgo_credito

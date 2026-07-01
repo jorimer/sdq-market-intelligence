@@ -51,6 +51,23 @@ Vía SIMBAD público (`simbad.sb.gob.do`, dataset 34 `FINANCIERO`, sin auth). Co
 - Afectados ≈ 40 entidades con estado de resultados; suben ~+1 a +2 pts; los pegados a un umbral
   (Popular 89.0, Scotiabank 83.2, varias AAyP/BAC ~80) cruzan tier hacia arriba — corrección esperada.
 
+## Fase 1b — Fix de infra que bloqueaba el deploy (2026-07-01)
+
+El primer `force` backfill en prod falló tras 1.9h con un bug **pre-existente** (ajeno al cambio de
+cost_income): `NoReferencedTableError: FK 'banking_data.uploaded_by' → 'users'`. La ruta del worker
+Celery no importaba el modelo `User`, así que la tabla `users` no estaba en `Base.metadata` al escribir.
+Prod quedó intacto (la transacción no persistió).
+
+Fix (Opción B — mínimo + optimización):
+- **FK:** `sib_sync.py` importa `shared.auth.models` (registra `users`). Verificado: `create_all`
+  resuelve el FK desde la ruta del worker.
+- **`skip_carteras`:** flag nuevo a través de `extract_one_tipo`/`extract_all_entities_bulk` →
+  `run_backfill` → `start_backfill_background` → task Celery → endpoints `/sib-sync` y `/sib-backfill`.
+  Omite el cubo de carteras (504s, el cuello de botella que falló); re-ingesta income/balance/
+  indicadores/solvencia y **preserva** las métricas de carteras existentes (el upsert solo escribe
+  no-None). Re-ingest de minutos en vez de ~2h, y no vuelve a tocar el paso frágil.
+- Re-run: `force=true · tipos=BM,AAP,BAC,CC · skip_carteras=true`. Suite 342 passed, ruff limpio.
+
 ## Plan de fases
 
 Leyenda: 🔍 = verificación en prod / fuente pública (bloqueante · read-only) ·

@@ -58,7 +58,7 @@ class _StubClient:
     def get_working_tipos(self):
         return ["BM"]
 
-    def extract_one_tipo(self, tipo, period_start="2021-01", on_progress=None):
+    def extract_one_tipo(self, tipo, period_start="2021-01", on_progress=None, skip_carteras=False):
         if on_progress:  # exercise the heartbeat callback path
             on_progress("carteras 2024-12 (1/1)")
         return self.extract_all_entities_bulk(period_start=period_start)
@@ -355,7 +355,7 @@ def test_only_tipos_targeted_reingest_skips_simbad(Session, monkeypatch):
         def get_working_tipos(self):
             return ["BM", "BAC", "AAP", "AC"]
 
-        def extract_one_tipo(self, tipo, period_start="2021-01", on_progress=None):
+        def extract_one_tipo(self, tipo, period_start="2021-01", on_progress=None, skip_carteras=False):
             _MultiTipoStub.seen.append(tipo)
             return self.extract_all_entities_bulk(period_start=period_start)
 

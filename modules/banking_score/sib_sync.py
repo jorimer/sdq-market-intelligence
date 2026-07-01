@@ -21,6 +21,11 @@ from sqlalchemy.orm import Session
 
 from shared.database.session import SessionLocal
 from shared.settings.models import AppSetting
+# Register the 'users' table in Base.metadata: BankingData.uploaded_by (and
+# RatingResult/RatingAction.*_by) carry a ForeignKey("users.id"). The Celery worker
+# doesn't import the auth routers, so without this the backfill's DB write fails with
+# NoReferencedTableError ('users' not found). See docs/DEEP_DIVE_FITCH_PARITY.md.
+import shared.auth.models  # noqa: F401
 from modules.banking_score.external.sib_data_client import (
     EIC_TIPOS,
     SIB_ENTITY_CODES,
@@ -277,7 +282,8 @@ def _friendly_error(exc: Exception) -> str:
 
 
 def run_backfill(force: bool = False, period_start: str = "2021-01",
-                 only_tipos: Optional[List[str]] = None) -> Dict:
+                 only_tipos: Optional[List[str]] = None,
+                 skip_carteras: bool = False) -> Dict:
     """Replace synthetic data with real SIB data (quarter-end periods only).
 
     Synchronous — callers run it in a background thread. Drives the DB-backed
@@ -287,6 +293,13 @@ def run_backfill(force: bool = False, period_start: str = "2021-01",
     types — a targeted re-ingest that skips the slow BM carteras stream. When it
     excludes the cambiaria types (ARC/AC), the SIMBAD cambiaria fallback is
     skipped too.
+
+    *skip_carteras* omits the per-quarter loan-cube aggregation (the 504s-prone
+    long pole). The income/balance/indicators/solvency fields are re-ingested
+    fresh; the carteras-derived fields (hhi_sectorial_raw, cartera_total,
+    suma_top10) are left as-is (the upsert only writes non-None fields). Use it
+    for a fast, robust re-ingest that only needs the income statement (e.g. a
+    cost-to-income recalibration).
     """
     db = SessionLocal()
     try:
@@ -373,7 +386,8 @@ def run_backfill(force: bool = False, period_start: str = "2021-01",
                 _write_status(db, is_running=True,
                               phase=f"extrayendo {_tipo} ({_i}/{len(tipos)}) · {msg}")
 
-            bulk = client.extract_one_tipo(tipo, period_start=period_start, on_progress=_progress)
+            bulk = client.extract_one_tipo(tipo, period_start=period_start,
+                                           on_progress=_progress, skip_carteras=skip_carteras)
             unmatched += bulk.get("_unmatched", [])
             entity_meta = bulk.get("_entity_meta", {})  # cambiarias: live dynamic catalog
             for short_name, periods in bulk.items():
@@ -520,11 +534,13 @@ def run_backfill(force: bool = False, period_start: str = "2021-01",
 
 
 def start_backfill_background(force: bool = False,
-                              only_tipos: Optional[List[str]] = None) -> Dict:
+                              only_tipos: Optional[List[str]] = None,
+                              skip_carteras: bool = False) -> Dict:
     """Start the backfill: via the Celery worker when enabled (survives web
     restarts, auto-retries on crash), otherwise an in-process thread.
 
     *only_tipos* restricts the run to the given entity types (targeted re-ingest).
+    *skip_carteras* omits the slow per-quarter loan-cube aggregation (see run_backfill).
     """
     from shared.config.settings import settings
 
@@ -538,13 +554,14 @@ def start_backfill_background(force: bool = False,
     if settings.USE_CELERY and settings.REDIS_URL:
         try:
             from modules.banking_score.tasks import sib_backfill_task
-            sib_backfill_task.delay(force=force, only_tipos=only_tipos)
+            sib_backfill_task.delay(force=force, only_tipos=only_tipos, skip_carteras=skip_carteras)
             return {"status": "started", "via": "celery", "message": msg}
         except Exception:  # noqa: BLE001 — fall back to thread if broker unavailable
             logger.exception("No se pudo encolar en Celery; usando hilo")
 
     threading.Thread(target=run_backfill,
-                     kwargs={"force": force, "only_tipos": only_tipos}, daemon=True).start()
+                     kwargs={"force": force, "only_tipos": only_tipos,
+                             "skip_carteras": skip_carteras}, daemon=True).start()
     return {"status": "started", "via": "thread", "message": msg}
 
 
