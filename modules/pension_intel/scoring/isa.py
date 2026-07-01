@@ -138,9 +138,11 @@ def _nav_series(db: Session, slug: str) -> List[Tuple[str, float]]:
     return [(r.period, r.value) for r in reversed(rows)]
 
 
-def _realized_vol(db: Session, slug: str) -> Optional[Tuple[str, float]]:
-    """Annualized realized volatility (%) of the AFP's monthly NAV returns, as ``(as_of
-    period, sigma_pct)``. None if too few clean months (never a spurious σ)."""
+def realized_risk_stats(db: Session, slug: str) -> Optional[Dict[str, Any]]:
+    """Realized risk/return stats from the AFP's monthly NAV series over the window:
+    ``{as_of, vol_pct, annual_return_pct, periods, n_returns}``. Annualized (σ×√12,
+    mean×12), in percent. None if too few clean months (never spurious). The ``riesgo``
+    dimension uses ``vol_pct``; the Sharpe narrative (products) uses the return + periods."""
     import statistics
 
     series = _nav_series(db, slug)
@@ -151,8 +153,20 @@ def _realized_vol(db: Session, slug: str) -> Optional[Tuple[str, float]]:
     rets = [r for r in rets if abs(r) <= _VOL_GUARD]
     if len(rets) < _VOL_MIN_RETURNS:
         return None
-    sigma_pct = statistics.pstdev(rets) * (12 ** 0.5) * 100.0
-    return (series[-1][0], round(sigma_pct, 4))
+    return {
+        "as_of": series[-1][0],
+        "vol_pct": round(statistics.pstdev(rets) * (12 ** 0.5) * 100.0, 4),
+        "annual_return_pct": round(statistics.mean(rets) * 12 * 100.0, 4),
+        "periods": [p for p, _ in series],
+        "n_returns": len(rets),
+    }
+
+
+def _realized_vol(db: Session, slug: str) -> Optional[Tuple[str, float]]:
+    """Annualized realized volatility (%) of the AFP's monthly NAV returns, as ``(as_of
+    period, sigma_pct)`` — the raw for the ``riesgo`` dimension. None if too few months."""
+    stats = realized_risk_stats(db, slug)
+    return (stats["as_of"], stats["vol_pct"]) if stats else None
 
 
 def _to_rd(value: float, unit: Optional[str]) -> float:

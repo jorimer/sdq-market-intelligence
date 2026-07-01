@@ -47,6 +47,14 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
                 "mensuales del valor cuota, ventana ~30m); menor σ = más consistente. La σ es baja "
                 "en parte por valoración a costo amortizado de la cartera (caveat, no sobre-leer).",
     }
+    # Retorno ajustado por riesgo (Diferido B): la dimensión riesgo puede traer el Sharpe
+    # (retorno anualizado − TPM) / σ — lectura para la narrativa (no es el score).
+    riskdim = next((d for d in dims if d.get("key") == "riesgo"), None)
+    if riskdim and riskdim.get("sharpe") is not None:
+        ctx["riesgo_volatilidad_pct"] = riskdim.get("raw")
+        ctx["retorno_anualizado_pct"] = riskdim.get("annual_return_pct")
+        ctx["tasa_libre_tpm_pct"] = riskdim.get("risk_free_pct")
+        ctx["sharpe"] = riskdim.get("sharpe")
     if rent_real is not None:
         ctx["rentabilidad_nominal_pct"] = (rdim or {}).get("raw")
         ctx["rentabilidad_real_pct"] = rent_real

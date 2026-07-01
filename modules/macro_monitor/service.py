@@ -749,6 +749,9 @@ def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     # returns into real terms without importing this module (the contract carries only
     # the latest value; deflating a trajectory needs the full history).
     _persist_inflation_series(db, grouped)
+    # Persist the BCRD policy rate (TPM) series too, so pension_intel can use it as the
+    # risk-free rate for the Sharpe ratio (ISA riesgo narrative) without importing macro.
+    _persist_tpm_series(db, grouped)
 
     payload = {
         "period": period,
@@ -808,6 +811,28 @@ def _persist_inflation_series(db: Session, grouped: Dict[str, List[tuple]]) -> N
     payload = json.dumps(series)
     if row is None:
         db.add(AppSetting(key=INFLATION_SERIES_KEY, value=payload, is_secret=False))
+    else:
+        row.value = payload
+    db.commit()
+
+
+def _persist_tpm_series(db: Session, grouped: Dict[str, List[tuple]]) -> None:
+    """Upsert the BCRD policy rate (TPM) series into a shared AppSetting so pension_intel
+    can use it as the risk-free rate (Sharpe) without importing this module. No-op if the
+    series is absent (never writes an empty payload)."""
+    import json
+
+    from shared.contracts import TPM_SERIES_CODE, TPM_SERIES_KEY
+    from shared.settings.models import AppSetting
+
+    obs = grouped.get(TPM_SERIES_CODE) or []
+    series = [[p, v] for p, v in obs if v is not None]
+    if not series:
+        return
+    row = db.query(AppSetting).filter(AppSetting.key == TPM_SERIES_KEY).first()
+    payload = json.dumps(series)
+    if row is None:
+        db.add(AppSetting(key=TPM_SERIES_KEY, value=payload, is_secret=False))
     else:
         row.value = payload
     db.commit()

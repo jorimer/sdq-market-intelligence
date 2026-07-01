@@ -9,13 +9,17 @@ from shared.contracts.macro_sector import (
     APP_SETTING_KEY,
     INFLATION_SERIES_CODE,
     INFLATION_SERIES_KEY,
+    TPM_SERIES_CODE,
+    TPM_SERIES_KEY,
     MacroFactor,
     MacroSectorContract,
     load_inflation_series,
     load_macro_contract,
+    load_tpm_series,
     sector_macro_exposure,
 )
 
 __all__ = ["APP_SETTING_KEY", "INFLATION_SERIES_CODE", "INFLATION_SERIES_KEY",
-           "MacroFactor", "MacroSectorContract", "load_inflation_series",
-           "load_macro_contract", "sector_macro_exposure"]
+           "TPM_SERIES_CODE", "TPM_SERIES_KEY", "MacroFactor", "MacroSectorContract",
+           "load_inflation_series", "load_macro_contract", "load_tpm_series",
+           "sector_macro_exposure"]

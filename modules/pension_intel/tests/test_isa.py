@@ -318,3 +318,60 @@ def test_riesgo_dimension_present_and_weighted(tmp_path):
     assert smooth["present"] and bumpy["present"]
     assert smooth["score"] > bumpy["score"]        # steadier NAV scores better on riesgo
     db.close()
+
+
+def test_realized_risk_stats_returns_return_vol_periods(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from modules.pension_intel.scoring.isa import realized_risk_stats
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    steady = [100.0 * (1.008 ** k) for k in range(15)]  # constant +0.8%/mo
+    _seed_nav(db, "afp_x", steady)
+    db.commit()
+    s = realized_risk_stats(db, "afp_x")
+    assert s["vol_pct"] == pytest.approx(0.0, abs=1e-6)
+    assert s["annual_return_pct"] == pytest.approx(9.6, abs=0.01)   # 0.8%/mo × 12
+    assert s["n_returns"] == 14 and len(s["periods"]) == 15
+    db.close()
+
+
+def test_apply_risk_adjusted_sharpe_over_tpm(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from modules.pension_intel.models.models import PensionEntity, PensionSeries  # noqa: F401
+    from modules.pension_intel.scoring.isa import compute_isa
+    from modules.pension_intel.products import _apply_risk_adjusted
+    from shared.contracts import TPM_SERIES_KEY
+    from shared.settings.models import AppSetting
+    import json
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    db.add(PensionEntity(slug="afp_x", name="AFP X", is_active=True))
+    db.add(PensionSeries(entity_slug="afp_x", series_code="rentabilidad_nominal_anual",
+                         period="2026-03", value=9.0, unit="%", source="SIPEN"))
+    # NAV with alternating monthly returns (+1.0% / +0.6%) → mean 0.8%/mo, small σ.
+    navs, v = [], 100.0
+    for k in range(20):
+        navs.append(v)
+        v *= 1.010 if k % 2 else 1.006
+    _seed_nav(db, "afp_x", navs)
+    # TPM series (fraction, BCRD convention) covering the window at 7%.
+    periods = [f"2024-{m:02d}" for m in range(1, 13)] + [f"2025-{m:02d}" for m in range(1, 9)]
+    db.add(AppSetting(key=TPM_SERIES_KEY, value=json.dumps([[p, 0.07] for p in periods]),
+                      is_secret=False))
+    db.commit()
+    rating = next(r for r in compute_isa(db) if r["slug"] == "afp_x")
+    extra = _apply_risk_adjusted(rating, db)
+    dim = next(d for d in rating["dimensions"] if d["key"] == "riesgo")
+    assert dim["risk_free_pct"] == pytest.approx(7.0, abs=0.01)   # 0.07 fraction → 7%
+    assert dim["sharpe"] == extra["sharpe"]
+    # Sharpe = (retorno anualizado − TPM) / σ, con los campos anexados.
+    assert dim["sharpe"] == pytest.approx(
+        (dim["annual_return_pct"] - dim["risk_free_pct"]) / dim["raw"], abs=0.05)
+    assert dim["sharpe"] > 0  # 9.6% return over 7% TPM → positive risk-adjusted
+    db.close()

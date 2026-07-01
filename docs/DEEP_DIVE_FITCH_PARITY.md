@@ -39,8 +39,14 @@ sube a #2 (63.94→71.66), Crecer pasa a Popular. Los dos más chicos suben (Atl
 **Piezas:** `external/nav_extractor.py` (parser puro Cuadro 6.4 + fixture real), `nav_sync.py`
 (encadena boletines → serie `valor_cuota`, op `sipen-nav-sync`), `scoring/isa.py` (dimensión
 `riesgo` derivada: `_realized_vol` + `_score_riesgo`, MODEL_VERSION 0.2→0.3). Recompute prod =
-proyección exacta (compute_isa live) + persistido vía `POST /pension-intel/sync`. **Follow-up:**
-headline Sharpe en narrativa (presentación, no muta).
+proyección exacta (compute_isa live) + persistido vía `POST /pension-intel/sync`.
+
+**Headline Sharpe (presentación, NO muta):** el titular del reporte lleva `· Sharpe X.XX` =
+(retorno anualizado − TPM promedio de la ventana) / σ. Tasa libre = TPM del BCRD, vía el mismo
+plumbing que la inflación de Fase 5: `macro_monitor._persist_tpm_series` escribe `macro_tpm_series`
+(AppSetting), `shared.contracts.load_tpm_series` lo lee, pensiones no importa macro.
+`products._apply_risk_adjusted` calcula el Sharpe y lo anexa a la dimensión riesgo + al contexto
+del cerebro (`ai_context`). El score sigue siendo la σ; el Sharpe es solo lectura narrativa.
 
 ## Diferido A — Rating soberano automatizado + multi-agencia (2026-07-01)
 

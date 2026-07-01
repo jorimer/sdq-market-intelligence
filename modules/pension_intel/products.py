@@ -310,6 +310,36 @@ def _apply_real_return(rating: Dict[str, Any], trend: List[tuple],
     return extra
 
 
+def _apply_risk_adjusted(rating: Dict[str, Any], db) -> Dict[str, Any]:
+    """Enriquece la dimensión *riesgo* de *rating* con su retorno ajustado por riesgo
+    (Sharpe = (retorno anualizado − TPM promedio de la ventana) / σ). Presentación — NO
+    toca score/ISA (el score de riesgo es la σ; el Sharpe es lectura para la narrativa).
+    Devuelve ``{sharpe}`` para el titular. Sin serie NAV o sin TPM → no anexa nada."""
+    from shared.contracts import load_tpm_series
+    from modules.pension_intel.scoring.isa import realized_risk_stats
+
+    extra: Dict[str, Any] = {}
+    dim = next((d for d in rating.get("dimensions") or [] if d.get("key") == "riesgo"), None)
+    if not dim:
+        return extra
+    stats = realized_risk_stats(db, rating.get("slug") or "")
+    if not stats:
+        return extra
+    tpm = load_tpm_series(db)
+    rf_vals = [tpm[p] for p in stats["periods"] if p in tpm]
+    if not rf_vals or not stats["vol_pct"]:
+        return extra
+    rf = sum(rf_vals) / len(rf_vals)
+    rf_pct = rf * 100.0 if rf < 1.0 else rf  # BCRD stores TPM as a fraction (0.085)
+    sharpe = round((stats["annual_return_pct"] - rf_pct) / stats["vol_pct"], 2)
+    dim["annual_return_pct"] = round(stats["annual_return_pct"], 2)
+    dim["risk_free_pct"] = round(rf_pct, 2)
+    dim["sharpe"] = sharpe
+    dim["vol_window_months"] = stats["n_returns"]
+    extra["sharpe"] = sharpe
+    return extra
+
+
 def _cartera_table(cartera: Optional[Dict[str, Any]]) -> Optional[tuple]:
     """Composición de la cartera del sistema por sub-sector/emisor (top-level), RD$ MM + %."""
     if not cartera or not cartera.get("found"):
@@ -484,6 +514,9 @@ class PensionProduct:
         infl = load_inflation_series(db)
         if infl:
             payload.update(_apply_real_return(rating, trend, infl))
+        # Retorno ajustado por riesgo (Diferido B): Sharpe = (retorno − TPM) / σ, con la TPM
+        # del BCRD como tasa libre (serie del AppSetting compartido). Presentación — NO muta.
+        payload.update(_apply_risk_adjusted(rating, db))
         if tier == ProductTier.deep_dive:
             payload["cartera"] = _system_cartera(db)  # contexto de riesgo (dónde invierte el fondo)
         return ProductSnapshot(
@@ -677,14 +710,18 @@ class PensionProduct:
             rdim = next((d for d in rating.get("dimensions") or []
                          if d.get("key") == "rentabilidad"), None)
             real = (rdim or {}).get("raw_real")
+            sharpe = payload.get("sharpe")
             if isinstance(ov, (int, float)):
                 headline = f"ISA {ov:.0f}/100 · {rating.get('name', 'AFP')} (relativo, parcial)"
                 if isinstance(real, (int, float)):
                     headline += f" · rentab. real {real:+.1f}%"
-            # Caveat al frente (Fase 5): sube el asterisco del §5 a la portada.
+                if isinstance(sharpe, (int, float)):
+                    headline += f" · Sharpe {sharpe:.2f}"
+            # Caveat al frente (Fase 5 + Diferido B): sube el asterisco del §5 a la portada.
             subtitle = ("Lectura RELATIVA y PARCIAL · solvencia (estados financieros) aún "
-                        "diferida · rentabilidad expresada en términos reales (deflactada "
-                        "por inflación interanual del BCRD)")
+                        "diferida · rentabilidad en términos reales (deflactada por inflación "
+                        "BCRD) · riesgo = volatilidad realizada del valor cuota (σ), Sharpe "
+                        "sobre la TPM; σ atenuada por valoración a costo amortizado")
             # Profundidad: pares, trayectoria (real vs nominal si hay inflación) y cartera.
             trend_tbl = (_real_trend_table(payload.get("trend_real"))
                          or _trend_table(payload.get("trend")))
