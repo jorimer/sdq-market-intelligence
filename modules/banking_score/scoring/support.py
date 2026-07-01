@@ -64,20 +64,45 @@ def _entity_share(db: Session, bank: Bank, period_end: date, metric: str) -> Opt
     return None
 
 
-def _support_assessment(state_owned: bool, is_systemic: bool) -> str:
-    """Lectura cualitativa del soporte extraordinario probable (estilo GSR de Fitch)."""
+# Grado de inversión arranca en BBB- (rating_scale = 55). Por debajo, el soberano es de
+# grado ESPECULATIVO → capacidad fiscal limitada para proveer soporte extraordinario.
+_INVESTMENT_GRADE_SCORE = 55.0
+
+
+def _support_assessment(state_owned: bool, is_systemic: bool,
+                        sovereign: Dict[str, Any]) -> str:
+    """Lectura cualitativa del soporte extraordinario (estilo GSR de Fitch), en sus DOS
+    patas: PROPENSIÓN (propiedad estatal / importancia sistémica → voluntad de soporte) y
+    CAPACIDAD (fortaleza del soberano → habilidad de costearlo). Un soberano de grado
+    especulativo acota la capacidad, así que el soporte no puede leerse como asegurado por
+    fuerte que sea la propensión — un rescate lo paga el soberano, no la doctrina."""
+    if not state_owned and not is_systemic:
+        return ("Sin soporte extraordinario esperado: la lectura relevante para esta entidad "
+                "es su perfil financiero standalone.")
+
+    # Pata 1 — propensión (voluntad).
     if state_owned and is_systemic:
-        return ("Soporte extraordinario probable ALTO: entidad de propiedad estatal e "
-                "importancia sistémica. En clave crediticia comparable, su solvencia "
-                "efectiva podría exceder su perfil financiero standalone.")
-    if is_systemic:
-        return ("Soporte sistémico POSIBLE: importancia sistémica (too-big-to-fail) sin "
-                "propiedad estatal; el soporte dependería de la política de resolución.")
-    if state_owned:
-        return ("Soporte estatal POSIBLE por propiedad, con importancia sistémica no "
+        prop = ("Propensión de soporte ALTA: propiedad estatal e importancia sistémica.")
+    elif is_systemic:
+        prop = ("Propensión de soporte por importancia sistémica (too-big-to-fail) sin "
+                "propiedad estatal; dependería de la política de resolución, no de un mandato "
+                "de propiedad.")
+    else:  # state_owned, no sistémico
+        prop = ("Propensión de soporte por propiedad estatal, con importancia sistémica no "
                 "material a nivel de activos.")
-    return ("Sin soporte extraordinario esperado: la lectura relevante para esta entidad "
-            "es su perfil financiero standalone.")
+
+    # Pata 2 — capacidad (habilidad del soberano). Un soberano especulativo la acota.
+    score = sovereign.get("score")
+    rating = sovereign.get("rating")
+    if isinstance(score, (int, float)) and score < _INVESTMENT_GRADE_SCORE:
+        cap = (f" No obstante, la CAPACIDAD efectiva de ese soporte está ACOTADA por el perfil "
+               f"soberano de grado especulativo (RD {rating}): un soberano con margen fiscal "
+               f"limitado tiene menor habilidad para proveer soporte extraordinario, por lo que "
+               f"el soporte debe leerse como INCIERTO, no asumido.")
+    else:
+        cap = (" La capacidad de ese soporte se apoya en un soberano de grado de inversión "
+               f"(RD {rating}), con mayor margen fiscal.")
+    return prop + cap
 
 
 def support_overlay(db: Session, bank: Bank, standalone_score: float,
@@ -96,6 +121,7 @@ def support_overlay(db: Session, bank: Bank, standalone_score: float,
     else:
         sys_label = "No sistémica (fuera del top-10 por activos)"
 
+    sov = sovereign_anchor()
     return {
         "state_owned": state_owned,
         "systemic": {
@@ -105,7 +131,7 @@ def support_overlay(db: Session, bank: Bank, standalone_score: float,
             "is_systemic": is_systemic,
             "label": sys_label,
         },
-        "sovereign": sovereign_anchor(),
-        "support_assessment": _support_assessment(state_owned, is_systemic),
+        "sovereign": sov,
+        "support_assessment": _support_assessment(state_owned, is_systemic, sov),
         "standalone": {"score": round(float(standalone_score), 2), "tier": standalone_tier},
     }
