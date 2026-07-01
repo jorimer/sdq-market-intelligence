@@ -63,6 +63,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "comparative": "banking_comparative",
     "recommendation": "banking_recommendation",
     "entorno_operativo": "banking_operating_env",
+    "soporte_soberano": "banking_support_context",
     "trend_analysis": "trend_analysis",
     "sector_outlook": "sector_outlook",
 }
@@ -73,6 +74,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
 _CEREBRO_TEMPLATES = frozenset({
     "subcomponent_focus", "banking_summary", "banking_comparative",
     "banking_risk", "banking_recommendation", "banking_operating_env",
+    "banking_support_context",
 })
 
 # Profundidad POR SECCIÓN (alineada con shared.products.section_mode), para que el deep dive
@@ -127,6 +129,18 @@ def _build_section_context(
             "period": period,
             "rating_tier": scoring_result.get("rating_tier", "N/A"),
             "entorno_macro": scoring_result.get("entorno_macro", {}),
+        }
+
+    # Soporte y Techo Soberano (Fase 6): overlay de contexto estilo Fitch (soporte estatal,
+    # importancia sistémica, techo soberano). Contexto propio — NO es el score standalone,
+    # que se mantiene puro; se presenta como capa analítica separada.
+    if section == "soporte_soberano":
+        return {
+            "entity_name": bank_name,
+            "period": period,
+            "rating_tier": scoring_result.get("rating_tier", "N/A"),
+            "overall_score": scoring_result.get("overall_score", 0),
+            "soporte_soberano": scoring_result.get("soporte_soberano", {}),
         }
 
     sub_key = _SUB_COMPONENT_MAP.get(section)

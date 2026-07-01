@@ -78,6 +78,7 @@ NARRATIVE_SECTION_TITLES = {
     "risk_assessment": "Evaluación de Riesgos",
     "comparative": "Análisis Comparativo",
     "entorno_operativo": "Entorno Operativo",
+    "soporte_soberano": "Soporte y Techo Soberano",
     "recommendation": "Recomendación",
     "trend_analysis": "Análisis de Tendencias",
     "sector_outlook": "Perspectiva Sectorial",
@@ -643,6 +644,52 @@ def _build_sensitivity_table(sens: Dict, styles) -> List:
     return elements
 
 
+def _build_support_table(support: Dict, styles) -> List:
+    """Tabla de Soporte y Techo Soberano (Fase 6): standalone vs contexto estructural.
+    Opt-in (Deep Dive). CONTEXTO — no muta el score standalone."""
+    if not support:
+        return []
+    sysd = support.get("systemic") or {}
+    sov = support.get("sovereign") or {}
+    standalone = support.get("standalone") or {}
+    elements: List = [Paragraph("Soporte y Techo Soberano — Contexto Estructural", styles["SDQHeading"])]
+
+    def _pct(v):
+        return f"{v:.2f}%" if isinstance(v, (int, float)) else "—"
+
+    rows = [["Eje", "Lectura"]]
+    rows.append(["Fortaleza standalone (SDQ)",
+                 f"{standalone.get('tier', '—')} · {standalone.get('score', '—')}/100"])
+    rows.append(["Propiedad estatal", "Sí" if support.get("state_owned") else "No"])
+    rows.append(["Importancia sistémica", str(sysd.get("label") or "—")])
+    rows.append(["Cuota de activos / depósitos",
+                 f"{_pct(sysd.get('activos_share'))} · {_pct(sysd.get('depositos_share'))}"])
+    sov_txt = "—"
+    if sov.get("rating"):
+        sov_txt = (f"{sov.get('rating')} ({sov.get('agency')}, {sov.get('as_of')}) · "
+                   f"{sov.get('score')}/100")
+    rows.append(["Techo soberano (RD)", sov_txt])
+    table = Table(rows, colWidths=[2.3 * inch, 4.2 * inch], repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 0.08 * inch))
+    elements.append(Paragraph(
+        "Capa de CONTEXTO estilo Fitch (VR/GSR/IDR): el soporte estatal, la importancia "
+        "sistémica y el techo soberano NO forman parte de la calificación SDQ standalone "
+        "(que mide fortaleza relativa dentro de RD, no riesgo de crédito absoluto). El techo "
+        "soberano es un dato declarado (S&amp;P) con su fecha de corte.", styles["SDQSmall"]))
+    return elements
+
+
 def _order_narratives(narratives: Dict[str, str],
                       sections: Optional[List[str]]) -> Dict[str, str]:
     """Filtra/ordena las narrativas por `sections` (manifiesto del nivel).
@@ -773,6 +820,14 @@ async def generate_pdf_report(
         sens_els = _build_sensitivity_table(sensibilidades, styles)
         if sens_els:
             body.extend(sens_els)
+            body.append(Spacer(1, 0.3 * inch))
+
+    # 3f. Soporte y Techo Soberano — contexto estructural estilo Fitch (opt-in; Deep Dive).
+    soporte = scoring_result.get("soporte_soberano")
+    if soporte:
+        sup_els = _build_support_table(soporte, styles)
+        if sup_els:
+            body.extend(sup_els)
             body.append(Spacer(1, 0.3 * inch))
 
     # 4. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`). Un único
