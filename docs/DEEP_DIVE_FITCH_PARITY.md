@@ -1,5 +1,37 @@
 # Paridad Deep-Dive vs Fitch — Workstream
 
+## Fase 4 — Amplitud en banca (2026-07-01) ✅ CERRADA Y VERIFICADA EN PROD
+
+Porta al deep dive de banca la amplitud tipo-Fitch que ya tenía (parcialmente) pensiones,
+sobre dato que ya poseemos. **Ningún cambio muta scores** (capa de presentación/narrativa).
+Hallazgo rector: `narratives()`/`render()` operan SIN `db` (para muestras sintéticas) → todo
+enriquecimiento derivado de DB se calcula en `BankingProduct.snapshot` y viaja en el
+`scoring_result`. 3 PRs, cada uno verificado en prod contra Banreservas/BDI.
+
+- **PR #405 — trayectoria + percentil por indicador** (Insight + Deep Dive). `scoring/amplitude.py`:
+  `entity_trajectories` (serie del score global, sub-componentes e indicadores, un query del
+  historial) + `period_percentiles` (percentil vs sector completo + mismo tipo, un query del
+  período). Se cablean al cerebro (los thin templates YA pedían "percentil"/"trayectoria") y al
+  PDF (columnas Percentil/Tendencia + tabla "Trayectoria del Score"). Verificado: Banreservas
+  8 períodos, sector p76.5/tipo p75.0; BDI sector p77.8/tipo p81.2.
+- **PR #406 — sección "Entorno Operativo"** (Deep Dive). Telón macro del BCRD vía el contrato
+  compartido `AppSetting["macro_sector_contract"]` (sin importar `macro_monitor`; lector
+  centralizado `shared.contracts.load_macro_contract`). Nuevo thin template
+  `banking_operating_env` + tabla macro en PDF. Sin contrato → sección no se emite (no fabrica).
+  Verificado: Banreservas 7 factores reales 2026-06 (inflación 5.35% adverso, IMAE 5.4%
+  favorable, TPM 5.25%, depreciación −1.54% favorable, reservas +7.7%, deuda/PIB 62.4% adverso).
+- **PR #407 — tabla de sensibilidades simétrica** (Deep Dive). `scoring/sensitivity.py`:
+  palancas al alza / riesgos a la baja, **umbral en valor crudo** (inverso de la curva de
+  `engine.py`, fijado por un test ROUND-TRIP de 16 curvas — si una se recalibra, CI falla) +
+  Δ exacto al score global (recompute real con pesos por tipo + renormalización N/D). El cerebro
+  ancla el umbral de acción (riesgo) y la palanca de mayor retorno (recomendación) en la tabla.
+  Gatea entorno_operativo + sensibilidades a `tier==deep_dive` (Insight se queda con
+  trayectoria+percentil). Verificado: Banreservas baseline_overall 86.72 = overall real
+  (recompute exacto); solvencia <12.75% pierde banda (−1.2); Insight NO trae entorno/sensib.
+
+Decisión de umbral (consultada al dueño, 2026-07-01): **valor crudo** (concreto tipo-Fitch),
+no puntos de score — la fragilidad ante recalibraciones la cubre el test round-trip.
+
 ## Fase 3 — Framing/procedencia en banca (2026-07-01)
 
 Portado de pensiones (que ya lo hacía). Capa de presentación — no muta scores.
@@ -162,11 +194,12 @@ Leyenda: 🔍 = verificación en prod / fuente pública (bloqueante · read-only
   autodenomina "credit rating system"); portar la columna de procedencia del dato; notas al pie de
   definición SIB en cobertura y eficiencia.
 
-### Fase 4 — Amplitud en banca (lo que pensiones ya tiene) ✅/🔍
-- Trayectoria multi-período por indicador (SIMBAD histórico).
-- Percentil vs el sistema por indicador (distribución de las ~81 entidades).
-- Sección "Entorno Operativo" auto-generada desde el módulo Macro/BCRD.
-- Tabla de sensibilidades simétrica (qué sube / qué baja el score, con umbral).
+### Fase 4 — Amplitud en banca (lo que pensiones ya tiene) ✅ CERRADA Y VERIFICADA EN PROD (2026-07-01)
+- ✅ Trayectoria multi-período por indicador (SIMBAD histórico) — PR #405.
+- ✅ Percentil vs el sistema por indicador (distribución de las ~81 entidades) — PR #405.
+- ✅ Sección "Entorno Operativo" auto-generada desde el módulo Macro/BCRD — PR #406.
+- ✅ Tabla de sensibilidades simétrica (qué sube / qué baja el score, con umbral crudo) — PR #407.
+- Detalle arriba (sección "Fase 4 — Amplitud en banca").
 
 ### Fase 5 — Pensiones: rentabilidad real + asterisco al titular ✅/🔍
 - Deflactar la rentabilidad nominal por la serie de inflación del BCRD → retorno real (AI-native,
