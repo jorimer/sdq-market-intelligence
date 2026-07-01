@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from modules.pension_intel.models.models import PensionEntity, PensionSeries
 
-MODEL_VERSION = "0.2"  # Fase 6: híbrido banda-absoluta + min-max (antes: min-max puro)
+MODEL_VERSION = "0.3"  # Diferido B: 5ª dimensión riesgo (volatilidad realizada del NAV)
 
 # Minimum real-data coverage to assign an overall band. Below this, an AFP is
 # "datos insuficientes" (no band, no rank) rather than getting a solidity verdict
@@ -67,19 +67,27 @@ DIMENSIONS: List[Dict[str, Any]] = [
         "ratio": ("patrimonio", "activos_totales"),
     },
     {
-        "key": "rentabilidad", "label": "Rentabilidad", "weight": 0.30,
+        "key": "rentabilidad", "label": "Rentabilidad", "weight": 0.25,
         "direction": "higher", "provenance": "real",
         "metric": "rentabilidad_nominal_anual",
     },
     {
-        "key": "escala", "label": "Escala (fondos administrados / AUM)", "weight": 0.20,
+        "key": "riesgo", "label": "Consistencia / Riesgo (volatilidad)", "weight": 0.15,
+        "direction": "lower", "provenance": "real",
+        # Realized volatility (annualized σ of monthly NAV returns) from the SIPEN bulletin
+        # valor-cuota series (nav_sync). Lower = steadier = better. Derived from the series,
+        # not a single latest value; see _realized_vol / _score_riesgo (Diferido B).
+        "derived": "volatility",
+    },
+    {
+        "key": "escala", "label": "Escala (fondos administrados / AUM)", "weight": 0.15,
         "direction": "higher", "provenance": "real",
         # AUM from each AFP's own estados financieros ('Activos de los Fondos Administrados'),
         # so all AFPs share one consistent source → present once financials are ingested.
         "metric": "fondos_administrados",
     },
     {
-        "key": "costo", "label": "Costo (comisión/AUM)", "weight": 0.15,
+        "key": "costo", "label": "Costo (comisión/AUM)", "weight": 0.10,
         "direction": "lower", "provenance": "real",
         "ratio": ("comisiones_anual", "fondos_administrados"),
     },
@@ -102,6 +110,51 @@ def _latest_value(db: Session, slug: str, metric: str):
     return (row.period, row.value, row.unit) if row else None
 
 
+# ── Realized volatility (ISA riesgo dimension, Diferido B) ─────────────────────
+# The monthly NAV series (valor_cuota, from nav_sync) → monthly returns → annualized σ.
+# Window = 30 clean months (owner decision 2026-07-01); the older SIPEN bulletins use a
+# divergent layout and mixed a different rate regime, so we cap at the recent uniform run.
+_VOL_WINDOW_MONTHS = 30
+_VOL_MIN_RETURNS = 12
+# A monthly NAV move this large is a parse artifact for these funds (realized σ ~1%/yr, so
+# a single month rarely exceeds ~4%); drop it rather than let it poison the σ (guard proven
+# necessary: a stray 2003 point once inflated σ ~8×).
+_VOL_GUARD = 0.15
+
+
+def _nav_series(db: Session, slug: str) -> List[Tuple[str, float]]:
+    """The AFP's monthly NAV points (period, value), ascending, last window only."""
+    from modules.pension_intel.nav_sync import VALOR_CUOTA_CODE
+
+    rows = (
+        db.query(PensionSeries)
+        .filter(PensionSeries.series_code == VALOR_CUOTA_CODE,
+                PensionSeries.entity_slug == slug,
+                PensionSeries.value.isnot(None))
+        .order_by(PensionSeries.period.desc())
+        .limit(_VOL_WINDOW_MONTHS)
+        .all()
+    )
+    return [(r.period, r.value) for r in reversed(rows)]
+
+
+def _realized_vol(db: Session, slug: str) -> Optional[Tuple[str, float]]:
+    """Annualized realized volatility (%) of the AFP's monthly NAV returns, as ``(as_of
+    period, sigma_pct)``. None if too few clean months (never a spurious σ)."""
+    import statistics
+
+    series = _nav_series(db, slug)
+    if len(series) < _VOL_MIN_RETURNS + 1:
+        return None
+    navs = [v for _, v in series]
+    rets = [navs[k] / navs[k - 1] - 1 for k in range(1, len(navs)) if navs[k - 1]]
+    rets = [r for r in rets if abs(r) <= _VOL_GUARD]
+    if len(rets) < _VOL_MIN_RETURNS:
+        return None
+    sigma_pct = statistics.pstdev(rets) * (12 ** 0.5) * 100.0
+    return (series[-1][0], round(sigma_pct, 4))
+
+
 def _to_rd(value: float, unit: Optional[str]) -> float:
     """Normalize a monetary value to RD$ base units. Some SIPEN series arrive in
     millions ('RD$ MM'); dividing a millions numerator by an RD$ denominator (as the
@@ -121,7 +174,11 @@ def _raw_values(db: Session, slugs: List[str]) -> Dict[str, Dict[str, Any]]:
     out: Dict[str, Dict[str, Any]] = {s: {} for s in slugs}
     for slug in slugs:
         for d in DIMENSIONS:
-            if d.get("metric"):
+            if d.get("derived") == "volatility":
+                v = _realized_vol(db, slug)
+                if v is not None:
+                    out[slug][d["key"]] = v
+            elif d.get("metric"):
                 v = _latest_value(db, slug, d["metric"])
                 if v is not None:
                     out[slug][d["key"]] = v
@@ -203,6 +260,31 @@ def _score_hybrid(present: Dict[str, float], key: str, direction: str) -> Dict[s
             for s, v in present.items()}
 
 
+# ── Riesgo (volatilidad realizada, Diferido B) ─────────────────────────────────
+# σ anualizada del NAV, menor = mejor. El spread real entre AFP es MUY comprimido
+# (~0.8-1.6% anualizado; la cartera se valora en buena parte a costo amortizado → NAV
+# suave), así que el min-max PURO amplificaría 0.8pp a 0-100. Se usa el híbrido con MÁS
+# peso a la banda absoluta (0.7 vs el 0.5 de las otras dims, decisión dueño 2026-07-01):
+# la banda comunica "todos son de baja vol" y el min-max discrimina suave dentro del pack.
+_RIESGO_WABS = 0.7
+_RIESGO_BAND = (0.5, 6.0)  # σ%: 0.5% → 100 (muy estable), 6.0% → 0 (vol tipo renta variable)
+
+
+def _absolute_band_lower(v: float, lo: float, hi: float) -> float:
+    """Banda absoluta lineal raw→0..100 donde MENOR = mejor (con clamp)."""
+    return max(0.0, min(100.0, (hi - v) / (hi - lo) * 100.0))
+
+
+def _score_riesgo(present: Dict[str, float]) -> Dict[str, float]:
+    """Híbrido banda-absoluta (0.7) + peer min-max (0.3) sobre la σ anualizada (menor=mejor).
+    Banda propia (no la de _ANCHORS) por el spread ultra-comprimido de la vol de pensiones."""
+    lo, hi = _RIESGO_BAND
+    mm = _normalize(present, "lower")
+    return {s: round(_RIESGO_WABS * _absolute_band_lower(v, lo, hi)
+                     + (1.0 - _RIESGO_WABS) * mm[s], 2)
+            for s, v in present.items()}
+
+
 def compute_isa(db: Session) -> List[Dict[str, Any]]:
     """Compute the ISA for every active AFP. Returns one dict per AFP, sorted desc.
 
@@ -224,6 +306,9 @@ def compute_isa(db: Session) -> List[Dict[str, Any]]:
         if d["key"] == "costo":
             # Absolute band (not peer min-max) — see _score_costo_absolute.
             dim_scores[d["key"]] = {s: _score_costo_absolute(v) for s, v in present.items()}
+        elif d["key"] == "riesgo":
+            # Realized-vol hybrid with its own (higher-absolute) weighting — see _score_riesgo.
+            dim_scores[d["key"]] = _score_riesgo(present) if present else {}
         elif d["key"] in _ANCHORS and present:
             # Híbrido banda-absoluta + min-max (Fase 6): magnitud + discriminación relativa.
             dim_scores[d["key"]] = _score_hybrid(present, d["key"], d["direction"])

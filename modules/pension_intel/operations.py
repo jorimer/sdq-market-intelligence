@@ -38,6 +38,16 @@ def _run_cartera_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_nav_sync(params, user_id, set_phase) -> Dict:
+    from modules.pension_intel.nav_sync import sipen_nav_sync
+    db = SessionLocal()
+    try:
+        n = int((params or {}).get("n_boletines") or 11)
+        return sipen_nav_sync(db, set_phase=set_phase, n_boletines=n)
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "sipen-sync", "Sincronizar pensiones (SIPEN)",
@@ -64,6 +74,14 @@ def register() -> None:
         "las tenencias por emisor (Hacienda/BCRD/bancos/privados). Dato público real, sin "
         "OCR (el boletín es texto). Trimestral.",
         _run_cartera_sync, default_interval_hours=2160,  # trimestral
+    ))
+    register_operation(Operation(
+        "sipen-nav-sync", "Sincronizar valor cuota / NAV (SIPEN)",
+        "Encadena los últimos ~11 Boletines Trimestrales (PDF), extrae el Cuadro 6.4 "
+        "—valor cuota mensual por AFP— y persiste la serie de NAV. Es el insumo de la "
+        "dimensión de RIESGO del ISA: NAV mensual → retornos → volatilidad realizada. Dato "
+        "público real, sin OCR. Trimestral (los boletines salen por trimestre).",
+        _run_nav_sync, default_interval_hours=2160,  # trimestral
     ))
 
 

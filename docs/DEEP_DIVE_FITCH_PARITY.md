@@ -2,7 +2,45 @@
 
 > **WORKSTREAM COMPLETO (2026-07-01): las 6 fases cerradas y verificadas en prod.**
 > Seguimientos diferidos (cada uno su ciclo): **A — rating soberano automatizado** (abajo);
-> B — ajuste por riesgo en pensiones (pendiente).
+> **B — ajuste por riesgo en pensiones** (abajo).
+
+## Diferido B — Ajuste por riesgo en el ISA (volatilidad realizada del NAV) (2026-07-01)
+
+**Problema:** el ISA puntuaba rentabilidad NOMINAL sin ninguna lectura de riesgo. La única
+serie de retorno que ingeríamos (XLSX Estadística Previsional) es **trailing-12m suavizada**
+→ sacar volatilidad de ahí sería deshonesto.
+
+**Hallazgo de datos (investigación 2026-07-01):** el **valor cuota (NAV) mensual por AFP**
+NO está en el XLSX ni en CKAN, sino en el **Boletín Trimestral PDF, Cuadro 6.4** (base 100 en
+2003). Encadenando boletines → serie NAV mensual → retornos mensuales → **volatilidad realizada
+honesta**. Cobertura limpia y uniforme = **30 meses (bols 82–91, 2023-10 a 2026-03)**; los
+boletines viejos (72–81) usan un layout divergente que contamina (un bug de año infló σ ~8×) →
+se acota a la ventana reciente y uniforme.
+
+**Decisiones del dueño (calibración con dato real, antes de código):**
+- **Métrica: Sharpe** (volatilidad TOTAL σ) — no Sortino: el downside deviation ≈ 0 (casi no
+  hay meses negativos) lo haría degenerado. Tasa libre = **TPM del BCRD** (para el ratio en
+  narrativa).
+- **Integración: 5ª dimensión "Consistencia/Riesgo"** (σ, menor=mejor), re-peso **solvencia .35
+  / rentab .25 / riesgo .15 / escala .15 / costo .10**. El ratio Sharpe se muestra en narrativa.
+- **Ventana: 30 meses limpios.**
+- **Calibración: híbrido 0.7·banda-absoluta + 0.3·min-max** (más absoluta que el 0.5 de Fase 6b),
+  banda σ [0.5%→100, 6.0%→0]. La σ real está ultra-comprimida (0.80%–1.64%, en parte por
+  valoración a costo amortizado → caveat), así que el min-max puro la amplificaría a 0-100.
+
+**σ realizada y riesgo (calibración):** JMMB 0.80%→96.2, Atlántico 0.87%→92.8, Romana 0.90%→91.3,
+Crecer 1.11%→81.2, Siembra 1.12%→80.7, Reservas 1.55%→59.9, Popular 1.64%→55.5.
+
+**Impacto proyectado en el ISA (aprobado):** Reservas 75.03 **Sólida → 73.66 Adecuada** (2ª más
+volátil; en términos ajustados por riesgo baja de banda — aceptado como el dato honesto). Romana
+sube a #2 (63.94→71.66), Crecer pasa a Popular. Los dos más chicos suben (Atlántico +10.9, JMMB
++9.3, los más suaves) pero siguen Frágil (los arrastra escala/solvencia).
+
+**Piezas:** `external/nav_extractor.py` (parser puro Cuadro 6.4 + fixture real), `nav_sync.py`
+(encadena boletines → serie `valor_cuota`, op `sipen-nav-sync`), `scoring/isa.py` (dimensión
+`riesgo` derivada: `_realized_vol` + `_score_riesgo`, MODEL_VERSION 0.2→0.3). Recompute prod =
+proyección exacta (compute_isa live) + persistido vía `POST /pension-intel/sync`. **Follow-up:**
+headline Sharpe en narrativa (presentación, no muta).
 
 ## Diferido A — Rating soberano automatizado + multi-agencia (2026-07-01)
 

@@ -77,7 +77,9 @@ def test_ingest_financials_persists_and_activates_solvency(db, monkeypatch):
     assert solv["present"] is True and solv["raw"] == pytest.approx(0.8)  # 4000/5000
     assert escala["present"] is True  # AUM filled the scale dimension
     assert after["band"] is not None and after["score_kind"] == "absolute"
-    assert after["coverage"] == pytest.approx(1.0)  # all four dimensions present
+    # solvencia .35 + rentab .25 + escala .15 + costo .10 present; the riesgo dimension
+    # (.15, from the NAV series) is absent here → coverage caps at 0.85 (Diferido B).
+    assert after["coverage"] == pytest.approx(0.85)
 
 
 def test_managed_funds_picks_assets_side_across_label_variants():
