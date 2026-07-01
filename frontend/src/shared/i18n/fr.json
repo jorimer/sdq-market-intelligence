@@ -1756,6 +1756,14 @@
         "peer_positioning": "Position dans le panel"
       },
       "dimensionsTitle": "Dimensions (score 0–100)",
+      "risk": {
+        "title": "Risque et rendement ajusté",
+        "sharpe": "Sharpe",
+        "vol": "Volatilité (σ)",
+        "return": "Rendement annualisé",
+        "free": "Taux sans risque (TPM)",
+        "caveat": "σ = volatilité réalisée de la valeur de part (fenêtre de {{n}} mois) ; Sharpe = (rendement − TPM moyen) / σ. La σ est atténuée par la valorisation au coût amorti du portefeuille."
+      },
       "dim": {
         "export_dynamism": "Dynamisme exportateur",
         "investment_attraction": "Attraction d'investissement",
@@ -1953,6 +1961,12 @@
     "drillWeight": "poids {{n}}",
     "dirHigher": "plus c'est élevé, mieux c'est",
     "dirLower": "plus c'est bas, mieux c'est",
+    "riskAdjTitle": "Rendement ajusté au risque",
+    "riskAdjCaveat": "Fenêtre de {{n}} mois. Sharpe = (rendement annualisé − TPM moyen) / σ. La σ est atténuée par la valorisation au coût amorti du portefeuille ; le score de cette dimension est la σ, pas le Sharpe.",
+    "riskSharpe": "Sharpe",
+    "riskVol": "Volatilité (σ)",
+    "riskReturn": "Rendement annualisé",
+    "riskFree": "Taux sans risque (TPM)",
     "isaPartialNote": "Indice PARTIEL : le score est une position relative parmi les AFP disposant de données suffisantes. La solvabilité (états financiers) est une lacune déclarée et les bandes absolues de solidité sont reportées jusqu'à son obtention.",
     "rankingTitle": "Classement des AFP · ISA relatif",
     "rankingSubtitle": "Classées par l'indice de solidité (relatif, partiel). Les AFP aux données insuffisantes sont listées sans score.",

@@ -375,3 +375,26 @@ def test_apply_risk_adjusted_sharpe_over_tpm(tmp_path):
         (dim["annual_return_pct"] - dim["risk_free_pct"]) / dim["raw"], abs=0.05)
     assert dim["sharpe"] > 0  # 9.6% return over 7% TPM → positive risk-adjusted
     db.close()
+
+
+def test_named_headline_caveat_includes_sharpe_and_real_return():
+    """El titular de portada (reusado por la vista in-app y el PDF) lleva ISA + rentab.
+    real + Sharpe, y el caveat nombra σ/Sharpe/costo amortizado. Blinda la paridad."""
+    from modules.pension_intel.products import _named_headline_caveat
+
+    payload = {
+        "rating": {
+            "name": "AFP X", "overall_score": 73.66,
+            "dimensions": [{"key": "rentabilidad", "raw": 7.84, "raw_real": 2.36}],
+        },
+        "sharpe": 1.97,
+    }
+    headline, caveat = _named_headline_caveat(payload)
+    assert headline == "ISA 74/100 · AFP X (relativo, parcial) · rentab. real +2.4% · Sharpe 1.97"
+    assert "σ" in caveat and "Sharpe" in caveat and "costo amortizado" in caveat
+    # Sin Sharpe ni retorno real → el titular omite esos tramos (nunca fabrica).
+    h2, _ = _named_headline_caveat({"rating": {"name": "AFP Y", "overall_score": 60.0,
+                                               "dimensions": []}})
+    assert h2 == "ISA 60/100 · AFP Y (relativo, parcial)"
+    # Sin ISA → no hay titular.
+    assert _named_headline_caveat({"rating": {"dimensions": []}}) == (None, None)

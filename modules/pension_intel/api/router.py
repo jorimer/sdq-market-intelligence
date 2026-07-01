@@ -147,10 +147,15 @@ async def insight(
 
 
 def _rating_payload(r: PensionRating, name: str) -> Dict[str, Any]:
+    # Copia profunda de las dimensiones: la enriquecemos con el Sharpe on-read
+    # (annotate_risk_adjusted) y NO debe mutar la columna JSON persistida.
+    import copy
+
     return {
         "slug": r.entity_slug, "name": name, "period": r.period,
         "overall_score": r.overall_score, "band": r.band, "coverage": r.coverage,
-        "dimensions": r.dimensions or [], "model_version": r.model_version,
+        "dimensions": copy.deepcopy(r.dimensions) if r.dimensions else [],
+        "model_version": r.model_version,
     }
 
 
@@ -241,7 +246,13 @@ async def entity_detail(
     )
     if row is None:
         return {"slug": slug, "found": False}
-    return {"found": True, **_rating_payload(row, names.get(slug, slug))}
+    payload = _rating_payload(row, names.get(slug, slug))
+    # Retorno ajustado por riesgo (Diferido B): enriquece la dimensión riesgo con el Sharpe
+    # (σ del valor cuota vs TPM). Presentación/on-read — NO toca el ISA persistido; mismo
+    # builder que el deep dive de producto → la tarjeta del eje y el PDF muestran igual.
+    from modules.pension_intel.scoring.isa import annotate_risk_adjusted
+    annotate_risk_adjusted(payload, db)
+    return {"found": True, **payload}
 
 
 @router.get("/sync-status")
@@ -554,11 +565,15 @@ async def afp_dimension(
     current_user: User = Depends(get_current_user),
 ):
     """Drill-down de UNA dimensión del ISA de una AFP: valor + posición vs pares + tendencia + insight IA."""
-    from modules.pension_intel.scoring.isa import compute_isa
+    from modules.pension_intel.scoring.isa import compute_isa, annotate_risk_adjusted
     results = compute_isa(db)
     me = next((r for r in results if r["slug"] == slug), None)
     if me is None:
         return {"found": False, "slug": slug}
+    # Retorno ajustado por riesgo (Diferido B): si el drill es la dimensión riesgo, anexa el
+    # Sharpe (σ del valor cuota vs TPM) a la dim. Presentación — NO toca el score.
+    if key == "riesgo":
+        annotate_risk_adjusted(me, db)
     dim = next((d for d in me["dimensions"] if d["key"] == key), None)
     if dim is None:
         return {"found": False, "slug": slug, "key": key}

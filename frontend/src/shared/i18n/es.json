@@ -1756,6 +1756,14 @@
         "peer_positioning": "Posición en el panel"
       },
       "dimensionsTitle": "Dimensiones (score 0–100)",
+      "risk": {
+        "title": "Riesgo y retorno ajustado",
+        "sharpe": "Sharpe",
+        "vol": "Volatilidad (σ)",
+        "return": "Retorno anualizado",
+        "free": "Tasa libre (TPM)",
+        "caveat": "σ = volatilidad realizada del valor cuota (ventana {{n}} meses); Sharpe = (retorno − TPM promedio) / σ. La σ está atenuada por la valoración a costo amortizado de la cartera."
+      },
       "dim": {
         "export_dynamism": "Dinamismo exportador",
         "investment_attraction": "Atracción de inversión",
@@ -1953,6 +1961,12 @@
     "drillWeight": "peso {{n}}",
     "dirHigher": "mayor es mejor",
     "dirLower": "menor es mejor",
+    "riskAdjTitle": "Retorno ajustado por riesgo",
+    "riskAdjCaveat": "Ventana {{n}} meses. Sharpe = (retorno anualizado − TPM promedio) / σ. La σ está atenuada por la valoración a costo amortizado de la cartera; el score de esta dimensión es la σ, no el Sharpe.",
+    "riskSharpe": "Sharpe",
+    "riskVol": "Volatilidad (σ)",
+    "riskReturn": "Retorno anualizado",
+    "riskFree": "Tasa libre (TPM)",
     "isaPartialNote": "Índice PARCIAL: el score es una posición relativa entre AFP con dato suficiente. La solvencia (estados financieros) es una brecha declarada y las bandas absolutas de solidez están diferidas hasta tenerla.",
     "rankingTitle": "Ranking de AFP · ISA relativo",
     "rankingSubtitle": "Ordenadas por el Índice de Solidez (relativo, parcial). Las AFP con dato insuficiente se listan sin score.",

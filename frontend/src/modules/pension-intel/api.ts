@@ -78,6 +78,13 @@ export interface PensionDimension {
   present: boolean;
   raw: number | null;
   score: number | null;
+  // Retorno ajustado por riesgo (Diferido B): solo la dimensión `riesgo` los trae, y solo
+  // si hay serie NAV + TPM. Presentación — NO alteran el score (que es la σ). Sharpe =
+  // (retorno anualizado − TPM promedio de la ventana) / σ.
+  sharpe?: number | null;
+  annual_return_pct?: number | null;
+  risk_free_pct?: number | null;
+  vol_window_months?: number | null;
 }
 
 export interface PensionDetail {
