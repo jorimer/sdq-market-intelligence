@@ -42,7 +42,10 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
         "source": "SIPEN — dato público real",
         "note": "Score de posición RELATIVA y PARCIAL: solvencia = brecha declarada (estados "
                 "financieros pendientes), bandas absolutas DIFERIDAS. El ISA puntúa sobre "
-                "rentabilidad NOMINAL; se reporta además la REAL (deflactada por inflación BCRD).",
+                "rentabilidad NOMINAL; se reporta además la REAL (deflactada por inflación BCRD). "
+                "La dimensión RIESGO es la volatilidad realizada (σ anualizada de los retornos "
+                "mensuales del valor cuota, ventana ~30m); menor σ = más consistente. La σ es baja "
+                "en parte por valoración a costo amortizado de la cartera (caveat, no sobre-leer).",
     }
     if rent_real is not None:
         ctx["rentabilidad_nominal_pct"] = (rdim or {}).get("raw")
@@ -59,7 +62,7 @@ def pension_peer_context(
     Serves the FULL peer table (each AFP's overall + per-dimension raw/score) so the
     narrative can cite concrete peer numbers (leader, average, gap) instead of vague
     'frente a sus pares'. Only AFPs with a score are ranked for position."""
-    dims = ["solvencia", "rentabilidad", "escala", "costo"]
+    dims = ["solvencia", "rentabilidad", "riesgo", "escala", "costo"]
 
     def _row(r: Dict[str, Any]) -> Dict[str, Any]:
         by = {d["key"]: d for d in r.get("dimensions") or []}

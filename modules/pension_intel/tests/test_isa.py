@@ -88,10 +88,11 @@ def test_solvency_absent_until_financials_caps_coverage(db):
 
 def test_full_vs_thin_coverage(db):
     by_slug = {r["slug"]: r for r in compute_isa(db)}
-    # Popular has rentabilidad + escala + costo → coverage 0.65.
-    assert by_slug["afp_popular"]["coverage"] == pytest.approx(0.65, abs=1e-6)
-    # Romana has only rentabilidad → coverage 0.30.
-    assert by_slug["afp_romana"]["coverage"] == pytest.approx(0.30, abs=1e-6)
+    # Diferido B weights: rentab .25 + escala .15 + costo .10 (no solvencia/riesgo in the
+    # fixture) → Popular coverage 0.50 (right at the gate).
+    assert by_slug["afp_popular"]["coverage"] == pytest.approx(0.50, abs=1e-6)
+    # Romana has only rentabilidad → coverage 0.25.
+    assert by_slug["afp_romana"]["coverage"] == pytest.approx(0.25, abs=1e-6)
 
 
 def test_rentabilidad_hybrid_communicates_magnitude(db):
@@ -230,3 +231,90 @@ def test_score_hybrid_blends_absolute_and_minmax():
     assert out["c"] > 0.0
     # orden preservado
     assert out["a"] > out["b"] > out["c"]
+
+
+# ── Diferido B: dimensión riesgo (volatilidad realizada del NAV) ────────────────
+
+def test_absolute_band_lower_clamps_and_inverts():
+    from modules.pension_intel.scoring.isa import _absolute_band_lower
+    assert _absolute_band_lower(0.5, 0.5, 6.0) == 100.0    # σ baja → mejor
+    assert _absolute_band_lower(6.0, 0.5, 6.0) == 0.0       # σ alta → peor
+    assert _absolute_band_lower(3.25, 0.5, 6.0) == pytest.approx(50.0, abs=0.5)
+    assert _absolute_band_lower(0.1, 0.5, 6.0) == 100.0     # clamp
+    assert _absolute_band_lower(9.0, 0.5, 6.0) == 0.0       # clamp
+
+
+def test_score_riesgo_hybrid_matches_calibration():
+    """σ reales de las 7 AFP (2023-10..2026-03): el híbrido 0.7·abs+0.3·minmax reproduce
+    las anclas aprobadas y NO manda el spread comprimido a 0/100."""
+    from modules.pension_intel.scoring.isa import _score_riesgo
+    sig = {"jmmb": 0.80, "atlantico": 0.87, "romana": 0.90, "crecer": 1.11,
+           "siembra": 1.12, "reservas": 1.55, "popular": 1.64}
+    out = _score_riesgo(sig)
+    assert out["jmmb"] == pytest.approx(96.18, abs=0.1)     # el más suave, no 100
+    assert out["popular"] == pytest.approx(55.49, abs=0.1)  # el más volátil, no 0
+    assert out["reservas"] == pytest.approx(59.90, abs=0.1)
+    # orden por σ (menor σ = mayor score)
+    assert out["jmmb"] > out["romana"] > out["crecer"] > out["reservas"] > out["popular"]
+    # el spread de 0.83pp NO barre todo el rango 0-100 (la banda absoluta ancla la magnitud)
+    assert min(out.values()) > 40.0 and max(out.values()) < 100.0
+
+
+def _seed_nav(db, slug, navs, start="2024-01"):
+    from modules.pension_intel.models.models import PensionSeries
+    y, m = int(start[:4]), int(start[5:])
+    for v in navs:
+        db.add(PensionSeries(entity_slug=slug, series_code="valor_cuota",
+                             period=f"{y}-{m:02d}", value=v, unit="RD$", source="SIPEN"))
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+
+
+def test_realized_vol_from_nav_series(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from modules.pension_intel.scoring.isa import _realized_vol
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    # 15 months of a CONSTANT 0.8%/mo return → σ = 0 (perfectly steady).
+    steady = [100.0 * (1.008 ** k) for k in range(15)]
+    _seed_nav(db, "afp_steady", steady)
+    db.commit()
+    per, vol = _realized_vol(db, "afp_steady")
+    assert vol == pytest.approx(0.0, abs=1e-6)
+    # too few points → None (never a spurious σ)
+    _seed_nav(db, "afp_short", [100.0, 101.0, 102.0])
+    db.commit()
+    assert _realized_vol(db, "afp_short") is None
+    db.close()
+
+
+def test_riesgo_dimension_present_and_weighted(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from modules.pension_intel.models.models import PensionEntity, PensionSeries
+    from modules.pension_intel.scoring.isa import compute_isa, DIMENSIONS
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    # two AFPs with rentabilidad + a NAV series of differing volatility
+    for slug, jitter in [("afp_smooth", 0.0), ("afp_bumpy", 0.03)]:
+        db.add(PensionEntity(slug=slug, name=slug, is_active=True))
+        db.add(PensionSeries(entity_slug=slug, series_code="rentabilidad_nominal_anual",
+                             period="2026-03", value=9.0, unit="%", source="SIPEN"))
+        navs = [100.0 * (1.007 ** k) * (1 + (jitter if k % 2 else -jitter)) for k in range(20)]
+        _seed_nav(db, slug, navs)
+    db.commit()
+    res = {r["slug"]: r for r in compute_isa(db)}
+    riesgo_w = next(d["weight"] for d in DIMENSIONS if d["key"] == "riesgo")
+    assert riesgo_w == 0.15
+    smooth = next(d for d in res["afp_smooth"]["dimensions"] if d["key"] == "riesgo")
+    bumpy = next(d for d in res["afp_bumpy"]["dimensions"] if d["key"] == "riesgo")
+    assert smooth["present"] and bumpy["present"]
+    assert smooth["score"] > bumpy["score"]        # steadier NAV scores better on riesgo
+    db.close()
