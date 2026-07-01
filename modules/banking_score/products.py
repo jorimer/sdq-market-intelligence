@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from shared.contracts import load_macro_contract
 from shared.products import (
     DataHealth,
     Granularity,
@@ -178,6 +179,22 @@ SAMPLE_NARRATIVES = {
         "estos factores compromete la viabilidad; definen la agenda de gestión, no la "
         "solvencia."
     ),
+    "entorno_operativo": (
+        "El entorno operativo macroeconómico ofrece, en el período, un **telón favorable "
+        "con matices** para la solidez bancaria dominicana. La **actividad económica** en "
+        "expansión sostiene la demanda de crédito y la capacidad de pago de los deudores, el "
+        "factor que más directamente protege la calidad de cartera de una entidad como Banco "
+        "Demo. La **inflación**, contenida cerca de la meta del BCRD, permite una política "
+        "monetaria menos restrictiva: una **tasa de política** a la baja alivia el costo de "
+        "fondeo y descomprime el margen de intermediación. El punto de atención es el **tipo "
+        "de cambio**: una depreciación más rápida presionaría la cartera en moneda extranjera "
+        "y las expectativas de inflación, con transmisión indirecta a la morosidad. Conviene "
+        "subrayar que este entorno es un **telón sistémico común a todo el sistema** —no forma "
+        "parte de la calificación standalone de Banco Demo, que mide su fortaleza financiera "
+        "propia—; su relevancia es encuadrar la dirección del viento macro que enfrentan por "
+        "igual todas las entidades. La señal adelantada a vigilar es la trayectoria del tipo "
+        "de cambio y de las reservas internacionales del BCRD."
+    ),
     "recommendation": (
         "Para una contraparte o comité de crédito, Banco Demo amerita una **aprobación "
         "clara** dentro de su segmento de riesgo: un capital holgado, una cartera sana y una "
@@ -199,7 +216,11 @@ _INSIGHT_SECTIONS = (
     "executive_summary", "solidez_financiera", "calidad_activos",
     "eficiencia_rentabilidad", "liquidez", "diversificacion", "comparative",
 )
-_DEEP_DIVE_SECTIONS = _INSIGHT_SECTIONS + ("risk_assessment", "recommendation", "limitations")
+# Deep Dive añade (Fase 4) el ENTORNO OPERATIVO macro (telón sistémico BCRD, tras el
+# comparativo y antes del riesgo forward que encuadra) + riesgo/escenarios +
+# recomendación + limitaciones. Entorno operativo es exclusivo del Deep Dive.
+_DEEP_DIVE_SECTIONS = _INSIGHT_SECTIONS + (
+    "entorno_operativo", "risk_assessment", "recommendation", "limitations")
 
 # Limitaciones: texto estático (sin cifras → guard anti-alucinación trivialmente limpio).
 # Incluye el ENCUADRE del score (Fase 3, portado de pensiones): la calificación SDQ es
@@ -369,6 +390,13 @@ class BankingProduct:
         # entidades con un solo período o sin pares.
         scoring_result["trayectorias"] = entity_trajectories(db, bank)
         scoring_result["percentiles"] = period_percentiles(db, bank, rr.period_end)
+        # Entorno Operativo (Fase 4): telón macro del BCRD vía el contrato compartido
+        # (sin importar macro_monitor). Solo los factores con dato real; si no hay
+        # contrato, se omite la sección (no se fabrica). Solo el Deep Dive lo consume.
+        macro = load_macro_contract(db)
+        factors = [f for f in (macro.get("factors") or []) if f.get("direction") != "n/d"]
+        if factors:
+            scoring_result["entorno_macro"] = {"period": macro.get("period"), "factors": factors}
         conc = compute_market_concentration(db, rr.period_end, "activos")
         peer_block = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
                        "cr10": conc["cr10"], "hhi": conc["hhi"]} if conc.get("available") else None)
@@ -444,6 +472,10 @@ class BankingProduct:
         scoring_result = snapshot.payload["scoring_result"]
         peer_block = snapshot.payload.get("peer_block")
         claude_sections = [s for s in manifest.sections if s != "limitations"]
+        # Entorno Operativo (Fase 4): se genera solo si el snapshot trajo factores macro
+        # reales; sin contrato macro la sección no se emite (nunca vacía/fabricada).
+        if not scoring_result.get("entorno_macro"):
+            claude_sections = [s for s in claude_sections if s != "entorno_operativo"]
         out = await generate_named_narratives(
             claude_sections, snapshot.entity_name or "Entidad", scoring_result,
             snapshot.period, benchmarks=peer_block,

@@ -21,6 +21,28 @@ from typing import Any, Dict, List, Optional
 # cross-module consumers (sector_intel) read it without importing the producer.
 APP_SETTING_KEY = "macro_sector_contract"
 
+
+def load_macro_contract(db) -> Dict[str, Any]:
+    """Read the latest macro→sectorial contract from the shared AppSetting
+    (written by ``macro_monitor``). Empty dict if none yet.
+
+    Centraliza el patrón de lectura para que cualquier consumidor (sector_intel,
+    banking) lea el contrato SIN importar el módulo productor — depende solo de
+    este contrato compartido. Nunca fabrica: sin contrato → ``{}`` (el consumidor
+    degrada declaradamente).
+    """
+    import json
+
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == APP_SETTING_KEY).first()
+    if row is None or not row.value:
+        return {}
+    try:
+        return json.loads(row.value)
+    except (ValueError, TypeError):
+        return {}
+
 # Allowed direction / magnitude values (kept as plain strings for JSON transport).
 FAVORABLE = "favorable"
 ADVERSO = "adverso"

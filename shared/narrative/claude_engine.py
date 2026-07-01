@@ -397,6 +397,23 @@ THIN_TEMPLATES = {
         "confirmaría o refutaría la postura antes del próximo corte. Sin recitar ratios; cita solo "
         "la cifra que justifica la decisión. Usa SOLO las cifras del contexto."
     ),
+    "banking_operating_env": (
+        "Lee el ENTORNO OPERATIVO macro y cómo incide en el perfil de riesgo de ESTA "
+        "entidad — el telón sistémico que el análisis de la entidad no abre.\n"
+        "Contexto (factores macro reales del BCRD vía 'entorno_macro'):\n{context}\n\n"
+        "Máximo 250 palabras. EMPIEZA POR EL VEREDICTO: ¿el entorno macro es un viento de "
+        "cola o de frente para la solidez de un banco, y cuál es el factor que más pesa "
+        "(inflación, actividad/IMAE, tasa de política, tipo de cambio, reservas)? Luego "
+        "conéctalo al canal bancario: cómo cada factor material transmite a la calidad de "
+        "cartera, el margen, el costo de fondeo o la liquidez —INTERPRETA el mecanismo, no "
+        "recites la serie—. NO recorras los factores uno por uno: nombra los 2-3 que mueven "
+        "la lectura y su dirección (favorable/adverso). Distingue lo que es entorno (común a "
+        "todos los bancos) de lo idiosincrático de la entidad. Cierra con qué factor macro "
+        "vigilar como señal adelantada. Este entorno es un TELÓN sistémico y NO forma parte "
+        "del score standalone de la entidad (que mide fortaleza propia); no lo presentes como "
+        "componente del rating. Usa SOLO las cifras de 'entorno_macro'; ninguna inventada; si "
+        "un factor viene 'n/d', no lo cites."
+    ),
     "banking_compare": (
         "Compara las entidades del contexto entre sí — para una decisión de asignación o "
         "exposición.\n"
@@ -735,6 +752,12 @@ STATIC_FALLBACKS = {
         "Esta sección sintetiza la lectura del período en una postura de exposición para el "
         "comité, fundamentada en la solidez y el perfil de riesgo de la entidad según la "
         "metodología SDQ."
+    ),
+    "banking_operating_env": (
+        "El entorno operativo macroeconómico —inflación, actividad, tasas de política, tipo "
+        "de cambio y reservas del BCRD— constituye el telón sistémico común a todas las "
+        "entidades del sistema. Se presenta como contexto y no forma parte de la calificación "
+        "standalone de la entidad, que mide su fortaleza financiera propia."
     ),
 }
 
