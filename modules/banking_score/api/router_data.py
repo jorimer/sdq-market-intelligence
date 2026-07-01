@@ -239,13 +239,14 @@ async def seed_banks(
 async def sib_backfill(
     force: bool = Query(False, description="Forzar re-ejecución aunque ya existan datos SIB"),
     tipos: Optional[str] = Query(None, description="Re-ingesta dirigida: lista de tipos separados por coma (p.ej. 'BAC,AAP'). Omite los demás tipos y el fallback SIMBAD."),
+    skip_carteras: bool = Query(False, description="Omite la agregación del cubo de carteras (el cuello de botella de 504s). Re-ingesta income/balance/indicadores/solvencia y preserva las métricas de carteras existentes. Útil para recalibraciones que solo tocan el estado de resultados (p.ej. cost-to-income)."),
     current_user: User = Depends(get_current_user),
 ):
     if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.sib_sync import start_backfill_background
     only_tipos = [t.strip() for t in tipos.split(",") if t.strip()] if tipos else None
-    return start_backfill_background(force=force, only_tipos=only_tipos)
+    return start_backfill_background(force=force, only_tipos=only_tipos, skip_carteras=skip_carteras)
 
 
 # Backward-compatible alias for /sib-sync → triggers the same backfill.
@@ -253,13 +254,14 @@ async def sib_backfill(
 async def sync_from_sib(
     force: bool = Query(False, description="Forzar re-ingesta aunque ya haya datos / un backfill reciente (admin override)"),
     tipos: Optional[str] = Query(None, description="Re-ingesta dirigida: lista de tipos separados por coma (p.ej. 'BAC,AAP')."),
+    skip_carteras: bool = Query(False, description="Omite la agregación del cubo de carteras (504s). Re-ingesta income/balance/indicadores/solvencia y preserva las métricas de carteras existentes."),
     current_user: User = Depends(get_current_user),
 ):
     if not role_satisfies(current_user.role, UserRole.admin):
         raise HTTPException(status_code=403, detail="Se requiere rol admin")
     from modules.banking_score.sib_sync import start_backfill_background
     only_tipos = [t.strip() for t in tipos.split(",") if t.strip()] if tipos else None
-    return start_backfill_background(force=force, only_tipos=only_tipos)
+    return start_backfill_background(force=force, only_tipos=only_tipos, skip_carteras=skip_carteras)
 
 
 # ─── Rescore (recompute ratings from existing data, no re-ingest) ─
