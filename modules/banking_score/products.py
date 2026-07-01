@@ -37,6 +37,7 @@ from modules.banking_score.reports.pdf_generator import generate_pdf_report
 from modules.banking_score.scoring.amplitude import entity_trajectories, period_percentiles
 from modules.banking_score.scoring.market_concentration import compute_market_concentration
 from modules.banking_score.scoring.sensitivity import sensitivity_table
+from modules.banking_score.scoring.support import support_overlay
 from modules.banking_score.scoring.system_aggregate import system_pulse_aggregate
 
 SECTOR_KEY = "banking"
@@ -196,6 +197,22 @@ SAMPLE_NARRATIVES = {
         "igual todas las entidades. La señal adelantada a vigilar es la trayectoria del tipo "
         "de cambio y de las reservas internacionales del BCRD."
     ),
+    "soporte_soberano": (
+        "Esta sección es **contexto estructural**, no un componente de la calificación "
+        "SDQ (que mide fortaleza financiera **standalone**). Banco Demo **no es una entidad "
+        "de propiedad estatal** y se ubica entre las de mayor escala del sistema, con una "
+        "**importancia sistémica material** por su cuota de activos y depósitos. En clave "
+        "Fitch, ello sugiere que un eventual soporte extraordinario dependería de la "
+        "política de resolución antes que de la propiedad. El **techo soberano** de la "
+        "República Dominicana (BB, S&P) ancla cualquier lectura en clave crediticia "
+        "comparable: una calificación de crédito en moneda extranjera difícilmente "
+        "excedería ese techo. La fortaleza **standalone** SDQ-AA- de Banco Demo mide su "
+        "posición **relativa** dentro del sistema dominicano y puede situarse por encima "
+        "de ese techo precisamente porque **no es** una medida de riesgo de crédito "
+        "absoluto. La lectura práctica: para una contraparte local, el perfil standalone "
+        "es la referencia; para una comparación internacional, el techo soberano y el "
+        "régimen de soporte son los encuadres que faltarían incorporar."
+    ),
     "recommendation": (
         "Para una contraparte o comité de crédito, Banco Demo amerita una **aprobación "
         "clara** dentro de su segmento de riesgo: un capital holgado, una cartera sana y una "
@@ -217,11 +234,13 @@ _INSIGHT_SECTIONS = (
     "executive_summary", "solidez_financiera", "calidad_activos",
     "eficiencia_rentabilidad", "liquidez", "diversificacion", "comparative",
 )
-# Deep Dive añade (Fase 4) el ENTORNO OPERATIVO macro (telón sistémico BCRD, tras el
-# comparativo y antes del riesgo forward que encuadra) + riesgo/escenarios +
-# recomendación + limitaciones. Entorno operativo es exclusivo del Deep Dive.
+# Deep Dive añade (Fase 4) el ENTORNO OPERATIVO macro (telón sistémico BCRD) + (Fase 6)
+# SOPORTE Y TECHO SOBERANO (capa de contexto estilo Fitch, NO muta el standalone) +
+# riesgo/escenarios + recomendación + limitaciones. Ambas secciones son exclusivas del
+# Deep Dive.
 _DEEP_DIVE_SECTIONS = _INSIGHT_SECTIONS + (
-    "entorno_operativo", "risk_assessment", "recommendation", "limitations")
+    "entorno_operativo", "soporte_soberano", "risk_assessment", "recommendation",
+    "limitations")
 
 # Limitaciones: texto estático (sin cifras → guard anti-alucinación trivialmente limpio).
 # Incluye el ENCUADRE del score (Fase 3, portado de pensiones): la calificación SDQ es
@@ -238,9 +257,11 @@ _LIMITATIONS_TEXT = (
     "escalas de las calificadoras internacionales: la solvencia efectiva de una entidad "
     "estatal o sistémica puede diferir de su perfil standalone —el soporte la eleva; el "
     "techo soberano la acota—. La escala SDQ-AAA…D ordena fortaleza financiera relativa "
-    "dentro del sistema dominicano, no riesgo de crédito absoluto. Las calificaciones SDQ "
-    "son opiniones independientes de SDQ Consulting y no constituyen una recomendación "
-    "para comprar, vender o mantener instrumentos."
+    "dentro del sistema dominicano, no riesgo de crédito absoluto. El Deep Dive incorpora "
+    "estos ejes (soporte estatal, importancia sistémica, techo soberano) como una capa de "
+    "CONTEXTO separada (sección «Soporte y Techo Soberano»), sin alterar la calificación "
+    "standalone. Las calificaciones SDQ son opiniones independientes de SDQ Consulting y "
+    "no constituyen una recomendación para comprar, vender o mantener instrumentos."
 )
 
 
@@ -404,6 +425,10 @@ class BankingProduct:
             # Sensibilidades: qué sube / qué baja el score, con umbral en valor crudo.
             scoring_result["sensibilidades"] = sensitivity_table(
                 scoring_result["indicators"], entity_type)
+            # Soporte/sistémico + techo soberano (Fase 6): overlay de CONTEXTO estilo
+            # Fitch — NO muta el standalone (score/tier/vector intactos). Solo Deep Dive.
+            scoring_result["soporte_soberano"] = support_overlay(
+                db, bank, float(rr.overall_score), rr.rating_tier, rr.period_end)
         conc = compute_market_concentration(db, rr.period_end, "activos")
         peer_block = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
                        "cr10": conc["cr10"], "hhi": conc["hhi"]} if conc.get("available") else None)

@@ -419,6 +419,25 @@ THIN_TEMPLATES = {
         "componente del rating. Usa SOLO las cifras de 'entorno_macro'; ninguna inventada; si "
         "un factor viene 'n/d', no lo cites."
     ),
+    "banking_support_context": (
+        "Lee el SOPORTE ESTRUCTURAL y el TECHO SOBERANO de esta entidad — la capa estilo "
+        "Fitch (VR/GSR/IDR) que el score standalone deliberadamente NO incorpora.\n"
+        "Contexto ('soporte_soberano': soporte estatal, importancia sistémica, techo soberano):\n"
+        "{context}\n\n"
+        "Máximo 250 palabras. REGLA DURA: esto es CONTEXTO, NO un componente del score SDQ. "
+        "El SDQ mide fortaleza financiera STANDALONE RELATIVA dentro de RD y NO es un rating "
+        "de crédito; NO afirmes que el soporte o el techo 'suben' o 'bajan' la calificación "
+        "SDQ, ni inventes una nota ajustada. EMPIEZA por el veredicto: ¿esta entidad es "
+        "sistémica y/o estatal, y qué implicaría eso para su solvencia efectiva en clave "
+        "comparable? Desarrolla los tres ejes con las cifras del contexto: (1) soporte "
+        "estatal (state_owned) — propiedad y su lectura; (2) importancia sistémica (cuota de "
+        "activos/depósitos, rank) — too-big-to-fail; (3) techo soberano (rating, agencia, "
+        "as_of) — que ancla cualquier lectura crediticia comparable, y por qué la fortaleza "
+        "standalone puede exceder ese techo (no es crédito absoluto). Cierra con la lectura "
+        "práctica: para una contraparte local el standalone es la referencia; para "
+        "comparación internacional faltarían incorporar el techo y el régimen de soporte. "
+        "Usa SOLO las cifras del contexto; si un eje viene vacío, dilo sin inventar."
+    ),
     "banking_compare": (
         "Compara las entidades del contexto entre sí — para una decisión de asignación o "
         "exposición.\n"
@@ -767,6 +786,13 @@ STATIC_FALLBACKS = {
         "de cambio y reservas del BCRD— constituye el telón sistémico común a todas las "
         "entidades del sistema. Se presenta como contexto y no forma parte de la calificación "
         "standalone de la entidad, que mide su fortaleza financiera propia."
+    ),
+    "banking_support_context": (
+        "El soporte estatal, la importancia sistémica y el techo soberano de la República "
+        "Dominicana constituyen una capa de contexto estructural, presentada de forma "
+        "separada. No forman parte de la calificación SDQ standalone —que mide fortaleza "
+        "financiera relativa dentro del sistema dominicano, no riesgo de crédito absoluto—; "
+        "encuadran cómo se leería la entidad en clave comparable internacional."
     ),
 }
 
