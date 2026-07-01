@@ -77,6 +77,7 @@ NARRATIVE_SECTION_TITLES = {
     "diversificacion": "Diversificación",
     "risk_assessment": "Evaluación de Riesgos",
     "comparative": "Análisis Comparativo",
+    "entorno_operativo": "Entorno Operativo",
     "recommendation": "Recomendación",
     "trend_analysis": "Análisis de Tendencias",
     "sector_outlook": "Perspectiva Sectorial",
@@ -544,6 +545,50 @@ def _build_peer_block(peer_block: Dict, styles) -> List:
     return elements
 
 
+_MACRO_DIR_LABEL = {"favorable": "Favorable", "adverso": "Adverso", "neutral": "Neutral"}
+
+
+def _build_macro_table(entorno_macro: Dict, styles) -> List:
+    """Tabla de factores del Entorno Operativo (macro BCRD, Fase 4). Opt-in: vacío si
+    el snapshot no trajo factores (sin contrato macro)."""
+    factors = (entorno_macro or {}).get("factors") or []
+    if not factors:
+        return []
+    period = entorno_macro.get("period")
+    ttl = "Entorno Operativo — Factores Macro (BCRD)" + (f" · {period}" if period else "")
+    elements: List = [Paragraph(ttl, styles["SDQHeading"])]
+    rows = [["Factor", "Valor", "Señal", "Lectura"]]
+    for f in factors:
+        val = f.get("value")
+        unit = f.get("unit") or ""
+        val_str = (f"{val:g}{unit}" if isinstance(val, (int, float)) else "N/D")
+        rows.append([
+            f.get("label", f.get("key", "")),
+            val_str,
+            _MACRO_DIR_LABEL.get(f.get("direction"), "—"),
+            Paragraph(_md_inline(f.get("reading", "") or ""), styles["SDQSmall"]),
+        ])
+    table = Table(rows, colWidths=[1.7 * inch, 1.0 * inch, 0.9 * inch, 2.9 * inch], repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("ALIGN", (1, 0), (2, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 0.08 * inch))
+    elements.append(Paragraph(
+        "Telón macroeconómico sistémico (BCRD), común a todas las entidades. No forma parte "
+        "de la calificación standalone; encuadra la dirección del entorno operativo.",
+        styles["SDQSmall"]))
+    return elements
+
+
 def _order_narratives(narratives: Dict[str, str],
                       sections: Optional[List[str]]) -> Dict[str, str]:
     """Filtra/ordena las narrativas por `sections` (manifiesto del nivel).
@@ -639,21 +684,16 @@ async def generate_pdf_report(
     percentiles = scoring_result.get("percentiles") or {}
 
     # 3. Indicators table (detailed reports only) — con columnas de percentil/tendencia.
-    rendered_detail = False
     if indicators and report_type in ("full_rating", "scorecard", "datawatch"):
         body.extend(_build_indicators_table(indicators, styles, percentiles, trajectories))
         body.append(Spacer(1, 0.3 * inch))
-        rendered_detail = True
 
     # 3a-bis. Trayectoria del score (multi-período) — solo si el snapshot la trajo.
     if trajectories.get("overall"):
         traj_els = _build_trajectory_table(trajectories, styles)
         if traj_els:
             body.extend(traj_els)
-            rendered_detail = True
-
-    if rendered_detail:
-        body.append(PageBreak())
+            body.append(Spacer(1, 0.3 * inch))
 
     # 3b. Pulse — distribución del sistema por banda (opt-in, anonimizado).
     if band_distribution:
@@ -665,8 +705,20 @@ async def generate_pdf_report(
         body.extend(_build_peer_block(peer_block, styles))
         body.append(Spacer(1, 0.3 * inch))
 
-    # 4. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`).
+    # 3d. Entorno Operativo — factores macro BCRD (opt-in; Deep Dive con contrato macro).
+    entorno_macro = scoring_result.get("entorno_macro")
+    if entorno_macro:
+        macro_els = _build_macro_table(entorno_macro, styles)
+        if macro_els:
+            body.extend(macro_els)
+            body.append(Spacer(1, 0.3 * inch))
+
+    # 4. Narrative sections (filtradas/ordenadas por el manifiesto si `sections`). Un único
+    # salto de página separa el bloque de datos (tablas) de la narrativa; las tablas fluyen
+    # naturalmente entre sí (evita páginas en blanco cuando el detalle desborda la primera).
     if narratives:
+        if body:
+            body.append(PageBreak())
         body.extend(_build_narrative_sections(
             _order_narratives(narratives, sections), styles))
 

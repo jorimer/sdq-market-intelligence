@@ -62,6 +62,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
     "risk_assessment": "banking_risk",
     "comparative": "banking_comparative",
     "recommendation": "banking_recommendation",
+    "entorno_operativo": "banking_operating_env",
     "trend_analysis": "trend_analysis",
     "sector_outlook": "sector_outlook",
 }
@@ -71,7 +72,7 @@ _SECTION_TO_TEMPLATE: Dict[str, str] = {
 # (trend_analysis, sector_outlook) sigue en ruta legacy.
 _CEREBRO_TEMPLATES = frozenset({
     "subcomponent_focus", "banking_summary", "banking_comparative",
-    "banking_risk", "banking_recommendation",
+    "banking_risk", "banking_recommendation", "banking_operating_env",
 })
 
 # Profundidad POR SECCIÓN (alineada con shared.products.section_mode), para que el deep dive
@@ -116,6 +117,18 @@ def _build_section_context(
     # el scoring_result (calculadas en snapshot con DB); pueden faltar en muestras/tests.
     traj = scoring_result.get("trayectorias") or {}
     pct = scoring_result.get("percentiles") or {}
+
+    # Entorno Operativo (Fase 4): telón macro del BCRD (factores reales del contrato
+    # compartido). Contexto propio — ni sub-componente ni panorama de la entidad: es el
+    # entorno sistémico común, encuadrado para el perfil del banco.
+    if section == "entorno_operativo":
+        return {
+            "entity_name": bank_name,
+            "period": period,
+            "rating_tier": scoring_result.get("rating_tier", "N/A"),
+            "entorno_macro": scoring_result.get("entorno_macro", {}),
+        }
+
     sub_key = _SUB_COMPONENT_MAP.get(section)
 
     # Sub-component sections: a TIGHT context with only this dimension's indicators,

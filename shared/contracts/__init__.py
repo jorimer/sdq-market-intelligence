@@ -9,7 +9,9 @@ from shared.contracts.macro_sector import (
     APP_SETTING_KEY,
     MacroFactor,
     MacroSectorContract,
+    load_macro_contract,
     sector_macro_exposure,
 )
 
-__all__ = ["APP_SETTING_KEY", "MacroFactor", "MacroSectorContract", "sector_macro_exposure"]
+__all__ = ["APP_SETTING_KEY", "MacroFactor", "MacroSectorContract",
+           "load_macro_contract", "sector_macro_exposure"]

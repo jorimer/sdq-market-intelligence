@@ -15,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 from shared.auth.models import User  # noqa: F401 — registra la tabla 'users' (FK de RatingResult)
 from shared.database.base import Base
+from shared.settings.models import AppSetting  # snapshot lee el contrato macro (Entorno Operativo)
 from shared.products import ProductSnapshot, ProductTier, SectorProduct, assemble_product_report
 from shared.products.anonymization import AnonymizationError
 from modules.banking_score.models.models import (
@@ -59,7 +60,7 @@ def db():
                            poolclass=StaticPool)
     Base.metadata.create_all(
         engine, tables=[User.__table__, Bank.__table__, RatingResult.__table__,
-                        BankingData.__table__])
+                        BankingData.__table__, AppSetting.__table__])
     s = sessionmaker(bind=engine)()
     try:
         yield s
