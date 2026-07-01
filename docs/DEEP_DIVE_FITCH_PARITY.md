@@ -1,5 +1,28 @@
 # Paridad Deep-Dive vs Fitch — Workstream
 
+## Fase 5 — Pensiones: rentabilidad real + asterisco al titular (2026-07-01) ✅ CERRADA Y VERIFICADA EN PROD
+
+Expresa la rentabilidad de las AFP en términos REALES (deflactada por inflación BCRD) y sube
+el caveat "relativo/parcial" del §5 a la portada. **NO muta el ISA**: deflactar por una
+inflación común a todas las AFP es un desplazamiento aditivo común → el min-max entre pares es
+invariante. El retorno real es honestidad económica de presentación; el ISA sigue sobre nominal.
+
+- **Plumbing cross-módulo (respeta el aislamiento):** `macro_monitor` persiste la SERIE de
+  inflación interanual del BCRD en un `AppSetting` compartido nuevo (`macro_inflation_series`),
+  junto al contrato (que solo trae el último valor). `shared.contracts.load_inflation_series`
+  la lee; pensiones NO importa macro_monitor ni toca `mm_series`. Se popula al correr el snapshot
+  macro (`POST /macro-monitor/refresh`).
+- **`scoring/real_return.py`:** `fisher_real` ((1+n)/(1+i)−1), `inflation_at` (match exacto +
+  carry-forward), `deflate_trend` (omite períodos sin inflación).
+- **Presentación:** dimensión rentabilidad enriquecida con `raw_real` + inflación (score intacto);
+  titular `· rentab. real ±X%`; caveat en el `subtitle` de portada; tabla "Trayectoria real vs
+  nominal"; narrativa (`pension_entity`) lee el real.
+- **Ajuste por riesgo: DIFERIDO** (necesita serie de volatilidad y SÍ cambiaría scores).
+- Verificado prod (AFP Reservas, 2026-05): nominal 7.84% → real 2.36% (inflación 5.35%), score
+  66.31 intacto; trayectoria real de 60 puntos deflactada con la inflación de cada período
+  (2021-06 nominal 10.77% → real 1.33%); titular "rentab. real +2.4%" + caveat en portada;
+  narrativa cita real+inflación. +7 tests (round-trip productor→consumidor). PR #409.
+
 ## Fase 4 — Amplitud en banca (2026-07-01) ✅ CERRADA Y VERIFICADA EN PROD
 
 Porta al deep dive de banca la amplitud tipo-Fitch que ya tenía (parcialmente) pensiones,
@@ -201,10 +224,10 @@ Leyenda: 🔍 = verificación en prod / fuente pública (bloqueante · read-only
 - ✅ Tabla de sensibilidades simétrica (qué sube / qué baja el score, con umbral crudo) — PR #407.
 - Detalle arriba (sección "Fase 4 — Amplitud en banca").
 
-### Fase 5 — Pensiones: rentabilidad real + asterisco al titular ✅/🔍
-- Deflactar la rentabilidad nominal por la serie de inflación del BCRD → retorno real (AI-native,
-  dato propio). Ideal: ajuste por riesgo.
-- Cargar el asterisco "relativo/parcial + inputs no confiables" a la portada/titular, no solo a §5.
+### Fase 5 — Pensiones: rentabilidad real + asterisco al titular ✅ CERRADA Y VERIFICADA EN PROD (2026-07-01)
+- ✅ Deflactar la rentabilidad nominal por la serie de inflación del BCRD → retorno real — PR #409.
+- ✅ Cargar el asterisco "relativo/parcial" a la portada/titular (subtítulo) — PR #409.
+- Ajuste por riesgo DIFERIDO (cambiaría scores). Detalle arriba (sección "Fase 5").
 
 ### Fase 6 — Ejes estructurales (EN ALCANCE AHORA · diseño-primero) ⚠️
 Decisión del dueño: se construye ahora, no se aplaza (excelencia sobre velocidad). "Diseño-primero"
