@@ -33,6 +33,7 @@ from shared.products import (
 from modules.banking_score.models.models import Bank, ModelType, RatingResult
 from modules.banking_score.reports.narrative import generate_named_narratives
 from modules.banking_score.reports.pdf_generator import generate_pdf_report
+from modules.banking_score.scoring.amplitude import entity_trajectories, period_percentiles
 from modules.banking_score.scoring.market_concentration import compute_market_concentration
 from modules.banking_score.scoring.system_aggregate import system_pulse_aggregate
 
@@ -362,6 +363,12 @@ class BankingProduct:
             "indicators": rr.indicator_details or {},
             "model_version": rr.model_version,
         }
+        # Amplitud (Fase 4): trayectoria multi-período + percentil vs el sistema por
+        # indicador. Se calculan aquí (con DB) y viajan en el scoring_result porque
+        # narratives()/render() operan sin DB. Degradan con gracia (dicts vacíos) para
+        # entidades con un solo período o sin pares.
+        scoring_result["trayectorias"] = entity_trajectories(db, bank)
+        scoring_result["percentiles"] = period_percentiles(db, bank, rr.period_end)
         conc = compute_market_concentration(db, rr.period_end, "activos")
         peer_block = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
                        "cr10": conc["cr10"], "hhi": conc["hhi"]} if conc.get("available") else None)

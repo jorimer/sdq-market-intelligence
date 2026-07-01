@@ -214,22 +214,54 @@ def _build_sub_scores_table(sub_scores: Dict[str, float], styles) -> List:
     return elements
 
 
-def _build_indicators_table(indicators: Dict[str, Dict], styles) -> List:
+def _trend_arrow(series: Optional[List[Dict]]) -> str:
+    """Flecha + delta del score entre el primer y último punto de la serie (Fase 4)."""
+    if not series or len(series) < 2:
+        return "—"
+    first = series[0].get("score")
+    last = series[-1].get("score")
+    if first is None or last is None:
+        return "—"
+    delta = last - first
+    arrow = "▲" if delta > 0.5 else ("▼" if delta < -0.5 else "=")
+    return f"{arrow} {delta:+.0f}"
+
+
+def _build_indicators_table(indicators: Dict[str, Dict], styles,
+                            percentiles: Optional[Dict] = None,
+                            trajectories: Optional[Dict] = None) -> List:
     elements: List = []
     elements.append(Paragraph("Indicadores Financieros", styles["SDQHeading"]))
 
+    # Columnas de amplitud (Fase 4): percentil vs el sistema y tendencia del score,
+    # opt-in — solo si el snapshot trajo los datos (deep dive de entidad real).
+    pct_ind = (percentiles or {}).get("indicators") or {}
+    traj_ind = (trajectories or {}).get("indicators") or {}
+    has_amplitude = bool(pct_ind or traj_ind)
+
     header = ["Indicador", "Valor", "Score"]
+    if has_amplitude:
+        header += ["Percentil sist.", "Tendencia"]
     rows = [header]
     for name, data in indicators.items():
-        if isinstance(data, dict):
-            rows.append([
-                name.replace("_", " ").title(),
-                f"{data.get('raw', 'N/A')}",
-                f"{data.get('score', 0):.1f}",
-            ])
+        if not isinstance(data, dict):
+            continue
+        row = [
+            name.replace("_", " ").title(),
+            f"{data.get('raw', 'N/A')}",
+            f"{data.get('score', 0):.1f}",
+        ]
+        if has_amplitude:
+            sector = (pct_ind.get(name) or {}).get("sector") or {}
+            p = sector.get("percentile")
+            row.append(f"p{p:.0f}" if isinstance(p, (int, float)) else "—")
+            row.append(_trend_arrow(traj_ind.get(name)))
+        rows.append(row)
 
     if len(rows) > 1:
-        table = Table(rows, colWidths=[2.5 * inch, 1.5 * inch, 1.0 * inch])
+        col_widths = ([2.3 * inch, 1.1 * inch, 0.8 * inch, 1.2 * inch, 1.1 * inch]
+                      if has_amplitude else [2.5 * inch, 1.5 * inch, 1.0 * inch])
+        table = Table(rows, colWidths=col_widths)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), NAVY),
             ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
@@ -241,7 +273,65 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles) -> List:
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ]))
         elements.append(table)
+        if has_amplitude:
+            elements.append(Spacer(1, 0.08 * inch))
+            elements.append(Paragraph(
+                "Percentil sist. = posición del score del indicador vs todas las entidades "
+                "calificadas en el período (p50 = mediana). Tendencia = variación del score "
+                "entre el primer y el último trimestre disponible.", styles["SDQSmall"]))
 
+    return elements
+
+
+def _build_trajectory_table(trajectories: Dict, styles) -> List:
+    """Trayectoria multi-período del score global + sub-componentes (Fase 4).
+
+    Muestra hasta los últimos ~6 trimestres como columnas. Opt-in: vacío si el
+    snapshot no trajo trayectoria (muestras sintéticas, entidad de un solo período).
+    """
+    overall = trajectories.get("overall") or []
+    sub = trajectories.get("sub") or {}
+    if len(overall) < 2:
+        return []
+
+    periods = [p["period_end"] for p in overall][-6:]
+    # Encabezado: períodos abreviados a YYYY-MM.
+    short = [pe[:7] for pe in periods]
+    elements: List = [Paragraph("Trayectoria del Score (multi-período)", styles["SDQHeading"])]
+
+    def _series_row(label: str, series: List[Dict]) -> List[str]:
+        by_period = {p["period_end"]: p.get("score") for p in series}
+        cells = [label]
+        for pe in periods:
+            v = by_period.get(pe)
+            cells.append(f"{v:.1f}" if isinstance(v, (int, float)) else "—")
+        return cells
+
+    rows = [["Eje"] + short]
+    rows.append(_series_row("Score global", overall))
+    for sk in ("solidez", "calidad", "eficiencia", "liquidez", "diversificacion"):
+        if sub.get(sk):
+            rows.append(_series_row(SUB_COMPONENT_LABELS.get(sk, sk), sub[sk]))
+
+    ncol = len(periods) + 1
+    table = Table(rows, colWidths=[1.9 * inch] + [(4.6 * inch) / len(periods)] * len(periods),
+                  repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("FONTNAME", (0, 1), (0, 1), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 0.08 * inch))
+    elements.append(Paragraph(
+        "Score 0–100 por eje en cada cierre trimestral. Permite leer la dirección del "
+        "perfil (mejora/deterioro) más allá del corte vigente.", styles["SDQSmall"]))
     return elements
 
 
@@ -543,9 +633,26 @@ async def generate_pdf_report(
         body.extend(_build_sub_scores_table(sub_scores, styles))
         body.append(Spacer(1, 0.3 * inch))
 
-    # 3. Indicators table (detailed reports only)
+    # Amplitud (Fase 4): trayectoria multi-período + percentil vs el sistema. Vienen en
+    # el scoring_result (calculados en snapshot); ausentes en Pulse/muestras → opt-in.
+    trajectories = scoring_result.get("trayectorias") or {}
+    percentiles = scoring_result.get("percentiles") or {}
+
+    # 3. Indicators table (detailed reports only) — con columnas de percentil/tendencia.
+    rendered_detail = False
     if indicators and report_type in ("full_rating", "scorecard", "datawatch"):
-        body.extend(_build_indicators_table(indicators, styles))
+        body.extend(_build_indicators_table(indicators, styles, percentiles, trajectories))
+        body.append(Spacer(1, 0.3 * inch))
+        rendered_detail = True
+
+    # 3a-bis. Trayectoria del score (multi-período) — solo si el snapshot la trajo.
+    if trajectories.get("overall"):
+        traj_els = _build_trajectory_table(trajectories, styles)
+        if traj_els:
+            body.extend(traj_els)
+            rendered_detail = True
+
+    if rendered_detail:
         body.append(PageBreak())
 
     # 3b. Pulse — distribución del sistema por banda (opt-in, anonimizado).

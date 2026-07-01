@@ -112,6 +112,10 @@ def _build_section_context(
 ) -> Dict:
     """Build the context dict that gets serialized into the Claude prompt."""
     all_indicators = scoring_result.get("indicators", {})
+    # Amplitud (Fase 4): trayectoria multi-período + percentil vs el sistema. Vienen en
+    # el scoring_result (calculadas en snapshot con DB); pueden faltar en muestras/tests.
+    traj = scoring_result.get("trayectorias") or {}
+    pct = scoring_result.get("percentiles") or {}
     sub_key = _SUB_COMPONENT_MAP.get(section)
 
     # Sub-component sections: a TIGHT context with only this dimension's indicators,
@@ -136,6 +140,31 @@ def _build_section_context(
             "impulsor": driver,
             "lastre": drag,
         }
+        # Amplitud de la dimensión: la trayectoria del score del sub-componente, su
+        # percentil vs el sistema, y —por indicador de la dimensión— su serie reciente
+        # y su percentil. Da al cerebro la profundidad Fitch (evolución + posición
+        # relativa) en vez de solo el corte actual.
+        traj_sub = (traj.get("sub") or {}).get(sub_key)
+        if traj_sub:
+            ctx["trayectoria_sub_componente"] = traj_sub
+        pct_sub = (pct.get("sub") or {}).get(sub_key)
+        if pct_sub:
+            ctx["percentil_sub_componente"] = pct_sub
+        traj_ind = traj.get("indicators") or {}
+        pct_ind = pct.get("indicators") or {}
+        amplitud = {}
+        for k in keys:
+            if k not in ind:
+                continue
+            block = {}
+            if traj_ind.get(k):
+                block["trayectoria"] = traj_ind[k][-8:]
+            if pct_ind.get(k):
+                block["percentil"] = pct_ind[k]
+            if block:
+                amplitud[k] = block
+        if amplitud:
+            ctx["amplitud_indicadores"] = amplitud
         if benchmarks and isinstance(benchmarks, dict):
             sub_bench = benchmarks.get(sub_key) or benchmarks.get(section)
             if sub_bench:
@@ -160,6 +189,18 @@ def _build_section_context(
             "crediticio ni la compares con las escalas de calificadoras internacionales."
         ),
     }
+    # Amplitud a nivel de entidad: trayectoria del score global + de cada
+    # sub-componente, y percentil vs el sistema (score global + sub-componentes). El
+    # comparativo y el resumen ejecutivo leen posición relativa y evolución, no solo
+    # el corte actual.
+    if traj.get("overall"):
+        ctx["trayectoria_score"] = traj["overall"]
+    if traj.get("sub"):
+        ctx["trayectoria_sub"] = traj["sub"]
+    if pct.get("overall"):
+        ctx["percentil_score"] = pct["overall"]
+    if pct.get("sub"):
+        ctx["percentil_sub"] = pct["sub"]
     if benchmarks:
         ctx["benchmarks"] = benchmarks
     return ctx
