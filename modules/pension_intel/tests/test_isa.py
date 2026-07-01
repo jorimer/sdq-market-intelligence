@@ -140,3 +140,55 @@ def test_no_solvency_figure_fabricated(db):
     for r in compute_isa(db):
         solv = next(d for d in r["dimensions"] if d["key"] == "solvencia")
         assert solv["raw"] is None and solv["score"] is None
+
+
+# ── Fase 2: costo dimension (unit fix + absolute scoring) ───────────────────────
+
+def test_to_rd_normalizes_millions():
+    from modules.pension_intel.scoring.isa import _to_rd
+    assert _to_rd(2265.7, "RD$ MM") == pytest.approx(2265.7 * 1_000_000)
+    assert _to_rd(2265.7, "RD$") == 2265.7
+    assert _to_rd(100.0, None) == 100.0
+
+
+def test_score_costo_absolute_band():
+    from modules.pension_intel.scoring.isa import _score_costo_absolute
+    assert _score_costo_absolute(0.4) == 100.0    # cheap
+    assert _score_costo_absolute(1.2) == 0.0      # expensive
+    assert _score_costo_absolute(0.8) == pytest.approx(50.0, abs=0.5)
+    # a marginal 0.22pp real spread no longer spans the full 0-100 range (the min-max bug)
+    assert _score_costo_absolute(0.65) - _score_costo_absolute(0.87) < 30
+
+
+def test_costo_ratio_unit_normalized_and_absolute(tmp_path):
+    """comisiones in 'RD$ MM' ÷ AUM in 'RD$' must yield a real % (~0.65), not ~0.0,
+    and the cheapest AFP must NOT be min-max-inflated to a perfect 100."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from modules.pension_intel.models.models import PensionEntity, PensionSeries
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+
+    def seed(slug, comis_mm, aum_rd, rent):
+        db.add(PensionEntity(slug=slug, name=slug, is_active=True))
+        db.add(PensionSeries(entity_slug=slug, series_code="comisiones_anual",
+                             period="2025", value=comis_mm, unit="RD$ MM", source="SIPEN"))
+        db.add(PensionSeries(entity_slug=slug, series_code="fondos_administrados",
+                             period="2026-05", value=aum_rd, unit="RD$", source="SIPEN"))
+        db.add(PensionSeries(entity_slug=slug, series_code="rentabilidad_nominal_anual",
+                             period="2026-05", value=rent, unit="%", source="SIPEN"))
+
+    seed("afp_a", 2265.7, 348007034642.0, 8.0)   # ~0.65%  (cheapest)
+    seed("afp_b", 99.2, 11377405992.0, 9.0)      # ~0.87%
+    db.commit()
+
+    res = {r["slug"]: r for r in compute_isa(db)}
+    costo_a = next(d for d in res["afp_a"]["dimensions"] if d["key"] == "costo")
+    costo_b = next(d for d in res["afp_b"]["dimensions"] if d["key"] == "costo")
+    assert costo_a["raw"] == pytest.approx(0.65, abs=0.05)   # real %, not 0.0
+    assert costo_a["score"] > costo_b["score"]               # A genuinely cheaper
+    assert costo_a["score"] < 100.0                          # absolute band, not min-max top
+    db.close()

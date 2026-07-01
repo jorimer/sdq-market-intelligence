@@ -104,6 +104,10 @@ def ingest_financials(
     # statement itself, so all AFPs share one consistent source (peer-normalized → unit-invariant).
     if fields.get("fondos_administrados") is not None:
         _upsert_series(db, afp_slug, "fondos_administrados", period, fields["fondos_administrados"], "RD$")
+    # Commission revenue for the ISA cost dimension — same statement as AUM → RD$ units
+    # and the same period, replacing the orphaned static 'RD$ MM' SIPEN series.
+    if fields.get("comisiones") is not None:
+        _upsert_series(db, afp_slug, "comisiones_anual", period, fields["comisiones"], "RD$")
 
     set_phase("Recalculando ISA (con solvencia)")
     db.flush()
