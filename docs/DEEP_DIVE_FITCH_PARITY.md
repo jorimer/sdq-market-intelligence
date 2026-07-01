@@ -1,5 +1,31 @@
 # Paridad Deep-Dive vs Fitch — Workstream
 
+> **WORKSTREAM COMPLETO (2026-07-01): las 6 fases cerradas y verificadas en prod.**
+
+## Fase 6 — Ejes estructurales (2026-07-01) ✅ CERRADA Y VERIFICADA EN PROD
+
+Diseño-primero (spec + anclas aprobadas por el dueño antes de código). Dos partes.
+
+### Parte A — Banca: capa de soporte/sistémico + techo soberano (PR #411, NO muta el standalone)
+Overlay estilo Fitch (VR/GSR/IDR) en el Deep Dive: soporte estatal + importancia sistémica +
+techo soberano como CONTEXTO separado. El score SDQ standalone (score/tier/vector 21-dim) queda
+PURO. **Decisión del dueño: contexto separado, SDQ intacto** — el SDQ es fortaleza relativa
+dentro de RD, no crédito (Fase 3), así que no se le aplica un cap soberano que importe semántica
+crediticia. `scoring/support.py`: `STATE_OWNED={Banreservas}` (set de config, sin migración),
+importancia sistémica (cuota activos/depósitos + rank CR; sistémica=CR5), `sovereign_anchor()`
+(techo RD = BB, S&P, 45/100, desde regulatory.yaml). Sección + tabla + thin template
+(regla dura: es contexto, NO sube/baja el SDQ). Verificado prod: Banreservas estatal, sistémica
+top-1 (cuota 31.2%/32.7%), techo BB 45/100, standalone SDQ-AA 86.72 intacto.
+
+### Parte B — Pensiones: hardening del min-max del ISA (PR #412, MUTA el ISA)
+Reemplaza el min-max PURO (bordes del pack a 0/100, outlier re-ancla) por un HÍBRIDO:
+`0.5·banda_absoluta + 0.5·min-max` — magnitud (inmune a outliers) + discriminación relativa.
+costo mantiene su banda propia. MODEL_VERSION 0.1→0.2. **Anclas aprobadas por el dueño**
+(calibradas a la distribución real + economía): rentabilidad 5%→0/12%→100, solvencia
+0.5→0/1.0→100, escala 10bn→0/500bn→100 (log). Verificado prod (recompute exacto vs proyección
+aprobada): Reservas #1 (75.03, Sólida), Siembra 3→2, Romana 2→3 (min-max le inflaba rentab.),
+Atlántico/JMMB ya no en 0; live (compute_isa) + persistido (/rankings) consistentes.
+
 ## Fase 5 — Pensiones: rentabilidad real + asterisco al titular (2026-07-01) ✅ CERRADA Y VERIFICADA EN PROD
 
 Expresa la rentabilidad de las AFP en términos REALES (deflactada por inflación BCRD) y sube
@@ -229,19 +255,14 @@ Leyenda: 🔍 = verificación en prod / fuente pública (bloqueante · read-only
 - ✅ Cargar el asterisco "relativo/parcial" a la portada/titular (subtítulo) — PR #409.
 - Ajuste por riesgo DIFERIDO (cambiaría scores). Detalle arriba (sección "Fase 5").
 
-### Fase 6 — Ejes estructurales (EN ALCANCE AHORA · diseño-primero) ⚠️
-Decisión del dueño: se construye ahora, no se aplaza (excelencia sobre velocidad). "Diseño-primero"
-es un requisito de calidad para un cambio arquitectónico, NO una postergación — el spec se escribe
-dentro de este workstream.
-- **Banca — capa de soporte/sistémico (arquitectura tipo Fitch VR/GSR/IDR):**
-  - El score standalone se mantiene PURO (5 sub-componentes / vector 21-dim intactos) = análogo VR.
-  - Nueva capa SEPARADA de soporte (importancia sistémica, propiedad estatal, cuota de depósitos) +
-    techo soberano (cap). NO un 6º peso (rompería la suma-a-1 y el vector ML).
-  - Salida en dos partes: fortaleza standalone + vista ajustada por soporte + cap soberano.
-  - Requiere: spec corto (fuentes de importancia sistémica, regla del techo) antes de código.
-- **Pensiones — normalización híbrida:** reemplazar el min-max puro por híbrido con anclas absolutas,
-  para que el score comunique magnitud (no solo rango) y un outlier no re-ancle el panel. Depende de
-  las distribuciones reales de Fase 0.
+### Fase 6 — Ejes estructurales ✅ CERRADA Y VERIFICADA EN PROD (2026-07-01)
+- ✅ **Banca — capa de soporte/sistémico + techo soberano** (PR #411): overlay estilo Fitch
+  VR/GSR/IDR como CONTEXTO separado; el standalone (score/tier/vector 21-dim) queda PURO.
+  Decisión del dueño: contexto separado, SDQ intacto (no cap crediticio sobre una escala que no
+  es de crédito). Detalle arriba (sección "Fase 6 · Parte A").
+- ✅ **Pensiones — normalización híbrida** (PR #412): min-max puro → híbrido `0.5·absoluta +
+  0.5·min-max`; comunica magnitud, un outlier no re-ancla. MUTA el ISA (anclas aprobadas por el
+  dueño; recompute prod = proyección exacta). Detalle arriba (sección "Fase 6 · Parte B").
 
 ---
 
