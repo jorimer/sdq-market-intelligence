@@ -1756,6 +1756,14 @@
         "peer_positioning": "Panel position"
       },
       "dimensionsTitle": "Dimensions (score 0–100)",
+      "risk": {
+        "title": "Risk & risk-adjusted return",
+        "sharpe": "Sharpe",
+        "vol": "Volatility (σ)",
+        "return": "Annualized return",
+        "free": "Risk-free (policy rate)",
+        "caveat": "σ = realized volatility of the unit value ({{n}}-month window); Sharpe = (return − average policy rate) / σ. σ is dampened by the portfolio's amortized-cost valuation."
+      },
       "dim": {
         "export_dynamism": "Export dynamism",
         "investment_attraction": "Investment attraction",
@@ -1953,6 +1961,12 @@
     "drillWeight": "weight {{n}}",
     "dirHigher": "higher is better",
     "dirLower": "lower is better",
+    "riskAdjTitle": "Risk-adjusted return",
+    "riskAdjCaveat": "{{n}}-month window. Sharpe = (annualized return − average policy rate) / σ. σ is dampened by the portfolio's amortized-cost valuation; this dimension's score is σ, not the Sharpe.",
+    "riskSharpe": "Sharpe",
+    "riskVol": "Volatility (σ)",
+    "riskReturn": "Annualized return",
+    "riskFree": "Risk-free (policy rate)",
     "isaPartialNote": "PARTIAL index: the score is a relative position among AFPs with enough data. Solvency (financial statements) is a declared gap and absolute solidity bands are deferred until it lands.",
     "rankingTitle": "AFP ranking · relative ISA",
     "rankingSubtitle": "Ordered by the Solidity Index (relative, partial). AFPs with insufficient data are listed unscored.",

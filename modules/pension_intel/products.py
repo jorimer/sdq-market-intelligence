@@ -314,30 +314,41 @@ def _apply_risk_adjusted(rating: Dict[str, Any], db) -> Dict[str, Any]:
     """Enriquece la dimensión *riesgo* de *rating* con su retorno ajustado por riesgo
     (Sharpe = (retorno anualizado − TPM promedio de la ventana) / σ). Presentación — NO
     toca score/ISA (el score de riesgo es la σ; el Sharpe es lectura para la narrativa).
-    Devuelve ``{sharpe}`` para el titular. Sin serie NAV o sin TPM → no anexa nada."""
-    from shared.contracts import load_tpm_series
-    from modules.pension_intel.scoring.isa import realized_risk_stats
+    Devuelve ``{sharpe}`` para el titular. Sin serie NAV o sin TPM → no anexa nada.
 
-    extra: Dict[str, Any] = {}
-    dim = next((d for d in rating.get("dimensions") or [] if d.get("key") == "riesgo"), None)
-    if not dim:
-        return extra
-    stats = realized_risk_stats(db, rating.get("slug") or "")
-    if not stats:
-        return extra
-    tpm = load_tpm_series(db)
-    rf_vals = [tpm[p] for p in stats["periods"] if p in tpm]
-    if not rf_vals or not stats["vol_pct"]:
-        return extra
-    rf = sum(rf_vals) / len(rf_vals)
-    rf_pct = rf * 100.0 if rf < 1.0 else rf  # BCRD stores TPM as a fraction (0.085)
-    sharpe = round((stats["annual_return_pct"] - rf_pct) / stats["vol_pct"], 2)
-    dim["annual_return_pct"] = round(stats["annual_return_pct"], 2)
-    dim["risk_free_pct"] = round(rf_pct, 2)
-    dim["sharpe"] = sharpe
-    dim["vol_window_months"] = stats["n_returns"]
-    extra["sharpe"] = sharpe
-    return extra
+    Delega en ``scoring.isa.annotate_risk_adjusted`` (único origen de verdad, compartido
+    con los endpoints del eje ISA) para que la web y el PDF muestren el mismo Sharpe."""
+    from modules.pension_intel.scoring.isa import annotate_risk_adjusted
+
+    return annotate_risk_adjusted(rating, db)
+
+
+def _named_headline_caveat(payload: Dict[str, Any]) -> tuple:
+    """Titular + caveat de portada para niveles nombrados (Insight/Deep Dive).
+
+    Titular: ``ISA {score}/100 · {AFP} (relativo, parcial) · rentab. real ±X% · Sharpe Y``
+    (los dos últimos tramos solo si el dato está). Caveat: encuadre RELATIVO/PARCIAL +
+    qué es el riesgo (σ del valor cuota) y el Sharpe (sobre TPM), con la nota de costo
+    amortizado. Único builder → la vista in-app y el PDF muestran exactamente lo mismo.
+    Devuelve ``(None, None)`` si no hay ISA (nunca fabrica)."""
+    rating = payload.get("rating") or {}
+    ov = rating.get("overall_score")
+    if not isinstance(ov, (int, float)):
+        return None, None
+    rdim = next((d for d in rating.get("dimensions") or []
+                 if d.get("key") == "rentabilidad"), None)
+    real = (rdim or {}).get("raw_real")
+    sharpe = payload.get("sharpe")
+    headline = f"ISA {ov:.0f}/100 · {rating.get('name', 'AFP')} (relativo, parcial)"
+    if isinstance(real, (int, float)):
+        headline += f" · rentab. real {real:+.1f}%"
+    if isinstance(sharpe, (int, float)):
+        headline += f" · Sharpe {sharpe:.2f}"
+    caveat = ("Lectura RELATIVA y PARCIAL · solvencia (estados financieros) aún "
+              "diferida · rentabilidad en términos reales (deflactada por inflación "
+              "BCRD) · riesgo = volatilidad realizada del valor cuota (σ), Sharpe "
+              "sobre la TPM; σ atenuada por valoración a costo amortizado")
+    return headline, caveat
 
 
 def _cartera_table(cartera: Optional[Dict[str, Any]]) -> Optional[tuple]:
@@ -519,6 +530,14 @@ class PensionProduct:
         payload.update(_apply_risk_adjusted(rating, db))
         if tier == ProductTier.deep_dive:
             payload["cartera"] = _system_cartera(db)  # contexto de riesgo (dónde invierte el fondo)
+        # Titular + caveat de portada (ISA · rentab. real · Sharpe + caveat de σ/costo
+        # amortizado): se stashean en el payload para que la vista in-app muestre lo mismo
+        # que la portada del PDF. Un solo builder → paridad web↔PDF por construcción.
+        headline, caveat = _named_headline_caveat(payload)
+        if headline:
+            payload["headline_line"] = headline
+        if caveat:
+            payload["caveat"] = caveat
         return ProductSnapshot(
             tier=tier, period=rating.get("period") or "—",
             payload=payload, entity_name=entity)
@@ -704,24 +723,13 @@ class PensionProduct:
             if len(present) >= 2:
                 charts.append({"title": "Dimensiones del ISA con dato (score 0-100)",
                                "items": present})
-            ov = rating.get("overall_score")
-            # Retorno real (Fase 5): el titular lleva la rentabilidad REAL (deflactada por
-            # inflación BCRD) — la magnitud económica que importa al afiliado.
-            rdim = next((d for d in rating.get("dimensions") or []
-                         if d.get("key") == "rentabilidad"), None)
-            real = (rdim or {}).get("raw_real")
-            sharpe = payload.get("sharpe")
-            if isinstance(ov, (int, float)):
-                headline = f"ISA {ov:.0f}/100 · {rating.get('name', 'AFP')} (relativo, parcial)"
-                if isinstance(real, (int, float)):
-                    headline += f" · rentab. real {real:+.1f}%"
-                if isinstance(sharpe, (int, float)):
-                    headline += f" · Sharpe {sharpe:.2f}"
-            # Caveat al frente (Fase 5 + Diferido B): sube el asterisco del §5 a la portada.
-            subtitle = ("Lectura RELATIVA y PARCIAL · solvencia (estados financieros) aún "
-                        "diferida · rentabilidad en términos reales (deflactada por inflación "
-                        "BCRD) · riesgo = volatilidad realizada del valor cuota (σ), Sharpe "
-                        "sobre la TPM; σ atenuada por valoración a costo amortizado")
+            # Titular (ISA · rentab. real · Sharpe) y caveat de portada: mismos strings que
+            # la vista in-app, stasheados en el payload por `snapshot()` (paridad web↔PDF).
+            # Fallback al builder para las muestras sintéticas, que no pasan por `snapshot()`.
+            headline = payload.get("headline_line")
+            subtitle = payload.get("caveat")
+            if headline is None and subtitle is None:
+                headline, subtitle = _named_headline_caveat(payload)
             # Profundidad: pares, trayectoria (real vs nominal si hay inflación) y cartera.
             trend_tbl = (_real_trend_table(payload.get("trend_real"))
                          or _trend_table(payload.get("trend")))

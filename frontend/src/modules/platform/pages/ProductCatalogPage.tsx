@@ -31,6 +31,17 @@ import {
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
 const SALES_EMAIL = "ventas@sdqconsulting.com.do";
 
+/** Dimensión de riesgo del ISA (pensiones) con los campos de retorno ajustado por riesgo
+ * (Diferido B). Sólo la dim `riesgo` los trae, y sólo si hay serie NAV + TPM. */
+interface RiskDim {
+  key: string;
+  raw?: number | null;
+  sharpe?: number | null;
+  annual_return_pct?: number | null;
+  risk_free_pct?: number | null;
+  vol_window_months?: number | null;
+}
+
 export function ProductCatalogPage() {
   const { t } = useTranslation();
   // El catálogo respeta el período global del topbar (antes salía siempre el último).
@@ -359,6 +370,53 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
           {report.period && (
             <p className="text-xs text-muted">{t("platform.catalog.period", { v: report.period })}</p>
           )}
+          {/* Titular de portada (ISA · rentab. real · Sharpe): mismo string que el PDF,
+              stasheado en el payload por el producto. Sólo se muestra si el producto lo llena. */}
+          {(() => {
+            const p = report.payload as Record<string, unknown>;
+            const headline = typeof p.headline_line === "string" ? p.headline_line : null;
+            const caveat = typeof p.caveat === "string" ? p.caveat : null;
+            if (!headline && !caveat) return null;
+            return (
+              <div className="rounded-[10px] border border-line bg-surface2 p-3">
+                {headline && (
+                  <p className="font-display text-base font-extrabold text-ink">{headline}</p>
+                )}
+                {caveat && (
+                  <p className="mt-1 text-[11px] leading-snug text-muted">{caveat}</p>
+                )}
+              </div>
+            );
+          })()}
+          {/* Retorno ajustado por riesgo (Diferido B): tira con σ / Sharpe / retorno / TPM,
+              leída de la dimensión `riesgo` del ISA. Presentación — el score es la σ. */}
+          {(() => {
+            const rating = (report.payload as { rating?: { dimensions?: RiskDim[] } }).rating;
+            const risk = rating?.dimensions?.find((d) => d.key === "riesgo");
+            if (!risk || risk.sharpe == null) return null;
+            const stats = [
+              { label: t("platform.catalog.risk.sharpe"), value: risk.sharpe != null ? risk.sharpe.toFixed(2) : "—" },
+              { label: t("platform.catalog.risk.vol"), value: risk.raw != null ? `${risk.raw.toFixed(2)}%` : "—" },
+              { label: t("platform.catalog.risk.return"), value: risk.annual_return_pct != null ? `${risk.annual_return_pct.toFixed(1)}%` : "—" },
+              { label: t("platform.catalog.risk.free"), value: risk.risk_free_pct != null ? `${risk.risk_free_pct.toFixed(1)}%` : "—" },
+            ];
+            return (
+              <div className="rounded-[10px] bg-surface2 p-3">
+                <div className="text-[11px] uppercase tracking-wide text-faint">{t("platform.catalog.risk.title")}</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {stats.map((s) => (
+                    <div key={s.label}>
+                      <div className="text-[11px] uppercase tracking-wide text-faint">{s.label}</div>
+                      <div className="mono tabular-nums text-lg font-semibold text-ink">{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] leading-snug text-muted">
+                  {t("platform.catalog.risk.caveat", { n: risk.vol_window_months ?? "—" })}
+                </p>
+              </div>
+            );
+          })()}
           {(() => {
             const dims = reportDimensions(report)
               .map((d) => ({

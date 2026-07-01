@@ -21,18 +21,51 @@ import {
   PENSION_AUDIENCES,
   PensionRankRow,
   PensionDetail,
+  PensionDimension,
 } from "../api";
 import { PensionDrillDrawer, PensionTrend, PeerBars } from "./PensionDrillDrawer";
 
-/** Raw-value formatter for an ISA dimension (rentabilidad=%, ratios=2dp, AUM=number). */
+/** Raw-value formatter for an ISA dimension (rentabilidad=%, riesgo=σ%, ratios=2dp, AUM=number). */
 function fmtDimRaw(key: string, raw: number | null): string {
   if (raw == null) return "—";
   if (key === "rentabilidad") return `${fmtNum(raw, 2)}%`;
+  // riesgo = volatilidad realizada (σ anualizada del valor cuota), en %.
+  if (key === "riesgo") return `${fmtNum(raw, 2)}%`;
   if (key === "escala") return fmtNum(raw, 0);
   return fmtNum(raw, 4);
 }
 
 type Status = "loading" | "error" | "ready";
+
+/** Retorno ajustado por riesgo (Diferido B): Sharpe + sus componentes (σ, retorno
+ * anualizado, TPM como tasa libre, ventana) para el drill de la dimensión riesgo. El
+ * score de la dimensión es la σ; el Sharpe es lectura complementaria (NO altera el ISA).
+ * Mismos números que el titular del PDF del deep dive. */
+function RiskAdjustedBlock({ dim }: { dim: PensionDimension }) {
+  const { t } = useTranslation();
+  const stats: { label: string; value: string }[] = [
+    { label: t("pension.riskSharpe"), value: dim.sharpe != null ? fmtNum(dim.sharpe, 2) : "—" },
+    { label: t("pension.riskVol"), value: dim.raw != null ? `${fmtNum(dim.raw, 2)}%` : "—" },
+    { label: t("pension.riskReturn"), value: dim.annual_return_pct != null ? `${fmtNum(dim.annual_return_pct, 1)}%` : "—" },
+    { label: t("pension.riskFree"), value: dim.risk_free_pct != null ? `${fmtNum(dim.risk_free_pct, 1)}%` : "—" },
+  ];
+  return (
+    <section className="rounded-[10px] bg-surface2 p-3">
+      <div className="mb-2 text-sm font-medium text-ink">{t("pension.riskAdjTitle")}</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.label}>
+            <div className="text-[11px] uppercase tracking-wide text-faint">{s.label}</div>
+            <div className="mono tabular-nums text-lg font-semibold text-ink">{s.value}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] leading-snug text-muted">
+        {t("pension.riskAdjCaveat", { n: dim.vol_window_months ?? "—" })}
+      </p>
+    </section>
+  );
+}
 
 /** Honest banner: the ISA is partial (solvency gap) and the score is relative. */
 function PartialNote() {
@@ -65,6 +98,7 @@ function DetailCard({ slug }: { slug: string }) {
     return <Card><StateBlock kind="error" message={t("pension.detailError")} /></Card>;
 
   const d = detail;
+  const sharpe = d.dimensions.find((x) => x.key === "riesgo")?.sharpe;
   return (
     <>
       <Card>
@@ -80,6 +114,9 @@ function DetailCard({ slug }: { slug: string }) {
                 </Chip>
               ) : (
                 <Chip tone="muted">{t("pension.insufficientData")}</Chip>
+              )}
+              {sharpe != null && (
+                <Chip tone="muted">{t("pension.riskSharpe")}: {fmtNum(sharpe, 2)}</Chip>
               )}
               {d.coverage != null && (
                 <Chip tone="muted">{t("pension.coverage")}: {fmtPct(d.coverage * 100, 0)}</Chip>
@@ -154,15 +191,18 @@ function DetailCard({ slug }: { slug: string }) {
                     ? <Chip tone="warn">{t("pension.provGap")}</Chip>
                     : dim.present ? <Chip tone="ok">{t("pension.provReal")}</Chip> : <Chip tone="muted">{t("pension.noData")}</Chip>}
                 </div>
+                {dim.key === "riesgo" && dim.sharpe != null && (
+                  <RiskAdjustedBlock dim={dim} />
+                )}
                 {data.trend.length > 1 && (
                   <section>
                     <div className="mb-2 text-sm font-medium text-ink">{t("pension.drillTrend")}</div>
-                    <PensionTrend points={data.trend} unit={dim.key === "rentabilidad" ? "%" : undefined} />
+                    <PensionTrend points={data.trend} unit={dim.key === "rentabilidad" || dim.key === "riesgo" ? "%" : undefined} />
                   </section>
                 )}
                 <section>
                   <div className="mb-2 text-sm font-medium text-ink">{t("pension.drillPeers")}</div>
-                  <PeerBars peers={data.peers} focusAfp={data.afp} unit={dim.key === "rentabilidad" ? "%" : undefined} />
+                  <PeerBars peers={data.peers} focusAfp={data.afp} unit={dim.key === "rentabilidad" || dim.key === "riesgo" ? "%" : undefined} />
                 </section>
               </>
             );

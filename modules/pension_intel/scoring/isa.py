@@ -162,6 +162,42 @@ def realized_risk_stats(db: Session, slug: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def annotate_risk_adjusted(rating: Dict[str, Any], db: Session) -> Dict[str, Any]:
+    """Enrich the ``riesgo`` dimension of *rating* IN PLACE with its risk-adjusted return
+    (Sharpe = (annualized return − average window TPM) / σ). Presentation only — does NOT
+    touch score/ISA (the riesgo score is σ; the Sharpe is a reading for narrative/UI).
+
+    Adds ``annual_return_pct``, ``risk_free_pct``, ``sharpe`` and ``vol_window_months`` to
+    the riesgo dimension and returns ``{sharpe}`` for headlines. No-op (empty dict) when
+    there is no riesgo dimension, no NAV series, or no TPM series — never fabricates.
+
+    Single source of truth for the Sharpe across surfaces: the product deep dive
+    (``products._apply_risk_adjusted``) and the ISA-axis endpoints (``api.router``) both
+    call this so the web view and the PDF report show the same figure."""
+    from shared.contracts import load_tpm_series
+
+    extra: Dict[str, Any] = {}
+    dim = next((d for d in rating.get("dimensions") or [] if d.get("key") == "riesgo"), None)
+    if not dim:
+        return extra
+    stats = realized_risk_stats(db, rating.get("slug") or "")
+    if not stats:
+        return extra
+    tpm = load_tpm_series(db)
+    rf_vals = [tpm[p] for p in stats["periods"] if p in tpm]
+    if not rf_vals or not stats["vol_pct"]:
+        return extra
+    rf = sum(rf_vals) / len(rf_vals)
+    rf_pct = rf * 100.0 if rf < 1.0 else rf  # BCRD stores TPM as a fraction (0.085)
+    sharpe = round((stats["annual_return_pct"] - rf_pct) / stats["vol_pct"], 2)
+    dim["annual_return_pct"] = round(stats["annual_return_pct"], 2)
+    dim["risk_free_pct"] = round(rf_pct, 2)
+    dim["sharpe"] = sharpe
+    dim["vol_window_months"] = stats["n_returns"]
+    extra["sharpe"] = sharpe
+    return extra
+
+
 def _realized_vol(db: Session, slug: str) -> Optional[Tuple[str, float]]:
     """Annualized realized volatility (%) of the AFP's monthly NAV returns, as ``(as_of
     period, sigma_pct)`` — the raw for the ``riesgo`` dimension. None if too few months."""
