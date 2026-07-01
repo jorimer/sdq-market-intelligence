@@ -18,9 +18,11 @@ Fix (A+B+C):
   AFP (RD$, mismo período que AUM) → arregla frescura+unidades de raíz; la serie huérfana de 2025 (que
   ningún sync refrescaba) queda superada al próximo sync de financials.
 
-Impacto proyectado (datos reales prod): la ventaja de Reservas sobre el #2 **colapsa de 17.3 a 0.9 pts**
-(su liderazgo era ~94% artefacto del min-max); Popular/Crecer suben de "En vigilancia" a "Adecuada".
-+3 tests. Suite pensiones verde, ruff limpio.
+**Verificado en prod (recompute del ISA):** AFP Reservas costo raw 0.6511 (0.65%, no 0.0) score 68.62;
+ISA 82.49→77.79 (sigue #1 Sólida). La ventaja sobre el #2 (Romana 71.15) se comprime de **17.3 → 6.6 pts**
+(−62%); Popular/Crecer suben de "En vigilancia" a "Adecuada". (La proyección previa de "0.9 pts" usó
+`present_weight`=0.65 asumiendo solvencia ausente; en realidad solvencia está presente → coverage 1.0 →
+costo pesa 15% del índice completo, no 23% de uno parcial. El fix de costo cuadró exacto.) +3 tests, suite verde.
 
 **Objetivo:** llevar los deep dives SDQ·MIP (banca y pensiones) al estándar de amplitud y
 correctitud de un informe Fitch, corrigiendo los defectos metodológicos verificados y portando
