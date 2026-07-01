@@ -36,6 +36,15 @@ FRESHNESS_OP_NAME = "data-freshness-audit"
 # pequeño retraso de publicación de la fuente).
 _GRACE = 1.5
 
+# Umbral de antigüedad de la ÚLTIMA ACCIÓN de rating soberano (ancla S&P) antes de
+# PROPONER verificación. Las agencias suelen actuar/afirmar dentro de ~2 años; una acción
+# más vieja no significa que la nota cambió, pero sí que el dato declarado debe re-verificarse
+# (este fue el síntoma que se pudrió con RD). El sistema propone; el humano dispone (nunca
+# sobrescribe una nota por su cuenta).
+_SOVEREIGN_MAX_AGE_MONTHS = 24
+# Cadencia de re-propuesta del aviso soberano (~mensual), reusa el dedupe de _recently_notified.
+_SOVEREIGN_RENOTIFY_HOURS = 24 * 30
+
 
 def _now_naive() -> datetime:
     """UTC naive (las columnas DateTime son naive: Postgres TIMESTAMP s/ TZ + SQLite)."""
@@ -100,12 +109,50 @@ def _admin_ids(db: Session) -> List[str]:
     return [u.id for u in rows]
 
 
+def _audit_sovereign_ratings(db: Session, admin_ids: List[str], now: datetime) -> List[str]:
+    """PROPONE (no sobrescribe) la re-verificación de un rating soberano cuya última acción
+    del ancla (S&P) supera :data:`_SOVEREIGN_MAX_AGE_MONTHS`. El store de ratings no tiene
+    OperationRun propio, así que su frescura se mide por la ANTIGÜEDAD DEL DATO (action_date),
+    no por la cadencia de un sync. Deduplica por país (~mensual). Devuelve los ISO propuestos."""
+    from shared.contracts.sovereign_ratings import (
+        AGENCY_NAMES, ANCHOR_AGENCY, overdue_ratings)
+
+    proposed: List[str] = []
+    try:
+        stale = overdue_ratings(db, _SOVEREIGN_MAX_AGE_MONTHS, today=now.date())
+    except Exception as e:  # noqa: BLE001 — la auditoría soberana no debe abortar el resto
+        logger.warning("no se pudo auditar el rating soberano: %s", e)
+        return proposed
+
+    for s in stale:
+        key = f"sovereign:{s['iso']}"
+        if _recently_notified(db, key, _SOVEREIGN_RENOTIFY_HOURS):
+            continue
+        years = s["age_months"] / 12
+        title = f"Rating soberano por verificar: {s['iso']}"
+        body = (f"La calificación {AGENCY_NAMES.get(ANCHOR_AGENCY, 'S&P')} de {s['iso']} "
+                f"({s['rating']}) tiene su última acción del {s['action_date']} "
+                f"(~{years:.1f} años). Verificar que siga vigente y, si aplica, anotar la "
+                f"fecha de afirmación. El sistema no sobrescribe la nota por su cuenta.")
+        try:
+            for uid in admin_ids:
+                notification_service.create(db, user_id=uid, type="warning",
+                                            title=title, body=body)
+            _mark_notified(db, key)
+            proposed.append(s["iso"])
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            logger.warning("no se pudo proponer la frescura soberana de %s: %s", s["iso"], e)
+    return proposed
+
+
 def run_freshness_audit(db: Session) -> Dict:
     """Audita la frescura de cada fuente recurrente y notifica las atrasadas.
 
-    Devuelve ``{checked, n_overdue, overdue, notified}``. Solo considera operaciones
-    con cadencia (>0) que no necesitan parámetros (las on-demand no tienen frescura
-    esperada). No se audita a sí misma.
+    Devuelve ``{checked, n_overdue, overdue, notified, sovereign_proposed}``. Solo considera
+    operaciones con cadencia (>0) que no necesitan parámetros (las on-demand no tienen
+    frescura esperada). No se audita a sí misma. Además propone re-verificar ratings
+    soberanos cuya última acción envejeció (dato declarado, no un sync agendado).
     """
     scheds = get_schedules(db)
     admin_ids = _admin_ids(db)
@@ -158,8 +205,11 @@ def run_freshness_audit(db: Session) -> Dict:
             db.rollback()
             logger.warning("no se pudo notificar la frescura de %s: %s", name, e)
 
+    sovereign_proposed = _audit_sovereign_ratings(db, admin_ids, now)
+
     return {"checked": checked, "n_overdue": len(overdue),
-            "overdue": overdue, "notified": notified}
+            "overdue": overdue, "notified": notified,
+            "sovereign_proposed": sovereign_proposed}
 
 
 def _run(params, user_id, set_phase) -> Dict:

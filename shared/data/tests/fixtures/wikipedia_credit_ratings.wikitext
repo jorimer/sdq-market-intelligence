@@ -1,0 +1,54 @@
+<!-- REAL subset of https://en.wikipedia.org/wiki/List_of_countries_by_credit_rating
+     (MediaWiki API action=parse&prop=wikitext). Target panel rows verbatim +
+     one non-target (Brazil) to test filtering. For offline parser unit tests. -->
+
+== Standard & Poor's ==
+{| class="wikitable sortable"
+! Country/Territory !! Rating !! Outlook !! Date !! Ref
+|-
+| {{flag|Brazil}} || data-sort-value=111 | {{Percentage bar|100|c=#ffcc66;|BB|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 19 December 2023 || <ref name=s&p-srl/>
+|-
+| {{flag|Costa Rica}} || data-sort-value=111 | {{Percentage bar|100|c=#ffcc66;|BB|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 22 October 2025 || <ref>{{Cite web |url=https://www.spglobal.com/ratings/en/regulatory/article/-/view/type/HTML/id/3463552 |title=Costa Rica Upgraded To 'BB' From 'BB-' On Stronger External Liquidity; Outlook Stable |website=www.spglobal.com |access-date=9 January 2026 |language=en-us |date=22 October 2025}}</ref>
+|-
+| {{flag|Dominican Republic}} || data-sort-value=111 | {{Percentage bar|100|c=#ffcc66;|BB|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 19 December 2022 || <ref>{{Cite web |url=https://countryeconomy.com/ratings/dominican-republic |title=Rating: Dominican Republic Credit Rating |website=countryeconomy.com}}</ref>
+|-
+| {{flag|Guatemala}} || data-sort-value=121 | {{Percentage bar|100|c=#ffcc99;|BB+|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 23 May 2025 || <ref>{{Cite web |url=https://www.spglobal.com/ratings/pt/regulatory/article/-/view/sourceId/13496158 |title=Guatemala Upgraded To 'BB+' From 'BB' On Record Of Economic Resilience; Outlook Stable |website=www.spglobal.com |access-date=9 January 2026 |language=en-us |date=23 May 2025}}</ref>
+|-
+| {{flag|Jamaica}} || data-sort-value=111 | {{Percentage bar|100|c=#ffcc66;|BB|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 25 September 2025 || <ref>{{Cite web |url=https://www.spglobal.com/ratings/en/regulatory/article/-/view/type/HTML/id/3447974 |title=Jamaica Long-Term Ratings Raised To 'BB' From 'BB-' On Stronger Institutions; Outlook Is Positive |website=www.spglobal.com |access-date=9 January 2026 |language=en-us |date=25 September 2025}}</ref>
+|-
+| {{flag|Panama}} || data-sort-value=131 | {{Percentage bar|100|c=#ffff00;|BBB−|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 26 November 2024 || <ref>{{Cite web |url=https://www.spglobal.com/ratings/en/regulatory/article/-/view/sourceId/13342704 |title=Panama Ratings Lowered To 'BBB-/A-3' On Higher Interest Burden; Outlook Stable |website=www.spglobal.com |access-date=9 January 2026 |language=en-us |date=26 November 2024}}</ref>
+|}
+
+== Fitch ==
+{| class="wikitable sortable"
+! Country/Territory !! Rating !! Outlook !! Date !! Ref
+|-
+| {{flag|Brazil}} || data-sort-value=101 | {{Percentage bar|100|c=#ffcc66;|BB|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 25 June 2025 || <ref>{{cite web |author=Fitch Ratings |url=https://www.fitchratings.com/research/sovereigns/fitch-affirms-brazil-at-bb-outlook-stable-25-06-2025 |title=Fitch Affirms Brazil at 'BB'; Outlook Stable}}</ref>
+|-
+| {{flag|Costa Rica}} || data-sort-value=102 | {{Percentage bar|100|c=#ffcc66;|BB|color=black|width=50}} || data-sort-value=3 | Positive&nbsp;{{Increase}} || 17 December 2025 || <ref>{{cite web |author=Fitch Ratings |url=https://www.fitchratings.com/research/sovereigns/fitch-affirms-costa-rica-at-bb-outlook-positive-17-12-2025 |title=Fitch Affirms Costa Rica at 'BB'; Outlook Positive}}</ref>
+|-
+| {{flag|Dominican Republic}} || data-sort-value=092 | {{Percentage bar|100|c=#ffc200;|BB−|color=black|width=50}} || data-sort-value=3 | Positive&nbsp;{{Increase}} || 7 November 2025 || <ref>{{Cite web |author=Fitch Ratings |url=https://www.fitchratings.com/research/sovereigns/fitch-affirms-dominican-republic-at-bb-outlook-positive-07-11-2025 |title=Fitch Affirms Dominican Republic at 'BB-'; Outlook Positive}}</ref>
+|-
+| {{flag|Guatemala}} || data-sort-value=111 | {{Percentage bar|100|c=#ffcc99;|BB+|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 14 October 2025 || <ref>{{cite web |author=Fitch Ratings |url=https://www.fitchratings.com/research/sovereigns/fitch-upgrades-guatemala-to-bb-outlook-stable-14-10-2025 |title=Fitch Upgrades Guatemala to 'BB+'; Outlook Stable}}</ref>
+|-
+| {{flag|Jamaica}} || data-sort-value=091 | {{Percentage bar|100|c=#ffc200;|BB−|color=black|width=50}}|| data-sort-value="2" | Stable&nbsp;{{Steady}} || 5 February 2026 || <ref>{{cite web |author=Fitch Ratings |url=https://www.fitchratings.com/research/sovereigns/fitch-affirms-jamaica-at-bb-outlook-stable-05-02-2026 |title=Fitch Affirms Jamaica at 'BB-'; Outlook Stable}}</ref>
+|-
+| {{flag|Panama}} || data-sort-value=111 | {{Percentage bar|100|c=#ffcc99;|BB+|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 28 March 2024 || <ref>{{cite web |author=Fitch Ratings |url=https://www.fitchratings.com/research/sovereigns/fitch-downgrades-panama-to-bb-outlook-stable-28-03-2024 |title=Fitch Downgrades Panama to 'BB+'; Outlook Stable}}</ref>
+|}
+
+== Moody's ==
+{| class="wikitable sortable"
+! Country/Territory !! Rating !! Outlook !! Date !! Ref
+|-
+| {{flag|Brazil}} || data-sort-value=112 | {{Percentage bar|100|c=#ffcc99;|Ba1|color=black|width=50}}|| data-sort-value="2" | Positive&nbsp;{{Increase}}|| 7 October 2024 || <ref>{{Cite web |author= |title=Moody's upgrades Brazil's sovereign credit rating and maintains a positive outlook |url=https://www.gov.br/tesouronacional/en/news/moody2019s-upgrades-brazil2019s-sovereign-credit-rating-and-maintains-a-positive-outlook-bringing-the-country-even-closer-to-achieving-investment-grade#:~:text=The%20credit%20rating%20agency%20Moody's,while%20maintaining%20a%20POSITIVE%20outlook.}}</ref>
+|-
+| {{flag|Costa Rica}} || data-sort-value=092 | {{Percentage bar|100|c=#ffc200;|Ba3|color=black|width=50}} || data-sort-value=3 | Positive&nbsp;{{Increase}} || 18 September 2024 || <ref>{{Cite web |author=Moody's Investors Service |url=https://www.moodys.com/research/Moodys-upgrades-Costa-Ricas-ratings-to-Ba3-maintains-positive--PR_494370?cy=emea&lang=en |title=Moody's upgrades Costa Rica's ratings to Ba3; maintains positive outlook}}</ref>
+|-
+| {{flag|Dominican Republic}} || data-sort-value=092 | {{Percentage bar|100|c=#ffc200;|Ba3|color=black|width=50}} || data-sort-value=3 | Positive&nbsp;{{Increase}} || 10 August 2023 || <ref>{{Cite web |author=Moody's Investors Service |url=https://www.moodys.com/research/Moodys-changes-outlook-on-Dominican-Republics-ratings-to-positive-affirms--PR_478730?cy=emea&lang=en |title=Moody's changes outlook on Dominican Republic's ratings to positive, affirms Ba3 ratings}}</ref>
+|-
+| {{flag|Guatemala}} || data-sort-value=111 | {{Percentage bar|100|c=#ffcc99;|Ba1|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 15 June 2022 || <ref>{{Cite web |author=Moody's Investors Service |url=https://www.moodys.com/research/Moodys-affirms-Guatemalas-Ba1-ratings-changes-outlook-to-stable-from--PR_465541?cy=mex&lang=es |title=Moody's affirms Guatemala's Ba1 ratings; changes outlook to stable from negative}}</ref>
+|-
+| {{flag|Jamaica}} || data-sort-value=082 | {{Percentage bar|100|c=#ff9933;|B1|color=black|width=50}} || data-sort-value=3 | Positive&nbsp;{{Increase}} || 18 October 2023 || <ref>{{Cite web |author=Moody's Investors Service |url=https://www.moodys.com/research/Moodys-upgrades-Jamaicas-government-ratings-to-B1-and-changes-outlook--PR_480876?cy=can&lang=en |title=Moody's upgrades Jamaica's government ratings to B1 and changes outlook to positive from stable}}</ref>
+|-
+| {{flag|Panama}} || data-sort-value=121 | {{Percentage bar|100|c=#ffff00;|Baa3|color=black|width=50}} || data-sort-value=2 | Stable&nbsp;{{Steady}} || 31 October 2023 || <ref>{{Cite web |author=Moody's Investors Service |url=https://www.moodys.com/research/Moodys-downgrades-Panamas-rating-to-Baa3-changes-outlook-to-stable--PR_480863?cy=asia&lang=en |title=Moody's downgrades Panama's rating to Baa3, changes outlook to stable}}</ref>
+|}

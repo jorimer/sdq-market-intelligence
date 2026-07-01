@@ -140,3 +140,26 @@ def test_audit_dedups_then_renotifies_after_recovery(db, temp_ops):
 
 def _uid(db, email):
     return db.query(User).filter_by(email=email).first().id
+
+
+def test_sovereign_audit_proposes_old_action(db, temp_ops):
+    """La auditoría PROPONE re-verificar un rating soberano cuya última acción envejeció.
+    El store no tiene OperationRun; su frescura se mide por el action_date del dato."""
+    from datetime import date
+    from shared.contracts.sovereign_ratings import save_sovereign_ratings
+
+    _admin(db)
+    save_sovereign_ratings(db, {
+        "DO": {"sp": {"rating": "BB", "action_date": "2022-12-19"}},  # ~viejo
+        "CR": {"sp": {"rating": "BB", "action_date": "2026-05-01"}},  # fresco
+    })
+    proposed = fr._audit_sovereign_ratings(db, [_uid(db, "a@x.com")],
+                                           datetime(2026, 7, 1, tzinfo=timezone.utc))
+    assert proposed == ["DO"]
+    notes = db.query(Notification).all()
+    assert len(notes) == 1 and "DO" in notes[0].title
+    # dedup: segunda corrida no repite el aviso.
+    again = fr._audit_sovereign_ratings(db, [_uid(db, "a@x.com")],
+                                        datetime(2026, 7, 1, tzinfo=timezone.utc))
+    assert again == []
+    assert db.query(Notification).count() == 1

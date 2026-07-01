@@ -22,7 +22,6 @@ from sqlalchemy.orm import Session
 
 from modules.banking_score.models.models import Bank
 from modules.banking_score.scoring.market_concentration import compute_market_concentration
-from shared.doctrine.loader import load_doctrine_raw
 
 COUNTRY = "DO"
 
@@ -35,20 +34,15 @@ STATE_OWNED = frozenset({"Banco de Reservas de la República Dominicana"})
 _SIFI_RANK = 5
 
 
-def sovereign_anchor() -> Dict[str, Any]:
-    """Ancla soberana de RD desde la doctrina declarada (regulatory.yaml): rating S&P
-    de largo plazo en moneda extranjera + su fecha + score 0-100. Dato declarado (no hay
-    API gratuita de ratings), transparente con su ``as_of``."""
-    doc = load_doctrine_raw("regulatory")
-    info = (doc.get("sovereign_ratings") or {}).get(COUNTRY) or {}
-    scale = doc.get("rating_scale") or {}
-    rating = info.get("rating")
-    return {
-        "rating": rating,
-        "agency": info.get("agency"),
-        "as_of": info.get("as_of"),
-        "score": scale.get(rating),
-    }
+def sovereign_anchor(db: Optional[Session] = None) -> Dict[str, Any]:
+    """Ancla soberana de RD desde el store refrescable multi-agencia (Wikipedia →
+    ``AppSetting``, con el ``regulatory.yaml`` como piso). Bajo la política "S&P manda"
+    (decisión dueño 2026-07-01), el rating/score/fecha que anclan son los de S&P; Fitch y
+    Moody's viajan como CONTEXTO en ``agencies`` (no mueven el índice). Sin *db* cae al
+    piso declarado. Transparente con su ``as_of`` (última acción)."""
+    from shared.contracts.sovereign_ratings import combined_anchor
+
+    return combined_anchor(COUNTRY, db=db)
 
 
 def _entity_share(db: Session, bank: Bank, period_end: date, metric: str) -> Optional[Dict[str, Any]]:
@@ -121,7 +115,7 @@ def support_overlay(db: Session, bank: Bank, standalone_score: float,
     else:
         sys_label = "No sistémica (fuera del top-10 por activos)"
 
-    sov = sovereign_anchor()
+    sov = sovereign_anchor(db)
     return {
         "state_owned": state_owned,
         "systemic": {

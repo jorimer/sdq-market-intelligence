@@ -666,9 +666,20 @@ def _build_support_table(support: Dict, styles) -> List:
                  f"{_pct(sysd.get('activos_share'))} · {_pct(sysd.get('depositos_share'))}"])
     sov_txt = "—"
     if sov.get("rating"):
-        sov_txt = (f"{sov.get('rating')} ({sov.get('agency')}, {sov.get('as_of')}) · "
-                   f"{sov.get('score')}/100")
-    rows.append(["Techo soberano (RD)", sov_txt])
+        outlook = f", {sov.get('outlook')}" if sov.get("outlook") else ""
+        sov_txt = (f"{sov.get('rating')} ({sov.get('agency')}{outlook}; última acción "
+                   f"{sov.get('as_of')}) · {sov.get('score')}/100")
+        if sov.get("affirm_date"):
+            sov_txt += f" · afirmado {sov.get('affirm_date')}"
+    rows.append(["Techo soberano (RD) — ancla", sov_txt])
+    # Panel multi-agencia: contexto de convergencia/divergencia (S&P ancla el índice;
+    # Fitch/Moody's no lo mueven — política "S&P manda").
+    agencies = sov.get("agencies") or []
+    if len(agencies) > 1:
+        def _ag(a):
+            ol = f", {a.get('outlook')}" if a.get("outlook") else ""
+            return f"{a.get('name')} {a.get('rating')}{ol} ({a.get('action_date') or 's/f'})"
+        rows.append(["Panel multi-agencia", " · ".join(_ag(a) for a in agencies)])
     table = Table(rows, colWidths=[2.3 * inch, 4.2 * inch], repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), NAVY),
@@ -686,7 +697,8 @@ def _build_support_table(support: Dict, styles) -> List:
         "Capa de CONTEXTO estilo Fitch (VR/GSR/IDR): el soporte estatal, la importancia "
         "sistémica y el techo soberano NO forman parte de la calificación SDQ standalone "
         "(que mide fortaleza relativa dentro de RD, no riesgo de crédito absoluto). El techo "
-        "soberano es un dato declarado (S&amp;P) con su fecha de corte.", styles["SDQSmall"]))
+        "soberano se ancla en la calificación de S&amp;P (última acción); Fitch y Moody's se "
+        "muestran como contexto de convergencia y no mueven la lectura.", styles["SDQSmall"]))
     return elements
 
 

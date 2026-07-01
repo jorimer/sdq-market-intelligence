@@ -1,6 +1,39 @@
 # Paridad Deep-Dive vs Fitch — Workstream
 
 > **WORKSTREAM COMPLETO (2026-07-01): las 6 fases cerradas y verificadas en prod.**
+> Seguimientos diferidos (cada uno su ciclo): **A — rating soberano automatizado** (abajo);
+> B — ajuste por riesgo en pensiones (pendiente).
+
+## Diferido A — Rating soberano automatizado + multi-agencia (2026-07-01)
+
+**Problema:** el rating soberano vivía hardcodeado en `regulatory.yaml` (solo S&P) y se pudrió
+en silencio — el `as_of` de RD quedó en 2022 sin que nadie lo notara. Alimenta dos consumidores:
+el IRMP (`sovereign_rating_score`, dimensión external, 5 países) y el techo del overlay de banca
+(Fase 6a). El síntoma no era el valor (BB→45 seguía correcto) sino la **frescura**.
+
+**Diseño (decisiones del dueño, 2026-07-01):**
+- **Fuente:** scraper GRATIS de Wikipedia "List of countries by credit rating" vía la MediaWiki
+  API (`action=parse&prop=wikitext`; la API es la ruta permitida — el HTML crudo lo bloquea la
+  política de bots con 403; requiere User-Agent descriptivo con contacto). Descartada Trading
+  Economics (paga, US$149-299/mes, no se justifica para 5 países). `shared/data/sovereign_ratings_client.py`
+  (parser puro + fixture real committeado).
+- **Store refrescable:** los ratings se mueven del yaml a un `AppSetting` (`sovereign_ratings`),
+  con el yaml como **piso/fallback**. `shared/contracts/sovereign_ratings.py` centraliza la
+  lectura (patrón `macro_sector`): `combined_anchor()` la usan `support.sovereign_anchor()` y
+  `wdi_client.declared_sovereign_records()`.
+- **Combinación multi-agencia — "S&P manda":** el store carga S&P + Fitch + Moody's, pero **solo
+  el ancla S&P** alimenta el índice; Fitch/Moody's viajan como CONTEXTO (panel de convergencia en
+  el Deep Dive). Cambiar el ancla es la constante `ANCHOR_AGENCY`. **No muta ningún score** vs hoy
+  (verificado: delta IRMP = 0). Notación Moody's → equivalente S&P para el contexto (`MOODYS_TO_SP`).
+- **Fecha:** última **acción** (convención del yaml) + nota opcional de **afirmación** (anotación
+  manual; Wikipedia no la trae).
+- **Freshness que PROPONE:** la `data-freshness-audit` diaria ahora vigila el `action_date` del
+  ancla en el STORE (no el piso) y propone re-verificar si supera 24 meses (dedupe ~mensual). El
+  sistema propone; el humano dispone (nunca sobrescribe una nota).
+
+**Operación:** `sovereign-ratings-sync` (mensual, `modules/macro_political_risk/operations.py`).
+Flujo de propagación de un cambio de nota: `sovereign-ratings-sync` → `wdi-sync` → `irmp-snapshot`.
+Preserva anotaciones `affirm_date` y reporta `anchor_changes` (el disparador del protocolo de impacto).
 
 ## Fase 6 — Ejes estructurales (2026-07-01) ✅ CERRADA Y VERIFICADA EN PROD
 
