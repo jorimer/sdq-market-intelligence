@@ -61,7 +61,10 @@ def test_support_overlay_state_owned_and_systemic():
     assert ov["sovereign"]["rating"] == "BB"
     # el standalone viaja intacto (no se muta)
     assert ov["standalone"] == {"score": 86.7, "tier": "SDQ-AA"}
-    assert "ALTO" in ov["support_assessment"]  # estatal + sistémica
+    # Propensión ALTA (estatal + sistémica) PERO capacidad acotada por soberano especulativo BB.
+    txt = ov["support_assessment"]
+    assert "Propensión de soporte ALTA" in txt
+    assert "ACOTADA" in txt and "INCIERTO" in txt  # capacidad soberana (BB < grado inversión)
 
 
 def test_support_overlay_not_state_not_systemic(db):
@@ -74,6 +77,21 @@ def test_support_overlay_not_state_not_systemic(db):
     assert ov["systemic"]["is_systemic"] is False
     assert "Sin soporte extraordinario" in ov["support_assessment"]
     assert big  # (usado para poblar el panel)
+
+
+def test_private_systemic_support_capped_by_speculative_sovereign():
+    """Banco Popular (privado, sistémico) en soberano BB: la propensión sistémica se lee
+    ACOTADA por la capacidad fiscal del soberano especulativo — no 'soporte plausible' pelado."""
+    from modules.banking_score.scoring.support import _support_assessment
+    txt = _support_assessment(state_owned=False, is_systemic=True,
+                              sovereign={"rating": "BB", "score": 45})
+    assert "importancia sistémica" in txt          # pata 1: propensión
+    assert "ACOTADA" in txt and "INCIERTO" in txt   # pata 2: capacidad soberana limitada
+    assert "grado especulativo" in txt
+    # Con un soberano de grado de inversión, la capacidad NO se acota.
+    inv = _support_assessment(state_owned=False, is_systemic=True,
+                              sovereign={"rating": "A", "score": 75})
+    assert "grado de inversión" in inv and "ACOTADA" not in inv
 
 
 def test_banreservas_in_state_owned_set():
