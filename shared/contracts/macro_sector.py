@@ -28,6 +28,12 @@ APP_SETTING_KEY = "macro_sector_contract"
 INFLATION_SERIES_KEY = "macro_inflation_series"
 INFLATION_SERIES_CODE = "bcrd.inflacion.inflacion.interanual"
 
+# AppSetting key + series code for the BCRD monetary policy rate (TPM), persisted by
+# macro_monitor alongside the inflation series so pension_intel can use it as the
+# risk-free rate for the Sharpe ratio (ISA riesgo narrative) without importing macro.
+TPM_SERIES_KEY = "macro_tpm_series"
+TPM_SERIES_CODE = "bcrd.xls.serie_tpm.tasa_de_politica_monetaria"
+
 
 def load_macro_contract(db) -> Dict[str, Any]:
     """Read the latest macro→sectorial contract from the shared AppSetting
@@ -70,6 +76,27 @@ def load_inflation_series(db) -> Dict[str, float]:
     except (ValueError, TypeError):
         return {}
     # Stored as [[period, value], ...]; drop null values.
+    return {str(p): float(v) for p, v in data if v is not None}
+
+
+def load_tpm_series(db) -> Dict[str, float]:
+    """Read the BCRD monetary policy rate (TPM) series (``{period: value}``) from the shared
+    AppSetting written by ``macro_monitor``. Empty dict if none yet.
+
+    Lets pension_intel use the TPM as the risk-free rate for the Sharpe ratio without
+    importing macro_monitor. Values keep their stored scale (BCRD stores TPM as a fraction,
+    e.g. 0.085); the consumer normalizes. Never fabricates: sin serie → ``{}``."""
+    import json
+
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == TPM_SERIES_KEY).first()
+    if row is None or not row.value:
+        return {}
+    try:
+        data = json.loads(row.value)
+    except (ValueError, TypeError):
+        return {}
     return {str(p): float(v) for p, v in data if v is not None}
 
 # Allowed direction / magnitude values (kept as plain strings for JSON transport).
