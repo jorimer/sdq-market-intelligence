@@ -1,5 +1,27 @@
 # Paridad Deep-Dive vs Fitch — Workstream
 
+## Fase 2 — Pensiones: costo del ISA (2026-07-01)
+
+**Corrección del diagnóstico:** el audit inicial dijo "falso perfecto comisión≈0 → score 100 (guarda
+solo chequea None)". **Falso.** Verificado en prod: `comisiones_anual` está poblado para las 7 AFP y
+suma al total del sistema. El "0.0" era un **bug de unidades** — `comisiones_anual` en `RD$ MM`,
+`fondos_administrados` en `RD$` → ratio ~6.5e-9 (muestra 0.0), real ~0.65%. AFP Reservas genuinamente
+tiene la comisión/AUM más baja (0.65% vs 0.80–0.87%); su score=100 no era fabricado sino **min-max
+amplificando un spread real de 0.2pp a un rango de 0-100**.
+
+Fix (A+B+C):
+- **A** — `isa.py`: ratio unit-aware (`_to_rd` usa el campo `unit`, `RD$ MM`↔`RD$`) + costo expresado
+  como % → raw muestra 0.65%, no 0.0.
+- **B** — `isa.py`: costo con banda **absoluta** (`_score_costo_absolute`, 0.4%→100 / 1.2%→0) en vez de
+  min-max, para que un edge marginal no valga 100 pts.
+- **C** — `financials_extractor`/`financials_sync`: comisiones cableadas del estado de resultados de la
+  AFP (RD$, mismo período que AUM) → arregla frescura+unidades de raíz; la serie huérfana de 2025 (que
+  ningún sync refrescaba) queda superada al próximo sync de financials.
+
+Impacto proyectado (datos reales prod): la ventaja de Reservas sobre el #2 **colapsa de 17.3 a 0.9 pts**
+(su liderazgo era ~94% artefacto del min-max); Popular/Crecer suben de "En vigilancia" a "Adecuada".
++3 tests. Suite pensiones verde, ruff limpio.
+
 **Objetivo:** llevar los deep dives SDQ·MIP (banca y pensiones) al estándar de amplitud y
 correctitud de un informe Fitch, corrigiendo los defectos metodológicos verificados y portando
 las mejores prácticas entre módulos.

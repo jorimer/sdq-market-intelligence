@@ -97,6 +97,10 @@ def map_afp_financials(statements: Dict[str, Any]) -> Dict[str, Optional[float]]
         "pasivos_totales": f.get("pasivos_exigibles"),
         "resultado": f.get("utilidad_neta"),
         "fondos_administrados": _managed_funds(statements),
+        # Commission revenue from the AFP income statement — the ISA cost dimension.
+        # Sourced from the SAME statement as AUM → RD$ units, same period (replaces the
+        # orphaned static SIPEN series that was in 'RD$ MM' and a year stale).
+        "comisiones": f.get("comisiones_fiduciarias"),
     }
 
 
