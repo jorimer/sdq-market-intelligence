@@ -34,7 +34,7 @@ def wdi_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> 
     from shared.data.wdi_client import declared_sovereign_records
     live_periods = [r.period for r in records if r.period]
     ref_period = max(live_periods) if live_periods else str(date.today().year)
-    records += declared_sovereign_records(ref_period)
+    records += declared_sovereign_records(ref_period, db=db)
 
     set_phase(f"persistiendo {len(records)} valores")
     synced = 0

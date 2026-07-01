@@ -75,10 +75,13 @@ inflation_targets:
   JM: 5.0   # BOJ: rango 4-6, punto medio
   PA: 2.0   # dolarizado: meta de facto importada (Fed largo plazo)
 
-# SUPUESTO declarado (no hay API gratuita de ratings): rating soberano S&P de
-# largo plazo en moneda extranjera, con su fecha. Verificado vía countryeconomy.com
-# (dic-2025). Alimenta sovereign_rating_score = rating_scale[rating]. Actualizar
-# por PR cuando una agencia cambie el rating.
+# PISO declarado del rating soberano S&P de largo plazo en moneda extranjera, con su
+# fecha de última ACCIÓN. Desde la automatización (2026-07), la fuente VIVA es el store
+# refrescable `sovereign_ratings` (AppSetting) que la operación `sovereign-ratings-sync`
+# actualiza desde Wikipedia (S&P/Fitch/Moody's); este bloque es solo el FALLBACK cuando el
+# store aún no existe (deploy fresco/offline). Política de combinación: "S&P manda" — solo
+# el ancla S&P alimenta sovereign_rating_score = rating_scale[rating]; Fitch/Moody's son
+# contexto. Ver shared/contracts/sovereign_ratings.py. Editar por PR sigue siendo válido.
 sovereign_ratings:
   DO: {rating: "BB",   agency: "S&P", as_of: "2022-12-19"}
   CR: {rating: "BB",   agency: "S&P", as_of: "2025-10-22"}

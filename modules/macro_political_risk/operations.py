@@ -28,6 +28,15 @@ def _run_wdi_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_sovereign_sync(params, user_id, set_phase) -> Dict:
+    from modules.macro_political_risk.sovereign_sync import sovereign_ratings_sync
+    db = SessionLocal()
+    try:
+        return sovereign_ratings_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_gdelt_sync(params, user_id, set_phase) -> Dict:
     from modules.macro_political_risk.gdelt_sync import gdelt_sync
     db = SessionLocal()
@@ -128,6 +137,14 @@ def register() -> None:
         "corriente, IED desde WDI; deuda y balance fiscal desde IMF WEO) para el "
         "peer set regional y los persiste.",
         _run_wdi_sync, default_interval_hours=720,  # anual → cadencia larga
+    ))
+    register_operation(Operation(
+        "sovereign-ratings-sync", "Sincronizar rating soberano (Wikipedia)",
+        "Trae la calificación soberana multi-agencia (S&P/Fitch/Moody's) del peer set "
+        "desde Wikipedia y actualiza el store refrescable. Bajo la política 'S&P manda', "
+        "solo el ancla S&P mueve el IRMP; Fitch/Moody's son contexto. Corre wdi-sync + "
+        "irmp-snapshot después para propagar un cambio de nota.",
+        _run_sovereign_sync, default_interval_hours=720,  # mensual (baja rotación)
     ))
     register_operation(Operation(
         "gdelt-sync", "Sincronizar eventos (GDELT · DOC API)",

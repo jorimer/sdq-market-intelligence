@@ -126,25 +126,30 @@ def _fx_volatility(fx_by_year: Dict[int, float]) -> Optional[float]:
     return round(statistics.pstdev(changes), 2)
 
 
-def declared_sovereign_records(period: str) -> List[Record]:
-    """Emit ``sovereign_rating_score`` from the declared doctrine table.
+def declared_sovereign_records(period: str, db=None) -> List[Record]:
+    """Emit ``sovereign_rating_score`` from the refreshable sovereign store.
 
-    Not an API value: S&P long-term FC ratings are maintained in
-    ``regulatory.yaml`` (with agency + as-of date) and mapped to 0-100 via the
-    declared ``rating_scale``. Stamped at *period* so it aligns with the live
-    data in a snapshot. Source ``SDQ_DECLARED`` makes the provenance explicit.
+    Not an API value: the S&P/Fitch/Moody's ratings are kept in the refreshable
+    ``sovereign_ratings`` store (Wikipedia → ``AppSetting``, with ``regulatory.yaml``
+    as the declared floor). Under the "S&P manda" combination policy the emitted score
+    is the **anchor (S&P)** rating mapped to 0-100 via the declared ``rating_scale``;
+    Fitch/Moody's are context and do not move the index. Stamped at *period* so it aligns
+    with the live data in a snapshot. Without *db* it falls back to the yaml floor (same
+    value as before), so offline/tests are unchanged.
     """
-    doc = load_doctrine_raw("regulatory")
-    ratings = doc.get("sovereign_ratings", {})
-    scale = doc.get("rating_scale", {})
+    from shared.contracts.sovereign_ratings import (
+        ANCHOR_AGENCY, agency_score, load_sovereign_ratings)
+
+    panel = load_sovereign_ratings(db)
     out: List[Record] = []
-    for iso2, info in ratings.items():
-        rating = info.get("rating") if isinstance(info, dict) else None
-        score = scale.get(rating)
+    for iso2, country in panel.items():
+        anchor = (country or {}).get(ANCHOR_AGENCY) or {}
+        rating = anchor.get("rating")
+        score = agency_score(ANCHOR_AGENCY, rating)
         lineage = Lineage(
-            source="SDQ_DECLARED", license="declarado (doctrina)",
+            source="SDQ_DECLARED", license="declarado (store soberano)",
             fetched_at=date.today(),
-            note=f"rating S&P {rating} ({info.get('as_of') if isinstance(info, dict) else '?'}) → escala declarada",
+            note=f"rating S&P {rating} ({anchor.get('action_date') or '?'}) → escala declarada",
         )
         out.append(Record(
             series="sovereign_rating_score", period=period,
