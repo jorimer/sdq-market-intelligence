@@ -28,11 +28,14 @@ def _run_rescore(params, user_id, set_phase) -> Dict:
 
 
 def _run_prune(params, user_id, set_phase) -> Dict:
-    from modules.banking_score.sib_sync import prune_future_periods
+    from modules.banking_score.sib_sync import prune_future_periods, prune_partial_latest_quarter
     db = SessionLocal()
     try:
         set_phase("podando trimestres futuros")
-        return prune_future_periods(db)
+        future = prune_future_periods(db)
+        set_phase("podando trimestre parcial (si lo hay)")
+        partial = prune_partial_latest_quarter(db)
+        return {"future": future, "partial": partial}
     finally:
         db.close()
 

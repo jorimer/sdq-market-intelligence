@@ -68,6 +68,19 @@ Fix (Opción B — mínimo + optimización):
   no-None). Re-ingest de minutos en vez de ~2h, y no vuelve a tocar el paso frágil.
 - Re-run: `force=true · tipos=BM,AAP,BAC,CC · skip_carteras=true`. Suite 342 passed, ruff limpio.
 
+## Fase 1c — Guard de trimestre parcial (2026-07-01)
+
+Verificación post-deploy (período **2026-03-31**, 81 entidades, completo): Banreservas 85.2→**86.72**,
+BDI 85.3→**87.14** — ambos SDQ-AA, **coincide con el pronóstico** (~86.6 / ~87.2). Fix de cost_income
+correcto en prod.
+
+Pero el `force` jaló el trimestre **2026-06-30** (cerró el día anterior), del que el SIB solo tenía
+**19 de 81** entidades — parcial, y sin carteras (por `skip_carteras`), inflando el "latest". El guard
+`period_end > today` no lo atrapa (ya es pasado). Fix de raíz: `prune_partial_latest_quarter` detecta
+el trimestre recién-cerrado incompleto por **cobertura** (< 50% de las entidades del trimestre previo —
+auto-calibrante, sin número mágico de rezago). Corre al final de `run_backfill` (tras ingesta, antes de
+scoring) y en la op `prune-future` (limpieza inmediata sin re-sync). +2 tests.
+
 ## Plan de fases
 
 Leyenda: 🔍 = verificación en prod / fuente pública (bloqueante · read-only) ·

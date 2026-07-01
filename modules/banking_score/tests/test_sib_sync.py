@@ -370,3 +370,44 @@ def test_only_tipos_targeted_reingest_skips_simbad(Session, monkeypatch):
     assert res["status"] == "completed"
     # Only the requested type was extracted (BM/BAC/AC skipped).
     assert _MultiTipoStub.seen == ["AAP"]
+
+
+def test_prune_partial_latest_quarter_drops_incomplete_quarter(Session):
+    """A just-closed quarter the SIB has only partially published (few filers) is
+    pruned; the prior complete quarter is kept."""
+    db = Session()
+    complete, partial = date(2026, 3, 31), date(2026, 6, 30)
+    banks = [Bank(name=f"Banco {i}", bank_type=BankType.banca_multiple) for i in range(4)]
+    for b in banks:
+        db.add(b)
+    db.flush()
+    for b in banks:  # complete quarter: all 4 entities
+        db.add(BankingData(bank_id=b.id, period_end=complete, source=DataSource.sib_api))
+    db.add(BankingData(bank_id=banks[0].id, period_end=partial,  # partial: 1 of 4 (< 50%)
+                       source=DataSource.sib_api))
+    db.commit()
+
+    res = sib_sync.prune_partial_latest_quarter(db)
+
+    assert str(partial) in res["periods"]
+    assert res["data_deleted"] == 1
+    remaining = {d.period_end for d in db.query(BankingData).all()}
+    assert partial not in remaining and complete in remaining
+
+
+def test_prune_partial_latest_quarter_keeps_complete_quarter(Session):
+    """A latest quarter with full coverage is never pruned."""
+    db = Session()
+    banks = [Bank(name=f"B{i}", bank_type=BankType.banca_multiple) for i in range(4)]
+    for b in banks:
+        db.add(b)
+    db.flush()
+    for pe in (date(2026, 3, 31), date(2026, 6, 30)):
+        for b in banks:
+            db.add(BankingData(bank_id=b.id, period_end=pe, source=DataSource.sib_api))
+    db.commit()
+
+    res = sib_sync.prune_partial_latest_quarter(db)
+
+    assert res["periods"] == []
+    assert db.query(BankingData).filter(BankingData.period_end == date(2026, 6, 30)).count() == 4
