@@ -214,6 +214,11 @@ def _build_section_context(
         ctx["percentil_score"] = pct["overall"]
     if pct.get("sub"):
         ctx["percentil_sub"] = pct["sub"]
+    # Sensibilidades (Fase 4): palancas al alza / riesgos a la baja con umbral en valor
+    # crudo y delta al score global. El riesgo forward y el cierre accionable las citan
+    # para dar umbrales concretos ("a qué nivel una señal pasa de vigilancia a acción").
+    if scoring_result.get("sensibilidades"):
+        ctx["sensibilidades"] = scoring_result["sensibilidades"]
     if benchmarks:
         ctx["benchmarks"] = benchmarks
     return ctx
