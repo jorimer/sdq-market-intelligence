@@ -304,12 +304,16 @@ def calc_margen_financiero(d) -> IndicatorResult:
 
 
 def calc_cost_to_income(d) -> IndicatorResult:
-    """Cost-to-Income (inverse). Prefers the SIB 'Gastos Op / Ingresos Op' (%);
-    falls back to gastos_operacionales / ingresos_operacionales."""
-    raw = _pct(d, "cost_income_pct")
-    if raw is None:
-        raw = _safe_div(d.gastos_operacionales, d.ingresos_operacionales) * 100
-    score = _clamp(max(0, 100 - raw))
+    """Cost-to-Income, Fitch-style: opex / pre-provision operating revenue, computed
+    from the real income statement (gastos_operacionales / ingresos_operacionales).
+
+    Calibrated to the DR system distribution (≈40% best decile → 100, ≈90% worst
+    decile → 0, linear) instead of the old naive ``100 - raw``. The old curve scored
+    the narrower SIB 'Gastos Op / Ingresos Op' ratio (~15-20pp higher than Fitch's
+    definition), which pinned the whole system near 20 and drove an alarmist verdict.
+    See docs/DEEP_DIVE_FITCH_PARITY.md."""
+    raw = _safe_div(d.gastos_operacionales, d.ingresos_operacionales) * 100
+    score = _clamp((90.0 - raw) / 0.50)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
@@ -431,7 +435,9 @@ INDICATOR_PCT_FIELD = {
     "pct_cartera_a": "cartera_vigente_pct",
     "cobertura_provisiones": "cobertura_pct",
     "margen_financiero": "margen_pct",
-    "cost_to_income": "cost_income_pct",
+    # cost_to_income intentionally omitted: it must be computed from the real income
+    # statement (Fitch-style), NOT lifted from the narrower SIB pre-computed ratio.
+    # See calc_cost_to_income and docs/DEEP_DIVE_FITCH_PARITY.md.
     "castigos_pct": "castigos_pct",
     "exposicion_re": "exposicion_re_pct",
 }

@@ -811,6 +811,52 @@ class SIBDataClient:
             return None
         return round(sum((v / total) ** 2 for v in buckets.values()) * 10000.0, 4)
 
+    @classmethod
+    def _subtotal_valor(cls, income_rows: List[Dict], name: str) -> Optional[float]:
+        """Value of a named subtotal in the estado de resultados tree, robust to its
+        depth: a subtotal row carries the concept name at some conceptoNivelK and
+        'TODOS' at the next level down (K+1)."""
+        target = _norm(name)
+        for r in income_rows or []:
+            # scan all depths — the API tree nests subtotals at different levels
+            # (a subtotal has its name at nivelK and 'TODOS' at nivelK+1).
+            for k in range(1, 7):
+                if (_norm(r.get(f"conceptoNivel{k}")) == target
+                        and _norm(r.get(f"conceptoNivel{k + 1}")) == "TODOS"):
+                    try:
+                        return float(r.get("valor") or 0)
+                    except (TypeError, ValueError):
+                        return None
+        return None
+
+    @classmethod
+    def _operating_income(cls, income_rows: List[Dict]):
+        """Fitch-style cost-to-income inputs from the real estado de resultados — NOT
+        the narrower SIB 'Gastos Op / Ingresos Op' ratio (which ran ~15-20pp high and
+        pinned efficiency scores near 20). See docs/DEEP_DIVE_FITCH_PARITY.md.
+
+          opex   = |Gastos operativos|  (matches Fitch 'Operating costs' to the peso)
+          income = Margen financiero bruto (pre-provision) + Otros ingresos operacionales
+
+        Pre-provision margin is used because the post-provision 'neto' collapses the
+        base when provisions spike (BDI 9M-2024 gave a spurious 212%). Returns
+        ``(opex, income)`` or ``(None, None)`` when the statement lacks the subtotals,
+        so the indicator goes N/D rather than being scored on the wrong definition."""
+        opex = cls._subtotal_valor(income_rows, "Gastos operativos")
+        margen_bruto = cls._subtotal_valor(income_rows, "Margen financiero bruto")
+        if margen_bruto is None:
+            # reconstruct pre-provision margin: neto + loan-loss provisions add-back
+            neto = cls._subtotal_valor(income_rows, "Margen financiero neto")
+            prov = (cls._subtotal_valor(income_rows, "Provisiones para cartera de créditos")
+                    or cls._subtotal_valor(income_rows, "Provisiones por Activos Productivos"))
+            if neto is not None:
+                margen_bruto = neto + abs(prov) if prov is not None else neto
+        if opex is None or margen_bruto is None:
+            return None, None
+        otros = cls._subtotal_valor(income_rows, "Otros ingresos operacionales") or 0.0
+        income = margen_bruto + otros
+        return abs(opex), (income if income > 0 else None)
+
     def _compute_carteras_metrics(self, period_start: str, period_end: str = "",
                                   on_progress=None) -> Dict[str, Dict[date, Dict[str, float]]]:
         """Stream carteras/creditos ONE quarter at a time, aggregating per entity/quarter
@@ -1850,11 +1896,15 @@ class SIBDataClient:
             gastos_financieros = depositos_totales * (gastos_fin_ratio / 100.0)
         if gastos_gya_ratio and activos_totales:
             gastos_operacionales = activos_totales * (gastos_gya_ratio / 100.0)
-        if gastos_op_ratio and ingresos_financieros and gastos_op_ratio > 0:
-            # gastos_op_ratio = gastos_op / ingresos_op → ingresos_op = gastos_op / ratio?
-            # Actually this ratio = Gastos Op / Ingresos Op, so if we have gastos_operacionales:
-            if gastos_operacionales:
-                ingresos_operacionales = gastos_operacionales / (gastos_op_ratio / 100.0)
+        # Cost-to-income (Fitch-style): source opex and pre-provision operating revenue
+        # from the REAL estado de resultados. The old path reverse-engineered
+        # ingresos_operacionales from the SIB 'Gastos Op / Ingresos Op' ratio, which is
+        # a narrower (higher) definition than Fitch's gross revenue — it ran ~15-20pp
+        # high and pinned efficiency scores near 20. See docs/DEEP_DIVE_FITCH_PARITY.md.
+        _opex, _op_income = self._operating_income(inc)
+        if _opex is not None and _op_income is not None:
+            gastos_operacionales = _opex
+            ingresos_operacionales = _op_income
 
         # Liquidez — liquid assets = cash & equivalents + investments, straight
         # from the balance (absolute values, like the cambiaria mapper).
