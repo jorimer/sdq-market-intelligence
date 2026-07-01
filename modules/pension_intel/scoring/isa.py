@@ -14,10 +14,12 @@ Two honesty devices, by design:
     The resulting ``coverage`` (≤ 0.65 until solvency lands) is surfaced verbatim — the
     number itself tells the reader the index is partial.
 
-Most dimensions are scored by peer min-max across the AFP panel (relative, like a
-percentile floor/ceiling). The exception is COSTO (comisión/AUM), scored on an ABSOLUTE
-%-band: DR commissions cluster in a ~0.2pp-wide range, so min-max would amplify a marginal
-real difference into the full 0-100 score. Missing values stay absent — never imputed.
+Dimensions with a declared anchor (rentabilidad, escala, solvencia) are scored by a
+HYBRID: half an ABSOLUTE band (fixed anchors → magnitude, outlier-immune) + half peer
+min-max (relative discrimination). Pure min-max sent the tight-pack edges to 0/100 and
+let one outlier re-anchor the panel; the hybrid communicates magnitude while keeping the
+relative signal (Fase 6, ``_ANCHORS``/``_score_hybrid``). COSTO keeps its own absolute
+%-band. Missing values stay absent — never imputed.
 """
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from modules.pension_intel.models.models import PensionEntity, PensionSeries
 
-MODEL_VERSION = "0.1"
+MODEL_VERSION = "0.2"  # Fase 6: híbrido banda-absoluta + min-max (antes: min-max puro)
 
 # Minimum real-data coverage to assign an overall band. Below this, an AFP is
 # "datos insuficientes" (no band, no rank) rather than getting a solidity verdict
@@ -166,6 +168,41 @@ def _score_costo_absolute(pct: float) -> float:
     return round(max(0.0, min(100.0, (_COSTO_BAD_PCT - pct) / span * 100.0)), 2)
 
 
+# ── Hardening del min-max (Fase 6, decisión dueño 2026-07-01) ──────────────────
+# El min-max PURO produce artefactos: un pack apretado (rentabilidad ~6-9%) manda al
+# borde inferior a 0 y al superior a 100, y un outlier re-ancla todo el panel; el score
+# no comunica MAGNITUD, solo rango. Se reemplaza por un HÍBRIDO: mezcla una banda ABSOLUTA
+# (anclas fijas → magnitud, inmune a outliers) con el peer min-max (discriminación
+# relativa). ``score = WABS·absoluta + (1-WABS)·minmax``. costo mantiene su banda propia.
+# Anclas (raw→0..100) calibradas a la distribución real de las 7 AFP + sentido económico.
+_HYBRID_WABS = 0.5
+# (lo→0, hi→100, log): rentabilidad nominal %, solvencia patrimonio/activos, escala AUM RD$.
+_ANCHORS: Dict[str, Tuple[float, float, bool]] = {
+    "rentabilidad": (5.0, 12.0, False),   # 5% ≈ apenas sobre inflación; 12% fuerte
+    "solvencia": (0.5, 1.0, False),       # 0.5 débil; 1.0 muy sólido
+    "escala": (10e9, 500e9, True),        # 10bn→0, 500bn→100 en escala log (AUM ~2 órdenes)
+}
+
+
+def _absolute_band(v: float, lo: float, hi: float, log: bool) -> float:
+    """Banda absoluta lineal raw→0..100 (higher = mejor), con clamp. *log*: escala log10
+    (para AUM, que abarca dos órdenes de magnitud)."""
+    import math
+    if log:
+        v, lo, hi = math.log10(max(v, 1.0)), math.log10(lo), math.log10(hi)
+    return max(0.0, min(100.0, (v - lo) / (hi - lo) * 100.0))
+
+
+def _score_hybrid(present: Dict[str, float], key: str, direction: str) -> Dict[str, float]:
+    """Híbrido banda-absoluta + peer min-max para una dimensión con anclas. Preserva la
+    discriminación relativa del panel y ancla la magnitud (un outlier no re-ancla)."""
+    lo, hi, log = _ANCHORS[key]
+    mm = _normalize(present, direction)
+    return {s: round(_HYBRID_WABS * _absolute_band(v, lo, hi, log)
+                     + (1.0 - _HYBRID_WABS) * mm[s], 2)
+            for s, v in present.items()}
+
+
 def compute_isa(db: Session) -> List[Dict[str, Any]]:
     """Compute the ISA for every active AFP. Returns one dict per AFP, sorted desc.
 
@@ -187,6 +224,9 @@ def compute_isa(db: Session) -> List[Dict[str, Any]]:
         if d["key"] == "costo":
             # Absolute band (not peer min-max) — see _score_costo_absolute.
             dim_scores[d["key"]] = {s: _score_costo_absolute(v) for s, v in present.items()}
+        elif d["key"] in _ANCHORS and present:
+            # Híbrido banda-absoluta + min-max (Fase 6): magnitud + discriminación relativa.
+            dim_scores[d["key"]] = _score_hybrid(present, d["key"], d["direction"])
         else:
             dim_scores[d["key"]] = _normalize(present, d["direction"]) if present else {}
 

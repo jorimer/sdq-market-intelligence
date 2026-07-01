@@ -94,15 +94,21 @@ def test_full_vs_thin_coverage(db):
     assert by_slug["afp_romana"]["coverage"] == pytest.approx(0.30, abs=1e-6)
 
 
-def test_rentabilidad_peer_extremes(db):
+def test_rentabilidad_hybrid_communicates_magnitude(db):
+    # Fase 6: híbrido banda-absoluta + min-max. El líder ya NO queda clavado en 100 ni el
+    # rezagado en 0 — el score refleja MAGNITUD absoluta además del rango del panel.
     by_slug = {r["slug"]: r for r in compute_isa(db)}
 
     def rent(s):
         return next(d for d in by_slug[s]["dimensions"] if d["key"] == "rentabilidad")["score"]
 
-    # Reservas leads rentabilidad (10.97) → 100; Atlántico lags (8.12) → 0.
-    assert rent("afp_reservas") == 100.0
-    assert rent("afp_atlantico") == 0.0
+    lead, lag = rent("afp_reservas"), rent("afp_atlantico")
+    # Reservas (10.97%) lidera: banda absoluta ~85 + min-max 100 → híbrido ~92.6 (no 100).
+    assert lead == pytest.approx(92.64, abs=0.2)
+    # Atlántico (8.12%) rezaga pero su 8.12% real NO vale 0 (banda absoluta lo rescata).
+    assert lag > 0.0
+    assert lag == pytest.approx(22.29, abs=0.5)
+    assert lead > lag  # se preserva el orden relativo
 
 
 def test_ratings_persisted_and_sorted(db):
@@ -192,3 +198,35 @@ def test_costo_ratio_unit_normalized_and_absolute(tmp_path):
     assert costo_a["score"] > costo_b["score"]               # A genuinely cheaper
     assert costo_a["score"] < 100.0                          # absolute band, not min-max top
     db.close()
+
+
+# ── Fase 6: híbrido banda-absoluta + min-max ──────────────────────────────────
+
+def test_absolute_band_linear_and_log_and_clamp():
+    from modules.pension_intel.scoring.isa import _absolute_band
+    # lineal rentabilidad 5→0, 12→100
+    assert _absolute_band(5.0, 5.0, 12.0, False) == 0.0
+    assert _absolute_band(12.0, 5.0, 12.0, False) == 100.0
+    assert _absolute_band(8.5, 5.0, 12.0, False) == pytest.approx(50.0, abs=0.1)
+    # clamp fuera de rango
+    assert _absolute_band(3.0, 5.0, 12.0, False) == 0.0
+    assert _absolute_band(20.0, 5.0, 12.0, False) == 100.0
+    # log escala 10bn→0, 500bn→100; el punto medio geométrico (~70.7bn) ≈ 50
+    import math
+    mid = 10 ** ((math.log10(10e9) + math.log10(500e9)) / 2)
+    assert _absolute_band(mid, 10e9, 500e9, True) == pytest.approx(50.0, abs=0.5)
+
+
+def test_score_hybrid_blends_absolute_and_minmax():
+    from modules.pension_intel.scoring.isa import _score_hybrid, _absolute_band, _normalize
+    present = {"a": 10.97, "b": 8.5, "c": 6.5}  # rentabilidad (líder < ancla 12 → no clava 100)
+    out = _score_hybrid(present, "rentabilidad", "higher")
+    mm = _normalize(present, "higher")
+    for s, v in present.items():
+        ab = _absolute_band(v, 5.0, 12.0, False)
+        assert out[s] == pytest.approx(0.5 * ab + 0.5 * mm[s], abs=0.01)
+    # el líder no queda en 100 (magnitud) y el rezagado no en 0
+    assert out["a"] < 100.0
+    assert out["c"] > 0.0
+    # orden preservado
+    assert out["a"] > out["b"] > out["c"]
