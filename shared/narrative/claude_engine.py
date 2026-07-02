@@ -566,7 +566,7 @@ THIN_TEMPLATES = {
         "(SIPEN, dato real), no el sistema entero:\n{context}\n\n"
         "Máximo 220 palabras. Lee: (1) el nivel actual y qué significa para la salud del "
         "sistema; (2) la TENDENCIA (la serie provista) — dirección, aceleración o reversión a "
-        "la media, sin sobre-leer un mes; (3) el 'y por tanto' para la audiencia. RENTABILIDAD "
+        "la media, sin sobreinterpretar un mes; (3) el 'y por tanto' para la audiencia. RENTABILIDAD "
         "es NOMINAL (no afirmes real ni descuentes inflación si no está en el contexto). Usa solo "
         "las cifras del contexto; si una relación no está precalculada, exprésala sin número."
     ),
