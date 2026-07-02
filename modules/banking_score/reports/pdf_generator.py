@@ -657,13 +657,19 @@ def _build_support_table(support: Dict, styles) -> List:
     def _pct(v):
         return f"{v:.2f}%" if isinstance(v, (int, float)) else "—"
 
+    # La columna "Lectura" trae texto largo y dinámico (techo soberano, panel multi-agencia):
+    # va en un Paragraph para que ReportLab haga wrap dentro del ancho de columna (un str plano
+    # NO envuelve y se desborda). _md_inline escapa el XML (p.ej. "S&P" → "S&amp;P").
+    def _val(txt):
+        return Paragraph(_md_inline(str(txt)), styles["SDQTableCell"])
+
     rows = [["Eje", "Lectura"]]
     rows.append(["Fortaleza standalone (SDQ)",
-                 f"{standalone.get('tier', '—')} · {standalone.get('score', '—')}/100"])
-    rows.append(["Propiedad estatal", "Sí" if support.get("state_owned") else "No"])
-    rows.append(["Importancia sistémica", str(sysd.get("label") or "—")])
+                 _val(f"{standalone.get('tier', '—')} · {standalone.get('score', '—')}/100")])
+    rows.append(["Propiedad estatal", _val("Sí" if support.get("state_owned") else "No")])
+    rows.append(["Importancia sistémica", _val(sysd.get("label") or "—")])
     rows.append(["Cuota de activos / depósitos",
-                 f"{_pct(sysd.get('activos_share'))} · {_pct(sysd.get('depositos_share'))}"])
+                 _val(f"{_pct(sysd.get('activos_share'))} · {_pct(sysd.get('depositos_share'))}")])
     sov_txt = "—"
     if sov.get("rating"):
         outlook = f", {sov.get('outlook')}" if sov.get("outlook") else ""
@@ -671,7 +677,7 @@ def _build_support_table(support: Dict, styles) -> List:
                    f"{sov.get('as_of')}) · {sov.get('score')}/100")
         if sov.get("affirm_date"):
             sov_txt += f" · afirmado {sov.get('affirm_date')}"
-    rows.append(["Techo soberano (RD) — ancla", sov_txt])
+    rows.append(["Techo soberano (RD) — ancla", _val(sov_txt)])
     # Panel multi-agencia: contexto de convergencia/divergencia (S&P ancla el índice;
     # Fitch/Moody's no lo mueven — política "S&P manda").
     agencies = sov.get("agencies") or []
@@ -679,7 +685,7 @@ def _build_support_table(support: Dict, styles) -> List:
         def _ag(a):
             ol = f", {a.get('outlook')}" if a.get("outlook") else ""
             return f"{a.get('name')} {a.get('rating')}{ol} ({a.get('action_date') or 's/f'})"
-        rows.append(["Panel multi-agencia", " · ".join(_ag(a) for a in agencies)])
+        rows.append(["Panel multi-agencia", _val(" · ".join(_ag(a) for a in agencies))])
     table = Table(rows, colWidths=[2.3 * inch, 4.2 * inch], repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), NAVY),
