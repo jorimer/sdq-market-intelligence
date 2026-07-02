@@ -77,10 +77,10 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Lectura de riesgo-país basada en el Índice de Riesgo Macro-Político (IRMP, fuentes "
+    "La lectura de riesgo-país se basa en el Índice de Riesgo Macro-Político (IRMP, fuentes "
     "WGI/WDI/IMF) del país a la fecha de corte; la coyuntura macroeconómica del Pulse usa "
     "las series oficiales publicadas (BCRD, DIGEPRES/Crédito Público) y es nacional (RD). "
-    "El panel regional es conjunto de pares; no anticipa shocks no publicados ni "
+    "El panel regional es un conjunto de pares y no anticipa choques no publicados ni "
     "decisiones de política posteriores al período."
 )
 
@@ -95,7 +95,7 @@ _SAMPLE_NARRATIVES = {
         "inversión. La **inflación de 3.8%** se sitúa dentro del rango meta del Banco "
         "Central, lo que preserva margen para la política monetaria. Las **reservas "
         "internacionales (USD 14,200 millones)** ofrecen un colchón externo holgado frente "
-        "a shocks de balanza de pagos, y el **tipo de cambio (RD$ 59.8/US$)** registra una "
+        "a choques de balanza de pagos, y el **tipo de cambio (RD$ 59.8/US$)** registra una "
         "depreciación gradual y predecible. El contrapunto se ubica en el plano fiscal. El "
         "**déficit de -3.1% del PIB**, sin ser alarmante, exige disciplina para no "
         "erosionar la sostenibilidad de la deuda. En conjunto, la lectura corresponde a "
@@ -111,7 +111,7 @@ _SAMPLE_NARRATIVES = {
         "se cuentan la estabilidad política, la continuidad institucional y un historial "
         "de cumplimiento de obligaciones que ancla la percepción de riesgo soberano. Entre "
         "los factores de atención, la dependencia de ingresos externos —turismo, remesas e "
-        "inversión extranjera— expone a la economía a shocks globales, y el frente fiscal "
+        "inversión extranjera— expone a la economía a choques globales, y el frente fiscal "
         "limita el margen de maniobra contracíclico. Ninguno configura un riesgo de cola "
         "elevado. En conjunto definen un perfil medio y gestionable, coherente con una "
         "economía emergente en consolidación."

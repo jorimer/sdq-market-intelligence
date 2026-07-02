@@ -59,11 +59,12 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Resiliencia comercial basada en los flujos de comercio exterior publicados por "
-    "la DGA (Aduanas), por capítulo arancelario (HS), a la fecha de corte; la "
-    "concentración por país socio proviene de UN Comtrade (RD como reportante). No "
-    "anticipa shocks externos no realizados ni reclasificaciones arancelarias "
-    "posteriores al período. Validación direccional (Gate E), no grado-Basilea."
+    "La resiliencia comercial se construye sobre los flujos de comercio exterior "
+    "publicados por la DGA (Aduanas), por capítulo arancelario (HS), a la fecha de corte; "
+    "la concentración por país socio proviene de UN Comtrade (con la RD como reportante). "
+    "La lectura no anticipa choques externos aún no materializados ni reclasificaciones "
+    "arancelarias posteriores al período, y corresponde a una validación direccional "
+    "(Gate E), no a una clasificación de grado-Basilea."
 )
 # Narrativa CURADA tier-1 de la muestra (exemplar). Coherente con los datos demo
 # (resiliencia 60.6, diversificación 63%, dependencia importadora 0.475, HHI 0.37,

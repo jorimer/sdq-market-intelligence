@@ -48,12 +48,13 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Estructura sectorial sobre datos del BCRD (PIB por sectores de origen, base 2018): peso "
-    "de cada sector en el Valor Agregado y su crecimiento real. La métrica de importancia es "
-    "la CONTRIBUCIÓN al crecimiento (peso × crecimiento) — distinta del valor EXPORTADO (donde "
-    "lideran joyería/oro por ser export-intensivos, no por su peso en el PIB) y de la "
-    "ATRACTIVIDAD de inversión (IAI). Dato ANUAL AGREGADO NACIONAL; sin desglose subsectorial. "
-    "Producto descriptivo (sin score sintético ni proyección): expone la estructura real."
+    "La estructura sectorial se construye sobre datos del BCRD (PIB por sectores de origen, "
+    "base 2018): el peso de cada sector en el valor agregado y su crecimiento real. La "
+    "métrica de importancia es la contribución al crecimiento (peso × crecimiento), distinta "
+    "del valor exportado —donde lideran la joyería y el oro por su intensidad exportadora, no "
+    "por su peso en el PIB— y de la atractividad de inversión (IAI). El dato es anual y "
+    "agregado nacional, sin desglose subsectorial. Es un producto descriptivo, sin score "
+    "sintético ni proyección: expone la estructura real."
 )
 _NO_DATA = (
     "No hay estructura sectorial persistida: corre `bcrd-sectores-sync` para ingerir el PIB "

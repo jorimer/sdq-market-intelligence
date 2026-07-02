@@ -54,14 +54,15 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Construcción (ICC) sobre dos fuentes abiertas y complementarias: licencias "
-    "de construcción del MIVHED (datos.gob.do, indicador LÍDER — el permiso precede a la "
-    "obra) y crecimiento real del PIB de construcción del BCRD (PRODUCCIÓN efectiva). "
-    "Cuatro dimensiones: producción (crec. real 3y), pipeline de permisos (CAGR m² 3y), "
-    "diversificación tipológica y amplitud geográfica (HHI). Dato ANUAL AGREGADO NACIONAL: "
-    "los permisos MIVHED arrancan en 2022 (historia corta para el CAGR del pipeline) y la "
-    "inversión licenciada es NOMINAL (RD$), no ejecutada. Índice PRELIMINAR (sin backtest "
-    "de outcomes)."
+    "El Índice de Construcción (ICC) se construye sobre dos fuentes abiertas y "
+    "complementarias: las licencias de construcción del MIVHED (datos.gob.do), un indicador "
+    "líder —el permiso precede a la obra—, y el crecimiento real del PIB de construcción del "
+    "BCRD (producción efectiva). Cuatro dimensiones: producción (crecimiento real a 3 años), "
+    "flujo de permisos (CAGR de m² a 3 años), diversificación tipológica y amplitud "
+    "geográfica (HHI). El dato es anual y agregado nacional: los permisos del MIVHED "
+    "comienzan en 2022 (historia corta para el CAGR del flujo) y la inversión licenciada es "
+    "nominal (RD$), no ejecutada. Índice preliminar, aún sin validación retrospectiva de "
+    "resultados."
 )
 _NO_DATA = (
     "No hay ICC persistido: el producto está cableado pero su cobertura es insuficiente "
@@ -69,7 +70,7 @@ _NO_DATA = (
 )
 
 # Narrativa CURADA tier-1 de la muestra (exemplar), coherente con el dato real 2025
-# (ICC 26.5 «Crítico»: producción 3y +0.39% y pipeline de permisos −7.5% deprimen el
+# (ICC 26.5 «Crítico»: producción 3y +0.39% y flujo de permisos −7.5% deprimen el
 # índice pese a una diversificación tipológica/geográfica más sana; 951 licencias, 4.47M
 # m², ~RD$271 mil millones licenciados; apartamentos 59.6%, Santo Domingo 22.8%).
 _SAMPLE_NARRATIVES = {
@@ -79,7 +80,7 @@ _SAMPLE_NARRATIVES = {
         "en enfriamiento tras el auge post-pandemia. El resultado lo determinan las dos "
         "dimensiones cíclicas: la **producción efectiva** (PIB real de construcción) "
         "promedia **+0.39% anual** en los últimos tres años y cerró 2025 en **−1.8%**, "
-        "mientras el **pipeline de permisos** se contrae de forma marcada —los metros² "
+        "mientras el **flujo de permisos** se contrae de forma marcada —los metros² "
         "licenciados caen a un **−7.5% anual** (CAGR 3 años), de 5.7M a 4.5M de m²—. El "
         "componente estructural resulta más sólido: la actividad se mantiene "
         "**razonablemente diversificada** por tipología (apartamentos lideran con 59.6% de "
@@ -92,7 +93,7 @@ _SAMPLE_NARRATIVES = {
         "La coyuntura de la construcción se evalúa en **26.5/100 (banda Crítico)**, "
         "deprimida por sus dos motores cíclicos y sostenida principalmente por la "
         "diversificación. La **producción** real del sector se estancó (promedio 3 años "
-        "+0.4%, último año −1.8%), y el **pipeline** —el mejor indicador adelantado "
+        "+0.4%, último año −1.8%), y el **flujo de permisos** —el mejor indicador adelantado "
         "disponible— se mantiene en terreno negativo: con 951 licencias y 4.5M de m² en "
         "2025, los permisos registran una contracción aproximada de 7.5% anual. La "
         "**inversión licenciada** se ubica en torno a los RD$271 mil millones (nominal). "
@@ -106,11 +107,11 @@ _SAMPLE_NARRATIVES = {
         "**El ICC se ubica en banda Crítico y su posición la define el contraste entre dos "
         "dimensiones cíclicas débiles y un componente estructural sano.** Ordenadas por "
         "aporte, las dimensiones que deprimen el índice son la producción (PIB real, "
-        "promedio 3 años +0.4% y último año −1.8%) y, sobre todo, el pipeline de permisos "
+        "promedio 3 años +0.4% y último año −1.8%) y, sobre todo, el flujo de permisos "
         "(metros² licenciados a −7.5% anual), ambas en terreno cíclico negativo. En el polo "
         "opuesto, la diversificación tipológica (apartamentos 59.6%) y la amplitud "
         "geográfica (Santo Domingo 22.8%) obtienen puntajes elevados y sostienen la base de "
-        "actividad. La dimensión que define la posición es el pipeline de permisos: como "
+        "actividad. La dimensión que define la posición es el flujo de permisos: como "
         "indicador adelantado, su contracción explica por qué el índice no toca fondo pese a "
         "la solidez estructural. Cabe una nota de honestidad metodológica: los permisos "
         "MIVHED arrancan en 2022, por lo que la serie histórica es corta y no permite leer "
@@ -120,13 +121,13 @@ _SAMPLE_NARRATIVES = {
     "recommendation": (
         "Para un inversionista, desarrollador o decisor público con exposición a la "
         "construcción dominicana, la señal dominante es un **ciclo en contracción**: tanto "
-        "la producción (PIB real) como el pipeline líder (permisos) apuntan a la baja, por "
+        "la producción (PIB real) como el flujo líder de permisos apuntan a la baja, por "
         "lo que el momento de nueva exposición exige cautela y selectividad. La palanca de "
         "mayor valor no reside en sumar capacidad horizontal sino en la **lectura del "
         "indicador adelantado de permisos por tipología y provincia**: la diversificación "
         "sólida indica que existen segmentos y plazas donde la demanda estructural persiste "
         "(vivienda, plazas fuera del Gran Santo Domingo). Se recomienda condicionar las "
-        "tesis a una reactivación del pipeline de permisos —el mejor indicador adelantado— "
+        "tesis a una reactivación del flujo de permisos —el mejor indicador adelantado— "
         "antes de asumir un giro del ciclo, y priorizar nichos diversificados sobre "
         "posiciones concentradas."
     ),
@@ -231,7 +232,7 @@ class ConstructionProduct:
         return ValidationState(approved=True, score=0.55,
                                notes="ICC preliminar (sin backtest de outcomes; permisos "
                                      "MIVHED desde 2022). Producción (PIB construcción BCRD), "
-                                     "pipeline de permisos, diversificación tipológica y "
+                                     "flujo de permisos, diversificación tipológica y "
                                      "amplitud geográfica sobre dato real.")
 
     # ── Snapshot por nivel ──
@@ -324,7 +325,7 @@ class ConstructionProduct:
         index = (snapshot.payload or {}).get("index") or {}
         dims = index.get("dimensions") or {}
         if dims:
-            labels = {"production": "Producción (PIB)", "pipeline": "Pipeline permisos",
+            labels = {"production": "Producción (PIB)", "pipeline": "Flujo de permisos",
                       "typology_diversification": "Divers. tipológica",
                       "geographic_breadth": "Amplitud geográfica"}
             rows = [["Dimensión", "Score", "Peso"]] + [

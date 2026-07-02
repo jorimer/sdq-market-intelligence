@@ -77,15 +77,16 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Atractividad de Inversión (IAI) + momentum (SGPS) por sector, a la fecha de "
-    "corte. Dato real per-sector: tamaño y crecimiento (valor agregado BCRD), exposición "
-    "macro (contrato macro→sectorial), costo operativo (salario TSS por actividad), mano de "
-    "obra (empleo ENCFT por rama) y, donde la ENAE cubre el sector, rentabilidad real "
-    "(utilidad/ingresos). Dato real nacional (igual para todos, no diferencia el ranking): "
-    "calidad y volatilidad regulatoria (WGI). Quedan sobre rúbrica declarada la facilidad de "
-    "negocios y el índice de competencias —suben a real con su fuente, no se fingen—. La "
-    "rentabilidad ENAE no cubre todos los sectores: donde falta, esa variable se OMITE (no "
-    "se inventa), por lo que el atractivo de esos sectores se lee sobre menos profundidad."
+    "El Índice de Atractividad de Inversión (IAI), junto con su momentum (SGPS), se calcula "
+    "por sector a la fecha de corte. Con dato real por sector: tamaño y crecimiento (valor "
+    "agregado del BCRD), exposición macro (contrato macro→sectorial), costo operativo "
+    "(salario TSS por actividad), mano de obra (empleo ENCFT por rama) y, donde la ENAE "
+    "cubre el sector, rentabilidad real (utilidad/ingresos). Con dato real nacional (común a "
+    "todos los sectores, no diferencia el ranking): calidad y volatilidad regulatoria (WGI). "
+    "La facilidad de negocios y el índice de competencias se mantienen sobre rúbrica "
+    "declarada y se incorporarán como dato real al disponer de su fuente. Donde la ENAE no "
+    "cubre un sector, esa variable se omite —no se estima—, por lo que el atractivo de esos "
+    "sectores se lee con menor profundidad."
 )
 _NO_DATA = (
     "No hay score persistido para este sector: el producto está cableado pero su "
@@ -138,7 +139,7 @@ _SAMPLE_NARRATIVES = {
         "histórico es indicativo de un sector en fase de consolidación más que de pico "
         "cíclico, lo que reduce el riesgo de ingresar en un punto de inflexión. En síntesis, "
         "la trayectoria respalda la exposición de mediano plazo, con un perfil de momentum "
-        "que favorece el horizonte temporal sobre el timing."
+        "que favorece el horizonte de mediano plazo sobre el momento puntual de entrada."
     ),
     "recommendation": (
         "Para un inversionista o comité que evalúa exposición al sector, la recomendación es "

@@ -53,12 +53,13 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Desarrollo Telecom (IDT) sobre los datos abiertos de ITU DataHub (API "
-    "pública, licencia CC): penetración de telefonía móvil, banda ancha móvil y banda "
-    "ancha fija (por 100 habitantes / % de hogares), serie anual fresca hasta 2024. "
-    "Reemplaza al boletín de INDOTEL, cuya serie pública quedó congelada en 2022-Q1 "
-    "(se conserva como histórico). Índice de alcance/penetración, no un veredicto "
-    "financiero del sector; sin backtest de outcomes."
+    "El Índice de Desarrollo Telecom (IDT) se construye sobre los datos abiertos de ITU "
+    "DataHub (API pública, licencia CC): penetración de telefonía móvil, banda ancha móvil "
+    "y banda ancha fija (por 100 habitantes / % de hogares), con serie anual actualizada "
+    "hasta 2024. Reemplaza al boletín de INDOTEL, cuya serie pública quedó congelada en "
+    "2022-Q1 y se conserva como histórico. Es un índice de alcance y penetración, no un "
+    "veredicto financiero del sector, y aún no cuenta con validación retrospectiva de "
+    "resultados."
 )
 _NO_DATA = (
     "No hay IDT persistido: el producto está cableado pero su cobertura (G1) es "

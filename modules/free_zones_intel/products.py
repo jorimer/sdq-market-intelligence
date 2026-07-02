@@ -52,12 +52,13 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Atractividad de Zonas Francas (IZF) sobre datos abiertos de la CNZFE "
-    "(datos.gob.do): dinamismo exportador, atracción de inversión, generación de empleo y "
-    "productividad (exportaciones por empresa), cada dimensión por su CAGR a 3 años vs un "
-    "objetivo. Dato ANUAL AGREGADO NACIONAL del sector — sin desglose por sub-sector "
-    "industrial (textil, tabaco, médica, calzado), que vive en el informe estadístico "
-    "anual de la CNZFE. Índice PRELIMINAR (sin backtest de outcomes)."
+    "El Índice de Atractividad de Zonas Francas (IZF) se construye sobre datos abiertos de "
+    "la CNZFE (datos.gob.do): dinamismo exportador, atracción de inversión, generación de "
+    "empleo y productividad (exportaciones por empresa), cada dimensión por su CAGR a 3 años "
+    "frente a un objetivo. El dato es anual y agregado nacional del sector, sin desglose por "
+    "subsector industrial (textil, tabaco, médico, calzado), que se publica en el informe "
+    "estadístico anual de la CNZFE. Índice preliminar, aún sin validación retrospectiva de "
+    "resultados."
 )
 _NO_DATA = (
     "No hay IZF persistido: el producto está cableado pero su cobertura es insuficiente "

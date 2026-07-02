@@ -54,13 +54,14 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Resiliencia del Sector Eléctrico (IRSE) sobre datos abiertos: adecuación "
-    "de capacidad (parque instalado del SENI, SIE), calidad de servicio (backlog de "
-    "reclamaciones, SIE) y TRANSICIÓN energética (penetración renovable de la matriz de "
-    "generación, ONE) — las 3 dimensiones con dato real. La penetración renovable se "
-    "mide sobre la meta nacional de la Ley 57-07 (25 %); el consumo de combustible CKAN "
-    "sigue excluido (quiebre de unidades 2018) para no fabricar precisión. Índice "
-    "PRELIMINAR (sin backtest)."
+    "El Índice de Resiliencia del Sector Eléctrico (IRSE) se construye sobre datos abiertos: "
+    "adecuación de capacidad (parque instalado del SENI, SIE), calidad de servicio "
+    "(reclamaciones acumuladas, SIE) y transición energética (penetración renovable de la "
+    "matriz de generación, ONE), las tres dimensiones con dato real. La penetración "
+    "renovable se mide sobre la meta nacional de la Ley 57-07 (25 %); el consumo de "
+    "combustible (CKAN) se mantiene excluido por el quiebre de unidades de 2018, para no "
+    "introducir una precisión que el dato no respalda. Índice preliminar, aún sin validación "
+    "retrospectiva."
 )
 _NO_DATA = (
     "No hay IRSE persistido: el producto está cableado pero su cobertura (G1) es "
