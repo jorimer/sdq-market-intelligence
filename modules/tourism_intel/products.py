@@ -52,16 +52,17 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Tracción Turística (ITT) sobre datos abiertos de la ONE (datos.gob.do, "
-    "llegada de pasajeros vía aérea de no residentes): demanda total, demanda extranjera, "
-    "resiliencia/recuperación (nivel vs pico pre-pandemia) y diversificación de mercados "
-    "(HHI por región emisora). Mide la tracción de DEMANDA (volumen, recuperación, "
-    "concentración de origen) — NO cubre la oferta hotelera, la tasa de ocupación, ni los "
-    "ingresos por turismo (divisas US$): el BCRD discontinuó esas series estructuradas en "
-    "2018-2019 (el Banco Mundial las espeja igual de desactualizadas) y hoy solo aparecen "
-    "como cifra suelta en informes PDF, sin serie limpia que publicar. "
-    "Dato ANUAL AGREGADO NACIONAL, sin desglose por polo turístico (Punta Cana, Puerto "
-    "Plata, etc.). Índice PRELIMINAR (sin backtest de outcomes)."
+    "El Índice de Tracción Turística (ITT) se construye sobre datos abiertos de la ONE "
+    "(datos.gob.do, llegada de pasajeros vía aérea de no residentes): demanda total, "
+    "demanda extranjera, resiliencia y recuperación (nivel frente al pico prepandemia) y "
+    "diversificación de mercados (HHI por región emisora). Mide la tracción de la demanda "
+    "(volumen, recuperación, concentración de origen); no cubre la oferta hotelera, la tasa "
+    "de ocupación ni los ingresos por turismo (divisas en US$), ya que el BCRD discontinuó "
+    "esas series estructuradas en 2018-2019 —el Banco Mundial las refleja igualmente "
+    "desactualizadas— y hoy solo aparecen como cifra suelta en informes PDF, sin serie "
+    "limpia disponible. El dato es anual y agregado nacional, sin desglose por polo "
+    "turístico (Punta Cana, Puerto Plata, etc.). Índice preliminar, aún sin validación "
+    "retrospectiva de resultados."
 )
 _NO_DATA = (
     "No hay ITT persistido: el producto está cableado pero su cobertura es insuficiente "

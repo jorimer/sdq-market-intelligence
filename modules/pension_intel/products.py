@@ -63,16 +63,17 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "El Índice de Solidez de AFP (ISA) es una lectura RELATIVA y PARCIAL sobre dato "
-    "público de SIPEN/ADAFP: la SOLVENCIA (estados financieros de las AFP) es una brecha "
-    "declarada y aún no entra al índice, por lo que la cobertura es inferior al 100% y las "
-    "bandas absolutas de solidez (Sólida/Frágil) están diferidas hasta disponer de ella. "
-    "El score ordena por POSICIÓN RELATIVA entre AFP con dato suficiente, no certifica "
-    "solvencia. La rentabilidad se expresa en términos REALES (deflactada por la inflación "
-    "interanual del BCRD) además del nominal; el ISA puntúa sobre el nominal —deflactar por "
-    "una inflación común a todas las AFP es neutral a la posición relativa—. No es un rating "
-    "crediticio ni grado-Basilea. El ajuste por riesgo (retorno por unidad de volatilidad) "
-    "está diferido."
+    "El Índice de Solidez de AFP (ISA) ofrece una lectura relativa y parcial construida "
+    "sobre dato público de SIPEN/ADAFP. La solvencia (estados financieros de las AFP) se "
+    "incorporará al índice cuando esté disponible; hasta entonces la cobertura es inferior "
+    "al 100% y las bandas absolutas de solidez (Sólida/Frágil) se reservan. El score ordena "
+    "la posición relativa entre las AFP con dato suficiente y no certifica solvencia. La "
+    "rentabilidad se presenta en términos reales —deflactada por la inflación interanual del "
+    "BCRD— además del nominal; el ISA puntúa sobre el nominal, ya que deflactar por una "
+    "inflación común a todas las AFP no altera la posición relativa. El riesgo se mide como "
+    "la volatilidad realizada del valor cuota y el Sharpe lo relaciona con la TPM, como "
+    "complemento de lectura ajustada por riesgo. El ISA es una medida de fortaleza relativa; "
+    "no constituye un rating de crédito ni una clasificación de grado-Basilea."
 )
 _NO_DATA = (
     "No hay dato suficiente de SIPEN para publicar este nivel: el producto está cableado "
@@ -344,10 +345,13 @@ def _named_headline_caveat(payload: Dict[str, Any]) -> tuple:
         headline += f" · rentab. real {real:+.1f}%"
     if isinstance(sharpe, (int, float)):
         headline += f" · Sharpe {sharpe:.2f}"
-    caveat = ("Lectura RELATIVA y PARCIAL · solvencia (estados financieros) aún "
-              "diferida · rentabilidad en términos reales (deflactada por inflación "
-              "BCRD) · riesgo = volatilidad realizada del valor cuota (σ), Sharpe "
-              "sobre la TPM; σ atenuada por valoración a costo amortizado")
+    caveat = ("Nota metodológica: el ISA ofrece una lectura relativa y parcial —ordena la "
+              "posición entre las AFP con dato suficiente—. La solvencia se incorporará al "
+              "publicarse los estados financieros auditados. La rentabilidad se presenta en "
+              "términos reales, deflactada por la inflación del BCRD. El riesgo corresponde a "
+              "la volatilidad realizada del valor cuota (σ) y el Sharpe la relaciona con la "
+              "TPM; la σ está parcialmente atenuada por la valoración a costo amortizado de "
+              "la cartera.")
     return headline, caveat
 
 

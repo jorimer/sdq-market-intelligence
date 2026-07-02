@@ -62,12 +62,13 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "Índice de Resiliencia Climática (IRC) sobre dato real a la fecha de corte: riesgo "
-    "físico de huracán (HURDAT2/NOAA) + exposición/adaptación/gobernanza (ND-GAIN) + "
-    "transición eléctrica (Ember: fósil/carbono); cuando Ember no cubre el panel, la "
-    "transición cae a rúbrica declarada (G1 lo refleja). Validación direccional (Gate E, "
-    "mortalidad por desastre vs IRC en panel Caribe/LatAm), no grado-Basilea. El panel "
-    "es conjunto de pares; no anticipa eventos climáticos no realizados."
+    "El Índice de Resiliencia Climática (IRC) se construye sobre dato real a la fecha de "
+    "corte: riesgo físico de huracán (HURDAT2/NOAA), exposición, adaptación y gobernanza "
+    "(ND-GAIN), y transición eléctrica (Ember: fósil/carbono). Cuando Ember no cubre el "
+    "panel, la transición pasa a rúbrica declarada (G1 lo refleja). Corresponde a una "
+    "validación direccional (Gate E, mortalidad por desastre frente al IRC en el panel "
+    "Caribe/LatAm), no a una clasificación de grado-Basilea. El panel es un conjunto de "
+    "pares y no anticipa eventos climáticos aún no materializados."
 )
 _NO_DATA = (
     "No hay IRC persistido para el período: el producto está cableado pero su cobertura "
