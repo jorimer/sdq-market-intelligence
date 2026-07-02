@@ -45,7 +45,7 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
                 "rentabilidad NOMINAL; se reporta además la REAL (deflactada por inflación BCRD). "
                 "La dimensión RIESGO es la volatilidad realizada (σ anualizada de los retornos "
                 "mensuales del valor cuota, ventana ~30m); menor σ = más consistente. La σ es baja "
-                "en parte por valoración a costo amortizado de la cartera (caveat, no sobre-leer).",
+                "en parte por valoración a costo amortizado de la cartera (caveat, no sobreinterpretar).",
     }
     # Retorno ajustado por riesgo (Diferido B): la dimensión riesgo puede traer el Sharpe
     # (retorno anualizado − TPM) / σ — lectura para la narrativa (no es el score).

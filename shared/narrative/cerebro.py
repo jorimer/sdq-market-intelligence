@@ -567,12 +567,12 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
     "construction_intel": {
         "inversionista": (
             "FRAME DE DECISIÓN — Audiencia: Inversionista / desarrollador inmobiliario.\n"
-            "Decide: timing y exposición al ciclo de la construcción (obra nueva, desarrollo).\n"
+            "Decide: el momento del ciclo y la exposición a la construcción (obra nueva, desarrollo).\n"
             "Le importa: la producción efectiva (PIB) como estado del ciclo y, sobre todo, el "
             "FLUJO de permisos como adelanto de la actividad futura; la diversificación "
             "tipológica y geográfica como dónde persiste la demanda. Tu \"y por tanto\" final "
             "apunta a dónde el adelanto de permisos o el giro del ciclo crea oportunidad o "
-            "riesgo de timing no descontado."
+            "riesgo aún no descontado por el mercado."
         ),
         "gobierno": (
             "FRAME DE DECISIÓN — Audiencia: Gobierno / política de vivienda e infraestructura.\n"

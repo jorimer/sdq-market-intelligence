@@ -41,35 +41,35 @@ _GAP_ACTIONS: Dict[str, Dict[str, str]] = {
                        "negocios y volatilidad regulatoria (Doing Business / serie WGI) e "
                        "índice de competencias (estudios ONE). Cada una sube cobertura → "
                        "cruza 0.85 (Insight/Deep).",
-                "g5": "Gate E sectorial diferido: lo desbloquea dato de outcomes por sector, "
-                      "no un backtest sobre la base actual."},
+                "g5": "Gate E sectorial diferido: lo desbloquea dato de resultados por sector, "
+                      "no una validación retrospectiva sobre la base actual."},
     "free_zones": {"g1": "Idéntico a turismo: 3 variables en rúbrica (negocios/competencias/"
                          "volatilidad regulatoria) → su conector cierra la cobertura.",
-                   "g5": "Gate E sectorial diferido (outcomes por sector)."},
+                   "g5": "Gate E sectorial diferido (resultados por sector)."},
     "construction": {"g1": "Producto dedicado (ICC): cobertura del MIVHED (permisos) + BCRD "
-                          "(PIB construcción). El pipeline solo acredita su peso con ≥4 años "
+                          "(PIB construcción). El flujo de permisos solo acredita su peso con ≥4 años "
                           "de permisos (MIVHED desde 2022).",
-                     "g5": "Índice preliminar sin backtest de outcomes; sube con validación "
+                     "g5": "Índice preliminar sin validación retrospectiva de resultados; sube con validación "
                           "real del ciclo de construcción."},
     "agribusiness": {"g1": "3 variables en rúbrica (negocios/competencias/volatilidad "
                           "regulatoria) → su conector cierra la cobertura.",
-                     "g5": "Gate E sectorial diferido (outcomes por sector)."},
+                     "g5": "Gate E sectorial diferido (resultados por sector)."},
     "telecom": {"g1": "Dato INDOTEL congelado: cargar el boletín trimestral más reciente "
                       "(la serie quedó en 2022-Q1). Es la palanca #1: G1=0 hoy.",
                 "g5": "Backtest pendiente de una serie con más historia vigente."},
     "energy": {"g1": "Cerrar la brecha de transición energética (cobertura parcial): traer "
                      "las dimensiones faltantes de la matriz SIE/CNE.",
-               "g5": "Validación preliminar: subir con outcomes reales del sector."},
+               "g5": "Validación preliminar: subir con resultados reales del sector."},
     "macro": {"g1": "Re-sync con un período nuevo: la edad del dato IRMP baja solo cuando "
                     "entra el corte siguiente (no es bug, es cadencia).",
               "g5": "Backtest ya fuerte; se refina con más panel/años."},
     "esg": {"g1": "Frescura anual (dato 2023): re-sync al publicarse el corte ND-GAIN/Ember "
                   "siguiente.",
             "g5": "Backtest validado (Spearman significativo); margen menor."},
-    "trade": {"g5": "Validación sobre outcomes comerciales: ya en umbral; sube con backtest "
-                    "de resiliencia más largo."},
-    "pension": {"g5": "Cap ESTRUCTURAL: no hay backtest de quiebras (ninguna AFP quebró). "
-                      "Sube con un evento de outcome real o un proxy de validación "
+    "trade": {"g5": "Validación sobre resultados comerciales: ya en umbral; sube con validación "
+                    "retrospectiva de resiliencia más larga."},
+    "pension": {"g5": "Cap ESTRUCTURAL: no hay validación retrospectiva de quiebras (ninguna AFP quebró). "
+                      "Sube con un evento de resultado real o un proxy de validación "
                       "acordado — no se fabrica."},
     "banking": {},
 }
@@ -100,9 +100,9 @@ def _gate_diagnosis(sector: str, gate: str, value: float, data, val) -> Dict[str
                 "accion": action or "Declarar las secciones del nivel en el manifiesto."}
     # g5
     estado = "no aprobada" if not val.approved else f"parcial (score {val.score:.2f})"
-    nota = (val.notes or "sin backtest de outcomes").strip().rstrip(".")
+    nota = (val.notes or "sin validación retrospectiva de resultados").strip().rstrip(".")
     return {"falta": f"Validación {estado}: {nota}.",
-            "accion": action or "Backtest de outcomes / QA firmado del sector."}
+            "accion": action or "Validación retrospectiva de resultados / QA firmado del sector."}
 
 
 def _sector_audit(db: Session, entry) -> Dict[str, Any]:
