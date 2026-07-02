@@ -489,8 +489,8 @@ class PensionProduct:
         # contra resultados. Honesto: aprobado por doctrina, fuerza modesta.
         return ValidationState(
             approved=True, score=0.5,
-            notes="ISA = índice RELATIVO y PARCIAL (sin backtest de outcomes); solvencia = "
-                  "brecha declarada, bandas absolutas diferidas.")
+            notes="ISA = índice relativo y parcial (sin validación retrospectiva de resultados); "
+                  "solvencia = brecha declarada, bandas absolutas diferidas.")
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,

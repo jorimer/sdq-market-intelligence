@@ -238,7 +238,7 @@ class TourismProduct:
         # Índice PRELIMINAR: 4 dimensiones sobre dato real ONE, pero SIN backtest de
         # outcomes → validación parcial honesta, no veredicto pleno.
         return ValidationState(approved=True, score=0.55,
-                               notes="ITT preliminar (sin backtest de outcomes). Demanda "
+                               notes="ITT preliminar (sin validación retrospectiva de resultados). Demanda "
                                      "total, demanda extranjera, recuperación y "
                                      "diversificación de mercados sobre dato real ONE "
                                      "(llegadas agregadas nacionales).")

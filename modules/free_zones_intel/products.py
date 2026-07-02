@@ -233,7 +233,7 @@ class FreeZoneProduct:
         # Índice PRELIMINAR: 4 dimensiones sobre dato real CNZFE, pero SIN backtest de
         # outcomes → validación parcial honesta, no veredicto pleno.
         return ValidationState(approved=True, score=0.55,
-                               notes="IZF preliminar (sin backtest de outcomes). Dinamismo "
+                               notes="IZF preliminar (sin validación retrospectiva de resultados). Dinamismo "
                                      "exportador, inversión, empleo y productividad sobre "
                                      "dato real CNZFE (agregado nacional).")
 

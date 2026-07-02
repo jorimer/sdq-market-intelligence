@@ -61,5 +61,5 @@ def tourism_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
                  "diversificación de mercados). NO cubre oferta hotelera, ocupación, ni "
                  "ingresos por turismo (divisas) — el BCRD discontinuó esas series "
                  "estructuradas en 2018-2019 y hoy solo viven en PDFs narrativos, sin serie "
-                 "limpia; no los inventes. Sin backtest de outcomes."),
+                 "limpia; no los inventes. Sin validación retrospectiva de resultados."),
     }

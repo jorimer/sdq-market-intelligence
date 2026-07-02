@@ -54,5 +54,5 @@ def free_zones_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         "note": ("Sobre dato real CNZFE: fundamentos anuales del sector de zonas francas "
                  "(exportaciones, inversión acumulada, empleos, empresas). Índice de "
                  "dinamismo por CAGR vs objetivo. Agregado nacional, sin desglose por "
-                 "sub-sector industrial ni backtest de outcomes."),
+                 "sub-sector industrial ni validación retrospectiva de resultados."),
     }
