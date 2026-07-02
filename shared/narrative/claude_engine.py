@@ -665,7 +665,7 @@ THIN_TEMPLATES = {
         "cifras del contexto (izf_score, coverage, niveles del último año —empresas, empleos, "
         "exportaciones US$, inversión US$— y el CAGR/score por dimensión). Distingue ESCALA "
         "(niveles) de DINAMISMO (crecimiento). HONESTIDAD: dato anual agregado nacional de la "
-        "CNZFE; sin desglose por sub-sector industrial ni backtest de outcomes. Si una cifra no "
+        "CNZFE; sin desglose por sub-sector industrial ni validación retrospectiva de resultados. Si una cifra no "
         "está, dilo; no inventes."
     ),
     "construction_outlook": (
@@ -681,7 +681,7 @@ THIN_TEMPLATES = {
         "PRODUCCIÓN realizada (PIB, lo ya hecho): si divergen, esa divergencia es la lectura. "
         "HONESTIDAD: dato anual agregado nacional; permisos MIVHED desde 2022 (historia corta "
         "para ese flujo); la inversión licenciada es NOMINAL en RD$ (no ejecutada), no la "
-        "confundas con inversión real ni con el PIB; sin backtest de outcomes. Si una cifra no "
+        "confundas con inversión real ni con el PIB; sin validación retrospectiva de resultados. Si una cifra no "
         "está, dilo; no inventes."
     ),
     "social_outlook": (

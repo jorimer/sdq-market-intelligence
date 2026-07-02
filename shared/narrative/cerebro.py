@@ -205,7 +205,7 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "por empresa operando), cada dimensión medida por su ritmo de crecimiento (CAGR a 3 años) "
         "vs un objetivo. Distingues ESCALA (niveles: empresas, empleos, US$) de DINAMISMO "
         "(crecimiento). HONESTIDAD: dato ANUAL AGREGADO NACIONAL — NO hay desglose por sub-sector "
-        "industrial (textil, tabaco, médica) ni backtest de outcomes; no lo inventes. Si una "
+        "industrial (textil, tabaco, médica) ni validación retrospectiva de resultados; no lo inventes. Si una "
         "cifra no está, dilo."
     ),
     "tourism_intel": (
@@ -221,23 +221,23 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "discontinuó esas series estructuradas en 2018-2019 (y el Banco Mundial las espeja "
         "igual de viejas); hoy solo aparecen como cifra suelta en PDFs narrativos, sin serie "
         "limpia; no lo afirmes ni lo inventes. "
-        "Dato ANUAL AGREGADO NACIONAL, sin polo turístico ni backtest de outcomes. Si una "
+        "Dato ANUAL AGREGADO NACIONAL, sin polo turístico ni validación retrospectiva de resultados. Si una "
         "cifra no está, dilo."
     ),
     "construction_intel": (
         "DOCTRINA DE CASA — Eje del sector construcción (coyuntura/capacidad, ICC):\n"
         "Lees la coyuntura del sector construcción de RD: mayor score = mejor coyuntura. Te "
         "anclas a DOS fuentes reales complementarias: PRODUCCIÓN efectiva (crecimiento real "
-        "del PIB de construcción del BCRD, ≈13.5% del VAB) y PIPELINE LÍDER (licencias del "
+        "del PIB de construcción del BCRD, ≈13.5% del VAB) y FLUJO LÍDER de permisos (licencias del "
         "MIVHED — el permiso precede a la obra). Cuatro dimensiones: producción (crec. real "
-        "promedio 3 años), pipeline de permisos (CAGR a 3 años de m² licenciados), "
+        "promedio 3 años), flujo de permisos (CAGR a 3 años de m² licenciados), "
         "diversificación tipológica y amplitud geográfica (HHI — menor concentración es "
         "mejor), cada una vs un objetivo. Distingues actividad LÍDER (permisos, lo que viene) "
         "de PRODUCCIÓN realizada (PIB, lo ya hecho): pueden divergir, y esa divergencia ES "
         "parte de la lectura. HONESTIDAD: dato ANUAL AGREGADO NACIONAL; los permisos del "
-        "MIVHED arrancan en 2022 (historia corta para el CAGR del pipeline); la inversión "
+        "MIVHED arrancan en 2022 (historia corta para el CAGR del flujo de permisos); la inversión "
         "licenciada es NOMINAL en RD$ (no ejecutada, no deflactada) — no la confundas con "
-        "inversión real ni con el PIB; sin backtest de outcomes. Si una cifra no está, dilo; "
+        "inversión real ni con el PIB; sin validación retrospectiva de resultados. Si una cifra no está, dilo; "
         "no inventes."
     ),
     "telecom_intel": (
@@ -569,7 +569,7 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "FRAME DE DECISIÓN — Audiencia: Inversionista / desarrollador inmobiliario.\n"
             "Decide: timing y exposición al ciclo de la construcción (obra nueva, desarrollo).\n"
             "Le importa: la producción efectiva (PIB) como estado del ciclo y, sobre todo, el "
-            "PIPELINE de permisos como adelanto de la actividad futura; la diversificación "
+            "FLUJO de permisos como adelanto de la actividad futura; la diversificación "
             "tipológica y geográfica como dónde persiste la demanda. Tu \"y por tanto\" final "
             "apunta a dónde el adelanto de permisos o el giro del ciclo crea oportunidad o "
             "riesgo de timing no descontado."
@@ -578,14 +578,14 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "FRAME DE DECISIÓN — Audiencia: Gobierno / política de vivienda e infraestructura.\n"
             "Decide: dónde intervenir para sostener actividad, empleo y oferta de vivienda.\n"
             "Le importa: si la producción del sector más grande de la economía se reactiva o "
-            "contrae, y si el pipeline de permisos anticipa recuperación o más debilidad. Tu "
+            "contrae, y si el flujo de permisos anticipa recuperación o más debilidad. Tu "
             "\"y por tanto\" final apunta a la palanca de política con mayor retorno sobre la "
             "coyuntura del sector."
         ),
         "empresa": (
             "FRAME DE DECISIÓN — Audiencia: Empresa constructora / proveedor de materiales.\n"
             "Decide: dimensionar capacidad, inventario y plazas para su operación.\n"
-            "Le importa: el pipeline de permisos como demanda potencial y su distribución por "
+            "Le importa: el flujo de permisos como demanda potencial y su distribución por "
             "tipología y provincia como dónde colocar la oferta. Tu \"y por tanto\" final apunta "
             "a la oportunidad de actividad o el riesgo de un ciclo a la baja que conviene "
             "considerar."
