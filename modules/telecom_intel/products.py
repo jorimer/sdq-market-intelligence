@@ -257,7 +257,7 @@ class TelecomProduct:
         src = "INDOTEL (2022-Q1)" if (s and "Q" in str(s.period)) else "ITU DataHub"
         return ValidationState(approved=True, score=0.55,
                                notes=f"IDT sobre dato real de {src} (penetración móvil + banda "
-                                     "ancha); sin backtest de outcomes.")
+                                     "ancha); sin validación retrospectiva de resultados.")
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,

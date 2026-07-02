@@ -230,7 +230,7 @@ class ConstructionProduct:
         # Índice PRELIMINAR: 4 dimensiones sobre dato real MIVHED+BCRD, pero SIN backtest de
         # outcomes y con historia corta de permisos (2022+) → validación parcial honesta.
         return ValidationState(approved=True, score=0.55,
-                               notes="ICC preliminar (sin backtest de outcomes; permisos "
+                               notes="ICC preliminar (sin validación retrospectiva de resultados; permisos "
                                      "MIVHED desde 2022). Producción (PIB construcción BCRD), "
                                      "flujo de permisos, diversificación tipológica y "
                                      "amplitud geográfica sobre dato real.")

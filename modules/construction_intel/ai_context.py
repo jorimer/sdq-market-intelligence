@@ -62,6 +62,6 @@ def construction_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any
                  "efectiva (PIB construcción BCRD). Índice de coyuntura — distingue "
                  "actividad LÍDER (permisos) de PRODUCCIÓN realizada (PIB). Agregado "
                  "nacional anual; los permisos MIVHED arrancan en 2022 (historia corta para "
-                 "el pipeline); sin backtest de outcomes. La inversión licenciada es nominal "
+                 "el flujo de permisos); sin validación retrospectiva de resultados. La inversión licenciada es nominal "
                  "(RD$); no la confundas con la inversión ejecutada."),
     }

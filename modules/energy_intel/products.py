@@ -246,10 +246,10 @@ class EnergyProduct:
         s = self._latest()
         full = s is not None and s.transition_score is not None
         score = 0.55 if full else 0.45
-        notes = ("IRSE preliminar (sin backtest de outcomes). Las 3 dimensiones "
+        notes = ("IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones "
                  "—capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real."
                  if full else
-                 "IRSE preliminar (sin backtest); transición declarada como brecha. "
+                 "IRSE preliminar (sin validación retrospectiva); transición declarada como brecha. "
                  "Capacidad y servicio sobre dato real SIE.")
         return ValidationState(approved=True, score=score, notes=notes)
 
