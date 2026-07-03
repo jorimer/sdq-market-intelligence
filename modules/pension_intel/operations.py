@@ -29,6 +29,11 @@ def _run_financials_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_sipen_discovery(params, user_id, set_phase) -> Dict:
+    from modules.pension_intel.sipen_discovery import sipen_discovery
+    return sipen_discovery(set_phase=set_phase)
+
+
 def _run_cartera_sync(params, user_id, set_phase) -> Dict:
     from modules.pension_intel.cartera_sync import sipen_cartera_sync
     db = SessionLocal()
@@ -49,6 +54,17 @@ def _run_nav_sync(params, user_id, set_phase) -> Dict:
 
 
 def register() -> None:
+    register_operation(Operation(
+        "sipen-discovery", "Descubrir cobertura SIPEN (read-only)",
+        "Sondea CADA página de publicación de SIPEN (Estadística Previsional, Boletines, "
+        "estados financieros interinos y AUDITADOS, CKAN) y devuelve un informe de qué "
+        "archivos/cuadros/años existen hoy y cuáles NO ingerimos. NO escribe en la base, "
+        "no ingiere, no muta scores — es puro diagnóstico (Fase 0 de la auditoría de "
+        "cobertura). Establece la estructura real de la página de auditados antes de "
+        "escribir su crawler. Corre desde Railway (egress estático + UA de navegador). "
+        "On-demand (no auto-agendada).",
+        _run_sipen_discovery, default_interval_hours=0,  # on-demand: diagnóstico read-only
+    ))
     register_operation(Operation(
         "sipen-sync", "Sincronizar pensiones (SIPEN)",
         "Ingiere las estadísticas del sistema dominicano de pensiones (SIPEN): "
