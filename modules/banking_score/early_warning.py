@@ -32,6 +32,11 @@ LIQ_FLOOR = 15.0           # (activos_líquidos/pasivos_exigibles)×100
 DEPOSIT_DROP = -0.10       # caída trimestral de depósitos ≥ 10% (proxy de corrida)
 CONCENTRATION = 30.0       # top-10 / cartera bruta %  (proxy de vinculados)
 
+# Solo entidades CAPTADORAS DE DEPÓSITOS — los precursores de la crisis 2003 (fuga de
+# depósitos, fondeo, provisiones, morosidad) aplican a la banca de intermediación, no a
+# agentes de cambio (``cambiaria``) ni a fiduciarias (perfil off-balance distinto).
+MONITORED_TYPES = ("banca_multiple", "aap", "banco_ahorro_credito", "corporacion_credito")
+
 
 @dataclass(frozen=True)
 class Alert:
@@ -192,7 +197,8 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
     del sistema: bancos con banderas activas ordenados por severidad, + resumen por código."""
     from modules.banking_score.models.models import Bank, BankingData
 
-    names = {b.id: b.name for b in db.query(Bank).filter(Bank.is_active.is_(True)).all()}
+    names = {b.id: b.name for b in db.query(Bank)
+             .filter(Bank.is_active.is_(True), Bank.bank_type.in_(MONITORED_TYPES)).all()}
     by_bank: Dict[str, Dict[date, object]] = {}
     for r in db.query(BankingData).all():
         if r.bank_id in names:
