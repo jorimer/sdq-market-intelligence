@@ -215,6 +215,19 @@ TEMPLATES = {
 # indicador, percentil, peso de sub-componente, BCRD como telón). La regla "no inventes
 # cifras" NO se repite aquí: vive en EPISTEMIC_STANDARD del cerebro y sigue activa.
 THIN_TEMPLATES = {
+    "early_warning_reading": (
+        "Interpreta el CONJUNTO de señales de alerta temprana YA detectadas para esta entidad "
+        "(no es un reporte de estado ni una relista). Contexto:\n{context}\n\n"
+        "Máximo 130 palabras, UN SOLO párrafo. Las banderas y sus cifras ya vienen dadas en "
+        "'flags'; tu trabajo es LEER EL PATRÓN: qué COMBINACIÓN de banderas es la que más pesa "
+        "(una combinación puede importar más que la suma de sus partes), qué la matiza para "
+        "esta entidad, y el 'y por tanto' de qué conviene vigilar. Si una sola bandera domina, "
+        "dilo. REGLA DURA: usa EXCLUSIVAMENTE las cifras servidas en 'flags' (valor/umbral); NO "
+        "inventes números, umbrales ni comparaciones que no estén en el contexto; si una "
+        "relación no está dada, exprésala en palabras SIN número. NO afirmes fraude ni causas "
+        "ocultas: estas señales son un COMPLEMENTO del rating/índice, no un veredicto, y no "
+        "detectan contabilidad fraudulenta. No repitas la lista textual; sintetiza."
+    ),
     "entity_rating": (
         "Explica el FUNDAMENTO del rating de esta entidad, a partir de datos reales del SIB.\n"
         "Contexto:\n{context}\n\n"
