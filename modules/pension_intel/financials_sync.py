@@ -299,6 +299,8 @@ def sipen_financials_history_sync(
     month found. Each file is extracted + persisted with ``recompute=False``; the ISA is
     rescored ONCE at the end. Best-effort: a failed file/year/AFP never aborts the run. Runs
     from Railway (static egress + browser UA). Idempotent (upsert by period)."""
+    import time
+
     import httpx
 
     set_phase = set_phase or (lambda _m: None)
@@ -309,22 +311,39 @@ def sipen_financials_history_sync(
     errors: List[str] = []
     periods_by_afp: Dict[str, List[str]] = {}
 
+    def _get(http, url, phase):
+        """GET with a heartbeat (so the crawl never trips the 30-min staleness guard) +
+        one retry with backoff (SIPEN throttles under repeated hits). Polite 0.4s spacing."""
+        set_phase(phase)
+        last = None
+        for attempt in range(2):
+            try:
+                r = http.get(url)
+                time.sleep(0.4)
+                return r
+            except Exception as e:  # noqa: BLE001
+                last = e
+                time.sleep(1.5 * (attempt + 1))
+        raise last
+
     roster = [(s, n) for s, n in afp_catalog() if not only_slug or s == only_slug]
-    with httpx.Client(timeout=120, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
+    with httpx.Client(timeout=45, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
         for slug, name in roster:
             token = _afp_token(slug)
             try:
-                years = year_links(http.get(_afp_audited_url(slug)).text, token)
+                years = year_links(_get(http, _afp_audited_url(slug),
+                                        f"{name}: descubriendo años…").text, token)
             except Exception as e:  # noqa: BLE001 — best-effort per AFP
                 errors.append(f"{slug}: página AFP {e}")
                 continue
-            # Fetch each year's file list, then choose the periods (pure selection).
+            # Fetch each year's file list (heartbeat per year), then choose periods.
             year_files: Dict[int, Dict[str, str]] = {}
             for y in sorted(years):
                 if y < since_year:
                     continue
                 try:
-                    year_files[y] = file_links(http.get(years[y]).text)  # {period: url}
+                    year_files[y] = file_links(
+                        _get(http, years[y], f"{name}: índice {y}").text)  # {period: url}
                 except Exception as e:  # noqa: BLE001
                     errors.append(f"{slug} {y}: {e}")
             chosen = select_history_periods(year_files, since_year, annual)
@@ -333,9 +352,8 @@ def sipen_financials_history_sync(
                 if _has_patrimonio(db, slug, period):
                     skipped += 1  # resumable: already ingested, don't re-extract
                     continue
-                set_phase(f"{name} · {period}")
                 try:
-                    content = http.get(chosen[period]).content
+                    content = _get(http, chosen[period], f"{name} · {period}").content
                     ingest_financials(db, slug, content, chosen[period].rsplit("/", 1)[-1],
                                       set_phase=set_phase, recompute=False)
                     ingested += 1
