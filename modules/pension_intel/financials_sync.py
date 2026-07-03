@@ -245,6 +245,18 @@ def _afp_audited_url(slug: str) -> str:
     return f"{EF_AUDITED_INDEX}/{_afp_token(slug)}"
 
 
+def _has_patrimonio(db: Session, slug: str, period: str) -> bool:
+    """True if (slug, period) already has a patrimonio figure — lets the history backfill
+    SKIP already-ingested periods so a long run is resumable and re-runs are cheap (no
+    re-extraction of what's done)."""
+    return db.query(PensionSeries).filter(
+        PensionSeries.entity_slug == slug,
+        PensionSeries.series_code == "patrimonio",
+        PensionSeries.period == period,
+        PensionSeries.value.isnot(None),
+    ).first() is not None
+
+
 def select_history_periods(
     year_files: Dict[int, Dict[str, str]], since_year: int, annual: bool,
 ) -> Dict[str, str]:
@@ -277,7 +289,7 @@ def select_history_periods(
 
 def sipen_financials_history_sync(
     db: Session, set_phase: Optional[Callable[[str], None]] = None,
-    since_year: int = 2010, annual: bool = True,
+    since_year: int = 2010, annual: bool = True, only_slug: Optional[str] = None,
 ) -> Dict:  # pragma: no cover - network I/O (verifies on Railway)
     """LIVE: ingest the AUDITED estados-financieros HISTORY per AFP → solvency trajectory.
 
@@ -293,11 +305,13 @@ def sipen_financials_history_sync(
     sipen_client.check_license()
     names = {slug: name for slug, name in afp_catalog()}
     ingested = 0
+    skipped = 0
     errors: List[str] = []
     periods_by_afp: Dict[str, List[str]] = {}
 
+    roster = [(s, n) for s, n in afp_catalog() if not only_slug or s == only_slug]
     with httpx.Client(timeout=120, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
-        for slug, name in afp_catalog():
+        for slug, name in roster:
             token = _afp_token(slug)
             try:
                 years = year_links(http.get(_afp_audited_url(slug)).text, token)
@@ -316,6 +330,9 @@ def sipen_financials_history_sync(
             chosen = select_history_periods(year_files, since_year, annual)
 
             for period in sorted(chosen):
+                if _has_patrimonio(db, slug, period):
+                    skipped += 1  # resumable: already ingested, don't re-extract
+                    continue
                 set_phase(f"{name} · {period}")
                 try:
                     content = http.get(chosen[period]).content
@@ -333,6 +350,7 @@ def sipen_financials_history_sync(
     db.commit()
     return {
         "ingested": ingested,
+        "skipped_ya_presentes": skipped,
         "periods_por_afp": {names.get(s, s): sorted(p) for s, p in periods_by_afp.items()},
         "ratings_written": ratings.get("ratings_written"),
         "n_errors": len(errors),
