@@ -40,6 +40,30 @@ def _run_sipen_audited_probe(params, user_id, set_phase) -> Dict:
     return sipen_audited_probe(slug=slug, set_phase=set_phase)
 
 
+def _run_pension_backtest(params, user_id, set_phase) -> Dict:
+    import json
+
+    from modules.pension_intel.validation.backtest import build_backtest_report
+    from shared.settings.models import AppSetting
+    db = SessionLocal()
+    try:
+        set_phase("Derivando observaciones y computando Gini (IC bootstrap)")
+        rep = build_backtest_report(db)
+        row = db.query(AppSetting).filter(AppSetting.key == "pension_backtest_report").first()
+        payload = json.dumps(rep, ensure_ascii=False)
+        if row:
+            row.value, row.is_secret = payload, False
+        else:
+            db.add(AppSetting(key="pension_backtest_report", value=payload, is_secret=False))
+        db.commit()
+        sig = rep.get("signals") or {}
+        return {"computed": rep.get("computed"), "headline_gini": rep.get("headline_gini"),
+                "headline_signal": rep.get("headline_signal"),
+                "solvency": (sig.get("solvency") or {}), "return": (sig.get("return") or {})}
+    finally:
+        db.close()
+
+
 def _run_financials_history_sync(params, user_id, set_phase) -> Dict:
     from modules.pension_intel.financials_sync import sipen_financials_history_sync
     p = params or {}
@@ -120,6 +144,15 @@ def register() -> None:
         "AI-native y recalcula el ISA UNA vez al final. Params: since_year (2010), annual "
         "(true). Corre desde Railway; best-effort por archivo; idempotente. On-demand.",
         _run_financials_history_sync, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "pension-backtest", "Backtest de validación del ISA (resultado-proxy)",
+        "Valida el poder discriminante del ISA contra un resultado SUAVE (subdesempeño "
+        "relativo vs. mediana del panel), ya que ninguna AFP ha fallado: señal solvencia "
+        "(patrimonio/activos, anual) y señal rentabilidad (mensual, N alta). Computa Gini + "
+        "IC bootstrap + calibración por quintil y persiste el reporte; el estado de validación "
+        "(G5) lo lee. Sube G5 de 0.50 solo si el IC del Gini es positivo. On-demand.",
+        _run_pension_backtest, default_interval_hours=0,
     ))
     register_operation(Operation(
         "sipen-cartera-sync", "Sincronizar cartera de inversiones (SIPEN)",

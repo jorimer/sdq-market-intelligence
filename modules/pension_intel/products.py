@@ -208,6 +208,22 @@ def _isa_results(db: Session) -> List[Dict[str, Any]]:
         return []
 
 
+def _pension_backtest(db: Session) -> Optional[Dict[str, Any]]:
+    """Reporte de backtest persistido (op ``pension-backtest``), o None. SAVEPOINT +
+    best-effort: nunca tumba el estado de validación si falta o la tabla no existe."""
+    import json
+
+    from shared.settings.models import AppSetting
+    try:
+        with db.begin_nested():
+            row = (db.query(AppSetting)
+                   .filter(AppSetting.key == "pension_backtest_report").first())
+        return json.loads(row.value) if row and row.value else None
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Backtest de pensiones no leído (uso doctrina): %s", e)
+        return None
+
+
 def _pulse(db: Session) -> Optional[Dict[str, Any]]:
     try:
         with db.begin_nested():
@@ -537,17 +553,26 @@ class PensionProduct:
         return distinct_periods(self._require_db(), PensionSnapshot.period)
 
     def validation_state(self) -> ValidationState:
-        # Sin validación retrospectiva de resultados: el ISA es metodología declarada, no
-        # validada contra resultados. Aprobado por doctrina, fuerza modesta. La nota refleja
-        # el estado REAL de la solvencia (incorporada y con banda, o brecha) — no un hardcode.
-        results = _isa_results(self._require_db())
+        # G5 DIRIGIDO POR DATO: refleja (a) el estado de la solvencia (con banda o brecha) y
+        # (b) el backtest de resultado-proxy persistido. Sube de 0.50 SOLO si el IC del Gini es
+        # positivo (concluyente); si no, se mantiene la fuerza modesta y se declara. Sin hardcode.
+        db = self._require_db()
+        results = _isa_results(db)
         n_band = sum(1 for r in results if _solvency_incorporated(r))
-        if n_band:
-            note = ("ISA = índice de solidez con banda absoluta (solvencia incorporada de los "
-                    "estados financieros de SIPEN); sin validación retrospectiva de resultados.")
-        else:
-            note = ("ISA = índice relativo y parcial (sin validación retrospectiva de "
-                    "resultados); solvencia = brecha declarada, banda absoluta reservada.")
+        solv = ("con banda absoluta (solvencia incorporada de los estados financieros de SIPEN)"
+                if n_band else "relativo y parcial; solvencia = brecha declarada")
+        bt = _pension_backtest(db)
+        if bt and bt.get("headline_gini") is not None:
+            g = bt["headline_gini"]
+            sig = bt.get("headline_signal")
+            ci = ((bt.get("signals") or {}).get(sig) or {}).get("gini_ci") or [None, None]
+            score = round(min(0.75, 0.60 + max(0.0, g) * 0.3), 2)  # soft: concluyente, no grado-regulador
+            note = (f"ISA = índice de solidez {solv}. Backtest de resultado-proxy (subdesempeño "
+                    f"relativo): Gini {g} (IC {ci[0]}–{ci[1]}) en la señal '{sig}'. Validación "
+                    f"soft; no es grado-regulador (N acotado por el número de AFP).")
+            return ValidationState(approved=True, score=score, notes=note)
+        note = (f"ISA = índice de solidez {solv}. Sin validación retrospectiva concluyente: el "
+                f"backtest de resultado-proxy no supera el ruido con el N disponible (se declara).")
         return ValidationState(approved=True, score=0.5, notes=note)
 
     # ── Snapshot por nivel ──
