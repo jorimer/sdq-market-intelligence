@@ -40,6 +40,20 @@ def _run_sipen_audited_probe(params, user_id, set_phase) -> Dict:
     return sipen_audited_probe(slug=slug, set_phase=set_phase)
 
 
+def _run_financials_history_sync(params, user_id, set_phase) -> Dict:
+    from modules.pension_intel.financials_sync import sipen_financials_history_sync
+    p = params or {}
+    db = SessionLocal()
+    try:
+        return sipen_financials_history_sync(
+            db, set_phase=set_phase,
+            since_year=int(p.get("since_year") or 2010),
+            annual=bool(p.get("annual", True)),
+        )
+    finally:
+        db.close()
+
+
 def _run_cartera_sync(params, user_id, set_phase) -> Dict:
     from modules.pension_intel.cartera_sync import sipen_cartera_sync
     db = SessionLocal()
@@ -96,6 +110,15 @@ def register() -> None:
         "SOLVENCIA del ISA y, con ella, la banda absoluta. Corre desde Railway (egress "
         "de IPs estáticas + UA de navegador). También hay carga manual en la sección Datos.",
         _run_financials_sync, default_interval_hours=2160,  # trimestral
+    ))
+    register_operation(Operation(
+        "sipen-financials-history-sync", "Ingerir historia de estados AUDITADOS (SIPEN)",
+        "Ingiere la HISTORIA de estados financieros AUDITADOS por AFP desde 2010: el cierre "
+        "de diciembre de cada año (estado anual auditado) + el último mes disponible, por las "
+        "7 AFP → serie de solvencia (patrimonio/activos) con trayectoria. Extrae con el motor "
+        "AI-native y recalcula el ISA UNA vez al final. Params: since_year (2010), annual "
+        "(true). Corre desde Railway; best-effort por archivo; idempotente. On-demand.",
+        _run_financials_history_sync, default_interval_hours=0,
     ))
     register_operation(Operation(
         "sipen-cartera-sync", "Sincronizar cartera de inversiones (SIPEN)",
