@@ -67,13 +67,17 @@ function RiskAdjustedBlock({ dim }: { dim: PensionDimension }) {
   );
 }
 
-/** Honest banner: the ISA is partial (solvency gap) and the score is relative. */
-function PartialNote() {
+/** Honest banner, DATA-DRIVEN: if every scored AFP has an absolute band (solvency
+ *  incorporated) it states that; if any is still partial (no band), it keeps the gap note. */
+function IsaStateNote({ rows }: { rows: PensionRankRow[] }) {
   const { t } = useTranslation();
+  const scored = rows.filter((r) => r.overall_score != null);
+  const anyPartial = scored.some((r) => !r.band);
+  const key = scored.length && !anyPartial ? "pension.isaAbsoluteNote" : "pension.isaPartialNote";
   return (
     <div className="flex items-start gap-2 rounded-[10px] bg-surface2 p-3 text-sm text-muted">
       <Info size={16} className="mt-0.5 shrink-0 text-accent" />
-      <span>{t("pension.isaPartialNote")}</span>
+      <span>{t(key)}</span>
     </div>
   );
 }
@@ -268,7 +272,7 @@ export function AfpRankingTab() {
 
   return (
     <div className="space-y-5">
-      <PartialNote />
+      <IsaStateNote rows={rows} />
       <Card>
         <CardHead title={t("pension.rankingTitle")} subtitle={t("pension.rankingSubtitle")} />
         <div className="mt-3 divide-y divide-line">

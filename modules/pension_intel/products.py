@@ -11,11 +11,13 @@ Naturaleza MIXTA:
     comisiones, afiliados, dispersión AGREGADA (brecha/promedio) — NUNCA nombres de
     AFP (las AFP son firmas → ``entity_roster`` lleva sus nombres y el sensor de
     anonimización verifica que ninguno se filtró al agregado).
-  * **Insight / Deep Dive** = una AFP NOMBRADA y su ISA (score relativo parcial).
+  * **Insight / Deep Dive** = una AFP NOMBRADA y su ISA (banda de solidez + posición relativa).
 
-Honestidad heredada del scoring: solvencia = brecha declarada (``coverage`` < 1) y
-bandas absolutas DIFERIDAS → el producto vende una lectura RELATIVA y PARCIAL, no un
-rating de solidez cerrado. Eso se nombra en limitaciones y en la narrativa.
+Honestidad DIRIGIDA POR EL DATO: con la solvencia incorporada (estados financieros de SIPEN,
+historia 2010-2026) el ISA emite BANDA ABSOLUTA y ``coverage`` = 1; los caveats, el titular y
+el contexto de IA se adaptan a ese estado vía ``_solvency_incorporated``/``_limitations_for``.
+Si alguna AFP quedara sin estados financieros, vuelve sola a la lectura RELATIVA y PARCIAL con
+banda reservada — nunca un hardcode. Eso se nombra en limitaciones y en la narrativa.
 """
 from __future__ import annotations
 
@@ -62,19 +64,51 @@ _SECTION_TITLES = {
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
-_LIMITATIONS = (
-    "El Índice de Solidez de AFP (ISA) ofrece una lectura relativa y parcial construida "
-    "sobre dato público de SIPEN/ADAFP. La solvencia (estados financieros de las AFP) se "
-    "incorporará al índice cuando esté disponible; hasta entonces la cobertura es inferior "
-    "al 100% y las bandas absolutas de solidez (Sólida/Frágil) se reservan. El score ordena "
-    "la posición relativa entre las AFP con dato suficiente y no certifica solvencia. La "
-    "rentabilidad se presenta en términos reales —deflactada por la inflación interanual del "
-    "BCRD— además del nominal; el ISA puntúa sobre el nominal, ya que deflactar por una "
-    "inflación común a todas las AFP no altera la posición relativa. El riesgo se mide como "
-    "la volatilidad realizada del valor cuota y el Sharpe lo relaciona con la TPM, como "
-    "complemento de lectura ajustada por riesgo. El ISA es una medida de fortaleza relativa; "
-    "no constituye un rating de crédito ni una clasificación de grado-Basilea."
+# Limitaciones — DOS variantes por estado real del ISA (no hardcode):
+#  * ABSOLUTA: la solvencia (estados financieros de SIPEN) está incorporada → el ISA emite
+#    banda absoluta de solidez. Es el estado vigente desde el backfill de auditados 2010-2026.
+#  * PARCIAL: sin solvencia (una AFP sin estados financieros) → lectura relativa, bandas
+#    reservadas. Se conserva como fallback honesto para cualquier AFP que quede sin dato.
+_LIMITATIONS_ABSOLUTE = (
+    "El Índice de Solidez de AFP (ISA) integra cinco dimensiones sobre dato público de "
+    "SIPEN/ADAFP: solvencia (patrimonio/activos, tomada de los estados financieros de las "
+    "AFP publicados por SIPEN, con historia desde 2010), rentabilidad, riesgo (volatilidad "
+    "realizada del valor cuota), escala y costo. Con la solvencia incorporada, el índice "
+    "emite una banda absoluta de solidez (Sólida / Adecuada / En vigilancia / Frágil) además "
+    "de ordenar la posición relativa entre las AFP. La rentabilidad se presenta en términos "
+    "reales —deflactada por la inflación interanual del BCRD— además del nominal; el ISA "
+    "puntúa sobre el nominal, ya que deflactar por una inflación común a todas las AFP no "
+    "altera la posición relativa. El riesgo se mide como la volatilidad realizada del valor "
+    "cuota y el Sharpe lo relaciona con la TPM; la volatilidad está parcialmente atenuada por "
+    "la valoración a costo amortizado de la cartera. El ISA es una medida de solidez, "
+    "relativa y por bandas absolutas; no constituye un rating de crédito ni una clasificación "
+    "de grado-Basilea."
 )
+_LIMITATIONS_PARTIAL = (
+    "El Índice de Solidez de AFP (ISA) ofrece una lectura relativa y parcial construida "
+    "sobre dato público de SIPEN/ADAFP. Para esta AFP la solvencia (estados financieros) "
+    "aún no está incorporada; mientras tanto la cobertura es inferior al 100% y la banda "
+    "absoluta de solidez (Sólida/Frágil) se reserva. El score ordena la posición relativa "
+    "entre las AFP con dato suficiente y no certifica solvencia. La rentabilidad se presenta "
+    "en términos reales —deflactada por la inflación interanual del BCRD— además del nominal; "
+    "el ISA puntúa sobre el nominal, ya que deflactar por una inflación común a todas las AFP "
+    "no altera la posición relativa. El riesgo se mide como la volatilidad realizada del "
+    "valor cuota y el Sharpe lo relaciona con la TPM, como complemento de lectura ajustada "
+    "por riesgo. El ISA es una medida de fortaleza relativa; no constituye un rating de "
+    "crédito ni una clasificación de grado-Basilea."
+)
+_LIMITATIONS = _LIMITATIONS_PARTIAL  # default sin rating (muestra / sin dato)
+
+
+def _solvency_incorporated(rating: Optional[Dict[str, Any]]) -> bool:
+    """True si el ISA emite banda absoluta para esta AFP (la solvencia está presente).
+    Único criterio para elegir el encuadre honesto de los caveats/titular."""
+    return bool(rating) and rating.get("score_kind") == "absolute" and bool(rating.get("band"))
+
+
+def _limitations_for(rating: Optional[Dict[str, Any]]) -> str:
+    """La sección Limitaciones que corresponde al estado REAL del rating."""
+    return _LIMITATIONS_ABSOLUTE if _solvency_incorporated(rating) else _LIMITATIONS_PARTIAL
 _NO_DATA = (
     "No hay dato suficiente de SIPEN para publicar este nivel: el producto está cableado "
     "pero su cobertura (G1) es insuficiente. No se fabrican cifras."
@@ -97,22 +131,23 @@ _SAMPLE_NARRATIVES = {
         "determina la profundidad del mercado de capitales local."
     ),
     "pension_assessment": (
-        "La AFP se ubica en una **posición relativa intermedia** del Índice de Solidez (ISA), "
+        "La AFP se ubica en una **banda de solidez Adecuada** del Índice de Solidez (ISA), "
         "sostenida por su escala (figura entre las mayores del sistema por patrimonio gestionado) "
-        "y una rentabilidad alineada con el promedio. El índice es PARCIAL: la solvencia —la "
-        "dimensión de mayor peso— constituye una brecha declarada hasta disponer de los estados "
-        "financieros, de modo que esta lectura mide posición competitiva (rentabilidad, escala, "
-        "costo), no solvencia certificada. La principal palanca de mejora corresponde al costo "
-        "relativo (comisión sobre patrimonio), donde se ubica por detrás de su par más eficiente."
+        "y una rentabilidad alineada con el promedio. El índice integra la solvencia "
+        "(patrimonio/activos de los estados financieros de las AFP publicados por SIPEN, con "
+        "historia desde 2010), la rentabilidad real, el riesgo y el costo, y emite una banda "
+        "absoluta de solidez además de ordenar la posición relativa entre las AFP. La principal "
+        "palanca de mejora corresponde al costo relativo (comisión sobre AUM), donde se ubica por "
+        "detrás de su par más eficiente."
     ),
     "peer_positioning": (
         "Frente a las siete AFP del sistema, esta administradora **lidera en escala y costo** "
         "—figura entre las mayores por patrimonio gestionado y reporta la comisión relativa más "
         "baja del grupo— pero **rezaga en rentabilidad**: su rendimiento nominal se ubica por debajo "
         "del promedio del panel, con una brecha de un par de puntos frente a la líder. En solvencia "
-        "declarada se posiciona en la parte alta, si bien esa dimensión descansa en cifras aún no "
-        "auditadas para todas. En términos competitivos, la administradora compite por costo y "
-        "tamaño, no por retorno; su diferenciación es estructural (perfil conservador), no coyuntural."
+        "se posiciona en la parte alta, con las cifras tomadas de los estados financieros publicados "
+        "por SIPEN. En términos competitivos, la administradora compite por costo y tamaño, no por "
+        "retorno; su diferenciación es estructural (perfil conservador), no coyuntural."
     ),
     "portfolio_context": (
         "El ahorro previsional del sistema se encuentra **fuertemente concentrado en deuda "
@@ -127,10 +162,10 @@ _SAMPLE_NARRATIVES = {
     "recommendation": (
         "Para un afiliado o un comité, la lectura accionable es doble: la AFP ofrece escala y "
         "una rentabilidad sostenida en torno al promedio del sistema —consistencia, no picos—, "
-        "si bien su costo relativo constituye la variable a negociar o vigilar. Mientras la "
-        "solvencia no se incorpore al índice, la decisión debe apoyarse en el desempeño consistente "
-        "y el costo, no en una banda de solidez absoluta que aún no resulta emisible. La señal a "
-        "seguir es la evolución del costo relativo y la incorporación de los estados financieros."
+        "si bien su costo relativo constituye la variable a negociar o vigilar. Con la solvencia "
+        "incorporada al índice, la banda absoluta de solidez complementa la lectura de desempeño "
+        "consistente y costo. La señal a seguir es la evolución del costo relativo y de la "
+        "trayectoria de solvencia."
     ),
 }
 
@@ -327,11 +362,11 @@ def _apply_risk_adjusted(rating: Dict[str, Any], db) -> Dict[str, Any]:
 def _named_headline_caveat(payload: Dict[str, Any]) -> tuple:
     """Titular + caveat de portada para niveles nombrados (Insight/Deep Dive).
 
-    Titular: ``ISA {score}/100 · {AFP} (relativo, parcial) · rentab. real ±X% · Sharpe Y``
-    (los dos últimos tramos solo si el dato está). Caveat: encuadre RELATIVO/PARCIAL +
-    qué es el riesgo (σ del valor cuota) y el Sharpe (sobre TPM), con la nota de costo
-    amortizado. Único builder → la vista in-app y el PDF muestran exactamente lo mismo.
-    Devuelve ``(None, None)`` si no hay ISA (nunca fabrica)."""
+    Se ADAPTA al estado real del ISA (``_solvency_incorporated``): con banda absoluta el
+    titular es ``ISA {score}/100 · {banda} · {AFP} · rentab. real ±X% · Sharpe Y`` y el caveat
+    dice que la solvencia está incorporada; sin banda, vuelve al encuadre RELATIVO/PARCIAL con
+    la solvencia como brecha. (Los tramos rentab./Sharpe solo si el dato está.) Único builder →
+    la vista in-app y el PDF muestran lo mismo. ``(None, None)`` si no hay ISA (nunca fabrica)."""
     rating = payload.get("rating") or {}
     ov = rating.get("overall_score")
     if not isinstance(ov, (int, float)):
@@ -340,18 +375,32 @@ def _named_headline_caveat(payload: Dict[str, Any]) -> tuple:
                  if d.get("key") == "rentabilidad"), None)
     real = (rdim or {}).get("raw_real")
     sharpe = payload.get("sharpe")
-    headline = f"ISA {ov:.0f}/100 · {rating.get('name', 'AFP')} (relativo, parcial)"
+    name = rating.get("name", "AFP")
+    absolute = _solvency_incorporated(rating)
+    if absolute:
+        headline = f"ISA {ov:.0f}/100 · {rating.get('band')} · {name}"
+    else:
+        headline = f"ISA {ov:.0f}/100 · {name} (relativo, parcial)"
     if isinstance(real, (int, float)):
         headline += f" · rentab. real {real:+.1f}%"
     if isinstance(sharpe, (int, float)):
         headline += f" · Sharpe {sharpe:.2f}"
-    caveat = ("Nota metodológica: el ISA ofrece una lectura relativa y parcial —ordena la "
-              "posición entre las AFP con dato suficiente—. La solvencia se incorporará al "
-              "publicarse los estados financieros auditados. La rentabilidad se presenta en "
-              "términos reales, deflactada por la inflación del BCRD. El riesgo corresponde a "
-              "la volatilidad realizada del valor cuota (σ) y el Sharpe la relaciona con la "
-              "TPM; la σ está parcialmente atenuada por la valoración a costo amortizado de "
-              "la cartera.")
+    if absolute:
+        caveat = ("Nota metodológica: el ISA integra la solvencia (patrimonio/activos de los "
+                  "estados financieros de las AFP publicados por SIPEN, con historia desde "
+                  "2010) y emite una banda absoluta de solidez, además de ordenar la posición "
+                  "relativa entre las AFP. La rentabilidad se presenta en términos reales, "
+                  "deflactada por la inflación del BCRD. El riesgo corresponde a la volatilidad "
+                  "realizada del valor cuota (σ) y el Sharpe la relaciona con la TPM; la σ está "
+                  "parcialmente atenuada por la valoración a costo amortizado de la cartera.")
+    else:
+        caveat = ("Nota metodológica: el ISA ofrece una lectura relativa y parcial —ordena la "
+                  "posición entre las AFP con dato suficiente—. Para esta AFP la solvencia se "
+                  "incorporará al publicarse sus estados financieros. La rentabilidad se "
+                  "presenta en términos reales, deflactada por la inflación del BCRD. El riesgo "
+                  "corresponde a la volatilidad realizada del valor cuota (σ) y el Sharpe la "
+                  "relaciona con la TPM; la σ está parcialmente atenuada por la valoración a "
+                  "costo amortizado de la cartera.")
     return headline, caveat
 
 
@@ -472,11 +521,14 @@ class PensionProduct:
         # de solvencia): honesto, no hardcode.
         cov = sum(r["coverage"] for r in results) / len(results)
         n_scoreable = sum(1 for r in results if r["overall_score"] is not None)
+        n_band = sum(1 for r in results if _solvency_incorporated(r))
         fresh = self._freshness_days(db)
+        detail = (f"{n_scoreable}/{len(results)} AFP calificables · "
+                  + (f"solvencia incorporada · {n_band} con banda absoluta"
+                     if n_band else "solvencia = brecha declarada"))
         return DataHealth(
             coverage=round(cov, 4), freshness_days=fresh, sources=("SIPEN", "ADAFP"),
-            detail=f"{n_scoreable}/{len(results)} AFP calificables · solvencia = brecha declarada",
-            cadence="quarterly")
+            detail=detail, cadence="quarterly")
 
     def has_engine(self) -> bool:
         return bool(_isa_results(self._require_db()))
@@ -485,12 +537,18 @@ class PensionProduct:
         return distinct_periods(self._require_db(), PensionSnapshot.period)
 
     def validation_state(self) -> ValidationState:
-        # Sin backtest de outcomes: el ISA es metodología parcial declarada, no validada
-        # contra resultados. Honesto: aprobado por doctrina, fuerza modesta.
-        return ValidationState(
-            approved=True, score=0.5,
-            notes="ISA = índice relativo y parcial (sin validación retrospectiva de resultados); "
-                  "solvencia = brecha declarada, bandas absolutas diferidas.")
+        # Sin validación retrospectiva de resultados: el ISA es metodología declarada, no
+        # validada contra resultados. Aprobado por doctrina, fuerza modesta. La nota refleja
+        # el estado REAL de la solvencia (incorporada y con banda, o brecha) — no un hardcode.
+        results = _isa_results(self._require_db())
+        n_band = sum(1 for r in results if _solvency_incorporated(r))
+        if n_band:
+            note = ("ISA = índice de solidez con banda absoluta (solvencia incorporada de los "
+                    "estados financieros de SIPEN); sin validación retrospectiva de resultados.")
+        else:
+            note = ("ISA = índice relativo y parcial (sin validación retrospectiva de "
+                    "resultados); solvencia = brecha declarada, banda absoluta reservada.")
+        return ValidationState(approved=True, score=0.5, notes=note)
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,
@@ -560,24 +618,28 @@ class PensionProduct:
             return ProductSnapshot(tier=tier, period="2025", payload=payload,
                                    entity_name=None, entity_roster=())
         rating = {
-            "slug": "afp_ejemplo", "name": "AFP Ejemplo", "overall_score": 54.6,
-            "score_kind": "relative_partial", "band": None, "coverage": 0.65, "period": "2025",
+            "slug": "afp_ejemplo", "name": "AFP Ejemplo", "overall_score": 62.4,
+            "score_kind": "absolute", "band": "Adecuada", "coverage": 1.0, "period": "2025",
             "dimensions": [
-                {"key": "solvencia", "label": "Solvencia", "weight": 0.35,
-                 "provenance": "brecha", "present": False, "raw": None, "score": None},
-                {"key": "rentabilidad", "label": "Rentabilidad", "weight": 0.30,
+                {"key": "solvencia", "label": "Solvencia (patrimonio/activos)", "weight": 0.35,
+                 "provenance": "real", "present": True, "raw": 0.8435, "score": 63.4},
+                {"key": "rentabilidad", "label": "Rentabilidad", "weight": 0.25,
                  "provenance": "real", "present": True, "raw": 9.59, "score": 51.6},
-                {"key": "escala", "label": "Escala (patrimonio)", "weight": 0.20,
-                 "provenance": "real", "present": True, "raw": 428449.7, "score": 100.0},
-                {"key": "costo", "label": "Costo (comisión/patrimonio)", "weight": 0.15,
-                 "provenance": "real", "present": True, "raw": 0.00885, "score": 0.0},
+                {"key": "riesgo", "label": "Consistencia / Riesgo (volatilidad)", "weight": 0.15,
+                 "provenance": "real", "present": True, "raw": 1.64, "score": 55.5},
+                {"key": "escala", "label": "Escala (fondos administrados / AUM)", "weight": 0.15,
+                 "provenance": "real", "present": True, "raw": 428449.7, "score": 98.0},
+                {"key": "costo", "label": "Costo (comisión/AUM)", "weight": 0.10,
+                 "provenance": "real", "present": True, "raw": 0.00885, "score": 42.0},
             ],
         }
         peers = [rating,
-                 {"slug": "afp_b", "name": "AFP Beta", "overall_score": 71.2, "coverage": 0.65,
+                 {"slug": "afp_b", "name": "AFP Beta", "overall_score": 71.2, "coverage": 1.0,
+                  "score_kind": "absolute", "band": "Adecuada",
                   "dimensions": [{"key": "solvencia", "score": 60.0}, {"key": "rentabilidad", "score": 80.0},
                                  {"key": "escala", "score": 55.0}, {"key": "costo", "score": 70.0}]},
-                 {"slug": "afp_c", "name": "AFP Gamma", "overall_score": 48.3, "coverage": 0.65,
+                 {"slug": "afp_c", "name": "AFP Gamma", "overall_score": 48.3, "coverage": 1.0,
+                  "score_kind": "absolute", "band": "En vigilancia",
                   "dimensions": [{"key": "solvencia", "score": 40.0}, {"key": "rentabilidad", "score": 65.0},
                                  {"key": "escala", "score": 30.0}, {"key": "costo", "score": 45.0}]}]
         trend = [(f"2024-{m:02d}", 9.0 + 0.1 * m) for m in range(1, 13)] + \
@@ -603,7 +665,7 @@ class PensionProduct:
 
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
         sections = self.product_manifest().require_level(tier).sections
-        return {sec: (_LIMITATIONS if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
+        return {sec: (_LIMITATIONS_ABSOLUTE if sec == "limitations" else _SAMPLE_NARRATIVES[sec])
                 for sec in sections}
 
     # ── Narrativas (operan sobre el snapshot) ──
@@ -641,7 +703,7 @@ class PensionProduct:
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
-                out["limitations"] = _LIMITATIONS
+                out["limitations"] = _limitations_for(rating)
                 continue
             if section == "peer_positioning":
                 res = await narrative_engine.generate(
@@ -719,7 +781,9 @@ class PensionProduct:
             for d in rating.get("dimensions") or []:
                 score = "—" if d.get("score") is None else f"{d['score']:.0f}"
                 rows.append([d["label"], f"{d['weight']*100:.0f}%", score, d["provenance"]])
-            tables.append(("Desglose del ISA (relativo, parcial)", rows))
+            _isa_title = ("Desglose del ISA (banda absoluta + posición relativa)"
+                          if _solvency_incorporated(rating) else "Desglose del ISA (relativo, parcial)")
+            tables.append((_isa_title, rows))
             # Gráfico SOLO de las dimensiones con dato real (las 'brecha' van nulas → se omiten,
             # honestidad: no se grafica una dimensión sin medir).
             present = [(d["label"], d.get("score")) for d in (rating.get("dimensions") or [])
