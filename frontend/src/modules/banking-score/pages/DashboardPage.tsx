@@ -6,6 +6,7 @@ import { RatingBadge } from "../components/RatingBadge";
 import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { MarketConcentrationCard } from "../components/MarketConcentrationCard";
+import { EarlyWarningCard } from "../components/EarlyWarningCard";
 import { getSectorInsight } from "../api";
 import {
   PageHead,
@@ -200,6 +201,13 @@ export function DashboardPage() {
 
       {/* Market structure of the EIF universe — only on the system (all) view. */}
       {area === "" && <MarketConcentrationCard />}
+
+      {/* Early-warning monitoring layer (RD-2003 crisis precursors) — system view only. */}
+      {area === "" && (
+        <div className="mt-5">
+          <EarlyWarningCard />
+        </div>
+      )}
 
       {rankings.length > 0 && (
         <div className="mt-5">

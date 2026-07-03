@@ -907,3 +907,38 @@ async def run_backtest(
     import modules.banking_score.operations  # noqa: F401
     from shared import operations
     return operations.trigger("backtest", origin="manual", user_id=current_user.id)
+
+
+@router.get(
+    "/alerts",
+    summary="Alertas de alerta temprana (sistema)",
+    description="Señales de monitoreo por banco al último período, ancladas a los precursores "
+                "de la crisis RD 2003 (crecimiento anómalo, fondeo caro, brecha de provisiones, "
+                "salto de morosidad, solvencia cerca del piso, estrés de liquidez, concentración). "
+                "Complemento del rating, no un veredicto.",
+)
+async def get_system_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.banking_score.early_warning import compute_alerts
+    return compute_alerts(db)
+
+
+@router.get(
+    "/{bank_id}/alerts",
+    summary="Alertas de alerta temprana (un banco)",
+    description="Las alertas de monitoreo del banco indicado en el último período (lista vacía "
+                "si no tiene banderas activas).",
+)
+async def get_bank_alerts(
+    bank_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.banking_score.early_warning import compute_alerts
+    block = compute_alerts(db)
+    entry = next((b for b in block["banks"] if b["bank_id"] == bank_id), None)
+    return {"period": block["period"], "bank_id": bank_id,
+            "alerts": entry["alerts"] if entry else [],
+            "max_severity": entry["max_severity"] if entry else None}
