@@ -61,6 +61,7 @@ _SECTION_TITLES = {
     "pension_assessment": "Evaluación de Solidez de la AFP (ISA)",
     "peer_positioning": "Posición Competitiva frente a las AFP",
     "portfolio_context": "Cartera de Inversiones del Sistema (Contexto de Riesgo)",
+    "early_warning": "Alerta Temprana",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
@@ -159,6 +160,14 @@ _SAMPLE_NARRATIVES = {
         "afiliado, esta composición define el perfil de riesgo de su ahorro: profundidad y seguridad "
         "soberana a cambio de una concentración elevada en un solo emisor, el Estado."
     ),
+    "early_warning": (
+        "Banderas de vigilancia activas —señales de monitoreo para el afiliado (complemento del "
+        "ISA, no un veredicto):\n\n"
+        "- **Costo elevado** (media) — comisión/AUM %: 0.86 (umbral 0.80). Comisión sobre AUM en "
+        "el tramo superior del panel — menor retorno neto.\n"
+        "- **Rentabilidad rezagada** (media) — rentabilidad nominal %: 7.69 (umbral 7.80). "
+        "Rendimiento en el tramo inferior del panel de AFP."
+    ),
     "recommendation": (
         "Para un afiliado o un comité, la lectura accionable es doble: la AFP ofrece escala y "
         "una rentabilidad sostenida en torno al promedio del sistema —consistencia, no picos—, "
@@ -186,7 +195,7 @@ def pension_manifest() -> SectorProductManifest:
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
                 sections=("pension_assessment", "peer_positioning", "portfolio_context",
-                          "recommendation", "limitations"),
+                          "early_warning", "recommendation", "limitations"),
                 narrative_templates=("pension_entity", "pension_peer_positioning",
                                      "pension_portfolio_context"),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
@@ -729,6 +738,16 @@ class PensionProduct:
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _limitations_for(rating)
+                continue
+            if section == "early_warning":
+                # Determinista (sin IA): banderas de vigilancia de la AFP (riesgo/costo/retorno).
+                # Sin DB (modo muestra) cae al texto de muestra — no fabrica ni exige sesión.
+                if self._db is None:
+                    out["early_warning"] = _SAMPLE_NARRATIVES["early_warning"]
+                else:
+                    from modules.pension_intel.early_warning import afp_alerts, format_alerts_text
+                    out["early_warning"] = format_alerts_text(
+                        afp_alerts(self._db, rating.get("slug")))
                 continue
             if section == "peer_positioning":
                 res = await narrative_engine.generate(

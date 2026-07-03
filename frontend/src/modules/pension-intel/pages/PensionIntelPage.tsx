@@ -17,6 +17,7 @@ import { AudienceTabs } from "@/shared/ui/AudienceTabs";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { AfpRankingTab } from "../components/AfpRankingTab";
 import { CarteraTab } from "../components/CarteraTab";
+import { EarlyWarningCard } from "../components/EarlyWarningCard";
 import { PensionDrillDrawer, PensionTrend, PeerBars } from "../components/PensionDrillDrawer";
 import {
   getPensionPulse,
@@ -223,6 +224,10 @@ export function PensionIntelPage() {
                 />
               }
             />
+          </div>
+
+          <div className="mt-5">
+            <EarlyWarningCard />
           </div>
         </>
       )}
