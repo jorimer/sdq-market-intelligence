@@ -216,6 +216,14 @@ SAMPLE_NARRATIVES = {
         "es la referencia; para una comparación internacional, el techo soberano y el "
         "régimen de soporte son los encuadres que faltarían incorporar."
     ),
+    "early_warning": (
+        "Señales de monitoreo activas —precursores detectables de la crisis bancaria de 2003 "
+        "(complemento del rating, no un veredicto; no detectan fraude):\n\n"
+        "- **Concentración elevada (top-10)** (media) — top-10 / cartera bruta %: 34.0 (umbral "
+        "30.0). Los préstamos vinculados fueron el corazón del fraude (proxy visible).\n"
+        "- **Fondeo por encima del sistema** (media) — gastos_financieros/depósitos %: 7.2 "
+        "(umbral 6.1). Baninter pagaba tasas pasivas sobre el sistema desde 1999 (Panel §24)."
+    ),
     "recommendation": (
         "Para una contraparte o comité de crédito, Banco Demo amerita una **aprobación "
         "clara** dentro de su segmento de riesgo: un capital holgado, una cartera sana y una "
@@ -242,8 +250,8 @@ _INSIGHT_SECTIONS = (
 # riesgo/escenarios + recomendación + limitaciones. Ambas secciones son exclusivas del
 # Deep Dive.
 _DEEP_DIVE_SECTIONS = _INSIGHT_SECTIONS + (
-    "entorno_operativo", "soporte_soberano", "risk_assessment", "recommendation",
-    "limitations")
+    "entorno_operativo", "soporte_soberano", "risk_assessment", "early_warning",
+    "recommendation", "limitations")
 
 # Limitaciones: texto estático (sin cifras → guard anti-alucinación trivialmente limpio).
 # Incluye el ENCUADRE del score (Fase 3, portado de pensiones): la calificación SDQ es
@@ -433,6 +441,10 @@ class BankingProduct:
             # Fitch — NO muta el standalone (score/tier/vector intactos). Solo Deep Dive.
             scoring_result["soporte_soberano"] = support_overlay(
                 db, bank, float(rr.overall_score), rr.rating_tier, rr.period_end)
+            # Alerta temprana (C): banderas de monitoreo de la entidad (precursores 2003).
+            # Se computa con DB aquí; narratives() la formatea sin DB. Solo Deep Dive.
+            from modules.banking_score.early_warning import bank_alerts
+            scoring_result["early_warning"] = bank_alerts(db, bank.id)
         conc = compute_market_concentration(db, rr.period_end, "activos")
         peer_block = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
                        "cr10": conc["cr10"], "hhi": conc["hhi"]} if conc.get("available") else None)
@@ -507,7 +519,8 @@ class BankingProduct:
 
         scoring_result = snapshot.payload["scoring_result"]
         peer_block = snapshot.payload.get("peer_block")
-        claude_sections = [s for s in manifest.sections if s != "limitations"]
+        # 'limitations' y 'early_warning' son DETERMINISTAS (no IA): se excluyen del motor.
+        claude_sections = [s for s in manifest.sections if s not in ("limitations", "early_warning")]
         # Entorno Operativo (Fase 4): se genera solo si el snapshot trajo factores macro
         # reales; sin contrato macro la sección no se emite (nunca vacía/fabricada).
         if not scoring_result.get("entorno_macro"):
@@ -519,6 +532,9 @@ class BankingProduct:
             # el cierre en 'standard' (profundidad por sección, no un mode único por tier).
             mode="detailed",
         )
+        if "early_warning" in manifest.sections:
+            from modules.banking_score.early_warning import format_alerts_text
+            out["early_warning"] = format_alerts_text(scoring_result.get("early_warning"))
         if "limitations" in manifest.sections:
             out["limitations"] = _LIMITATIONS_TEXT
         return out
