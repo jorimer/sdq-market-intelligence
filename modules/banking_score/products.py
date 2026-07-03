@@ -534,7 +534,26 @@ class BankingProduct:
         )
         if "early_warning" in manifest.sections:
             from modules.banking_score.early_warning import format_alerts_text
-            out["early_warning"] = format_alerts_text(scoring_result.get("early_warning"))
+            ew = scoring_result.get("early_warning") or {}
+            bullets = format_alerts_text(ew)
+            flags = ew.get("alerts") or []
+            interp = ""
+            if flags:
+                # HÍBRIDO: párrafo IA que LEE EL PATRÓN del conjunto de banderas (alimentado
+                # SOLO por las banderas ya computadas → numeric_guard impide inventar cifras).
+                # Solo si hay motor real; sin API key quedan los bullets deterministas.
+                try:
+                    res = await narrative_engine.generate(
+                        context={"entity": snapshot.entity_name or "Entidad",
+                                 "dominio": "banca — precursores detectables de la crisis 2003",
+                                 "flags": flags},
+                        template="early_warning_reading", mode="standard",
+                        axis="banking", audience="inversionista")
+                    if res.model_used != "static_fallback":
+                        interp = (res.text or "").strip()
+                except Exception:  # noqa: BLE001 — la sección nunca depende del motor IA
+                    interp = ""
+            out["early_warning"] = (interp + "\n\n" + bullets) if interp else bullets
         if "limitations" in manifest.sections:
             out["limitations"] = _LIMITATIONS_TEXT
         return out

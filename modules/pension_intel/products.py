@@ -740,14 +740,29 @@ class PensionProduct:
                 out["limitations"] = _limitations_for(rating)
                 continue
             if section == "early_warning":
-                # Determinista (sin IA): banderas de vigilancia de la AFP (riesgo/costo/retorno).
-                # Sin DB (modo muestra) cae al texto de muestra — no fabrica ni exige sesión.
+                # Banderas deterministas + párrafo IA que LEE EL PATRÓN (alimentado SOLO por
+                # las banderas → numeric_guard). Sin DB (muestra) o sin motor: solo bullets.
                 if self._db is None:
                     out["early_warning"] = _SAMPLE_NARRATIVES["early_warning"]
-                else:
-                    from modules.pension_intel.early_warning import afp_alerts, format_alerts_text
-                    out["early_warning"] = format_alerts_text(
-                        afp_alerts(self._db, rating.get("slug")))
+                    continue
+                from modules.pension_intel.early_warning import afp_alerts, format_alerts_text
+                blk = afp_alerts(self._db, rating.get("slug"))
+                bullets = format_alerts_text(blk)
+                flags = blk.get("alerts") or []
+                interp = ""
+                if flags:
+                    try:
+                        res = await narrative_engine.generate(
+                            context={"entity": entity,
+                                     "dominio": "pensiones — banderas de vigilancia para el afiliado",
+                                     "flags": flags},
+                            template="early_warning_reading", mode="standard",
+                            axis="pension_intel", audience="inversionista")
+                        if res.model_used != "static_fallback":
+                            interp = (res.text or "").strip()
+                    except Exception:  # noqa: BLE001 — la sección nunca depende del motor IA
+                        interp = ""
+                out["early_warning"] = (interp + "\n\n" + bullets) if interp else bullets
                 continue
             if section == "peer_positioning":
                 res = await narrative_engine.generate(
