@@ -392,3 +392,30 @@ export async function runBacktest(): Promise<{ started: boolean; reason?: string
   const { data } = await client.post("/banking-score/validation/backtest/run");
   return data;
 }
+
+// ── Alerta temprana (early warning) ──
+export interface BankAlert {
+  code: string;
+  label: string;
+  severity: "alta" | "media";
+  value: number | null;
+  threshold: number;
+  basis: string;
+  metric: string;
+}
+export interface BankAlerts {
+  bank_id: string;
+  name: string;
+  max_severity: "alta" | "media";
+  alerts: BankAlert[];
+}
+export interface SystemAlerts {
+  period: string | null;
+  banks: BankAlerts[];
+  summary: Record<string, number>;
+  n_alerts: number;
+}
+export async function getSystemAlerts(): Promise<SystemAlerts> {
+  const { data } = await client.get<SystemAlerts>("/banking-score/alerts");
+  return data;
+}
