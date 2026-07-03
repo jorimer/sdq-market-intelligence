@@ -632,3 +632,25 @@ async def cartera_holding(
         "found": True, "period": data["period"], "fund": fund,
         "total": data["total"], "holding": h, "ai_insight": ai,
     }
+
+
+@router.get("/alerts", summary="Alerta temprana de AFP (sistema)")
+async def get_system_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Banderas de vigilancia por AFP (rentabilidad rezagada, retorno real negativo, riesgo,
+    costo, caída de solvencia). Complemento del ISA, no un veredicto."""
+    from modules.pension_intel.early_warning import compute_alerts
+    return compute_alerts(db)
+
+
+@router.get("/{slug}/alerts", summary="Alerta temprana de una AFP")
+async def get_afp_alerts(
+    slug: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Las banderas de vigilancia de la AFP indicada (lista vacía si no tiene banderas)."""
+    from modules.pension_intel.early_warning import afp_alerts
+    return afp_alerts(db, slug)

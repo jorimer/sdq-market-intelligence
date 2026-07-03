@@ -263,3 +263,30 @@ export function pulseHasData(p: PensionPulse): boolean {
   return (p.afp_rentabilidad?.ranking?.length ?? 0) > 0 ||
     Object.values(p.headline ?? {}).some((v) => v != null);
 }
+
+// ── Alerta temprana (early warning) ──
+export interface AfpAlert {
+  code: string;
+  label: string;
+  severity: "alta" | "media";
+  value: number | null;
+  threshold: number | null;
+  basis: string;
+  metric: string;
+}
+export interface AfpAlerts {
+  slug: string;
+  name: string;
+  max_severity: "alta" | "media";
+  alerts: AfpAlert[];
+}
+export interface PensionSystemAlerts {
+  period: string | null;
+  afps: AfpAlerts[];
+  summary: Record<string, number>;
+  n_alerts: number;
+}
+export async function getPensionAlerts(): Promise<PensionSystemAlerts> {
+  const { data } = await client.get<PensionSystemAlerts>("/pension-intel/alerts");
+  return data;
+}
