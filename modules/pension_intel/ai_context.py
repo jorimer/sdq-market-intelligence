@@ -23,6 +23,27 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
     rdim = next((d for d in dims if d.get("key") == "rentabilidad"), None)
     rent_real = (rdim or {}).get("raw_real")
     infl = (rdim or {}).get("inflacion")
+    solv = next((d for d in dims if d.get("key") == "solvencia"), None)
+    solv_present = bool(solv and solv.get("present"))
+    band = rating.get("band")
+    if solv_present and rating.get("score_kind") == "absolute":
+        _note = (f"Score de solidez con SOLVENCIA INCORPORADA (patrimonio/activos de los estados "
+                 f"financieros de las AFP publicados por SIPEN, con historia desde 2010): el ISA "
+                 f"emite BANDA ABSOLUTA de solidez ({band}) además de la posición relativa entre "
+                 f"AFP. NO digas que la solvencia es una brecha ni que las bandas están diferidas. "
+                 f"El ISA puntúa sobre rentabilidad NOMINAL; se reporta además la REAL (deflactada "
+                 f"por inflación BCRD). La dimensión RIESGO es la volatilidad realizada (σ anualizada "
+                 f"de los retornos mensuales del valor cuota, ventana ~30m); menor σ = más "
+                 f"consistente. La σ es baja en parte por valoración a costo amortizado de la cartera "
+                 f"(caveat, no sobreinterpretar).")
+    else:
+        _note = ("Score de posición RELATIVA y PARCIAL: para esta AFP la solvencia es brecha "
+                 "declarada (estados financieros pendientes), banda absoluta reservada. El ISA "
+                 "puntúa sobre rentabilidad NOMINAL; se reporta además la REAL (deflactada por "
+                 "inflación BCRD). La dimensión RIESGO es la volatilidad realizada (σ anualizada de "
+                 "los retornos mensuales del valor cuota, ventana ~30m); menor σ = más consistente. "
+                 "La σ es baja en parte por valoración a costo amortizado de la cartera (caveat, no "
+                 "sobreinterpretar).")
     ctx: Dict[str, Any] = {
         "afp": rating.get("name"),
         "isa_score_relativo": rating.get("overall_score"),
@@ -38,14 +59,12 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
             }
             for d in dims
         ],
-        "direction": "mayor score = mejor POSICIÓN RELATIVA entre las AFP (no veredicto absoluto)",
+        "direction": ("mayor score = mejor solidez; con solvencia hay BANDA ABSOLUTA y también "
+                      "posición relativa entre AFP" if solv_present
+                      else "mayor score = mejor POSICIÓN RELATIVA entre las AFP (no veredicto absoluto)"),
+        "band": band,
         "source": "SIPEN — dato público real",
-        "note": "Score de posición RELATIVA y PARCIAL: solvencia = brecha declarada (estados "
-                "financieros pendientes), bandas absolutas DIFERIDAS. El ISA puntúa sobre "
-                "rentabilidad NOMINAL; se reporta además la REAL (deflactada por inflación BCRD). "
-                "La dimensión RIESGO es la volatilidad realizada (σ anualizada de los retornos "
-                "mensuales del valor cuota, ventana ~30m); menor σ = más consistente. La σ es baja "
-                "en parte por valoración a costo amortizado de la cartera (caveat, no sobreinterpretar).",
+        "note": _note,
     }
     # Retorno ajustado por riesgo (Diferido B): la dimensión riesgo puede traer el Sharpe
     # (retorno anualizado − TPM) / σ — lectura para la narrativa (no es el score).
@@ -84,9 +103,14 @@ def pension_peer_context(
     ranked = sorted([r for r in peers if r.get("overall_score") is not None],
                     key=lambda r: r["overall_score"], reverse=True)
     rank = next((i + 1 for i, r in enumerate(ranked) if r.get("name") == afp_name), None)
+    n_band = sum(1 for r in peers if r.get("score_kind") == "absolute" and r.get("band"))
+    solv_note = ("La solvencia está incorporada de los estados financieros de las AFP publicados "
+                 "por SIPEN; el ISA emite banda absoluta. No la trates como brecha."
+                 if n_band else "Solvencia = brecha declarada (sin estados financieros).")
     return {
         "afp": afp_name,
         "isa": rating.get("overall_score"),
+        "band": rating.get("band"),
         "rank": rank,
         "n_afp_rankeadas": len(ranked),
         "tabla_pares": table,
@@ -95,7 +119,7 @@ def pension_peer_context(
         "source": "SIPEN — dato real",
         "note": "Cada score de dimensión es POSICIÓN RELATIVA (peer min-max). Cita números de "
                 "la tabla (líder, promedio, brecha); no inventes valores de pares ausentes. "
-                "Solvencia = brecha declarada (sin estados financieros auditados).",
+                + solv_note,
     }
 
 
@@ -186,8 +210,12 @@ def pension_dimension_context(
         "pares": [{"afp": p["afp"], "valor_real": p["raw"], "score": p["score"]} for p in peers],
         "serie_reciente": [{"periodo": p, "valor": v} for p, v in trend[-12:]],
         "source": "SIPEN — dato real",
-        "note": "Score = POSICIÓN RELATIVA (peer min-max), no veredicto absoluto. Si la dimensión "
-                "es solvencia y es brecha declarada, dilo y no inventes cifra.",
+        "note": ("Score = POSICIÓN RELATIVA (peer min-max). "
+                 + ("Esta es la dimensión de solvencia, INCORPORADA de los estados financieros de "
+                    "SIPEN (patrimonio/activos, con historia desde 2010); léela como dato real, no "
+                    "como brecha."
+                    if dim.get("key") == "solvencia" and dim.get("present")
+                    else "Si la dimensión es solvencia y es brecha declarada, dilo y no inventes cifra.")),
     }
 
 
