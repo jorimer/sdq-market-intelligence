@@ -43,6 +43,12 @@ _SITE = "https://sipen.gob.do"
 # are named "<afp-token>-<year>_<YYYY>_<MM>_<ts>.pdf" — they do NOT contain the literal
 # "estados-financieros", so file discovery keys on /descarga/ + the period stamp only.
 EF_AFP_INDEX = f"{_SITE}/estadisticas/estados-financieros-afp/estados-financieros"
+# The AUDITED section (owner-designated authoritative source, confirmed live via
+# sipen-audited-probe 2026-07-03): monthly statements 2010-2026 per AFP, 12/year, same
+# AFP→year→/descarga hierarchy as the interim index. The per-AFP page URL is built from the
+# token (the interim ``afp_page_links`` regex keys ``/estados-financieros/`` and does NOT
+# match the ``-auditados`` path), so we iterate the catalog rather than parse the index.
+EF_AUDITED_INDEX = f"{_SITE}/estadisticas/estados-financieros-afp/estados-financieros-auditados"
 _FILE_RE = re.compile(r"/descarga/[^\"'> ]+\.(?:pdf|xlsx)", re.IGNORECASE)
 _PERIOD_RE = re.compile(r"_(\d{4})_(\d{2})_")
 
@@ -78,8 +84,14 @@ def _upsert_series(db: Session, slug: str, code: str, period: str,
 def ingest_financials(
     db: Session, afp_slug: str, content: bytes, filename: str,
     set_phase: Optional[Callable[[str], None]] = None,
+    recompute: bool = True,
 ) -> Dict:
-    """Extract one AFP statement (PDF/XLSX) → persist patrimonio/activos → recompute ISA."""
+    """Extract one AFP statement (PDF/XLSX) → persist patrimonio/activos → recompute ISA.
+
+    ``recompute=False`` skips the (expensive) ISA rescore — for BATCH history ingest, where
+    the caller recomputes ONCE after persisting every period (see
+    ``sipen_financials_history_sync``). The series are still committed per file so a failure
+    mid-batch never loses the work already done."""
     set_phase = set_phase or (lambda _m: None)
     names = {slug: name for slug, name in afp_catalog()}
     if afp_slug not in names:
@@ -109,15 +121,17 @@ def ingest_financials(
     if fields.get("comisiones") is not None:
         _upsert_series(db, afp_slug, "comisiones_anual", period, fields["comisiones"], "RD$")
 
-    set_phase("Recalculando ISA (con solvencia)")
     db.flush()
-    from modules.pension_intel.scoring.batch import score_and_persist
-    ratings = score_and_persist(db)
+    ratings_written = None
+    if recompute:
+        set_phase("Recalculando ISA (con solvencia)")
+        from modules.pension_intel.scoring.batch import score_and_persist
+        ratings_written = score_and_persist(db)["ratings_written"]
     db.commit()
     return {
         "afp": names[afp_slug], "period": period,
         "patrimonio": fields["patrimonio"], "activos_totales": fields["activos_totales"],
-        "ratings_written": ratings["ratings_written"],
+        "ratings_written": ratings_written,
     }
 
 
@@ -225,3 +239,102 @@ def sipen_financials_sync(
     except Exception as e:  # noqa: BLE001
         return {"error": str(e), "ingested": ingested, "errors": errors}
     return {"ingested": ingested, "errors": errors}
+
+
+def _afp_audited_url(slug: str) -> str:
+    return f"{EF_AUDITED_INDEX}/{_afp_token(slug)}"
+
+
+def select_history_periods(
+    year_files: Dict[int, Dict[str, str]], since_year: int, annual: bool,
+) -> Dict[str, str]:
+    """Pure period selection for the history ingest → ``{period 'YYYY-MM': url}``.
+
+    *year_files* = ``{year: {period: url}}`` (from ``file_links`` per year page). When
+    *annual*, pick the **December** close of each year ≥ *since_year* PLUS the single most
+    recent month across all years (freshness — kept even if it isn't a December). When not
+    *annual*, take every month of every year ≥ *since_year*. Pure (no network) → unit-tested."""
+    chosen: Dict[str, str] = {}
+    latest_period: Optional[str] = None
+    latest_url: Optional[str] = None
+    for year in sorted(year_files):
+        if year < since_year:
+            continue
+        files = year_files[year]
+        for period, url in files.items():
+            if latest_period is None or period > latest_period:
+                latest_period, latest_url = period, url
+        if annual:
+            dec = f"{year}-12"
+            if dec in files:
+                chosen[dec] = files[dec]
+        else:
+            chosen.update(files)
+    if latest_period and latest_period not in chosen and latest_url:
+        chosen[latest_period] = latest_url
+    return chosen
+
+
+def sipen_financials_history_sync(
+    db: Session, set_phase: Optional[Callable[[str], None]] = None,
+    since_year: int = 2010, annual: bool = True,
+) -> Dict:  # pragma: no cover - network I/O (verifies on Railway)
+    """LIVE: ingest the AUDITED estados-financieros HISTORY per AFP → solvency trajectory.
+
+    Per AFP, crawl every year ≥ *since_year* from the audited section and choose, when
+    ``annual`` (default), the **December** close of each year (the year-end audited statement)
+    plus the single most-recent month available (freshness). ``annual=False`` ingests every
+    month found. Each file is extracted + persisted with ``recompute=False``; the ISA is
+    rescored ONCE at the end. Best-effort: a failed file/year/AFP never aborts the run. Runs
+    from Railway (static egress + browser UA). Idempotent (upsert by period)."""
+    import httpx
+
+    set_phase = set_phase or (lambda _m: None)
+    sipen_client.check_license()
+    names = {slug: name for slug, name in afp_catalog()}
+    ingested = 0
+    errors: List[str] = []
+    periods_by_afp: Dict[str, List[str]] = {}
+
+    with httpx.Client(timeout=120, headers=_BROWSER_HEADERS, follow_redirects=True) as http:
+        for slug, name in afp_catalog():
+            token = _afp_token(slug)
+            try:
+                years = year_links(http.get(_afp_audited_url(slug)).text, token)
+            except Exception as e:  # noqa: BLE001 — best-effort per AFP
+                errors.append(f"{slug}: página AFP {e}")
+                continue
+            # Fetch each year's file list, then choose the periods (pure selection).
+            year_files: Dict[int, Dict[str, str]] = {}
+            for y in sorted(years):
+                if y < since_year:
+                    continue
+                try:
+                    year_files[y] = file_links(http.get(years[y]).text)  # {period: url}
+                except Exception as e:  # noqa: BLE001
+                    errors.append(f"{slug} {y}: {e}")
+            chosen = select_history_periods(year_files, since_year, annual)
+
+            for period in sorted(chosen):
+                set_phase(f"{name} · {period}")
+                try:
+                    content = http.get(chosen[period]).content
+                    ingest_financials(db, slug, content, chosen[period].rsplit("/", 1)[-1],
+                                      set_phase=set_phase, recompute=False)
+                    ingested += 1
+                    periods_by_afp.setdefault(slug, []).append(period)
+                except Exception as e:  # noqa: BLE001 — best-effort per file
+                    errors.append(f"{slug} {period}: {e}")
+
+    # Single ISA rescore after the whole batch (solvency now has audited history).
+    set_phase("Recalculando ISA (solvencia auditada · historia)")
+    from modules.pension_intel.scoring.batch import score_and_persist
+    ratings = score_and_persist(db)
+    db.commit()
+    return {
+        "ingested": ingested,
+        "periods_por_afp": {names.get(s, s): sorted(p) for s, p in periods_by_afp.items()},
+        "ratings_written": ratings.get("ratings_written"),
+        "n_errors": len(errors),
+        "errors": errors[:50],
+    }
