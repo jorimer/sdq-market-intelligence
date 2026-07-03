@@ -46,6 +46,8 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
                  "Min. Agricultura · BAGRÍCOLA · ONE"),
     CatalogEntry("esg", "SDQ ESG & Climate", "esg_climate", "ONE · Medio Ambiente · IPCC · SIE"),
     CatalogEntry("pension", "SDQ Pensiones (SIPEN)", "pension_intel", "SIPEN · ADAFP"),
+    CatalogEntry("insurance", "SDQ Seguros (SIS)", "insurance_intel",
+                 "SIS · SISALRIL · datos.gob.do"),
     # Producto AGREGADO (no un sector): la estructura de la economía por sector
     # (importancia económica + contribución al crecimiento). Para clientes institucionales.
     CatalogEntry("economic_structure", "SDQ Sectoral Structure · Estructura de la Economía",

@@ -57,6 +57,7 @@ def _register_all():
     import modules.construction_intel.products  # noqa: F401 — construction (dedicado, ICC)
     import modules.trade_intel.products  # noqa: F401
     import modules.pension_intel.products  # noqa: F401
+    import modules.insurance_intel.products  # noqa: F401 — insurance (dedicado, SIS)
 
 
 def test_all_ten_sectors_have_demo_data():

@@ -58,6 +58,7 @@ from modules.telecom_intel.api.router import router as telecom_intel_router
 from modules.tourism_intel.api.router import router as tourism_intel_router
 from modules.construction_intel.api.router import router as construction_intel_router
 from modules.pension_intel.api.router import router as pension_intel_router
+from modules.insurance_intel.api.router import router as insurance_intel_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users_admin_router, prefix="/api/v1/admin/users", tags=["User Admin"])
@@ -80,6 +81,7 @@ app.include_router(tourism_intel_router, prefix="/api/v1/tourism-intel", tags=["
 app.include_router(construction_intel_router, prefix="/api/v1/construction-intel",
                    tags=["Construction Intel"])
 app.include_router(pension_intel_router, prefix="/api/v1/pension-intel", tags=["Pension Intel"])
+app.include_router(insurance_intel_router, prefix="/api/v1/insurance-intel", tags=["Insurance Intel"])
 
 from shared.settings.router import router as settings_router
 app.include_router(settings_router, prefix="/api/v1/settings", tags=["Settings"])
@@ -134,6 +136,7 @@ import modules.telecom_intel.operations  # noqa: F401 — registers indotel-tele
 import modules.tourism_intel.operations  # noqa: F401 — registers one-tourism-sync
 import modules.construction_intel.operations  # noqa: F401 — registers mivhed-construction-sync
 import modules.pension_intel.operations  # noqa: F401 — registers sipen-sync
+import modules.insurance_intel.operations  # noqa: F401 — registers insurance-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
 import shared.source_intel.operations  # noqa: F401 — registers source-research-agent (Capa 3)
@@ -152,6 +155,7 @@ import modules.construction_intel.products  # noqa: F401 — registers construct
 import modules.energy_intel.products  # noqa: F401 — registers energy SectorProduct
 import modules.telecom_intel.products  # noqa: F401 — registers telecom SectorProduct
 import modules.pension_intel.products  # noqa: F401 — registers pension SectorProduct
+import modules.insurance_intel.products  # noqa: F401 — registers insurance SectorProduct
 # Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
 # (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)
 from app import products_macro as _products_macro  # noqa: F401 — registers macro SectorProduct
