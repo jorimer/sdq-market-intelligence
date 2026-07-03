@@ -176,6 +176,82 @@ def _probe_ckan(http) -> Dict[str, Any]:  # pragma: no cover - network I/O
             "datasets": datasets}
 
 
+def sipen_audited_probe(slug: str = "afp_popular",
+                        set_phase=None) -> Dict[str, Any]:  # pragma: no cover - network I/O
+    """READ-ONLY deep probe of ONE AFP's AUDITED statements, to settle the two open
+    questions before writing the ingester (no DB writes, no persist):
+
+      1. Are historical years ANNUAL (1 file/year) or monthly? → dump per-year file counts
+         + the actual /descarga URLs for the earliest, a middle, and the latest year.
+      2. Does the AI-native extractor pull patrimonio/activos from a real AUDITED PDF? →
+         download the earliest annual file + the latest file and run extract → report the
+         figures WITHOUT persisting.
+    """
+    import httpx
+
+    from modules.pension_intel.external.financials_extractor import (
+        extract_financials, map_afp_financials, statement_period,
+    )
+    from modules.pension_intel.financials_sync import _afp_token, file_links, year_links
+
+    set_phase = set_phase or (lambda _m: None)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    token = _afp_token(slug)
+    afp_url = f"{EF_AUDITED_INDEX}/{token}"
+    out: Dict[str, Any] = {"slug": slug, "afp_url": afp_url, "per_year": {}, "extractions": []}
+
+    def _trial_extract(http, label, url):
+        set_phase(f"Extrayendo (prueba, sin persistir) · {label}")
+        try:
+            content = http.get(url).content
+            fname = url.rsplit("/", 1)[-1]
+            statements = extract_financials(content, fname)
+            fields = map_afp_financials(statements)
+            out["extractions"].append({
+                "label": label, "url": url, "filename": fname,
+                "period": statement_period(statements),
+                "patrimonio": fields.get("patrimonio"),
+                "activos_totales": fields.get("activos_totales"),
+                "fondos_administrados": fields.get("fondos_administrados"),
+                "comisiones": fields.get("comisiones"),
+            })
+        except Exception as e:  # noqa: BLE001
+            out["extractions"].append({"label": label, "url": url, "error": str(e)})
+
+    with httpx.Client(timeout=120, headers=headers, follow_redirects=True) as http:
+        set_phase(f"Sondeo auditado · {slug} · años")
+        try:
+            years = year_links(http.get(afp_url).text, token)
+        except Exception as e:  # noqa: BLE001
+            out["error"] = f"afp page: {e}"
+            return out
+        ys = sorted(years)
+        out["years"] = ys
+        # Per-year file coverage for EVERY year (annual vs monthly at a glance).
+        for y in ys:
+            try:
+                files = descarga_files(http.get(years[y]).text)
+                out["per_year"][y] = {"n_files": len(files),
+                                      "periods": [f["period"] for f in files],
+                                      "urls": [f["url"] for f in files]}
+            except Exception as e:  # noqa: BLE001
+                out["per_year"][y] = {"error": str(e)}
+        # Trial extraction: earliest annual file + the latest file.
+        if ys:
+            first_urls = out["per_year"].get(ys[0], {}).get("urls") or []
+            last_urls = out["per_year"].get(ys[-1], {}).get("urls") or []
+            if first_urls:
+                _trial_extract(http, f"{slug} {ys[0]} (más antiguo)", first_urls[-1])
+            if last_urls:
+                _trial_extract(http, f"{slug} {ys[-1]} (más reciente)", last_urls[-1])
+    set_phase("Sondeo auditado completo (read-only)")
+    return out
+
+
 def sipen_discovery(set_phase=None) -> Dict[str, Any]:  # pragma: no cover - network I/O
     """READ-ONLY: probe every SIPEN publication surface and return a structured coverage
     report. No DB writes, no ingest. Best-effort per page (one failure never aborts the
