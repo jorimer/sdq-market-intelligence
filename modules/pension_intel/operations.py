@@ -34,6 +34,12 @@ def _run_sipen_discovery(params, user_id, set_phase) -> Dict:
     return sipen_discovery(set_phase=set_phase)
 
 
+def _run_sipen_audited_probe(params, user_id, set_phase) -> Dict:
+    from modules.pension_intel.sipen_discovery import sipen_audited_probe
+    slug = (params or {}).get("slug") or "afp_popular"
+    return sipen_audited_probe(slug=slug, set_phase=set_phase)
+
+
 def _run_cartera_sync(params, user_id, set_phase) -> Dict:
     from modules.pension_intel.cartera_sync import sipen_cartera_sync
     db = SessionLocal()
@@ -64,6 +70,15 @@ def register() -> None:
         "escribir su crawler. Corre desde Railway (egress estático + UA de navegador). "
         "On-demand (no auto-agendada).",
         _run_sipen_discovery, default_interval_hours=0,  # on-demand: diagnóstico read-only
+    ))
+    register_operation(Operation(
+        "sipen-audited-probe", "Sondear estados auditados de una AFP (read-only)",
+        "Sondea a fondo los estados financieros AUDITADOS de UNA AFP (param opcional "
+        "'slug', default afp_popular): cuántos archivos por año (anual vs mensual) con sus "
+        "URLs reales, y una extracción de PRUEBA del archivo más antiguo y el más reciente "
+        "(patrimonio/activos/AUM/comisiones) SIN persistir. Diagnóstico de la Fase 1 para "
+        "escribir el crawler de auditados sobre hechos. Corre desde Railway. On-demand.",
+        _run_sipen_audited_probe, default_interval_hours=0, needs_params=None,
     ))
     register_operation(Operation(
         "sipen-sync", "Sincronizar pensiones (SIPEN)",
