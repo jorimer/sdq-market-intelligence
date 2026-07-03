@@ -16,10 +16,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from reportlab.lib.colors import HexColor
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
+    Flowable,
     HRFlowable,
     Image as RLImage,
     PageBreak,
@@ -139,7 +140,71 @@ def _get_styles():
         "SDQPullQuote", parent=styles["Normal"],
         fontSize=12, textColor=NAVY, leading=16, fontName="Helvetica-Bold",
     ))
+    styles.add(ParagraphStyle(
+        "SDQTableCellBold", parent=styles["SDQTableCell"], fontName="Helvetica-Bold",
+    ))
     return styles
+
+
+# ── Table factory (fuente única de tablas branded del PDF de banca) ───────────
+# TODAS las tablas del reporte se construyen aquí. Motivo: en ReportLab una celda
+# que es str PLANO se dibuja en una sola línea y se DESBORDA hacia la columna
+# vecina (nunca envuelve) — era la causa raíz del bug de "wrapping" que se veía en
+# los labels largos del Entorno Operativo. Al envolver cada celda en un Paragraph,
+# el texto respeta el ancho de su columna y salta de línea. Centralizarlo garantiza
+# que ningún reporte (actual o futuro) pueda re-introducir el desborde.
+
+_BLACK = HexColor("#111111")
+_ALIGN_ENUM = {"LEFT": TA_LEFT, "CENTER": TA_CENTER, "RIGHT": TA_RIGHT}
+
+
+def _branded_table(rows: List[List], col_widths: List[float], styles, *,
+                   font_size: float = 8.5, aligns: Optional[List[str]] = None,
+                   padding: float = 4, repeat_header: bool = True) -> Table:
+    """Construye una tabla de marca envolviendo CADA celda en un Paragraph.
+
+    - Fila 0 = encabezado (fondo navy, texto blanco); resto = cuerpo (texto negro,
+      con bandas de fila alternas).
+    - ``aligns[i]`` alinea la columna i (``LEFT``/``CENTER``/``RIGHT``). Default:
+      1.ª columna a la izquierda, el resto centradas (el look actual de la reportería).
+    - Las celdas que ya son *flowables* (un Paragraph con estilo propio — p.ej. la
+      "Lectura" gris del macro, o un label en negrita) pasan intactas.
+    - ``font_size`` iguala el tamaño de todas las celdas planas de la tabla.
+    """
+    ncol = len(col_widths)
+    aligns = aligns or (["LEFT"] + ["CENTER"] * (ncol - 1))
+    lead = font_size + 2.5
+    cache: Dict = {}
+
+    def _style(align: str, header: bool) -> ParagraphStyle:
+        key = (align, header)
+        st = cache.get(key)
+        if st is None:
+            st = ParagraphStyle(
+                f"_bt_{len(cache)}", fontName="Helvetica", fontSize=font_size,
+                leading=lead, alignment=_ALIGN_ENUM.get(align, TA_LEFT),
+                textColor=(WHITE if header else _BLACK))
+            cache[key] = st
+        return st
+
+    def _cell(val, ridx: int, cidx: int):
+        if isinstance(val, Flowable):
+            return val
+        align = aligns[cidx] if cidx < len(aligns) else "CENTER"
+        return Paragraph(_md_inline("" if val is None else str(val)),
+                         _style(align, ridx == 0))
+
+    data = [[_cell(c, ri, ci) for ci, c in enumerate(r)] for ri, r in enumerate(rows)]
+    table = Table(data, colWidths=col_widths, repeatRows=1 if repeat_header else 0)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), padding),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), padding),
+    ]))
+    return table
 
 
 # ── Radar chart ───────────────────────────────────────────────────
@@ -202,17 +267,8 @@ def _build_sub_scores_table(sub_scores: Dict[str, float], styles) -> List:
             f"{score:.1f}",
         ])
 
-    table = Table(rows, colWidths=[2.5 * inch, 1.0 * inch, 1.0 * inch])
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
+    table = _branded_table(rows, [2.5 * inch, 1.0 * inch, 1.0 * inch], styles,
+                           font_size=10, padding=6)
     elements.append(table)
     return elements
 
@@ -264,17 +320,7 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles,
     if len(rows) > 1:
         col_widths = ([2.3 * inch, 1.1 * inch, 0.8 * inch, 1.2 * inch, 1.1 * inch]
                       if has_amplitude else [2.5 * inch, 1.5 * inch, 1.0 * inch])
-        table = Table(rows, colWidths=col_widths)
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-            ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-            ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ]))
+        table = _branded_table(rows, col_widths, styles, font_size=9)
         elements.append(table)
         if has_amplitude:
             elements.append(Spacer(1, 0.08 * inch))
@@ -302,34 +348,25 @@ def _build_trajectory_table(trajectories: Dict, styles) -> List:
     short = [pe[:7] for pe in periods]
     elements: List = [Paragraph("Trayectoria del Score (multi-período)", styles["SDQHeading"])]
 
-    def _series_row(label: str, series: List[Dict]) -> List[str]:
+    def _series_row(label: str, series: List[Dict], bold: bool = False) -> List:
         by_period = {p["period_end"]: p.get("score") for p in series}
-        cells = [label]
+        # "Score global" va en negrita (fila resumen); como la fábrica envuelve cada
+        # celda en un Paragraph, la negrita se aplica en la celda, no vía TableStyle.
+        head = (Paragraph(_md_inline(label), styles["SDQTableCellBold"]) if bold else label)
+        cells: List = [head]
         for pe in periods:
             v = by_period.get(pe)
             cells.append(f"{v:.1f}" if isinstance(v, (int, float)) else "—")
         return cells
 
     rows = [["Eje"] + short]
-    rows.append(_series_row("Score global", overall))
+    rows.append(_series_row("Score global", overall, bold=True))
     for sk in ("solidez", "calidad", "eficiencia", "liquidez", "diversificacion"):
         if sub.get(sk):
             rows.append(_series_row(SUB_COMPONENT_LABELS.get(sk, sk), sub[sk]))
 
-    ncol = len(periods) + 1
-    table = Table(rows, colWidths=[1.9 * inch] + [(4.6 * inch) / len(periods)] * len(periods),
-                  repeatRows=1)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-        ("FONTNAME", (0, 1), (0, 1), "Helvetica-Bold"),
-        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
+    table = _branded_table(
+        rows, [1.9 * inch] + [(4.6 * inch) / len(periods)] * len(periods), styles)
     elements.append(table)
     elements.append(Spacer(1, 0.08 * inch))
     elements.append(Paragraph(
@@ -504,17 +541,8 @@ def _build_band_distribution_table(band_distribution: Dict[str, int], styles) ->
     rows = [["Banda", "Entidades", "% del sistema"]]
     for band, count in band_distribution.items():
         rows.append([str(band), str(int(count)), f"{int(count) / total * 100:.1f}%"])
-    table = Table(rows, colWidths=[2.8 * inch, 1.4 * inch, 1.6 * inch])
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
+    table = _branded_table(rows, [2.8 * inch, 1.4 * inch, 1.6 * inch], styles,
+                           font_size=10, padding=6)
     elements.append(table)
     return elements
 
@@ -532,17 +560,8 @@ def _build_peer_block(peer_block: Dict, styles) -> List:
             rows.append([disp, f"{val}{suffix}"])
     if len(rows) == 1:
         return []
-    table = Table(rows, colWidths=[3.5 * inch, 2.0 * inch])
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
-        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]))
+    table = _branded_table(rows, [3.5 * inch, 2.0 * inch], styles,
+                           font_size=9.5, padding=5)
     elements.append(table)
     return elements
 
@@ -570,18 +589,9 @@ def _build_macro_table(entorno_macro: Dict, styles) -> List:
             _MACRO_DIR_LABEL.get(f.get("direction"), "—"),
             Paragraph(_md_inline(f.get("reading", "") or ""), styles["SDQSmall"]),
         ])
-    table = Table(rows, colWidths=[1.7 * inch, 1.0 * inch, 0.9 * inch, 2.9 * inch], repeatRows=1)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-        ("ALIGN", (1, 0), (2, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
+    table = _branded_table(
+        rows, [1.7 * inch, 1.0 * inch, 0.9 * inch, 2.9 * inch], styles,
+        aligns=["LEFT", "CENTER", "CENTER", "LEFT"])
     elements.append(table)
     elements.append(Spacer(1, 0.08 * inch))
     elements.append(Paragraph(
@@ -591,8 +601,8 @@ def _build_macro_table(entorno_macro: Dict, styles) -> List:
     return elements
 
 
-def _sensitivity_rows(rows: List[Dict], up: bool) -> List[List[str]]:
-    out: List[List[str]] = []
+def _sensitivity_rows(rows: List[Dict]) -> List[List]:
+    out: List[List] = []
     for r in rows:
         delta = r.get("delta_overall", 0)
         out.append([
@@ -616,27 +626,16 @@ def _build_sensitivity_table(sens: Dict, styles) -> List:
     header = ["Indicador", "Actual", "Umbral", "Banda→", "Δ Score"]
     col_widths = [2.2 * inch, 0.9 * inch, 1.1 * inch, 1.1 * inch, 0.9 * inch]
 
-    def _block(subtitle: str, rows: List[List[str]]):
+    def _block(subtitle: str, rows: List[List]):
         if not rows:
             return
         elements.append(Paragraph(subtitle, styles["SDQSubHeading"]))
-        data = [header] + rows
-        table = Table(data, colWidths=col_widths, repeatRows=1)
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-            ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-            ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ]))
+        table = _branded_table([header] + rows, col_widths, styles)
         elements.append(table)
         elements.append(Spacer(1, 0.12 * inch))
 
-    _block("Palancas al alza — mejorar a este umbral sube el score", _sensitivity_rows(up, True))
-    _block("Riesgos a la baja — deteriorarse a este umbral hace perder banda", _sensitivity_rows(down, False))
+    _block("Palancas al alza — mejorar a este umbral sube el score", _sensitivity_rows(up))
+    _block("Riesgos a la baja — deteriorarse a este umbral hace perder banda", _sensitivity_rows(down))
     elements.append(Paragraph(
         "Umbral = valor crudo del indicador que lleva su score a la frontera de banda "
         "indicada; Δ Score = cambio resultante en el score global (recomputado con la "
@@ -687,17 +686,8 @@ def _build_support_table(support: Dict, styles) -> List:
             ol = f", {a.get('outlook')}" if a.get("outlook") else ""
             return f"{a.get('name')} {a.get('rating')}{ol} ({a.get('action_date') or 's/f'})"
         rows.append(["Panel multi-agencia", _val(" · ".join(_ag(a) for a in agencies))])
-    table = Table(rows, colWidths=[2.3 * inch, 4.2 * inch], repeatRows=1)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
+    table = _branded_table(rows, [2.3 * inch, 4.2 * inch], styles,
+                           aligns=["LEFT", "LEFT"])
     elements.append(table)
     elements.append(Spacer(1, 0.08 * inch))
     elements.append(Paragraph(
