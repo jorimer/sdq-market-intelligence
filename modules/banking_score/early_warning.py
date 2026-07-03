@@ -231,3 +231,28 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
     banks.sort(key=lambda b: (b["max_severity"] != "alta", -len(b["alerts"]), b["name"]))
     return {"period": target.isoformat(), "banks": banks, "summary": summary,
             "n_alerts": sum(len(b["alerts"]) for b in banks)}
+
+
+def bank_alerts(db: Session, bank_id: str) -> Dict:
+    """Alertas de UNA entidad al último período (para el deep dive / endpoint por-banco)."""
+    block = compute_alerts(db)
+    entry = next((b for b in block["banks"] if b["bank_id"] == bank_id), None)
+    return {"period": block["period"],
+            "alerts": entry["alerts"] if entry else [],
+            "max_severity": entry["max_severity"] if entry else None}
+
+
+def format_alerts_text(block: Optional[Dict]) -> str:
+    """Bloque de alertas → texto markdown para la sección del reporte (determinista, sin IA)."""
+    alerts = (block or {}).get("alerts") or []
+    if not alerts:
+        return ("Sin banderas de alerta temprana activas al período de corte. Las señales de "
+                "monitoreo —precursores detectables de la crisis bancaria de 2003— no se activaron "
+                "para esta entidad. Es un complemento del rating, no un veredicto, y no detecta "
+                "fraude ni contabilidad paralela.")
+    lines = ["Señales de monitoreo activas —precursores detectables de la crisis bancaria de 2003 "
+             "(complemento del rating, no un veredicto; no detectan fraude):", ""]
+    for a in alerts:
+        lines.append(f"- **{a['label']}** ({a['severity']}) — {a['metric']}: {a['value']} "
+                     f"(umbral {a['threshold']}). {a['basis']}.")
+    return "\n".join(lines)

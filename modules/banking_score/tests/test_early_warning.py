@@ -1,6 +1,7 @@
 """Tests de las reglas PURAS del motor de alerta temprana (sin DB)."""
 from modules.banking_score.early_warning import (
     evaluate,
+    format_alerts_text,
     percentile,
     rule_concentration,
     rule_coverage,
@@ -66,3 +67,13 @@ def test_evaluate_ordena_alta_primero():
     codes = [a.code for a in alerts]
     assert "solvencia_piso" in codes and "brecha_provisiones" in codes and "concentracion" in codes
     assert alerts[0].severity == "alta"                    # la 'alta' va primero
+
+
+def test_format_alerts_text_vacio_y_con_alertas():
+    empty = format_alerts_text({"alerts": []})
+    assert "Sin banderas" in empty and "no detecta fraude" in empty
+    txt = format_alerts_text({"alerts": [
+        {"label": "Salto de morosidad", "severity": "alta", "value": 4.83,
+         "threshold": 3.0, "basis": "Deterioro diferido", "metric": "morosidad %"},
+    ]})
+    assert "**Salto de morosidad**" in txt and "4.83" in txt and "umbral 3.0" in txt

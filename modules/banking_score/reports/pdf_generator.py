@@ -79,6 +79,7 @@ NARRATIVE_SECTION_TITLES = {
     "comparative": "Análisis Comparativo",
     "entorno_operativo": "Entorno Operativo",
     "soporte_soberano": "Soporte y Techo Soberano",
+    "early_warning": "Alerta Temprana",
     "recommendation": "Recomendación",
     "trend_analysis": "Análisis de Tendencias",
     "sector_outlook": "Perspectiva Sectorial",
