@@ -49,6 +49,7 @@ def _run_financials_history_sync(params, user_id, set_phase) -> Dict:
             db, set_phase=set_phase,
             since_year=int(p.get("since_year") or 2010),
             annual=bool(p.get("annual", True)),
+            only_slug=p.get("only_slug") or None,
         )
     finally:
         db.close()
