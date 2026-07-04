@@ -892,7 +892,10 @@
     "ewEmpty": "Aucun signalement actif dans le système pour la dernière période.",
     "ewNote": "Complète la notation (pas un verdict) : précurseurs détectables de la crise de 2003. Ne détecte pas la fraude.",
     "ewCount": "{{n}} alertes · {{b}} banques",
-    "ewSeverity": { "alta": "Élevée", "media": "Moyenne" },
+    "ewSeverity": {
+      "alta": "Élevée",
+      "media": "Moyenne"
+    },
     "dashInsightAll": "Tout le système financier",
     "mcMetricActivos": "Actifs",
     "mcMetricDepositos": "Dépôts",
@@ -1945,7 +1948,10 @@
     "ewEmpty": "Aucun signal de surveillance actif.",
     "ewNote": "Signaux de surveillance pour l'affilié — complète l'ISA, pas un verdict.",
     "ewCount": "{{n}} signaux · {{b}} AFP",
-    "ewSeverity": { "alta": "Élevée", "media": "Moyenne" },
+    "ewSeverity": {
+      "alta": "Élevée",
+      "media": "Moyenne"
+    },
     "tabAfp": "AFP",
     "tabCartera": "Portefeuille",
     "carteraNote": "Photo trimestrielle du portefeuille d'investissement des fonds (bulletin SIPEN, Tableau 6.1). Montants en RD$ ; ce n'est ni une série ni un jugement de risque d'un émetteur.",
@@ -2341,6 +2347,15 @@
       "risks": "Risques",
       "relevanceBySector": "Pertinence par secteur",
       "errorChip": "erreur"
+    }
+  },
+  "insurance": {
+    "audienceLabel": "Orientation",
+    "audience": {
+      "inversionista": "Investisseur",
+      "regulador": "Régulateur",
+      "asegurado": "Assuré",
+      "gobierno": "Gouvernement"
     }
   }
 }
