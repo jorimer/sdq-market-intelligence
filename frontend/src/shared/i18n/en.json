@@ -892,7 +892,10 @@
     "ewEmpty": "No active flags in the system for the latest period.",
     "ewNote": "Complements the rating (not a verdict): detectable precursors of the 2003 crisis. It does not detect fraud.",
     "ewCount": "{{n}} alerts · {{b}} banks",
-    "ewSeverity": { "alta": "High", "media": "Medium" },
+    "ewSeverity": {
+      "alta": "High",
+      "media": "Medium"
+    },
     "dashInsightAll": "Whole financial system",
     "mcMetricActivos": "Assets",
     "mcMetricDepositos": "Deposits",
@@ -1945,7 +1948,10 @@
     "ewEmpty": "No active watch flags.",
     "ewNote": "Monitoring signals for the affiliate — complements the ISA, not a verdict.",
     "ewCount": "{{n}} flags · {{b}} AFPs",
-    "ewSeverity": { "alta": "High", "media": "Medium" },
+    "ewSeverity": {
+      "alta": "High",
+      "media": "Medium"
+    },
     "tabAfp": "AFP",
     "tabCartera": "Portfolio",
     "carteraNote": "Quarterly snapshot of the funds' investment portfolio (SIPEN bulletin, Table 6.1). Amounts in DOP; not a time series nor a credit view of any issuer.",
@@ -2341,6 +2347,15 @@
       "risks": "Risks",
       "relevanceBySector": "Relevance by sector",
       "errorChip": "error"
+    }
+  },
+  "insurance": {
+    "audienceLabel": "Audience",
+    "audience": {
+      "inversionista": "Investor",
+      "regulador": "Regulator",
+      "asegurado": "Policyholder",
+      "gobierno": "Government"
     }
   }
 }

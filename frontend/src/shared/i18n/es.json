@@ -892,7 +892,10 @@
     "ewEmpty": "Sin banderas activas en el sistema para el último período.",
     "ewNote": "Complemento del rating (no un veredicto): precursores detectables de la crisis 2003. No detecta fraude.",
     "ewCount": "{{n}} alertas · {{b}} bancos",
-    "ewSeverity": { "alta": "Alta", "media": "Media" },
+    "ewSeverity": {
+      "alta": "Alta",
+      "media": "Media"
+    },
     "dashInsightAll": "Todo el sistema financiero",
     "mcMetricActivos": "Activos",
     "mcMetricDepositos": "Depósitos",
@@ -1945,7 +1948,10 @@
     "ewEmpty": "Sin banderas de vigilancia activas.",
     "ewNote": "Señales de monitoreo para el afiliado — complemento del ISA, no un veredicto.",
     "ewCount": "{{n}} banderas · {{b}} AFP",
-    "ewSeverity": { "alta": "Alta", "media": "Media" },
+    "ewSeverity": {
+      "alta": "Alta",
+      "media": "Media"
+    },
     "tabAfp": "AFP",
     "tabCartera": "Cartera",
     "carteraNote": "Foto trimestral de la cartera de inversiones de los fondos (Boletín SIPEN, Cuadro 6.1). Montos en RD$; no es una serie ni un juicio de riesgo de un emisor.",
@@ -2341,6 +2347,15 @@
       "risks": "Riesgos",
       "relevanceBySector": "Relevancia por sector",
       "errorChip": "error"
+    }
+  },
+  "insurance": {
+    "audienceLabel": "Orientación",
+    "audience": {
+      "inversionista": "Inversionista",
+      "regulador": "Regulador",
+      "asegurado": "Asegurado",
+      "gobierno": "Gobierno"
     }
   }
 }
