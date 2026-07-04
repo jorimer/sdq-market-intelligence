@@ -1,0 +1,97 @@
+"""AI context builders for Insurance Intel narratives.
+
+Each builder digests a read-side payload into a flat, source-stamped context dict
+for ``shared.narrative`` templates. Numbers only — the narrative engine never counts,
+it interprets (numeric_guard). Mirrors ``pension_intel.ai_context``.
+"""
+from typing import Any, Dict, List
+
+
+def _dims(rating: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [
+        {"dimension": d["label"], "score": d.get("score"), "peso": d["weight"],
+         "valor_real": d.get("raw"), "presente": d.get("present")}
+        for d in rating.get("dimensions") or []
+    ]
+
+
+def insurance_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Context for a named insurer's ISF assessment (template ``insurance_entity``)."""
+    ranked = [p for p in peers if p.get("overall_score") is not None]
+    rank = next((i + 1 for i, p in enumerate(ranked) if p["slug"] == rating["slug"]), None)
+    return {
+        "aseguradora": rating.get("name") or rating.get("slug"),
+        "isf_score": rating.get("overall_score"),
+        "banda": rating.get("band"),
+        "coverage": rating.get("coverage"),
+        "rank": rank,
+        "n_aseguradoras_rankeadas": len(ranked),
+        "periodo": rating.get("period"),
+        "dimensiones": _dims(rating),
+        "direction": "mayor solvencia/liquidez/resultado y menor siniestralidad = más sólida",
+        "source": "SIS — estados financieros auditados por compañía (dato real)",
+        "note": ("El ISF integra cinco dimensiones sobre los estados financieros auditados que "
+                 "publica la SIS: solvencia (patrimonio/activos), siniestralidad (loss ratio), "
+                 "liquidez, escala y resultado técnico. Es una medida de solidez por bandas, no "
+                 "un rating de crédito ni una clasificación de Solvencia II."),
+    }
+
+
+def insurance_peer_context(name: str, rating: Dict[str, Any],
+                           peers: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Context for peer positioning against the market (template ``insurance_peer_positioning``)."""
+    ranked = sorted((p for p in peers if p.get("overall_score") is not None),
+                    key=lambda p: p["overall_score"], reverse=True)
+    def _cell(p: Dict[str, Any]) -> Dict[str, Any]:
+        by = {d["key"]: d.get("score") for d in p.get("dimensions") or []}
+        return {"aseguradora": p.get("name") or p.get("slug"), "isf": p.get("overall_score"),
+                "solvencia": by.get("solvencia"), "siniestralidad": by.get("siniestralidad"),
+                "liquidez": by.get("liquidez"), "escala": by.get("escala"),
+                "resultado_tecnico": by.get("resultado_tecnico")}
+    rank = next((i + 1 for i, p in enumerate(ranked) if p["slug"] == rating["slug"]), None)
+    avg = round(sum(p["overall_score"] for p in ranked) / len(ranked), 1) if ranked else None
+    return {
+        "aseguradora": name, "isf": rating.get("overall_score"), "banda": rating.get("band"),
+        "rank": rank, "n_aseguradoras_rankeadas": len(ranked),
+        "tabla_pares": [_cell(p) for p in ranked[:12]],
+        "lider_isf": ranked[0].get("name") if ranked else None,
+        "promedio_isf": avg,
+        "source": "SIS — estados financieros auditados por compañía (dato real)",
+        "note": "Posición relativa por bandas de solidez (0-100). No es un rating de crédito.",
+    }
+
+
+def market_pulse_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
+    """Context for the national insurance-market Pulse (template ``insurance_pulse``)."""
+    mix: List[Dict[str, Any]] = pulse.get("mix") or []
+    hc = pulse.get("health_coverage") or {}
+    return {
+        "periodo": pulse.get("period"),
+        "cobertura_salud_sfs": {
+            "afiliados_total": hc.get("afiliados_total"),
+            "afiliados_contributivo": hc.get("afiliados_contributivo"),
+            "afiliados_subsidiado": hc.get("afiliados_subsidiado"),
+            "crecimiento_5a_pct": hc.get("crecimiento_5a_pct"),
+            "periodo": hc.get("period"),
+            "fuente": "SISALRIL/CNSS — Seguro Familiar de Salud",
+        } if hc else None,
+        "anio": pulse.get("latest_year"),
+        "primas_totales_rd": pulse.get("total_premiums_rd"),
+        "crecimiento_pct": pulse.get("growth_pct"),
+        "crecimiento_ventana": pulse.get("growth_years"),
+        "aseguradoras_activas": pulse.get("active_insurers"),
+        "n_ramos": pulse.get("n_ramos"),
+        "concentracion_top4_pct": pulse.get("top4_concentration_pct"),
+        "mezcla_por_ramo": [
+            {"ramo": d["label"], "monto_rd": d["amount"], "pct": d.get("pct")}
+            for d in mix[:6]
+        ],
+        "unit_primas": "RD$ (primas netas cobradas)",
+        "direction": "mayor tamaño, crecimiento sostenido y mezcla diversificada = mercado más profundo",
+        "source": "SIS — Superintendencia de Seguros (dato real, datos.gob.do)",
+        "note": (
+            "Pulso del mercado asegurador (agregado, sin nombres de aseguradora). "
+            "Primas netas cobradas; el crecimiento se lee como tasa compuesta entre años "
+            "independientes. " + (pulse.get("data_caveat") or "")
+        ).strip(),
+    }

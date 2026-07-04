@@ -40,6 +40,8 @@ import { EsgClimatePage } from "@/modules/esg-climate/pages/EsgClimatePage";
 // Pensiones (SIPEN)
 import { PensionIntelPage } from "@/modules/pension-intel/pages/PensionIntelPage";
 import { DatosPensionesPage } from "@/modules/pension-intel/pages/DatosPensionesPage";
+// Seguros (SIS · SISALRIL)
+import { InsuranceIntelPage } from "@/modules/insurance-intel/pages/InsuranceIntelPage";
 // Plataforma
 import { OverviewPage } from "@/modules/platform/pages/OverviewPage";
 import { MetodologiaPage } from "@/modules/platform/pages/MetodologiaPage";
@@ -102,6 +104,7 @@ export default function App() {
           <Route path="/trade-intel" element={<TradeIntelPage />} />
           <Route path="/esg-climate" element={<EsgClimatePage />} />
           <Route path="/pension-intel" element={<PensionIntelPage />} />
+          <Route path="/insurance-intel" element={<InsuranceIntelPage />} />
 
           {/* Herramientas */}
           <Route

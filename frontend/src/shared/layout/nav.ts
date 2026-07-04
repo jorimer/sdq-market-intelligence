@@ -48,6 +48,7 @@ export const NAV: NavGroup[] = [
       { to: "/trade-intel", label: "Comercio exterior", icon: Ship, ready: true },
       { to: "/esg-climate", label: "ESG & clima", icon: Leaf, ready: true },
       { to: "/pension-intel", label: "Pensiones", icon: PiggyBank, ready: true },
+      { to: "/insurance-intel", label: "Seguros", icon: ShieldCheck, ready: true },
     ],
   },
   {

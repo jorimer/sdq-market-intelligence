@@ -1,0 +1,180 @@
+"""Tests for Insurance Intel (SIS market Pulse — F1a).
+
+Self-contained: builds an in-memory SQLite with just the insurance tables, ingests
+the committed real fixture, and asserts the market pulse + product contract behave.
+"""
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from shared.database.base import Base
+import modules.insurance_intel.models.models as m
+import modules.insurance_intel.products  # noqa: F401 — registers the SectorProduct
+from modules.insurance_intel.service import build_market_pulse
+from modules.insurance_intel.sis_sync import sis_insurance_sync
+from shared.data.sis_client import SISClient
+
+
+@pytest.fixture()
+def db():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng, tables=[
+        m.InsuranceEntity.__table__, m.InsuranceSeries.__table__,
+        m.InsuranceRating.__table__, m.InsuranceSnapshot.__table__])
+    session = sessionmaker(bind=eng)()
+    yield session
+    session.close()
+
+
+# ── Client / fixture ──────────────────────────────────────────────
+def test_fixture_fetch_normalizes_ramo_dimension():
+    recs = SISClient(mode="fixture").fetch()
+    assert recs, "fixture should yield records"
+    # Per-ramo series are normalized to a single code + dimension (parity with live).
+    ramo = [r for r in recs if r.series == "sis.primas.ramo"]
+    assert ramo and all(r.dimension for r in ramo)
+    # No malformed period keys (the lowercase-'febrero' month bug regression guard).
+    assert all(len(r.period) == 7 and r.period[4] == "-" and r.period[:4].isdigit()
+               for r in recs)
+
+
+def test_fixture_has_all_months_2020_2025():
+    recs = SISClient(mode="fixture").fetch(series="sis.primas.total_mensual")
+    years = {}
+    for r in recs:
+        years[r.period[:4]] = years.get(r.period[:4], 0) + 1
+    assert years == {str(y): 12 for y in range(2020, 2026)}
+
+
+# ── Sync / service ────────────────────────────────────────────────
+def test_sync_is_idempotent(db):
+    r1 = sis_insurance_sync(db, mode="fixture")
+    n1 = db.query(m.InsuranceSeries).count()
+    r2 = sis_insurance_sync(db, mode="fixture")
+    n2 = db.query(m.InsuranceSeries).count()
+    assert n1 == n2 == r1["market_rows"] == r2["market_rows"]
+    assert r1["snapshot_period"] == "2025-12"
+
+
+def test_pulse_growth_skips_duplicate_year(db):
+    sis_insurance_sync(db, mode="fixture")
+    p = build_market_pulse(db)
+    assert p["has_data"] and p["latest_year"] == "2025"
+    # 2024 duplicates 2023 in the source → growth is a CAGR from 2023, not off 2024.
+    assert p["growth_years"] == ("2023", "2025")
+    assert p["data_caveat"] and "2024" in p["data_caveat"]
+    # Total ≈ RD$ 153 MMM and a sane double-digit CAGR.
+    assert 150e9 < p["total_premiums_rd"] < 156e9
+    assert 10 < p["growth_pct"] < 25
+
+
+def test_pulse_mix_sums_and_concentration(db):
+    sis_insurance_sync(db, mode="fixture")
+    p = build_market_pulse(db)
+    assert p["n_ramos"] == 11
+    assert abs(sum(d["pct"] for d in p["mix"]) - 100) < 0.5
+    assert p["top4_concentration_pct"] > 80  # a concentrated market
+
+
+# ── Product contract ──────────────────────────────────────────────
+def test_product_registered_and_manifest():
+    from shared.products.registry import is_implemented, get_product
+    from shared.products import ProductTier
+    assert is_implemented("insurance")
+    man = get_product("insurance").product_manifest()
+    assert set(man.levels) == {ProductTier.pulse, ProductTier.insight, ProductTier.deep_dive}
+
+
+def test_pulse_tier_has_data_named_tier_honest(db):
+    from shared.products.registry import get_product
+    from shared.products import ProductTier
+    sis_insurance_sync(db, mode="fixture")
+    prod = get_product("insurance", db)
+    assert prod.has_engine() is True
+    pulse = prod.snapshot(ProductTier.pulse, "2025-12")
+    assert pulse.payload["has_data"] is True
+    # Named tier without ingested financials → honest "sin dato", never fabricated.
+    named = prod.snapshot(ProductTier.insight, "2025", scope="no_existe")
+    assert named.payload["has_data"] is False
+
+
+# ── F1b · ISF (entity rating) ─────────────────────────────────────
+def _synthetic_financials():
+    return [
+        {"slug": "grande", "name": "Grande", "period": "2024", "patrimonio": 8e9,
+         "activos_totales": 33e9, "primas_suscritas": 28e9, "siniestros_pagados": 10e9,
+         "reservas_tecnicas": 12e9, "activos_liquidos": 14e9, "ingresos_totales": 30e9,
+         "gastos_totales": 28e9},
+        {"slug": "solida", "name": "Sólida", "period": "2024", "patrimonio": 1.3e9,
+         "activos_totales": 1.5e9, "primas_suscritas": 0.7e9, "siniestros_pagados": 0.2e9,
+         "reservas_tecnicas": 0.15e9, "activos_liquidos": 0.4e9, "ingresos_totales": 0.8e9,
+         "gastos_totales": 0.6e9},
+        {"slug": "debil", "name": "Débil", "period": "2024", "patrimonio": 0.15e9,
+         "activos_totales": 1.7e9, "primas_suscritas": 3.9e9, "siniestros_pagados": 3.1e9,
+         "reservas_tecnicas": 1.0e9, "activos_liquidos": 0.3e9, "ingresos_totales": 4.0e9,
+         "gastos_totales": 4.1e9},
+    ]
+
+
+def test_score_insurers_ranks_and_bands():
+    from modules.insurance_intel.scoring.isf import score_insurers
+    res = score_insurers(_synthetic_financials())
+    by = {r["slug"]: r for r in res}
+    # Full coverage → absolute bands emitted.
+    assert all(r["coverage"] == 1.0 and r["band"] for r in res)
+    # The high-solvency/low-loss insurer outranks the weak one.
+    assert by["solida"]["overall_score"] > by["debil"]["overall_score"]
+    # Loss ratio is lower-is-better: 'solida' (0.29) beats 'debil' (0.79) on that axis.
+    def sini(r):
+        return next(d["score"] for d in by[r]["dimensions"] if d["key"] == "siniestralidad")
+    assert sini("solida") > sini("debil")
+
+
+def test_named_tier_renders_isf(db):
+    import asyncio
+    from shared.products.registry import get_product
+    from shared.products import ProductTier
+    # Persist synthetic per-entity series + roster, then score.
+    for f in _synthetic_financials():
+        db.add(m.InsuranceEntity(slug=f["slug"], name=f["name"], entity_type="aseguradora",
+                                 is_active=True))
+        for code in ("patrimonio", "activos_totales", "primas_suscritas", "siniestros_pagados",
+                     "reservas_tecnicas", "activos_liquidos", "ingresos_totales", "gastos_totales"):
+            db.add(m.InsuranceSeries(series_code=code, period="2024", entity_slug=f["slug"],
+                                     value=f[code], unit="RD$", frequency="annual"))
+    db.flush()
+    from modules.insurance_intel.scoring.batch import score_and_persist
+    assert score_and_persist(db)["ratings_written"] == 3
+
+    prod = get_product("insurance", db)
+    opts = {o["value"] for o in prod.scope_options()}
+    assert {"grande", "solida", "debil"} <= opts
+    snap = prod.snapshot(ProductTier.insight, "2024", scope="solida")
+    assert snap.payload["has_data"] is True
+    assert snap.payload["headline_line"].startswith("ISF")
+    narr = asyncio.run(prod.narratives(ProductTier.insight, snap))
+    path = asyncio.run(prod.render(ProductTier.insight, snap, narr, output_dir="/tmp"))
+    import os
+    assert os.path.exists(path) and path.endswith(".pdf")
+
+
+# ── F1c · SISALRIL / SFS health coverage ──────────────────────────
+def test_sisalril_sfs_pulse(db):
+    from modules.insurance_intel.sisalril_sync import sisalril_sfs_sync
+    from modules.insurance_intel.service import build_health_pulse
+    res = sisalril_sfs_sync(db, mode="fixture")
+    assert res["sfs_rows"] > 0
+    hp = build_health_pulse(db)
+    assert hp is not None
+    # ~10.6M affiliated, split into contributory + subsidized.
+    assert hp["afiliados_total"] > 9e6
+    assert hp["afiliados_contributivo"] and hp["afiliados_subsidiado"]
+
+
+def test_market_pulse_folds_in_health(db):
+    from modules.insurance_intel.sisalril_sync import sisalril_sfs_sync
+    sis_insurance_sync(db, mode="fixture")
+    sisalril_sfs_sync(db, mode="fixture")
+    p = build_market_pulse(db)
+    assert p["health_coverage"] is not None
+    assert p["health_coverage"]["afiliados_total"] > 9e6
