@@ -12,7 +12,11 @@ from typing import Callable, Dict, Optional
 from sqlalchemy.orm import Session
 
 from shared.data.lineage import Lineage
-from shared.data.sisalril_ars_client import ARS_CAT_LABELS, SISALRILARSClient, ars_categories
+from shared.data.sisalril_ars_client import (
+    SISALRILARSClient,
+    ars_categories,
+    ars_name,
+)
 from modules.insurance_intel.models.models import (
     InsuranceEntity,
     InsuranceRating,
@@ -23,20 +27,24 @@ logger = logging.getLogger("sdq.insurance_intel.ars_sync")
 
 
 def _seed_entities(db: Session, ars_ids, cats: Dict[str, int]) -> int:
-    existing = {e.slug for e in db.query(InsuranceEntity)
+    """Seed/refresh ARS entities with their OFFICIAL names (SISALRIL Portal Estadístico).
+    Also upgrades names already seeded as coded 'ARS 001 (...)' placeholders."""
+    existing = {e.slug: e for e in db.query(InsuranceEntity)
                 .filter(InsuranceEntity.entity_type == "ars").all()}
     created = 0
     for ars_id in ars_ids:
         slug = f"ars_{ars_id}"
-        if slug in existing:
-            continue
         cat = cats.get(ars_id)
-        label = ARS_CAT_LABELS.get(cat, "ARS")
-        db.add(InsuranceEntity(slug=slug, name=f"ARS {ars_id} ({label})",
-                               entity_type="ars", entity_code=str(cat) if cat else None,
-                               is_active=True))
-        existing.add(slug)
-        created += 1
+        name = ars_name(ars_id, cat)
+        ent = existing.get(slug)
+        if ent is None:
+            db.add(InsuranceEntity(slug=slug, name=name, entity_type="ars",
+                                   entity_code=str(cat) if cat else None, is_active=True))
+            created += 1
+        else:
+            ent.name = name  # upgrade to the official name
+            if cat and not ent.entity_code:
+                ent.entity_code = str(cat)
     return created
 
 

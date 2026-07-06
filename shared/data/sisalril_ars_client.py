@@ -42,6 +42,37 @@ _ACCOUNTS: Dict[int, Tuple[str, int]] = {
 }
 ARS_CAT_LABELS = {1: "Autogestionada", 2: "Pública", 3: "Privada"}
 
+# Official ARS_ID → name, from the SISALRIL Portal Estadístico (indicator 405, toggle
+# Codificados↔Etiquetados: the indicator codes equal the BDFINAC ARS_ID). Authoritative.
+ARS_NAMES = {
+    "001": "ARS CMD (Colegio Médico Dominicano)",
+    "003": "ARS APS",
+    "005": "ARS Simag",
+    "006": "ARS Grupo Médico Asociado (GMA)",
+    "013": "ARS Dr. Yunén",
+    "014": "ARS Universal",
+    "018": "ARS Monumental",
+    "021": "ARS Futuro",
+    "023": "ARS Primera",
+    "036": "ARS ASEMAP (Amor y Paz)",
+    "042": "ARS SEMMA",
+    "043": "ARS Renacer",
+    "049": "Mapfre Salud ARS",
+    "050": "ARS Plan Salud Banco Central",
+    "052": "ARS SeNaSa",
+    "056": "ARS Reservas",
+    "063": "ARS MetaSalud",
+    "147": "IDOPPRIL (Riesgos Laborales)",
+}
+
+
+def ars_name(ars_id: str, category=None) -> str:
+    """Official ARS name for a BDFINAC ARS_ID; falls back to a coded label."""
+    n = ARS_NAMES.get(str(ars_id).zfill(3)) or ARS_NAMES.get(str(ars_id))
+    if n:
+        return n
+    return f"ARS {ars_id}" + (f" ({ARS_CAT_LABELS.get(category, '')})" if category else "")
+
 
 def _num(s: str) -> Optional[float]:
     try:
