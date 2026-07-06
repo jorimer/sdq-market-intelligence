@@ -223,6 +223,15 @@ async def trigger_ars_sync(
     return ars_sync(db, mode="live")
 
 
+@router.post("/solvency/sync")
+async def trigger_solvency_sync(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    from modules.insurance_intel.solvency_sync import solvency_sync
+    return solvency_sync(db, mode="live")
+
+
 @router.post("/financials/sync")
 async def trigger_financials_sync(
     db: Session = Depends(get_db),

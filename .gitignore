@@ -65,3 +65,4 @@ docker-compose.override.yml
 
 # Claude Code
 .claude/
+docs/reference/seguros/*.pdf

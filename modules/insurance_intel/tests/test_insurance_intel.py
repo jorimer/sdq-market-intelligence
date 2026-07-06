@@ -99,20 +99,25 @@ def test_pulse_tier_has_data_named_tier_honest(db):
 
 
 # ── F1b · ISF (entity rating) ─────────────────────────────────────
+_SYNTH_CODES = ("patrimonio", "activos_totales", "primas_suscritas", "siniestros_pagados",
+                "reservas_tecnicas", "activos_liquidos", "ingresos_totales", "gastos_totales",
+                "indice_solvencia", "indice_liquidez")
+
+
 def _synthetic_financials():
     return [
         {"slug": "grande", "name": "Grande", "period": "2024", "patrimonio": 8e9,
          "activos_totales": 33e9, "primas_suscritas": 28e9, "siniestros_pagados": 10e9,
          "reservas_tecnicas": 12e9, "activos_liquidos": 14e9, "ingresos_totales": 30e9,
-         "gastos_totales": 28e9},
+         "gastos_totales": 28e9, "indice_solvencia": 2.5, "indice_liquidez": 3.0},
         {"slug": "solida", "name": "Sólida", "period": "2024", "patrimonio": 1.3e9,
          "activos_totales": 1.5e9, "primas_suscritas": 0.7e9, "siniestros_pagados": 0.2e9,
          "reservas_tecnicas": 0.15e9, "activos_liquidos": 0.4e9, "ingresos_totales": 0.8e9,
-         "gastos_totales": 0.6e9},
+         "gastos_totales": 0.6e9, "indice_solvencia": 3.5, "indice_liquidez": 4.0},
         {"slug": "debil", "name": "Débil", "period": "2024", "patrimonio": 0.15e9,
          "activos_totales": 1.7e9, "primas_suscritas": 3.9e9, "siniestros_pagados": 3.1e9,
          "reservas_tecnicas": 1.0e9, "activos_liquidos": 0.3e9, "ingresos_totales": 4.0e9,
-         "gastos_totales": 4.1e9},
+         "gastos_totales": 4.1e9, "indice_solvencia": 0.6, "indice_liquidez": 0.7},
     ]
 
 
@@ -138,8 +143,7 @@ def test_named_tier_renders_isf(db):
     for f in _synthetic_financials():
         db.add(m.InsuranceEntity(slug=f["slug"], name=f["name"], entity_type="aseguradora",
                                  is_active=True))
-        for code in ("patrimonio", "activos_totales", "primas_suscritas", "siniestros_pagados",
-                     "reservas_tecnicas", "activos_liquidos", "ingresos_totales", "gastos_totales"):
+        for code in _SYNTH_CODES:
             db.add(m.InsuranceSeries(series_code=code, period="2024", entity_slug=f["slug"],
                                      value=f[code], unit="RD$", frequency="annual"))
     db.flush()
@@ -202,8 +206,7 @@ def test_validation_state_reads_backtest(db):
     for f in _synthetic_financials():
         db.add(m.InsuranceEntity(slug=f["slug"], name=f["name"], entity_type="aseguradora",
                                  is_active=True))
-        for code in ("patrimonio", "activos_totales", "primas_suscritas", "siniestros_pagados",
-                     "reservas_tecnicas", "activos_liquidos", "ingresos_totales", "gastos_totales"):
+        for code in _SYNTH_CODES:
             db.add(m.InsuranceSeries(series_code=code, period="2024", entity_slug=f["slug"],
                                      value=f[code], unit="RD$", frequency="annual"))
     db.flush()
@@ -247,3 +250,25 @@ def test_ars_sync_and_rankings(db):
     # Entities carry the ARS entity_type.
     ars_ents = db.query(m.InsuranceEntity).filter(m.InsuranceEntity.entity_type == "ars").count()
     assert ars_ents == res["ars"]
+
+
+# ── Regulatory solvency/liquidity (Ley 146-02, Art. 164) ──────────
+def test_solvency_indices_feed_isf(db):
+    from modules.insurance_intel.solvency_sync import solvency_sync
+    from modules.insurance_intel.scoring.isf import compute_isf
+    # Seed a couple of aseguradora entities whose names match the solvency fixture.
+    db.add(m.InsuranceEntity(slug="universal", name="Seguros Universal",
+                             entity_type="aseguradora", is_active=True))
+    db.add(m.InsuranceEntity(slug="bupa", name="Bupa Dominicana",
+                             entity_type="aseguradora", is_active=True))
+    db.flush()
+    res = solvency_sync(db, mode="fixture")
+    assert res["entities_matched"] >= 2 and res["series_rows"] > 0
+    # The solvency dimension now reads the official regulatory index.
+    rows = db.query(m.InsuranceSeries).filter(
+        m.InsuranceSeries.series_code == "indice_solvencia").count()
+    assert rows > 0
+    # An insurer with only the índices present is scored on solvencia+liquidez (partial cov).
+    isf = {r["slug"]: r for r in compute_isf(db)}
+    bupa = isf.get("bupa")
+    assert bupa and any(d["key"] == "solvencia" and d["present"] for d in bupa["dimensions"])

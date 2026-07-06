@@ -45,6 +45,16 @@ def _run_financials_history_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_solvency_sync(params, user_id, set_phase) -> Dict:
+    from modules.insurance_intel.solvency_sync import solvency_sync
+    db = SessionLocal()
+    try:
+        mode = (params or {}).get("mode") or "live"
+        return solvency_sync(db, set_phase=set_phase, mode=mode)
+    finally:
+        db.close()
+
+
 def _run_ars_sync(params, user_id, set_phase) -> Dict:
     from modules.insurance_intel.ars_sync import ars_sync
     db = SessionLocal()
@@ -129,6 +139,16 @@ def register() -> None:
         "el insumo del backtest de validación (G5). Param opcional 'since_year'. Corre desde "
         "Railway; best-effort por año; idempotente. On-demand.",
         _run_financials_history_sync, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "insurance-solvency-sync", "Sincronizar índices de solvencia y liquidez (SIS · Art. 164)",
+        "Descarga los Índices de Solvencia y Liquidez OFICIALES que publica la Superintendencia "
+        "de Seguros por aseguradora (Ley 146-02, Cap. XII, Art. 164; Excel auditado/trimestral): "
+        "índice de solvencia = patrimonio técnico ajustado / margen de solvencia mínima requerida "
+        "(≥1 cumple), e índice de liquidez = disponibilidad libre / liquidez mínima requerida. "
+        "Los cruza al roster (por clave de marca) y recalcula el ISF usando la solvencia y "
+        "liquidez REGULATORIAS en vez de proxies. Trimestral.",
+        _run_solvency_sync, default_interval_hours=2160,  # trimestral
     ))
     register_operation(Operation(
         "insurance-backtest", "Backtest de validación del ISF (resultado-proxy)",
