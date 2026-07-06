@@ -139,58 +139,103 @@ def score_insurers(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def _canonical_key(name: str) -> str:
-    """Stable insurer key robust to the audited sheet-name truncation (31-char Excel cap
-    cuts the tail at varying points). Uses the first two BRAND tokens (the head is stable);
-    falls back to a lighter slug when the brand words are all generic (e.g. 'Dominicana
-    Compañía de Seguros', where 'Dominicana' IS the brand)."""
+def _fallback_key(name: str) -> str:
+    """Heuristic canonical key (used only if the official roster is unavailable): first two
+    brand tokens (stable head vs. the truncated tail), with a lighter-slug fallback."""
     from shared.data.sis_solvency_client import brand_key
     from modules.insurance_intel.external.audited_excel_extractor import slugify_insurer
     bk = brand_key(name)
-    if bk:
-        return "_".join(bk.split("_")[:2])
-    return slugify_insurer(name) or "sin_nombre"
+    return "_".join(bk.split("_")[:2]) if bk else (slugify_insurer(name) or "sin_nombre")
+
+
+def _official_index():
+    """``{brand_key: (official_name, official_slug)}`` for the authorized-insurer roster."""
+    from shared.data.sis_roster_client import official_insurers
+    from shared.data.sis_solvency_client import brand_key
+    from modules.insurance_intel.external.audited_excel_extractor import slugify_insurer
+    idx = {}
+    for name in official_insurers():
+        idx[brand_key(name)] = (name, slugify_insurer(name))
+    return idx
+
+
+def _match_official(key: str, official: dict):
+    """Match an entity's brand key to an official company. exact → prefix (≥5) → unique
+    first-token. Returns ``(official_name, official_slug)`` or None."""
+    if key in official:
+        return official[key]
+    for ok, v in official.items():
+        short, long = sorted((key, ok), key=len)
+        if len(short) >= 5 and long.startswith(short):
+            return v
+    first = key.split("_")[0]
+    if len(first) >= 5:
+        hits = [v for ok, v in official.items() if ok.split("_")[0] == first]
+        if len(hits) == 1:
+            return hits[0]
+    return None
 
 
 def _load_financials(db: Session) -> List[Dict[str, Any]]:
-    """Assemble each CURRENT insurer's latest figures from ``insurance_series``, grouped by
-    a canonical key so entities fragmented across audited years collapse into one insurer
-    (merging series + official longest name), and filtered to the latest data year so
-    defunct insurers from old years drop out. Only ``entity_type='aseguradora'``."""
+    """Assemble each insurer's latest figures from ``insurance_series``, grouped under the
+    OFFICIAL roster identity (``companias-aseguradoras-y-reaseguradoras``): fragmented
+    entities (audited sheet-name truncation drifts the slug across years) collapse into the
+    authorized company they match, using its official name/slug. Entities that match no
+    authorized company (defunct) drop out. Falls back to a heuristic key + latest-year filter
+    if the roster is unavailable. Only ``entity_type='aseguradora'``."""
+    from shared.data.sis_solvency_client import brand_key
     from modules.insurance_intel.models.models import InsuranceEntity, InsuranceSeries
 
     ents = (db.query(InsuranceEntity)
             .filter(InsuranceEntity.entity_type == "aseguradora").all())
     if not ents:
         return []
-    slug_key = {e.slug: _canonical_key(e.name) for e in ents}
-    key_name: Dict[str, str] = {}
-    key_slug: Dict[str, str] = {}
+    official = _official_index()
+
+    # Map each entity slug → canonical (key, name, slug).
+    canon: Dict[str, tuple] = {}
+    heuristic = not official
     for e in ents:
-        k = slug_key[e.slug]
-        if k not in key_name or len(e.name or "") > len(key_name[k]):
-            key_name[k], key_slug[k] = e.name, e.slug
+        if official:
+            m = _match_official(brand_key(e.name), official)
+            if m:
+                canon[e.slug] = (m[1], m[0], m[1])  # key=slug, official name, official slug
+        else:
+            k = _fallback_key(e.name)
+            canon[e.slug] = (k, e.name, e.slug)
+    if not canon:
+        return []
+    # For the heuristic path, the longest name is the display name per key.
+    if heuristic:
+        best: Dict[str, tuple] = {}
+        for e in ents:
+            k = canon[e.slug][0]
+            if k not in best or len(e.name or "") > len(best[k][1]):
+                best[k] = (k, e.name, e.slug)
+        canon = {e.slug: best[canon[e.slug][0]] for e in ents if e.slug in canon}
 
     rows = (db.query(InsuranceSeries)
-            .filter(InsuranceSeries.entity_slug.in_(list(slug_key)),
+            .filter(InsuranceSeries.entity_slug.in_(list(canon)),
                     InsuranceSeries.value.isnot(None)).all())
     agg: Dict[str, Dict[str, Any]] = {}
     seen: Dict[tuple, str] = {}
     for r in rows:
-        k = slug_key.get(r.entity_slug)
-        if k is None:
+        c = canon.get(r.entity_slug)
+        if c is None:
             continue
-        d = agg.setdefault(k, {"slug": key_slug[k], "name": key_name[k]})
-        sk = (k, r.series_code)
+        key, name, slug = c
+        d = agg.setdefault(key, {"slug": slug, "name": name})
+        sk = (key, r.series_code)
         if sk not in seen or r.period > seen[sk]:
             seen[sk] = r.period
             d[r.series_code] = r.value
             d["period"] = max(d.get("period", ""), r.period)
     if not agg:
         return []
-    # Keep only the CURRENT roster: insurers with data in the latest year present.
-    latest_year = max((str(d.get("period", ""))[:4] for d in agg.values()), default="")
-    return [d for d in agg.values() if str(d.get("period", ""))[:4] == latest_year]
+    if heuristic:  # no roster → drop defunct via latest-year filter
+        latest = max((str(d.get("period", ""))[:4] for d in agg.values()), default="")
+        return [d for d in agg.values() if str(d.get("period", ""))[:4] == latest]
+    return list(agg.values())
 
 
 def compute_isf(db: Session) -> List[Dict[str, Any]]:

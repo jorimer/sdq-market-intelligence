@@ -104,20 +104,25 @@ _SYNTH_CODES = ("patrimonio", "activos_totales", "primas_suscritas", "siniestros
                 "indice_solvencia", "indice_liquidez")
 
 
+# Real authorized-insurer names (must match the official roster fixture so the canonical
+# grouping keeps them). Slugs = slugify_insurer(name) → the canonical slug the ISF returns.
 def _synthetic_financials():
     return [
-        {"slug": "grande", "name": "Grande", "period": "2024", "patrimonio": 8e9,
-         "activos_totales": 33e9, "primas_suscritas": 28e9, "siniestros_pagados": 10e9,
-         "reservas_tecnicas": 12e9, "activos_liquidos": 14e9, "ingresos_totales": 30e9,
-         "gastos_totales": 28e9, "indice_solvencia": 2.5, "indice_liquidez": 3.0},
-        {"slug": "solida", "name": "Sólida", "period": "2024", "patrimonio": 1.3e9,
-         "activos_totales": 1.5e9, "primas_suscritas": 0.7e9, "siniestros_pagados": 0.2e9,
-         "reservas_tecnicas": 0.15e9, "activos_liquidos": 0.4e9, "ingresos_totales": 0.8e9,
-         "gastos_totales": 0.6e9, "indice_solvencia": 3.5, "indice_liquidez": 4.0},
-        {"slug": "debil", "name": "Débil", "period": "2024", "patrimonio": 0.15e9,
-         "activos_totales": 1.7e9, "primas_suscritas": 3.9e9, "siniestros_pagados": 3.1e9,
-         "reservas_tecnicas": 1.0e9, "activos_liquidos": 0.3e9, "ingresos_totales": 4.0e9,
-         "gastos_totales": 4.1e9, "indice_solvencia": 0.6, "indice_liquidez": 0.7},
+        {"slug": "universal", "name": "Seguros Universal, S. A.", "period": "2024",
+         "patrimonio": 8e9, "activos_totales": 33e9, "primas_suscritas": 28e9,
+         "siniestros_pagados": 10e9, "reservas_tecnicas": 12e9, "activos_liquidos": 14e9,
+         "ingresos_totales": 30e9, "gastos_totales": 28e9,
+         "indice_solvencia": 2.5, "indice_liquidez": 3.0},
+        {"slug": "bupa", "name": "Bupa Dominicana, S.A.", "period": "2024",
+         "patrimonio": 1.3e9, "activos_totales": 1.5e9, "primas_suscritas": 0.7e9,
+         "siniestros_pagados": 0.2e9, "reservas_tecnicas": 0.15e9, "activos_liquidos": 0.4e9,
+         "ingresos_totales": 0.8e9, "gastos_totales": 0.6e9,
+         "indice_solvencia": 3.5, "indice_liquidez": 4.0},
+        {"slug": "creciendo", "name": "Creciendo Seguros, S.A.", "period": "2024",
+         "patrimonio": 0.15e9, "activos_totales": 1.7e9, "primas_suscritas": 3.9e9,
+         "siniestros_pagados": 3.1e9, "reservas_tecnicas": 1.0e9, "activos_liquidos": 0.3e9,
+         "ingresos_totales": 4.0e9, "gastos_totales": 4.1e9,
+         "indice_solvencia": 0.6, "indice_liquidez": 0.7},
     ]
 
 
@@ -128,11 +133,11 @@ def test_score_insurers_ranks_and_bands():
     # Full coverage → absolute bands emitted.
     assert all(r["coverage"] == 1.0 and r["band"] for r in res)
     # The high-solvency/low-loss insurer outranks the weak one.
-    assert by["solida"]["overall_score"] > by["debil"]["overall_score"]
-    # Loss ratio is lower-is-better: 'solida' (0.29) beats 'debil' (0.79) on that axis.
+    assert by["bupa"]["overall_score"] > by["creciendo"]["overall_score"]
+    # Loss ratio is lower-is-better: 'bupa' (0.29) beats 'creciendo' (0.79) on that axis.
     def sini(r):
         return next(d["score"] for d in by[r]["dimensions"] if d["key"] == "siniestralidad")
-    assert sini("solida") > sini("debil")
+    assert sini("bupa") > sini("creciendo")
 
 
 def test_named_tier_renders_isf(db):
@@ -152,8 +157,8 @@ def test_named_tier_renders_isf(db):
 
     prod = get_product("insurance", db)
     opts = {o["value"] for o in prod.scope_options()}
-    assert {"grande", "solida", "debil"} <= opts
-    snap = prod.snapshot(ProductTier.insight, "2024", scope="solida")
+    assert len(opts) == 3  # three official companies matched the roster
+    snap = prod.snapshot(ProductTier.insight, "2024", scope=next(iter(opts)))
     assert snap.payload["has_data"] is True
     assert snap.payload["headline_line"].startswith("ISF")
     narr = asyncio.run(prod.narratives(ProductTier.insight, snap))
@@ -269,6 +274,5 @@ def test_solvency_indices_feed_isf(db):
         m.InsuranceSeries.series_code == "indice_solvencia").count()
     assert rows > 0
     # An insurer with only the índices present is scored on solvencia+liquidez (partial cov).
-    isf = {r["slug"]: r for r in compute_isf(db)}
-    bupa = isf.get("bupa")
+    bupa = next((r for r in compute_isf(db) if "Bupa" in r["name"]), None)
     assert bupa and any(d["key"] == "solvencia" and d["present"] for d in bupa["dimensions"])
