@@ -114,3 +114,32 @@ export async function getInsuranceEntityInsight(
 export function pulseHasData(p: InsurancePulse): boolean {
   return p.has_data && (p.total_premiums_rd ?? 0) > 0;
 }
+
+/** One ARS row in the ISARS ranking (health-risk-manager solidity, 0-100). */
+export interface ArsRankRow {
+  rank: number | null;
+  slug: string;
+  name: string;
+  category: number | string | null; // 1=Autogestionada, 2=Pública, 3=Privada
+  overall_score: number | null;
+  band: string | null;
+  coverage: number | null;
+  period: string | null;
+}
+
+export async function getArsRankings(): Promise<{
+  rankings: ArsRankRow[];
+  count: number;
+  scale: string;
+  note: string | null;
+  caveat: string;
+}> {
+  const { data } = await client.get("/insurance-intel/ars/rankings");
+  return data;
+}
+
+export const ARS_CATEGORY_LABELS: Record<string, string> = {
+  "1": "Autogestionada",
+  "2": "Pública",
+  "3": "Privada",
+};

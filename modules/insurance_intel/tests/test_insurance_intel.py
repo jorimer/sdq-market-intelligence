@@ -216,3 +216,34 @@ def test_validation_state_reads_backtest(db):
     vs = get_product("insurance", db).validation_state()
     # 0.60 + 0.30*0.30 = 0.69
     assert vs.approved and vs.score == 0.69 and "Gini 0.3" in vs.notes
+
+
+# ── ARS rating (ISARS) ────────────────────────────────────────────
+def test_score_ars_ranks_and_bands():
+    from modules.insurance_intel.scoring.ars_rating import score_ars
+    fins = [
+        {"slug": "ars_a", "name": "A", "period": "2026-04", "category": 3,
+         "ars.margen_inversiones": 3.0e9, "ars.margen_requerido": 1.0e9,
+         "ars.ingreso_salud": 2.0e9, "ars.gasto_salud": 1.0e9, "ars.beneficio_neto": 0.5e9},
+        {"slug": "ars_b", "name": "B", "period": "2026-04", "category": 2,
+         "ars.margen_inversiones": 0.7e9, "ars.margen_requerido": 1.0e9,
+         "ars.ingreso_salud": 2.0e9, "ars.gasto_salud": 2.6e9, "ars.beneficio_neto": -0.6e9},
+    ]
+    res = score_ars(fins)
+    by = {r["slug"]: r for r in res}
+    assert all(r["coverage"] == 1.0 and r["band"] for r in res)
+    # Strong ARS (margin 3.0, LR 50%, +margin) outranks the weak one (margin 0.7, LR 130%).
+    assert by["ars_a"]["overall_score"] > by["ars_b"]["overall_score"]
+    assert res[0]["slug"] == "ars_a"
+
+
+def test_ars_sync_and_rankings(db):
+    from modules.insurance_intel.ars_sync import ars_sync
+    from modules.insurance_intel.scoring.ars_rating import compute_ars
+    res = ars_sync(db, mode="fixture")
+    assert res["ars"] > 5 and res["ratings_written"] > 0
+    scored = [r for r in compute_ars(db) if r["overall_score"] is not None]
+    assert scored and all(r["slug"].startswith("ars_") for r in scored)
+    # Entities carry the ARS entity_type.
+    ars_ents = db.query(m.InsuranceEntity).filter(m.InsuranceEntity.entity_type == "ars").count()
+    assert ars_ents == res["ars"]

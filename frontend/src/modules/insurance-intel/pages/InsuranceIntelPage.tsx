@@ -19,10 +19,13 @@ import {
   getInsurancePulse,
   getInsuranceInsight,
   getInsuranceRankings,
+  getArsRankings,
   pulseHasData,
   INSURANCE_AUDIENCES,
+  ARS_CATEGORY_LABELS,
   InsurancePulse,
   InsuranceRankRow,
+  ArsRankRow,
 } from "../api";
 
 type Status = "loading" | "error" | "ready";
@@ -196,21 +199,76 @@ function IsfTab({ rows, note }: { rows: InsuranceRankRow[]; note: string | null 
   );
 }
 
+function ArsTab({ rows, note, caveat }: { rows: ArsRankRow[]; note: string | null; caveat: string }) {
+  const { t } = useTranslation();
+  if (!rows.length) {
+    return (
+      <StateBlock
+        kind="empty"
+        title={t("insurance.arsEmptyTitle", "ISARS pendiente")}
+        message={note ?? t("insurance.arsEmpty", "La sincronización de ARS (BDFINAC) no se ha ejecutado.")}
+      />
+    );
+  }
+  return (
+    <Card>
+      <CardHead
+        title={t("insurance.arsTitle", "Índice de Solidez de ARS (ISARS)")}
+        subtitle={t("insurance.arsSub", "Administradoras de Riesgos de Salud · SISALRIL (BDFINAC)")}
+      />
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-muted border-b border-line">
+              <th className="py-2 pr-3 font-medium">#</th>
+              <th className="py-2 pr-3 font-medium">{t("insurance.ars", "ARS")}</th>
+              <th className="py-2 pr-3 font-medium">{t("insurance.category", "Categoría")}</th>
+              <th className="py-2 pr-3 font-medium text-right">ISARS</th>
+              <th className="py-2 pr-3 font-medium">{t("insurance.band", "Banda")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.slug} className="border-b border-line/60">
+                <td className="py-2 pr-3 mono tabular-nums text-muted">{r.rank}</td>
+                <td className="py-2 pr-3 text-ink">{r.name}</td>
+                <td className="py-2 pr-3 text-body">{ARS_CATEGORY_LABELS[String(r.category)] ?? "—"}</td>
+                <td className="py-2 pr-3 text-right mono tabular-nums font-semibold text-ink">
+                  {fmtNum(r.overall_score, 1)}
+                </td>
+                <td className="py-2 pr-3"><Chip tone={bandTone(r.band)}>{r.band ?? "—"}</Chip></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted mt-3">{caveat}</p>
+    </Card>
+  );
+}
+
 export function InsuranceIntelPage() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("loading");
   const [tab, setTab] = useState<string>("mercado");
   const [pulse, setPulse] = useState<InsurancePulse | null>(null);
   const [rankings, setRankings] = useState<{ rows: InsuranceRankRow[]; note: string | null }>({ rows: [], note: null });
+  const [ars, setArs] = useState<{ rows: ArsRankRow[]; note: string | null; caveat: string }>({ rows: [], note: null, caveat: "" });
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const [p, r] = await Promise.all([getInsurancePulse(), getInsuranceRankings()]);
+        const [p, r, a] = await Promise.all([
+          getInsurancePulse(),
+          getInsuranceRankings(),
+          // ARS is a newer surface; tolerate its absence so the page still renders.
+          getArsRankings().catch(() => ({ rankings: [], note: null, caveat: "" })),
+        ]);
         if (!alive) return;
         setPulse(p);
         setRankings({ rows: r.rankings, note: r.note });
+        setArs({ rows: a.rankings, note: a.note, caveat: a.caveat });
         setStatus("ready");
       } catch {
         if (alive) setStatus("error");
@@ -238,6 +296,7 @@ export function InsuranceIntelPage() {
               tabs={[
                 { id: "mercado", label: t("insurance.tabMarket", "Mercado") },
                 { id: "solidez", label: t("insurance.tabIsf", "Solidez (ISF)") },
+                { id: "ars", label: t("insurance.tabArs", "ARS (salud)") },
               ]}
               active={tab}
               onChange={setTab}
@@ -249,6 +308,7 @@ export function InsuranceIntelPage() {
               : <StateBlock kind="empty" message={t("insurance.emptyMsg", "Aún no hay dato de mercado ingerido. Ejecute la sincronización de seguros.")} />
           )}
           {tab === "solidez" && <IsfTab rows={rankings.rows} note={rankings.note} />}
+          {tab === "ars" && <ArsTab rows={ars.rows} note={ars.note} caveat={ars.caveat} />}
         </>
       )}
     </div>
