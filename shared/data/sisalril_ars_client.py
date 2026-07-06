@@ -32,10 +32,13 @@ logger = logging.getLogger("sdq.data.sisalril_ars")
 _DL = "https://redatam.sisalril.gob.do/api/bases-de-datos/download"
 _UA = "Mozilla/5.0 (SDQMIP research; +https://sdqconsulting.com.do)"
 
-# TIPO (account) → series code, and the PLAN_NO the figure is read from.
+# TIPO (account) → series code, and the PLAN_NO the figure is read from. These accounts
+# reproduce SISALRIL's official regulatory indicators (validated: margen 6/7 == portal
+# indicator 405 exactly): 405 = 6/7, 401 = 13/12, 409 ROE = 11/10.
 _ACCOUNTS: Dict[int, Tuple[str, int]] = {
     6: ("ars.margen_inversiones", 0),
     7: ("ars.margen_requerido", 0),
+    10: ("ars.patrimonio", 0),
     11: ("ars.beneficio_neto", 1),
     12: ("ars.ingreso_salud", 1),
     13: ("ars.gasto_salud", 1),

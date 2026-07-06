@@ -1,29 +1,34 @@
 """Índice de Solidez de ARS (ISARS) — health-risk-manager solidity index.
 
-A 0-100 band index over the WELL-DEFINED regulatory metrics that SISALRIL publishes per
-ARS (base BDFINAC), NOT a credit rating. Three dimensions (hybrid absolute band + peer
-min-max, like the insurer ISF):
+A 0-100 band index over the OFFICIAL regulatory indicators that SISALRIL publishes per ARS
+(Portal Estadístico, "Indicadores de Desempeño Financiero"), computed from the BDFINAC
+accounts. NOT a credit rating. Three dimensions (hybrid absolute band + peer min-max):
 
-    margen_solvencia   0.50  inversiones que avalan / margen requerido  higher=better (≥1 = cumple)
-    siniestralidad     0.30  gasto salud / ingreso salud (loss ratio)   lower ratio=better
-    resultado          0.20  beneficio neto / ingreso salud             higher=better
+    margen_solvencia   0.50  ind. 405 = inversiones que avalan (6) / margen requerido (7)  ≥1 = cumple
+    siniestralidad     0.30  ind. 401 = gasto salud (13) / ingreso salud (12)              lower = better
+    rentabilidad       0.20  ind. 409 (ROE) = beneficio neto (11) / patrimonio (10)        higher = better
 
-Honesty directed by data: patrimonial solvency (patrimonio/activos) is a DECLARED GAP —
-the BDFINAC trial-balance schema mixes stock/flow per plan and isn't fully documented, so
-it's excluded rather than misread. ``coverage`` is over the declared 3-dimension model.
+Validated: the computed margen (6/7) matches SISALRIL's published indicator 405 EXACTLY,
+confirming the account + plan handling. The other official indicators ROA (408), capital
+mínimo (403/404) and endeudamiento (406/407) are DECLARED GAPS — their BDFINAC accounts
+(activo, capital mínimo) show inconsistent magnitudes for some ARS, so they are excluded
+rather than misread. ``coverage`` is over the declared 3-dimension model.
 """
 import math
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+# Dimensiones = indicadores REGULATORIOS OFICIALES de SISALRIL (Portal Estadístico,
+# Indicadores de Desempeño Financiero), computados de las cuentas del BDFINAC. Validado:
+# el margen (6/7) coincide EXACTAMENTE con el indicador 405 del portal.
 DIMENSIONS = [
-    {"key": "margen_solvencia", "label": "Margen de solvencia (avala/requerido)", "weight": 0.50,
-     "direction": "higher", "lo": 0.8, "hi": 3.0, "log": False},
-    {"key": "siniestralidad", "label": "Siniestralidad médica (gasto/ingreso salud)", "weight": 0.30,
-     "direction": "lower", "lo": 1.0, "hi": 0.6, "log": False},
-    {"key": "resultado", "label": "Resultado técnico (beneficio/ingreso salud)", "weight": 0.20,
-     "direction": "higher", "lo": -0.10, "hi": 0.15, "log": False},
+    {"key": "margen_solvencia", "label": "Margen de solvencia requerido (SISALRIL ind. 405)",
+     "weight": 0.50, "direction": "higher", "lo": 0.8, "hi": 3.0, "log": False},
+    {"key": "siniestralidad", "label": "Índice de siniestralidad (SISALRIL ind. 401)",
+     "weight": 0.30, "direction": "lower", "lo": 1.0, "hi": 0.6, "log": False},
+    {"key": "rentabilidad", "label": "Rentabilidad patrimonial ROE (SISALRIL ind. 409)",
+     "weight": 0.20, "direction": "higher", "lo": -0.05, "hi": 0.15, "log": False},
 ]
 _WABS = 0.5
 _MIN_COVERAGE = 0.50
@@ -59,17 +64,18 @@ def _minmax(raw: float, peers: List[float], direction: str) -> Optional[float]:
     return max(0.0, min(1.0, frac)) * 100
 
 
+def _ratio(num: Optional[float], den: Optional[float]) -> Optional[float]:
+    return (num / den) if (num is not None and den) else None
+
+
 def _raw_metric(fin: Dict[str, Any], key: str) -> Optional[float]:
     g = fin.get
     if key == "margen_solvencia":
-        req = g("ars.margen_requerido")
-        return (g("ars.margen_inversiones") / req) if req else None
+        return _ratio(g("ars.margen_inversiones"), g("ars.margen_requerido"))
     if key == "siniestralidad":
-        ing = g("ars.ingreso_salud")
-        return (g("ars.gasto_salud") / ing) if ing else None
-    if key == "resultado":
-        ing = g("ars.ingreso_salud")
-        return (g("ars.beneficio_neto") / ing) if ing else None
+        return _ratio(g("ars.gasto_salud"), g("ars.ingreso_salud"))
+    if key == "rentabilidad":  # ROE = beneficio neto / patrimonio (ind. 409)
+        return _ratio(g("ars.beneficio_neto"), g("ars.patrimonio"))
     return None
 
 
