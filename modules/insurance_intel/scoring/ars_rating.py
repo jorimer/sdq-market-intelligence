@@ -2,17 +2,18 @@
 
 A 0-100 band index over the OFFICIAL regulatory indicators that SISALRIL publishes per ARS
 (Portal Estadístico, "Indicadores de Desempeño Financiero"), computed from the BDFINAC
-accounts. NOT a credit rating. Three dimensions (hybrid absolute band + peer min-max):
+accounts. NOT a credit rating. Four dimensions (hybrid absolute band + peer min-max):
 
-    margen_solvencia   0.50  ind. 405 = inversiones que avalan (6) / margen requerido (7)  ≥1 = cumple
-    siniestralidad     0.30  ind. 401 = gasto salud (13) / ingreso salud (12)              lower = better
-    rentabilidad       0.20  ind. 409 (ROE) = beneficio neto (11) / patrimonio (10)        higher = better
+    margen_solvencia       0.35  ind. 405 = inversiones que avalan (6) / margen requerido (7)  ≥1=cumple
+    siniestralidad         0.25  ind. 401 = gasto salud (13) / ingreso salud (12)              lower=better
+    solvencia_patrimonial  0.20  patrimonio (10) / activo total (15)                            higher=better
+    rentabilidad           0.20  ind. 408 (ROA) = beneficio neto (11) / activo total (15)       higher=better
 
-Validated: the computed margen (6/7) matches SISALRIL's published indicator 405 EXACTLY,
-confirming the account + plan handling. The other official indicators ROA (408), capital
-mínimo (403/404) and endeudamiento (406/407) are DECLARED GAPS — their BDFINAC accounts
-(activo, capital mínimo) show inconsistent magnitudes for some ARS, so they are excluded
-rather than misread. ``coverage`` is over the declared 3-dimension model.
+VALIDATED EXACTLY against SISALRIL's published indicators: margen (6/7) == ind. 405, and
+ROA (11/15) == ind. 408 for all 17 ARS. Key finding: the real total asset is TIPO 15 (the
+documented ``9`` is a partial line); this unlocked ROA and the patrimonial solvency
+(patrimonio/activo) that were previously declared gaps. Capital mínimo (403/404) remains a
+declared gap (its accounts are inconsistent for some public/self-managed ARS).
 """
 import math
 from typing import Any, Dict, List, Optional
@@ -24,11 +25,13 @@ from sqlalchemy.orm import Session
 # el margen (6/7) coincide EXACTAMENTE con el indicador 405 del portal.
 DIMENSIONS = [
     {"key": "margen_solvencia", "label": "Margen de solvencia requerido (SISALRIL ind. 405)",
-     "weight": 0.50, "direction": "higher", "lo": 0.8, "hi": 3.0, "log": False},
+     "weight": 0.35, "direction": "higher", "lo": 0.8, "hi": 3.0, "log": False},
     {"key": "siniestralidad", "label": "Índice de siniestralidad (SISALRIL ind. 401)",
-     "weight": 0.30, "direction": "lower", "lo": 1.0, "hi": 0.6, "log": False},
-    {"key": "rentabilidad", "label": "Rentabilidad patrimonial ROE (SISALRIL ind. 409)",
-     "weight": 0.20, "direction": "higher", "lo": -0.05, "hi": 0.15, "log": False},
+     "weight": 0.25, "direction": "lower", "lo": 1.0, "hi": 0.6, "log": False},
+    {"key": "solvencia_patrimonial", "label": "Solvencia patrimonial (patrimonio/activo)",
+     "weight": 0.20, "direction": "higher", "lo": 0.10, "hi": 0.60, "log": False},
+    {"key": "rentabilidad", "label": "Rentabilidad sobre activos ROA (SISALRIL ind. 408)",
+     "weight": 0.20, "direction": "higher", "lo": -0.01, "hi": 0.06, "log": False},
 ]
 _WABS = 0.5
 _MIN_COVERAGE = 0.50
@@ -74,8 +77,10 @@ def _raw_metric(fin: Dict[str, Any], key: str) -> Optional[float]:
         return _ratio(g("ars.margen_inversiones"), g("ars.margen_requerido"))
     if key == "siniestralidad":
         return _ratio(g("ars.gasto_salud"), g("ars.ingreso_salud"))
-    if key == "rentabilidad":  # ROE = beneficio neto / patrimonio (ind. 409)
-        return _ratio(g("ars.beneficio_neto"), g("ars.patrimonio"))
+    if key == "solvencia_patrimonial":  # patrimonio / activo total (TIPO 10/15)
+        return _ratio(g("ars.patrimonio"), g("ars.activo_total"))
+    if key == "rentabilidad":  # ROA = beneficio neto / activo total (ind. 408; 11/15)
+        return _ratio(g("ars.beneficio_neto"), g("ars.activo_total"))
     return None
 
 

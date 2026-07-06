@@ -39,9 +39,11 @@ _ACCOUNTS: Dict[int, Tuple[str, int]] = {
     6: ("ars.margen_inversiones", 0),
     7: ("ars.margen_requerido", 0),
     10: ("ars.patrimonio", 0),
-    11: ("ars.beneficio_neto", 1),
+    11: ("ars.beneficio_neto", 0),   # resultado acumulado (para ROA/ROE oficiales)
     12: ("ars.ingreso_salud", 1),
     13: ("ars.gasto_salud", 1),
+    15: ("ars.activo_total", 0),     # activo total real (TIPO 15; el 9 es parcial). Validado
+                                     # con el ROA oficial 408 = beneficio(11)/activo(15).
 }
 ARS_CAT_LABELS = {1: "Autogestionada", 2: "Pública", 3: "Privada"}
 

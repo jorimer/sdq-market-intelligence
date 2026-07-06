@@ -232,10 +232,12 @@ def test_score_ars_ranks_and_bands():
     fins = [
         {"slug": "ars_a", "name": "A", "period": "2026-04", "category": 3,
          "ars.margen_inversiones": 3.0e9, "ars.margen_requerido": 1.0e9, "ars.patrimonio": 5.0e9,
-         "ars.ingreso_salud": 2.0e9, "ars.gasto_salud": 1.0e9, "ars.beneficio_neto": 0.5e9},
+         "ars.activo_total": 10.0e9, "ars.ingreso_salud": 2.0e9, "ars.gasto_salud": 1.0e9,
+         "ars.beneficio_neto": 0.5e9},
         {"slug": "ars_b", "name": "B", "period": "2026-04", "category": 2,
-         "ars.margen_inversiones": 0.7e9, "ars.margen_requerido": 1.0e9, "ars.patrimonio": 5.0e9,
-         "ars.ingreso_salud": 2.0e9, "ars.gasto_salud": 2.6e9, "ars.beneficio_neto": -0.6e9},
+         "ars.margen_inversiones": 0.7e9, "ars.margen_requerido": 1.0e9, "ars.patrimonio": 1.0e9,
+         "ars.activo_total": 12.0e9, "ars.ingreso_salud": 2.0e9, "ars.gasto_salud": 2.6e9,
+         "ars.beneficio_neto": -0.6e9},
     ]
     res = score_ars(fins)
     by = {r["slug"]: r for r in res}
