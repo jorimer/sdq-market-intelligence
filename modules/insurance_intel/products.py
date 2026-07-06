@@ -151,6 +151,22 @@ def _isf_results(db: Session) -> List[Dict[str, Any]]:
         return []
 
 
+def _insurance_backtest(db: Session) -> Optional[Dict[str, Any]]:
+    """Reporte de backtest persistido (op ``insurance-backtest``), o None. SAVEPOINT +
+    best-effort: nunca tumba el estado de validación si falta o la tabla no existe."""
+    import json
+
+    from shared.settings.models import AppSetting
+    try:
+        with db.begin_nested():
+            row = (db.query(AppSetting)
+                   .filter(AppSetting.key == "insurance_backtest_report").first())
+        return json.loads(row.value) if row and row.value else None
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Backtest de seguros no leído (uso doctrina): %s", e)
+        return None
+
+
 def _mix_table(pulse: Dict[str, Any]) -> Optional[tuple]:
     mix = pulse.get("mix") or []
     if not mix:
@@ -295,17 +311,31 @@ class InsuranceProduct:
         return distinct_periods(self._require_db(), InsuranceSnapshot.period)
 
     def validation_state(self) -> ValidationState:
+        # G5 DIRIGIDO POR DATO: si hay backtest persistido con Gini concluyente, sube de 0.60;
+        # si no, se mantiene modesto y se declara. Sin hardcode.
         db = self._require_db()
         isf = _isf_results(db)
         n_scored = sum(1 for r in isf if r.get("overall_score") is not None)
-        if n_scored:
-            note = ("ISF = índice de solidez de aseguradora con estados financieros incorporados. "
-                    "Validación retrospectiva pendiente de backtest (paridad con pensiones).")
-            return ValidationState(approved=True, score=0.6, notes=note)
-        note = ("Pulso de mercado descriptivo sobre dato real de SIS (primas por ramo). El ISF por "
-                "aseguradora y su validación retrospectiva llegan con los estados financieros "
-                "auditados (F1b). Se declara la brecha; no se fabrica rating.")
-        return ValidationState(approved=True, score=0.5, notes=note)
+        if not n_scored:
+            note = ("Pulso de mercado descriptivo sobre dato real de SIS (primas por ramo). El ISF "
+                    "por aseguradora y su validación retrospectiva llegan con los estados "
+                    "financieros auditados. Se declara la brecha; no se fabrica rating.")
+            return ValidationState(approved=True, score=0.5, notes=note)
+        bt = _insurance_backtest(db)
+        if bt and bt.get("headline_gini") is not None:
+            g = bt["headline_gini"]
+            sig = bt.get("headline_signal")
+            ci = ((bt.get("signals") or {}).get(sig) or {}).get("gini_ci") or [None, None]
+            n = ((bt.get("signals") or {}).get(sig) or {}).get("n_obs")
+            score = round(min(0.80, 0.60 + max(0.0, g) * 0.3), 2)
+            note = (f"ISF = índice de solidez con estados financieros auditados incorporados. "
+                    f"Backtest de resultado-proxy (subdesempeño técnico relativo): Gini {g} "
+                    f"(IC {ci[0]}–{ci[1]}, N={n}) en la señal '{sig}'. Concluyente; el N mayor del "
+                    f"mercado asegurador estrecha el IC frente a otros ejes.")
+            return ValidationState(approved=True, score=score, notes=note)
+        note = ("ISF = índice de solidez con estados financieros auditados incorporados. Backtest "
+                "de validación pendiente o no concluyente con el histórico disponible (se declara).")
+        return ValidationState(approved=True, score=0.6, notes=note)
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,

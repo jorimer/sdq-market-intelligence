@@ -192,3 +192,46 @@ async def trigger_health_sync(
 ):
     from modules.insurance_intel.sisalril_sync import sisalril_sfs_sync
     return sisalril_sfs_sync(db, mode="live")
+
+
+@router.post("/financials/history/sync")
+async def trigger_financials_history(
+    since_year: int = Query(2018),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    from modules.insurance_intel.financials_sync import sis_financials_history_sync
+    return sis_financials_history_sync(db, since_year=since_year)
+
+
+@router.post("/backtest")
+async def trigger_backtest(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    import json
+
+    from modules.insurance_intel.validation.backtest import build_backtest_report
+    from shared.settings.models import AppSetting
+    rep = build_backtest_report(db)
+    row = db.query(AppSetting).filter(AppSetting.key == "insurance_backtest_report").first()
+    payload = json.dumps(rep, ensure_ascii=False)
+    if row:
+        row.value, row.is_secret = payload, False
+    else:
+        db.add(AppSetting(key="insurance_backtest_report", value=payload, is_secret=False))
+    db.commit()
+    return rep
+
+
+@router.get("/validation")
+async def validation(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The persisted ISF backtest report (Gini + CI per signal), or None."""
+    import json
+
+    from shared.settings.models import AppSetting
+    row = db.query(AppSetting).filter(AppSetting.key == "insurance_backtest_report").first()
+    return {"backtest": json.loads(row.value) if row and row.value else None}

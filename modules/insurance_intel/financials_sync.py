@@ -9,7 +9,7 @@ best-effort per sheet. Runs from Railway (static egress + browser UA).
 import logging
 import re
 from datetime import date
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -126,3 +126,44 @@ def sis_financials_sync(db: Session, set_phase: Optional[Callable[[str], None]] 
     r = requests.get(url, headers={"User-Agent": _UA}, timeout=90)
     r.raise_for_status()
     return ingest_audited(db, r.content, target, set_phase=set_phase)
+
+
+def sis_financials_history_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None,
+                                since_year: int = 2018) -> Dict:
+    """Ingest the HISTORY of audited statements (``since_year``..latest) → per-entity series
+    with a multi-year trajectory, recomputing the ISF once at the end. Feeds the ISF backtest
+    (G5). Best-effort per year; idempotent. Defaults to 2018 (the .xlsx era, stable layout)."""
+    import requests
+
+    set_phase = set_phase or (lambda _m: None)
+    set_phase("Descubriendo estados auditados (SIS)")
+    urls = discover_audited_urls()
+    years = sorted(y for y in urls if y.isdigit() and int(y) >= since_year)
+    if not years:
+        return {"years": [], "note": f"sin auditados desde {since_year}"}
+
+    lineage = Lineage(source=_SOURCE, license=_LICENSE, fetched_at=date.today())
+    total_rows = created = 0
+    ingested: List[str] = []
+    for y in years:
+        set_phase(f"Auditados {y}")
+        try:
+            r = requests.get(urls[y], headers={"User-Agent": _UA}, timeout=90)
+            r.raise_for_status()
+            fins = [f for f in extract_audited_workbook(r.content, y) if f.reconciled]
+        except Exception as e:  # noqa: BLE001 — un año que falle no tumba la historia
+            logger.warning("[SIS] auditados %s no ingeridos: %s", y, e)
+            continue
+        if not fins:
+            continue
+        created += _seed_entities(db, fins)
+        total_rows += _persist_entity_series(db, fins, y, lineage)
+        ingested.append(y)
+        db.flush()
+
+    set_phase("Recalculando ISF (última corrida)")
+    from modules.insurance_intel.scoring.batch import score_and_persist
+    ratings = score_and_persist(db)
+    db.commit()
+    return {"years": ingested, "entities_created": created, "series_rows": total_rows,
+            "ratings_written": ratings["ratings_written"]}
