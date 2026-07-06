@@ -180,7 +180,7 @@ function IsfTab({ rows, note }: { rows: InsuranceRankRow[]; note: string | null 
             {rows.map((r) => (
               <tr key={r.slug} className="border-b border-line/60">
                 <td className="py-2 pr-3 mono tabular-nums text-muted">{r.rank}</td>
-                <td className="py-2 pr-3 text-ink truncate max-w-[16rem]">{r.slug.replace(/_/g, " ")}</td>
+                <td className="py-2 pr-3 text-ink truncate max-w-[16rem]">{r.name ?? r.slug.replace(/_/g, " ")}</td>
                 <td className="py-2 pr-3 text-right mono tabular-nums font-semibold text-ink">
                   {fmtNum(r.overall_score, 1)}
                 </td>
