@@ -139,20 +139,31 @@ def score_insurers(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def _load_financials(db: Session) -> List[Dict[str, Any]]:
-    """Assemble each insurer's latest figures from ``insurance_series``, grouped by a
-    canonical BRAND KEY so entities fragmented across audited years (Excel sheet-name
-    truncation drifts the slug) collapse into ONE insurer, merging their series and the
-    official (longest) name. Only ``entity_type='aseguradora'`` (ARS have their own rating)."""
+def _canonical_key(name: str) -> str:
+    """Stable insurer key robust to the audited sheet-name truncation (31-char Excel cap
+    cuts the tail at varying points). Uses the first two BRAND tokens (the head is stable);
+    falls back to a lighter slug when the brand words are all generic (e.g. 'Dominicana
+    Compañía de Seguros', where 'Dominicana' IS the brand)."""
     from shared.data.sis_solvency_client import brand_key
+    from modules.insurance_intel.external.audited_excel_extractor import slugify_insurer
+    bk = brand_key(name)
+    if bk:
+        return "_".join(bk.split("_")[:2])
+    return slugify_insurer(name) or "sin_nombre"
+
+
+def _load_financials(db: Session) -> List[Dict[str, Any]]:
+    """Assemble each CURRENT insurer's latest figures from ``insurance_series``, grouped by
+    a canonical key so entities fragmented across audited years collapse into one insurer
+    (merging series + official longest name), and filtered to the latest data year so
+    defunct insurers from old years drop out. Only ``entity_type='aseguradora'``."""
     from modules.insurance_intel.models.models import InsuranceEntity, InsuranceSeries
 
     ents = (db.query(InsuranceEntity)
             .filter(InsuranceEntity.entity_type == "aseguradora").all())
     if not ents:
         return []
-    slug_key = {e.slug: brand_key(e.name) for e in ents}
-    # Canonical representative per brand key: the longest (official/untruncated) name.
+    slug_key = {e.slug: _canonical_key(e.name) for e in ents}
     key_name: Dict[str, str] = {}
     key_slug: Dict[str, str] = {}
     for e in ents:
@@ -175,7 +186,11 @@ def _load_financials(db: Session) -> List[Dict[str, Any]]:
             seen[sk] = r.period
             d[r.series_code] = r.value
             d["period"] = max(d.get("period", ""), r.period)
-    return list(agg.values())
+    if not agg:
+        return []
+    # Keep only the CURRENT roster: insurers with data in the latest year present.
+    latest_year = max((str(d.get("period", ""))[:4] for d in agg.values()), default="")
+    return [d for d in agg.values() if str(d.get("period", ""))[:4] == latest_year]
 
 
 def compute_isf(db: Session) -> List[Dict[str, Any]]:
