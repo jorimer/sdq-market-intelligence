@@ -45,6 +45,16 @@ def _run_financials_history_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_ars_sync(params, user_id, set_phase) -> Dict:
+    from modules.insurance_intel.ars_sync import ars_sync
+    db = SessionLocal()
+    try:
+        mode = (params or {}).get("mode") or "live"
+        return ars_sync(db, set_phase=set_phase, mode=mode)
+    finally:
+        db.close()
+
+
 def _run_backtest(params, user_id, set_phase) -> Dict:
     import json
 
@@ -99,6 +109,17 @@ def register() -> None:
         "solidez de las ARS es una vía aparte diferida (financieros tras el portal REDATAM). "
         "Dato público real. Mensual.",
         _run_sisalril_sync, default_interval_hours=720,  # mensual
+    ))
+    register_operation(Operation(
+        "ars-sync", "Sincronizar solidez de ARS (SISALRIL · BDFINAC)",
+        "Ingiere los estados financieros regulatorios de las Administradoras de Riesgos de "
+        "Salud (ARS) desde el Portal Estadístico de SISALRIL (base BDFINAC, endpoint REST de "
+        "descarga): margen de solvencia (inversiones que avalan / requerido), ingreso y gasto "
+        "en salud y beneficio neto por ARS. Siembra el roster, persiste las series y calcula el "
+        "Índice de Solidez de ARS (ISARS): margen de solvencia, siniestralidad médica y "
+        "resultado técnico. La solvencia patrimonial es brecha declarada (esquema no documentado "
+        "del todo). Descarga live con respaldo al fixture citado. Dato público real. Mensual.",
+        _run_ars_sync, default_interval_hours=720,  # mensual
     ))
     register_operation(Operation(
         "insurance-financials-history-sync", "Ingerir historia de estados AUDITADOS (SIS)",

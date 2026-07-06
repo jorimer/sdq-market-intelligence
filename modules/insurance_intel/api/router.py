@@ -167,6 +167,44 @@ async def entity_insight(
     return {"slug": slug, "audience": aud, "ai_insight": ai, "has_data": True}
 
 
+@router.get("/ars/rankings")
+async def ars_rankings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """ARS (health-risk managers) ranked by ISARS. Empty until the ARS sync runs."""
+    from modules.insurance_intel.models.models import InsuranceEntity
+    from modules.insurance_intel.scoring.ars_rating import compute_ars
+    results = compute_ars(db)
+    names = {e.slug: e.name for e in db.query(InsuranceEntity)
+             .filter(InsuranceEntity.entity_type == "ars").all()}
+    ranked = [
+        {"rank": i + 1, "slug": r["slug"], "name": names.get(r["slug"], r["slug"]),
+         "category": r.get("category"), "overall_score": r["overall_score"],
+         "band": r["band"], "coverage": r["coverage"], "period": r["period"]}
+        for i, r in enumerate(results) if r["overall_score"] is not None
+    ]
+    return {"rankings": ranked, "count": len(ranked),
+            "scale": "ISARS 0-100 (Sólida/Adecuada/En vigilancia/Frágil)",
+            "note": None if ranked else "ISARS pendiente: sincronización de ARS (BDFINAC) no ejecutada.",
+            "caveat": ("Índice sobre métricas regulatorias de SISALRIL (margen de solvencia, "
+                       "siniestralidad médica, resultado). La solvencia patrimonial es una brecha "
+                       "declarada — el esquema BDFINAC no la documenta del todo.")}
+
+
+@router.get("/ars/{ars_slug}/detail")
+async def ars_detail(
+    ars_slug: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from modules.insurance_intel.scoring.ars_rating import compute_ars
+    r = next((x for x in compute_ars(db) if x["slug"] == ars_slug), None)
+    if not r or r["overall_score"] is None:
+        return {"found": False, "slug": ars_slug}
+    return {"found": True, **r}
+
+
 @router.post("/sync")
 async def trigger_sync(
     db: Session = Depends(get_db),
@@ -174,6 +212,15 @@ async def trigger_sync(
 ):
     from modules.insurance_intel.sis_sync import sis_insurance_sync
     return sis_insurance_sync(db, mode="live")
+
+
+@router.post("/ars/sync")
+async def trigger_ars_sync(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    from modules.insurance_intel.ars_sync import ars_sync
+    return ars_sync(db, mode="live")
 
 
 @router.post("/financials/sync")
