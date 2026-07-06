@@ -1,0 +1,176 @@
+{
+ "_meta": {
+  "source": "SIS",
+  "citation": "SIS — Superintendencia de Seguros. Índices de Solvencia y Liquidez (Auditado), Ley 146-02 Cap. XII, Art. 164.",
+  "license": "público",
+  "note": "Índice de solvencia = Patrimonio Técnico Ajustado / Margen de Solvencia Mínima Requerida (≥1 cumple). Índice de liquidez = Disponibilidad Libre de Gravamen / Liquidez Mínima Requerida (≥1 cumple)."
+ },
+ "period": "2024",
+ "entities": {
+  "angloamericana": {
+   "name": "Angloamericana de Seguros, S. A.",
+   "indice_solvencia": 2.6430697385142534,
+   "indice_liquidez": 1.7690450348968456
+  },
+  "aseguradora_agropecuaria_dominicana": {
+   "name": "Aseguradora Agropecuaria Dominicana, S. A.",
+   "indice_solvencia": 3.220390927556961,
+   "indice_liquidez": 0.8888927446891491
+  },
+  "atlantica": {
+   "name": "Atlántica Seguros, S. A.",
+   "indice_solvencia": 0.9746028092679786,
+   "indice_liquidez": 1.7280067347872652
+  },
+  "bmi": {
+   "name": "BMI Compañía de Seguros, S. A.",
+   "indice_solvencia": 1.1264588080061488,
+   "indice_liquidez": 6.504395470283866
+  },
+  "bupa_dominicana": {
+   "name": "Bupa Dominicana, S. A.",
+   "indice_solvencia": 5.165720585279301,
+   "indice_liquidez": 39.71159743931117
+  },
+  "cooperativa_nacional_inc": {
+   "name": "Cooperativa Nacional de Seguros, INC.",
+   "indice_solvencia": 4.307211620536636,
+   "indice_liquidez": 3.205753751861205
+  },
+  "creciendo": {
+   "name": "Creciendo Seguros, S. A.",
+   "indice_solvencia": 0.24932457851075396,
+   "indice_liquidez": 0.5930325129663667
+  },
+  "cuna_mutual_insurance_society_dominicana_trustage": {
+   "name": "Cuna Mutual Insurance Society Dominicana, S. A. (TRUSTAGE)",
+   "indice_solvencia": 13.47378900805238,
+   "indice_liquidez": 79.9343495703731
+  },
+  "dominicana": {
+   "name": "Dominicana Compañía de Seguros, S. A.",
+   "indice_solvencia": 1.0098302634506995,
+   "indice_liquidez": 2.0344691083786097
+  },
+  "futuro": {
+   "name": "Futuro Seguros, S. A.",
+   "indice_solvencia": 0.7542357576857113,
+   "indice_liquidez": 3.8709834048009655
+  },
+  "general": {
+   "name": "General de Seguros, S. A.",
+   "indice_solvencia": 1.9715972953747865,
+   "indice_liquidez": 1.9691505023259221
+  },
+  "humano": {
+   "name": "Humano Seguros, S. A.",
+   "indice_solvencia": 1.3867883171432394,
+   "indice_liquidez": 1.6171009728267376
+  },
+  "hylseg": {
+   "name": "Hylseg Seguros, S. A.",
+   "indice_solvencia": 3.990998039514113,
+   "indice_liquidez": 1.9036292017523462
+  },
+  "la_colonial": {
+   "name": "La Colonial, Compañía de Seguros, S. A.",
+   "indice_solvencia": 2.3394621324941327,
+   "indice_liquidez": 2.3013026529677356
+  },
+  "la_monumental": {
+   "name": "La Monumental de Seguros, S. A.",
+   "indice_solvencia": 2.7461142451514116,
+   "indice_liquidez": 1.844791995936018
+  },
+  "mapfre_bhd": {
+   "name": "MAPFRE BHD, Compañía de Seguros, S. A.",
+   "indice_solvencia": 2.82654823253658,
+   "indice_liquidez": 1.438725500135779
+  },
+  "midas": {
+   "name": "Midas Seguros, S. A.",
+   "indice_solvencia": 2.865838872343722,
+   "indice_liquidez": 3.9259018010967184
+  },
+  "multiseguros_s_u": {
+   "name": "Multiseguros S.U, S. A.",
+   "indice_solvencia": 0.9781857574502884,
+   "indice_liquidez": 1.4006992048827553
+  },
+  "one_alliance": {
+   "name": "One Alliance Seguros, S. A.",
+   "indice_solvencia": 1.0432602391493648,
+   "indice_liquidez": 1.275022154675979
+  },
+  "patria": {
+   "name": "Patria, Compañía de Seguros, S. A.",
+   "indice_solvencia": 1.4276905989718232,
+   "indice_liquidez": 1.9287953436958132
+  },
+  "ademi": {
+   "name": "Seguros Ademi, S. A.",
+   "indice_solvencia": 5.25734680091012,
+   "indice_liquidez": 4.306775625444958
+  },
+  "aps": {
+   "name": "Seguros APS, S. A.",
+   "indice_solvencia": 2.4002069008759053,
+   "indice_liquidez": 3.513748685488472
+  },
+  "crecer": {
+   "name": "Seguros Crecer, S. A.",
+   "indice_solvencia": 1.8165087492780516,
+   "indice_liquidez": 4.175997626396688
+  },
+  "la_internacional": {
+   "name": "Seguros La Internacional, S. A.",
+   "indice_solvencia": 1.8918209166900508,
+   "indice_liquidez": 2.4062701737466337
+  },
+  "pepin": {
+   "name": "Seguros Pepín, S. A.",
+   "indice_solvencia": 3.7701947782905907,
+   "indice_liquidez": 2.397689702379618
+  },
+  "reservas": {
+   "name": "Seguros Reservas, S. A.",
+   "indice_solvencia": 2.8330044925451277,
+   "indice_liquidez": 1.7242992770541505
+  },
+  "sura": {
+   "name": "Seguros Sura, S. A.",
+   "indice_solvencia": 2.087284094423624,
+   "indice_liquidez": 2.050827139921158
+  },
+  "universal": {
+   "name": "Seguros Universal, S. A.",
+   "indice_solvencia": 1.5241680245239155,
+   "indice_liquidez": 1.2847866192099122
+  },
+  "yunen": {
+   "name": "Seguros Yunén, S.A.",
+   "indice_solvencia": 0.7925678953167498,
+   "indice_liquidez": 2.9584166607569204
+  },
+  "unit": {
+   "name": "Unit, S. A.",
+   "indice_solvencia": 1.721036016911321,
+   "indice_liquidez": 3.092083230767508
+  },
+  "worldwide": {
+   "name": "Worldwide Seguros, S. A.",
+   "indice_solvencia": 1.0938200109843947,
+   "indice_liquidez": 3.4299520146654037
+  },
+  "reaseguradora_santo_domingo": {
+   "name": "Reaseguradora Santo Domingo, S. A.",
+   "indice_solvencia": 4.1336944100676565,
+   "indice_liquidez": 2.771907056449133
+  },
+  "rehsa_y_reaseguros": {
+   "name": "REHSA, Compañía de Seguros y Reaseguros, S. A.",
+   "indice_solvencia": 3.2523553686836912,
+   "indice_liquidez": 2.1615972026063357
+  }
+ }
+}

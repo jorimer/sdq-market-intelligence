@@ -56,15 +56,18 @@ _SECTION_TITLES = {
 }
 
 _LIMITATIONS = (
-    "El Índice de Solidez de Aseguradora (ISF) integra cinco dimensiones sobre los estados "
-    "financieros auditados por compañía que publica la Superintendencia de Seguros (SIS): "
-    "solvencia (patrimonio/activos), siniestralidad (loss ratio), liquidez (activos "
-    "líquidos/reservas técnicas), escala (activos) y resultado técnico. Con la solvencia "
-    "incorporada, el índice emite una banda absoluta de solidez además de ordenar la "
-    "posición relativa entre aseguradoras. La calibración de las bandas absolutas es "
-    "provisional, pendiente de validación retrospectiva (backtest). El ISF es una medida de "
-    "solidez; no constituye un rating de crédito ni una clasificación regulatoria de "
-    "Solvencia II."
+    "El Índice de Solidez de Aseguradora (ISF) integra cinco dimensiones sobre dato público de "
+    "la Superintendencia de Seguros (SIS). La solvencia y la liquidez toman los índices "
+    "REGULATORIOS oficiales que la SIS publica por compañía conforme a la Ley 146-02, Cap. XII, "
+    "Art. 164 —índice de solvencia = patrimonio técnico ajustado / margen de solvencia mínima "
+    "requerida (Arts. 160-161) e índice de liquidez = disponibilidad libre / liquidez mínima "
+    "requerida (Art. 162), en ambos casos ≥ 1 = cumplimiento—; la siniestralidad (loss ratio), "
+    "la escala y el resultado técnico se derivan de los estados financieros auditados. Con la "
+    "solvencia incorporada, el índice emite una banda absoluta de solidez además de ordenar la "
+    "posición relativa. El marco de supervisión de referencia son los Principios Básicos de "
+    "Seguros (ICP) de la IAIS, adoptados por la SIS (Res. 04-2024). La calibración de las bandas "
+    "es provisional, sujeta a validación retrospectiva. El ISF es una medida de solidez; no "
+    "constituye un rating de crédito ni un dictamen regulatorio de solvencia."
 )
 _NO_DATA = (
     "No hay ISF para esta aseguradora en el período seleccionado: sus estados financieros "
@@ -189,11 +192,12 @@ def _named_headline_caveat(rating: Dict[str, Any]) -> tuple:
         headline = f"ISF {ov:.0f}/100 · {rating.get('band')} · {name}"
     else:
         headline = f"ISF {ov:.0f}/100 · {name} (relativo, parcial)"
-    caveat = ("Nota metodológica: el ISF integra solvencia (patrimonio/activos), "
-              "siniestralidad, liquidez, escala y resultado técnico de los estados "
-              "financieros auditados que publica la SIS. Con la solvencia incorporada emite "
-              "banda absoluta; la calibración de las bandas es provisional, pendiente de "
-              "backtest. No es un rating de crédito ni una clasificación de Solvencia II.")
+    caveat = ("Nota metodológica: el ISF toma la solvencia y la liquidez de los índices "
+              "REGULATORIOS oficiales que publica la SIS (Ley 146-02, Art. 164: patrimonio "
+              "técnico ajustado/margen requerido y disponibilidad/liquidez requerida, ≥1 = "
+              "cumple), y la siniestralidad, escala y resultado técnico de los estados "
+              "financieros auditados. Marco de referencia: ICP de la IAIS (Res. 04-2024). "
+              "Calibración de bandas provisional. No es un rating de crédito.")
     return headline, caveat
 
 

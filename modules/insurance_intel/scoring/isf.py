@@ -23,15 +23,20 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-# Dimension spec: weight, direction, and absolute anchors (worst→0, best→100),
-# calibrated to the real 33-insurer distribution (2024 audited).
+# Dimension spec: weight, direction, and absolute anchors (worst→0, best→100).
+# Solvencia y liquidez usan los ÍNDICES REGULATORIOS oficiales que publica la SIS
+# (Ley 146-02, Art. 164): índice = recurso disponible / mínimo requerido, ≥1 = cumple.
+# Los anclajes reflejan el umbral regulatorio 1.0 (cumplimiento) como piso de referencia.
+# ``wabs`` = peso de la banda ABSOLUTA vs. min-max entre pares. Solvencia y liquidez son
+# ÍNDICES regulatorios (valor absoluto significativo: 1.0 = cumple sin colchón), así que
+# pesan más hacia lo absoluto que las dimensiones puramente relativas.
 DIMENSIONS = [
-    {"key": "solvencia", "label": "Solvencia (patrimonio/activos)", "weight": 0.35,
-     "direction": "higher", "lo": 0.10, "hi": 0.40, "log": False},
+    {"key": "solvencia", "label": "Solvencia regulatoria (PTA/margen requerido, Ley 146-02)",
+     "weight": 0.35, "direction": "higher", "lo": 0.60, "hi": 3.00, "log": False, "wabs": 0.75},
     {"key": "siniestralidad", "label": "Siniestralidad (loss ratio)", "weight": 0.20,
      "direction": "lower", "lo": 0.85, "hi": 0.25, "log": False},
-    {"key": "liquidez", "label": "Liquidez (líquidos/reservas técnicas)", "weight": 0.15,
-     "direction": "higher", "lo": 0.40, "hi": 2.00, "log": False},
+    {"key": "liquidez", "label": "Liquidez regulatoria (disponible/mínimo, Ley 146-02)",
+     "weight": 0.15, "direction": "higher", "lo": 0.50, "hi": 5.00, "log": False, "wabs": 0.65},
     {"key": "escala", "label": "Escala (activos totales)", "weight": 0.15,
      "direction": "higher", "lo": 5e8, "hi": 3.5e10, "log": True},
     {"key": "resultado_tecnico", "label": "Resultado técnico (sobre primas)", "weight": 0.15,
@@ -76,11 +81,11 @@ def _raw_metric(fin: Dict[str, Any], key: str) -> Optional[float]:
     """Derive a dimension's raw ratio from an insurer's financials dict."""
     g = fin.get
     if key == "solvencia":
-        return (g("patrimonio") / g("activos_totales")) if g("activos_totales") else None
+        return g("indice_solvencia")  # oficial (PTA/MSMR), Ley 146-02 Art. 160-161
     if key == "siniestralidad":
         return (g("siniestros_pagados") / g("primas_suscritas")) if g("primas_suscritas") else None
     if key == "liquidez":
-        return (g("activos_liquidos") / g("reservas_tecnicas")) if g("reservas_tecnicas") else None
+        return g("indice_liquidez")  # oficial (DLGFL/LMR), Ley 146-02 Art. 162
     if key == "escala":
         return g("activos_totales")
     if key == "resultado_tecnico":
@@ -115,7 +120,8 @@ def score_insurers(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             if present:
                 a = _absolute(raw, d)
                 mm = _minmax(raw, pools[d["key"]], d["direction"])
-                score = round(_WABS * a + (1 - _WABS) * mm, 1) if mm is not None else round(a, 1)
+                wabs = d.get("wabs", _WABS)
+                score = round(wabs * a + (1 - wabs) * mm, 1) if mm is not None else round(a, 1)
                 num += score * d["weight"]
                 wsum += d["weight"]
             dims.append({"key": d["key"], "label": d["label"], "weight": d["weight"],
