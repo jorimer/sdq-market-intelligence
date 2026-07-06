@@ -178,3 +178,41 @@ def test_market_pulse_folds_in_health(db):
     p = build_market_pulse(db)
     assert p["health_coverage"] is not None
     assert p["health_coverage"]["afiliados_total"] > 9e6
+
+
+# ── F3 · ISF validation backtest (G5) ─────────────────────────────
+def test_backtest_derive_and_summarize():
+    from modules.insurance_intel.validation.backtest import derive_observations, summarize_signal
+    # Perfect separation: low score → low forward outcome → Gini ≈ 1, conclusive.
+    score_by = {f"a{i}": {"2020": float(i)} for i in range(10)}
+    fwd_by = {f"a{i}": [("2021", float(i)), ("2022", float(i))] for i in range(10)}
+    obs = derive_observations(score_by, fwd_by, horizon=2, min_entities=5)
+    assert len(obs) == 10 and {o.label for o in obs} == {0, 1}
+    s = summarize_signal(obs)
+    assert s and s["conclusive"] and s["gini"] > 0.8
+
+
+def test_validation_state_reads_backtest(db):
+    import json
+    from shared.products.registry import get_product
+    from shared.settings.models import AppSetting
+    from modules.insurance_intel.scoring.batch import score_and_persist
+    AppSetting.__table__.create(db.get_bind(), checkfirst=True)
+    # Scoreable insurers (n_scored>0 gate): persist synthetic per-entity series + score.
+    for f in _synthetic_financials():
+        db.add(m.InsuranceEntity(slug=f["slug"], name=f["name"], entity_type="aseguradora",
+                                 is_active=True))
+        for code in ("patrimonio", "activos_totales", "primas_suscritas", "siniestros_pagados",
+                     "reservas_tecnicas", "activos_liquidos", "ingresos_totales", "gastos_totales"):
+            db.add(m.InsuranceSeries(series_code=code, period="2024", entity_slug=f["slug"],
+                                     value=f[code], unit="RD$", frequency="annual"))
+    db.flush()
+    score_and_persist(db)
+    # A conclusive persisted backtest (Gini 0.30).
+    db.add(AppSetting(key="insurance_backtest_report", is_secret=False, value=json.dumps({
+        "headline_gini": 0.30, "headline_signal": "solvency",
+        "signals": {"solvency": {"gini_ci": [0.14, 0.48], "n_obs": 163}}})))
+    db.commit()
+    vs = get_product("insurance", db).validation_state()
+    # 0.60 + 0.30*0.30 = 0.69
+    assert vs.approved and vs.score == 0.69 and "Gini 0.3" in vs.notes

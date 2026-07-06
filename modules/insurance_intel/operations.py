@@ -35,6 +35,39 @@ def _run_sisalril_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_financials_history_sync(params, user_id, set_phase) -> Dict:
+    from modules.insurance_intel.financials_sync import sis_financials_history_sync
+    db = SessionLocal()
+    try:
+        since = int((params or {}).get("since_year") or 2018)
+        return sis_financials_history_sync(db, set_phase=set_phase, since_year=since)
+    finally:
+        db.close()
+
+
+def _run_backtest(params, user_id, set_phase) -> Dict:
+    import json
+
+    from modules.insurance_intel.validation.backtest import build_backtest_report
+    from shared.settings.models import AppSetting
+    db = SessionLocal()
+    try:
+        set_phase("Derivando observaciones y computando Gini (IC bootstrap)")
+        rep = build_backtest_report(db)
+        row = (db.query(AppSetting)
+               .filter(AppSetting.key == "insurance_backtest_report").first())
+        payload = json.dumps(rep, ensure_ascii=False)
+        if row:
+            row.value, row.is_secret = payload, False
+        else:
+            db.add(AppSetting(key="insurance_backtest_report", value=payload, is_secret=False))
+        db.commit()
+        return {"computed": rep.get("computed"), "headline_gini": rep.get("headline_gini"),
+                "headline_signal": rep.get("headline_signal")}
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "insurance-sync", "Sincronizar seguros (SIS · mercado)",
@@ -66,6 +99,24 @@ def register() -> None:
         "solidez de las ARS es una vía aparte diferida (financieros tras el portal REDATAM). "
         "Dato público real. Mensual.",
         _run_sisalril_sync, default_interval_hours=720,  # mensual
+    ))
+    register_operation(Operation(
+        "insurance-financials-history-sync", "Ingerir historia de estados AUDITADOS (SIS)",
+        "Ingiere la HISTORIA de estados financieros auditados por compañía desde 2018 (era "
+        ".xlsx, estructura estable): patrimonio, activos, primas, siniestros e ingresos/gastos "
+        "por aseguradora y año → serie con trayectoria. Recalcula el ISF una vez al final. Es "
+        "el insumo del backtest de validación (G5). Param opcional 'since_year'. Corre desde "
+        "Railway; best-effort por año; idempotente. On-demand.",
+        _run_financials_history_sync, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "insurance-backtest", "Backtest de validación del ISF (resultado-proxy)",
+        "Valida el poder discriminante del ISF contra un resultado SUAVE (subdesempeño técnico "
+        "relativo vs. mediana del panel), ya que ninguna aseguradora ha quebrado. Señal cruzada "
+        "solvencia→resultado técnico y persistencia de underwriting; Gini + IC bootstrap sobre "
+        "la historia de auditados. Persiste el reporte; el estado de validación (G5) lo lee y "
+        "sube de 0.60 solo si el IC del Gini es positivo. Requiere history-sync antes. On-demand.",
+        _run_backtest, default_interval_hours=0,
     ))
 
 
