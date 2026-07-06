@@ -140,24 +140,42 @@ def score_insurers(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _load_financials(db: Session) -> List[Dict[str, Any]]:
-    """Assemble each insurer's latest per-entity figures from ``insurance_series``."""
+    """Assemble each insurer's latest figures from ``insurance_series``, grouped by a
+    canonical BRAND KEY so entities fragmented across audited years (Excel sheet-name
+    truncation drifts the slug) collapse into ONE insurer, merging their series and the
+    official (longest) name. Only ``entity_type='aseguradora'`` (ARS have their own rating)."""
+    from shared.data.sis_solvency_client import brand_key
     from modules.insurance_intel.models.models import InsuranceEntity, InsuranceSeries
 
-    names = {e.slug: e.name for e in db.query(InsuranceEntity).all()}
+    ents = (db.query(InsuranceEntity)
+            .filter(InsuranceEntity.entity_type == "aseguradora").all())
+    if not ents:
+        return []
+    slug_key = {e.slug: brand_key(e.name) for e in ents}
+    # Canonical representative per brand key: the longest (official/untruncated) name.
+    key_name: Dict[str, str] = {}
+    key_slug: Dict[str, str] = {}
+    for e in ents:
+        k = slug_key[e.slug]
+        if k not in key_name or len(e.name or "") > len(key_name[k]):
+            key_name[k], key_slug[k] = e.name, e.slug
+
     rows = (db.query(InsuranceSeries)
-            .filter(InsuranceSeries.entity_slug.isnot(None), InsuranceSeries.value.isnot(None))
-            .all())
-    latest: Dict[str, Dict[str, Any]] = {}
-    seen_period: Dict[tuple, str] = {}
+            .filter(InsuranceSeries.entity_slug.in_(list(slug_key)),
+                    InsuranceSeries.value.isnot(None)).all())
+    agg: Dict[str, Dict[str, Any]] = {}
+    seen: Dict[tuple, str] = {}
     for r in rows:
-        d = latest.setdefault(r.entity_slug, {"slug": r.entity_slug,
-                                              "name": names.get(r.entity_slug, r.entity_slug)})
-        key = (r.entity_slug, r.series_code)
-        if key not in seen_period or r.period > seen_period[key]:
-            seen_period[key] = r.period
+        k = slug_key.get(r.entity_slug)
+        if k is None:
+            continue
+        d = agg.setdefault(k, {"slug": key_slug[k], "name": key_name[k]})
+        sk = (k, r.series_code)
+        if sk not in seen or r.period > seen[sk]:
+            seen[sk] = r.period
             d[r.series_code] = r.value
             d["period"] = max(d.get("period", ""), r.period)
-    return list(latest.values())
+    return list(agg.values())
 
 
 def compute_isf(db: Session) -> List[Dict[str, Any]]:
