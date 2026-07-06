@@ -189,10 +189,10 @@ async def ars_rankings(
             "scale": "ISARS 0-100 (Sólida/Adecuada/En vigilancia/Frágil)",
             "note": None if ranked else "ISARS pendiente: sincronización de ARS (BDFINAC) no ejecutada.",
             "caveat": ("Índice sobre los indicadores regulatorios OFICIALES de SISALRIL "
-                       "(Portal Estadístico): margen de solvencia (ind. 405, validado exacto), "
-                       "siniestralidad médica (ind. 401) y rentabilidad patrimonial ROE (ind. 409). "
-                       "ROA, capital mínimo y endeudamiento se excluyen por magnitudes "
-                       "inconsistentes en algunas ARS (brecha declarada).")}
+                       "(Portal Estadístico): margen de solvencia (ind. 405) y ROA (ind. 408), "
+                       "ambos validados EXACTOS contra el portal; siniestralidad médica (ind. 401) "
+                       "y solvencia patrimonial (patrimonio/activo). El capital mínimo (403/404) se "
+                       "excluye por magnitudes inconsistentes en algunas ARS (brecha declarada).")}
 
 
 @router.get("/ars/{ars_slug}/detail")
