@@ -57,6 +57,7 @@ export async function getInsuranceInsight(
 export interface InsuranceRankRow {
   rank: number | null;
   slug: string;
+  name?: string;
   overall_score: number | null;
   band: string | null;
   coverage: number | null;

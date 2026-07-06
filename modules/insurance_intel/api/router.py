@@ -125,8 +125,9 @@ async def rankings(
     """Insurers ranked by ISF. Empty until F1b (audited financials) — honest."""
     results = compute_isf(db)
     ranked = [
-        {"rank": i + 1, "slug": r["slug"], "overall_score": r["overall_score"],
-         "band": r["band"], "coverage": r["coverage"], "period": r["period"]}
+        {"rank": i + 1, "slug": r["slug"], "name": r.get("name") or r["slug"],
+         "overall_score": r["overall_score"], "band": r["band"],
+         "coverage": r["coverage"], "period": r["period"]}
         for i, r in enumerate(results) if r["overall_score"] is not None
     ]
     return {"rankings": ranked, "count": len(ranked),
