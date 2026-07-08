@@ -66,6 +66,20 @@ def _run_bcrd_comunicados_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_tpm_model_train(params, user_id, set_phase) -> Dict:
+    """Entrena el modelo de predicción de TPM (regla de Taylor + clasificador XGBoost),
+    corre el backtest time-series y persiste modelo + reporte en AppSetting.
+
+    Pesado (≈100 reentrenamientos en el backtest expanding-window) → va por la operación,
+    no por endpoint síncrono. Sirve el forecast en /comunicados/forecast."""
+    from modules.macro_monitor.tpm_modeling import service as tpm_service
+    db = SessionLocal()
+    try:
+        return tpm_service.train_and_persist(db, trained_by=user_id, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "fiscal-sync", "Sincronizar pulso fiscal (Hacienda + DGII)",
@@ -93,6 +107,17 @@ def register() -> None:
         "ruteado a Macro/Banca. Idempotente (omite artículos ya ingeridos salvo "
         "force=true). Mensual — es la señal más oportuna del BCRD.",
         _run_bcrd_comunicados_sync, default_interval_hours=720,
+        triggers=["tpm-model-train"],  # dato nuevo de decisiones → reentrena el modelo
+    ))
+    register_operation(Operation(
+        "tpm-model-train", "Entrenar modelo de predicción de TPM",
+        "Construye el panel POINT-IN-TIME de decisiones de política monetaria + features "
+        "macro del BCRD, estima la regla de reacción tipo Taylor (OLS interpretable) y el "
+        "clasificador XGBoost (hold/cut/hike, con pesos por clase por el desbalance), corre "
+        "el backtest time-series expanding-window (recall por clase vs baseline 'siempre "
+        "mantener') y persiste modelo + backtest. Alimenta /comunicados/forecast. Re-entrenar "
+        "tras ingerir comunicados o refrescar las series macro. Mensual.",
+        _run_tpm_model_train, default_interval_hours=720,
     ))
 
 
