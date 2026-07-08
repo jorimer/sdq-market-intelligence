@@ -163,3 +163,74 @@ def comunicado_prompt_context(db: Session, max_findings: int = 3) -> Optional[Di
         "riesgos": (dg.get("riesgos") or [])[:max_findings],
         "fuente": row.source_url,
     }
+
+
+def _decisions_desc(db: Session) -> List[ComunicadoTPM]:
+    """Decisiones de TPM ingeridas (con sentido), de la más reciente a la más antigua."""
+    return (
+        db.query(ComunicadoTPM)
+        .filter(ComunicadoTPM.status == "ok", ComunicadoTPM.action.isnot(None))
+        .order_by(ComunicadoTPM.decision_date.desc().nullslast(),
+                  ComunicadoTPM.article_id.desc())
+        .all()
+    )
+
+
+def trajectory(db: Session, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Trayectoria completa de la TPM (fecha/sentido/nivel/bps), newest-first. Para el
+    timeline: sin el cap del listado, payload chico (solo la decisión, no el digest)."""
+    rows = _decisions_desc(db)
+    if limit:
+        rows = rows[:limit]
+    return [{"fecha": r.decision_date, "sentido": r.action,
+             "tpm": r.tpm_level, "bps": r.bps_change} for r in rows]
+
+
+def mp_evaluation_context(db: Session, recent: int = 18) -> Dict[str, Any]:
+    """Contexto para la EVALUACIÓN de política monetaria (postura + impacto macro).
+
+    Da al modelo la trayectoria reciente, un resumen del ciclo (holds/cortes/alzas y nivel
+    actual vs 12/24 decisiones atrás) y el contexto macro (inflación/actividad) de la última
+    decisión digerida. Todas las cifras citables van incluidas (para el numeric_guard).
+    """
+    from collections import Counter
+
+    rows = _decisions_desc(db)
+    if not rows:
+        return {"has_data": False, "title": "Evaluación de política monetaria"}
+
+    latest = rows[0]
+
+    def _lvl(i: int) -> Optional[float]:
+        return rows[i].tpm_level if i < len(rows) else None
+
+    last24 = Counter(r.action for r in rows[:24])
+    dg = latest.digest or {}
+    _label = {"hold": "mantuvo", "cut": "redujo", "hike": "incrementó"}
+    return {
+        "has_data": True,
+        "postura_actual": {
+            "fecha": latest.decision_date,
+            "sentido": _label.get(latest.action or "", latest.action),
+            "tpm": latest.tpm_level,
+        },
+        "trayectoria_reciente": [
+            {"fecha": r.decision_date, "sentido": r.action, "tpm": r.tpm_level}
+            for r in rows[:recent]
+        ],
+        "ciclo": {
+            "decisiones_en_historico": len(rows),
+            "desde": rows[-1].decision_date,
+            "ultimos_24m": {"holds": last24.get("hold", 0), "cortes": last24.get("cut", 0),
+                            "alzas": last24.get("hike", 0)},
+            "tpm_actual": latest.tpm_level,
+            "tpm_12_decisiones_atras": _lvl(12),
+            "tpm_24_decisiones_atras": _lvl(24),
+        },
+        "contexto_macro": {  # de la última decisión digerida (inflación / actividad)
+            "cifras": (dg.get("cifras") or [])[:8],
+            "hallazgos": (dg.get("hallazgos") or [])[:5],
+        },
+        "digest_reciente": {"resumen": dg.get("resumen", ""),
+                            "riesgos": (dg.get("riesgos") or [])[:5]},
+    }

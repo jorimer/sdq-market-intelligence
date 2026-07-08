@@ -2311,6 +2311,8 @@
     },
     "comunicados": {
       "intro": "Comunicados de la Junta Monetaria: cada decisión sobre la Tasa de Política Monetaria (TPM), con su sentido, el nivel resultante y el análisis del racional.",
+      "evalTitle": "Evaluación de política monetaria",
+      "evalSub": "Postura del BCRD e impacto macro de las medidas (IA)",
       "loadError": "No se pudieron cargar los comunicados.",
       "retry": "Reintentar",
       "empty": "Aún no hay comunicados ingeridos.",

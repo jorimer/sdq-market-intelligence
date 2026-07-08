@@ -334,3 +334,26 @@ export async function getComunicadoLatest(): Promise<ComunicadoLatest | null> {
   const { data } = await client.get<ComunicadoLatest>("/macro-monitor/comunicados/latest");
   return data.has_comunicado ? data : null;
 }
+
+export interface TrajectoryPoint {
+  fecha: string | null;
+  sentido: TpmAction | null;
+  tpm: number | null;
+  bps: number | null;
+}
+
+export async function getComunicadoTrajectory(): Promise<TrajectoryPoint[]> {
+  const { data } = await client.get("/macro-monitor/comunicados/trajectory");
+  return data.trajectory ?? [];
+}
+
+export async function getComunicadoEvaluation(
+  audience = "comite",
+  deep = false,
+): Promise<AiInsight | null> {
+  const { data } = await client.get<{ ai_insight: AiInsight | null }>(
+    "/macro-monitor/comunicados/evaluation",
+    { params: { audience, ...(deep ? { deep: true } : {}) } },
+  );
+  return data.ai_insight ?? null;
+}
