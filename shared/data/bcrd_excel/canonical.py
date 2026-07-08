@@ -79,8 +79,11 @@ REGISTRY: List[CanonicalSeries] = [
     # ── Sector Real ──────────────────────────────────────────────
     CanonicalSeries(
         key="imae", concept="IMAE (actividad económica)", sector="sector_real",
-        source_file="imae.xlsx", base="2007=100", frequency="mensual",
-        homogenization="índice + YoY",
+        # El BCRD migró el IMAE al archivo base 2018 (imae_2018.xlsx); el viejo imae.xlsx
+        # (base 2007) quedó congelado en oct-2024. Repuntamos al vigente (cubre 2007→hoy,
+        # separadores 'Promedio {año}'). El YoY interanual es invariante a la base.
+        source_file="imae_2018.xlsx", base="2018=100", frequency="mensual",
+        homogenization="índice + YoY (interanual base-invariante)",
         rationale="Único indicador de actividad de alta frecuencia; mensual desde 2007.",
         robustness="green", api_series="bcrd.sector_real.imaes", api_transform="identity",
         excel_series_suffix="serie_original_variacion_porcentual_interanual",
