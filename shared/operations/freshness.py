@@ -45,6 +45,19 @@ _SOVEREIGN_MAX_AGE_MONTHS = 24
 # Cadencia de re-propuesta del aviso soberano (~mensual), reusa el dedupe de _recently_notified.
 _SOVEREIGN_RENOTIFY_HOURS = 24 * 30
 
+# Cadencia de publicación esperada de cada informe recurrente del BCRD → horas. Si la
+# ÚLTIMA edición ingerida con éxito supera esta cadencia (con margen _GRACE), se AVISA
+# que no ha aparecido una edición nueva a tiempo — puede ser un atraso de la fuente o un
+# cambio de formato/URL en el CDN (el síntoma que dejó caída la ingesta del IPoM: el BCRD
+# renombró el archivo y el sync corría "ok" sin traer nada nuevo). Advisory: el sistema
+# avisa, el humano verifica. La frescura se mide por antigüedad de la ingestión (created_at),
+# que solo avanza con una edición nueva — así distingue "el sync corre en vacío" de "entró algo".
+_PUBLICATION_CADENCE_HOURS = {
+    "trimestral": 24 * 90,
+    "semestral": 24 * 182,
+    "anual": 24 * 365,
+}
+
 
 def _now_naive() -> datetime:
     """UTC naive (las columnas DateTime son naive: Postgres TIMESTAMP s/ TZ + SQLite)."""
@@ -146,13 +159,66 @@ def _audit_sovereign_ratings(db: Session, admin_ids: List[str], now: datetime) -
     return proposed
 
 
+def _audit_publications(db: Session, admin_ids: List[str], now: datetime) -> List[str]:
+    """AVISA (advisory) cuando la última edición ingerida de una publicación recurrente del
+    BCRD supera su cadencia esperada: no apareció una edición nueva a tiempo. Mide la frescura
+    por la antigüedad de la ÚLTIMA INGESTIÓN EXITOSA (``created_at``), que solo avanza con una
+    edición nueva — así distingue "el sync corre en vacío" (renombrado del CDN) de "entró algo
+    nuevo". No avisa las nunca-ingeridas (eso ya lo cubre la frescura de la operación). Deduplica
+    por informe (reusa el buzón de _recently_notified). Devuelve las report_keys avisadas."""
+    from shared.publications import catalog as pub_catalog
+    from shared.publications.models import Publication
+
+    alerted: List[str] = []
+    try:
+        for key in pub_catalog.report_keys("BCRD"):
+            spec = pub_catalog.REPORTS[key]
+            max_age_h = _PUBLICATION_CADENCE_HOURS.get(spec.cadence)
+            if max_age_h is None:
+                continue  # cadencia irregular/puntual → sin frescura esperada
+            akey = f"publication:{key}"
+            last = (
+                db.query(Publication.created_at)
+                .filter(Publication.report_key == key, Publication.status == "ok")
+                .order_by(Publication.created_at.desc().nullslast())
+                .first()
+            )
+            if last is None or last[0] is None:
+                continue  # nunca ingerida con éxito → lo cubre la frescura de la operación
+            age_h = (now - last[0]).total_seconds() / 3600
+            if age_h <= max_age_h * _GRACE:
+                _clear_notified(db, akey)
+                continue
+            if _recently_notified(db, akey, max_age_h):
+                continue
+            days = int(age_h // 24)
+            title = f"Publicación por verificar: {spec.name}"
+            body = (f"La última edición ingerida de «{spec.name}» tiene ~{days} día(s); no ha "
+                    f"aparecido una edición nueva dentro de su cadencia ({spec.cadence}). Puede "
+                    f"ser un atraso de la fuente o un cambio de formato/URL en el CDN del BCRD; "
+                    f"conviene verificar la disponibilidad de una edición más reciente.")
+            try:
+                for uid in admin_ids:
+                    notification_service.create(db, user_id=uid, type="warning",
+                                                title=title, body=body)
+                _mark_notified(db, akey)
+                alerted.append(key)
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                logger.warning("no se pudo avisar la frescura de la publicación %s: %s", key, e)
+    except Exception as e:  # noqa: BLE001 — la auditoría de publicaciones no debe abortar el resto
+        logger.warning("no se pudo auditar la frescura de publicaciones: %s", e)
+    return alerted
+
+
 def run_freshness_audit(db: Session) -> Dict:
     """Audita la frescura de cada fuente recurrente y notifica las atrasadas.
 
-    Devuelve ``{checked, n_overdue, overdue, notified, sovereign_proposed}``. Solo considera
-    operaciones con cadencia (>0) que no necesitan parámetros (las on-demand no tienen
-    frescura esperada). No se audita a sí misma. Además propone re-verificar ratings
-    soberanos cuya última acción envejeció (dato declarado, no un sync agendado).
+    Devuelve ``{checked, n_overdue, overdue, notified, sovereign_proposed, publications_stale}``.
+    Solo considera operaciones con cadencia (>0) que no necesitan parámetros (las on-demand no
+    tienen frescura esperada). No se audita a sí misma. Además: propone re-verificar ratings
+    soberanos cuya última acción envejeció (dato declarado, no un sync agendado), y avisa las
+    publicaciones BCRD sin edición nueva dentro de su cadencia (renombrado/atraso del CDN).
     """
     scheds = get_schedules(db)
     admin_ids = _admin_ids(db)
@@ -206,10 +272,12 @@ def run_freshness_audit(db: Session) -> Dict:
             logger.warning("no se pudo notificar la frescura de %s: %s", name, e)
 
     sovereign_proposed = _audit_sovereign_ratings(db, admin_ids, now)
+    publications_stale = _audit_publications(db, admin_ids, now)
 
     return {"checked": checked, "n_overdue": len(overdue),
             "overdue": overdue, "notified": notified,
-            "sovereign_proposed": sovereign_proposed}
+            "sovereign_proposed": sovereign_proposed,
+            "publications_stale": publications_stale}
 
 
 def _run(params, user_id, set_phase) -> Dict:
