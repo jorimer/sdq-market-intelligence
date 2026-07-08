@@ -41,6 +41,21 @@ def _run_bcrd_publications_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_bcrd_comunicados_sync(params, user_id, set_phase) -> Dict:
+    """Descubre e ingiere los comunicados de política monetaria (decisiones de TPM) más
+    recientes del BCRD, con la decisión estructurada + digest IA del racional. Idempotente
+    por artículo (omite los ya ok salvo force=true). `limit` en params (default 12)."""
+    from modules.macro_monitor.comunicados import service as com_service
+    db = SessionLocal()
+    try:
+        p = params or {}
+        return com_service.ingest_comunicados(
+            db, limit=int(p.get("limit") or 12), force=bool(p.get("force")),
+            set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "fiscal-sync", "Sincronizar pulso fiscal (Hacienda + DGII)",
@@ -59,6 +74,15 @@ def register() -> None:
         "force=true en params). Mensual. La aparición de una edición nueva la vigila "
         "la auditoría de frescura de datos.",
         _run_bcrd_publications_sync, default_interval_hours=720,
+    ))
+    register_operation(Operation(
+        "bcrd-comunicados-sync", "Ingerir comunicados de política monetaria (TPM, digest IA)",
+        "Descubre los comunicados de política monetaria del BCRD (cada decisión de TPM de "
+        "la Junta Monetaria, HTML de la Sala de Prensa), deriva la decisión de forma "
+        "determinista (sentido + nivel resultante) y genera un digest de IA del racional, "
+        "ruteado a Macro/Banca. Idempotente (omite artículos ya ingeridos salvo "
+        "force=true). Mensual — es la señal más oportuna del BCRD.",
+        _run_bcrd_comunicados_sync, default_interval_hours=720,
     ))
 
 

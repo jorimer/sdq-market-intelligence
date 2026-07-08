@@ -24,6 +24,7 @@ from shared.database.session import get_db
 from shared.publications import catalog as pub_catalog
 from shared.publications import service as pub_service
 from shared.publications.models import Publication
+from modules.macro_monitor.comunicados import service as com_service
 from shared.settings.service import get_sector_api_base_url, get_sector_api_key
 from modules.macro_monitor.service import (
     backfill_historico,
@@ -691,3 +692,66 @@ def refresh_publications(
             results.append({"report_key": key, "status": row.status, "period": row.period})
     ingested = sum(1 for r in results if r["status"] == "ok")
     return {"ingested_ok": ingested, "results": results}
+
+
+# ── Comunicados de política monetaria (decisiones de TPM) ──────────
+def _comunicado_summary(row) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "article_id": row.article_id,
+        "title": row.title,
+        "date": row.decision_date,
+        "action": row.action,           # hold | cut | hike
+        "tpm_level": row.tpm_level,      # nivel resultante (%)
+        "bps_change": row.bps_change,
+        "source_url": row.source_url,
+        "status": row.status,
+    }
+
+
+@router.get(
+    "/comunicados",
+    summary="Comunicados de política monetaria del BCRD (decisiones de TPM)",
+    description="Decisiones de TPM ingeridas (sentido + nivel + digest IA), del más reciente al más antiguo.",
+)
+def list_comunicados(
+    limit: int = Query(24, ge=1, le=100, description="Máximo de comunicados"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    rows = com_service.list_comunicados(db, limit=limit)
+    return {"comunicados": [_comunicado_summary(r) for r in rows], "count": len(rows)}
+
+
+@router.get(
+    "/comunicados/latest",
+    summary="Última decisión de TPM del BCRD (con digest completo)",
+)
+def latest_comunicado(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    row = com_service.latest_comunicado(db)
+    if row is None:
+        return {"has_comunicado": False}
+    out = _comunicado_summary(row)
+    out["has_comunicado"] = True
+    out["digest"] = row.digest or {}
+    return out
+
+
+@router.post(
+    "/comunicados/refresh",
+    summary="Ingerir los comunicados de política monetaria más recientes (admin)",
+    description=(
+        "Descubre los comunicados de TPM del BCRD, deriva la decisión (sentido + nivel) y "
+        "genera el digest IA del racional. Idempotente: omite los ya ingeridos salvo 'force'."
+    ),
+)
+def refresh_comunicados(
+    limit: int = Query(12, ge=1, le=100, description="Cuántos comunicados recientes revisar"),
+    force: bool = Query(False, description="Re-ingerir aunque ya existan"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    return com_service.ingest_comunicados(db, limit=limit, force=force)
