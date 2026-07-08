@@ -160,6 +160,7 @@ import modules.insurance_intel.products  # noqa: F401 — registers insurance Se
 # Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
 # (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)
 from app import products_macro as _products_macro  # noqa: F401 — registers macro SectorProduct
+from app import products_monetary_policy as _products_mp  # noqa: F401 — registers monetary_policy SectorProduct
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":

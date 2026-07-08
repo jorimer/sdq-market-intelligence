@@ -48,6 +48,10 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
     CatalogEntry("pension", "SDQ Pensiones (SIPEN)", "pension_intel", "SIPEN · ADAFP"),
     CatalogEntry("insurance", "SDQ Seguros (SIS)", "insurance_intel",
                  "SIS · SISALRIL · datos.gob.do"),
+    # Producto de POLÍTICA MONETARIA (nacional): evaluación de la postura del BCRD +
+    # trayectoria de la TPM + pronóstico/sesgo del modelo (regla de Taylor + XGBoost).
+    CatalogEntry("monetary_policy", "SDQ Política Monetaria", "macro_monitor",
+                 "BCRD — Comunicados de Política Monetaria · series macro"),
     # Producto AGREGADO (no un sector): la estructura de la economía por sector
     # (importancia económica + contribución al crecimiento). Para clientes institucionales.
     CatalogEntry("economic_structure", "SDQ Sectoral Structure · Estructura de la Economía",
