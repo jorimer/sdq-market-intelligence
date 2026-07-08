@@ -71,3 +71,12 @@ def test_ingest_canonical_dedupes_and_persists(db, monkeypatch):
     assert out["ok"] >= 1
     assert db.query(ExcelFileReport).count() == out["files"]
     assert db.query(MacroSeries).count() >= 1  # persisted
+
+
+def test_imae_canonical_points_to_current_base2018_file():
+    """El BCRD migró el IMAE a imae_2018.xlsx (base 2018); el viejo imae.xlsx quedó
+    congelado en oct-2024. El canónico debe apuntar al vigente y estar en el catálogo."""
+    imae = next(s for s in canonical.registry() if s.key == "imae")
+    assert imae.source_file == "imae_2018.xlsx"
+    assert imae.base == "2018=100"
+    assert find_entry(imae.source_file) is not None  # resoluble en el catálogo
