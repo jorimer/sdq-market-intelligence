@@ -214,8 +214,27 @@ def snapshot(
     }
     if with_ai:
         from modules.macro_monitor.ai_context import snapshot_ai_context
-        out["ai_insight"] = _ai_insight(
-            snapshot_ai_context(out, get_indicators(db)), "macro_snapshot", audience, deep)
+        ctx = snapshot_ai_context(out, get_indicators(db))
+        # Telón oficial: la última decisión de política monetaria (TPM) del BCRD, como
+        # bloque estilo-publicación bajo 'contexto_oficial_bcrd' (el template lo consume y
+        # el numeric_guard permite sus cifras). La decisión y el nivel son deterministas.
+        com = com_service.comunicado_prompt_context(db)
+        if com:
+            cifras = []
+            if com.get("tpm_nivel") is not None:
+                cifras.append({"etiqueta": "TPM resultante", "valor": f"{com['tpm_nivel']}%"})
+            if com.get("decision"):
+                cifras.append({"etiqueta": "Decisión de la Junta Monetaria", "valor": com["decision"]})
+            ctx["contexto_oficial_bcrd"] = [{
+                "informe": "Comunicado de Política Monetaria del BCRD (última decisión)",
+                "periodo": com.get("fecha") or "",
+                "resumen": com.get("resumen", ""),
+                "hallazgos": com.get("hallazgos", []),
+                "cifras": cifras,
+                "riesgos": com.get("riesgos", []),
+                "fuente": com.get("fuente", ""),
+            }]
+        out["ai_insight"] = _ai_insight(ctx, "macro_snapshot", audience, deep)
     return out
 
 

@@ -2149,6 +2149,7 @@
       "tabApi": "Series · API",
       "tabExcel": "Histórico · Excel",
       "tabPublications": "Publicaciones",
+      "tabComunicados": "Decisiones · TPM",
       "adminRequired": "Requiere rol de administrador.",
       "sectors": {
         "sector_real": "Sector real",
@@ -2306,6 +2307,37 @@
         "range": "{{min}} → {{max}} ({{points}} puntos)",
         "maxErr": "error máx ·",
         "differences": "Diferencias:"
+      }
+    },
+    "comunicados": {
+      "intro": "Comunicados de la Junta Monetaria: cada decisión sobre la Tasa de Política Monetaria (TPM), con su sentido, el nivel resultante y el análisis del racional.",
+      "loadError": "No se pudieron cargar los comunicados.",
+      "retry": "Reintentar",
+      "empty": "Aún no hay comunicados ingeridos.",
+      "statComunicados": "Comunicados",
+      "statChanges": "Cambios de tasa",
+      "statLatestTpm": "TPM vigente",
+      "statLatestDecision": "Última decisión",
+      "timelineTitle": "Trayectoria de la TPM",
+      "timelineSub": "Nivel de la Tasa de Política Monetaria por reunión",
+      "tableTitle": "Decisiones de política monetaria",
+      "tableSub": "{{count}} comunicados",
+      "colDate": "Fecha",
+      "colDecision": "Decisión",
+      "colTpm": "TPM",
+      "colChange": "Δ (pb)",
+      "colBcrd": "BCRD",
+      "view": "Ver",
+      "noLatest": "Sin decisión reciente.",
+      "latestTitle": "Última decisión",
+      "tpmLabel": "TPM",
+      "keyFigures": "Datos clave",
+      "findings": "Puntos clave",
+      "risks": "Riesgos y consideraciones",
+      "decision": {
+        "hold": "Mantiene",
+        "cut": "Baja",
+        "hike": "Sube"
       }
     },
     "publications": {

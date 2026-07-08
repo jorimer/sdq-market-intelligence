@@ -297,3 +297,40 @@ export async function getFiscalInsight(
     "/macro-monitor/fiscal/insight", { params: { audience, ...(deep ? { deep: true } : {}) } });
   return data.ai_insight ?? null;
 }
+
+// ── Comunicados de Política Monetaria (decisiones de TPM) ─────────
+export type TpmAction = "hold" | "cut" | "hike";
+
+export interface Comunicado {
+  id: string;
+  article_id: number;
+  title: string;
+  date: string | null;
+  action: TpmAction | null;
+  tpm_level: number | null;
+  bps_change: number | null;
+  source_url: string;
+  status: string;
+}
+
+export interface ComunicadoDigest {
+  resumen?: string;
+  hallazgos?: string[];
+  cifras?: { etiqueta: string; valor: string }[];
+  riesgos?: string[];
+}
+
+export interface ComunicadoLatest extends Comunicado {
+  has_comunicado: boolean;
+  digest: ComunicadoDigest | null;
+}
+
+export async function getComunicados(limit = 24): Promise<{ comunicados: Comunicado[]; count: number }> {
+  const { data } = await client.get("/macro-monitor/comunicados", { params: { limit } });
+  return { comunicados: data.comunicados ?? [], count: data.count ?? 0 };
+}
+
+export async function getComunicadoLatest(): Promise<ComunicadoLatest | null> {
+  const { data } = await client.get<ComunicadoLatest>("/macro-monitor/comunicados/latest");
+  return data.has_comunicado ? data : null;
+}

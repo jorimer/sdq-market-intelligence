@@ -141,6 +141,7 @@ import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
 import shared.source_intel.operations  # noqa: F401 — registers source-research-agent (Capa 3)
 import shared.operations.freshness  # noqa: F401 — registers data-freshness-audit (alerta dato viejo)
+import modules.macro_monitor.comunicados.freshness  # noqa: F401 — registra frescura de decisiones TPM
 
 # Product catalog: each sector registers its SectorProduct into shared.products at
 # import time (anti-Frankenstein: shared/products never imports a sector).

@@ -2149,6 +2149,7 @@
       "tabApi": "Series · API",
       "tabExcel": "History · Excel",
       "tabPublications": "Publications",
+      "tabComunicados": "Decisions · MPR",
       "adminRequired": "Administrator role required.",
       "sectors": {
         "sector_real": "Real sector",
@@ -2306,6 +2307,37 @@
         "range": "{{min}} → {{max}} ({{points}} points)",
         "maxErr": "max error ·",
         "differences": "Differences:"
+      }
+    },
+    "comunicados": {
+      "intro": "Monetary Board communiqués: each Monetary Policy Rate (MPR) decision, with its direction, the resulting level, and an analysis of the rationale.",
+      "loadError": "Could not load the communiqués.",
+      "retry": "Retry",
+      "empty": "No communiqués ingested yet.",
+      "statComunicados": "Communiqués",
+      "statChanges": "Rate changes",
+      "statLatestTpm": "Current MPR",
+      "statLatestDecision": "Latest decision",
+      "timelineTitle": "MPR path",
+      "timelineSub": "Monetary Policy Rate level by meeting",
+      "tableTitle": "Monetary policy decisions",
+      "tableSub": "{{count}} communiqués",
+      "colDate": "Date",
+      "colDecision": "Decision",
+      "colTpm": "MPR",
+      "colChange": "Δ (bps)",
+      "colBcrd": "BCRD",
+      "view": "View",
+      "noLatest": "No recent decision.",
+      "latestTitle": "Latest decision",
+      "tpmLabel": "MPR",
+      "keyFigures": "Key figures",
+      "findings": "Key points",
+      "risks": "Risks and considerations",
+      "decision": {
+        "hold": "Hold",
+        "cut": "Cut",
+        "hike": "Hike"
       }
     },
     "publications": {

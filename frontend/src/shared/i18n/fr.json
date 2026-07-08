@@ -2149,6 +2149,7 @@
       "tabApi": "Séries · API",
       "tabExcel": "Historique · Excel",
       "tabPublications": "Publications",
+      "tabComunicados": "Décisions · TPM",
       "adminRequired": "Rôle d'administrateur requis.",
       "sectors": {
         "sector_real": "Secteur réel",
@@ -2306,6 +2307,37 @@
         "range": "{{min}} → {{max}} ({{points}} points)",
         "maxErr": "erreur max ·",
         "differences": "Différences :"
+      }
+    },
+    "comunicados": {
+      "intro": "Communiqués du Conseil monétaire : chaque décision sur le taux directeur (TPM), avec son sens, le niveau résultant et l'analyse de la justification.",
+      "loadError": "Impossible de charger les communiqués.",
+      "retry": "Réessayer",
+      "empty": "Aucun communiqué ingéré pour l'instant.",
+      "statComunicados": "Communiqués",
+      "statChanges": "Changements de taux",
+      "statLatestTpm": "TPM en vigueur",
+      "statLatestDecision": "Dernière décision",
+      "timelineTitle": "Trajectoire du TPM",
+      "timelineSub": "Niveau du taux directeur par réunion",
+      "tableTitle": "Décisions de politique monétaire",
+      "tableSub": "{{count}} communiqués",
+      "colDate": "Date",
+      "colDecision": "Décision",
+      "colTpm": "TPM",
+      "colChange": "Δ (pb)",
+      "colBcrd": "BCRD",
+      "view": "Voir",
+      "noLatest": "Aucune décision récente.",
+      "latestTitle": "Dernière décision",
+      "tpmLabel": "TPM",
+      "keyFigures": "Chiffres clés",
+      "findings": "Points clés",
+      "risks": "Risques et considérations",
+      "decision": {
+        "hold": "Maintient",
+        "cut": "Baisse",
+        "hike": "Hausse"
       }
     },
     "publications": {
