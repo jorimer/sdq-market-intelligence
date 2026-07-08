@@ -807,3 +807,42 @@ def refresh_comunicados(
     current_user: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
     return com_service.ingest_comunicados(db, limit=limit, force=force)
+
+
+# ── Modelo de predicción de TPM (regla de Taylor + clasificador XGBoost) ──
+@router.get(
+    "/comunicados/forecast",
+    summary="Pronóstico de la próxima decisión de TPM (probabilidades + tasa implícita + sesgo)",
+    description=(
+        "Combina el clasificador XGBoost (distribución hold/cut/hike de la próxima decisión) "
+        "con la regla de reacción tipo Taylor (tasa implícita y sesgo restrictivo/expansivo), "
+        "sobre features macro POINT-IN-TIME. Análisis con incertidumbre, no consejo de "
+        "inversión. Si el modelo no está entrenado, indica correr la operación 'tpm-model-train'."
+    ),
+)
+def tpm_forecast(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.macro_monitor.tpm_modeling import service as tpm_service
+
+    return tpm_service.get_forecast(db)
+
+
+@router.get(
+    "/comunicados/model/backtest",
+    summary="Backtest del modelo de TPM (métricas time-series)",
+    description=(
+        "Reporte del backtest expanding-window out-of-sample: recall/precisión POR CLASE y "
+        "macro-F1 del clasificador vs el baseline 'siempre mantener', más el error del nivel "
+        "y el poder direccional a 6-12 meses de la regla de Taylor. Persistido por la "
+        "operación 'tpm-model-train'."
+    ),
+)
+def tpm_model_backtest(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.macro_monitor.tpm_modeling import service as tpm_service
+
+    return tpm_service.get_backtest(db)
