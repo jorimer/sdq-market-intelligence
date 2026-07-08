@@ -28,11 +28,21 @@ Candidate = Tuple[str, str]
 
 
 def _ipom_candidates(year: int) -> List[Candidate]:
-    """Informe de Política Monetaria — semestral (junio / diciembre)."""
-    return [
-        (f"{year}-12", f"{_IPOM_DIR}/informepm{year}-12.pdf"),
-        (f"{year}-06", f"{_IPOM_DIR}/informepm{year}-06.pdf"),
-    ]
+    """Informe de Política Monetaria — trimestral desde 2026.
+
+    El BCRD renombró el archivo en 2026 (``IPoM-{mes}-{año}.pdf``, mes en
+    minúscula) y pasó de semestral a trimestral. 2025 y años previos conservan el
+    nombre viejo ``informepm{año}-{mm}.pdf`` (solo junio / diciembre). Emitimos
+    ambos patrones newest-first; el probe se queda con la primera URL que exista,
+    así que no hace falta un año de corte hardcodeado. Verificado 2026-07 (marzo y
+    junio 2026 con el patrón nuevo devuelven 200; el viejo, 404).
+    """
+    out: List[Candidate] = []
+    for month in (12, 9, 6, 3):  # trimestres, más reciente primero
+        out.append((f"{year}-{month:02d}", f"{_IPOM_DIR}/IPoM-{_MESES[month].lower()}-{year}.pdf"))
+        if month in (12, 6):  # fallback histórico: naming viejo, cadencia semestral
+            out.append((f"{year}-{month:02d}", f"{_IPOM_DIR}/informepm{year}-{month:02d}.pdf"))
+    return out
 
 
 def _infeco_candidates(year: int) -> List[Candidate]:
@@ -100,7 +110,7 @@ REPORTS: Dict[str, ReportSpec] = {
     "politica_monetaria": ReportSpec(
         key="politica_monetaria",
         name="Informe de Política Monetaria (IPOM)",
-        cadence="semestral",
+        cadence="trimestral",
         sectors=("macro",),
         landing_url="https://www.bancentral.gov.do/a/d/2535-informe-de-politica-monetaria",
         _candidates=_ipom_candidates,

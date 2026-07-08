@@ -88,7 +88,7 @@ def test_catalog_reports_latest_period(db):
     reports = {x["key"]: x for x in r.json()["reports"]}
     assert reports["politica_monetaria"]["latest_ingested_period"] == "2025-06"
     assert reports["estabilidad_financiera"]["latest_ingested_period"] is None
-    assert reports["politica_monetaria"]["cadence"] == "semestral"
+    assert reports["politica_monetaria"]["cadence"] == "trimestral"
 
 
 def test_detail_includes_full_digest(db):

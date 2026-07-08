@@ -38,11 +38,22 @@ def test_report_catalog_has_three():
     }
 
 
-def test_ipom_candidates_are_semestral():
-    cands = catalog.REPORTS["politica_monetaria"].candidates(2025)
+def test_ipom_candidates_trimestral_with_legacy_fallback():
+    # BCRD renamed the file in 2026 (IPoM-{mes}-{año}.pdf) and went quarterly.
+    cands = catalog.REPORTS["politica_monetaria"].candidates(2026)
     periods = [p for p, _ in cands]
-    assert periods == ["2025-12", "2025-06"]
-    assert all(u.endswith(".pdf") and "informepm" in u for _, u in cands)
+    # four quarters newest-first; Dec/Jun each also emit a legacy fallback url
+    assert periods == ["2026-12", "2026-12", "2026-09", "2026-06", "2026-06", "2026-03"]
+    urls = [u for _, u in cands]
+    # new naming (lowercase month) for every quarter
+    assert any(u.endswith("IPoM-marzo-2026.pdf") for u in urls)
+    assert any(u.endswith("IPoM-junio-2026.pdf") for u in urls)
+    assert any(u.endswith("IPoM-septiembre-2026.pdf") for u in urls)
+    assert any(u.endswith("IPoM-diciembre-2026.pdf") for u in urls)
+    # legacy fallback preserved only where it existed (semestral: jun/dic)
+    assert any(u.endswith("informepm2026-12.pdf") for u in urls)
+    assert any(u.endswith("informepm2026-06.pdf") for u in urls)
+    assert not any("informepm2026-03" in u or "informepm2026-09" in u for u in urls)
 
 
 def test_estabilidad_candidates_include_month_and_year_variants():
@@ -61,9 +72,10 @@ def test_infeco_candidates_prefer_definitivo():
 
 
 def test_candidate_urls_newest_year_first():
-    cands = catalog.candidate_urls("politica_monetaria", 2025, lookback_years=1)
+    cands = catalog.candidate_urls("politica_monetaria", 2026, lookback_years=1)
     periods = [p for p, _ in cands]
-    assert periods == ["2025-12", "2025-06", "2024-12", "2024-06"]
+    assert periods[:6] == ["2026-12", "2026-12", "2026-09", "2026-06", "2026-06", "2026-03"]
+    assert periods[6:] == ["2025-12", "2025-12", "2025-09", "2025-06", "2025-06", "2025-03"]
 
 
 # ── digest parsing ────────────────────────────────────────────────
@@ -120,6 +132,34 @@ def test_resolve_latest_url_picks_first_existing():
     period, url = found
     assert period == "2025-06"
     assert url.endswith("informepm2025-06.pdf")
+
+
+def test_resolve_picks_latest_quarter_new_naming():
+    # Post-rename CDN: both marzo and junio 2026 exist; newest (junio) wins.
+    def probe(url):
+        return url.endswith("IPoM-marzo-2026.pdf") or url.endswith("IPoM-junio-2026.pdf")
+
+    found = service.resolve_latest_url(
+        "politica_monetaria", today=date(2026, 8, 1), probe=probe
+    )
+    assert found is not None
+    period, url = found
+    assert period == "2026-06"
+    assert url.endswith("IPoM-junio-2026.pdf")
+
+
+def test_resolve_falls_back_to_legacy_naming_pre_2026():
+    # Pre-rename editions keep the old informepm{año}-{mm}.pdf name.
+    def probe(url):
+        return url.endswith("informepm2025-12.pdf")
+
+    found = service.resolve_latest_url(
+        "politica_monetaria", today=date(2026, 1, 15), probe=probe
+    )
+    assert found is not None
+    period, url = found
+    assert period == "2025-12"
+    assert url.endswith("informepm2025-12.pdf")
 
 
 def test_resolve_latest_url_none_when_nothing_exists():
