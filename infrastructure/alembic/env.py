@@ -28,6 +28,7 @@ from modules.macro_political_risk.models.models import (  # noqa: F401
 from modules.macro_monitor.models.models import (  # noqa: F401
     ExcelFileReport, MacroSeries, MacroSnapshot,
 )
+from modules.macro_monitor.comunicados.models import ComunicadoTPM  # noqa: F401
 from modules.trade_intel.models.models import (  # noqa: F401
     TradeFlow, TradeScore,
 )
