@@ -759,6 +759,39 @@ def latest_comunicado(
     return out
 
 
+@router.get(
+    "/comunicados/trajectory",
+    summary="Trayectoria completa de la TPM (todas las decisiones)",
+    description="Solo la decisión (fecha/sentido/nivel/bps) de cada comunicado, sin cap ni digest — para el timeline histórico.",
+)
+def comunicados_trajectory(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    traj = com_service.trajectory(db)
+    return {"trajectory": traj, "count": len(traj)}
+
+
+@router.get(
+    "/comunicados/evaluation",
+    summary="Evaluación de IA de la política monetaria (postura + impacto macro)",
+    description="Lee la trayectoria de la TPM + el contexto macro y evalúa la postura del "
+    "BCRD y el impacto de las medidas. Best-effort: cae a fallback estático sin clave.",
+)
+def comunicados_evaluation(
+    audience: str = Query(
+        "comite",
+        description="Audiencia para orientar el insight (comite·inversionista·gobierno·empresa).",
+    ),
+    deep: bool = Query(False, description="Versión extendida (análisis completo)."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    ctx = com_service.mp_evaluation_context(db)
+    return {"has_data": ctx.get("has_data", False),
+            "ai_insight": _ai_insight(ctx, "mp_evaluation", audience, deep)}
+
+
 @router.post(
     "/comunicados/refresh",
     summary="Ingerir los comunicados de política monetaria más recientes (admin)",

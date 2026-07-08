@@ -222,3 +222,37 @@ def test_latest_and_prompt_context(db):
 
 def test_prompt_context_none_when_empty(db):
     assert com_service.comunicado_prompt_context(db) is None
+
+
+def _add(db, aid, date, action, tpm, status="ok", digest=None):
+    db.add(ComunicadoTPM(article_id=aid, string_id=f"{aid}-x", title="t", decision_date=date,
+                         action=action, tpm_level=tpm, status=status, digest=digest))
+    db.commit()
+
+
+def test_trajectory_is_newest_first_and_only_decisions(db):
+    _add(db, 1, "2025-01-31", "hold", 6.0)
+    _add(db, 2, "2025-02-28", "cut", 5.75)
+    _add(db, 3, "2025-03-31", None, None)          # no-decisión (estructurado sin sentido)
+    traj = com_service.trajectory(db)
+    assert [t["fecha"] for t in traj] == ["2025-02-28", "2025-01-31"]  # newest-first, sin la None
+    assert traj[0] == {"fecha": "2025-02-28", "sentido": "cut", "tpm": 5.75, "bps": None}
+
+
+def test_mp_evaluation_context_summarizes_cycle(db):
+    _add(db, 1, "2025-01-31", "hike", 6.0)
+    _add(db, 2, "2025-02-28", "cut", 5.75)
+    _add(db, 3, "2025-03-31", "hold", 5.75,
+         digest={"resumen": "r", "cifras": [{"etiqueta": "Inflación", "valor": "5%"}],
+                 "hallazgos": ["h"], "riesgos": ["riesgo"]})
+    ctx = com_service.mp_evaluation_context(db)
+    assert ctx["has_data"] is True
+    assert ctx["postura_actual"] == {"fecha": "2025-03-31", "sentido": "mantuvo", "tpm": 5.75}
+    assert ctx["ciclo"]["ultimos_24m"] == {"holds": 1, "cortes": 1, "alzas": 1}
+    assert ctx["ciclo"]["decisiones_en_historico"] == 3
+    assert ctx["contexto_macro"]["cifras"] == [{"etiqueta": "Inflación", "valor": "5%"}]
+    assert [t["fecha"] for t in ctx["trayectoria_reciente"]] == ["2025-03-31", "2025-02-28", "2025-01-31"]
+
+
+def test_mp_evaluation_context_empty(db):
+    assert com_service.mp_evaluation_context(db)["has_data"] is False

@@ -731,6 +731,18 @@ THIN_TEMPLATES = {
         "BCRD, señala la postura vigente —nivel de la TPM y sentido de la decisión— y conéctala con "
         "la coyuntura; el resto del contexto oficial úsalo como telón y cítalo breve."
     ),
+    "mp_evaluation": (
+        "Evalúa la POSTURA de política monetaria del BCRD y su impacto macro (dato real BCRD).\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 380 palabras. Lee la 'trayectoria_reciente' y el 'ciclo' (holds/cortes/alzas, "
+        "nivel de TPM actual vs 12 y 24 decisiones atrás) para caracterizar la FASE del ciclo "
+        "(restrictiva, neutral, de distensión o de ajuste). Valora la coherencia de la "
+        "'postura_actual' con el 'contexto_macro' (inflación vs meta, actividad): dado el balance "
+        "de riesgos, ¿la postura es adecuada, rezagada o anticipada? Comenta el IMPACTO y la "
+        "transmisión esperados (crédito, actividad, tipo de cambio). Conecta con la decisión de la "
+        "audiencia. Usa EXCLUSIVAMENTE las cifras del contexto; NO inventes valores. Si "
+        "'has_data' es falso, dilo en una línea."
+    ),
     "fiscal_pulse": (
         "Analiza el PULSO FISCAL del Gobierno Central (dato real Hacienda/DGII).\n"
         "Contexto:\n{context}\n\n"

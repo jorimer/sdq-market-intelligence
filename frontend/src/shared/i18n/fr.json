@@ -2311,6 +2311,8 @@
     },
     "comunicados": {
       "intro": "Communiqués du Conseil monétaire : chaque décision sur le taux directeur (TPM), avec son sens, le niveau résultant et l'analyse de la justification.",
+      "evalTitle": "Évaluation de la politique monétaire",
+      "evalSub": "Posture de la BCRD et impact macro des mesures (IA)",
       "loadError": "Impossible de charger les communiqués.",
       "retry": "Réessayer",
       "empty": "Aucun communiqué ingéré pour l'instant.",

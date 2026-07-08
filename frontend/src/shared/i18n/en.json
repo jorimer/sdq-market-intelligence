@@ -2311,6 +2311,8 @@
     },
     "comunicados": {
       "intro": "Monetary Board communiqués: each Monetary Policy Rate (MPR) decision, with its direction, the resulting level, and an analysis of the rationale.",
+      "evalTitle": "Monetary policy assessment",
+      "evalSub": "BCRD stance and the macro impact of the measures (AI)",
       "loadError": "Could not load the communiqués.",
       "retry": "Retry",
       "empty": "No communiqués ingested yet.",

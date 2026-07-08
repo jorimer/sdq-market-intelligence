@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   BarChart3,
   ListChecks,
+  Scale,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -20,12 +21,16 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardHead, StatTile, Chip, StateBlock, LoadingGrid } from "@/shared/ui/primitives";
+import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { Tone } from "@/shared/lib/bands";
 import {
   getComunicados,
   getComunicadoLatest,
+  getComunicadoTrajectory,
+  getComunicadoEvaluation,
   Comunicado,
   ComunicadoLatest,
+  TrajectoryPoint,
   TpmAction,
 } from "../api";
 
@@ -49,13 +54,19 @@ export function ComunicadosSection() {
   const [status, setStatus] = useState<Status>("loading");
   const [rows, setRows] = useState<Comunicado[]>([]);
   const [latest, setLatest] = useState<ComunicadoLatest | null>(null);
+  const [traj, setTraj] = useState<TrajectoryPoint[]>([]);
 
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      const [{ comunicados }, l] = await Promise.all([getComunicados(24), getComunicadoLatest()]);
+      const [{ comunicados }, l, tj] = await Promise.all([
+        getComunicados(24),
+        getComunicadoLatest(),
+        getComunicadoTrajectory(),
+      ]);
       setRows(comunicados);
       setLatest(l);
+      setTraj(tj);
       setStatus(comunicados.length === 0 ? "empty" : "ready");
     } catch {
       setStatus("error");
@@ -66,14 +77,15 @@ export function ComunicadosSection() {
     load();
   }, [load]);
 
-  // Serie para el timeline: de la más antigua a la más reciente (el paso de la TPM).
+  // Serie para el timeline: trayectoria COMPLETA (sin el cap del listado), de la más
+  // antigua a la más reciente (el paso de la TPM en el tiempo).
   const series = useMemo(
     () =>
-      [...rows]
-        .filter((r) => r.status === "ok" && r.tpm_level != null && r.date)
-        .sort((a, b) => (a.date! < b.date! ? -1 : 1))
-        .map((r) => ({ date: r.date as string, tpm: r.tpm_level as number })),
-    [rows],
+      [...traj]
+        .filter((t) => t.tpm != null && t.fecha)
+        .sort((a, b) => (a.fecha! < b.fecha! ? -1 : 1))
+        .map((t) => ({ date: t.fecha as string, tpm: t.tpm as number })),
+    [traj],
   );
 
   const intro = (
@@ -113,7 +125,7 @@ export function ComunicadosSection() {
     );
   }
 
-  const changes = rows.filter((r) => r.action === "cut" || r.action === "hike").length;
+  const changes = traj.filter((t) => t.sentido === "cut" || t.sentido === "hike").length;
   const latestTpm = series.length ? series[series.length - 1].tpm : null;
 
   return (
@@ -177,6 +189,17 @@ export function ComunicadosSection() {
           </ResponsiveContainer>
         </Card>
       )}
+
+      <div className="mb-5">
+        <AiInsightCard
+          title={t("datos.comunicados.evalTitle")}
+          subtitle={t("datos.comunicados.evalSub")}
+          icon={Scale}
+          depsKey={`mp-eval:${latest?.id ?? "none"}`}
+          fetcher={() => getComunicadoEvaluation()}
+          deepFetcher={(deep) => getComunicadoEvaluation("comite", deep)}
+        />
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
