@@ -17,6 +17,7 @@ from shared.operations.service import (
     seed_default_schedules,
 )
 from shared.operations import freshness as fr
+from shared.publications.models import Publication
 from shared.settings.models import AppSetting
 
 
@@ -26,7 +27,7 @@ def db():
                            poolclass=StaticPool)
     Base.metadata.create_all(engine, tables=[
         OperationSchedule.__table__, OperationRun.__table__, AppSetting.__table__,
-        User.__table__, Notification.__table__,
+        User.__table__, Notification.__table__, Publication.__table__,
     ])
     s = sessionmaker(bind=engine)()
     try:
@@ -140,6 +141,65 @@ def test_audit_dedups_then_renotifies_after_recovery(db, temp_ops):
 
 def _uid(db, email):
     return db.query(User).filter_by(email=email).first().id
+
+
+# ── frescura de publicaciones BCRD (edición nueva que no aparece) ──
+
+def _seed_pub(db, report_key, age_days, status="ok"):
+    """Inserta una edición ingerida con created_at hace *age_days* días."""
+    row = Publication(report_key=report_key, report_name=report_key, period=f"p{age_days}",
+                      status=status, created_at=_naive_now() - timedelta(days=age_days))
+    db.add(row)
+    db.commit()
+    return row
+
+
+def test_publication_stale_alerts_admins(db):
+    # IPOM es trimestral (90d); umbral = 90 * 1.5 = 135d. 200 días → atrasado.
+    _admin(db, "admin@x.com", UserRole.admin)
+    _admin(db, "viewer@x.com", UserRole.viewer)  # NO debe recibir
+    _seed_pub(db, "politica_monetaria", age_days=200)
+    alerted = fr._audit_publications(db, [_uid(db, "admin@x.com")], _naive_now())
+    assert alerted == ["politica_monetaria"]
+    assert db.query(Notification).filter_by(user_id=_uid(db, "admin@x.com")).count() == 1
+
+
+def test_publication_fresh_no_alert(db):
+    _admin(db)
+    _seed_pub(db, "politica_monetaria", age_days=10)  # dentro de la cadencia trimestral
+    alerted = fr._audit_publications(db, [_uid(db, "a@x.com")], _naive_now())
+    assert alerted == []
+    assert db.query(Notification).count() == 0
+
+
+def test_publication_never_ingested_is_not_alerted_here(db):
+    # Sin filas ingeridas → lo cubre la frescura de la OPERACIÓN, no esta auditoría.
+    _admin(db)
+    alerted = fr._audit_publications(db, [_uid(db, "a@x.com")], _naive_now())
+    assert alerted == []
+    assert db.query(Notification).count() == 0
+
+
+def test_publication_errored_edition_does_not_count(db):
+    # Una edición 'error' vieja no cuenta como ingestión exitosa → no hay 'ok' → no avisa.
+    _admin(db)
+    _seed_pub(db, "politica_monetaria", age_days=300, status="error")
+    alerted = fr._audit_publications(db, [_uid(db, "a@x.com")], _naive_now())
+    assert alerted == []
+
+
+def test_publication_dedups_then_clears_on_recovery(db):
+    _admin(db)
+    _seed_pub(db, "politica_monetaria", age_days=200)
+    fr._audit_publications(db, [_uid(db, "a@x.com")], _naive_now())  # 1er aviso
+    n1 = db.query(Notification).count()
+    assert n1 == 1
+    fr._audit_publications(db, [_uid(db, "a@x.com")], _naive_now())  # dedup
+    assert db.query(Notification).count() == n1
+    # aparece una edición nueva (fresca) → limpia el marcador para re-avisar si recae
+    _seed_pub(db, "politica_monetaria", age_days=1)
+    fr._audit_publications(db, [_uid(db, "a@x.com")], _naive_now())
+    assert db.query(AppSetting).filter_by(key=fr._alert_key("publication:politica_monetaria")).count() == 0
 
 
 def test_sovereign_audit_proposes_old_action(db, temp_ops):
