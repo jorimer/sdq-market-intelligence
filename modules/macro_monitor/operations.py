@@ -68,14 +68,22 @@ def _run_bcrd_comunicados_sync(params, user_id, set_phase) -> Dict:
 
 def _run_tpm_model_train(params, user_id, set_phase) -> Dict:
     """Entrena el modelo de predicción de TPM (regla de Taylor + clasificador XGBoost),
-    corre el backtest time-series y persiste modelo + reporte en AppSetting.
+    corre el backtest time-series y persiste modelo + reporte en AppSetting. Además mantiene
+    el track record EN VIVO: (1) puntúa el pronóstico pendiente contra las decisiones ya
+    conocidas, (2) re-entrena, (3) congela un pronóstico nuevo para la próxima decisión.
 
     Pesado (≈100 reentrenamientos en el backtest expanding-window) → va por la operación,
     no por endpoint síncrono. Sirve el forecast en /comunicados/forecast."""
-    from modules.macro_monitor.tpm_modeling import service as tpm_service
+    from modules.macro_monitor.tpm_modeling import ledger, service as tpm_service
     db = SessionLocal()
     try:
-        return tpm_service.train_and_persist(db, trained_by=user_id, set_phase=set_phase)
+        set_phase("puntuando pronósticos pendientes vs decisiones reales")
+        scored = ledger.score_pending(db)
+        result = tpm_service.train_and_persist(db, trained_by=user_id, set_phase=set_phase)
+        set_phase("registrando pronóstico en vivo para la próxima decisión")
+        snapshot = ledger.snapshot_forecast(db)
+        result["ledger"] = {"scored": scored, "snapshot": snapshot}
+        return result
     finally:
         db.close()
 

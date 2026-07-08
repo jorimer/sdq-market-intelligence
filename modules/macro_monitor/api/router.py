@@ -846,3 +846,23 @@ def tpm_model_backtest(
     from modules.macro_monitor.tpm_modeling import service as tpm_service
 
     return tpm_service.get_backtest(db)
+
+
+@router.get(
+    "/comunicados/forecast/track-record",
+    summary="Track record EN VIVO del modelo de TPM (aciertos acumulados)",
+    description=(
+        "Historial PROSPECTIVO: cada pronóstico se congela antes de la decisión y se puntúa "
+        "contra la decisión real cuando el BCRD la publica (acierto top-1, Brier score, error "
+        "del nivel implícito). Distinto del backtest histórico: es evidencia en tiempo real, "
+        "inmune a look-ahead. Crece ~1 por reunión de la Junta Monetaria; con muestra chica "
+        "léase junto al backtest. La operación 'tpm-model-train' lo mantiene al día."
+    ),
+)
+def tpm_track_record(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from modules.macro_monitor.tpm_modeling import ledger
+
+    return ledger.track_record(db)
