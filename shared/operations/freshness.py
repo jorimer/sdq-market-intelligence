@@ -59,6 +59,21 @@ _PUBLICATION_CADENCE_HOURS = {
 }
 
 
+# Auditorías de frescura CONTRIBUIDAS por los módulos. `shared` no puede importar de
+# `modules` (dirección de dependencia), así que un módulo (p.ej. macro/comunicados)
+# registra aquí su propio chequeo de "dato viejo por fuente" en tiempo de import. Cada
+# callback recibe (db, admin_ids, now) y devuelve las claves avisadas. Reusan los helpers
+# de dedup/notificación de este módulo. Ver :func:`register_freshness_audit`.
+ExtraAuditFn = "Callable[[Session, List[str], datetime], List[str]]"
+_EXTRA_AUDITS: List = []
+
+
+def register_freshness_audit(fn) -> None:
+    """Registra una auditoría de frescura contribuida por un módulo (idempotente por fn)."""
+    if fn not in _EXTRA_AUDITS:
+        _EXTRA_AUDITS.append(fn)
+
+
 def _now_naive() -> datetime:
     """UTC naive (las columnas DateTime son naive: Postgres TIMESTAMP s/ TZ + SQLite)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -274,10 +289,18 @@ def run_freshness_audit(db: Session) -> Dict:
     sovereign_proposed = _audit_sovereign_ratings(db, admin_ids, now)
     publications_stale = _audit_publications(db, admin_ids, now)
 
+    extra_stale: List[str] = []
+    for fn in _EXTRA_AUDITS:
+        try:
+            extra_stale.extend(fn(db, admin_ids, now) or [])
+        except Exception as e:  # noqa: BLE001 — una auditoría contribuida no aborta el resto
+            logger.warning("auditoría de frescura contribuida falló (%s): %s", getattr(fn, "__name__", fn), e)
+
     return {"checked": checked, "n_overdue": len(overdue),
             "overdue": overdue, "notified": notified,
             "sovereign_proposed": sovereign_proposed,
-            "publications_stale": publications_stale}
+            "publications_stale": publications_stale,
+            "extra_stale": extra_stale}
 
 
 def _run(params, user_id, set_phase) -> Dict:

@@ -5,6 +5,7 @@ import { PageHead, Tabs } from "@/shared/ui/primitives";
 import { MacroApiSection } from "../components/MacroApiSection";
 import { MacroExcelSection } from "../components/MacroExcelSection";
 import { PublicationsSection } from "@/modules/publications/components/PublicationsSection";
+import { ComunicadosSection } from "../components/ComunicadosSection";
 
 const STORAGE_KEY = "datos-macro-tab";
 
@@ -17,6 +18,7 @@ export function DatosMacroPage() {
     { id: "api", label: t("datos.macro.tabApi") },
     { id: "excel", label: t("datos.macro.tabExcel") },
     { id: "publicaciones", label: t("datos.macro.tabPublications") },
+    { id: "comunicados", label: t("datos.macro.tabComunicados") },
   ];
   const [params, setParams] = useSearchParams();
   const initial =
@@ -47,6 +49,7 @@ export function DatosMacroPage() {
       {tab === "api" && <MacroApiSection />}
       {tab === "excel" && <MacroExcelSection />}
       {tab === "publicaciones" && <PublicationsSection />}
+      {tab === "comunicados" && <ComunicadosSection />}
     </div>
   );
 }
