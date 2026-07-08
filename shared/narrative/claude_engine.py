@@ -727,7 +727,9 @@ THIN_TEMPLATES = {
         "Máximo 350 palabras. No repases todas las series: ve a las señales tempranas "
         "('signals') y a los 'top_movers' que más mueven la aguja por aceleración, y conecta con "
         "la decisión de la audiencia. Usa EXCLUSIVAMENTE las cifras del contexto; NO inventes "
-        "valores. Si hay 'contexto_oficial_bcrd', úsalo como telón y cítalo breve."
+        "valores. Si 'contexto_oficial_bcrd' incluye la última decisión de política monetaria del "
+        "BCRD, señala la postura vigente —nivel de la TPM y sentido de la decisión— y conéctala con "
+        "la coyuntura; el resto del contexto oficial úsalo como telón y cítalo breve."
     ),
     "fiscal_pulse": (
         "Analiza el PULSO FISCAL del Gobierno Central (dato real Hacienda/DGII).\n"
