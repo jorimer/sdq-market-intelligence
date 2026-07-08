@@ -32,6 +32,11 @@ logger = logging.getLogger("sdq.comunicados.source")
 BASE = "https://www.bancentral.gov.do"
 ENDPOINT = f"{BASE}/Home/GetContentForRender"
 LISTING_ID = 2576  # contenedor "Sala de prensa / Comunicados de política monetaria"
+# Endpoint paginable del CMS: devuelve TODO el histórico de una categoría en una sola
+# llamada (maxResultCount alto). CAT-036 = Comunicados de política monetaria. Se usa
+# para el backfill completo de la trayectoria; el listado recurrente usa GetContentForRender.
+ARTICLES_ENDPOINT = f"{BASE}/Home/GetArticles"
+CATEGORY_CODE = "CAT-036"
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; SDQ-MIP/1.0)",
@@ -45,6 +50,7 @@ _CUT = ("reduce", "redujo", "reducir", "baja", "disminuye", "recorta")
 _HIKE = ("incrementa", "incrementó", "aumenta", "aumentó", "sube", "eleva", "eleva")
 
 PostFn = Callable[[int], Dict]
+ArticlesFn = Callable[..., Dict]
 
 
 @dataclass(frozen=True)
@@ -80,6 +86,16 @@ def _post(article_id: int, timeout: int = 30) -> Dict:  # pragma: no cover - net
     return json.loads(resp.text, strict=False)
 
 
+def _post_articles(max_results: int = 400, skip: int = 0, timeout: int = 60) -> Dict:  # pragma: no cover - network I/O
+    """POST a GetArticles (endpoint paginable) — trae hasta *max_results* de la categoría."""
+    resp = httpx.post(ARTICLES_ENDPOINT, headers=_HEADERS, data={
+        "categoryCode": CATEGORY_CODE, "languageName": "es", "filter": "",
+        "skipCount": skip, "maxResultCount": max_results, "requestIsFromPortal": "true"},
+        timeout=timeout, follow_redirects=True)
+    resp.raise_for_status()
+    return json.loads(resp.text, strict=False)
+
+
 def _html_to_text(raw: str) -> str:
     """HTML → texto plano legible (colapsa espacios, desescapa entidades)."""
     if not raw:
@@ -109,19 +125,40 @@ def list_comunicados(limit: int = 50, *, post: PostFn = _post) -> List[Comunicad
     payload = post(LISTING_ID)
     items = (payload.get("result", {}).get("dynamicContent", {})
              .get("articleList", {}).get("articleList", {}).get("items", []))
-    refs: List[ComunicadoRef] = []
-    for it in items:
-        try:
-            aid = int(it["id"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        refs.append(ComunicadoRef(
-            article_id=aid,
-            string_id=str(it.get("stringId") or aid),
-            title=(it.get("title") or "").strip(),
-            date_iso=_date_iso(it.get("auxiliarDatetime1")),
-            preview=_html_to_text(it.get("previewContent") or ""),
-        ))
+    refs = [r for r in (_item_ref(it) for it in items) if r is not None]
+    refs.sort(key=lambda r: (r.date_iso or "", r.article_id), reverse=True)
+    return refs[:limit] if limit else refs
+
+
+def _item_ref(it: Dict) -> Optional[ComunicadoRef]:
+    """Construye un ComunicadoRef desde un item del listado/GetArticles.
+
+    Fecha: ``auxiliarDatetime1`` (recientes) con *fallback* a ``creationTime`` (históricos,
+    donde el primero viene vacío). Devuelve None si el id no es válido.
+    """
+    try:
+        aid = int(it["id"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return ComunicadoRef(
+        article_id=aid,
+        string_id=str(it.get("stringId") or aid),
+        title=(it.get("title") or "").strip(),
+        date_iso=_date_iso(it.get("auxiliarDatetime1")) or _date_iso(it.get("creationTime")),
+        preview=_html_to_text(it.get("previewContent") or ""),
+    )
+
+
+def list_all_comunicados(
+    limit: Optional[int] = None, *, post_articles: ArticlesFn = _post_articles, max_results: int = 400,
+) -> List[ComunicadoRef]:
+    """TODO el histórico de comunicados (GetArticles, una sola llamada), *newest-first*.
+
+    Para el backfill de la trayectoria completa. ``limit`` recorta desde el más reciente.
+    """
+    payload = post_articles(max_results, 0)
+    items = (payload.get("result", {}) or {}).get("items", []) or []
+    refs = [r for r in (_item_ref(it) for it in items) if r is not None]
     refs.sort(key=lambda r: (r.date_iso or "", r.article_id), reverse=True)
     return refs[:limit] if limit else refs
 

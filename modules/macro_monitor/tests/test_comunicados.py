@@ -77,6 +77,21 @@ def test_date_iso_ignores_sentinel():
     assert src._date_iso(None) is None
 
 
+def test_list_all_comunicados_date_fallback_and_sort():
+    # GetArticles: los históricos traen auxiliarDatetime1 vacío → fallback a creationTime.
+    payload = {"result": {"items": [
+        {"id": 1066, "stringId": "1066-x", "title": "BCRD mantiene su TPM en 5.25 %",
+         "auxiliarDatetime1": None, "creationTime": "2018-02-28T00:00:00Z",
+         "previewContent": "<p>viejo</p>"},
+        {"id": 6606, "stringId": "6606-x", "title": "BCRD mantiene su TPM en 5.25 %",
+         "auxiliarDatetime1": "2026-06-30T00:00:00Z", "creationTime": "2026-06-30T00:00:00Z",
+         "previewContent": "<p>nuevo</p>"},
+    ]}}
+    refs = src.list_all_comunicados(post_articles=lambda mx, skip: payload)
+    assert [r.article_id for r in refs] == [6606, 1066]      # newest-first
+    assert refs[1].date_iso == "2018-02-28"                  # fallback a creationTime
+
+
 def test_list_comunicados_parses_and_sorts_newest_first():
     payload = {"result": {"dynamicContent": {"articleList": {"articleList": {"items": [
         {"id": 6553, "stringId": "6553-bcrd-mantiene", "title": "BCRD mantiene ... 5.25 %",
@@ -159,6 +174,40 @@ def test_ingest_records_error_without_aborting_batch(db):
     assert res["ingested_ok"] == 1  # el segundo entra pese al fallo del primero
     bad = db.query(ComunicadoTPM).filter_by(article_id=6606).first()
     assert bad.status == "error" and "timeout CMS" in bad.error
+
+
+def test_digest_limit_only_recent_get_digest(db):
+    refs = [_ref(6606, "2026-06-30"), _ref(6582, "2026-05-29"), _ref(6553, "2026-04-30")]
+    calls = {"n": 0}
+
+    def counting_detail(aid):
+        calls["n"] += 1
+        return _detail(aid)
+
+    res = com_service.ingest_comunicados(
+        db, limit=None, digest_limit=1, list_fn=lambda limit=None: refs,
+        detail_fn=counting_detail, make_digest=_fake_digest)
+    assert res["ingested_ok"] == 3
+    assert calls["n"] == 1  # solo el más reciente trae detalle+digest IA
+    rows = {r.article_id: r for r in db.query(ComunicadoTPM).all()}
+    assert rows[6606].digest is not None
+    # el resto: estructurado (decisión del título), sin digest ni detalle
+    assert rows[6582].digest is None
+    assert rows[6582].action == "hold" and rows[6582].tpm_level == 5.25
+
+
+def test_ingest_skips_non_decisions(db):
+    # La categoría histórica mezcla "Nota Económica", FMI, etc. — sin sentido ni nivel → se omiten.
+    nota = src.ComunicadoRef(article_id=999, string_id="999-x",
+                             title="Nota Económica Enero 2010", date_iso="2010-01-31",
+                             preview="resumen económico del mes")
+    res = com_service.ingest_comunicados(
+        db, limit=None, digest_limit=0,
+        list_fn=lambda limit=None: [_ref(6606, "2026-06-30"), nota],
+        detail_fn=_detail, make_digest=_fake_digest)
+    assert res["skipped_nondecision"] == 1
+    assert db.query(ComunicadoTPM).filter_by(article_id=999).first() is None
+    assert db.query(ComunicadoTPM).filter_by(article_id=6606).first().action == "hold"
 
 
 def test_latest_and_prompt_context(db):

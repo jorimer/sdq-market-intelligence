@@ -42,13 +42,23 @@ def _run_bcrd_publications_sync(params, user_id, set_phase) -> Dict:
 
 
 def _run_bcrd_comunicados_sync(params, user_id, set_phase) -> Dict:
-    """Descubre e ingiere los comunicados de política monetaria (decisiones de TPM) más
-    recientes del BCRD, con la decisión estructurada + digest IA del racional. Idempotente
-    por artículo (omite los ya ok salvo force=true). `limit` en params (default 12)."""
+    """Descubre e ingiere los comunicados de política monetaria (decisiones de TPM) del BCRD,
+    con la decisión estructurada + digest IA del racional. Idempotente por artículo (omite
+    los ya ok salvo force=true).
+
+    Params: ``limit`` (default 12, recurrente). ``all=true`` hace el backfill de TODA la
+    trayectoria histórica (GetArticles) con SOLO dato estructurado, dejando el digest IA para
+    los ``digest_limit`` más recientes (default 24) — barato: sin IA para el histórico."""
     from modules.macro_monitor.comunicados import service as com_service
+    from modules.macro_monitor.comunicados import source as com_source
     db = SessionLocal()
     try:
         p = params or {}
+        if p.get("all"):
+            return com_service.ingest_comunicados(
+                db, limit=None, digest_limit=int(p.get("digest_limit", 24)),
+                force=bool(p.get("force")), list_fn=com_source.list_all_comunicados,
+                set_phase=set_phase)
         return com_service.ingest_comunicados(
             db, limit=int(p.get("limit") or 12), force=bool(p.get("force")),
             set_phase=set_phase)

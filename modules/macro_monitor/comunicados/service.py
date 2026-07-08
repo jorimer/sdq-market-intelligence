@@ -37,30 +37,46 @@ def _default_digest(text: str, name: str, period: str, sectors: tuple) -> Dict[s
 def ingest_comunicados(
     db: Session,
     *,
-    limit: int = 12,
+    limit: Optional[int] = 12,
     force: bool = False,
+    digest_limit: Optional[int] = None,
     list_fn: ListFn = src.list_comunicados,
     detail_fn: DetailFn = src.fetch_detail,
     make_digest: Optional[DigestFn] = None,
     set_phase: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
-    """Descubre los *limit* comunicados más recientes e ingiere los que falten.
+    """Descubre comunicados (los *limit* más recientes, o todos si limit=None) e ingiere
+    los que falten. Idempotente por ``article_id``: omite los ya ``ok`` salvo *force*.
 
-    Idempotente por ``article_id``: omite los ya ``ok`` salvo *force*. Cada fallo se
-    registra en su fila (``status='error'``) sin abortar el resto del lote.
+    ``digest_limit`` = cuántos de los más recientes reciben digest IA del racional (None =
+    todos, comportamiento del sync recurrente). Los demás se ingieren SOLO con la decisión
+    estructurada (fecha / sentido / nivel), sin traer el detalle ni llamar a la IA — barato
+    para el backfill de la trayectoria completa. Los items que NO son decisiones de TPM
+    (Notas Económicas, misiones FMI, colocaciones) se omiten (sin sentido ni nivel). Cada
+    fallo se registra en su fila sin abortar el lote.
     """
     make_digest = make_digest or _default_digest
     refs = list_fn(limit=limit)
     results: List[Dict[str, Any]] = []
     ingested = 0
+    skipped_nondecision = 0
 
     for i, ref in enumerate(refs, 1):
-        if set_phase:
-            set_phase(f"comunicado {i}/{len(refs)} ({ref.date_iso or ref.article_id})")
+        want_digest = digest_limit is None or i <= digest_limit
         existing = db.query(ComunicadoTPM).filter_by(article_id=ref.article_id).first()
         if existing and existing.status == "ok" and not force:
             results.append({"article_id": ref.article_id, "status": "skip", "date": ref.date_iso})
             continue
+
+        # Filtro de no-decisiones: si por título+preview no hay ni sentido ni nivel, no es
+        # una decisión de TPM (la categoría histórica mezcla Notas Económicas, FMI, etc.).
+        prelim = src.parse_decision(ref.title, ref.preview)
+        if not want_digest and prelim["action"] is None and prelim["tpm_level"] is None:
+            skipped_nondecision += 1
+            continue
+
+        if set_phase:
+            set_phase(f"comunicado {i}/{len(refs)} ({ref.date_iso or ref.article_id})")
 
         row = existing or ComunicadoTPM(article_id=ref.article_id)
         row.string_id = ref.string_id
@@ -73,14 +89,19 @@ def ingest_comunicados(
             db.add(row)
 
         try:
-            detail = detail_fn(ref.article_id)
-            body = detail.body_text or ref.preview
-            decision = src.parse_decision(ref.title, body)
+            if want_digest:
+                detail = detail_fn(ref.article_id)
+                body = detail.body_text or ref.preview
+                decision = src.parse_decision(ref.title, body)
+                row.digest = make_digest(body, _REPORT_NAME, ref.date_iso or ref.string_id, _SECTORS)
+            else:
+                body = ref.preview
+                decision = prelim
+                row.digest = None
             row.action = decision["action"]
             row.tpm_level = decision["tpm_level"]
             row.bps_change = decision["bps_change"]
             row.body_text = body[:20_000]
-            row.digest = make_digest(body, _REPORT_NAME, ref.date_iso or ref.string_id, _SECTORS)
             row.status = "ok"
             ingested += 1
         except Exception as e:  # noqa: BLE001 — registra el fallo, no tumba el lote
@@ -94,7 +115,8 @@ def ingest_comunicados(
                         "date": row.decision_date, "action": row.action,
                         "tpm_level": row.tpm_level})
 
-    return {"discovered": len(refs), "ingested_ok": ingested, "results": results}
+    return {"discovered": len(refs), "ingested_ok": ingested,
+            "skipped_nondecision": skipped_nondecision, "results": results}
 
 
 # ── Queries ───────────────────────────────────────────────────────
