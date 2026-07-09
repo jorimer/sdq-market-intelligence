@@ -59,6 +59,11 @@ KEEP_QUARTERS = 8
 TOP_PARTNERS = 30
 MIN_YEAR = 2024                  # querydata Año >= this (covers the window with margin)
 MIN_PARTNERS = 10                # below this the report structure changed → fail closed
+# El conceptualschema de ESTE reporte exige modelId ("Both ModelIds and ModelObjectIds are
+# empty") — un círculo vicioso (a diferencia del de TSS, que lo devuelve sin args). El
+# modelId es estable junto con el token (ambos cambian si la DGA republica → fail-closed →
+# fixture). Se intenta descubrirlo por conceptualschema y, si falla, se usa este conocido.
+KNOWN_MODEL_ID = 317763
 
 
 class DGAPartnersError(powerbi.PowerBIError):
@@ -230,7 +235,12 @@ class DGAPartnersClient(FixtureBackedClient):
         try:
             api = powerbi.resolve_api_host(VIEW_URL)
             with httpx.Client(http2=False, timeout=90, headers=powerbi.browser_headers()) as client:
-                model_id = powerbi.fetch_model_id(client, api, res_key)
+                # El conceptualschema de la DGA exige modelId (ver KNOWN_MODEL_ID); se intenta
+                # igual (por si el reporte pasa a soportarlo) y si falla se usa el conocido.
+                try:
+                    model_id = powerbi.fetch_model_id(client, api, res_key)
+                except Exception:  # noqa: BLE001
+                    model_id = KNOWN_MODEL_ID
                 resp = client.post(
                     f"{api}/public/reports/querydata?synchronous=true",
                     headers=powerbi.api_headers(res_key),
