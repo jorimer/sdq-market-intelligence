@@ -103,3 +103,16 @@ def test_trajectory_is_as_of_and_excludes_future(db):
     # Reporte del primer corte: no hay historia previa → sin trayectoria (una foto).
     snap = MacroProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope="DO")
     assert snap.payload.get("trajectory") in ({}, None)
+
+
+def test_peer_position_needs_panel_of_two(db):
+    # E2E-F4: panel de 1 país (solo DO en ese período) → sin peer_position (no "rank 1 de 1").
+    do = Country(iso_code="DO", name="República Dominicana", region="LATAM", is_active=True)
+    db.add(do)
+    db.flush()
+    db.add(IRMPSnapshot(country_id=do.id, period_end=dt.date(2025, 12, 31),
+                        irmp_score=40.0, risk_band=RiskBand.alto, peer_set_size=1,
+                        breakdown={}))
+    db.commit()
+    snap = MacroProduct(db).snapshot(ProductTier.insight, "2025-12-31", scope="DO")
+    assert snap.payload.get("peer_position") in ({}, None)

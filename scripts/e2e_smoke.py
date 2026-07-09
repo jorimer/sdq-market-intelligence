@@ -49,11 +49,13 @@ class _Client:
             import httpx
             self._c = httpx.Client(base_url=base.rstrip("/"), timeout=30)
             self.mode = f"httpx → {base}"
+            self.deployed = True
         else:
             from fastapi.testclient import TestClient
             from app.main import app
             self._c = TestClient(app)
             self.mode = "TestClient (in-process)"
+            self.deployed = False
         self.headers = {}
 
     def get(self, path, **kw):
@@ -87,11 +89,22 @@ def run() -> int:
     w = r.json().get("dimension_weights", {}) if r.status_code == 200 else {}
     check("pesos de doctrina suman 1.0", round(sum(w.values()), 6) == 1.0, f"suma={sum(w.values())}")
 
-    dataset = {
-        "DO": {"gdp_cagr_3y": 5.0, "public_debt_gdp": 45.0, "wgi_rule_of_law": 55.0},
-        "CR": {"gdp_cagr_3y": 3.0, "public_debt_gdp": 63.0, "wgi_rule_of_law": 65.0},
-        "PA": {"gdp_cagr_3y": 1.0, "public_debt_gdp": 52.0, "wgi_rule_of_law": 50.0},
-    }
+    # Dataset COMPLETO (las 5 dimensiones con sus variables). Un dataset parcial produce un
+    # IRMP con dimensiones de 0 variables que el servidor ahora rechaza al persistir (E2E-F4).
+    def _full(**over):
+        base = {"gdp_cagr_3y": 4.0, "inflation_gap": 1.0, "fiscal_balance_gdp": -3.0,
+                "public_debt_gdp": 50.0, "reserves_import_months": 4.0,
+                "current_account_gdp": -2.0, "fdi_gdp": 3.0, "fx_volatility": 3.0,
+                "sovereign_rating_score": 50.0, "wgi_rule_of_law": 55.0,
+                "wgi_gov_effectiveness": 55.0, "wgi_control_corruption": 45.0,
+                "wgi_political_stability": 60.0, "wgi_voice_accountability": 60.0,
+                "electoral_uncertainty": 30.0, "policy_continuity": 65.0,
+                "wgi_regulatory_quality": 55.0, "regulatory_volatility_5y": 25.0,
+                "discretion": 35.0, "contract_enforcement": 55.0,
+                "news_sentiment": -0.3, "unrest_shocks": 3.0, "sanctions_signal": 0.0}
+        base.update(over)
+        return base
+    dataset = {"DO": _full(), "CR": _full(public_debt_gdp=63.0), "PA": _full(gdp_cagr_3y=5.1)}
     r = c.post("/api/v1/macro-political-risk/score",
                json={"country_code": "DO", "dataset": dataset})
     check("IRMP /score 200 (motor compartido)", r.status_code == 200)
@@ -103,18 +116,26 @@ def run() -> int:
 
     # ── Fase 1B: persistencia + eventos del IRMP ───────────────────
     print("\nFase 1B — macro_political_risk (persistencia + histórico)")
-    r = c.post("/api/v1/macro-political-risk/snapshot",
-               json={"country_code": "DO", "period_end": "2025-12-31",
-                     "country_name": "República Dominicana", "region": "Caribe",
-                     "dataset": dataset})
-    check("IRMP /snapshot 200 (persiste + publica irmp.updated)", r.status_code == 200,
-          f"status={r.status_code}")
-    snap_id = r.json().get("snapshot_id") if r.status_code == 200 else None
-    check("snapshot persistido con id", bool(snap_id))
-    r = c.get("/api/v1/macro-political-risk/DO/latest")
-    check("IRMP /DO/latest 200", r.status_code == 200 and r.json().get("has_snapshot") is True)
-    r = c.get("/api/v1/macro-political-risk/DO/history")
-    check("IRMP /DO/history ≥1", r.status_code == 200 and r.json().get("count", 0) >= 1)
+    if c.deployed:
+        # Un smoke contra un despliegue real debe ser de SOLO-LECTURA: escribir un snapshot
+        # de prueba a prod ya envenenó el histórico de DO una vez (E2E-F4). La ruta de
+        # persistencia se valida in-process (TestClient), no contra prod.
+        print("  (omitido: no se escribe /snapshot contra un despliegue real)")
+        r = c.get("/api/v1/macro-political-risk/DO/history")
+        check("IRMP /DO/history 200 (solo lectura)", r.status_code == 200)
+    else:
+        r = c.post("/api/v1/macro-political-risk/snapshot",
+                   json={"country_code": "DO", "period_end": "2025-12-31",
+                         "country_name": "República Dominicana", "region": "Caribe",
+                         "dataset": dataset})
+        check("IRMP /snapshot 200 (persiste + publica irmp.updated)", r.status_code == 200,
+              f"status={r.status_code}")
+        snap_id = r.json().get("snapshot_id") if r.status_code == 200 else None
+        check("snapshot persistido con id", bool(snap_id))
+        r = c.get("/api/v1/macro-political-risk/DO/latest")
+        check("IRMP /DO/latest 200", r.status_code == 200 and r.json().get("has_snapshot") is True)
+        r = c.get("/api/v1/macro-political-risk/DO/history")
+        check("IRMP /DO/history ≥1", r.status_code == 200 and r.json().get("count", 0) >= 1)
 
     # ── Fase 1A: banking_score responde ────────────────────────────
     print("\nFase 1A — banking_score")

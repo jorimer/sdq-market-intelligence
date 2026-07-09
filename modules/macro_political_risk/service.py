@@ -25,6 +25,16 @@ from modules.macro_political_risk.scoring.engine import run_irmp
 logger = logging.getLogger("sdq.macro_political_risk.service")
 
 
+def snapshot_breakdown_incomplete(breakdown: Optional[Dict[str, Any]]) -> bool:
+    """True si el breakdown dimensional tiene alguna dimensión SIN variables — un IRMP
+    inválido (p.ej. computado desde un dataset parcial). Un IRMP legítimo puebla las 5
+    dimensiones; una dimensión con 0 variables da score 0 y falsea el índice. Criterio
+    único usado por la guarda de persistencia (E2E-F4) y por la op de limpieza."""
+    if not breakdown:
+        return True
+    return any(not (d or {}).get("variables") for d in breakdown.values())
+
+
 def _get_or_create_country(
     db: Session, iso_code: str, name: Optional[str] = None, region: Optional[str] = None
 ) -> Country:
@@ -55,6 +65,17 @@ def compute_and_persist(
     persisted ``snapshot_id``.
     """
     result = run_irmp(country_code, dataset)  # raises KeyError if absent
+
+    # E2E-F4: guarda de completitud. Un dataset parcial (p.ej. el smoke E2E con 3 variables)
+    # produce un IRMP con dimensiones de 0 variables (score 0) — una lectura inválida que
+    # nunca debe persistirse a prod. Un IRMP legítimo puebla las 5 dimensiones.
+    if snapshot_breakdown_incomplete(result.get("dimensions")):
+        empties = [k for k, d in (result.get("dimensions") or {}).items()
+                   if not (d or {}).get("variables")]
+        raise ValueError(
+            f"Dataset IRMP incompleto para {country_code}: dimensiones sin variables "
+            f"({', '.join(empties) or 'todas'}). No se persiste un snapshot parcial."
+        )
 
     country = _get_or_create_country(db, country_code, country_name, region)
 
@@ -102,6 +123,24 @@ def compute_and_persist(
     )
 
     return {**result, "snapshot_id": snapshot.id, "period_end": period_end.isoformat()}
+
+
+def delete_invalid_snapshots(db: Session) -> Dict[str, Any]:
+    """Borra los IRMPSnapshot con breakdown incompleto (alguna dimensión con 0 variables) —
+    lecturas inválidas de datasets parciales (E2E-F4). Reutilizable e idempotente: sin
+    snapshots inválidos no borra nada. La cascada delete-orphan limpia las filas de dimensión.
+    """
+    victims = [s for s in db.query(IRMPSnapshot).all()
+               if snapshot_breakdown_incomplete(s.breakdown)]
+    removed = [{"country": (s.country.iso_code if s.country else s.country_id),
+                "period_end": str(s.period_end), "irmp_score": s.irmp_score}
+               for s in victims]
+    for s in victims:
+        db.delete(s)
+    db.commit()
+    logger.info("IRMP cleanup: %d snapshots inválidos borrados: %s",
+                len(removed), removed)
+    return {"deleted": len(removed), "snapshots": removed}
 
 
 def get_latest(db: Session, country_code: str) -> Optional[IRMPSnapshot]:

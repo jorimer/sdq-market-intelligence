@@ -293,7 +293,9 @@ class MacroProduct:
             logger.warning("Panel IRMP no disponible: %s", e)
             return {}
         scored = [s for s in panel if s.irmp_score is not None]
-        if not scored:
+        # E2E-F4: un panel de <2 países no informa posición relativa (evita el falso
+        # "rank 1 de 1" cuando el período del sujeto no tiene peers persistidos).
+        if len(scored) < 2:
             return {}
         rank = next((i + 1 for i, s in enumerate(scored)
                      if s.country and s.country.iso_code == iso), None)
