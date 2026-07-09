@@ -285,6 +285,7 @@ class MacroProduct:
     def _peer_position(self, db: Session, iso: str, period_end) -> Dict[str, Any]:
         """Rank del país y distribución del panel para su período, en SAVEPOINT."""
         from modules.macro_political_risk import service as irmp_svc
+        from shared.indices.panel import annotate_panel_position
         try:
             with db.begin_nested():
                 panel = irmp_svc.get_panel(db, period_end)
@@ -298,7 +299,12 @@ class MacroProduct:
                      if s.country and s.country.iso_code == iso), None)
         vals = [s.irmp_score for s in scored]
         mean = round(sum(vals) / len(vals), 2)
+        # E2E-SYS1: percentil dentro del panel (100 = tope; mayor IRMP = menor riesgo).
+        subject = next((s.irmp_score for s in scored
+                        if s.country and s.country.iso_code == iso), None)
+        pos = annotate_panel_position(subject, vals)
         return {"rank": rank, "n_countries": len(scored),
+                "percentile": (pos["percentile"] if pos else None),
                 "distribution": {"mean": mean, "max": max(vals), "min": min(vals)}}
 
     # ── Snapshot ──

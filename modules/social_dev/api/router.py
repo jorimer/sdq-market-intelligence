@@ -208,10 +208,14 @@ async def insight(
         return {"has_score": False, "entity_key": entity_key, "ai_insight": None}
 
     # Rank + distribution among the regions of the same (latest) period — inequality read.
+    from shared.indices.panel import annotate_panel_position
     peers = [r for r in get_scores(db, s.period) if r.development_score is not None]
     peers.sort(key=lambda r: r.development_score, reverse=True)
     rank = next((i + 1 for i, r in enumerate(peers) if r.entity_key == entity_key), None)
     dist = distribution_stats([r.development_score for r in peers])
+    # E2E-SYS1: posición estructurada en el panel (antes solo iba a la prosa IA).
+    panel_position = annotate_panel_position(
+        s.development_score, [r.development_score for r in peers])
     name = dict(region_catalog()).get(entity_key)
     sources = assemble_idm_dataset(db, period=s.period)["sources"].get(entity_key)
     score = {"development_score": s.development_score, "band": s.band,
@@ -219,4 +223,5 @@ async def insight(
     ctx = social_ai_context(entity_key, score, region_name=name, sources=sources,
                             rank=rank, n_regions=len(peers), distribution=dist)
     return {"has_score": True, "entity_key": entity_key,
+            "panel_position": panel_position,
             "ai_insight": await _ai_insight(ctx, "social_outlook", audience, deep)}
