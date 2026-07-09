@@ -69,3 +69,37 @@ def test_deep_dive_still_populates_peer_position(db):
     snap = MacroProduct(db).snapshot(ProductTier.deep_dive, str(period), scope="DO")
     assert snap.payload.get("peer_position"), "Deep Dive no debe regresionar"
     assert snap.payload["peer_position"]["rank"] == 3
+
+
+def _seed_do_trajectory(db):
+    """3 cortes de DO (mejora sostenida) + 1 peer, para probar la trayectoria."""
+    do = Country(iso_code="DO", name="República Dominicana", region="LATAM", is_active=True)
+    cr = Country(iso_code="CR", name="Costa Rica", region="LATAM", is_active=True)
+    db.add_all([do, cr])
+    db.flush()
+    for pe, score in [(dt.date(2024, 12, 31), 44.0),
+                      (dt.date(2025, 6, 30), 46.0),
+                      (dt.date(2025, 12, 31), 48.66)]:
+        db.add(IRMPSnapshot(country_id=do.id, period_end=pe, irmp_score=score,
+                            risk_band=RiskBand.elevado, peer_set_size=2, breakdown={}))
+        db.add(IRMPSnapshot(country_id=cr.id, period_end=pe, irmp_score=58.0,
+                            risk_band=RiskBand.moderado, peer_set_size=2, breakdown={}))
+    db.commit()
+
+
+def test_trajectory_as_of_latest_period(db):
+    _seed_do_trajectory(db)
+    snap = MacroProduct(db).snapshot(ProductTier.insight, "2025-12-31", scope="DO")
+    traj = snap.payload.get("trajectory")
+    assert traj, "El Insight debe traer trayectoria cuando hay ≥2 cortes"
+    assert traj["n_periods"] == 3
+    assert traj["series"][0]["period"] == "2024-12-31"   # cronológico
+    assert traj["series"][-1]["period"] == "2025-12-31"
+    assert traj["delta"] == 4.66   # 48.66 − 44.0, mejora sostenida
+
+
+def test_trajectory_is_as_of_and_excludes_future(db):
+    _seed_do_trajectory(db)
+    # Reporte del primer corte: no hay historia previa → sin trayectoria (una foto).
+    snap = MacroProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope="DO")
+    assert snap.payload.get("trajectory") in ({}, None)
