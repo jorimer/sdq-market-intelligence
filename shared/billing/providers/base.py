@@ -48,6 +48,13 @@ class NormalizedEvent:
     tier: Optional[str] = None
     sku: Optional[str] = None
     period_end: Optional[str] = None  # ISO, fin del período de la suscripción
+    # Para facturar (Fase 4): el intervalo de la suscripción y/o el plan_id del proveedor
+    # (permite resolver el intervalo desde el mapa de planes) y el bruto realmente cobrado
+    # por el proveedor (reconciliación contra el desglose que computa la plataforma).
+    plan_id: Optional[str] = None
+    interval: Optional[str] = None
+    amount_gross: Optional[str] = None
+    amount_currency: Optional[str] = None
 
 
 class BillingProvider(Protocol):
@@ -60,13 +67,22 @@ class BillingProvider(Protocol):
         ...
 
     def create_order_checkout(self, *, sku: str, amount: str, currency: str, user_id: str,
-                              return_url: str, cancel_url: str) -> Checkout:
-        """Compra puntual (Deep Dive): crea la orden y devuelve el link de aprobación."""
+                              return_url: str, cancel_url: str,
+                              subtotal: Optional[str] = None, tax: Optional[str] = None) -> Checkout:
+        """Compra puntual (Deep Dive): crea la orden por el TOTAL (subtotal + impuesto) y
+        devuelve el link de aprobación. ``subtotal``/``tax`` alimentan el desglose del proveedor."""
         ...
 
-    def create_subscription_checkout(self, *, tier: str, user_id: str,
-                                     return_url: str, cancel_url: str) -> Checkout:
-        """Suscripción (plan Insight/Enterprise): crea la suscripción y devuelve el link."""
+    def create_subscription_checkout(self, *, sku: str, interval: str, user_id: str,
+                                     return_url: str, cancel_url: str,
+                                     tax_percentage: Optional[str] = None) -> Checkout:
+        """Suscripción (por-sector o bundle): crea la suscripción por su plan y devuelve el
+        link. ``tax_percentage`` aplica el impuesto sobre el precio base del plan."""
+        ...
+
+    def cancel_subscription(self, subscription_id: str, *, reason: str = "") -> None:
+        """Cancela una suscripción en el proveedor (a pedido del cliente). El proveedor emite
+        luego el webhook de cancelación que corta el acceso."""
         ...
 
     def verify_webhook(self, *, headers: dict, body: bytes) -> bool:

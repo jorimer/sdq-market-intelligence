@@ -63,6 +63,11 @@ export function CheckoutReturnPage() {
             ? tr("checkout.cancelledMsg", "No se realizó ningún cobro. Podés volver al catálogo cuando quieras.")
             : detail}
         </p>
+        {phase !== "cancelled" && (
+          <p className="text-[11px] text-faint mt-2">
+            {tr("checkout.viaPaypal", "El pago se procesó con PayPal, tu medio de pago. La factura con el desglose (subtotal + impuestos) queda en «Mi plan».")}
+          </p>
+        )}
         <div className="flex justify-center gap-2 mt-5">
           <Link to="/mi-plan" className="btn btn-soft">{tr("checkout.myPlan", "Ir a Mi plan")}</Link>
           <Link to="/catalog" className="btn btn-ghost">{tr("checkout.catalog", "Volver al catálogo")}</Link>

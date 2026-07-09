@@ -32,6 +32,41 @@ def _already_processed(db: Session, provider: str, event_id: str) -> bool:
     ).scalar()
 
 
+def _record_transaction(db: Session, provider: str, ev: NormalizedEvent, kind: str) -> None:
+    """Persiste la transacción facturable (desglose subtotal + impuesto = total) del cobro.
+    Desglose autoritativo desde el tarifario + país del cliente; si el precio ya no está en
+    el tarifario (cambió tras el checkout), back-deriva del bruto que cobró el proveedor.
+    Best-effort: un fallo al facturar NO revierte el acceso ya concedido."""
+    from shared.auth.models import User
+    from shared.billing.tariffs import price_for
+    from shared.billing.tax import compute_tax, compute_tax_from_total
+    from shared.billing.transactions import record_transaction
+    from shared.settings.service import get_tax_config
+
+    if not ev.user_id or not ev.sku:
+        return
+    try:
+        user = db.query(User).filter_by(id=ev.user_id).one_or_none()
+        country = getattr(user, "country", None) if user else None
+        cfg = get_tax_config(db)
+        interval = ev.interval or "once"
+        row = price_for(db, ev.sku, interval)
+        if row is not None:
+            bd = compute_tax(row.amount, currency=row.currency, country=country, config=cfg)
+        elif ev.amount_gross:
+            bd = compute_tax_from_total(ev.amount_gross,
+                                        currency=ev.amount_currency or "USD",
+                                        country=country, config=cfg)
+        else:
+            logger.warning("[billing] sin precio ni bruto para facturar %s (%s)", ev.sku, kind)
+            return
+        record_transaction(db, user_id=ev.user_id, sku=ev.sku, kind=kind, provider=provider,
+                            provider_ref=ev.provider_ref, event_id=ev.event_id,
+                            breakdown=bd, note="PayPal")
+    except Exception:  # noqa: BLE001 — facturar no debe tumbar la concesión de acceso
+        logger.exception("[billing] no se pudo registrar la transacción de %s", ev.sku)
+
+
 def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
     """Aplica un evento normalizado. Devuelve una etiqueta de lo hecho."""
     from shared.products.entitlements import grant_entitlement
@@ -46,6 +81,7 @@ def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
         grant_entitlement(db, user_id=ev.user_id, sector_key=ent[0], tier=ent[1].value,
                           granted_by=None, source="order",
                           note=f"PayPal {ev.provider_ref}")
+        _record_transaction(db, provider, ev, "order")
         return "entitlement_otorgado"
 
     if ev.kind == "subscription_active":
@@ -60,8 +96,10 @@ def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
                 period_end = None
         apply_subscription(db, user_id=ev.user_id, provider=provider,
                            provider_subscription_id=ev.provider_ref, sku=ev.sku,
+                           interval=ev.interval,
                            tier=tier_for_sku(ev.sku).value, status="active",
                            current_period_end=period_end, note="PayPal")
+        _record_transaction(db, provider, ev, "subscription")
         return "suscripcion_activa"
 
     if ev.kind in ("subscription_cancelled", "subscription_expired"):

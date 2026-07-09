@@ -64,6 +64,10 @@ class User(UUIDMixin, Base):
     # Nivel de acceso (monetización) — independiente del rol administrativo.
     tier = Column(Enum(AccessTier, name="access_tier"), default=AccessTier.free,
                   server_default=AccessTier.free.value, nullable=False)
+    # País de facturación (ISO-2) del cliente — define el trato fiscal del cobro (ITBIS RD
+    # vs exportación de servicios exenta). None/"" se resuelve como "DO" (default conservador:
+    # tributa, nunca exime por omisión). Ver ``shared/billing/tax.py``.
+    country = Column(String(2), nullable=True)
     organization_id = Column(String, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     failed_login_attempts = Column(Integer, default=0, nullable=False)
