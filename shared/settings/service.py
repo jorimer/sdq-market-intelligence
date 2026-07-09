@@ -538,3 +538,77 @@ def _persist_test(
         cfg.last_test_date = datetime.now(timezone.utc).isoformat()
         db.commit()
     return TestConnectionOut(status=status, detail=detail, httpStatus=http_status, viaProxy=via_proxy)
+
+
+# ── PayPal (pasarela de pago, Fase 3 de monetización) ──────────────────
+# Credenciales de la app PayPal Developer del comercio. Guardadas como AppSettings
+# (client_id/secret encriptados; webhook_id/env/enabled en claro). El adaptador las lee
+# con ``get_paypal_config``; la UI de admin las escribe (secretos preservados ante MASK).
+_PP_CLIENT_ID = "paypal_client_id"
+_PP_SECRET = "paypal_secret"
+_PP_WEBHOOK_ID = "paypal_webhook_id"
+_PP_ENV = "paypal_env"          # "sandbox" | "live"
+_PP_ENABLED = "paypal_enabled"  # "1" | "0"
+_PP_PLAN_PRO = "paypal_plan_pro"                # id del billing plan PayPal del tier pro
+_PP_PLAN_ENTERPRISE = "paypal_plan_enterprise"  # id del billing plan del tier enterprise
+
+
+def get_paypal_config(db: Session) -> Dict[str, object]:
+    """Config PayPal en CLARO para el adaptador. ``enabled`` True solo si está habilitado
+    Y hay client_id + secret. Sin valores → deshabilitado (la superficie de checkout
+    responde 'no configurado')."""
+    def _plain(key: str) -> str:
+        row = _get_app_setting(db, key)
+        return decrypt(row.value) if (row and row.value) else ""
+
+    def _clear(key: str) -> str:
+        row = _get_app_setting(db, key)
+        return (row.value or "") if row else ""
+
+    client_id = _plain(_PP_CLIENT_ID)
+    secret = _plain(_PP_SECRET)
+    enabled = _clear(_PP_ENABLED) == "1" and bool(client_id) and bool(secret)
+    env = _clear(_PP_ENV) or "sandbox"
+    return {"client_id": client_id, "secret": secret,
+            "webhook_id": _clear(_PP_WEBHOOK_ID), "env": env, "enabled": enabled,
+            "plans": {"pro": _clear(_PP_PLAN_PRO), "enterprise": _clear(_PP_PLAN_ENTERPRISE)}}
+
+
+def paypal_config_masked(db: Session) -> Dict[str, object]:
+    """Config PayPal para el endpoint de lectura: secretos ENMASCARADOS (nunca en claro)."""
+    cfg = get_paypal_config(db)
+    return {
+        "clientId": MASK if cfg["client_id"] else "",
+        "secret": MASK if cfg["secret"] else "",
+        "webhookId": cfg["webhook_id"],
+        "env": cfg["env"],
+        "planPro": cfg["plans"]["pro"],
+        "planEnterprise": cfg["plans"]["enterprise"],
+        "enabled": _get_app_setting(db, _PP_ENABLED) is not None
+                   and (_get_app_setting(db, _PP_ENABLED).value == "1"),
+        "configured": bool(cfg["enabled"]),
+    }
+
+
+def set_paypal_config(db: Session, *, client_id: Optional[str], secret: Optional[str],
+                      webhook_id: Optional[str], env: Optional[str],
+                      enabled: Optional[bool], plan_pro: Optional[str] = None,
+                      plan_enterprise: Optional[str] = None) -> Dict[str, object]:
+    """Guarda la config PayPal. Un secreto None o == MASK preserva el actual (no lo pisa
+    con la máscara). ``env`` se normaliza a sandbox|live."""
+    if client_id is not None and client_id != MASK:
+        _set_app_setting(db, _PP_CLIENT_ID, client_id.strip(), is_secret=True)
+    if secret is not None and secret != MASK:
+        _set_app_setting(db, _PP_SECRET, secret.strip(), is_secret=True)
+    if webhook_id is not None:
+        _set_app_setting(db, _PP_WEBHOOK_ID, webhook_id.strip(), is_secret=False)
+    if env is not None:
+        _set_app_setting(db, _PP_ENV, "live" if env == "live" else "sandbox", is_secret=False)
+    if enabled is not None:
+        _set_app_setting(db, _PP_ENABLED, "1" if enabled else "0", is_secret=False)
+    if plan_pro is not None:
+        _set_app_setting(db, _PP_PLAN_PRO, plan_pro.strip(), is_secret=False)
+    if plan_enterprise is not None:
+        _set_app_setting(db, _PP_PLAN_ENTERPRISE, plan_enterprise.strip(), is_secret=False)
+    db.commit()
+    return paypal_config_masked(db)

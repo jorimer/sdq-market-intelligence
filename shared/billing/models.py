@@ -57,3 +57,22 @@ class Tariff(UUIDMixin, Base):
         # Lookup del precio vigente: por sku + ventana de fechas.
         Index("ix_tariff_sku_window", "sku", "effective_from"),
     )
+
+
+class BillingEvent(UUIDMixin, Base):
+    """Evento de webhook YA procesado — idempotencia de la pasarela (Fase 3).
+
+    El proveedor puede reenviar el mismo evento; procesarlo dos veces duplicaría accesos.
+    Antes de aplicar un webhook se inserta ``(provider, event_id)`` único: si ya existe, se
+    ignora. ``kind`` guarda el tipo normalizado (order_paid / subscription_*) para auditar."""
+
+    __tablename__ = "billing_event"
+
+    provider = Column(String(20), nullable=False)     # paypal | azul
+    event_id = Column(String(128), nullable=False)    # id del evento en el proveedor
+    kind = Column(String(40), nullable=True)          # tipo normalizado aplicado
+    processed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("uq_billing_event", "provider", "event_id", unique=True),
+    )
