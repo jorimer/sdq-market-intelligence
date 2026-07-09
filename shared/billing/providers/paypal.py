@@ -108,21 +108,31 @@ class PayPalProvider:
         return Checkout(approval_url=self._approval_url(data.get("links", [])),
                         provider_ref=data.get("id", ""))
 
-    def create_subscription_checkout(self, *, tier: str, user_id: str,
+    def create_subscription_checkout(self, *, sku: str, interval: str, user_id: str,
                                      return_url: str, cancel_url: str) -> Checkout:
         self._require()
-        plan_id = (self._cfg.get("plans") or {}).get(tier)
+        plan_id = ((self._cfg.get("plans") or {}).get(sku) or {}).get(interval)
         if not plan_id:
-            raise ProviderNotConfigured(f"Falta el billing plan de PayPal para el tier '{tier}'.")
+            raise ProviderNotConfigured(
+                f"Falta el billing plan de PayPal para '{sku}' ({interval}). "
+                "Créalo en PayPal y mapéalo en Pagos · PayPal.")
         body = {
             "plan_id": plan_id,
-            "custom_id": encode_custom_id(user_id, "sub", tier),
+            "custom_id": encode_custom_id(user_id, "sub", sku),
             "application_context": {"return_url": return_url, "cancel_url": cancel_url,
                                     "user_action": "SUBSCRIBE_NOW", "shipping_preference": "NO_SHIPPING"},
         }
         data = self._post("/v1/billing/subscriptions", body)
         return Checkout(approval_url=self._approval_url(data.get("links", [])),
                         provider_ref=data.get("id", ""))
+
+    def capture_order(self, order_id: str) -> dict:
+        """Captura (cobra) una orden aprobada al volver el usuario de PayPal. Devuelve
+        ``{status, order_id}``. El acceso lo concede el webhook PAYMENT.CAPTURE.COMPLETED
+        (idempotente); acá solo se toma el pago."""
+        self._require()
+        data = self._post(f"/v2/checkout/orders/{order_id}/capture", {})
+        return {"status": data.get("status", ""), "order_id": data.get("id", order_id)}
 
     # ── Webhook ──
     def verify_webhook(self, *, headers: dict, body: bytes) -> bool:

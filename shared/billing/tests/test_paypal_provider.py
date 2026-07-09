@@ -9,7 +9,7 @@ from shared.billing.providers.paypal import (
 )
 
 CFG_OK = {"enabled": True, "client_id": "cid", "secret": "sec", "env": "sandbox",
-          "webhook_id": "WH", "plans": {"pro": "P-PRO", "enterprise": ""}}
+          "webhook_id": "WH", "plans": {"all_access": {"monthly": "P-AM"}}}
 CFG_OFF = {"enabled": False, "plans": {}}
 
 
@@ -31,14 +31,15 @@ def test_checkout_requires_config():
         p.create_order_checkout(sku="deep_dive:banking", amount="10.00", currency="USD",
                                 user_id="u1", return_url="r", cancel_url="c")
     with pytest.raises(ProviderNotConfigured):
-        p.create_subscription_checkout(tier="pro", user_id="u1", return_url="r", cancel_url="c")
+        p.create_subscription_checkout(sku="all_access", interval="monthly", user_id="u1",
+                                       return_url="r", cancel_url="c")
 
 
-def test_subscription_requires_plan_id():
-    # enterprise no tiene plan configurado → error claro, no llamada a red.
-    with pytest.raises(ProviderNotConfigured, match="enterprise"):
+def test_subscription_requires_plan_for_sku_interval():
+    # all_access/annual no tiene plan mapeado (solo monthly) → error claro, sin red.
+    with pytest.raises(ProviderNotConfigured, match="all_access"):
         PayPalProvider(CFG_OK).create_subscription_checkout(
-            tier="enterprise", user_id="u1", return_url="r", cancel_url="c")
+            sku="all_access", interval="annual", user_id="u1", return_url="r", cancel_url="c")
 
 
 def test_parse_order_paid():

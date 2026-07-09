@@ -94,6 +94,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: "/admin/users", label: "Usuarios", icon: ShieldCheck, ready: true, minRole: "admin" },
       { to: "/admin/tarifario", label: "Tarifario", icon: CircleDollarSign, ready: true, minRole: "admin" },
+      { to: "/admin/pagos", label: "Pagos · PayPal", icon: CreditCard, ready: true, minRole: "admin" },
     ],
   },
 ];

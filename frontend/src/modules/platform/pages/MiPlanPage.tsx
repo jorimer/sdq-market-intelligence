@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { BadgeCheck, CreditCard, Package } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { getMyPlan, type MyPlan } from "../api";
+import { checkoutSubscription } from "../billingApi";
 
 const TIER_LABEL: Record<string, string> = {
   free: "Free",
@@ -21,6 +22,22 @@ export function MiPlanPage() {
   const tr = (k: string, d: string) => t(k, d) as string;
   const [plan, setPlan] = useState<MyPlan | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [busy, setBusy] = useState(false);
+  const [payMsg, setPayMsg] = useState<string | null>(null);
+  const [interval, setIntervalSel] = useState("monthly");
+
+  async function subscribe(sku: string) {
+    setBusy(true); setPayMsg(null);
+    try {
+      window.location.href = (await checkoutSubscription(sku, interval)).approval_url;
+    } catch (e) {
+      const code = (e as { response?: { status?: number } })?.response?.status;
+      setPayMsg(code === 503
+        ? tr("plan.pay.unavailable", "Los pagos en línea todavía no están disponibles. Escribinos a ventas@sdqconsulting.com.do.")
+        : tr("plan.pay.error", "No se pudo iniciar el pago. Intentá de nuevo."));
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     getMyPlan()
@@ -89,10 +106,23 @@ export function MiPlanPage() {
               </div>
             ) : (
               <div>
-                <p className="text-sm text-muted">{tr("plan.sub.none", "No tenés una suscripción activa.")}</p>
-                <p className="text-xs text-faint mt-2">
-                  {tr("plan.sub.contact", "Para suscribirte o cambiar de plan, escribinos a ventas@sdqconsulting.com.do.")}
+                <p className="text-sm text-muted mb-2">{tr("plan.sub.none", "No tenés una suscripción activa.")}</p>
+                <p className="text-xs text-faint mb-3">
+                  {tr("plan.sub.perSector", "Para un solo sector, suscribite desde el Catálogo. Acá podés tomar los bundles:")}
                 </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select className="field !py-1 w-28 text-sm" value={interval} onChange={(e) => setIntervalSel(e.target.value)}>
+                    <option value="monthly">{tr("plan.interval.monthly", "Mensual")}</option>
+                    <option value="annual">{tr("plan.interval.annual", "Anual")}</option>
+                  </select>
+                  <button className="btn btn-primary" disabled={busy} onClick={() => subscribe("all_access")}>
+                    {tr("plan.sub.allAccess", "All-Access")}
+                  </button>
+                  <button className="btn btn-soft" disabled={busy} onClick={() => subscribe("enterprise")}>
+                    {tr("plan.sub.enterprise", "Enterprise")}
+                  </button>
+                </div>
+                {payMsg && <p className="text-xs text-alert mt-2">{payMsg}</p>}
               </div>
             )}
           </Card>

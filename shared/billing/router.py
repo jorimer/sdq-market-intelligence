@@ -37,9 +37,14 @@ class _CheckoutOrderBody(BaseModel):
 
 
 class _CheckoutSubBody(BaseModel):
-    tier: str = Field(..., description="pro | enterprise")
+    sku: str = Field(..., description="insight:{sector} | all_access | enterprise")
+    interval: str = Field("monthly", description="monthly | annual")
     return_url: str
     cancel_url: str
+
+
+class _CaptureBody(BaseModel):
+    order_ref: str = Field(..., description="id de la orden PayPal a capturar")
 
 
 class _PayPalConfigBody(BaseModel):
@@ -48,8 +53,8 @@ class _PayPalConfigBody(BaseModel):
     webhookId: Optional[str] = None
     env: Optional[str] = None
     enabled: Optional[bool] = None
-    planPro: Optional[str] = None
-    planEnterprise: Optional[str] = None
+    # Mapa de billing plans por (sku, intervalo): {sku: {interval: plan_id}}.
+    plans: Optional[Dict[str, Dict[str, str]]] = None
 
 
 @router.post("/checkout/order", summary="Iniciar compra puntual de un Deep Dive (self-serve)")
@@ -77,27 +82,54 @@ async def post_checkout_order(body: _CheckoutOrderBody, db: Session = Depends(ge
     return {"approval_url": ck.approval_url, "provider_ref": ck.provider_ref}
 
 
-@router.post("/checkout/subscription", summary="Iniciar suscripción a un plan (self-serve)")
+@router.post("/checkout/subscription", summary="Iniciar suscripción a un producto (self-serve)")
 async def post_checkout_subscription(body: _CheckoutSubBody, db: Session = Depends(get_db),
                                      current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
-    """Crea la suscripción en el proveedor y devuelve el link de aprobación. 503 si la
-    pasarela (o el plan del tier) no está configurada."""
+    """Crea la suscripción (por-sector o bundle, con periodicidad) y devuelve el link de
+    aprobación. 400 si el SKU no es de suscripción o el intervalo no aplica; 503 si la
+    pasarela o el plan de ese (sku, intervalo) no está configurado."""
     from starlette.concurrency import run_in_threadpool
 
     from shared.billing.providers import ProviderError, ProviderNotConfigured, get_provider
+    from shared.billing.skus import SkuError, allowed_intervals, is_subscription_sku, validate_sku
 
-    if body.tier not in ("pro", "enterprise"):
-        raise HTTPException(status_code=400, detail="Plan inválido. Use pro | enterprise.")
+    try:
+        validate_sku(body.sku)
+        if not is_subscription_sku(body.sku):
+            raise HTTPException(status_code=400, detail="Ese producto no es una suscripción.")
+        if body.interval not in allowed_intervals(body.sku):
+            raise HTTPException(status_code=400, detail="Periodicidad inválida (use mensual o anual).")
+    except SkuError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     provider = get_provider(db)
     try:
         ck = await run_in_threadpool(
-            provider.create_subscription_checkout, tier=body.tier, user_id=current_user.id,
-            return_url=body.return_url, cancel_url=body.cancel_url)
+            provider.create_subscription_checkout, sku=body.sku, interval=body.interval,
+            user_id=current_user.id, return_url=body.return_url, cancel_url=body.cancel_url)
     except ProviderNotConfigured as e:
         raise HTTPException(status_code=503, detail=str(e))
     except ProviderError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return {"approval_url": ck.approval_url, "provider_ref": ck.provider_ref}
+
+
+@router.post("/checkout/order/capture", summary="Capturar una orden aprobada (retorno de PayPal)")
+async def post_capture_order(body: _CaptureBody, db: Session = Depends(get_db),
+                             current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Al volver el usuario de aprobar el pago, captura (cobra) la orden. El acceso lo concede
+    el webhook (idempotente). 503 si la pasarela no está configurada."""
+    from starlette.concurrency import run_in_threadpool
+
+    from shared.billing.providers import ProviderError, ProviderNotConfigured, get_provider
+
+    provider = get_provider(db)
+    try:
+        return await run_in_threadpool(provider.capture_order, body.order_ref)
+    except ProviderNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.post("/webhook/paypal", summary="Webhook de PayPal (verificado + idempotente)")
@@ -130,8 +162,7 @@ async def put_paypal(body: _PayPalConfigBody, db: Session = Depends(get_db),
     from shared.settings.service import set_paypal_config
     return set_paypal_config(
         db, client_id=body.clientId, secret=body.secret, webhook_id=body.webhookId,
-        env=body.env, enabled=body.enabled, plan_pro=body.planPro,
-        plan_enterprise=body.planEnterprise)
+        env=body.env, enabled=body.enabled, plans=body.plans)
 
 
 @router.get("/skus", summary="SKUs vendibles del catálogo + su precio vigente (admin)")

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, Lock, Eye, Download, Mail, FileText } from "lucide-react";
+import { Boxes, Lock, Eye, Download, Mail, FileText, ShoppingCart } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -27,6 +27,7 @@ import {
   type ProductReport,
   type ScopeOption,
 } from "../api";
+import { checkoutOrder, checkoutSubscription } from "../billingApi";
 
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
 const SALES_EMAIL = "ventas@sdqconsulting.com.do";
@@ -130,7 +131,29 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
   t: any;
 }) {
   const [sampling, setSampling] = useState(false);
+  const [buying, setBuying] = useState(false);
+  const [buyErr, setBuyErr] = useState<string | null>(null);
+  const [subInterval, setSubInterval] = useState("monthly");
   const tierLabel = t(`platform.catalog.tier.${level.tier}`, { defaultValue: level.tier });
+
+  const payErr = (e: unknown) => {
+    const code = (e as { response?: { status?: number } })?.response?.status;
+    setBuyErr(code === 503
+      ? t("platform.catalog.payUnavailable", { defaultValue: "Pagos en línea aún no disponibles." })
+      : code === 400 ? t("platform.catalog.noPrice", { defaultValue: "Este producto aún no tiene precio." })
+      : t("platform.catalog.payError", { defaultValue: "No se pudo iniciar el pago." }));
+    setBuying(false);
+  };
+  const onBuyOrder = async () => {
+    setBuying(true); setBuyErr(null);
+    try { window.location.href = (await checkoutOrder(`deep_dive:${sector.sector_key}`)).approval_url; }
+    catch (e) { payErr(e); }
+  };
+  const onSubscribe = async () => {
+    setBuying(true); setBuyErr(null);
+    try { window.location.href = (await checkoutSubscription(`insight:${sector.sector_key}`, subInterval)).approval_url; }
+    catch (e) { payErr(e); }
+  };
 
   const onSample = async () => {
     setSampling(true);
@@ -181,6 +204,23 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
           <Chip tone="warn">
             <Lock className="w-3 h-3" /> {t("platform.catalog.requiresPlan", { plan: planLabel(level.required_tier) })}
           </Chip>
+          {level.tier === "deep_dive" ? (
+            <button onClick={onBuyOrder} disabled={buying} className="btn btn-primary !py-1 !px-2 text-xs disabled:opacity-40">
+              <ShoppingCart className="w-3.5 h-3.5" /> {t("platform.catalog.buy", { defaultValue: "Comprar" })}
+            </button>
+          ) : level.tier === "insight" ? (
+            <div className="flex items-center gap-1">
+              <select className="field !py-0.5 !px-1 text-xs" value={subInterval}
+                onChange={(e) => setSubInterval(e.target.value)}>
+                <option value="monthly">{t("platform.catalog.monthly", { defaultValue: "Mensual" })}</option>
+                <option value="annual">{t("platform.catalog.annual", { defaultValue: "Anual" })}</option>
+              </select>
+              <button onClick={onSubscribe} disabled={buying} className="btn btn-primary !py-1 !px-2 text-xs disabled:opacity-40">
+                <ShoppingCart className="w-3.5 h-3.5" /> {t("platform.catalog.subscribe", { defaultValue: "Suscribirme" })}
+              </button>
+            </div>
+          ) : null}
+          {buyErr && <span className="text-[11px] text-alert max-w-[170px] text-right">{buyErr}</span>}
           {level.sample_available && (
             <button onClick={onSample} disabled={sampling} className="btn btn-ghost !py-1 !px-2 text-xs disabled:opacity-40">
               <FileText className="w-3.5 h-3.5" /> {t("platform.catalog.sample")}
