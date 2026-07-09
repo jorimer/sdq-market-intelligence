@@ -214,16 +214,18 @@ async def insight(
     "/partners",
     summary="Concentración por socio comercial (dimensión geográfica)",
     description="Concentración geográfica del comercio de RD por país socio "
-    "(exportaciones e importaciones): HHI, diversificación y top socios. Dato de "
-    "UN Comtrade (RD como reportante) — el detalle por país que el Power BI de la "
-    "DGA no exporta.",
+    "(exportaciones e importaciones): HHI, diversificación y top socios. Prefiere el "
+    "dato FRESCO trimestral de la DGA (Power BI) cuando está persistido; si no, cae "
+    "al fixture anual de Comtrade. El payload declara siempre 'source', 'period' y "
+    "'frequency' para que cada cifra tenga fuente y período inequívocos.",
 )
 async def partners(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     from modules.trade_intel.partners import partner_concentration_report
 
-    return partner_concentration_report()
+    return partner_concentration_report(db=db)
 
 
 @router.get(

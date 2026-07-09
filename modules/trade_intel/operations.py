@@ -19,6 +19,15 @@ def _run_dga_trade_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_dga_partners_sync(params, user_id, set_phase) -> Dict:
+    from modules.trade_intel.partners_sync import dga_partners_sync
+    db = SessionLocal()
+    try:
+        return dga_partners_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_trade_backtest(params, user_id, set_phase) -> Dict:
     """Recompute the resilience backtest from the committed Comtrade+WDI panel and
     persist the report. Deterministic (reads the versioned fixture, no network)."""
@@ -59,6 +68,14 @@ def register() -> None:
         "snapshot de resiliencia comercial por trimestre. Dato público real. Usa "
         "{\"only_latest\": true} para refrescar solo el último trimestre.",
         _run_dga_trade_sync, default_interval_hours=2160,  # trimestral → cadencia larga
+    ))
+    register_operation(Operation(
+        "dga-partners-sync", "Sincronizar comercio por país socio (Aduanas/DGA)",
+        "Consulta el comercio exterior por país socio (exportaciones e importaciones, "
+        "FOB USD, trimestral) desde el Power BI de la DGA y persiste el top de socios "
+        "por flujo y trimestre. Complementa el corte por capítulo arancelario con la "
+        "dimensión geográfica. Dato público real; idempotente por país×flujo×trimestre.",
+        _run_dga_partners_sync, default_interval_hours=2160,  # trimestral → cadencia larga
     ))
     register_operation(Operation(
         "trade-backtest", "Backtest de resiliencia comercial (validación)",

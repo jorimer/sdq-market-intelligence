@@ -20,13 +20,12 @@ is an undocumented internal API — fragile by nature — so the live path fails
 (raises :class:`TSSSalaryError`) and stamps provenance; offline/tests read the
 committed ``tss_salary.json`` snapshot. Missing values stay ``None``.
 """
-import json
 import logging
 import re
-import uuid
 from datetime import date
 from typing import Dict, List, Optional, Tuple
 
+from shared.data import powerbi
 from shared.data._text import norm
 from shared.data.base_client import FixtureBackedClient, Record
 from shared.data.lineage import Lineage
@@ -50,11 +49,9 @@ VAR_SALARY = "avg_salary"
 UNIT_SALARY = "RD$/mes (salario promedio cotizable)"
 LICENSE = "datos públicos TSS/SDSS — uso con cita"
 MIN_ACTIVITIES = 15   # below this the report structure changed → fail closed
-_HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
 
 
-class TSSSalaryError(RuntimeError):
+class TSSSalaryError(powerbi.PowerBIError):
     """The TSS Power BI report was unreachable or structurally changed."""
 
 
@@ -74,64 +71,19 @@ def activity_key(label: object) -> str:
 def decode_dsr(response: dict) -> List[Tuple[str, str, Optional[float]]]:
     """Decode a Power BI querydata DSR → ``[(activity_label, year, salary)]``.
 
-    The DSR packs a matrix with per-column value dictionaries (``ValueDicts``) and
-    a row list (``DM0``) where each row carries only the columns that changed: ``C``
-    holds present values (a dict index for dimension columns, a literal for the
-    measure), ``R`` is a bitmask of columns reused from the previous row, ``Ø`` a
-    bitmask of nulls. Pure of network — unit-testable against a fixed payload.
+    Thin adapter over :func:`shared.data.powerbi.decode_dsr_rows` (the shared,
+    source-agnostic decoder) that projects each 3-column row to the TSS shape.
+    The report must carry activity, year and the salary measure → ``min_cols=3``.
     """
     try:
-        dsr = response["results"][0]["result"]["data"]["dsr"]
-    except (KeyError, IndexError, TypeError) as e:
-        raise TSSSalaryError(f"DSR inesperado de Power BI: {str(response)[:200]}") from e
-    if "DS" not in dsr:
-        # Power BI returns an odata error (e.g. a bad measure reference) under
-        # DataShapes instead of DS — surface it explicitly, fail closed.
-        try:
-            msg = dsr["DataShapes"][0]["odata.error"]["message"]["value"]
-        except (KeyError, IndexError, TypeError):
-            msg = str(dsr)[:200]
-        raise TSSSalaryError(f"Power BI rechazó la consulta TSS: {msg}")
-    ds = dsr["DS"][0]
-    dicts = ds.get("ValueDicts", {})
-    rows = ds.get("PH", [{}])[0].get("DM0", [])
-    if not rows:
-        return []
-    # column → value dict name (D0/D1/…) from the first row's select descriptor;
-    # a column with no ``DN`` is the measure (literal value, no dict).
-    col_dict: Dict[int, Optional[str]] = {}
-    for i, s in enumerate(rows[0].get("S", [])):
-        col_dict[i] = s.get("DN")
-    ncols = len(col_dict)
-    if ncols < 3:
-        # the first row must carry the select descriptor (activity, year, measure)
-        raise TSSSalaryError("DSR sin descriptor de columnas (S) — el reporte TSS cambió")
+        rows = powerbi.decode_dsr_rows(response, min_cols=3)
+    except powerbi.PowerBIError as e:
+        # keep the historical TSS-flavoured wording (rechazó / descriptor)
+        msg = str(e).replace("Power BI rechazó la consulta", "Power BI rechazó la consulta TSS")
+        msg = msg.replace("el reporte cambió", "el reporte TSS cambió")
+        raise TSSSalaryError(msg) from e
     out: List[Tuple[str, str, Optional[float]]] = []
-    prev: List[object] = [None] * ncols
-    for r in rows:
-        c = r.get("C", [])
-        reuse = r.get("R", 0)
-        nulls = r.get("Ø", 0)
-        vals: List[object] = []
-        ci = 0
-        for col in range(ncols):
-            if reuse & (1 << col):
-                vals.append(prev[col])
-            elif nulls & (1 << col):
-                vals.append(None)
-            else:
-                vals.append(c[ci] if ci < len(c) else None)
-                ci += 1
-        prev = vals[:]
-        # resolve dict-backed columns to their labels
-        resolved = []
-        for col in range(ncols):
-            v = vals[col]
-            dn = col_dict.get(col)
-            if dn and isinstance(v, int) and dn in dicts and 0 <= v < len(dicts[dn]):
-                resolved.append(dicts[dn][v])
-            else:
-                resolved.append(v)
+    for resolved in rows:
         activity, year = str(resolved[0]), str(resolved[1])
         sal = resolved[2]
         out.append((activity, year, None if sal is None else float(sal)))
@@ -232,57 +184,19 @@ class TSSSalaryClient(FixtureBackedClient):
     def _fetch_live(self, series: Optional[str], period: Optional[str]) -> List[Record]:  # pragma: no cover - network I/O
         import httpx
 
-        resource_key = json.loads(_b64(VIEW_TOKEN))["k"]
-        api = self._resolve_api_host()
-        with httpx.Client(http2=False, timeout=40, headers=_HEADERS) as client:
-            model_id = self._model_id(client, api, resource_key)
+        res_key = powerbi.resource_key(VIEW_TOKEN)
+        api = powerbi.resolve_api_host(VIEW_URL)
+        with httpx.Client(http2=False, timeout=40, headers=powerbi.browser_headers()) as client:
+            model_id = powerbi.fetch_model_id(client, api, res_key)
             resp = client.post(
                 f"{api}/public/reports/querydata?synchronous=true",
-                headers=self._api_headers(resource_key),
+                headers=powerbi.api_headers(res_key),
                 json=build_query(model_id),
             )
             resp.raise_for_status()
             decoded = decode_dsr(resp.json())
         records = build_salary_records(decoded)
         return _filter(records, series, period)
-
-    def _resolve_api_host(self) -> str:  # pragma: no cover - network I/O
-        """Resolve the report's data cluster from the view page, fail-closed."""
-        import httpx
-
-        r = httpx.get(VIEW_URL, timeout=30, follow_redirects=True, headers=_HEADERS)
-        r.raise_for_status()
-        m = re.search(r"https://(wabi-[a-z0-9-]+-redirect)\.analysis\.windows\.net", r.text)
-        if not m:
-            raise TSSSalaryError("no se pudo resolver el cluster del reporte Power BI TSS")
-        # the data host is the same cluster with "-redirect" swapped for "-api".
-        host = m.group(1).replace("-redirect", "-api")
-        return f"https://{host}.analysis.windows.net"
-
-    @staticmethod
-    def _api_headers(resource_key: str) -> Dict[str, str]:
-        return {
-            **_HEADERS,
-            "Accept": "application/json, text/plain, */*",
-            "X-PowerBI-ResourceKey": resource_key,
-            "Content-Type": "application/json;charset=UTF-8",
-            "ActivityId": str(uuid.uuid4()),
-            "RequestId": str(uuid.uuid4()),
-            "Origin": "https://app.powerbi.com",
-            "Referer": "https://app.powerbi.com/",
-        }
-
-    def _model_id(self, client, api: str, resource_key: str) -> int:  # pragma: no cover - network I/O
-        resp = client.post(
-            f"{api}/public/reports/conceptualschema",
-            headers=self._api_headers(resource_key),
-            json={"version": "1.0.0", "queryApiVersion": 2, "resourceKey": resource_key},
-        )
-        resp.raise_for_status()
-        schemas = resp.json().get("schemas", [])
-        if not schemas or "modelId" not in schemas[0]:
-            raise TSSSalaryError("conceptualschema sin modelId — el reporte TSS cambió")
-        return schemas[0]["modelId"]
 
     # ── Fixture (offline / tests) ─────────────────────────────────
     def _fetch_fixture(self, series: Optional[str], period: Optional[str]) -> List[Record]:
@@ -299,11 +213,6 @@ class TSSSalaryClient(FixtureBackedClient):
                         lineage=lineage, unit=UNIT_SALARY, dimension=key,
                     ))
         return _filter(out, series, period)
-
-
-def _b64(token: str) -> bytes:
-    import base64
-    return base64.b64decode(token + "=" * (-len(token) % 4))
 
 
 tss_salary_client = TSSSalaryClient()
