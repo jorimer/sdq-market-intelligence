@@ -4,6 +4,7 @@ import pytest
 from shared.billing.skus import (
     SKU_INSIGHT,
     SkuError,
+    catalog_skus,
     deep_dive_sku,
     entitlement_for_sku,
     parse_sku,
@@ -11,6 +12,7 @@ from shared.billing.skus import (
     special_sku,
     validate_sku,
 )
+from shared.products.registry import PRODUCT_CATALOG
 from shared.products.tiers import ProductTier
 
 
@@ -55,3 +57,16 @@ def test_sku_label_human_readable():
     assert sku_label("deep_dive:no_existe") == "Deep Dive de no_existe"  # parse ok, sin catálogo
     assert "informe especial" in sku_label("special:riesgo-2026")
     assert sku_label("basura") == "basura"  # inválido → best-effort
+
+
+def test_catalog_skus_enumerates_insight_plus_every_product():
+    items = catalog_skus()
+    skus = {i["sku"] for i in items}
+    assert SKU_INSIGHT in skus
+    assert len(items) == 1 + len(PRODUCT_CATALOG)  # insight + un deep_dive por producto
+    for entry in PRODUCT_CATALOG:
+        assert deep_dive_sku(entry.sector_key) in skus
+    insight = next(i for i in items if i["sku"] == SKU_INSIGHT)
+    assert insight["kind"] == "insight" and insight["ref"] is None and insight["label"]
+    dd = next(i for i in items if i["kind"] == "deep_dive")
+    assert dd["ref"] in {e.sector_key for e in PRODUCT_CATALOG} and dd["label"]

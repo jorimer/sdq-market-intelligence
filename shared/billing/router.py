@@ -23,9 +23,30 @@ from shared.billing.tariffs import (
     price_for,
     withdraw_tariff,
 )
+from shared.billing.skus import catalog_skus
 from shared.database.session import get_db
 
 router = APIRouter()
+
+
+@router.get("/skus", summary="SKUs vendibles del catálogo + su precio vigente (admin)")
+async def get_skus(db: Session = Depends(get_db),
+                   current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    """Enumera los SKUs canónicos (plan Insight + un Deep Dive por producto del catálogo) con
+    su precio vigente si lo tienen, para que el tarifario muestre TODO lo vendible —incluidos
+    los SKUs sin precio aún— y el admin pueda fijarlos. Los 'special:{slug}' no se enumeran
+    (son a medida)."""
+    items = []
+    for s in catalog_skus():
+        row = price_for(db, s["sku"])
+        items.append({
+            **s,
+            "price": ({"amount": format(row.amount, "f"), "currency": row.currency,
+                       "effective_from": row.effective_from.isoformat() if row.effective_from else None,
+                       "effective_to": row.effective_to.isoformat() if row.effective_to else None,
+                       "label": row.label} if row is not None else None),
+        })
+    return {"skus": items}
 
 
 class _TariffBody(BaseModel):

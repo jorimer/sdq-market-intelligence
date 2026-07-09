@@ -18,6 +18,7 @@ import {
   Store,
   PiggyBank,
   Compass,
+  CircleDollarSign,
   type LucideIcon,
 } from "lucide-react";
 
@@ -90,6 +91,7 @@ export const NAV: NavGroup[] = [
     title: "Administración",
     items: [
       { to: "/admin/users", label: "Usuarios", icon: ShieldCheck, ready: true, minRole: "admin" },
+      { to: "/admin/tarifario", label: "Tarifario", icon: CircleDollarSign, ready: true, minRole: "admin" },
     ],
   },
 ];
