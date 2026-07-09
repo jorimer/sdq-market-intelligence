@@ -132,3 +132,30 @@ def test_partners_report_falls_back_to_comtrade_annual_when_no_dga(db):
     assert rep["has_data"] is True
     assert rep["frequency"] == "anual"
     assert "-Q" not in rep["period"]           # an annual period, not a quarter
+
+
+def test_sync_falls_back_to_real_fixture_when_live_fails(db, monkeypatch):
+    """E2E-C3b: si la ruta live de la DGA falla (Power BI frágil), el sync SIN client
+    explícito cae al fixture REAL commiteado → prod nunca queda sin la dimensión geográfica."""
+    from modules.trade_intel import partners_sync
+    from shared.data.dga_partners_client import DGAPartnersClient as _Real
+
+    def _factory(mode="live"):
+        if mode == "live":
+            return _StubClient(error=DGAPartnersError("conceptualschema 400"))
+        return _Real(mode="fixture")  # snapshot real commiteado
+
+    monkeypatch.setattr(partners_sync, "DGAPartnersClient", _factory)
+    res = dga_partners_sync(db)  # client=None → live falla → fallback fixture
+    assert res["source_mode"].startswith("fixture")
+    assert res["records"] > 0
+    assert res["periods"]  # trimestres reales cargados
+    # persistió filas de socio reales (EEUU debe estar).
+    partners = {f.partner for f in db.query(TradeFlow).all() if is_partner_flow(f)}
+    assert "Estados Unidos" in partners
+
+
+def test_sync_with_explicit_client_does_not_mask_error(db):
+    """Con client explícito (tests), un error NO se enmascara con el fixture."""
+    res = dga_partners_sync(db, client=_StubClient(error=DGAPartnersError("boom")))
+    assert res["records"] == 0 and "error" in res
