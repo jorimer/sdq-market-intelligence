@@ -49,6 +49,13 @@ def upgrade() -> None:
         sa.Column("invoice_number", sa.String(length=40), nullable=True),
         sa.Column("status", sa.String(length=20), server_default="paid", nullable=False),
         sa.Column("note", sa.String(length=255), nullable=True),
+        # e-CF / e-NCF (DGII) — listo para la integración de factura electrónica.
+        sa.Column("encf_type", sa.String(length=2), nullable=True),
+        sa.Column("encf_number", sa.String(length=19), nullable=True),
+        sa.Column("encf_status", sa.String(length=20), nullable=True),
+        sa.Column("encf_trackid", sa.String(length=40), nullable=True),
+        sa.Column("encf_security_code", sa.String(length=12), nullable=True),
+        sa.Column("encf_signed_at", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )

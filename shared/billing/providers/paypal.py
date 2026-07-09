@@ -91,6 +91,17 @@ class PayPalProvider:
         except httpx.HTTPError as e:  # pragma: no cover - red
             raise ProviderError(f"PayPal {path} falló: {e}") from e
 
+    def _get(self, path: str, token: Optional[str] = None) -> dict:
+        token = token or self._token()
+        try:
+            r = httpx.get(f"{self._base}{path}",
+                          headers={"Authorization": f"Bearer {token}",
+                                   "Content-Type": "application/json"}, timeout=_TIMEOUT)
+            r.raise_for_status()
+            return r.json() if r.content else {}
+        except httpx.HTTPError as e:  # pragma: no cover - red
+            raise ProviderError(f"PayPal {path} falló: {e}") from e
+
     def _interval_for_plan(self, sku: Optional[str], plan_id: Optional[str]) -> Optional[str]:
         """Resuelve el intervalo (monthly/annual) de una suscripción desde el ``plan_id``,
         buscándolo en el mapa de planes configurado para ese SKU. Sirve para facturar con el
@@ -175,11 +186,37 @@ class PayPalProvider:
 
     def capture_order(self, order_id: str) -> dict:
         """Captura (cobra) una orden aprobada al volver el usuario de PayPal. Devuelve
-        ``{status, order_id}``. El acceso lo concede el webhook PAYMENT.CAPTURE.COMPLETED
-        (idempotente); acá solo se toma el pago."""
+        ``{status, order_id, user_id, sku, gross, currency}`` extraídos de la respuesta de
+        captura (custom_id + monto), para poder **conceder el acceso en el retorno** sin
+        depender del webhook (que en sandbox puede no existir). El webhook, cuando llega,
+        reconcilia de forma idempotente."""
         self._require()
         data = self._post(f"/v2/checkout/orders/{order_id}/capture", {})
-        return {"status": data.get("status", ""), "order_id": data.get("id", order_id)}
+        pu = (data.get("purchase_units") or [{}])[0]
+        custom = decode_custom_id(pu.get("custom_id") or "")
+        cap = ((pu.get("payments") or {}).get("captures") or [{}])[0]
+        amt = cap.get("amount") or {}
+        user_id = custom[0] if custom else None
+        sku = custom[2] if custom else None
+        return {"status": data.get("status", ""), "order_id": data.get("id", order_id),
+                "user_id": user_id, "sku": sku,
+                "gross": amt.get("value"), "currency": amt.get("currency_code")}
+
+    def get_subscription(self, subscription_id: str) -> dict:
+        """Lee el estado de una suscripción en PayPal (para activar en el retorno sin webhook).
+        Devuelve ``{status, plan_id, interval, user_id, sku, period_end, gross, currency}``."""
+        self._require()
+        data = self._get(f"/v1/billing/subscriptions/{subscription_id}")
+        custom = decode_custom_id(data.get("custom_id") or "")
+        binfo = data.get("billing_info") or {}
+        last = (binfo.get("last_payment") or {}).get("amount") or {}
+        plan_id = data.get("plan_id")
+        sku = custom[2] if custom else None
+        return {"status": data.get("status", ""), "plan_id": plan_id,
+                "interval": self._interval_for_plan(sku, plan_id),
+                "user_id": custom[0] if custom else None, "sku": sku,
+                "period_end": binfo.get("next_billing_time"),
+                "gross": last.get("value"), "currency": last.get("currency_code")}
 
     # ── Webhook ──
     def verify_webhook(self, *, headers: dict, body: bytes) -> bool:

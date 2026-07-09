@@ -158,19 +158,62 @@ async def post_checkout_subscription(body: _CheckoutSubBody, db: Session = Depen
 @router.post("/checkout/order/capture", summary="Capturar una orden aprobada (retorno de PayPal)")
 async def post_capture_order(body: _CaptureBody, db: Session = Depends(get_db),
                              current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
-    """Al volver el usuario de aprobar el pago, captura (cobra) la orden. El acceso lo concede
-    el webhook (idempotente). 503 si la pasarela no está configurada."""
+    """Al volver el usuario de aprobar el pago, captura (cobra) la orden **y concede el acceso
+    + factura en el momento** (no depende del webhook, que en sandbox puede no existir). El
+    webhook, si llega, reconcilia de forma idempotente. 503 si la pasarela no está configurada."""
     from starlette.concurrency import run_in_threadpool
 
     from shared.billing.providers import ProviderError, ProviderNotConfigured, get_provider
+    from shared.billing.settlement import settle_order
 
     provider = get_provider(db)
     try:
-        return await run_in_threadpool(provider.capture_order, body.order_ref)
+        cap = await run_in_threadpool(provider.capture_order, body.order_ref)
     except ProviderNotConfigured as e:
         raise HTTPException(status_code=503, detail=str(e))
     except ProviderError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    settled = None
+    if (cap.get("status") or "").upper() == "COMPLETED":
+        # El pagador viene del custom_id de la captura; se prefiere sobre el usuario de sesión
+        # por seguridad (el acceso se concede a quien pagó), con fallback al de sesión.
+        settled = settle_order(db, provider.name, order_id=cap.get("order_id") or body.order_ref,
+                               user_id=cap.get("user_id") or current_user.id, sku=cap.get("sku"),
+                               gross=cap.get("gross"), currency=cap.get("currency"))
+    return {**cap, "settled": settled}
+
+
+class _ActivateSubBody(BaseModel):
+    subscription_id: str
+
+
+@router.post("/checkout/subscription/activate", summary="Activar una suscripción aprobada (retorno)")
+async def post_activate_subscription(body: _ActivateSubBody, db: Session = Depends(get_db),
+                                     current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Al volver de aprobar la suscripción, consulta su estado en PayPal y, si está ACTIVE,
+    **concede el acceso + factura** sin depender del webhook. Idempotente (el webhook, si
+    llega, reconcilia). 503 si la pasarela no está configurada."""
+    from starlette.concurrency import run_in_threadpool
+
+    from shared.billing.providers import ProviderError, ProviderNotConfigured, get_provider
+    from shared.billing.settlement import settle_subscription
+
+    provider = get_provider(db)
+    try:
+        sub = await run_in_threadpool(provider.get_subscription, body.subscription_id)
+    except ProviderNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    status = (sub.get("status") or "").upper()
+    settled = None
+    if status in ("ACTIVE", "APPROVED"):
+        settled = settle_subscription(
+            db, provider.name, subscription_id=body.subscription_id,
+            user_id=sub.get("user_id") or current_user.id, sku=sub.get("sku"),
+            interval=sub.get("interval"), period_end=sub.get("period_end"),
+            gross=sub.get("gross"), currency=sub.get("currency"))
+    return {"status": sub.get("status"), "settled": settled}
 
 
 @router.post("/checkout/quote", summary="Cotizar un SKU con impuestos (desglose)")

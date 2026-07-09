@@ -27,6 +27,16 @@ logger = logging.getLogger("sdq.billing.transactions")
 _INVOICE_PREFIX = "SDQ"
 
 
+def intended_encf_type(breakdown: TaxBreakdown, *, client_has_rnc: bool = False) -> str:
+    """Tipo de e-CF (DGII) previsto para una transacción, según la matriz fiscal RD:
+    exportación de servicios (cliente del exterior, exento) → **46**; cliente local con RNC
+    que necesita crédito fiscal → **31**; consumidor final local → **32** (default). El e-NCF
+    real lo asigna la integración con la DGII (secuencia autorizada + firma digital)."""
+    if breakdown.exempt:
+        return "46"
+    return "31" if client_has_rnc else "32"
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -60,19 +70,25 @@ def _serialize(t: BillingTransaction) -> Dict[str, Any]:
         "invoice_number": t.invoice_number,
         "status": t.status,
         "created_at": t.created_at.isoformat() if t.created_at else None,
+        "encf_type": t.encf_type,
+        "encf_number": t.encf_number,
+        "encf_status": t.encf_status,
     }
 
 
-def record_transaction(db: Session, *, user_id: str, sku: str, kind: str, provider: str,
-                       provider_ref: Optional[str], event_id: Optional[str],
-                       breakdown: TaxBreakdown, note: Optional[str] = None) -> Dict[str, Any]:
-    """Registra un cobro facturable con su desglose. Idempotente por ``(provider, event_id)``:
-    si ya existe una transacción para ese evento, la devuelve sin crear otra."""
+def record_transaction_once(db: Session, *, user_id: str, sku: str, kind: str, provider: str,
+                            provider_ref: Optional[str], event_id: Optional[str],
+                            breakdown: TaxBreakdown, note: Optional[str] = None) -> tuple:
+    """Registra un cobro facturable con su desglose y devuelve ``(dict, created)``. Idempotente
+    por ``(provider, event_id)``: si ya existe una transacción para ese evento, la devuelve con
+    ``created=False`` (sin crear otra). El ``event_id`` determinista por ``provider_ref`` hace
+    que el webhook y el retorno/captura converjan en UNA sola factura (lo enforca el índice
+    único). ``created`` permite conceder el acceso exactamente una vez."""
     if event_id:
         existing = (db.query(BillingTransaction)
                     .filter_by(provider=provider, event_id=event_id).one_or_none())
         if existing is not None:
-            return _serialize(existing)
+            return _serialize(existing), False
 
     now = _utcnow()
     for attempt in range(4):  # reintentos ante colisión del correlativo (carrera)
@@ -89,11 +105,12 @@ def record_transaction(db: Session, *, user_id: str, sku: str, kind: str, provid
             tax_exempt=bool(breakdown.exempt),
             country=breakdown.country,
             invoice_number=invoice_number,
-            status="paid", note=note)
+            status="paid", note=note,
+            encf_type=intended_encf_type(breakdown), encf_status="pending")
         db.add(row)
         try:
             db.commit()
-            return _serialize(row)
+            return _serialize(row), True
         except IntegrityError:
             db.rollback()
             # Otra entrega concurrente ganó por (provider, event_id) o por el correlativo.
@@ -101,10 +118,15 @@ def record_transaction(db: Session, *, user_id: str, sku: str, kind: str, provid
                 existing = (db.query(BillingTransaction)
                             .filter_by(provider=provider, event_id=event_id).one_or_none())
                 if existing is not None:
-                    return _serialize(existing)
+                    return _serialize(existing), False
             if attempt == 3:
                 raise
     raise RuntimeError("No se pudo asignar un número de factura.")  # pragma: no cover
+
+
+def record_transaction(db: Session, **kwargs) -> Dict[str, Any]:
+    """Como ``record_transaction_once`` pero devuelve solo el dict (back-compat)."""
+    return record_transaction_once(db, **kwargs)[0]
 
 
 def list_user_transactions(db: Session, user_id: str) -> List[Dict[str, Any]]:

@@ -38,6 +38,13 @@ _LIGHT = HexColor("#F1F5F9")
 _LINE = HexColor("#CBD5E1")
 _INK = HexColor("#0F172A")
 
+# Etiquetas de los tipos de e-CF de la DGII relevantes para SDQ.
+_ENCF_LABELS = {
+    "31": "Factura de Crédito Fiscal Electrónica",
+    "32": "Factura de Consumo Electrónica",
+    "46": "Comprobante de Exportaciones Electrónico",
+}
+
 
 def _styles() -> Dict[str, ParagraphStyle]:
     return {
@@ -102,7 +109,10 @@ def render_invoice_pdf(db: Session, tx, user) -> bytes:
     issuer = get_invoice_issuer(db)
     st = _styles()
     ccy = tx.currency or "USD"
-    is_internal = not (issuer.get("rnc") or "").strip()
+    encf = (getattr(tx, "encf_number", None) or "").strip()
+    # Es factura electrónica válida solo cuando la DGII asignó el e-NCF; si no, comprobante
+    # interno (aunque el emisor tenga RNC, sin e-NCF no hay crédito fiscal).
+    is_internal = not encf
 
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=_MARGIN, rightMargin=_MARGIN,
@@ -121,10 +131,15 @@ def render_invoice_pdf(db: Session, tx, user) -> bytes:
     issuer_lines.append(Paragraph(issuer.get("email", ""), st["issuerMeta"]))
 
     created = tx.created_at.strftime("%d/%m/%Y") if tx.created_at else datetime.now().strftime("%d/%m/%Y")
-    doc_title = "FACTURA" if not is_internal else "COMPROBANTE"
-    right = [Paragraph(doc_title, st["docTitle"]),
-             Paragraph(f"Nº {tx.invoice_number or '—'}", st["docMeta"]),
-             Paragraph(f"Fecha: {created}", st["docMeta"])]
+    doc_title = "FACTURA ELECTRÓNICA" if not is_internal else "COMPROBANTE"
+    right = [Paragraph(doc_title, st["docTitle"])]
+    if encf:
+        right.append(Paragraph(f"e-NCF: {encf}", st["docMeta"]))
+        etype = (getattr(tx, "encf_type", None) or "")
+        if etype in _ENCF_LABELS:
+            right.append(Paragraph(_ENCF_LABELS[etype], st["docMeta"]))
+    right += [Paragraph(f"Nº interno {tx.invoice_number or '—'}", st["docMeta"]),
+              Paragraph(f"Fecha: {created}", st["docMeta"])]
     head = Table([[issuer_lines, right]], colWidths=[doc.width * 0.58, doc.width * 0.42])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     el += [head, Spacer(1, 0.25 * inch)]

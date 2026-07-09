@@ -80,3 +80,31 @@ def test_interval_resolved_from_plan_id():
     assert p._interval_for_plan("insight:banking", "P-YEAR-1") == "annual"
     assert p._interval_for_plan("insight:banking", "P-MONTH-1") == "monthly"
     assert p._interval_for_plan("insight:banking", "P-UNKNOWN") is None
+
+
+def test_capture_order_parses_payer_and_gross(monkeypatch):
+    p = PayPalProvider(_CFG)
+    monkeypatch.setattr(p, "_post", lambda path, body, token=None: {
+        "id": "ORD-1", "status": "COMPLETED",
+        "purchase_units": [{
+            "custom_id": "user-7|order|deep_dive:banking",
+            "payments": {"captures": [{"amount": {"value": "118.00", "currency_code": "USD"}}]},
+        }],
+    })
+    out = p.capture_order("ORD-1")
+    assert out["status"] == "COMPLETED" and out["user_id"] == "user-7"
+    assert out["sku"] == "deep_dive:banking" and out["gross"] == "118.00" and out["currency"] == "USD"
+
+
+def test_get_subscription_parses_status_and_custom(monkeypatch):
+    p = PayPalProvider(_CFG)
+    monkeypatch.setattr(p, "_get", lambda path, token=None: {
+        "status": "ACTIVE", "plan_id": "P-MONTH-1",
+        "custom_id": "user-9|sub|insight:banking",
+        "billing_info": {"next_billing_time": "2026-08-09T00:00:00Z",
+                         "last_payment": {"amount": {"value": "59.00", "currency_code": "USD"}}},
+    })
+    out = p.get_subscription("SUB-1")
+    assert out["status"] == "ACTIVE" and out["user_id"] == "user-9"
+    assert out["sku"] == "insight:banking" and out["interval"] == "monthly"
+    assert out["gross"] == "59.00" and out["period_end"] == "2026-08-09T00:00:00Z"

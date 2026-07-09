@@ -99,6 +99,17 @@ class BillingTransaction(UUIDMixin, Base):
     status = Column(String(20), nullable=False, server_default="paid")  # paid | refunded
     note = Column(String(255), nullable=True)
 
+    # ── e-CF / e-NCF (DGII) — listo para la integración de factura electrónica ──
+    # Tipo de e-CF previsto (RD con RNC=31 crédito fiscal · RD consumo=32 · exterior=46
+    # exportación). El resto se llena cuando se emite el e-CF contra los web services de la
+    # DGII (certificado digital + secuencia e-NCF autorizada). Nullable = aún no emitido.
+    encf_type = Column(String(2), nullable=True)           # 31 | 32 | 46 …
+    encf_number = Column(String(19), nullable=True)        # e-NCF asignado por la DGII
+    encf_status = Column(String(20), nullable=True)        # pending | issued | accepted | rejected
+    encf_trackid = Column(String(40), nullable=True)       # TrackID del acuse (ACECF)
+    encf_security_code = Column(String(12), nullable=True) # código de seguridad (representación impresa)
+    encf_signed_at = Column(DateTime, nullable=True)       # fecha/hora de la firma digital
+
     __table_args__ = (
         Index("ix_billing_transaction_user", "user_id"),
         # Un evento del proveedor produce a lo sumo una transacción (idempotencia dura).

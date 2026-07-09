@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Card } from "@/shared/ui/primitives";
-import { captureOrder } from "../billingApi";
+import { captureOrder, activateSubscription } from "../billingApi";
 
 type Phase = "working" | "ok" | "cancelled" | "error";
 
@@ -35,8 +35,19 @@ export function CheckoutReturnPage() {
           setDetail(tr("checkout.captureError", "No pudimos confirmar el pago. Si te cobraron, escribinos y lo resolvemos."));
         });
     } else if (subId) {
-      setPhase("ok");
-      setDetail(tr("checkout.subOk", "Tu suscripción está en proceso; el plan se activa en unos segundos. Revisá 'Mi plan'."));
+      activateSubscription(subId)
+        .then((r) => {
+          const active = (r.status || "").toUpperCase() === "ACTIVE" || !!r.settled;
+          setPhase("ok");
+          setDetail(active
+            ? tr("checkout.subActive", "Tu suscripción quedó activa. Ya podés usar el producto — revisá 'Mi plan'.")
+            : tr("checkout.subPending", "Tu suscripción está en proceso; el plan se activa en unos segundos. Revisá 'Mi plan'."));
+        })
+        .catch(() => {
+          // Si la activación en el retorno falla, el webhook (en vivo) lo resuelve.
+          setPhase("ok");
+          setDetail(tr("checkout.subPending", "Tu suscripción está en proceso; el plan se activa en unos segundos. Revisá 'Mi plan'."));
+        });
     } else {
       setPhase("ok");
       setDetail(tr("checkout.generic", "Gracias. Si completaste un pago, el acceso se reflejará en breve."));

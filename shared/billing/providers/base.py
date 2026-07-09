@@ -85,6 +85,11 @@ class BillingProvider(Protocol):
         luego el webhook de cancelación que corta el acceso."""
         ...
 
+    def get_subscription(self, subscription_id: str) -> dict:
+        """Lee el estado de una suscripción (para activar en el retorno sin depender del
+        webhook). Devuelve status/plan/interval/user/sku/período/monto normalizados."""
+        ...
+
     def verify_webhook(self, *, headers: dict, body: bytes) -> bool:
         """Verifica la firma del webhook contra el proveedor. False = rechazar."""
         ...

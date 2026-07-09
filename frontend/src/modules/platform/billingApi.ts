@@ -113,9 +113,15 @@ export async function checkoutSubscription(sku: string, interval: string, countr
   return data;
 }
 
-/** Captura una orden aprobada (al volver de PayPal). */
-export async function captureOrder(orderRef: string): Promise<{ status: string }> {
+/** Captura una orden aprobada (al volver de PayPal). Concede el acceso en el momento. */
+export async function captureOrder(orderRef: string): Promise<{ status: string; settled?: string | null }> {
   const { data } = await client.post("/billing/checkout/order/capture", { order_ref: orderRef });
+  return data;
+}
+
+/** Activa una suscripción aprobada (al volver de PayPal). Concede el acceso sin webhook. */
+export async function activateSubscription(subscriptionId: string): Promise<{ status: string; settled?: string | null }> {
+  const { data } = await client.post("/billing/checkout/subscription/activate", { subscription_id: subscriptionId });
   return data;
 }
 
