@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,111 @@ from shared.billing.skus import catalog_skus
 from shared.database.session import get_db
 
 router = APIRouter()
+
+
+# ─── Pago self-serve (Fase 3): checkout + webhook + config del proveedor ───
+class _CheckoutOrderBody(BaseModel):
+    sku: str = Field(..., description="deep_dive:{sector}")
+    return_url: str
+    cancel_url: str
+
+
+class _CheckoutSubBody(BaseModel):
+    tier: str = Field(..., description="pro | enterprise")
+    return_url: str
+    cancel_url: str
+
+
+class _PayPalConfigBody(BaseModel):
+    clientId: Optional[str] = None
+    secret: Optional[str] = None
+    webhookId: Optional[str] = None
+    env: Optional[str] = None
+    enabled: Optional[bool] = None
+    planPro: Optional[str] = None
+    planEnterprise: Optional[str] = None
+
+
+@router.post("/checkout/order", summary="Iniciar compra puntual de un Deep Dive (self-serve)")
+async def post_checkout_order(body: _CheckoutOrderBody, db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Crea la orden en el proveedor y devuelve el link de aprobación. 400 si el SKU no
+    tiene precio; 503 si la pasarela no está configurada."""
+    from starlette.concurrency import run_in_threadpool
+
+    from shared.billing.providers import ProviderError, ProviderNotConfigured, get_provider
+
+    row = price_for(db, body.sku)
+    if row is None:
+        raise HTTPException(status_code=400, detail="Este producto no tiene precio configurado.")
+    provider = get_provider(db)
+    try:
+        ck = await run_in_threadpool(
+            provider.create_order_checkout, sku=body.sku, amount=format(row.amount, "f"),
+            currency=row.currency, user_id=current_user.id,
+            return_url=body.return_url, cancel_url=body.cancel_url)
+    except ProviderNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"approval_url": ck.approval_url, "provider_ref": ck.provider_ref}
+
+
+@router.post("/checkout/subscription", summary="Iniciar suscripción a un plan (self-serve)")
+async def post_checkout_subscription(body: _CheckoutSubBody, db: Session = Depends(get_db),
+                                     current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Crea la suscripción en el proveedor y devuelve el link de aprobación. 503 si la
+    pasarela (o el plan del tier) no está configurada."""
+    from starlette.concurrency import run_in_threadpool
+
+    from shared.billing.providers import ProviderError, ProviderNotConfigured, get_provider
+
+    if body.tier not in ("pro", "enterprise"):
+        raise HTTPException(status_code=400, detail="Plan inválido. Use pro | enterprise.")
+    provider = get_provider(db)
+    try:
+        ck = await run_in_threadpool(
+            provider.create_subscription_checkout, tier=body.tier, user_id=current_user.id,
+            return_url=body.return_url, cancel_url=body.cancel_url)
+    except ProviderNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"approval_url": ck.approval_url, "provider_ref": ck.provider_ref}
+
+
+@router.post("/webhook/paypal", summary="Webhook de PayPal (verificado + idempotente)")
+async def paypal_webhook(request: Request, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Recibe los eventos de PayPal: verifica la firma, deduplica por event_id y aplica al
+    modelo de acceso (entitlement / suscripción). Público (lo llama PayPal), pero solo actúa
+    si la firma verifica contra el webhook_id configurado."""
+    from starlette.concurrency import run_in_threadpool
+
+    from shared.billing.webhook import WebhookError, handle_webhook
+
+    body = await request.body()
+    headers = dict(request.headers)
+    try:
+        return await run_in_threadpool(handle_webhook, db, "paypal", headers, body)
+    except WebhookError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/paypal", summary="Config de PayPal (admin, secretos enmascarados)")
+async def get_paypal(db: Session = Depends(get_db),
+                     current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    from shared.settings.service import paypal_config_masked
+    return paypal_config_masked(db)
+
+
+@router.put("/paypal", summary="Configurar PayPal (admin)")
+async def put_paypal(body: _PayPalConfigBody, db: Session = Depends(get_db),
+                     current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    from shared.settings.service import set_paypal_config
+    return set_paypal_config(
+        db, client_id=body.clientId, secret=body.secret, webhook_id=body.webhookId,
+        env=body.env, enabled=body.enabled, plan_pro=body.planPro,
+        plan_enterprise=body.planEnterprise)
 
 
 @router.get("/skus", summary="SKUs vendibles del catálogo + su precio vigente (admin)")
