@@ -144,3 +144,55 @@ def list_user_subscriptions(db: Session, user_id: str) -> List[Dict[str, Any]]:
             .order_by(Subscription.started_at.desc())
             .all())
     return [_serialize(r) for r in rows]
+
+
+# ── Gestión MANUAL (aprovisionamiento por admin, cobro fuera de plataforma) ──
+# Mientras no hay pasarela (Fase 3), el admin da de alta/cambia/baja la suscripción a mano.
+# Provider ``manual`` para distinguirla de las del proveedor de pago (paypal/azul).
+MANUAL_PROVIDER = "manual"
+
+
+def set_manual_subscription(db: Session, *, user_id: str, tier: str,
+                            current_period_end: Optional[datetime] = None,
+                            note: Optional[str] = None) -> Dict[str, Any]:
+    """Alta o CAMBIO de plan de la suscripción manual de un usuario (una sola por usuario).
+
+    Si ya existe una suscripción manual, actualiza su tier/período y la reactiva (limpia
+    ``cancelled_at``); si no, la crea. "Cambiar de plan" = llamar con otro tier."""
+    import uuid
+
+    at = _validate(tier, "active")
+    period_end = _to_naive_utc(current_period_end)
+    row = (db.query(Subscription)
+           .filter_by(user_id=user_id, provider=MANUAL_PROVIDER)
+           .order_by(Subscription.started_at.desc())
+           .first())
+    if row is None:
+        row = Subscription(
+            user_id=user_id, provider=MANUAL_PROVIDER,
+            provider_subscription_id=f"manual-{uuid.uuid4().hex}", tier=at.value,
+            status="active", current_period_end=period_end, started_at=_utcnow(),
+            cancelled_at=None, note=note)
+        db.add(row)
+    else:
+        row.tier = at.value
+        row.status = "active"
+        row.current_period_end = period_end
+        row.cancelled_at = None  # reactivar limpia la baja previa (nota B3a)
+        if note is not None:
+            row.note = note
+    db.commit()
+    return _serialize(row)
+
+
+def cancel_subscription(db: Session, subscription_id: str) -> bool:
+    """Da de baja una suscripción por id (``cancelled`` + ``cancelled_at``). Corta el acceso
+    que concedía. False si no existe. Sirve para la baja manual desde la consola de admin."""
+    row = db.query(Subscription).filter_by(id=subscription_id).one_or_none()
+    if row is None:
+        return False
+    row.status = "cancelled"
+    if row.cancelled_at is None:
+        row.cancelled_at = _utcnow()
+    db.commit()
+    return True

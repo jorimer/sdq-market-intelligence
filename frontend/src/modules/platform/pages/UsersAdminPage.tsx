@@ -13,7 +13,8 @@ import {
 } from "../usersApi";
 import {
   getProductReadiness, getUserEntitlements, grantEntitlement, revokeEntitlement,
-  type UserEntitlement,
+  getUserSubscriptions, setSubscription, cancelSubscription,
+  type UserEntitlement, type Subscription,
 } from "../api";
 
 const ROLE_TONE: Record<string, "ok" | "warn" | "muted" | "accent"> = {
@@ -202,10 +203,14 @@ function EntitlementsModal({ user, onClose, t }: {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [subs, setSubs] = useState<Subscription[] | null>(null);
+  const [subTier, setSubTier] = useState("pro");
 
   const load = () => getUserEntitlements(user.id).then(setRows).catch(() => setRows([]));
+  const loadSubs = () => getUserSubscriptions(user.id).then(setSubs).catch(() => setSubs([]));
   useEffect(() => {
     load();
+    loadSubs();
     getProductReadiness()
       .then((m) => {
         const s = m.sectors.map((x) => ({ key: x.sector_key, name: x.display_name }));
@@ -244,6 +249,33 @@ function EntitlementsModal({ user, onClose, t }: {
     }
   };
 
+  const onSetSub = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await setSubscription({ user_id: user.id, tier: subTier });
+      await loadSubs();
+    } catch (e) {
+      setErr(errMsg(e, t("platform.users.subscription.error", "No se pudo actualizar la suscripción.")));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onCancelSub = async (id: string) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await cancelSubscription(id);
+      await loadSubs();
+    } catch (e) {
+      setErr(errMsg(e, t("platform.users.subscription.error", "No se pudo actualizar la suscripción.")));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const activeSub = (subs ?? []).find((s) => s.status === "active");
   const active = (rows ?? []).filter((r) => r.active);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -259,6 +291,50 @@ function EntitlementsModal({ user, onClose, t }: {
           </button>
         </div>
         <p className="text-xs text-muted mb-3">{t("platform.users.entitlements.help")}</p>
+
+        {/* Suscripción (plan) — aprovisionamiento manual */}
+        <div className="text-xs font-medium text-ink mb-2">{t("platform.users.subscription.title", "Suscripción (plan)")}</div>
+        <div className="rounded-lg border border-line p-3 mb-4">
+          {subs === null ? (
+            <Skeleton className="h-10" />
+          ) : activeSub ? (
+            <div className="flex items-center gap-2 mb-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-ink">
+                  {t("platform.users.subscription.active", "Plan activo")}:{" "}
+                  <span className="font-semibold uppercase">{activeSub.tier}</span>
+                </div>
+                <div className="text-[11px] text-faint truncate">
+                  {activeSub.provider === "manual"
+                    ? t("platform.users.subscription.manual", "alta manual (cobro fuera de plataforma)")
+                    : activeSub.provider}
+                  {activeSub.current_period_end
+                    ? ` · vence ${new Date(activeSub.current_period_end).toLocaleDateString("es-DO")}`
+                    : ` · ${t("platform.users.subscription.openEnded", "sin vencimiento")}`}
+                </div>
+              </div>
+              <button className="btn btn-ghost !py-1 !px-2 text-xs text-alert shrink-0"
+                disabled={busy} onClick={() => onCancelSub(activeSub.id)}>
+                {t("platform.users.subscription.cancel", "Dar de baja")}
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-faint mb-2">{t("platform.users.subscription.none", "Sin suscripción activa.")}</p>
+          )}
+          <div className="flex items-end gap-2">
+            <Field label={t("platform.users.subscription.plan", "Plan")}>
+              <select className="field" value={subTier} onChange={(e) => setSubTier(e.target.value)}>
+                <option value="pro">Pro (Insight)</option>
+                <option value="enterprise">Enterprise (Deep Dive)</option>
+              </select>
+            </Field>
+            <button className="btn btn-primary" disabled={busy} onClick={onSetSub}>
+              {activeSub
+                ? t("platform.users.subscription.change", "Cambiar plan")
+                : t("platform.users.subscription.grant", "Dar de alta")}
+            </button>
+          </div>
+        </div>
 
         {/* Grant */}
         <div className="rounded-lg border border-line p-3 space-y-2 mb-4">

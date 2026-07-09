@@ -269,6 +269,50 @@ export async function revokeEntitlement(id: string): Promise<void> {
   await client.post(`/products/entitlements/${encodeURIComponent(id)}/revoke`);
 }
 
+/* ── Suscripciones (aprovisionamiento manual por admin + "Mi plan" del usuario) ── */
+export interface Subscription {
+  id: string;
+  user_id: string;
+  provider: string;
+  tier: string;
+  status: string;
+  current_period_end: string | null;
+  started_at: string | null;
+  cancelled_at: string | null;
+  note: string | null;
+}
+
+export async function getUserSubscriptions(userId: string): Promise<Subscription[]> {
+  const { data } = await client.get(`/products/subscriptions/${encodeURIComponent(userId)}`);
+  return data.subscriptions as Subscription[];
+}
+
+/** Alta o cambio de plan de la suscripción manual del usuario (admin). */
+export async function setSubscription(input: {
+  user_id: string; tier: string; current_period_end?: string | null; note?: string;
+}): Promise<Subscription> {
+  const { data } = await client.post("/products/subscriptions", input);
+  return data as Subscription;
+}
+
+export async function cancelSubscription(id: string): Promise<void> {
+  await client.post(`/products/subscriptions/${encodeURIComponent(id)}/cancel`);
+}
+
+export interface MyPlan {
+  manual_tier: string;
+  subscription_tier: string | null;
+  effective_tier: string;
+  subscriptions: Subscription[];
+  entitlements: UserEntitlement[];
+}
+
+/** El plan del usuario autenticado (tier efectivo + suscripción + accesos por-producto). */
+export async function getMyPlan(): Promise<MyPlan> {
+  const { data } = await client.get("/products/me/plan");
+  return data as MyPlan;
+}
+
 /* ── Catálogo de consumo (monetización: solo niveles publicados, con estado de
  *    acceso resuelto por el backend según el tier del usuario) ── */
 export interface CatalogLevel {
