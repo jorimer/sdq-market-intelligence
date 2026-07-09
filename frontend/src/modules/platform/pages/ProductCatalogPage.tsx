@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, Lock, Eye, Download, Mail, FileText } from "lucide-react";
+import { Boxes, Lock, Eye, Download, Mail, FileText, ShoppingCart } from "lucide-react";
 import {
   PageHead,
   Card,
@@ -27,6 +27,7 @@ import {
   type ProductReport,
   type ScopeOption,
 } from "../api";
+import { checkoutOrder, checkoutSubscription } from "../billingApi";
 
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
 const SALES_EMAIL = "ventas@sdqconsulting.com.do";
@@ -130,7 +131,29 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
   t: any;
 }) {
   const [sampling, setSampling] = useState(false);
+  const [buying, setBuying] = useState(false);
+  const [buyErr, setBuyErr] = useState<string | null>(null);
   const tierLabel = t(`platform.catalog.tier.${level.tier}`, { defaultValue: level.tier });
+
+  // Compra self-serve: Deep Dive = orden puntual; Insight = suscripción al plan requerido.
+  const onBuy = async () => {
+    setBuying(true);
+    setBuyErr(null);
+    try {
+      const res = level.tier === "deep_dive"
+        ? await checkoutOrder(`deep_dive:${sector.sector_key}`)
+        : await checkoutSubscription(level.required_tier === "enterprise" ? "enterprise" : "pro");
+      window.location.href = res.approval_url;
+    } catch (e) {
+      const code = (e as { response?: { status?: number } })?.response?.status;
+      setBuyErr(code === 503
+        ? t("platform.catalog.payUnavailable", { defaultValue: "Pagos en línea aún no disponibles." })
+        : code === 400
+        ? t("platform.catalog.noPrice", { defaultValue: "Este producto aún no tiene precio." })
+        : t("platform.catalog.payError", { defaultValue: "No se pudo iniciar el pago." }));
+      setBuying(false);
+    }
+  };
 
   const onSample = async () => {
     setSampling(true);
@@ -181,6 +204,13 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
           <Chip tone="warn">
             <Lock className="w-3 h-3" /> {t("platform.catalog.requiresPlan", { plan: planLabel(level.required_tier) })}
           </Chip>
+          <button onClick={onBuy} disabled={buying} className="btn btn-primary !py-1 !px-2 text-xs disabled:opacity-40">
+            <ShoppingCart className="w-3.5 h-3.5" />{" "}
+            {level.tier === "deep_dive"
+              ? t("platform.catalog.buy", { defaultValue: "Comprar" })
+              : t("platform.catalog.upgrade", { defaultValue: "Mejorar plan" })}
+          </button>
+          {buyErr && <span className="text-[11px] text-alert max-w-[160px] text-right">{buyErr}</span>}
           {level.sample_available && (
             <button onClick={onSample} disabled={sampling} className="btn btn-ghost !py-1 !px-2 text-xs disabled:opacity-40">
               <FileText className="w-3.5 h-3.5" /> {t("platform.catalog.sample")}

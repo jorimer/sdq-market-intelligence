@@ -75,3 +75,8 @@ def test_parse_subscription_lifecycle():
 
 def test_parse_ignores_irrelevant_event():
     assert PayPalProvider(CFG_OK).parse_event({"id": "E", "event_type": "SOMETHING.ELSE"}) is None
+
+
+def test_capture_requires_config():
+    with pytest.raises(ProviderNotConfigured):
+        PayPalProvider(CFG_OFF).capture_order("ORD-1")

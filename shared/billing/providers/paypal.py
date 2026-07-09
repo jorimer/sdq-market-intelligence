@@ -124,6 +124,14 @@ class PayPalProvider:
         return Checkout(approval_url=self._approval_url(data.get("links", [])),
                         provider_ref=data.get("id", ""))
 
+    def capture_order(self, order_id: str) -> dict:
+        """Captura (cobra) una orden aprobada al volver el usuario de PayPal. Devuelve
+        ``{status, order_id}``. El acceso lo concede el webhook PAYMENT.CAPTURE.COMPLETED
+        (idempotente); acá solo se toma el pago."""
+        self._require()
+        data = self._post(f"/v2/checkout/orders/{order_id}/capture", {})
+        return {"status": data.get("status", ""), "order_id": data.get("id", order_id)}
+
     # ── Webhook ──
     def verify_webhook(self, *, headers: dict, body: bytes) -> bool:
         self._require()

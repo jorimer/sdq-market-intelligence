@@ -100,6 +100,29 @@ async def post_checkout_subscription(body: _CheckoutSubBody, db: Session = Depen
     return {"approval_url": ck.approval_url, "provider_ref": ck.provider_ref}
 
 
+class _CaptureBody(BaseModel):
+    order_ref: str = Field(..., description="id de la orden PayPal a capturar")
+
+
+@router.post("/checkout/order/capture", summary="Capturar una orden aprobada (retorno de PayPal)")
+async def post_capture_order(body: _CaptureBody, db: Session = Depends(get_db),
+                             current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Al volver el usuario de aprobar el pago, captura (cobra) la orden. El acceso lo concede
+    el webhook (idempotente). 503 si la pasarela no está configurada."""
+    from starlette.concurrency import run_in_threadpool
+
+    from shared.billing.providers import ProviderError, ProviderNotConfigured, get_provider
+
+    provider = get_provider(db)
+    try:
+        res = await run_in_threadpool(provider.capture_order, body.order_ref)
+    except ProviderNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return res
+
+
 @router.post("/webhook/paypal", summary="Webhook de PayPal (verificado + idempotente)")
 async def paypal_webhook(request: Request, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Recibe los eventos de PayPal: verifica la firma, deduplica por event_id y aplica al

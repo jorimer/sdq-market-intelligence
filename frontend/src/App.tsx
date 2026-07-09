@@ -52,6 +52,8 @@ import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 import { UsersAdminPage } from "@/modules/platform/pages/UsersAdminPage";
 import { TarifarioPage } from "@/modules/platform/pages/TarifarioPage";
 import { MiPlanPage } from "@/modules/platform/pages/MiPlanPage";
+import { PagosPage } from "@/modules/platform/pages/PagosPage";
+import { CheckoutReturnPage } from "@/modules/platform/pages/CheckoutReturnPage";
 import { ProductMonitorPage } from "@/modules/platform/pages/ProductMonitorPage";
 import { ProductCatalogPage } from "@/modules/platform/pages/ProductCatalogPage";
 import { SourceIntelPage } from "@/modules/source-intel/pages/SourceIntelPage";
@@ -127,6 +129,7 @@ export default function App() {
           <Route path="/methodology" element={<MetodologiaPage />} />
           <Route path="/catalog" element={<ProductCatalogPage />} />
           <Route path="/mi-plan" element={<MiPlanPage />} />
+          <Route path="/checkout/return" element={<CheckoutReturnPage />} />
           <Route
             path="/products"
             element={
@@ -159,6 +162,14 @@ export default function App() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <TarifarioPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/pagos"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <PagosPage />
               </ProtectedRoute>
             }
           />
