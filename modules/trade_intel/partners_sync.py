@@ -71,14 +71,30 @@ def dga_partners_sync(
     error reports (never fabricates), leaving persisted data untouched.
     """
     set_phase = set_phase or (lambda _m: None)
+    explicit_client = client is not None
     client = client or DGAPartnersClient(mode="live")
 
     set_phase("consultando comercio por país socio (DGA · Power BI)")
+    fell_back = False
     try:
         records = client.fetch()
     except DGAPartnersError as e:
-        logger.warning("DGA partners sync falló: %s", e)
-        return {"error": str(e), "records": 0, "periods": []}
+        # La ruta live de la DGA es frágil (Power BI publish-to-web: el conceptualschema
+        # exige modelId y el reporte puede cambiar). Si falla, se cae al fixture REAL
+        # commiteado (snapshot reciente) para que prod NUNCA quede sin la dimensión
+        # geográfica; se registra para refrescar el live. Con un client explícito (tests)
+        # no se enmascara: se propaga el reporte de error.
+        if explicit_client:
+            logger.warning("DGA partners sync falló: %s", e)
+            return {"error": str(e), "records": 0, "periods": []}
+        logger.warning("DGA partners live falló (%s) → fallback al fixture real commiteado", e)
+        set_phase("live no disponible; usando snapshot real commiteado")
+        try:
+            records = DGAPartnersClient(mode="fixture").fetch()
+            fell_back = True
+        except DGAPartnersError as e2:
+            logger.warning("DGA partners fixture también falló: %s", e2)
+            return {"error": str(e2), "records": 0, "periods": []}
 
     created = 0
     updated = 0
@@ -106,4 +122,5 @@ def dga_partners_sync(
         "updated": updated,
         "periods": uniq_periods,
         "latest": uniq_periods[-1] if uniq_periods else None,
+        "source_mode": "fixture (live no disponible)" if fell_back else "live",
     }
