@@ -549,8 +549,22 @@ _PP_SECRET = "paypal_secret"
 _PP_WEBHOOK_ID = "paypal_webhook_id"
 _PP_ENV = "paypal_env"          # "sandbox" | "live"
 _PP_ENABLED = "paypal_enabled"  # "1" | "0"
-_PP_PLAN_PRO = "paypal_plan_pro"                # id del billing plan PayPal del tier pro
-_PP_PLAN_ENTERPRISE = "paypal_plan_enterprise"  # id del billing plan del tier enterprise
+# Mapa de billing plans de PayPal por (sku, intervalo), JSON: {sku: {interval: plan_id}}.
+# La suscripción v2 es por-sector con periodicidad, así que cada (insight:{sector}|all_access|
+# enterprise, monthly|annual) que se venda necesita su plan de PayPal creado y mapeado acá.
+_PP_PLANS = "paypal_plans"
+
+
+def _paypal_plans_map(db: Session) -> Dict[str, Dict[str, str]]:
+    import json
+
+    row = _get_app_setting(db, _PP_PLANS)
+    if not row or not row.value:
+        return {}
+    try:
+        return json.loads(row.value)
+    except (ValueError, TypeError):
+        return {}
 
 
 def get_paypal_config(db: Session) -> Dict[str, object]:
@@ -571,7 +585,7 @@ def get_paypal_config(db: Session) -> Dict[str, object]:
     env = _clear(_PP_ENV) or "sandbox"
     return {"client_id": client_id, "secret": secret,
             "webhook_id": _clear(_PP_WEBHOOK_ID), "env": env, "enabled": enabled,
-            "plans": {"pro": _clear(_PP_PLAN_PRO), "enterprise": _clear(_PP_PLAN_ENTERPRISE)}}
+            "plans": _paypal_plans_map(db)}
 
 
 def paypal_config_masked(db: Session) -> Dict[str, object]:
@@ -582,8 +596,7 @@ def paypal_config_masked(db: Session) -> Dict[str, object]:
         "secret": MASK if cfg["secret"] else "",
         "webhookId": cfg["webhook_id"],
         "env": cfg["env"],
-        "planPro": cfg["plans"]["pro"],
-        "planEnterprise": cfg["plans"]["enterprise"],
+        "plans": cfg["plans"],  # mapa {sku: {interval: plan_id}} (no secreto)
         "enabled": _get_app_setting(db, _PP_ENABLED) is not None
                    and (_get_app_setting(db, _PP_ENABLED).value == "1"),
         "configured": bool(cfg["enabled"]),
@@ -592,10 +605,12 @@ def paypal_config_masked(db: Session) -> Dict[str, object]:
 
 def set_paypal_config(db: Session, *, client_id: Optional[str], secret: Optional[str],
                       webhook_id: Optional[str], env: Optional[str],
-                      enabled: Optional[bool], plan_pro: Optional[str] = None,
-                      plan_enterprise: Optional[str] = None) -> Dict[str, object]:
+                      enabled: Optional[bool],
+                      plans: Optional[Dict[str, Dict[str, str]]] = None) -> Dict[str, object]:
     """Guarda la config PayPal. Un secreto None o == MASK preserva el actual (no lo pisa
-    con la máscara). ``env`` se normaliza a sandbox|live."""
+    con la máscara). ``plans`` reemplaza el mapa de billing plans; None lo deja igual."""
+    import json
+
     if client_id is not None and client_id != MASK:
         _set_app_setting(db, _PP_CLIENT_ID, client_id.strip(), is_secret=True)
     if secret is not None and secret != MASK:
@@ -606,9 +621,11 @@ def set_paypal_config(db: Session, *, client_id: Optional[str], secret: Optional
         _set_app_setting(db, _PP_ENV, "live" if env == "live" else "sandbox", is_secret=False)
     if enabled is not None:
         _set_app_setting(db, _PP_ENABLED, "1" if enabled else "0", is_secret=False)
-    if plan_pro is not None:
-        _set_app_setting(db, _PP_PLAN_PRO, plan_pro.strip(), is_secret=False)
-    if plan_enterprise is not None:
-        _set_app_setting(db, _PP_PLAN_ENTERPRISE, plan_enterprise.strip(), is_secret=False)
+    if plans is not None:
+        # Limpia entradas vacías antes de guardar.
+        clean = {sku: {iv: pid for iv, pid in (ivs or {}).items() if pid}
+                 for sku, ivs in plans.items()}
+        clean = {sku: ivs for sku, ivs in clean.items() if ivs}
+        _set_app_setting(db, _PP_PLANS, json.dumps(clean), is_secret=False)
     db.commit()
     return paypal_config_masked(db)

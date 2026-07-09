@@ -30,14 +30,16 @@ def test_empty_is_not_configured(db):
 
 def test_set_and_mask(db):
     set_paypal_config(db, client_id="CID", secret="SECRET", webhook_id="WH", env="live",
-                      enabled=True, plan_pro="P-PRO")
+                      enabled=True, plans={"all_access": {"monthly": "P-AM", "annual": ""}})
     cfg = get_paypal_config(db)
     assert cfg["enabled"] is True and cfg["env"] == "live"
     assert cfg["client_id"] == "CID" and cfg["secret"] == "SECRET"
-    assert cfg["plans"]["pro"] == "P-PRO"
+    # El mapa de planes limpia entradas vacías (annual="" se descarta).
+    assert cfg["plans"] == {"all_access": {"monthly": "P-AM"}}
     masked = paypal_config_masked(db)
     assert masked["clientId"] == MASK and masked["secret"] == MASK  # nunca en claro
     assert masked["webhookId"] == "WH" and masked["configured"] is True
+    assert masked["plans"] == {"all_access": {"monthly": "P-AM"}}
 
 
 def test_mask_preserves_secret(db):

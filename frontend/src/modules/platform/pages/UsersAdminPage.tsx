@@ -204,7 +204,7 @@ function EntitlementsModal({ user, onClose, t }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [subs, setSubs] = useState<Subscription[] | null>(null);
-  const [subTier, setSubTier] = useState("pro");
+  const [subSku, setSubSku] = useState("all_access");
 
   const load = () => getUserEntitlements(user.id).then(setRows).catch(() => setRows([]));
   const loadSubs = () => getUserSubscriptions(user.id).then(setSubs).catch(() => setSubs([]));
@@ -253,7 +253,7 @@ function EntitlementsModal({ user, onClose, t }: {
     setBusy(true);
     setErr(null);
     try {
-      await setSubscription({ user_id: user.id, tier: subTier });
+      await setSubscription({ user_id: user.id, sku: subSku });
       await loadSubs();
     } catch (e) {
       setErr(errMsg(e, t("platform.users.subscription.error", "No se pudo actualizar la suscripción.")));
@@ -302,7 +302,7 @@ function EntitlementsModal({ user, onClose, t }: {
               <div className="min-w-0 flex-1">
                 <div className="text-sm text-ink">
                   {t("platform.users.subscription.active", "Plan activo")}:{" "}
-                  <span className="font-semibold uppercase">{activeSub.tier}</span>
+                  <span className="font-semibold mono">{activeSub.sku || activeSub.tier}</span>
                 </div>
                 <div className="text-[11px] text-faint truncate">
                   {activeSub.provider === "manual"
@@ -322,10 +322,13 @@ function EntitlementsModal({ user, onClose, t }: {
             <p className="text-xs text-faint mb-2">{t("platform.users.subscription.none", "Sin suscripción activa.")}</p>
           )}
           <div className="flex items-end gap-2">
-            <Field label={t("platform.users.subscription.plan", "Plan")}>
-              <select className="field" value={subTier} onChange={(e) => setSubTier(e.target.value)}>
-                <option value="pro">Pro (Insight)</option>
-                <option value="enterprise">Enterprise (Deep Dive)</option>
+            <Field label={t("platform.users.subscription.plan", "Producto")}>
+              <select className="field" value={subSku} onChange={(e) => setSubSku(e.target.value)}>
+                <option value="all_access">All-Access (todos los Insight)</option>
+                <option value="enterprise">Enterprise (todo el catálogo)</option>
+                {sectors.map((s) => (
+                  <option key={s.key} value={`insight:${s.key}`}>Insight · {s.name}</option>
+                ))}
               </select>
             </Field>
             <button className="btn btn-primary" disabled={busy} onClick={onSetSub}>

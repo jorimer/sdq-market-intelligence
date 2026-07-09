@@ -72,3 +72,51 @@ export async function publishTariff(input: PublishTariffInput): Promise<unknown>
 export async function withdrawTariff(tariffId: string): Promise<void> {
   await client.post(`/billing/tariffs/${tariffId}/withdraw`, {});
 }
+
+/* ── Pago self-serve (checkout PayPal, v2) ───────────────────────── */
+function returnUrls(): { return_url: string; cancel_url: string } {
+  const base = `${window.location.origin}/checkout/return`;
+  return { return_url: `${base}?status=ok`, cancel_url: `${base}?status=cancel` };
+}
+
+/** Compra puntual de un Deep Dive (once). Devuelve el link de aprobación de PayPal. */
+export async function checkoutOrder(sku: string): Promise<{ approval_url: string }> {
+  const { data } = await client.post("/billing/checkout/order", { sku, ...returnUrls() });
+  return data;
+}
+
+/** Suscripción a un producto (insight:{sector} | all_access | enterprise) mensual/anual. */
+export async function checkoutSubscription(sku: string, interval: string): Promise<{ approval_url: string }> {
+  const { data } = await client.post("/billing/checkout/subscription", { sku, interval, ...returnUrls() });
+  return data;
+}
+
+/** Captura una orden aprobada (al volver de PayPal). */
+export async function captureOrder(orderRef: string): Promise<{ status: string }> {
+  const { data } = await client.post("/billing/checkout/order/capture", { order_ref: orderRef });
+  return data;
+}
+
+/* ── Configuración de PayPal (admin) ─────────────────────────────── */
+export interface PaypalConfig {
+  clientId: string;
+  secret: string;
+  webhookId: string;
+  env: string;
+  plans: Record<string, Record<string, string>>;  // {sku: {interval: planId}}
+  enabled: boolean;
+  configured: boolean;
+}
+
+export async function getPaypalConfig(): Promise<PaypalConfig> {
+  const { data } = await client.get("/billing/paypal");
+  return data as PaypalConfig;
+}
+
+export async function setPaypalConfig(input: Partial<{
+  clientId: string; secret: string; webhookId: string; env: string;
+  enabled: boolean; plans: Record<string, Record<string, string>>;
+}>): Promise<PaypalConfig> {
+  const { data } = await client.put("/billing/paypal", input);
+  return data as PaypalConfig;
+}

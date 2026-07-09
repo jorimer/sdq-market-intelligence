@@ -274,6 +274,8 @@ export interface Subscription {
   id: string;
   user_id: string;
   provider: string;
+  sku: string | null;
+  interval: string | null;
   tier: string;
   status: string;
   current_period_end: string | null;
@@ -289,7 +291,8 @@ export async function getUserSubscriptions(userId: string): Promise<Subscription
 
 /** Alta o cambio de plan de la suscripción manual del usuario (admin). */
 export async function setSubscription(input: {
-  user_id: string; tier: string; current_period_end?: string | null; note?: string;
+  user_id: string; sku?: string; tier?: string; interval?: string;
+  current_period_end?: string | null; note?: string;
 }): Promise<Subscription> {
   const { data } = await client.post("/products/subscriptions", input);
   return data as Subscription;
