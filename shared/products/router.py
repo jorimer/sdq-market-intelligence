@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user, require_role
-from shared.auth.models import User, UserRole
+from shared.auth.models import AccessTier, User, UserRole, tier_satisfies
 from shared.database.session import get_db
 from shared.narrative.lang_context import resolve_request_lang
 from shared.products.access import (
@@ -43,6 +43,13 @@ from shared.products.assembler import (
 from shared.products.models import SampleGrant
 from shared.products.registry import CATALOG_BY_KEY, PRODUCT_CATALOG, get_product
 from shared.products.service import build_matrix, recompute_readiness, sector_detail
+from shared.products.subscriptions import (
+    SubscriptionError,
+    active_subscription_tier,
+    cancel_subscription,
+    list_user_subscriptions,
+    set_manual_subscription,
+)
 from shared.products.tiers import Granularity, ProductTier
 
 router = APIRouter()
@@ -375,3 +382,66 @@ async def post_revoke_entitlement(entitlement_id: str, db: Session = Depends(get
     if not revoke_entitlement(db, entitlement_id):
         raise HTTPException(status_code=404, detail="Entitlement no encontrado.")
     return {"id": entitlement_id, "active": False}
+
+
+# ─── Suscripciones (aprovisionamiento manual por admin, mientras no hay pasarela) ───
+#
+# Alta / cambio de plan / baja de la suscripción de un usuario, operadas por el admin
+# (cobro fuera de plataforma). El webhook de pago (Fase 3) usará el mismo modelo vía
+# ``apply_subscription``. ``can_access`` ya honra la suscripción activa como eje de acceso.
+
+class _SubBody(BaseModel):
+    user_id: str
+    tier: str  # pro | enterprise
+    current_period_end: Optional[datetime] = None  # None = abierto (sin vencimiento)
+    note: Optional[str] = None
+
+
+@router.get("/subscriptions/{user_id}", summary="Suscripciones de un usuario (admin)")
+async def get_subscriptions(user_id: str, db: Session = Depends(get_db),
+                            current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    return {"user_id": user_id, "subscriptions": list_user_subscriptions(db, user_id)}
+
+
+@router.post("/subscriptions", summary="Alta o cambio de plan de la suscripción (admin)")
+async def post_set_subscription(body: _SubBody, db: Session = Depends(get_db),
+                                current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    """Da de alta o CAMBIA el plan de la suscripción manual del usuario (una por usuario).
+    Reactiva si estaba dada de baja. El acceso se concede mientras esté activa y vigente."""
+    target = db.query(User).filter(User.id == body.user_id).one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    try:
+        return set_manual_subscription(
+            db, user_id=body.user_id, tier=body.tier,
+            current_period_end=body.current_period_end, note=body.note)
+    except SubscriptionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/subscriptions/{subscription_id}/cancel", summary="Dar de baja una suscripción (admin)")
+async def post_cancel_subscription(subscription_id: str, db: Session = Depends(get_db),
+                                   current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    if not cancel_subscription(db, subscription_id):
+        raise HTTPException(status_code=404, detail="Suscripción no encontrada.")
+    return {"id": subscription_id, "status": "cancelled"}
+
+
+@router.get("/me/plan", summary="Mi plan: tier efectivo + suscripción + accesos por-producto")
+async def get_my_plan(db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Vista del usuario de su propio plan: el tier efectivo (el mayor entre el manual y el
+    de una suscripción activa), sus suscripciones y sus entitlements por-producto vigentes."""
+    manual_tier = current_user.tier or AccessTier.free
+    sub_tier = active_subscription_tier(db, current_user.id)
+    effective = manual_tier
+    if sub_tier is not None and tier_satisfies(sub_tier, manual_tier) and sub_tier != manual_tier:
+        # tier efectivo = el más alto entre el manual y el de la suscripción vigente
+        effective = sub_tier
+    return {
+        "manual_tier": manual_tier.value,
+        "subscription_tier": sub_tier.value if sub_tier else None,
+        "effective_tier": effective.value,
+        "subscriptions": list_user_subscriptions(db, current_user.id),
+        "entitlements": list_user_entitlements(db, current_user.id),
+    }

@@ -20,8 +20,10 @@ from shared.products.subscriptions import (
     SubscriptionError,
     active_subscription_tier,
     apply_subscription,
+    cancel_subscription,
     expire_subscription,
     list_user_subscriptions,
+    set_manual_subscription,
 )
 from shared.products.tiers import ProductTier
 
@@ -176,3 +178,42 @@ def test_subscription_never_reveals_unpublished(db):
                        tier="enterprise", status="active", current_period_end=_future())
     d = can_access(db, _User(AccessTier.free, "u1"), "banking", ProductTier.insight)
     assert d.outcome is AccessOutcome.not_published
+
+
+# ── Gestión MANUAL por admin (alta / cambio de plan / baja) ──
+def test_set_manual_subscription_creates_then_upserts(db):
+    a = set_manual_subscription(db, user_id="u1", tier="pro", note="lanzamiento")
+    assert a["provider"] == "manual" and a["tier"] == "pro" and a["status"] == "active"
+    assert active_subscription_tier(db, "u1") == AccessTier.pro
+    # Cambio de plan: misma fila (una manual por usuario), tier nuevo.
+    b = set_manual_subscription(db, user_id="u1", tier="enterprise")
+    assert b["id"] == a["id"] and b["tier"] == "enterprise"
+    assert len(list_user_subscriptions(db, "u1")) == 1
+    assert active_subscription_tier(db, "u1") == AccessTier.enterprise
+
+
+def test_cancel_then_reactivate(db):
+    a = set_manual_subscription(db, user_id="u2", tier="pro")
+    assert cancel_subscription(db, a["id"]) is True
+    assert active_subscription_tier(db, "u2") is None  # baja corta el acceso
+    rows = list_user_subscriptions(db, "u2")
+    assert rows[0]["status"] == "cancelled" and rows[0]["cancelled_at"] is not None
+    # Reactivar (set de nuevo) limpia la baja y reconcede el tier.
+    b = set_manual_subscription(db, user_id="u2", tier="pro")
+    assert b["id"] == a["id"] and b["status"] == "active" and b["cancelled_at"] is None
+    assert active_subscription_tier(db, "u2") == AccessTier.pro
+
+
+def test_cancel_unknown_returns_false(db):
+    assert cancel_subscription(db, "no-existe") is False
+
+
+def test_manual_rejects_free_tier(db):
+    with pytest.raises(SubscriptionError):
+        set_manual_subscription(db, user_id="u3", tier="free")
+
+
+def test_manual_respects_period_end(db):
+    past = datetime.now(timezone.utc) - timedelta(days=1)
+    set_manual_subscription(db, user_id="u4", tier="pro", current_period_end=past)
+    assert active_subscription_tier(db, "u4") is None  # fuera de período → sin acceso

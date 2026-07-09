@@ -19,6 +19,7 @@ import {
   PiggyBank,
   Compass,
   CircleDollarSign,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 
@@ -81,6 +82,7 @@ export const NAV: NavGroup[] = [
       { to: "/compare", label: "Comparador", icon: GitCompare },
       { to: "/methodology", label: "Metodología", icon: BookOpen },
       { to: "/catalog", label: "Catálogo de productos", icon: Store },
+      { to: "/mi-plan", label: "Mi plan", icon: CreditCard },
       { to: "/products", label: "Monitor de productos", icon: Boxes, minRole: "admin" },
       { to: "/source-intel", label: "Inteligencia de Fuentes", icon: Compass, minRole: "admin" },
       { to: "/settings", label: "Configuración", icon: Settings },

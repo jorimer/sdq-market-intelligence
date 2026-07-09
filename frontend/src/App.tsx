@@ -51,6 +51,7 @@ import { DealScoringPage } from "@/modules/platform/pages/DealScoringPage";
 import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 import { UsersAdminPage } from "@/modules/platform/pages/UsersAdminPage";
 import { TarifarioPage } from "@/modules/platform/pages/TarifarioPage";
+import { MiPlanPage } from "@/modules/platform/pages/MiPlanPage";
 import { ProductMonitorPage } from "@/modules/platform/pages/ProductMonitorPage";
 import { ProductCatalogPage } from "@/modules/platform/pages/ProductCatalogPage";
 import { SourceIntelPage } from "@/modules/source-intel/pages/SourceIntelPage";
@@ -125,6 +126,7 @@ export default function App() {
           />
           <Route path="/methodology" element={<MetodologiaPage />} />
           <Route path="/catalog" element={<ProductCatalogPage />} />
+          <Route path="/mi-plan" element={<MiPlanPage />} />
           <Route
             path="/products"
             element={
