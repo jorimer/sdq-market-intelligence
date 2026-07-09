@@ -368,9 +368,23 @@ def _forecast_md(payload: Dict[str, Any]) -> str:
         md.append(f"**Tasa implícita de la regla de Taylor:** {rt['tasa_implicita']:.2f}%{bias_txt}.")
     bt = (payload.get("backtest") or {}).get("classifier") or {}
     if bt.get("macro_f1") is not None:
-        md.append(f"**Backtest (out-of-sample, expanding-window):** macro-F1 {bt['macro_f1']:.2f}; "
-                  "el clasificador aporta en las decisiones de recorte y alza sobre el baseline "
-                  "ingenuo de 'siempre mantener' (que domina por el peso de los 'mantener').")
+        # E2E-MM5 (candor): exhibir que en accuracy CRUDA el modelo no supera al baseline
+        # "siempre mantener" — su valor está en anticipar los giros (recorte/alza), que la
+        # macro-F1 capta y la accuracy (dominada por los 'mantener') esconde. Nunca vender
+        # el macro-F1 sin decir que la accuracy no bate el promedio ingenuo.
+        acc, base = bt.get("accuracy"), bt.get("baseline_always_hold_accuracy")
+        beats = bt.get("beats_baseline")
+        line = f"**Backtest (out-of-sample, expanding-window):** macro-F1 {bt['macro_f1']:.2f}."
+        if isinstance(acc, (int, float)) and isinstance(base, (int, float)):
+            rel = "supera" if beats else ("iguala" if abs(acc - base) < 0.005 else "no supera")
+            line += (f" En accuracy cruda el modelo {rel} al baseline ingenuo de 'siempre "
+                     f"mantener' (accuracy {acc:.2f} vs {base:.2f}): su valor NO está en batir "
+                     "ese promedio —que el desbalance de 'mantener' infla— sino en anticipar "
+                     "los giros de recorte y alza, que es lo que la macro-F1 mide.")
+        else:
+            line += (" El clasificador aporta en las decisiones de recorte y alza sobre el "
+                     "baseline ingenuo de 'siempre mantener'.")
+        md.append(line)
     tr = payload.get("track_record") or {}
     n = tr.get("n_scored", 0)
     md.append(f"**Track record en vivo:** {n} pronóstico(s) puntuado(s) contra la decisión real. "
