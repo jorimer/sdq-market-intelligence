@@ -223,17 +223,26 @@ class DGAPartnersClient(FixtureBackedClient):
         import httpx
 
         res_key = powerbi.resource_key(VIEW_TOKEN)
-        api = powerbi.resolve_api_host(VIEW_URL)
-        with httpx.Client(http2=False, timeout=90, headers=powerbi.browser_headers()) as client:
-            model_id = powerbi.fetch_model_id(client, api, res_key)
-            resp = client.post(
-                f"{api}/public/reports/querydata?synchronous=true",
-                headers=powerbi.api_headers(res_key),
-                json=build_query(model_id),
-            )
-            resp.raise_for_status()
-            decoded = powerbi.decode_dsr_rows(resp.json(), min_cols=5)
-        return rows_to_records(decoded)
+        # Fail CLOSED de verdad: cualquier sorpresa de red/estructura (incluido el
+        # HTTPStatusError de httpx, p.ej. el conceptualschema de la DGA que exige modelId
+        # y a veces 400ea) se envuelve en DGAPartnersError para que el sync pueda decidir
+        # (cae al fixture real commiteado) en vez de propagar un error crudo.
+        try:
+            api = powerbi.resolve_api_host(VIEW_URL)
+            with httpx.Client(http2=False, timeout=90, headers=powerbi.browser_headers()) as client:
+                model_id = powerbi.fetch_model_id(client, api, res_key)
+                resp = client.post(
+                    f"{api}/public/reports/querydata?synchronous=true",
+                    headers=powerbi.api_headers(res_key),
+                    json=build_query(model_id),
+                )
+                resp.raise_for_status()
+                decoded = powerbi.decode_dsr_rows(resp.json(), min_cols=5)
+            return rows_to_records(decoded)
+        except DGAPartnersError:
+            raise
+        except Exception as e:  # noqa: BLE001 — normalizar a fail-closed
+            raise DGAPartnersError(f"extracción live de la DGA falló: {e}") from e
 
     # ── Fixture (offline / tests) ─────────────────────────────────
     def _fetch_fixture(self) -> List[Record]:
