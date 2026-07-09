@@ -68,6 +68,9 @@ class User(UUIDMixin, Base):
     # vs exportación de servicios exenta). None/"" se resuelve como "DO" (default conservador:
     # tributa, nunca exime por omisión). Ver ``shared/billing/tax.py``.
     country = Column(String(2), nullable=True)
+    # RNC/cédula del cliente (opcional) — si un cliente de RD lo aporta, la factura es de
+    # crédito fiscal (e-CF tipo 31); si no, consumo (tipo 32). Ver ``shared/billing/encf``.
+    tax_id = Column(String(20), nullable=True)
     organization_id = Column(String, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     failed_login_attempts = Column(Integer, default=0, nullable=False)

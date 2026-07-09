@@ -148,15 +148,15 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
     setBuying(false);
     throw e as Error;  // el modal muestra su propio estado de error
   };
-  // El pago pasa por el modal de confirmación (medio de pago PayPal + desglose + país).
-  const onConfirmOrder = async (country: string) => {
+  // El pago pasa por el modal de confirmación (medio de pago PayPal + desglose + país + RNC).
+  const onConfirmOrder = async (country: string, taxId?: string) => {
     setBuying(true); setBuyErr(null);
-    try { window.location.href = (await checkoutOrder(`deep_dive:${sector.sector_key}`, country)).approval_url; }
+    try { window.location.href = (await checkoutOrder(`deep_dive:${sector.sector_key}`, country, taxId)).approval_url; }
     catch (e) { payErr(e); }
   };
-  const onConfirmSubscribe = async (country: string) => {
+  const onConfirmSubscribe = async (country: string, taxId?: string) => {
     setBuying(true); setBuyErr(null);
-    try { window.location.href = (await checkoutSubscription(`insight:${sector.sector_key}`, subInterval, country)).approval_url; }
+    try { window.location.href = (await checkoutSubscription(`insight:${sector.sector_key}`, subInterval, country, taxId)).approval_url; }
     catch (e) { payErr(e); }
   };
 

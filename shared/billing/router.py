@@ -37,6 +37,9 @@ class _CheckoutOrderBody(BaseModel):
     # País de facturación elegido en la confirmación de checkout (ISO-2). Si viene, se guarda
     # en el perfil y define el trato fiscal (RD 18% vs exportación de servicios exenta).
     country: Optional[str] = None
+    # RNC/cédula del cliente (opcional): si el cliente de RD lo da, la factura es de crédito
+    # fiscal (e-CF tipo 31); si no, consumo (tipo 32).
+    tax_id: Optional[str] = None
 
 
 class _CheckoutSubBody(BaseModel):
@@ -45,6 +48,7 @@ class _CheckoutSubBody(BaseModel):
     return_url: str
     cancel_url: str
     country: Optional[str] = None
+    tax_id: Optional[str] = None
 
 
 class _QuoteBody(BaseModel):
@@ -67,18 +71,27 @@ class _PayPalConfigBody(BaseModel):
     plans: Optional[Dict[str, Dict[str, str]]] = None
 
 
-def _resolve_country(db: Session, user: User, chosen: Optional[str]) -> str:
-    """País de facturación efectivo: si el cliente eligió uno en la confirmación, se guarda en
-    su perfil y se usa; si no, el ya guardado; default 'DO' (conservador: tributa)."""
+def _resolve_country(db: Session, user: User, chosen: Optional[str],
+                     tax_id: Optional[str] = None) -> str:
+    """País de facturación efectivo (persiste la elección en el perfil) + guarda el RNC/cédula
+    del cliente si vino. Default 'DO' (conservador: tributa)."""
     from shared.billing.tax import normalize_country
 
+    dirty = False
+    if tax_id is not None:
+        clean = tax_id.strip() or None
+        if clean != (user.tax_id or None):
+            user.tax_id = clean
+            dirty = True
+    cc = normalize_country(user.country)
     if chosen:
         cc = normalize_country(chosen)
         if cc != (user.country or ""):
             user.country = cc
-            db.commit()
-        return cc
-    return normalize_country(user.country)
+            dirty = True
+    if dirty:
+        db.commit()
+    return cc
 
 
 @router.post("/checkout/order", summary="Iniciar compra puntual de un Deep Dive (self-serve)")
@@ -94,7 +107,7 @@ async def post_checkout_order(body: _CheckoutOrderBody, db: Session = Depends(ge
     row = price_for(db, body.sku)
     if row is None:
         raise HTTPException(status_code=400, detail="Este producto no tiene precio configurado.")
-    country = _resolve_country(db, current_user, body.country)
+    country = _resolve_country(db, current_user, body.country, body.tax_id)
     bd = quote_for(db, subtotal=row.amount, currency=row.currency, country=country)
     provider = get_provider(db)
     try:
@@ -137,7 +150,7 @@ async def post_checkout_subscription(body: _CheckoutSubBody, db: Session = Depen
     from shared.billing.tax import quote_for
 
     row = price_for(db, body.sku, body.interval)
-    country = _resolve_country(db, current_user, body.country)
+    country = _resolve_country(db, current_user, body.country, body.tax_id)
     subtotal = row.amount if row is not None else 0
     currency = row.currency if row is not None else "USD"
     bd = quote_for(db, subtotal=subtotal, currency=currency, country=country)
@@ -338,6 +351,36 @@ async def put_issuer(body: _IssuerBody, db: Session = Depends(get_db),
     from shared.settings.service import set_invoice_issuer
     return set_invoice_issuer(db, name=body.name, rnc=body.rnc, address=body.address,
                               email=body.email)
+
+
+# ─── Secuencias e-NCF (e-CF, DGII) — rangos autorizados por tipo (admin) ───
+class _EncfSequenceBody(BaseModel):
+    ecf_type: str = Field(..., description="31 | 32 | 46")
+    range_from: int
+    range_to: int
+    current: Optional[int] = None
+    expires_at: Optional[datetime] = None
+    active: bool = True
+    note: Optional[str] = None
+
+
+@router.get("/encf/sequences", summary="Secuencias e-NCF configuradas (admin)")
+async def get_encf_sequences(db: Session = Depends(get_db),
+                             current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    from shared.billing.encf.sequences import list_sequences
+    return {"sequences": list_sequences(db)}
+
+
+@router.put("/encf/sequences", summary="Cargar/actualizar un rango de e-NCF (admin)")
+async def put_encf_sequence(body: _EncfSequenceBody, db: Session = Depends(get_db),
+                            current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    from shared.billing.encf.sequences import EncfSequenceError, upsert_sequence
+    try:
+        return upsert_sequence(db, ecf_type=body.ecf_type, range_from=body.range_from,
+                               range_to=body.range_to, current=body.current,
+                               expires_at=body.expires_at, active=body.active, note=body.note)
+    except EncfSequenceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/webhook/paypal", summary="Webhook de PayPal (verificado + idempotente)")

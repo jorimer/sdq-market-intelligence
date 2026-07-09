@@ -118,6 +118,30 @@ class BillingTransaction(UUIDMixin, Base):
     )
 
 
+class EncfSequence(UUIDMixin, Base):
+    """Rango de secuencia e-NCF autorizado por la DGII para un tipo de e-CF (Fase e-CF).
+
+    El e-NCF tiene el formato ``E`` + tipo (2 díg.) + secuencia (10 díg.) = 13 caracteres
+    (p.ej. ``E310000000001``). La DGII autoriza un RANGO por tipo (``range_from``..``range_to``)
+    con una fecha de vencimiento; el emisor asigna correlativos consecutivos desde ``current``.
+    ``allocate_next`` toma el próximo, controla vencimiento y agotamiento. Un tipo puede tener
+    varias filas históricas; se asigna desde la activa, no vencida y con cupo."""
+
+    __tablename__ = "encf_sequence"
+
+    ecf_type = Column(String(2), nullable=False)      # 31 | 32 | 46 …
+    range_from = Column(Numeric(12, 0), nullable=False)  # inicio del rango autorizado
+    range_to = Column(Numeric(12, 0), nullable=False)    # fin del rango (inclusive)
+    current = Column(Numeric(12, 0), nullable=False)     # próximo correlativo a asignar
+    expires_at = Column(DateTime, nullable=True)         # vencimiento de la secuencia (DGII)
+    active = Column(Boolean, nullable=False, default=True, server_default=true())
+    note = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index("ix_encf_sequence_type", "ecf_type"),
+    )
+
+
 class BillingEvent(UUIDMixin, Base):
     """Evento de webhook YA procesado — idempotencia de la pasarela (Fase 3).
 
