@@ -75,7 +75,8 @@ def _seed_do_trajectory(db):
     """3 cortes de DO (mejora sostenida) + 1 peer, para probar la trayectoria."""
     do = Country(iso_code="DO", name="República Dominicana", region="LATAM", is_active=True)
     cr = Country(iso_code="CR", name="Costa Rica", region="LATAM", is_active=True)
-    db.add_all([do, cr]); db.flush()
+    db.add_all([do, cr])
+    db.flush()
     for pe, score in [(dt.date(2024, 12, 31), 44.0),
                       (dt.date(2025, 6, 30), 46.0),
                       (dt.date(2025, 12, 31), 48.66)]:
