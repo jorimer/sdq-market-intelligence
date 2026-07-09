@@ -183,3 +183,24 @@ def test_pulse_is_anonymous():
     snap = prod.sample_snapshot(ProductTier.pulse)
     assert snap.entity_name is None
     enforce_anonymized(snap.payload, entity_roster=snap.entity_roster)  # no debe levantar
+
+
+def test_forecast_md_candor_accuracy_vs_baseline():
+    """E2E-MM5: la metodología debe exhibir que en accuracy cruda el modelo NO supera
+    (iguala) al baseline 'siempre mantener' — no vender el macro-F1 a secas."""
+    from app.products_monetary_policy import _forecast_md
+    payload = {
+        "forecast": {"has_model": True,
+                     "clasificador": {"probabilidades": {"cut": 0.01, "hold": 0.64, "hike": 0.35}},
+                     "regla_taylor": {}},
+        "backtest": {"classifier": {"macro_f1": 0.56, "accuracy": 0.69,
+                                    "baseline_always_hold_accuracy": 0.69,
+                                    "beats_baseline": False}},
+        "track_record": {"has_data": True, "n_scored": 0},
+    }
+    md = _forecast_md(payload)
+    assert "accuracy 0.69 vs 0.69" in md
+    assert "iguala" in md
+    assert "anticipar los giros" in md
+    # MM4: track record vacío presentado como en acumulación, no ambiguo.
+    assert "acumulación" in md
