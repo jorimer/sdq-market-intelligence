@@ -138,6 +138,45 @@ def _nav_series(db: Session, slug: str) -> List[Tuple[str, float]]:
     return [(r.period, r.value) for r in reversed(rows)]
 
 
+def _series_asc(db: Session, slug: str, metric: str) -> List[Tuple[str, float]]:
+    """Todos los (period, value) de una métrica por-AFP, ascendente por período."""
+    rows = (
+        db.query(PensionSeries)
+        .filter(PensionSeries.entity_slug == slug,
+                PensionSeries.series_code == metric,
+                PensionSeries.value.isnot(None))
+        .order_by(PensionSeries.period.asc())
+        .all()
+    )
+    return [(r.period, r.value) for r in rows]
+
+
+def dimension_trend(db: Session, slug: str, key: str) -> List[Tuple[str, float]]:
+    """Trayectoria (period, value) de UNA dimensión del ISA — E2E-SYS2/PN1.
+
+    Antes solo rentabilidad y escala (métrica directa) tenían trend; solvencia, costo y
+    riesgo son DERIVADAS y salían con ``trend=[]``. Aquí se computan:
+    - ``metric`` directo (rentabilidad, escala): la serie tal cual.
+    - ``ratio`` (solvencia = patrimonio/activos; costo = comisiones/AUM): el ratio en % por
+      cada período con AMBOS componentes.
+    - ``derived`` volatility (riesgo): la serie mensual del valor cuota (NAV), cuya variación
+      ES el riesgo (la σ puntual va en el score; la trayectoria del NAV la contextualiza).
+    """
+    dim = next((d for d in DIMENSIONS if d["key"] == key), None)
+    if dim is None:
+        return []
+    if "metric" in dim:
+        return _series_asc(db, slug, dim["metric"])
+    if "ratio" in dim:
+        num = dict(_series_asc(db, slug, dim["ratio"][0]))
+        den = dict(_series_asc(db, slug, dim["ratio"][1]))
+        return [(p, round(100.0 * num[p] / den[p], 4))
+                for p in sorted(set(num) & set(den)) if den[p]]
+    if dim.get("derived") == "volatility":
+        return _nav_series(db, slug)
+    return []
+
+
 def realized_risk_stats(db: Session, slug: str) -> Optional[Dict[str, Any]]:
     """Realized risk/return stats from the AFP's monthly NAV series over the window:
     ``{as_of, vol_pct, annual_return_pct, periods, n_returns}``. Annualized (σ×√12,

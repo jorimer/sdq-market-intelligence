@@ -515,12 +515,6 @@ _SYSTEM_INDICATORS: Dict[str, str] = {
 }
 # AFP dimension key → the per-AFP PensionSeries metric whose history is the trend (ratio
 # dims have no single series → no trend line).
-_DIM_TREND_METRIC: Dict[str, str] = {
-    "rentabilidad": "rentabilidad_nominal_anual",
-    "escala": "fondos_administrados",
-}
-
-
 @router.get("/indicator")
 async def system_indicator(
     code: str = Query(..., description="Código de serie del sistema, p.ej. sipen.rentabilidad.cci_nominal_anual"),
@@ -586,14 +580,11 @@ async def afp_dimension(
     from shared.indices.panel import annotate_panel_position
     panel_position = annotate_panel_position(
         dim.get("score"), [p["score"] for p in peers if p["score"] is not None])
-    trend: List = []
-    metric = _DIM_TREND_METRIC.get(key)
-    if metric:
-        trows = (db.query(PensionSeries)
-                 .filter(PensionSeries.entity_slug == slug, PensionSeries.series_code == metric,
-                         PensionSeries.value.isnot(None))
-                 .order_by(PensionSeries.period.asc()).all())
-        trend = [(r.period, r.value) for r in trows]
+    # E2E-SYS2/PN1: trayectoria de la dimensión (antes solo rentabilidad/escala tenían
+    # serie; solvencia/costo/riesgo, derivadas, salían con trend=[]). dimension_trend
+    # computa el ratio período-a-período (solvencia/costo) y el NAV (riesgo).
+    from modules.pension_intel.scoring.isa import dimension_trend
+    trend: List = dimension_trend(db, slug, key)
     ai = None
     if with_ai and dim["present"]:
         from modules.pension_intel.ai_context import pension_dimension_context
