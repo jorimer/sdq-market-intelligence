@@ -84,6 +84,23 @@ def sku_label(sku: str) -> str:
     return f"informe especial «{ref}»"  # parse_sku garantiza kind ∈ {insight, deep_dive, special}
 
 
+def catalog_skus() -> list:
+    """Los SKUs vendibles canónicos del catálogo, para poblar el tarifario en la UI de
+    administración: la suscripción ``insight`` (plataforma-wide) + un ``deep_dive:{sector}``
+    por cada producto del catálogo. Los ``special:{slug}`` son a medida (no se enumeran).
+
+    Cada item: ``{sku, kind, ref, label}``. ``ref`` = sector (deep_dive) o None (insight)."""
+    from shared.products.registry import PRODUCT_CATALOG
+
+    out = [{"sku": SKU_INSIGHT, "kind": "insight", "ref": None,
+            "label": "Plan Insight (suscripción, todo el catálogo)"}]
+    for entry in PRODUCT_CATALOG:
+        sku = deep_dive_sku(entry.sector_key)
+        out.append({"sku": sku, "kind": "deep_dive", "ref": entry.sector_key,
+                    "label": f"Deep Dive · {entry.display_name}"})
+    return out
+
+
 def entitlement_for_sku(sku: str) -> Optional[Tuple[str, ProductTier]]:
     """Si el SKU corresponde a una compra por-producto (Deep Dive), devuelve el
     ``(sector_key, ProductTier.deep_dive)`` que el webhook otorgará vía
