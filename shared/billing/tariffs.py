@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from shared.billing.events import TARIFF_PUBLISHED
 from shared.billing.models import Tariff
-from shared.billing.skus import SkuError, validate_sku
+from shared.billing.skus import INTERVAL_ONCE, SkuError, allowed_intervals, validate_sku
 from shared.events.event_bus import event_bus
 
 
@@ -65,6 +65,7 @@ def _serialize(t: Tariff, *, at: Optional[datetime] = None) -> Dict[str, Any]:
     return {
         "id": t.id,
         "sku": t.sku,
+        "interval": t.interval or INTERVAL_ONCE,
         "currency": t.currency,
         "amount": format(t.amount, "f") if t.amount is not None else None,
         "effective_from": t.effective_from.isoformat() if t.effective_from else None,
@@ -78,18 +79,22 @@ def _serialize(t: Tariff, *, at: Optional[datetime] = None) -> Dict[str, Any]:
 
 
 def create_tariff(db: Session, *, sku: str, amount: Any, currency: str = "USD",
+                  interval: str = INTERVAL_ONCE,
                   effective_from: Optional[datetime] = None,
                   effective_to: Optional[datetime] = None,
                   label: Optional[str] = None, note: Optional[str] = None,
                   created_by: Optional[str] = None) -> Dict[str, Any]:
-    """Publica un precio para un SKU. ``effective_from`` None = rige desde ahora;
-    ``effective_to`` None = abierto. Valida SKU contra el catálogo, moneda ISO de 3 letras,
-    monto > 0 y coherencia de la ventana. No edita el histórico (cada publicación es una
-    fila nueva)."""
+    """Publica un precio para un ``(sku, interval)``. ``interval`` debe ser válido para el SKU
+    (once en compras puntuales; monthly/annual en suscripciones). ``effective_from`` None =
+    rige desde ahora; ``effective_to`` None = abierto. No edita el histórico."""
     try:
         validate_sku(sku)
     except SkuError as e:
         raise TariffError(str(e))
+    interval = (interval or INTERVAL_ONCE).strip()
+    if interval not in allowed_intervals(sku):
+        raise TariffError(
+            f"Intervalo '{interval}' inválido para '{sku}'. Válidos: {', '.join(allowed_intervals(sku))}.")
 
     cur = (currency or "").strip().upper()
     if len(cur) != 3 or not cur.isalpha():
@@ -101,11 +106,11 @@ def create_tariff(db: Session, *, sku: str, amount: Any, currency: str = "USD",
     if eff_to is not None and eff_to <= eff_from:
         raise TariffError("La vigencia 'hasta' debe ser posterior a 'desde'.")
 
-    # ¿Es un CAMBIO sobre un precio actualmente vigente? (no la primera fijación del SKU).
-    # Se resuelve ANTES de insertar para alertar a los suscriptos (B2) solo ante cambios.
-    is_change = price_for(db, sku) is not None
+    # ¿Es un CAMBIO sobre un precio actualmente vigente de ese (sku, interval)? Se resuelve
+    # ANTES de insertar para alertar a los suscriptos (B2) solo ante cambios.
+    is_change = price_for(db, sku, interval) is not None
 
-    row = Tariff(sku=sku, currency=cur, amount=value, effective_from=eff_from,
+    row = Tariff(sku=sku, interval=interval, currency=cur, amount=value, effective_from=eff_from,
                  effective_to=eff_to, active=True, label=label, note=note,
                  created_by=created_by)
     db.add(row)
@@ -114,7 +119,7 @@ def create_tariff(db: Session, *, sku: str, amount: Any, currency: str = "USD",
     # Publicar tras el commit (la alerta corre en su propia sesión; un fallo de notificación
     # no revierte la tarifa ya persistida). Los handlers se suscriben solo en runtime.
     event_bus.publish(TARIFF_PUBLISHED, {
-        "sku": sku, "currency": cur, "amount": format(value, "f"),
+        "sku": sku, "interval": interval, "currency": cur, "amount": format(value, "f"),
         "effective_from": eff_from.isoformat(), "is_change": is_change,
     })
     return out
@@ -131,13 +136,15 @@ def withdraw_tariff(db: Session, tariff_id: str) -> bool:
     return True
 
 
-def price_for(db: Session, sku: str, at: Optional[datetime] = None) -> Optional[Tariff]:
-    """Precio vigente de ``sku`` a la fecha ``at`` (default ahora): la fila ``active`` cuya
-    ventana de vigencia contiene ``at``, con el ``effective_from`` más reciente. ``None`` si
-    no hay precio vigente (no se debe vender sin tarifa configurada)."""
+def price_for(db: Session, sku: str, interval: str = INTERVAL_ONCE,
+              at: Optional[datetime] = None) -> Optional[Tariff]:
+    """Precio vigente de ``(sku, interval)`` a la fecha ``at`` (default ahora): la fila
+    ``active`` cuya ventana contiene ``at``, con el ``effective_from`` más reciente. ``None``
+    si no hay precio vigente (no se debe vender sin tarifa configurada)."""
     moment = _to_naive_utc(at) if at else _utcnow()
     return (db.query(Tariff)
             .filter(Tariff.sku == sku,
+                    Tariff.interval == interval,
                     Tariff.active.is_(True),
                     Tariff.effective_from <= moment,
                     or_(Tariff.effective_to.is_(None), Tariff.effective_to > moment))

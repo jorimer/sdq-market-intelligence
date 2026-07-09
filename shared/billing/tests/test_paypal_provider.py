@@ -63,10 +63,10 @@ def test_parse_order_custom_id_in_purchase_units():
 
 def test_parse_subscription_lifecycle():
     p = PayPalProvider(CFG_OK)
-    base = {"resource": {"id": "SUB-1", "custom_id": encode_custom_id("u1", "sub", "pro"),
+    base = {"resource": {"id": "SUB-1", "custom_id": encode_custom_id("u1", "sub", "insight:banking"),
                          "billing_info": {"next_billing_time": "2026-12-31T00:00:00Z"}}}
     act = p.parse_event({**base, "id": "E1", "event_type": "BILLING.SUBSCRIPTION.ACTIVATED"})
-    assert act.kind == "subscription_active" and act.tier == "pro" and act.period_end.startswith("2026-12-31")
+    assert act.kind == "subscription_active" and act.sku == "insight:banking" and act.period_end.startswith("2026-12-31")
     can = p.parse_event({**base, "id": "E2", "event_type": "BILLING.SUBSCRIPTION.CANCELLED"})
     assert can.kind == "subscription_cancelled"
     exp = p.parse_event({**base, "id": "E3", "event_type": "BILLING.SUBSCRIPTION.EXPIRED"})

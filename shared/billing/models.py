@@ -41,6 +41,9 @@ class Tariff(UUIDMixin, Base):
     __tablename__ = "tariff"
 
     sku = Column(String(80), nullable=False)
+    # Periodicidad del cobro: once (compra puntual) | monthly | annual. El precio vigente se
+    # resuelve por (sku, interval); el anual suele ser el mensual×12 con descuento.
+    interval = Column(String(10), nullable=False, server_default="once")
     currency = Column(String(3), nullable=False, server_default="USD")  # ISO 4217
     amount = Column(Numeric(12, 2), nullable=False)  # monto en la moneda, 2 decimales
 
@@ -54,8 +57,8 @@ class Tariff(UUIDMixin, Base):
 
     __table_args__ = (
         Index("ix_tariff_sku", "sku"),
-        # Lookup del precio vigente: por sku + ventana de fechas.
-        Index("ix_tariff_sku_window", "sku", "effective_from"),
+        # Lookup del precio vigente: por sku + intervalo + ventana de fechas.
+        Index("ix_tariff_sku_window", "sku", "interval", "effective_from"),
     )
 
 

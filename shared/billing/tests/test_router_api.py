@@ -48,16 +48,16 @@ def _client(db, role=UserRole.admin):
 
 def test_admin_publishes_and_lists(db):
     c = _client(db)
-    r = c.post("/api/v1/billing/tariffs", json={"sku": "insight", "amount": "299.00"})
+    r = c.post("/api/v1/billing/tariffs", json={"sku": "deep_dive:banking", "amount": "299.00"})
     assert r.status_code == 200, r.text
     assert r.json()["is_current"] is True
     listing = c.get("/api/v1/billing/tariffs").json()["tariffs"]
-    assert len(listing) == 1 and listing[0]["sku"] == "insight"
+    assert len(listing) == 1 and listing[0]["sku"] == "deep_dive:banking"
 
 
 def test_viewer_cannot_publish(db):
     c = _client(db, role=UserRole.viewer)
-    r = c.post("/api/v1/billing/tariffs", json={"sku": "insight", "amount": "299"})
+    r = c.post("/api/v1/billing/tariffs", json={"sku": "deep_dive:banking", "amount": "299"})
     assert r.status_code == 403
 
 
@@ -82,22 +82,22 @@ def test_price_endpoint_returns_current(db):
 
 def test_price_endpoint_404_without_tariff(db):
     c = _client(db)
-    assert c.get("/api/v1/billing/tariffs/price/insight").status_code == 404
+    assert c.get("/api/v1/billing/tariffs/price/deep_dive:banking").status_code == 404
 
 
 def test_price_endpoint_open_to_any_authenticated(db):
     # Un viewer SÍ puede consultar el precio (alimenta el catálogo), aunque no administre.
     admin = _client(db)
-    admin.post("/api/v1/billing/tariffs", json={"sku": "insight", "amount": "299"})
+    admin.post("/api/v1/billing/tariffs", json={"sku": "deep_dive:banking", "amount": "299"})
     viewer = _client(db, role=UserRole.viewer)
-    assert viewer.get("/api/v1/billing/tariffs/price/insight").status_code == 200
+    assert viewer.get("/api/v1/billing/tariffs/price/deep_dive:banking").status_code == 200
 
 
 def test_withdraw_then_404(db):
     c = _client(db)
-    tid = c.post("/api/v1/billing/tariffs", json={"sku": "insight", "amount": "299"}).json()["id"]
+    tid = c.post("/api/v1/billing/tariffs", json={"sku": "deep_dive:banking", "amount": "299"}).json()["id"]
     assert c.post(f"/api/v1/billing/tariffs/{tid}/withdraw").status_code == 200
-    assert c.get("/api/v1/billing/tariffs/price/insight").status_code == 404
+    assert c.get("/api/v1/billing/tariffs/price/deep_dive:banking").status_code == 404
 
 
 def test_withdraw_missing_404(db):

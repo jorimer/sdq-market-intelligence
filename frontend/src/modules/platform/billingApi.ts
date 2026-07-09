@@ -15,15 +15,17 @@ export interface SkuPrice {
 
 export interface CatalogSku {
   sku: string;
-  kind: "insight" | "deep_dive";
+  kind: "insight" | "deep_dive" | "all_access" | "enterprise";
   ref: string | null;
   label: string;
-  price: SkuPrice | null;
+  intervals: string[];                          // once | monthly | annual válidos del SKU
+  prices: Record<string, SkuPrice | null>;      // precio vigente por intervalo
 }
 
 export interface Tariff {
   id: string;
   sku: string;
+  interval: string;
   currency: string;
   amount: string | null;
   effective_from: string | null;
@@ -38,6 +40,7 @@ export interface Tariff {
 export interface PublishTariffInput {
   sku: string;
   amount: string;
+  interval?: string;
   currency?: string;
   effective_from?: string | null;
   effective_to?: string | null;

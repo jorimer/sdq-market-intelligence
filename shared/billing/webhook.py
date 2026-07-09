@@ -49,8 +49,9 @@ def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
         return "entitlement_otorgado"
 
     if ev.kind == "subscription_active":
-        if not ev.user_id or not ev.tier:
+        if not ev.user_id or not ev.sku:
             return "sub_sin_datos"
+        from shared.products.subscriptions import tier_for_sku
         period_end = None
         if ev.period_end:
             try:
@@ -58,17 +59,18 @@ def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
             except ValueError:
                 period_end = None
         apply_subscription(db, user_id=ev.user_id, provider=provider,
-                           provider_subscription_id=ev.provider_ref, tier=ev.tier,
-                           status="active", current_period_end=period_end,
-                           note="PayPal")
+                           provider_subscription_id=ev.provider_ref, sku=ev.sku,
+                           tier=tier_for_sku(ev.sku).value, status="active",
+                           current_period_end=period_end, note="PayPal")
         return "suscripcion_activa"
 
     if ev.kind in ("subscription_cancelled", "subscription_expired"):
         status = "cancelled" if ev.kind == "subscription_cancelled" else "expired"
-        if ev.user_id and ev.tier:
+        if ev.user_id and ev.sku:
+            from shared.products.subscriptions import tier_for_sku
             apply_subscription(db, user_id=ev.user_id, provider=provider,
-                               provider_subscription_id=ev.provider_ref, tier=ev.tier,
-                               status=status)
+                               provider_subscription_id=ev.provider_ref, sku=ev.sku,
+                               tier=tier_for_sku(ev.sku).value, status=status)
         else:  # sin custom_id: al menos cortar por id de proveedor
             expire_subscription(db, provider, ev.provider_ref)
         return f"suscripcion_{status}"

@@ -167,15 +167,17 @@ class PayPalProvider:
         if etype in ("PAYMENT.CAPTURE.COMPLETED", "CHECKOUT.ORDER.APPROVED"):
             return NormalizedEvent(event_id=event_id, kind="order_paid",
                                    provider_ref=resource.get("id", ""), user_id=user_id, sku=ref)
+        # En v2 el custom_id de una suscripción embebe el SKU (insight:{sector}/all_access/
+        # enterprise), no el tier: define el alcance del acceso.
         if etype == "BILLING.SUBSCRIPTION.ACTIVATED":
             nbt = ((resource.get("billing_info") or {}).get("next_billing_time"))
             return NormalizedEvent(event_id=event_id, kind="subscription_active",
                                    provider_ref=resource.get("id", ""), user_id=user_id,
-                                   tier=ref, period_end=nbt)
+                                   sku=ref, period_end=nbt)
         if etype == "BILLING.SUBSCRIPTION.CANCELLED":
             return NormalizedEvent(event_id=event_id, kind="subscription_cancelled",
-                                   provider_ref=resource.get("id", ""), user_id=user_id, tier=ref)
+                                   provider_ref=resource.get("id", ""), user_id=user_id, sku=ref)
         if etype in ("BILLING.SUBSCRIPTION.EXPIRED", "BILLING.SUBSCRIPTION.SUSPENDED"):
             return NormalizedEvent(event_id=event_id, kind="subscription_expired",
-                                   provider_ref=resource.get("id", ""), user_id=user_id, tier=ref)
+                                   provider_ref=resource.get("id", ""), user_id=user_id, sku=ref)
         return None  # evento que no nos interesa

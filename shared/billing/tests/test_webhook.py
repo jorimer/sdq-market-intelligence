@@ -63,8 +63,9 @@ def test_order_paid_grants_entitlement(monkeypatch, db):
 
 
 def test_subscription_active_grants_tier(monkeypatch, db):
+    # all_access (bundle Insight) → tier espejo pro.
     ev = NormalizedEvent(event_id="E2", kind="subscription_active", provider_ref="SUB-1",
-                         user_id="u1", tier="pro")
+                         user_id="u1", sku="all_access")
     _patch(monkeypatch, ev)
     wh.handle_webhook(db, "paypal", {}, json.dumps({"id": "E2"}).encode())
     assert active_subscription_tier(db, "u1") == AccessTier.pro
@@ -72,11 +73,11 @@ def test_subscription_active_grants_tier(monkeypatch, db):
 
 def test_subscription_cancel_cuts_access(monkeypatch, db):
     _patch(monkeypatch, NormalizedEvent(event_id="A", kind="subscription_active",
-                                        provider_ref="SUB-9", user_id="u1", tier="enterprise"))
+                                        provider_ref="SUB-9", user_id="u1", sku="enterprise"))
     wh.handle_webhook(db, "paypal", {}, json.dumps({"id": "A"}).encode())
     assert active_subscription_tier(db, "u1") == AccessTier.enterprise
     _patch(monkeypatch, NormalizedEvent(event_id="B", kind="subscription_cancelled",
-                                        provider_ref="SUB-9", user_id="u1", tier="enterprise"))
+                                        provider_ref="SUB-9", user_id="u1", sku="enterprise"))
     wh.handle_webhook(db, "paypal", {}, json.dumps({"id": "B"}).encode())
     assert active_subscription_tier(db, "u1") is None
 
