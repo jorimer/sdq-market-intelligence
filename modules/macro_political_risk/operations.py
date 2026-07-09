@@ -124,6 +124,19 @@ def _run_irmp_snapshot(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_irmp_cleanup(params, user_id, set_phase) -> Dict:
+    """Borra los snapshots IRMP inválidos (breakdown con dimensiones de 0 variables) —
+    lecturas de datasets parciales (E2E-F4). Idempotente: sin inválidos, no borra nada.
+    """
+    from modules.macro_political_risk.service import delete_invalid_snapshots
+    db = SessionLocal()
+    try:
+        set_phase("buscando snapshots IRMP inválidos")
+        return delete_invalid_snapshots(db)
+    finally:
+        db.close()
+
+
 def register() -> None:
     register_operation(Operation(
         "wgi-sync", "Sincronizar WGI (Banco Mundial)",
@@ -173,6 +186,13 @@ def register() -> None:
         "IRMP de cada país del peer set para el último período, publicando "
         "irmp.updated para los demás ejes.",
         _run_irmp_snapshot, default_interval_hours=720,
+    ))
+    register_operation(Operation(
+        "irmp-cleanup-invalid", "Limpiar snapshots IRMP inválidos",
+        "Borra los snapshots IRMP con breakdown incompleto (alguna dimensión con 0 "
+        "variables) — lecturas de datasets parciales que falsean el índice y el panel. "
+        "Idempotente; on-demand.",
+        _run_irmp_cleanup, default_interval_hours=0,
     ))
 
 
