@@ -581,6 +581,11 @@ async def afp_dimension(
               "raw": next((d["raw"] for d in r["dimensions"] if d["key"] == key), None),
               "score": next((d["score"] for d in r["dimensions"] if d["key"] == key), None)}
              for r in results]
+    # E2E-SYS1: posición de la AFP entre sus pares en esta dimensión (rank/percentil).
+    # El score de dimensión es siempre "mayor = mejor" (así agrega al ISA), incluido costo.
+    from shared.indices.panel import annotate_panel_position
+    panel_position = annotate_panel_position(
+        dim.get("score"), [p["score"] for p in peers if p["score"] is not None])
     trend: List = []
     metric = _DIM_TREND_METRIC.get(key)
     if metric:
@@ -599,6 +604,7 @@ async def afp_dimension(
         "found": True, "slug": slug, "afp": me["name"], "period": me["period"],
         "dimension": dim,
         "peers": peers,
+        "panel_position": panel_position,
         "trend": [{"period": p, "value": v} for p, v in trend],
         "ai_insight": ai,
     }

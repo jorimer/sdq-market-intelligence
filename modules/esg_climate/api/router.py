@@ -148,6 +148,7 @@ async def insight(
     if s is None:
         return {"has_score": False, "entity_key": entity_key, "ai_insight": None}
 
+    from shared.indices.panel import annotate_panel_position
     peers = [r for r in get_scores(db, s.period) if r.esg_score is not None]
     peers.sort(key=lambda r: r.esg_score, reverse=True)   # most resilient first
     rank = next((i + 1 for i, r in enumerate(peers) if r.entity_key == entity_key), None)
@@ -155,10 +156,14 @@ async def insight(
     dist = ({"mean": round(statistics.mean(vals), 2), "min": round(min(vals), 2),
              "max": round(max(vals), 2), "spread": round(max(vals) - min(vals), 2)}
             if vals else None)
+    # E2E-SYS1: posición estructurada en el panel de 24 países (antes solo en la prosa IA).
+    panel_position = annotate_panel_position(
+        (float(s.esg_score) if s.esg_score is not None else None), vals)
     score = {"esg_score": s.esg_score, "band": s.band, "period": s.period, "breakdown": s.breakdown}
     ctx = climate_ai_context(entity_key, score, country_name=IRC_PANEL.get(entity_key),
                              rank=rank, n_countries=len(peers), distribution=dist)
     return {"has_score": True, "entity_key": entity_key,
+            "panel_position": panel_position,
             "ai_insight": await _ai_insight(ctx, "climate_outlook", audience, deep)}
 
 

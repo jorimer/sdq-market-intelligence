@@ -60,6 +60,8 @@ def test_insight_populates_peer_position(db):
     # DO (46.06) es el de mayor riesgo → último del panel de 3 (rank 3).
     assert pp["rank"] == 3
     assert pp["distribution"]["max"] == 58.0
+    # E2E-SYS1: percentil expuesto (rank 3 de 3 → 0.0, fondo del panel).
+    assert pp["percentile"] == 0.0
 
 
 def test_deep_dive_still_populates_peer_position(db):

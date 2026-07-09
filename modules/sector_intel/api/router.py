@@ -22,6 +22,7 @@ from modules.sector_intel.service import (
     compute_and_persist,
     get_economic_structure,
     get_latest,
+    get_latest_scores,
     get_sectors,
     seed_sectors,
 )
@@ -261,10 +262,15 @@ async def insight(
     if s is None:
         return {"has_score": False, "sector_code": sector_code, "ai_insight": None}
     name = next((sec.name for sec in get_sectors(db) if sec.code == sector_code), None)
+    # E2E-SYS1: posición del sector entre los 17 del panel (rank/percentil estructurado).
+    from shared.indices.panel import annotate_panel_position
+    panel = [sc.iai_score for sc in get_latest_scores(db) if sc.iai_score is not None]
+    panel_position = annotate_panel_position(s.iai_score, panel)
     latest = {
         "sector_code": sector_code, "period": s.period, "iai_score": s.iai_score,
         "iai_band": s.iai_band, "sgps_score": s.sgps_score, "iai_breakdown": s.iai_breakdown,
     }
     ctx = sector_ai_context(latest, sector_name=name, sgps_detail=s.sgps_breakdown)
     return {"has_score": True, "sector_code": sector_code,
+            "panel_position": panel_position,
             "ai_insight": await _ai_insight(ctx, "sector_outlook", audience, deep)}
