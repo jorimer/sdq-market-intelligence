@@ -137,26 +137,25 @@ async def put_paypal(body: _PayPalConfigBody, db: Session = Depends(get_db),
 @router.get("/skus", summary="SKUs vendibles del catálogo + su precio vigente (admin)")
 async def get_skus(db: Session = Depends(get_db),
                    current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
-    """Enumera los SKUs canónicos (plan Insight + un Deep Dive por producto del catálogo) con
-    su precio vigente si lo tienen, para que el tarifario muestre TODO lo vendible —incluidos
-    los SKUs sin precio aún— y el admin pueda fijarlos. Los 'special:{slug}' no se enumeran
-    (son a medida)."""
+    """Enumera los SKUs vendibles (Insight y Deep Dive por sector + bundles all_access/
+    enterprise) con su precio vigente POR INTERVALO (mensual/anual en suscripciones; once en
+    compra puntual), para poblar el tarifario incluyendo los que aún no tienen precio."""
     items = []
     for s in catalog_skus():
-        row = price_for(db, s["sku"])
-        items.append({
-            **s,
-            "price": ({"amount": format(row.amount, "f"), "currency": row.currency,
-                       "effective_from": row.effective_from.isoformat() if row.effective_from else None,
-                       "effective_to": row.effective_to.isoformat() if row.effective_to else None,
-                       "label": row.label} if row is not None else None),
-        })
+        prices = {}
+        for interval in s["intervals"]:
+            row = price_for(db, s["sku"], interval)
+            prices[interval] = ({"amount": format(row.amount, "f"), "currency": row.currency,
+                                 "effective_from": row.effective_from.isoformat() if row.effective_from else None,
+                                 "label": row.label} if row is not None else None)
+        items.append({**s, "prices": prices})
     return {"skus": items}
 
 
 class _TariffBody(BaseModel):
     sku: str = Field(..., description="insight | deep_dive:{sector} | special:{slug}")
     amount: Decimal = Field(..., description="Monto en la moneda (envíe string para exactitud)")
+    interval: str = Field("once", description="once | monthly | annual")
     currency: str = "USD"
     # Fechas en UTC. Un ISO sin offset se interpreta como UTC (no hora local): para
     # programar a una hora local de RD (UTC-4), enviar el offset explícito.
@@ -184,8 +183,9 @@ async def post_tariff(body: _TariffBody, db: Session = Depends(get_db),
     try:
         return create_tariff(
             db, sku=body.sku, amount=body.amount, currency=body.currency,
-            effective_from=body.effective_from, effective_to=body.effective_to,
-            label=body.label, note=body.note, created_by=current_user.id)
+            interval=body.interval, effective_from=body.effective_from,
+            effective_to=body.effective_to, label=body.label, note=body.note,
+            created_by=current_user.id)
     except TariffError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -200,15 +200,16 @@ async def post_withdraw_tariff(tariff_id: str, db: Session = Depends(get_db),
 
 
 @router.get("/tariffs/price/{sku}", summary="Precio vigente de un SKU")
-async def get_price(sku: str, db: Session = Depends(get_db),
+async def get_price(sku: str, interval: str = "once", db: Session = Depends(get_db),
                     current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
-    """Precio vigente del SKU a la fecha actual. 404 si no hay tarifa configurada (no se
-    debe vender sin precio). Lo consume el catálogo y, en B3, el checkout."""
-    row = price_for(db, sku)
+    """Precio vigente del ``(sku, interval)`` a la fecha actual. 404 si no hay tarifa
+    configurada (no se debe vender sin precio). Lo consume el catálogo y el checkout."""
+    row = price_for(db, sku, interval)
     if row is None:
         raise HTTPException(status_code=404, detail="No hay precio vigente para este producto.")
     return {
         "sku": sku,
+        "interval": interval,
         "currency": row.currency,
         "amount": format(row.amount, "f"),
         "effective_from": row.effective_from.isoformat() if row.effective_from else None,

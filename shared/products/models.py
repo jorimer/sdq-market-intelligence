@@ -111,6 +111,11 @@ class Subscription(UUIDMixin, Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     provider = Column(String(20), nullable=False)              # paypal | azul | manual
     provider_subscription_id = Column(String(128), nullable=False)  # id del proveedor
+    # SKU vendido (modelo v2): insight:{sector} | all_access | enterprise. Define el ALCANCE
+    # del acceso (por-sector o bundle) vía shared.billing.skus.sku_grants_access. Nullable por
+    # compat con suscripciones legacy tier-only (sin sku → se cae al mapeo por ``tier``).
+    sku = Column(String(80), nullable=True)
+    interval = Column(String(10), nullable=True)               # monthly | annual (cobro)
     tier = Column(String(20), nullable=False)                  # AccessTier concedido (pro/enterprise)
     status = Column(String(20), nullable=False)                # active|cancelled|expired|suspended|past_due
     current_period_end = Column(DateTime, nullable=True)       # naive UTC; None = abierto

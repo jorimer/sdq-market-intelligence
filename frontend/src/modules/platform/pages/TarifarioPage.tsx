@@ -12,6 +12,14 @@ import {
   type Tariff,
 } from "../billingApi";
 
+const INTERVAL_LABEL: Record<string, string> = {
+  once: "Único", monthly: "Mensual", annual: "Anual",
+};
+const KIND_LABEL: Record<string, string> = {
+  insight: "Suscripción · por sector", deep_dive: "Compra puntual · por reporte",
+  all_access: "Suscripción · bundle (todos los Insight)", enterprise: "Suscripción · todo el catálogo",
+};
+
 function fmtMoney(amount: string | null | undefined, currency: string): string {
   if (amount == null) return "—";
   const n = Number(amount);
@@ -24,7 +32,6 @@ function fmtDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("es-DO", { year: "numeric", month: "short", day: "numeric" });
 }
 
-/** Estado comercial de una fila de tarifa → chip. */
 function tariffChip(t: Tariff, tr: (k: string, d: string) => string) {
   if (!t.active) return <Chip tone="muted">{tr("tariff.state.withdrawn", "Retirada")}</Chip>;
   if (t.is_current) return <Chip tone="ok">{tr("tariff.state.current", "Vigente")}</Chip>;
@@ -33,13 +40,15 @@ function tariffChip(t: Tariff, tr: (k: string, d: string) => string) {
 }
 
 interface FormState {
+  interval: string;
   amount: string;
   currency: string;
   effective_from: string;
   label: string;
-  note: string;
 }
-const emptyForm: FormState = { amount: "", currency: "USD", effective_from: "", label: "", note: "" };
+const mkForm = (interval: string): FormState => ({
+  interval, amount: "", currency: "USD", effective_from: "", label: "",
+});
 
 export function TarifarioPage() {
   const { t } = useTranslation();
@@ -49,10 +58,10 @@ export function TarifarioPage() {
 
   const [skus, setSkus] = useState<CatalogSku[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [openSku, setOpenSku] = useState<string | null>(null); // historial expandido
+  const [openSku, setOpenSku] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, Tariff[]>>({});
-  const [formSku, setFormSku] = useState<string | null>(null); // fila con form de precio abierto
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [formSku, setFormSku] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(mkForm("once"));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -71,10 +80,7 @@ export function TarifarioPage() {
   }, [isAdmin, load]);
 
   async function toggleHistory(sku: string) {
-    if (openSku === sku) {
-      setOpenSku(null);
-      return;
-    }
+    if (openSku === sku) { setOpenSku(null); return; }
     setOpenSku(sku);
     if (!history[sku]) {
       try {
@@ -86,9 +92,9 @@ export function TarifarioPage() {
     }
   }
 
-  function openForm(sku: string) {
-    setFormSku(sku);
-    setForm(emptyForm);
+  function openForm(s: CatalogSku) {
+    setFormSku(s.sku);
+    setForm(mkForm(s.intervals[0]));
     setErr(null);
   }
 
@@ -102,19 +108,13 @@ export function TarifarioPage() {
     setErr(null);
     try {
       await publishTariff({
-        sku,
-        amount,
-        currency: form.currency.trim() || "USD",
+        sku, amount, interval: form.interval, currency: form.currency.trim() || "USD",
         effective_from: form.effective_from ? new Date(form.effective_from).toISOString() : null,
         label: form.label.trim() || null,
-        note: form.note.trim() || null,
       });
       setFormSku(null);
-      setHistory((h) => {
-        const { [sku]: _drop, ...rest } = h;
-        return rest;
-      });
-      if (openSku === sku) void toggleHistory(sku);
+      setHistory((h) => { const { [sku]: _d, ...rest } = h; return rest; });
+      if (openSku === sku) setOpenSku(null);
       await load();
     } catch (e) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -128,12 +128,8 @@ export function TarifarioPage() {
     setBusy(true);
     try {
       await withdrawTariff(id);
-      setHistory((h) => {
-        const { [sku]: _drop, ...rest } = h;
-        return rest;
-      });
-      await toggleHistory(sku);
-      await toggleHistory(sku);
+      setHistory((h) => { const { [sku]: _d, ...rest } = h; return rest; });
+      setOpenSku(null);
       await load();
     } finally {
       setBusy(false);
@@ -141,84 +137,48 @@ export function TarifarioPage() {
   }
 
   if (!isAdmin) {
-    return (
-      <StateBlock
-        kind="forbidden"
-        message={tr("tariff.forbidden", "El tarifario es solo para administradores.")}
-      />
-    );
+    return <StateBlock kind="forbidden" message={tr("tariff.forbidden", "El tarifario es solo para administradores.")} />;
   }
 
-  const priced = skus.filter((s) => s.price).length;
+  const priced = skus.filter((s) => Object.values(s.prices).some(Boolean)).length;
 
   return (
     <div>
       <PageHead
         eyebrow={tr("tariff.eyebrow", "Monetización")}
         title={tr("tariff.title", "Tarifario")}
-        sub={tr(
-          "tariff.sub",
-          "Fijá el precio de cada producto vendible: la suscripción Insight (todo el catálogo) y el Deep Dive de cada sector. Cada publicación queda con su vigencia; el histórico no se borra.",
-        )}
+        sub={tr("tariff.sub",
+          "Fijá el precio de cada producto: la suscripción Insight de cada sector (mensual y anual), su Deep Dive puntual, y los bundles All-Access y Enterprise. El precio anual suele ser el mensual con descuento.")}
       />
 
-      {status === "loading" && (
-        <Card>
-          <Skeleton className="h-6 w-48 mb-4" />
-          <Skeleton className="h-40 w-full" />
-        </Card>
-      )}
+      {status === "loading" && <Card><Skeleton className="h-6 w-48 mb-4" /><Skeleton className="h-40 w-full" /></Card>}
 
       {status === "error" && (
-        <StateBlock
-          kind="error"
-          message={tr("tariff.err.load", "No se pudo cargar el tarifario.")}
-          action={
-            <button className="btn btn-soft" onClick={() => void load()}>
-              {tr("common.retry", "Reintentar")}
-            </button>
-          }
-        />
+        <StateBlock kind="error" message={tr("tariff.err.load", "No se pudo cargar el tarifario.")}
+          action={<button className="btn btn-soft" onClick={() => void load()}>{tr("common.retry", "Reintentar")}</button>} />
       )}
 
       {status === "ready" && (
         <Card>
-          <CardHead
-            icon={CircleDollarSign}
-            title={tr("tariff.card.title", "Productos vendibles")}
+          <CardHead icon={CircleDollarSign} title={tr("tariff.card.title", "Productos vendibles")}
             subtitle={tr("tariff.card.count", "{{priced}} de {{total}} con precio vigente")
-              .replace("{{priced}}", String(priced))
-              .replace("{{total}}", String(skus.length))}
-          />
+              .replace("{{priced}}", String(priced)).replace("{{total}}", String(skus.length))} />
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[720px]">
               <thead>
                 <tr className="text-left text-xs text-faint border-b border-line">
                   <th className="py-2 pr-3 font-semibold">{tr("tariff.col.product", "Producto")}</th>
-                  <th className="py-2 pr-3 font-semibold">SKU</th>
-                  <th className="py-2 pr-3 font-semibold">{tr("tariff.col.price", "Precio vigente")}</th>
+                  <th className="py-2 pr-3 font-semibold">{tr("tariff.col.price", "Precios vigentes")}</th>
                   <th className="py-2 pr-3 font-semibold text-right">{tr("tariff.col.actions", "Acciones")}</th>
                 </tr>
               </thead>
               <tbody>
                 {skus.map((s) => (
-                  <SkuRow
-                    key={s.sku}
-                    sku={s}
-                    tr={tr}
-                    open={openSku === s.sku}
-                    formOpen={formSku === s.sku}
-                    form={form}
-                    setForm={setForm}
-                    busy={busy}
-                    err={formSku === s.sku ? err : null}
-                    history={history[s.sku]}
-                    onToggleHistory={() => void toggleHistory(s.sku)}
-                    onOpenForm={() => openForm(s.sku)}
-                    onCloseForm={() => setFormSku(null)}
-                    onSubmit={() => void submit(s.sku)}
-                    onWithdraw={(id) => void doWithdraw(s.sku, id)}
-                  />
+                  <SkuRow key={s.sku} sku={s} tr={tr} open={openSku === s.sku} formOpen={formSku === s.sku}
+                    form={form} setForm={setForm} busy={busy} err={formSku === s.sku ? err : null}
+                    history={history[s.sku]} onToggleHistory={() => void toggleHistory(s.sku)}
+                    onOpenForm={() => openForm(s)} onCloseForm={() => setFormSku(null)}
+                    onSubmit={() => void submit(s.sku)} onWithdraw={(id) => void doWithdraw(s.sku, id)} />
                 ))}
               </tbody>
             </table>
@@ -232,18 +192,11 @@ export function TarifarioPage() {
 function SkuRow(props: {
   sku: CatalogSku;
   tr: (k: string, d: string) => string;
-  open: boolean;
-  formOpen: boolean;
-  form: FormState;
-  setForm: (f: FormState) => void;
-  busy: boolean;
-  err: string | null;
-  history?: Tariff[];
-  onToggleHistory: () => void;
-  onOpenForm: () => void;
-  onCloseForm: () => void;
-  onSubmit: () => void;
-  onWithdraw: (id: string) => void;
+  open: boolean; formOpen: boolean;
+  form: FormState; setForm: (f: FormState) => void;
+  busy: boolean; err: string | null; history?: Tariff[];
+  onToggleHistory: () => void; onOpenForm: () => void; onCloseForm: () => void;
+  onSubmit: () => void; onWithdraw: (id: string) => void;
 }) {
   const { sku: s, tr, open, formOpen, form, setForm, busy, err, history } = props;
   return (
@@ -251,21 +204,25 @@ function SkuRow(props: {
       <tr className="border-b border-line align-top">
         <td className="py-3 pr-3">
           <div className="font-medium text-ink">{s.label}</div>
-          <div className="text-xs text-faint mt-0.5">
-            {s.kind === "insight"
-              ? tr("tariff.kind.insight", "Suscripción · plataforma-wide")
-              : tr("tariff.kind.deep_dive", "Compra puntual · por reporte")}
-          </div>
+          <div className="text-xs text-faint mt-0.5">{KIND_LABEL[s.kind] ?? s.kind}</div>
+          <code className="mono text-[11px] text-muted">{s.sku}</code>
         </td>
         <td className="py-3 pr-3">
-          <code className="mono text-xs text-muted">{s.sku}</code>
-        </td>
-        <td className="py-3 pr-3 mono tabular-nums">
-          {s.price ? (
-            <span className="text-ink font-semibold">{fmtMoney(s.price.amount, s.price.currency)}</span>
-          ) : (
-            <Chip tone="warn">{tr("tariff.noprice", "Sin precio")}</Chip>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {s.intervals.map((iv) => {
+              const p = s.prices[iv];
+              return (
+                <span key={iv} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1">
+                  <span className="text-[10px] uppercase tracking-wide text-faint">{INTERVAL_LABEL[iv] ?? iv}</span>
+                  {p ? (
+                    <span className="mono tabular-nums text-ink font-semibold">{fmtMoney(p.amount, p.currency)}</span>
+                  ) : (
+                    <span className="text-xs text-faint">{tr("tariff.noprice", "sin precio")}</span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
         </td>
         <td className="py-3 pr-0 text-right whitespace-nowrap">
           <button className="btn btn-soft mr-2" onClick={props.onOpenForm}>
@@ -280,46 +237,37 @@ function SkuRow(props: {
 
       {formOpen && (
         <tr className="border-b border-line bg-surface2">
-          <td colSpan={4} className="p-4">
+          <td colSpan={3} className="p-4">
             <div className="flex flex-wrap items-end gap-3">
+              {s.intervals.length > 1 && (
+                <label className="flex flex-col gap-1 text-xs text-muted">
+                  {tr("tariff.form.interval", "Periodicidad")}
+                  <select className="field w-32" value={form.interval}
+                    onChange={(e) => setForm({ ...form, interval: e.target.value })}>
+                    {s.intervals.map((iv) => <option key={iv} value={iv}>{INTERVAL_LABEL[iv] ?? iv}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="flex flex-col gap-1 text-xs text-muted">
                 {tr("tariff.form.amount", "Monto")}
-                <input
-                  className="field mono w-32"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.amount}
-                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                  placeholder="0.00"
-                />
+                <input className="field mono w-32" type="number" min="0" step="0.01" value={form.amount}
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" />
               </label>
               <label className="flex flex-col gap-1 text-xs text-muted">
                 {tr("tariff.form.currency", "Moneda")}
-                <input
-                  className="field w-24"
-                  value={form.currency}
-                  onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
-                  maxLength={3}
-                />
+                <input className="field w-24" value={form.currency} maxLength={3}
+                  onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} />
               </label>
               <label className="flex flex-col gap-1 text-xs text-muted">
                 {tr("tariff.form.from", "Vigente desde (opcional)")}
-                <input
-                  className="field"
-                  type="datetime-local"
-                  value={form.effective_from}
-                  onChange={(e) => setForm({ ...form, effective_from: e.target.value })}
-                />
+                <input className="field" type="datetime-local" value={form.effective_from}
+                  onChange={(e) => setForm({ ...form, effective_from: e.target.value })} />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted flex-1 min-w-[160px]">
+              <label className="flex flex-col gap-1 text-xs text-muted flex-1 min-w-[140px]">
                 {tr("tariff.form.label", "Etiqueta (opcional)")}
-                <input
-                  className="field"
-                  value={form.label}
+                <input className="field" value={form.label}
                   onChange={(e) => setForm({ ...form, label: e.target.value })}
-                  placeholder={tr("tariff.form.label.ph", "p.ej. Lanzamiento 2026")}
-                />
+                  placeholder={tr("tariff.form.label.ph", "p.ej. Lanzamiento 2026")} />
               </label>
               <div className="flex gap-2">
                 <button className="btn btn-primary" disabled={busy} onClick={props.onSubmit}>
@@ -332,10 +280,8 @@ function SkuRow(props: {
             </div>
             {err && <p className="text-xs text-alert mt-2">{err}</p>}
             <p className="text-xs text-faint mt-2">
-              {tr(
-                "tariff.form.hint",
-                "Sin fecha, el precio rige desde ahora. Una fecha futura programa el cambio. Publicar no borra el precio anterior: queda en el histórico.",
-              )}
+              {tr("tariff.form.hint",
+                "Sin fecha, el precio rige desde ahora. Una fecha futura programa el cambio. Publicar no borra el precio anterior: queda en el histórico.")}
             </p>
           </td>
         </tr>
@@ -343,7 +289,7 @@ function SkuRow(props: {
 
       {open && (
         <tr className="border-b border-line bg-surface2">
-          <td colSpan={4} className="p-4">
+          <td colSpan={3} className="p-4">
             {history === undefined ? (
               <Skeleton className="h-16 w-full" />
             ) : history.length === 0 ? (
@@ -353,9 +299,9 @@ function SkuRow(props: {
                 <thead>
                   <tr className="text-left text-xs text-faint">
                     <th className="py-1.5 pr-3 font-semibold">{tr("tariff.col.state", "Estado")}</th>
+                    <th className="py-1.5 pr-3 font-semibold">{tr("tariff.col.interval", "Periodicidad")}</th>
                     <th className="py-1.5 pr-3 font-semibold">{tr("tariff.col.amount", "Monto")}</th>
                     <th className="py-1.5 pr-3 font-semibold">{tr("tariff.col.validity", "Vigencia")}</th>
-                    <th className="py-1.5 pr-3 font-semibold">{tr("tariff.col.label", "Etiqueta")}</th>
                     <th className="py-1.5 pr-0 font-semibold text-right"></th>
                   </tr>
                 </thead>
@@ -363,18 +309,14 @@ function SkuRow(props: {
                   {history.map((row) => (
                     <tr key={row.id} className="border-t border-line">
                       <td className="py-2 pr-3">{tariffChip(row, tr)}</td>
+                      <td className="py-2 pr-3 text-muted">{INTERVAL_LABEL[row.interval] ?? row.interval}</td>
                       <td className="py-2 pr-3 mono tabular-nums text-ink">{fmtMoney(row.amount, row.currency)}</td>
                       <td className="py-2 pr-3 text-muted">
                         {fmtDate(row.effective_from)} → {row.effective_to ? fmtDate(row.effective_to) : tr("tariff.open", "abierto")}
                       </td>
-                      <td className="py-2 pr-3 text-muted">{row.label || "—"}</td>
                       <td className="py-2 pr-0 text-right">
                         {row.active && (
-                          <button
-                            className="btn btn-ghost"
-                            disabled={props.busy}
-                            onClick={() => props.onWithdraw(row.id)}
-                          >
+                          <button className="btn btn-ghost" disabled={props.busy} onClick={() => props.onWithdraw(row.id)}>
                             {tr("tariff.withdraw", "Retirar")}
                           </button>
                         )}

@@ -392,7 +392,9 @@ async def post_revoke_entitlement(entitlement_id: str, db: Session = Depends(get
 
 class _SubBody(BaseModel):
     user_id: str
-    tier: str  # pro | enterprise
+    sku: Optional[str] = None       # v2: insight:{sector} | all_access | enterprise (alcance)
+    tier: Optional[str] = None      # legacy: pro | enterprise (sin alcance por-sector)
+    interval: Optional[str] = None  # monthly | annual
     current_period_end: Optional[datetime] = None  # None = abierto (sin vencimiento)
     note: Optional[str] = None
 
@@ -413,7 +415,7 @@ async def post_set_subscription(body: _SubBody, db: Session = Depends(get_db),
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     try:
         return set_manual_subscription(
-            db, user_id=body.user_id, tier=body.tier,
+            db, user_id=body.user_id, sku=body.sku, tier=body.tier, interval=body.interval,
             current_period_end=body.current_period_end, note=body.note)
     except SubscriptionError as e:
         raise HTTPException(status_code=400, detail=str(e))

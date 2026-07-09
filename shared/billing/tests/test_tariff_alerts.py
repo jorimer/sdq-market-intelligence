@@ -20,6 +20,8 @@ from shared.billing.tariffs import create_tariff
 from shared.database.base import Base
 from shared.events.event_bus import event_bus
 from shared.notifications.service import Notification, notification_service
+from shared.products.models import Subscription
+from shared.products.subscriptions import set_manual_subscription
 
 
 @pytest.fixture()
@@ -29,7 +31,7 @@ def env(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
                            poolclass=StaticPool)
     Base.metadata.create_all(engine, tables=[
-        User.__table__, Tariff.__table__, Notification.__table__])
+        User.__table__, Tariff.__table__, Notification.__table__, Subscription.__table__])
     Maker = sessionmaker(bind=engine)
     # El handler abre su propia sesión vía SessionLocal: apuntarla al engine de test.
     monkeypatch.setattr(billing_events, "SessionLocal", Maker)
@@ -47,56 +49,55 @@ def env(monkeypatch):
             event_bus._handlers[k] = v
 
 
-def _user(db, email, tier, is_active=True):
+def _user(db, email, is_active=True, sub_sku=None):
     u = User(email=email, password_hash="x", full_name=email, role=UserRole.viewer,
-             tier=tier, is_active=is_active)
+             tier=AccessTier.free, is_active=is_active)
     db.add(u)
     db.commit()
+    if sub_sku:
+        set_manual_subscription(db, user_id=u.id, sku=sub_sku)
     return u
 
 
 def test_first_price_does_not_notify(env):
     db = env
-    pro = _user(db, "pro@x", AccessTier.pro)
-    create_tariff(db, sku="insight", amount="299")  # primera fijación → no es cambio
-    assert notification_service.unread_count(db, pro.id) == 0
+    sub = _user(db, "sub@x", sub_sku="all_access")
+    create_tariff(db, sku="all_access", interval="monthly", amount="299")  # 1ª fijación → no cambio
+    assert notification_service.unread_count(db, sub.id) == 0
 
 
 def test_price_change_notifies_only_subscribers(env):
     db = env
-    free = _user(db, "free@x", AccessTier.free)
-    pro = _user(db, "pro@x", AccessTier.pro)
-    ent = _user(db, "ent@x", AccessTier.enterprise)
-    inact = _user(db, "off@x", AccessTier.pro, is_active=False)
-    create_tariff(db, sku="insight", amount="299")  # precio vigente inicial
+    free = _user(db, "free@x")                       # sin suscripción
+    sub = _user(db, "sub@x", sub_sku="all_access")   # suscripto al SKU
+    inact = _user(db, "off@x", is_active=False, sub_sku="all_access")
+    create_tariff(db, sku="all_access", interval="monthly", amount="299")  # precio inicial
     future = datetime.now(timezone.utc) + timedelta(days=30)
-    create_tariff(db, sku="insight", amount="349", effective_from=future)  # CAMBIO
-    assert notification_service.unread_count(db, pro.id) == 1
-    assert notification_service.unread_count(db, ent.id) == 1
+    create_tariff(db, sku="all_access", interval="monthly", amount="349",
+                  effective_from=future)  # CAMBIO
+    assert notification_service.unread_count(db, sub.id) == 1
     assert notification_service.unread_count(db, free.id) == 0
     assert notification_service.unread_count(db, inact.id) == 0
-    # El cuerpo lleva el precio nuevo y la fecha de vigencia.
-    body = notification_service.list_for_user(db, pro.id)[0]["body"]
+    body = notification_service.list_for_user(db, sub.id)[0]["body"]
     assert "349" in body and future.date().isoformat() in body
 
 
 def test_deep_dive_change_notifies_nobody(env):
     db = env
-    _user(db, "ent@x", AccessTier.enterprise)
+    ent = _user(db, "ent@x")
     create_tariff(db, sku="deep_dive:banking", amount="199")
     create_tariff(db, sku="deep_dive:banking", amount="249")  # cambio, pero on-demand
-    ent = db.query(User).filter_by(email="ent@x").one()
     assert notification_service.unread_count(db, ent.id) == 0
 
 
 def test_handler_swallows_errors(env, monkeypatch):
     # Un fallo notificando NO debe propagar (no romper la publicación de la tarifa).
     db = env
-    _user(db, "pro@x", AccessTier.pro)
+    _user(db, "sub@x", sub_sku="all_access")
     monkeypatch.setattr(billing_events, "affected_subscribers",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
-    create_tariff(db, sku="insight", amount="299")
-    create_tariff(db, sku="insight", amount="349")  # publica el cambio; el handler revienta y se traga
+    create_tariff(db, sku="all_access", interval="monthly", amount="299")
+    create_tariff(db, sku="all_access", interval="monthly", amount="349")  # cambio; handler revienta y se traga
 
 
 def test_first_price_payload_marks_not_a_change_via_subscribe(env):

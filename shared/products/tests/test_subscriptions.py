@@ -217,3 +217,39 @@ def test_manual_respects_period_end(db):
     past = datetime.now(timezone.utc) - timedelta(days=1)
     set_manual_subscription(db, user_id="u4", tier="pro", current_period_end=past)
     assert active_subscription_tier(db, "u4") is None  # fuera de período → sin acceso
+
+
+# ── v2: alcance por-SKU (suscripción por sector) ──
+def test_manual_subscription_with_sku_scopes_access(db):
+    _activate(db, "banking", ProductTier.insight)
+    _activate(db, "macro", ProductTier.insight)
+    set_manual_subscription(db, user_id="u1", sku="insight:banking")
+    # abre SOLO banking a nivel insight; NO macro, NI deep_dive de banking.
+    assert can_access(db, _User(AccessTier.free, "u1"), "banking", ProductTier.insight).outcome is AccessOutcome.allowed
+    assert can_access(db, _User(AccessTier.free, "u1"), "macro", ProductTier.insight).outcome is AccessOutcome.tier_required
+
+
+def test_all_access_opens_every_insight_not_deep_dive(db):
+    _activate(db, "banking", ProductTier.insight)
+    _activate(db, "banking", ProductTier.deep_dive)
+    set_manual_subscription(db, user_id="u1", sku="all_access")
+    assert can_access(db, _User(AccessTier.free, "u1"), "banking", ProductTier.insight).outcome is AccessOutcome.allowed
+    assert can_access(db, _User(AccessTier.free, "u1"), "banking", ProductTier.deep_dive).outcome is AccessOutcome.tier_required
+
+
+def test_enterprise_sku_opens_everything(db):
+    _activate(db, "energy", ProductTier.deep_dive)
+    set_manual_subscription(db, user_id="u1", sku="enterprise")
+    assert can_access(db, _User(AccessTier.free, "u1"), "energy", ProductTier.deep_dive).outcome is AccessOutcome.allowed
+
+
+def test_set_sku_derives_tier_mirror(db):
+    out = set_manual_subscription(db, user_id="u1", sku="enterprise")
+    assert out["sku"] == "enterprise" and out["tier"] == "enterprise"
+    out2 = set_manual_subscription(db, user_id="u1", sku="insight:banking")
+    assert out2["sku"] == "insight:banking" and out2["tier"] == "pro"  # espejo
+
+
+def test_set_rejects_non_subscription_sku(db):
+    with pytest.raises(SubscriptionError):
+        set_manual_subscription(db, user_id="u1", sku="deep_dive:banking")
