@@ -341,8 +341,32 @@ class MacroProduct:
         # la sección "Posición en el Panel" hueca aunque el panel del período existiera.
         if tier in (ProductTier.insight, ProductTier.deep_dive):
             payload["peer_position"] = self._peer_position(db, iso, snap.period_end)
+            # E2E-SYS2/F2: trayectoria multi-período. El histórico persistido ya existía
+            # (IRMPSnapshot por país+período) pero el reporte solo leía UN corte. Serie
+            # cronológica AS-OF el período del reporte (no muestra períodos futuros).
+            payload["trajectory"] = self._trajectory(db, iso, snap.period_end)
         return ProductSnapshot(tier=tier, period=str(snap.period_end),
                                payload=payload, entity_name=country_name)
+
+    # ── Trayectoria del IRMP del país (as-of el período) ──
+    def _trajectory(self, db: Session, iso: str, period_end) -> Dict[str, Any]:
+        """Serie cronológica del IRMP del país hasta *period_end* + delta punta a punta.
+        ``{}`` si hay menos de 2 cortes (una sola foto no es trayectoria)."""
+        from modules.macro_political_risk import service as irmp_svc
+        try:
+            with db.begin_nested():
+                hist = irmp_svc.get_history(db, iso)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Historia IRMP no disponible: %s", e)
+            return {}
+        rows = [h for h in hist if h.period_end <= period_end and h.irmp_score is not None]
+        if len(rows) < 2:
+            return {}
+        rows.sort(key=lambda h: h.period_end)  # cronológico (antiguo → reciente)
+        series = [{"period": str(h.period_end), "irmp_score": h.irmp_score,
+                   "risk_band": (h.risk_band.value if h.risk_band else None)} for h in rows]
+        return {"series": series, "n_periods": len(series),
+                "delta": round(series[-1]["irmp_score"] - series[0]["irmp_score"], 2)}
 
     # ── Muestra sintética (datos demo ilustrativos, sin DB) ──
     def sample_snapshot(self, tier: ProductTier) -> ProductSnapshot:
@@ -399,12 +423,23 @@ class MacroProduct:
             "peer_set_size": snapshot.payload.get("peer_set_size"),
         }
         base_ctx = irmp_ai_context(result, country_name=snapshot.entity_name)
+        # E2E-SYS2/F2: trayectoria precalculada disponible para todas las secciones (serie
+        # + delta punta a punta). numeric_guard admite estas cifras porque están guardadas.
+        trajectory = snapshot.payload.get("trajectory") or {}
+        if trajectory:
+            base_ctx["trayectoria"] = trajectory
         out: Dict[str, str] = {}
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
                 continue
             ctx = dict(base_ctx)
+            if section == "risk_assessment" and trajectory:
+                ctx["enfoque"] = ("Incorporá la TRAYECTORIA del IRMP: usá la serie y el "
+                                  "delta precalculado (punta a punta) para decir si el "
+                                  "riesgo del país MEJORÓ o se DETERIORÓ en el tiempo y "
+                                  "qué tan sostenido es; recordá mayor IRMP = menor riesgo. "
+                                  "No inventes cifras: solo las de la serie guardada.")
             if section == "peer_position":
                 pos = dict(snapshot.payload.get("peer_position") or {})
                 # Precalcular las distancias (media/líder) para que el modelo cite cifras
@@ -470,6 +505,16 @@ class MacroProduct:
                           d.get("score") if isinstance(d, dict) else None) for k, d in dims.items()]
                 charts.append({"title": "Dimensiones del IRMP (score 0-100; mayor = menor riesgo)",
                                "items": items})
+            # E2E-SYS2/F2: trayectoria del IRMP (tabla + gráfico) cuando hay ≥2 cortes.
+            series = (snapshot.payload.get("trajectory") or {}).get("series") or []
+            if len(series) >= 2:
+                trows = [["Período", "IRMP", "Banda"]] + [
+                    [p["period"],
+                     (f"{p['irmp_score']:.1f}" if p.get("irmp_score") is not None else "—"),
+                     p.get("risk_band") or "—"] for p in series]
+                tables.append(("Trayectoria del IRMP", trows))
+                charts.append({"title": "Trayectoria del IRMP (mayor = menor riesgo)",
+                               "items": [(p["period"], p.get("irmp_score")) for p in series]})
             sc = snapshot.payload.get("irmp_score")
             band = snapshot.payload.get("irmp_band")
             if isinstance(sc, (int, float)):
