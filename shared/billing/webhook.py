@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from shared.billing.models import BillingEvent
 from shared.billing.providers import get_provider
 from shared.billing.providers.base import NormalizedEvent
-from shared.billing.skus import deep_dive_sku, entitlement_for_sku
+from shared.billing.skus import deep_dive_sku
 
 logger = logging.getLogger("sdq.billing.webhook")
 
@@ -33,36 +33,22 @@ def _already_processed(db: Session, provider: str, event_id: str) -> bool:
 
 
 def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
-    """Aplica un evento normalizado. Devuelve una etiqueta de lo hecho."""
-    from shared.products.entitlements import grant_entitlement
+    """Aplica un evento normalizado. Devuelve una etiqueta de lo hecho. Reusa la MISMA
+    liquidación que el retorno/captura (``shared/billing/settlement.py``): concede el acceso +
+    factura de forma idempotente, así el webhook (en vivo) reconcilia sin duplicar lo que el
+    retorno ya concedió (en sandbox, donde puede no haber webhook)."""
+    from shared.billing.settlement import settle_order, settle_subscription
     from shared.products.subscriptions import apply_subscription, expire_subscription
 
     if ev.kind == "order_paid":
-        if not ev.user_id or not ev.sku:
-            return "order_sin_datos"
-        ent = entitlement_for_sku(ev.sku)  # (sector, ProductTier.deep_dive) o None
-        if ent is None:
-            return "order_sku_no_entitlement"
-        grant_entitlement(db, user_id=ev.user_id, sector_key=ent[0], tier=ent[1].value,
-                          granted_by=None, source="order",
-                          note=f"PayPal {ev.provider_ref}")
-        return "entitlement_otorgado"
+        return settle_order(db, provider, order_id=ev.provider_ref, user_id=ev.user_id,
+                            sku=ev.sku, gross=ev.amount_gross, currency=ev.amount_currency)
 
     if ev.kind == "subscription_active":
-        if not ev.user_id or not ev.sku:
-            return "sub_sin_datos"
-        from shared.products.subscriptions import tier_for_sku
-        period_end = None
-        if ev.period_end:
-            try:
-                period_end = datetime.fromisoformat(ev.period_end.replace("Z", "+00:00"))
-            except ValueError:
-                period_end = None
-        apply_subscription(db, user_id=ev.user_id, provider=provider,
-                           provider_subscription_id=ev.provider_ref, sku=ev.sku,
-                           tier=tier_for_sku(ev.sku).value, status="active",
-                           current_period_end=period_end, note="PayPal")
-        return "suscripcion_activa"
+        return settle_subscription(db, provider, subscription_id=ev.provider_ref,
+                                   user_id=ev.user_id, sku=ev.sku, interval=ev.interval,
+                                   period_end=ev.period_end, gross=ev.amount_gross,
+                                   currency=ev.amount_currency)
 
     if ev.kind in ("subscription_cancelled", "subscription_expired"):
         status = "cancelled" if ev.kind == "subscription_cancelled" else "expired"

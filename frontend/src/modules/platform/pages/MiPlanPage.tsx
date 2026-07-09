@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BadgeCheck, CreditCard, Package } from "lucide-react";
+import { BadgeCheck, CreditCard, Package, FileText, Download, XCircle } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { getMyPlan, type MyPlan } from "../api";
-import { checkoutSubscription } from "../billingApi";
+import {
+  checkoutSubscription, cancelSubscription, listInvoices, downloadInvoice, type Invoice,
+} from "../billingApi";
+import { CheckoutConfirmModal } from "../components/CheckoutConfirmModal";
 
 const TIER_LABEL: Record<string, string> = {
   free: "Free",
@@ -22,31 +25,43 @@ export function MiPlanPage() {
   const tr = (k: string, d: string) => t(k, d) as string;
   const [plan, setPlan] = useState<MyPlan | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [busy, setBusy] = useState(false);
   const [payMsg, setPayMsg] = useState<string | null>(null);
-  const [interval, setIntervalSel] = useState("monthly");
+  const [interval, setIntervalSel] = useState<"monthly" | "annual">("monthly");
+  const [confirmSku, setConfirmSku] = useState<string | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<string | null>(null);
 
-  async function subscribe(sku: string) {
-    setBusy(true); setPayMsg(null);
+  const reload = () => {
+    getMyPlan().then((p) => { setPlan(p); setStatus("ready"); }).catch(() => setStatus("error"));
+    listInvoices().then(setInvoices).catch(() => setInvoices([]));
+  };
+
+  // Ejecuta el checkout del bundle con el país elegido (desde el modal) y redirige a PayPal.
+  async function confirmSubscribe(country: string) {
+    if (!confirmSku) return;
+    setPayMsg(null);
+    window.location.href = (await checkoutSubscription(confirmSku, interval, country)).approval_url;
+  }
+
+  async function onCancel(subId: string) {
+    if (!window.confirm(tr("plan.sub.cancelConfirm", "¿Cancelar tu suscripción? Perderás el acceso al final del período vigente."))) return;
+    setCancelBusy(true); setCancelMsg(null);
     try {
-      window.location.href = (await checkoutSubscription(sku, interval)).approval_url;
+      await cancelSubscription(subId);
+      setCancelMsg(tr("plan.sub.cancelled", "Suscripción cancelada. El acceso se ajusta al vencimiento del período."));
+      reload();
     } catch (e) {
       const code = (e as { response?: { status?: number } })?.response?.status;
-      setPayMsg(code === 503
-        ? tr("plan.pay.unavailable", "Los pagos en línea todavía no están disponibles. Escribinos a ventas@sdqconsulting.com.do.")
-        : tr("plan.pay.error", "No se pudo iniciar el pago. Intentá de nuevo."));
-      setBusy(false);
+      setCancelMsg(code === 503
+        ? tr("plan.pay.unavailable", "Los pagos en línea todavía no están disponibles.")
+        : tr("plan.sub.cancelError", "No se pudo cancelar. Escribinos a ventas@sdqconsulting.com.do."));
+    } finally {
+      setCancelBusy(false);
     }
   }
 
-  useEffect(() => {
-    getMyPlan()
-      .then((p) => {
-        setPlan(p);
-        setStatus("ready");
-      })
-      .catch(() => setStatus("error"));
-  }, []);
+  useEffect(() => { reload(); }, []);
 
   const activeSub = plan?.subscriptions.find((s) => s.status === "active");
   const activeEnts = (plan?.entitlements ?? []).filter((e) => e.active);
@@ -103,6 +118,13 @@ export function MiPlanPage() {
                       )
                     : tr("plan.sub.openEnded", "Sin fecha de vencimiento.")}
                 </p>
+                <div className="mt-3">
+                  <button className="btn btn-ghost !py-1 text-xs text-alert disabled:opacity-40"
+                    disabled={cancelBusy} onClick={() => onCancel(activeSub.id)}>
+                    <XCircle className="w-3.5 h-3.5" /> {tr("plan.sub.cancel", "Cancelar suscripción")}
+                  </button>
+                  {cancelMsg && <p className="text-[11px] text-muted mt-1">{cancelMsg}</p>}
+                </div>
               </div>
             ) : (
               <div>
@@ -111,17 +133,18 @@ export function MiPlanPage() {
                   {tr("plan.sub.perSector", "Para un solo sector, suscribite desde el Catálogo. Acá podés tomar los bundles:")}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <select className="field !py-1 w-28 text-sm" value={interval} onChange={(e) => setIntervalSel(e.target.value)}>
+                  <select className="field !py-1 w-28 text-sm" value={interval} onChange={(e) => setIntervalSel(e.target.value as "monthly" | "annual")}>
                     <option value="monthly">{tr("plan.interval.monthly", "Mensual")}</option>
                     <option value="annual">{tr("plan.interval.annual", "Anual")}</option>
                   </select>
-                  <button className="btn btn-primary" disabled={busy} onClick={() => subscribe("all_access")}>
+                  <button className="btn btn-primary" onClick={() => setConfirmSku("all_access")}>
                     {tr("plan.sub.allAccess", "All-Access")}
                   </button>
-                  <button className="btn btn-soft" disabled={busy} onClick={() => subscribe("enterprise")}>
+                  <button className="btn btn-soft" onClick={() => setConfirmSku("enterprise")}>
                     {tr("plan.sub.enterprise", "Enterprise")}
                   </button>
                 </div>
+                <p className="text-[11px] text-faint mt-2">{tr("plan.sub.plusTax", "Suscripción + impuestos · el pago se procesa con PayPal.")}</p>
                 {payMsg && <p className="text-xs text-alert mt-2">{payMsg}</p>}
               </div>
             )}
@@ -155,7 +178,52 @@ export function MiPlanPage() {
               </ul>
             )}
           </Card>
+
+          <Card className="md:col-span-2">
+            <CardHead
+              icon={FileText}
+              title={tr("plan.invoices.title", "Facturas")}
+              subtitle={tr("plan.invoices.sub", "Cada cobro con su desglose: subtotal + impuesto = total.")}
+            />
+            {invoices.length === 0 ? (
+              <p className="text-sm text-muted">
+                {tr("plan.invoices.empty", "Todavía no tenés facturas. Aparecerán acá tras tu primera compra o suscripción.")}
+              </p>
+            ) : (
+              <ul className="grid gap-2">
+                {invoices.map((inv) => (
+                  <li key={inv.id} className="flex items-center gap-3 rounded-lg border border-line p-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-ink truncate">
+                        {inv.invoice_number || inv.sku}
+                        <span className="text-[11px] text-faint ml-2">{inv.created_at ? new Date(inv.created_at).toLocaleDateString("es-DO") : ""}</span>
+                      </div>
+                      <div className="text-[11px] text-muted mono tabular-nums">
+                        {inv.currency} {Number(inv.subtotal).toFixed(2)} + {inv.tax_label || "Imp."} {Number(inv.tax_amount).toFixed(2)} = <span className="text-ink font-semibold">{inv.currency} {Number(inv.total).toFixed(2)}</span>
+                        {inv.tax_exempt && <span className="ml-1 text-faint">(exento)</span>}
+                      </div>
+                    </div>
+                    <button className="btn btn-ghost !py-1 !px-2 text-xs shrink-0"
+                      onClick={() => downloadInvoice(inv.id, `${inv.invoice_number || "factura"}.pdf`)}>
+                      <Download className="w-3.5 h-3.5" /> {tr("plan.invoices.pdf", "PDF")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </div>
+      )}
+
+      {confirmSku && (
+        <CheckoutConfirmModal
+          sku={confirmSku}
+          interval={interval}
+          title={confirmSku === "all_access" ? tr("plan.sub.allAccess", "All-Access") : tr("plan.sub.enterprise", "Enterprise")}
+          subtitle={interval === "monthly" ? tr("plan.interval.monthly", "Mensual") : tr("plan.interval.annual", "Anual")}
+          onConfirm={confirmSubscribe}
+          onClose={() => setConfirmSku(null)}
+        />
       )}
     </div>
   );

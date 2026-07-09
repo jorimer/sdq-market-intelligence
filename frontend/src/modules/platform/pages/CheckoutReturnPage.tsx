@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Card } from "@/shared/ui/primitives";
-import { captureOrder } from "../billingApi";
+import { captureOrder, activateSubscription } from "../billingApi";
 
 type Phase = "working" | "ok" | "cancelled" | "error";
 
@@ -35,8 +35,19 @@ export function CheckoutReturnPage() {
           setDetail(tr("checkout.captureError", "No pudimos confirmar el pago. Si te cobraron, escribinos y lo resolvemos."));
         });
     } else if (subId) {
-      setPhase("ok");
-      setDetail(tr("checkout.subOk", "Tu suscripción está en proceso; el plan se activa en unos segundos. Revisá 'Mi plan'."));
+      activateSubscription(subId)
+        .then((r) => {
+          const active = (r.status || "").toUpperCase() === "ACTIVE" || !!r.settled;
+          setPhase("ok");
+          setDetail(active
+            ? tr("checkout.subActive", "Tu suscripción quedó activa. Ya podés usar el producto — revisá 'Mi plan'.")
+            : tr("checkout.subPending", "Tu suscripción está en proceso; el plan se activa en unos segundos. Revisá 'Mi plan'."));
+        })
+        .catch(() => {
+          // Si la activación en el retorno falla, el webhook (en vivo) lo resuelve.
+          setPhase("ok");
+          setDetail(tr("checkout.subPending", "Tu suscripción está en proceso; el plan se activa en unos segundos. Revisá 'Mi plan'."));
+        });
     } else {
       setPhase("ok");
       setDetail(tr("checkout.generic", "Gracias. Si completaste un pago, el acceso se reflejará en breve."));
@@ -63,6 +74,11 @@ export function CheckoutReturnPage() {
             ? tr("checkout.cancelledMsg", "No se realizó ningún cobro. Podés volver al catálogo cuando quieras.")
             : detail}
         </p>
+        {phase !== "cancelled" && (
+          <p className="text-[11px] text-faint mt-2">
+            {tr("checkout.viaPaypal", "El pago se procesó con PayPal, tu medio de pago. La factura con el desglose (subtotal + impuestos) queda en «Mi plan».")}
+          </p>
+        )}
         <div className="flex justify-center gap-2 mt-5">
           <Link to="/mi-plan" className="btn btn-soft">{tr("checkout.myPlan", "Ir a Mi plan")}</Link>
           <Link to="/catalog" className="btn btn-ghost">{tr("checkout.catalog", "Volver al catálogo")}</Link>

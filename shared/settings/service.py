@@ -629,3 +629,108 @@ def set_paypal_config(db: Session, *, client_id: Optional[str], secret: Optional
         _set_app_setting(db, _PP_PLANS, json.dumps(clean), is_secret=False)
     db.commit()
     return paypal_config_masked(db)
+
+
+# ── Impuestos (ITBIS RD) — matriz fiscal SDQ configurable ──────────────
+# El impuesto sobre la venta NO es una constante mágica en código: es config administrable
+# (decisión del dueño 2026-07-09). Regla: ITBIS 18% a clientes de RD; exportación de
+# servicios a cliente del exterior = exento (0%). El precio del tarifario (``Tariff.amount``)
+# es el SUBTOTAL pre-impuesto; el impuesto se suma encima. Guardado como AppSettings (nada
+# secreto). Lo lee ``shared/billing/tax.py`` para computar el desglose de cada cobro.
+_TAX_ENABLED = "tax_enabled"          # "1" | "0" (si 0, todo cobro va sin impuesto)
+_TAX_RATE = "tax_rate"                # porcentaje, p.ej. "18" (ITBIS RD)
+_TAX_LABEL = "tax_label"              # etiqueta visible, p.ej. "ITBIS"
+_TAX_HOME_COUNTRY = "tax_home_country"    # ISO-2 del país que tributa, p.ej. "DO"
+_TAX_EXEMPT_FOREIGN = "tax_exempt_foreign"  # "1" | "0": exento a clientes fuera del home
+
+# Defaults de la matriz fiscal RD (aplican si el admin no configuró nada).
+TAX_DEFAULTS = {
+    "enabled": True, "rate": "18", "label": "ITBIS",
+    "home_country": "DO", "exempt_foreign": True,
+}
+
+
+def get_tax_config(db: Session) -> Dict[str, object]:
+    """Config de impuesto en claro para el motor de cálculo. Con fallbacks a los defaults
+    de la matriz fiscal RD, para que una instalación fresca cobre ITBIS correctamente sin
+    tener que configurar nada."""
+    def _val(key: str, default: str) -> str:
+        row = _get_app_setting(db, key)
+        return (row.value if (row and row.value not in (None, "")) else default)
+
+    enabled_row = _get_app_setting(db, _TAX_ENABLED)
+    enabled = TAX_DEFAULTS["enabled"] if enabled_row is None else (enabled_row.value == "1")
+    exf_row = _get_app_setting(db, _TAX_EXEMPT_FOREIGN)
+    exempt_foreign = TAX_DEFAULTS["exempt_foreign"] if exf_row is None else (exf_row.value == "1")
+    return {
+        "enabled": enabled,
+        "rate": _val(_TAX_RATE, TAX_DEFAULTS["rate"]),
+        "label": _val(_TAX_LABEL, TAX_DEFAULTS["label"]),
+        "home_country": (_val(_TAX_HOME_COUNTRY, TAX_DEFAULTS["home_country"]) or "DO").upper(),
+        "exempt_foreign": exempt_foreign,
+    }
+
+
+def set_tax_config(db: Session, *, enabled: Optional[bool] = None, rate: Optional[str] = None,
+                   label: Optional[str] = None, home_country: Optional[str] = None,
+                   exempt_foreign: Optional[bool] = None) -> Dict[str, object]:
+    """Guarda la config de impuesto (admin). Sólo escribe los campos provistos."""
+    if enabled is not None:
+        _set_app_setting(db, _TAX_ENABLED, "1" if enabled else "0", is_secret=False)
+    if rate is not None:
+        _set_app_setting(db, _TAX_RATE, str(rate).strip(), is_secret=False)
+    if label is not None:
+        _set_app_setting(db, _TAX_LABEL, label.strip(), is_secret=False)
+    if home_country is not None:
+        _set_app_setting(db, _TAX_HOME_COUNTRY, home_country.strip().upper()[:2], is_secret=False)
+    if exempt_foreign is not None:
+        _set_app_setting(db, _TAX_EXEMPT_FOREIGN, "1" if exempt_foreign else "0", is_secret=False)
+    db.commit()
+    return get_tax_config(db)
+
+
+# ── Emisor de la factura (datos fiscales de SDQ) ───────────────────────
+# Datos del comercio que emite la factura. El RNC y la secuencia NCF (comprobante fiscal
+# DGII) son datos que el dueño debe cargar; sin ellos la factura sale como comprobante
+# interno (no válido como crédito fiscal). Guardados como AppSettings (no secretos).
+_INV_ISSUER_NAME = "invoice_issuer_name"
+_INV_ISSUER_RNC = "invoice_issuer_rnc"
+_INV_ISSUER_ADDRESS = "invoice_issuer_address"
+_INV_ISSUER_EMAIL = "invoice_issuer_email"
+
+INVOICE_ISSUER_DEFAULTS = {
+    "name": "SDQ Consulting Group, SRL",
+    "rnc": "",  # el dueño lo carga (brecha de servicio hasta entonces)
+    "address": "Santo Domingo, República Dominicana",
+    "email": "facturacion@sdqconsulting.com.do",
+}
+
+
+def get_invoice_issuer(db: Session) -> Dict[str, str]:
+    """Datos del emisor de la factura, con defaults de marca SDQ. ``rnc`` vacío se muestra
+    como pendiente (brecha) y marca la factura como comprobante interno."""
+    def _val(key: str, default: str) -> str:
+        row = _get_app_setting(db, key)
+        return (row.value if (row and row.value not in (None, "")) else default)
+
+    return {
+        "name": _val(_INV_ISSUER_NAME, INVOICE_ISSUER_DEFAULTS["name"]),
+        "rnc": _val(_INV_ISSUER_RNC, INVOICE_ISSUER_DEFAULTS["rnc"]),
+        "address": _val(_INV_ISSUER_ADDRESS, INVOICE_ISSUER_DEFAULTS["address"]),
+        "email": _val(_INV_ISSUER_EMAIL, INVOICE_ISSUER_DEFAULTS["email"]),
+    }
+
+
+def set_invoice_issuer(db: Session, *, name: Optional[str] = None, rnc: Optional[str] = None,
+                       address: Optional[str] = None, email: Optional[str] = None) -> Dict[str, str]:
+    """Guarda los datos del emisor (admin). Sólo escribe los campos provistos."""
+    if name is not None:
+        _set_app_setting(db, _INV_ISSUER_NAME, name.strip(), is_secret=False)
+    if rnc is not None:
+        _set_app_setting(db, _INV_ISSUER_RNC, rnc.strip(), is_secret=False)
+    if address is not None:
+        _set_app_setting(db, _INV_ISSUER_ADDRESS, address.strip(), is_secret=False)
+    if email is not None:
+        _set_app_setting(db, _INV_ISSUER_EMAIL, email.strip(), is_secret=False)
+    db.commit()
+    return get_invoice_issuer(db)

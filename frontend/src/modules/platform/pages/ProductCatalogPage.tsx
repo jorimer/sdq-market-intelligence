@@ -28,6 +28,7 @@ import {
   type ScopeOption,
 } from "../api";
 import { checkoutOrder, checkoutSubscription } from "../billingApi";
+import { CheckoutConfirmModal } from "../components/CheckoutConfirmModal";
 
 /** Correo de contacto interino para el upsell (se reemplaza por el checkout en Fase B). */
 const SALES_EMAIL = "ventas@sdqconsulting.com.do";
@@ -133,7 +134,9 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
   const [sampling, setSampling] = useState(false);
   const [buying, setBuying] = useState(false);
   const [buyErr, setBuyErr] = useState<string | null>(null);
-  const [subInterval, setSubInterval] = useState("monthly");
+  const [subInterval, setSubInterval] = useState<"monthly" | "annual">("monthly");
+  // Confirmación de checkout (desglose + PayPal) antes de redirigir.
+  const [confirm, setConfirm] = useState<null | { kind: "order" | "sub" }>(null);
   const tierLabel = t(`platform.catalog.tier.${level.tier}`, { defaultValue: level.tier });
 
   const payErr = (e: unknown) => {
@@ -143,15 +146,17 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
       : code === 400 ? t("platform.catalog.noPrice", { defaultValue: "Este producto aún no tiene precio." })
       : t("platform.catalog.payError", { defaultValue: "No se pudo iniciar el pago." }));
     setBuying(false);
+    throw e as Error;  // el modal muestra su propio estado de error
   };
-  const onBuyOrder = async () => {
+  // El pago pasa por el modal de confirmación (medio de pago PayPal + desglose + país).
+  const onConfirmOrder = async (country: string) => {
     setBuying(true); setBuyErr(null);
-    try { window.location.href = (await checkoutOrder(`deep_dive:${sector.sector_key}`)).approval_url; }
+    try { window.location.href = (await checkoutOrder(`deep_dive:${sector.sector_key}`, country)).approval_url; }
     catch (e) { payErr(e); }
   };
-  const onSubscribe = async () => {
+  const onConfirmSubscribe = async (country: string) => {
     setBuying(true); setBuyErr(null);
-    try { window.location.href = (await checkoutSubscription(`insight:${sector.sector_key}`, subInterval)).approval_url; }
+    try { window.location.href = (await checkoutSubscription(`insight:${sector.sector_key}`, subInterval, country)).approval_url; }
     catch (e) { payErr(e); }
   };
 
@@ -205,22 +210,38 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
             <Lock className="w-3 h-3" /> {t("platform.catalog.requiresPlan", { plan: planLabel(level.required_tier) })}
           </Chip>
           {level.tier === "deep_dive" ? (
-            <button onClick={onBuyOrder} disabled={buying} className="btn btn-primary !py-1 !px-2 text-xs disabled:opacity-40">
-              <ShoppingCart className="w-3.5 h-3.5" /> {t("platform.catalog.buy", { defaultValue: "Comprar" })}
-            </button>
-          ) : level.tier === "insight" ? (
-            <div className="flex items-center gap-1">
-              <select className="field !py-0.5 !px-1 text-xs" value={subInterval}
-                onChange={(e) => setSubInterval(e.target.value)}>
-                <option value="monthly">{t("platform.catalog.monthly", { defaultValue: "Mensual" })}</option>
-                <option value="annual">{t("platform.catalog.annual", { defaultValue: "Anual" })}</option>
-              </select>
-              <button onClick={onSubscribe} disabled={buying} className="btn btn-primary !py-1 !px-2 text-xs disabled:opacity-40">
-                <ShoppingCart className="w-3.5 h-3.5" /> {t("platform.catalog.subscribe", { defaultValue: "Suscribirme" })}
+            <>
+              <button onClick={() => setConfirm({ kind: "order" })} disabled={buying} className="btn btn-primary !py-1 !px-2 text-xs disabled:opacity-40">
+                <ShoppingCart className="w-3.5 h-3.5" /> {t("platform.catalog.buy", { defaultValue: "Comprar" })}
               </button>
-            </div>
+              <span className="text-[10px] text-faint">{t("platform.catalog.plusTax", { defaultValue: "Precio + impuestos · pago con PayPal" })}</span>
+            </>
+          ) : level.tier === "insight" ? (
+            <>
+              <div className="flex items-center gap-1">
+                <select className="field !py-0.5 !px-1 text-xs" value={subInterval}
+                  onChange={(e) => setSubInterval(e.target.value as "monthly" | "annual")}>
+                  <option value="monthly">{t("platform.catalog.monthly", { defaultValue: "Mensual" })}</option>
+                  <option value="annual">{t("platform.catalog.annual", { defaultValue: "Anual" })}</option>
+                </select>
+                <button onClick={() => setConfirm({ kind: "sub" })} disabled={buying} className="btn btn-primary !py-1 !px-2 text-xs disabled:opacity-40">
+                  <ShoppingCart className="w-3.5 h-3.5" /> {t("platform.catalog.subscribe", { defaultValue: "Suscribirme" })}
+                </button>
+              </div>
+              <span className="text-[10px] text-faint">{t("platform.catalog.plusTaxSub", { defaultValue: "Suscripción + impuestos · pago con PayPal" })}</span>
+            </>
           ) : null}
           {buyErr && <span className="text-[11px] text-alert max-w-[170px] text-right">{buyErr}</span>}
+          {confirm && (
+            <CheckoutConfirmModal
+              sku={confirm.kind === "order" ? `deep_dive:${sector.sector_key}` : `insight:${sector.sector_key}`}
+              interval={confirm.kind === "order" ? "once" : subInterval}
+              title={`${sector.display_name} · ${tierLabel}`}
+              subtitle={confirm.kind === "order" ? undefined : (subInterval === "monthly" ? "Suscripción mensual" : "Suscripción anual")}
+              onConfirm={confirm.kind === "order" ? onConfirmOrder : onConfirmSubscribe}
+              onClose={() => setConfirm(null)}
+            />
+          )}
           {level.sample_available && (
             <button onClick={onSample} disabled={sampling} className="btn btn-ghost !py-1 !px-2 text-xs disabled:opacity-40">
               <FileText className="w-3.5 h-3.5" /> {t("platform.catalog.sample")}

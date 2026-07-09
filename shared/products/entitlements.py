@@ -60,6 +60,19 @@ def grant_entitlement(db: Session, *, user_id: str, sector_key: str, tier: str,
     return _serialize(row)
 
 
+def order_entitlement_exists(db: Session, *, user_id: str, sector_key: str, tier: str,
+                             note: str) -> bool:
+    """¿Ya existe un entitlement ACTIVO de esta compra (por ``note`` = ref de la orden)?
+    Hace idempotente la concesión entre el retorno/captura y el webhook (misma orden → un solo
+    acceso), sin depender de que la factura se haya podido registrar."""
+    return db.query(
+        db.query(ProductEntitlement)
+        .filter_by(user_id=user_id, sector_key=sector_key, tier=tier,
+                   source="order", note=note, active=True)
+        .exists()
+    ).scalar()
+
+
 def revoke_entitlement(db: Session, entitlement_id: str) -> bool:
     """Revoca (``active=False``) un entitlement. Devuelve False si no existe."""
     row = db.query(ProductEntitlement).filter_by(id=entitlement_id).one_or_none()
