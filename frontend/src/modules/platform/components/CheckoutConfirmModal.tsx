@@ -15,12 +15,13 @@ export function CheckoutConfirmModal({
   interval: "once" | "monthly" | "annual";
   title: string;
   subtitle?: string;
-  /** Ejecuta el checkout con el país elegido y redirige a PayPal. Debe devolver una promesa
-   *  (el modal muestra el spinner hasta que resuelva/redirija). */
-  onConfirm: (country: string) => Promise<void>;
+  /** Ejecuta el checkout con el país + RNC/cédula elegidos y redirige a PayPal. Debe devolver
+   *  una promesa (el modal muestra el spinner hasta que resuelva/redirija). */
+  onConfirm: (country: string, taxId?: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [country, setCountry] = useState("DO");
+  const [taxId, setTaxId] = useState("");
   const [quote, setQuote] = useState<TaxBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const [going, setGoing] = useState(false);
@@ -53,7 +54,7 @@ export function CheckoutConfirmModal({
   const go = async () => {
     setGoing(true); setErr(null);
     try {
-      await onConfirm(country);
+      await onConfirm(country, country === "DO" ? taxId.trim() || undefined : undefined);
     } catch {
       setGoing(false);
       setErr("No se pudo iniciar el pago. Intentá de nuevo.");
@@ -87,6 +88,17 @@ export function CheckoutConfirmModal({
               <option value="XX">Exterior — exportación de servicios (exento)</option>
             </select>
           </div>
+
+          {/* RNC/cédula (solo RD): si lo dan, la factura es de crédito fiscal (e-CF 31). */}
+          {country === "DO" && (
+            <div>
+              <label className="text-xs text-muted block mb-1">
+                RNC / Cédula <span className="text-faint">(opcional — para factura con crédito fiscal)</span>
+              </label>
+              <input className="field w-full mono" value={taxId} onChange={(e) => setTaxId(e.target.value)}
+                placeholder="RNC o cédula del receptor de la factura" />
+            </div>
+          )}
 
           {/* Desglose suscripción/compra + impuestos. */}
           <div className="rounded-[10px] border border-line bg-surface2 p-3">

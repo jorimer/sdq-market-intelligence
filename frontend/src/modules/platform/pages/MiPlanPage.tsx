@@ -37,11 +37,11 @@ export function MiPlanPage() {
     listInvoices().then(setInvoices).catch(() => setInvoices([]));
   };
 
-  // Ejecuta el checkout del bundle con el país elegido (desde el modal) y redirige a PayPal.
-  async function confirmSubscribe(country: string) {
+  // Ejecuta el checkout del bundle con el país + RNC elegidos (desde el modal) y va a PayPal.
+  async function confirmSubscribe(country: string, taxId?: string) {
     if (!confirmSku) return;
     setPayMsg(null);
-    window.location.href = (await checkoutSubscription(confirmSku, interval, country)).approval_url;
+    window.location.href = (await checkoutSubscription(confirmSku, interval, country, taxId)).approval_url;
   }
 
   async function onCancel(subId: string) {

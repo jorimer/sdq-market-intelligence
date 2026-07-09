@@ -94,6 +94,22 @@ def test_subscription_activates_and_invoices_without_webhook(db):
     assert str(tx.subtotal) == "50.00" and str(tx.tax_amount) == "9.00" and tx.kind == "subscription"
 
 
+def test_client_with_rnc_gets_credito_fiscal_31(db):
+    # Cliente RD con RNC/cédula → e-CF tipo 31 (crédito fiscal); sin RNC → 32 (consumo).
+    from shared.auth.models import User
+    db.add(User(id="rd1", email="rd1@x.com", password_hash="x", full_name="Banco",
+                country="DO", tax_id="101010101"))
+    db.add(User(id="rd2", email="rd2@x.com", password_hash="x", full_name="Consumidor",
+                country="DO", tax_id=None))
+    db.commit()
+    create_tariff(db, sku="deep_dive:banking", amount="100.00", currency="USD", interval="once")
+    set_tax_config(db, enabled=True, rate="18", home_country="DO")
+    settle_order(db, "paypal", order_id="O-RNC", user_id="rd1", sku="deep_dive:banking")
+    settle_order(db, "paypal", order_id="O-NO", user_id="rd2", sku="deep_dive:banking")
+    by_user = {t.user_id: t.encf_type for t in db.query(BillingTransaction).all()}
+    assert by_user["rd1"] == "31" and by_user["rd2"] == "32"
+
+
 def test_subscription_idempotent_across_paths(db):
     _seed(db, "u1", "DO")
     create_tariff(db, sku="insight:banking", amount="50.00", currency="USD", interval="monthly")

@@ -102,14 +102,14 @@ export async function checkoutQuote(
 }
 
 /** Compra puntual de un Deep Dive (once). Cobra el TOTAL (subtotal + impuesto). */
-export async function checkoutOrder(sku: string, country?: string): Promise<{ approval_url: string; breakdown?: TaxBreakdown }> {
-  const { data } = await client.post("/billing/checkout/order", { sku, country, ...returnUrls() });
+export async function checkoutOrder(sku: string, country?: string, taxId?: string): Promise<{ approval_url: string; breakdown?: TaxBreakdown }> {
+  const { data } = await client.post("/billing/checkout/order", { sku, country, tax_id: taxId, ...returnUrls() });
   return data;
 }
 
 /** Suscripción a un producto (insight:{sector} | all_access | enterprise) mensual/anual. */
-export async function checkoutSubscription(sku: string, interval: string, country?: string): Promise<{ approval_url: string; breakdown?: TaxBreakdown }> {
-  const { data } = await client.post("/billing/checkout/subscription", { sku, interval, country, ...returnUrls() });
+export async function checkoutSubscription(sku: string, interval: string, country?: string, taxId?: string): Promise<{ approval_url: string; breakdown?: TaxBreakdown }> {
+  const { data } = await client.post("/billing/checkout/subscription", { sku, interval, country, tax_id: taxId, ...returnUrls() });
   return data;
 }
 
@@ -224,4 +224,33 @@ export async function getInvoiceIssuer(): Promise<InvoiceIssuer> {
 export async function setInvoiceIssuer(input: Partial<InvoiceIssuer>): Promise<InvoiceIssuer> {
   const { data } = await client.put("/billing/issuer", input);
   return data as InvoiceIssuer;
+}
+
+/* ── Secuencias e-NCF (e-CF DGII) — rangos autorizados por tipo (admin) ── */
+export interface EncfSequence {
+  id: string;
+  ecf_type: string;            // 31 | 32 | 46
+  range_from: string;
+  range_to: string;
+  current: string;
+  remaining: number;
+  expires_at: string | null;
+  active: boolean;
+  expired: boolean;
+  exhausted: boolean;
+  next_encf: string | null;
+  note: string | null;
+}
+
+export async function listEncfSequences(): Promise<EncfSequence[]> {
+  const { data } = await client.get<{ sequences: EncfSequence[] }>("/billing/encf/sequences");
+  return Array.isArray(data?.sequences) ? data.sequences : [];
+}
+
+export async function upsertEncfSequence(input: {
+  ecf_type: string; range_from: number; range_to: number;
+  current?: number; expires_at?: string | null; active?: boolean; note?: string;
+}): Promise<EncfSequence> {
+  const { data } = await client.put("/billing/encf/sequences", input);
+  return data as EncfSequence;
 }

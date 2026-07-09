@@ -78,7 +78,8 @@ def _serialize(t: BillingTransaction) -> Dict[str, Any]:
 
 def record_transaction_once(db: Session, *, user_id: str, sku: str, kind: str, provider: str,
                             provider_ref: Optional[str], event_id: Optional[str],
-                            breakdown: TaxBreakdown, note: Optional[str] = None) -> tuple:
+                            breakdown: TaxBreakdown, note: Optional[str] = None,
+                            encf_type: Optional[str] = None) -> tuple:
     """Registra un cobro facturable con su desglose y devuelve ``(dict, created)``. Idempotente
     por ``(provider, event_id)``: si ya existe una transacción para ese evento, la devuelve con
     ``created=False`` (sin crear otra). El ``event_id`` determinista por ``provider_ref`` hace
@@ -106,7 +107,7 @@ def record_transaction_once(db: Session, *, user_id: str, sku: str, kind: str, p
             country=breakdown.country,
             invoice_number=invoice_number,
             status="paid", note=note,
-            encf_type=intended_encf_type(breakdown), encf_status="pending")
+            encf_type=encf_type or intended_encf_type(breakdown), encf_status="pending")
         db.add(row)
         try:
             db.commit()

@@ -45,11 +45,14 @@ def _breakdown_for(db: Session, *, sku: str, interval: str, country: Optional[st
     return None
 
 
-def _client_country(db: Session, user_id: str) -> Optional[str]:
+def _client_fiscal(db: Session, user_id: str) -> tuple:
+    """(país, tax_id) del cliente — definen el trato fiscal y el tipo de e-CF."""
     from shared.auth.models import User
 
     user = db.query(User).filter_by(id=user_id).one_or_none()
-    return getattr(user, "country", None) if user else None
+    if not user:
+        return None, None
+    return getattr(user, "country", None), getattr(user, "tax_id", None)
 
 
 def _record_invoice_best_effort(db: Session, *, provider: str, kind: str, provider_ref: str,
@@ -57,18 +60,20 @@ def _record_invoice_best_effort(db: Session, *, provider: str, kind: str, provid
                                 currency: Optional[str]) -> None:
     """Registra la factura del cobro. Best-effort: **facturar nunca tumba el acceso ya
     concedido**. Idempotente por ``event_id`` determinista (webhook y retorno convergen)."""
-    from shared.billing.transactions import record_transaction_once
+    from shared.billing.transactions import intended_encf_type, record_transaction_once
 
     try:
-        country = _client_country(db, user_id)
+        country, tax_id = _client_fiscal(db, user_id)
         bd = _breakdown_for(db, sku=sku, interval=interval, country=country,
                             gross=gross, gross_currency=currency)
         if bd is None:
             logger.warning("[billing] sin precio ni bruto para facturar %s (%s)", sku, provider_ref)
             return
+        # Tipo de e-CF: exento→46; RD con RNC/cédula→31 (crédito fiscal); RD sin→32 (consumo).
+        encf_type = intended_encf_type(bd, client_has_rnc=bool((tax_id or "").strip()))
         record_transaction_once(db, user_id=user_id, sku=sku, kind=kind, provider=provider,
                                 provider_ref=provider_ref, event_id=f"settle:{kind}:{provider_ref}",
-                                breakdown=bd, note="PayPal")
+                                breakdown=bd, note="PayPal", encf_type=encf_type)
     except Exception:  # noqa: BLE001 — facturar no debe revertir la concesión de acceso
         db.rollback()
         logger.exception("[billing] no se pudo registrar la factura de %s", sku)
