@@ -37,7 +37,10 @@ factors:
 
   - key: activity
     label: "Actividad económica (IMAE)"
-    series_code: "bcrd.xls.imae.variacion_porcentual_interanual"
+    # El BCRD renombró la serie del IMAE a la familia base 2018 (imae → imae_2018) en 2026;
+    # el código viejo ya no existe en prod → el factor quedaba "sin dato". La serie base 2018
+    # trae la variación interanual completa (221 obs, fresca) — la misma familia que usa el TPM.
+    series_code: "bcrd.xls.imae_2018.variacion_porcentual_interanual"
     unit: "%"
     mode: level
     good_direction: high         # crecimiento de la actividad

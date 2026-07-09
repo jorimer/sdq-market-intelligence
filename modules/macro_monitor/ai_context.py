@@ -87,11 +87,15 @@ def fiscal_ai_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
         for d in (pulse.get("eo", {}).get("balance_global") or [])[-12:]
     ]
     rec = pulse.get("recaudacion") or {}
+    fresh = pulse.get("freshness") or {}
     return {
         "title": "Pulso fiscal — Gobierno Central",
         "has_data": True,
         "period": pulse.get("latest_period"),
         "unit": pulse.get("eo_unit"),
+        # E2E-MM2: rezago de fuente del balance (advisory). Si viene, la narrativa debe
+        # ubicar el déficit con su antigüedad y no presentarlo como el cierre corriente.
+        "caveat_frescura": fresh.get("eo_lag_note"),
         "ingresos": lat.get("ingresos"),
         "gastos": lat.get("gastos"),
         "balance_global": lat.get("balance_global"),
