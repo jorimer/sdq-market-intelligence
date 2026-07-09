@@ -659,19 +659,42 @@ async def get_rankings(
             if bank.bank_type and bank.bank_type.value == entity_type
         ]
 
-    rankings = [
-        {
+    # Período más reciente del conjunto: ancla para marcar filas con rating rezagado.
+    # El ranking global mezcla tipos de entidad NO comparables (banca múltiple, cambiarias,
+    # ahorro y crédito, …); ``rank_in_type`` da la posición dentro del propio tipo para no
+    # inducir a leer una casa de cambio como "más sólida" que un banco múltiple. ``stale``
+    # marca ratings viejos frente al corte más fresco (aditivo, no muta el score).
+    latest_pe = max((rr.period_end for rr, _ in results), default=None)
+    STALE_MONTHS = 9  # ~3 trimestres detrás del corte más reciente
+    _type_counter: Dict[str, int] = {}
+
+    def _months_behind(pe) -> Optional[int]:
+        if latest_pe is None or pe is None:
+            return None
+        return (latest_pe.year - pe.year) * 12 + (latest_pe.month - pe.month)
+
+    rankings = []
+    for i, (rr, bank) in enumerate(results):
+        btype = bank.bank_type.value if bank.bank_type else None
+        _type_counter[btype] = _type_counter.get(btype, 0) + 1
+        mb = _months_behind(rr.period_end)
+        rankings.append({
             "rank": i + 1,
+            "rank_in_type": _type_counter[btype],
             "bank_id": rr.bank_id,
             "bank_name": bank.name,
-            "bank_type": bank.bank_type.value if bank.bank_type else None,
+            "bank_type": btype,
             "period_end": str(rr.period_end),
+            "months_behind": mb,
+            "stale": (mb is not None and mb >= STALE_MONTHS),
             "overall_score": float(rr.overall_score),
             "rating_tier": rr.rating_tier,
-        }
-        for i, (rr, bank) in enumerate(results)
-    ]
-    return {"rankings": rankings, "count": len(rankings), "period_end": period_end or "latest"}
+        })
+    return {
+        "rankings": rankings, "count": len(rankings),
+        "period_end": period_end or "latest",
+        "latest_period_end": str(latest_pe) if latest_pe else None,
+    }
 
 
 # ─── Banks (catálogo) ────────────────────────────────────────────

@@ -28,6 +28,10 @@ async def latest_score(
     if s is None:
         return {"has_score": False, "period": period}
     bd = s.breakdown or {}
+    # La fuente se infiere del período: con "Q" = boletín INDOTEL (trimestral, congelado
+    # en 2022-Q1, histórico); sin "Q" = ITU DataHub (anual, fuente vigente). Igual criterio
+    # que ``telecom_intel.products`` para no re-etiquetar como INDOTEL un dato ya migrado.
+    source = "INDOTEL (histórico)" if "Q" in (s.period or "") else "ITU DataHub"
     return {
         "has_score": True, "period": s.period, "telecom_score": s.telecom_score,
         "band": s.band, "coverage": s.coverage,
@@ -35,7 +39,7 @@ async def latest_score(
         "internet_penetration": s.internet_penetration,
         "broadband_share": s.broadband_share,
         "dimensions": bd.get("dimensions", {}), "metrics": bd.get("metrics", {}),
-        "model_version": s.model_version, "source": "INDOTEL",
+        "model_version": s.model_version, "source": source,
     }
 
 

@@ -329,7 +329,11 @@ class MacroProduct:
             "irmp_band": result["risk_band"], "dimensions": result["dimensions"],
             "peer_set_size": result["peer_set_size"],
         }
-        if tier == ProductTier.deep_dive:
+        # Posición en el panel del período. La sección ``peer_position`` está declarada
+        # en el manifest tanto para Insight como para Deep Dive (macro_manifest), así que
+        # se puebla para ambos: antes solo se poblaba en deep_dive y el Insight renderizaba
+        # la sección "Posición en el Panel" hueca aunque el panel del período existiera.
+        if tier in (ProductTier.insight, ProductTier.deep_dive):
             payload["peer_position"] = self._peer_position(db, iso, snap.period_end)
         return ProductSnapshot(tier=tier, period=str(snap.period_end),
                                payload=payload, entity_name=country_name)

@@ -266,7 +266,15 @@ class TestScoringPipeline:
         assert resp.status_code == 200
         data = resp.json()
         assert data["count"] >= 1
-        assert data["rankings"][0]["rank"] == 1
+        row = data["rankings"][0]
+        assert row["rank"] == 1
+        # E2E-BK2/BK3: campos aditivos para no mezclar tipos ni mostrar ratings rancios
+        # sin bandera. ``rank_in_type`` = posición dentro del propio tipo de entidad;
+        # ``stale``/``months_behind`` = antigüedad frente al corte más fresco del conjunto.
+        assert row["rank_in_type"] == 1
+        assert row["stale"] is False  # recién sembrado = fresco frente a sí mismo
+        assert "months_behind" in row
+        assert data["latest_period_end"]
 
     def test_run_all(self):
         token = register_and_login()
