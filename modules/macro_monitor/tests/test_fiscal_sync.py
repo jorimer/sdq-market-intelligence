@@ -63,6 +63,26 @@ def test_get_fiscal_pulse_shape(db):
     assert groups and all("label" in g and "value" in g for g in groups)
     assert all(g["slug"] != "total" for g in groups)
     assert groups == sorted(groups, key=lambda g: g["value"], reverse=True)
+    # E2E-MM2: bloque de frescura presente.
+    assert "freshness" in pulse
+    assert set(pulse["freshness"]) >= {"eo_asof", "dgii_asof", "eo_months_behind_dgii"}
+
+
+def test_fiscal_freshness_flags_eo_lag(db):
+    # EO (Hacienda) rezagado vs DGII → nota de rezago de fuente (E2E-MM2).
+    from modules.macro_monitor.models.models import MacroSeries
+    for code, period, val in [
+        ("fiscal_eo.ingresos", "2025-12", 100.0), ("fiscal_eo.gastos", "2025-12", 130.0),
+        ("fiscal_eo.balance_global", "2025-12", -30.0),
+        ("fiscal_dgii.itbis", "2026-05", 50.0), ("fiscal_dgii.renta", "2026-05", 40.0),
+    ]:
+        db.add(MacroSeries(series_code=code, period=period, value=val))
+    db.commit()
+    fresh = get_fiscal_pulse(db)["freshness"]
+    assert fresh["eo_asof"] == "2025-12"
+    assert fresh["dgii_asof"] == "2026-05"
+    assert fresh["eo_months_behind_dgii"] == 5
+    assert "rezago de fuente" in fresh["eo_lag_note"]
 
 
 def test_sync_best_effort_when_one_source_fails(db):

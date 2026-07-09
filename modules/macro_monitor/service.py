@@ -182,6 +182,26 @@ def get_fiscal_pulse(db: Session) -> Dict[str, Any]:
     recaudacion.sort(key=lambda x: x["value"], reverse=True)
 
     all_periods = sorted({p for d in by_code.values() for p in d})
+    # E2E-MM2: frescura del balance fiscal. El Estado de Operaciones de Hacienda se publica
+    # con rezago (a jul-2026 su último cierre es 2025-12) mientras la recaudación DGII llega
+    # mucho más al día. Se expone la asimetría para que la narrativa NO presente un déficit
+    # de hace meses como "el cierre" sin advertir su antigüedad (rezago de FUENTE, no de sync).
+    def _months_between(p_old, p_new):
+        try:
+            yo, mo = (int(x) for x in p_old.split("-")[:2])
+            yn, mn = (int(x) for x in p_new.split("-")[:2])
+            return (yn - yo) * 12 + (mn - mo)
+        except Exception:  # noqa: BLE001
+            return None
+
+    eo_behind = _months_between(latest, dgii_latest)
+    eo_lag_note = None
+    if eo_behind and eo_behind >= 2:
+        eo_lag_note = (
+            f"El balance fiscal (Hacienda · Estado de Operaciones) más reciente publicado "
+            f"corresponde a {latest}; la recaudación (DGII) llega hasta {dgii_latest}. "
+            f"El déficit se lee con ese rezago de fuente ({eo_behind} meses)."
+        )
     return {
         "has_data": True,
         "period_range": [all_periods[0], all_periods[-1]],
@@ -191,6 +211,8 @@ def get_fiscal_pulse(db: Session) -> Dict[str, Any]:
         "eo_latest": eo_latest,
         "recaudacion_unit": "RD$",
         "recaudacion": {"period": dgii_latest, "groups": recaudacion},
+        "freshness": {"eo_asof": latest, "dgii_asof": dgii_latest,
+                      "eo_months_behind_dgii": eo_behind, "eo_lag_note": eo_lag_note},
     }
 
 
