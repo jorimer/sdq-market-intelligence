@@ -290,3 +290,67 @@ def get_history(db: Session, country_code: str, limit: int = 20) -> List[IRMPSna
         .limit(limit)
         .all()
     )
+
+
+# WGI governance dimensions → Spanish label (report/UI). Order = report order.
+GOVERNANCE_DIMENSIONS: Dict[str, str] = {
+    "wgi_voice_accountability": "Voz y rendición de cuentas",
+    "wgi_political_stability": "Estabilidad política",
+    "wgi_gov_effectiveness": "Efectividad gubernamental",
+    "wgi_regulatory_quality": "Calidad regulatoria",
+    "wgi_rule_of_law": "Estado de derecho",
+    "wgi_control_corruption": "Control de la corrupción",
+}
+
+
+def get_governance_profile(
+    db: Session, country_code: str, period: Optional[str] = None
+) -> Dict[str, Any]:
+    """Governance profile for *country_code* from the WGI-2025 store.
+
+    For each of the six governance dimensions returns the latest (or *period*)
+    absolute 0-100 score with its confidence interval, source count and 35-source
+    breakdown (from ``CountryVariable.meta``), plus the full annual trajectory.
+    Reads real data only — a dimension with no persisted rows is simply omitted.
+    """
+    rows = (
+        db.query(CountryVariable)
+        .filter(
+            CountryVariable.iso_code == country_code,
+            CountryVariable.variable.in_(GOVERNANCE_DIMENSIONS.keys()),
+            CountryVariable.value.isnot(None),
+        )
+        .all()
+    )
+    by_var: Dict[str, List[CountryVariable]] = {}
+    for r in rows:
+        by_var.setdefault(r.variable, []).append(r)
+
+    dimensions: Dict[str, Any] = {}
+    resolved_period: Optional[str] = None
+    for var, label in GOVERNANCE_DIMENSIONS.items():
+        series = sorted(by_var.get(var, []), key=lambda r: r.period)
+        if not series:
+            continue
+        target = period or series[-1].period
+        latest = next((r for r in series if r.period == target), series[-1])
+        resolved_period = resolved_period or latest.period
+        meta = latest.meta or {}
+        dimensions[var] = {
+            "label": label,
+            "period": latest.period,
+            "score": latest.value,
+            "ci_lo": meta.get("ci_lo"),
+            "ci_hi": meta.get("ci_hi"),
+            "n_sources": meta.get("n_sources"),
+            "sources": meta.get("sources") or {},
+            "trajectory": [
+                {"year": r.period, "score": r.value} for r in series
+            ],
+        }
+    return {
+        "country_code": country_code,
+        "period": resolved_period,
+        "dimensions": dimensions,
+        "source": "WGI 2025 (World Bank, escala absoluta 0-100)",
+    }
