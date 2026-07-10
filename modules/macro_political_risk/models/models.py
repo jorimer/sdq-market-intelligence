@@ -60,6 +60,11 @@ class CountryVariable(UUIDMixin, Base):
     variable = Column(String(60), nullable=False)
     value = Column(Float, nullable=True)          # None = missing, never interpolated
     source = Column(String(20), nullable=False, default="WGI")
+    # Rich metadata carried alongside the scalar value. For WGI-2025 governance
+    # variables: {"se", "ci_lo", "ci_hi", "n_sources", "sources": {CODE: mean}} —
+    # the confidence interval, source count and 35-source breakdown behind the
+    # 0-100 score. None for legacy scalar sources.
+    meta = Column(JSON, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("iso_code", "period", "variable", name="uq_mpr_var_country_period"),

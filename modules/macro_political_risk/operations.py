@@ -28,6 +28,15 @@ def _run_wdi_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_wgi2025_load(params, user_id, set_phase) -> Dict:
+    from modules.macro_political_risk.wgi2025_loader import ingest_wgi2025
+    db = SessionLocal()
+    try:
+        return ingest_wgi2025(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_sovereign_sync(params, user_id, set_phase) -> Dict:
     from modules.macro_political_risk.sovereign_sync import sovereign_ratings_sync
     db = SessionLocal()
@@ -179,6 +188,15 @@ def register() -> None:
         "política realizada (eventos GDELT/BigQuery) + validez convergente vs rating. "
         "Direccional (N=5). Requiere GCP_SA_JSON.",
         _run_irmp_backtest, default_interval_hours=720,
+    ))
+    register_operation(Operation(
+        "wgi-2025-load", "Cargar gobernanza WGI 2025 (histórico + fuentes)",
+        "Ingesta el asset canónico de la revisión metodológica WGI 2025: serie "
+        "absoluta 0-100 de 1996-2024 para las 6 dimensiones del panel regional, con "
+        "intervalo de confianza, número de fuentes y el desglose de las 35 fuentes "
+        "subyacentes. Reemplaza a 'wgi-sync' (API, 1 año, percentil viejo) como "
+        "fuente autoritativa de gobernanza. Idempotente; on-demand.",
+        _run_wgi2025_load, default_interval_hours=0,
     ))
     register_operation(Operation(
         "irmp-snapshot", "Calcular snapshot IRMP",
