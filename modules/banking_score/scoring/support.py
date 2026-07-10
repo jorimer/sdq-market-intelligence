@@ -74,16 +74,20 @@ def _support_assessment(state_owned: bool, is_systemic: bool,
         return ("Sin soporte extraordinario esperado: la lectura relevante para esta entidad "
                 "es su perfil financiero standalone.")
 
+    # La propiedad estatal es un dato de configuración DECLARADO por SDQ (set de casa,
+    # por nombre del catálogo SIB), no un flag publicado por el supervisor — se rotula.
+    _decl = " (propiedad estatal: dato de configuración declarado por SDQ, no un indicador publicado por el SIB)"
+
     # Pata 1 — propensión (voluntad).
     if state_owned and is_systemic:
-        prop = ("Propensión de soporte ALTA: propiedad estatal e importancia sistémica.")
+        prop = ("Propensión de soporte ALTA: propiedad estatal e importancia sistémica." + _decl)
     elif is_systemic:
         prop = ("Propensión de soporte por importancia sistémica (too-big-to-fail) sin "
                 "propiedad estatal; dependería de la política de resolución, no de un mandato "
                 "de propiedad.")
     else:  # state_owned, no sistémico
         prop = ("Propensión de soporte por propiedad estatal, con importancia sistémica no "
-                "material a nivel de activos.")
+                "material a nivel de activos." + _decl)
 
     # Pata 2 — capacidad (habilidad del soberano). Un soberano especulativo la acota.
     score = sovereign.get("score")
@@ -118,6 +122,13 @@ def support_overlay(db: Session, bank: Bank, standalone_score: float,
     sov = sovereign_anchor(db)
     return {
         "state_owned": state_owned,
+        # Procedencia del flag: set de configuración declarado (regla de casa), no un
+        # indicador publicado por el SIB. Rotula la rúbrica factual (brecha H2).
+        "state_owned_provenance": {
+            "source": "declarado",
+            "note": ("Dato de configuración declarado por SDQ (set de casa, por nombre del "
+                     "catálogo SIB); no es un flag publicado por el supervisor."),
+        },
         "systemic": {
             "activos_share": (activos or {}).get("share"),
             "depositos_share": (depositos or {}).get("share"),

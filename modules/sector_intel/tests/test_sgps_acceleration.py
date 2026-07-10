@@ -27,6 +27,21 @@ class TestSGPS:
         assert res["factors"]["historical"]["value"] == 100.0
         assert res["factors"]["structural"]["value"] == 0.0
 
+    def test_provenance_defaults_declared_rubric(self):
+        # H1: histórico/estructural son rúbrica declarada por defecto; aceleración es real.
+        res = compute_sgps(historical=60, structural=64, acceleration=62.4)
+        assert res["factors"]["historical"]["source"] == "rubric"
+        assert res["factors"]["structural"]["source"] == "rubric"
+        assert res["factors"]["acceleration"]["source"] == "live"
+
+    def test_provenance_flips_to_live_when_sourced(self):
+        # Cuando una fuente real llegue (P1: BCRD histórico / ENAE estructural), el
+        # ensamblador pasa "live" y el badge lo refleja.
+        res = compute_sgps(historical=60, structural=64, acceleration=62.4,
+                           sources={"historical": "live", "structural": "rubric"})
+        assert res["factors"]["historical"]["source"] == "live"
+        assert res["factors"]["structural"]["source"] == "rubric"
+
 
 class TestAcceleration:
     def test_neutral_when_no_context(self):
