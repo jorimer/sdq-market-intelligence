@@ -73,6 +73,7 @@ _SECTION_TITLES = {
     "macro_pulse": "Pulso Macroeconómico",
     "risk_assessment": "Evaluación de Riesgo-País (IRMP)",
     "peer_position": "Posición en el Panel Regional",
+    "governance": "Gobernanza Institucional (WGI 2025)",
     "recommendation": "Lectura para Decisión",
     "limitations": "Limitaciones",
 }
@@ -129,6 +130,21 @@ _SAMPLE_NARRATIVES = {
         "estructural de lo atribuible a la gestión, y señala que la convergencia hacia el "
         "cuartil superior regional constituye un objetivo alcanzable."
     ),
+    "governance": (
+        "El perfil de gobernanza institucional, medido sobre los **Worldwide Governance "
+        "Indicators 2025 del Banco Mundial** (escala absoluta 0-100, donde un valor más "
+        "alto indica mejor gobernanza), muestra un cuadro de fortalezas y rezagos "
+        "definidos. La **estabilidad política (76.0)** es el ancla del perfil, mientras que "
+        "el **control de la corrupción (42.5)** es la dimensión más rezagada y el principal "
+        "foco de atención. El **estado de derecho (53.8)** se ubica en una franja "
+        "intermedia, respaldado por 12 fuentes independientes, lo que confiere solidez a la "
+        "lectura. La dimensión temporal es la más reveladora: el estado de derecho **mejoró "
+        "de 45.6 en 2010 a 53.8 en 2024**, una trayectoria sostenida de fortalecimiento "
+        "institucional a lo largo de tres lustros. El intervalo de confianza acotado en "
+        "cada dimensión refleja la convergencia entre fuentes y respalda la fiabilidad del "
+        "diagnóstico. En conjunto, las instituciones dominicanas se consolidan de forma "
+        "gradual, con la integridad pública como la brecha pendiente."
+    ),
     "recommendation": (
         "Para un comité de inversión o una contraparte con exposición a la República "
         "Dominicana, la recomendación corresponde a una **exposición constructiva con "
@@ -156,12 +172,13 @@ def macro_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("risk_assessment", "peer_position"),
+                sections=("risk_assessment", "peer_position", "governance"),
                 narrative_templates=("risk_assessment",),
                 audience="cliente / comité", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("risk_assessment", "peer_position", "recommendation", "limitations"),
+                sections=("risk_assessment", "peer_position", "governance",
+                          "recommendation", "limitations"),
                 narrative_templates=("risk_assessment",),
                 audience="comité / contraparte", cadence="on_demand", price_band="on-demand"),
         })
@@ -347,6 +364,19 @@ class MacroProduct:
             # (IRMPSnapshot por país+período) pero el reporte solo leía UN corte. Serie
             # cronológica AS-OF el período del reporte (no muestra períodos futuros).
             payload["trajectory"] = self._trajectory(db, iso, snap.period_end)
+            # Fase A (WGI 2025): perfil de gobernanza REAL — escala absoluta 0-100 con
+            # intervalo de confianza, número de fuentes y trayectoria 1996-2024 por
+            # dimensión. Dato de fuente, no rúbrica. En un SAVEPOINT: si la lectura
+            # falla (tabla ausente, tx abortada) se revierte solo el savepoint y el
+            # snapshot sale sin la sección, nunca roto.
+            try:
+                with db.begin_nested():
+                    gov = irmp_svc.get_governance_profile(db, iso, str(snap.period_end.year))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Perfil de gobernanza no disponible: %s", e)
+                gov = {}
+            if gov.get("dimensions"):
+                payload["governance"] = gov
         return ProductSnapshot(tier=tier, period=str(snap.period_end),
                                payload=payload, entity_name=country_name)
 
@@ -390,6 +420,28 @@ class MacroProduct:
         if tier == ProductTier.deep_dive:
             payload["peer_position"] = {"rank": 3, "n_countries": 5,
                                         "distribution": {"mean": 50.7, "max": 64.9, "min": 36.3}}
+        # Muestra de gobernanza (WGI 2025) — cifras ilustrativas coherentes con RD real.
+        payload["governance"] = {
+            "country_code": COUNTRY_ISO, "period": "2024",
+            "source": "WGI 2025 (World Bank, escala absoluta 0-100)",
+            "dimensions": {
+                "wgi_political_stability": {
+                    "label": "Estabilidad política", "score": 76.0, "ci_lo": 71.2,
+                    "ci_hi": 80.8, "n_sources": 9,
+                    "trajectory": [{"year": "2010", "score": 70.1},
+                                   {"year": "2024", "score": 76.0}]},
+                "wgi_rule_of_law": {
+                    "label": "Estado de derecho", "score": 53.8, "ci_lo": 49.5,
+                    "ci_hi": 58.2, "n_sources": 12,
+                    "trajectory": [{"year": "2010", "score": 45.6},
+                                   {"year": "2024", "score": 53.8}]},
+                "wgi_control_corruption": {
+                    "label": "Control de la corrupción", "score": 42.5, "ci_lo": 37.9,
+                    "ci_hi": 47.1, "n_sources": 10,
+                    "trajectory": [{"year": "2010", "score": 40.2},
+                                   {"year": "2024", "score": 42.5}]},
+            },
+        }
         return ProductSnapshot(tier=tier, period="2025-Q1", payload=payload, entity_name=COUNTRY_NAME)
 
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
@@ -458,6 +510,34 @@ class MacroProduct:
                                   "y las distancias precalculadas (delta_vs_media, delta_vs_lider; "
                                   "recordá: mayor IRMP = menor riesgo) para ubicarlo; qué dimensión "
                                   "explica el diferencial frente al líder. No repitas el score; ubícalo.")
+            elif section == "governance":
+                gov = snapshot.payload.get("governance") or {}
+                gdims = gov.get("dimensions") or {}
+                # Pre-digerir cifras EXACTAS (score, IC, n_fuentes, delta de trayectoria)
+                # para que el modelo las cite sin derivarlas (regla del thin/numeric_guard).
+                resumen = []
+                for g in gdims.values():
+                    traj = g.get("trajectory") or []
+                    delta = (round(traj[-1]["score"] - traj[0]["score"], 1)
+                             if len(traj) >= 2 and traj[0].get("score") is not None
+                             and traj[-1].get("score") is not None else None)
+                    resumen.append({
+                        "dimension": g["label"], "score": g.get("score"),
+                        "ic_90": [g.get("ci_lo"), g.get("ci_hi")],
+                        "n_fuentes": g.get("n_sources"),
+                        "delta_trayectoria": delta,
+                        "desde": traj[0]["year"] if traj else None,
+                        "hasta": traj[-1]["year"] if traj else None,
+                    })
+                ctx["gobernanza"] = {"fuente": gov.get("source"), "dimensiones": resumen}
+                ctx["enfoque"] = (
+                    "Gobernanza institucional sobre dato de fuente (WGI 2025, escala "
+                    "absoluta 0-100, mayor = mejor). Narra: (a) el perfil por dimensión "
+                    "citando score + intervalo de confianza 90% + n° de fuentes que lo "
+                    "respaldan (señal de solidez del dato); (b) la TRAYECTORIA de largo "
+                    "plazo usando delta_trayectoria (desde→hasta) — ¿las instituciones se "
+                    "FORTALECIERON o DETERIORARON?; (c) qué dimensión es el ancla y cuál el "
+                    "rezago. Solo cifras del contexto; no inventes.")
             elif section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: prioriza la palanca de política o gestión "
                                   "de riesgo país con mayor retorno sobre la resiliencia macro, "
@@ -517,6 +597,36 @@ class MacroProduct:
                 tables.append(("Trayectoria del IRMP", trows))
                 charts.append({"title": "Trayectoria del IRMP (mayor = menor riesgo)",
                                "items": [(p["period"], p.get("irmp_score")) for p in series]})
+            # Fase A (WGI 2025): perfil de gobernanza con escala absoluta, intervalo de
+            # confianza y n° de fuentes por dimensión (dato de fuente, no rúbrica).
+            gov = snapshot.payload.get("governance") or {}
+            gdims = gov.get("dimensions") or {}
+            if gdims:
+                grows = [["Dimensión", "Score (0-100)", "IC 90%", "Fuentes"]]
+                for g in gdims.values():
+                    ci = ("—" if g.get("ci_lo") is None or g.get("ci_hi") is None
+                          else f"{g['ci_lo']:.1f}–{g['ci_hi']:.1f}")
+                    grows.append([
+                        g["label"],
+                        (f"{g['score']:.1f}" if g.get("score") is not None else "—"),
+                        ci,
+                        str(g.get("n_sources") or "—"),
+                    ])
+                tables.append(("Gobernanza · WGI 2025 (mayor = mejor)", grows))
+                charts.append({
+                    "title": "Gobernanza por dimensión · WGI 2025 (0-100)",
+                    "items": [(g["label"], g.get("score")) for g in gdims.values()],
+                })
+                # Trayectoria de la dimensión insignia (Estado de derecho) — cuenta la
+                # historia real de fortalecimiento/deterioro institucional de 1996-2024.
+                flagship = gdims.get("wgi_rule_of_law")
+                traj = (flagship or {}).get("trajectory") or []
+                if len(traj) >= 2:
+                    charts.append({
+                        "title": "Estado de derecho · trayectoria WGI (0-100)",
+                        "items": [(t["year"], t.get("score")) for t in traj],
+                    })
+
             sc = snapshot.payload.get("irmp_score")
             band = snapshot.payload.get("irmp_band")
             if isinstance(sc, (int, float)):
