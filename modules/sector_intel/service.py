@@ -65,6 +65,7 @@ def compute_and_persist(
     sgps_inputs: Optional[Dict[str, Dict[str, float]]] = None,
     country_code: str = "DO",
     sources: Optional[Dict[str, Dict[str, str]]] = None,
+    sgps_sources: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """Compute IAI + SGPS for every sector in *sector_dataset*, persist, publish.
 
@@ -79,12 +80,18 @@ def compute_and_persist(
             monitor (G1) can credit cobertura honestly — the real fraction of the
             index backed by live data, not a hardcoded dimension set. Optional: the
             manual ``/snapshot`` endpoint passes none (those rows keep no source).
+        sgps_sources: ``{sector_code: {"historical": ..., "structural": ...}}`` —
+            per-SGPS-factor provenance from ``assemble_iai_dataset``. Stamped into
+            the persisted ``sgps_breakdown`` factors for the real-vs-rubric badge.
+            Optional: absent → factors default to ``"rubric"`` (declared, never
+            assumed real) in :func:`compute_sgps`.
     """
     if not sector_dataset:
         raise ValueError("Se requiere 'sector_dataset' con al menos un sector.")
 
     sgps_inputs = sgps_inputs or {}
     sources = sources or {}
+    sgps_sources = sgps_sources or {}
     # The acceleration factor is the macro environment — shared across sectors.
     acceleration = compute_acceleration(acceleration_context, country_code)
 
@@ -99,6 +106,7 @@ def compute_and_persist(
             historical=si.get("historical"),
             structural=si.get("structural"),
             acceleration=acceleration["acceleration"],
+            sources=sgps_sources.get(sector_code),
         )
 
         row = (
@@ -406,6 +414,70 @@ def _load_enae_profitability(db: Session) -> Dict[str, float]:
             for slug, a in agg.items() if a["ingresos"] > 0}
 
 
+# ── SGPS factor sourcing (histórico / estructural) ────────────────────────────
+# El SGPS es una MEZCLA DIRECTA (suma ponderada por factor), NO una normalización
+# min-max entre sectores como el IAI. Por eso —a diferencia de las dimensiones del
+# IAI— dar dato real a solo algunos sectores NO hunde a los demás a un piso relativo:
+# cada factor se mapea con una escala ABSOLUTA fija. Esto habilita cobertura parcial
+# honesta en el estructural (ENAE, ~9/17) sin distorsión, y dato real all-17 en el
+# histórico (BCRD). Los slugs sin dato quedan ausentes → ``compute_sgps`` los imputa
+# a 50 y los rotula rúbrica (declarado, nunca asumido real).
+_SGPS_HIST_WINDOW = 5          # años recientes promediados (suaviza el one-off)
+_SGPS_HIST_K = 50.0 / 15.0     # pendiente pp→puntos: 0%→50, ±15pp cubre toda la banda
+_SGPS_STRUCT_PIVOT = 0.10      # margen ENAE "típico" (utilidad/ingresos) → 50 neutral
+_SGPS_STRUCT_J = 400.0         # cada +1pp de margen = +4 puntos
+
+
+def _clamp100(v: float) -> float:
+    return max(0.0, min(100.0, v))
+
+
+def _load_sgps_historical(db: Session) -> Dict[str, float]:
+    """Per-slug SGPS *histórico* (0-100) desde el track record de crecimiento real
+    (BCRD ``sector_growth``). Media de hasta los últimos ``_SGPS_HIST_WINDOW`` años,
+    mapeada a 0-100 con anclaje ABSOLUTO (0%→50; ±15pp de crecimiento sostenido cubren
+    la banda completa) — sin min-max, coherente con la mezcla directa del SGPS.
+
+    Cubre los 17 (todos tienen la serie ``sector_growth``); un slug sin ningún valor
+    queda ausente → ``compute_sgps`` lo imputa a 50 (rúbrica rotulada). ``{}`` si no
+    hay serie de crecimiento persistida."""
+    from modules.sector_intel.models.models import SectorVariable
+    from shared.data.bcrd_sectors import VAR_GROWTH
+
+    rows = (db.query(SectorVariable)
+            .filter(SectorVariable.dimension == SECTOR_DIMENSION,
+                    SectorVariable.variable == VAR_GROWTH).all())
+    by_slug: Dict[str, Dict[str, float]] = {}
+    for r in rows:
+        if r.value is not None and r.period:
+            by_slug.setdefault(r.sector_code, {})[r.period] = r.value
+    out: Dict[str, float] = {}
+    for slug, per in by_slug.items():
+        recent = sorted(per, key=_period_key)[-_SGPS_HIST_WINDOW:]
+        vals = [per[p] for p in recent]
+        if not vals:
+            continue
+        mean_growth = sum(vals) / len(vals)
+        out[slug] = round(_clamp100(50.0 + mean_growth * _SGPS_HIST_K), 2)
+    return out
+
+
+def _load_sgps_structural(db: Session) -> Dict[str, float]:
+    """Per-slug SGPS *estructural* (0-100) desde el margen operativo ENAE
+    (utilidad/ingresos), señal REAL de calidad estructural del sector. Reutiliza el
+    marco ENAE de :func:`_load_enae_profitability` (mismo dato real que el input
+    ``profitability`` del IAI, ya en prod) y lo mapea a 0-100 con anclaje ABSOLUTO
+    (pivote 0.10→50; +1pp de margen → +4 pts), sin min-max.
+
+    Cobertura PARCIAL honesta: solo los ~9 slugs que el marco ENAE alcanza; el resto
+    queda ausente → ``compute_sgps`` lo imputa a 50 y lo rotula rúbrica. La mezcla
+    directa del SGPS hace que esta parcialidad NO distorsione (a diferencia del IAI).
+    ``{}`` si no hay dato ENAE."""
+    margins = _load_enae_profitability(db)
+    return {slug: round(_clamp100(50.0 + (m - _SGPS_STRUCT_PIVOT) * _SGPS_STRUCT_J), 2)
+            for slug, m in margins.items()}
+
+
 def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Full IAI dataset per sector for *period*: declared rubric (doctrine) + real
     data (BCRD sector dim, contract-derived macro_exposure). Single source of truth
@@ -417,8 +489,9 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     back to a neutral 50 (declared) — never the current contract stamped on the
     past. The sector dimension is real per period. *period* defaults to the latest.
 
-    Returns ``{period, dataset, sources, sgps_inputs, has_live}``. ``sources``
-    maps each var to ``"live"`` or ``"rubric"`` for the real-vs-rubric badge.
+    Returns ``{period, dataset, sources, sgps_inputs, sgps_sources, has_live}``.
+    ``sources`` maps each IAI var to ``"live"``/``"rubric"``; ``sgps_sources`` does
+    the same per SGPS factor (``historical``/``structural``) for the same badge.
     """
     from shared.contracts import sector_macro_exposure
     from shared.data.bcrd_sectors import sector_catalog
@@ -449,10 +522,15 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     # profitability (ENAE rentabilidad, real per-sector) — cobertura PARCIAL honesta:
     # solo los slugs del marco ENAE; el resto la deja ausente (el motor la omite).
     enae_profit = _load_enae_profitability(db)
+    # SGPS histórico (BCRD sector_growth, all-17) + estructural (ENAE margen, ~9/17):
+    # dato real por factor, escala absoluta (el SGPS es mezcla directa, no min-max).
+    sgps_hist = _load_sgps_historical(db)
+    sgps_struct = _load_sgps_structural(db)
 
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
     sgps_inputs: Dict[str, Dict[str, float]] = {}
+    sgps_sources: Dict[str, Dict[str, str]] = {}
 
     for slug, _name in sector_catalog():
         ov = overrides.get(slug, {})
@@ -492,13 +570,24 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
             smap["profitability"] = "live"
         dataset[slug] = merged
         sources[slug] = smap
+        # SGPS: dato real donde lo hay (histórico all-17, estructural ~9/17), rúbrica
+        # declarada (doctrina) donde no. La procedencia por factor va en sgps_sources.
+        hist = sgps_hist.get(slug)
+        struct = sgps_struct.get(slug)
         sgps_inputs[slug] = {
-            "historical": float(ov.get("sgps_historical", defaults.get("sgps_historical", 50))),
-            "structural": float(ov.get("sgps_structural", defaults.get("sgps_structural", 50))),
+            "historical": hist if hist is not None
+            else float(ov.get("sgps_historical", defaults.get("sgps_historical", 50))),
+            "structural": struct if struct is not None
+            else float(ov.get("sgps_structural", defaults.get("sgps_structural", 50))),
+        }
+        sgps_sources[slug] = {
+            "historical": "live" if hist is not None else "rubric",
+            "structural": "live" if struct is not None else "rubric",
         }
 
     return {"period": target, "dataset": dataset, "sources": sources,
-            "sgps_inputs": sgps_inputs, "has_live": live["has_data"]}
+            "sgps_inputs": sgps_inputs, "sgps_sources": sgps_sources,
+            "has_live": live["has_data"]}
 
 
 def get_economic_structure(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
@@ -548,7 +637,8 @@ def backfill_sector_scores(db: Session, set_phase: Optional[Callable[[str], None
         set_phase(f"backfill IAI/SGPS {p} ({i}/{len(periods)})")
         asm = assemble_iai_dataset(db, period=p)
         compute_and_persist(db, period=p, sector_dataset=asm["dataset"],
-                            sgps_inputs=asm["sgps_inputs"], sources=asm["sources"])
+                            sgps_inputs=asm["sgps_inputs"], sources=asm["sources"],
+                            sgps_sources=asm["sgps_sources"])
 
     set_phase("purgando scores fuera del backfill (fixture/seed)")
     keep = set(periods)

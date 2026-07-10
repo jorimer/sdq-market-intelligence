@@ -96,8 +96,13 @@ def test_assemble_merges_real_and_rubric_with_sources(db):
     assert t["ease_of_business"] == 50
     assert asm["dataset"]["salud"]["ease_of_business"] == 50
     assert asm["dataset"]["salud"]["macro_exposure"] == 50.0   # untouched by factors
-    # SGPS inputs come from the rubric too (neutral)
-    assert asm["sgps_inputs"]["turismo"]["historical"] == 50
+    # SGPS histórico ahora es REAL (BCRD sector_growth): turismo creció 9.5% →
+    # 50 + 9.5*(50/15) = 81.67 (escala absoluta, no min-max). Estructural sin ENAE
+    # queda en la rúbrica declarada (50), rotulado rúbrica.
+    assert asm["sgps_inputs"]["turismo"]["historical"] == pytest.approx(81.67, abs=0.01)
+    assert asm["sgps_sources"]["turismo"]["historical"] == "live"
+    assert asm["sgps_inputs"]["turismo"]["structural"] == 50
+    assert asm["sgps_sources"]["turismo"]["structural"] == "rubric"
     assert asm["has_live"] is True
 
 
@@ -230,3 +235,67 @@ def test_wgi_regulatory_sync_persists_series(db, monkeypatch):
     assert res["years"] == 2 and res["latest"] == 58.13 and res["errors"] == []
     row = db.query(AppSetting).filter(AppSetting.key == WGI_REGULATORY_KEY).first()
     assert row is not None and json.loads(row.value)["series"]["2024"] == 58.13
+
+
+# ── SGPS factor sourcing (histórico all-17 · estructural ~9/17 honesto) ────────
+def _seed_enae(db, enae_key, ingresos, utilidad, period="2022"):
+    from shared.data.enae_activity import VAR_INGRESOS, VAR_UTILIDAD
+    from modules.sector_intel.sectors_sync import ENAE_DIMENSION
+    db.add(SectorVariable(sector_code=enae_key, dimension=ENAE_DIMENSION,
+                          variable=VAR_INGRESOS, value=ingresos, period=period, source="ONE"))
+    db.add(SectorVariable(sector_code=enae_key, dimension=ENAE_DIMENSION,
+                          variable=VAR_UTILIDAD, value=utilidad, period=period, source="ONE"))
+
+
+def test_sgps_historical_is_real_all17_from_growth_trailing_mean(db):
+    # Track record: la media de la ventana reciente de crecimiento real → 0-100 con
+    # escala ABSOLUTA fija (0%→50, ±15pp cubre la banda). Multi-período se promedia.
+    _seed_sector_var(db, "turismo", "sector_growth", 5.0, "2023")
+    _seed_sector_var(db, "turismo", "sector_growth", 9.5, "2024")   # media = 7.25
+    _seed_sector_var(db, "salud", "sector_growth", 0.0, "2024")     # neutral → 50
+    db.commit()
+    asm = assemble_iai_dataset(db, period="2024")
+    assert asm["sgps_inputs"]["turismo"]["historical"] == pytest.approx(74.17, abs=0.01)
+    assert asm["sgps_sources"]["turismo"]["historical"] == "live"
+    assert asm["sgps_inputs"]["salud"]["historical"] == 50.0
+    assert asm["sgps_sources"]["salud"]["historical"] == "live"
+    # un slug sin ninguna serie de crecimiento cae a la rúbrica declarada, rotulada
+    assert asm["sgps_inputs"]["financiero"]["historical"] == 50
+    assert asm["sgps_sources"]["financiero"]["historical"] == "rubric"
+
+
+def test_sgps_structural_partial_honest_from_enae_margin(db):
+    # Estructural = margen ENAE (utilidad/ingresos) en escala absoluta (0.10→50,
+    # +1pp→+4pts). Cobertura PARCIAL honesta: solo los slugs del marco ENAE; el resto
+    # queda en rúbrica-50 rotulada (la mezcla directa del SGPS no distorsiona).
+    _seed_sector_var(db, "comercio", "sector_size", 12.0, "2022")
+    _seed_enae(db, "comercio", ingresos=1000.0, utilidad=200.0)   # margen 0.20 → 90
+    db.commit()
+    asm = assemble_iai_dataset(db, period="2022")
+    assert asm["sgps_inputs"]["comercio"]["structural"] == pytest.approx(90.0, abs=0.01)
+    assert asm["sgps_sources"]["comercio"]["structural"] == "live"
+    # slug fuera del marco ENAE (salud): rúbrica declarada, rotulada
+    assert asm["sgps_inputs"]["salud"]["structural"] == 50
+    assert asm["sgps_sources"]["salud"]["structural"] == "rubric"
+
+
+def test_sgps_provenance_is_stamped_into_persisted_breakdown(db):
+    # El cableado completo: backfill → compute_and_persist pasa sgps_sources →
+    # compute_sgps → sgps_breakdown.factors[*].source. Antes salía siempre "rubric".
+    from modules.sector_intel.models.models import SectorScore
+    from modules.sector_intel.service import backfill_sector_scores
+
+    _seed_sector_var(db, "comercio", "sector_size", 12.0, "2022")
+    _seed_sector_var(db, "comercio", "sector_growth", 6.0, "2022")
+    _seed_enae(db, "comercio", ingresos=1000.0, utilidad=200.0)
+    db.commit()
+    res = backfill_sector_scores(db)
+    assert res["errors"] == []
+    row = db.query(SectorScore).filter_by(sector_code="comercio", period="2022").first()
+    factors = row.sgps_breakdown["factors"]
+    assert factors["historical"]["source"] == "live"     # BCRD crecimiento
+    assert factors["structural"]["source"] == "live"      # margen ENAE
+    assert factors["acceleration"]["source"] == "live"    # eventos upstream
+    # un slug sin ENAE mantiene el estructural en rúbrica rotulada
+    salud = db.query(SectorScore).filter_by(sector_code="salud", period="2022").first()
+    assert salud.sgps_breakdown["factors"]["structural"]["source"] == "rubric"
