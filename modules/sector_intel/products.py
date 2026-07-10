@@ -129,17 +129,17 @@ _SAMPLE_NARRATIVES = {
         "datos."
     ),
     "momentum": (
-        "El momentum del sector —medido por el Score de Generación de Potencial Sostenible "
-        "(SGPS) de 62— confirma una trayectoria favorable, consistente con el nivel del "
-        "índice. La descomposición es ilustrativa: un **componente estructural de 64** algo "
-        "por encima del **histórico de 60** sugiere que la dinámica reciente no responde "
-        "solo a inercia, sino que incorpora una mejora de fundamentos; el crecimiento del "
-        "sector se acompaña de una mejora en la calidad de ese crecimiento. Para una tesis "
-        "de inversión esta distinción es relevante: un momentum estructural superior al "
-        "histórico es indicativo de un sector en fase de consolidación más que de pico "
-        "cíclico, lo que reduce el riesgo de ingresar en un punto de inflexión. En síntesis, "
-        "la trayectoria respalda la exposición de mediano plazo, con un perfil de momentum "
-        "que favorece el horizonte de mediano plazo sobre el momento puntual de entrada."
+        "El momentum del sector se resume en el Score de Generación de Potencial Sostenible "
+        "(SGPS) de 62. Una nota de transparencia sobre su composición: el **factor de "
+        "aceleración** —la única de las tres componentes construida sobre dato real reciente— "
+        "es la señal viva del momentum y la que aporta la lectura de dinámica. En cambio, los "
+        "componentes **histórico y estructural son estimación declarada (rúbrica de casa), "
+        "aún sin fuente sectorial**, y funcionan hoy como una base transparente y uniforme, "
+        "no como medición: no debe leerse en ellos una diferencia de fundamentos entre "
+        "sectores. La tabla de procedencia acompaña cada factor con su origen (real vs. "
+        "rúbrica). En síntesis, la aceleración respalda una lectura favorable de la "
+        "trayectoria reciente; la profundización del histórico y lo estructural sobre dato "
+        "sectorial real es la vía para elevar la robustez de esta sección."
     ),
     "recommendation": (
         "Para un inversionista o comité que evalúa exposición al sector, la recomendación es "
@@ -365,7 +365,13 @@ class SectorIntelProduct:
             return ProductSnapshot(tier=tier, period="2025", payload=payload,
                                    entity_name=None, entity_roster=())
         if tier == ProductTier.deep_dive:
-            payload["sgps_detail"] = {"historical": 60.0, "structural": 64.0}
+            payload["sgps_detail"] = {"sgps_score": 62.0, "factors": {
+                "historical": {"value": 60.0, "weight": 0.40, "contribution": 24.0,
+                               "imputed": False, "source": "rubric"},
+                "structural": {"value": 64.0, "weight": 0.35, "contribution": 22.4,
+                               "imputed": False, "source": "rubric"},
+                "acceleration": {"value": 62.4, "weight": 0.25, "contribution": 15.6,
+                                 "imputed": False, "source": "live"}}}
         return ProductSnapshot(tier=tier, period="2025", payload=payload, entity_name=self._display)
 
     def sample_narratives(self, tier: ProductTier) -> Dict[str, str]:
@@ -396,7 +402,11 @@ class SectorIntelProduct:
             ctx = dict(base_ctx)
             if section == "momentum":
                 ctx["enfoque"] = ("Momentum del sector (SGPS): aceleración/desaceleración del "
-                                  "crecimiento real reciente, separada del nivel de atractividad.")
+                                  "crecimiento real reciente, separada del nivel de atractividad. "
+                                  "DECLARÁ con transparencia que los componentes histórico y "
+                                  "estructural son ESTIMACIÓN DECLARADA (rúbrica de casa, aún sin "
+                                  "fuente); solo la aceleración es dato real. No los presentes como "
+                                  "medición.")
             elif section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la dimensión real con mayor brecha y la "
                                   "palanca de atractividad con mayor retorno, dado el cuadro anterior.")
@@ -429,6 +439,20 @@ class SectorIntelProduct:
             tables.append(("Dimensiones del IAI", rows))
             items = [(_labels.get(k, str(k)), (d or {}).get("score")) for k, d in dims.items()]
             charts.append({"title": "Dimensiones del IAI (score 0-100)", "items": items})
+        # SGPS (momentum): tabla con PROCEDENCIA por factor. Histórico/estructural son
+        # rúbrica declarada (juicio de casa, aún sin fuente); aceleración es real. La
+        # columna evita presentar la rúbrica como dato (brecha de honestidad H1).
+        sgps_factors = ((snapshot.payload or {}).get("sgps_detail") or {}).get("factors") or {}
+        if sgps_factors:
+            _sgps_labels = {"historical": "Histórico", "structural": "Estructural",
+                            "acceleration": "Aceleración"}
+            srows = [["Factor", "Valor", "Peso", "Procedencia"]]
+            for k in ("historical", "structural", "acceleration"):
+                f = sgps_factors.get(k) or {}
+                proc = "Real" if f.get("source") == "live" else "Rúbrica (declarada)"
+                srows.append([_sgps_labels.get(k, k), _fmt(f.get("value")),
+                              _fmt(f.get("weight")), proc])
+            tables.append(("Momentum del sector (SGPS) · procedencia", srows))
         sc = latest.get("iai_score")
         headline = (f"IAI {_fmt(sc)} · {latest.get('iai_band')}"
                     if isinstance(sc, (int, float)) else None)

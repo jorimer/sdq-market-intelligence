@@ -79,6 +79,19 @@ def test_support_overlay_not_state_not_systemic(db):
     assert big  # (usado para poblar el panel)
 
 
+def test_state_owned_is_labeled_declared_config(db):
+    # H2: la propiedad estatal se rotula como dato de configuración declarado (no un
+    # flag publicado por el SIB), tanto en el overlay como en el assessment.
+    br = _bank(db, _BANRESERVAS, 900_000, 700_000)
+    for i in range(6):
+        _bank(db, f"Banco {i}", 100_000 - i * 5_000, 80_000)
+    db.commit()
+    ov = support_overlay(db, br, 86.7, "SDQ-AA", date(2025, 12, 31))
+    assert ov["state_owned_provenance"]["source"] == "declarado"
+    assert "SIB" in ov["state_owned_provenance"]["note"]
+    assert "dato de configuración declarado" in ov["support_assessment"]
+
+
 def test_private_systemic_support_capped_by_speculative_sovereign():
     """Banco Popular (privado, sistémico) en soberano BB: la propensión sistémica se lee
     ACOTADA por la capacidad fiscal del soberano especulativo — no 'soporte plausible' pelado."""
