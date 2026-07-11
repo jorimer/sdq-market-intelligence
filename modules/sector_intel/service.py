@@ -276,6 +276,32 @@ def _load_wgi_regulatory(db: Session, target: Optional[str]) -> Optional[float]:
     return float(series[max(series, key=int)])  # latest available (e.g. current period)
 
 
+def _load_human_capital(db: Session, target: Optional[str]) -> Optional[float]:
+    """National WB Human Capital Index (0-100 scale) for *target*'s year, latest-year
+    fallback (HCI publishes every ~2 years). Read from the AppSetting written by
+    ``human_capital_sync``; ``None`` if absent. Feeds the IAI ``skills_index``."""
+    import json
+    import re
+
+    from modules.sector_intel.sectors_sync import HUMAN_CAPITAL_KEY
+    from shared.settings.models import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == HUMAN_CAPITAL_KEY).first()
+    if row is None or not row.value:
+        return None
+    try:
+        series = json.loads(row.value).get("series", {})
+    except (ValueError, TypeError):
+        series = {}
+    if not series:
+        return None
+    m = re.match(r"(\d{4})", target or "")
+    year = m.group(1) if m else None
+    if year and year in series:
+        return float(series[year])
+    return float(series[max(series, key=int)])  # latest available
+
+
 def _load_wgi_volatility(db: Session) -> Optional[float]:
     """National regulatory VOLATILITY = desviación estándar de la serie WGI de calidad
     regulatoria (percentil 0-100, ~12 años). Señal nacional REAL de inestabilidad
@@ -518,6 +544,9 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     # regulatory_volatility (real, nacional) — std de la serie WGI; completa la dim
     # regulación. Constante entre sectores (como reg_quality): sube cobertura, no ranking.
     reg_vol = _load_wgi_volatility(db)
+    # skills_index (WB Human Capital Index, national 0-100) — same for every sector, like
+    # reg_quality: raises the talent dimension from rubric to real without changing ranking.
+    skills = _load_human_capital(db, target)
     # operating_cost (TSS salary snapshot, per slug) + labor_availability (ENCFT
     # employment, per period) — real business/talent inputs, raise these dims out of
     # declared rubric. Both cover all 17 slugs (crosswalk), so no partial-override
@@ -556,6 +585,10 @@ def assemble_iai_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
         if reg_vol is not None:
             merged["regulatory_volatility"] = reg_vol
             smap["regulatory_volatility"] = "live"
+        # skills_index (real, WB HCI nacional) — igual para los 17, sube talento a real.
+        if skills is not None:
+            merged["skills_index"] = skills
+            smap["skills_index"] = "live"
         # sector dimension (real) from si_variables — overrides any rubric.
         sv = live["sectors"].get(slug, {})
         for var in SECTOR_LIVE_VARS:
