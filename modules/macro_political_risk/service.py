@@ -57,12 +57,15 @@ def compute_and_persist(
     period_end: date,
     country_name: Optional[str] = None,
     region: Optional[str] = None,
+    publish: bool = True,
 ) -> Dict[str, Any]:
     """Compute the IRMP for *country_code*, persist it and publish ``irmp.updated``.
 
     Idempotent per ``(country, period_end)``: re-running replaces the snapshot
     and its dimension rows in place.  Returns the engine result enriched with the
-    persisted ``snapshot_id``.
+    persisted ``snapshot_id``. ``publish=False`` suprime el evento (para el backfill
+    de trayectoria, que persiste cientos de snapshots históricos y no debe disparar
+    el recompute de los demás ejes en cada uno).
     """
     result = run_irmp(country_code, dataset)  # raises KeyError if absent
 
@@ -116,7 +119,8 @@ def compute_and_persist(
         "irmp_score": result["irmp_score"],
         "risk_band": result["risk_band"],
     }
-    publish_irmp_updated(payload)
+    if publish:
+        publish_irmp_updated(payload)
     logger.info(
         "IRMP persistido y publicado: %s | %s → %s (%s)",
         country_code, period_end, result["irmp_score"], result["risk_band"],

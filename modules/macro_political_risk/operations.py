@@ -98,6 +98,15 @@ def _run_irmp_backtest(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_irmp_history_backfill(params, user_id, set_phase) -> Dict:
+    from modules.macro_political_risk.irmp_backfill import backfill_irmp_history
+    db = SessionLocal()
+    try:
+        return backfill_irmp_history(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_irmp_snapshot(params, user_id, set_phase) -> Dict:
     """Assemble the IRMP dataset (real + declared rubric) and compute+persist a
     snapshot for every peer country at the latest period, publishing irmp.updated.
@@ -205,6 +214,16 @@ def register() -> None:
         "IRMP de cada país del peer set para el último período, publicando "
         "irmp.updated para los demás ejes.",
         _run_irmp_snapshot, default_interval_hours=720,
+    ))
+    register_operation(Operation(
+        "irmp-history-backfill", "Backfill histórico del IRMP (trayectoria)",
+        "Reconstruye y persiste un snapshot del IRMP por AÑO (2016 → año anterior) para "
+        "todo el panel, dándole TRAYECTORIA al producto (antes: un solo corte). Dato 100% "
+        "real por año: macro/externo (WDI+IMF), gobernanza (WGI), volatilidad regulatoria "
+        "(std WGI), eventos (GDELT-BigQuery consultado POR AÑO) y proximidad electoral. "
+        "Self-contained (no toca el snapshot en vivo ni el backtest). Requiere GCP_SA_JSON. "
+        "Idempotente; on-demand tras un cambio de metodología o de panel.",
+        _run_irmp_history_backfill, default_interval_hours=0,
     ))
     register_operation(Operation(
         "irmp-cleanup-invalid", "Limpiar snapshots IRMP inválidos",

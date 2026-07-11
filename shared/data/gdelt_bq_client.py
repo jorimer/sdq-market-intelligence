@@ -41,6 +41,18 @@ class GdeltBQError(RuntimeError):
 
 def build_query() -> str:
     """The partition-pruned events query. Parameterized by @days and @fips."""
+    return _query_body(
+        "DATE(_PARTITIONTIME) >= DATE_SUB(CURRENT_DATE(), INTERVAL @days DAY)")
+
+
+def build_query_for_year() -> str:
+    """Historical variant: events for a full calendar @year (para el backfill de
+    trayectoria). El GKG particionado del dataset público cubre desde ~2015."""
+    return _query_body(
+        "DATE(_PARTITIONTIME) BETWEEN DATE(@year, 1, 1) AND DATE(@year, 12, 31)")
+
+
+def _query_body(partition_filter: str) -> str:
     return f"""
     SELECT
       fips,
@@ -54,7 +66,7 @@ def build_query() -> str:
         (V2Themes LIKE '%PROTEST%') AS is_protest,
         (V2Themes LIKE '%ECON_SANCTIONS%') AS is_sanction
       FROM `{GKG_TABLE}`, UNNEST(SPLIT(V2Locations, ';')) AS loc
-      WHERE DATE(_PARTITIONTIME) >= DATE_SUB(CURRENT_DATE(), INTERVAL @days DAY)
+      WHERE {partition_filter}
         AND V2Tone IS NOT NULL AND V2Tone != ''
     )
     WHERE fips IN UNNEST(@fips)
@@ -71,17 +83,20 @@ _VARS = {
 }
 
 
-def rows_to_records(rows: List[dict]) -> List[Record]:
+def rows_to_records(rows: List[dict], period: Optional[str] = None,
+                    note: Optional[str] = None) -> List[Record]:
     """Map BigQuery result rows (``{fips, news_sentiment, unrest_shocks,
     sanctions_signal}``) into normalized records, one per (country, variable).
 
-    A row's FIPS not in the peer map is skipped; a None metric stays None (the
-    declared rubric remains the fallback). Pure — unit-tested without BigQuery.
+    *period* defaults to the current year (ventana reciente); el backfill histórico
+    pasa el año consultado. A row's FIPS not in the peer map is skipped; a None metric
+    stays None (the declared rubric remains the fallback). Pure — sin BigQuery.
     """
+    period = period or str(date.today().year)
     lineage = Lineage(
         source="GDELT_BQ", license="GDELT Project (open data) · BigQuery public dataset",
         fetched_at=date.today(), url=f"bigquery://{GKG_TABLE}",
-        note=f"GKG particionado, ventana {WINDOW_DAYS}d",
+        note=note or f"GKG particionado, ventana {WINDOW_DAYS}d",
     )
     out: List[Record] = []
     for row in rows:
@@ -91,7 +106,7 @@ def rows_to_records(rows: List[dict]) -> List[Record]:
         for var, unit in _VARS.items():
             val = row.get(var)
             out.append(Record(
-                series=var, period=str(date.today().year),
+                series=var, period=period,
                 value=None if val is None else round(float(val), 3),
                 lineage=lineage, unit=unit, dimension=iso2,
             ))
@@ -123,6 +138,31 @@ def fetch_events(days: int = WINDOW_DAYS) -> List[Record]:  # pragma: no cover -
     rows = [dict(r) for r in client.query(build_query(), job_config=job_config).result()]
     logger.info("GDELT-BQ: %d países con datos de eventos", len(rows))
     return rows_to_records(rows)
+
+
+def fetch_events_for_year(year: int) -> List[Record]:  # pragma: no cover - needs BigQuery + creds
+    """Eventos GDELT de un año calendario completo (para el backfill de trayectoria).
+    Mismo esquema que :func:`fetch_events` pero particionado por *year* en vez de la
+    ventana reciente. Registros estampados al período ``year``."""
+    raw = os.environ.get("GCP_SA_JSON")
+    if not raw:
+        raise GdeltBQError("GCP_SA_JSON no configurado (credencial de service account)")
+    try:
+        from google.cloud import bigquery
+        from google.oauth2 import service_account
+    except ImportError as e:
+        raise GdeltBQError(f"google-cloud-bigquery no instalado: {e}")
+
+    info = json.loads(raw)
+    creds = service_account.Credentials.from_service_account_info(info)
+    client = bigquery.Client(project=info.get("project_id"), credentials=creds)
+    job_config = bigquery.QueryJobConfig(query_parameters=[
+        bigquery.ScalarQueryParameter("year", "INT64", year),
+        bigquery.ArrayQueryParameter("fips", "STRING", list(FIPS_TO_ISO2.keys())),
+    ])
+    rows = [dict(r) for r in client.query(build_query_for_year(), job_config=job_config).result()]
+    logger.info("GDELT-BQ %d: %d países con eventos", year, len(rows))
+    return rows_to_records(rows, period=str(year), note=f"GKG particionado, año {year}")
 
 
 # ── Historical instability events (for the IRMP backtest, governance outcome) ──
