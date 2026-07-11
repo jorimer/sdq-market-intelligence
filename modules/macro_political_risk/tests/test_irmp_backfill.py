@@ -12,6 +12,7 @@ from modules.macro_political_risk.models.models import (  # noqa: F401 — regis
     Country,
     DimensionScore,
     IRMPSnapshot,
+    RiskBand,
 )
 from modules.macro_political_risk.irmp_backfill import backfill_irmp_history
 from modules.macro_political_risk.validation.historical import (
@@ -81,6 +82,40 @@ def test_backfill_skips_year_without_series(db):
     # solo el año con datos completos persiste (DO+CR); los 2 previos, sin serie, saltados
     assert res["persisted"] == 2
     assert {str(s.period_end) for s in db.query(IRMPSnapshot).all()} == {f"{last}-12-31"}
+
+
+def test_years_already_done_threshold(db):
+    from modules.macro_political_risk.irmp_backfill import _years_already_done
+
+    y = 2020
+    for i in range(3):
+        c = Country(iso_code=f"Z{i}", name=f"c{i}", region="r")
+        db.add(c)
+        db.flush()
+        db.add(IRMPSnapshot(country_id=c.id, period_end=dt.date(y, 12, 31), risk_band=RiskBand.moderado,
+                            irmp_score=50.0, model_version="1.0"))
+    db.commit()
+    assert y in _years_already_done(db, threshold=3)     # 3 ≥ 3
+    assert y not in _years_already_done(db, threshold=4)  # 3 < 4
+
+
+def test_resume_skips_years_already_done(db):
+    # Simula una corrida previa 'completa' del año (≥ umbral = mitad del panel = 12) →
+    # el backfill lo SALTA sin re-consultar GDELT (ahorro de cuota), reportando resumed.
+    year = dt.date.today().year - 1
+    for i in range(13):
+        c = Country(iso_code=f"X{i}", name=f"c{i}", region="r")
+        db.add(c)
+        db.flush()
+        db.add(IRMPSnapshot(country_id=c.id, period_end=dt.date(year, 12, 31), risk_band=RiskBand.moderado,
+                            irmp_score=50.0, model_version="1.0"))
+    db.commit()
+    res = backfill_irmp_history(
+        db, start_year=year, series=_full_series(year), events_by_year=_events(year))
+    assert res["resumed"] >= 1 and res["persisted"] == 0   # año ya hecho → no re-procesa
+    # no se crearon snapshots nuevos de DO/CR para ese año
+    assert not db.query(IRMPSnapshot).join(Country).filter(
+        Country.iso_code.in_(["DO", "CR"])).count()
 
 
 def test_gdelt_year_query_and_period_stamp():
