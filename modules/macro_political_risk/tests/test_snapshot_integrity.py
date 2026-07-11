@@ -41,9 +41,8 @@ def _full(**over):
             "sovereign_rating_score": 50.0, "wgi_rule_of_law": 55.0,
             "wgi_gov_effectiveness": 55.0, "wgi_control_corruption": 45.0,
             "wgi_political_stability": 60.0, "wgi_voice_accountability": 60.0,
-            "electoral_uncertainty": 30.0, "policy_continuity": 65.0,
+            "electoral_uncertainty": 30.0,
             "wgi_regulatory_quality": 55.0, "regulatory_volatility_5y": 25.0,
-            "discretion": 35.0, "contract_enforcement": 55.0,
             "news_sentiment": -0.3, "unrest_shocks": 3.0, "sanctions_signal": 0.0}
     base.update(over)
     return base

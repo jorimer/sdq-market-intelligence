@@ -29,18 +29,22 @@ dimension_variables:
     - fx_volatility          # volatilidad cambiaria        mayor = peor
     - sovereign_rating_score # rating soberano 0-100        mayor = mejor
   political:
-    - wgi_rule_of_law         # WGI percentil 0-100         mayor = mejor
-    - wgi_gov_effectiveness   # WGI percentil 0-100         mayor = mejor
-    - wgi_control_corruption  # WGI percentil 0-100         mayor = mejor
-    - wgi_political_stability # WGI percentil 0-100         mayor = mejor
-    - wgi_voice_accountability # WGI percentil 0-100        mayor = mejor
-    - electoral_uncertainty   # 0-100 (rúbrica)             mayor = peor
-    - policy_continuity       # 0-100 (rúbrica)             mayor = mejor
+    - wgi_rule_of_law         # WGI absoluto 0-100          mayor = mejor
+    - wgi_gov_effectiveness   # WGI absoluto 0-100          mayor = mejor
+    - wgi_control_corruption  # WGI absoluto 0-100          mayor = mejor
+    - wgi_political_stability # WGI absoluto 0-100          mayor = mejor
+    - wgi_voice_accountability # WGI absoluto 0-100         mayor = mejor
+    - electoral_uncertainty   # proximidad electoral (real) mayor = peor
   regulatory:
-    - wgi_regulatory_quality   # WGI percentil 0-100        mayor = mejor
-    - regulatory_volatility_5y # cambios en 5a              mayor = peor
-    - discretion               # 0-100 (rúbrica)            mayor = peor
-    - contract_enforcement     # 0-100                      mayor = mejor
+    - wgi_regulatory_quality   # WGI absoluto 0-100         mayor = mejor
+    - regulatory_volatility_5y # std serie WGI (real)       mayor = peor
+# Racionalización (2026-07): se RETIRARON del índice las rúbricas tecleadas
+# `policy_continuity`, `discretion` y `contract_enforcement`. Eran juicio de casa y,
+# además, DOBLE CONTEO de gobernanza que las dimensiones WGI ya capturan con dato real:
+#   • contract_enforcement ⊂ wgi_rule_of_law (estado de derecho / cumplimiento)
+#   • discretion ⊂ wgi_control_corruption + wgi_regulatory_quality
+#   • policy_continuity ⊂ wgi_gov_effectiveness + wgi_political_stability
+# Quitarlas elimina la última rúbrica dura del IRMP sin perder señal (la mide WGI).
   events:
     - news_sentiment    # sentimiento noticias (-100..100) mayor = mejor
     - unrest_shocks     # intensidad disturbios 0-100      mayor = peor
@@ -53,7 +57,6 @@ risk_increasing:
   - fx_volatility
   - electoral_uncertainty
   - regulatory_volatility_5y
-  - discretion
   - unrest_shocks
   - sanctions_signal
 
@@ -97,14 +100,17 @@ sovereign_ratings:
 #     (derivado en wgi-2025-load; señal de inestabilidad, distinta del nivel).
 #   • electoral_uncertainty ← proximidad a la próxima elección general (calculada en el
 #     ensamblado desde `election_calendar`; riesgo de calendario, dato factual).
-# Siguen rúbrica pura (pendiente de fuente): policy_continuity, discretion,
-# contract_enforcement. Estos valores quedan como fallback declarado.
+# YA NO HAY RÚBRICA DURA en el IRMP: policy_continuity/discretion/contract_enforcement se
+# RETIRARON del índice (doble conteo de WGI, ver dimension_variables). Los valores de abajo
+# son solo FALLBACK declarado para un deploy fresco (antes de que corran gdelt/wgi loads);
+# en operación normal cada variable es dato real. `electoral_uncertainty` se computa en el
+# ensamblado, así que su valor aquí es un piso conservador si el cálculo no aplicara.
 rubric_inputs:
-  DO: {electoral_uncertainty: 30, policy_continuity: 65, regulatory_volatility_5y: 25, discretion: 35, contract_enforcement: 55, news_sentiment: 15, unrest_shocks: 20, sanctions_signal: 5}
-  CR: {electoral_uncertainty: 22, policy_continuity: 70, regulatory_volatility_5y: 18, discretion: 28, contract_enforcement: 64, news_sentiment: 18, unrest_shocks: 16, sanctions_signal: 3}
-  PA: {electoral_uncertainty: 28, policy_continuity: 60, regulatory_volatility_5y: 22, discretion: 40, contract_enforcement: 58, news_sentiment: 8, unrest_shocks: 24, sanctions_signal: 12}
-  GT: {electoral_uncertainty: 45, policy_continuity: 45, regulatory_volatility_5y: 35, discretion: 55, contract_enforcement: 40, news_sentiment: -10, unrest_shocks: 38, sanctions_signal: 8}
-  JM: {electoral_uncertainty: 25, policy_continuity: 68, regulatory_volatility_5y: 20, discretion: 32, contract_enforcement: 52, news_sentiment: 12, unrest_shocks: 28, sanctions_signal: 4}
+  DO: {electoral_uncertainty: 30, regulatory_volatility_5y: 25, news_sentiment: 15, unrest_shocks: 20, sanctions_signal: 5}
+  CR: {electoral_uncertainty: 22, regulatory_volatility_5y: 18, news_sentiment: 18, unrest_shocks: 16, sanctions_signal: 3}
+  PA: {electoral_uncertainty: 28, regulatory_volatility_5y: 22, news_sentiment: 8, unrest_shocks: 24, sanctions_signal: 12}
+  GT: {electoral_uncertainty: 45, regulatory_volatility_5y: 35, news_sentiment: -10, unrest_shocks: 38, sanctions_signal: 8}
+  JM: {electoral_uncertainty: 25, regulatory_volatility_5y: 20, news_sentiment: 12, unrest_shocks: 28, sanctions_signal: 4}
 
 # CALENDARIO ELECTORAL (dato factual, mantenido): por país, la fecha ``anchor`` de una
 # elección general REAL (YYYY-MM) + la duración constitucional del período (``term_years``).
