@@ -422,7 +422,12 @@ def _load_enae_profitability(db: Session) -> Dict[str, float]:
 # honesta en el estructural (ENAE, ~9/17) sin distorsión, y dato real all-17 en el
 # histórico (BCRD). Los slugs sin dato quedan ausentes → ``compute_sgps`` los imputa
 # a 50 y los rotula rúbrica (declarado, nunca asumido real).
-_SGPS_HIST_WINDOW = 5          # años recientes promediados (suaviza el one-off)
+# Ventana de 8 años = un CICLO económico completo. Con la historia retropolada del
+# BCRD (2007+, ver bcrd_sectors) el track record cubre crisis+recuperación, así un
+# único año de rebote (p.ej. el +45% de turismo post-COVID 2021) no domina la media
+# (con 5 años saturaba en 100; con 8 aterriza en ~75). No tan larga como para
+# sobre-ponderar booms viejos (el boom minero 2008-2013).
+_SGPS_HIST_WINDOW = 8          # años recientes promediados = ciclo completo
 _SGPS_HIST_K = 50.0 / 15.0     # pendiente pp→puntos: 0%→50, ±15pp cubre toda la banda
 _SGPS_STRUCT_PIVOT = 0.10      # margen ENAE "típico" (utilidad/ingresos) → 50 neutral
 _SGPS_STRUCT_J = 400.0         # cada +1pp de margen = +4 puntos

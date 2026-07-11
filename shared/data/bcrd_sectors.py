@@ -11,7 +11,11 @@ economy), replacing the thin 3-anchor fixture.
 
 Source: ``cdn.bancentral.gov.do/.../pib_origen_2018.xlsx`` (base 2018, public —
 no token, no IP allowlist, unlike the MacroVariables API). Workbook sheets:
-``PIB$_Trim`` (nominal RD$ MM) and ``PIBK_Trim`` (real chained-volume).
+``PIB$_Trim`` (nominal RD$ MM) and ``PIBK_Trim`` (real chained-volume). The current
+file starts in 2018; the panel is extended back to **2007** with the BCRD's official
+retropolado (``pib_origen_retro_2018_2007.xlsx``) as a HISTORICAL vintage — a coarser
+16-activity split (no separate 'Servicios profesionales') whose 2018+ overlap matches
+the current file exactly. See :func:`build_sector_records` for the vintage seam rule.
 
 Hierarchy trap (handled): the table interleaves parent aggregates
 ("Industrias", "Servicios", "Valor Agregado"), leaf sectors, and sub-items
@@ -43,6 +47,17 @@ PIB_ORIGEN_URL = (
 )
 SHEET_NOMINAL = "PIB$_Trim"   # value added at current prices (RD$ MM)
 SHEET_REAL = "PIBK_Trim"      # value added at chained-volume (real) — for growth
+
+# Retropolado oficial del BCRD (misma base 2018, empalme hacia atrás): serie larga
+# 2007-2026. Es un VINTAGE MÁS GRUESO — 16 actividades: NO desagrega "Servicios
+# profesionales" (lo mantiene dentro de "Otras Actividades de Servicios de Mercado").
+# Verificado que, en el solapamiento 2018+, las 16 actividades coinciden EXACTO con el
+# archivo vigente; solo el residual difiere por esa (des)agregación. Se usa como fuente
+# HISTÓRICA (años previos al primer año del archivo vigente), rotulada retropolada.
+PIB_ORIGEN_RETRO_URL = (
+    "https://cdn.bancentral.gov.do/documents/estadisticas/sector-real/"
+    "documents/pib_origen_retro_2018_2007.xlsx"
+)
 
 TOTAL_LABEL = "Valor Agregado"
 
@@ -224,10 +239,31 @@ def parse_origin_workbook(path) -> Tuple[Dict[str, Dict[int, float]], Dict[str, 
     return nominal, real
 
 
+def _yoy(real: Dict[str, Dict[int, float]], label: str, year: int) -> Optional[float]:
+    """Real YoY % for *label* at *year* from one vintage's chained-volume map, or
+    ``None`` when either endpoint is missing. Kept within a single vintage so a
+    seam between the current and the retropolated series never yields a
+    cross-vintage ratio (which would be meaningless for a redefined activity)."""
+    s = real.get(label, {})
+    now, prev = s.get(year), s.get(year - 1)
+    if now is None or prev in (None, 0):
+        return None
+    return round(100.0 * (now / prev - 1.0), 2)
+
+
+def _partition_dev(nominal: Dict[str, Dict[int, float]], year: int, va: float) -> float:
+    """Deviation % of Σ(leaf labels present) vs Valor Agregado for *year*. Labels
+    absent in this vintage (e.g. 'Servicios profesionales' in the 16-activity
+    retropolado) contribute 0 — the remaining leaves still close to the total."""
+    leaf_sum = sum(nominal[lbl].get(year, 0.0) for lbl in _LABEL_TO_SLUG if lbl in nominal)
+    return 100.0 * (leaf_sum / va - 1.0) if va else 0.0
+
+
 def build_sector_records(
     nominal: Dict[str, Dict[int, float]],
     real: Dict[str, Dict[int, float]],
     *,
+    historical: Optional[Tuple[Dict[str, Dict[int, float]], Dict[str, Dict[int, float]]]] = None,
     url: Optional[str] = PIB_ORIGEN_URL,
     license_: str = "datos oficiales BCRD — uso público con cita",
     published_at: Optional[date] = None,
@@ -237,12 +273,21 @@ def build_sector_records(
     Pure function (no I/O): ``size = 100·nominal_sector / Valor Agregado``;
     ``growth = real YoY %`` (``None`` when no prior year).
 
+    *nominal*/*real* are the **current** vintage (authoritative, most recent
+    disaggregation — must carry all 17 leaves). *historical*, if given, is the
+    ``(nominal, real)`` of the BCRD **retropolado** (a longer but coarser vintage,
+    16 activities) used for years *before* the current vintage begins. Per year the
+    size/partition come from one vintage (current from its first year on, historical
+    before that); growth is always computed WITHIN a single vintage (current
+    preferred, else historical) so the seam never produces a cross-vintage ratio.
+    Leaves the historical vintage lacks (``servicios_profesionales``) simply have no
+    pre-seam history — an honest gap, never fabricated.
+
     **Anti double-count guard (hard):** the leaf partition must sum to "Valor
-    Agregado" each year. If it deviates beyond ``SIZE_SUM_TOLERANCE`` — which
-    happens if a parent aggregate leaks into the partition or a leaf is renamed
-    out of it — this *raises* :class:`BCRDSectorsError` rather than persisting a
-    distorted set of shares. The sync catches it and surfaces a visible error in
-    the console (the SIB ``TODOS`` + children lesson, made fail-closed).
+    Agregado" each year (per vintage). If it deviates beyond ``SIZE_SUM_TOLERANCE``
+    — a parent aggregate leaking in or a leaf renamed out — this *raises*
+    :class:`BCRDSectorsError` rather than persisting distorted shares. The sync
+    catches it and surfaces a visible error (the SIB ``TODOS`` lesson, fail-closed).
     """
     total = nominal.get(_norm(TOTAL_LABEL), {})
     if not total:
@@ -250,38 +295,55 @@ def build_sector_records(
 
     missing = [lbl for lbl in _LABEL_TO_SLUG if lbl not in nominal]
     if missing:
-        # A renamed/removed leaf breaks the partition → fail closed, don't degrade.
+        # A renamed/removed leaf breaks the current partition → fail closed, don't
+        # degrade. (Only the current vintage must be complete; the retropolado is
+        # allowed to omit the finer 'Servicios profesionales' split.)
         raise BCRDSectorsError(
             f"etiquetas hoja ausentes en el libro (¿renombre del BCRD?): {sorted(missing)}"
         )
 
+    nom_hist, real_hist = historical or ({}, {})
+    total_hist = nom_hist.get(_norm(TOTAL_LABEL), {})
+    cutover = min(total) if total else None  # first year of the current vintage
+    note = ("PIB por sectores de origen (base 2018); tamaño=share del VAB, "
+            "crecimiento=real interanual")
+    if total_hist:
+        note += ("; historia previa a %s = serie oficial BCRD retropolada (16 actividades: "
+                 "'servicios_profesionales' sin split → arranca en %s; 'otros_servicios' "
+                 "previo incluye servicios profesionales)" % (cutover, cutover))
     lineage = Lineage(
         source="BCRD", license=license_, fetched_at=date.today(), url=url,
-        published_at=published_at,
-        note="PIB por sectores de origen (base 2018); tamaño=share del VAB, crecimiento=real interanual",
+        published_at=published_at, note=note,
     )
+
+    all_years = sorted(set(total) | set(total_hist))
     out: List[Record] = []
-    for year, va in sorted(total.items()):
+    for year in all_years:
+        use_hist = cutover is not None and year < cutover
+        nom = nom_hist if use_hist else nominal
+        va = (total_hist if use_hist else total).get(year)
         if not va:
             continue
-        leaf_sum = sum(nominal[lbl].get(year, 0.0) for lbl in _LABEL_TO_SLUG if lbl in nominal)
-        dev = 100.0 * (leaf_sum / va - 1.0) if va else 0.0
+        dev = _partition_dev(nom, year, va)
         if abs(dev) > SIZE_SUM_TOLERANCE:
             raise BCRDSectorsError(
-                f"{year}: Σ hojas={leaf_sum:.0f} vs Valor Agregado={va:.0f} "
-                f"(dif {dev:+.2f}%) — posible doble conteo o cambio de estructura del BCRD"
+                f"{year}: Σ hojas={sum(nom[lbl].get(year, 0.0) for lbl in _LABEL_TO_SLUG if lbl in nom):.0f} "
+                f"vs Valor Agregado={va:.0f} (dif {dev:+.2f}%) — posible doble conteo "
+                f"o cambio de estructura del BCRD"
             )
         for norm_label, slug in _LABEL_TO_SLUG.items():
-            nom = nominal.get(norm_label, {}).get(year)
-            size = round(100.0 * nom / va, 3) if nom is not None else None
+            nomv = nom.get(norm_label, {}).get(year)
+            size = round(100.0 * nomv / va, 3) if nomv is not None else None
             out.append(Record(
                 series=VAR_SIZE, period=str(year), value=size,
                 lineage=lineage, unit=UNIT_SIZE, dimension=slug,
             ))
-            r_now = real.get(norm_label, {}).get(year)
-            r_prev = real.get(norm_label, {}).get(year - 1)
-            growth = (round(100.0 * (r_now / r_prev - 1.0), 2)
-                      if r_now is not None and r_prev not in (None, 0) else None)
+            # Growth within a single vintage: current if it has both endpoints, else
+            # the retropolado — never current[Y]/historical[Y-1] (a redefined activity
+            # like 'otros_servicios' would give a spurious jump).
+            growth = _yoy(real, norm_label, year)
+            if growth is None:
+                growth = _yoy(real_hist, norm_label, year)
             out.append(Record(
                 series=VAR_GROWTH, period=str(year), value=growth,
                 lineage=lineage, unit=UNIT_GROWTH, dimension=slug,
@@ -317,7 +379,17 @@ class BCRDSectorsClient(FixtureBackedClient):
         from shared.data.bcrd_excel.download import fetch_excel
         path = fetch_excel(PIB_ORIGEN_URL)
         nominal, real = parse_origin_workbook(path)
-        records = build_sector_records(nominal, real, published_at=_published_at())
+        # Historia larga (2007+) desde el retropolado oficial: extiende el panel ~11
+        # años atrás. Best-effort — si el retro falla (CDN cambia el nombre, red), se
+        # ingiere solo el vigente (2018+) sin tumbar la sync.
+        historical = None
+        try:
+            hist_path = fetch_excel(PIB_ORIGEN_RETRO_URL)
+            historical = parse_origin_workbook(hist_path)
+        except Exception as e:  # noqa: BLE001 — la historia extra nunca bloquea la ingesta
+            logger.warning("[bcrd_sectors] retropolado no disponible, solo serie vigente: %s", e)
+        records = build_sector_records(
+            nominal, real, historical=historical, published_at=_published_at())
         return _filter(records, series, period)
 
     # ── Fixture (offline / tests) ─────────────────────────────────
