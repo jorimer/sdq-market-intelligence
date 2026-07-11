@@ -203,6 +203,58 @@ def get_country_variables(
     }
 
 
+# electoral_uncertainty = RIESGO DE CALENDARIO: proximidad a la próxima elección general
+# (evento electoral en el horizonte → incertidumbre de política/transición). Dato real
+# derivado del ``election_calendar`` (fechas verificables), no la rúbrica tecleada. Función
+# monótona decreciente en los meses a la próxima elección, con piso (siempre hay algo de
+# incertidumbre de base) y horizonte (más allá de ~un ciclo, el timing casi no pesa).
+_ELECTORAL_HORIZON_MONTHS = 48
+_ELECTORAL_FLOOR = 10.0
+
+
+def _months_to_next_election(anchor: str, term_years: int, as_of_year: int) -> Optional[int]:
+    """Meses desde el cierre de *as_of_year* (31-dic) hasta la próxima elección general
+    on/after esa fecha, rodando el ``anchor`` (``"YYYY-MM"``) por ``term_years``.
+    ``None`` si el ancla es inválida."""
+    try:
+        ay, am = (int(x) for x in anchor.split("-"))
+    except (ValueError, AttributeError):
+        return None
+    if not (1 <= am <= 12) or term_years <= 0:
+        return None
+    as_of_m = as_of_year * 12 + 12  # fin de año del período
+    ey = ay
+    while ey * 12 + am < as_of_m:
+        ey += term_years
+    while (ey - term_years) * 12 + am >= as_of_m:
+        ey -= term_years
+    return ey * 12 + am - as_of_m
+
+
+def _electoral_uncertainty(months: int) -> float:
+    """Meses a la próxima elección → 0-100 (mayor = más incertidumbre). Elección cercana
+    → alto; lejana → tiende al piso. Risk-increasing: el motor la invierte."""
+    u = 100.0 * (1.0 - months / _ELECTORAL_HORIZON_MONTHS)
+    return round(max(_ELECTORAL_FLOOR, min(100.0, u)), 2)
+
+
+def _electoral_uncertainty_map(as_of_year: Optional[int]) -> Dict[str, float]:
+    """``{iso: electoral_uncertainty}`` as-of *as_of_year* desde el calendario electoral
+    de la doctrina. ``{}`` si no hay año de referencia."""
+    if as_of_year is None:
+        return {}
+    from shared.doctrine import load_doctrine_raw
+
+    calendar = load_doctrine_raw("regulatory").get("election_calendar", {}) or {}
+    out: Dict[str, float] = {}
+    for iso, spec in calendar.items():
+        months = _months_to_next_election(
+            str(spec.get("anchor", "")), int(spec.get("term_years", 0) or 0), as_of_year)
+        if months is not None:
+            out[iso] = _electoral_uncertainty(months)
+    return out
+
+
 def assemble_irmp_dataset(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Full IRMP dataset per country: declared rubric (doctrine) overlaid with
     persisted live/declared data (real wins). Single source of truth so the
@@ -211,11 +263,20 @@ def assemble_irmp_dataset(db: Session, period: Optional[str] = None) -> Dict[str
     Returns ``{period, dataset: {iso: {var: value}}, sources: {iso: {var:
     "live"|"rubric"}}, has_live}``. The ``sources`` map powers a real-vs-rubric
     disclosure. Rubric values not yet sourced stay declared — never fabricated.
+
+    ``electoral_uncertainty`` is COMPUTED here from the ``election_calendar``
+    doctrine as-of the assembled period (proximity to the next general election),
+    overriding the declared rubric with a real, auditable signal.
     """
     from shared.doctrine import load_doctrine_raw
 
     rubric = load_doctrine_raw("regulatory").get("rubric_inputs", {})
     live = get_country_variables(db, period=period, source=None)
+    # as-of el año del período (fin de año); si no hay período resuelto, sin overlay.
+    as_of_year = None
+    if live["period"] and str(live["period"])[:4].isdigit():
+        as_of_year = int(str(live["period"])[:4])
+    electoral = _electoral_uncertainty_map(as_of_year)
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
     isos = set(rubric) | set(live["countries"])
@@ -225,6 +286,10 @@ def assemble_irmp_dataset(db: Session, period: Optional[str] = None) -> Dict[str
         for var, val in live["countries"].get(iso, {}).items():
             merged[var] = val
             smap[var] = "live"
+        # electoral_uncertainty computada (calendario) — dato real, gana sobre la rúbrica.
+        if iso in electoral:
+            merged["electoral_uncertainty"] = electoral[iso]
+            smap["electoral_uncertainty"] = "live"
         dataset[iso] = merged
         sources[iso] = smap
     return {

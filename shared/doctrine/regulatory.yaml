@@ -95,14 +95,32 @@ sovereign_ratings:
 #   • news_sentiment / unrest_shocks / sanctions_signal ← GDELT (gdelt-bq-sync)
 #   • regulatory_volatility_5y ← std de la serie WGI de calidad regulatoria
 #     (derivado en wgi-2025-load; señal de inestabilidad, distinta del nivel).
-# Siguen rúbrica pura (pendiente de fuente): electoral_uncertainty, policy_continuity,
-# discretion, contract_enforcement. Estos valores quedan como fallback declarado.
+#   • electoral_uncertainty ← proximidad a la próxima elección general (calculada en el
+#     ensamblado desde `election_calendar`; riesgo de calendario, dato factual).
+# Siguen rúbrica pura (pendiente de fuente): policy_continuity, discretion,
+# contract_enforcement. Estos valores quedan como fallback declarado.
 rubric_inputs:
   DO: {electoral_uncertainty: 30, policy_continuity: 65, regulatory_volatility_5y: 25, discretion: 35, contract_enforcement: 55, news_sentiment: 15, unrest_shocks: 20, sanctions_signal: 5}
   CR: {electoral_uncertainty: 22, policy_continuity: 70, regulatory_volatility_5y: 18, discretion: 28, contract_enforcement: 64, news_sentiment: 18, unrest_shocks: 16, sanctions_signal: 3}
   PA: {electoral_uncertainty: 28, policy_continuity: 60, regulatory_volatility_5y: 22, discretion: 40, contract_enforcement: 58, news_sentiment: 8, unrest_shocks: 24, sanctions_signal: 12}
   GT: {electoral_uncertainty: 45, policy_continuity: 45, regulatory_volatility_5y: 35, discretion: 55, contract_enforcement: 40, news_sentiment: -10, unrest_shocks: 38, sanctions_signal: 8}
   JM: {electoral_uncertainty: 25, policy_continuity: 68, regulatory_volatility_5y: 20, discretion: 32, contract_enforcement: 52, news_sentiment: 12, unrest_shocks: 28, sanctions_signal: 4}
+
+# CALENDARIO ELECTORAL (dato factual, mantenido): por país, la fecha ``anchor`` de una
+# elección general REAL (YYYY-MM) + la duración constitucional del período (``term_years``).
+# El ensamblado calcula la PRÓXIMA elección general on/after el período del snapshot
+# (rodando el ancla por el ciclo) y de la PROXIMIDAD deriva ``electoral_uncertainty`` —
+# dato real (fechas verificables + fórmula transparente), NO la rúbrica 0-100 tecleada.
+# Es una señal de RIESGO DE CALENDARIO (evento electoral en el horizonte → incertidumbre de
+# política/transición), distinta de la calidad institucional (que ya la capturan las dims
+# WGI). Fuentes: autoridad electoral de cada país + Transparencia Electoral (calendario
+# regional). Actualizar el ancla por PR cuando cambie el ciclo (o se confirme una fecha).
+election_calendar:
+  DO: {anchor: "2024-05", term_years: 4, source: "JCE (general 19-may-2024)"}
+  CR: {anchor: "2022-02", term_years: 4, source: "TSE-CR / Transparencia Electoral (feb-2026)"}
+  PA: {anchor: "2024-05", term_years: 5, source: "Tribunal Electoral PA (5-may-2024; próxima 6-may-2029)"}
+  GT: {anchor: "2023-06", term_years: 4, source: "TSE-GT (próxima 27-jun-2027)"}
+  JM: {anchor: "2020-09", term_years: 5, source: "ECJ (general 3-sep-2025; ciclo máx 5a, convoca el PM)"}
 
 # Escala S&P (notch → 0-100, lineal por escalón). Mayor = mejor calidad crediticia.
 rating_scale:
