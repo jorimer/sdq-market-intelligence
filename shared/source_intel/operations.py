@@ -27,6 +27,15 @@ def _run_catalog_discovery(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_bcrd_completeness(params, user_id, set_phase) -> Dict:
+    from shared.source_intel.bcrd_completeness import run_bcrd_completeness_audit
+    db = SessionLocal()
+    try:
+        return run_bcrd_completeness_audit(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 register_operation(Operation(
     name="source-research-agent",
     label="Agente de descubrimiento de fuentes",
@@ -48,4 +57,17 @@ register_operation(Operation(
                 "Idempotente por brecha; agendable (semanal). El dueño decide e integra.",
     runner=_run_catalog_discovery,
     default_interval_hours=168,
+))
+
+register_operation(Operation(
+    name="bcrd-source-completeness",
+    label="Completitud de fuentes BCRD (hermanos del catálogo)",
+    description="Cruza los conectores del BCRD (nombres cableados) contra el catálogo "
+                "descubierto del CDN y propone los archivos HERMANOS sin cablear que "
+                "aportarían más historia (variantes retro/empalme) o base más nueva — "
+                "la clase de fuente que se pasó por alto con el retropolado sectorial. "
+                "Verifica que resuelvan (HEAD 200); sube al tablero para que el dueño "
+                "decida. Idempotente por título; agendable (mensual).",
+    runner=_run_bcrd_completeness,
+    default_interval_hours=720,  # mensual (el catálogo cambia lento)
 ))
