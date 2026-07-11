@@ -191,9 +191,9 @@ def test_assemble_overlays_live_over_rubric(db):
 
     asm = assemble_irmp_dataset(db)
     do = asm["dataset"]["DO"]
-    # rubric var present (declared, from doctrine)
-    assert "electoral_uncertainty" in do
-    assert asm["sources"]["DO"]["electoral_uncertainty"] == "rubric"
+    # rubric var present (declared, from doctrine) — policy_continuity aún es rúbrica
+    assert "policy_continuity" in do
+    assert asm["sources"]["DO"]["policy_continuity"] == "rubric"
     # live var added
     assert do["public_debt_gdp"] == 58.8
     assert asm["sources"]["DO"]["public_debt_gdp"] == "live"
@@ -201,6 +201,46 @@ def test_assemble_overlays_live_over_rubric(db):
     assert do["contract_enforcement"] == 99.0
     assert asm["sources"]["DO"]["contract_enforcement"] == "live"
     assert asm["has_live"] is True
+
+
+def test_assemble_computes_electoral_uncertainty_from_calendar(db):
+    # electoral_uncertainty deja de ser rúbrica: se calcula de la proximidad a la próxima
+    # elección general (as-of el período). DO (ancla 2024-05, ciclo 4a) as-of 2024 → la
+    # próxima es 2028-05 = 41 meses → 100*(1-41/48) = 14.58. Fuente = live, no rubric.
+    from modules.macro_political_risk.service import (
+        _electoral_uncertainty,
+        _months_to_next_election,
+    )
+
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="wgi_rule_of_law",
+                           value=53.8, source="WGI"))
+    db.commit()
+    asm = assemble_irmp_dataset(db)
+    do = asm["dataset"]["DO"]
+    assert _months_to_next_election("2024-05", 4, 2024) == 41
+    assert do["electoral_uncertainty"] == pytest.approx(14.58, abs=0.01)
+    assert asm["sources"]["DO"]["electoral_uncertainty"] == "live"
+    # una elección más cercana (CR: ancla 2022-02, ciclo 4 → 2026-02 = 14 meses) da MÁS
+    assert asm["dataset"]["CR"]["electoral_uncertainty"] == pytest.approx(
+        _electoral_uncertainty(14), abs=0.01)
+    assert asm["dataset"]["CR"]["electoral_uncertainty"] > do["electoral_uncertainty"]
+
+
+def test_electoral_uncertainty_proximity_shape():
+    from modules.macro_political_risk.service import (
+        _electoral_uncertainty,
+        _months_to_next_election,
+    )
+
+    # monótona decreciente en meses, con piso y tope
+    assert _electoral_uncertainty(0) == 100.0            # elección inminente
+    assert _electoral_uncertainty(24) == pytest.approx(50.0)
+    assert _electoral_uncertainty(48) == 10.0            # horizonte → piso
+    assert _electoral_uncertainty(120) == 10.0           # más allá → piso, no negativo
+    # rolling del ancla por el ciclo hasta la próxima on/after el año
+    assert _months_to_next_election("2020-09", 5, 2024) == 9    # JM → 2025-09
+    assert _months_to_next_election("2023-06", 4, 2024) == 30   # GT → 2027-06
+    assert _months_to_next_election("bad", 4, 2024) is None      # ancla inválida → None
 
 
 def test_gdelt_sync_skips_none_and_stamps_at_vintage(db, monkeypatch):
