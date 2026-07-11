@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     # model (Haiku missed wrong-period values and miscomputed deltas in the pilot sensor).
     # Override via the ANTHROPIC_GUARD_MODEL env var.
     ANTHROPIC_GUARD_MODEL: str = "claude-sonnet-4-6"
+    # Máximo de llamadas CONCURRENTES al API de Anthropic (semáforo global del motor de
+    # narrativa). Es el TECHO REAL de throughput del warmer y de las descargas frescas:
+    # las secciones de un reporte se generan en paralelo (asyncio.gather), acotadas por esta
+    # cota para no rozar el rate limit (429). Subirlo acelera; el cliente reintenta 429 con
+    # backoff, pero si se satura el rate el reintento agota → fallback estático (peor calidad).
+    # Ajustar según el tier del API key. Override via NARRATIVE_MAX_CONCURRENCY.
+    NARRATIVE_MAX_CONCURRENCY: int = 10
 
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"

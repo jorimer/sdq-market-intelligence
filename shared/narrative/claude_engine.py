@@ -853,12 +853,6 @@ class NarrativeResult:
 class NarrativeEngine:
     """Engine for generating AI-powered narratives using Claude and SCQA framework."""
 
-    # Cota de llamadas CONCURRENTES al API de Anthropic. Las secciones de un reporte se
-    # generan con asyncio.gather (ver app/products_macro.py); sin esta cota, un deep dive
-    # de ~6 secciones dispararía 6 requests a la vez y rozaría el rate limit (429). 5 es
-    # holgado para el throughput del key y mantiene el paralelismo que baja la descarga.
-    _MAX_CONCURRENCY = 5
-
     def __init__(self):
         self._cache: dict[str, tuple[NarrativeResult, float]] = {}
         self._client = None
@@ -869,9 +863,15 @@ class NarrativeEngine:
         self._sem_loop = None
 
     def _get_sem(self) -> asyncio.Semaphore:
+        # Cota de llamadas CONCURRENTES al API (secciones en asyncio.gather). Es el techo real
+        # de throughput; configurable vía NARRATIVE_MAX_CONCURRENCY. El semáforo se liga al
+        # loop en el 1er uso y se recrea si el loop cambia (asyncio.run de los tests).
         loop = asyncio.get_running_loop()
+        raw = getattr(settings, "NARRATIVE_MAX_CONCURRENCY", 10)
+        # Un valor inválido (0, negativo, no-int) cae al default 10 — nunca estrangula a <1.
+        cap = raw if isinstance(raw, int) and raw >= 1 else 10
         if self._sem is None or self._sem_loop is not loop:
-            self._sem = asyncio.Semaphore(self._MAX_CONCURRENCY)
+            self._sem = asyncio.Semaphore(cap)
             self._sem_loop = loop
         return self._sem
 
@@ -879,7 +879,10 @@ class NarrativeEngine:
         if self._client is None and settings.ANTHROPIC_API_KEY:
             try:
                 import anthropic
-                self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+                # max_retries alto: con más concurrencia, un 429 transitorio se reintenta con
+                # backoff (SDK) en vez de caer al fallback estático. Absorbe picos de rate.
+                self._client = anthropic.Anthropic(
+                    api_key=settings.ANTHROPIC_API_KEY, max_retries=4)
             except ImportError:
                 logger.warning("anthropic package not installed, using fallback templates")
         return self._client

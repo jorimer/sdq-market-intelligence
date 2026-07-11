@@ -18,7 +18,7 @@ ACOTADO a:
 
 CONCURRENCIA: los reportes se calientan en paralelo (bounded) para no dejar ociosos los cupos
 del motor entre un reporte y el siguiente. El techo REAL de throughput es el semáforo de IA
-del motor (``NarrativeEngine._MAX_CONCURRENCY``); esta cota solo evita el desperdicio de los
+del motor (``settings.NARRATIVE_MAX_CONCURRENCY``); esta cota solo evita el desperdicio de los
 bordes. Cada reporte usa su PROPIA sesión (una Session de SQLAlchemy no es segura para uso
 concurrente entre corrutinas).
 
