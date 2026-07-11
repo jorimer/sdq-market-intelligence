@@ -17,6 +17,7 @@ Eje doctrinal ÚNICO: ``telecom_intel`` + thin ``telecom_outlook`` → numeric_g
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -313,6 +314,10 @@ class TelecomProduct:
         trend = _trend_series(self._db)  # trayectoria para la sección de posición (best-effort)
         templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
+        # Secciones con cifras → una llamada IA c/u, generadas en PARALELO (asyncio.gather):
+        # antes era secuencial (~15s × N secciones). El cliente Anthropic ya libera el event
+        # loop (asyncio.to_thread en claude_engine); aquí solo falta lanzar las llamadas juntas.
+        pending: List = []   # (section, kwargs de generate)
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
@@ -324,11 +329,17 @@ class TelecomProduct:
                                   "retorno, dado el cuadro anterior.")
             elif section == "positioning" and trend:
                 ctx["trayectoria"] = [{"periodo": p, "score": v} for p, v in trend]
-            res = await narrative_engine.generate(
+            pending.append((section, dict(
                 context=ctx, template=templates.get(section, "telecom_outlook"),
                 mode=section_mode(tier, section, sections),
-                axis="telecom_intel", audience=audience)
-            out[section] = res.text
+                axis="telecom_intel", audience=audience)))
+
+        async def _gen(section: str, kwargs: Dict) -> tuple:
+            res = await narrative_engine.generate(**kwargs)
+            return section, res.text
+
+        for section, text in await asyncio.gather(*(_gen(s, k) for s, k in pending)):
+            out[section] = text
         return out
 
     # ── Render (sin DB, renderer genérico) ──

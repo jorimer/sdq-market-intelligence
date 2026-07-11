@@ -13,6 +13,7 @@ como pensiones arrancó relativa/parcial antes del backfill de solvencia de SIPE
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -454,30 +455,29 @@ class InsuranceProduct:
         rating = snapshot.payload["rating"]
         peers = snapshot.payload.get("peers") or [rating]
         entity = snapshot.entity_name or rating.get("name") or "Aseguradora"
-        out: Dict[str, str] = {}
-        for section in sections:
+        # Cada sección se resuelve en su propia corrutina y todas corren en PARALELO
+        # (asyncio.gather): antes era secuencial (~15s × N). El cliente Anthropic ya libera el
+        # event loop (asyncio.to_thread en claude_engine). Las lecturas de DB internas (_pulse)
+        # son SÍNCRONAS → no ceden el loop, así que la Session se usa de a una corrutina por vez.
+        async def _gen(section: str) -> tuple:
             if section == "limitations":
-                out["limitations"] = _LIMITATIONS
-                continue
+                return section, _LIMITATIONS
             if section == "market_context":
                 pulse = _pulse(self._require_db())
                 if not pulse or not pulse.get("has_data"):
-                    out[section] = _PULSE_NO_DATA
-                    continue
+                    return section, _PULSE_NO_DATA
                 res = await narrative_engine.generate(
                     context=market_pulse_context(pulse), template="insurance_market_context",
                     mode=section_mode(tier, section, sections),
                     axis="insurance_intel", audience="inversionista")
-                out[section] = res.text
-                continue
+                return section, res.text
             if section == "peer_positioning":
                 res = await narrative_engine.generate(
                     context=insurance_peer_context(entity, rating, peers),
                     template="insurance_peer_positioning",
                     mode=section_mode(tier, section, sections),
                     axis="insurance_intel", audience="inversionista")
-                out[section] = res.text
-                continue
+                return section, res.text
             ctx = insurance_entity_context(rating, peers)
             if section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE y SINTÉTICO: la dimensión de mayor palanca "
@@ -488,7 +488,9 @@ class InsuranceProduct:
                 template="sector_decision" if section == "recommendation" else "insurance_entity",
                 mode=section_mode(tier, section, sections),
                 axis="insurance_intel", audience="inversionista")
-            out[section] = res.text
+            return section, res.text
+
+        out: Dict[str, str] = dict(await asyncio.gather(*(_gen(s) for s in sections)))
         return out
 
     # ── Render (renderer genérico) ──

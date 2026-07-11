@@ -21,6 +21,7 @@ banda reservada — nunca un hardcode. Eso se nombra en limitaciones y en la nar
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -734,17 +735,19 @@ class PensionProduct:
             base_ctx["trayectoria_rentabilidad_real"] = [
                 {"periodo": p, "nominal": nom, "real": real} for p, nom, real in trend_real[-12:]]
         cartera = snapshot.payload.get("cartera")
-        out: Dict[str, str] = {}
-        for section in sections:
+
+        # Cada sección se resuelve en su propia corrutina y todas corren en PARALELO
+        # (asyncio.gather): antes era secuencial (~15s × N). El cliente Anthropic ya libera el
+        # event loop (asyncio.to_thread en claude_engine). Las lecturas de DB internas
+        # (afp_alerts) son SÍNCRONAS → no ceden el loop: la Session se usa de a una corrutina por vez.
+        async def _gen(section: str) -> tuple:
             if section == "limitations":
-                out["limitations"] = _limitations_for(rating)
-                continue
+                return section, _limitations_for(rating)
             if section == "early_warning":
                 # Banderas deterministas + párrafo IA que LEE EL PATRÓN (alimentado SOLO por
                 # las banderas → numeric_guard). Sin DB (muestra) o sin motor: solo bullets.
                 if self._db is None:
-                    out["early_warning"] = _SAMPLE_NARRATIVES["early_warning"]
-                    continue
+                    return section, _SAMPLE_NARRATIVES["early_warning"]
                 from modules.pension_intel.early_warning import afp_alerts, format_alerts_text
                 blk = afp_alerts(self._db, rating.get("slug"))
                 bullets = format_alerts_text(blk)
@@ -762,27 +765,23 @@ class PensionProduct:
                             interp = (res.text or "").strip()
                     except Exception:  # noqa: BLE001 — la sección nunca depende del motor IA
                         interp = ""
-                out["early_warning"] = (interp + "\n\n" + bullets) if interp else bullets
-                continue
+                return section, ((interp + "\n\n" + bullets) if interp else bullets)
             if section == "peer_positioning":
                 res = await narrative_engine.generate(
                     context=pension_peer_context(entity, rating, peers),
                     template="pension_peer_positioning",
                     mode=section_mode(tier, section, sections),
                     axis="pension_intel", audience="inversionista")
-                out[section] = res.text
-                continue
+                return section, res.text
             if section == "portfolio_context":
                 if not cartera or not cartera.get("found"):
-                    out[section] = _NO_CARTERA
-                    continue
+                    return section, _NO_CARTERA
                 res = await narrative_engine.generate(
                     context=pension_cartera_context(cartera),
                     template="pension_portfolio_context",
                     mode=section_mode(tier, section, sections),
                     axis="pension_intel", audience="inversionista")
-                out[section] = res.text
-                continue
+                return section, res.text
             ctx = dict(base_ctx)
             if section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE y SINTÉTICO (no repitas el desglose de "
@@ -794,7 +793,9 @@ class PensionProduct:
                 template="sector_decision" if section == "recommendation" else "pension_entity",
                 mode=section_mode(tier, section, sections),
                 axis="pension_intel", audience="inversionista")
-            out[section] = res.text
+            return section, res.text
+
+        out: Dict[str, str] = dict(await asyncio.gather(*(_gen(s) for s in sections)))
         return out
 
     # ── Render (renderer genérico) ──

@@ -3,6 +3,7 @@
 Delegates to ``shared.narrative.claude_engine.NarrativeEngine`` and adds
 banking-domain context (section mapping, sub-component focus, etc.).
 """
+import asyncio
 from typing import Dict, Optional
 
 from shared.narrative.claude_engine import NarrativeResult, narrative_engine
@@ -294,6 +295,11 @@ async def generate_named_narratives(
     report_type); es la vía de la productización por niveles.
     """
     narratives: Dict[str, str] = {}
+    # Una llamada IA por sección, generadas en PARALELO (asyncio.gather): antes era secuencial
+    # (~15s × N secciones). El cliente Anthropic ya libera el event loop (asyncio.to_thread en
+    # claude_engine); aquí solo falta lanzar las llamadas juntas. La construcción de contexto
+    # (barata) sigue en el loop; solo el await del motor va al gather.
+    pending: list = []   # (section, kwargs de generate)
     for section in sections:
         template = _SECTION_TO_TEMPLATE.get(section, "banking_summary")
         context = _build_section_context(section, bank_name, scoring_result, period, benchmarks)
@@ -301,8 +307,14 @@ async def generate_named_narratives(
             if template in _CEREBRO_TEMPLATES else {}
         # Profundidad por sección: riesgo profundo, cierre corto, resto al mode pedido
         # (ver _section_mode).
-        result: NarrativeResult = await narrative_engine.generate(
+        pending.append((section, dict(
             context=context, template=template, mode=_section_mode(section, mode), **cerebro,
-        )
-        narratives[section] = result.text
+        )))
+
+    async def _gen(section: str, kwargs: Dict) -> tuple:
+        result: NarrativeResult = await narrative_engine.generate(**kwargs)
+        return section, result.text
+
+    for section, text in await asyncio.gather(*(_gen(s, k) for s, k in pending)):
+        narratives[section] = text
     return narratives

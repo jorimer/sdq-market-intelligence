@@ -29,6 +29,7 @@ Eje doctrinal ÚNICO: ``sector_intel`` + thin ``sector_outlook`` → numeric_gua
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date
 from typing import Any, Dict, List, Optional
@@ -395,6 +396,10 @@ class SectorIntelProduct:
             sgps_detail=snapshot.payload.get("sgps_detail"))
         audience = "inversionista"
         out: Dict[str, str] = {}
+        # Secciones con cifras → una llamada IA c/u, generadas en PARALELO (asyncio.gather):
+        # antes era secuencial (~15s × N secciones). El cliente Anthropic ya libera el event
+        # loop (asyncio.to_thread en claude_engine); aquí solo falta lanzar las llamadas juntas.
+        pending: List = []   # (section, kwargs de generate)
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
@@ -410,12 +415,18 @@ class SectorIntelProduct:
             elif section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la dimensión real con mayor brecha y la "
                                   "palanca de atractividad con mayor retorno, dado el cuadro anterior.")
-            res = await narrative_engine.generate(
+            pending.append((section, dict(
                 context=ctx,
                 template="sector_decision" if section == "recommendation" else "sector_outlook",
                 mode=section_mode(tier, section, sections),
-                axis="sector_intel", audience=audience)
-            out[section] = res.text
+                axis="sector_intel", audience=audience)))
+
+        async def _gen(section: str, kwargs: Dict) -> tuple:
+            res = await narrative_engine.generate(**kwargs)
+            return section, res.text
+
+        for section, text in await asyncio.gather(*(_gen(s, k) for s, k in pending)):
+            out[section] = text
         return out
 
     # ── Render (sin DB, renderer genérico) ──
