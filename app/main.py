@@ -164,7 +164,20 @@ from app import products_monetary_policy as _products_mp  # noqa: F401 — regis
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":
-    from shared.operations import seed_default_schedules, start_scheduler
+    from shared.database.session import SessionLocal as _SessionLocal
+    from shared.operations import (
+        clear_orphaned_runs,
+        seed_default_schedules,
+        start_scheduler,
+    )
+    # Limpia ops con is_running huérfano (un deploy anterior cortó una corrida larga a la
+    # mitad): sin esto, el flag stale bloquea el reintento 30 min. Debe correr ANTES de
+    # sembrar/arrancar el scheduler, que podría re-disparar esas ops.
+    _boot_db = _SessionLocal()
+    try:
+        clear_orphaned_runs(_boot_db)
+    finally:
+        _boot_db.close()
     # Activa por defecto las agendas que falten (todas las syncs recurrentes corren
     # solas tras el deploy; idempotente, respeta cambios manuales) y arranca el tick.
     seed_default_schedules()
