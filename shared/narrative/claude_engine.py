@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import logging
@@ -852,9 +853,27 @@ class NarrativeResult:
 class NarrativeEngine:
     """Engine for generating AI-powered narratives using Claude and SCQA framework."""
 
+    # Cota de llamadas CONCURRENTES al API de Anthropic. Las secciones de un reporte se
+    # generan con asyncio.gather (ver app/products_macro.py); sin esta cota, un deep dive
+    # de ~6 secciones dispararía 6 requests a la vez y rozaría el rate limit (429). 5 es
+    # holgado para el throughput del key y mantiene el paralelismo que baja la descarga.
+    _MAX_CONCURRENCY = 5
+
     def __init__(self):
         self._cache: dict[str, tuple[NarrativeResult, float]] = {}
         self._client = None
+        # El semáforo se liga al event loop en el primer uso; se recrea si el loop cambia
+        # (p. ej. cada asyncio.run() de los tests abre un loop nuevo). Así evitamos el
+        # error "bound to a different event loop" de un singleton creado al importar.
+        self._sem: Optional[asyncio.Semaphore] = None
+        self._sem_loop = None
+
+    def _get_sem(self) -> asyncio.Semaphore:
+        loop = asyncio.get_running_loop()
+        if self._sem is None or self._sem_loop is not loop:
+            self._sem = asyncio.Semaphore(self._MAX_CONCURRENCY)
+            self._sem_loop = loop
+        return self._sem
 
     def _get_client(self):
         if self._client is None and settings.ANTHROPIC_API_KEY:
@@ -1042,9 +1061,18 @@ class NarrativeEngine:
                     user_body = f"{user_body}\n\n{DEEP_DIRECTIVE}"
                 user = _apply_lang(user_body, lang)
                 try:
-                    return self._generate_guarded(
-                        client, system, user, max_tokens, context_str, cache_key, template,
-                        context=context)
+                    # El cliente Anthropic es SÍNCRONO/bloqueante. Corrido directo dentro de
+                    # un asyncio.gather bloquearía el event loop y serializaría las secciones
+                    # (el motivo por el que #491 quedó inefectivo). asyncio.to_thread lo mueve
+                    # a un worker thread → el gather paraleliza de verdad. Todo el flujo con
+                    # guard (generación + verificación + regeneración, incluida la llamada
+                    # bloqueante de numeric_guard.verify_figures) corre en ese thread. El
+                    # semáforo acota la concurrencia para no rozar el rate limit.
+                    async with self._get_sem():
+                        return await asyncio.to_thread(
+                            self._generate_guarded,
+                            client, system, user, max_tokens, context_str, cache_key,
+                            template, context)
                 except Exception as e:  # noqa: BLE001
                     logger.error("Claude API error (cerebro): %s. Fallback estático.", e)
                     result = self._generate_fallback(context, template)
@@ -1065,12 +1093,16 @@ class NarrativeEngine:
         from shared.narrative.cerebro import REGISTER_NEUTRO
 
         try:
-            response = client.messages.create(
-                model=settings.ANTHROPIC_MODEL,
-                max_tokens=max_tokens,
-                system=REGISTER_NEUTRO,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            # to_thread + semáforo: mismo motivo que la ruta cerebro — liberar el event loop
+            # para que el gather de secciones no se serialice, con la concurrencia acotada.
+            async with self._get_sem():
+                response = await asyncio.to_thread(
+                    client.messages.create,
+                    model=settings.ANTHROPIC_MODEL,
+                    max_tokens=max_tokens,
+                    system=REGISTER_NEUTRO,
+                    messages=[{"role": "user", "content": prompt}],
+                )
             return self._result_from_response(response, cache_key, template)
 
         except Exception as e:
