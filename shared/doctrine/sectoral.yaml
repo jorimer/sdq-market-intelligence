@@ -47,17 +47,23 @@ risk_increasing:
   - regulatory_volatility
 
 # Rúbrica declarada (Gate C) — juicio de casa para las dimensiones sin dato
-# sectorial real aún (negocios / talento / regulatoria) + los inputs del SGPS
-# (histórico / estructural). La UI las marca "rúbrica". Suben a real luego:
-# regulatoria ← WGI (Eje 4); negocios/talento ← estudios de la ONE (pendiente).
+# sectorial real aún (negocios / talento / regulatoria). La UI las marca "rúbrica".
+# Suben a real luego: regulatoria ← WGI (Eje 4); negocios/talento ← estudios de la ONE.
 #
-# NEUTRAL 50 para los 17 ("no diferenciamos aún"). IMPORTANTE: bajo la
-# normalización min-max del motor, dar overrides solo a ALGUNOS sectores hundiría
-# a los neutrales al piso (un artefacto, no una señal). Por eso la rúbrica es
-# uniforme: estas dimensiones quedan constantes (base transparente, no discriminan)
-# y el ranking lo mueven solo `sector` (BCRD) y `macro_exposure` (contrato), que
-# son dato real. La diferenciación por sector entra cuando haya dato real para
-# TODOS (WGI / estudios ONE), no como juicio parcial que distorsiona.
+# NEUTRAL 50 para los 17 ("no diferenciamos aún") en las dimensiones del IAI.
+# IMPORTANTE: bajo la normalización min-max del motor del IAI, dar overrides solo a
+# ALGUNOS sectores hundiría a los neutrales al piso (un artefacto, no una señal). Por
+# eso la rúbrica del IAI es uniforme: estas dimensiones quedan constantes (base
+# transparente, no discriminan) y el ranking lo mueven `sector` (BCRD) y
+# `macro_exposure` (contrato), que son dato real. La diferenciación por sector entra
+# cuando haya dato real para TODOS, no como juicio parcial que distorsiona.
+#
+# SGPS (histórico / estructural): estos NO pasan por min-max — el SGPS es una MEZCLA
+# DIRECTA (suma ponderada por factor). Por eso ya se sirven con dato real por factor
+# (histórico ← BCRD crecimiento, all-17; estructural ← margen ENAE, ~9/17 honesto) en
+# escala absoluta, sin distorsión. Los defaults de abajo son solo el FALLBACK para el
+# slug sin dato (p.ej. estructural de los 8 sectores fuera del marco ENAE): quedan en
+# 50 y se rotulan rúbrica. Ver ``_load_sgps_historical`` / ``_load_sgps_structural``.
 rubric_defaults:
   ease_of_business: 50
   operating_cost: 50
@@ -65,8 +71,8 @@ rubric_defaults:
   skills_index: 50
   regulatory_quality: 50
   regulatory_volatility: 50
-  sgps_historical: 50
-  sgps_structural: 50
+  sgps_historical: 50    # fallback: slug sin serie de crecimiento (raro; BCRD cubre 17)
+  sgps_structural: 50    # fallback: slug fuera del marco ENAE (~8/17)
 
 # rubric_overrides: por-sector, vacío por ahora (ver nota arriba: parcial distorsiona).
 

@@ -439,9 +439,10 @@ class SectorIntelProduct:
             tables.append(("Dimensiones del IAI", rows))
             items = [(_labels.get(k, str(k)), (d or {}).get("score")) for k, d in dims.items()]
             charts.append({"title": "Dimensiones del IAI (score 0-100)", "items": items})
-        # SGPS (momentum): tabla con PROCEDENCIA por factor. Histórico/estructural son
-        # rúbrica declarada (juicio de casa, aún sin fuente); aceleración es real. La
-        # columna evita presentar la rúbrica como dato (brecha de honestidad H1).
+        # SGPS (momentum): tabla con PROCEDENCIA por factor. Histórico ← BCRD
+        # crecimiento (real, all-17); estructural ← margen ENAE (real donde el marco
+        # llega, ~9/17; rúbrica declarada en el resto); aceleración es real. La columna
+        # evita presentar la rúbrica como dato (brecha de honestidad H1).
         sgps_factors = ((snapshot.payload or {}).get("sgps_detail") or {}).get("factors") or {}
         if sgps_factors:
             _sgps_labels = {"historical": "Histórico", "structural": "Estructural",
