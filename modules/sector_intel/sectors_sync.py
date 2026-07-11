@@ -16,6 +16,10 @@ from modules.sector_intel.models.models import SectorVariable
 logger = logging.getLogger("sdq.sector_intel.sectors_sync")
 
 SECTOR_DIMENSION = "sector"  # IAI dimension these variables belong to
+# El archivo vigente del BCRD arranca en 2018; el retropolado extiende a 2007. Si el
+# panel trae algún año ≤ este ancla, el vintage histórico se ingirió; si arranca en
+# 2018+, el retropolado no estaba disponible (degradación a rotular, no silenciar).
+_RETRO_HISTORY_ANCHOR_YEAR = 2017
 # ENCFT employment is published by the ONE at a 10-activity-branch resolution (NOT
 # the 17 BCRD slugs); these rows are keyed by branch under their own dimension so
 # the 17-slug IAI never reads them. They are the Gate-E outcome (Δempleo) and the
@@ -136,10 +140,24 @@ def bcrd_sectores_sync(db: Session, set_phase: Optional[Callable[[str], None]] =
             db.add(row)
         synced += 1
     db.commit()
+    # Visibilidad del vintage histórico (retropolado 2007+). Es best-effort en el
+    # conector: si el CDN del BCRD renombra el archivo (lección IPoM), la sync cae a
+    # solo-vigente (2018+) SIN fallar. Para que esa degradación no sea silenciosa, se
+    # infiere del rango del panel y se rota a errors[] (que el console/freshness resalta).
+    years = sorted({int(p) for p in periods if str(p).isdigit()})
+    rng = [years[0], years[-1]] if years else None
+    historical_ok = bool(years and years[0] <= _RETRO_HISTORY_ANCHOR_YEAR)
+    if years and not historical_ok:
+        errors.append(
+            f"histórico retropolado (2007+) no disponible: el panel arranca en {years[0]} "
+            "— el BCRD pudo renombrar 'pib_origen_retro_2018_2007.xlsx' (revisar el CDN)"
+        )
     return {
         "synced": synced,
         "sectors_seeded": seeded,
         "periods": sorted(periods),
+        "range": rng,
+        "historical": "included" if historical_ok else "unavailable",
         "sectors": len({r.dimension for r in records if r.dimension}),
         "variables": sorted({r.series for r in records}),
         "errors": errors,
