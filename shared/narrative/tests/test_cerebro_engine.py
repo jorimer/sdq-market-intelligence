@@ -183,3 +183,30 @@ def test_parse_unsupported_tolerant():
     assert _parse_unsupported('texto ```{"unsupported": ["12.3 — x"]}``` fin') == ["12.3 — x"]
     assert _parse_unsupported("no json") == []
     assert _parse_unsupported('{"otra": 1}') == []
+
+
+# ── Semáforo de concurrencia configurable ──────────────────────────────────────
+def test_semaphore_reads_setting(monkeypatch):
+    """El semáforo global de concurrencia toma su cota de settings.NARRATIVE_MAX_CONCURRENCY
+    (techo real de throughput; configurable por env)."""
+    monkeypatch.setattr(claude_engine.settings, "NARRATIVE_MAX_CONCURRENCY", 7, raising=False)
+    eng = NarrativeEngine()
+
+    async def _cap():
+        return eng._get_sem()._value  # valor inicial del semáforo == cota
+
+    assert asyncio.run(_cap()) == 7
+
+
+def _sem_value(eng):
+    async def _cap():
+        return eng._get_sem()._value
+    return asyncio.run(_cap())
+
+
+def test_semaphore_invalid_value_falls_back_to_default(monkeypatch):
+    # Un valor inválido (0, negativo) NO estrangula: cae al default 10.
+    monkeypatch.setattr(claude_engine.settings, "NARRATIVE_MAX_CONCURRENCY", 0, raising=False)
+    assert _sem_value(NarrativeEngine()) == 10
+    monkeypatch.setattr(claude_engine.settings, "NARRATIVE_MAX_CONCURRENCY", -3, raising=False)
+    assert _sem_value(NarrativeEngine()) == 10
