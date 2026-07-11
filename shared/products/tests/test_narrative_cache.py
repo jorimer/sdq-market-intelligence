@@ -29,7 +29,9 @@ class _FakeProduct:
     sector_key = "macro"
 
     def __init__(self, db):
-        self.db = db
+        # Los productos reales guardan la sesión en `_db` (NO `db`): el fake debe reflejar
+        # el contrato real, o el test pasaría mientras producción no cachea (fue el bug).
+        self._db = db
         self.calls = 0
 
     async def narratives(self, tier, snapshot, lang):
