@@ -91,6 +91,46 @@ def wgi_regulatory_sync(db: Session, set_phase: Optional[Callable[[str], None]] 
             "latest": series.get(years[-1]) if years else None, "errors": []}
 
 
+# Human Capital Index (WB, HD.HCI.OVRL) — NACIONAL (un valor por país), como la WGI
+# regulatoria. Fuente real para la dimensión talento del IAI (skills_index), que hoy es
+# rúbrica. Uniforme entre sectores: sube la procedencia a dato real, no cambia el ranking
+# (normaliza al centro). El HCI viene 0-1 → se escala ×100 a la escala 0-100 del IAI.
+HUMAN_CAPITAL_KEY = "sector_skills_hci"
+HCI_CODE = "HD.HCI.OVRL"
+
+
+def human_capital_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
+    """Fetch the national WB Human Capital Index (DOM) and persist it, scaled 0-100, as
+    the AppSetting the IAI assembly reads for ``skills_index``. Best-effort."""
+    import json
+
+    from shared.data.wgi_client import fetch_wgi_indicator  # fetcher WB genérico
+    from shared.settings.models import AppSetting
+
+    set_phase = set_phase or (lambda _m: None)
+    set_phase("descargando capital humano nacional (WB HCI)")
+    try:
+        rows, last_updated = fetch_wgi_indicator(HCI_CODE, ["DOM"], mrv=8)
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("HCI sync falló: %s", e)
+        return {"error": str(e), "years": 0, "errors": [str(e)]}
+
+    # HCI ∈ [0,1] → escala 0-100 (misma que skills_index).
+    series = {str(r["date"]): round(float(r["value"]) * 100.0, 2) for r in rows
+              if r.get("date") and r.get("value") is not None}
+    payload = {"series": series, "unit": "índice 0-100 (HCI×100)", "source": "WB-HCI",
+               "last_updated": last_updated}
+    row = db.query(AppSetting).filter(AppSetting.key == HUMAN_CAPITAL_KEY).first()
+    if row:
+        row.value = json.dumps(payload)
+    else:
+        db.add(AppSetting(key=HUMAN_CAPITAL_KEY, value=json.dumps(payload), is_secret=False))
+    db.commit()
+    years = sorted(series)
+    return {"years": len(series), "range": [years[0], years[-1]] if years else None,
+            "latest": series.get(years[-1]) if years else None, "errors": []}
+
+
 def bcrd_sectores_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
     """Pull live BCRD value-added and upsert into ``si_variables``.
 

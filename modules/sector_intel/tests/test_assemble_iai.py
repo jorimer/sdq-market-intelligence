@@ -237,6 +237,42 @@ def test_wgi_regulatory_sync_persists_series(db, monkeypatch):
     assert row is not None and json.loads(row.value)["series"]["2024"] == 58.13
 
 
+def _set_hci(db, series):
+    from modules.sector_intel.sectors_sync import HUMAN_CAPITAL_KEY
+    db.add(AppSetting(key=HUMAN_CAPITAL_KEY,
+                      value=json.dumps({"series": series}), is_secret=False))
+
+
+def test_human_capital_sync_scales_and_persists(db, monkeypatch):
+    # El HCI viene 0-1; el sync lo escala ×100 a la escala del IAI y lo persiste.
+    import shared.data.wgi_client as wgi
+
+    monkeypatch.setattr(wgi, "fetch_wgi_indicator",
+                        lambda code, isos, mrv=8: ([{"date": "2020", "value": 0.5028},
+                                                    {"date": "2018", "value": 0.5069}], "2020-09-01"))
+    from modules.sector_intel.sectors_sync import HUMAN_CAPITAL_KEY, human_capital_sync
+
+    res = human_capital_sync(db)
+    assert res["years"] == 2 and res["latest"] == pytest.approx(50.28) and res["errors"] == []
+    row = db.query(AppSetting).filter(AppSetting.key == HUMAN_CAPITAL_KEY).first()
+    assert row is not None and json.loads(row.value)["series"]["2020"] == pytest.approx(50.28)
+
+
+def test_skills_index_live_from_hci_uniform_ease_stays_rubric(db):
+    # skills_index sube a real (HCI nacional, uniforme para los 17); ease_of_business
+    # sigue rúbrica (sin fuente viva). Ambas nacional-uniformes → no cambian el ranking.
+    _seed_sector_var(db, "turismo", "sector_size", 8.9, "2024")
+    _set_hci(db, {"2020": 50.28})   # HCI aplicado con fallback al último disponible
+    db.commit()
+    asm = assemble_iai_dataset(db, period="2024")
+    for slug in ("turismo", "mineria", "salud"):                 # nacional → igual para todos
+        assert asm["dataset"][slug]["skills_index"] == pytest.approx(50.28)
+        assert asm["sources"][slug]["skills_index"] == "live"
+        # ease_of_business no tiene fuente viva → rúbrica declarada, rotulada
+        assert asm["sources"][slug]["ease_of_business"] == "rubric"
+        assert asm["dataset"][slug]["ease_of_business"] == 50
+
+
 # ── SGPS factor sourcing (histórico all-17 · estructural ~9/17 honesto) ────────
 def _seed_enae(db, enae_key, ingresos, utilidad, period="2022"):
     from shared.data.enae_activity import VAR_INGRESOS, VAR_UTILIDAD

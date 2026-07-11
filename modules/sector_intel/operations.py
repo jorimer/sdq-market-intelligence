@@ -50,6 +50,15 @@ def _run_enae_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_human_capital_sync(params, user_id, set_phase) -> Dict:
+    from modules.sector_intel.sectors_sync import human_capital_sync
+    db = SessionLocal()
+    try:
+        return human_capital_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_tss_salario_sync(params, user_id, set_phase) -> Dict:
     from modules.sector_intel.sectors_sync import tss_salario_sync
     db = SessionLocal()
@@ -120,6 +129,15 @@ def register() -> None:
         "sectores (no cambia el ranking, mejora la procedencia). Corre antes del "
         "backfill del índice.",
         _run_wgi_regulatory_sync, default_interval_hours=2160,
+        triggers=["sector-snapshot"],
+    ))
+    register_operation(Operation(
+        "human-capital-sync", "Sincronizar talento (WB · Índice de Capital Humano)",
+        "Trae el Índice de Capital Humano nacional del Banco Mundial (HCI, escalado "
+        "0-100) y lo persiste para la dimensión talento del IAI (skills_index). Es "
+        "nacional: sube esa dimensión de rúbrica a dato real, igual para los 17 sectores "
+        "(no cambia el ranking, mejora la procedencia). El HCI publica cada ~2 años.",
+        _run_human_capital_sync, default_interval_hours=2160,
         triggers=["sector-snapshot"],
     ))
     register_operation(Operation(
