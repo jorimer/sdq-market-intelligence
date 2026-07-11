@@ -12,12 +12,71 @@ ensamblador es el director de orquesta. Las cifras se generan dentro del sector 
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 from dataclasses import dataclass
 from typing import Dict, Optional
 
 from shared.products.anonymization import AnonymizationError, enforce_anonymized
 from shared.products.contract import ProductSnapshot, SectorProduct
 from shared.products.tiers import Granularity, ProductTier, TierLevelSpec
+
+logger = logging.getLogger("sdq.products.assembler")
+
+# Bumpear para invalidar TODA la caché de narrativas cuando cambie la lógica de generación
+# (plantillas, prompt, guard). El fingerprint del payload cubre los cambios de DATO; esta
+# versión cubre los cambios de CÓDIGO.
+NARRATIVE_CACHE_VERSION = "1"
+
+
+def _narrative_fingerprint(payload: Optional[Dict], tier: str, lang: str) -> str:
+    """Hash del snapshot (dato) + tier + idioma + versión → clave de frescura de la caché.
+    Si el dato subyacente cambia, el fingerprint cambia → MISS → se regenera."""
+    raw = json.dumps(payload or {}, sort_keys=True, default=str, ensure_ascii=False)
+    return hashlib.sha256(
+        f"{raw}|{tier}|{lang}|{NARRATIVE_CACHE_VERSION}".encode("utf-8")).hexdigest()
+
+
+async def _narratives_cached(
+    product: SectorProduct, tier: ProductTier, snapshot: ProductSnapshot,
+    lang: str, scope: Optional[str],
+) -> Dict[str, str]:
+    """Narrativas del producto con caché por (sector, nivel, ámbito, período, idioma).
+
+    HIT (fingerprint igual) → texto guardado al instante (evita ~15-90s de motor IA).
+    MISS → genera y guarda en sitio. La caché NUNCA rompe la entrega: cualquier fallo de
+    lectura/escritura cae a la generación directa."""
+    from shared.products.models import ProductReportCache
+
+    db = getattr(product, "db", None)
+    if db is None:  # sin sesión → sin caché
+        return await product.narratives(tier, snapshot, lang)
+
+    fp = _narrative_fingerprint(snapshot.payload, tier.value, lang)
+    key = dict(sector_key=product.sector_key, tier=tier.value,
+               scope=scope or "", period=snapshot.period or "", lang=lang)
+    row = None
+    try:
+        row = db.query(ProductReportCache).filter_by(**key).first()
+        if row is not None and row.fingerprint == fp:
+            return dict(row.narratives or {})  # HIT
+    except Exception as e:  # noqa: BLE001 — la caché jamás debe tumbar la entrega
+        logger.warning("caché de narrativas (lectura) no disponible: %s", e)
+        return await product.narratives(tier, snapshot, lang)
+
+    narratives = await product.narratives(tier, snapshot, lang)  # MISS → generar
+    try:
+        if row is None:
+            row = ProductReportCache(**key)
+            db.add(row)
+        row.fingerprint = fp
+        row.narratives = narratives
+        db.commit()
+    except Exception as e:  # noqa: BLE001 — una carrera/constraint no debe romper la entrega
+        db.rollback()
+        logger.warning("caché de narrativas (escritura) omitida: %s", e)
+    return narratives
 
 
 @dataclass(frozen=True)
@@ -62,11 +121,12 @@ async def _content_from_snapshot(
     tier: ProductTier,
     snapshot: ProductSnapshot,
     lang: str,
+    scope: Optional[str] = None,
 ) -> ProductContent:
     """Núcleo compartido: a partir de un snapshot (real o de muestra), aplica el sensor
-    de anonimización Pulse y produce las narrativas vía el motor. NO renderiza."""
+    de anonimización Pulse y produce las narrativas vía el motor (con caché). NO renderiza."""
     level = _assert_system_payload(product, tier, snapshot)
-    narratives = await product.narratives(tier, snapshot, lang)
+    narratives = await _narratives_cached(product, tier, snapshot, lang, scope)
     # Secciones ESTÁNDAR auto-generadas (metodología/fuentes) — nuestra ventaja honesta.
     # Se anexan tras las del producto; las heredan online y PDF (docs/REPORT_STANDARD.md).
     from shared.products.report_sections import standard_sections
@@ -93,7 +153,7 @@ async def assemble_product_content(
     snapshot no es resoluble, y ``AnonymizationError`` si un Pulse filtra identificadores.
     """
     snapshot = product.snapshot(tier, period, scope)
-    return await _content_from_snapshot(product, tier, snapshot, lang)
+    return await _content_from_snapshot(product, tier, snapshot, lang, scope=scope)
 
 
 async def assemble_product_report(

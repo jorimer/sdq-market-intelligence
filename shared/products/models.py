@@ -150,3 +150,32 @@ class ProductActivation(UUIDMixin, Base):
         UniqueConstraint("sector_key", "tier", name="uq_product_activation_sector_tier"),
         Index("ix_product_activation_sector", "sector_key"),
     )
+
+
+class ProductReportCache(UUIDMixin, Base):
+    """Caché de narrativas IA por (sector, nivel, ámbito, período, idioma).
+
+    Las narrativas del reporte se generan con el motor IA (varias llamadas por reporte);
+    regenerarlas en cada descarga hace que el PDF tarde ~15-90s. Esta caché guarda el
+    texto generado junto a un ``fingerprint`` del snapshot (hash del payload): un HIT sirve
+    el texto al instante; si el dato cambió, el fingerprint difiere → MISS → se regenera y
+    se actualiza en sitio (tabla acotada, auto-invalidada, sin cablear eventos). Solo cachea
+    reportes REALES (la muestra usa narrativa curada, no el motor). Bumpear ``CACHE_VERSION``
+    (en el assembler) invalida todo cuando cambia la lógica de narrativa.
+    """
+
+    __tablename__ = "product_report_cache"
+
+    sector_key = Column(String(40), nullable=False)
+    tier = Column(String(20), nullable=False)
+    scope = Column(String(80), nullable=False, default="", server_default="")
+    period = Column(String(20), nullable=False, default="", server_default="")
+    lang = Column(String(8), nullable=False, default="es", server_default="es")
+    fingerprint = Column(String(64), nullable=False)   # sha256 del payload + versión
+    narratives = Column(JSON, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("sector_key", "tier", "scope", "period", "lang",
+                         name="uq_product_report_cache_key"),
+        Index("ix_product_report_cache_key", "sector_key", "tier", "scope", "period", "lang"),
+    )
