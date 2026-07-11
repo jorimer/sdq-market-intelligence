@@ -17,6 +17,7 @@ Naturaleza MULTIPAÍS (re-encuadrado 2026-06-26). El producto tiene DOS lecturas
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date
 from typing import Any, Dict, List, Optional
@@ -483,6 +484,7 @@ class MacroProduct:
         if trajectory:
             base_ctx["trayectoria"] = trajectory
         out: Dict[str, str] = {}
+        pending: List = []   # (section, ctx) → se generan en paralelo (una llamada IA/sección)
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
@@ -542,14 +544,23 @@ class MacroProduct:
                 ctx["enfoque"] = ("Cierre ACCIONABLE: prioriza la palanca de política o gestión "
                                   "de riesgo país con mayor retorno sobre la resiliencia macro, "
                                   "dado el cuadro anterior. No repitas el diagnóstico; recomienda.")
-            # TODAS las secciones con cifras narran por el thin del eje (risk_assessment,
-            # axis macro_political_risk) → numeric_guard. El "foco" va por contexto, nunca
-            # por un template homónimo no-thin (caería a la ruta legacy sin guard).
+            pending.append((section, ctx))
+
+        # TODAS las secciones con cifras narran por el thin del eje (risk_assessment, axis
+        # macro_political_risk) → numeric_guard. El "foco" va por contexto, nunca por un
+        # template homónimo no-thin (caería a la ruta legacy sin guard). Se generan en
+        # PARALELO (asyncio.gather): antes era secuencial (~15s × 5-6 secciones ≈ 90s en el
+        # deep dive); en paralelo tarda ~la sección más lenta. Baja mucho la descarga del PDF.
+        mode = "detailed" if tier == ProductTier.deep_dive else "standard"
+
+        async def _gen(section: str, ctx: Dict) -> tuple:
             res = await narrative_engine.generate(
-                context=ctx, template="risk_assessment",
-                mode="detailed" if tier == ProductTier.deep_dive else "standard",
+                context=ctx, template="risk_assessment", mode=mode,
                 axis="macro_political_risk", audience="inversionista")
-            out[section] = res.text
+            return section, res.text
+
+        for section, text in await asyncio.gather(*(_gen(s, c) for s, c in pending)):
+            out[section] = text
         return out
 
     # ── Render (sin DB, renderer genérico) ──
