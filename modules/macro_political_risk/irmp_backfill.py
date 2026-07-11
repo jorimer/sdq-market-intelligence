@@ -82,16 +82,31 @@ def _events_for_year(year: int) -> Dict[str, Dict[str, float]]:
     return out
 
 
+def _years_already_done(db: Session, threshold: int) -> set:
+    """Años que ya tienen suficientes snapshots persistidos (≥ *threshold*) → un año
+    'hecho'. Distingue el año que completó (GDELT ok → ~panel entero) del que falló por
+    cuota (0). Permite RESUMIR: no re-consultar GDELT (que gasta cuota) en años ya listos."""
+    from collections import Counter
+
+    from modules.macro_political_risk.models.models import IRMPSnapshot
+
+    counts = Counter(pe.year for (pe,) in db.query(IRMPSnapshot.period_end).all() if pe)
+    return {y for y, c in counts.items() if c >= threshold}
+
+
 def backfill_irmp_history(
     db: Session, set_phase: Optional[Callable[[str], None]] = None,
     start_year: int = _START_YEAR, series: Optional[Dict] = None,
     events_by_year: Optional[Dict[int, Dict[str, Dict[str, float]]]] = None,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """Reconstruye y persiste el IRMP por año (pasado) para todo el panel.
 
-    *series* / *events_by_year* se inyectan en tests (offline); en vivo se traen de
-    WDI/WGI/IMF (network) y de GDELT-BQ (por año). Devuelve un resumen con los años,
-    snapshots persistidos, saltados (parciales) y errores por año."""
+    RESUMIBLE: por defecto salta los años que ya tienen snapshots (sin re-consultar
+    GDELT, que consume cuota de BigQuery), así corridas sucesivas (p.ej. mensuales,
+    con cuota fresca) van cerrando el hueco hasta completar. ``force=True`` rehace todo.
+    *series* / *events_by_year* se inyectan en tests (offline). Devuelve un resumen con
+    años, snapshots persistidos, saltados (parciales), ya-hechos (resumidos) y errores."""
     set_phase = set_phase or (lambda _m: None)
     from modules.macro_political_risk.service import (
         _electoral_uncertainty_map,
@@ -103,11 +118,16 @@ def backfill_irmp_history(
     end_year = date.today().year - 1  # el año actual lo cubre irmp-snapshot (GDELT live + rating)
     if end_year < start_year:
         return {"years": [start_year, end_year], "persisted": 0, "skipped": 0,
-                "errors": ["sin años pasados que reconstruir"]}
+                "resumed": 0, "errors": ["sin años pasados que reconstruir"]}
 
     targets = load_doctrine_raw("regulatory").get("inflation_targets", {}) or {}
     nm, rg = names(), regions()
     iso2_list = list(nm)
+    done_years = set() if force else _years_already_done(db, max(1, len(iso2_list) // 2))
+    pending = [y for y in range(start_year, end_year + 1) if y not in done_years]
+    if not pending:
+        return {"years": [start_year, end_year], "persisted": 0, "skipped": 0,
+                "resumed": len(done_years), "errors": [], "note": "trayectoria completa"}
 
     if series is None:  # pragma: no cover - network I/O
         set_phase("descargando series históricas (WDI + WGI + IMF)")
@@ -115,14 +135,14 @@ def backfill_irmp_history(
         series = fetch_series(mrv=end_year - start_year + 8)  # holgura para CAGR/ventanas
 
     persisted, skipped, errors = 0, 0, []
-    for year in range(start_year, end_year + 1):
+    for year in pending:
         if events_by_year is not None:
             events = events_by_year.get(year, {})
         else:  # pragma: no cover - network I/O
             set_phase(f"eventos GDELT {year}")
             try:
                 events = _events_for_year(year)
-            except Exception as e:  # noqa: BLE001 — un año sin eventos no aborta el resto
+            except Exception as e:  # noqa: BLE001 — un año sin eventos (p.ej. cuota) no aborta
                 errors.append(f"{year}: eventos GDELT no disponibles: {e}")
                 continue
         electoral = _electoral_uncertainty_map(year)
@@ -153,4 +173,7 @@ def backfill_irmp_history(
         from modules.macro_political_risk.events import publish_irmp_updated
         publish_irmp_updated({"backfill": True, "years": [start_year, end_year]})
     return {"years": [start_year, end_year], "persisted": persisted,
-            "skipped": skipped, "errors": errors[:10]}
+            "skipped": skipped, "resumed": len(done_years),
+            "pending_after": [y for y in pending if y not in _years_already_done(
+                db, max(1, len(iso2_list) // 2))],
+            "errors": errors[:10]}

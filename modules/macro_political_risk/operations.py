@@ -222,8 +222,10 @@ def register() -> None:
         "real por año: macro/externo (WDI+IMF), gobernanza (WGI), volatilidad regulatoria "
         "(std WGI), eventos (GDELT-BigQuery consultado POR AÑO) y proximidad electoral. "
         "Self-contained (no toca el snapshot en vivo ni el backtest). Requiere GCP_SA_JSON. "
-        "Idempotente; on-demand tras un cambio de metodología o de panel.",
-        _run_irmp_history_backfill, default_interval_hours=0,
+        "RESUMIBLE: salta los años ya persistidos (sin gastar cuota de BigQuery), así la "
+        "cadencia mensual va cerrando el hueco de años que la cuota gratuita corta (~3/mes) "
+        "hasta completar; una vez completa, es un no-op barato.",
+        _run_irmp_history_backfill, default_interval_hours=720,  # mensual → se auto-completa
     ))
     register_operation(Operation(
         "irmp-cleanup-invalid", "Limpiar snapshots IRMP inválidos",
