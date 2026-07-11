@@ -36,10 +36,11 @@ logger = logging.getLogger("sdq.data.wdi")
 WDI_BASE_URL = "https://api.worldbank.org/v2"
 IMF_BASE_URL = "https://www.imf.org/external/datamapper/api/v1"
 
-# Regional peer set: our ISO2 key → ISO3 (what both APIs expect).
-PEER_ISO3: Dict[str, str] = {
-    "DO": "DOM", "CR": "CRI", "PA": "PAN", "GT": "GTM", "JM": "JAM",
-}
+# Peer set (24, LatAm+Caribe): our ISO2 key → ISO3 (lo que ambas APIs esperan). Fuente
+# única en shared.data.latam_peers (antes eran 5 duplicados por módulo).
+from shared.data.latam_peers import iso3_by_iso2
+
+PEER_ISO3: Dict[str, str] = iso3_by_iso2()
 ISO3_TO_ISO2: Dict[str, str] = {v: k for k, v in PEER_ISO3.items()}
 
 # WDI indicators consumed AS-IS: code → IRMP variable + unit.

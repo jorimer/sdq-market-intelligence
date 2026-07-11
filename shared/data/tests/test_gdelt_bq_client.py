@@ -16,8 +16,10 @@ def test_build_query_is_partition_pruned_and_parameterized():
 
 
 def test_fips_map_covers_peer_set():
-    # FIPS 10-4 ≠ ISO2 for DR/CS/PM; GT/JM coincide.
-    assert FIPS_TO_ISO2 == {"DR": "DO", "CS": "CR", "PM": "PA", "GT": "GT", "JM": "JM"}
+    # FIPS 10-4 ≠ ISO2 para varios (DR→DO, CS→CR, PM→PA…); panel completo de 24.
+    assert FIPS_TO_ISO2["DR"] == "DO" and FIPS_TO_ISO2["CS"] == "CR"
+    assert FIPS_TO_ISO2["VE"] == "VE" and FIPS_TO_ISO2["BR"] == "BR"
+    assert len(FIPS_TO_ISO2) == 24 and len(set(FIPS_TO_ISO2.values())) == 24
 
 
 def test_rows_to_records_maps_fips_and_three_vars():

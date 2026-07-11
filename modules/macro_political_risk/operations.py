@@ -64,10 +64,11 @@ def _run_gdelt_bq_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
-_PEER_NAMES = {"DO": "República Dominicana", "CR": "Costa Rica", "PA": "Panamá",
-               "GT": "Guatemala", "JM": "Jamaica"}
-_PEER_REGIONS = {"DO": "Caribe", "CR": "Centroamérica", "PA": "Centroamérica",
-                 "GT": "Centroamérica", "JM": "Caribe"}
+from shared.data.latam_peers import names as _peer_names
+from shared.data.latam_peers import regions as _peer_regions
+
+_PEER_NAMES = _peer_names()      # 24 países (fuente única shared.data.latam_peers)
+_PEER_REGIONS = _peer_regions()
 
 
 def _run_irmp_backtest(params, user_id, set_phase) -> Dict:
