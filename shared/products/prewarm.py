@@ -7,25 +7,33 @@ Genera por adelantado las narrativas IA de los productos PUBLICADOS y las persis
 IDEMPOTENTE: reusa ``assemble_product_content`` → ``_narratives_cached``, así que un
 (sector, nivel, ámbito, período, idioma) con el mismo fingerprint es un HIT y NO regenera —
 solo se paga IA cuando el dato subyacente cambió. Por eso correrlo periódicamente es barato:
-la primera pasada genera todo; las siguientes solo tocan lo que cambió.
+la primera pasada genera todo; las siguientes solo tocan lo que cambió. La idempotencia
+también lo hace RESUMIBLE: si un deploy corta la corrida a la mitad, la próxima retoma
+saltando lo ya calentado (HITs).
 
 ACOTADO a:
 - Productos PUBLICADOS (``ProductActivation.is_active``): no se calienta lo no vendible.
-- Niveles caros/vendibles (insight, deep_dive). El Pulse es abierto y de una sola sección
-  (barato al vuelo); no vale la pena precalentarlo.
-- Idiomas configurables; por defecto solo ``es`` (agregar en/fr cuando se quiera pagar su
-  generación — cada idioma es una fila y una generación aparte).
+- Niveles caros/vendibles (insight, deep_dive). El Pulse es abierto y de una sola sección.
+- Idiomas configurables; por defecto solo ``es``.
 
-NO corre inline al persistir un snapshot (eso bloquearía el sync minutos y dispararía
-decenas de generaciones): es una operación de consola desacoplada, agendable.
+CONCURRENCIA: los reportes se calientan en paralelo (bounded) para no dejar ociosos los cupos
+del motor entre un reporte y el siguiente. El techo REAL de throughput es el semáforo de IA
+del motor (``NarrativeEngine._MAX_CONCURRENCY``); esta cota solo evita el desperdicio de los
+bordes. Cada reporte usa su PROPIA sesión (una Session de SQLAlchemy no es segura para uso
+concurrente entre corrutinas).
+
+NO corre inline al persistir un snapshot: es una operación de consola desacoplada, agendable,
+y se dispara sola tras cada evento de datos (ver ``shared/products/events.py``).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
+from shared.database.session import SessionLocal
 from shared.products import Granularity, ProductTier
 from shared.products.access import _is_activated
 from shared.products.assembler import assemble_product_content
@@ -35,6 +43,11 @@ logger = logging.getLogger("sdq.products.prewarm")
 
 # Niveles caros/vendibles que vale la pena precalentar (el Pulse es barato/abierto).
 _WARM_TIERS: tuple = (ProductTier.insight, ProductTier.deep_dive)
+
+# Reportes calentados EN PARALELO. Conservador: el cuello real es el semáforo de IA del motor
+# (5); esto solo llena los cupos ociosos entre reportes. Cada reporte concurrente toma una
+# conexión de DB propia → se mantiene holgado bajo el pool (5 + overflow 10).
+_REPORT_CONCURRENCY = 4
 
 
 def _scopes_for(product, level) -> List[Optional[str]]:
@@ -56,23 +69,12 @@ def _scopes_for(product, level) -> List[Optional[str]]:
         return []
 
 
-async def prewarm_report_cache(
-    db: Session,
-    *,
-    langs: Sequence[str] = ("es",),
-    tiers: Sequence[ProductTier] = _WARM_TIERS,
-    set_phase=None,
-) -> Dict:
-    """Precalienta la caché de narrativas de TODOS los productos publicados.
-
-    Recorre cada (sector publicado, nivel en ``tiers``, ámbito, idioma) y ensambla el
-    contenido, lo que genera+cachea las narrativas si el fingerprint cambió (HIT barato si
-    no). Devuelve el conteo para el panel de Operaciones. Best-effort por combo: un fallo
-    aislado (p. ej. una entidad sin datos, un snapshot no resoluble) se registra y no aborta
-    el resto del warm.
-    """
-    set_phase = set_phase or (lambda _m: None)
-    warmed = 0
+def _enumerate_combos(
+    db: Session, langs: Sequence[str], tiers: Sequence[ProductTier],
+) -> Tuple[List[Tuple[str, ProductTier, Optional[str], str]], int, List[str]]:
+    """(secuencial, sobre la sesión compartida) → los combos (sector publicado, nivel, ámbito,
+    idioma) a calentar, el conteo de niveles NO publicados y los errores de enumeración."""
+    combos: List[Tuple[str, ProductTier, Optional[str], str]] = []
     skipped_unpublished = 0
     errors: List[str] = []
     for sector in registered_sectors():
@@ -93,15 +95,53 @@ async def prewarm_report_cache(
             level = manifest.require_level(tier)
             for scope in _scopes_for(product, level):
                 for lang in langs:
-                    label = f"{sector}/{tier.value} · {scope or '—'} · {lang}"
-                    set_phase(f"precalentando {label}")
-                    try:
-                        await assemble_product_content(
-                            product, tier, period="", scope=scope, lang=lang)
-                        warmed += 1
-                    except Exception as e:  # noqa: BLE001 — un combo no tumba el warm global
-                        logger.warning("prewarm %s falló: %s", label, e)
-                        errors.append(f"{label}: {e}")
+                    combos.append((sector, tier, scope, lang))
+    return combos, skipped_unpublished, errors
+
+
+async def prewarm_report_cache(
+    db: Session,
+    *,
+    langs: Sequence[str] = ("es",),
+    tiers: Sequence[ProductTier] = _WARM_TIERS,
+    concurrency: int = _REPORT_CONCURRENCY,
+    set_phase=None,
+) -> Dict:
+    """Precalienta la caché de narrativas de TODOS los productos publicados.
+
+    Enumera los combos (sector publicado, nivel, ámbito, idioma) y los ensambla en PARALELO
+    acotado — cada uno genera+cachea las narrativas si el fingerprint cambió (HIT barato si
+    no). Devuelve el conteo para el panel de Operaciones. Best-effort por combo: un fallo
+    aislado (p. ej. una entidad sin datos) se registra y no aborta el resto del warm.
+    """
+    set_phase = set_phase or (lambda _m: None)
+    combos, skipped_unpublished, errors = _enumerate_combos(db, langs, tiers)
+    total = len(combos)
+    sem = asyncio.Semaphore(max(1, concurrency))
+    counter = {"done": 0}
+
+    async def _warm(combo: Tuple[str, ProductTier, Optional[str], str]) -> Optional[str]:
+        sector, tier, scope, lang = combo
+        label = f"{sector}/{tier.value} · {scope or '—'} · {lang}"
+        async with sem:
+            # Sesión PROPIA por reporte: una Session no es segura para uso concurrente entre
+            # corrutinas (los await del motor IA intercalarían sus operaciones de DB).
+            wdb = SessionLocal()
+            try:
+                product = get_product(sector, wdb)
+                await assemble_product_content(product, tier, period="", scope=scope, lang=lang)
+                return None
+            except Exception as e:  # noqa: BLE001 — un combo no tumba el warm global
+                logger.warning("prewarm %s falló: %s", label, e)
+                return f"{label}: {e}"
+            finally:
+                wdb.close()
+                counter["done"] += 1
+                set_phase(f"precalentado {counter['done']}/{total} · {label}")
+
+    results = await asyncio.gather(*(_warm(c) for c in combos))
+    errors += [r for r in results if r]
+    warmed = sum(1 for r in results if r is None)
     result = {
         "warmed": warmed,
         "skipped_unpublished": skipped_unpublished,
@@ -109,6 +149,7 @@ async def prewarm_report_cache(
         "errors": errors[:50],
         "langs": list(langs),
         "tiers": [t.value for t in tiers],
+        "concurrency": concurrency,
     }
     logger.info("prewarm-report-cache: %s",
                 {k: v for k, v in result.items() if k != "errors"})

@@ -33,9 +33,16 @@ class _FakeProduct:
         return [{"value": "AAA", "label": "AAA"}, {"value": "BBB", "label": "BBB"}]
 
 
+class _DummyWDB:
+    """Sesión por-reporte: solo necesita cerrarse."""
+    def close(self):
+        pass
+
+
 def _patch(monkeypatch, *, activated_tiers, calls, boom=None):
     monkeypatch.setattr(pw, "registered_sectors", lambda: ["fake"])
     monkeypatch.setattr(pw, "get_product", lambda sector, db: _FakeProduct())
+    monkeypatch.setattr(pw, "SessionLocal", lambda: _DummyWDB())
     monkeypatch.setattr(
         pw, "_is_activated",
         lambda db, sector, tier: tier in activated_tiers)
@@ -104,6 +111,7 @@ def test_system_tier_uses_single_none_scope(monkeypatch):
 
     monkeypatch.setattr(pw, "registered_sectors", lambda: ["fake"])
     monkeypatch.setattr(pw, "get_product", lambda sector, db: _SystemProduct())
+    monkeypatch.setattr(pw, "SessionLocal", lambda: _DummyWDB())
     monkeypatch.setattr(pw, "_is_activated", lambda db, sector, tier: True)
 
     async def _fake_assemble(product, tier, *, period, scope, lang):
