@@ -29,9 +29,10 @@ GKG_TABLE = "gdelt-bq.gdeltv2.gkg_partitioned"
 WINDOW_DAYS = 30
 
 # GDELT V2Locations carries FIPS 10-4 country codes (not ISO). Map FIPS → our ISO2.
-FIPS_TO_ISO2: Dict[str, str] = {
-    "DR": "DO", "CS": "CR", "PM": "PA", "GT": "GT", "JM": "JM",
-}
+# Fuente única (24 países) en shared.data.latam_peers.
+from shared.data.latam_peers import fips_to_iso2
+
+FIPS_TO_ISO2: Dict[str, str] = fips_to_iso2()
 
 
 class GdeltBQError(RuntimeError):

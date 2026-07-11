@@ -159,4 +159,6 @@ def test_fetch_imf_parses_ok_shape(monkeypatch):
 
 
 def test_iso_map_is_consistent():
-    assert ISO3_TO_ISO2["DOM"] == "DO" and len(ISO3_TO_ISO2) == 5
+    # Panel LatAm+Caribe completo (24, fuente única shared.data.latam_peers).
+    assert ISO3_TO_ISO2["DOM"] == "DO" and ISO3_TO_ISO2["VEN"] == "VE"
+    assert len(ISO3_TO_ISO2) == 24
