@@ -16,6 +16,22 @@ def test_render_basic_pdf(tmp_path):
     assert os.path.getsize(path) > 2000
 
 
+def test_render_tall_chart_does_not_overflow_page(tmp_path):
+    # Regresión: un gráfico con MUCHAS barras (p.ej. la trayectoria WGI de 26 años) generaba
+    # una imagen más alta que el marco de página → LayoutError → 500 al descargar el PDF.
+    # Ahora se escala por alto y el PDF se genera igual.
+    from shared.products.render import render_product_pdf
+    tall = {"title": "Trayectoria WGI (0-100)",
+            "items": [(str(1996 + i), 40.0 + i) for i in range(26)]}  # 26 barras
+    path = render_product_pdf(
+        sector_key="macro", display_name="República Dominicana",
+        title="Deep Dive Riesgo-País", period="2024-12-31",
+        narratives={"gov": "Trayectoria institucional."},
+        section_titles={"gov": "Gobernanza"},
+        charts=[tall], output_dir=str(tmp_path))
+    assert os.path.exists(path) and os.path.getsize(path) > 2000
+
+
 def test_render_sample_overlay(tmp_path):
     from shared.products.render import render_product_pdf
     path = render_product_pdf(

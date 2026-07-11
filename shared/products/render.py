@@ -43,6 +43,9 @@ SAMPLE_RED = HexColor("#991B1B")
 WHITE = HexColor("#FFFFFF")
 MARGIN = 0.75 * inch
 CONTENT_W = A4[0] - 2 * MARGIN
+# Alto máximo de una imagen embebida: debe caber en el marco de página tras el furniture
+# (cabecera/pie). Un gráfico más alto se escala hacia abajo en vez de romper el layout.
+MAX_IMG_H = A4[1] - 2 * MARGIN - 1.25 * inch
 
 DISCLAIMER_ES = (
     "Las opiniones expresadas en este informe son de SDQ Consulting y no constituyen "
@@ -389,7 +392,14 @@ def render_product_pdf(
     # Gráficos de marca (barras de dimensión/contribución, línea de tendencia) — PNG embebido.
     from shared.products.charts import render_charts
     for _ctitle, png in render_charts(charts, out_dir, f"{sector_key}_{ts}"):
-        body.append(Image(png, width=CONTENT_W, height=CONTENT_W * _img_ratio(png)))
+        # Escalar a ancho de contenido; pero si un gráfico "alto" (muchas barras, p.ej. la
+        # trayectoria WGI de 26 años) excede el alto útil de página, cap por ALTO y reduce
+        # el ancho — antes tiraba LayoutError → 500 al descargar el PDF (bug real).
+        ratio = _img_ratio(png)
+        w, h = CONTENT_W, CONTENT_W * ratio
+        if ratio > 0 and h > MAX_IMG_H:
+            h, w = MAX_IMG_H, MAX_IMG_H / ratio
+        body.append(Image(png, width=w, height=h))
         body.append(Spacer(1, 0.2 * inch))
     for heading, rows in (tables or []):
         if rows:
