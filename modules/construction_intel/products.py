@@ -18,6 +18,7 @@ para sobreescribir el registro.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -297,6 +298,10 @@ class ConstructionProduct:
         audience = "inversionista"
         templates = {"recommendation": "sector_decision", "positioning": "sector_positioning"}
         out: Dict[str, str] = {}
+        # Secciones con cifras → una llamada IA c/u, generadas en PARALELO (asyncio.gather):
+        # antes era secuencial (~15s × N secciones). El cliente Anthropic ya libera el event
+        # loop (asyncio.to_thread en claude_engine); aquí solo falta lanzar las llamadas juntas.
+        pending: List = []   # (section, kwargs de generate)
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
@@ -305,11 +310,17 @@ class ConstructionProduct:
             if section == "recommendation":
                 ctx["enfoque"] = ("Cierre ACCIONABLE: la palanca de mayor retorno sobre la "
                                   "coyuntura del sector construcción, dado el cuadro anterior.")
-            res = await narrative_engine.generate(
+            pending.append((section, dict(
                 context=ctx, template=templates.get(section, "construction_outlook"),
                 mode=section_mode(tier, section, sections),
-                axis="construction_intel", audience=audience)
-            out[section] = res.text
+                axis="construction_intel", audience=audience)))
+
+        async def _gen(section: str, kwargs: Dict) -> tuple:
+            res = await narrative_engine.generate(**kwargs)
+            return section, res.text
+
+        for section, text in await asyncio.gather(*(_gen(s, k) for s, k in pending)):
+            out[section] = text
         return out
 
     # ── Render (sin DB, renderer genérico) ──

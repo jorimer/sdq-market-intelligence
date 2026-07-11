@@ -12,6 +12,7 @@ renderizan DETERMINISTAS desde el payload; la IA solo evalúa la postura y recom
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
@@ -204,15 +205,25 @@ class MonetaryPolicyProduct:
     async def narratives(self, tier: ProductTier, snapshot: ProductSnapshot,
                          lang: str = "es") -> Dict[str, str]:
         sections = self.product_manifest().require_level(tier).sections
-        out: Dict[str, str] = {}
         eval_ctx = snapshot.payload.get("eval_context") or {}
-        for section in sections:
+
+        async def _gen(section: str) -> tuple:
+            # Deterministas (cifras del payload) → al instante; las secciones con IA
+            # (mp_evaluation/recommendation) hacen la llamada al motor.
             if section == "tpm_snapshot":
-                out[section] = _tpm_snapshot_md(snapshot.payload)
-            elif section == "forecast":
-                out[section] = _forecast_md(snapshot.payload)
-            elif section in ("mp_evaluation", "recommendation"):
-                out[section] = await _mp_narrative(section, eval_ctx, snapshot.payload, tier)
+                return section, _tpm_snapshot_md(snapshot.payload)
+            if section == "forecast":
+                return section, _forecast_md(snapshot.payload)
+            if section in ("mp_evaluation", "recommendation"):
+                return section, await _mp_narrative(section, eval_ctx, snapshot.payload, tier)
+            return section, None
+
+        # Las secciones con IA se generan en PARALELO (asyncio.gather); las deterministas
+        # resuelven de inmediato. El cliente Anthropic ya libera el event loop (to_thread).
+        out: Dict[str, str] = {}
+        for section, text in await asyncio.gather(*(_gen(s) for s in sections)):
+            if text is not None:
+                out[section] = text
         return out
 
     # ── Render ──

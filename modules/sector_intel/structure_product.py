@@ -12,6 +12,7 @@ del Valor Agregado. Naturaleza NACIONAL → ``entity_roster=()``.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -293,15 +294,25 @@ class EconomicStructureProduct:
             "recommendation": "economic_structure_decision",
         }
         out: Dict[str, str] = {}
+        # Secciones con cifras → una llamada IA c/u, generadas en PARALELO (asyncio.gather):
+        # antes era secuencial (~15s × N secciones). El cliente Anthropic ya libera el event
+        # loop (asyncio.to_thread en claude_engine); aquí solo falta lanzar las llamadas juntas.
+        pending: List = []   # (section, kwargs de generate)
         for section in sections:
             if section == "limitations":
                 out["limitations"] = _LIMITATIONS
                 continue
-            res = await narrative_engine.generate(
+            pending.append((section, dict(
                 context=base_ctx, template=templates.get(section, "economic_structure_outlook"),
                 mode=section_mode(tier, section, sections, deep_section="mechanism"),
-                axis="economic_structure", audience=audience)
-            out[section] = res.text
+                axis="economic_structure", audience=audience)))
+
+        async def _gen(section: str, kwargs: Dict) -> tuple:
+            res = await narrative_engine.generate(**kwargs)
+            return section, res.text
+
+        for section, text in await asyncio.gather(*(_gen(s, k) for s, k in pending)):
+            out[section] = text
         return out
 
     # ── Render (sin DB, renderer genérico) ──
