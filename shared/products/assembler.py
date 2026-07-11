@@ -49,8 +49,12 @@ async def _narratives_cached(
     lectura/escritura cae a la generación directa."""
     from shared.products.models import ProductReportCache
 
-    db = getattr(product, "db", None)
-    if db is None:  # sin sesión → sin caché
+    # Los productos guardan la sesión en `_db` (el contrato SectorProduct no expone `db`
+    # público); aceptamos ambos por robustez. OJO: leer solo `db` dejaba esta caché MUERTA
+    # —todo producto caía a "sin caché" y regeneraba en cada descarga (~15-90s)—. Sin sesión
+    # (muestras/tests) → sin caché, correcto.
+    db = getattr(product, "db", None) or getattr(product, "_db", None)
+    if db is None:
         return await product.narratives(tier, snapshot, lang)
 
     fp = _narrative_fingerprint(snapshot.payload, tier.value, lang)
