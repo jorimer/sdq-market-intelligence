@@ -21,6 +21,23 @@ _TRACKED = ("macro.updated", "irmp.updated", "trade.updated", "sector.updated",
             "tourism.updated", "construction.updated")
 
 
+def _trigger_prewarm() -> None:
+    """Re-calienta la caché de reportes tras un cambio de dato (op en background, deduped).
+
+    Cierra la ventana en que la 1ª descarga vuelve a ser lenta desde que un sync refresca el
+    dato hasta la corrida agendada (24h): un fingerprint nuevo invalida la caché de ese
+    producto y la próxima descarga regeneraría (~15-90s). El disparo NO bloquea al publicador
+    —``trigger`` lanza la op en su propio hilo— y el guard de "ya en curso" deduplica la
+    tormenta de eventos de un deploy. El warm es idempotente: solo regenera lo que cambió."""
+    try:
+        from shared.operations.service import trigger
+        res = trigger("prewarm-report-cache", origin="cascade", user_id=None)
+        if not res.get("started"):
+            logger.info("prewarm-report-cache no disparado tras evento: %s", res.get("reason"))
+    except Exception:  # noqa: BLE001 — un fallo al encolar el warm no debe romper al publicador
+        logger.exception("No se pudo disparar prewarm-report-cache tras evento de datos")
+
+
 def _on_data_updated(payload: dict) -> None:
     db = SessionLocal()
     try:
@@ -30,6 +47,8 @@ def _on_data_updated(payload: dict) -> None:
         db.rollback()
     finally:
         db.close()
+    # Con el dato ya refrescado, re-calentar la caché de reportes (background, idempotente).
+    _trigger_prewarm()
 
 
 def subscribe_product_events() -> None:
