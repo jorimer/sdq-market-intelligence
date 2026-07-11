@@ -77,6 +77,50 @@ def test_ingest_maps_iso3_to_iso2_and_stores_score_and_meta(db):
     assert _get(db, "CR", "2024", "wgi_rule_of_law").value == pytest.approx(67.58)
 
 
+_ASSET_VOL = {
+    "meta": {"source": "WGI 2025"},
+    "data": {
+        "DOM": {
+            "wgi_regulatory_quality": {
+                "2019": {"score": 40.0},   # fuera de la ventana de 5 años → excluido
+                "2020": {"score": 53.3}, "2021": {"score": 54.7}, "2022": {"score": 53.9},
+                "2023": {"score": 55.6}, "2024": {"score": 58.1},
+            },
+        },
+        "CRI": {  # un solo punto → sin varianza computable → sin fila derivada
+            "wgi_regulatory_quality": {"2024": {"score": 64.0}},
+        },
+    },
+}
+
+
+def test_derives_regulatory_volatility_from_wgi_series(db):
+    import statistics
+
+    res = ingest_wgi2025(db, asset=_ASSET_VOL)
+    assert res["derived_regulatory_volatility"] == 1   # solo DO tiene ≥2 puntos
+
+    row = _get(db, "DO", "2024", "regulatory_volatility_5y")
+    # std de las ÚLTIMAS 5 (2020-2024); el 2019 queda fuera de la ventana.
+    assert row.value == pytest.approx(statistics.pstdev([53.3, 54.7, 53.9, 55.6, 58.1]), abs=1e-4)
+    assert row.source == "WGI-2025 (derivado)"
+    assert row.meta["derived_from"] == "wgi_regulatory_quality"
+    assert row.meta["window"] == 5 and row.meta["n"] == 5
+
+    # Costa Rica: un solo punto → NO se fabrica volatilidad.
+    assert (db.query(CountryVariable)
+            .filter_by(iso_code="CR", variable="regulatory_volatility_5y").count() == 0)
+
+
+def test_regulatory_volatility_is_idempotent(db):
+    ingest_wgi2025(db, asset=_ASSET_VOL)
+    ingest_wgi2025(db, asset=_ASSET_VOL)
+    rows = db.query(CountryVariable).filter_by(
+        iso_code="DO", variable="regulatory_volatility_5y"
+    ).all()
+    assert len(rows) == 1   # una fila por país, actualizada en sitio
+
+
 def test_ingest_is_idempotent(db):
     ingest_wgi2025(db, asset=_ASSET)
     ingest_wgi2025(db, asset=_ASSET)
