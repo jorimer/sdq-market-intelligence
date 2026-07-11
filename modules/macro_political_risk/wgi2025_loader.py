@@ -13,8 +13,9 @@ metadata the product needs for trajectory, confidence and drill-down.
 """
 import json
 import logging
+import statistics
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,17 @@ logger = logging.getLogger("sdq.mpr.wgi2025")
 _ASSET_PATH = Path(__file__).resolve().parent / "data" / "wgi2025.json"
 
 SOURCE_TAG = "WGI-2025"
+SOURCE_TAG_DERIVED = "WGI-2025 (derivado)"
+
+# `regulatory_volatility_5y` (IRMP, regulación · risk-increasing) se DERIVA de la
+# serie WGI de calidad regulatoria en vez de teclearse: la desviación estándar de las
+# últimas ``_REG_VOL_WINDOW`` observaciones anuales = inestabilidad regulatoria real.
+# Es una señal DISTINTA del nivel (``wgi_regulatory_quality``, que ya es input aparte),
+# así que no hay doble conteo. El motor del IRMP la normaliza min-max contra el peer set
+# y la invierte (más volatilidad → más riesgo). Espeja ``_load_wgi_volatility`` del IAI.
+_REG_VOL_VAR = "regulatory_volatility_5y"
+_REG_VOL_SOURCE_DIM = "wgi_regulatory_quality"
+_REG_VOL_WINDOW = 5
 
 # iso3 (asset keys) → iso2 (CountryVariable.iso_code). Mirrors validation/peers.py.
 ISO3_TO_ISO2: Dict[str, str] = {
@@ -43,13 +55,30 @@ def load_asset(path: Optional[Path] = None) -> dict:
         return json.load(fh)
 
 
+def _regulatory_volatility(by_year: Dict[str, dict]) -> Optional[tuple]:
+    """``(period, std, n)`` for the regulatory-quality volatility of one country:
+    population std of the last ``_REG_VOL_WINDOW`` annual scores. ``None`` when
+    there are <2 usable points (no variance computable)."""
+    pts: List[tuple] = [
+        (yr, e["score"]) for yr, e in by_year.items() if e.get("score") is not None
+    ]
+    if len(pts) < 2:
+        return None
+    pts.sort(key=lambda p: int(p[0]))
+    window = pts[-_REG_VOL_WINDOW:]
+    scores = [s for _yr, s in window]
+    return window[-1][0], round(statistics.pstdev(scores), 4), len(window)
+
+
 def ingest_wgi2025(
     db: Session,
     asset: Optional[dict] = None,
     set_phase: Optional[Callable[[str], None]] = None,
 ) -> Dict:
     """Upsert every (country, year, variable) governance observation from the
-    asset. Idempotent by the ``(iso_code, period, variable)`` unique key.
+    asset. Idempotent by the ``(iso_code, period, variable)`` unique key. Also
+    derives and persists ``regulatory_volatility_5y`` per country (std of the
+    regulatory-quality series) so the IRMP scores it as real, not rubric.
 
     Returns a summary: rows upserted, economies, years covered, errors[].
     """
@@ -66,8 +95,16 @@ def ingest_wgi2025(
             CountryVariable.variable.like("wgi_%")
         )
     }
+    # Derived regulatory_volatility_5y rows are keyed outside the wgi_% space, so
+    # prefetch them separately to stay idempotent across re-runs.
+    existing_vol = {
+        (r.iso_code, r.variable): r
+        for r in db.query(CountryVariable).filter(
+            CountryVariable.variable == _REG_VOL_VAR
+        )
+    }
 
-    upserts, years, errors = 0, set(), []
+    upserts, years, errors, derived = 0, set(), [], 0
     for iso3, by_var in data.items():
         iso2 = ISO3_TO_ISO2.get(iso3)
         if not iso2:
@@ -99,6 +136,24 @@ def ingest_wgi2025(
                     row.source = SOURCE_TAG
                     row.meta = meta
                 upserts += 1
+        # Derivar la volatilidad regulatoria (una fila por país, al período más
+        # reciente de la serie). Mata la rúbrica `regulatory_volatility_5y` del IRMP.
+        vol = _regulatory_volatility(by_var.get(_REG_VOL_SOURCE_DIM, {}))
+        if vol is not None:
+            vperiod, vstd, vn = vol
+            vmeta = {"derived_from": _REG_VOL_SOURCE_DIM, "window": _REG_VOL_WINDOW, "n": vn}
+            vrow = existing_vol.get((iso2, _REG_VOL_VAR))
+            if vrow is None:
+                vrow = CountryVariable(
+                    iso_code=iso2, period=vperiod, variable=_REG_VOL_VAR,
+                    value=vstd, source=SOURCE_TAG_DERIVED, meta=vmeta,
+                )
+                db.add(vrow)
+                existing_vol[(iso2, _REG_VOL_VAR)] = vrow
+            else:
+                vrow.period, vrow.value = vperiod, vstd
+                vrow.source, vrow.meta = SOURCE_TAG_DERIVED, vmeta
+            derived += 1
         set_phase(f"cargando {iso3}")
 
     db.commit()
@@ -107,6 +162,7 @@ def ingest_wgi2025(
                 max(years) if years else "-")
     return {
         "upserts": upserts,
+        "derived_regulatory_volatility": derived,
         "economies": len(data),
         "years": sorted(years),
         "source": SOURCE_TAG,

@@ -89,11 +89,14 @@ sovereign_ratings:
   GT: {rating: "BB+",  agency: "S&P", as_of: "2025-05-23"}
   JM: {rating: "BB",   agency: "S&P", as_of: "2025-12-18"}
 
-# RÚBRICA declarada (no hay API): las variables de juicio del IRMP aún no sourced
-# en vivo, con su valor 0-100 por país. Fuente única para backend (snapshot) y
-# frontend, de modo que el índice persistido coincida con el mostrado. Ajustable
-# por PR. NOTA: news_sentiment/unrest_shocks/sanctions_signal se reemplazarán por
-# dato real (GDELT) en T8 — al persistirse, el ensamblado los sobreescribe.
+# RÚBRICA declarada (fallback): valor 0-100 por país que el ensamblado usa SOLO
+# cuando no hay dato real persistido para esa variable. El overlay live→rubric hace
+# que, al sincronizarse la fuente, el dato real gane. Ya NO son rúbrica en vivo:
+#   • news_sentiment / unrest_shocks / sanctions_signal ← GDELT (gdelt-bq-sync)
+#   • regulatory_volatility_5y ← std de la serie WGI de calidad regulatoria
+#     (derivado en wgi-2025-load; señal de inestabilidad, distinta del nivel).
+# Siguen rúbrica pura (pendiente de fuente): electoral_uncertainty, policy_continuity,
+# discretion, contract_enforcement. Estos valores quedan como fallback declarado.
 rubric_inputs:
   DO: {electoral_uncertainty: 30, policy_continuity: 65, regulatory_volatility_5y: 25, discretion: 35, contract_enforcement: 55, news_sentiment: 15, unrest_shocks: 20, sanctions_signal: 5}
   CR: {electoral_uncertainty: 22, policy_continuity: 70, regulatory_volatility_5y: 18, discretion: 28, contract_enforcement: 64, news_sentiment: 18, unrest_shocks: 16, sanctions_signal: 3}
