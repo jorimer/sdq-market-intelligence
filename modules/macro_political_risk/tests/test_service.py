@@ -26,11 +26,11 @@ from modules.macro_political_risk.service import (
 
 DATASET = {
     "DO": {"gdp_cagr_3y": 5.0, "public_debt_gdp": 45.0, "wgi_rule_of_law": 55.0,
-           "fx_volatility": 3.0, "news_sentiment": 20.0, "discretion": 30.0},
+           "fx_volatility": 3.0, "news_sentiment": 20.0, "regulatory_volatility_5y": 1.5},
     "CR": {"gdp_cagr_3y": 3.0, "public_debt_gdp": 63.0, "wgi_rule_of_law": 65.0,
-           "fx_volatility": 5.0, "news_sentiment": 10.0, "discretion": 40.0},
+           "fx_volatility": 5.0, "news_sentiment": 10.0, "regulatory_volatility_5y": 0.5},
     "PA": {"gdp_cagr_3y": 1.0, "public_debt_gdp": 52.0, "wgi_rule_of_law": 50.0,
-           "fx_volatility": 8.0, "news_sentiment": -10.0, "discretion": 60.0},
+           "fx_volatility": 8.0, "news_sentiment": -10.0, "regulatory_volatility_5y": 2.0},
 }
 
 
@@ -181,26 +181,40 @@ def test_country_variables_cross_source_lag_keeps_both(db):
 
 
 def test_assemble_overlays_live_over_rubric(db):
-    # Rubric comes from doctrine; persisted live data overrides it where present.
+    # Rubric (fallback) comes from doctrine; persisted live data overrides it where present.
     db.add(CountryVariable(iso_code="DO", period="2024", variable="public_debt_gdp",
                            value=58.8, source="IMF_WEO"))
-    # A live value that also exists as a rubric var must win:
-    db.add(CountryVariable(iso_code="DO", period="2024", variable="contract_enforcement",
-                           value=99.0, source="WGI"))
+    # A live value that also exists as a rubric-fallback var must win:
+    db.add(CountryVariable(iso_code="DO", period="2024", variable="news_sentiment",
+                           value=42.0, source="GDELT"))
     db.commit()
 
     asm = assemble_irmp_dataset(db)
     do = asm["dataset"]["DO"]
-    # rubric var present (declared, from doctrine) — policy_continuity aún es rúbrica
-    assert "policy_continuity" in do
-    assert asm["sources"]["DO"]["policy_continuity"] == "rubric"
+    # rubric fallback present (declared, from doctrine) — sanctions_signal sin dato live
+    assert "sanctions_signal" in do
+    assert asm["sources"]["DO"]["sanctions_signal"] == "rubric"
     # live var added
     assert do["public_debt_gdp"] == 58.8
     assert asm["sources"]["DO"]["public_debt_gdp"] == "live"
-    # live overrides the rubric value for the same var
-    assert do["contract_enforcement"] == 99.0
-    assert asm["sources"]["DO"]["contract_enforcement"] == "live"
+    # live overrides the rubric fallback for the same var
+    assert do["news_sentiment"] == 42.0
+    assert asm["sources"]["DO"]["news_sentiment"] == "live"
     assert asm["has_live"] is True
+
+
+def test_rationalized_rubric_vars_are_not_scored(db):
+    # policy_continuity / discretion / contract_enforcement se RETIRARON del índice
+    # (doble conteo de WGI). Ya no están en la doctrina ni se puntúan en ninguna dimensión.
+    from modules.macro_political_risk.scoring.weights import IRMP_CONFIG
+
+    all_vars = {v for vs in IRMP_CONFIG.dimension_variables.values() for v in vs}
+    assert {"policy_continuity", "discretion", "contract_enforcement"}.isdisjoint(all_vars)
+    assert "discretion" not in IRMP_CONFIG.risk_increasing
+    # la dimensión política conserva las 5 WGI + electoral; la regulatoria, nivel + volatilidad
+    assert set(IRMP_CONFIG.dimension_variables["regulatory"]) == {
+        "wgi_regulatory_quality", "regulatory_volatility_5y"}
+    assert "electoral_uncertainty" in IRMP_CONFIG.dimension_variables["political"]
 
 
 def test_assemble_computes_electoral_uncertainty_from_calendar(db):
