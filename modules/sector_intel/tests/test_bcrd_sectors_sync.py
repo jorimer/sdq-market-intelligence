@@ -249,6 +249,10 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     assert first["errors"] == []
     assert first["synced"] > 0
     assert first["sectors_seeded"] == 17
+    # El fixture ahora refleja el híbrido (2007+): el vintage histórico está presente
+    # y visible en el resumen de la operación.
+    assert first["historical"] == "included"
+    assert first["range"][0] <= 2017 and first["range"][1] >= 2024
     assert set(first["variables"]) == {VAR_SIZE, VAR_GROWTH}
     n1 = db.query(SectorVariable).count()
     assert n1 == first["synced"]
@@ -268,3 +272,28 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     assert row is not None
     assert row.source == "BCRD"
     assert row.dimension == "sector"
+
+
+def test_sync_flags_missing_retropolado_history_visibly(db, monkeypatch):
+    # Si el retropolado no llega (CDN renombrado), el conector cae a solo-vigente
+    # (2018+). Esa degradación NO debe ser silenciosa: la sync la infiere del rango y
+    # la rota a errors[] + ``historical: unavailable`` para que el console/freshness la vea.
+    from datetime import date as _date
+
+    from shared.data.bcrd_sectors import Record, VAR_GROWTH as _VG, VAR_SIZE as _VS
+    from shared.data.lineage import Lineage
+
+    def _only_current(self, series=None, period=None):
+        lin = Lineage(source="BCRD", license="x", fetched_at=_date.today())
+        out = []
+        for slug, _lbl, _n in SECTORS:
+            for y in (2024, 2025):
+                out.append(Record(series=_VS, period=str(y), value=5.0, lineage=lin, dimension=slug))
+                out.append(Record(series=_VG, period=str(y), value=1.0, lineage=lin, dimension=slug))
+        return out
+
+    monkeypatch.setattr(BCRDSectorsClient, "_fetch_live", _only_current)
+    res = bcrd_sectores_sync(db)
+    assert res["historical"] == "unavailable"
+    assert res["range"] == [2024, 2025]
+    assert any("retropolado" in e for e in res["errors"])  # degradación visible, no silenciosa
