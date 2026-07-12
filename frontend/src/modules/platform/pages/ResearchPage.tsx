@@ -37,6 +37,8 @@ const STATE_META: Record<
 
 const SECTION_TITLES: Record<string, string> = {
   resumen_ejecutivo: "Resumen ejecutivo",
+  dictamen: "Dictamen integrado",
+  evidencia: "Evidencia por motor",
   respuesta_a_su_pregunta: "Respuesta a su pregunta",
   hallazgos: "Hallazgos",
   metodologia: "Metodología",

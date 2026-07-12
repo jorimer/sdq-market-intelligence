@@ -236,6 +236,30 @@ THIN_TEMPLATES = {
         "motor computa— DECILO explícitamente como límite del análisis; NO lo rellenes con "
         "conocimiento general ni con una estimación propia."
     ),
+    # Research tema-primero: SÍNTESIS CROSS-DOMINIO. Integra el resultado de VARIOS motores
+    # (entidad + macro/monetario/regulatorio/externo) alrededor de la pregunta — lo que un
+    # solo producto no puede. Estructura por la pregunta/decisión, no por dimensiones de rating.
+    "research_synthesis": (
+        "Sos un analista senior de SDQ. Respondé la PREGUNTA del comprador ('pregunta') "
+        "INTEGRANDO el resultado de los distintos motores del sistema en 'dominios' (cada uno "
+        "trae dato REAL ya computado: una entidad, el macro, el monetario, etc.). El valor de "
+        "este informe —y por lo que se paga— es la SÍNTESIS entre dominios: los mecanismos de "
+        "transmisión que conectan un motor con otro, no la ficha de ninguno.\nContexto:\n{context}\n\n"
+        "Estructurá la respuesta EXACTAMENTE con estos encabezados markdown:\n"
+        "## Tesis — el veredicto que responde la pregunta, en 3-4 frases.\n"
+        "## Mecanismos de transmisión — los CANALES cross-dominio por los que la pregunta se "
+        "resuelve (p.ej. cómo la postura monetaria del sistema golpea el fondeo de la entidad, "
+        "cómo la presión externa se conecta con su liquidez). Este es el núcleo: conectá los "
+        "motores, no los recites por separado. Nombrá el dominio de cada cifra.\n"
+        "## Posición y evidencia — las cifras reales que sostienen la tesis, de cada motor.\n"
+        "## Disparadores y monitoreo — orientado a la DECISIÓN del comprador: qué vigilar, qué "
+        "umbrales, qué cambiaría el veredicto.\n\n"
+        "REGLA DURA DE CIFRAS: usá SOLO los números de 'dominios'; no inventes ni derives lo "
+        "que no está servido; si una relación no está dada, decila en palabras SIN número. "
+        "PROCEDENCIA: sobre dato 'real' construí con firmeza; sobre 'rúbrica' nómbrala. BRECHA: "
+        "lo que la pregunta pide y ningún motor computa (proyecciones/escenarios a futuro), "
+        "DECILO como límite; no lo estimes. Extensión: hasta ~700 palabras, denso, sin relleno."
+    ),
     "early_warning_reading": (
         "Interpreta el CONJUNTO de señales de alerta temprana YA detectadas para esta entidad "
         "(no es un reporte de estado ni una relista). Contexto:\n{context}\n\n"

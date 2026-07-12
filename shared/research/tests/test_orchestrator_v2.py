@@ -69,6 +69,52 @@ async def test_narrate_returns_none_without_pulls():
     assert await narrate_answer("una pregunta", []) is None
 
 
+# ─── síntesis cross-dominio (tema-primero) ─────────────────────────────
+def test_context_axes_banking_pulls_macro_monetary():
+    from shared.research.resolve import context_axes
+    ctx = context_axes("riesgo de liquidez del banco", ["banking"])
+    assert "monetary_policy" in ctx and "macro" in ctx
+
+
+@pytest.mark.asyncio
+async def test_synthesis_integrates_multiple_engines(monkeypatch):
+    import shared.research.deep_report as dr
+
+    class T:
+        entities = [ResolvedEntity("banking", "id1", "Banco Lafise")]
+        axes: list = []
+        context = ["monetary_policy", "macro"]
+
+    def fake_pull_entity(db, e):
+        return _pull("Banco Lafise", "banking")
+
+    def fake_pull_axis(db, sk):
+        return EnginePull(sector_key=sk, entity_label=f"Sistema {sk}", period="2026-03",
+                          source=f"BCRD·{sk}", payload={"index": {"score": 55.0}},
+                          evidence=[Evidence(text=f"{sk} sistema: score 55.0", source=f"BCRD·{sk}",
+                                             kind="engine", state=REAL, score=90.0)], ok=True)
+
+    import shared.research.data_pull as dp
+    import shared.research.narrate as nar
+    monkeypatch.setattr(dp, "pull_entity", fake_pull_entity)
+    monkeypatch.setattr(dp, "pull_axis", fake_pull_axis)
+
+    async def fake_synth(question, live, *, forward_gaps=None, lang="es"):
+        # recibe los 3 motores (entidad + 2 de contexto) → integra
+        assert len(live) == 3
+        return "## Tesis\nLafise es vulnerable al fondeo.\n## Mecanismos de transmisión\n..."
+
+    monkeypatch.setattr(nar, "narrate_synthesis", fake_synth)
+
+    report = await dr.build_synthesis_report("riesgo de liquidez de Banco Lafise próximos 12 meses",
+                                             db=object(), targets=T(), forward_gaps=[])
+    assert report is not None
+    assert report.ordered_keys[0] == "dictamen"
+    assert "evidencia" in report.ordered_keys
+    # las fuentes de los 3 motores aparecen (síntesis multi-dominio).
+    assert any("monetary_policy" in s or "BCRD" in s for s in report.sources)
+
+
 # ─── end-to-end (sin DB, sin Cerebro): pull inyectado vía monkeypatch ──
 @pytest.mark.asyncio
 async def test_answer_uses_engine_evidence_and_declares_forward_gap(monkeypatch):

@@ -64,6 +64,16 @@ def _looks_real(text: str) -> bool:
 
 SECTION_TITLES["metodologia"] = "Metodología y fuentes"
 SECTION_TITLES["limitaciones"] = "Limitaciones"
+SECTION_TITLES["dictamen"] = "Dictamen integrado"
+SECTION_TITLES["evidencia"] = "Evidencia por motor"
+
+_SYNTH_METHODOLOGY = (
+    "Este informe INTEGRA el resultado ya computado de varios motores del sistema SDQ "
+    "—{engines}— alrededor de la pregunta. No es la ficha de un sector: es la síntesis de "
+    "los mecanismos de transmisión entre dominios, que ningún producto individual entrega. "
+    "El Cerebro redactó circunscrito a esas cifras (verificador numérico activo: no se cita "
+    "ningún número que no trace al dato de un motor). Sin web abierta ni fuentes externas en "
+    "vivo. Lo que ningún motor computa se declara como límite, no se rellena.")
 
 _METHODOLOGY_TEXT = (
     "La respuesta se ancló al resultado ya computado por el motor de la entidad "
@@ -158,6 +168,66 @@ def _headline(payload: Dict[str, Any]) -> str:
     if tier and isinstance(score, (int, float)):
         return f"{tier} · {score:.1f}/100"
     return ""
+
+
+async def build_synthesis_report(question: str, db: Optional[Session], targets,
+                                 forward_gaps: List[DeclaredGap]) -> Optional[DeepReport]:
+    """Research TEMA-PRIMERO: cosecha el dato real de TODOS los motores que la pregunta
+    convoca (entidades + dominios de contexto: macro, monetario, …) y entrega un DICTAMEN
+    INTEGRADO —los mecanismos de transmisión entre dominios— en vez de la ficha de un sector.
+    Es lo que un Deep Dive estructuralmente no puede dar. ``None`` si no hay dato/Cerebro."""
+    from shared.research.data_pull import pull_axis, pull_entity
+    from shared.research.narrate import narrate_synthesis
+
+    if db is None:
+        return None
+    pulls: List[EnginePull] = []
+    for ent in targets.entities:
+        pulls.append(pull_entity(db, ent))
+    for ax in list(targets.axes) + list(targets.context):
+        pulls.append(pull_axis(db, ax))
+    live = [p for p in pulls if p.ok and p.payload]
+    if not live:
+        return None
+
+    thesis = await narrate_synthesis(question, live,
+                                     forward_gaps=[g.note for g in forward_gaps])
+    if not thesis:
+        return None  # sin Cerebro → el orquestador cae al ensamblado liviano
+
+    sections: Dict[str, str] = {"dictamen": f"**Pregunta:** {question}\n\n{thesis}"}
+    ordered = ["dictamen"]
+
+    # Evidencia por motor (determinista, cifras reales de cada dominio cosechado).
+    ev: List[str] = []
+    for p in live:
+        ev.append(f"### {p.entity_label} · {p.sector_key}")
+        ev.extend(f"- {e.text}" for e in p.evidence[:4])
+    sections["evidencia"] = "\n".join(ev)
+    ordered.append("evidencia")
+
+    engines = ", ".join(dict.fromkeys(p.source for p in live))
+    sections["metodologia"] = _SYNTH_METHODOLOGY.format(engines=engines)
+    ordered.append("metodologia")
+    lim = _LIMITATIONS_TEXT
+    if forward_gaps:
+        lim += "\n\n**Fuera de alcance (declarado):**\n" + "\n".join(
+            f"- {g.note}" for g in forward_gaps)
+    sections["limitaciones"] = lim
+    ordered.append("limitaciones")
+
+    # Gráficos/tablas del motor primario con entidad (si lo hay).
+    ent_pull = next((p for p in live if any(p.sector_key == e.sector_key
+                     for e in targets.entities)), live[0])
+    titles = {k: SECTION_TITLES.get(k, k.replace("_", " ").title()) for k in ordered}
+    sources = list(dict.fromkeys(p.source for p in live))
+    return DeepReport(
+        entity_label=ent_pull.entity_label, sector_key=ent_pull.sector_key,
+        period=ent_pull.period, ordered_keys=ordered, sections=sections, titles=titles,
+        charts=_charts_from_payload(ent_pull.payload),
+        tables=_tables_from_payload(ent_pull.payload),
+        headline=_headline(ent_pull.payload), sources=sources,
+    )
 
 
 async def build_deep_report(question: str, db: Optional[Session],
