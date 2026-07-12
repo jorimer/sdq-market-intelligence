@@ -29,8 +29,11 @@ coverage.xml
 .env.local
 .env.production
 
-# Docs
+# Docs — se excluyen del contexto por defecto para mantener la imagen liviana…
 *.md
+# …excepto los docs de metodología del corpus del motor de research, que el Dockerfile
+# copia explícitamente (solo el allowlist; ver shared/knowledge/corpus/__init__.py).
+!docs/*.md
 LICENSE
 
 # Claude Code
