@@ -216,6 +216,26 @@ TEMPLATES = {
 # indicador, percentil, peso de sub-componente, BCRD como telón). La regla "no inventes
 # cifras" NO se repite aquí: vive en EPISTEMIC_STANDARD del cerebro y sigue activa.
 THIN_TEMPLATES = {
+    # Motor de Research Custom (orquestador v2): responde una PREGUNTA LIBRE del comprador
+    # circunscrita EXCLUSIVAMENTE a los resultados ya computados por los motores del sistema
+    # (pasados en 'datos'). Genérico por eje: la persona/doctrina la pone build_system(axis).
+    "research_answer": (
+        "Respondé la PREGUNTA del comprador (campo 'pregunta') usando EXCLUSIVAMENTE los "
+        "resultados ya computados por los motores del sistema para las entidades/ejes "
+        "involucrados (campo 'datos'). NO es un reporte de estado: es la respuesta a esa "
+        "pregunta concreta.\nContexto:\n{context}\n\n"
+        "Máximo 450 palabras. Estructura: abrí con el VEREDICTO que responde la pregunta; "
+        "respaldalo con las cifras REALES del contexto que correspondan al eje (rating/score/"
+        "sub-componentes/percentil vs pares/trayectoria/alertas/sensibilidades); cerrá con el "
+        "'y por tanto' accionable para la audiencia. REGLA DURA DE CIFRAS: usá SOLO los números "
+        "servidos en 'datos'; NO inventes ni derives cifras que no estén dadas; si la relación "
+        "que querés expresar no está precalculada, decila en palabras SIN número. PROCEDENCIA: "
+        "sobre datos marcados 'real' construí con firmeza; sobre 'rúbrica declarada' no "
+        "construyas conclusión fuerte y nómbrala como tal. BRECHA (crítico): si la pregunta "
+        "pide algo que 'datos' NO cubre —p.ej. una proyección o escenario a futuro que ningún "
+        "motor computa— DECILO explícitamente como límite del análisis; NO lo rellenes con "
+        "conocimiento general ni con una estimación propia."
+    ),
     "early_warning_reading": (
         "Interpreta el CONJUNTO de señales de alerta temprana YA detectadas para esta entidad "
         "(no es un reporte de estado ni una relista). Contexto:\n{context}\n\n"

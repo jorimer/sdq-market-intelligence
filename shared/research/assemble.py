@@ -11,7 +11,7 @@ queda sin ancla.
 """
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from shared.registry.signals import REAL, RUBRIC
 from shared.research.models import DeclaredGap, SubQuestion
@@ -35,19 +35,28 @@ def _coverage_line(coverage_real: float, anchored_fraction: float) -> str:
 
 def assemble_report_sections(question: str, sub_questions: List[SubQuestion],
                              sources: List[str], gaps: List[DeclaredGap],
-                             coverage_real: float,
-                             anchored_fraction: float) -> Dict[str, str]:
-    """Informe completo: cobertura suficiente para responder con ancla mayoritaria."""
+                             coverage_real: float, anchored_fraction: float,
+                             narrative: Optional[str] = None) -> Dict[str, str]:
+    """Informe completo: cobertura suficiente para responder con ancla mayoritaria.
+
+    Si *narrative* viene dado (el Cerebro escribió la respuesta circunscrita al dato de los
+    motores), es el cuerpo del resumen ejecutivo; los hallazgos quedan como respaldo con la
+    evidencia citada. Sin narrativa, el resumen es el determinista (cobertura + estructura)."""
     anchored = [sq for sq in sub_questions if sq.anchored]
     gapped = [sq for sq in sub_questions if not sq.anchored]
 
-    resumen = (
-        f"**Pregunta:** {question}\n\n"
-        f"{_coverage_line(coverage_real, anchored_fraction)}\n\n"
-        f"Se descompuso la consulta en {len(sub_questions)} línea(s) de análisis; "
-        f"{len(anchored)} con evidencia de procedencia clara y {len(gapped)} sin ancla "
-        f"(declaradas como brecha). Las conclusiones de abajo se sostienen solo sobre "
-        f"la evidencia citada — ninguna afirmación se completa con conocimiento general.")
+    if narrative:
+        resumen = (
+            f"**Pregunta:** {question}\n\n{narrative}\n\n"
+            f"_{_coverage_line(coverage_real, anchored_fraction)}_")
+    else:
+        resumen = (
+            f"**Pregunta:** {question}\n\n"
+            f"{_coverage_line(coverage_real, anchored_fraction)}\n\n"
+            f"Se descompuso la consulta en {len(sub_questions)} línea(s) de análisis; "
+            f"{len(anchored)} con evidencia de procedencia clara y {len(gapped)} sin ancla "
+            f"(declaradas como brecha). Las conclusiones de abajo se sostienen solo sobre "
+            f"la evidencia citada — ninguna afirmación se completa con conocimiento general.")
 
     hallazgos_parts: List[str] = []
     for i, sq in enumerate(anchored, 1):

@@ -56,6 +56,33 @@ def split_question(text: str) -> List[str]:
     return out
 
 
+# Detección de peticiones forward-looking (proyección/escenario a futuro) — que ningún
+# motor computa hoy: se declaran como límite, no se rellenan.
+_FORWARD_RE = re.compile(
+    r"\b(proxim|siguientes?|futur|proyec|pronostic|forecast|escenario|"
+    r"shock|estres|stress|a \d+\s*(mes|ano|año)|\d+\s*(meses|anos|años))",
+    re.IGNORECASE,
+)
+
+
+def is_forward_looking(text: str) -> bool:
+    """¿La pregunta pide una proyección/escenario a futuro (no modelable con el dato de hoy)?"""
+    import unicodedata
+    norm = "".join(c for c in unicodedata.normalize("NFKD", text.lower())
+                   if not unicodedata.combining(c))
+    return _FORWARD_RE.search(norm) is not None
+
+
+# Fuga de código/interno: un pasaje del corpus con rutas de archivo, backticks o muchos
+# identificadores snake_case NO debe llegar a un entregable de cliente. Se filtra de la
+# evidencia mostrada (sigue en el índice, solo no se cita crudo).
+_CODE_RE = re.compile(r"`[^`]+`|[\w/]+\.py\b|\b\w+_\w+_\w+\b|/[a-z_]+/[a-z_]+")
+
+
+def _is_code_dump(text: str) -> bool:
+    return len(_CODE_RE.findall(text or "")) >= 3
+
+
 def _aggregate_state(evidence: List[Evidence]) -> str:
     """El mejor ancla que la evidencia soporta: real > rúbrica > brecha."""
     if any(e.state == REAL for e in evidence):
@@ -72,7 +99,8 @@ def map_subquestion(text: str, db: Optional[Session], top_k: int = 4,
     Solo cuenta como evidencia (y como ancla) lo que supera ``min_anchor_score``: un
     roce léxico marginal no ancla — la sub-pregunta queda como brecha declarada (§4)."""
     hits = retrieve(text, top_k=top_k, db=db, min_score=min_anchor_score)
-    evidence = [Evidence.from_passage(h) for h in hits]
+    # Filtra la fuga de código/interno del corpus antes de que llegue al cliente.
+    evidence = [Evidence.from_passage(h) for h in hits if not _is_code_dump(h.get("text", ""))]
     axes: List[str] = []
     for h in hits:
         sk = (h.get("meta") or {}).get("sector_key")
