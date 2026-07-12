@@ -248,6 +248,21 @@ class TelecomProduct:
     def has_engine(self) -> bool:
         return self._latest() is not None
 
+    def variable_signals(self) -> Dict[str, Any]:
+        """Señal por-dimensión del índice para el Data Registry (motor de research).
+        Reusa el ``breakdown.dimensions`` persistido (``provenance`` + peso) y la
+        fuente/cadencia que el producto ya declara — sin fabricar."""
+        from shared.registry.builders import pattern_b_signals
+
+        s = self._latest()
+        dims = (s.breakdown or {}).get("dimensions") if s else None
+        if not dims:
+            return {"period": None, "signals": []}
+        dh = self.data_signals()
+        signals = pattern_b_signals(breakdown=dims, source_label=", ".join(dh.sources),
+                                    cadence=dh.cadence)
+        return {"period": str(s.period), "signals": signals}
+
     def available_periods(self) -> List[str]:
         return distinct_periods(self._require_db(), TelecomScore.period)
 
