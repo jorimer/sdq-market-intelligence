@@ -502,6 +502,7 @@ export interface ResearchAnswer {
   state_counts: Record<AnchorState, number>;
   sub_questions: ResearchSubQuestion[];
   sections: Record<string, string>;
+  section_order: string[];
   sources: string[];
   gaps: ResearchGap[];
   generated_at: string;

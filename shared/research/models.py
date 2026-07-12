@@ -103,9 +103,13 @@ class ResearchAnswer:
     anchored_fraction: float                         # fracción anclada (real o rúbrica)
     sub_questions: List[SubQuestion] = field(default_factory=list)
     sections: Dict[str, str] = field(default_factory=dict)
+    section_order: List[str] = field(default_factory=list)   # orden de render de las secciones
     sources: List[str] = field(default_factory=list)
     gaps: List[DeclaredGap] = field(default_factory=list)
     generated_at: str = ""
+    # Reporte profundo (Deep Dive + capa de research) cuando se resolvió una entidad; lo usa
+    # el renderer del entregable para los gráficos/tablas/títulos. No se serializa a JSON.
+    deep: Any = None
 
     @property
     def state_counts(self) -> Dict[str, int]:
@@ -122,6 +126,7 @@ class ResearchAnswer:
             "state_counts": self.state_counts,
             "sub_questions": [sq.to_dict() for sq in self.sub_questions],
             "sections": self.sections,
+            "section_order": self.section_order,
             "sources": self.sources,
             "gaps": [g.to_dict() for g in self.gaps],
             "generated_at": self.generated_at,

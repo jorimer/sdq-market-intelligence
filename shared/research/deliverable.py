@@ -49,31 +49,43 @@ def render_deliverable(answer: ResearchAnswer, *, fmt: str = "pdf",
                        watermark: Optional[str] = _DEFAULT_WATERMARK) -> str:
     """Renderiza la respuesta como entregable de marca (PDF o Word) y devuelve el path.
 
-    Reusa ``render_product_pdf`` (mismo motor branded del catálogo). Las secciones se
-    pasan como ``narratives`` en el orden canónico según el gate (informe o scoping)."""
+    Reusa ``render_product_pdf`` (mismo motor branded del catálogo). Si la respuesta trae un
+    reporte PROFUNDO (Deep Dive + capa de research), renderiza todas sus secciones en orden
+    con gráficos/tablas del dato real; si no, las secciones livianas."""
     from shared.products.render import render_product_pdf
 
-    sections = ordered_sections(answer)  # [(título, markdown)] en orden canónico
-    # narratives: clave → texto, en orden. Reconstruimos las claves desde el orden.
-    order_keys = [k for k, _ in _iter_answer_keys(answer)]
+    # Orden de secciones: el resuelto por el orquestador (profundo o liviano).
+    order = answer.section_order or [k for k, _ in _iter_answer_keys(answer)]
+    deep = answer.deep
+    title_map = dict(_SECTION_TITLES)
+    if deep is not None and getattr(deep, "titles", None):
+        title_map.update(deep.titles)
+
     narratives: Dict[str, str] = {}
     titles: Dict[str, str] = {}
-    for key in order_keys:
+    for key in order:
         if key in answer.sections:
             narratives[key] = answer.sections[key]
-            titles[key] = _SECTION_TITLES.get(key, key.replace("_", " ").title())
+            titles[key] = title_map.get(key, key.replace("_", " ").title())
 
     kind = ("SDQ Research — Scoping Report" if answer.gate == GATE_SCOPING
             else "SDQ Research — Informe a medida")
-    headline = (f"{answer.coverage_real:.0%} dato real · "
-                f"{answer.anchored_fraction:.0%} con ancla")
-    period = (answer.generated_at[:10] if answer.generated_at
-              else datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    if deep is not None and getattr(deep, "headline", ""):
+        headline = f"{deep.entity_label} · {deep.headline}"
+    else:
+        headline = (f"{answer.coverage_real:.0%} dato real · "
+                    f"{answer.anchored_fraction:.0%} con ancla")
+    period = ((deep.period if deep is not None and getattr(deep, "period", None) else None)
+              or (answer.generated_at[:10] if answer.generated_at
+                  else datetime.now(timezone.utc).strftime("%Y-%m-%d")))
+    charts = getattr(deep, "charts", None) if deep is not None else None
+    tables = getattr(deep, "tables", None) if deep is not None else None
 
     return render_product_pdf(
         sector_key="research_custom", display_name=_subject(answer.question),
-        title=kind, period=period, narratives=narratives, section_titles=titles,
-        headline=headline, subtitle="Motor de Research Custom",
+        title=kind, period=str(period), narratives=narratives, section_titles=titles,
+        tables=tables, charts=charts, headline=headline,
+        subtitle="Motor de Research Custom",
         watermark=watermark, fmt=fmt, output_dir=output_dir,
     )
 

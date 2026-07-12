@@ -37,6 +37,7 @@ const STATE_META: Record<
 
 const SECTION_TITLES: Record<string, string> = {
   resumen_ejecutivo: "Resumen ejecutivo",
+  respuesta_a_su_pregunta: "Respuesta a su pregunta",
   hallazgos: "Hallazgos",
   metodologia: "Metodología",
   fuentes: "Fuentes",
@@ -45,17 +46,27 @@ const SECTION_TITLES: Record<string, string> = {
   lo_que_si_se_puede: "Lo que se puede contestar hoy",
   lo_que_no_se_puede: "Lo que no se puede contestar hoy",
   que_cerraria_la_brecha: "Qué cerraría la brecha",
+  // secciones profundas (Deep Dive reutilizado)
+  executive_summary: "Resumen ejecutivo",
+  solidez_financiera: "Solidez financiera",
+  calidad_activos: "Calidad de activos",
+  eficiencia_rentabilidad: "Eficiencia y rentabilidad",
+  liquidez: "Liquidez",
+  diversificacion: "Diversificación",
+  comparative: "Posición vs pares",
+  entorno_operativo: "Entorno operativo",
+  soporte_soberano: "Soporte y techo soberano",
+  risk_assessment: "Evaluación de riesgo",
+  early_warning: "Alerta temprana",
+  recommendation: "Recomendaciones",
+  limitations: "Limitaciones",
+  std_methodology: "Metodología y fuentes",
+  std_sources: "Fuentes y referencias",
 };
 
-const REPORT_ORDER = ["resumen_ejecutivo", "hallazgos", "metodologia", "fuentes", "limitaciones"];
-const SCOPING_ORDER = [
-  "resumen_scoping",
-  "lo_que_si_se_puede",
-  "lo_que_no_se_puede",
-  "que_cerraria_la_brecha",
-  "metodologia",
-  "fuentes",
-];
+function titleFor(key: string): string {
+  return SECTION_TITLES[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const EXAMPLES = [
   "¿Qué tan atractivo es el sector energía para invertir y cómo mide SDQ la resiliencia energética?",
@@ -204,7 +215,9 @@ export function ResearchPage() {
   };
 
   const isScoping = answer?.gate === "scoping";
-  const order = isScoping ? SCOPING_ORDER : REPORT_ORDER;
+  const order = answer?.section_order?.length
+    ? answer.section_order
+    : Object.keys(answer?.sections ?? {});
 
   return (
     <div className="space-y-4">
@@ -312,7 +325,7 @@ export function ResearchPage() {
             .filter((k) => answer.sections[k])
             .map((k) => (
               <Card key={k}>
-                <CardHead icon={FileText} title={SECTION_TITLES[k] ?? k} />
+                <CardHead icon={FileText} title={titleFor(k)} />
                 <Markdownish md={answer.sections[k]} />
               </Card>
             ))}
