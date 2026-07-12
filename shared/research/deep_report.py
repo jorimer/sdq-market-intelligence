@@ -62,6 +62,22 @@ def _looks_real(text: str) -> bool:
     import re
     return len(re.findall(r"\d", text or "")) >= 4
 
+SECTION_TITLES["metodologia"] = "Metodología y fuentes"
+SECTION_TITLES["limitaciones"] = "Limitaciones"
+
+_METHODOLOGY_TEXT = (
+    "La respuesta se ancló al resultado ya computado por el motor de la entidad "
+    "(fuente: {source}) — rating, sub-componentes, percentiles vs pares, alerta temprana — "
+    "y el Cerebro la redactó circunscrita a esas cifras (verificador numérico activo: no se "
+    "cita ningún número que no trace al dato del motor). Sin web abierta ni fuentes externas "
+    "en vivo. Lo que ningún motor computa se declara como límite, no se rellena.")
+
+_LIMITATIONS_TEXT = (
+    "La calificación es una medida de fortaleza financiera intrínseca (standalone) sobre "
+    "información pública supervisada a la fecha de corte; no es un rating de crédito ni una "
+    "recomendación de inversión. El análisis se circunscribe a los indicadores que el motor "
+    "computa; lo prospectivo (proyecciones/escenarios a futuro) no se estima.")
+
 _SUB_LABELS = {
     "solidez": "Solidez", "calidad": "Calidad de activos", "eficiencia": "Eficiencia",
     "liquidez": "Liquidez", "diversificacion": "Diversificación",
@@ -147,71 +163,88 @@ def _headline(payload: Dict[str, Any]) -> str:
 async def build_deep_report(question: str, db: Optional[Session],
                             entities: List[ResolvedEntity], pulls: List[EnginePull],
                             forward_gaps: List[DeclaredGap]) -> Optional[DeepReport]:
-    """Reporte profundo de la PRIMERA entidad con Deep Dive disponible. ``None`` si ninguna
-    entidad produce contenido profundo (→ el orquestador usa el ensamblado liviano)."""
+    """Reporte profundo de la PRIMERA entidad resuelta con dato de motor. ``None`` si ninguna
+    entidad trae dato (→ el orquestador usa el ensamblado liviano).
+
+    Núcleo confiable: la RESPUESTA profunda (un solo llamado, siempre real) + gráficos/tablas
+    del dato ya recibido. Las secciones del Deep Dive del producto se AGREGAN solo si están
+    tibias en caché (retornan rápido); en frío no se espera el burst que rate-limitea (§6:
+    ni slop ni latencia por relleno que igual se filtraría)."""
+    import asyncio
+
     if db is None or not entities:
         return None
     from shared.products.assembler import assemble_product_content
 
     for ent in entities:
+        pull = next((p for p in pulls if p.sector_key == ent.sector_key
+                     and p.ok and p.payload and p.entity_label == ent.label), None)
+        if pull is None:
+            continue
         product = get_product(ent.sector_key, db)
-        if product is None:
-            continue
-        try:
-            content = await assemble_product_content(
-                product, ProductTier.deep_dive, period="", scope=ent.scope_value, lang="es")
-        except Exception as e:  # noqa: BLE001 — entidad sin Deep Dive → siguiente
-            logger.info("Deep Dive de %s (%s) no disponible: %s", ent.sector_key, ent.label, e)
-            try:
-                db.rollback()
-            except Exception:  # noqa: BLE001
-                pass
-            continue
-
+        payload = pull.payload
         entry = CATALOG_BY_KEY.get(ent.sector_key)
         source = entry.source if entry else ent.sector_key
 
-        # Capa de research: la respuesta directa a la pregunta (con su ángulo), arriba de todo.
-        live = [p for p in pulls if p.sector_key == ent.sector_key and p.ok]
-        lead = await narrate_answer(question, live,
-                                    forward_gaps=[g.note for g in forward_gaps]) if live else None
-
+        # Capa de research: la respuesta profunda a la pregunta (su ángulo), arriba de todo.
+        lead = await narrate_answer(question, [pull],
+                                    forward_gaps=[g.note for g in forward_gaps])
         sections: Dict[str, str] = {}
         ordered: List[str] = []
         if lead:
             sections["respuesta_a_su_pregunta"] = f"**Pregunta:** {question}\n\n{lead}"
             ordered.append("respuesta_a_su_pregunta")
 
-        # Regla anti-slop (CLAUDE.md frontend §6): una sección del Deep Dive reutilizada solo
-        # entra si trae CONTENIDO REAL. Las que volvieron como fallback estático (Cerebro sin
-        # cupo/caché fría) se OMITEN — nunca se muestra relleno genérico. Con la caché tibia
-        # del producto (lo normal), las secciones reales del Deep Dive sí pasan el filtro.
-        order = list(content.section_order) or list(content.narratives.keys())
-        for k in order:
-            text = content.narratives.get(k)
-            if not text or k in sections:
-                continue
-            if k in _ALWAYS_KEEP or _looks_real(text):
-                sections[k] = text
-                ordered.append(k)
-            # si no, es fallback del Cerebro (caché fría / sin cupo) → se omite (anti-slop)
+        # Secciones del Deep Dive del producto — SOLO si la caché está tibia (retorno rápido).
+        # En frío no se espera el burst de ~11 narrativas (rate limit → fallback que se filtra).
+        try:
+            content = await asyncio.wait_for(
+                assemble_product_content(product, ProductTier.deep_dive, period="",
+                                         scope=ent.scope_value, lang="es"),
+                timeout=15.0)
+        except (asyncio.TimeoutError, Exception) as e:  # noqa: BLE001 — frío/no disponible
+            logger.info("Deep Dive de %s no en caché tibia (%s); solo la respuesta profunda.",
+                        ent.label, type(e).__name__)
+            content = None
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+
+        if content is not None:
+            # Anti-slop: una sección reutilizada entra solo si trae análisis REAL (cifras) o
+            # es determinista; el fallback del Cerebro se omite.
+            for k in (list(content.section_order) or list(content.narratives.keys())):
+                text = content.narratives.get(k)
+                if not text or k in sections:
+                    continue
+                if k in _ALWAYS_KEEP or _looks_real(text):
+                    sections[k] = text
+                    ordered.append(k)
+
+        # Metodología/Limitaciones mínimas si el Deep Dive no las aportó (caché fría).
+        if "std_methodology" not in sections and "limitations" not in sections:
+            sections["metodologia"] = _METHODOLOGY_TEXT.format(source=source)
+            ordered.append("metodologia")
+            sections["limitaciones"] = _LIMITATIONS_TEXT
+            ordered.append("limitaciones")
 
         # Aumenta Limitaciones con la brecha prospectiva declarada (§4), sin fabricar.
         if forward_gaps:
             extra = "\n\n**Fuera de alcance (declarado):**\n" + "\n".join(
                 f"- {g.note}" for g in forward_gaps)
-            if "limitations" in sections:
-                sections["limitations"] += extra
+            key = "limitations" if "limitations" in sections else "limitaciones"
+            if key in sections:
+                sections[key] += extra
             else:
-                sections["limitations"] = extra.strip()
-                ordered.append("limitations")
+                sections[key] = extra.strip()
+                ordered.append(key)
 
         titles = {k: SECTION_TITLES.get(k, k.replace("_", " ").title()) for k in ordered}
         return DeepReport(
-            entity_label=ent.label, sector_key=ent.sector_key, period=content.snapshot.period,
+            entity_label=ent.label, sector_key=ent.sector_key, period=pull.period,
             ordered_keys=ordered, sections=sections, titles=titles,
-            charts=_charts_from_payload(content.snapshot.payload),
-            tables=_tables_from_payload(content.snapshot.payload),
-            headline=_headline(content.snapshot.payload), sources=[source],
+            charts=_charts_from_payload(payload), tables=_tables_from_payload(payload),
+            headline=_headline(payload), sources=[source],
         )
     return None
