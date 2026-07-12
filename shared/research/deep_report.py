@@ -51,6 +51,17 @@ SECTION_TITLES: Dict[str, str] = {
     "std_sources": "Fuentes y referencias",
 }
 
+# Secciones deterministas del producto (no pasan por el Cerebro) → siempre reales.
+_ALWAYS_KEEP = {"early_warning", "limitations", "std_methodology", "std_sources"}
+
+
+def _looks_real(text: str) -> bool:
+    """Heurística anti-slop: una sección de análisis real CITA cifras. Los fallbacks del
+    Cerebro (genérico o por-sección) son prosa genérica sin números de la entidad. Sin
+    ``model_used`` en el dict de narrativas, esto distingue análisis real de relleno."""
+    import re
+    return len(re.findall(r"\d", text or "")) >= 4
+
 _SUB_LABELS = {
     "solidez": "Solidez", "calidad": "Calidad de activos", "eficiencia": "Eficiencia",
     "liquidez": "Liquidez", "diversificacion": "Diversificación",
@@ -171,11 +182,19 @@ async def build_deep_report(question: str, db: Optional[Session],
             sections["respuesta_a_su_pregunta"] = f"**Pregunta:** {question}\n\n{lead}"
             ordered.append("respuesta_a_su_pregunta")
 
+        # Regla anti-slop (CLAUDE.md frontend §6): una sección del Deep Dive reutilizada solo
+        # entra si trae CONTENIDO REAL. Las que volvieron como fallback estático (Cerebro sin
+        # cupo/caché fría) se OMITEN — nunca se muestra relleno genérico. Con la caché tibia
+        # del producto (lo normal), las secciones reales del Deep Dive sí pasan el filtro.
         order = list(content.section_order) or list(content.narratives.keys())
         for k in order:
-            if k in content.narratives and k not in sections:
-                sections[k] = content.narratives[k]
+            text = content.narratives.get(k)
+            if not text or k in sections:
+                continue
+            if k in _ALWAYS_KEEP or _looks_real(text):
+                sections[k] = text
                 ordered.append(k)
+            # si no, es fallback del Cerebro (caché fría / sin cupo) → se omite (anti-slop)
 
         # Aumenta Limitaciones con la brecha prospectiva declarada (§4), sin fabricar.
         if forward_gaps:

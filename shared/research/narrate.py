@@ -61,8 +61,10 @@ async def narrate_answer(question: str, pulls: List[EnginePull],
         context["fuera_de_alcance"] = forward_gaps
 
     try:
+        # mode="deep": respuesta extensa y multi-faceta (es un entregable de US$7-10k, no un
+        # resumen). El DEEP_DIRECTIVE del motor gana sobre el tope de palabras del template.
         res = await narrative_engine.generate(
-            context=context, template="research_answer", mode="detailed",
+            context=context, template="research_answer", mode="deep",
             lang=lang, axis=axis, audience=None,
         )
     except Exception as e:  # noqa: BLE001 — cualquier fallo del motor → determinista
