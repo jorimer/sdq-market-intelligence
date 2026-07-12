@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from shared.registry.signals import GAP, REAL, RUBRIC
 from shared.research.assemble import assemble_report_sections, assemble_scoping_sections
 from shared.research.data_pull import EnginePull, pull_entity
+from shared.research.deep_report import build_deep_report
 from shared.research.decompose import (
     DEFAULT_MIN_ANCHOR_SCORE,
     decompose,
@@ -144,23 +145,42 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
     sources = _collect_sources(sub_questions)
     gaps = _collect_gaps(sub_questions, db) + forward
 
-    # 5. Narrativa circunscrita (Cerebro) — solo pule sobre lo ya anclado; puede ser None.
-    narrative = None
-    if narrate and live_pulls:
-        narrative = await narrate_answer(question, live_pulls,
-                                         forward_gaps=[g.note for g in forward])
+    # 5. Reporte PROFUNDO: si se resolvió una entidad, reutiliza TODO el Deep Dive del
+    #    producto + la capa de research (respuesta a la pregunta arriba). A US$7–10k el
+    #    entregable debe superar un Deep Dive — no un resumen.
+    deep = None
+    section_order: List[str] = []
+    if narrate and gate != GATE_SCOPING and targets.entities:
+        deep = await build_deep_report(question, db, targets.entities, live_pulls, forward)
 
-    if gate == GATE_SCOPING:
-        sections = assemble_scoping_sections(question, sub_questions, sources, gaps,
-                                             coverage_real, anchored_fraction)
+    if deep is not None:
+        sections = deep.sections
+        section_order = deep.ordered_keys
+        for s in deep.sources:
+            if s not in sources:
+                sources.insert(0, s)
     else:
-        sections = assemble_report_sections(question, sub_questions, sources, gaps,
-                                            coverage_real, anchored_fraction,
-                                            narrative=narrative)
+        # Sin entidad profunda: ensamblado liviano (narrativa circunscrita o determinista).
+        narrative = None
+        if narrate and live_pulls:
+            narrative = await narrate_answer(question, live_pulls,
+                                             forward_gaps=[g.note for g in forward])
+        if gate == GATE_SCOPING:
+            sections = assemble_scoping_sections(question, sub_questions, sources, gaps,
+                                                 coverage_real, anchored_fraction)
+            section_order = ["resumen_scoping", "lo_que_si_se_puede", "lo_que_no_se_puede",
+                             "que_cerraria_la_brecha", "metodologia", "fuentes"]
+        else:
+            sections = assemble_report_sections(question, sub_questions, sources, gaps,
+                                                coverage_real, anchored_fraction,
+                                                narrative=narrative)
+            section_order = ["resumen_ejecutivo", "hallazgos", "metodologia", "fuentes",
+                             "limitaciones"]
+    section_order = [k for k in section_order if k in sections]
 
     return ResearchAnswer(
         question=question, gate=gate, coverage_real=coverage_real,
         anchored_fraction=anchored_fraction, sub_questions=sub_questions,
-        sections=sections, sources=sources, gaps=gaps,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        sections=sections, section_order=section_order, sources=sources, gaps=gaps,
+        generated_at=datetime.now(timezone.utc).isoformat(), deep=deep,
     )
