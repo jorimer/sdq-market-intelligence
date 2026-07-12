@@ -40,13 +40,13 @@ class ResearchQuery(BaseModel):
 
 
 @router.post("")
-def run_research(
+async def run_research(
     body: ResearchQuery,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Responde una pregunta libre con procedencia honesta + gate de publicación."""
-    answer = answer_question(
+    answer = await answer_question(
         body.question, db=db,
         gap_threshold=body.gap_threshold if body.gap_threshold is not None
         else DEFAULT_GAP_THRESHOLD,
@@ -68,14 +68,14 @@ class DeliverableRequest(BaseModel):
 
 
 @router.post("/deliverable")
-def research_deliverable(
+async def research_deliverable(
     body: DeliverableRequest,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> FileResponse:
     """Fase 5: la respuesta del motor como entregable de marca (PDF/Word) — el borrador
     anclado a procedencia que acelera el DD Full/Deep Dive. Reusa el pipeline branded."""
-    answer = answer_question(
+    answer = await answer_question(
         body.question, db=db,
         gap_threshold=body.gap_threshold if body.gap_threshold is not None
         else DEFAULT_GAP_THRESHOLD,
@@ -96,7 +96,7 @@ class PilotRequest(BaseModel):
 
 
 @router.post("/pilot")
-def run_research_pilot(
+async def run_research_pilot(
     body: PilotRequest,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_role(UserRole.admin)),
@@ -104,7 +104,7 @@ def run_research_pilot(
     """Instrumentación del piloto manual (Fase 2, admin): corre el lote de preguntas y
     devuelve métricas de cobertura por pregunta + markdown. Las columnas de horas/costo
     las completa el analista (no se fabrican)."""
-    report = run_pilot(
+    report = await run_pilot(
         body.questions, db=db,
         gap_threshold=body.gap_threshold if body.gap_threshold is not None
         else DEFAULT_GAP_THRESHOLD,

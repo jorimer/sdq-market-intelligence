@@ -105,13 +105,13 @@ class PilotReport:
         return "\n".join(out)
 
 
-def run_pilot(questions: List[str], db: Optional[Session] = None, *,
-              gap_threshold: float = DEFAULT_GAP_THRESHOLD,
-              per_q_k: int = 4) -> PilotReport:
+async def run_pilot(questions: List[str], db: Optional[Session] = None, *,
+                    gap_threshold: float = DEFAULT_GAP_THRESHOLD,
+                    per_q_k: int = 4) -> PilotReport:
     """Corre el motor sobre las *questions* del piloto y captura las métricas de cobertura."""
     rows: List[PilotRow] = []
     for q in questions:
-        ans = answer_question(q, db=db, gap_threshold=gap_threshold, per_q_k=per_q_k)
+        ans = await answer_question(q, db=db, gap_threshold=gap_threshold, per_q_k=per_q_k)
         rows.append(PilotRow(
             question=q, gate=ans.gate, coverage_real=ans.coverage_real,
             anchored_fraction=ans.anchored_fraction, n_sub=len(ans.sub_questions),

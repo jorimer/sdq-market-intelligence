@@ -1,4 +1,5 @@
 """Tests del instrumento de piloto (Fase 2) y la exportación a documento (Fase 5)."""
+import pytest
 import shared.research.decompose as decompose_mod
 from shared.research.export import ordered_sections, to_markdown
 from shared.research.models import GATE_SCOPING
@@ -15,13 +16,14 @@ def _patch(monkeypatch, mapping):
     monkeypatch.setattr(decompose_mod, "retrieve", fake_retrieve)
 
 
-def test_run_pilot_captures_coverage(monkeypatch):
+@pytest.mark.asyncio
+async def test_run_pilot_captures_coverage(monkeypatch):
     _patch(monkeypatch, {
         "energ": [{"text": "IRSE real", "source": "Data Registry · Energía",
                    "kind": "registry", "score": 9.0,
                    "meta": {"sector_key": "energy", "state": "real"}}],
     })
-    report = run_pilot(["Cómo está la resiliencia energética",
+    report = await run_pilot(["Cómo está la resiliencia energética",
                         "Precio del cacao en Marte hoy mismo"], db=None)
     assert report.summary["n"] == 2
     assert report.rows[0].gate == "report"          # anclado a dato real
@@ -33,13 +35,14 @@ def test_run_pilot_captures_coverage(monkeypatch):
     assert report.rows[0].hours_manual_dd is None    # no se fabrica
 
 
-def test_export_ordered_sections_report(monkeypatch):
+@pytest.mark.asyncio
+async def test_export_ordered_sections_report(monkeypatch):
     _patch(monkeypatch, {
         "energ": [{"text": "IRSE real", "source": "Data Registry · Energía",
                    "kind": "registry", "score": 9.0,
                    "meta": {"sector_key": "energy", "state": "real"}}],
     })
-    ans = answer_question("Cómo está la resiliencia energética del sistema", db=None)
+    ans = await answer_question("Cómo está la resiliencia energética del sistema", db=None)
     titles = [t for t, _ in ordered_sections(ans)]
     assert titles[0] == "Resumen ejecutivo"
     assert "Limitaciones" in titles
@@ -48,9 +51,10 @@ def test_export_ordered_sections_report(monkeypatch):
     assert "Metodología" in md
 
 
-def test_export_scoping_order(monkeypatch):
+@pytest.mark.asyncio
+async def test_export_scoping_order(monkeypatch):
     _patch(monkeypatch, {})  # todo brecha → scoping
-    ans = answer_question("Tema completamente ausente del corpus propio", db=None)
+    ans = await answer_question("Tema completamente ausente del corpus propio", db=None)
     titles = [t for t, _ in ordered_sections(ans)]
     assert titles[0] == "Alcance"
     assert "Lo que no se puede contestar hoy" in titles

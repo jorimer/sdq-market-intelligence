@@ -2,6 +2,7 @@
 
 Núcleo determinista → sin DB ni LLM. Los tests que necesitan controlar la evidencia
 parchean ``retrieve`` para inyectar pasajes con procedencia conocida."""
+import pytest
 import shared.research.decompose as decompose_mod
 from shared.registry.signals import GAP, REAL, RUBRIC
 from shared.research.decompose import split_question
@@ -67,7 +68,8 @@ def _patch_retrieve(monkeypatch, mapping):
     monkeypatch.setattr(decompose_mod, "retrieve", fake_retrieve)
 
 
-def test_known_gap_is_declared_not_filled(monkeypatch):
+@pytest.mark.asyncio
+async def test_known_gap_is_declared_not_filled(monkeypatch):
     # Pregunta con una parte respondible (energía, dato real) y una brecha deliberada
     # (un tópico ausente del corpus). El reporte DEBE declarar la brecha, no completarla.
     _patch_retrieve(monkeypatch, {
@@ -77,7 +79,7 @@ def test_known_gap_is_declared_not_filled(monkeypatch):
     })
     q = ("Cómo está la resiliencia energética y además cuál es el precio del cacao "
          "en Marte")
-    ans = answer_question(q, db=None)
+    ans = await answer_question(q, db=None)
 
     by_state = {sq.text: sq.state for sq in ans.sub_questions}
     energia = next(sq for sq in ans.sub_questions if "energ" in sq.text.lower())
@@ -92,7 +94,8 @@ def test_known_gap_is_declared_not_filled(monkeypatch):
     assert "marte" in ans.sections["lo_que_no_se_puede"].lower()
 
 
-def test_fully_anchored_question_yields_report(monkeypatch):
+@pytest.mark.asyncio
+async def test_fully_anchored_question_yields_report(monkeypatch):
     _patch_retrieve(monkeypatch, {
         "energ": [{"text": "IRSE real", "source": "Data Registry · Energía",
                      "kind": "registry", "score": 9.0,
@@ -101,7 +104,7 @@ def test_fully_anchored_question_yields_report(monkeypatch):
                          "kind": "doctrine", "score": 8.0, "meta": {}}],
     })
     q = "Cómo está la resiliencia energética y además el riesgo regulatorio"
-    ans = answer_question(q, db=None)
+    ans = await answer_question(q, db=None)
     assert ans.gate == GATE_REPORT
     assert ans.anchored_fraction == 1.0
     assert set(ans.sections) >= {"resumen_ejecutivo", "hallazgos", "metodologia",
@@ -110,7 +113,8 @@ def test_fully_anchored_question_yields_report(monkeypatch):
     assert "Data Registry · Energía" in ans.sections["fuentes"]
 
 
-def test_marginal_match_below_floor_does_not_anchor(monkeypatch):
+@pytest.mark.asyncio
+async def test_marginal_match_below_floor_does_not_anchor(monkeypatch):
     # Un roce léxico débil (score bajo el umbral de ancla) NO debe anclar: es el modo
     # de fallo del §6 (colgar una brecha de vocabulario genérico compartido).
     _patch_retrieve(monkeypatch, {
@@ -118,19 +122,20 @@ def test_marginal_match_below_floor_does_not_anchor(monkeypatch):
                    "source": "Metodología · X", "kind": "methodology",
                    "score": 4.0, "meta": {}}],  # 4.0 < 7.0 (default) → no ancla
     })
-    ans = answer_question("Cuál es el precio del cacao en Marte hoy", db=None)
+    ans = await answer_question("Cuál es el precio del cacao en Marte hoy", db=None)
     sq = ans.sub_questions[0]
     assert sq.state == GAP           # roce marginal filtrado → brecha honesta
     assert not sq.evidence
     # Pero con un umbral laxo (0), ese mismo roce sí anclaría (parámetro tunable).
-    ans2 = answer_question("Cuál es el precio del cacao en Marte hoy", db=None,
+    ans2 = await answer_question("Cuál es el precio del cacao en Marte hoy", db=None,
                            min_anchor_score=0.0)
     assert ans2.sub_questions[0].state == RUBRIC
 
 
-def test_no_evidence_at_all_is_scoping_with_declared_gaps(monkeypatch):
+@pytest.mark.asyncio
+async def test_no_evidence_at_all_is_scoping_with_declared_gaps(monkeypatch):
     _patch_retrieve(monkeypatch, {})  # nada matchea → todo brecha
-    ans = answer_question("Pregunta sobre un tema totalmente ausente del corpus", db=None)
+    ans = await answer_question("Pregunta sobre un tema totalmente ausente del corpus", db=None)
     assert ans.gate == GATE_SCOPING
     assert ans.coverage_real == 0.0
     assert ans.gaps                                  # brechas declaradas
