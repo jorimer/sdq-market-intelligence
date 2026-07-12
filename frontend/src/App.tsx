@@ -47,6 +47,7 @@ import { OverviewPage } from "@/modules/platform/pages/OverviewPage";
 import { MetodologiaPage } from "@/modules/platform/pages/MetodologiaPage";
 import { ComparadorPage } from "@/modules/platform/pages/ComparadorPage";
 import { MarketBriefPage } from "@/modules/platform/pages/MarketBriefPage";
+import { ResearchPage } from "@/modules/platform/pages/ResearchPage";
 import { DealScoringPage } from "@/modules/platform/pages/DealScoringPage";
 import { ConfiguracionPage } from "@/modules/platform/pages/ConfiguracionPage";
 import { UsersAdminPage } from "@/modules/platform/pages/UsersAdminPage";
@@ -111,6 +112,7 @@ export default function App() {
           <Route path="/insurance-intel" element={<InsuranceIntelPage />} />
 
           {/* Herramientas */}
+          <Route path="/tools/research" element={<ResearchPage />} />
           <Route
             path="/tools/deal-scoring"
             element={<DealScoringPage />}
