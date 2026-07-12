@@ -20,6 +20,7 @@ import {
   Compass,
   CircleDollarSign,
   CreditCard,
+  ScanSearch,
   type LucideIcon,
 } from "lucide-react";
 
@@ -70,6 +71,7 @@ export const NAV: NavGroup[] = [
     key: "tools",
     title: "Herramientas",
     items: [
+      { to: "/tools/research", label: "Research a Medida", icon: ScanSearch, ready: true },
       { to: "/tools/deal-scoring", label: "Deal Scoring", icon: Target },
       { to: "/tools/market-brief", label: "Market Brief", icon: Sparkles },
     ],

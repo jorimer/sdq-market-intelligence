@@ -469,3 +469,71 @@ export async function downloadProductPdf(
 export async function downloadProductSample(sector: string, tier: string): Promise<void> {
   await downloadPdfBlob(`/products/${sector}/${tier}/sample`, `SDQ_muestra_${sector}_${tier}.pdf`);
 }
+
+/* ── Motor de Research Custom (pregunta libre → informe con procedencia) ── */
+export type AnchorState = "real" | "rubric" | "gap";
+
+export interface ResearchEvidence {
+  text: string;
+  source: string;
+  kind: string;
+  state: AnchorState;
+  score: number;
+  ref?: string;
+}
+export interface ResearchSubQuestion {
+  text: string;
+  state: AnchorState;
+  anchored: boolean;
+  axes: string[];
+  note?: string;
+  evidence: ResearchEvidence[];
+}
+export interface ResearchGap {
+  sub_question: string;
+  note: string;
+  candidate_source?: string | null;
+}
+export interface ResearchAnswer {
+  question: string;
+  gate: "report" | "scoping";
+  coverage_real: number;
+  anchored_fraction: number;
+  state_counts: Record<AnchorState, number>;
+  sub_questions: ResearchSubQuestion[];
+  sections: Record<string, string>;
+  sources: string[];
+  gaps: ResearchGap[];
+  generated_at: string;
+  markdown?: string;
+}
+
+/** Corre el motor sobre una pregunta libre y devuelve la respuesta con procedencia. */
+export async function runResearch(
+  question: string,
+  opts: { gap_threshold?: number; per_q_k?: number; min_anchor_score?: number } = {},
+): Promise<ResearchAnswer> {
+  const { data } = await client.post("/research", { question, ...opts });
+  return data as ResearchAnswer;
+}
+
+/** Descarga el entregable de marca (PDF/Word) de una pregunta. */
+export async function downloadResearchDeliverable(
+  question: string,
+  fmt: "pdf" | "docx" = "pdf",
+): Promise<void> {
+  const r = await client.post(
+    "/research/deliverable",
+    { question, fmt },
+    { responseType: "blob" },
+  );
+  const cd = (r.headers["content-disposition"] as string) || "";
+  const filename =
+    /filename="?([^"]+)"?/.exec(cd)?.[1] ?? `SDQ_research.${fmt}`;
+  const blobUrl = URL.createObjectURL(r.data as Blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(blobUrl);
+}
