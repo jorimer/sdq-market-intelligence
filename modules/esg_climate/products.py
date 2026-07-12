@@ -278,6 +278,23 @@ class ESGProduct:
     def has_engine(self) -> bool:
         return self._latest() is not None
 
+    def variable_signals(self) -> Dict[str, Any]:
+        """Señal por-variable del IRC para el Data Registry (motor de research). Reusa
+        el mapa ``sources`` ("live"/"rubric") ya persistido en el breakdown — RD es
+        sujeto único, así que cada variable es real o rúbrica declarada, sin fabricar."""
+        from shared.registry.builders import pattern_a_signals
+
+        s = self._latest()
+        smap = ((s.breakdown or {}).get("sources") if s else None) or {}
+        if not smap:
+            return {"period": None, "signals": []}
+        dataset = {"RD": (s.breakdown or {}).get("dataset", {}) or {}}
+        signals = pattern_a_signals(
+            axis="esg", dataset=dataset, sources={"RD": smap},
+            source_label=", ".join(("ND-GAIN", "HURDAT2/NOAA", "Ember")), cadence="annual",
+        )
+        return {"period": str(s.period), "signals": signals}
+
     def available_periods(self) -> List[str]:
         return distinct_periods(self._require_db(), ESGScore.period,
                                 where=ESGScore.entity_key == COUNTRY_ISO)

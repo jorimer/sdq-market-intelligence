@@ -104,6 +104,12 @@ app.include_router(products_router, prefix="/api/v1/products", tags=["Productos"
 from shared.source_intel.router import router as source_intel_router
 app.include_router(source_intel_router, prefix="/api/v1/source-intel", tags=["Inteligencia de Fuentes"])
 
+from shared.registry.router import router as data_registry_router
+app.include_router(data_registry_router, prefix="/api/v1/registry", tags=["Data Registry"])
+
+from shared.research.router import router as research_router
+app.include_router(research_router, prefix="/api/v1/research", tags=["Motor de Research Custom"])
+
 from shared.billing.router import router as billing_router
 app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
 

@@ -131,6 +131,17 @@ class SectorProduct(Protocol):
     # rótulo correcto del catálogo: "entity" (banco) o "country" (país de un panel: macro/ESG,
     # índices de riesgo-país). El catálogo lo detecta por ``getattr``.
 
+    # ── Señal por-variable para el Data Registry (OPCIONAL) ──
+    # Un producto PUEDE implementar ``variable_signals() -> {"period": str|None,
+    # "signals": List[VariableSignal]}`` (o directamente ``List[VariableSignal]``) para
+    # exponer su procedencia POR-VARIABLE (estado real/rúbrica/brecha + peso + fuente +
+    # cadencia) al Data Registry del motor de research (``shared/registry``). Se detecta
+    # por ``getattr``; un producto que no lo implemente degrada con honestidad a su
+    # ``data_signals`` a-nivel-producto. Construir las señales con los helpers de
+    # ``shared/registry/builders`` (``pattern_a_signals`` para paneles con mapa
+    # ``sources``; ``pattern_b_signals`` para índices con ``breakdown.provenance``) —
+    # NO duplicar la normalización. Ver docs/SPEC_MOTOR_RESEARCH_CUSTOM.md §3.1.
+
 
 def required_signal_methods() -> List[str]:
     """Métodos que un sector debe implementar para el monitor (test de contrato)."""

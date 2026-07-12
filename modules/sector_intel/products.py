@@ -319,6 +319,22 @@ class SectorIntelProduct:
     def has_engine(self) -> bool:
         return self._latest() is not None
 
+    def variable_signals(self) -> Dict[str, Any]:
+        """Señal por-variable del IAI de ESTE sector para el Data Registry (motor de
+        research). Reusa la procedencia por-variable ya persistida en ``iai_breakdown``
+        (``variables[var]["source"]``) — sin re-ensamblar ni fabricar nada."""
+        from shared.registry.builders import nested_breakdown_signals
+
+        s = self._latest()
+        if s is None or not (s.iai_breakdown or {}):
+            return {"period": None, "signals": []}
+        signals = nested_breakdown_signals(
+            breakdown=s.iai_breakdown, axis="sectoral",
+            source_label=", ".join(("BCRD", "contrato macro→sectorial", "TSS", "ENCFT", "WGI")),
+            cadence="annual",
+        )
+        return {"period": str(s.period), "signals": signals}
+
     def available_periods(self) -> List[str]:
         return distinct_periods(self._require_db(), SectorScore.period,
                                 where=SectorScore.sector_code == self._sector_code)
