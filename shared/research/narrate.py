@@ -36,6 +36,42 @@ _CEREBRO_AXIS = {
 }
 
 
+async def narrate_synthesis(question: str, pulls: List[EnginePull],
+                            *, forward_gaps: Optional[List[str]] = None,
+                            lang: str = "es") -> Optional[str]:
+    """Síntesis CROSS-DOMINIO: integra el dato de VARIOS motores (entidad + contexto macro/
+    monetario/…) alrededor de la pregunta. Es el núcleo del research tema-primero. ``None`` si
+    no hay dato o el Cerebro no está disponible."""
+    live = [p for p in pulls if p.ok and p.payload]
+    if not live:
+        return None
+    from shared.narrative.claude_engine import narrative_engine
+
+    # Persona del eje primario (el primer motor con entidad, o el primero); el guard verifica
+    # las cifras contra TODO el contexto multi-dominio, no solo ese eje.
+    axis = _CEREBRO_AXIS.get(live[0].sector_key)
+    context = {
+        "pregunta": question,
+        "dominios": [
+            {"dominio": p.entity_label, "eje": p.sector_key, "fuente": p.source,
+             "procedencia": "real", "resultado_del_motor": p.payload}
+            for p in live
+        ],
+    }
+    if forward_gaps:
+        context["fuera_de_alcance"] = forward_gaps
+    try:
+        res = await narrative_engine.generate(
+            context=context, template="research_synthesis", mode="deep",
+            lang=lang, axis=axis, audience=None)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("narrate_synthesis falló: %s", e)
+        return None
+    if not res or not res.text or res.model_used == "static_fallback":
+        return None
+    return res.text.strip()
+
+
 async def narrate_answer(question: str, pulls: List[EnginePull],
                          *, forward_gaps: Optional[List[str]] = None,
                          lang: str = "es") -> Optional[str]:

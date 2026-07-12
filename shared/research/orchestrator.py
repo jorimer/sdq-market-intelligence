@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from shared.registry.signals import GAP, REAL, RUBRIC
 from shared.research.assemble import assemble_report_sections, assemble_scoping_sections
 from shared.research.data_pull import EnginePull, pull_entity
-from shared.research.deep_report import build_deep_report
+from shared.research.deep_report import build_synthesis_report
 from shared.research.decompose import (
     DEFAULT_MIN_ANCHOR_SCORE,
     decompose,
@@ -150,8 +150,8 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
     #    entregable debe superar un Deep Dive — no un resumen.
     deep = None
     section_order: List[str] = []
-    if narrate and gate != GATE_SCOPING and targets.entities:
-        deep = await build_deep_report(question, db, targets.entities, live_pulls, forward)
+    if narrate and gate != GATE_SCOPING and (targets.entities or targets.context or live_pulls):
+        deep = await build_synthesis_report(question, db, targets, forward)
 
     if deep is not None:
         sections = deep.sections

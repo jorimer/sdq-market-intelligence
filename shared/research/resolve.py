@@ -78,8 +78,9 @@ class ResolvedEntity:
 
 @dataclass
 class Targets:
-    axes: List[str] = field(default_factory=list)          # ejes detectados (sin entidad)
+    axes: List[str] = field(default_factory=list)          # ejes primarios sin entidad
     entities: List[ResolvedEntity] = field(default_factory=list)
+    context: List[str] = field(default_factory=list)       # dominios de contexto (sistema)
 
     @property
     def is_empty(self) -> bool:
@@ -140,6 +141,38 @@ def resolve_entities(question: str, db: Optional[Session],
     return out
 
 
+# Dominios de CONTEXTO que una pregunta convoca además del primario — el corazón del
+# research tema-primero: una pregunta de una entidad/sector casi nunca se contesta con un
+# solo motor. Un riesgo de liquidez bancaria se transmite por el canal monetario y macro;
+# un sector se lee contra el ciclo. Curado por dominio primario + intención de la pregunta.
+_CONTEXT_FOR: Dict[str, Tuple[str, ...]] = {
+    "banking": ("monetary_policy", "macro"),      # fondeo/condiciones sistémicas
+    "insurance": ("macro",),
+    "pension": ("macro",),
+    "tourism": ("macro",), "free_zones": ("macro", "trade"), "energy": ("macro",),
+    "telecom": ("macro",), "construction": ("macro",), "trade": ("macro",),
+    "esg": ("macro",), "agribusiness": ("macro", "trade"),
+}
+# Términos que suman el dominio regulatorio/político como contexto.
+_REGULATORY_TERMS = ("regulator", "politic", "gobernanz", "riesgo pais", "soberano",
+                     "confianza", "electoral")
+
+
+def context_axes(question: str, primary: List[str]) -> List[str]:
+    """Dominios de contexto (a-nivel-sistema) que la pregunta convoca, además de los
+    primarios. Es lo que convierte el research en síntesis cross-dominio, no en una ficha."""
+    q = _norm(question)
+    out: List[str] = []
+    for ax in primary:
+        for ctx in _CONTEXT_FOR.get(ax, ("macro",)):
+            if ctx not in out and ctx not in primary:
+                out.append(ctx)
+    # Contexto regulatorio/político si la pregunta lo toca (el producto 'macro' lo cubre).
+    if any(_kw_hit(t, q) for t in _REGULATORY_TERMS) and "macro" not in out and "macro" not in primary:
+        out.append("macro")
+    return out
+
+
 def resolve_targets(question: str, db: Optional[Session]) -> Targets:
     """Ejes detectados + entidades resueltas. Las entidades se buscan primero en los ejes
     detectados; si no hay eje detectado pero sí una entidad, su eje entra igual."""
@@ -149,4 +182,6 @@ def resolve_targets(question: str, db: Optional[Session]) -> Targets:
     # ejes SIN entidad (para pull a-nivel-sistema).
     axes_with_entity = {e.sector_key for e in entities}
     axes_only = [a for a in axes if a not in axes_with_entity]
-    return Targets(axes=axes_only, entities=entities)
+    primary = list(axes) + [e.sector_key for e in entities]
+    return Targets(axes=axes_only, entities=entities,
+                   context=context_axes(question, primary))

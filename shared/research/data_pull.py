@@ -105,6 +105,38 @@ def _generic_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                     source=source, kind="engine", state=REAL, score=95.0)]
 
 
+def pull_axis(db: Optional[Session], sector_key: str) -> EnginePull:
+    """Cosecha a-nivel-SISTEMA de un motor de contexto (sin entidad): macro, monetario, etc.
+    Es lo que trae el telón cross-dominio para la síntesis (condiciones sistémicas). Prueba
+    niveles (deep_dive→insight→pulse) con ``scope=None``; el primero con dato gana."""
+    entry = CATALOG_BY_KEY.get(sector_key)
+    source = entry.source if entry else sector_key
+    label = entry.display_name if entry else sector_key
+    base = EnginePull(sector_key=sector_key, entity_label=label, period=None, source=source)
+    if db is None:
+        return base
+    product = get_product(sector_key, db)
+    if product is None:
+        return base
+    for tier in (ProductTier.deep_dive, ProductTier.insight, ProductTier.pulse):
+        try:
+            snap = product.snapshot(tier, "", scope=None)
+        except Exception:  # noqa: BLE001 — nivel no disponible sin entidad
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            continue
+        payload = snap.payload or {}
+        if not payload:
+            continue
+        ev = _generic_summary(label, payload, snap.period, source)
+        return EnginePull(sector_key=sector_key, entity_label=label, period=snap.period,
+                          source=source, payload=payload, evidence=ev, ok=bool(ev))
+    base.note = f"Sin dato de sistema para '{label}'."
+    return base
+
+
 def pull_entity(db: Optional[Session], resolved: ResolvedEntity) -> EnginePull:
     """Trae el resultado del motor para *resolved* (Deep Dive → Insight → brecha)."""
     entry = CATALOG_BY_KEY.get(resolved.sector_key)
