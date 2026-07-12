@@ -26,6 +26,17 @@ COPY shared/ ./shared/
 COPY modules/ ./modules/
 COPY app/ ./app/
 COPY scripts/ ./scripts/
+# Corpus del motor de research (shared/knowledge/corpus): SOLO los docs de metodología
+# de licencia clara del allowlist — NO todo docs/ (evita enviar handoffs/prompts con
+# credenciales a la imagen). La doctrina versionada ya viaja en shared/. Si un doc falta,
+# el loader degrada con gracia (pasaje ausente), no rompe. Mantener sincronizado con
+# shared/knowledge/corpus/__init__.py::CORPUS_MANIFEST.
+COPY docs/REPORT_STANDARD.md docs/DEEP_DIVE_FITCH_PARITY.md \
+     docs/RUBRIC_AUDIT_AND_REMEDIATION.md docs/IRMP_SOURCE_UPGRADE_RESEARCH.md \
+     docs/SPEC_PLATFORM_PRODUCTIZATION.md docs/SPEC_TIER_PRODUCTIZATION_BANKING.md \
+     docs/RECETA_ONBOARDING_SECTOR.md docs/SERIES_CANONICAS_BCRD.md \
+     docs/bcrd_estadisticas_catalog.md docs/sectorial-gate-e-data-spec.md \
+     ./docs/
 COPY infrastructure/alembic/ ./infrastructure/alembic/
 COPY infrastructure/alembic.ini ./infrastructure/alembic.ini
 COPY infrastructure/log_config.json ./infrastructure/log_config.json
