@@ -5,16 +5,20 @@
 > **[Likely]** inferencia fuerte, no probada · **[Guessing]** supuesto a validar ·
 > **[Lock]** decisión ya tomada por el dueño.
 
-> **Estado de implementación (2026-07-11):** Fases 1, 3 y 4 **construidas y verificadas**
-> (núcleo determinista, tests verdes). Data Registry en `shared/registry` (§3.1);
-> retrieval real en `shared/knowledge` —reemplaza el stub del §2— (§3.2); orquestador +
-> gate de honestidad en `shared/research` (§3.3/§3.4/§4), con el test round-trip de brecha
-> del §4. Andamiaje de la Fase 2 (instrumento de piloto) y de la Fase 5 (export con la
-> anatomía del REPORT_STANDARD) listo. Fases 2/5/6 requieren input del dueño (preguntas
-> reales, medición de horas, decisión de tier) — ver `docs/MOTOR_RESEARCH_PILOTO.md`.
-> Pendiente incremental: exponer `variable_signals` en los productos que aún degradan al
-> fallback a-nivel-producto (banking, macro, trade, pension, insurance, monetary_policy);
-> y enchufar el Cerebro para el pulido de prosa (alimentado solo de pasajes con procedencia).
+> **Estado de implementación (2026-07-11):** Fases 1, 3, 4, **5 y 6 construidas y
+> verificadas** (núcleo determinista, tests verdes). Data Registry en `shared/registry`
+> (§3.1); retrieval real en `shared/knowledge` —reemplaza el stub del §2— (§3.2);
+> orquestador + gate de honestidad en `shared/research` (§3.3/§3.4/§4), con el test
+> round-trip de brecha del §4. **Fase 5**: la respuesta → entregable de marca (PDF/Word)
+> reutilizando `render_product_pdf` (`shared/research/deliverable.py`), endpoint
+> `POST /api/v1/research/deliverable`. **Fase 6**: el tier es el SKU `special:research-custom`
+> del tarifario v2 (`shared/research/packaging.py`) — el precio vive en `Tariff`, NO
+> hardcodeado; se publica con `POST /api/v1/research/packaging/price` (admin). Fase 2
+> (piloto) requiere las preguntas reales del dueño — ver `docs/MOTOR_RESEARCH_PILOTO.md`.
+> El precio inicial (US$3,500/encargo) es **PROVISIONAL**, recalibrable con los números
+> del piloto. Pendiente incremental: exponer `variable_signals` en los productos que aún
+> degradan al fallback (banking, macro, trade, pension, insurance, monetary_policy); y
+> enchufar el Cerebro para el pulido de prosa (alimentado solo de pasajes con procedencia).
 
 ## 0. Qué se construye
 
