@@ -1,7 +1,7 @@
 """AFP estados financieros → structured figures, reusing the SIB machinery.
 
 Doctrine: don't reinvent. The banking module already has an AI-native audited-PDF
-extractor (``AuditedPdfExtractor``) and a statement-field mapper (``map_entity_fields``)
+extractor (``AuditedPdfExtractor``) and the shared statement-field mapper (``map_entity_fields``)
 built for the SIB supervised portal. AFP financial statements have the same shape
 (balance general + estado de resultados), so we feed them through the SAME extractor:
 
@@ -44,10 +44,10 @@ def _xlsx_to_text(content: bytes) -> str:
 def extract_financials(content: bytes, filename: str) -> Dict[str, Any]:
     """PDF or XLSX bytes → the extractor's statements dict (company_info + statements).
 
-    Reuses ``modules.banking_score.external.audited_pdf_extractor`` (lazy import so the
+    Reuses ``shared.pdf.audited_extractor`` (lazy import so the
     heavy deps load only when an extraction actually runs).
     """
-    from modules.banking_score.external.audited_pdf_extractor import AuditedPdfExtractor
+    from shared.pdf.audited_extractor import AuditedPdfExtractor
 
     name = (filename or "").lower()
     extractor = AuditedPdfExtractor()
@@ -88,7 +88,7 @@ def map_afp_financials(statements: Dict[str, Any]) -> Dict[str, Optional[float]]
     accounting-identity fallback) and the net result — the ISA solvency dimension. We also
     pull the administered-funds total (AUM) for the ISA's scale/cost dimensions.
     """
-    from modules.banking_score.external.fiduciaria_pdf_client import map_entity_fields
+    from shared.pdf.fields import map_entity_fields
 
     f = map_entity_fields(statements)
     return {

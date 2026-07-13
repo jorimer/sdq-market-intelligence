@@ -319,7 +319,7 @@ async def debug_financials(
     from modules.pension_intel.external.financials_extractor import (
         map_afp_financials, statement_period,
     )
-    from modules.banking_score.external.audited_pdf_extractor import (
+    from shared.pdf.audited_extractor import (
         AuditedPdfExtractor, extract_pdf_text, render_pdf_images,
     )
     found = latest_statement_url(slug)

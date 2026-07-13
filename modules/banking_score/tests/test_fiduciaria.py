@@ -276,7 +276,7 @@ def test_run_fiduciaria_sync_persists_entities_trusts_and_scores(Session, monkey
 
 
 def test_audited_extractor_json_repair_and_parse():
-    from modules.banking_score.external.audited_pdf_extractor import AuditedPdfExtractor as A
+    from shared.pdf.audited_extractor import AuditedPdfExtractor as A
     # Clean JSON inside prose / code fence.
     assert A._parse_json_response('```json\n{"a": 1}\n```') == {"a": 1}
     assert A._parse_json_response('garbage {"b": 2} trailing') == {"b": 2}
