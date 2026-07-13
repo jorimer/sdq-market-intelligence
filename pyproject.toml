@@ -3,3 +3,19 @@ line-length = 100
 
 [tool.ruff.lint]
 ignore = ["E402", "F841", "F401", "F811"]
+
+# mypy con BASELINE (deuda del DD: "sin mypy"). El código pre-mypy arrastra ~1300
+# errores tipados (SQLAlchemy sin Mapped[], Decimal/float, etc.) congelados en
+# mypy-baseline.txt: el CI corre `mypy ... | mypy-baseline filter` y FALLA solo con
+# errores NUEVOS. Para quemar deuda: arreglar errores y regenerar con
+# `mypy shared modules app | mypy-baseline sync`.
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[tool.mypy-baseline]
+baseline_path = "mypy-baseline.txt"
+sort_baseline = true
+# Las "note:" de mypy (p.ej. overloads posibles) no son violaciones y su orden no es
+# estable entre corridas — sin esto el filtro da falsos "nuevos".
+ignore_categories = ["note"]

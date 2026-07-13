@@ -206,7 +206,7 @@ def _upsert_trust_data(db: Session, trust_id: str, period_end: date, fields: Dic
 
 def _extract_one(url: str) -> Dict:  # pragma: no cover - network + AI
     """Download + AI-extract a PDF; return the raw statements dict."""
-    from modules.banking_score.external.audited_pdf_extractor import AuditedPdfExtractor
+    from shared.pdf.audited_extractor import AuditedPdfExtractor
 
     path = fc.download_pdf(url)
     try:

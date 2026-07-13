@@ -54,6 +54,16 @@ jobs:
           pip install ruff
           ruff check modules/ shared/ app/
 
+      # mypy con BASELINE (deuda del DD "sin mypy"): los ~1300 errores del código
+      # pre-mypy están congelados en mypy-baseline.txt; este paso FALLA solo si un
+      # cambio introduce errores de tipos NUEVOS. Para quemar deuda: arreglar y
+      # regenerar con `mypy shared/ modules/ app/ | mypy-baseline sync`.
+      # (Sin pipefail: el exit que manda es el del filtro, no el de mypy.)
+      - name: Type check (mypy + baseline)
+        run: |
+          pip install "mypy==1.17.1" "mypy-baseline==0.7.4"
+          mypy shared/ modules/ app/ 2>&1 | mypy-baseline filter
+
   # ─── Alembic reversibility ───
   # Un downgrade roto solo se descubre en un rollback de producción bajo presión.
   # Este job prueba, en cada PR, que la última migración es reversible:

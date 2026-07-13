@@ -203,7 +203,7 @@ def extract_pdf_text(file_path: str, max_chars: int = 180_000) -> str:  # pragma
 
     # Image-only scan (no text layer) → OCR fallback.
     if not _has_text_layer(text, n_pages):
-        from modules.banking_score.external.ocr_processor import ocr_available, ocr_pdf_text
+        from shared.pdf.ocr import ocr_available, ocr_pdf_text
 
         if ocr_available():
             logger.info("[AuditedPdf] PDF sin capa de texto (%d chars/%d pág) → OCR", len(text), n_pages)
