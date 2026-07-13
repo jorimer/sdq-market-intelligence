@@ -81,6 +81,7 @@ class Targets:
     axes: List[str] = field(default_factory=list)          # ejes primarios sin entidad
     entities: List[ResolvedEntity] = field(default_factory=list)
     context: List[str] = field(default_factory=list)       # dominios de contexto (sistema)
+    reasons: Dict[str, str] = field(default_factory=dict)  # eje → por qué la pregunta lo convoca
 
     @property
     def is_empty(self) -> bool:

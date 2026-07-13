@@ -114,7 +114,7 @@ async def test_synthesis_integrates_multiple_engines(monkeypatch):
     monkeypatch.setattr(dp, "pull_entity", fake_pull_entity)
     monkeypatch.setattr(dp, "pull_axis", fake_pull_axis)
 
-    async def fake_synth(question, live, *, forward_gaps=None, lang="es"):
+    async def fake_synth(question, live, *, forward_gaps=None, reasons=None, lang="es"):
         # recibe los 3 motores (entidad + 2 de contexto) → integra
         assert len(live) == 3
         return "## Tesis\nLafise es vulnerable al fondeo.\n## Mecanismos de transmisión\n..."

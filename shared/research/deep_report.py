@@ -171,7 +171,8 @@ async def build_synthesis_report(question: str, db: Optional[Session], targets,
         return None
 
     thesis = await narrate_synthesis(question, live,
-                                     forward_gaps=[g.note for g in forward_gaps])
+                                     forward_gaps=[g.note for g in forward_gaps],
+                                     reasons=getattr(targets, "reasons", None))
     if not thesis:
         return None  # sin Cerebro → el orquestador cae al ensamblado liviano
 
