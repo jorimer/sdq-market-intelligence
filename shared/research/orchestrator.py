@@ -17,16 +17,25 @@ deterministas; el Cerebro solo pule la prosa sobre lo ya anclado.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
+import time
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 from shared.registry.signals import GAP, REAL, RUBRIC
 from shared.research.assemble import assemble_report_sections, assemble_scoping_sections
-from shared.research.data_pull import EnginePull, pull_entity
+from shared.research.data_pull import EnginePull, pull_axis, pull_entity
 from shared.research.deep_report import build_synthesis_report
 from shared.research.domain_router import merge_routing, route_domains
+
+logger = logging.getLogger("sdq.research.orchestrator")
+
+# Techo del enrutador semántico (una llamada LLM): si el Cerebro no responde a tiempo, el
+# contexto curado ya sembrado por `resolve` basta — fiabilidad sobre exhaustividad.
+_ROUTE_TIMEOUT_S = 12.0
 from shared.research.decompose import (
     DEFAULT_MIN_ANCHOR_SCORE,
     decompose,
@@ -41,6 +50,24 @@ from shared.research.models import (
 )
 from shared.research.narrate import narrate_answer
 from shared.research.resolve import AXIS_KEYWORDS, _norm, resolve_targets
+
+
+async def _route_bounded(question: str, db: Optional[Session]) -> list:
+    """`route_domains` con techo de latencia: al vencer, lista vacía (queda el curado)."""
+    try:
+        return await asyncio.wait_for(route_domains(question, db), _ROUTE_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        logger.warning("route_domains excedió %.0fs; se sigue con el contexto curado.",
+                       _ROUTE_TIMEOUT_S)
+        return []
+
+
+def _pull_known(db: Session, targets,
+                axes: List[str]) -> Tuple[List[EnginePull], List[EnginePull]]:
+    """Cosecha secuencial (una sesión, un thread) de entidades + ejes ya conocidos.
+    Corre en un worker thread, en paralelo con el enrutador semántico (que no usa la DB)."""
+    return ([pull_entity(db, e) for e in targets.entities],
+            [pull_axis(db, ax) for ax in axes])
 
 
 def _matches_pull(sq: SubQuestion, pull: EnginePull) -> bool:
@@ -131,15 +158,29 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
                           min_anchor_score: float = DEFAULT_MIN_ANCHOR_SCORE,
                           narrate: bool = True) -> ResearchAnswer:
     """Responde una pregunta libre circunscrita al dato real de los motores + gate de honestidad."""
+    t0 = time.monotonic()
     # 1-2. Resolver eje+entidad y recibir el resultado de los motores.
     targets = resolve_targets(question, db)
-    # Descomposición SEMÁNTICA: el Cerebro elige del catálogo real qué motores convoca la
-    # pregunta y por qué, uniéndolos al contexto curado (aditivo; sin Cerebro no cambia nada).
-    # Sólo vale la llamada si vamos a sintetizar contra datos (narrate + DB).
+    axis_pulls: List[EnginePull] = []
     if narrate and db is not None:
-        merge_routing(targets, await route_domains(question, db))
-    pulls = [pull_entity(db, e) for e in targets.entities]
+        # Descomposición SEMÁNTICA (el Cerebro elige qué motores convoca) EN PARALELO con la
+        # cosecha ya conocida: `route_domains` no toca la DB (invariante — si algún día la
+        # usa, hay que revisar esto), así que la sesión la usa un solo worker thread a la
+        # vez. Acotado con timeout: sin router a tiempo, el contexto curado basta.
+        route_task = asyncio.ensure_future(_route_bounded(question, db))
+        known_axes = list(dict.fromkeys(list(targets.axes) + list(targets.context)))
+        pulls, axis_pulls = await asyncio.to_thread(_pull_known, db, targets, known_axes)
+        merge_routing(targets, await route_task)
+        # Dominios NUEVOS que el router agregó (no estaban en el mapa curado) → cosecharlos.
+        extra = [ax for ax in list(targets.axes) + list(targets.context)
+                 if ax not in known_axes]
+        if extra:
+            axis_pulls += await asyncio.to_thread(
+                lambda: [pull_axis(db, ax) for ax in extra])
+    else:
+        pulls = [pull_entity(db, e) for e in targets.entities]
     live_pulls = [p for p in pulls if p.ok]
+    t_pulls = time.monotonic()
 
     # 3. Descomponer + metodología, con la evidencia REAL del motor fusionada.
     sub_questions = decompose(question, db=db, per_q_k=per_q_k, min_anchor_score=min_anchor_score)
@@ -157,7 +198,10 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
     deep = None
     section_order: List[str] = []
     if narrate and gate != GATE_SCOPING and (targets.entities or targets.context or live_pulls):
-        deep = await build_synthesis_report(question, db, targets, forward)
+        # La cosecha YA se hizo arriba (entidades + ejes) — se pasa para no re-cosechar
+        # (cada snapshot de entidad son varios queries: percentiles, concentración, pares).
+        deep = await build_synthesis_report(question, db, targets, forward,
+                                            pulls=pulls + axis_pulls)
 
     if deep is not None:
         sections = deep.sections
@@ -183,6 +227,9 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
             section_order = ["resumen_ejecutivo", "hallazgos", "metodologia", "fuentes",
                              "limitaciones"]
     section_order = [k for k in section_order if k in sections]
+    t_end = time.monotonic()
+    logger.info("research timings: route+pulls=%.1fs synthesis=%.1fs total=%.1fs (gate=%s)",
+                t_pulls - t0, t_end - t_pulls, t_end - t0, gate)
 
     return ResearchAnswer(
         question=question, gate=gate, coverage_real=coverage_real,

@@ -181,21 +181,26 @@ def _headline(payload: Dict[str, Any]) -> str:
 
 
 async def build_synthesis_report(question: str, db: Optional[Session], targets,
-                                 forward_gaps: List[DeclaredGap]) -> Optional[DeepReport]:
+                                 forward_gaps: List[DeclaredGap],
+                                 pulls: Optional[List[EnginePull]] = None) -> Optional[DeepReport]:
     """Research TEMA-PRIMERO: cosecha el dato real de TODOS los motores que la pregunta
     convoca (entidades + dominios de contexto: macro, monetario, …) y entrega un DICTAMEN
     INTEGRADO —los mecanismos de transmisión entre dominios— en vez de la ficha de un sector.
-    Es lo que un Deep Dive estructuralmente no puede dar. ``None`` si no hay dato/Cerebro."""
+    Es lo que un Deep Dive estructuralmente no puede dar. ``None`` si no hay dato/Cerebro.
+
+    ``pulls``: cosecha ya hecha por el orquestador (evita re-cosechar cada entidad — un
+    snapshot de banca son varios queries). Si es ``None``, cosecha aquí (compatibilidad)."""
     from shared.research.data_pull import pull_axis, pull_entity
     from shared.research.narrate import narrate_synthesis
 
-    if db is None:
-        return None
-    pulls: List[EnginePull] = []
-    for ent in targets.entities:
-        pulls.append(pull_entity(db, ent))
-    for ax in list(targets.axes) + list(targets.context):
-        pulls.append(pull_axis(db, ax))
+    if pulls is None:
+        if db is None:
+            return None
+        pulls = []
+        for ent in targets.entities:
+            pulls.append(pull_entity(db, ent))
+        for ax in list(targets.axes) + list(targets.context):
+            pulls.append(pull_axis(db, ax))
     live = [p for p in pulls if p.ok and p.payload]
     if not live:
         return None
