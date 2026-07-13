@@ -40,7 +40,10 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
     "esg": ("esg", "clima", "climatic", "ambiental", "carbono", "resiliencia climatica",
             "adaptacion", "sostenibilidad"),
     "pension": ("pension", "afp", "sipen", "fondo de pension", "cotizante", "rentabilidad afp"),
-    "insurance": ("seguro", "aseguradora", "isf", "primas", "siniestralidad", "solvencia aseguradora"),
+    # "asegurador" (stem) cubre asegurador/aseguradora/aseguradoras — hallazgo del piloto:
+    # "mercado asegurador" no matcheaba ("aseguradora" es más largo y "seguro" no es
+    # substring de "asegurador") → el eje primario no se detectaba y el gate caía a scoping.
+    "insurance": ("seguro", "asegurador", "isf", "primas", "siniestralidad"),
     "economic_structure": ("estructura de la economia", "estructura economica",
                            "sectores de origen", "valor agregado por sector"),
 }
