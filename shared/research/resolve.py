@@ -47,9 +47,12 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
 
 # Términos genéricos que NO distinguen una entidad (evitan matches espurios al resolver
 # nombres del roster: "banco", "multiple" aparecen en casi todos los labels bancarios).
+# Los gentilicios/país tampoco distinguen (hallazgo del piloto Fase 2: "mercado asegurador
+# dominicano" resolvía "Banco Popular DOMINICANO" y "Qik ... DOMINICANO" — ruido).
 _ENTITY_STOPWORDS = frozenset(
     "banco banca multiple ahorro credito servicios sa srl de del la el los las asociacion "
-    "aseguradora seguros compania cia fondo afp administradora s a".split())
+    "aseguradora seguros compania cia fondo afp administradora s a "
+    "dominicano dominicana dominicanos dominicanas republica".split())
 
 
 def _norm(s: str) -> str:
