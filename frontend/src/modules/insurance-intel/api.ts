@@ -100,6 +100,12 @@ export async function getInsuranceEntityDetail(slug: string): Promise<InsuranceD
   return data;
 }
 
+/** ISARS breakdown for one ARS — same shape as the insurer detail. */
+export async function getArsEntityDetail(slug: string): Promise<InsuranceDetail> {
+  const { data } = await client.get(`/insurance-intel/ars/${slug}/detail`);
+  return data;
+}
+
 export async function getInsuranceEntityInsight(
   slug: string,
   audience: string = INSURANCE_AUDIENCES[0],

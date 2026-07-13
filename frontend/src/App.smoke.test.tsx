@@ -11,13 +11,14 @@ import "@/shared/i18n/config"; // i18n real (registra recursos ES/EN/FR)
 import App from "@/App";
 import { AuthProvider } from "@/shared/auth/AuthContext";
 
-// Montar App importa TODAS las páginas (import eager en App.tsx): este smoke atrapa
-// cualquier error de import/módulo que hoy produciría una "pantalla blanca", y
-// verifica que la ruta pública /login renderiza el shell sin crashear.
+// Las páginas ahora cargan con React.lazy (code-splitting); solo LoginPage queda
+// eager. El smoke verifica: (a) /login renderiza síncrono sin crashear, y (b) una
+// ruta LAZY resuelve su chunk y monta (atrapa errores de import/módulo que
+// producirían "pantalla blanca" o un Suspense que nunca resuelve).
 describe("App — smoke de montaje", () => {
   beforeEach(() => localStorage.clear());
 
-  it("monta sin crashear y renderiza /login", () => {
+  it("monta sin crashear y renderiza /login (eager)", () => {
     render(
       <MemoryRouter initialEntries={["/login"]}>
         <AuthProvider>
@@ -27,6 +28,19 @@ describe("App — smoke de montaje", () => {
     );
     // El formulario de login (ruta pública) debe estar presente.
     expect(screen.getByRole("button")).toBeInTheDocument();
+    expect(document.querySelector("input")).not.toBeNull();
+  });
+
+  it("resuelve una ruta lazy sin token → redirige a /login", async () => {
+    render(
+      <MemoryRouter initialEntries={["/insurance-intel"]}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+    // Sin sesión, ProtectedRoute redirige a /login; findBy espera el ciclo lazy.
+    expect(await screen.findByRole("button")).toBeInTheDocument();
     expect(document.querySelector("input")).not.toBeNull();
   });
 });

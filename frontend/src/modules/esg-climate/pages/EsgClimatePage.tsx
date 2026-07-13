@@ -18,6 +18,7 @@ import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { AudienceTabs } from "@/shared/ui/AudienceTabs";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { Band } from "@/shared/lib/bands";
+import { dimTag as sharedDimTag } from "@/shared/lib/dimTag";
 import { fmtNum } from "@/shared/lib/format";
 import { getIndicators, getCountryScore, getCountryInsight, getBacktest, CLIMATE_AUDIENCES, IRCIndicator, IRCCountryDetail, IRCBacktest } from "../api";
 import { IRC_DIM_VARS } from "../data";
@@ -32,18 +33,14 @@ function ircBand(score: number | null | undefined, t: TFunction): Band {
   return { label: t("esg.band.low"), tone: "alert" };
 }
 
-/** Real-vs-rubric tag for one IRC dimension, from the source map. */
+/** Real-vs-rubric tag for one IRC dimension (shared helper + IRC variable map).
+ * Usa las claves compartidas widgets.tag* — mismo texto que tenía esg.tag.*. */
 function dimTag(
   sources: Record<string, string> | undefined,
   dimKey: string,
   t: TFunction,
 ): DimensionRow["tag"] {
-  const vars = IRC_DIM_VARS[dimKey] ?? [];
-  if (!sources || vars.length === 0) return undefined;
-  const live = vars.filter((v) => sources[v] === "live").length;
-  if (live === 0) return { text: t("esg.tag.rubric"), ok: false };
-  if (live === vars.length) return { text: t("esg.tag.live"), ok: true };
-  return { text: t("esg.tag.partialLive", { n: live, total: vars.length }), ok: true };
+  return sharedDimTag(sources, IRC_DIM_VARS[dimKey] ?? [], t);
 }
 
 export function EsgClimatePage() {
