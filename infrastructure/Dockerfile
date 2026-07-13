@@ -17,9 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr tesseract-ocr-spa poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Python dependencies
-COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Python dependencies — lockfile con hashes (build reproducible). requirements.txt
+# es la fuente de intención; requirements.lock la resolución fija (pip-compile en
+# python:3.11-slim, mismo intérprete que esta imagen). --require-hashes falla si un
+# paquete no está pinneado o su hash no coincide.
+COPY requirements.lock ./requirements.lock
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 # Copy backend code
 COPY shared/ ./shared/
@@ -45,9 +48,6 @@ RUN chmod +x ./infrastructure/start.sh
 
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
-
-# Copy infrastructure configs
-COPY infrastructure/railway.toml ./railway.toml
 
 # Create data directories
 RUN mkdir -p data/reports data/models data/charts

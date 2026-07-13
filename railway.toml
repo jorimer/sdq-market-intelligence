@@ -3,6 +3,12 @@ builder = "dockerfile"
 dockerfilePath = "infrastructure/Dockerfile"
 
 [deploy]
+# Railway lee ESTE archivo (raíz del repo). El de infrastructure/ se eliminó por
+# ser drift muerto con valores en conflicto. Fuente única de la config de deploy.
 healthcheckPath = "/api/v1/health"
+# Timeout amplio: el primer healthcheck ocurre tras correr `alembic upgrade head`
+# en el arranque; un cold start con migraciones puede tardar.
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+numReplicas = 1
