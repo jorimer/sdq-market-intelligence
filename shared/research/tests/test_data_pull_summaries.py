@@ -140,3 +140,20 @@ def test_all_catalog_sectors_have_a_summarizer():
     from shared.products.registry import PRODUCT_CATALOG
     for entry in PRODUCT_CATALOG:
         assert entry.sector_key in dp._AXIS_SUMMARY, f"{entry.sector_key} sin summarizer"
+
+
+def test_declares_no_data_detects_dead_payload():
+    """Hallazgo del piloto: un payload {'has_data': False} contaba como cosecha VIVA
+    (evidencia REAL 'has_data False') e inflaba el ledger. Un motor honesto sin dato
+    no es evidencia."""
+    assert dp._declares_no_data({"has_data": False})
+    assert dp._declares_no_data({"has_score": False})
+    assert not dp._declares_no_data({"has_data": True, "pulse": {}})
+    assert not dp._declares_no_data({"scoring_result": {"overall_score": 78.0}})
+
+
+def test_generic_summary_ignores_booleans():
+    """'has_data' es int para isinstance — no debe salir como cifra en la evidencia."""
+    evs = dp._generic_summary("X", {"has_data": True, "flag": False}, "2025", "src")
+    t = " ".join(e.text for e in evs)
+    assert "has_data" not in t and "flag" not in t

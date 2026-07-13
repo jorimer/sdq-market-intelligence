@@ -162,8 +162,10 @@ def _generic_summary(label: str, payload: Dict[str, Any], period: Optional[str],
             break
     cand = cand or root
     # Ignora claves de CONTEO/estructura (no son la señal): 'n_factors', 'n_scored'…
+    # y los booleanos ('has_data' es int para isinstance — no es una cifra).
     scalars = {k: v for k, v in cand.items()
-               if isinstance(v, (int, float)) and not k.lower().startswith(("n_", "num_", "count"))}
+               if isinstance(v, (int, float)) and not isinstance(v, bool)
+               and not k.lower().startswith(("n_", "num_", "count"))}
     if not scalars:
         return [Evidence(text=f"{label}: el motor devolvió resultado para el período {period or 's/f'}.",
                         source=source, kind="engine", state=REAL, score=90.0)]
@@ -436,6 +438,13 @@ _AXIS_SUMMARY = {
 }
 
 
+def _declares_no_data(payload: Dict[str, Any]) -> bool:
+    """¿El payload DECLARA que no hay dato? (``has_data``/``has_score`` en False). Un motor
+    honesto sin dato no es cosecha viva: contarlo inflaba el ledger de cobertura y mostraba
+    "has_data False" como evidencia (hallazgo del piloto: seguros sin dato de pulse en prod)."""
+    return payload.get("has_data") is False or payload.get("has_score") is False
+
+
 def pull_axis(db: Optional[Session], sector_key: str) -> EnginePull:
     """Cosecha a-nivel-SISTEMA de un motor de contexto (sin entidad): macro, monetario, etc.
     Es lo que trae el telón cross-dominio para la síntesis (condiciones sistémicas). Prueba
@@ -459,8 +468,8 @@ def pull_axis(db: Optional[Session], sector_key: str) -> EnginePull:
                 pass
             continue
         payload = snap.payload or {}
-        if not payload:
-            continue
+        if not payload or _declares_no_data(payload):
+            continue  # sin dato en este nivel → probar el siguiente
         ev = _AXIS_SUMMARY.get(sector_key, _generic_summary)(label, payload, snap.period, source)
         return EnginePull(sector_key=sector_key, entity_label=label, period=snap.period,
                           source=source, payload=payload, evidence=ev, ok=bool(ev))
@@ -494,6 +503,8 @@ def pull_entity(db: Optional[Session], resolved: ResolvedEntity) -> EnginePull:
                 pass
             continue
         payload = snap.payload or {}
+        if not payload or _declares_no_data(payload):
+            continue  # el motor declara "sin dato" → probar el siguiente nivel / brecha
         summarizer = _AXIS_SUMMARY.get(resolved.sector_key, _generic_summary)
         ev = summarizer(resolved.label, payload, snap.period, source)
         return EnginePull(sector_key=resolved.sector_key, entity_label=resolved.label,
