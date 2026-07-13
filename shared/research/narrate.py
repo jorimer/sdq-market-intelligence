@@ -38,15 +38,18 @@ _CEREBRO_AXIS = {
 
 async def narrate_synthesis(question: str, pulls: List[EnginePull],
                             *, forward_gaps: Optional[List[str]] = None,
+                            reasons: Optional[dict] = None,
                             lang: str = "es") -> Optional[str]:
     """Síntesis CROSS-DOMINIO: integra el dato de VARIOS motores (entidad + contexto macro/
     monetario/…) alrededor de la pregunta. Es el núcleo del research tema-primero. ``None`` si
-    no hay dato o el Cerebro no está disponible."""
+    no hay dato o el Cerebro no está disponible. ``reasons`` (eje → por qué la pregunta lo
+    convoca, del enrutador semántico) ancla el canal de transmisión que el Cerebro debe narrar."""
     live = [p for p in pulls if p.ok and p.payload]
     if not live:
         return None
     from shared.narrative.claude_engine import narrative_engine
 
+    reasons = reasons or {}
     # Persona del eje primario (el primer motor con entidad, o el primero); el guard verifica
     # las cifras contra TODO el contexto multi-dominio, no solo ese eje.
     axis = _CEREBRO_AXIS.get(live[0].sector_key)
@@ -54,7 +57,8 @@ async def narrate_synthesis(question: str, pulls: List[EnginePull],
         "pregunta": question,
         "dominios": [
             {"dominio": p.entity_label, "eje": p.sector_key, "fuente": p.source,
-             "procedencia": "real", "resultado_del_motor": p.payload}
+             "procedencia": "real", "resultado_del_motor": p.payload,
+             **({"por_que_convocado": reasons[p.sector_key]} if reasons.get(p.sector_key) else {})}
             for p in live
         ],
     }

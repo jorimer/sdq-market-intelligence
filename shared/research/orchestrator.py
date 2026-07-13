@@ -26,6 +26,7 @@ from shared.registry.signals import GAP, REAL, RUBRIC
 from shared.research.assemble import assemble_report_sections, assemble_scoping_sections
 from shared.research.data_pull import EnginePull, pull_entity
 from shared.research.deep_report import build_synthesis_report
+from shared.research.domain_router import merge_routing, route_domains
 from shared.research.decompose import (
     DEFAULT_MIN_ANCHOR_SCORE,
     decompose,
@@ -132,6 +133,11 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
     """Responde una pregunta libre circunscrita al dato real de los motores + gate de honestidad."""
     # 1-2. Resolver eje+entidad y recibir el resultado de los motores.
     targets = resolve_targets(question, db)
+    # Descomposición SEMÁNTICA: el Cerebro elige del catálogo real qué motores convoca la
+    # pregunta y por qué, uniéndolos al contexto curado (aditivo; sin Cerebro no cambia nada).
+    # Sólo vale la llamada si vamos a sintetizar contra datos (narrate + DB).
+    if narrate and db is not None:
+        merge_routing(targets, await route_domains(question, db))
     pulls = [pull_entity(db, e) for e in targets.entities]
     live_pulls = [p for p in pulls if p.ok]
 
