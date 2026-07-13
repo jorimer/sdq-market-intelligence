@@ -83,6 +83,54 @@ def _banking_summary(label: str, payload: Dict[str, Any], period: Optional[str],
     return out
 
 
+def _monetary_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                      source: str) -> List[Evidence]:
+    """Evidencia REAL del motor de política monetaria (TPM + sesgo + pronóstico)."""
+    out: List[Evidence] = []
+    latest = (payload or {}).get("latest") or {}
+    tpm = latest.get("tpm")
+    if tpm is not None:
+        out.append(Evidence(
+            text=(f"Política monetaria (BCRD): TPM en {_fmt(tpm)}% "
+                  f"({latest.get('sentido') or 'sin cambio'}) al {latest.get('fecha') or period}."),
+            source=source, kind="engine", state=REAL, score=95.0))
+    fc = (payload or {}).get("forecast") or {}
+    prob = fc.get("prob_hold") or fc.get("probabilidad_hold") or fc.get("hold_prob")
+    taylor = fc.get("taylor") or fc.get("tasa_taylor") or fc.get("implied_taylor")
+    if prob is not None or taylor is not None:
+        bits = []
+        if prob is not None:
+            bits.append(f"prob. de mantener {_fmt(prob if prob > 1 else prob * 100)}%")
+        if taylor is not None:
+            bits.append(f"Taylor implícita {_fmt(taylor)}%")
+        out.append(Evidence(text="Sesgo prospectivo del modelo: " + ", ".join(bits) + ".",
+                            source=source, kind="engine", state=REAL, score=93.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
+def _macro_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                   source: str) -> List[Evidence]:
+    """Evidencia REAL del motor macro/riesgo-país (banda IRMP + factores)."""
+    out: List[Evidence] = []
+    band = (payload or {}).get("irmp_band")
+    score = (payload or {}).get("irmp_score")
+    if band or score is not None:
+        s = f" (IRMP {_fmt(score)})" if isinstance(score, (int, float)) else ""
+        out.append(Evidence(text=f"Riesgo-país / macro: banda {band or '—'}{s} al {period}.",
+                            source=source, kind="engine", state=REAL, score=94.0))
+    for f in ((payload or {}).get("factors") or [])[:4]:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("name") or f.get("nombre") or f.get("label") or f.get("factor")
+        val = next((f[k] for k in ("value", "valor", "score", "level")
+                    if isinstance(f.get(k), (int, float))), None)
+        if name and val is not None:
+            dirn = f.get("direction") or f.get("direccion") or ""
+            out.append(Evidence(text=f"{name}: {_fmt(val)}{(' · ' + str(dirn)) if dirn else ''}.",
+                                source=source, kind="engine", state=REAL, score=88.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
 def _generic_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                      source: str) -> List[Evidence]:
     """Evidencia REAL desde cualquier payload: extrae escalares del primer dict con 'score'
@@ -96,13 +144,22 @@ def _generic_summary(label: str, payload: Dict[str, Any], period: Optional[str],
             cand = v
             break
     cand = cand or root
-    scalars = {k: v for k, v in cand.items() if isinstance(v, (int, float))}
+    # Ignora claves de CONTEO/estructura (no son la señal): 'n_factors', 'n_scored'…
+    scalars = {k: v for k, v in cand.items()
+               if isinstance(v, (int, float)) and not k.lower().startswith(("n_", "num_", "count"))}
     if not scalars:
         return [Evidence(text=f"{label}: el motor devolvió resultado para el período {period or 's/f'}.",
                         source=source, kind="engine", state=REAL, score=90.0)]
     parts = ", ".join(f"{k} {_fmt(v)}" for k, v in list(scalars.items())[:6])
     return [Evidence(text=f"{label}: {parts} · período {period or 's/f'}.",
                     source=source, kind="engine", state=REAL, score=95.0)]
+
+
+# Summarizer de evidencia por eje (real, no genérico) para los motores de contexto.
+_AXIS_SUMMARY = {
+    "monetary_policy": _monetary_summary,
+    "macro": _macro_summary,
+}
 
 
 def pull_axis(db: Optional[Session], sector_key: str) -> EnginePull:
@@ -130,7 +187,7 @@ def pull_axis(db: Optional[Session], sector_key: str) -> EnginePull:
         payload = snap.payload or {}
         if not payload:
             continue
-        ev = _generic_summary(label, payload, snap.period, source)
+        ev = _AXIS_SUMMARY.get(sector_key, _generic_summary)(label, payload, snap.period, source)
         return EnginePull(sector_key=sector_key, entity_label=label, period=snap.period,
                           source=source, payload=payload, evidence=ev, ok=bool(ev))
     base.note = f"Sin dato de sistema para '{label}'."
