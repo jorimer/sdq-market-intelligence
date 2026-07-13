@@ -236,3 +236,53 @@ async def test_answer_parallel_flow_end_to_end(monkeypatch):
 
 async def _none_coro(*a, **k):
     return None
+
+
+# ─── hallazgos del piloto Fase 2 (2026-07-12) ─────────────────────────
+def test_gentilicio_is_not_a_distinctive_entity_token():
+    """'dominicano/a' no distingue una entidad: "mercado asegurador dominicano" resolvía
+    'Banco Popular DOMINICANO' y 'Qik ... DOMINICANO' (ruido del piloto). El gentilicio va
+    a stopwords; los nombres reales siguen distinguiéndose por sus otros tokens."""
+    from shared.research.resolve import _distinctive_tokens
+    assert "dominicano" not in _distinctive_tokens("Banco Popular Dominicano")
+    assert "popular" in _distinctive_tokens("Banco Popular Dominicano")
+    assert "dominicano" not in _distinctive_tokens("Qik Banco Digital Dominicano")
+    assert "digital" in _distinctive_tokens("Qik Banco Digital Dominicano")
+    # 'nacional' NO va a stopwords: es el nombre distintivo de la Asociación La Nacional.
+    assert "nacional" in _distinctive_tokens("Asociación La Nacional de Ahorros y Préstamos")
+
+
+@pytest.mark.asyncio
+async def test_axis_pulls_feed_honesty_ledger_and_forward_gap(monkeypatch):
+    """Pregunta de SISTEMA (sin entidad) con cosecha de eje viva: el ledger debe acreditar
+    la evidencia (cobertura real > 0, no '0%' con el dictamen lleno de dato) y la brecha
+    prospectiva DEBE declararse — hallazgo del piloto: 'próximos 2-3 años' no se declaraba
+    porque _forward_gaps solo veía pulls de entidad."""
+    class T:
+        entities: list = []
+        axes = ["tourism"]
+        context: list = []
+        reasons: dict = {}
+    monkeypatch.setattr(orch, "resolve_targets", lambda q, db: T())
+
+    async def no_route(question, db):
+        return []
+    monkeypatch.setattr(orch, "route_domains", no_route)
+    monkeypatch.setattr(orch, "pull_axis",
+                        lambda db, ax: _pull(f"SDQ Tourism ({ax})", ax))
+    monkeypatch.setattr(decompose_mod, "retrieve", lambda *a, **k: [])
+
+    async def no_deep(question, db, targets, forward, pulls=None):
+        return None
+    monkeypatch.setattr(orch, "build_synthesis_report", no_deep)
+
+    async def no_narr(*a, **k):
+        return None
+    monkeypatch.setattr(orch, "narrate_answer", no_narr)
+
+    ans = await orch.answer_question(
+        "¿Atractivo de un proyecto hotelero en los próximos 2-3 años?",
+        db=object(), narrate=True)
+    assert ans.coverage_real > 0, "la cosecha de eje viva debe acreditar el ledger"
+    assert any("prospectiva" in g.note.lower() for g in ans.gaps), \
+        "la brecha prospectiva debe declararse también en preguntas de sistema"

@@ -179,7 +179,12 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
                 lambda: [pull_axis(db, ax) for ax in extra])
     else:
         pulls = [pull_entity(db, e) for e in targets.entities]
-    live_pulls = [p for p in pulls if p.ok]
+    # El ledger de honestidad cuenta TODA la cosecha viva — entidades Y ejes de sistema.
+    # Hallazgo del piloto Fase 2: contarlo solo por-entidad hacía que una pregunta de
+    # sistema (sin entidad) reportara "cobertura real 0%" con el dictamen lleno de dato
+    # real, y —peor— NO declarara la brecha prospectiva ("próximos 2-3 años") porque
+    # `_forward_gaps` exige cosecha viva. Entidades primero (evidencia más específica).
+    live_pulls = [p for p in pulls if p.ok] + [p for p in axis_pulls if p.ok]
     t_pulls = time.monotonic()
 
     # 3. Descomponer + metodología, con la evidencia REAL del motor fusionada.
