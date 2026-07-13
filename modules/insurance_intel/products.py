@@ -356,8 +356,12 @@ class InsuranceProduct:
                                    entity_name=None)
 
         # Niveles nombrados (Insight / Deep Dive): ISF por aseguradora (estados auditados).
+        # Sin scope se LANZA (contrato del registro, como banca/pensiones/ESG): devolver un
+        # snapshot "sin dato" aquí cortaba la degradación deep_dive→pulse de los consumidores.
+        if not scope:
+            raise ValueError("Debe indicar la aseguradora (scope) para el nivel nombrado.")
         results = _isf_results(db)
-        rating = next((r for r in results if r["slug"] == scope), None) if scope else None
+        rating = next((r for r in results if r["slug"] == scope), None)
         if rating is None or rating.get("overall_score") is None:
             return ProductSnapshot(tier=tier, period=period or "—",
                                    payload={"has_data": False},
