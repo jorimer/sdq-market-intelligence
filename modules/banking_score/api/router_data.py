@@ -545,7 +545,7 @@ async def fiduciaria_pdf_test(
     import os as _os
 
     from modules.banking_score.external import fiduciaria_pdf_client as fc
-    from modules.banking_score.external.audited_pdf_extractor import AuditedPdfExtractor
+    from shared.pdf.audited_extractor import AuditedPdfExtractor
 
     try:
         disco = fc.discover_pdfs(slug)

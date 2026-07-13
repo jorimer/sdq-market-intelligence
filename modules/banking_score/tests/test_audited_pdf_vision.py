@@ -7,7 +7,7 @@ text-layer threshold. The vision path was added because Tesseract OCR mangled th
 """
 import pytest
 
-from modules.banking_score.external import audited_pdf_extractor as ape
+from shared.pdf import audited_extractor as ape
 
 
 def _extractor():
