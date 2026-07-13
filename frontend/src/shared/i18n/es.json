@@ -2440,5 +2440,34 @@
       "asegurado": "Asegurado",
       "gobierno": "Gobierno"
     }
+  },
+  "tariff": {
+    "tab": {
+      "bulk": "Edición rápida",
+      "catalog": "Catálogo e histórico"
+    },
+    "bulk": {
+      "insightTitle": "Insight por sector — suscripción",
+      "insightSub": "Mensual y anual por sector. El anual suele ser el mensual con descuento.",
+      "deepDiveTitle": "Deep Dive por sector — compra puntual",
+      "deepDiveSub": "Precio por informe a demanda.",
+      "bundlesTitle": "Bundles",
+      "bundlesSub": "All-Access (todos los Insight) y Enterprise (todo el catálogo).",
+      "colProduct": "Producto",
+      "colChange": "Cambio",
+      "applyAll": "Aplicar a todos los sectores",
+      "apply": "Aplicar",
+      "new": "nuevo",
+      "label": "Etiqueta del lote (opcional)",
+      "labelPh": "p.ej. Tarifario v0.3",
+      "from": "Vigente desde (opcional)",
+      "publish": "Publicar",
+      "confirmTitle": "Confirmar publicación",
+      "confirmSub": "{{n}} precios nuevos rigen al publicar",
+      "confirm": "Publicar ahora",
+      "okCount": "{{n}} precios publicados",
+      "failCount": "Fallaron: {{list}}",
+      "hint": "Solo se publican las celdas modificadas. Publicar no borra precios anteriores: quedan en el histórico. Una celda vacía no borra el precio (retirar es acción del histórico)."
+    }
   }
 }
