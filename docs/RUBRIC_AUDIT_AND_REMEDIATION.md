@@ -1,5 +1,48 @@
 # Auditoría de rúbrica de toda la app + plan de remediación
 
+---
+
+> ## ⚠️ RE-EMISIÓN 2026-07-13 (leer primero) — el código va POR DELANTE de este doc
+>
+> Una due-diligence técnica (2026-07-13) verificó módulo por módulo con `archivo:línea`
+> que **varios ítems que este doc lista como pendientes YA están cableados a fuente real**.
+> Usar la tabla de abajo —no el cuerpo histórico— como estado actual. El cuerpo (fechado
+> 2026-07-10) se conserva como registro del plan original.
+>
+> **Estado verificado (2026-07-13): 9 REAL · 5 MIXTO · 1 RÚBRICA declarada · 0 MOCK.**
+> No se halló ningún score inventado presentado como dato sin rótulo.
+>
+> | Módulo | Veredicto | Fuente real (conector) | Rúbrica/fallback que queda |
+> |---|---|---|---|
+> | banking_score | MIXTO (núcleo REAL) | SIB `external/sib_data_client.py`, SIMBAD `external/simbad_client.py` | proxy diversificación cambiaria fijo 0.5 (`scoring/cambiaria.py`); `STATE_OWNED` overlay factual rotulado |
+> | macro_monitor | REAL | BCRD `shared/data/bcrd_*`, DGII/Hacienda | — |
+> | trade_intel | REAL | DGA `shared/data/dga_client.py`, Comtrade | — |
+> | construction_intel | REAL | BCRD sectores + MIVHED | — |
+> | free_zones_intel | REAL | CNZFE `shared/data/cnzfe_client.py` (CKAN) | — |
+> | telecom_intel | REAL | ITU `shared/data/itu_client.py` | — |
+> | energy_intel | REAL | SIE `shared/data/sie_client.py` | dim transición = gap declarado (excluida) |
+> | tourism_intel | REAL | ONE llegadas `shared/data/tourism_arrivals_client.py` | ocupación/divisas = serie discontinuada, declarada fuera de alcance (no fabricada) |
+> | pension_intel | REAL | SIPEN `shared/data/sipen_client.py` | ISA solvencia = gap declarado (excluida) |
+> | insurance_intel | REAL | SIS + **solvencia regulatoria Ley 146-02** `solvency_sync.py` | dim sin dato = gap declarado. **El doc lo listaba como brecha P3 — YA cableado** |
+> | sector_intel (IAI/SGPS) | MIXTO (mayormente REAL) | IAI: BCRD+WGI+WB-HCI+TSS+ENCFT+ENAE; SGPS: BCRD growth + ENAE margen | **única rúbrica dura viva: `ease_of_business` fijo 50** (`service.py:188`, Doing Business murió); SGPS cae a 50 solo donde falta dato (rotulado) |
+> | esg_climate | MIXTO | ND-GAIN + HURDAT2 + Ember | transición → fallback 0.5 cuando panel incompleto (rotulado "rubric") |
+> | social_dev | MIXTO | ONE (ENCFT/ENHOGAR) + WDI/Findex | fallback 50 por período faltante (rotulado) |
+> | macro_political_risk (IRMP) | MIXTO | WGI + WDI + rating soberano + GDELT + calendario electoral | **3 inputs de JUICIO en `regulatory.yaml`** (`policy_continuity`, `discretion`, `contract_enforcement`) — ver nota abajo |
+> | deal_scoring | RÚBRICA (IP declarada) | anclas a IAI/IRMP/IRC reales | `_STAGE_SCORE`/`_momentum`/`WEIGHTS` hardcodeados (`scoring/rubric.py`), auto-rotulado `is_trained_model: False` |
+>
+> ### El IRMP NO está en "rúbrica cero" — precisión honesta
+> La columna vertebral del IRMP es real (gobernanza WGI, macro WDI, rating soberano S&P,
+> eventos GDELT, `electoral_uncertainty` computada del calendario). PERO tres variables
+> institucionales —`policy_continuity`, `discretion`, `contract_enforcement`— siguen siendo
+> **juicio experto tecleado en `modules/macro_political_risk/regulatory.yaml`** y entran al
+> score vía `rubric_inputs` (`service.py:277,288`). Están **rotuladas como rúbrica** en el
+> badge de procedencia, pero pesan ~0.30. Esto es **metodológicamente legítimo** (las agencias
+> de rating usan juicio experto); lo que sería incorrecto es afirmar "cero juicio". Regla:
+> el juicio experto se declara, se fecha y se atribuye — nunca se presenta como dato medido.
+> Ver `docs/CLAIMS_COMERCIALES.md`.
+
+---
+
 **Fecha:** 2026-07-10 · **Alcance:** todos los módulos de producto de SDQ·MIP · **Objetivo:**
 determinar qué queda de "rúbrica" (valor de juicio tecleado a mano que alimenta un score
 publicado, presentado como si fuera dato) y lanzar la investigación de fuentes confiables
