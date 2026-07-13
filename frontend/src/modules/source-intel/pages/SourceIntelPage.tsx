@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Compass, Plus, Trash2, Bot, User as UserIcon, Sparkles, Wrench, Database, RefreshCw } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
@@ -51,8 +52,7 @@ function recTone(r: Evaluation["recommendation"]): "ok" | "warn" | "alert" | "mu
   return "warn";
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function EvaluationBlock({ ev, t }: { ev: Evaluation; t: any }) {
+function EvaluationBlock({ ev, t }: { ev: Evaluation; t: TFunction }) {
   return (
     <div className="mt-2 rounded-md border border-line bg-surface2/50 px-3 py-2">
       <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -75,8 +75,7 @@ function EvaluationBlock({ ev, t }: { ev: Evaluation; t: any }) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function PlanBlock({ plan, t }: { plan: IntegrationPlan; t: any }) {
+function PlanBlock({ plan, t }: { plan: IntegrationPlan; t: TFunction }) {
   return (
     <div className="mt-2 rounded-md border border-line bg-surface px-3 py-2">
       <div className="flex items-center gap-2 text-xs">
