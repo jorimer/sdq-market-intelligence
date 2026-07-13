@@ -5,9 +5,13 @@ Inference:  feature vector → predict_proba → weighted midpoint → continuou
 
 Extracted from financial-analysis-agent/banking_scoring_service.py.
 """
+import base64
+import hashlib
+import hmac
+import json
 import logging
 import os
-import pickle
+import tempfile
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -55,6 +59,25 @@ TIER_MIDPOINTS: Dict[str, float] = {
     tier: (lo + hi) / 2 for tier, lo, hi in RATING_SCALE
 }
 
+# Serialization format: JSON envelope { format, payload_b64, hmac } where the
+# payload is { booster_b64 (XGBoost native JSON), classes, version, metrics }.
+# XGBoost's native format cannot execute code on load (unlike pickle), and the
+# HMAC rejects a blob that was altered at rest (DB row or disk file).
+MODEL_FORMAT = "sdq-xgb-v2"
+
+
+class ModelIntegrityError(RuntimeError):
+    """Blob de modelo con formato desconocido o firma HMAC inválida."""
+
+
+def _hmac_key() -> bytes:
+    # Same derivation precedence as shared/settings/crypto.py.
+    return (settings.SETTINGS_SECRET or settings.JWT_SECRET_KEY).encode("utf-8")
+
+
+def _sign(payload: bytes) -> str:
+    return hmac.new(_hmac_key(), payload, hashlib.sha256).hexdigest()
+
 
 class SDQXGBoostModel:
     """Wrapper around XGBClassifier for 10-tier credit-rating prediction."""
@@ -65,7 +88,7 @@ class SDQXGBoostModel:
         self.version: Optional[str] = None
         self.metrics: Optional[Dict] = None
         self._model_path = os.path.join(
-            settings.MODELS_DIR, "sdq_xgboost_latest.pkl"
+            settings.MODELS_DIR, "sdq_xgboost_latest.json"
         )
 
     # ── Training ──────────────────────────────────────────────────
@@ -171,17 +194,62 @@ class SDQXGBoostModel:
         return score, tier, tier_probs
 
     # ── Serialization ─────────────────────────────────────────────
+    # No pickle anywhere: a compromised blob must not be able to execute code.
+
+    def _serialize(self) -> bytes:
+        with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
+            self.model.save_model(tmp.name)
+            booster_bytes = open(tmp.name, "rb").read()
+        payload = json.dumps({
+            "booster_b64": base64.b64encode(booster_bytes).decode("ascii"),
+            "classes": [str(c) for c in self.label_encoder.classes_],
+            "version": self.version,
+            "metrics": self.metrics,
+        }, sort_keys=True).encode("utf-8")
+        envelope = {
+            "format": MODEL_FORMAT,
+            "payload_b64": base64.b64encode(payload).decode("ascii"),
+            "hmac": _sign(payload),
+        }
+        return json.dumps(envelope).encode("utf-8")
+
+    def _deserialize(self, blob: bytes) -> None:
+        try:
+            envelope = json.loads(blob.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as e:
+            raise ModelIntegrityError(
+                "Blob de modelo en formato legado (pickle) o corrupto; se ignora "
+                "por seguridad. Re-entrenar con POST /model/train."
+            ) from e
+        if not isinstance(envelope, dict) or envelope.get("format") != MODEL_FORMAT:
+            raise ModelIntegrityError(
+                f"Formato de modelo desconocido: {envelope.get('format') if isinstance(envelope, dict) else '?'}"
+            )
+        payload = base64.b64decode(envelope.get("payload_b64", ""))
+        if not hmac.compare_digest(_sign(payload), str(envelope.get("hmac", ""))):
+            raise ModelIntegrityError(
+                "Firma HMAC inválida: el blob del modelo fue alterado. Se rechaza."
+            )
+        data = json.loads(payload.decode("utf-8"))
+
+        _ensure_ml_libs()
+        model = XGBClassifier()
+        with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
+            tmp.write(base64.b64decode(data["booster_b64"]))
+            tmp.flush()
+            model.load_model(tmp.name)
+        encoder = LabelEncoder()
+        encoder.classes_ = np.array(data["classes"])
+
+        self.model = model
+        self.label_encoder = encoder
+        self.version = data.get("version")
+        self.metrics = data.get("metrics")
 
     def _save(self):
         os.makedirs(os.path.dirname(self._model_path), exist_ok=True)
-        payload = {
-            "model": self.model,
-            "label_encoder": self.label_encoder,
-            "version": self.version,
-            "metrics": self.metrics,
-        }
         with open(self._model_path, "wb") as f:
-            pickle.dump(payload, f)
+            f.write(self._serialize())
         logger.info("Model saved to %s", self._model_path)
 
     def _load(self):
@@ -191,32 +259,13 @@ class SDQXGBoostModel:
                 "Run /model/train first."
             )
         with open(self._model_path, "rb") as f:
-            payload = pickle.load(f)
-        self.model = payload["model"]
-        self.label_encoder = payload["label_encoder"]
-        self.version = payload.get("version")
-        self.metrics = payload.get("metrics")
+            self._deserialize(f.read())
         logger.info("Model loaded: v=%s", self.version)
 
     # ── Durable persistence (Postgres) ───────────────────────────
-    # The disk pickle lives on the ephemeral container FS and vanishes on
+    # The disk file lives on the ephemeral container FS and vanishes on
     # redeploy. The newest ml_models row is the durable source of truth, loaded
     # into memory on cold start.
-
-    def _serialize(self) -> bytes:
-        return pickle.dumps({
-            "model": self.model,
-            "label_encoder": self.label_encoder,
-            "version": self.version,
-            "metrics": self.metrics,
-        })
-
-    def _deserialize(self, blob: bytes) -> None:
-        payload = pickle.loads(blob)
-        self.model = payload["model"]
-        self.label_encoder = payload["label_encoder"]
-        self.version = payload.get("version")
-        self.metrics = payload.get("metrics")
 
     def save_to_db(self, db, trained_by: Optional[str] = None) -> None:
         """Persist the in-memory model as a new ml_models row (durable)."""
@@ -243,12 +292,21 @@ class SDQXGBoostModel:
         )
 
     def load_from_db(self, db) -> bool:
-        """Load the most recent model from the DB into memory. Returns success."""
+        """Load the most recent model from the DB into memory. Returns success.
+
+        A legacy-pickle or tampered blob is refused (never deserialized) and
+        reported as "no model": the deterministic engine keeps serving and
+        /model/train produces a fresh row in the current format.
+        """
         row = self._latest_row(db)
         if not row:
             return False
         _ensure_ml_libs()
-        self._deserialize(row.model_blob)
+        try:
+            self._deserialize(row.model_blob)
+        except ModelIntegrityError as e:
+            logger.warning("Modelo en DB rechazado (v=%s): %s", row.version, e)
+            return False
         logger.info("Model loaded from DB: v=%s", self.version)
         return True
 
