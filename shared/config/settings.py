@@ -51,6 +51,17 @@ class Settings(BaseSettings):
     CHARTS_DIR: str = "./data/charts"
     DEBUG: bool = False
 
+    # Observability
+    # Nombre del entorno (development/staging/production) — etiqueta los eventos de
+    # Sentry y decide el formato de logs. En prod, ENVIRONMENT=production activa logs JSON.
+    ENVIRONMENT: str = "development"
+    # Sentry: sin DSN, la instrumentación es un no-op (no rompe dev/tests). El dueño
+    # crea el proyecto y setea SENTRY_DSN en Railway.
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+    # Forzar logs JSON estructurados aunque ENVIRONMENT no sea production (debug).
+    LOG_JSON: bool = False
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
