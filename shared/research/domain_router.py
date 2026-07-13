@@ -132,12 +132,32 @@ def _parse_domains(obj: Dict[str, Any]) -> List[RoutedDomain]:
     return out
 
 
+# Caché en memoria del ruteo por pregunta. Crítico para la caché de RESPUESTAS aguas abajo:
+# el ruteo es una llamada LLM — sin caché (y con temperatura) dos corridas de la MISMA
+# pregunta pueden convocar dominios distintos → contexto de síntesis distinto → la caché del
+# narrative_engine nunca pega y cada re-consulta idéntica paga el LLM completo (hallado
+# midiendo en prod: la "warm" tardaba igual que la fría). Acotada (FIFO) para no crecer.
+_ROUTE_CACHE: Dict[str, List[RoutedDomain]] = {}
+_ROUTE_CACHE_MAX = 256
+
+
+def _route_cache_key(question: str) -> str:
+    return " ".join(question.lower().split())
+
+
 async def route_domains(question: str, db: Optional[Session]) -> List[RoutedDomain]:
     """Dominios que la pregunta convoca según el Cerebro (validados contra el catálogo). Lista
     vacía si no hay Cerebro, hay error, o la respuesta es inválida → el orquestador se queda
-    con el contexto curado de ``resolve`` (degradación transparente, sin pérdida)."""
+    con el contexto curado de ``resolve`` (degradación transparente, sin pérdida).
+
+    Cacheado por pregunta y con ``temperature=0``: el ruteo debe ser ESTABLE — misma pregunta,
+    mismos dominios — para que la caché de narrativas aguas abajo funcione."""
     if not question or not question.strip():
         return []
+    key = _route_cache_key(question)
+    cached = _ROUTE_CACHE.get(key)
+    if cached is not None:
+        return list(cached)
     from shared.config.settings import settings
     from shared.narrative.claude_engine import narrative_engine
 
@@ -153,6 +173,7 @@ async def route_domains(question: str, db: Optional[Session]) -> List[RoutedDoma
                 client.messages.create,
                 model=settings.ANTHROPIC_MODEL,
                 max_tokens=600,
+                temperature=0.0,  # ruteo estable entre corridas (clasificación, no prosa)
                 system=system,
                 messages=[{"role": "user", "content": user}],
             )
@@ -165,7 +186,11 @@ async def route_domains(question: str, db: Optional[Session]) -> List[RoutedDoma
     if not obj:
         logger.info("route_domains: respuesta sin JSON válido; fallback al contexto curado.")
         return []
-    return _parse_domains(obj)
+    routed = _parse_domains(obj)
+    if len(_ROUTE_CACHE) >= _ROUTE_CACHE_MAX:
+        _ROUTE_CACHE.pop(next(iter(_ROUTE_CACHE)))
+    _ROUTE_CACHE[key] = list(routed)
+    return routed
 
 
 def merge_routing(targets, routed: List[RoutedDomain]) -> None:

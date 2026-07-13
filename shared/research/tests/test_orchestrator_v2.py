@@ -150,3 +150,89 @@ async def test_answer_uses_engine_evidence_and_declares_forward_gap(monkeypatch)
     assert any("prospectiva" in g.note.lower() for g in ans.gaps)
     # La fuente del motor aparece.
     assert "SIB · BCRD" in ans.sources
+
+
+# ─── latencia (roadmap #4): cosecha única + router acotado ─────────────
+@pytest.mark.asyncio
+async def test_synthesis_uses_preharvested_pulls_without_repulling(monkeypatch):
+    """Si el orquestador ya cosechó, build_synthesis_report NO re-cosecha (el doble
+    pull_entity era el desperdicio: cada snapshot son varios queries)."""
+    import shared.research.data_pull as dp
+    import shared.research.deep_report as dr
+    import shared.research.narrate as nar
+
+    def _boom(*a, **k):
+        raise AssertionError("no debe re-cosechar si recibe pulls")
+    monkeypatch.setattr(dp, "pull_entity", _boom)
+    monkeypatch.setattr(dp, "pull_axis", _boom)
+
+    async def fake_synth(question, live, *, forward_gaps=None, reasons=None, lang="es"):
+        assert len(live) == 1
+        return "## Tesis\nok"
+    monkeypatch.setattr(nar, "narrate_synthesis", fake_synth)
+
+    class T:
+        entities = [ResolvedEntity("banking", "id1", "Banco Lafise")]
+        axes: list = []
+        context: list = []
+
+    report = await dr.build_synthesis_report("pregunta", db=object(), targets=T(),
+                                             forward_gaps=[], pulls=[_pull()])
+    assert report is not None and report.ordered_keys[0] == "dictamen"
+
+
+@pytest.mark.asyncio
+async def test_route_bounded_times_out_to_curated(monkeypatch):
+    """Un router colgado no cuelga el research: al vencer el techo, lista vacía
+    (el contexto curado ya sembrado por resolve queda como piso)."""
+    import asyncio
+
+    async def hang(question, db):
+        await asyncio.sleep(60)
+    monkeypatch.setattr(orch, "route_domains", hang)
+    monkeypatch.setattr(orch, "_ROUTE_TIMEOUT_S", 0.05)
+    assert await orch._route_bounded("q", None) == []
+
+
+@pytest.mark.asyncio
+async def test_answer_parallel_flow_end_to_end(monkeypatch):
+    """Flujo con narrate+db: router y cosecha en paralelo, merge del router, y la síntesis
+    recibe la cosecha (entidad + eje curado + eje agregado por el router) sin re-cosechar."""
+    from shared.research.domain_router import RoutedDomain
+
+    class T:
+        entities = [ResolvedEntity("banking", "id1", "Banco Lafise")]
+        axes: list = []
+        context = ["macro"]          # curado
+        reasons: dict = {}
+    monkeypatch.setattr(orch, "resolve_targets", lambda q, db: T())
+
+    async def fake_route(question, db):
+        return [RoutedDomain("monetary_policy", "context", "canal de fondeo")]
+    monkeypatch.setattr(orch, "route_domains", fake_route)
+
+    pulled_axes: list = []
+    monkeypatch.setattr(orch, "pull_entity", lambda db, e: _pull())
+    monkeypatch.setattr(orch, "pull_axis",
+                        lambda db, ax: (pulled_axes.append(ax) or _pull(f"Sistema {ax}", ax)))
+    monkeypatch.setattr(decompose_mod, "retrieve", lambda *a, **k: [])
+
+    seen = {}
+
+    async def fake_build(question, db, targets, forward, pulls=None):
+        seen["pulls"] = pulls
+        return None  # → ensamblado liviano (no interesa la narrativa aquí)
+    monkeypatch.setattr(orch, "build_synthesis_report", fake_build)
+    monkeypatch.setattr(orch, "narrate_answer",
+                        lambda *a, **k: _none_coro())
+
+    ans = await orch.answer_question("riesgo de Banco Lafise", db=object(), narrate=True)
+    assert ans is not None
+    # cosechó el eje curado Y el que agregó el router — una sola vez cada uno
+    assert pulled_axes == ["macro", "monetary_policy"]
+    # la síntesis recibió la cosecha completa (1 entidad + 2 ejes)
+    assert seen["pulls"] is not None and len(seen["pulls"]) == 3
+
+
+async def _none_coro(*a, **k):
+    return None

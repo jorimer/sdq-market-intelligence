@@ -109,3 +109,53 @@ async def test_route_domains_parses_a_mocked_cerebro_response(monkeypatch):
     keys = {d.sector_key for d in out}
     assert keys == {"banking", "monetary_policy"}
     assert next(d for d in out if d.sector_key == "monetary_policy").role == "context"
+
+
+@pytest.mark.asyncio
+async def test_route_domains_caches_by_question(monkeypatch):
+    """El ruteo se cachea por pregunta (y va con temperature=0): misma pregunta → mismos
+    dominios SIN segunda llamada LLM. Sin esto, la variación del router rompía la caché de
+    narrativas aguas abajo (cada re-consulta idéntica pagaba el LLM completo)."""
+    from shared.narrative.claude_engine import narrative_engine
+    monkeypatch.setattr(dr, "_ROUTE_CACHE", {})
+    calls = {"n": 0, "kwargs": None}
+
+    class _Block:
+        text = '{"dominios": [{"eje": "macro", "rol": "contexto", "por_que": "ciclo"}]}'
+
+    class _Resp:
+        content = [_Block()]
+
+    class _Client:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                calls["n"] += 1
+                calls["kwargs"] = kw
+                return _Resp()
+
+    monkeypatch.setattr(narrative_engine, "_get_client", lambda: _Client())
+    q = "impacto del ciclo en las zonas francas orientales"
+    out1 = await dr.route_domains(q, db=object())
+    out2 = await dr.route_domains(q.upper() + "  ", db=object())  # normaliza espacios/caso
+    assert calls["n"] == 1, "la 2ª llamada debe salir del caché"
+    assert [d.sector_key for d in out1] == [d.sector_key for d in out2] == ["macro"]
+    assert calls["kwargs"]["temperature"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_route_domains_does_not_cache_failures(monkeypatch):
+    """Un fallo del API no se cachea: la próxima consulta reintenta."""
+    from shared.narrative.claude_engine import narrative_engine
+    monkeypatch.setattr(dr, "_ROUTE_CACHE", {})
+
+    class _Boom:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                raise RuntimeError("api caída")
+
+    monkeypatch.setattr(narrative_engine, "_get_client", lambda: _Boom())
+    q = "pregunta que falla transitoriamente"
+    assert await dr.route_domains(q, db=object()) == []
+    assert dr._route_cache_key(q) not in dr._ROUTE_CACHE
