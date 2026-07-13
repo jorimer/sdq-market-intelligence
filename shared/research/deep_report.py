@@ -130,8 +130,11 @@ def _as_series(tr: Any) -> List[Tuple[str, float]]:
 
 
 def _tables_from_payload(payload: Dict[str, Any]) -> List[Tuple[str, List[List[str]]]]:
-    """Tablas de marca desde el snapshot real (concentración del sistema si viene)."""
-    peer = (payload or {}).get("peer_block") or {}
+    """Tablas de marca desde el snapshot real: concentración del sistema y —si el motor los
+    sirve— PARES NOMBRADOS (posición de la entidad vs competidores concretos con su score).
+    Es la comparación que un percentil anónimo no da."""
+    payload = payload or {}
+    peer = payload.get("peer_block") or {}
     tables: List[Tuple[str, List[List[str]]]] = []
     if peer.get("cr5") is not None:
         tables.append((f"Concentración del sistema · {peer.get('metric_label', 'activos')}",
@@ -139,6 +142,33 @@ def _tables_from_payload(payload: Dict[str, Any]) -> List[Tuple[str, List[List[s
                         ["CR5 (5 mayores)", _fmt(peer.get("cr5"))],
                         ["CR10 (10 mayores)", _fmt(peer.get("cr10"))],
                         ["HHI", _fmt(peer.get("hhi"))]]))
+    # Forma banca: peer_block.named_peers (líderes del sistema + del mismo tipo + la entidad).
+    np_meta = peer.get("named_peers") or {}
+    np_rows = np_meta.get("rows") or []
+    if np_rows:
+        body: List[List[str]] = [["Pos.", "Entidad", "Tipo", "Score", "Rating"]]
+        for r in np_rows:
+            name = str(r.get("name", "")) + (" ◀" if r.get("is_subject") else "")
+            body.append([str(r.get("rank", "")), name, str(r.get("type", "")),
+                         _fmt(r.get("score")), str(r.get("tier", ""))])
+        n = np_meta.get("n_system")
+        tables.append((f"Posición vs pares nombrados · {n} entidades calificadas" if n
+                       else "Posición vs pares nombrados", body))
+    # Forma pension/insurance: payload.peers = roster completo con score; el sujeto en 'rating'.
+    peers = payload.get("peers")
+    rating = payload.get("rating") or {}
+    if isinstance(peers, list) and rating:
+        ranked = sorted((p for p in peers
+                         if isinstance(p, dict) and isinstance(p.get("overall_score"), (int, float))),
+                        key=lambda p: p["overall_score"], reverse=True)
+        if len(ranked) >= 2:
+            subj = rating.get("slug") or rating.get("name")
+            body = [["Pos.", "Entidad", "Score", "Banda"]]
+            for i, p in enumerate(ranked, start=1):
+                mark = " ◀" if subj and subj in (p.get("slug"), p.get("name")) else ""
+                body.append([str(i), str(p.get("name") or p.get("slug") or "") + mark,
+                             _fmt(p["overall_score"]), str(p.get("band") or "")])
+            tables.append(("Ranking nombrado del sistema", body))
     return tables
 
 

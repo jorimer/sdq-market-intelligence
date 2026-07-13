@@ -74,6 +74,22 @@ def _banking_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                   f"CR5 {_fmt(peer.get('cr5'))}, CR10 {_fmt(peer.get('cr10'))}, "
                   f"HHI {_fmt(peer.get('hhi'))}."),
             source=source, kind="engine", state=REAL, score=98.0))
+    # Pares NOMBRADOS (si el motor los sirve): posición concreta + competidores con su dato.
+    np_meta = peer.get("named_peers") or {}
+    np_rows = np_meta.get("rows") or []
+    subject = next((r for r in np_rows if r.get("is_subject")), None)
+    if subject:
+        pos = f"Posición nombrada: {subject.get('rank')} de {np_meta.get('n_system')} en el sistema"
+        if subject.get("rank_in_type") and np_meta.get("n_type"):
+            pos += (f"; {subject['rank_in_type']} de {np_meta['n_type']} "
+                    f"entre {np_meta.get('entity_type') or 'su tipo'}")
+        out.append(Evidence(text=pos + ".", source=source, kind="engine", state=REAL, score=97.5))
+    peers_named = [r for r in np_rows if not r.get("is_subject")][:4]
+    if peers_named:
+        listed = ", ".join(f"{r.get('name')} ({_fmt(r.get('score'))}, {r.get('tier')})"
+                           for r in peers_named)
+        out.append(Evidence(text=f"Pares del sistema: {listed}.",
+                            source=source, kind="engine", state=REAL, score=96.5))
     ew = sr.get("early_warning") or {}
     flags = ew.get("flags") if isinstance(ew, dict) else None
     if flags:
@@ -318,9 +334,11 @@ def _structure_summary(label: str, payload: Dict[str, Any], period: Optional[str
     return out or _generic_summary(label, payload, period, source)
 
 
-def _named_rating_summary(label: str, rating: Dict[str, Any], period: Optional[str],
+def _named_rating_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                           source: str, *, index_name: str) -> List[Evidence]:
-    """Forma NOMBRADA de pension/insurance: ``rating.overall_score/band`` + dimensiones (lista)."""
+    """Forma NOMBRADA de pension/insurance: ``rating.overall_score/band`` + dimensiones (lista)
+    + pares NOMBRADOS del sistema (``payload['peers']`` ya trae el roster completo con score)."""
+    rating = payload.get("rating") or {}
     out: List[Evidence] = []
     score, band = rating.get("overall_score"), rating.get("band")
     if isinstance(score, (int, float)) or band:
@@ -330,6 +348,21 @@ def _named_rating_summary(label: str, rating: Dict[str, Any], period: Optional[s
     line = _dims_line(rating.get("dimensions"))
     if line:
         out.append(_ev(line, source, 90.0))
+    ranked = [p for p in (payload.get("peers") or [])
+              if isinstance(p, dict) and isinstance(p.get("overall_score"), (int, float))]
+    if ranked:
+        ranked.sort(key=lambda p: p["overall_score"], reverse=True)
+        subj = rating.get("slug") or rating.get("name")
+        rank = next((i for i, p in enumerate(ranked, start=1)
+                     if subj and subj in (p.get("slug"), p.get("name"))), None)
+        if rank:
+            out.append(_ev(f"Posición nombrada: {rank} de {len(ranked)} en el sistema.",
+                           source, 89.5))
+        listed = ", ".join(f"{p.get('name') or p.get('slug')} ({_fmt(p['overall_score'])})"
+                           for p in ranked
+                           if not (subj and subj in (p.get("slug"), p.get("name"))))
+        if listed:
+            out.append(_ev(f"Pares del sistema ({index_name}): {listed}.", source, 88.5))
     return out
 
 
@@ -338,7 +371,7 @@ def _pension_summary(label: str, payload: Dict[str, Any], period: Optional[str],
     """Pensiones (SIPEN): nombrado (``rating.*`` = ISA) o pulse de sistema (``dispersion.*``)."""
     p = payload or {}
     if p.get("rating"):
-        return _named_rating_summary(label, p["rating"], period, source, index_name="ISA") \
+        return _named_rating_summary(label, p, period, source, index_name="ISA") \
             or _generic_summary(label, payload, period, source)
     out: List[Evidence] = []
     disp = p.get("dispersion") or {}
@@ -362,7 +395,7 @@ def _insurance_summary(label: str, payload: Dict[str, Any], period: Optional[str
     """Seguros (SIS): nombrado (``rating.*`` = ISF) o pulse de mercado (``pulse.*``)."""
     p = payload or {}
     if p.get("rating"):
-        return _named_rating_summary(label, p["rating"], period, source, index_name="ISF") \
+        return _named_rating_summary(label, p, period, source, index_name="ISF") \
             or _generic_summary(label, payload, period, source)
     out: List[Evidence] = []
     pu = p.get("pulse") or {}

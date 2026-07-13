@@ -319,6 +319,59 @@ def _parse_period(period: Optional[str]) -> Optional[date]:
         return None
 
 
+# Cuántos pares nombrados por corte (líderes del sistema / del mismo tipo). Acota el
+# payload: la tabla comparativa quiere los referentes, no el censo completo (~50 entidades).
+_NAMED_PEERS_TOP_N = 5
+
+
+def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str, object]]:
+    """Pares NOMBRADOS de *bank* en *period_end*: su posición (sistema y mismo tipo) + los
+    líderes del sistema y de su tipo con score/rating reales. Complementa el percentil
+    (anónimo) con la comparación concreta —"Popular 82.1 SDQ-AA"— que un percentil no da.
+
+    ``None`` si no hay al menos otro par medible (entidad única → no se fabrica tabla)."""
+    rows = (db.query(RatingResult, Bank)
+            .join(Bank, Bank.id == RatingResult.bank_id)
+            .filter(RatingResult.period_end == period_end,
+                    RatingResult.model_type == ModelType.deterministic)
+            .order_by(RatingResult.overall_score.desc(), Bank.name)
+            .all())
+    if len(rows) < 2:
+        return None
+    btype = bank.bank_type
+    type_rank = 0
+    entries: List[Dict[str, object]] = []
+    for rank, (rr, b) in enumerate(rows, start=1):
+        same_type = (b.bank_type == btype)
+        if same_type:
+            type_rank += 1
+        entries.append({
+            "bank_id": b.id, "name": b.name,
+            "type": b.bank_type.value if b.bank_type else "",
+            "score": float(rr.overall_score), "tier": rr.rating_tier,
+            "rank": rank, "rank_in_type": type_rank if same_type else None,
+            "is_subject": b.id == bank.id,
+        })
+    n_type = type_rank
+    subject = next(e for e in entries if e["is_subject"])
+    # Corte: líderes del sistema + líderes del mismo tipo + la entidad, dedup por id.
+    picked: Dict[str, Dict[str, object]] = {}
+    for e in entries[:_NAMED_PEERS_TOP_N]:
+        picked[e["bank_id"]] = e
+    same = [e for e in entries if e["rank_in_type"] is not None]
+    for e in same[:_NAMED_PEERS_TOP_N]:
+        picked.setdefault(e["bank_id"], e)
+    picked.setdefault(subject["bank_id"], subject)
+    out_rows = sorted(picked.values(), key=lambda e: e["rank"])
+    for e in out_rows:
+        e.pop("bank_id", None)  # el payload narra nombres, no ids internos
+    return {
+        "entity_type": btype.value if btype else "",
+        "n_system": len(entries), "n_type": n_type,
+        "rows": out_rows,
+    }
+
+
 class BankingProduct:
     """``SectorProduct`` de Banca. ``db`` es opcional: las muestras sintéticas usan
     solo ``narratives``/``render`` (sin DB)."""
@@ -446,11 +499,19 @@ class BankingProduct:
             from modules.banking_score.early_warning import bank_alerts
             scoring_result["early_warning"] = bank_alerts(db, bank.id)
         conc = compute_market_concentration(db, rr.period_end, "activos")
-        peer_block = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
-                       "cr10": conc["cr10"], "hhi": conc["hhi"]} if conc.get("available") else None)
+        peer_block: Dict[str, object] = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
+                                          "cr10": conc["cr10"], "hhi": conc["hhi"]}
+                                         if conc.get("available") else {})
+        # Pares NOMBRADOS (mismo patrón que pension/insurance exponen en 'peers'): posición
+        # de la entidad + competidores concretos con su score/rating. Solo en los niveles
+        # nombrados (el Pulse permanece anonimizado por doctrina). Dato ya computado
+        # (RatingResult del período) — costo marginal: un query indexado.
+        named = _named_peers(db, bank, rr.period_end)
+        if named:
+            peer_block["named_peers"] = named
         return ProductSnapshot(
             tier=tier, period=str(rr.period_end),
-            payload={"scoring_result": scoring_result, "peer_block": peer_block},
+            payload={"scoring_result": scoring_result, "peer_block": peer_block or None},
             entity_name=bank.name,
         )
 

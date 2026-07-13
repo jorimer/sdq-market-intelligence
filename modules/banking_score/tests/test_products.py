@@ -411,3 +411,58 @@ def test_limitations_frame_score_as_standalone_not_credit_rating():
     assert "standalone" in t
     assert "no es un rating de crédito" in t
     assert "soporte soberano" in t and "techo soberano" in t
+
+
+# ── Pares NOMBRADOS en el snapshot nombrado (research/tabla comparativa) ──
+
+def _seed_typed(db, name, score, tier, btype, period=date(2024, 12, 31)):
+    b = Bank(name=name, bank_type=btype)
+    db.add(b)
+    db.flush()
+    db.add(RatingResult(bank_id=b.id, period_end=period, overall_score=score,
+                        rating_tier=tier, model_type=ModelType.deterministic,
+                        model_version="1.0"))
+    db.commit()
+    return b
+
+
+def test_named_snapshot_includes_named_peers(db):
+    """El payload nombrado trae pares NOMBRADOS: posición (sistema y mismo tipo) + líderes
+    concretos con score/tier. Complementa el percentil anónimo con la comparación real."""
+    _seed_typed(db, "Banco Grande SA", 90, "SDQ-AA", BankType.banca_multiple)
+    _seed_typed(db, "Banco Medio SA", 75, "SDQ-A", BankType.banca_multiple)
+    subject = _seed_typed(db, "Banco Chico SA", 60, "SDQ-BBB", BankType.banco_ahorro_credito)
+    _seed_typed(db, "Financiera Par SA", 55, "SDQ-BBB", BankType.banco_ahorro_credito)
+
+    snap = BankingProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope=subject.id)
+    named = (snap.payload.get("peer_block") or {}).get("named_peers")
+    assert named, "el payload nombrado debe traer named_peers"
+    assert named["n_system"] == 4
+    assert named["n_type"] == 2  # los dos banco_ahorro_credito
+    rows = named["rows"]
+    subj = next(r for r in rows if r["is_subject"])
+    assert subj["name"] == "Banco Chico SA"
+    assert subj["rank"] == 3 and subj["rank_in_type"] == 1
+    # los líderes del sistema aparecen NOMBRADOS con su score/tier real
+    by_name = {r["name"]: r for r in rows}
+    assert by_name["Banco Grande SA"]["score"] == 90.0
+    assert by_name["Banco Grande SA"]["tier"] == "SDQ-AA"
+    assert by_name["Banco Grande SA"]["rank"] == 1
+    # el id interno NO viaja en el payload (narra nombres, no ids)
+    assert all("bank_id" not in r for r in rows)
+
+
+def test_named_peers_absent_when_single_entity(db):
+    """Con una sola entidad calificada no hay pares → no se fabrica tabla."""
+    b = _seed_typed(db, "Banco Solo SA", 70, "SDQ-A", BankType.banca_multiple)
+    snap = BankingProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope=b.id)
+    assert "named_peers" not in (snap.payload.get("peer_block") or {})
+
+
+def test_pulse_stays_anonymized_with_named_peers_feature(db):
+    """Doctrina: el Pulse permanece anonimizado — los pares nombrados son EXCLUSIVOS de
+    los niveles nombrados (Insight/Deep Dive)."""
+    _seed_typed(db, "Banco Uno SA", 80, "SDQ-A", BankType.banca_multiple)
+    _seed_typed(db, "Banco Dos SA", 60, "SDQ-BBB", BankType.banca_multiple)
+    snap = BankingProduct(db).snapshot(ProductTier.pulse, "2024-12-31")
+    assert "Banco Uno SA" not in str(snap.payload)
