@@ -2440,5 +2440,34 @@
       "asegurado": "Assuré",
       "gobierno": "Gouvernement"
     }
+  },
+  "tariff": {
+    "tab": {
+      "bulk": "Édition rapide",
+      "catalog": "Catalogue et historique"
+    },
+    "bulk": {
+      "insightTitle": "Insight par secteur — abonnement",
+      "insightSub": "Mensuel et annuel par secteur. L'annuel est en général le mensuel avec remise.",
+      "deepDiveTitle": "Deep Dive par secteur — achat ponctuel",
+      "deepDiveSub": "Prix par rapport à la demande.",
+      "bundlesTitle": "Bundles",
+      "bundlesSub": "All-Access (tous les Insight) et Enterprise (tout le catalogue).",
+      "colProduct": "Produit",
+      "colChange": "Changement",
+      "applyAll": "Appliquer à tous les secteurs",
+      "apply": "Appliquer",
+      "new": "nouveau",
+      "label": "Étiquette du lot (optionnel)",
+      "labelPh": "p. ex. Tarifs v0.3",
+      "from": "En vigueur à partir de (optionnel)",
+      "publish": "Publier",
+      "confirmTitle": "Confirmer la publication",
+      "confirmSub": "{{n}} nouveaux prix prennent effet à la publication",
+      "confirm": "Publier maintenant",
+      "okCount": "{{n}} prix publiés",
+      "failCount": "Échecs : {{list}}",
+      "hint": "Seules les cellules modifiées sont publiées. Publier ne supprime jamais les prix antérieurs : ils restent dans l'historique. Une cellule vide ne retire pas un prix (le retrait est une action de l'historique)."
+    }
   }
 }

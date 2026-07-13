@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CircleDollarSign, ChevronDown, Plus, X } from "lucide-react";
-import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
+import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton, Tabs } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
+import { TariffBulkEditor } from "../components/TariffBulkEditor";
 import {
   listSkus,
   listTariffs,
@@ -58,6 +59,7 @@ export function TarifarioPage() {
 
   const [skus, setSkus] = useState<CatalogSku[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [tab, setTab] = useState("edicion");
   const [openSku, setOpenSku] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, Tariff[]>>({});
   const [formSku, setFormSku] = useState<string | null>(null);
@@ -159,6 +161,25 @@ export function TarifarioPage() {
       )}
 
       {status === "ready" && (
+        <div className="mb-5">
+          <Tabs
+            tabs={[
+              { id: "edicion", label: tr("tariff.tab.bulk", "Edición rápida") },
+              { id: "catalogo", label: tr("tariff.tab.catalog", "Catálogo e histórico") },
+            ]}
+            active={tab}
+            onChange={setTab}
+          />
+        </div>
+      )}
+
+      {status === "ready" && tab === "edicion" && (
+        // key: al recargar los SKUs (post-publicación) el borrador se re-precarga
+        // con los vigentes nuevos.
+        <TariffBulkEditor key={JSON.stringify(skus.map((s) => s.prices))} skus={skus} onPublished={() => void load()} />
+      )}
+
+      {status === "ready" && tab === "catalogo" && (
         <Card>
           <CardHead icon={CircleDollarSign} title={tr("tariff.card.title", "Productos vendibles")}
             subtitle={tr("tariff.card.count", "{{priced}} de {{total}} con precio vigente")
