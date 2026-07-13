@@ -21,6 +21,7 @@ sector.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -29,6 +30,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.cache import cache_get, cache_set
+from shared.llm.budget import budget_allows, record_usage
 from shared.products.registry import CATALOG_BY_KEY, PRODUCT_CATALOG
 
 logger = logging.getLogger("sdq.research.domain_router")
@@ -140,9 +143,45 @@ def _parse_domains(obj: Dict[str, Any]) -> List[RoutedDomain]:
 _ROUTE_CACHE: Dict[str, List[RoutedDomain]] = {}
 _ROUTE_CACHE_MAX = 256
 
+# L2 compartida (Redis): el ruteo de una pregunta hecho por OTRO worker sirve acá.
+# Sin esto la caché era por-worker y la "warm" de research dependía de a qué worker
+# cayera la request. TTL largo: el ruteo es estable (temp=0) y solo cambia si cambia
+# el catálogo de motores → el namespace versionado invalida en ese caso.
+_L2_NS = "route:v1:"
+_L2_TTL_SECONDS = 24 * 3600
+
 
 def _route_cache_key(question: str) -> str:
     return " ".join(question.lower().split())
+
+
+def _l2_key(norm_question: str) -> str:
+    return _L2_NS + hashlib.sha256(norm_question.encode()).hexdigest()
+
+
+def _l2_get(norm_question: str) -> Optional[List[RoutedDomain]]:
+    raw = cache_get(_l2_key(norm_question))
+    if not raw:
+        return None
+    try:
+        items = json.loads(raw)
+        return [RoutedDomain(sector_key=str(i["sector_key"]),
+                             role=str(i.get("role") or "context"),
+                             reason=str(i.get("reason") or ""))
+                for i in items if isinstance(i, dict) and i.get("sector_key")]
+    except (KeyError, TypeError, ValueError) as e:
+        logger.warning("Entrada L2 de ruteo corrupta (se ignora): %s", e)
+        return None
+
+
+def _l2_set(norm_question: str, routed: List[RoutedDomain]) -> None:
+    try:
+        payload = json.dumps(
+            [{"sector_key": d.sector_key, "role": d.role, "reason": d.reason}
+             for d in routed], ensure_ascii=False)
+        cache_set(_l2_key(norm_question), payload, _L2_TTL_SECONDS)
+    except (TypeError, ValueError) as e:
+        logger.warning("No se pudo serializar ruteo a L2 (se omite): %s", e)
 
 
 async def route_domains(question: str, db: Optional[Session]) -> List[RoutedDomain]:
@@ -158,12 +197,23 @@ async def route_domains(question: str, db: Optional[Session]) -> List[RoutedDoma
     cached = _ROUTE_CACHE.get(key)
     if cached is not None:
         return list(cached)
+    l2 = _l2_get(key)
+    if l2 is not None:
+        if len(_ROUTE_CACHE) >= _ROUTE_CACHE_MAX:
+            _ROUTE_CACHE.pop(next(iter(_ROUTE_CACHE)))
+        _ROUTE_CACHE[key] = list(l2)  # promover a L1
+        return list(l2)
     from shared.config.settings import settings
     from shared.narrative.claude_engine import narrative_engine
 
     client = narrative_engine._get_client()
     if client is None:
         return []  # sin API key → fallback determinista (contexto curado)
+    if not budget_allows():
+        # Corte suave: sin presupuesto no se paga el ruteo LLM; el orquestador se
+        # queda con el contexto curado de resolve (misma degradación que sin key).
+        logger.warning("route_domains degradado a contexto curado por presupuesto LLM.")
+        return []
 
     system = _SYSTEM
     user = _USER.format(question=question.strip(), catalog=_catalog_menu())
@@ -178,6 +228,11 @@ async def route_domains(question: str, db: Optional[Session]) -> List[RoutedDoma
                 messages=[{"role": "user", "content": user}],
             )
         raw = "".join(getattr(b, "text", "") for b in (resp.content or []))
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            record_usage(settings.ANTHROPIC_MODEL,
+                         getattr(usage, "input_tokens", 0) or 0,
+                         getattr(usage, "output_tokens", 0) or 0)
     except Exception as e:  # noqa: BLE001 — cualquier fallo del API → fallback determinista
         logger.warning("route_domains: fallo del Cerebro (%s); fallback al contexto curado.", e)
         return []
@@ -190,6 +245,7 @@ async def route_domains(question: str, db: Optional[Session]) -> List[RoutedDoma
     if len(_ROUTE_CACHE) >= _ROUTE_CACHE_MAX:
         _ROUTE_CACHE.pop(next(iter(_ROUTE_CACHE)))
     _ROUTE_CACHE[key] = list(routed)
+    _l2_set(key, routed)
     return routed
 
 

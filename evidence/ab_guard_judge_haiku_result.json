@@ -1,0 +1,464 @@
+{
+  "summary": {
+    "n_texts": 20,
+    "verdict_mismatches": 15,
+    "discrepancy_pct": 75.0,
+    "gate": "<=5% para cambiar a Haiku",
+    "targets": {
+      "total": 3,
+      "sonnet": 1,
+      "haiku": 1
+    },
+    "decision": "NO cambiar (queda Sonnet)",
+    "mismatch_detail": [
+      {
+        "entity": "popular",
+        "audience": "entidad",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "ROE de 21.0% a cierre de 2025 — No está en el contexto proporcionado. Se cita como 'Informe de Economía Dominicana, BCRD' pero ese documento no forma parte del contexto de datos disponibles.",
+          "octo entre diez asociaciones — Imprecisión ordinal. El percentil 80.0 en un grupo de n=10 significa que ~2 entidades lo superan (según 'pares_tipo_que_lo_superan_aprox': 2), lo que lo sitúa en posición 8-9 de 10, pero afirmar 'octo' (8.º) es una interpretación sobre un cálculo de percentil que no es estrictamente correcto. El percentil 80 indica estar en el cuartil superior pero no define ordinal exacto en una muestra de 10."
+        ]
+      },
+      {
+        "entity": "popular",
+        "audience": "inversionista",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "ROE de 21.0% a cierre de 2025 (Informe de la Economía Dominicana, BCRD) — No aparece en el contexto proporcionado; no hay 'contexto_oficial_bcrd' adjunto para verificación",
+          "P75 sistémico (85.25) — Esta cifra corresponde al p75_score del sector (81 entidades), no es 'sistémico dominicano' sino del subconjunto de la muestra; la atribución es correcta pero la formulación 'P75 sistémico' puede inducir confusión"
+        ]
+      },
+      {
+        "entity": "popular",
+        "audience": "supervisor",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "~48 (score global si se resta aporte de solidez financiera) — La derivación es incorrecta. Si solidez aporta 40 pts, restar eso del score 80.18 da ~40.18, no ~48. La aritmética del análisis no es verificable.",
+          "17.4% (índice de solvencia sistémico según BCRD) — No aparece en el contexto proporcionado. No hay telón oficial BCRD incluido que respalde esta cifra.",
+          "2.1% (PIB en 2025) — No aparece en el contexto proporcionado. No hay telón oficial BCRD incluido que respalde esta cifra."
+        ]
+      },
+      {
+        "entity": "reservas",
+        "audience": "comite_credito",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "desaceleración al 2.1% en 2025 — no aparece en el contexto; es dato macroeconómico externo sin fuente oficial BCRD identificada",
+          "200 pb de recorte desde 2023 — no aparece en el contexto; es dato macroeconómico externo sin fuente oficial BCRD identificada"
+        ]
+      },
+      {
+        "entity": "reservas",
+        "audience": "inversionista",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "~7 puntos potenciales máximos por eficiencia — la cifra de 'daño contenido' (~7 pts) no aparece en el contexto ni es derivable; el aporte actual es 8.05 pts (53.69 × 0.15), no ~7",
+          "~85% del peso total en solidez + calidad de activos — cifra no derivable del contexto; la suma de pesos es 0.40 + 0.30 = 0.70 (70%), no 85%",
+          "PIB 2.1% en 2025 vs. 5.0% en 2024 — datos macroeconómicos no presentes en el contexto; no pueden ser verificados contra él"
+        ]
+      },
+      {
+        "entity": "reservas",
+        "audience": "supervisor",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "PIB 2.1% vs. 5.0% en 2024 — no aparece en el CONTEXTO; se cita como 'contexto macroeconómico de 2025' pero el CONTEXTO suministrado no contiene datos macroeconómicos oficiales del BCRD",
+          "inversión privada en contracción — no aparece en el CONTEXTO; afirmación macro no respaldada en datos proporcionados"
+        ]
+      },
+      {
+        "entity": "bdi",
+        "audience": "comite_credito",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "solvencia del sistema en 17.4% según BCRD sep-24 — cifra de contexto macroeconómico externo no presente en el CONTEXTO proporcionado",
+          "morosidad 1.7% al cierre 2025 — cifra de contexto macroeconómico externo no presente en el CONTEXTO proporcionado",
+          "PIB desacelerándose a 2.1% en 2025 — cifra de contexto macroeconómico externo no presente en el CONTEXTO proporcionado",
+          "−3.95 pts en mar-24 — error aritmético: 89.26 (dic-23) − 85.31 (mar-24) = 3.95, pero la declaración invierte el signo de la operación; el cierre de marzo es MENOR al de diciembre anterior, por lo que es una caída de 3.95 pts (correcto en dirección pero la anotación del cálculo es confusa). Verificación: dic-23 es 89.26, mar-24 es 85.31 según tendencia_score. La diferencia es 89.26 − 85.31 = 3.95 pts de caída. La cifra es correcta."
+        ]
+      },
+      {
+        "entity": "bdi",
+        "audience": "entidad",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "ROE de 21.0% (BCRD, dic-2025) — No aparece en el contexto proporcionado; no hay sección 'contexto_oficial_bcrd'"
+        ]
+      },
+      {
+        "entity": "bdi",
+        "audience": "inversionista",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "morosidad sistémica en 1.7% (BCRD, 2025) — no aparece en el contexto; no hay datos de morosidad sistémica en el CONTEXTO proporcionado",
+          "PIB desaceleró a 2.1% en 2025 — no aparece en el contexto; es información macroeconómica externa no respaldada en los datos proporcionados",
+          "inversión privada contrajo 3.0% — no aparece en el contexto; es información macroeconómica externa no respaldada en los datos proporcionados"
+        ]
+      },
+      {
+        "entity": "bdi",
+        "audience": "supervisor",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "PIB 2.1% en 2025 vs. 5.0% en 2024 según el BCRD — no aparece en el contexto proporcionado; es dato macroeconómico externo no validable contra los datos suministrados",
+          "cayó a 85.35 en marzo 2026 — error de período: el score 85.35 corresponde a 2026-03-31, pero el análisis dice 'marzo 2026' cuando debería ser 'marzo 2026' (esto es correcto); sin embargo, la frase 'desde diciembre 2024' es correcta (90.6 en 2024-12-31 a 85.35 en 2026-03-31), pero hay un lapso de 15 meses, no un ciclo trimestral simple — verificado y correcto",
+          "la lectura más baja en los doce períodos disponibles — FALSO: el mínimo en los 12 períodos es 85.31 (2024-03-31), y 85.35 (2026-03-31) es mayor; 85.35 > 85.31, por lo que NO es la más baja"
+        ]
+      },
+      {
+        "entity": "bhd",
+        "audience": "supervisor",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "PIB 2.1% en 2025 vs. 5.0% en 2024 — no aparece en contexto; atribuido a BCRD pero no incluido en datos suministrados",
+          "morosidad sistémica que subió a 1.7% (2025) desde 1.4% (sep-2024) — no aparece en contexto; atribuido a BCRD pero no incluido en datos suministrados"
+        ]
+      },
+      {
+        "entity": "santa cruz",
+        "audience": "comite_credito",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "construcción contrayendo 1.8% — no aparece en el contexto suministrado; es un dato macroeconómico externo no verificable contra los datos bancarios provistos",
+          "PIB a 2.1% — no aparece en el contexto suministrado; es un dato macroeconómico externo no verificable contra los datos bancarios provistos"
+        ]
+      },
+      {
+        "entity": "santa cruz",
+        "audience": "entidad",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "superando a 14 de sus 16 pares directos — El contexto indica percentile 87.5 en banca_multiple (n=16), lo que significa que aproximadamente 2 pares lo superan, no 14. Esta afirmación invierte la relación.",
+          "sector opera con solvencia de 17.4% (BCRD, ago 2024) — Esta cifra no aparece en el contexto. El análisis introduce un dato macroeconómico externo sin respaldo en los datos proporcionados.",
+          "PIB dominicano desacelerándose a 2.1% en 2025 — Esta cifra no aparece en el contexto. Es un dato macroeconómico no incluido en los datos del analista.",
+          "construcción contrayéndose 1.8% — Esta cifra no aparece en el contexto. Es un dato macroeconómico no incluido en los datos del analista.",
+          "crecimiento crediticio (16.2% en 2024, desacelerando) — Esta cifra no aparece en el contexto. Es un dato macroeconómico no incluido en los datos del analista."
+        ]
+      },
+      {
+        "entity": "santa cruz",
+        "audience": "inversionista",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "«desaceleración del PIB a 2.1% en 2025» — No aparece en contexto. El contexto no incluye datos macro del BCRD.",
+          "«morosidad sistémica en alza respecto a 2024» — No aparece en contexto. El contexto no incluye indicadores de morosidad sistémica."
+        ]
+      },
+      {
+        "entity": "santa cruz",
+        "audience": "supervisor",
+        "sonnet_flags": [],
+        "haiku_flags": [
+          "PIB dominicano desacelerado a 2.1% en 2025 según el BCRD — no aparece en el contexto proporcionado; el contexto no incluye datos macro oficiales del BCRD",
+          "percentil 79 del sector amplio — inconsistencia: el contexto indica percentile: 79.0 en la sección 'sector', pero el análisis lo asigna como posición actual ('retroceso desde diciembre 2025 lo devuelve al percentil 79 del sector amplio'). El percentil 79.0 es del período 2026-03-31 (actual), no un retroceso. Además, se confunde con el percentil 87.5 de entity_type que es el correcto para la posición actual dentro de banca múltiple."
+        ]
+      }
+    ]
+  },
+  "rows": [
+    {
+      "entity": "popular",
+      "audience": "comite_credito",
+      "sonnet_flags": [],
+      "haiku_flags": [],
+      "sonnet_verdict": false,
+      "haiku_verdict": false,
+      "verdict_match": true,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "popular",
+      "audience": "entidad",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "ROE de 21.0% a cierre de 2025 — No está en el contexto proporcionado. Se cita como 'Informe de Economía Dominicana, BCRD' pero ese documento no forma parte del contexto de datos disponibles.",
+        "octo entre diez asociaciones — Imprecisión ordinal. El percentil 80.0 en un grupo de n=10 significa que ~2 entidades lo superan (según 'pares_tipo_que_lo_superan_aprox': 2), lo que lo sitúa en posición 8-9 de 10, pero afirmar 'octo' (8.º) es una interpretación sobre un cálculo de percentil que no es estrictamente correcto. El percentil 80 indica estar en el cuartil superior pero no define ordinal exacto en una muestra de 10."
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "popular",
+      "audience": "inversionista",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "ROE de 21.0% a cierre de 2025 (Informe de la Economía Dominicana, BCRD) — No aparece en el contexto proporcionado; no hay 'contexto_oficial_bcrd' adjunto para verificación",
+        "P75 sistémico (85.25) — Esta cifra corresponde al p75_score del sector (81 entidades), no es 'sistémico dominicano' sino del subconjunto de la muestra; la atribución es correcta pero la formulación 'P75 sistémico' puede inducir confusión"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "popular",
+      "audience": "supervisor",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "~48 (score global si se resta aporte de solidez financiera) — La derivación es incorrecta. Si solidez aporta 40 pts, restar eso del score 80.18 da ~40.18, no ~48. La aritmética del análisis no es verificable.",
+        "17.4% (índice de solvencia sistémico según BCRD) — No aparece en el contexto proporcionado. No hay telón oficial BCRD incluido que respalde esta cifra.",
+        "2.1% (PIB en 2025) — No aparece en el contexto proporcionado. No hay telón oficial BCRD incluido que respalde esta cifra."
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": "83.45",
+      "target_caught_sonnet": false,
+      "target_caught_haiku": false
+    },
+    {
+      "entity": "reservas",
+      "audience": "comite_credito",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "desaceleración al 2.1% en 2025 — no aparece en el contexto; es dato macroeconómico externo sin fuente oficial BCRD identificada",
+        "200 pb de recorte desde 2023 — no aparece en el contexto; es dato macroeconómico externo sin fuente oficial BCRD identificada"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "reservas",
+      "audience": "entidad",
+      "sonnet_flags": [],
+      "haiku_flags": [],
+      "sonnet_verdict": false,
+      "haiku_verdict": false,
+      "verdict_match": true,
+      "target": "85.79",
+      "target_caught_sonnet": false,
+      "target_caught_haiku": false
+    },
+    {
+      "entity": "reservas",
+      "audience": "inversionista",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "~7 puntos potenciales máximos por eficiencia — la cifra de 'daño contenido' (~7 pts) no aparece en el contexto ni es derivable; el aporte actual es 8.05 pts (53.69 × 0.15), no ~7",
+        "~85% del peso total en solidez + calidad de activos — cifra no derivable del contexto; la suma de pesos es 0.40 + 0.30 = 0.70 (70%), no 85%",
+        "PIB 2.1% en 2025 vs. 5.0% en 2024 — datos macroeconómicos no presentes en el contexto; no pueden ser verificados contra él"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "reservas",
+      "audience": "supervisor",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "PIB 2.1% vs. 5.0% en 2024 — no aparece en el CONTEXTO; se cita como 'contexto macroeconómico de 2025' pero el CONTEXTO suministrado no contiene datos macroeconómicos oficiales del BCRD",
+        "inversión privada en contracción — no aparece en el CONTEXTO; afirmación macro no respaldada en datos proporcionados"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "bdi",
+      "audience": "comite_credito",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "solvencia del sistema en 17.4% según BCRD sep-24 — cifra de contexto macroeconómico externo no presente en el CONTEXTO proporcionado",
+        "morosidad 1.7% al cierre 2025 — cifra de contexto macroeconómico externo no presente en el CONTEXTO proporcionado",
+        "PIB desacelerándose a 2.1% en 2025 — cifra de contexto macroeconómico externo no presente en el CONTEXTO proporcionado",
+        "−3.95 pts en mar-24 — error aritmético: 89.26 (dic-23) − 85.31 (mar-24) = 3.95, pero la declaración invierte el signo de la operación; el cierre de marzo es MENOR al de diciembre anterior, por lo que es una caída de 3.95 pts (correcto en dirección pero la anotación del cálculo es confusa). Verificación: dic-23 es 89.26, mar-24 es 85.31 según tendencia_score. La diferencia es 89.26 − 85.31 = 3.95 pts de caída. La cifra es correcta."
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "bdi",
+      "audience": "entidad",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "ROE de 21.0% (BCRD, dic-2025) — No aparece en el contexto proporcionado; no hay sección 'contexto_oficial_bcrd'"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "bdi",
+      "audience": "inversionista",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "morosidad sistémica en 1.7% (BCRD, 2025) — no aparece en el contexto; no hay datos de morosidad sistémica en el CONTEXTO proporcionado",
+        "PIB desaceleró a 2.1% en 2025 — no aparece en el contexto; es información macroeconómica externa no respaldada en los datos proporcionados",
+        "inversión privada contrajo 3.0% — no aparece en el contexto; es información macroeconómica externa no respaldada en los datos proporcionados"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "bdi",
+      "audience": "supervisor",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "PIB 2.1% en 2025 vs. 5.0% en 2024 según el BCRD — no aparece en el contexto proporcionado; es dato macroeconómico externo no validable contra los datos suministrados",
+        "cayó a 85.35 en marzo 2026 — error de período: el score 85.35 corresponde a 2026-03-31, pero el análisis dice 'marzo 2026' cuando debería ser 'marzo 2026' (esto es correcto); sin embargo, la frase 'desde diciembre 2024' es correcta (90.6 en 2024-12-31 a 85.35 en 2026-03-31), pero hay un lapso de 15 meses, no un ciclo trimestral simple — verificado y correcto",
+        "la lectura más baja en los doce períodos disponibles — FALSO: el mínimo en los 12 períodos es 85.31 (2024-03-31), y 85.35 (2026-03-31) es mayor; 85.35 > 85.31, por lo que NO es la más baja"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "bhd",
+      "audience": "comite_credito",
+      "sonnet_flags": [],
+      "haiku_flags": [],
+      "sonnet_verdict": false,
+      "haiku_verdict": false,
+      "verdict_match": true,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "bhd",
+      "audience": "entidad",
+      "sonnet_flags": [
+        "11 puntos por encima de la mediana del tipo — el contexto indica vs_mediana_tipo = 3.77 pts (86.42 − 82.65 = 3.77), no 11",
+        "caída de ~2.5 puntos desde dic-2024 — la caída desde 88.90 (dic-2024) hasta 86.42 es 2.48 pts, atribuida a 'cuatro trimestres'; desde dic-2024 (2026-03-31 es un trimestre después de 2025-12-31) solo hay un trimestre de caída de 1.05 pts; la caída de ~2.5 pts ocurre desde 2025-03-31 (85.46) no desde dic-2024"
+      ],
+      "haiku_flags": [
+        "11 puntos por encima de la mediana del tipo — El score es 86.42 y la mediana del tipo es 82.65; la diferencia real es 3.77 puntos, no 11",
+        "morosidad de 1.7% al cierre de 2025 — Esta cifra no aparece en el contexto suministrado",
+        "desaceleración económica a 2.1% — Esta cifra no aparece en el contexto suministrado",
+        "construcción —sector que retrocedió 1.8% en 2025 — Esta cifra no aparece en el contexto suministrado",
+        "el crédito ya no crece al 16% del boom 2024 — Esta cifra no aparece en el contexto suministrado",
+        "PIB estancado — Esta cifra no aparece en el contexto suministrado"
+      ],
+      "sonnet_verdict": true,
+      "haiku_verdict": true,
+      "verdict_match": true,
+      "target": "11",
+      "target_caught_sonnet": true,
+      "target_caught_haiku": true
+    },
+    {
+      "entity": "bhd",
+      "audience": "inversionista",
+      "sonnet_flags": [],
+      "haiku_flags": [],
+      "sonnet_verdict": false,
+      "haiku_verdict": false,
+      "verdict_match": true,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "bhd",
+      "audience": "supervisor",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "PIB 2.1% en 2025 vs. 5.0% en 2024 — no aparece en contexto; atribuido a BCRD pero no incluido en datos suministrados",
+        "morosidad sistémica que subió a 1.7% (2025) desde 1.4% (sep-2024) — no aparece en contexto; atribuido a BCRD pero no incluido en datos suministrados"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "santa cruz",
+      "audience": "comite_credito",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "construcción contrayendo 1.8% — no aparece en el contexto suministrado; es un dato macroeconómico externo no verificable contra los datos bancarios provistos",
+        "PIB a 2.1% — no aparece en el contexto suministrado; es un dato macroeconómico externo no verificable contra los datos bancarios provistos"
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "santa cruz",
+      "audience": "entidad",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "superando a 14 de sus 16 pares directos — El contexto indica percentile 87.5 en banca_multiple (n=16), lo que significa que aproximadamente 2 pares lo superan, no 14. Esta afirmación invierte la relación.",
+        "sector opera con solvencia de 17.4% (BCRD, ago 2024) — Esta cifra no aparece en el contexto. El análisis introduce un dato macroeconómico externo sin respaldo en los datos proporcionados.",
+        "PIB dominicano desacelerándose a 2.1% en 2025 — Esta cifra no aparece en el contexto. Es un dato macroeconómico no incluido en los datos del analista.",
+        "construcción contrayéndose 1.8% — Esta cifra no aparece en el contexto. Es un dato macroeconómico no incluido en los datos del analista.",
+        "crecimiento crediticio (16.2% en 2024, desacelerando) — Esta cifra no aparece en el contexto. Es un dato macroeconómico no incluido en los datos del analista."
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "santa cruz",
+      "audience": "inversionista",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "«desaceleración del PIB a 2.1% en 2025» — No aparece en contexto. El contexto no incluye datos macro del BCRD.",
+        "«morosidad sistémica en alza respecto a 2024» — No aparece en contexto. El contexto no incluye indicadores de morosidad sistémica."
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    },
+    {
+      "entity": "santa cruz",
+      "audience": "supervisor",
+      "sonnet_flags": [],
+      "haiku_flags": [
+        "PIB dominicano desacelerado a 2.1% en 2025 según el BCRD — no aparece en el contexto proporcionado; el contexto no incluye datos macro oficiales del BCRD",
+        "percentil 79 del sector amplio — inconsistencia: el contexto indica percentile: 79.0 en la sección 'sector', pero el análisis lo asigna como posición actual ('retroceso desde diciembre 2025 lo devuelve al percentil 79 del sector amplio'). El percentil 79.0 es del período 2026-03-31 (actual), no un retroceso. Además, se confunde con el percentil 87.5 de entity_type que es el correcto para la posición actual dentro de banca múltiple."
+      ],
+      "sonnet_verdict": false,
+      "haiku_verdict": true,
+      "verdict_match": false,
+      "target": null,
+      "target_caught_sonnet": null,
+      "target_caught_haiku": null
+    }
+  ]
+}

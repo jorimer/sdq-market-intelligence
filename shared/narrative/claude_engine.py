@@ -6,7 +6,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from shared.cache import cache_get, cache_set
 from shared.config.settings import settings
+from shared.llm.budget import budget_allows, record_usage
 from shared.narrative.lang_context import get_request_lang
 
 logger = logging.getLogger(__name__)
@@ -880,6 +882,10 @@ STATIC_FALLBACKS = {
 
 CACHE_TTL_SECONDS = 3600  # 1 hour
 
+# Namespace de la L2 compartida (Redis). Versionado: subir a v2 invalida todo el
+# namespace si cambia el formato serializado o la semántica de la clave.
+_L2_NS = "narr:v1:"
+
 
 @dataclass
 class NarrativeResult:
@@ -944,16 +950,51 @@ class NarrativeEngine:
                 result.from_cache = True
                 return result
             del self._cache[key]
+        # L2 compartida (Redis): una narrativa generada por OTRO worker sirve acá.
+        # Antes cada worker uvicorn tenía su copia y un deploy vaciaba todo.
+        raw = cache_get(_L2_NS + key)
+        if raw:
+            try:
+                data = json.loads(raw)
+                result = NarrativeResult(
+                    text=data["text"],
+                    tokens_used=int(data.get("tokens_used") or 0),
+                    cost_estimate=float(data.get("cost_estimate") or 0.0),
+                    model_used=str(data.get("model_used") or ""),
+                    from_cache=True,
+                    guard_unsupported=list(data.get("guard_unsupported") or []),
+                )
+                self._cache[key] = (result, time.time())  # promover a L1
+                return result
+            except (KeyError, TypeError, ValueError) as e:
+                logger.warning("Entrada L2 corrupta (se ignora): %s", e)
         return None
 
     def _set_cache(self, key: str, result: NarrativeResult):
         self._cache[key] = (result, time.time())
+        if result.model_used == "static_fallback":
+            # El fallback estático es un degradado transitorio (sin API key, error,
+            # presupuesto): se cachea solo por-worker, no se propaga a los demás.
+            return
+        try:
+            payload = json.dumps({
+                "text": result.text,
+                "tokens_used": result.tokens_used,
+                "cost_estimate": result.cost_estimate,
+                "model_used": result.model_used,
+                "guard_unsupported": result.guard_unsupported,
+            }, ensure_ascii=False)
+            cache_set(_L2_NS + key, payload, CACHE_TTL_SECONDS)
+        except (TypeError, ValueError) as e:  # payload no serializable — solo L1
+            logger.warning("No se pudo serializar narrativa a L2 (se omite): %s", e)
 
     def _build_result(self, response) -> NarrativeResult:
         """NarrativeResult from a Claude response — token/cost accounting, no caching."""
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
-        cost = (input_tokens * 3.0 / 1_000_000) + (output_tokens * 15.0 / 1_000_000)
+        # Contabilidad central: registra el gasto del día (Redis) y devuelve el costo
+        # estimado con la tarifa DEL MODELO (antes estaba hardcodeada la de Sonnet).
+        cost = record_usage(settings.ANTHROPIC_MODEL, input_tokens, output_tokens)
         return NarrativeResult(
             text=response.content[0].text,
             tokens_used=input_tokens + output_tokens,
@@ -1089,6 +1130,14 @@ class NarrativeEngine:
             result = self._generate_fallback(context, template)
             self._set_cache(cache_key, result)
             return result
+
+        # Corte SUAVE de presupuesto: sobre el techo diario no se paga una llamada
+        # nueva — se sirve el fallback estático SIN cachearlo (al liberarse el
+        # presupuesto, la próxima request regenera de verdad).
+        if not budget_allows():
+            logger.warning("Narrativa degradada a estático por presupuesto LLM "
+                           "(template=%s, axis=%s)", template, axis)
+            return self._generate_fallback(context, template)
 
         context_str = json.dumps(context, indent=2, ensure_ascii=False, default=str)
         max_tokens = 4096 if mode == "deep" else 2048 if mode == "detailed" else 1024
