@@ -4,10 +4,11 @@ import { CreditCard, CheckCircle2, AlertCircle, Plus, X, Percent, FileText, Hash
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
-  getPaypalConfig, setPaypalConfig, listSkus,
+  getPaypalConfig, setPaypalConfig, listSkus, syncPaypalPlans,
   getTaxConfig, setTaxConfig, getInvoiceIssuer, setInvoiceIssuer,
   listEncfSequences, upsertEncfSequence,
   type PaypalConfig, type CatalogSku, type TaxConfig, type InvoiceIssuer, type EncfSequence,
+  type PlanSyncResult,
 } from "../billingApi";
 
 const ECF_TYPE_LABEL: Record<string, string> = {
@@ -36,10 +37,15 @@ export function PagosPage() {
   const [webhookId, setWebhookId] = useState("");
   const [plans, setPlans] = useState<Record<string, Record<string, string>>>({});
 
-  // Fila para agregar un plan.
+  // Fila para agregar un plan (manual, casos borde).
   const [pSku, setPSku] = useState("");
   const [pInterval, setPInterval] = useState("monthly");
   const [pId, setPId] = useState("");
+
+  // Sync automático tarifario → planes de PayPal.
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncReport, setSyncReport] = useState<PlanSyncResult[] | null>(null);
+  const [syncErr, setSyncErr] = useState<string | null>(null);
 
   // Impuesto (ITBIS) + emisor de la factura.
   const [tax, setTax] = useState<TaxConfig | null>(null);
@@ -100,6 +106,20 @@ export function PagosPage() {
       setTaxMsg({ ok: false, text: tr("pagos.saveError", "No se pudo guardar la configuración.") });
     } finally {
       setTaxBusy(false);
+    }
+  }
+
+  async function doSyncPlans() {
+    setSyncBusy(true); setSyncErr(null); setSyncReport(null);
+    try {
+      const res = await syncPaypalPlans();
+      setPlans(res.plans || {});
+      setSyncReport(res.results);
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setSyncErr(detail || tr("pagos.plans.syncError", "No se pudieron sincronizar los planes."));
+    } finally {
+      setSyncBusy(false);
     }
   }
 
@@ -179,7 +199,41 @@ export function PagosPage() {
 
           <Card>
             <CardHead icon={CreditCard} title={tr("pagos.card.plans", "Billing plans (suscripciones)")}
-              subtitle={tr("pagos.plans.help", "El id del billing plan de PayPal por producto y periodicidad. Solo hacen falta para los que vendas por suscripción.")} />
+              subtitle={tr("pagos.plans.helpAuto",
+                "PayPal cobra las suscripciones contra un plan pre-creado. Sincronizá con un clic: se crea/rota el plan de cada producto con precio en el tarifario y queda mapeado solo.")}
+              right={
+                <button type="button" className="btn btn-primary" disabled={syncBusy || !enabled}
+                  onClick={() => void doSyncPlans()}>
+                  {syncBusy
+                    ? tr("pagos.plans.syncing", "Sincronizando…")
+                    : tr("pagos.plans.sync", "Sincronizar con el tarifario")}
+                </button>
+              } />
+            {!enabled && (
+              <p className="text-xs text-warn mb-3">
+                {tr("pagos.plans.needEnabled", "Habilitá los cobros con PayPal (arriba) y guardá antes de sincronizar.")}
+              </p>
+            )}
+            {syncErr && <p className="text-xs text-alert mb-3" role="alert">{syncErr}</p>}
+            {syncReport && (
+              <div className="mb-3 rounded-lg bg-surface2 p-2.5 text-xs" role="status">
+                <span className="text-ok font-medium">
+                  {tr("pagos.plans.syncOk", "{{ok}} al día · {{created}} creados")
+                    .replace("{{ok}}", String(syncReport.filter((r) => r.action === "ok").length))
+                    .replace("{{created}}", String(syncReport.filter((r) => r.action === "created").length))}
+                </span>
+                <span className="text-muted ml-2">
+                  {tr("pagos.plans.syncSkipped", "{{n}} sin precio en el tarifario")
+                    .replace("{{n}}", String(syncReport.filter((r) => r.action === "sin_precio").length))}
+                </span>
+                {syncReport.some((r) => r.action === "error") && (
+                  <div className="text-alert mt-1">
+                    {syncReport.filter((r) => r.action === "error")
+                      .map((r) => `${r.sku} (${r.interval}): ${r.detail ?? "error"}`).join(" · ")}
+                  </div>
+                )}
+              </div>
+            )}
             {Object.keys(plans).length === 0 ? (
               <p className="text-xs text-faint mb-3">{tr("pagos.plans.empty", "Sin planes mapeados todavía.")}</p>
             ) : (

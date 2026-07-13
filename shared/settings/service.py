@@ -553,6 +553,10 @@ _PP_ENABLED = "paypal_enabled"  # "1" | "0"
 # La suscripción v2 es por-sector con periodicidad, así que cada (insight:{sector}|all_access|
 # enterprise, monthly|annual) que se venda necesita su plan de PayPal creado y mapeado acá.
 _PP_PLANS = "paypal_plans"
+# Mapa de Products de PayPal por SKU, JSON: {sku: product_id}. Un plan de PayPal cuelga de
+# un Product; el sync automático (shared/billing/plan_sync) los crea una vez y los reutiliza
+# al rotar precios.
+_PP_PRODUCTS = "paypal_plan_products"
 
 
 def _paypal_plans_map(db: Session) -> Dict[str, Dict[str, str]]:
@@ -565,6 +569,27 @@ def _paypal_plans_map(db: Session) -> Dict[str, Dict[str, str]]:
         return json.loads(row.value)
     except (ValueError, TypeError):
         return {}
+
+
+def get_paypal_products(db: Session) -> Dict[str, str]:
+    """Mapa {sku: product_id de PayPal} para el sync de billing plans."""
+    import json
+
+    row = _get_app_setting(db, _PP_PRODUCTS)
+    if not row or not row.value:
+        return {}
+    try:
+        data = json.loads(row.value)
+        return data if isinstance(data, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def set_paypal_products(db: Session, products: Dict[str, str]) -> None:
+    import json
+
+    _set_app_setting(db, _PP_PRODUCTS, json.dumps(products or {}), is_secret=False)
+    db.commit()
 
 
 def get_paypal_config(db: Session) -> Dict[str, object]:

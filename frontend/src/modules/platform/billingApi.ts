@@ -190,6 +190,28 @@ export async function setPaypalConfig(input: Partial<{
   return data as PaypalConfig;
 }
 
+/** Resultado por (sku, intervalo) del sync tarifario → planes de PayPal. */
+export interface PlanSyncResult {
+  sku: string;
+  interval: string;
+  action: "ok" | "created" | "sin_precio" | "error";
+  plan_id?: string;
+  amount?: string;
+  replaced?: string | null;
+  detail?: string;
+}
+
+/** Reconcilia los billing plans de PayPal con el tarifario vigente (idempotente):
+ * crea/rota el plan de cada SKU de suscripción con precio y lo deja mapeado. */
+export async function syncPaypalPlans(): Promise<{
+  enabled: boolean;
+  results: PlanSyncResult[];
+  plans: Record<string, Record<string, string>>;
+}> {
+  const { data } = await client.post("/billing/paypal/sync-plans", {});
+  return data;
+}
+
 /* ── Impuestos (ITBIS) + emisor de la factura (admin) ────────────── */
 export interface TaxConfig {
   enabled: boolean;

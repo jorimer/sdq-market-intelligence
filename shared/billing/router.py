@@ -416,6 +416,22 @@ async def put_paypal(body: _PayPalConfigBody, db: Session = Depends(get_db),
         env=body.env, enabled=body.enabled, plans=body.plans)
 
 
+@router.post("/paypal/sync-plans", summary="Sincronizar billing plans de PayPal con el tarifario (admin)")
+async def post_sync_paypal_plans(db: Session = Depends(get_db),
+                                 current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    """Reconcilia tarifario → planes de PayPal: crea (y mapea) un plan por cada SKU de
+    suscripción con precio vigente cuyo plan falte o difiera en monto; desactiva el plan
+    reemplazado (sus suscriptos siguen cobrando su precio). Idempotente. Las llamadas a
+    PayPal son bloqueantes → threadpool."""
+    from starlette.concurrency import run_in_threadpool
+
+    from shared.billing.plan_sync import sync_paypal_plans
+    result = await run_in_threadpool(sync_paypal_plans, db)
+    if not result.get("enabled"):
+        raise HTTPException(status_code=503, detail="PayPal no está configurado/habilitado.")
+    return result
+
+
 @router.get("/skus", summary="SKUs vendibles del catálogo + su precio vigente (admin)")
 async def get_skus(db: Session = Depends(get_db),
                    current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:

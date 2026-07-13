@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CircleDollarSign, Rocket, X } from "lucide-react";
 import { Card, CardHead, Chip } from "@/shared/ui/primitives";
-import { publishTariff, type CatalogSku } from "../billingApi";
+import { publishTariff, syncPaypalPlans, type CatalogSku } from "../billingApi";
 import {
   CellChange,
   TariffDraft,
@@ -39,7 +39,7 @@ export function TariffBulkEditor({ skus, onPublished }: Props) {
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [report, setReport] = useState<{ ok: number; fail: string[] } | null>(null);
+  const [report, setReport] = useState<{ ok: number; fail: string[]; plansCreated: number | null } | null>(null);
 
   const insight = useMemo(() => skus.filter((s) => s.kind === "insight"), [skus]);
   const deepDive = useMemo(() => skus.filter((s) => s.kind === "deep_dive"), [skus]);
@@ -80,9 +80,21 @@ export function TariffBulkEditor({ skus, onPublished }: Props) {
         fails.push(`${c.sku} · ${c.interval}`);
       }
     }
+    // Precio de suscripción publicado → PayPal necesita su billing plan con ese
+    // monto. Se sincroniza solo (best-effort: si la pasarela no está habilitada,
+    // el sync queda para el botón de /admin/pagos).
+    let plansCreated: number | null = null;
+    if (ok > 0 && changes.some((c) => c.interval !== "once")) {
+      try {
+        const sync = await syncPaypalPlans();
+        plansCreated = sync.results.filter((r) => r.action === "created").length;
+      } catch {
+        plansCreated = null; // pasarela apagada o error: no bloquea la publicación
+      }
+    }
     setPublishing(false);
     setConfirming(false);
-    setReport({ ok, fail: fails });
+    setReport({ ok, fail: fails, plansCreated });
     if (ok > 0) onPublished();
   }
 
@@ -147,6 +159,12 @@ export function TariffBulkEditor({ skus, onPublished }: Props) {
               <span className="text-ok font-medium">
                 {tr("tariff.bulk.okCount", "{{n}} precios publicados").replace("{{n}}", String(report.ok))}
               </span>
+              {report.plansCreated != null && report.plansCreated > 0 && (
+                <span className="text-muted ml-2">
+                  {tr("tariff.bulk.plansSynced", "{{n}} planes de PayPal actualizados")
+                    .replace("{{n}}", String(report.plansCreated))}
+                </span>
+              )}
               {report.fail.length > 0 && (
                 <span className="text-alert ml-2">
                   {tr("tariff.bulk.failCount", "Fallaron: {{list}}").replace("{{list}}", report.fail.join(", "))}
