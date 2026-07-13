@@ -107,6 +107,11 @@ jobs:
           cd frontend
           npx tsc --noEmit
 
+      - name: ESLint
+        run: |
+          cd frontend
+          npm run lint
+
   # ─── Docker Build ───
   docker-build:
     runs-on: ubuntu-latest

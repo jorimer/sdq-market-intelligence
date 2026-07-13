@@ -3,7 +3,6 @@ import { ProtectedRoute } from "@/shared/auth/ProtectedRoute";
 import { AppLayout } from "@/shared/layout/AppLayout";
 import { LoginPage } from "@/shared/auth/LoginPage";
 import { ErrorBoundary } from "@/shared/components/ErrorBoundary";
-import { PlaceholderPage } from "@/shared/ui/PlaceholderPage";
 
 // Banking Score (Eje 1) — existing screens
 import { DashboardPage } from "@/modules/banking-score/pages/DashboardPage";

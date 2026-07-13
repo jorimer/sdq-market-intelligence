@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Boxes, Lock, Eye, Download, Mail, FileText, ShoppingCart } from "lucide-react";
 import {
   PageHead,
@@ -121,15 +122,13 @@ export function ProductCatalogPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
   sector: CatalogSector;
   level: CatalogLevel;
   planLabel: (tier: string) => string;
   onView: () => void;
   onSampleDownloaded: () => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  t: any;
+  t: TFunction;
 }) {
   const [sampling, setSampling] = useState(false);
   const [buying, setBuying] = useState(false);
@@ -256,14 +255,12 @@ function LevelRow({ sector, level, planLabel, onView, onSampleDownloaded, t }: {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
   sector: CatalogSector;
   level: CatalogLevel;
   periodEnd: string;
   onClose: () => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  t: any;
+  t: TFunction;
 }) {
   // Pide entidad solo si el producto la necesita (banca); los de sujeto fijo cargan directo.
   const needsScope = level.requires_scope;

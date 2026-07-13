@@ -9,7 +9,7 @@ import {
   LoadingGrid,
   Chip,
 } from "@/shared/ui/primitives";
-import { fmtNum, fmtPct } from "@/shared/lib/format";
+import { fmtNum } from "@/shared/lib/format";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { AudienceTabs } from "@/shared/ui/AudienceTabs";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
