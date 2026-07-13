@@ -112,6 +112,7 @@ certifi==2026.6.17 \
     #   httpcore
     #   httpx
     #   requests
+    #   sentry-sdk
 cffi==2.1.0 \
     --hash=sha256:02cb7ff33ded4f1532476731f89ede53e2e488a8e6205515a82144246ffa7dcc \
     --hash=sha256:03e9810d18c646077e501f661b682fbf5dee4676048527ca3cffe66faa9960dd \
@@ -485,7 +486,9 @@ et-xmlfile==2.0.0 \
 fastapi==0.139.0 \
     --hash=sha256:99ab7b2d92223c76d6cf10757ab3f89d45b38267fc20b2a136cf02f6beac3145 \
     --hash=sha256:cf15e1e9e667ddb0ad63811e60bd11390d1aac838ca4a7a23f421807b2308189
-    # via -r requirements.txt
+    # via
+    #   -r requirements.txt
+    #   sentry-sdk
 fonttools==4.63.0 \
     --hash=sha256:032038247a96c1690f9f31e377c389383c902531b085aa4e4dabd6f57f870e69 \
     --hash=sha256:063e08bd17bd5a90127a14123de0d6a952dbc847695fd98b63c043d58057f90c \
@@ -2084,6 +2087,10 @@ seaborn==0.13.2 \
     --hash=sha256:636f8336facf092165e27924f223d3c62ca560b1f2bb5dff7ab7fad265361987 \
     --hash=sha256:93e60a40988f4d65e9f4885df477e2fdaff6b73a9ded434c1ab356dd57eefff7
     # via -r requirements.txt
+sentry-sdk==2.65.0 \
+    --hash=sha256:3595169677a808e4d0e1ea6ffb89443459549c7a98392ed71c77c847182ab6bf \
+    --hash=sha256:c94dc945d54bad49d4f20448b1e6b217ca2f92f46d05c3e83d41764af685c3d1
+    # via -r requirements.txt
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
@@ -2195,7 +2202,9 @@ tzlocal==5.4.4 \
 urllib3==2.7.0 \
     --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
     --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
-    # via requests
+    # via
+    #   requests
+    #   sentry-sdk
 uvicorn==0.51.0 \
     --hash=sha256:5d38af6cd620f2ae3849fb44fd4879e0890aa1febe8d47eb355fb45d93fe6a5b \
     --hash=sha256:f6f4b69b657c312f516dd2d268ab9ae6f254b11e4bac504f37b2ab58b24dd0b0
