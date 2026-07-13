@@ -213,7 +213,9 @@ async def build_synthesis_report(question: str, db: Optional[Session], targets,
     ev: List[str] = []
     for p in live:
         ev.append(f"### {p.entity_label} · {p.sector_key}")
-        ev.extend(f"- {e.text}" for e in p.evidence[:4])
+        # 6 líneas: banca emite hasta 6 (head, sub-componentes, concentración, posición
+        # nombrada, pares, alerta) — con [:4] la línea de pares nombrados se cortaba.
+        ev.extend(f"- {e.text}" for e in p.evidence[:6])
     sections["evidencia"] = "\n".join(ev)
     ordered.append("evidencia")
 

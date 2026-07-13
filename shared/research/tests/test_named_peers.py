@@ -32,6 +32,8 @@ def test_banking_summary_names_position_and_peers():
     evs = dp._banking_summary("Banco Lafise", _banking_payload(), "2025-12", "SIB · BCRD")
     t = " || ".join(e.text for e in evs)
     assert "Posición nombrada: 30 de 42 en el sistema; 14 de 18 entre banca_multiple" in t
+    # los pares se etiquetan por su GRUPO (mismo tipo), no "sistema"
+    assert "Pares (banca_multiple):" in t
     assert "Banco Popular (84.3, SDQ-AA)" in t and "BHD (82.1, SDQ-AA)" in t
     # el sujeto no se lista como par de sí mismo
     assert "Banco Lafise (61.2" not in t
@@ -42,7 +44,7 @@ def test_banking_summary_without_named_peers_unchanged():
                "peer_block": {"metric_label": "activos", "cr5": 70.0, "cr10": 88.0, "hhi": 1200.0}}
     evs = dp._banking_summary("Banco Lafise", payload, "2025-12", "SIB · BCRD")
     t = " || ".join(e.text for e in evs)
-    assert "Posición nombrada" not in t and "Pares del sistema" not in t
+    assert "Posición nombrada" not in t and "Pares (" not in t
     assert "CR5 70.0" in t  # la evidencia previa sigue intacta
 
 

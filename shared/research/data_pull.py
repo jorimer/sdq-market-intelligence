@@ -88,7 +88,8 @@ def _banking_summary(label: str, payload: Dict[str, Any], period: Optional[str],
     if peers_named:
         listed = ", ".join(f"{r.get('name')} ({_fmt(r.get('score'))}, {r.get('tier')})"
                            for r in peers_named)
-        out.append(Evidence(text=f"Pares del sistema: {listed}.",
+        group = np_meta.get("entity_type") or "sistema"
+        out.append(Evidence(text=f"Pares ({group}): {listed}.",
                             source=source, kind="engine", state=REAL, score=96.5))
     ew = sr.get("early_warning") or {}
     flags = ew.get("flags") if isinstance(ew, dict) else None

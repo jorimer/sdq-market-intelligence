@@ -427,8 +427,9 @@ def _seed_typed(db, name, score, tier, btype, period=date(2024, 12, 31)):
 
 
 def test_named_snapshot_includes_named_peers(db):
-    """El payload nombrado trae pares NOMBRADOS: posición (sistema y mismo tipo) + líderes
-    concretos con score/tier. Complementa el percentil anónimo con la comparación real."""
+    """El payload nombrado trae pares NOMBRADOS del MISMO TIPO (grupo de pares estilo
+    Fitch): posición (sistema y tipo) + los pares concretos con score/tier. Los líderes de
+    OTRO tipo (p.ej. cambiarias con score alto) NO entran — son ruido, no comparación."""
     _seed_typed(db, "Banco Grande SA", 90, "SDQ-AA", BankType.banca_multiple)
     _seed_typed(db, "Banco Medio SA", 75, "SDQ-A", BankType.banca_multiple)
     subject = _seed_typed(db, "Banco Chico SA", 60, "SDQ-BBB", BankType.banco_ahorro_credito)
@@ -442,14 +443,28 @@ def test_named_snapshot_includes_named_peers(db):
     rows = named["rows"]
     subj = next(r for r in rows if r["is_subject"])
     assert subj["name"] == "Banco Chico SA"
-    assert subj["rank"] == 3 and subj["rank_in_type"] == 1
-    # los líderes del sistema aparecen NOMBRADOS con su score/tier real
+    assert subj["rank"] == 3 and subj["rank_in_type"] == 1  # rank global se conserva
     by_name = {r["name"]: r for r in rows}
-    assert by_name["Banco Grande SA"]["score"] == 90.0
-    assert by_name["Banco Grande SA"]["tier"] == "SDQ-AA"
-    assert by_name["Banco Grande SA"]["rank"] == 1
+    # el par del MISMO tipo entra con su dato real
+    assert by_name["Financiera Par SA"]["score"] == 55.0
+    assert by_name["Financiera Par SA"]["rank_in_type"] == 2
+    # los líderes de OTRO tipo quedan FUERA del grupo de pares
+    assert "Banco Grande SA" not in by_name and "Banco Medio SA" not in by_name
     # el id interno NO viaja en el payload (narra nombres, no ids)
     assert all("bank_id" not in r for r in rows)
+
+
+def test_named_peers_fall_back_to_system_when_type_is_singleton(db):
+    """Si la entidad es la única de su tipo, degrada a los líderes del sistema (mejor
+    referencia imperfecta que una tabla de una fila)."""
+    _seed_typed(db, "Banco Grande SA", 90, "SDQ-AA", BankType.banca_multiple)
+    _seed_typed(db, "Banco Medio SA", 75, "SDQ-A", BankType.banca_multiple)
+    solo = _seed_typed(db, "Fiduciaria Única SA", 65, "SDQ-A-", BankType.fiduciaria)
+    snap = BankingProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope=solo.id)
+    named = (snap.payload.get("peer_block") or {}).get("named_peers")
+    names = {r["name"] for r in named["rows"]}
+    assert "Fiduciaria Única SA" in names
+    assert "Banco Grande SA" in names  # líderes del sistema como referencia
 
 
 def test_named_peers_absent_when_single_entity(db):
