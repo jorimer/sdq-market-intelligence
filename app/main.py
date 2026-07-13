@@ -11,9 +11,10 @@ from shared.narrative.lang_context import resolve_request_lang
 from shared.observability import configure_logging, init_sentry
 from shared.observability.health import liveness, readiness
 
-# Sentry primero (captura errores del arranque) y logs estructurados (JSON en prod).
-init_sentry()
+# Logging primero (para que todo log —incluida la confirmación de Sentry— salga ya en
+# el formato correcto), luego Sentry (captura errores del arranque a partir de aquí).
 configure_logging()
+init_sentry()
 
 app = FastAPI(
     title="SDQ Market Intelligence",
