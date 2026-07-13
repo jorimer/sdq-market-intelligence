@@ -172,8 +172,13 @@ export function Gauge({
   const pct = Math.max(0, Math.min(100, score ?? 0)) / 100;
   const color = toneVar(band.tone);
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
+    <div
+      className="relative"
+      style={{ width: size, height: size }}
+      role="img"
+      aria-label={`${score == null ? "—" : score.toFixed(1)} ${gaugeT("widgets.gaugeOf100")} · ${band.label}`}
+    >
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--grid)" strokeWidth={stroke} />
         <circle
           cx={size / 2}
@@ -200,7 +205,7 @@ export function Gauge({
 
 /* ── Skeleton ─────────────────────────────────────────────────── */
 export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-[10px] bg-surface2 ${className}`} />;
+  return <div aria-hidden="true" className={`animate-pulse rounded-[10px] bg-surface2 ${className}`} />;
 }
 
 /* ── Tabs (controlled) ────────────────────────────────────────── */
@@ -214,12 +219,15 @@ export function Tabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="flex gap-1 border-b border-line">
+    <div role="tablist" className="flex gap-1 border-b border-line">
       {tabs.map((t) => (
         <button
           key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={active === t.id}
           onClick={() => onChange(t.id)}
-          className={`px-3.5 py-2 text-sm font-medium -mb-px border-b-2 transition ${
+          className={`px-3.5 py-2 text-sm font-medium -mb-px border-b-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-[-2px] ${
             active === t.id
               ? "border-accent text-accent-ink"
               : "border-transparent text-muted hover:text-ink"
@@ -258,8 +266,12 @@ export function StateBlock({
   const Icon = meta.icon;
   const { t } = useTranslation();
   return (
-    <div className="card p-10 flex flex-col items-center justify-center text-center">
-      <span className="grid place-items-center w-12 h-12 rounded-xl bg-surface2 text-muted mb-3">
+    <div
+      className="card p-10 flex flex-col items-center justify-center text-center"
+      role={kind === "loading" ? "status" : kind === "error" ? "alert" : undefined}
+      aria-live={kind === "loading" ? "polite" : undefined}
+    >
+      <span aria-hidden="true" className="grid place-items-center w-12 h-12 rounded-xl bg-surface2 text-muted mb-3">
         <Icon size={22} className={kind === "loading" ? "animate-spin" : ""} />
       </span>
       <div className="font-display text-[15px] font-bold text-ink whitespace-nowrap">

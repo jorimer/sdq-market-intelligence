@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ShieldCheck } from "lucide-react";
 import {
@@ -15,6 +15,7 @@ import { fmtNum, fmtPct } from "@/shared/lib/format";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { AudienceTabs } from "@/shared/ui/AudienceTabs";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
+import { InsurerDrillDrawer } from "../components/InsurerDrillDrawer";
 import {
   getInsurancePulse,
   getInsuranceInsight,
@@ -59,7 +60,7 @@ function RamoMixTable({ pulse }: { pulse: InsurancePulse }) {
           </div>
           <div className="w-28 shrink-0 text-right mono tabular-nums text-sm text-ink">
             {fmtNum((m.amount ?? 0) / 1e9, 1)}
-            <span className="text-muted ml-1 text-xs">{t("insurance.mmm", "MMM")}</span>
+            <span className="text-muted ml-1 text-xs">{t("insurance.mmm")}</span>
           </div>
           <div className="w-14 shrink-0 text-right mono tabular-nums text-sm text-muted">
             {fmtPct(m.pct, 1)}
@@ -70,39 +71,73 @@ function RamoMixTable({ pulse }: { pulse: InsurancePulse }) {
   );
 }
 
+/** SFS health-coverage card (SISALRIL/CNSS). Rendered even when the SIS market
+ * series are not ingested yet — the two datasets have independent syncs. */
+function HealthCoverageCard({ pulse }: { pulse: InsurancePulse }) {
+  const { t } = useTranslation();
+  const hc = pulse.health_coverage;
+  if (!hc) return null;
+  return (
+    <Card>
+      <CardHead
+        title={t("insurance.healthTitle")}
+        subtitle={t("insurance.healthSub", { period: hc.period ?? "" })}
+      />
+      <div className="grid grid-cols-3 gap-4 mt-3">
+        <StatTile label={t("insurance.total")} value={fmtNum((hc.afiliados_total ?? 0) / 1e6, 2)} unit="MM" />
+        <StatTile label={t("insurance.contributivo")} value={fmtNum((hc.afiliados_contributivo ?? 0) / 1e6, 2)} unit="MM" />
+        <StatTile label={t("insurance.subsidiado")} value={fmtNum((hc.afiliados_subsidiado ?? 0) / 1e6, 2)} unit="MM" />
+      </div>
+    </Card>
+  );
+}
+
 function MarketTab({ pulse }: { pulse: InsurancePulse }) {
   const { t } = useTranslation();
   const [audience, setAudience] = useAudiencePref("sdq.insurance.audience", INSURANCE_AUDIENCES);
   const hc = pulse.health_coverage;
   const gy = pulse.growth_years;
+
+  // El pulse de mercado (SIS) y la cobertura de salud (SISALRIL) tienen syncs
+  // INDEPENDIENTES: sin primas ingeridas se muestra el vacío del mercado, pero la
+  // tarjeta de salud se pinta igual si su dato existe (antes quedaba oculta).
+  if (!pulseHasData(pulse)) {
+    return (
+      <div className="space-y-5">
+        <StateBlock kind="empty" message={t("insurance.emptyMsg")} />
+        <HealthCoverageCard pulse={pulse} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatTile
-          label={t("insurance.premiums", "Primas netas cobradas")}
+          label={t("insurance.premiums")}
           value={fmtNum((pulse.total_premiums_rd ?? 0) / 1e9, 1)}
-          unit={`RD$ ${t("insurance.mmm", "MMM")} · ${pulse.latest_year ?? ""}`}
+          unit={`RD$ ${t("insurance.mmm")} · ${pulse.latest_year ?? ""}`}
         />
         <StatTile
-          label={gy ? t("insurance.growthSpan", `Crecimiento ${gy[0]}–${gy[1]} (compuesto)`) : t("insurance.growth", "Crecimiento")}
+          label={gy ? t("insurance.growthSpan", { from: gy[0], to: gy[1] }) : t("insurance.growth")}
           value={pulse.growth_pct == null ? "—" : `${fmtNum(pulse.growth_pct, 1)}%`}
         />
         <StatTile
-          label={t("insurance.activeInsurers", "Aseguradoras activas")}
+          label={t("insurance.activeInsurers")}
           value={pulse.active_insurers ?? "—"}
         />
         <StatTile
-          label={t("insurance.healthCoverage", "Cobertura de salud (SFS)")}
+          label={t("insurance.healthCoverage")}
           value={hc?.afiliados_total == null ? "—" : fmtNum(hc.afiliados_total / 1e6, 2)}
-          unit={hc?.afiliados_total == null ? undefined : `${t("insurance.millions", "MM afiliados")} · ${hc.period ?? ""}`}
+          unit={hc?.afiliados_total == null ? undefined : `${t("insurance.millions")} · ${hc.period ?? ""}`}
         />
       </div>
 
       <Card>
         <CardHead
           icon={ShieldCheck}
-          title={t("insurance.mixTitle", "Mezcla del mercado por ramo")}
-          subtitle={t("insurance.mixSub", `Concentración top-4: ${fmtPct(pulse.top4_concentration_pct, 1)} · fuente SIS`)}
+          title={t("insurance.mixTitle")}
+          subtitle={t("insurance.mixSub", { pct: fmtPct(pulse.top4_concentration_pct, 1) })}
         />
         <div className="mt-3">
           <RamoMixTable pulse={pulse} />
@@ -114,23 +149,11 @@ function MarketTab({ pulse }: { pulse: InsurancePulse }) {
         )}
       </Card>
 
-      {hc && (
-        <Card>
-          <CardHead
-            title={t("insurance.healthTitle", "Cobertura de salud · Seguro Familiar de Salud")}
-            subtitle={t("insurance.healthSub", `SISALRIL / CNSS · ${hc.period ?? ""}`)}
-          />
-          <div className="grid grid-cols-3 gap-4 mt-3">
-            <StatTile label={t("insurance.total", "Total afiliados")} value={fmtNum((hc.afiliados_total ?? 0) / 1e6, 2)} unit="MM" />
-            <StatTile label={t("insurance.contributivo", "Contributivo")} value={fmtNum((hc.afiliados_contributivo ?? 0) / 1e6, 2)} unit="MM" />
-            <StatTile label={t("insurance.subsidiado", "Subsidiado")} value={fmtNum((hc.afiliados_subsidiado ?? 0) / 1e6, 2)} unit="MM" />
-          </div>
-        </Card>
-      )}
+      <HealthCoverageCard pulse={pulse} />
 
       <AiInsightCard
-        title={t("insurance.insightTitle", "Lectura del mercado asegurador")}
-        subtitle={t("insurance.insightSubtitle", `Período ${pulse.period ?? ""}`)}
+        title={t("insurance.insightTitle")}
+        subtitle={t("insurance.insightSubtitle", { period: pulse.period ?? "" })}
         depsKey={`${pulse.period ?? "insurance"}:${audience}`}
         fetcher={() => getInsuranceInsight(audience)}
         deepFetcher={(deep) => getInsuranceInsight(audience, deep)}
@@ -148,39 +171,53 @@ function MarketTab({ pulse }: { pulse: InsurancePulse }) {
   );
 }
 
-function IsfTab({ rows, note }: { rows: InsuranceRankRow[]; note: string | null }) {
+function IsfTab({
+  rows, note, onSelect,
+}: { rows: InsuranceRankRow[]; note: string | null; onSelect: (r: InsuranceRankRow) => void }) {
   const { t } = useTranslation();
   if (!rows.length) {
     return (
       <StateBlock
         kind="empty"
-        title={t("insurance.isfEmptyTitle", "ISF pendiente")}
-        message={note ?? t("insurance.isfEmpty", "Los estados financieros auditados no están ingeridos todavía.")}
+        title={t("insurance.isfEmptyTitle")}
+        message={note ?? t("insurance.isfEmpty")}
       />
     );
   }
   return (
     <Card>
       <CardHead
-        title={t("insurance.isfTitle", "Índice de Solidez de Aseguradora (ISF)")}
-        subtitle={t("insurance.isfSub", "0-100 sobre estados financieros auditados · SIS")}
+        title={t("insurance.isfTitle")}
+        subtitle={t("insurance.isfSub")}
       />
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-muted border-b border-line">
-              <th className="py-2 pr-3 font-medium">#</th>
-              <th className="py-2 pr-3 font-medium">{t("insurance.insurer", "Aseguradora")}</th>
-              <th className="py-2 pr-3 font-medium text-right">ISF</th>
-              <th className="py-2 pr-3 font-medium">{t("insurance.band", "Banda")}</th>
-              <th className="py-2 pr-3 font-medium text-right">{t("insurance.coverage", "Cobertura")}</th>
+              <th scope="col" className="py-2 pr-3 font-medium">#</th>
+              <th scope="col" className="py-2 pr-3 font-medium">{t("insurance.insurer")}</th>
+              <th scope="col" className="py-2 pr-3 font-medium text-right">ISF</th>
+              <th scope="col" className="py-2 pr-3 font-medium">{t("insurance.band")}</th>
+              <th scope="col" className="py-2 pr-3 font-medium text-right">{t("insurance.coverage")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.slug} className="border-b border-line/60">
+              <tr
+                key={r.slug}
+                className="border-b border-line/60 cursor-pointer hover:bg-surface2/60 transition-colors"
+                onClick={() => onSelect(r)}
+              >
                 <td className="py-2 pr-3 mono tabular-nums text-muted">{r.rank}</td>
-                <td className="py-2 pr-3 text-ink truncate max-w-[16rem]">{r.name ?? r.slug.replace(/_/g, " ")}</td>
+                <td className="py-2 pr-3 text-ink truncate max-w-[16rem]">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onSelect(r); }}
+                    className="text-left hover:underline focus-visible:underline"
+                  >
+                    {r.name ?? r.slug.replace(/_/g, " ")}
+                  </button>
+                </td>
                 <td className="py-2 pr-3 text-right mono tabular-nums font-semibold text-ink">
                   {fmtNum(r.overall_score, 1)}
                 </td>
@@ -195,43 +232,58 @@ function IsfTab({ rows, note }: { rows: InsuranceRankRow[]; note: string | null 
           </tbody>
         </table>
       </div>
+      <p className="text-xs text-muted mt-3">{t("insurance.drillHint")}</p>
     </Card>
   );
 }
 
-function ArsTab({ rows, note, caveat }: { rows: ArsRankRow[]; note: string | null; caveat: string }) {
+function ArsTab({
+  rows, note, caveat, onSelect,
+}: { rows: ArsRankRow[]; note: string | null; caveat: string; onSelect: (r: ArsRankRow) => void }) {
   const { t } = useTranslation();
   if (!rows.length) {
     return (
       <StateBlock
         kind="empty"
-        title={t("insurance.arsEmptyTitle", "ISARS pendiente")}
-        message={note ?? t("insurance.arsEmpty", "La sincronización de ARS (BDFINAC) no se ha ejecutado.")}
+        title={t("insurance.arsEmptyTitle")}
+        message={note ?? t("insurance.arsEmpty")}
       />
     );
   }
   return (
     <Card>
       <CardHead
-        title={t("insurance.arsTitle", "Índice de Solidez de ARS (ISARS)")}
-        subtitle={t("insurance.arsSub", "Administradoras de Riesgos de Salud · SISALRIL (BDFINAC)")}
+        title={t("insurance.arsTitle")}
+        subtitle={t("insurance.arsSub")}
       />
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-muted border-b border-line">
-              <th className="py-2 pr-3 font-medium">#</th>
-              <th className="py-2 pr-3 font-medium">{t("insurance.ars", "ARS")}</th>
-              <th className="py-2 pr-3 font-medium">{t("insurance.category", "Categoría")}</th>
-              <th className="py-2 pr-3 font-medium text-right">ISARS</th>
-              <th className="py-2 pr-3 font-medium">{t("insurance.band", "Banda")}</th>
+              <th scope="col" className="py-2 pr-3 font-medium">#</th>
+              <th scope="col" className="py-2 pr-3 font-medium">{t("insurance.ars")}</th>
+              <th scope="col" className="py-2 pr-3 font-medium">{t("insurance.category")}</th>
+              <th scope="col" className="py-2 pr-3 font-medium text-right">ISARS</th>
+              <th scope="col" className="py-2 pr-3 font-medium">{t("insurance.band")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.slug} className="border-b border-line/60">
+              <tr
+                key={r.slug}
+                className="border-b border-line/60 cursor-pointer hover:bg-surface2/60 transition-colors"
+                onClick={() => onSelect(r)}
+              >
                 <td className="py-2 pr-3 mono tabular-nums text-muted">{r.rank}</td>
-                <td className="py-2 pr-3 text-ink">{r.name}</td>
+                <td className="py-2 pr-3 text-ink">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onSelect(r); }}
+                    className="text-left hover:underline focus-visible:underline"
+                  >
+                    {r.name}
+                  </button>
+                </td>
                 <td className="py-2 pr-3 text-body">{ARS_CATEGORY_LABELS[String(r.category)] ?? "—"}</td>
                 <td className="py-2 pr-3 text-right mono tabular-nums font-semibold text-ink">
                   {fmtNum(r.overall_score, 1)}
@@ -254,62 +306,90 @@ export function InsuranceIntelPage() {
   const [pulse, setPulse] = useState<InsurancePulse | null>(null);
   const [rankings, setRankings] = useState<{ rows: InsuranceRankRow[]; note: string | null }>({ rows: [], note: null });
   const [ars, setArs] = useState<{ rows: ArsRankRow[]; note: string | null; caveat: string }>({ rows: [], note: null, caveat: "" });
+  const [drill, setDrill] = useState<{ slug: string; name: string; kind: "insurer" | "ars" } | null>(null);
+
+  const load = useCallback(async () => {
+    setStatus("loading");
+    // Tolerancia por-recurso (patrón canónico): un endpoint caído no tumba la
+    // página entera — cada tab muestra su vacío; error total solo si TODO falla.
+    const [p, r, a] = await Promise.all([
+      getInsurancePulse().catch(() => null),
+      getInsuranceRankings().catch(() => null),
+      getArsRankings().catch(() => null),
+    ]);
+    if (!p && !r && !a) {
+      setStatus("error");
+      return;
+    }
+    setPulse(p ?? { has_data: false, period: null, source: "" });
+    setRankings({ rows: r?.rankings ?? [], note: r?.note ?? null });
+    setArs({ rows: a?.rankings ?? [], note: a?.note ?? null, caveat: a?.caveat ?? "" });
+    setStatus("ready");
+  }, []);
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const [p, r, a] = await Promise.all([
-          getInsurancePulse(),
-          getInsuranceRankings(),
-          // ARS is a newer surface; tolerate its absence so the page still renders.
-          getArsRankings().catch(() => ({ rankings: [], note: null, caveat: "" })),
-        ]);
-        if (!alive) return;
-        setPulse(p);
-        setRankings({ rows: r.rankings, note: r.note });
-        setArs({ rows: a.rankings, note: a.note, caveat: a.caveat });
-        setStatus("ready");
-      } catch {
-        if (alive) setStatus("error");
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
+    load();
+  }, [load]);
 
   return (
     <div>
       <PageHead
-        eyebrow={t("insurance.eyebrow", "Seguros · SIS · SISALRIL")}
-        title={t("insurance.title", "Seguros")}
-        sub={t("insurance.subtitle", "Mercado asegurador dominicano: primas por ramo, solidez de aseguradoras (ISF) y cobertura de salud (SFS).")}
+        eyebrow={t("insurance.eyebrow")}
+        title={t("insurance.title")}
+        sub={t("insurance.subtitle")}
       />
 
       {status === "loading" && <LoadingGrid />}
       {status === "error" && (
-        <StateBlock kind="error" message={t("insurance.errorMsg", "No se pudo cargar el mercado asegurador.")} />
+        <StateBlock
+          kind="error"
+          message={t("insurance.errorMsg")}
+          action={
+            <button type="button" onClick={load} className="btn btn-ghost">
+              {t("insurance.retry")}
+            </button>
+          }
+        />
       )}
       {status === "ready" && pulse && (
         <>
           <div className="mb-5">
             <Tabs
               tabs={[
-                { id: "mercado", label: t("insurance.tabMarket", "Mercado") },
-                { id: "solidez", label: t("insurance.tabIsf", "Solidez (ISF)") },
-                { id: "ars", label: t("insurance.tabArs", "ARS (salud)") },
+                { id: "mercado", label: t("insurance.tabMarket") },
+                { id: "solidez", label: t("insurance.tabIsf") },
+                { id: "ars", label: t("insurance.tabArs") },
               ]}
               active={tab}
               onChange={setTab}
             />
           </div>
-          {tab === "mercado" && (
-            pulseHasData(pulse)
-              ? <MarketTab pulse={pulse} />
-              : <StateBlock kind="empty" message={t("insurance.emptyMsg", "Aún no hay dato de mercado ingerido. Ejecute la sincronización de seguros.")} />
+          {tab === "mercado" && <MarketTab pulse={pulse} />}
+          {tab === "solidez" && (
+            <IsfTab
+              rows={rankings.rows}
+              note={rankings.note}
+              onSelect={(r) => setDrill({ slug: r.slug, name: r.name ?? r.slug.replace(/_/g, " "), kind: "insurer" })}
+            />
           )}
-          {tab === "solidez" && <IsfTab rows={rankings.rows} note={rankings.note} />}
-          {tab === "ars" && <ArsTab rows={ars.rows} note={ars.note} caveat={ars.caveat} />}
+          {tab === "ars" && (
+            <ArsTab
+              rows={ars.rows}
+              note={ars.note}
+              caveat={ars.caveat}
+              onSelect={(r) => setDrill({ slug: r.slug, name: r.name, kind: "ars" })}
+            />
+          )}
         </>
+      )}
+
+      {drill && (
+        <InsurerDrillDrawer
+          slug={drill.slug}
+          name={drill.name}
+          kind={drill.kind}
+          onClose={() => setDrill(null)}
+        />
       )}
     </div>
   );

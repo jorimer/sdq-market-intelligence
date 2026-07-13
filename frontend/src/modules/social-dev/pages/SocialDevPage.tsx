@@ -19,6 +19,7 @@ import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { AudienceTabs } from "@/shared/ui/AudienceTabs";
 import { useAudiencePref } from "@/shared/lib/useAudiencePref";
 import { bandFor, toneVar } from "@/shared/lib/bands";
+import { dimTag as sharedDimTag } from "@/shared/lib/dimTag";
 import { fmtNum } from "@/shared/lib/format";
 import {
   getIndicators,
@@ -35,18 +36,13 @@ import { ValidationTab } from "../components/ValidationTab";
 
 type Status = "loading" | "error" | "ready";
 
-/** Real-vs-rubric tag for one IDM dimension, from the dataset's sources map. */
+/** Real-vs-rubric tag for one IDM dimension (shared helper + IDM variable map). */
 function dimTag(
   sources: Record<string, string> | undefined,
   dimKey: string,
   t: TFunction,
 ): DimensionRow["tag"] {
-  const vars = IDM_DIM_VARS[dimKey] ?? [];
-  if (!sources || vars.length === 0) return undefined;
-  const live = vars.filter((v) => sources[v] === "live").length;
-  if (live === 0) return { text: t("widgets.tagRubric"), ok: false };
-  if (live === vars.length) return { text: t("widgets.tagLive"), ok: true };
-  return { text: t("widgets.tagPartialLive", { n: live, total: vars.length }), ok: true };
+  return sharedDimTag(sources, IDM_DIM_VARS[dimKey] ?? [], t);
 }
 
 export function SocialDevPage() {

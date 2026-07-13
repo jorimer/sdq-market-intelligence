@@ -12,6 +12,7 @@ import {
   Delta,
   StatTile,
   Gauge,
+  Tabs,
 } from "@/shared/ui/primitives";
 import type { Band } from "@/shared/lib/bands";
 
@@ -90,5 +91,38 @@ describe("Gauge", () => {
   it("muestra — cuando el score es nulo", () => {
     render(<Gauge score={null} band={BAND} />);
     expect(screen.getByText("—")).toBeInTheDocument();
+  });
+  it("es accesible: role=img con score y banda en el aria-label", () => {
+    render(<Gauge score={72.34} band={BAND} />);
+    const img = screen.getByRole("img");
+    expect(img.getAttribute("aria-label")).toContain("72.3");
+    expect(img.getAttribute("aria-label")).toContain("Sólido");
+  });
+});
+
+describe("Tabs — semántica a11y", () => {
+  const tabs = [
+    { id: "a", label: "Alfa" },
+    { id: "b", label: "Beta" },
+  ];
+  it("expone tablist/tab con aria-selected en la activa", () => {
+    render(<Tabs tabs={tabs} active="b" onChange={() => {}} />);
+    expect(screen.getByRole("tablist")).toBeInTheDocument();
+    const items = screen.getAllByRole("tab");
+    expect(items).toHaveLength(2);
+    expect(items[0].getAttribute("aria-selected")).toBe("false");
+    expect(items[1].getAttribute("aria-selected")).toBe("true");
+    expect(items[0].getAttribute("type")).toBe("button");
+  });
+});
+
+describe("StateBlock — semántica a11y", () => {
+  it("loading anuncia como status", () => {
+    render(<StateBlock kind="loading" />);
+    expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+  it("error anuncia como alert", () => {
+    render(<StateBlock kind="error" />);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 });

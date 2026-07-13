@@ -57,12 +57,13 @@ export function PublicationsSection() {
       const [p, c] = await Promise.all([getPublications(), getCatalog()]);
       setPubs(p);
       setCatalog(c);
-      if (p.length && !selectedId) setSelectedId(p[0].id);
+      // functional update: no depender de selectedId evita re-crear load() (y
+      // re-disparar el efecto) cada vez que el usuario selecciona un reporte.
+      setSelectedId((cur) => cur || (p.length ? p[0].id : ""));
       setStatus(p.length === 0 ? "empty" : "ready");
     } catch {
       setStatus("error");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -110,7 +111,7 @@ export function PublicationsSection() {
       <p className="text-sm text-muted max-w-2xl">
         {t("datos.publications.intro")}
       </p>
-      <button onClick={doRefresh} disabled={refreshing} className="btn btn-soft shrink-0">
+      <button type="button" onClick={doRefresh} disabled={refreshing} className="btn btn-soft shrink-0">
         {refreshing ? t("datos.publications.checking") : t("datos.publications.findNew")}
       </button>
     </div>
@@ -133,7 +134,7 @@ export function PublicationsSection() {
           kind="error"
           message={t("datos.publications.loadError")}
           action={
-            <button onClick={load} className="btn btn-ghost">
+            <button type="button" onClick={load} className="btn btn-ghost">
               {t("datos.publications.retry")}
             </button>
           }
@@ -150,7 +151,7 @@ export function PublicationsSection() {
           kind="empty"
           message={t("datos.publications.empty")}
           action={
-            <button onClick={doRefresh} disabled={refreshing} className="btn btn-primary">
+            <button type="button" onClick={doRefresh} disabled={refreshing} className="btn btn-primary">
               {refreshing ? t("datos.publications.searching") : t("datos.publications.findEditions")}
             </button>
           }
@@ -187,11 +188,11 @@ export function PublicationsSection() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted border-b border-line">
-                <th className="py-2 px-1 font-medium">{t("datos.publications.colReport")}</th>
-                <th className="py-2 px-1 font-medium">{t("datos.publications.colCadence")}</th>
-                <th className="py-2 px-1 font-medium">{t("datos.publications.colSectors")}</th>
-                <th className="py-2 px-1 font-medium">{t("datos.publications.colLastEdition")}</th>
-                <th className="py-2 px-1 font-medium text-right">{t("datos.publications.colBcrd")}</th>
+                <th scope="col" className="py-2 px-1 font-medium">{t("datos.publications.colReport")}</th>
+                <th scope="col" className="py-2 px-1 font-medium">{t("datos.publications.colCadence")}</th>
+                <th scope="col" className="py-2 px-1 font-medium">{t("datos.publications.colSectors")}</th>
+                <th scope="col" className="py-2 px-1 font-medium">{t("datos.publications.colLastEdition")}</th>
+                <th scope="col" className="py-2 px-1 font-medium text-right">{t("datos.publications.colBcrd")}</th>
               </tr>
             </thead>
             <tbody>
@@ -230,6 +231,8 @@ export function PublicationsSection() {
                 return (
                   <li key={p.id}>
                     <button
+                      type="button"
+                      aria-pressed={active}
                       onClick={() => setSelectedId(p.id)}
                       className={`w-full text-left rounded-[10px] p-3 transition-colors ${
                         active
