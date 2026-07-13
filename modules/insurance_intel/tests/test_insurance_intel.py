@@ -98,6 +98,20 @@ def test_pulse_tier_has_data_named_tier_honest(db):
     assert named.payload["has_data"] is False
 
 
+def test_named_tier_without_scope_raises(db):
+    # Registry contract (parity with banking/pension/ESG): a named tier with no scope must
+    # RAISE so consumers (research pull_axis) degrade to the Pulse instead of taking a
+    # non-empty "has_data: False" payload as the engine's result.
+    import pytest
+    from shared.products.registry import get_product
+    from shared.products import ProductTier
+    sis_insurance_sync(db, mode="fixture")
+    prod = get_product("insurance", db)
+    for tier in (ProductTier.insight, ProductTier.deep_dive):
+        with pytest.raises(ValueError):
+            prod.snapshot(tier, "2025", scope=None)
+
+
 # ── F1b · ISF (entity rating) ─────────────────────────────────────
 _SYNTH_CODES = ("patrimonio", "activos_totales", "primas_suscritas", "siniestros_pagados",
                 "reservas_tecnicas", "activos_liquidos", "ingresos_totales", "gastos_totales",
