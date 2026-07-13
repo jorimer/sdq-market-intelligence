@@ -76,6 +76,21 @@ def test_context_axes_banking_pulls_macro_monetary():
     assert "monetary_policy" in ctx and "macro" in ctx
 
 
+def test_efficiency_chart_label_matches_section_title():
+    """Regresión: el rótulo del gráfico para el sub-componente 'eficiencia' debe ser IDÉNTICO
+    al encabezado de sección 'eficiencia_rentabilidad' del mismo archivo (una sola fuente,
+    no una etiqueta truncada). Evita reincidir en el desalineamiento gráfico↔texto."""
+    import shared.research.deep_report as dr
+    payload = {"scoring_result": {"sub_components": {
+        "solidez": 70.0, "calidad": 65.0, "eficiencia": 58.0,
+        "liquidez": 80.0, "diversificacion": 60.0}}}
+    charts = dr._charts_from_payload(payload)
+    sub_chart = next(c for c in charts if "Sub-componentes" in c["title"])
+    labels = [label for label, _ in sub_chart["items"]]
+    assert dr.SECTION_TITLES["eficiencia_rentabilidad"] in labels
+    assert "Eficiencia" not in labels  # ya no aparece la etiqueta truncada
+
+
 @pytest.mark.asyncio
 async def test_synthesis_integrates_multiple_engines(monkeypatch):
     import shared.research.deep_report as dr
