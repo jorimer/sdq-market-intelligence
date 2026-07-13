@@ -319,17 +319,21 @@ def _parse_period(period: Optional[str]) -> Optional[date]:
         return None
 
 
-# Cuántos pares nombrados por corte (líderes del sistema / del mismo tipo). Acota el
-# payload: la tabla comparativa quiere los referentes, no el censo completo (~50 entidades).
+# Cuántos pares nombrados en el corte. Acota el payload: la tabla comparativa quiere a los
+# referentes del grupo de pares, no el censo completo (~80 entidades).
 _NAMED_PEERS_TOP_N = 5
 
 
 def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str, object]]:
     """Pares NOMBRADOS de *bank* en *period_end*: su posición (sistema y mismo tipo) + los
-    líderes del sistema y de su tipo con score/rating reales. Complementa el percentil
-    (anónimo) con la comparación concreta —"Popular 82.1 SDQ-AA"— que un percentil no da.
+    líderes de su MISMO TIPO con score/rating reales. Complementa el percentil (anónimo) con
+    la comparación concreta —"Popular 90.7 SDQ-AA+"— que un percentil no da.
 
-    ``None`` si no hay al menos otro par medible (entidad única → no se fabrica tabla)."""
+    El grupo de pares es el MISMO TIPO de entidad (estilo Fitch): comparar una banca múltiple
+    contra agentes de cambio (scores altos en un negocio incomparable) es ruido, no señal —
+    lección de la verificación en prod. El contexto de sistema queda en n_system/rank global.
+    Si el tipo no tiene otro par medible, degrada a los líderes del sistema (mejor referencia
+    imperfecta que tabla de una fila). ``None`` sin al menos otro par (no se fabrica tabla)."""
     rows = (db.query(RatingResult, Bank)
             .join(Bank, Bank.id == RatingResult.bank_id)
             .filter(RatingResult.period_end == period_end,
@@ -354,13 +358,10 @@ def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str
         })
     n_type = type_rank
     subject = next(e for e in entries if e["is_subject"])
-    # Corte: líderes del sistema + líderes del mismo tipo + la entidad, dedup por id.
-    picked: Dict[str, Dict[str, object]] = {}
-    for e in entries[:_NAMED_PEERS_TOP_N]:
-        picked[e["bank_id"]] = e
+    # Corte: líderes del MISMO tipo + la entidad. Sin pares del tipo → líderes del sistema.
     same = [e for e in entries if e["rank_in_type"] is not None]
-    for e in same[:_NAMED_PEERS_TOP_N]:
-        picked.setdefault(e["bank_id"], e)
+    pool = same if len(same) >= 2 else entries
+    picked: Dict[str, Dict[str, object]] = {e["bank_id"]: e for e in pool[:_NAMED_PEERS_TOP_N]}
     picked.setdefault(subject["bank_id"], subject)
     out_rows = sorted(picked.values(), key=lambda e: e["rank"])
     for e in out_rows:
