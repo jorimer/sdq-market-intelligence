@@ -286,3 +286,15 @@ async def test_axis_pulls_feed_honesty_ledger_and_forward_gap(monkeypatch):
     assert ans.coverage_real > 0, "la cosecha de eje viva debe acreditar el ledger"
     assert any("prospectiva" in g.note.lower() for g in ans.gaps), \
         "la brecha prospectiva debe declararse también en preguntas de sistema"
+
+
+def test_detect_axes_mercado_asegurador():
+    """Hallazgo del piloto: "mercado asegurador" no detectaba insurance ("aseguradora" es
+    más largo que el texto y "seguro" no es substring de "asegurador") → el eje primario
+    faltaba, el ledger quedaba en brecha y el gate caía a scoping para una pregunta
+    respondible. El stem 'asegurador' cubre asegurador/aseguradora/aseguradoras."""
+    axes = detect_axes("¿Conviene entrar al mercado asegurador dominicano?")
+    assert "insurance" in axes
+    # la forma femenina/plural sigue detectando
+    assert "insurance" in detect_axes("solvencia de las aseguradoras dominicanas")
+    assert "insurance" in detect_axes("primas de seguros en el mercado local")
