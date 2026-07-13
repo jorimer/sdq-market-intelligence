@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     # backoff, pero si se satura el rate el reintento agota → fallback estático (peor calidad).
     # Ajustar según el tier del API key. Override via NARRATIVE_MAX_CONCURRENCY.
     NARRATIVE_MAX_CONCURRENCY: int = 10
+    # Presupuesto DIARIO de gasto LLM en USD (0 = sin techo). Al superarlo se activa
+    # el corte SUAVE: la narrativa degrada a caché/fallback estático, el router
+    # semántico cae al contexto curado y el juez LLM del guardrail se omite (la capa
+    # determinista sigue). Nada lanza error; se loguea un warning por hora. El
+    # contador vive en Redis (compartido entre workers) — ver shared/llm/budget.py.
+    LLM_DAILY_BUDGET_USD: float = 0.0
 
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"

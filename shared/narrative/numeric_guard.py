@@ -359,6 +359,13 @@ def verify_figures(client, model: str, context_str: str, text: str) -> List[str]
     or if the check can't run). Best-effort: never raises."""
     if not text.strip():
         return []
+    from shared.llm.budget import budget_allows, record_usage
+    if not budget_allows():
+        # Corte suave: sin presupuesto se omite el juez LLM; la capa DETERMINISTA
+        # (deterministic_unsupported) sigue corriendo en el caller — el modo de
+        # fallo mecánico queda cubierto igual.
+        logger.warning("Juez LLM omitido por presupuesto (queda la capa determinista).")
+        return []
     try:
         resp = client.messages.create(
             model=model,
@@ -367,6 +374,11 @@ def verify_figures(client, model: str, context_str: str, text: str) -> List[str]
             messages=[{"role": "user", "content": _JUDGE_USER.format(
                 context=context_str, text=text)}],
         )
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            record_usage(model,
+                         getattr(usage, "input_tokens", 0) or 0,
+                         getattr(usage, "output_tokens", 0) or 0)
         return _parse_unsupported(resp.content[0].text)
     except Exception as e:  # noqa: BLE001 — best-effort; the guardrail must not break generation
         logger.warning("Guardrail numérico no pudo verificar (se sirve sin verificar): %s", e)
