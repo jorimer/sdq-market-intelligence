@@ -1,4 +1,5 @@
 """Tests for PASO 5 — ML Pipeline, SIB Client, and Features."""
+import json
 import os
 import sys
 
@@ -133,7 +134,7 @@ class TestXGBoostModel:
     @_skip_xgb
     def test_train_and_predict(self, tmp_path):
         model = SDQXGBoostModel()
-        model._model_path = str(tmp_path / "test_model.pkl")
+        model._model_path = str(tmp_path / "test_model.json")
 
         features, tiers = self._generate_training_data(60)
         metrics = model.train(features, tiers)
@@ -155,14 +156,14 @@ class TestXGBoostModel:
     @_skip_xgb
     def test_model_persistence(self, tmp_path):
         model1 = SDQXGBoostModel()
-        model1._model_path = str(tmp_path / "persist_model.pkl")
+        model1._model_path = str(tmp_path / "persist_model.json")
 
         features, tiers = self._generate_training_data(60)
         model1.train(features, tiers)
 
         # Load in a new instance
         model2 = SDQXGBoostModel()
-        model2._model_path = str(tmp_path / "persist_model.pkl")
+        model2._model_path = str(tmp_path / "persist_model.json")
         model2._load()
 
         assert model2.version == model1.version
@@ -177,13 +178,13 @@ class TestXGBoostModel:
 
     def test_model_not_found_raises(self, tmp_path):
         model = SDQXGBoostModel()
-        model._model_path = str(tmp_path / "nonexistent.pkl")
+        model._model_path = str(tmp_path / "nonexistent.json")
         with pytest.raises(FileNotFoundError):
             model._load()
 
     def test_get_status_no_model(self, tmp_path):
         model = SDQXGBoostModel()
-        model._model_path = str(tmp_path / "no_model.pkl")
+        model._model_path = str(tmp_path / "no_model.json")
         status = model.get_status()
         assert status["model_available"] is False
 
@@ -290,7 +291,7 @@ class TestIntegration:
     def test_full_train_from_synthetic_data(self, tmp_path):
         """Seed → Score → Feature extraction → Train → Predict."""
         model = SDQXGBoostModel()
-        model._model_path = str(tmp_path / "integration_model.pkl")
+        model._model_path = str(tmp_path / "integration_model.json")
 
         rng = np.random.RandomState(123)
         features = []
@@ -346,13 +347,13 @@ class TestModelDurability:
         gen = TestXGBoostModel()._generate_training_data(60)
 
         trainer = SDQXGBoostModel()
-        trainer._model_path = str(tmp_path / "m.pkl")
+        trainer._model_path = str(tmp_path / "m.json")
         trainer.train(*gen)
         trainer.save_to_db(db)
 
         # Simulate redeploy: fresh instance, NO disk file present.
         revived = SDQXGBoostModel()
-        revived._model_path = str(tmp_path / "gone.pkl")  # does not exist
+        revived._model_path = str(tmp_path / "gone.json")  # does not exist
         assert revived.ensure_loaded(db) is True
         assert revived.version == trainer.version
         assert revived.get_status(db)["model_available"] is True
@@ -366,5 +367,68 @@ class TestModelDurability:
     def test_status_reports_unavailable_without_disk_or_db(self, tmp_path):
         db = self._db()
         model = SDQXGBoostModel()
-        model._model_path = str(tmp_path / "none.pkl")
+        model._model_path = str(tmp_path / "none.json")
         assert model.get_status(db)["model_available"] is False
+
+
+@_skip_xgb
+class TestModelIntegrity:
+    """The model blob must not execute code on load, and a tampered blob (disk
+    or DB) must be refused rather than trusted."""
+
+    def _trained(self, tmp_path):
+        model = SDQXGBoostModel()
+        model._model_path = str(tmp_path / "m.json")
+        model.train(*TestXGBoostModel()._generate_training_data(60))
+        return model
+
+    def test_blob_is_not_pickle(self, tmp_path):
+        # A JSON envelope, never a pickle stream (which would start with b'\x80').
+        blob = self._trained(tmp_path)._serialize()
+        assert blob.lstrip()[:1] == b"{"
+        env = json.loads(blob)
+        assert env["format"] == "sdq-xgb-v2" and "hmac" in env
+
+    def test_tampered_blob_is_rejected(self, tmp_path):
+        from modules.banking_score.ml.xgboost_model import ModelIntegrityError
+        model = self._trained(tmp_path)
+        blob = bytearray(model._serialize())
+        blob[-3] ^= 0x01  # flip a bit inside the payload/hmac region
+        revived = SDQXGBoostModel()
+        with pytest.raises(ModelIntegrityError):
+            revived._deserialize(bytes(blob))
+
+    def test_legacy_pickle_blob_is_rejected_not_executed(self, tmp_path):
+        import pickle
+        from modules.banking_score.ml.xgboost_model import ModelIntegrityError
+        legacy = pickle.dumps({"model": None, "label_encoder": None})
+        revived = SDQXGBoostModel()
+        with pytest.raises(ModelIntegrityError):
+            revived._deserialize(legacy)
+
+    def test_db_load_skips_tampered_row(self, tmp_path):
+        # A tampered DB blob → load_from_db returns False (deterministic keeps serving),
+        # it does NOT raise or execute.
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.pool import StaticPool
+        from shared.database.base import Base
+        from shared.auth.models import User  # noqa: F401
+        import modules.banking_score.models.models  # noqa: F401
+        from modules.banking_score.models.models import MlModel
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+        )
+        Base.metadata.create_all(bind=engine)
+        db = sessionmaker(bind=engine)()
+
+        model = self._trained(tmp_path)
+        blob = bytearray(model._serialize())
+        blob[-3] ^= 0x01
+        db.add(MlModel(module="banking_score", version="bad", model_blob=bytes(blob)))
+        db.commit()
+
+        revived = SDQXGBoostModel()
+        revived._model_path = str(tmp_path / "absent.json")
+        assert revived.load_from_db(db) is False
+        assert revived.model is None

@@ -25,7 +25,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          # Del lockfile con hashes: CI corre contra la misma resolución que prod.
+          pip install --require-hashes -r requirements.lock
+          # Deps solo-de-test (no viajan a la imagen), sin hashes.
           pip install pytest pytest-cov pytest-asyncio httpx
 
       - name: Run tests with coverage
@@ -51,6 +53,35 @@ jobs:
         run: |
           pip install ruff
           ruff check modules/ shared/ app/
+
+  # ─── Alembic reversibility ───
+  # Un downgrade roto solo se descubre en un rollback de producción bajo presión.
+  # Este job prueba, en cada PR, que la última migración es reversible:
+  # head → downgrade -1 → head. Barato y atrapa downgrades vacíos/rotos.
+  migrations-reversible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.lock
+
+      - name: Round-trip de la última migración (head → -1 → head)
+        env:
+          DATABASE_URL: "sqlite:///./_ci_migrations.db"
+          JWT_SECRET_KEY: "test-secret-key-ci"
+          ANTHROPIC_API_KEY: "sk-test-dummy"
+          ENVIRONMENT: "test"
+        run: |
+          alembic -c infrastructure/alembic.ini upgrade head
+          alembic -c infrastructure/alembic.ini downgrade -1
+          alembic -c infrastructure/alembic.ini upgrade head
 
   # ─── Frontend Build ───
   frontend-build:

@@ -1,20 +1,20 @@
 import logging
 import os
-import sys
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
 from shared.narrative.lang_context import resolve_request_lang
+from shared.observability import configure_logging, init_sentry
+from shared.observability.health import liveness, readiness
 
-# Log to stdout so platform log collectors (Railway) don't flag INFO as errors.
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    stream=sys.stdout,
-)
+# Logging primero (para que todo log —incluida la confirmación de Sentry— salga ya en
+# el formato correcto), luego Sentry (captura errores del arranque a partir de aquí).
+configure_logging()
+init_sentry()
 
 app = FastAPI(
     title="SDQ Market Intelligence",
@@ -35,7 +35,20 @@ app.add_middleware(
 
 @app.get("/api/v1/health")
 async def health():
-    return {"status": "ok", "platform": "SDQ Market Intelligence", "version": "1.0.0"}
+    """Readiness: toca DB (y Redis si está configurado). 503 si una dependencia
+    configurada está caída — para que Railway no promueva/mantenga una réplica que
+    arranca pero no puede servir. Es el path que Railway chequea (railway.toml)."""
+    healthy, payload = readiness()
+    if not healthy:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
+
+
+@app.get("/api/v1/health/live")
+async def health_live():
+    """Liveness: el proceso está vivo. Estático, no toca dependencias (un blip de
+    DB no debe disparar reinicios)."""
+    return liveness()
 
 
 # --- Module routers ---
