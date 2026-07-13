@@ -2,9 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-// Mockea el cliente HTTP: el smoke no debe pegarle a la red.
+// Mockea el cliente HTTP: el smoke no debe pegarle a la red. /auth/me rechaza
+// (sesión por cookie ausente → anónimo); el resto resuelve vacío.
 vi.mock("@/shared/api/client", () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: {} }), post: vi.fn(), interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } } },
+  default: {
+    get: vi.fn((url: string) =>
+      url.includes("/auth/me")
+        ? Promise.reject(Object.assign(new Error("401"), { response: { status: 401 } }))
+        : Promise.resolve({ data: {} })),
+    post: vi.fn().mockResolvedValue({ data: {} }),
+    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+  },
 }));
 
 import "@/shared/i18n/config"; // i18n real (registra recursos ES/EN/FR)
