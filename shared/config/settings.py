@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"
+    # Orígenes permitidos para CORS (coma-separados). La SPA de prod se sirve del MISMO
+    # dominio que el API (same-origin, no necesita CORS); esta lista cubre el dev server
+    # de Vite y cualquier origen extra que el dueño agregue (p. ej. un dominio propio).
+    # Antes era "*" con credenciales — brecha 2 del DD.
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # Secret used to encrypt stored API keys (data-source config). Falls back to
     # JWT_SECRET_KEY when unset so dev works out of the box; set explicitly in prod.
