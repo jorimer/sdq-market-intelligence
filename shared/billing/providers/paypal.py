@@ -176,6 +176,67 @@ class PayPalProvider:
         return Checkout(approval_url=self._approval_url(data.get("links", [])),
                         provider_ref=data.get("id", ""))
 
+    # ── Billing plans (sync automático tarifario → PayPal) ──
+    # PayPal exige un Product y un Plan pre-creados para cobrar suscripciones. Estos
+    # métodos permiten que la plataforma los cree/rote sola al publicar tarifas, en vez
+    # de que el dueño los arme a mano en el dashboard.
+    _PLAN_UNIT = {"monthly": "MONTH", "annual": "YEAR"}
+
+    def get_plan(self, plan_id: str) -> dict:
+        """Estado y precio del ciclo REGULAR de un plan: ``{id, status, value,
+        currency_code, product_id}``. Para comparar contra el tarifario."""
+        self._require()
+        data = self._get(f"/v1/billing/plans/{plan_id}")
+        price: dict = {}
+        for cycle in data.get("billing_cycles") or []:
+            if cycle.get("tenure_type") == "REGULAR":
+                price = (cycle.get("pricing_scheme") or {}).get("fixed_price") or {}
+                break
+        return {"id": data.get("id", plan_id), "status": data.get("status", ""),
+                "value": price.get("value"), "currency_code": price.get("currency_code"),
+                "product_id": data.get("product_id")}
+
+    def create_product(self, *, name: str, description: str = "") -> str:
+        """Crea el Product de PayPal (contenedor de planes) para un SKU. Devuelve su id."""
+        self._require()
+        data = self._post("/v1/catalogs/products", {
+            "name": name[:127],
+            "description": (description or name)[:256],
+            "type": "SERVICE",
+            "category": "SOFTWARE",
+        })
+        return data.get("id", "")
+
+    def create_plan(self, *, product_id: str, name: str, interval: str,
+                    amount: str, currency: str) -> str:
+        """Crea un billing plan ACTIVO (ciclo infinito, monto fijo). Devuelve su id.
+        El impuesto NO va en el plan: se pasa por-suscripción en el checkout."""
+        self._require()
+        unit = self._PLAN_UNIT.get(interval)
+        if not unit:
+            raise ProviderError(f"Intervalo '{interval}' sin ciclo de PayPal (monthly|annual).")
+        data = self._post("/v1/billing/plans", {
+            "product_id": product_id,
+            "name": name[:127],
+            "status": "ACTIVE",
+            "billing_cycles": [{
+                "frequency": {"interval_unit": unit, "interval_count": 1},
+                "tenure_type": "REGULAR",
+                "sequence": 1,
+                "total_cycles": 0,  # 0 = hasta cancelación
+                "pricing_scheme": {"fixed_price": {"value": amount, "currency_code": currency}},
+            }],
+            "payment_preferences": {"auto_bill_outstanding": True,
+                                    "payment_failure_threshold": 3},
+        })
+        return data.get("id", "")
+
+    def deactivate_plan(self, plan_id: str) -> None:
+        """Desactiva un plan (no acepta suscripciones NUEVAS; las existentes siguen
+        cobrando). Se usa al rotar el precio: el plan viejo queda para sus suscriptos."""
+        self._require()
+        self._post(f"/v1/billing/plans/{plan_id}/deactivate", {})
+
     def cancel_subscription(self, subscription_id: str, *, reason: str = "") -> None:
         """Cancela una suscripción activa en PayPal (lado comercio, a pedido del cliente).
         PayPal emite luego ``BILLING.SUBSCRIPTION.CANCELLED`` que corta el acceso vía webhook.

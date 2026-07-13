@@ -2467,7 +2467,19 @@
       "confirm": "Publish now",
       "okCount": "{{n}} prices published",
       "failCount": "Failed: {{list}}",
-      "hint": "Only edited cells are published. Publishing never deletes previous prices: they stay in the history. An empty cell does not remove a price (withdrawing is a history action)."
+      "hint": "Only edited cells are published. Publishing never deletes previous prices: they stay in the history. An empty cell does not remove a price (withdrawing is a history action).",
+      "plansSynced": "{{n}} PayPal plans updated"
+    }
+  },
+  "pagos": {
+    "plans": {
+      "helpAuto": "PayPal charges subscriptions against a pre-created plan. Sync in one click: a plan is created/rotated for every product with a price in the tariff and mapped automatically.",
+      "sync": "Sync with the tariff",
+      "syncing": "Syncing…",
+      "syncError": "Plans could not be synced.",
+      "needEnabled": "Enable PayPal charges (above) and save before syncing.",
+      "syncOk": "{{ok}} up to date · {{created}} created",
+      "syncSkipped": "{{n}} without a tariff price"
     }
   }
 }

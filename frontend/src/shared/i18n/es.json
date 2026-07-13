@@ -2467,7 +2467,19 @@
       "confirm": "Publicar ahora",
       "okCount": "{{n}} precios publicados",
       "failCount": "Fallaron: {{list}}",
-      "hint": "Solo se publican las celdas modificadas. Publicar no borra precios anteriores: quedan en el histórico. Una celda vacía no borra el precio (retirar es acción del histórico)."
+      "hint": "Solo se publican las celdas modificadas. Publicar no borra precios anteriores: quedan en el histórico. Una celda vacía no borra el precio (retirar es acción del histórico).",
+      "plansSynced": "{{n}} planes de PayPal actualizados"
+    }
+  },
+  "pagos": {
+    "plans": {
+      "helpAuto": "PayPal cobra las suscripciones contra un plan pre-creado. Sincronizá con un clic: se crea/rota el plan de cada producto con precio en el tarifario y queda mapeado solo.",
+      "sync": "Sincronizar con el tarifario",
+      "syncing": "Sincronizando…",
+      "syncError": "No se pudieron sincronizar los planes.",
+      "needEnabled": "Habilitá los cobros con PayPal (arriba) y guardá antes de sincronizar.",
+      "syncOk": "{{ok}} al día · {{created}} creados",
+      "syncSkipped": "{{n}} sin precio en el tarifario"
     }
   }
 }
