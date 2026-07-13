@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Boxes, RefreshCw, ChevronDown, Check, X, Download, BellRing } from "lucide-react";
 import {
   PageHead,
@@ -255,7 +256,6 @@ export function ProductMonitorPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function SectorRow({ sector, isAdmin, busy, expanded, onExpand, onToggle, t }: {
   sector: ProductSector;
   isAdmin: boolean;
@@ -263,8 +263,7 @@ function SectorRow({ sector, isAdmin, busy, expanded, onExpand, onToggle, t }: {
   expanded: boolean;
   onExpand: () => void;
   onToggle: (sector: string, level: ProductLevel) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  t: any;
+  t: TFunction;
 }) {
   return (
     <>

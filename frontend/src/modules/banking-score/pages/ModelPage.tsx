@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Brain, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 import client from "@/shared/api/client";
-import { PageHead, Card, CardHead, StatTile, StateBlock, LoadingGrid } from "@/shared/ui/primitives";
+import { PageHead, Card, CardHead, StatTile, LoadingGrid } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import type { ModelStatus } from "@/types";
 
