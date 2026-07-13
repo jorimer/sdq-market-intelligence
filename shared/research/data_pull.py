@@ -155,10 +155,250 @@ def _generic_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                     source=source, kind="engine", state=REAL, score=95.0)]
 
 
-# Summarizer de evidencia por eje (real, no genérico) para los motores de contexto.
+# ── Summarizers por-eje para los sectores restantes ─────────────────────────────
+# Cada motor arma su ``payload`` con una forma distinta (6 familias); estos extractores
+# sacan 2-4 cifras legibles de cada una para la sección "Evidencia por motor". Sin summarizer
+# dedicado un sector caía a ``_generic_summary`` → "el motor devolvió resultado" (ruido).
+
+def _humanize(slug: Any) -> str:
+    return str(slug).replace("_", " ").strip().capitalize()
+
+
+def _dim_scores(dims: Any) -> List[tuple]:
+    """[(etiqueta, score)] de un bloque de dimensiones, sea dict {clave:{score,label?}} o
+    lista [{key/label, score}]. Omite dimensiones sin score numérico (p.ej. brecha)."""
+    out: List[tuple] = []
+    if isinstance(dims, dict):
+        for k, v in dims.items():
+            if isinstance(v, dict) and isinstance(v.get("score"), (int, float)):
+                out.append((v.get("label") or _humanize(k), float(v["score"])))
+    elif isinstance(dims, list):
+        for v in dims:
+            if isinstance(v, dict) and isinstance(v.get("score"), (int, float)):
+                out.append((v.get("label") or _humanize(v.get("key", "")), float(v["score"])))
+    return out
+
+
+def _dims_line(dims: Any) -> Optional[str]:
+    """Línea 'impulsa X / lastra Y' con la dimensión más fuerte y la más débil."""
+    items = _dim_scores(dims)
+    if not items:
+        return None
+    items.sort(key=lambda x: x[1])
+    if len(items) == 1:
+        return f"Dimensión: {items[0][0]} ({_fmt(items[0][1])})."
+    worst, best = items[0], items[-1]
+    return f"Dimensiones: impulsa {best[0]} ({_fmt(best[1])}); lastra {worst[0]} ({_fmt(worst[1])})."
+
+
+def _ev(text: str, source: str, score: float) -> Evidence:
+    return Evidence(text=text, source=source, kind="engine", state=REAL, score=score)
+
+
+def _make_index_summary(index_name: str):
+    """Familia 'index' (tourism/free_zones/energy/telecom/construction): ``payload['index']``
+    con ``<x>_score`` + banda + ``dimensions`` (dict) + niveles absolutos."""
+    def _summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                 source: str) -> List[Evidence]:
+        idx = (payload or {}).get("index") or {}
+        out: List[Evidence] = []
+        score = next((idx[k] for k in idx
+                      if k.endswith("_score") and isinstance(idx[k], (int, float))), None)
+        band = idx.get("band")
+        if score is not None or band:
+            s = f" {_fmt(score)}/100" if isinstance(score, (int, float)) else ""
+            b = f" (banda {band})" if band else ""
+            out.append(_ev(f"{label}: {index_name}{s}{b} · período {period or 's/f'}.", source, 94.0))
+        line = _dims_line(idx.get("dimensions"))
+        if line:
+            out.append(_ev(line, source, 90.0))
+        levels = idx.get("levels") or idx.get("metrics") or {}
+        scal = [(k, v) for k, v in levels.items() if isinstance(v, (int, float))][:3]
+        if scal:
+            out.append(_ev("Niveles: " + ", ".join(f"{_humanize(k)} {_fmt(v)}" for k, v in scal) + ".",
+                           source, 86.0))
+        return out or _generic_summary(label, payload, period, source)
+    return _summary
+
+
+def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                   source: str) -> List[Evidence]:
+    """Comercio: ``score.*`` (resiliencia + estructura exportadora + flujos)."""
+    sc = (payload or {}).get("score") or {}
+    out: List[Evidence] = []
+    res = sc.get("resilience_score")
+    if isinstance(res, (int, float)):
+        out.append(_ev(f"{label}: resiliencia comercial {_fmt(res)}/100 · período {period or 's/f'}.",
+                       source, 94.0))
+    bits = []
+    for key, lbl in (("export_diversification", "diversificación export."),
+                     ("import_dependency", "dependencia importadora"),
+                     ("hhi_exports", "HHI export.")):
+        v = sc.get(key)
+        if isinstance(v, (int, float)):
+            bits.append(f"{lbl} {_fmt(v)}")
+    if bits:
+        out.append(_ev("Estructura: " + ", ".join(bits) + ".", source, 90.0))
+    flows = []
+    for key, lbl in (("total_exports", "exportaciones"), ("total_imports", "importaciones")):
+        v = sc.get(key)
+        if isinstance(v, (int, float)):
+            flows.append(f"{lbl} {_fmt(v)}")
+    if flows:
+        out.append(_ev("Flujos (US$MM): " + ", ".join(flows) + ".", source, 86.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
+def _esg_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                 source: str) -> List[Evidence]:
+    """ESG/clima (IRC): ``score.esg_score/band`` + breakdown + posición en el panel Caribe."""
+    p = payload or {}
+    sc = p.get("score") or {}
+    out: List[Evidence] = []
+    score, band = sc.get("esg_score"), sc.get("band")
+    if isinstance(score, (int, float)) or band:
+        s = f" {_fmt(score)}/100" if isinstance(score, (int, float)) else ""
+        b = f" (banda {band})" if band else ""
+        out.append(_ev(f"{label}: IRC{s}{b} · período {sc.get('period') or period or 's/f'}.",
+                       source, 94.0))
+    line = _dims_line((sc.get("breakdown") or {}).get("dimensions"))
+    if line:
+        out.append(_ev(line, source, 90.0))
+    rank, n = p.get("rank"), p.get("n_countries")
+    if isinstance(rank, (int, float)) and isinstance(n, (int, float)):
+        out.append(_ev(f"Posición en el panel Caribe: {int(rank)} de {int(n)}.", source, 88.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
+def _agribusiness_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                          source: str) -> List[Evidence]:
+    """Agroindustria (sector_intel): ``latest.iai_score/iai_band`` + SGPS + ejes del IAI."""
+    lt = (payload or {}).get("latest") or {}
+    out: List[Evidence] = []
+    score, band = lt.get("iai_score"), lt.get("iai_band")
+    if isinstance(score, (int, float)) or band:
+        s = f" {_fmt(score)}/100" if isinstance(score, (int, float)) else ""
+        b = f" (banda {band})" if band else ""
+        out.append(_ev(f"{label}: IAI{s}{b} · período {period or 's/f'}.", source, 94.0))
+    sgps = lt.get("sgps_score")
+    if isinstance(sgps, (int, float)):
+        out.append(_ev(f"Momentum del sector (SGPS): {_fmt(sgps)}.", source, 90.0))
+    line = _dims_line(lt.get("iai_breakdown"))
+    if line:
+        out.append(_ev(line.replace("Dimensiones", "Ejes del IAI"), source, 87.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
+def _structure_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                       source: str) -> List[Evidence]:
+    """Estructura de la economía: crecimiento del VA + principal motor/lastre + concentración."""
+    st = (payload or {}).get("structure") or {}
+    out: List[Evidence] = []
+    g = st.get("total_va_growth")
+    if isinstance(g, (int, float)):
+        out.append(_ev(f"{label}: crecimiento del Valor Agregado {_fmt(g)}% · período {period or 's/f'}.",
+                       source, 94.0))
+
+    def _sector_bit(d: Any, tag: str) -> Optional[str]:
+        if isinstance(d, dict) and d.get("sector"):
+            extra = []
+            if isinstance(d.get("weight"), (int, float)):
+                extra.append(f"peso {_fmt(d['weight'])}%")
+            if isinstance(d.get("growth"), (int, float)):
+                extra.append(f"crece {_fmt(d['growth'])}%")
+            return f"{tag} {d['sector']}" + (f" ({', '.join(extra)})" if extra else "")
+        return None
+    parts = [b for b in (_sector_bit(st.get("top_driver"), "principal motor"),
+                         _sector_bit(st.get("top_drag"), "principal lastre")) if b]
+    if parts:
+        out.append(_ev("Composición — " + "; ".join(parts) + ".", source, 89.0))
+    hhi = st.get("concentration_hhi")
+    if isinstance(hhi, (int, float)):
+        out.append(_ev(f"Concentración sectorial (HHI): {_fmt(hhi)}.", source, 85.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
+def _named_rating_summary(label: str, rating: Dict[str, Any], period: Optional[str],
+                          source: str, *, index_name: str) -> List[Evidence]:
+    """Forma NOMBRADA de pension/insurance: ``rating.overall_score/band`` + dimensiones (lista)."""
+    out: List[Evidence] = []
+    score, band = rating.get("overall_score"), rating.get("band")
+    if isinstance(score, (int, float)) or band:
+        s = f" {_fmt(score)}/100" if isinstance(score, (int, float)) else ""
+        b = f" (banda {band})" if band else ""
+        out.append(_ev(f"{label}: {index_name}{s}{b} · período {period or 's/f'}.", source, 94.0))
+    line = _dims_line(rating.get("dimensions"))
+    if line:
+        out.append(_ev(line, source, 90.0))
+    return out
+
+
+def _pension_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                     source: str) -> List[Evidence]:
+    """Pensiones (SIPEN): nombrado (``rating.*`` = ISA) o pulse de sistema (``dispersion.*``)."""
+    p = payload or {}
+    if p.get("rating"):
+        return _named_rating_summary(label, p["rating"], period, source, index_name="ISA") \
+            or _generic_summary(label, payload, period, source)
+    out: List[Evidence] = []
+    disp = p.get("dispersion") or {}
+    avg = disp.get("average")
+    if isinstance(avg, (int, float)):
+        out.append(_ev(f"{label}: rentabilidad promedio del sistema {_fmt(avg)}% · período {period or 's/f'}.",
+                       source, 93.0))
+    bits = []
+    if isinstance(disp.get("spread_pp"), (int, float)):
+        bits.append(f"dispersión entre AFP {_fmt(disp['spread_pp'])} pp")
+    n = disp.get("n_afp") or disp.get("n_scoreable")
+    if isinstance(n, (int, float)):
+        bits.append(f"{int(n)} AFP")
+    if bits:
+        out.append(_ev("Sistema: " + ", ".join(bits) + ".", source, 89.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
+def _insurance_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                       source: str) -> List[Evidence]:
+    """Seguros (SIS): nombrado (``rating.*`` = ISF) o pulse de mercado (``pulse.*``)."""
+    p = payload or {}
+    if p.get("rating"):
+        return _named_rating_summary(label, p["rating"], period, source, index_name="ISF") \
+            or _generic_summary(label, payload, period, source)
+    out: List[Evidence] = []
+    pu = p.get("pulse") or {}
+    prem = pu.get("total_premiums_rd")
+    if isinstance(prem, (int, float)):
+        out.append(_ev(f"{label}: primas del mercado RD$ {prem:,.0f} · período {period or 's/f'}.",
+                       source, 93.0))
+    bits = []
+    if isinstance(pu.get("growth_pct"), (int, float)):
+        bits.append(f"crecimiento {_fmt(pu['growth_pct'])}%")
+    if isinstance(pu.get("top4_concentration_pct"), (int, float)):
+        bits.append(f"concentración top-4 {_fmt(pu['top4_concentration_pct'])}%")
+    if isinstance(pu.get("active_insurers"), (int, float)):
+        bits.append(f"{int(pu['active_insurers'])} aseguradoras")
+    if bits:
+        out.append(_ev("Mercado: " + ", ".join(bits) + ".", source, 89.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
+# Summarizer de evidencia por eje (real, no genérico). Usado por pull_axis (contexto de
+# sistema) Y pull_entity (entidad resuelta); cada uno tolera la forma pulse y la nombrada.
 _AXIS_SUMMARY = {
+    "banking": _banking_summary,
     "monetary_policy": _monetary_summary,
     "macro": _macro_summary,
+    "trade": _trade_summary,
+    "tourism": _make_index_summary("ITT"),
+    "free_zones": _make_index_summary("IZF"),
+    "energy": _make_index_summary("índice de energía"),
+    "telecom": _make_index_summary("índice de telecom"),
+    "construction": _make_index_summary("ICC"),
+    "agribusiness": _agribusiness_summary,
+    "esg": _esg_summary,
+    "pension": _pension_summary,
+    "insurance": _insurance_summary,
+    "economic_structure": _structure_summary,
 }
 
 
@@ -220,10 +460,8 @@ def pull_entity(db: Optional[Session], resolved: ResolvedEntity) -> EnginePull:
                 pass
             continue
         payload = snap.payload or {}
-        if resolved.sector_key == "banking":
-            ev = _banking_summary(resolved.label, payload, snap.period, source)
-        else:
-            ev = _generic_summary(resolved.label, payload, snap.period, source)
+        summarizer = _AXIS_SUMMARY.get(resolved.sector_key, _generic_summary)
+        ev = summarizer(resolved.label, payload, snap.period, source)
         return EnginePull(sector_key=resolved.sector_key, entity_label=resolved.label,
                           period=snap.period, source=source, payload=payload,
                           evidence=ev, ok=bool(ev), note="")
