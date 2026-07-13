@@ -26,17 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async () => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
+    // Migración: la sesión vive en cookies httpOnly; cualquier token legado en
+    // localStorage (esquema anterior, robable por XSS) se purga.
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
     try {
+      // La cookie manda sola; 200 = sesión viva, 401 = no logueado.
       const { data } = await client.get<User>("/auth/me");
       setUser(data);
     } catch {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -48,12 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser]);
 
   const login = async (email: string, password: string) => {
+    // El backend setea las cookies httpOnly en la respuesta; los tokens del body
+    // no se persisten (son para clientes de API por header Bearer).
     const { data } = await client.post<LoginResponse>("/auth/login", {
       email,
       password,
     });
-    localStorage.setItem("access_token", data.access_token);
-    localStorage.setItem("refresh_token", data.refresh_token);
     setUser({
       id: data.user_id,
       email: data.email,
@@ -65,8 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
+    // Solo el backend puede borrar cookies httpOnly. Best-effort: el estado local
+    // se limpia igual aunque la red falle.
+    client.post("/auth/logout").catch(() => undefined);
     setUser(null);
   };
 

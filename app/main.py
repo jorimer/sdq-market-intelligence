@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
+from shared.config.settings import settings
 from shared.narrative.lang_context import resolve_request_lang
 from shared.observability import configure_logging, init_sentry
 from shared.observability.health import liveness, readiness
@@ -24,12 +25,16 @@ app = FastAPI(
     dependencies=[Depends(resolve_request_lang)],
 )
 
+# CORS restrictivo (brecha 2 del DD): allowlist explícita en vez de "*". La SPA de prod
+# es same-origin (se sirve desde este mismo app) así que no depende de CORS; la lista
+# cubre el dev server de Vite y orígenes extra vía CORS_ORIGINS. Con credenciales
+# (cookies httpOnly) los navegadores exigen origen y headers explícitos.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Lang"],
 )
 
 
