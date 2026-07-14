@@ -83,6 +83,45 @@ def registry_passages(db: Optional[Session]) -> List[Passage]:
     return out
 
 
+def dgii_passages(db: Optional[Session]) -> List[Passage]:
+    """Pasajes del padrón de contribuyentes DGII (§B): un pasaje por vertical del crosswalk,
+    con el conteo de activos del corte más reciente, la fecha de corte y el caveat obligatorio.
+    ``kind="registry"`` + ``meta.state="real"`` → ``_evidence_state`` lo trata REAL. ``[]`` si
+    no hay DB o el padrón no se cargó (degrada, no rompe)."""
+    if db is None:
+        return []
+    try:
+        from shared.data.dgii_rnc_client import CAVEAT, PAGE_URL, VERTICALS
+        from shared.reference.dgii_query import latest_contribuyentes
+        corte, by_code = latest_contribuyentes(db)
+    except Exception as e:  # noqa: BLE001 — tabla ausente / import → sin pasajes DGII
+        logger.warning("Padrón DGII no disponible para ingesta: %s", e)
+        return []
+    if corte is None or not by_code:
+        return []
+
+    fecha = corte.strftime("%d/%m/%Y")
+    out: List[Passage] = []
+    for v in VERTICALS:
+        total = sum(r.activos or 0 for code, r in by_code.items() if v.matches(code))
+        if total <= 0:
+            continue
+        total_str = f"{total:,}".replace(",", ".")   # separador de miles es-DO
+        scope = f" {v.scope_note}." if v.scope_note else ""
+        out.append(Passage(
+            text=(f"Contribuyentes activos registrados en la DGII para {v.label} "
+                  f"({v.terms}) — CIIU {v.code_label}: {total_str} al corte {fecha}.{scope} {CAVEAT}"),
+            source="DGII · Estadísticas de Contribuyentes por Actividad Económica",
+            kind=KIND_REGISTRY,
+            ref=f"dgii/contribuyentes/{v.key}",
+            license=LICENSE_PUBLIC,
+            meta={"state": "real", "corte": corte.isoformat(), "vertical": v.key,
+                  "subclases": list(v.codes) or [f"{v.prefix}xxx"],
+                  "caveat": CAVEAT, "source_url": PAGE_URL},
+        ))
+    return out
+
+
 @lru_cache(maxsize=1)
 def _corpus_index() -> LexicalIndex:
     """Índice solo-corpus (estático), cacheado — sirve para consultas sin DB."""
@@ -95,6 +134,7 @@ def build_passages(db: Optional[Session] = None,
     passages = list(load_corpus_passages())
     if include_registry:
         passages.extend(registry_passages(db))
+        passages.extend(dgii_passages(db))
     return passages
 
 

@@ -228,3 +228,79 @@ async def test_orchestrator_downgrades_irrelevant_rubric_to_gap(monkeypatch):
     # #1 (reviewer): la fuente desacreditada NO debe seguir citada en Fuentes.
     assert "Metodología · Estándar de Reporte MIR" not in ans.sources
     assert all(not sq.evidence for sq in ans.sub_questions)
+
+
+# ─── B (reviewer §Parte B): registry EXTERNO DGII (REAL) también se verifica ─────
+def _dgii_ev(state, ref="dgii/contribuyentes/hoteles"):
+    return Evidence(text="Contribuyentes activos en la DGII para hoteles: 1.897",
+                    source="DGII · Estadísticas de Contribuyentes", kind="registry",
+                    state=state, score=8.0, ref=ref)
+
+
+def test_needs_check_incluye_dgii_real_pero_no_registry_de_eje():
+    # DGII (ref dgii/) ancla por solape léxico → se verifica AUNQUE sea REAL
+    assert _needs_check(SubQuestion(text="q", evidence=[_dgii_ev(REAL)], state=REAL)) is True
+    assert _needs_check(SubQuestion(text="q", evidence=[_dgii_ev(RUBRIC)], state=RUBRIC)) is True
+    # registry ATADO a un eje (ref registry/…) sigue exento
+    axis = Evidence(text="x", source="Data Registry · Banca", kind="registry", state=REAL,
+                    score=9.0, ref="registry/banca/roe")
+    assert _needs_check(SubQuestion(text="q", evidence=[axis], state=REAL)) is False
+
+
+@pytest.mark.asyncio
+async def test_verify_degrada_dgii_real_no_pertinente(monkeypatch):
+    # "rentabilidad de los hoteles" matchea el CONTEO de contribuyentes por léxico → REAL falso.
+    async def not_applicable(question, passages, lang="es"):
+        return False
+    monkeypatch.setattr(rel, "is_method_applicable", not_applicable)
+    sq = SubQuestion(text="rentabilidad de los hoteles", evidence=[_dgii_ev(REAL)], state=REAL)
+    await verify_rubric_relevance("rentabilidad de los hoteles", [sq])
+    assert sq.state == GAP          # ya no ancla REAL falso
+    assert sq.evidence == []
+
+
+@pytest.mark.asyncio
+async def test_verify_conserva_dgii_real_pertinente(monkeypatch):
+    async def applicable(question, passages, lang="es"):
+        return True
+    monkeypatch.setattr(rel, "is_method_applicable", applicable)
+    sq = SubQuestion(text="cuántos contribuyentes en hoteles", evidence=[_dgii_ev(REAL)], state=REAL)
+    await verify_rubric_relevance("cuántos contribuyentes en hoteles", [sq])
+    assert sq.state == REAL and sq.evidence   # ancla legítima se conserva
+
+
+@pytest.mark.asyncio
+async def test_verify_dgii_no_pertinente_conserva_ancla_de_eje(monkeypatch):
+    # mixta: ancla de eje REAL + DGII no pertinente → cae SOLO la DGII, queda la de eje.
+    async def not_applicable(question, passages, lang="es"):
+        return False
+    monkeypatch.setattr(rel, "is_method_applicable", not_applicable)
+    axis = Evidence(text="Variable rentabilidad del eje banca", source="Data Registry · Banca",
+                    kind="registry", state=REAL, score=12.0, ref="registry/banca/roe")
+    sq = SubQuestion(text="rentabilidad", evidence=[axis, _dgii_ev(REAL)], state=REAL)
+    await verify_rubric_relevance("rentabilidad", [sq])
+    assert sq.state == REAL
+    assert [e.ref for e in sq.evidence] == ["registry/banca/roe"]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_downgrades_irrelevant_dgii_real_to_gap(monkeypatch):
+    """Aceptación del hallazgo del reviewer: un conteo DGII (REAL) que matchea por léxico una
+    pregunta de OTRA métrica ya no ancla REAL falso — cae a GAP y no se cita en Fuentes."""
+    import shared.research.orchestrator as orch
+
+    monkeypatch.setattr(decompose_mod, "retrieve",
+                        lambda *a, **k: [{"text": "Contribuyentes activos en la DGII para hoteles: 1.897",
+                                          "source": "DGII · Estadísticas de Contribuyentes",
+                                          "kind": "registry", "score": 8.0,
+                                          "ref": "dgii/contribuyentes/hoteles",
+                                          "meta": {"state": "real"}}])
+
+    async def not_applicable(question, passages, lang="es"):
+        return False
+    monkeypatch.setattr(rel, "is_method_applicable", not_applicable)
+
+    ans = await orch.answer_question("qué tan rentables son los hoteles en RD", db=None)
+    assert all(sq.state == GAP for sq in ans.sub_questions)
+    assert not any("DGII" in s for s in ans.sources)
+    assert ans.coverage_real == 0.0
