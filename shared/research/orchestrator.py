@@ -25,6 +25,7 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from shared.config.settings import settings
 from shared.registry.signals import GAP, REAL, RUBRIC
 from shared.research.assemble import assemble_report_sections, assemble_scoping_sections
 from shared.research.data_pull import EnginePull, pull_axis, pull_entity
@@ -162,21 +163,29 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
     # 1-2. Resolver eje+entidad y recibir el resultado de los motores.
     targets = resolve_targets(question, db)
     axis_pulls: List[EnginePull] = []
-    if narrate and db is not None:
-        # Descomposición SEMÁNTICA (el Cerebro elige qué motores convoca) EN PARALELO con la
-        # cosecha ya conocida: `route_domains` no toca la DB (invariante — si algún día la
-        # usa, hay que revisar esto), así que la sesión la usa un solo worker thread a la
-        # vez. Acotado con timeout: sin router a tiempo, el contexto curado basta.
+    # El enrutador semántico (LLM) + la cosecha concurrente en worker-threads rompieron el
+    # endpoint para TODA consulta sin caché (502 ~7s = latencia del router). Se gatea detrás
+    # de un flag OFF por defecto hasta diagnosticar con logs de prod; el camino por defecto es
+    # SECUENCIAL y sin router (contexto curado de `resolve` — el comportamiento probado en prod).
+    use_router = (narrate and db is not None
+                  and getattr(settings, "RESEARCH_SEMANTIC_ROUTER", False))
+    if use_router:
+        assert db is not None  # implícito en use_router; estrecha el tipo para mypy
         route_task = asyncio.ensure_future(_route_bounded(question, db))
         known_axes = list(dict.fromkeys(list(targets.axes) + list(targets.context)))
         pulls, axis_pulls = await asyncio.to_thread(_pull_known, db, targets, known_axes)
         merge_routing(targets, await route_task)
-        # Dominios NUEVOS que el router agregó (no estaban en el mapa curado) → cosecharlos.
         extra = [ax for ax in list(targets.axes) + list(targets.context)
                  if ax not in known_axes]
         if extra:
             axis_pulls += await asyncio.to_thread(
                 lambda: [pull_axis(db, ax) for ax in extra])
+    elif narrate and db is not None:
+        # Camino seguro (v4): cosecha SECUENCIAL de entidades + ejes curados, sin threads
+        # ni router. Bloquea el event loop unos segundos (aceptable: es un reporte, no RT).
+        known_axes = list(dict.fromkeys(list(targets.axes) + list(targets.context)))
+        pulls = [pull_entity(db, e) for e in targets.entities]
+        axis_pulls = [pull_axis(db, ax) for ax in known_axes]
     else:
         pulls = [pull_entity(db, e) for e in targets.entities]
     # El ledger de honestidad cuenta TODA la cosecha viva — entidades Y ejes de sistema.
