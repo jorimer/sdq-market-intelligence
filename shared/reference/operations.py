@@ -27,8 +27,8 @@ register_operation(Operation(
     description=("Descarga el padrón público de contribuyentes activos de DGII, lo agrega a "
                  "nivel de subclase CIIU (no las filas crudas) y persiste el corte con "
                  "historia. Alimenta el motor de research con el conteo real de participantes "
-                 "por vertical (comida rápida, hoteles, supermercados, farmacias…). Cadencia "
-                 "manual: correr cuando DGII publique un corte nuevo."),
+                 "por vertical (comida rápida, hoteles, supermercados, farmacias…). On-demand. "
+                 "Correr cuando: la DGII publique un corte nuevo del padrón de contribuyentes."),
     runner=_run_dgii_contribuyentes_sync,
     default_interval_hours=0,   # manual — no auto-agendada
 ))

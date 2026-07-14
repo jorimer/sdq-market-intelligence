@@ -104,12 +104,14 @@ def register() -> None:
         "purge-synthetic", "Purgar datos sintéticos (seed)",
         "Borra los datos sembrados sintéticos (source=manual) y los ratings/acciones "
         "que queden huérfanos. El catálogo de entidades y todo dato real "
-        "(SIB/SIMBAD/CSV) quedan intactos. Sella el seed: la app solo puntúa dato real.",
+        "(SIB/SIMBAD/CSV) quedan intactos. Sella el seed: la app solo puntúa dato real. "
+        "Correr cuando: quieras sellar el paso de datos de siembra a solo dato real (una vez).",
         _run_purge_synthetic, default_interval_hours=0,
     ))
     register_operation(Operation(
         "recompute-carteras", "Recomputar carteras",
-        "Re-descarga las carteras de crédito de un trimestre y actualiza concentración/mora.",
+        "Re-descarga las carteras de crédito de un trimestre y actualiza concentración/mora. "
+        "Correr cuando: haya que recomputar la cartera de un trimestre puntual (indicá el período).",
         _run_recompute, default_interval_hours=0, needs_params=["period"],
     ))
     register_operation(Operation(

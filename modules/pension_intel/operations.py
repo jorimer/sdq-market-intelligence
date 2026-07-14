@@ -107,7 +107,8 @@ def register() -> None:
         "no ingiere, no muta scores — es puro diagnóstico (Fase 0 de la auditoría de "
         "cobertura). Establece la estructura real de la página de auditados antes de "
         "escribir su crawler. Corre desde Railway (egress estático + UA de navegador). "
-        "On-demand (no auto-agendada).",
+        "On-demand (no auto-agendada). Correr cuando: quieras redescubrir qué publica SIPEN "
+        "hoy (diagnóstico, no escribe en la base).",
         _run_sipen_discovery, default_interval_hours=0,  # on-demand: diagnóstico read-only
     ))
     register_operation(Operation(
@@ -116,7 +117,8 @@ def register() -> None:
         "'slug', default afp_popular): cuántos archivos por año (anual vs mensual) con sus "
         "URLs reales, y una extracción de PRUEBA del archivo más antiguo y el más reciente "
         "(patrimonio/activos/AUM/comisiones) SIN persistir. Diagnóstico de la Fase 1 para "
-        "escribir el crawler de auditados sobre hechos. Corre desde Railway. On-demand.",
+        "escribir el crawler de auditados sobre hechos. Corre desde Railway. On-demand. "
+        "Correr cuando: quieras sondear los estados auditados de una AFP (diagnóstico, no persiste).",
         _run_sipen_audited_probe, default_interval_hours=0, needs_params=None,
     ))
     register_operation(Operation(
@@ -142,7 +144,9 @@ def register() -> None:
         "de diciembre de cada año (estado anual auditado) + el último mes disponible, por las "
         "7 AFP → serie de solvencia (patrimonio/activos) con trayectoria. Extrae con el motor "
         "AI-native y recalcula el ISA UNA vez al final. Params: since_year (2010), annual "
-        "(true). Corre desde Railway; best-effort por archivo; idempotente. On-demand.",
+        "(true). Corre desde Railway; best-effort por archivo; idempotente. On-demand. "
+        "Correr cuando: haga falta (re)ingerir el histórico de auditados de las AFP (backfill "
+        "puntual con OCR+IA), típicamente antes de un pension-backtest.",
         _run_financials_history_sync, default_interval_hours=0,
     ))
     register_operation(Operation(
@@ -151,7 +155,9 @@ def register() -> None:
         "relativo vs. mediana del panel), ya que ninguna AFP ha fallado: señal solvencia "
         "(patrimonio/activos, anual) y señal rentabilidad (mensual, N alta). Computa Gini + "
         "IC bootstrap + calibración por quintil y persiste el reporte; el estado de validación "
-        "(G5) lo lee. Sube G5 de 0.50 solo si el IC del Gini es positivo. On-demand.",
+        "(G5) lo lee. Sube G5 de 0.50 solo si el IC del Gini es positivo. On-demand. "
+        "Correr cuando: revalides el ISA (nuevos períodos o cambio de modelo); requiere el "
+        "history-sync antes.",
         _run_pension_backtest, default_interval_hours=0,
     ))
     register_operation(Operation(

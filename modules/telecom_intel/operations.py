@@ -45,7 +45,8 @@ def register() -> None:
     register_operation(Operation(
         "indotel-telecom-sync", "Sincronizar telecom (INDOTEL · histórico 2022-Q1)",
         "Descarga el boletín trimestral de INDOTEL (XLSX), congelado en 2022-Q1, y "
-        "persiste su IDT. Histórico: la fuente vigente es ITU (itu-telecom-sync).",
+        "persiste su IDT. Histórico: la fuente vigente es ITU (itu-telecom-sync). "
+        "Correr cuando: necesites recargar el histórico congelado de INDOTEL (rara vez).",
         _run_indotel_telecom_sync, default_interval_hours=0,  # on-demand (histórico)
     ))
 
