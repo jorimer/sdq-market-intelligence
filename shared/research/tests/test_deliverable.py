@@ -3,7 +3,7 @@ import pytest
 import os
 
 import shared.research.decompose as decompose_mod
-from shared.research.deliverable import render_deliverable
+from shared.research.deliverable import _subject, render_deliverable
 from shared.research.orchestrator import answer_question
 
 
@@ -35,3 +35,25 @@ async def test_render_deliverable_scoping_docx(monkeypatch, tmp_path):
     assert ans.gate == "scoping"
     path = render_deliverable(ans, fmt="docx", output_dir=str(tmp_path))
     assert path.endswith(".docx") and os.path.getsize(path) > 1000
+
+
+def test_subject_muestra_pregunta_completa_y_acota_lo_desmesurado():
+    # antes se truncaba a 110 chars (se cortaba en portada); ahora una pregunta normal va entera
+    corta = ("¿Cuántas cadenas de comida rápida operan activamente en RD, cuál es la "
+             "participación de mercado por marca y cómo crecieron las ventas en 3 años?")
+    assert _subject(corta) == corta
+    # solo lo desmesurado se acota, en frontera de palabra + elipsis
+    larga = "palabra " * 200
+    s = _subject(larga)
+    assert s.endswith("…") and len(s) <= 481
+
+
+@pytest.mark.asyncio
+async def test_render_pregunta_larga_no_rompe_filename(monkeypatch, tmp_path):
+    # regresión: un display_name larguísimo generaba un filename >255 chars → OSError al guardar
+    _patch(monkeypatch, {})   # scoping
+    q = "Estamos evaluando la expansión de una cadena de comida rápida en RD. " * 12
+    ans = await answer_question(q, db=None)
+    path = render_deliverable(ans, fmt="pdf", output_dir=str(tmp_path))
+    assert os.path.getsize(path) > 1000
+    assert len(os.path.basename(path)) <= 255
