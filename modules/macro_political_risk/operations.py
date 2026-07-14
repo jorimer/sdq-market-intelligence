@@ -205,7 +205,8 @@ def register() -> None:
         "absoluta 0-100 de 1996-2024 para las 6 dimensiones del panel regional, con "
         "intervalo de confianza, número de fuentes y el desglose de las 35 fuentes "
         "subyacentes. Reemplaza a 'wgi-sync' (API, 1 año, percentil viejo) como "
-        "fuente autoritativa de gobernanza. Idempotente; on-demand.",
+        "fuente autoritativa de gobernanza. Idempotente; on-demand. "
+        "Correr cuando: el Banco Mundial publique una nueva vintage de la serie WGI.",
         _run_wgi2025_load, default_interval_hours=0,
     ))
     register_operation(Operation(
@@ -231,7 +232,8 @@ def register() -> None:
         "irmp-cleanup-invalid", "Limpiar snapshots IRMP inválidos",
         "Borra los snapshots IRMP con breakdown incompleto (alguna dimensión con 0 "
         "variables) — lecturas de datasets parciales que falsean el índice y el panel. "
-        "Idempotente; on-demand.",
+        "Idempotente; on-demand. Correr cuando: detectes snapshots IRMP inválidos (tras una "
+        "corrida parcial o un cambio de metodología).",
         _run_irmp_cleanup, default_interval_hours=0,
     ))
 

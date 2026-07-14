@@ -82,6 +82,14 @@ class Operation:
 OPERATIONS: Dict[str, Operation] = {}
 
 
+def is_on_demand(op: Operation) -> bool:
+    """Una operación es BAJO DEMANDA (no admite agenda automática) si no tiene una cadencia
+    natural (``default_interval_hours <= 0``) o si necesita parámetros para correr (p.ej. un
+    ``period``): agendarla no tiene sentido — o correría sin el parámetro, o repetiría un
+    trabajo puntual (backfills de historia, backtests, purgas, sondeos read-only)."""
+    return op.default_interval_hours <= 0 or bool(op.needs_params)
+
+
 def register_operation(op: Operation) -> Operation:
     """Register a console operation. Modules call this at import time."""
     OPERATIONS[op.name] = op
@@ -275,8 +283,8 @@ def all_status(db: Session) -> Dict:
         "operations": [
             {
                 "name": op.name, "label": op.label, "description": op.description,
-                "needs_params": op.needs_params, "status": get_status(db, op.name),
-                "schedule": schedules.get(op.name),
+                "needs_params": op.needs_params, "on_demand": is_on_demand(op),
+                "status": get_status(db, op.name), "schedule": schedules.get(op.name),
             }
             for op in OPERATIONS.values()
         ],
@@ -310,6 +318,13 @@ def set_schedule(db: Session, op_name: str, enabled: bool,
                  interval_hours: Optional[int] = None, params: Optional[Dict] = None) -> Dict:
     if op_name not in OPERATIONS:
         raise ValueError(f"Operación desconocida: {op_name}")
+    # Las operaciones bajo demanda no se agendan: encenderlas forzaría una cadencia mínima de
+    # 1h (``max(1, 0)``) sobre trabajos puntuales/costosos (backfills, backtests, purgas). Se
+    # rechaza en el backend además de ocultarse en la UI (defensa en profundidad).
+    if enabled and is_on_demand(OPERATIONS[op_name]):
+        raise ValueError(
+            f"«{OPERATIONS[op_name].label}» es una operación bajo demanda: se ejecuta a mano, "
+            "no admite agenda automática.")
     try:
         r = db.query(OperationSchedule).filter_by(operation=op_name).first()
         if not r:
@@ -372,6 +387,39 @@ def seed_default_schedules(db: Optional[Session] = None) -> int:
         if created:
             logger.info("seed_default_schedules: %d agendas creadas", created)
         return created
+    finally:
+        if own:
+            db.close()
+
+
+def normalize_ondemand_schedules(db: Optional[Session] = None) -> int:
+    """Apaga cualquier agenda ACTIVA de una operación BAJO DEMANDA. Autocorrección idempotente.
+
+    Cierra el borde áspero por el que activar una operación bajo demanda (cadencia 0) la dejaba
+    corriendo cada 1h (``max(1, 0)``): un backfill de historia o un backtest agendado repite
+    trabajo costoso sin sentido. Corre en el arranque, tras ``seed_default_schedules``, así un
+    deploy limpia solo los toggles accidentales. Devuelve cuántas apagó."""
+    own = db is None
+    db = db or SessionLocal()
+    try:
+        try:
+            rows = db.query(OperationSchedule).filter_by(enabled=True).all()
+        except Exception:  # noqa: BLE001 — tabla ausente (pre-migración/tests)
+            db.rollback()
+            return 0
+        to_disable = [
+            str(r.operation) for r in rows
+            if (op := OPERATIONS.get(str(r.operation))) is not None and is_on_demand(op)
+        ]
+        if not to_disable:
+            return 0
+        db.query(OperationSchedule).filter(
+            OperationSchedule.operation.in_(to_disable)).update(
+            {"enabled": False, "next_run_at": None}, synchronize_session=False)
+        db.commit()
+        logger.info("normalize_ondemand_schedules: %d agendas bajo-demanda apagadas",
+                    len(to_disable))
+        return len(to_disable)
     finally:
         if own:
             db.close()

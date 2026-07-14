@@ -26,6 +26,8 @@ export interface OperationInfo {
   label: string;
   description: string;
   needs_params: string[];
+  /** Bajo demanda: se ejecuta a mano, no admite agenda automática. */
+  on_demand: boolean;
   status: OperationStatus;
   schedule: OperationSchedule;
 }

@@ -184,7 +184,8 @@ def register() -> None:
         "Valida que el IAI en T ordena el crecimiento del empleo formal por rama en "
         "T+1 (IC de rango de Spearman, panel ENCFT a 10 ramas), controlando por el "
         "crecimiento del sector para acotar la circularidad. Direccional, se reporta "
-        "con su n e IC. Corre después de sector-snapshot y encft-empleo-sync.",
+        "con su n e IC. Corre después de sector-snapshot y encft-empleo-sync. "
+        "Correr cuando: revalides el índice sectorial (nuevo empleo ENCFT o cambio de modelo).",
         _run_sector_gate_e, default_interval_hours=0,  # on-demand
     ))
 

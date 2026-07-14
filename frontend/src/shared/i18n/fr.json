@@ -1848,6 +1848,7 @@
     "schedule": "Planifier",
     "schedActive": "Actif",
     "schedInactive": "Inactif",
+    "onDemandOnly": "Sur demande uniquement",
     "scheduleError": "Impossible d'enregistrer la planification.",
     "scheduleSaved": "Planification mise à jour.",
     "next": "Prochain :",

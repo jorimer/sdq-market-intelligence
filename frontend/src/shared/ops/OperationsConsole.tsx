@@ -182,17 +182,21 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
         <div className="flex items-center gap-2 mb-2">
           <Clock className="w-3.5 h-3.5 text-muted shrink-0" />
           <span className="text-xs font-medium text-ink">{t("ops.schedule")}</span>
-          <label className="ml-auto inline-flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={sched.enabled}
-              onChange={(e) => toggleSchedule(e.target.checked)}
-              className="accent-[var(--accent)]"
-            />
-            <span className="text-xs text-muted">{sched.enabled ? t("ops.schedActive") : t("ops.schedInactive")}</span>
-          </label>
+          {op.on_demand ? (
+            <span className="ml-auto text-xs text-muted">{t("ops.onDemandOnly")}</span>
+          ) : (
+            <label className="ml-auto inline-flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sched.enabled}
+                onChange={(e) => toggleSchedule(e.target.checked)}
+                className="accent-[var(--accent)]"
+              />
+              <span className="text-xs text-muted">{sched.enabled ? t("ops.schedActive") : t("ops.schedInactive")}</span>
+            </label>
+          )}
         </div>
-        {sched.enabled && (
+        {!op.on_demand && sched.enabled && (
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={sched.hours}

@@ -192,6 +192,7 @@ if _os.getenv("SDQ_SCHEDULER") == "1":
     from shared.database.session import SessionLocal as _SessionLocal
     from shared.operations import (
         clear_orphaned_runs,
+        normalize_ondemand_schedules,
         seed_default_schedules,
         start_scheduler,
     )
@@ -204,8 +205,11 @@ if _os.getenv("SDQ_SCHEDULER") == "1":
     finally:
         _boot_db.close()
     # Activa por defecto las agendas que falten (todas las syncs recurrentes corren
-    # solas tras el deploy; idempotente, respeta cambios manuales) y arranca el tick.
+    # solas tras el deploy; idempotente, respeta cambios manuales), APAGA cualquier agenda
+    # bajo-demanda encendida por error (backfills/backtests/purgas no van en ciclo) y arranca
+    # el tick.
     seed_default_schedules()
+    normalize_ondemand_schedules()
     start_scheduler()
 
 # Serve frontend in production.

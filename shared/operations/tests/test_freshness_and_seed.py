@@ -13,8 +13,12 @@ from shared.operations.models import OperationRun, OperationSchedule
 from shared.operations.service import (
     OPERATIONS,
     Operation,
+    all_status,
+    is_on_demand,
+    normalize_ondemand_schedules,
     register_operation,
     seed_default_schedules,
+    set_schedule,
 )
 from shared.operations import freshness as fr
 from shared.publications.models import Publication
@@ -88,6 +92,54 @@ def test_seed_is_idempotent_and_respects_manual(db, temp_ops):
     assert created2 == 0  # no recrea las existentes
     r2 = db.query(OperationSchedule).filter_by(operation="t-recurring").first()
     assert r2.enabled is False  # respeta el apagado manual
+
+
+# ── bajo demanda: clasificación, guard y autocorrección ───────────
+
+def test_is_on_demand_classification(temp_ops):
+    assert is_on_demand(OPERATIONS["t-ondemand"]) is True     # cadencia 0
+    assert is_on_demand(OPERATIONS["t-needsparam"]) is True   # necesita parámetros
+    assert is_on_demand(OPERATIONS["t-recurring"]) is False
+
+
+def test_set_schedule_rejects_enabling_ondemand(db, temp_ops):
+    with pytest.raises(ValueError, match="bajo demanda"):
+        set_schedule(db, "t-ondemand", enabled=True)
+    with pytest.raises(ValueError, match="bajo demanda"):
+        set_schedule(db, "t-needsparam", enabled=True, interval_hours=24)
+    # una recurrente sí se puede agendar
+    out = set_schedule(db, "t-recurring", enabled=True, interval_hours=24)
+    assert out["enabled"] is True
+
+
+def test_normalize_disables_enabled_ondemand_only(db, temp_ops):
+    # Simula el estado accidental: agendas activas para on-demand/param (como las que dejó el
+    # borde áspero max(1,0)=1h) + una recurrente legítima.
+    now = _naive_now()
+    db.add_all([
+        OperationSchedule(operation="t-ondemand", enabled=True, interval_hours=1,
+                          next_run_at=now),
+        OperationSchedule(operation="t-needsparam", enabled=True, interval_hours=24,
+                          next_run_at=now),
+        OperationSchedule(operation="t-recurring", enabled=True, interval_hours=24,
+                          next_run_at=now),
+    ])
+    db.commit()
+    fixed = normalize_ondemand_schedules(db)
+    assert fixed == 2
+    rows = {r.operation: r for r in db.query(OperationSchedule).all()}
+    assert rows["t-ondemand"].enabled is False and rows["t-ondemand"].next_run_at is None
+    assert rows["t-needsparam"].enabled is False
+    assert rows["t-recurring"].enabled is True   # la recurrente no se toca
+    # idempotente
+    assert normalize_ondemand_schedules(db) == 0
+
+
+def test_all_status_exposes_on_demand_flag(db, temp_ops):
+    ops = {o["name"]: o for o in all_status(db)["operations"]}
+    assert ops["t-ondemand"]["on_demand"] is True
+    assert ops["t-needsparam"]["on_demand"] is True
+    assert ops["t-recurring"]["on_demand"] is False
 
 
 # ── auditoría de frescura ─────────────────────────────────────────

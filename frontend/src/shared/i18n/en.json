@@ -1848,6 +1848,7 @@
     "schedule": "Schedule",
     "schedActive": "On",
     "schedInactive": "Off",
+    "onDemandOnly": "On-demand only",
     "scheduleError": "Could not save the schedule.",
     "scheduleSaved": "Schedule updated.",
     "next": "Next:",

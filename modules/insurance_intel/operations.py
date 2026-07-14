@@ -137,7 +137,9 @@ def register() -> None:
         ".xlsx, estructura estable): patrimonio, activos, primas, siniestros e ingresos/gastos "
         "por aseguradora y año → serie con trayectoria. Recalcula el ISF una vez al final. Es "
         "el insumo del backtest de validación (G5). Param opcional 'since_year'. Corre desde "
-        "Railway; best-effort por año; idempotente. On-demand.",
+        "Railway; best-effort por año; idempotente. On-demand. Correr cuando: haga falta "
+        "(re)ingerir el histórico de auditados de aseguradoras (backfill puntual), típicamente "
+        "antes de un insurance-backtest.",
         _run_financials_history_sync, default_interval_hours=0,
     ))
     register_operation(Operation(
@@ -156,7 +158,9 @@ def register() -> None:
         "relativo vs. mediana del panel), ya que ninguna aseguradora ha quebrado. Señal cruzada "
         "solvencia→resultado técnico y persistencia de underwriting; Gini + IC bootstrap sobre "
         "la historia de auditados. Persiste el reporte; el estado de validación (G5) lo lee y "
-        "sube de 0.60 solo si el IC del Gini es positivo. Requiere history-sync antes. On-demand.",
+        "sube de 0.60 solo si el IC del Gini es positivo. Requiere history-sync antes. On-demand. "
+        "Correr cuando: revalides el ISF (nuevos períodos o cambio de modelo); requiere el "
+        "history-sync antes.",
         _run_backtest, default_interval_hours=0,
     ))
 
