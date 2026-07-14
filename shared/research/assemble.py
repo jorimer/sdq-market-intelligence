@@ -33,6 +33,26 @@ def _coverage_line(coverage_real: float, anchored_fraction: float) -> str:
             f"El resto se declara como brecha explícita.")
 
 
+def _related_context_section(sub_questions: List[SubQuestion]) -> str:
+    """Dato REAL recuperado que NO responde ninguna sub-pregunta (el chequeo de relevancia lo
+    descartó como ancla) pero es contexto adyacente. Deduplica por (fuente, ref). ``""`` si no
+    hay. NO cuenta para la cobertura: es contexto, no respuesta —lo dice el encabezado."""
+    seen = set()
+    lines: List[str] = []
+    for sq in sub_questions:
+        for e in sq.related_context:
+            key = (e.source, e.ref or e.text[:60])
+            if key in seen:
+                continue
+            seen.add(key)
+            lines.append(f"- _{e.source}_: {e.text.strip()[:400]}")
+    if not lines:
+        return ""
+    return ("_Dato real que SDQ tiene sobre el tema, mostrado como CONTEXTO: no responde "
+            "directamente lo consultado, pero acota el terreno. No cuenta para la cobertura._"
+            "\n\n" + "\n".join(lines))
+
+
 def assemble_report_sections(question: str, sub_questions: List[SubQuestion],
                              sources: List[str], gaps: List[DeclaredGap],
                              coverage_real: float, anchored_fraction: float,
@@ -92,13 +112,17 @@ def assemble_report_sections(question: str, sub_questions: List[SubQuestion],
             "sube a dato real cuando la fuente correspondiente se integre.")
     limitaciones = "\n".join(limitaciones_parts)
 
-    return {
+    out = {
         "resumen_ejecutivo": resumen,
         "hallazgos": hallazgos,
         "metodologia": metodologia,
         "fuentes": fuentes,
         "limitaciones": limitaciones,
     }
+    contexto = _related_context_section(sub_questions)
+    if contexto:
+        out["contexto_relacionado"] = contexto
+    return out
 
 
 def assemble_scoping_sections(question: str, sub_questions: List[SubQuestion],
@@ -155,7 +179,7 @@ def assemble_scoping_sections(question: str, sub_questions: List[SubQuestion],
     fuentes = ("\n".join(f"- {s}" for s in sources)
                if sources else "_Sin fuentes con dato real disponibles para esta consulta hoy._")
 
-    return {
+    out = {
         "resumen_scoping": resumen,
         "lo_que_si_se_puede": lo_que_si,
         "lo_que_no_se_puede": lo_que_no,
@@ -163,3 +187,7 @@ def assemble_scoping_sections(question: str, sub_questions: List[SubQuestion],
         "metodologia": metodologia,
         "fuentes": fuentes,
     }
+    contexto = _related_context_section(sub_questions)
+    if contexto:
+        out["contexto_relacionado"] = contexto
+    return out

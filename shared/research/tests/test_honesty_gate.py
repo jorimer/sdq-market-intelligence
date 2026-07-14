@@ -6,6 +6,7 @@ import pytest
 
 import shared.research.decompose as decompose_mod
 import shared.research.relevance as rel
+from shared.research.assemble import assemble_scoping_sections
 from shared.registry.signals import GAP, REAL, RUBRIC
 from shared.research.models import Evidence, SubQuestion
 from shared.research.relevance import (
@@ -166,6 +167,7 @@ async def test_verify_downgrades_when_not_applicable(monkeypatch):
     await verify_rubric_relevance("pregunta", [sq_text, sq_real, sq_reg])
     assert sq_text.state == GAP
     assert sq_text.evidence == []          # #1: evidencia desacreditada descartada
+    assert sq_text.related_context == []   # doctrina RUBRIC descartada NO es contexto (no es dato)
     assert "no es método aplicable" in sq_text.note.lower()
     assert sq_real.state == REAL
     assert sq_reg.state == RUBRIC
@@ -257,6 +259,8 @@ async def test_verify_degrada_dgii_real_no_pertinente(monkeypatch):
     await verify_rubric_relevance("rentabilidad de los hoteles", [sq])
     assert sq.state == GAP          # ya no ancla REAL falso
     assert sq.evidence == []
+    # el dato REAL descartado se preserva como contexto adyacente (no como ancla)
+    assert len(sq.related_context) == 1 and sq.related_context[0].kind == "registry"
 
 
 @pytest.mark.asyncio
@@ -302,5 +306,31 @@ async def test_orchestrator_downgrades_irrelevant_dgii_real_to_gap(monkeypatch):
 
     ans = await orch.answer_question("qué tan rentables son los hoteles en RD", db=None)
     assert all(sq.state == GAP for sq in ans.sub_questions)
-    assert not any("DGII" in s for s in ans.sources)
-    assert ans.coverage_real == 0.0
+    assert not any("DGII" in s for s in ans.sources)   # no ancló → NO en Fuentes
+    assert ans.coverage_real == 0.0                     # el contexto NO cuenta para cobertura
+    # pero el conteo DGII se surface como "Contexto relacionado" (dato real adyacente)
+    assert any(sq.related_context for sq in ans.sub_questions)
+    assert "DGII" in ans.sections.get("contexto_relacionado", "")
+
+
+# ─── render del "Contexto relacionado" (assemble) ──────────────────────
+def test_assemble_scoping_incluye_contexto_relacionado():
+    ctx = Evidence(text="Contribuyentes activos en la DGII para comida rápida: 1.966 al corte "
+                        "29/01/2026. «Cantidad de contribuyentes» no equivale a locales.",
+                   source="DGII · Estadísticas de Contribuyentes", kind="registry",
+                   state=REAL, score=8.0, ref="dgii/contribuyentes/comida_rapida")
+    sq = SubQuestion(text="cuántas cadenas de comida rápida", state=GAP, related_context=[ctx])
+    secs = assemble_scoping_sections("q", [sq], sources=[], gaps=[],
+                                     coverage_real=0.0, anchored_fraction=0.0)
+    assert "contexto_relacionado" in secs
+    body = secs["contexto_relacionado"]
+    assert "DGII" in body and "1.966" in body
+    assert "no responde" in body.lower()          # etiquetado como contexto, no respuesta
+    assert "DGII" not in secs["fuentes"]           # NO se cuela en Fuentes
+
+
+def test_assemble_scoping_sin_contexto_omite_seccion():
+    sq = SubQuestion(text="q", state=GAP)
+    secs = assemble_scoping_sections("q", [sq], sources=[], gaps=[],
+                                     coverage_real=0.0, anchored_fraction=0.0)
+    assert "contexto_relacionado" not in secs

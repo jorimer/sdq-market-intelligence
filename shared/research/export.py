@@ -18,6 +18,7 @@ from shared.research.models import GATE_SCOPING, ResearchAnswer
 _REPORT_ORDER: List[Tuple[str, str]] = [
     ("Resumen ejecutivo", "resumen_ejecutivo"),
     ("Hallazgos", "hallazgos"),
+    ("Contexto relacionado", "contexto_relacionado"),
     ("Metodología", "metodologia"),
     ("Fuentes", "fuentes"),
     ("Limitaciones", "limitaciones"),
@@ -26,6 +27,7 @@ _SCOPING_ORDER: List[Tuple[str, str]] = [
     ("Alcance", "resumen_scoping"),
     ("Lo que se puede contestar hoy", "lo_que_si_se_puede"),
     ("Lo que no se puede contestar hoy", "lo_que_no_se_puede"),
+    ("Contexto relacionado", "contexto_relacionado"),
     ("Qué cerraría la brecha", "que_cerraria_la_brecha"),
     ("Metodología", "metodologia"),
     ("Fuentes", "fuentes"),

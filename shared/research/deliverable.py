@@ -30,6 +30,7 @@ _SECTION_TITLES: Dict[str, str] = {
     "lo_que_si_se_puede": "Lo que se puede contestar hoy",
     "lo_que_no_se_puede": "Lo que no se puede contestar hoy",
     "que_cerraria_la_brecha": "Qué cerraría la brecha",
+    "contexto_relacionado": "Contexto relacionado",
 }
 
 _DEFAULT_WATERMARK = "BORRADOR · motor de research"
