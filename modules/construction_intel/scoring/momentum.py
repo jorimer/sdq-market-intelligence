@@ -158,8 +158,12 @@ def compute_construction_index(
     production = _production_dimension(growth_by_year, period)
     pipeline = _pipeline_dimension(sqm_by_year, period)
     typology = _diversification_dimension(latest.get("by_typology") or {})
-    typology["breakdown"] = _typology_breakdown(latest.get("by_typology_detail") or {})
     geography = _diversification_dimension(latest.get("by_province") or {})
+    # El desglose por tipología (lista) se adjunta en el dict de salida (literal nuevo), no
+    # sobre ``typology`` (tipado ``Dict[str, Optional[float]]``): así el cambio es neutral para
+    # el baseline de mypy — no introduce ni resuelve violaciones.
+    typology_out = {**typology,
+                    "breakdown": _typology_breakdown(latest.get("by_typology_detail") or {})}
 
     dims = {
         "production": {"score": production["score"], "weight": W_PRODUCTION, "provenance": "real"},
@@ -188,7 +192,7 @@ def compute_construction_index(
         "dimensions": dims,
         "production": production,
         "pipeline": pipeline,
-        "typology": typology,
+        "typology": typology_out,
         "geography": geography,
         "levels": {  # contexto del año del índice
             "permits": latest.get("permits"),
