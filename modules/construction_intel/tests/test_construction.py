@@ -177,6 +177,42 @@ def test_compute_and_persist_idempotent(db):
     assert latest.breakdown["dimensions"]["pipeline"]["score"] == 100.0
 
 
+_ONE_TYP = {"year": 2025, "by_typology": {
+    "Comerciales y Oficinas": {"licencias": 149, "construcciones": 113,
+                               "sqm": 343086.0, "valor_tasado": 5127690356.0},
+    "Edificios de Apartamentos": {"licencias": 781, "construcciones": 1641,
+                                  "sqm": 3205538.0, "valor_tasado": 45789879594.0}},
+    "totals": {"valor_tasado": 75894662621.0}}
+
+
+def test_one_typology_persisted_and_surfaced(db):
+    # La capa ONE (valor tasado por tipología) inyectada se persiste en el breakdown y el
+    # ai_context la expone, atribuida a la ONE y al año que corresponde.
+    from modules.construction_intel.ai_context import construction_ai_context
+    r = compute_and_persist(db, licenses_by_year=_LIC, growth_by_year=_GROWTH,
+                            one_typology=_ONE_TYP)
+    assert r["period"] == "2025"
+    row = get_latest(db)
+    one = row.breakdown["one_typology"]
+    assert one["year"] == 2025
+    assert one["by_typology"]["Comerciales y Oficinas"]["valor_tasado"] == 5127690356.0
+    ctx = construction_ai_context({"one_typology": one, "levels": {}, "dimensions": {},
+                                   "typology": {}}, "2025")
+    assert ctx["one_valor_tasado_year"] == 2025
+    # ordenado por valor tasado desc → apartamentos primero
+    assert ctx["one_typology_valor_tasado"][0]["typology"] == "Edificios de Apartamentos"
+    co = next(r for r in ctx["one_typology_valor_tasado"]
+              if r["typology"] == "Comerciales y Oficinas")
+    assert co["valor_tasado_mm_dop"] == 5127.7  # RD$MM
+
+
+def test_one_typology_absent_is_ok(db):
+    # Sin ONE inyectada (y sin red en tests) el ICC se computa y persiste igual; breakdown
+    # trae one_typology = None.
+    compute_and_persist(db, licenses_by_year=_LIC, growth_by_year=_GROWTH)
+    assert get_latest(db).breakdown["one_typology"] is None
+
+
 def test_backfill_persists_only_full_coverage_years(db):
     from modules.construction_intel.service import backfill_scores, get_scores
     r = backfill_scores(db, licenses_by_year=_LIC, growth_by_year=_GROWTH)

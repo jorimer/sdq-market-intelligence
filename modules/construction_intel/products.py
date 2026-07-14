@@ -62,8 +62,11 @@ _LIMITATIONS = (
     "flujo de permisos (CAGR de m² a 3 años), diversificación tipológica y amplitud "
     "geográfica (HHI). El dato es anual y agregado nacional: los permisos del MIVHED "
     "comienzan en 2022 (historia corta para el CAGR del flujo) y la inversión licenciada es "
-    "nominal (RD$), no ejecutada. Índice preliminar, aún sin validación retrospectiva de "
-    "resultados."
+    "nominal (RD$), no ejecutada. El desglose por tipología incluye dos capas de fuente "
+    "distinta y complementaria: los m² licenciados del MIVHED (indicador líder) y el valor "
+    "tasado por tipología de la ONE (tasación oficial anual, ≈RD$15,000/m²) — que no debe "
+    "confundirse con el «costo estándar» derivado del MIVHED (m² × tarifa fija ≈RD$61,600/m²). "
+    "Índice preliminar, aún sin validación retrospectiva de resultados."
 )
 _NO_DATA = (
     "No hay ICC persistido: el producto está cableado pero su cobertura es insuficiente "
@@ -177,7 +180,8 @@ def _index_dict(s: ConstructionScore) -> Dict[str, Any]:
     return {"icc_score": s.icc_score, "band": s.band, "coverage": s.coverage,
             "dimensions": bd.get("dimensions", {}), "production": bd.get("production", {}),
             "pipeline": bd.get("pipeline", {}), "typology": bd.get("typology", {}),
-            "geography": bd.get("geography", {}), "levels": bd.get("levels", {})}
+            "geography": bd.get("geography", {}), "levels": bd.get("levels", {}),
+            "one_typology": bd.get("one_typology")}
 
 
 def _fmt(v: Optional[float]) -> str:
@@ -217,7 +221,7 @@ class ConstructionProduct:
         except (ValueError, TypeError):
             pass
         return DataHealth(coverage=coverage, freshness_days=freshness, cadence="annual",
-                          sources=("MIVHED (datos.gob.do)", "BCRD"),
+                          sources=("MIVHED (datos.gob.do)", "BCRD", "ONE (one.gob.do)"),
                           detail=f"ICC {_fmt(s.icc_score)} ({s.band}) en {s.period} · "
                                  f"{int(s.permits) if s.permits else '—'} licencias")
 
@@ -307,7 +311,25 @@ class ConstructionProduct:
                             "investment_dop": 271302161786.0, "prod_growth_latest": -1.8,
                             "prod_growth_3y": 0.39, "top_typology": "APARTAMENTOS",
                             "top_typology_share": 59.6, "top_province": "SANTO DOMINGO",
-                            "top_province_share": 22.8}}
+                            "top_province_share": 22.8},
+                 # Capa ONE REAL 2025 (valor tasado por tipología, top 8) — dato verídico.
+                 "one_typology": {"year": 2025, "by_typology": {
+                     "Edificios de Apartamentos": {"licencias": 781, "construcciones": 1641,
+                         "sqm": 3205538.0, "valor_tasado": 45789879594.0},
+                     "Combinados": {"licencias": 71, "construcciones": 537,
+                         "sqm": 719158.0, "valor_tasado": 10867091787.0},
+                     "Hospedaje": {"licencias": 35, "construcciones": 117,
+                         "sqm": 344187.0, "valor_tasado": 6388842600.0},
+                     "Comerciales y Oficinas": {"licencias": 149, "construcciones": 113,
+                         "sqm": 343086.0, "valor_tasado": 5127690355.0},
+                     "Centro de Recreación y Deportes": {"licencias": 7, "construcciones": 17,
+                         "sqm": 129360.0, "valor_tasado": 2380434236.0},
+                     "Viviendas": {"licencias": 222, "construcciones": 408,
+                         "sqm": 160579.0, "valor_tasado": 2177221397.0},
+                     "Estructuras Especiales": {"licencias": 33, "construcciones": 35,
+                         "sqm": 86355.0, "valor_tasado": 1299495325.0},
+                     "Apartamentos y Viviendas": {"licencias": 7, "construcciones": 1259,
+                         "sqm": 52310.0, "valor_tasado": 784664850.0}}}}
         payload = {"has_score": True, "index": index}
         if tier == ProductTier.pulse:
             return ProductSnapshot(tier=tier, period="2025", payload=payload,
@@ -397,6 +419,25 @@ class ConstructionProduct:
                  _int(r.get("sqm")), _pct(r.get("sqm_share"))]
                 for r in typ_rows[:8]]
             tables.append(("Licencias por tipología (m² licenciados, MIVHED)", trows))
+        # Capa autoritativa ONE: valor tasado REAL por tipología (tasación, no costo
+        # estándar) + construcciones validadas. Anual; atribuida a la ONE; niveles pagos.
+        one = index.get("one_typology") or {}
+        one_bt = one.get("by_typology") or {}
+        if one_bt and tier != ProductTier.pulse:
+            def _i(v: Optional[float]) -> str:
+                return "—" if v is None else f"{int(v):,}"
+
+            def _vmm(v: Optional[float]) -> str:
+                return "—" if v is None else f"{v / 1e6:,.0f}"
+
+            ordered = sorted(one_bt.items(),
+                             key=lambda kv: (kv[1] or {}).get("valor_tasado") or 0, reverse=True)
+            orows = [["Tipología", "Licencias", "Construcciones", "m²", "Valor tasado (RD$MM)"]] + [
+                [str(lbl).title(), _i(d.get("licencias")), _i(d.get("construcciones")),
+                 _i(d.get("sqm")), _vmm(d.get("valor_tasado"))]
+                for lbl, d in ordered[:8]]
+            yr = one.get("year")
+            tables.append((f"Valor tasado por tipología · {yr} (ONE)", orows))
         sc = index.get("icc_score")
         headline = (f"ICC {_fmt(sc)} · {index.get('band')}" if sc is not None else None)
         return render_product_pdf(

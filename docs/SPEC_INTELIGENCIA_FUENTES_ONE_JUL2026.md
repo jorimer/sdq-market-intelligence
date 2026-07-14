@@ -335,6 +335,21 @@ reject · defer.
 > existe; lo que queda es un conector nuevo chico + identificar la fuente de informalidad
 > sectorial).
 
+> **[Certain] §2.3 IMPLEMENTADO — 2026-07-14.** Conector nuevo
+> `shared/data/one_construction.py` (`ONEConstructionClient`): descarga y cruza los 4 cuadros
+> por tipo de construcción (4.7 licencias · 4.8 construcciones · 4.9 m² · 4.10 valor tasado),
+> resolviendo las URLs por número de cuadro desde la página (anti-CDN-rename), manejando el
+> cambio de orientación por año (2013-2019 filas=Mes → solo total; 2020-2025 filas=Tipo →
+> detalle por grupo vía indent+negrita), derivando el total de la suma de grupos y normalizando
+> el casing de etiquetas. Se cablea al producto de construcción: el sync
+> `mivhed-construction-sync` (modo live) ahora también trae la ONE y la persiste en
+> `ConstructionScore.breakdown.one_typology` (sin migración); Insight/Deep Dive muestran la
+> tabla **"Valor tasado por tipología · <año> (ONE)"** (licencias, construcciones, m², valor
+> tasado) junto a la de m² del MIVHED, cada una atribuida a su fuente. Reconciliación exacta en
+> vivo (Comerciales y Oficinas 2025: 149 lic / 113 construcciones / 343,086 m² /
+> RD$5,127,690,356; Total 2024 RD$81,496,658,121). El ICC no cambia; la ONE es capa
+> complementaria y defensiva (si la ONE falla, el ICC sobre MIVHED+BCRD no se cae).
+
 ---
 
 ## 3. Fuera de alcance / redundante — no cargar al tablero sin verificar primero

@@ -52,6 +52,20 @@ def construction_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any
         "sqm": r.get("sqm"),
         "sqm_share_pct": r.get("sqm_share"),
     } for r in typ_breakdown[:5]]
+    # Capa autoritativa ONE: valor tasado REAL (tasación) + construcciones validadas por
+    # tipología. Anual; se atribuye a la ONE y NO se confunde con el costo derivado del MIVHED.
+    one = index.get("one_typology") or {}
+    one_bt = one.get("by_typology") or {}
+    one_rows = [{
+        "typology": lbl,
+        "licencias": d.get("licencias"),
+        "construcciones": d.get("construcciones"),
+        "sqm": d.get("sqm"),
+        "valor_tasado_mm_dop": (round(d["valor_tasado"] / 1e6, 1)
+                                if d.get("valor_tasado") is not None else None),
+    } for lbl, d in sorted(one_bt.items(),
+                           key=lambda kv: (kv[1] or {}).get("valor_tasado") or 0,
+                           reverse=True)[:5]]
     return {
         "period": period,
         "icc_score": index.get("icc_score"),
@@ -67,6 +81,8 @@ def construction_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any
         "top_typology": levels.get("top_typology"),
         "top_typology_share_pct": levels.get("top_typology_share"),
         "typology_breakdown": typology_rows,
+        "one_valor_tasado_year": one.get("year"),
+        "one_typology_valor_tasado": one_rows,
         "top_province": levels.get("top_province"),
         "top_province_share_pct": levels.get("top_province_share"),
         "score_global": index.get("icc_score"),
