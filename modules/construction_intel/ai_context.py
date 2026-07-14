@@ -40,6 +40,18 @@ def construction_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any
         })
     levels = index.get("levels") or {}
     inv = levels.get("investment_dop")
+    # Desagregado por tipología (m² licenciados + participación por tipo de construcción) —
+    # dato real del MIVHED; top 5 por m² para que la narrativa cite el peso físico de cada
+    # segmento (p.ej. Comercial y oficinas) sin fabricar. NO se expone la "inversión" por
+    # tipología: es un costo estándar derivado (m² × tarifa), redundante con los m² y distinto
+    # del valor tasado de la ONE (ver mivhed_client.parse_licenses).
+    typ_breakdown = ((index.get("typology") or {}).get("breakdown")) or []
+    typology_rows = [{
+        "typology": r.get("typology"),
+        "permits": r.get("permits"),
+        "sqm": r.get("sqm"),
+        "sqm_share_pct": r.get("sqm_share"),
+    } for r in typ_breakdown[:5]]
     return {
         "period": period,
         "icc_score": index.get("icc_score"),
@@ -54,6 +66,7 @@ def construction_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any
         "construction_gdp_growth_3y_pct": levels.get("prod_growth_3y"),
         "top_typology": levels.get("top_typology"),
         "top_typology_share_pct": levels.get("top_typology_share"),
+        "typology_breakdown": typology_rows,
         "top_province": levels.get("top_province"),
         "top_province_share_pct": levels.get("top_province_share"),
         "score_global": index.get("icc_score"),

@@ -39,6 +39,59 @@ def test_parse_licenses_aggregates_per_year():
     assert out[2025]["permits"] == 1 and out[2025]["months"] == 1
 
 
+def test_parse_licenses_typology_detail_sqm_and_investment():
+    # m² y valor tasado (inversión) POR tipología, no solo el conteo de permisos.
+    out = parse_licenses(_CSV)
+    assert out[2024]["by_typology_detail"] == {
+        "APARTAMENTOS": {"permits": 1, "sqm": pytest.approx(100.5),
+                         "investment": pytest.approx(1_000_000)},
+        "VIVIENDAS": {"permits": 1, "sqm": pytest.approx(50.0),
+                      "investment": pytest.approx(500_000)},
+    }
+    assert out[2025]["by_typology_detail"]["COMERCIAL Y OFICINAS"] == {
+        "permits": 1, "sqm": pytest.approx(200.0), "investment": pytest.approx(2_000_000)}
+    # el conteo por tipología (que alimenta el HHI) se preserva intacto
+    assert out[2024]["by_typology"] == {"APARTAMENTOS": 1, "VIVIENDAS": 1}
+
+
+def test_parse_licenses_typology_detail_matches_row_totals():
+    # QA estilo ONE: varias filas de una misma tipología se suman a un triple conocido
+    # (licencias, m², valor tasado) — el mismo cruce que valida "Comercial y oficinas".
+    csv = (
+        ",,,,,,,,,\n"
+        "Licencias Emitidas 2022-2026,,,,,,,,,\n"
+        "Fecha de Emisión,Mes,Año,Provincia,Municipio,Barrio/Sector,"
+        "Número de Licencia,Tipologia,Metros Cuadrados,Inversión Total\n"
+        "01/10/2025,ENERO,2025,SANTO DOMINGO,SDO,X,C1,COMERCIAL Y OFICINAS,143086,2127690356\n"
+        "02/10/2025,FEBRERO,2025,SANTIAGO,STG,Y,C2,COMERCIAL Y OFICINAS,200000,3000000000\n"
+        "03/10/2025,MARZO,2025,SANTO DOMINGO,SDO,Z,A1,APARTAMENTOS,500000,10000000000\n"
+    )
+    d = parse_licenses(csv)[2025]["by_typology_detail"]
+    assert d["COMERCIAL Y OFICINAS"] == {
+        "permits": 2, "sqm": pytest.approx(343_086), "investment": pytest.approx(5_127_690_356)}
+    assert d["APARTAMENTOS"]["permits"] == 1
+
+
+def test_index_exposes_typology_breakdown_sorted_by_sqm():
+    lic = {2025: {
+        "permits": 3, "sqm": 843_086.0, "investment": 15_127_690_356.0, "months": 12,
+        "by_typology": {"COMERCIAL Y OFICINAS": 2, "APARTAMENTOS": 1},
+        "by_typology_detail": {
+            "COMERCIAL Y OFICINAS": {"permits": 2, "sqm": 343_086.0,
+                                     "investment": 5_127_690_356.0},
+            "APARTAMENTOS": {"permits": 1, "sqm": 500_000.0, "investment": 10_000_000_000.0}},
+        "by_province": {"SANTO DOMINGO": 2, "SANTIAGO": 1}}}
+    idx = compute_construction_index(lic, _GROWTH, period=2025)
+    bd = idx["typology"]["breakdown"]
+    # ordenado por m² descendente → apartamentos (500k) antes que comercial (343k)
+    assert [r["typology"] for r in bd] == ["APARTAMENTOS", "COMERCIAL Y OFICINAS"]
+    # m² y participación por tipología; NO se expone la "inversión" derivada por tipología
+    assert bd[1] == {"typology": "COMERCIAL Y OFICINAS", "permits": 2,
+                     "sqm": 343_086.0, "sqm_share": round(343_086 / 843_086 * 100, 1)}
+    assert "investment" not in bd[1]
+    assert bd[0]["sqm_share"] + bd[1]["sqm_share"] == pytest.approx(100.0, abs=0.1)
+
+
 def test_parse_licenses_no_header():
     assert parse_licenses("garbage,without,a,year,column\n1,2,3,4,5\n") == {}
 

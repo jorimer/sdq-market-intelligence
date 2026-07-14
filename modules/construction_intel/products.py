@@ -281,7 +281,26 @@ class ConstructionProduct:
                  "production": {"latest": -1.8, "avg_growth": 0.39, "score": 9.75},
                  "pipeline": {"latest": 4473895.0, "cagr": -7.52, "score": 0.0},
                  "typology": {"hhi": 3971.1, "top": "APARTAMENTOS", "top_share": 59.6,
-                              "score": 65.31},
+                              "score": 65.31,
+                              # Desglose REAL MIVHED 2025 (m² por tipología, top 8 por m²) —
+                              # dato verídico, no fabricado; ordenado por m² licenciados.
+                              "breakdown": [
+                                  {"typology": "APARTAMENTOS", "permits": 567,
+                                   "sqm": 2888911.0, "sqm_share": 64.6},
+                                  {"typology": "COMBINADOS", "permits": 46,
+                                   "sqm": 689858.0, "sqm_share": 15.4},
+                                  {"typology": "COMERCIAL Y OFICINAS", "permits": 95,
+                                   "sqm": 273808.0, "sqm_share": 6.1},
+                                  {"typology": "HOSPEDAJE", "permits": 14,
+                                   "sqm": 202402.0, "sqm_share": 4.5},
+                                  {"typology": "VIVIENDAS", "permits": 159,
+                                   "sqm": 139755.0, "sqm_share": 3.1},
+                                  {"typology": "CENTROS DE RECREACIÓN Y DEPORTES",
+                                   "permits": 3, "sqm": 129360.0, "sqm_share": 2.9},
+                                  {"typology": "ESTRUCTURAS ESPECIALES", "permits": 22,
+                                   "sqm": 87097.0, "sqm_share": 1.9},
+                                  {"typology": "ALMACENES", "permits": 10,
+                                   "sqm": 31332.0, "sqm_share": 0.7}]},
                  "geography": {"hhi": 1443.1, "top": "SANTO DOMINGO", "top_share": 22.8,
                                "score": 88.74},
                  "levels": {"permits": 951, "sqm": 4473895.0,
@@ -360,6 +379,24 @@ class ConstructionProduct:
             tables.append(("Dimensiones del ICC", rows))
             items = [(labels.get(k, k), (d or {}).get("score")) for k, d in dims.items()]
             charts.append({"title": "Dimensiones del ICC (score 0-100)", "items": items})
+        # Desagregado por tipología (licencias + m² licenciados + participación en los m² del
+        # año) — dato real del MIVHED; valor de profundidad, se reserva a los niveles pagos
+        # (Insight/Deep Dive), no al Pulse abierto. NO se muestra "inversión" por tipología:
+        # esa columna del MIVHED es un costo estándar derivado (m² × tarifa fija), redundante
+        # con los m² y distinto del valor tasado de la ONE.
+        typ_rows = ((index.get("typology") or {}).get("breakdown")) or []
+        if typ_rows and tier != ProductTier.pulse:
+            def _int(v: Optional[float]) -> str:
+                return "—" if v is None else f"{int(v):,}"
+
+            def _pct(v: Optional[float]) -> str:
+                return "—" if v is None else f"{v:.1f}%"
+
+            trows = [["Tipología", "Licencias", "m² licenciados", "% de m²"]] + [
+                [str(r.get("typology") or "—").title(), _int(r.get("permits")),
+                 _int(r.get("sqm")), _pct(r.get("sqm_share"))]
+                for r in typ_rows[:8]]
+            tables.append(("Licencias por tipología (m² licenciados, MIVHED)", trows))
         sc = index.get("icc_score")
         headline = (f"ICC {_fmt(sc)} · {index.get('band')}" if sc is not None else None)
         return render_product_pdf(

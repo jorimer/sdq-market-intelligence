@@ -70,12 +70,26 @@ def _find_header(rows) -> Optional[int]:
 
 
 def parse_licenses(text: str) -> Dict[int, Dict[str, Any]]:
-    """``{year: {permits, sqm, investment, months, by_typology, by_province}}`` from the
-    MIVHED permit CSV.
+    """``{year: {permits, sqm, investment, months, by_typology, by_typology_detail,
+    by_province}}`` from the MIVHED permit CSV.
 
     Aggregates the per-permit rows to annual totals. ``months`` is the count of distinct
     months seen that year (so the caller can drop a partial year). Empty numeric cells are
-    treated as 0 for the totals but never fabricated as a year."""
+    treated as 0 for the totals but never fabricated as a year.
+
+    ``by_typology`` is the per-typology PERMIT COUNT (drives the HHI diversification
+    dimension). ``by_typology_detail`` desagrega además los m² licenciados y la ``inversion``
+    por tipología — ``{typology: {permits, sqm, investment}}`` — porque esos campos ya vienen
+    en el dataset crudo por fila; sostiene la lectura de m² licenciados por tipo de
+    construcción (p.ej. Comercial y oficinas).
+
+    ⚠️ AVISO sobre ``investment`` (columna "Inversión Total" del MIVHED): NO es un valor
+    declarado ni tasado por permiso — es un **costo estándar derivado** = m² × una tarifa fija
+    por año (verificado 2026-07-14: el 94 % de las filas es exactamente m² × RD$61,600 y el
+    resto m² × RD$57,200). Por tipología es por tanto **redundante con los m²** (comparte la
+    misma tarifa) y NO equivale al "valor tasado" de la ONE (≈RD$14,946/m² tasado, ~4× menor).
+    Se conserva por fidelidad al dato crudo, pero el producto NO lo expone por tipología como
+    métrica monetaria independiente — la señal real por tipología son los m²."""
     rows = list(csv.reader(io.StringIO(text.lstrip("﻿"))))
     hi = _find_header(rows)
     if hi is None:
@@ -108,13 +122,15 @@ def parse_licenses(text: str) -> Dict[int, Dict[str, Any]]:
             continue
         year = int(ys)
         rec = out.setdefault(year, {"permits": 0, "sqm": 0.0, "investment": 0.0,
-                                    "_months": set(), "by_typology": {}, "by_province": {}})
+                                    "_months": set(), "by_typology": {},
+                                    "by_typology_detail": {}, "by_province": {}})
         rec["permits"] += 1
         sqm = _num(row[idx["sqm"]]) if "sqm" in idx and idx["sqm"] < len(row) else None
         inv = (_num(row[idx["investment"]])
                if "investment" in idx and idx["investment"] < len(row) else None)
-        rec["sqm"] += sqm or 0.0
-        rec["investment"] += inv or 0.0
+        sqm_val, inv_val = sqm or 0.0, inv or 0.0
+        rec["sqm"] += sqm_val
+        rec["investment"] += inv_val
         if "month" in idx and idx["month"] < len(row):
             m = row[idx["month"]].strip().upper()
             if m:
@@ -122,6 +138,11 @@ def parse_licenses(text: str) -> Dict[int, Dict[str, Any]]:
         if "typology" in idx and idx["typology"] < len(row):
             t = row[idx["typology"]].strip().upper() or "SIN CLASIFICAR"
             rec["by_typology"][t] = rec["by_typology"].get(t, 0) + 1
+            d = rec["by_typology_detail"].setdefault(
+                t, {"permits": 0, "sqm": 0.0, "investment": 0.0})
+            d["permits"] += 1
+            d["sqm"] += sqm_val
+            d["investment"] += inv_val
         if "province" in idx and idx["province"] < len(row):
             p = row[idx["province"]].strip().upper() or "SIN PROVINCIA"
             rec["by_province"][p] = rec["by_province"].get(p, 0) + 1
