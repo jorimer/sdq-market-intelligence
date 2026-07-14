@@ -170,6 +170,7 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
     use_router = (narrate and db is not None
                   and getattr(settings, "RESEARCH_SEMANTIC_ROUTER", False))
     if use_router:
+        assert db is not None  # implícito en use_router; estrecha el tipo para mypy
         route_task = asyncio.ensure_future(_route_bounded(question, db))
         known_axes = list(dict.fromkeys(list(targets.axes) + list(targets.context)))
         pulls, axis_pulls = await asyncio.to_thread(_pull_known, db, targets, known_axes)
