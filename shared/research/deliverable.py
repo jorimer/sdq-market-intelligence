@@ -36,8 +36,10 @@ _SECTION_TITLES: Dict[str, str] = {
 _DEFAULT_WATERMARK = "BORRADOR · motor de research"
 
 
-def _subject(question: str, limit: int = 110) -> str:
-    """Título de portada: la pregunta, cortada en FRONTERA DE PALABRA (no a media palabra)."""
+def _subject(question: str, limit: int = 480) -> str:
+    """Título de portada: la pregunta COMPLETA (el renderer escala el cuerpo según el largo,
+    ver `_cover`). Solo se recorta —en frontera de palabra— si es desmesuradamente larga, para
+    no desbordar la portada; el texto íntegro va igual en el cuerpo (sección 'Pregunta')."""
     q = " ".join((question or "").split())
     if len(q) <= limit:
         return q

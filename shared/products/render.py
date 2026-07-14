@@ -263,8 +263,15 @@ def _cover(title: str, display_name: str, period: str, subtitle: Optional[str],
         ("TOPPADDING", (0, 0), (0, 0), 18), ("BOTTOMPADDING", (0, 0), (0, 0), 2),
         ("TOPPADDING", (0, 1), (0, 1), 2), ("BOTTOMPADDING", (0, 1), (0, 1), 20),
     ]))
+    # El sujeto de portada (``display_name``) es, en el motor de research, la PREGUNTA del
+    # cliente —que puede ser larga—. A 24pt fijo se cortaba/desbordaba; se escala el cuerpo
+    # según el largo para que la pregunta ENTERA quede legible sin truncar en la portada.
+    dn = len(display_name or "")
+    subj_fs = 24 if dn <= 80 else 20 if dn <= 160 else 16 if dn <= 280 else 13
+    subj_style = ParagraphStyle("PTitleDyn", parent=styles["PTitle"],
+                                fontSize=subj_fs, leading=round(subj_fs * 1.2))
     out: List = [Spacer(1, 1.1 * inch), band, Spacer(1, 0.45 * inch),
-                 Paragraph(_inline(display_name), styles["PTitle"])]
+                 Paragraph(_inline(display_name), subj_style)]
     if subtitle:
         out.append(Paragraph(_inline(subtitle), styles["PSub"]))
     if headline:
@@ -379,7 +386,9 @@ def render_product_pdf(
     out_dir = output_dir or settings.REPORTS_DIR
     os.makedirs(out_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe = re.sub(r"[^a-z0-9]+", "_", display_name.lower()).strip("_")
+    # Acotar el slug: el display_name puede ser una pregunta larga (motor de research) y un
+    # nombre de archivo >255 chars rompe el guardado (OSError). El sufijo timestamp lo hace único.
+    safe = re.sub(r"[^a-z0-9]+", "_", display_name.lower()).strip("_")[:80].rstrip("_")
     path = os.path.join(out_dir, f"{sector_key}_{safe}_{ts}.pdf")
 
     # Títulos de las secciones ESTÁNDAR auto-generadas (metodología/fuentes): se mergean
