@@ -59,7 +59,7 @@ def test_gate_scoping_when_empty():
 # ─── round-trip de honestidad (§4): brecha conocida se DECLARA, no se rellena ──
 def _patch_retrieve(monkeypatch, mapping):
     """mapping: substring de la sub-pregunta -> lista de pasajes a devolver."""
-    def fake_retrieve(query, top_k=5, *, db=None, include_registry=True, min_score=0.0):
+    def fake_retrieve(query, top_k=5, *, db=None, include_registry=True, min_score=0.0, min_score_by_kind=None):
         for needle, passages in mapping.items():
             if needle.lower() in query.lower():
                 # Respeta el umbral de ancla igual que el retrieval real.
@@ -104,7 +104,9 @@ async def test_fully_anchored_question_yields_report(monkeypatch):
                          "kind": "doctrine", "score": 8.0, "meta": {}}],
     })
     q = "Cómo está la resiliencia energética y además el riesgo regulatorio"
-    ans = await answer_question(q, db=None)
+    # narrate=False aísla el gate determinista (A4.1/A4.3); la verificación LLM A4.2 —que
+    # sin Cerebro degradaría la rúbrica de doctrina a GAP— tiene sus propios tests.
+    ans = await answer_question(q, db=None, narrate=False)
     assert ans.gate == GATE_REPORT
     assert ans.anchored_fraction == 1.0
     assert set(ans.sections) >= {"resumen_ejecutivo", "hallazgos", "metodologia",
@@ -126,9 +128,10 @@ async def test_marginal_match_below_floor_does_not_anchor(monkeypatch):
     sq = ans.sub_questions[0]
     assert sq.state == GAP           # roce marginal filtrado → brecha honesta
     assert not sq.evidence
-    # Pero con un umbral laxo (0), ese mismo roce sí anclaría (parámetro tunable).
+    # Pero con un umbral laxo (0), ese mismo roce sí anclaría (parámetro tunable). Se aísla
+    # el gate determinista con narrate=False (A4.2 LLM tiene sus propios tests).
     ans2 = await answer_question("Cuál es el precio del cacao en Marte hoy", db=None,
-                           min_anchor_score=0.0)
+                           min_anchor_score=0.0, narrate=False)
     assert ans2.sub_questions[0].state == RUBRIC
 
 

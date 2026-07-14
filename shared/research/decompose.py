@@ -35,6 +35,22 @@ _MIN_TOKENS = 3   # una cláusula con menos que esto no es una sub-pregunta aut�
 # re-calibra con las preguntas reales del piloto (Fase 2), como el umbral del gate (§3.4).
 DEFAULT_MIN_ANCHOR_SCORE = 7.0
 
+# Kinds de TEXTO libre (doctrina/metodología/boletín): cruzan un umbral absoluto por
+# acumulación de vocabulario genérico más fácil que el dato estructurado (`registry`).
+_TEXT_KINDS = ("doctrine", "methodology", "bulletin")
+
+# A4.1 (docs/SPEC_GATE_HONESTIDAD_Y_FUENTES_DGII.md §A.4): barra MÁS ALTA para que un pasaje
+# de texto ancle RUBRIC, vs el base de `registry`. Frena el "100% con ancla" falso citando
+# doctrina irrelevante. Fijado justo sobre el borde del match legítimo (spec §A.1: "≳8"): un
+# pre-filtro barato que descarta el ruido claro; lo dudoso (9-10) lo re-juzga A4.2 (relevancia
+# LLM), el backstop real. [Guessing] a calibrar con las 3 preguntas del piloto (regresión).
+DEFAULT_MIN_ANCHOR_SCORE_SOFT = 9.0
+
+# A4.3: si la pregunta NO mapeó a ningún eje del catálogo (fuera del alcance de los 14
+# ejes), un pasaje de texto necesita una barra AÚN más alta para anclar RUBRIC — o cae a
+# GAP. Reusa la señal ya computada por `resolve_targets` (sin llamada nueva).
+DEFAULT_MIN_ANCHOR_SCORE_OFFTOPIC = 14.0
+
 
 def split_question(text: str) -> List[str]:
     """Parte la pregunta en cláusulas sustantivas, deduplicando y preservando orden."""
@@ -93,12 +109,22 @@ def _aggregate_state(evidence: List[Evidence]) -> str:
 
 
 def map_subquestion(text: str, db: Optional[Session], top_k: int = 4,
-                    min_anchor_score: float = DEFAULT_MIN_ANCHOR_SCORE) -> SubQuestion:
+                    min_anchor_score: float = DEFAULT_MIN_ANCHOR_SCORE,
+                    min_anchor_score_soft: float = DEFAULT_MIN_ANCHOR_SCORE_SOFT,
+                    question_in_scope: bool = True) -> SubQuestion:
     """Recupera evidencia para *text* y arma la ``SubQuestion`` con estado y ejes.
 
     Solo cuenta como evidencia (y como ancla) lo que supera ``min_anchor_score``: un
-    roce léxico marginal no ancla — la sub-pregunta queda como brecha declarada (§4)."""
-    hits = retrieve(text, top_k=top_k, db=db, min_score=min_anchor_score)
+    roce léxico marginal no ancla — la sub-pregunta queda como brecha declarada (§4).
+
+    A4.1/A4.3: la doctrina/metodología (texto libre) debe superar un umbral MÁS ALTO
+    (``min_anchor_score_soft``) que el dato estructurado; y si ``question_in_scope`` es
+    ``False`` (la pregunta no mapeó a ningún eje del catálogo), la barra sube al umbral
+    off-topic. El dato ``registry`` mantiene el base."""
+    soft = min_anchor_score_soft if question_in_scope else DEFAULT_MIN_ANCHOR_SCORE_OFFTOPIC
+    by_kind = {k: soft for k in _TEXT_KINDS}
+    hits = retrieve(text, top_k=top_k, db=db, min_score=min_anchor_score,
+                    min_score_by_kind=by_kind)
     # Filtra la fuga de código/interno del corpus antes de que llegue al cliente.
     evidence = [Evidence.from_passage(h) for h in hits if not _is_code_dump(h.get("text", ""))]
     axes: List[str] = []
@@ -114,7 +140,14 @@ def map_subquestion(text: str, db: Optional[Session], top_k: int = 4,
 
 
 def decompose(question: str, db: Optional[Session] = None, per_q_k: int = 4,
-              min_anchor_score: float = DEFAULT_MIN_ANCHOR_SCORE) -> List[SubQuestion]:
-    """Descompone la pregunta y mapea cada sub-pregunta a su evidencia con procedencia."""
-    return [map_subquestion(clause, db, top_k=per_q_k, min_anchor_score=min_anchor_score)
+              min_anchor_score: float = DEFAULT_MIN_ANCHOR_SCORE,
+              min_anchor_score_soft: float = DEFAULT_MIN_ANCHOR_SCORE_SOFT,
+              question_in_scope: bool = True) -> List[SubQuestion]:
+    """Descompone la pregunta y mapea cada sub-pregunta a su evidencia con procedencia.
+
+    ``question_in_scope`` (A4.3): lo computa el orquestador desde ``resolve_targets``
+    (¿la pregunta mapeó a algún eje del catálogo?) y se propaga al umbral por-kind."""
+    return [map_subquestion(clause, db, top_k=per_q_k, min_anchor_score=min_anchor_score,
+                            min_anchor_score_soft=min_anchor_score_soft,
+                            question_in_scope=question_in_scope)
             for clause in split_question(question)]

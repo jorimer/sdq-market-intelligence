@@ -50,6 +50,7 @@ from shared.research.models import (
     SubQuestion,
 )
 from shared.research.narrate import narrate_answer
+from shared.research.relevance import verify_rubric_relevance
 from shared.research.resolve import AXIS_KEYWORDS, _norm, resolve_targets
 
 
@@ -197,8 +198,21 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
     t_pulls = time.monotonic()
 
     # 3. Descomponer + metodología, con la evidencia REAL del motor fusionada.
-    sub_questions = decompose(question, db=db, per_q_k=per_q_k, min_anchor_score=min_anchor_score)
+    #    A4.3 (SPEC_GATE_HONESTIDAD): si la pregunta NO mapeó a ningún eje del catálogo,
+    #    la doctrina/metodología necesita una barra más alta para anclar RUBRIC (o cae a
+    #    GAP). Reusa la señal YA computada por `resolve_targets` — sin llamada nueva.
+    question_in_scope = bool(targets.axes or targets.entities or targets.context)
+    sub_questions = decompose(question, db=db, per_q_k=per_q_k,
+                              min_anchor_score=min_anchor_score,
+                              question_in_scope=question_in_scope)
     _merge_engine_evidence(sub_questions, live_pulls)
+
+    # 3b. A4.2 (SPEC_GATE_HONESTIDAD): verificación de relevancia tema-pasaje. Corre DESPUÉS
+    #     de fusionar el dato de motor (no re-verifica lo que ya quedó REAL) y ANTES del gate.
+    #     Degrada RUBRIC→GAP donde el ancla es doctrina/metodología que comparte vocabulario
+    #     pero no es método aplicable. Fail-safe (nunca lanza; sin Cerebro → GAP conservador).
+    if narrate:
+        await verify_rubric_relevance(question, sub_questions)
 
     # 4. Gate de honestidad + brechas (incl. la prospectiva no-modelable).
     forward = _forward_gaps(question, sub_questions, live_pulls)

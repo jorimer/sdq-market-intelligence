@@ -8,7 +8,7 @@ from shared.research.orchestrator import answer_question
 
 
 def _patch(monkeypatch, mapping):
-    def fake_retrieve(query, top_k=5, *, db=None, include_registry=True, min_score=0.0):
+    def fake_retrieve(query, top_k=5, *, db=None, include_registry=True, min_score=0.0, min_score_by_kind=None):
         for needle, passages in mapping.items():
             if needle.lower() in query.lower():
                 return [p for p in passages if p.get("score", 0.0) >= min_score]

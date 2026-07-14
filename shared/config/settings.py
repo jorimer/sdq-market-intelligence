@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # probado). Re-activar (=true) sólo tras diagnosticar el crash con métricas de memoria.
     RESEARCH_SEMANTIC_ROUTER: bool = False
 
+    # Verificación de relevancia tema-pasaje del gate de honestidad (A4.2 de
+    # docs/SPEC_GATE_HONESTIDAD_Y_FUENTES_DGII.md): antes de anclar RUBRIC con doctrina/
+    # metodología, una llamada LLM sí/no valida que el pasaje sea método APLICABLE a la
+    # sub-pregunta. ON por defecto (es el fix estructural); es una válvula operativa para
+    # apagarlo sin deploy si hiciera falta. Fail-safe: sin Cerebro/presupuesto/error → GAP.
+    RESEARCH_RELEVANCE_CHECK: bool = True
+
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"
