@@ -118,6 +118,13 @@ VERTICALS: Tuple[Vertical, ...] = (
              codes=("523110", "513310")),
 )
 
+# La subclase viene como "552118-Etiqueta", pero algunas filas del padrón OMITEN el guion
+# ("741109Patentes Y Derechos De Autor"). El código CIIU es SIEMPRE numérico → se extraen los
+# dígitos iniciales como código y el resto como descripción. Así el código nunca arrastra la
+# etiqueta larga (que reventaba el VARCHAR(12) en Postgres — SQLite no valida el largo).
+_CODE_RE = re.compile(r"\s*(\d+)\s*[-–]?\s*(.*)", re.DOTALL)
+_MAX_CODE_LEN = 12       # largo de la columna `subclase` (Postgres VARCHAR(12)); un CIIU real ≤ 7
+
 _MESES = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
     "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
@@ -160,10 +167,12 @@ def aggregate_rows(header: Tuple, data_rows) -> List[SubclaseContrib]:
         estatus = str(row[col[COL_ESTATUS]] or "").strip().lower()
         if estatus and estatus != "activo":
             continue
-        code, _, desc = str(sub).partition("-")
-        code = code.strip()
-        if not code:
+        m = _CODE_RE.match(str(sub))
+        # Sin código numérico, o código anómalamente largo (no es un CIIU real): se descarta la
+        # fila en vez de arriesgar un truncamiento en Postgres (VARCHAR(12) de la columna).
+        if not m or len(m.group(1)) > _MAX_CODE_LEN:
             continue
+        code, desc = m.group(1), m.group(2).strip(" -–")
         cant = _to_int(row[col[COL_CANT]])
         tipo = _norm(str(row[col[COL_TIPO]] or ""))
         a = acc.setdefault(code, _Acc(desc.strip()))

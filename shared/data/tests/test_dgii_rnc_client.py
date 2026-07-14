@@ -48,6 +48,21 @@ def test_aggregate_ignora_subclase_vacia_y_suma_cantidades_texto():
     assert len(out) == 1
 
 
+def test_aggregate_codigo_sin_guion_y_descarta_sin_digitos():
+    # Algunas filas del padrón omiten el guion ("741109Patentes…"); el código son los dígitos
+    # iniciales (no la etiqueta larga, que reventaba VARCHAR(12) en Postgres). Sin dígitos → se descarta.
+    rows = _rows(
+        ("741109Patentes Y Derechos De Autor", "Física", "Activo", 5),
+        ("552118-Comida Rapida", "Jurídica", "Activo", 2),
+        ("Sin Codigo Numerico", "Física", "Activo", 9),
+    )
+    out = {a.subclase: a for a in aggregate_rows(_HEADER, rows)}
+    assert out["741109"].activos == 5
+    assert out["741109"].descripcion == "Patentes Y Derechos De Autor"
+    assert set(out) == {"741109", "552118"}          # la fila sin dígitos se descartó
+    assert all(len(code) <= 12 for code in out)       # ningún código arrastra la etiqueta
+
+
 def test_vertical_matches_codes_y_prefijo():
     comida = next(v for v in VERTICALS if v.key == "comida_rapida")
     assert comida.matches("552118") and comida.matches("552113")
