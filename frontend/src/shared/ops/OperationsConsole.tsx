@@ -103,6 +103,11 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
     setSched({ enabled: op.schedule.enabled, hours: op.schedule.interval_hours });
   }, [op.schedule.enabled, op.schedule.interval_hours]);
   const needsPeriod = op.needs_params.includes("period");
+  // La descripción de las operaciones bajo demanda trae al final una nota "Correr cuando: …".
+  // Se separa para mostrarla como un renglón propio y visible (no perdida al final del texto).
+  const runWhenIdx = op.description.indexOf("Correr cuando:");
+  const descMain = runWhenIdx >= 0 ? op.description.slice(0, runWhenIdx).trim() : op.description;
+  const runWhen = runWhenIdx >= 0 ? op.description.slice(runWhenIdx).trim() : null;
 
   const run = async () => {
     setBusy(true);
@@ -140,7 +145,7 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
 
   return (
     <Card>
-      <CardHead icon={Wrench} title={op.label} subtitle={op.description} right={statusChip(op, t)} />
+      <CardHead icon={Wrench} title={op.label} subtitle={descMain} right={statusChip(op, t)} />
 
       {s.is_running && (
         <div className="mt-3 flex items-center gap-2 text-sm text-accent">
@@ -196,6 +201,11 @@ function OperationCard({ op, onChanged }: { op: OperationInfo; onChanged: () => 
             </label>
           )}
         </div>
+        {op.on_demand && runWhen && (
+          <p className="text-xs text-body/85 bg-accent-soft/50 border-l-2 border-accent rounded-r px-2 py-1">
+            {runWhen}
+          </p>
+        )}
         {!op.on_demand && sched.enabled && (
           <div className="flex flex-wrap items-center gap-2">
             <select
