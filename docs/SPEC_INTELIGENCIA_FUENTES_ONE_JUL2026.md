@@ -164,6 +164,33 @@ reject · defer.
 > la fuente de la ONE (no es una extensión del parser del MIVHED) — decisión abierta para el
 > dueño, ya no un ticket de build sobre `mivhed_client.py`.
 
+> **[Certain] EVALUACIÓN DE LA FUENTE ONE — verificada con descarga real 2026-07-14. La
+> premisa "solo Power BI (format 0.6)" era FALSA: la ONE publica el dato como Excel
+> estructurado descargable.** En
+> `one.gob.do/.../estadisticas-sectoriales/construccion-y-actividades-inmobiliarias/` hay
+> **cuatro .xlsx por tipo de construcción, mensuales, 2013-2025** (actualizados 2026-02-24):
+> 4.7 Licencias otorgadas · 4.8 Construcciones · 4.9 Área construida (m²) · **4.10 Valor
+> tasado (RD$)**. URLs directas `www.one.gob.do/media/<hash>/…xlsx` (el `<hash>` es opaco y
+> puede cambiar al republicar → resolver por título desde la página, patrón CDN-rename del
+> BCRD [[bcrd-publications-connector]], no hardcodear).
+>
+> **Reconciliación EXACTA (descargué y parseé 4.10):** hoja por año; "Comerciales y Oficinas"
+> 2025 = **RD$5,127,690,356** (idéntico a la cifra ancla), Total 2024 =
+> **RD$81,496,658,121** (= los RD$81,496.7MM que reporta la ONE). Confirma que el valor
+> tasado de la ONE (≈RD$15,214/m² en 2024) es real, distinto y ~4× menor que el costo
+> derivado del MIVHED (RD$61,600/m²). Taxonomía jerárquica y más fina que el MIVHED (grupos
+> "Edificios de Apartamentos" → sub-líneas; buckets como "Comerciales y Oficinas", "Combinados
+> / Comercio y Vivienda", etc.).
+>
+> **Complejidades reales del conector** (no bloqueantes, molde = ETL Excel BCRD
+> [[bcrd-excel-historico-etl]]): (a) la orientación de las hojas CAMBIA entre años (2013:
+> filas=mes, columnas=tipo; 2024+: filas=tipo, columnas=mes) → el parser detecta la
+> orientación; (b) filas de grupo vs sub-línea → tomar solo los totales de grupo para no
+> doblar; (c) **falta el año 2015** (hueco honesto, no fabricar); (d) mapear la tipología
+> ONE↔MIVHED para poder cruzar. **Recomendación revisada: `approve`** — fuente estructurada,
+> autoritativa y ya reconciliada; el esfuerzo es un conector Excel de dificultad media, no una
+> extracción Power BI frágil.
+
 - **target_axis:** `construction`.
 - **Descripción:** Licencias, construcciones, m² y valor tasado por tipología de construcción
   (Comercial y oficinas, Edificios de apartamentos, Combinados, Centros de salud, etc.), serie
