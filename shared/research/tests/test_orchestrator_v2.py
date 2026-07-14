@@ -199,6 +199,8 @@ async def test_answer_parallel_flow_end_to_end(monkeypatch):
     """Flujo con narrate+db: router y cosecha en paralelo, merge del router, y la síntesis
     recibe la cosecha (entidad + eje curado + eje agregado por el router) sin re-cosechar."""
     from shared.research.domain_router import RoutedDomain
+    from shared.config.settings import settings as _st
+    monkeypatch.setattr(_st, "RESEARCH_SEMANTIC_ROUTER", True, raising=False)
 
     class T:
         entities = [ResolvedEntity("banking", "id1", "Banco Lafise")]

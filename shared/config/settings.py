@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     # contador vive en Redis (compartido entre workers) — ver shared/llm/budget.py.
     LLM_DAILY_BUDGET_USD: float = 0.0
 
+    # Enrutador SEMÁNTICO de dominios del motor de research (el Cerebro decide qué motores
+    # convoca la pregunta). OFF por defecto: su despliegue con cosecha concurrente en
+    # worker-threads mataba al worker uvicorn (SIGKILL, sin traceback) en TODA consulta sin
+    # caché. Con OFF, el orquestador usa el contexto CURADO + cosecha secuencial (camino
+    # probado). Re-activar (=true) sólo tras diagnosticar el crash con métricas de memoria.
+    RESEARCH_SEMANTIC_ROUTER: bool = False
+
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"
