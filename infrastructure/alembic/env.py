@@ -19,6 +19,7 @@ from shared.publications.models import Publication  # noqa: F401
 from shared.operations.models import OperationRun, OperationSchedule  # noqa: F401
 from shared.products.models import ProductActivation, ProductReadiness, Subscription  # noqa: F401
 from shared.billing.models import Tariff  # noqa: F401
+from shared.reference.models import DgiiContribuyenteSubclase  # noqa: F401
 from modules.banking_score.models.models import (  # noqa: F401
     Bank, BankingData, RatingResult, RatingAction, Report,
 )

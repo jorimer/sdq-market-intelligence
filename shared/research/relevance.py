@@ -22,26 +22,33 @@ import logging
 import re
 from typing import List, Optional
 
-from shared.registry.signals import GAP, RUBRIC
-from shared.research.models import SubQuestion
+from shared.registry.signals import GAP, REAL, RUBRIC
+from shared.research.models import Evidence, SubQuestion
 
 logger = logging.getLogger("sdq.research.relevance")
 
-# Kinds de texto libre cuya RUBRIC hay que verificar (los mismos del gate). Un pasaje
-# ``registry`` (dato/rúbrica declarada de un eje real) es temático por construcción y NO
-# se re-verifica: su procedencia ya lo ata a un eje del catálogo.
+# Kinds de texto libre cuya RUBRIC hay que verificar. Un pasaje ``registry`` ATADO A UN EJE
+# (lleva ``sector_key`` en su procedencia) es temático por construcción y NO se re-verifica.
 _TEXT_KINDS = ("doctrine", "methodology", "bulletin")
+
+# Registry EXTERNO no atado a un eje del catálogo (padrón DGII, ref ``dgii/…``): es dato REAL,
+# pero se empareja por puro solape léxico del sustantivo del vertical (p.ej. "hoteles"), sin la
+# garantía temática del registry con ``sector_key``. Por eso un conteo de contribuyentes puede
+# anclar una pregunta sobre rentabilidad/empleo/precios que NO responde. Se verifica igual que
+# el texto libre —aunque sea REAL— para no reintroducir el "ancla falsa" que cerró A4.2.
+_UNBOUND_REF_PREFIXES = ("dgii/",)
 _MAX_PASSAGES = 4       # pasajes de contexto por sub-pregunta (recorte anti-costo)
 _PASSAGE_CHARS = 500    # recorte por pasaje
 
 _SYSTEM = (
     "Sos el verificador de relevancia del motor de research de SDQ (inteligencia financiera "
-    "de República Dominicana). Dada una PREGUNTA y unos PASAJES de la doctrina/metodología "
-    "propia de SDQ, decidís si AL MENOS UNO de los pasajes es un método, marco, criterio o "
-    "definición APLICABLE para responder esa pregunta concreta. Que compartan vocabulario NO "
-    "basta: '¿cuántas cadenas de comida rápida operan?' NO se responde con la metodología de "
-    "formatos de salida de un reporte ni con la escala de un índice de riesgo-país. Sé "
-    "estricto. Respondé SÓLO un objeto JSON, sin texto alrededor."
+    "de República Dominicana). Dada una PREGUNTA y unos PASAJES (doctrina/metodología propia, o "
+    "un conteo estadístico), decidís si AL MENOS UNO es un método, marco, criterio, definición o "
+    "DATO que responda esa pregunta concreta. Que compartan vocabulario NO basta: '¿cuántas "
+    "cadenas de comida rápida operan?' NO se responde con la metodología de formatos de salida de "
+    "un reporte ni con la escala de un índice de riesgo-país; y un CONTEO de contribuyentes de un "
+    "sector NO responde una pregunta sobre rentabilidad, empleo, precios o desempeño de ese "
+    "sector. Sé estricto. Respondé SÓLO un objeto JSON, sin texto alrededor."
 )
 _USER = (
     "PREGUNTA:\n{question}\n\nPASAJES:\n{passages}\n\n"
@@ -49,9 +56,33 @@ _USER = (
 )
 
 
+def _is_unbound(e: Evidence) -> bool:
+    """¿Evidencia `registry` externa NO atada a un eje (padrón DGII)? Ancla por solape léxico."""
+    return e.kind == "registry" and (getattr(e, "ref", "") or "").startswith(_UNBOUND_REF_PREFIXES)
+
+
+def _to_verify(e: Evidence) -> bool:
+    """Evidencia anclada por solape léxico (texto libre o registry externo) → se verifica."""
+    return e.kind in _TEXT_KINDS or _is_unbound(e)
+
+
+def _best_state(evidence: list) -> str:
+    """Mejor ancla que soporta la evidencia restante: real > rúbrica > brecha."""
+    if any(e.state == REAL for e in evidence):
+        return REAL
+    if any(e.state == RUBRIC for e in evidence):
+        return RUBRIC
+    return GAP
+
+
 def _needs_check(sq: SubQuestion) -> bool:
-    """¿Esta sub-pregunta ancla RUBRIC SOLO por texto libre (el vector del bug)? Un ancla
-    ``registry`` (temática por procedencia) la exime."""
+    """¿Esta sub-pregunta ancla por solape léxico sin garantía temática (el vector del bug)?
+
+    - Registry externo (DGII): se verifica aunque sea REAL —no está atado a un eje—.
+    - Texto libre (doctrina/metodología): se verifica solo si ancló RUBRIC y no hay un
+      registry ATADO a eje que ya la exima (comportamiento original de A4.2)."""
+    if any(_is_unbound(e) for e in sq.evidence):
+        return sq.state in (REAL, RUBRIC)
     if sq.state != RUBRIC:
         return False
     if any(e.kind == "registry" for e in sq.evidence):
@@ -130,8 +161,7 @@ async def verify_rubric_relevance(question: str, sub_questions: List[SubQuestion
     # sin abandonar el lote ni dejar rúbricas permisivas por un fallo aislado.
     try:
         verdicts = await asyncio.gather(*[
-            is_method_applicable(sq.text, [e.text for e in sq.evidence
-                                           if e.kind in _TEXT_KINDS])
+            is_method_applicable(sq.text, [e.text for e in sq.evidence if _to_verify(e)])
             for sq in targets], return_exceptions=True)
     except Exception as e:  # noqa: BLE001 — el pase completo jamás rompe la request
         logger.warning("verify_rubric_relevance falló en bloque (%s); estado determinista.", e)
@@ -139,11 +169,15 @@ async def verify_rubric_relevance(question: str, sub_questions: List[SubQuestion
     for sq, verdict in zip(targets, verdicts):
         applicable = verdict is True  # Exception o False → NO aplicable → GAP (conservador)
         if not applicable:
-            sq.state = GAP
-            # Se descarta la evidencia desacreditada: si no, `_collect_sources` (que itera por
-            # `e.state`) seguiría citando la fuente irrelevante en "Fuentes" — el falso ancla
-            # que este fix elimina. Un GAP no cita evidencia (coherente con el §4).
-            sq.evidence = []
-            sq.note = ("La evidencia recuperada es doctrina/metodología que comparte "
-                       "vocabulario pero NO es método aplicable a esta sub-pregunta "
-                       "(verificado): brecha declarada, no se ancla en rúbrica irrelevante.")
+            # Se descarta SOLO la evidencia anclada por solape léxico (texto libre + registry
+            # externo DGII) que el Cerebro juzgó no pertinente —si no, `_collect_sources`
+            # seguiría citando la fuente irrelevante en "Fuentes"—. Se preservan las anclas de
+            # registry ATADAS a un eje (dato real temático), y el estado se recomputa con lo
+            # que quede: un GAP no cita evidencia; una sub-pregunta con otra ancla válida la
+            # conserva (coherente con el §4).
+            sq.evidence = [e for e in sq.evidence if not _to_verify(e)]
+            sq.state = _best_state(sq.evidence)
+            if not sq.evidence:
+                sq.note = ("La evidencia recuperada comparte vocabulario pero no es método "
+                           "aplicable ni dato pertinente a esta sub-pregunta (verificado): "
+                           "brecha declarada, no se ancla en evidencia irrelevante.")
