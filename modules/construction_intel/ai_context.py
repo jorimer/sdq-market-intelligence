@@ -40,6 +40,32 @@ def construction_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any
         })
     levels = index.get("levels") or {}
     inv = levels.get("investment_dop")
+    # Desagregado por tipología (m² licenciados + participación por tipo de construcción) —
+    # dato real del MIVHED; top 5 por m² para que la narrativa cite el peso físico de cada
+    # segmento (p.ej. Comercial y oficinas) sin fabricar. NO se expone la "inversión" por
+    # tipología: es un costo estándar derivado (m² × tarifa), redundante con los m² y distinto
+    # del valor tasado de la ONE (ver mivhed_client.parse_licenses).
+    typ_breakdown = ((index.get("typology") or {}).get("breakdown")) or []
+    typology_rows = [{
+        "typology": r.get("typology"),
+        "permits": r.get("permits"),
+        "sqm": r.get("sqm"),
+        "sqm_share_pct": r.get("sqm_share"),
+    } for r in typ_breakdown[:5]]
+    # Capa autoritativa ONE: valor tasado REAL (tasación) + construcciones validadas por
+    # tipología. Anual; se atribuye a la ONE y NO se confunde con el costo derivado del MIVHED.
+    one = index.get("one_typology") or {}
+    one_bt = one.get("by_typology") or {}
+    one_rows = [{
+        "typology": lbl,
+        "licencias": d.get("licencias"),
+        "construcciones": d.get("construcciones"),
+        "sqm": d.get("sqm"),
+        "valor_tasado_mm_dop": (round(d["valor_tasado"] / 1e6, 1)
+                                if d.get("valor_tasado") is not None else None),
+    } for lbl, d in sorted(one_bt.items(),
+                           key=lambda kv: (kv[1] or {}).get("valor_tasado") or 0,
+                           reverse=True)[:5]]
     return {
         "period": period,
         "icc_score": index.get("icc_score"),
@@ -54,6 +80,9 @@ def construction_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any
         "construction_gdp_growth_3y_pct": levels.get("prod_growth_3y"),
         "top_typology": levels.get("top_typology"),
         "top_typology_share_pct": levels.get("top_typology_share"),
+        "typology_breakdown": typology_rows,
+        "one_valor_tasado_year": one.get("year"),
+        "one_typology_valor_tasado": one_rows,
         "top_province": levels.get("top_province"),
         "top_province_share_pct": levels.get("top_province_share"),
         "score_global": index.get("icc_score"),

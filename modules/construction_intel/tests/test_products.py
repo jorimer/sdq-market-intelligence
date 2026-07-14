@@ -79,6 +79,27 @@ def test_data_signals_reports_coverage(db):
     assert h.cadence == "annual"
 
 
+def test_sample_snapshot_carries_one_valor_tasado():
+    # La muestra Deep Dive trae la capa ONE real 2025 (valor tasado por tipología) para que el
+    # reporte demo la exhiba; incluye la cifra ancla exacta.
+    snap = ConstructionProduct().sample_snapshot(ProductTier.deep_dive)
+    one = snap.payload["index"]["one_typology"]
+    assert one["year"] == 2025
+    assert one["by_typology"]["Comerciales y Oficinas"]["valor_tasado"] == 5127690355.0
+
+
+def test_render_deep_dive_includes_one_table():
+    # El render del Deep Dive arma la tabla "Valor tasado por tipología (ONE)" sin romper.
+    p = ConstructionProduct()
+    snap = p.sample_snapshot(ProductTier.deep_dive)
+    narr = p.sample_narratives(ProductTier.deep_dive)
+    import os
+    import tempfile
+    path = asyncio.run(p.render(ProductTier.deep_dive, snap, narr, sample=True,
+                                output_dir=tempfile.mkdtemp()))
+    assert os.path.getsize(path) > 0
+
+
 def test_sample_and_no_data_narratives():
     p = ConstructionProduct()
     sample = p.sample_narratives(ProductTier.deep_dive)

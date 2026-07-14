@@ -40,23 +40,45 @@ def _complete_years(licenses_by_year: Dict[int, Dict[str, Any]]) -> Dict[int, Di
             if r.get("months", 0) >= _MONTHS_FULL_YEAR}
 
 
+def _fetch_one_typology() -> Optional[Dict[str, Any]]:
+    """Detalle por tipología de la ONE (valor tasado + construcciones + licencias + m²) del
+    último año disponible, o ``None`` si la ONE no está accesible. Defensivo: la ONE es una
+    capa autoritativa COMPLEMENTARIA — si falla, el ICC (sobre MIVHED+BCRD) no se cae."""
+    try:
+        from shared.data.one_construction import one_construction_client
+        return one_construction_client.latest_typology()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("ONE construcción no disponible (se omite la capa de valor tasado): %s", e)
+        return None
+
+
 def assemble_construction_dataset(
     licenses_by_year: Optional[Dict[int, Dict[str, Any]]] = None,
     growth_by_year: Optional[Dict[int, float]] = None,
+    one_typology: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Fetch MIVHED permits + BCRD construction growth (live) unless provided, and compute
     the ICC for the latest complete year. Raises if there is no complete year. Fully-provided
-    inputs (tests) never hit the network."""
+    inputs (tests) never hit the network.
+
+    En modo live (sin ``licenses_by_year``) también trae la capa autoritativa de la ONE (valor
+    tasado por tipología) y la adjunta al índice; los tests inyectan ``one_typology`` si la
+    quieren ejercitar (o lo dejan en ``None``)."""
+    live = licenses_by_year is None
     if licenses_by_year is None:
         from shared.data.mivhed_client import mivhed_client
         licenses_by_year = mivhed_client.licenses()
     if growth_by_year is None:
         growth_by_year = _bcrd_construction_growth()
+    if one_typology is None and live:
+        one_typology = _fetch_one_typology()
     complete = _complete_years(licenses_by_year)
     if not complete:
         raise ValueError("MIVHED no devolvió ningún año completo de licencias.")
     period = max(complete)
     index = compute_construction_index(complete, growth_by_year, period=period)
+    if one_typology:
+        index["one_typology"] = one_typology
     return {"period": str(period), "index": index}
 
 
@@ -76,7 +98,8 @@ def _write_score(db: Session, period: str, index: Dict[str, Any]) -> Constructio
     row.prod_growth_3y = levels.get("prod_growth_3y")
     row.breakdown = {"dimensions": index["dimensions"], "production": index["production"],
                      "pipeline": index["pipeline"], "typology": index["typology"],
-                     "geography": index["geography"], "levels": levels}
+                     "geography": index["geography"], "levels": levels,
+                     "one_typology": index.get("one_typology")}
     row.model_version = MODEL_VERSION
     return row
 
@@ -85,10 +108,11 @@ def compute_and_persist(
     db: Session,
     licenses_by_year: Optional[Dict[int, Dict[str, Any]]] = None,
     growth_by_year: Optional[Dict[int, float]] = None,
+    one_typology: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Compute the ICC for the latest complete year, persist it and publish
     ``construction.updated``. Idempotent per period: re-running replaces the score in place."""
-    asm = assemble_construction_dataset(licenses_by_year, growth_by_year)
+    asm = assemble_construction_dataset(licenses_by_year, growth_by_year, one_typology)
     period, index = asm["period"], asm["index"]
 
     row = _write_score(db, period, index)
@@ -106,6 +130,7 @@ def backfill_scores(
     db: Session,
     licenses_by_year: Optional[Dict[int, Dict[str, Any]]] = None,
     growth_by_year: Optional[Dict[int, float]] = None,
+    one_typology: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Compute & persist the ICC for every COMPLETE, FULL-COVERAGE year.
 
@@ -116,11 +141,14 @@ def backfill_scores(
     la palanca fácil-pero-incorrecta). Mejor un punto honesto hoy; la serie crece sola a
     medida que el MIVHED acumula años. Publica el evento UNA vez (con el último año).
     Idempotente: upsert por período."""
+    live = licenses_by_year is None
     if licenses_by_year is None:
         from shared.data.mivhed_client import mivhed_client
         licenses_by_year = mivhed_client.licenses()
     if growth_by_year is None:
         growth_by_year = _bcrd_construction_growth()
+    if one_typology is None and live:
+        one_typology = _fetch_one_typology()
     complete = _complete_years(licenses_by_year)
     if not complete:
         raise ValueError("MIVHED no devolvió ningún año completo de licencias.")
@@ -132,6 +160,10 @@ def backfill_scores(
         # cobertura plena: las 4 dimensiones medibles (índice comparable año a año)
         if index["icc_score"] is None or (index["coverage"] or 0.0) < 0.999:
             continue
+        # La capa ONE (valor tasado por tipología) se adjunta SOLO al año que coincide con el
+        # año de la ONE — nunca se estampa un valor tasado de otro año en un período ajeno.
+        if one_typology and str(one_typology.get("year")) == str(y):
+            index["one_typology"] = one_typology
         _write_score(db, str(y), index)
         persisted.append(str(y))
         last = {"period": str(y), "icc_score": index["icc_score"], "band": index["band"]}

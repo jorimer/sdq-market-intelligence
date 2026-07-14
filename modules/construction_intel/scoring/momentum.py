@@ -91,6 +91,31 @@ def _hhi(shares: Dict[str, float]) -> Optional[float]:
     return round(sum((v / total) ** 2 for v in shares.values()) * 10000, 1)
 
 
+def _typology_breakdown(detail: Dict[str, Dict[str, float]]) -> List[Dict[str, Any]]:
+    """Desagregado por tipología — ``[{typology, permits, sqm, sqm_share}]`` — ordenado por
+    m² licenciados descendente. Dato real del MIVHED: cuántos permisos y cuántos m² concentra
+    cada tipo de construcción (p.ej. "Comercial y oficinas"), y su participación en los m²
+    totales del año. Devuelve ``[]`` si el año no trae el desglose.
+
+    Deliberadamente NO expone la columna "Inversión Total" por tipología: ese campo es un
+    costo estándar derivado (m² × tarifa fija anual), por lo que su desglose por tipología es
+    redundante con los m² y NO equivale al valor tasado de la ONE (ver
+    ``shared.data.mivhed_client.parse_licenses``). La señal monetaria agregada ya vive en
+    ``levels.investment_dop`` con su caveat de nominalidad."""
+    rows: List[Dict[str, Any]] = []
+    total_sqm = sum((d.get("sqm") or 0.0) for d in (detail or {}).values())
+    for name, d in (detail or {}).items():
+        sqm = round(d.get("sqm") or 0.0, 0)
+        rows.append({
+            "typology": name,
+            "permits": int(d.get("permits") or 0),
+            "sqm": sqm,
+            "sqm_share": round(sqm / total_sqm * 100, 1) if total_sqm > 0 else None,
+        })
+    rows.sort(key=lambda r: r["sqm"], reverse=True)
+    return rows
+
+
 def _diversification_dimension(mix: Dict[str, float]) -> Dict[str, Optional[float]]:
     """Diversificación de una mezcla (tipología o provincia): menor HHI = mayor score.
 
@@ -134,6 +159,11 @@ def compute_construction_index(
     pipeline = _pipeline_dimension(sqm_by_year, period)
     typology = _diversification_dimension(latest.get("by_typology") or {})
     geography = _diversification_dimension(latest.get("by_province") or {})
+    # El desglose por tipología (lista) se adjunta en el dict de salida (literal nuevo), no
+    # sobre ``typology`` (tipado ``Dict[str, Optional[float]]``): así el cambio es neutral para
+    # el baseline de mypy — no introduce ni resuelve violaciones.
+    typology_out = {**typology,
+                    "breakdown": _typology_breakdown(latest.get("by_typology_detail") or {})}
 
     dims = {
         "production": {"score": production["score"], "weight": W_PRODUCTION, "provenance": "real"},
@@ -162,7 +192,7 @@ def compute_construction_index(
         "dimensions": dims,
         "production": production,
         "pipeline": pipeline,
-        "typology": typology,
+        "typology": typology_out,
         "geography": geography,
         "levels": {  # contexto del año del índice
             "permits": latest.get("permits"),
