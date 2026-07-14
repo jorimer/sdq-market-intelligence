@@ -11,6 +11,8 @@ from shared.operations.service import (
     clear_orphaned_runs,
     get_schedules,
     get_status,
+    is_on_demand,
+    normalize_ondemand_schedules,
     recent_runs,
     register_operation,
     run_due_schedules,
@@ -25,5 +27,6 @@ __all__ = [
     "OperationRun", "OperationSchedule", "OPERATIONS", "Operation",
     "register_operation", "trigger", "all_status", "get_status", "write_status",
     "get_schedules", "set_schedule", "run_due_schedules", "seed_default_schedules",
+    "normalize_ondemand_schedules", "is_on_demand",
     "start_scheduler", "recent_runs", "clear_orphaned_runs",
 ]

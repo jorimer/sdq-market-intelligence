@@ -1848,6 +1848,7 @@
     "schedule": "Agendar",
     "schedActive": "Activo",
     "schedInactive": "Inactivo",
+    "onDemandOnly": "Solo bajo demanda",
     "scheduleError": "No se pudo guardar el agendado.",
     "scheduleSaved": "Agendado actualizado.",
     "next": "Próximo:",
