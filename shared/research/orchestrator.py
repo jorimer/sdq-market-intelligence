@@ -247,13 +247,14 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
             sections = assemble_scoping_sections(question, sub_questions, sources, gaps,
                                                  coverage_real, anchored_fraction)
             section_order = ["resumen_scoping", "lo_que_si_se_puede", "lo_que_no_se_puede",
-                             "que_cerraria_la_brecha", "metodologia", "fuentes"]
+                             "contexto_relacionado", "que_cerraria_la_brecha",
+                             "metodologia", "fuentes"]
         else:
             sections = assemble_report_sections(question, sub_questions, sources, gaps,
                                                 coverage_real, anchored_fraction,
                                                 narrative=narrative)
-            section_order = ["resumen_ejecutivo", "hallazgos", "metodologia", "fuentes",
-                             "limitaciones"]
+            section_order = ["resumen_ejecutivo", "hallazgos", "contexto_relacionado",
+                             "metodologia", "fuentes", "limitaciones"]
     section_order = [k for k in section_order if k in sections]
     t_end = time.monotonic()
     logger.info("research timings: route+pulls=%.1fs synthesis=%.1fs total=%.1fs (gate=%s)",

@@ -64,6 +64,10 @@ class SubQuestion:
     axes: List[str] = field(default_factory=list)   # sector_keys mapeados
     state: str = GAP                                 # mejor ancla disponible
     note: str = ""
+    # Dato REAL recuperado que NO responde esta sub-pregunta (el chequeo de relevancia lo
+    # descartó como ancla) pero es contexto adyacente útil. No cuenta para la cobertura ni
+    # cambia el estado — se muestra aparte, etiquetado como contexto, no como respuesta.
+    related_context: List[Evidence] = field(default_factory=list)
 
     @property
     def anchored(self) -> bool:
@@ -77,6 +81,9 @@ class SubQuestion:
             "evidence": [{"text": e.text, "source": e.source, "kind": e.kind,
                           "state": e.state, "score": e.score, "ref": e.ref}
                          for e in self.evidence],
+            "related_context": [{"text": e.text, "source": e.source, "kind": e.kind,
+                                 "score": e.score, "ref": e.ref}
+                                for e in self.related_context],
         }
 
 

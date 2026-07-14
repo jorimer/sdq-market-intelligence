@@ -175,7 +175,14 @@ async def verify_rubric_relevance(question: str, sub_questions: List[SubQuestion
             # registry ATADAS a un eje (dato real temático), y el estado se recomputa con lo
             # que quede: un GAP no cita evidencia; una sub-pregunta con otra ancla válida la
             # conserva (coherente con el §4).
+            pruned = [e for e in sq.evidence if _to_verify(e)]
             sq.evidence = [e for e in sq.evidence if not _to_verify(e)]
+            # El dato REAL descartado (p.ej. el conteo DGII) no responde la pregunta, pero es
+            # contexto adyacente útil: se preserva aparte (NO cuenta para la cobertura ni el
+            # estado). La doctrina/rúbrica descartada sí se tira (no es dato).
+            real_pruned = [e for e in pruned if e.state == REAL]
+            if real_pruned:
+                sq.related_context = real_pruned + sq.related_context
             sq.state = _best_state(sq.evidence)
             if not sq.evidence:
                 sq.note = ("La evidencia recuperada comparte vocabulario pero no es método "
