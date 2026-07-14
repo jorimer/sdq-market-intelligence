@@ -24,18 +24,34 @@ logger = logging.getLogger("sdq.knowledge")
 def retrieve(query: str, top_k: int = 5, *,
              db: Optional[Session] = None,
              include_registry: bool = True,
-             min_score: float = 0.0) -> List[Dict[str, Any]]:
+             min_score: float = 0.0,
+             min_score_by_kind: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
     """Hasta *top_k* pasajes relevantes para *query*, cada uno con su procedencia.
 
     ``db`` (opcional): si se pasa una sesión, el índice incluye el Data Registry vivo
     (qué dato real existe hoy) además del corpus documental. Sin ``db`` recupera solo
     sobre el corpus estático (doctrina + metodología). Lista vacía = sin evidencia
     (brecha declarada), nunca un relleno inventado.
+
+    ``min_score_by_kind`` (A4.1 de docs/SPEC_GATE_HONESTIDAD_Y_FUENTES_DGII.md): umbral de
+    score MÁS ALTO por ``kind`` de pasaje. La doctrina/metodología, al ser texto libre,
+    cruza un umbral absoluto por acumulación de vocabulario genérico más fácil que el dato
+    estructurado (``registry``); exigirle una barra más alta frena el falso ancla. Un kind
+    sin entrada usa ``min_score``. Se sobre-recupera para no perder pasajes ``registry``
+    válidos desplazados por doctrina que luego se filtra.
     """
     if not (query or "").strip():
         return []
     index = build_index(db=db, include_registry=include_registry)
-    hits = index.search(query, top_k=top_k, min_score=min_score)
+    # Sobre-recupera 3× cuando hay filtro por-kind: la doctrina que se va a descartar no debe
+    # desplazar a un `registry` válido fuera del top_k. 3× cubre corpus donde el ruido de texto
+    # rara vez supera 2× los pasajes de dato para una consulta; si un caso lo excede, el
+    # `registry` perdido reaparece al re-consultar (degradación suave, no fabricación).
+    fetch_k = top_k * 3 if min_score_by_kind else top_k
+    hits = index.search(query, top_k=fetch_k, min_score=min_score)
+    if min_score_by_kind:
+        hits = [(p, s) for p, s in hits
+                if s >= min_score_by_kind.get(p.kind, min_score)][:top_k]
     logger.debug("knowledge.retrieve(query=%r, top_k=%d) -> %d pasajes",
                  query, top_k, len(hits))
     return [p.as_result(score) for p, score in hits]
