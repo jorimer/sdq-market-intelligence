@@ -51,7 +51,7 @@ from shared.research.models import (
 )
 from shared.research.narrate import narrate_answer
 from shared.research.relevance import verify_rubric_relevance
-from shared.research.resolve import AXIS_KEYWORDS, _norm, resolve_targets
+from shared.research.resolve import AXIS_KEYWORDS, _norm, _tokens, resolve_targets
 
 
 async def _route_bounded(question: str, db: Optional[Session]) -> list:
@@ -75,13 +75,21 @@ def _pull_known(db: Session, targets,
 def _matches_pull(sq: SubQuestion, pull: EnginePull) -> bool:
     """¿La sub-pregunta corresponde a este motor? (nombra la entidad o el léxico del eje)."""
     q = _norm(sq.text)
-    for tok in _norm(pull.entity_label).split():
+    # ``_tokens`` descarta puntuación: un entity_label como "Comparación regional (CA y Caribe)"
+    # daba el token "caribe)" con paréntesis, que NO estaba en la sub-pregunta → el pull regional
+    # no adhería en preguntas COMPUESTAS (en las de una sola sub-pregunta lo salvaba el fallback
+    # de _merge_engine_evidence). Verificado en prod: la pregunta original dejaba la comparación
+    # regional como brecha pese a que el eje SÍ traía dato.
+    for tok in _tokens(pull.entity_label):
         if len(tok) >= 4 and tok in q:
             return True
     if any(kw in q for kw in AXIS_KEYWORDS.get(pull.sector_key, ())):
         return True
     from shared.research.sector_base import base_sector_keywords  # SPEC-4: ejes base
-    return any(kw in q for kw in base_sector_keywords().get(pull.sector_key, ()))
+    if any(kw in q for kw in base_sector_keywords().get(pull.sector_key, ())):
+        return True
+    from shared.research.regional_benchmark import REGIONAL_KEYWORDS  # SPEC-6: eje regional
+    return pull.sector_key == "regional_benchmark" and any(kw in q for kw in REGIONAL_KEYWORDS)
 
 
 def _merge_engine_evidence(sub_questions: List[SubQuestion], pulls: List[EnginePull]) -> None:
