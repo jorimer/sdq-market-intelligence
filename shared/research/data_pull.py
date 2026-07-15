@@ -24,6 +24,13 @@ from shared.research.resolve import ResolvedEntity
 
 logger = logging.getLogger("sdq.research.data_pull")
 
+# Clave canónica de la TPM (tasa de política monetaria) — la MISMA variable la citan dos
+# motores: monetary_policy (log de decisiones del BCRD, fechado por reunión) y macro (la TPM
+# como factor del IRMP, con su propia cadencia y lectura cualitativa). Se etiqueta en la
+# evidencia de ambos con esta clave para que la síntesis las reconcilie en una sola línea sin
+# parsear texto. Coincide con `key: policy_rate` en shared/doctrine/macro_sector.yaml.
+TPM_VARIABLE = "policy_rate"
+
 
 @dataclass
 class EnginePull:
@@ -110,7 +117,7 @@ def _monetary_summary(label: str, payload: Dict[str, Any], period: Optional[str]
         out.append(Evidence(
             text=(f"Política monetaria (BCRD): TPM en {_fmt(tpm)}% "
                   f"({latest.get('sentido') or 'sin cambio'}) al {latest.get('fecha') or period}."),
-            source=source, kind="engine", state=REAL, score=95.0))
+            source=source, kind="engine", state=REAL, score=95.0, variable=TPM_VARIABLE))
     fc = (payload or {}).get("forecast") or {}
     prob = fc.get("prob_hold") or fc.get("probabilidad_hold") or fc.get("hold_prob")
     taylor = fc.get("taylor") or fc.get("tasa_taylor") or fc.get("implied_taylor")
@@ -143,8 +150,11 @@ def _macro_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                     if isinstance(f.get(k), (int, float))), None)
         if name and val is not None:
             dirn = f.get("direction") or f.get("direccion") or ""
+            # `key` = clave estable del factor (policy_rate = TPM); etiqueta la variable para
+            # que la síntesis reconcilie la TPM con la que cita monetary_policy.
             out.append(Evidence(text=f"{name}: {_fmt(val)}{(' · ' + str(dirn)) if dirn else ''}.",
-                                source=source, kind="engine", state=REAL, score=88.0))
+                                source=source, kind="engine", state=REAL, score=88.0,
+                                variable=str(f.get("key") or "")))
     return out or _generic_summary(label, payload, period, source)
 
 

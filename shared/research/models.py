@@ -27,6 +27,11 @@ class Evidence:
     score: float
     ref: str = ""
     license: str = ""
+    # Clave CANÓNICA de la variable subyacente (p.ej. "policy_rate" para la TPM), cuando
+    # dos motores distintos citan la MISMA variable. Permite reconciliarlas en la síntesis de
+    # forma ESTRUCTURAL (por clave estable del catálogo/doctrina), sin parsear el texto de la
+    # evidencia. Vacío para la mayoría de evidencia (no toda variable es compartida).
+    variable: str = ""
 
     @classmethod
     def from_passage(cls, r: Dict[str, Any]) -> "Evidence":

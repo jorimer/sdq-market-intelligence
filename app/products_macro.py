@@ -195,7 +195,10 @@ def _macro_factors(db: Session) -> List[Dict]:
         with db.begin_nested():
             from modules.macro_monitor.macro_context import build_macro_context
             ctx = build_macro_context(db)
-            return [{"label": f.label, "value": f.value, "unit": f.unit,
+            # `key` = clave estable del factor en la doctrina (p.ej. "policy_rate" = TPM). Se
+            # propaga para que la síntesis del research pueda reconciliar variables compartidas
+            # entre motores (la TPM la cita también monetary_policy) sin string-matching frágil.
+            return [{"key": f.key, "label": f.label, "value": f.value, "unit": f.unit,
                      "direction": f.direction, "reading": f.reading}
                     for f in (ctx.factors or []) if f.value is not None]
     except Exception as e:  # noqa: BLE001

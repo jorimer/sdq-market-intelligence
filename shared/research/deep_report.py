@@ -20,8 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from shared.research.data_pull import EnginePull
-from shared.research.models import DeclaredGap
+from shared.research.data_pull import TPM_VARIABLE, EnginePull
+from shared.research.models import DeclaredGap, Evidence
 
 logger = logging.getLogger("sdq.research.deep_report")
 
@@ -218,6 +218,49 @@ def _latest_period(pulls: List[EnginePull]) -> Optional[str]:
     return max(dated, key=_period_key)
 
 
+def _reconcile_shared_variables(live: List[EnginePull]) -> None:
+    """Reconcilia una variable que DOS motores citan (hoy: la TPM, por ``monetary_policy`` y por
+    ``macro``/IRMP) en UNA sola línea de evidencia: el corte más reciente + ambas lecturas
+    cualitativas —"hold" según la decisión del BCRD y la postura del factor en el IRMP—. Así el
+    mismo número no aparece dos veces con etiqueta/fecha distintas en el mismo informe.
+
+    Estructural (empareja por ``Evidence.variable``, no por texto). Autoridad de la CIFRA: el log
+    de decisiones del BCRD (``monetary_policy``, fechado por reunión); el IRMP aporta la lectura
+    cualitativa. Si la serie macro registra un nivel distinto (vintage/escala) se MUESTRA, no se
+    oculta. No-op si falta cualquiera de los dos motores o la evidencia etiquetada (mutación
+    in-situ de ``EnginePull.evidence``)."""
+    mon = next((p for p in live if p.sector_key == "monetary_policy"), None)
+    mac = next((p for p in live if p.sector_key == "macro"), None)
+    if mon is None or mac is None:
+        return
+    mon_ev = next((e for e in mon.evidence if e.variable == TPM_VARIABLE), None)
+    mac_ev = next((e for e in mac.evidence if e.variable == TPM_VARIABLE), None)
+    if mon_ev is None or mac_ev is None:
+        return
+    latest = (mon.payload or {}).get("latest") or {}
+    tpm = latest.get("tpm")
+    if tpm is None:
+        return  # sin la cifra autoritativa no se consolida
+    sentido = latest.get("sentido") or "sin cambio"
+    fecha = latest.get("fecha") or mon.period
+    factor = next((f for f in ((mac.payload or {}).get("factors") or [])
+                   if isinstance(f, dict) and f.get("key") == TPM_VARIABLE), {})
+    irmp_dir = factor.get("direction") or factor.get("direccion") or ""
+    mac_val = next((factor[k] for k in ("value", "valor")
+                    if isinstance(factor.get(k), (int, float))), None)
+    disc = (f" La serie del IRMP registra {_fmt(mac_val)}%."
+            if isinstance(mac_val, (int, float)) and abs(float(mac_val) - float(tpm)) > 0.01
+            else "")
+    reading = f"; postura en el IRMP: {irmp_dir}" if irmp_dir else ""
+    text = (f"Política monetaria (BCRD): TPM en {_fmt(tpm)}% — decisión {sentido} al {fecha}"
+            f"{reading}.{disc}")
+    consolidated = Evidence(text=text, source=mon_ev.source, kind=mon_ev.kind,
+                            state=mon_ev.state, score=mon_ev.score, variable=TPM_VARIABLE)
+    # Reemplaza la línea de la TPM del motor monetario por la consolidada; quita la del macro.
+    mon.evidence = [consolidated if e is mon_ev else e for e in mon.evidence]
+    mac.evidence = [e for e in mac.evidence if e is not mac_ev]
+
+
 async def build_synthesis_report(question: str, db: Optional[Session], targets,
                                  forward_gaps: List[DeclaredGap],
                                  pulls: Optional[List[EnginePull]] = None) -> Optional[DeepReport]:
@@ -242,6 +285,10 @@ async def build_synthesis_report(question: str, db: Optional[Session], targets,
     live = [p for p in pulls if p.ok and p.payload]
     if not live:
         return None
+
+    # Reconcilia variables citadas por dos motores (la TPM) ANTES de narrar y de armar la
+    # evidencia, para que ni el Cerebro ni la sección de evidencia vean el número duplicado.
+    _reconcile_shared_variables(live)
 
     thesis = await narrate_synthesis(question, live,
                                      forward_gaps=[g.note for g in forward_gaps],
