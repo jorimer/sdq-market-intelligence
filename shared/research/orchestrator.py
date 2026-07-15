@@ -78,7 +78,10 @@ def _matches_pull(sq: SubQuestion, pull: EnginePull) -> bool:
     for tok in _norm(pull.entity_label).split():
         if len(tok) >= 4 and tok in q:
             return True
-    return any(kw in q for kw in AXIS_KEYWORDS.get(pull.sector_key, ()))
+    if any(kw in q for kw in AXIS_KEYWORDS.get(pull.sector_key, ())):
+        return True
+    from shared.research.sector_base import base_sector_keywords  # SPEC-4: ejes base
+    return any(kw in q for kw in base_sector_keywords().get(pull.sector_key, ()))
 
 
 def _merge_engine_evidence(sub_questions: List[SubQuestion], pulls: List[EnginePull]) -> None:
