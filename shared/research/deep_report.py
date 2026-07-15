@@ -14,13 +14,14 @@ del sector. Los títulos de sección son data local (no se importa el módulo so
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from shared.research.data_pull import EnginePull
-from shared.research.models import DeclaredGap
+from shared.research.data_pull import TPM_VARIABLE, EnginePull
+from shared.research.models import DeclaredGap, Evidence
 
 logger = logging.getLogger("sdq.research.deep_report")
 
@@ -180,6 +181,86 @@ def _headline(payload: Dict[str, Any]) -> str:
     return ""
 
 
+# El "Período" de portada tiene que ser la fecha MÁS RECIENTE entre TODOS los motores que la
+# pregunta convoca, no la del primero de la lista. Sin esto, el período era un artefacto del
+# orden de iteración de `pulls` (entidades → axes → context): para research macro/sectorial —
+# sin entidad nombrada— la portada mostraba el período del primer motor de la lista, no el corte
+# más nuevo del informe (hallazgo del piloto P4-P6: dos preguntas del mismo día mostraron
+# 2025-12-31 y 2026-06-30 solo por qué motor quedó primero). Los períodos vienen en formatos
+# mixtos (año, ISO, trimestre) → una comparación de string ingenua ordena mal ("2026-Q1" vs
+# "2026-06-30"): se parsea a (año, mes, día) antes de tomar el máximo.
+def _period_key(period: Optional[str]) -> Tuple[int, int, int]:
+    """Clave ordenable de un período en formatos mixtos: año solo ('2025'), ISO ('2026-06-30'
+    o '2026-06') o trimestre ('2026-Q1' / '2026-T1'). Devuelve ``(año, mes, día)``; lo no
+    parseable ordena al fondo (época negativa) para que nunca gane el 'más reciente' por error."""
+    if not period:
+        return (-1, -1, -1)
+    s = str(period).strip()
+    # Trimestre: 2026-Q1 / 2026Q1 / 2026-T1 → fin de trimestre (cota superior ordenable).
+    m = re.match(r"^(\d{4})[-\s]?[QqTt]([1-4])$", s)
+    if m:
+        return (int(m.group(1)), int(m.group(2)) * 3, 31)
+    # ISO / año-mes / año: 2026-06-30 · 2026-06 · 2026.
+    m = re.match(r"^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$", s)
+    if m:
+        return (int(m.group(1)),
+                int(m.group(2)) if m.group(2) else 0,
+                int(m.group(3)) if m.group(3) else 0)
+    return (-1, -1, -1)
+
+
+def _latest_period(pulls: List[EnginePull]) -> Optional[str]:
+    """El período MÁS RECIENTE entre los motores convocados (no el del primero de la lista).
+    ``None`` si ninguno trae período. Conserva el string original del período ganador."""
+    dated = [p.period for p in pulls if p.period]
+    if not dated:
+        return None
+    return max(dated, key=_period_key)
+
+
+def _reconcile_shared_variables(live: List[EnginePull]) -> None:
+    """Reconcilia una variable que DOS motores citan (hoy: la TPM, por ``monetary_policy`` y por
+    ``macro``/IRMP) en UNA sola línea de evidencia: el corte más reciente + ambas lecturas
+    cualitativas —"hold" según la decisión del BCRD y la postura del factor en el IRMP—. Así el
+    mismo número no aparece dos veces con etiqueta/fecha distintas en el mismo informe.
+
+    Estructural (empareja por ``Evidence.variable``, no por texto). Autoridad de la CIFRA: el log
+    de decisiones del BCRD (``monetary_policy``, fechado por reunión); el IRMP aporta la lectura
+    cualitativa. Si la serie macro registra un nivel distinto (vintage/escala) se MUESTRA, no se
+    oculta. No-op si falta cualquiera de los dos motores o la evidencia etiquetada (mutación
+    in-situ de ``EnginePull.evidence``)."""
+    mon = next((p for p in live if p.sector_key == "monetary_policy"), None)
+    mac = next((p for p in live if p.sector_key == "macro"), None)
+    if mon is None or mac is None:
+        return
+    mon_ev = next((e for e in mon.evidence if e.variable == TPM_VARIABLE), None)
+    mac_ev = next((e for e in mac.evidence if e.variable == TPM_VARIABLE), None)
+    if mon_ev is None or mac_ev is None:
+        return
+    latest = (mon.payload or {}).get("latest") or {}
+    tpm = latest.get("tpm")
+    if tpm is None:
+        return  # sin la cifra autoritativa no se consolida
+    sentido = latest.get("sentido") or "sin cambio"
+    fecha = latest.get("fecha") or mon.period
+    factor = next((f for f in ((mac.payload or {}).get("factors") or [])
+                   if isinstance(f, dict) and f.get("key") == TPM_VARIABLE), {})
+    irmp_dir = factor.get("direction") or factor.get("direccion") or ""
+    mac_val = next((factor[k] for k in ("value", "valor")
+                    if isinstance(factor.get(k), (int, float))), None)
+    disc = (f" La serie del IRMP registra {_fmt(mac_val)}%."
+            if isinstance(mac_val, (int, float)) and abs(float(mac_val) - float(tpm)) > 0.01
+            else "")
+    reading = f"; postura en el IRMP: {irmp_dir}" if irmp_dir else ""
+    text = (f"Política monetaria (BCRD): TPM en {_fmt(tpm)}% — decisión {sentido} al {fecha}"
+            f"{reading}.{disc}")
+    consolidated = Evidence(text=text, source=mon_ev.source, kind=mon_ev.kind,
+                            state=mon_ev.state, score=mon_ev.score, variable=TPM_VARIABLE)
+    # Reemplaza la línea de la TPM del motor monetario por la consolidada; quita la del macro.
+    mon.evidence = [consolidated if e is mon_ev else e for e in mon.evidence]
+    mac.evidence = [e for e in mac.evidence if e is not mac_ev]
+
+
 async def build_synthesis_report(question: str, db: Optional[Session], targets,
                                  forward_gaps: List[DeclaredGap],
                                  pulls: Optional[List[EnginePull]] = None) -> Optional[DeepReport]:
@@ -204,6 +285,10 @@ async def build_synthesis_report(question: str, db: Optional[Session], targets,
     live = [p for p in pulls if p.ok and p.payload]
     if not live:
         return None
+
+    # Reconcilia variables citadas por dos motores (la TPM) ANTES de narrar y de armar la
+    # evidencia, para que ni el Cerebro ni la sección de evidencia vean el número duplicado.
+    _reconcile_shared_variables(live)
 
     thesis = await narrate_synthesis(question, live,
                                      forward_gaps=[g.note for g in forward_gaps],
@@ -239,9 +324,12 @@ async def build_synthesis_report(question: str, db: Optional[Session], targets,
                      for e in targets.entities)), live[0])
     titles = {k: SECTION_TITLES.get(k, k.replace("_", " ").title()) for k in ordered}
     sources = list(dict.fromkeys(p.source for p in live))
+    # El período de portada = el corte MÁS RECIENTE de todos los motores, no el de `ent_pull`
+    # (que se elige por entidad/orden, no por fecha). Fallback a ent_pull.period si ninguno data.
+    period = _latest_period(live) or ent_pull.period
     return DeepReport(
         entity_label=ent_pull.entity_label, sector_key=ent_pull.sector_key,
-        period=ent_pull.period, ordered_keys=ordered, sections=sections, titles=titles,
+        period=period, ordered_keys=ordered, sections=sections, titles=titles,
         charts=_charts_from_payload(ent_pull.payload),
         tables=_tables_from_payload(ent_pull.payload),
         headline=_headline(ent_pull.payload), sources=sources,
