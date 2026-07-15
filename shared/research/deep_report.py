@@ -14,6 +14,7 @@ del sector. Los títulos de sección son data local (no se importa el módulo so
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -180,6 +181,43 @@ def _headline(payload: Dict[str, Any]) -> str:
     return ""
 
 
+# El "Período" de portada tiene que ser la fecha MÁS RECIENTE entre TODOS los motores que la
+# pregunta convoca, no la del primero de la lista. Sin esto, el período era un artefacto del
+# orden de iteración de `pulls` (entidades → axes → context): para research macro/sectorial —
+# sin entidad nombrada— la portada mostraba el período del primer motor de la lista, no el corte
+# más nuevo del informe (hallazgo del piloto P4-P6: dos preguntas del mismo día mostraron
+# 2025-12-31 y 2026-06-30 solo por qué motor quedó primero). Los períodos vienen en formatos
+# mixtos (año, ISO, trimestre) → una comparación de string ingenua ordena mal ("2026-Q1" vs
+# "2026-06-30"): se parsea a (año, mes, día) antes de tomar el máximo.
+def _period_key(period: Optional[str]) -> Tuple[int, int, int]:
+    """Clave ordenable de un período en formatos mixtos: año solo ('2025'), ISO ('2026-06-30'
+    o '2026-06') o trimestre ('2026-Q1' / '2026-T1'). Devuelve ``(año, mes, día)``; lo no
+    parseable ordena al fondo (época negativa) para que nunca gane el 'más reciente' por error."""
+    if not period:
+        return (-1, -1, -1)
+    s = str(period).strip()
+    # Trimestre: 2026-Q1 / 2026Q1 / 2026-T1 → fin de trimestre (cota superior ordenable).
+    m = re.match(r"^(\d{4})[-\s]?[QqTt]([1-4])$", s)
+    if m:
+        return (int(m.group(1)), int(m.group(2)) * 3, 31)
+    # ISO / año-mes / año: 2026-06-30 · 2026-06 · 2026.
+    m = re.match(r"^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$", s)
+    if m:
+        return (int(m.group(1)),
+                int(m.group(2)) if m.group(2) else 0,
+                int(m.group(3)) if m.group(3) else 0)
+    return (-1, -1, -1)
+
+
+def _latest_period(pulls: List[EnginePull]) -> Optional[str]:
+    """El período MÁS RECIENTE entre los motores convocados (no el del primero de la lista).
+    ``None`` si ninguno trae período. Conserva el string original del período ganador."""
+    dated = [p.period for p in pulls if p.period]
+    if not dated:
+        return None
+    return max(dated, key=_period_key)
+
+
 async def build_synthesis_report(question: str, db: Optional[Session], targets,
                                  forward_gaps: List[DeclaredGap],
                                  pulls: Optional[List[EnginePull]] = None) -> Optional[DeepReport]:
@@ -239,9 +277,12 @@ async def build_synthesis_report(question: str, db: Optional[Session], targets,
                      for e in targets.entities)), live[0])
     titles = {k: SECTION_TITLES.get(k, k.replace("_", " ").title()) for k in ordered}
     sources = list(dict.fromkeys(p.source for p in live))
+    # El período de portada = el corte MÁS RECIENTE de todos los motores, no el de `ent_pull`
+    # (que se elige por entidad/orden, no por fecha). Fallback a ent_pull.period si ninguno data.
+    period = _latest_period(live) or ent_pull.period
     return DeepReport(
         entity_label=ent_pull.entity_label, sector_key=ent_pull.sector_key,
-        period=ent_pull.period, ordered_keys=ordered, sections=sections, titles=titles,
+        period=period, ordered_keys=ordered, sections=sections, titles=titles,
         charts=_charts_from_payload(ent_pull.payload),
         tables=_tables_from_payload(ent_pull.payload),
         headline=_headline(ent_pull.payload), sources=sources,
