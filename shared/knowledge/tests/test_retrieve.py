@@ -59,7 +59,9 @@ def test_corpus_loads_and_every_passage_has_lineage():
 
 # ─── contrato de retrieve() ───────────────────────────────────────────
 def test_retrieve_returns_contract_keys():
-    results = retrieve("estándar de reporte metodología fuentes limitaciones", top_k=3)
+    # Consulta a la doctrina citable del corpus (rationale de macro_sector · inflación).
+    # Antes apuntaba a docs/REPORT_STANDARD.md, retirado del manifest en Hallazgo 7.
+    results = retrieve("inflación erosiona el poder de compra consumo comercio", top_k=3)
     assert results
     for r in results:
         assert {"text", "source", "score"} <= set(r)   # contrato preservado

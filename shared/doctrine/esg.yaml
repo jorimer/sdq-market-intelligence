@@ -50,3 +50,11 @@ bands:
 rubric_defaults:
   fossil_dependence: 0.5
   carbon_intensity: 0.5
+
+# Prosa CITABLE A CLIENTE, una por dimensión (Hallazgo 7). Lo ÚNICO que el retrieval indexa de
+# este archivo; el resto (pesos, variables, bandas, rúbrica) lo lee el motor de scoring directo.
+dimension_rationales:
+  physical_risk: "Exposición física al riesgo climático: huracanes (HURDAT2/NOAA) y sensibilidad climática general (ND-GAIN). Es la dimensión de mayor peso porque el Caribe enfrenta el riesgo físico climático más alto y menos discrecional del conjunto — no es una variable de política, es geografía. Dato real."
+  transition_risk: "Dependencia de combustibles fósiles e intensidad de carbono de la matriz energética — la exposición del país al costo de una transición energética global, no al clima físico en sí. Hoy corre sobre rúbrica uniforme (0.5) mientras se conecta el balance energético/PEN como fuente real."
+  adaptive_capacity: "Preparación física y económica del país para responder a impactos climáticos ya en curso (ND-GAIN readiness). Compensa parcialmente el riesgo físico: dos países con igual exposición a huracanes no enfrentan el mismo riesgo neto si uno tiene mayor capacidad de respuesta. Dato real."
+  governance: "Calidad de gobernanza y preparación social para gestionar el riesgo climático (ND-GAIN). Dato real."

@@ -59,3 +59,11 @@ rubric_defaults:
   financial_inclusion: 50
   informality_rate: 50
   secondary_coverage: 50
+
+# Prosa CITABLE A CLIENTE, una por dimensión (Hallazgo 7). Lo ÚNICO que el retrieval indexa de
+# este archivo; el resto (pesos, variables, bandas, rúbrica) lo lee el motor de scoring directo.
+dimension_rationales:
+  health: "Esperanza de vida y mortalidad infantil, ambas del WDI nacional. Dato real."
+  education: "Alfabetización y cobertura secundaria neta por región (ONE/ENHOGAR), más años promedio de escolaridad a nivel nacional (ONE no publica esta última por región). Dato real."
+  living_standards: "Ingreso per cápita — proxy declarado de ingreso laboral por hora (ONE), no ingreso per cápita del hogar — y tasa de pobreza por región (ONE). Dato real."
+  inclusion: "Inclusión financiera (cajeros por 100 mil adultos, Banco Mundial Findex, proxy de acceso) e informalidad laboral (ONE/BCRD, Encuesta Continua de Fuerza de Trabajo). Dato real."
