@@ -98,7 +98,7 @@ def _iter_answer_keys(answer: ResearchAnswer):
     pero devuelve las CLAVES, para alimentar el render por-narrativa)."""
     if answer.gate == GATE_SCOPING:
         keys = ["resumen_scoping", "lo_que_si_se_puede", "lo_que_no_se_puede",
-                "que_cerraria_la_brecha", "metodologia", "fuentes"]
+                "que_cerraria_la_brecha", "metodologia", "fuentes", "limitaciones"]
     else:
         keys = ["resumen_ejecutivo", "hallazgos", "metodologia", "fuentes", "limitaciones"]
     return [(k, None) for k in keys]

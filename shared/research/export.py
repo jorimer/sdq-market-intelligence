@@ -31,6 +31,7 @@ _SCOPING_ORDER: List[Tuple[str, str]] = [
     ("Qué cerraría la brecha", "que_cerraria_la_brecha"),
     ("Metodología", "metodologia"),
     ("Fuentes", "fuentes"),
+    ("Limitaciones", "limitaciones"),   # Hallazgo 9: el scoping también declara sus límites
 ]
 
 

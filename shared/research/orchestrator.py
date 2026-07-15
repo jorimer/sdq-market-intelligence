@@ -245,10 +245,11 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
                                              forward_gaps=[g.note for g in forward])
         if gate == GATE_SCOPING:
             sections = assemble_scoping_sections(question, sub_questions, sources, gaps,
-                                                 coverage_real, anchored_fraction)
+                                                 coverage_real, anchored_fraction,
+                                                 narrative=narrative)
             section_order = ["resumen_scoping", "lo_que_si_se_puede", "lo_que_no_se_puede",
                              "contexto_relacionado", "que_cerraria_la_brecha",
-                             "metodologia", "fuentes"]
+                             "metodologia", "fuentes", "limitaciones"]
         else:
             sections = assemble_report_sections(question, sub_questions, sources, gaps,
                                                 coverage_real, anchored_fraction,
