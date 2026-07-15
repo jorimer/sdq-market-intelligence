@@ -933,6 +933,7 @@ shared/indices/tests/test_indices.py:0: error: Argument 1 to "IndexConfig" has i
 shared/indices/tests/test_indices.py:0: error: Argument 1 to "IndexConfig" has incompatible type "**dict[str, Collection[object]]"; expected "frozenset[str]"  [arg-type]
 shared/indices/tests/test_indices.py:0: error: Argument 1 to "IndexConfig" has incompatible type "**dict[str, Collection[object]]"; expected "str"  [arg-type]
 shared/indices/tests/test_indices.py:0: error: Argument 1 to "IndexConfig" has incompatible type "**dict[str, Collection[object]]"; expected "tuple[Band, ...]"  [arg-type]
+shared/knowledge/corpus/__init__.py:0: error: Library stubs not installed for "yaml"  [import-untyped]
 shared/narrative/claude_engine.py:0: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
 shared/narrative/claude_engine.py:0: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
 shared/narrative/derived.py:0: error: Argument "key" to "max" has incompatible type "Callable[[dict[str, Any | int | None]], Any | int | None]"; expected "Callable[[dict[str, Any | int | None]], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"  [arg-type]

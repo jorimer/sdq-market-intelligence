@@ -81,3 +81,13 @@ bands:
   - {name: Alto,  lower: 70.0, color: "#047857"}
   - {name: Medio, lower: 40.0, color: "#F59E0B"}
   - {name: Bajo,  lower: 0.0,  color: "#991B1B"}
+
+# Prosa CITABLE A CLIENTE, una por dimensión (Hallazgo 7). Es lo ÚNICO de este archivo que el
+# retrieval indexa; el resto (pesos, variables, bandas, rúbrica) lo lee el motor de scoring
+# directo. Escrito para que un cliente lo lea — sin jerga de config ni identificadores de código.
+dimension_rationales:
+  macro: "Mide cómo las condiciones macroeconómicas del país golpean específicamente a este sector — no el macro genérico, sino su exposición particular (ver Doctrina · Contrato macro→sectorial). Es la dimensión de mayor peso porque ningún sector opera aislado del ciclo nacional, y es dato real derivado del contrato macro-sectorial, no juicio de casa."
+  business: "Clima de negocios: facilidad de operar, costo operativo y rentabilidad real del sector. La rentabilidad usa dato real de la Encuesta Nacional de Actividad Económica (ENAE) donde el sector está cubierto (8 de 17 sectores); donde no, la variable queda ausente en vez de rellenarse — evita distorsionar el índice con un valor inventado. Facilidad de negocio y costo operativo son hoy rúbrica uniforme (neutral, no discrimina entre sectores) mientras no haya dato real per-sector."
+  talent: "Disponibilidad y nivel de competencias de la fuerza laboral relevante para el sector. Es hoy rúbrica uniforme (neutral 50 para los 17 sectores) — un limitante estructural de mediano plazo que SDQ aún no discrimina con dato real por sector."
+  regulation: "Calidad y estabilidad del marco regulatorio que enmarca al sector. Pesa menos que negocios o talento porque, a diferencia de estos, hoy también es rúbrica uniforme (neutral) en tanto no se conecte el dato real del WGI que ya alimenta el eje de riesgo regulatorio nacional (IRMP)."
+  sector: "Crecimiento y tamaño relativo del sector dentro del valor agregado nacional — dato real del BCRD para los 17 sectores. Es la dimensión que, junto con el entorno macro, mueve el ranking entre sectores hoy, porque negocios/talento/regulación siguen en rúbrica uniforme."
