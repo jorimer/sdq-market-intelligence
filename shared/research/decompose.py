@@ -27,6 +27,54 @@ _CONNECTORS = re.compile(
 )
 _MIN_TOKENS = 3   # una cláusula con menos que esto no es una sub-pregunta autónoma
 
+# Separador SECUNDARIO: coma+"y"/"e" (A.5 de docs/SPEC_GATE_HONESTIDAD_Y_FUENTES_DGII.md).
+# Una "y" simple no parte (rompería enumeraciones "A, B y C"); la coma+"y" solo se parte si la
+# cláusula posterior ENCABEZA con un interrogativo → es una segunda PREGUNTA, no una enumeración
+# ("A, B, y C" —coma de Oxford— tras ", y" trae un sustantivo, no un interrogativo). El grupo se
+# captura para poder RE-UNIR sin distorsionar el texto cuando el corte no procede.
+_COMMA_AND = re.compile(r"(,\s+(?:y|e)\s+)", re.IGNORECASE)
+
+# Interrogativos que, al encabezar la cláusula tras ", y"/", e", señalan una segunda pregunta.
+# Salvaguarda anti-falso-positivo por ACENTO: 'qué/cómo/cuándo/dónde' (interrogativos) tienen
+# homógrafo no-interrogativo sin acento ('que'=relativo, 'como'=comparativo, 'cuando'/'donde'=
+# conjunciones) → solo la forma ACENTUADA dispara el corte. Los sin homógrafo ambiguo ('cual',
+# 'cuanto'...) se aceptan con o sin acento. Conservador por diseño: ante la duda (interrogativo
+# ambiguo escrito sin acento) NO parte y se queda como una sola sub-pregunta (sin regresión).
+_INTERROGATIVE_LEAD = frozenset((
+    "cual", "cuales", "cuál", "cuáles",
+    "cuanto", "cuanta", "cuantos", "cuantas",
+    "cuánto", "cuánta", "cuántos", "cuántas",
+    "qué", "cómo", "cuándo", "dónde",
+))
+_LEAD_WORD = re.compile(r"\s*([a-záéíóúñ]+)", re.IGNORECASE)
+
+
+def _leads_with_interrogative(segment: str) -> bool:
+    """¿La cláusula EMPIEZA con un interrogativo (señal de una segunda pregunta)? Se mira el
+    primer token conservando acentos: solo así se distingue 'qué/cómo' (pregunta) de 'que/como'
+    (relativo/comparativo). Ante la ambigüedad sin acento, devuelve False (no parte)."""
+    m = _LEAD_WORD.match(segment or "")
+    return bool(m and m.group(1).lower() in _INTERROGATIVE_LEAD)
+
+
+def _split_compound_and(clause: str) -> List[str]:
+    """Parte una cláusula en "X, y Q" SOLO cuando Q (la parte tras ", y"/", e") encabeza con un
+    interrogativo — dos preguntas distintas. Una enumeración ("turismo, minería y construcción",
+    o con coma de Oxford "turismo, minería, y construcción") trae un sustantivo tras ", y" → NO
+    se parte, se re-une con su conector original intacto."""
+    tokens = _COMMA_AND.split(clause)
+    if len(tokens) == 1:
+        return [clause]
+    out = [tokens[0]]
+    # tokens = [seg0, sep1, seg1, sep2, seg2, …] — separadores en los índices impares.
+    for i in range(1, len(tokens) - 1, 2):
+        sep, seg = tokens[i], tokens[i + 1]
+        if _leads_with_interrogative(seg):
+            out.append(seg)                    # corte real → nueva sub-pregunta
+        else:
+            out[-1] = out[-1] + sep + seg       # enumeración → re-unir sin distorsionar
+    return out
+
 # Umbral de ANCLA: un pasaje con score BM25 por debajo de esto NO ancla la sub-pregunta
 # —es un roce léxico marginal, no evidencia. Sin él, una pregunta sobre un tópico/entidad
 # ausente del corpus (p.ej. "precio del cacao en Marte") se colgaría de cualquier doc que
@@ -53,19 +101,24 @@ DEFAULT_MIN_ANCHOR_SCORE_OFFTOPIC = 14.0
 
 
 def split_question(text: str) -> List[str]:
-    """Parte la pregunta en cláusulas sustantivas, deduplicando y preservando orden."""
+    """Parte la pregunta en cláusulas sustantivas, deduplicando y preservando orden.
+
+    Dos niveles: (1) conectores duros (. ? ; salto de línea, "y además"…); (2) coma+"y"/"e"
+    SOLO si la parte posterior encabeza con un interrogativo — una segunda pregunta, no una
+    enumeración (``_split_compound_and``)."""
     parts = _CONNECTORS.split(text or "")
     out: List[str] = []
     seen = set()
     for p in parts:
-        clause = p.strip(" \t\r\n-·•")
-        if len(clause.split()) < _MIN_TOKENS:
-            continue
-        key = clause.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(clause)
+        for clause in _split_compound_and(p):
+            clause = clause.strip(" \t\r\n-·•")
+            if len(clause.split()) < _MIN_TOKENS:
+                continue
+            key = clause.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(clause)
     # Si no se pudo partir (pregunta corta), la pregunta entera es una sub-pregunta.
     if not out and (text or "").strip():
         out.append(text.strip())
