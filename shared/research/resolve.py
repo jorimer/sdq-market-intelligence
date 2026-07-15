@@ -44,8 +44,17 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
     # "mercado asegurador" no matcheaba ("aseguradora" es más largo y "seguro" no es
     # substring de "asegurador") → el eje primario no se detectaba y el gate caía a scoping.
     "insurance": ("seguro", "asegurador", "isf", "primas", "siniestralidad"),
+    # Además de las frases técnicas, lenguaje natural de comprador (hallazgo del piloto P4-P6:
+    # con las frases técnicas SÍ ruteaba, pero preguntas normales de "motores del crecimiento"
+    # nunca lo activaban → la tabla de 17 sectores no salía).
     "economic_structure": ("estructura de la economia", "estructura economica",
-                           "sectores de origen", "valor agregado por sector"),
+                           "sectores de origen", "valor agregado por sector",
+                           "motor del crecimiento", "motores del crecimiento",
+                           "motores sectoriales", "motor sectorial",
+                           "que sectores impulsan", "que mueve la economia",
+                           "aporte de cada sector", "aporte sectorial",
+                           "contribucion sectorial", "contribucion de cada sector",
+                           "sectores que mas crecen", "que sector crece mas"),
 }
 
 # Términos genéricos que NO distinguen una entidad (evitan matches espurios al resolver
@@ -164,6 +173,17 @@ _CONTEXT_FOR: Dict[str, Tuple[str, ...]] = {
 _REGULATORY_TERMS = ("regulator", "politic", "gobernanz", "riesgo pais", "soberano",
                      "confianza", "electoral")
 
+# Señal de intención SECTORIAL en una pregunta macro/crecimiento: si el primario es 'macro' y
+# la pregunta toca la composición por sector, se suma economic_structure como CONTEXTO (la
+# tabla de aporte por sector). Se condiciona a estos términos —en vez de sumarlo a CADA macro—
+# para no inflar el contexto de una pregunta macro genérica (ver `_MAX_DOMAINS` en
+# domain_router.py: un dictamen de 3-4 motores es síntesis, uno de 8 es ruido). Los términos son
+# genéricos ('sector'/'sectorial'/'rama de actividad') a propósito: los específicos de motores
+# sectoriales ya elevan economic_structure a PRIMARIO vía AXIS_KEYWORDS, y este bloque salta lo
+# que ya es primario.
+_SECTORAL_INTENT_TERMS = ("sector", "sectorial", "rama de actividad", "ramas de actividad",
+                          "actividad economica", "por industria", "composicion de la economia")
+
 
 def context_axes(question: str, primary: List[str]) -> List[str]:
     """Dominios de contexto (a-nivel-sistema) que la pregunta convoca, además de los
@@ -177,6 +197,12 @@ def context_axes(question: str, primary: List[str]) -> List[str]:
     # Contexto regulatorio/político si la pregunta lo toca (el producto 'macro' lo cubre).
     if any(_kw_hit(t, q) for t in _REGULATORY_TERMS) and "macro" not in out and "macro" not in primary:
         out.append("macro")
+    # Composición sectorial como contexto de una pregunta macro/crecimiento SOLO si la pregunta
+    # toca la intención sectorial — no se infla el contexto de cada macro genérica.
+    if ("macro" in primary and "economic_structure" not in primary
+            and "economic_structure" not in out
+            and any(_kw_hit(t, q) for t in _SECTORAL_INTENT_TERMS)):
+        out.append("economic_structure")
     return out
 
 
