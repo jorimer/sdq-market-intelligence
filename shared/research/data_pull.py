@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy.orm import Session
 
@@ -510,6 +510,42 @@ def pull_sector_base(sector_key: str) -> Optional[EnginePull]:
     )
 
 
+REGIONAL_AXIS = "regional_benchmark"
+
+
+def pull_regional_benchmark() -> Optional[EnginePull]:
+    """SPEC-6 — RD vs promedio Centroamérica+Caribe (WDI): gran-composición + crecimiento, con el
+    límite honesto declarado. ``None`` si el WDI no responde (→ brecha declarada, no fabricación)."""
+    from shared.research.regional_benchmark import REGIONAL_SOURCE, build_regional_comparison
+
+    data = build_regional_comparison()
+    if data is None:
+        return None
+    ev: List[Evidence] = []
+    comp = cast(List[Dict[str, Any]], data.get("composition") or [])
+    if comp:
+        bits = "; ".join(
+            f"{c['sector']} RD {_fmt(c['dom'])}% vs {_fmt(c['region_avg'])}% regional"
+            for c in comp)
+        yr = data.get("year")
+        ev.append(_ev(f"Composición del valor agregado — {bits} · {yr} (WDI, promedio de "
+                      f"{comp[0]['n_peers']} pares de Centroamérica y el Caribe).",
+                      REGIONAL_SOURCE, 88.0))
+    growth = data.get("growth")
+    if isinstance(growth, dict):
+        ev.append(_ev(f"Crecimiento del PIB real: RD {_fmt(growth['dom'])}% vs {_fmt(growth['region_avg'])}% "
+                      f"promedio regional · {growth['year']} (WDI).", REGIONAL_SOURCE, 88.0))
+    if not ev:
+        return None
+    # Límite de honestidad: el WDI no desagrega minería/turismo/construcción cross-country.
+    ev.append(_ev("Alcance de la comparación regional: el WDI solo desagrega agricultura, industria y "
+                  "servicios entre países — no permite comparar minería, turismo ni construcción por "
+                  "separado contra la región.", REGIONAL_SOURCE, 60.0))
+    return EnginePull(sector_key=REGIONAL_AXIS, entity_label="Comparación regional (CA y Caribe)",
+                      period=str(data.get("year") or ""), source=REGIONAL_SOURCE,
+                      payload={"has_data": True, "regional": True}, evidence=ev, ok=True)
+
+
 def pull_axis(db: Optional[Session], sector_key: str) -> EnginePull:
     """Cosecha a-nivel-SISTEMA de un motor de contexto (sin entidad): macro, monetario, etc.
     Es lo que trae el telón cross-dominio para la síntesis (condiciones sistémicas). Prueba
@@ -520,6 +556,10 @@ def pull_axis(db: Optional[Session], sector_key: str) -> EnginePull:
     source = entry.source if entry else sector_key
     label = entry.display_name if entry else sector_key
     base = EnginePull(sector_key=sector_key, entity_label=label, period=None, source=source)
+    # SPEC-6: comparación regional (WDI) — independiente de la sesión; degrada a vacío si WDI no responde.
+    if sector_key == REGIONAL_AXIS:
+        rb = pull_regional_benchmark()
+        return rb if rb is not None else base
     # SPEC-4: una hoja del VAB sin producto dedicado rinde su piso del BCRD (share + crecimiento +
     # ranking). Es independiente de la sesión (dato del cliente bcrd_sectors) → antes del guard de db.
     if is_base_sector(sector_key):

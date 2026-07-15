@@ -122,6 +122,10 @@ def detect_axes(question: str) -> List[str]:
     for slug, kws in base_sector_keywords().items():
         if slug not in hits and any(_kw_hit(kw, q) for kw in kws):
             hits.append(slug)
+    # SPEC-6: intención de comparación regional (Centroamérica y el Caribe) → eje regional.
+    from shared.research.regional_benchmark import REGIONAL_KEYWORDS
+    if any(_kw_hit(kw, q) for kw in REGIONAL_KEYWORDS):
+        hits.append("regional_benchmark")
     return hits
 
 
