@@ -79,6 +79,25 @@ def _related_context_section(sub_questions: List[SubQuestion]) -> str:
             "\n\n" + "\n".join(lines))
 
 
+def _limitaciones_lines(gaps: List[DeclaredGap], coverage_real: float,
+                        anchored_fraction: float, sub_questions: List[SubQuestion]) -> str:
+    """Sección 'Limitaciones' COMPARTIDA por el informe completo y el scoping report: cobertura +
+    brechas declaradas + aviso de rúbrica. Determinista, desde los mismos parámetros que ambos
+    ensamblados ya reciben. Extraída para no duplicar la lógica (Hallazgo 9: el scoping no la
+    tenía pese a tener todos los insumos)."""
+    parts = [_coverage_line(coverage_real, anchored_fraction)]
+    if gaps:
+        parts.append("\nBrechas declaradas (no contestadas con dato):")
+        for g in gaps:
+            extra = f" Fuente candidata en evaluación: {g.candidate_source}." if g.candidate_source else ""
+            parts.append(f"- {g.sub_question}.{extra}")
+    if any(sq.state == RUBRIC for sq in sub_questions):
+        parts.append(
+            "\nParte del ancla es rúbrica declarada (juicio de casa), no dato observado; "
+            "sube a dato real cuando la fuente correspondiente se integre.")
+    return "\n".join(parts)
+
+
 def assemble_report_sections(question: str, sub_questions: List[SubQuestion],
                              sources: List[str], gaps: List[DeclaredGap],
                              coverage_real: float, anchored_fraction: float,
@@ -124,19 +143,7 @@ def assemble_report_sections(question: str, sub_questions: List[SubQuestion],
     fuentes = ("\n".join(f"- {s}" for s in sources)
                if sources else "_Sin fuentes con dato real en esta respuesta._")
 
-    limitaciones_parts = [
-        _coverage_line(coverage_real, anchored_fraction),
-    ]
-    if gaps:
-        limitaciones_parts.append("\nBrechas declaradas (no contestadas con dato):")
-        for g in gaps:
-            extra = f" Fuente candidata en evaluación: {g.candidate_source}." if g.candidate_source else ""
-            limitaciones_parts.append(f"- {g.sub_question}.{extra}")
-    if any(sq.state == RUBRIC for sq in sub_questions):
-        limitaciones_parts.append(
-            "\nParte del ancla es rúbrica declarada (juicio de casa), no dato observado; "
-            "sube a dato real cuando la fuente correspondiente se integre.")
-    limitaciones = "\n".join(limitaciones_parts)
+    limitaciones = _limitaciones_lines(gaps, coverage_real, anchored_fraction, sub_questions)
 
     out = {
         "resumen_ejecutivo": resumen,
@@ -153,11 +160,16 @@ def assemble_report_sections(question: str, sub_questions: List[SubQuestion],
 
 def assemble_scoping_sections(question: str, sub_questions: List[SubQuestion],
                               sources: List[str], gaps: List[DeclaredGap],
-                              coverage_real: float,
-                              anchored_fraction: float) -> Dict[str, str]:
+                              coverage_real: float, anchored_fraction: float,
+                              narrative: Optional[str] = None) -> Dict[str, str]:
     """Scoping report: la brecha supera el umbral → se declara honestamente qué se puede
     y no contestar hoy, y qué cerraría la brecha. NO se entrega un informe con apariencia
-    de completo."""
+    de completo.
+
+    Si *narrative* viene dado (el Cerebro redactó la respuesta circunscrita al dato de los
+    motores con el template ``research_answer``, diseñado para declarar brecha), es la antesala
+    de 'Lo que se puede contestar hoy' — el framing de síntesis antes de los bullets de
+    evidencia (Hallazgo 8: esa narrativa se calculaba y se descartaba en el scoping)."""
     anchored = [sq for sq in sub_questions if sq.anchored]
     gapped = [sq for sq in sub_questions if not sq.anchored]
 
@@ -175,8 +187,11 @@ def assemble_scoping_sections(question: str, sub_questions: List[SubQuestion],
         lo_que_si_parts.append(
             f"### {i}. {sq.text}\n_Ancla: {_STATE_LABEL.get(sq.state, sq.state)}_\n\n"
             f"Evidencia:\n{_evidence_lines(sq)}")
-    lo_que_si = ("\n\n".join(lo_que_si_parts)
-                 if lo_que_si_parts else "_Ninguna línea alcanzó ancla con evidencia hoy._")
+    lo_que_si_body = ("\n\n".join(lo_que_si_parts)
+                      if lo_que_si_parts else "_Ninguna línea alcanzó ancla con evidencia hoy._")
+    # Antesala de síntesis (Cerebro), si vino: framing antes de los bullets de evidencia.
+    lo_que_si = (f"{narrative.strip()}\n\n{lo_que_si_body}"
+                 if narrative and narrative.strip() else lo_que_si_body)
 
     lo_que_no = ("\n".join(f"- {sq.text}" for sq in gapped)
                  if gapped else "_Sin brechas: todo lo consultado tiene ancla._")
@@ -212,6 +227,9 @@ def assemble_scoping_sections(question: str, sub_questions: List[SubQuestion],
         "que_cerraria_la_brecha": que_cerraria,
         "metodologia": metodologia,
         "fuentes": fuentes,
+        # Hallazgo 9: el scoping SÍ debe declarar sus limitaciones (cobertura + brechas +
+        # aviso de rúbrica) — tiene todos los insumos; misma lógica que el informe completo.
+        "limitaciones": _limitaciones_lines(gaps, coverage_real, anchored_fraction, sub_questions),
     }
     contexto = _related_context_section(sub_questions)
     if contexto:
