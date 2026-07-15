@@ -37,6 +37,11 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
     "energy": ("energia", "energetic", "electric", "generacion", "renovable", "sie", "apagon"),
     "telecom": ("telecom", "telefonia", "internet", "banda ancha", "movil", "penetracion"),
     "construction": ("construccion", "cemento", "permisos de construccion", "vivienda", "obra"),
+    # agribusiness tenía CatalogEntry + summarizer pero NUNCA keywords → una pregunta de sector
+    # agro caía a scoping con cobertura 0 aunque el eje IAI existía (mismo modo de falla que
+    # 'insurance' arriba). El stem "agro" en frontera de palabra cubre agropecuario/agroindustria/
+    # agrícola/agroindustrial; "iai" activa por el índice. Verificado con detect_axes en el test.
+    "agribusiness": ("agro", "agropecuari", "agroindustri", "agricol", "iai"),
     "esg": ("esg", "clima", "climatic", "ambiental", "carbono", "resiliencia climatica",
             "adaptacion", "sostenibilidad"),
     "pension": ("pension", "afp", "sipen", "fondo de pension", "cotizante", "rentabilidad afp"),
