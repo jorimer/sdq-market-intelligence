@@ -68,3 +68,25 @@ def test_pull_declares_the_honest_limit(monkeypatch):
 def test_pull_none_degrades(monkeypatch):
     monkeypatch.setattr(rb, "build_regional_comparison", lambda: None)
     assert pull_regional_benchmark() is None
+
+
+def test_regional_pull_attaches_in_compound_question():
+    """El pull regional debe adherir a la sub-pregunta de comparación en una pregunta COMPUESTA.
+
+    Bug hallado en verificación de prod: el entity_label "Comparación regional (CA y Caribe)" daba
+    el token "caribe)" (con paréntesis) que no estaba en la sub-pregunta → la comparación regional
+    quedaba como brecha pese a que el eje traía dato. En preguntas de UNA sub-pregunta lo salvaba el
+    fallback de _merge_engine_evidence; en las compuestas, no.
+    """
+    from shared.research.data_pull import EnginePull
+    from shared.research.models import SubQuestion
+    from shared.research.orchestrator import _matches_pull
+
+    pull = EnginePull(sector_key="regional_benchmark",
+                      entity_label="Comparación regional (CA y Caribe)",
+                      period="2025", source="WDI", ok=True)
+    regional_sq = SubQuestion(
+        text="cómo se compara ese desempeño con el promedio de Centroamérica y el Caribe")
+    mining_sq = SubQuestion(text="qué papel juega la minería en el crecimiento dominicano")
+    assert _matches_pull(regional_sq, pull), "el pull regional no adhirió a la sub-pregunta regional"
+    assert not _matches_pull(mining_sq, pull), "el pull regional NO debe adherir a minería"
