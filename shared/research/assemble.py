@@ -20,8 +20,34 @@ _STATE_LABEL = {REAL: "dato real", RUBRIC: "rúbrica declarada", "gap": "brecha 
 
 
 def _evidence_lines(sq: SubQuestion, limit: int = 3) -> str:
+    """Líneas de evidencia citadas de una sub-pregunta, garantizando AL MENOS una por cada
+    FUENTE distinta presente.
+
+    Una truncación plana ``sq.evidence[:limit]`` descartaba ejes legítimamente matcheados
+    cuando una pregunta agrupa 2+ sectores en una sola sub-pregunta: el merge
+    (``_merge_engine_evidence``) antepone la evidencia de cada motor, así el motor procesado al
+    final queda al frente; si trae ``limit`` evidencias propias, copa todos los cupos y los
+    demás motores (aunque anclen el estado) no aportan ninguna línea visible. Se agrupa por
+    ``source`` y se recorre en round-robin (una de cada fuente por ronda) → el slice captura al
+    menos una de cada una. El presupuesto total se expande a ``n_fuentes`` cuando excede
+    ``limit`` (nunca se cae una fuente); con una sola fuente el comportamiento es el de antes."""
+    groups: Dict[str, List] = {}
+    for e in sq.evidence:
+        groups.setdefault(e.source, []).append(e)
+    if not groups:
+        return ""
+    budget = max(limit, len(groups))  # ≥1 por fuente: el presupuesto nunca es menor a n_fuentes
+    picked: List = []
+    round_idx = 0
+    while len(picked) < budget and any(round_idx < len(evs) for evs in groups.values()):
+        for evs in groups.values():
+            if round_idx < len(evs):
+                picked.append(evs[round_idx])
+                if len(picked) >= budget:
+                    break
+        round_idx += 1
     out = []
-    for e in sq.evidence[:limit]:
+    for e in picked:
         etiqueta = _STATE_LABEL.get(e.state, e.state)
         out.append(f"  - _{e.source}_ ({etiqueta}): {e.text.strip()[:280]}")
     return "\n".join(out)
