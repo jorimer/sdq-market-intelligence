@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy.orm import Session
 
@@ -455,14 +455,116 @@ def _declares_no_data(payload: Dict[str, Any]) -> bool:
     return payload.get("has_data") is False or payload.get("has_score") is False
 
 
+def pull_sector_base(sector_key: str) -> Optional[EnginePull]:
+    """SPEC-4 — pull BASE de una hoja del PIB-por-origen del BCRD (sin producto dedicado).
+
+    Piso de inteligencia sourced al BCRD: aporte al Valor Agregado (share nominal), crecimiento real
+    interanual y ranking entre sectores, del último año disponible. Evita que un sector con dato del
+    BCRD caiga a scoping con cobertura 0. Devuelve ``None`` si el slug no es hoja base o no hay dato
+    (para que el llamador degrade con honestidad, no fabrique)."""
+    from shared.research.sector_base import BASE_SECTORS, SECTOR_BASE_SOURCE
+
+    meta = BASE_SECTORS.get(sector_key)
+    if meta is None:
+        return None
+    label = meta[0]
+    from shared.data.bcrd_sectors import VAR_GROWTH, VAR_SIZE, bcrd_sectors_client
+
+    try:
+        size = [r for r in bcrd_sectors_client.fetch(series=VAR_SIZE) if r.value is not None]
+        growth = [r for r in bcrd_sectors_client.fetch(series=VAR_GROWTH) if r.value is not None]
+    except Exception:  # noqa: BLE001 — sin dato del BCRD el sector simplemente no rinde base
+        return None
+
+    mine = [r for r in size if r.dimension == sector_key]
+    if not mine:
+        return None
+    latest = max(r.period for r in mine)
+    my_size = next((r.value for r in mine if r.period == latest), None)
+    # ``size`` ya está filtrado a value-no-None; ``or 0.0`` solo estrecha el tipo para mypy.
+    peers = sorted(((r.dimension, r.value or 0.0) for r in size if r.period == latest),
+                   key=lambda t: t[1], reverse=True)
+    rank = next((i + 1 for i, (d, _v) in enumerate(peers) if d == sector_key), None)
+    my_growth = next((r.value for r in growth
+                      if r.dimension == sector_key and r.period == latest), None)
+
+    ev: List[Evidence] = []
+    if my_size is not None:
+        head = f"{label}: aporta {_fmt(my_size)}% del Valor Agregado"
+        if rank and peers:
+            head += f" (puesto {rank} de {len(peers)} sectores)"
+        ev.append(_ev(head + f" · {latest} (cuentas nacionales BCRD).", SECTOR_BASE_SOURCE, 92.0))
+    if my_growth is not None:
+        ev.append(_ev(f"{label}: creció {_fmt(my_growth)}% real interanual en {latest} (BCRD).",
+                      SECTOR_BASE_SOURCE, 90.0))
+    if sector_key == "financiero":  # SPEC-2: puente al detalle por entidad
+        ev.append(_ev("Para el detalle por entidad (rating, solvencia, mora, eficiencia), ver el "
+                      "eje de banca (SIB).", SECTOR_BASE_SOURCE, 70.0))
+    if not ev:
+        return None
+    return EnginePull(
+        sector_key=sector_key, entity_label=label, period=latest, source=SECTOR_BASE_SOURCE,
+        payload={"has_data": True, "sector_size": my_size, "sector_growth": my_growth,
+                 "rank": rank, "base_sector": True},
+        evidence=ev, ok=True,
+    )
+
+
+REGIONAL_AXIS = "regional_benchmark"
+
+
+def pull_regional_benchmark() -> Optional[EnginePull]:
+    """SPEC-6 — RD vs promedio Centroamérica+Caribe (WDI): gran-composición + crecimiento, con el
+    límite honesto declarado. ``None`` si el WDI no responde (→ brecha declarada, no fabricación)."""
+    from shared.research.regional_benchmark import REGIONAL_SOURCE, build_regional_comparison
+
+    data = build_regional_comparison()
+    if data is None:
+        return None
+    ev: List[Evidence] = []
+    comp = cast(List[Dict[str, Any]], data.get("composition") or [])
+    if comp:
+        bits = "; ".join(
+            f"{c['sector']} RD {_fmt(c['dom'])}% vs {_fmt(c['region_avg'])}% regional"
+            for c in comp)
+        yr = data.get("year")
+        ev.append(_ev(f"Composición del valor agregado — {bits} · {yr} (WDI, promedio de "
+                      f"{comp[0]['n_peers']} pares de Centroamérica y el Caribe).",
+                      REGIONAL_SOURCE, 88.0))
+    growth = data.get("growth")
+    if isinstance(growth, dict):
+        ev.append(_ev(f"Crecimiento del PIB real: RD {_fmt(growth['dom'])}% vs {_fmt(growth['region_avg'])}% "
+                      f"promedio regional · {growth['year']} (WDI).", REGIONAL_SOURCE, 88.0))
+    if not ev:
+        return None
+    # Límite de honestidad: el WDI no desagrega minería/turismo/construcción cross-country.
+    ev.append(_ev("Alcance de la comparación regional: el WDI solo desagrega agricultura, industria y "
+                  "servicios entre países — no permite comparar minería, turismo ni construcción por "
+                  "separado contra la región.", REGIONAL_SOURCE, 60.0))
+    return EnginePull(sector_key=REGIONAL_AXIS, entity_label="Comparación regional (CA y Caribe)",
+                      period=str(data.get("year") or ""), source=REGIONAL_SOURCE,
+                      payload={"has_data": True, "regional": True}, evidence=ev, ok=True)
+
+
 def pull_axis(db: Optional[Session], sector_key: str) -> EnginePull:
     """Cosecha a-nivel-SISTEMA de un motor de contexto (sin entidad): macro, monetario, etc.
     Es lo que trae el telón cross-dominio para la síntesis (condiciones sistémicas). Prueba
     niveles (deep_dive→insight→pulse) con ``scope=None``; el primero con dato gana."""
+    from shared.research.sector_base import is_base_sector
+
     entry = CATALOG_BY_KEY.get(sector_key)
     source = entry.source if entry else sector_key
     label = entry.display_name if entry else sector_key
     base = EnginePull(sector_key=sector_key, entity_label=label, period=None, source=source)
+    # SPEC-6: comparación regional (WDI) — independiente de la sesión; degrada a vacío si WDI no responde.
+    if sector_key == REGIONAL_AXIS:
+        rb = pull_regional_benchmark()
+        return rb if rb is not None else base
+    # SPEC-4: una hoja del VAB sin producto dedicado rinde su piso del BCRD (share + crecimiento +
+    # ranking). Es independiente de la sesión (dato del cliente bcrd_sectors) → antes del guard de db.
+    if is_base_sector(sector_key):
+        base_pull = pull_sector_base(sector_key)
+        return base_pull if base_pull is not None else base
     if db is None:
         return base
     product = get_product(sector_key, db)

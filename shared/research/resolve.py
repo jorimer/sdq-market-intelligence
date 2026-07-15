@@ -109,13 +109,23 @@ class Targets:
 
 
 def detect_axes(question: str) -> List[str]:
-    """Ejes del catálogo cuyo léxico aparece en la pregunta, en orden del catálogo."""
+    """Ejes cuyo léxico aparece en la pregunta: primero los productizados (catálogo), luego los
+    ejes BASE de sector (hojas del VAB sin producto dedicado, SPEC-4). Un slug base solo se agrega
+    si ningún eje productizado ya lo cubre."""
     q = _norm(question)
     hits: List[str] = []
     for entry in PRODUCT_CATALOG:
         kws = AXIS_KEYWORDS.get(entry.sector_key, ())
         if any(_kw_hit(kw, q) for kw in kws) and entry.sector_key not in hits:
             hits.append(entry.sector_key)
+    from shared.research.sector_base import base_sector_keywords
+    for slug, kws in base_sector_keywords().items():
+        if slug not in hits and any(_kw_hit(kw, q) for kw in kws):
+            hits.append(slug)
+    # SPEC-6: intención de comparación regional (Centroamérica y el Caribe) → eje regional.
+    from shared.research.regional_benchmark import REGIONAL_KEYWORDS
+    if any(_kw_hit(kw, q) for kw in REGIONAL_KEYWORDS):
+        hits.append("regional_benchmark")
     return hits
 
 
