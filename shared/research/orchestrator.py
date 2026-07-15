@@ -161,6 +161,13 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
                           narrate: bool = True) -> ResearchAnswer:
     """Responde una pregunta libre circunscrita al dato real de los motores + gate de honestidad."""
     t0 = time.monotonic()
+    # Normaliza el whitespace: colapsa saltos de línea de wrapping (y espacios múltiples) a un
+    # solo espacio. Sin esto, un `\n` embebido —cuando se pega una pregunta que venía en varias
+    # líneas— actúa como separador de cláusula en `split_question` (`_CONNECTORS` incluye `\n`) y
+    # fragmenta la pregunta en sub-preguntas sin sentido ("el crecimiento dominicano", "cómo se
+    # compara ese") — H10. Los separadores REALES (. ? ; + conectores + el splitter coma+"y")
+    # siguen operando sobre el texto ya en una sola línea; la portada/cuerpo también salen limpios.
+    question = " ".join((question or "").split())
     # 1-2. Resolver eje+entidad y recibir el resultado de los motores.
     targets = resolve_targets(question, db)
     axis_pulls: List[EnginePull] = []
