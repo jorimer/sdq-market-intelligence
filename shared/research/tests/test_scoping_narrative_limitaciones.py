@@ -1,9 +1,11 @@
-"""Regresión Hallazgos 8 y 9 (familia "contenido perdido en Scoping Report").
+"""Regresión Hallazgos 8, 9 y 10 (familia "contenido perdido / mal formado en Scoping Report").
 
 H8: la narrativa del Cerebro (narrate_answer, template research_answer) se calculaba y se
     DESCARTABA en el scoping — assemble_scoping_sections no tenía parámetro `narrative`.
 H9: el Scoping Report no traía sección "Limitaciones" pese a tener todos los insumos
     (cobertura, brechas, sub-preguntas) que el informe completo ya usa.
+H10: una pregunta pegada con saltos de línea de wrapping se fragmentaba en sub-preguntas sin
+    sentido (`_CONNECTORS` parte en `\n`) — se normaliza el whitespace antes de decompose.
 """
 import pytest
 
@@ -136,3 +138,28 @@ async def test_orchestrator_wires_narrative_and_limitaciones_into_scoping(monkey
     assert "limitaciones" in ans.sections
     assert "limitaciones" in ans.section_order
     assert "Cobertura de la respuesta" in ans.sections["limitaciones"]
+
+
+# ─── H10: la pregunta con saltos de línea de wrapping NO se fragmenta ──
+@pytest.mark.asyncio
+async def test_question_with_embedded_newlines_is_not_fragmented(monkeypatch):
+    """Reproducción del PDF prod de turismo: la pregunta se pegó con `\n` de wrapping y salió
+    fragmentada en 4 sub-preguntas sin sentido ('el crecimiento dominicano', 'cómo se compara
+    ese'). Con la normalización previa a decompose, se parte en 2 cláusulas coherentes."""
+    monkeypatch.setattr(decompose_mod, "retrieve", lambda *a, **k: [])   # todo GAP, determinista
+    q_multilinea = ("¿Qué papel juegan el turismo, la minería y la construcción en\n"
+                    "el crecimiento dominicano, y cómo se compara ese\n"
+                    "desempeño con el promedio de Centroamérica y el Caribe?")
+    ans = await orch.answer_question(q_multilinea, db=None, narrate=False)
+
+    # la pregunta guardada queda en una sola línea (portada y cuerpo salen limpios)
+    assert "\n" not in ans.question
+    textos = [sq.text for sq in ans.sub_questions]
+    # se parte en 2 cláusulas coherentes (por ', y cómo'), no en 4 fragmentos
+    assert len(textos) == 2
+    assert any("turismo" in t and "construcción" in t and "crecimiento dominicano" in t
+               for t in textos)
+    assert any("compara" in t and "Centroamérica" in t and "Caribe" in t for t in textos)
+    # ninguno de los fragmentos rotos de antes aparece como sub-pregunta entera
+    assert "el crecimiento dominicano" not in textos
+    assert "cómo se compara ese" not in textos
