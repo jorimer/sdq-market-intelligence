@@ -136,7 +136,10 @@ async def _content_from_snapshot(
     # estándar (metodología/fuentes no llevan jerga propia del eje). Punto único: lo
     # heredan la vista in-app (JSON) y el PDF/Word para todos los módulos de sector.
     from shared.products.report_sections import glossary_section, standard_sections
-    glossary = glossary_section("\n\n".join(narratives.values()), tier)
+    # Solo valores str: una fila de caché con un valor no-str (columna JSON) no debe
+    # tumbar la entrega — misma doctrina defensiva que las secciones estándar.
+    glossary = glossary_section(
+        "\n\n".join(v for v in narratives.values() if isinstance(v, str)), tier)
     if glossary:
         narratives = {**narratives, **glossary}
     # Secciones ESTÁNDAR auto-generadas (metodología/fuentes) — nuestra ventaja honesta.

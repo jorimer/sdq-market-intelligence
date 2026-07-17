@@ -302,12 +302,14 @@ def _dedup_header(title: str, display_name: str) -> str:
     varios ejes país/sector construyen ambos strings con el nombre del eje incluido).
 
     Conservador por diseño: solo quita un segmento de ``display_name`` (separado por
-    '·') si su texto ya aparece LITERAL (case-insensitive) dentro de ``title``. Si no
-    hay coincidencia, no toca nada — mejor un header algo redundante que uno que
-    pierda información por una coincidencia parcial mal cortada."""
+    '·') si su texto ya aparece LITERAL (case-insensitive, con frontera de palabra —
+    un segmento corto tipo sigla no calza DENTRO de una palabra más larga del título)
+    dentro de ``title``. Si no hay coincidencia, no toca nada — mejor un header algo
+    redundante que uno que pierda información por una coincidencia parcial mal cortada."""
     segs = [s.strip() for s in display_name.split("·") if s.strip()]
     t_cf = title.casefold()
-    kept = [s for s in segs if s.casefold() not in t_cf]
+    kept = [s for s in segs
+            if not re.search(rf"(?<!\w){re.escape(s.casefold())}(?!\w)", t_cf)]
     if len(kept) == len(segs):
         return f"SDQ·MIP — {title} · {display_name}"
     tail = " · ".join(kept)

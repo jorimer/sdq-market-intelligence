@@ -89,3 +89,11 @@ def test_dedup_header_no_overlap_identical_to_before():
     from shared.products.render import _dedup_header
     out = _dedup_header("Deep Dive Seguros", "Mercado Asegurador Dominicano")
     assert out == "SDQ·MIP — Deep Dive Seguros · Mercado Asegurador Dominicano"
+
+
+def test_dedup_header_sigla_inside_longer_word_untouched():
+    # Fix del reviewer: un segmento corto tipo sigla ("RD") no debe calzar DENTRO
+    # de una palabra más larga del título ("perdurable") — frontera de palabra.
+    from shared.products.render import _dedup_header
+    out = _dedup_header("Análisis perdurable", "RD · Mercado Local")
+    assert out == "SDQ·MIP — Análisis perdurable · RD · Mercado Local"

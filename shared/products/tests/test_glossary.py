@@ -54,3 +54,10 @@ def test_definitions_do_not_use_the_term_itself():
     for term, definition in GLOSSARY.items():
         assert term.casefold() not in definition.casefold(), (
             f"La definición de '{term}' usa el propio término")
+
+
+def test_short_units_are_case_sensitive():
+    # Fix del reviewer: "PP"/"PB" en mayúsculas (siglas ajenas al catálogo) NO
+    # disparan las unidades pp/pb; las unidades en minúscula sí calzan.
+    assert glossary_markdown("El PP ganó las elecciones") == ""
+    assert "- **pp**" in glossary_markdown("la tasa sube 2 pp interanual")

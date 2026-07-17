@@ -105,14 +105,16 @@ def _term_pattern(term: str) -> re.Pattern:
     el '%' de "IC 90%" no lleva ``\\b`` (entre '%' y un espacio no hay frontera de
     palabra y el patrón nunca calzaría). Case-SENSITIVE si el término es todo
     mayúsculas (siglas: ISF, ROA, ONE — evita que un "one" cualquiera dispare la
-    entrada); case-INSENSITIVE para el resto (backtest, Gini — para calzar aunque el
-    texto lo capitalice distinto, p.ej. al inicio de una oración)."""
+    entrada) o si es una unidad corta (≤2 letras: pp, pb — evita que un "PP"/"PB"
+    en mayúsculas, p.ej. unas siglas ajenas al catálogo, dispare la unidad);
+    case-INSENSITIVE para el resto (backtest, Gini — para calzar aunque el texto lo
+    capitalice distinto, p.ej. al inicio de una oración)."""
     pat = re.escape(term)
     if term and (term[0].isalnum() or term[0] == "_"):
         pat = r"\b" + pat
     if term and (term[-1].isalnum() or term[-1] == "_"):
         pat = pat + r"\b"
-    flags = 0 if term.isupper() else re.IGNORECASE
+    flags = 0 if (term.isupper() or len(term) <= 2) else re.IGNORECASE
     return re.compile(pat, flags)
 
 
