@@ -77,3 +77,34 @@ def test_order_narratives_orders_by_sections():
 def test_order_narratives_skips_absent_sections():
     n = {"a": "1"}
     assert list(_order_narratives(n, ["a", "missing"])) == ["a"]
+
+
+# ─── Regresiones de template en producción (2026-07-17) ────────────────────────
+
+def test_standard_section_titles_merged_in_spanish():
+    # Bug real: "std_methodology"/"std_sources" caían al fallback key.title() →
+    # "Std Methodology"/"Std Sources" en inglés en el índice del PDF.
+    from modules.banking_score.reports.pdf_generator import NARRATIVE_SECTION_TITLES
+    assert NARRATIVE_SECTION_TITLES["std_methodology"] == "Metodología y fuentes"
+    assert NARRATIVE_SECTION_TITLES["std_sources"] == "Fuentes y referencias"
+    assert NARRATIVE_SECTION_TITLES["std_glossary"] == "Glosario"
+
+
+@pytest.mark.asyncio
+async def test_tier_label_translated_in_title(tmp_path, monkeypatch):
+    # Bug real: la portada imprimía el tier crudo ("· deep_dive") sin mapear.
+    import shared.products.render as render_mod
+    captured = {}
+    real_build = render_mod.build_branded_pdf
+
+    def _spy(**kwargs):
+        captured.update(kwargs)
+        return real_build(**kwargs)
+
+    monkeypatch.setattr(render_mod, "build_branded_pdf", _spy)
+    await generate_pdf_report(
+        "full_rating", "Banco Test", _result(), "2024-Q4",
+        narratives={"executive_summary": "Resumen."},
+        output_dir=str(tmp_path), tier="deep_dive")
+    assert "Deep Dive" in captured["title"]
+    assert "deep_dive" not in captured["title"]

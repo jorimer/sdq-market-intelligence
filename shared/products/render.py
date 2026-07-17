@@ -294,6 +294,26 @@ def _img_ratio(path: str) -> float:
         return 0.55
 
 
+def _dedup_header(title: str, display_name: str) -> str:
+    """Encabezado corrido sin repetir el nombre del sector cuando ``title`` y
+    ``display_name`` lo comparten (p.ej. title='Deep Dive · Política Monetaria',
+    display_name='Política Monetaria · República Dominicana' → sin este dedupe el
+    header repite 'Política Monetaria' — bug real detectado en producción, uno de
+    varios ejes país/sector construyen ambos strings con el nombre del eje incluido).
+
+    Conservador por diseño: solo quita un segmento de ``display_name`` (separado por
+    '·') si su texto ya aparece LITERAL (case-insensitive) dentro de ``title``. Si no
+    hay coincidencia, no toca nada — mejor un header algo redundante que uno que
+    pierda información por una coincidencia parcial mal cortada."""
+    segs = [s.strip() for s in display_name.split("·") if s.strip()]
+    t_cf = title.casefold()
+    kept = [s for s in segs if s.casefold() not in t_cf]
+    if len(kept) == len(segs):
+        return f"SDQ·MIP — {title} · {display_name}"
+    tail = " · ".join(kept)
+    return f"SDQ·MIP — {title} · {tail}" if tail else f"SDQ·MIP — {title}"
+
+
 def build_branded_pdf(
     *,
     path: str,
@@ -320,7 +340,7 @@ def build_branded_pdf(
     if add_disclaimer:
         el += [Spacer(1, 0.4 * inch), Paragraph("Disclaimer", styles["PSub"]),
                Paragraph(DISCLAIMER_ES, styles["PSmall"])]
-    header_line = f"SDQ·MIP — {title} · {display_name}"
+    header_line = _dedup_header(title, display_name)
     doc = SimpleDocTemplate(path, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
                             topMargin=MARGIN, bottomMargin=MARGIN,
                             title=f"SDQ — {title} — {display_name}", author="SDQ Market Intelligence")
