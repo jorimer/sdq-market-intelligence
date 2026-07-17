@@ -74,7 +74,8 @@ def test_scope_and_lang_are_separate_keys(db):
 def test_fingerprint_changes_with_version(monkeypatch):
     import shared.products.assembler as asm
     fp1 = _narrative_fingerprint({"x": 1}, "deep_dive", "es")
-    monkeypatch.setattr(asm, "NARRATIVE_CACHE_VERSION", "2")
+    # Cualquier versión DISTINTA de la vigente (no un literal, que queda obsoleto al bumpear).
+    monkeypatch.setattr(asm, "NARRATIVE_CACHE_VERSION", asm.NARRATIVE_CACHE_VERSION + ".test")
     fp2 = _narrative_fingerprint({"x": 1}, "deep_dive", "es")
     assert fp1 != fp2   # bumpear la versión invalida toda la caché
 
