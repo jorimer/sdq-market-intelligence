@@ -292,3 +292,20 @@ def test_solvency_indices_feed_isf(db):
     # An insurer with only the índices present is scored on solvencia+liquidez (partial cov).
     bupa = next((r for r in compute_isf(db) if "Bupa" in r["name"]), None)
     assert bupa and any(d["key"] == "solvencia" and d["present"] for d in bupa["dimensions"])
+
+
+def test_scope_options_label_is_official_name_not_slug(db, monkeypatch):
+    # Regresión (2026-07-17): el selector del catálogo mostraba el slug crudo
+    # ("mapfre_bhd") como etiqueta — el label debe ser el nombre oficial del roster.
+    import modules.insurance_intel.products as prods
+    from shared.products.registry import get_product
+    monkeypatch.setattr(prods, "_isf_results", lambda _db: [
+        {"slug": "mapfre_bhd", "name": "Mapfre BHD Seguros", "overall_score": 80.0},
+        {"slug": "sin_nombre_oficial", "name": None, "overall_score": 70.0},
+        {"slug": "sin_score", "name": "No Califica", "overall_score": None},
+    ])
+    opts = get_product("insurance", db).scope_options()
+    assert opts[0] == {"value": "mapfre_bhd", "label": "Mapfre BHD Seguros",
+                       "group": "Aseguradora"}
+    assert opts[1]["label"] == "sin_nombre_oficial"   # fallback honesto sin nombre
+    assert len(opts) == 2                             # sin score → no se ofrece

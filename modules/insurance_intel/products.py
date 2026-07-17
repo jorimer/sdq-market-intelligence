@@ -274,7 +274,10 @@ class InsuranceProduct:
         out: List[Dict[str, str]] = []
         for r in _isf_results(self._require_db()):
             if r.get("overall_score") is not None:
-                out.append({"value": r["slug"], "label": r.get("slug"), "group": "Aseguradora"})
+                # label = nombre oficial del roster (bug real detectado en producción: el
+                # selector del catálogo mostraba el slug crudo "mapfre_bhd" al cliente).
+                out.append({"value": r["slug"], "label": r.get("name") or r["slug"],
+                            "group": "Aseguradora"})
         return out
 
     # ── Señales de readiness ──
