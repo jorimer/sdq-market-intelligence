@@ -263,7 +263,6 @@ modules/energy_intel/scoring/resilience.py:0: error: Unsupported operand types f
 modules/energy_intel/scoring/resilience.py:0: error: Unsupported operand types for * ("str" and "float")  [operator]
 modules/energy_intel/scoring/resilience.py:0: error: Unsupported operand types for * ("str" and "str")  [operator]
 modules/energy_intel/scoring/resilience.py:0: error: Unsupported operand types for * ("str" and "str")  [operator]
-modules/energy_intel/service.py:0: error: Argument 2 to "compute_energy_index" has incompatible type "list[dict[str, Any]] | None"; expected "list[dict[str, object]]"  [arg-type]
 modules/energy_intel/service.py:0: error: Incompatible types in assignment (expression has type "Any | None", variable has type "Column[float]")  [assignment]
 modules/energy_intel/service.py:0: error: Incompatible types in assignment (expression has type "Any | None", variable has type "Column[float]")  [assignment]
 modules/energy_intel/service.py:0: error: Incompatible types in assignment (expression has type "Any | None", variable has type "Column[float]")  [assignment]
