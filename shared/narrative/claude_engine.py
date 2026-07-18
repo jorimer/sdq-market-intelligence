@@ -1184,9 +1184,14 @@ class NarrativeEngine:
         prompt = _apply_lang(prompt_template.format(context=context_str), lang)
 
         # Aun en la ruta legacy (market_brief, cross_compare, deal_outlook, etc.) se aplica el
-        # registro de voz: español latinoamericano neutro corporativo-consultivo, sin la
-        # doctrina/Barra del cerebro pero con el MISMO tono que el resto de la plataforma.
-        from shared.narrative.cerebro import REGISTER_NEUTRO
+        # registro de voz Y la disciplina anti-fabricación/incertidumbre — hallazgo del
+        # 2026-07-17: esta ruta corría con SOLO el registro de voz, sin la regla dura que
+        # prohíbe inventar cifras ni la distinción dato/inferencia/conjetura. No hay razón
+        # de producto para que esa garantía exista en 6 ejes y no en el resto. Deliberadamente
+        # SIN BARRA_DE_INSIGHT ni CEREBRO_IDENTITY: la profundidad analítica del cerebro es
+        # una decisión de producto aparte; "no fabricar" aplica siempre.
+        from shared.narrative.cerebro import EPISTEMIC_STANDARD, REGISTER_NEUTRO
+        legacy_system = REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
 
         try:
             # to_thread + semáforo: mismo motivo que la ruta cerebro — liberar el event loop
@@ -1196,7 +1201,7 @@ class NarrativeEngine:
                     client.messages.create,
                     model=settings.ANTHROPIC_MODEL,
                     max_tokens=max_tokens,
-                    system=REGISTER_NEUTRO,
+                    system=legacy_system,
                     messages=[{"role": "user", "content": prompt}],
                 )
             return self._result_from_response(response, cache_key, template)

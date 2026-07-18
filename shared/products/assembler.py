@@ -27,7 +27,9 @@ logger = logging.getLogger("sdq.products.assembler")
 # Bumpear para invalidar TODA la caché de narrativas cuando cambie la lógica de generación
 # (plantillas, prompt, guard). El fingerprint del payload cubre los cambios de DATO; esta
 # versión cubre los cambios de CÓDIGO.
-NARRATIVE_CACHE_VERSION = "1"
+# "2": doctrina 2026-07-17 (TRADUCE EL TECNICISMO + registro llano de PROCEDENCIA/
+# INCERTIDUMBRE) — sin el bump, los reportes cacheados seguirían sirviendo la voz vieja.
+NARRATIVE_CACHE_VERSION = "2"
 
 
 def _narrative_fingerprint(payload: Optional[Dict], tier: str, lang: str) -> str:

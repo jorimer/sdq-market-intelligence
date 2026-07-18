@@ -24,6 +24,22 @@ logger = logging.getLogger("sdq.publications.digest")
 
 _MAX_TOKENS = 4096
 
+# Gobierno de voz de la ruta del Digest — hallazgo del 2026-07-17: esta ruta generaba
+# narrativa reader-facing (vista "Publicaciones") sin NINGÚN system prompt. Versión corta
+# y propia de la disciplina anti-fabricación (consistente en espíritu con
+# shared.narrative.cerebro.EPISTEMIC_STANDARD) — NO se pega el estándar completo ni
+# REGISTER_NEUTRO: traen instrucciones de formato en prosa (encabezados, giros) que
+# chocarían con el contrato de salida JSON estricta que _extract_json parsea.
+_DIGEST_SYSTEM = (
+    "Responde ÚNICAMENTE con el objeto JSON pedido — nada de prosa fuera del JSON, "
+    "nada de encabezados. Dentro de los campos de texto ('resumen', 'hallazgos', "
+    "'riesgos', 'relevancia'), aplica esta disciplina: nunca inventes una cifra, "
+    "hallazgo o riesgo que no esté en el texto del informe — si el informe no lo dice, "
+    "no lo pongas. Si una lectura es tu interpretación (no una cifra u oración literal "
+    "del informe), dilo en el propio texto del campo con lenguaje llano ('el informe "
+    "sugiere que…'), nunca la presentes con la misma certeza que un dato citado."
+)
+
 _PROMPT = (
     "Eres un analista senior del Caribe analizando un informe/estudio estadístico "
     "oficial de la República Dominicana ('{report_name}', período {period}).\n\n"
@@ -134,6 +150,7 @@ def build_digest(
     resp = client.messages.create(
         model=model or settings.ANTHROPIC_MODEL,
         max_tokens=_MAX_TOKENS,
+        system=_DIGEST_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     raw = resp.content[0].text if resp.content else ""
