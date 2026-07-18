@@ -79,8 +79,9 @@ def _compute_snapshots(db: Session) -> Optional[str]:
     ]
     if not market:
         return None
-    existing = {s.period: s for s in db.query(InsuranceSnapshot).all()}
     # str(): a nivel de instancia ya es str; el cast es para mypy (modelo estilo Column).
+    existing: Dict[str, InsuranceSnapshot] = {
+        str(s.period): s for s in db.query(InsuranceSnapshot).all()}
     periods = sorted({str(s.period) for s in market})
     latest_by_code: Dict[str, InsuranceSeries] = {}
     for period in periods:  # ascendente: latest_by_code acumula el as-of de cada período
