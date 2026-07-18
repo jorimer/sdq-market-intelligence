@@ -36,6 +36,7 @@ from shared.products import (
     TierLevelSpec,
     ValidationState,
     distinct_periods,
+    period_sort_key,
     register_product,
     section_mode,
 )
@@ -234,10 +235,10 @@ def _pension_backtest(db: Session) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _pulse(db: Session) -> Optional[Dict[str, Any]]:
+def _pulse(db: Session, as_of: Optional[str] = None) -> Optional[Dict[str, Any]]:
     try:
         with db.begin_nested():
-            return build_system_pulse(db)
+            return build_system_pulse(db, as_of=as_of)
     except Exception as e:  # noqa: BLE001
         logger.warning("Pulso de pensiones no disponible: %s", e)
         return None
@@ -259,19 +260,24 @@ def _rentabilidad_trend(db: Session, slug: str, n: int = 24) -> List[tuple]:
     return [(p, v) for p, v in rows][-n:]
 
 
-def _system_cartera(db: Session) -> Optional[Dict[str, Any]]:
+def _system_cartera(db: Session, as_of: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Composición de la cartera de inversiones del sistema (Cuadro 6.1, fondo CCI), o None.
 
     Devuelve el payload completo (holdings + summary + total) — mismo molde que el
-    endpoint ``/cartera`` — para alimentar tabla y narrativa de contexto de riesgo."""
+    endpoint ``/cartera`` — para alimentar tabla y narrativa de contexto de riesgo.
+    ``as_of``: la cartera más reciente HASTA ese período (vista histórica del Pulse);
+    corte cronológico con ``period_sort_key`` (los períodos mezclan formatos)."""
     from modules.pension_intel.models.models import PensionHolding
     try:
         with db.begin_nested():
-            latest = (db.query(PensionHolding.period).filter(PensionHolding.fund == "cci")
-                      .order_by(PensionHolding.period.desc()).first())
-            if not latest:
+            periods = [str(p) for (p,) in db.query(PensionHolding.period)
+                       .filter(PensionHolding.fund == "cci").distinct().all()]
+            if as_of:
+                cutoff = period_sort_key(as_of)
+                periods = [p for p in periods if period_sort_key(p) <= cutoff]
+            if not periods:
                 return None
-            period = latest[0]
+            period = max(periods, key=period_sort_key)
             rows = (db.query(PensionHolding)
                     .filter(PensionHolding.fund == "cci", PensionHolding.period == period)
                     .order_by(PensionHolding.amount.desc().nullslast()).all())
@@ -591,14 +597,18 @@ class PensionProduct:
         db = self._require_db()
         roster = tuple(_afp_names().values())
         if tier == ProductTier.pulse:
-            pulse = _pulse(db)
+            # `period` (del selector) produce la vista as-of; vacío → la más reciente.
+            # Sin el pass-through, elegir un período histórico servía el pulso ACTUAL
+            # con la etiqueta del período elegido — mismo defecto que seguros (PR #552).
+            pulse = _pulse(db, as_of=period or None)
             if not pulse:
                 return ProductSnapshot(tier=tier, period=period or "—",
                                        payload={"has_data": False}, entity_name=None,
                                        entity_roster=roster)
             n_scoreable = sum(1 for r in _isa_results(db) if r["overall_score"] is not None)
             payload = _anon_pulse_payload(pulse, n_scoreable)
-            payload["cartera"] = _system_cartera(db)  # composición de la cartera (sin nombres de AFP)
+            # Cartera as-of también: la vista histórica no muestra la cartera actual.
+            payload["cartera"] = _system_cartera(db, as_of=period or None)  # sin nombres de AFP
             return ProductSnapshot(tier=tier, period=pulse.get("period") or "—",
                                    payload=payload, entity_name=None, entity_roster=roster)
 
