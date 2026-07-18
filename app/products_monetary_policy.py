@@ -77,21 +77,21 @@ def monetary_policy_manifest() -> SectorProductManifest:
 
 
 # ── Getters de macro_monitor (nivel app, en SAVEPOINT para no envenenar la transacción) ──
-def _trajectory(db: Session) -> List[Dict[str, Any]]:
+def _trajectory(db: Session, as_of: Optional[str] = None) -> List[Dict[str, Any]]:
     try:
         with db.begin_nested():
             from modules.macro_monitor.comunicados.service import trajectory
-            return trajectory(db)
+            return trajectory(db, as_of=as_of)
     except Exception as e:  # noqa: BLE001
         logger.warning("trayectoria TPM no disponible: %s", e)
         return []
 
 
-def _eval_context(db: Session) -> Dict[str, Any]:
+def _eval_context(db: Session, as_of: Optional[str] = None) -> Dict[str, Any]:
     try:
         with db.begin_nested():
             from modules.macro_monitor.comunicados.service import mp_evaluation_context
-            return mp_evaluation_context(db)
+            return mp_evaluation_context(db, as_of=as_of)
     except Exception as e:  # noqa: BLE001
         logger.warning("contexto de evaluación MP no disponible: %s", e)
         return {"has_data": False}
@@ -137,11 +137,22 @@ class MonetaryPolicyProduct:
             raise RuntimeError("MonetaryPolicyProduct requiere una sesión de DB.")
         return self._db
 
-    def _signals(self) -> tuple:
+    def _signals(self, as_of: Optional[str] = None) -> tuple:
+        # La vista más reciente (as_of=None) se cachea; las históricas (un período elegido
+        # en el selector) se computan al vuelo — no se cachean para no contaminar la vista viva.
+        if as_of is not None:
+            db = self._require_db()
+            return (_trajectory(db, as_of=as_of), _eval_context(db, as_of=as_of))
         if self._cache is None:
             db = self._require_db()
             self._cache = (_trajectory(db), _eval_context(db))
         return self._cache
+
+    def available_periods(self) -> List[str]:
+        """Fechas de decisión de TPM para el selector (más reciente primero). Sin esto el
+        selector salía vacío y el producto servía siempre la última decisión."""
+        traj, _ = self._signals()
+        return [t["fecha"] for t in traj if t.get("fecha")]
 
     def product_manifest(self) -> SectorProductManifest:
         return monetary_policy_manifest()
@@ -181,9 +192,16 @@ class MonetaryPolicyProduct:
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
         db = self._require_db()
-        traj, eval_ctx = self._signals()
-        if not traj:
+        full_traj, _ = self._signals()
+        if not full_traj:
             raise ValueError("No hay decisiones de política monetaria (TPM) ingeridas todavía.")
+        # `period` (del selector) = una fecha de decisión. Si es una fecha histórica (no la
+        # última), se sirve la vista AS-OF; si es la última o vacío, la vista viva.
+        latest_date = full_traj[0].get("fecha")
+        as_of = period if (period and period != latest_date) else None
+        traj, eval_ctx = self._signals(as_of=as_of)
+        if not traj:
+            raise ValueError("No hay decisiones de TPM hasta el período indicado.")
         latest = traj[0]
         payload: Dict[str, Any] = {
             "latest": {"fecha": latest.get("fecha"), "sentido": latest.get("sentido"),
@@ -193,11 +211,21 @@ class MonetaryPolicyProduct:
             "macro_context": eval_ctx.get("contexto_macro") or {},
             "eval_context": eval_ctx,
         }
-        if tier == ProductTier.deep_dive:
+        if tier == ProductTier.deep_dive and as_of is None:
             payload["forecast"] = _forecast(db)
             payload["backtest"] = _backtest(db)
             payload["track_record"] = _track_record(db)
-        # Nacional/agregado: sin entidad (system) → el período es la fecha de la última decisión.
+        elif tier == ProductTier.deep_dive:
+            # Histórico: el pronóstico, el backtest y el track record del modelo son
+            # point-in-time del presente (reflejan el estado actual del modelo y su track
+            # record en vivo). Reconstruirlos para una fecha pasada sería fabricar un
+            # "pronóstico retroactivo" — se declara la ausencia en prosa llana en su lugar.
+            payload["forecast"] = {"has_model": False, "historical_note": (
+                "El pronóstico del modelo es point-in-time: refleja el estado actual del "
+                "modelo y su track record en vivo. Para esta fecha histórica no se "
+                "reconstruye un pronóstico retroactivo; la lectura se basa en la "
+                "trayectoria y el contexto macro tal como eran a esa fecha.")}
+        # Nacional/agregado: sin entidad (system) → el período es la fecha de la decisión servida.
         return ProductSnapshot(tier=tier, period=str(latest.get("fecha") or period or ""),
                                payload=payload, entity_name=None)
 
@@ -353,6 +381,8 @@ def _tpm_snapshot_md(payload: Dict[str, Any]) -> str:
 def _forecast_md(payload: Dict[str, Any]) -> str:
     """Narrativa DETERMINISTA del pronóstico (deep dive): cifras del modelo, sin IA."""
     fc = payload.get("forecast") or {}
+    if fc.get("historical_note"):
+        return fc["historical_note"]
     if not fc.get("has_model"):
         return ("El modelo de pronóstico de TPM aún no está entrenado. Corra la operación "
                 "'tpm-model-train' para habilitar esta sección.")

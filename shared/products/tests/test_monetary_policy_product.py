@@ -204,3 +204,58 @@ def test_forecast_md_candor_accuracy_vs_baseline():
     assert "anticipar los giros" in md
     # MM4: track record vacío presentado como en acumulación, no ambiguo.
     assert "acumulación" in md
+
+
+# ── Selector de períodos + vista as-of (2026-07-18) ─────────────────────────────
+# Regresión: el producto no implementaba available_periods (selector vacío) y el
+# snapshot ignoraba el período (servía siempre la última decisión).
+
+def test_available_periods_are_decision_dates(db):
+    _seed(db)
+    periods = MonetaryPolicyProduct(db).available_periods()
+    assert periods == ["2026-06-30", "2025-10-31", "2025-09-30", "2024-10-31"]
+
+
+def test_snapshot_as_of_historical_period_truncates_trajectory(db):
+    _seed(db)
+    snap = MonetaryPolicyProduct(db).snapshot(ProductTier.pulse, "2025-09-30")
+    assert snap.period == "2025-09-30"                       # la decisión de ese período
+    assert snap.payload["latest"]["tpm"] == 5.50
+    # As-of: solo las decisiones HASTA esa fecha (2025-09-30 y 2024-10-31).
+    fechas = [t["fecha"] for t in snap.payload["trajectory"]]
+    assert fechas == ["2025-09-30", "2024-10-31"]
+    assert "2026-06-30" not in fechas                        # no filtra el futuro
+
+
+def test_deep_dive_historical_omits_forecast_with_note(db):
+    _seed(db)
+    snap = MonetaryPolicyProduct(db).snapshot(ProductTier.deep_dive, "2025-09-30")
+    fc = snap.payload["forecast"]
+    assert fc.get("has_model") is False
+    assert "point-in-time" in fc.get("historical_note", "")   # declara, no fabrica
+    assert "backtest" not in snap.payload                     # tampoco backtest retroactivo
+    # La narrativa determinista del pronóstico muestra la nota honesta, no el "entrená".
+    from app.products_monetary_policy import _forecast_md
+    md = _forecast_md(snap.payload)
+    assert "point-in-time" in md and "tpm-model-train" not in md
+
+
+def test_deep_dive_latest_keeps_live_forecast_block(db):
+    _seed(db)
+    # Período vacío O la última fecha → vista viva con el bloque de modelo.
+    for p in ("", "2026-06-30"):
+        snap = MonetaryPolicyProduct(db).snapshot(ProductTier.deep_dive, p)
+        assert "backtest" in snap.payload and "track_record" in snap.payload
+        assert "historical_note" not in snap.payload["forecast"]
+
+
+def test_mp_evaluation_context_as_of_is_historical(db):
+    from modules.macro_monitor.comunicados.service import mp_evaluation_context, trajectory
+    _seed(db)
+    ctx = mp_evaluation_context(db, as_of="2025-09-30")
+    assert ctx["postura_actual"]["fecha"] == "2025-09-30"
+    assert ctx["postura_actual"]["tpm"] == 5.50
+    assert ctx["ciclo"]["decisiones_en_historico"] == 2       # solo ≤ 2025-09-30
+    # trajectory(as_of) coincide.
+    assert [t["fecha"] for t in trajectory(db, as_of="2025-09-30")] == \
+        ["2025-09-30", "2024-10-31"]
