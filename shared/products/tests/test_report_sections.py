@@ -52,3 +52,27 @@ def test_defensive_when_signals_raise():
 
     s = standard_sections(_Bad(), ProductTier.deep_dive)  # no debe propagar
     assert METHODOLOGY_KEY in s and SOURCES_KEY in s
+
+
+# ─── Glosario automático (tier-gated igual que metodología) ────────────────────
+
+def test_glossary_titles_registered():
+    from shared.products.report_sections import GLOSSARY_KEY, STANDARD_SECTION_TITLES
+    assert STANDARD_SECTION_TITLES[GLOSSARY_KEY] == "Glosario"
+
+
+def test_glossary_section_pulse_is_lean():
+    from shared.products.report_sections import glossary_section
+    assert glossary_section("El ROA del sistema mejora.", ProductTier.pulse) == {}
+
+
+def test_glossary_section_insight_detects_terms():
+    from shared.products.report_sections import GLOSSARY_KEY, glossary_section
+    out = glossary_section("El ROA mejora y el HHI baja.", ProductTier.insight)
+    assert GLOSSARY_KEY in out
+    assert "- **ROA**" in out[GLOSSARY_KEY] and "- **HHI**" in out[GLOSSARY_KEY]
+
+
+def test_glossary_section_empty_when_no_terms():
+    from shared.products.report_sections import glossary_section
+    assert glossary_section("Texto sin jerga del catálogo.", ProductTier.deep_dive) == {}

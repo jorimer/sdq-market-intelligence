@@ -19,10 +19,12 @@ from shared.products.tiers import ProductTier
 # Claves y títulos canónicos de las secciones estándar (se mergean en el render).
 METHODOLOGY_KEY = "std_methodology"
 SOURCES_KEY = "std_sources"
+GLOSSARY_KEY = "std_glossary"
 
 STANDARD_SECTION_TITLES = {
     METHODOLOGY_KEY: "Metodología y fuentes",
     SOURCES_KEY: "Fuentes y referencias",
+    GLOSSARY_KEY: "Glosario",
 }
 
 # Tier → qué secciones estándar añade. Pulse queda lean (teaser); Insight suma metodología;
@@ -92,3 +94,16 @@ def standard_sections(product, tier: ProductTier) -> Dict[str, str]:
     if tv in _TIERS_WITH_SOURCES:
         out[SOURCES_KEY] = _sources_md(sig)
     return out
+
+
+def glossary_section(narrative_text: str, tier: ProductTier) -> Dict[str, str]:
+    """``{std_glossary: markdown}`` con las siglas/términos técnicos que aparecen en
+    ``narrative_text`` (el texto YA REDACTADO del producto, antes de anexar metodología/
+    fuentes). Tier-gated igual que metodología (Pulse queda lean, sin glosario). Vacío
+    si el texto no usa ningún término del diccionario."""
+    tv = tier.value if isinstance(tier, ProductTier) else str(tier)
+    if tv not in _TIERS_WITH_METHODOLOGY:
+        return {}
+    from shared.products.glossary import glossary_markdown
+    md = glossary_markdown(narrative_text)
+    return {GLOSSARY_KEY: md} if md else {}

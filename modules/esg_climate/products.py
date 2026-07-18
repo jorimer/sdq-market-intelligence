@@ -349,7 +349,7 @@ class ESGProduct:
 
         iso3 = (scope or "").strip().upper()
         if not iso3:
-            raise ValueError("Seleccioná un país del panel para el Insight/Deep Dive de ESG.")
+            raise ValueError("Selecciona un país del panel para el Insight/Deep Dive de ESG.")
         s = get_for_entity_period(db, iso3, period)
         country_name = IRC_PANEL.get(iso3, iso3)
         if s is None:
