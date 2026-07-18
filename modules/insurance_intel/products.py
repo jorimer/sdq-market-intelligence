@@ -137,10 +137,10 @@ def insurance_manifest() -> SectorProductManifest:
         })
 
 
-def _pulse(db: Session) -> Optional[Dict[str, Any]]:
+def _pulse(db: Session, as_of: Optional[str] = None) -> Optional[Dict[str, Any]]:
     try:
         with db.begin_nested():
-            return build_market_pulse(db)
+            return build_market_pulse(db, as_of=as_of)
     except Exception as e:  # noqa: BLE001
         logger.warning("Pulso de seguros no disponible: %s", e)
         return None
@@ -350,7 +350,10 @@ class InsuranceProduct:
                  scope: Optional[str] = None) -> ProductSnapshot:
         db = self._require_db()
         if tier == ProductTier.pulse:
-            pulse = _pulse(db)
+            # `period` (del selector) produce la vista as-of; vacío → la más reciente.
+            # Sin el pass-through, elegir un período histórico servía el pulso ACTUAL
+            # con la etiqueta del período elegido — bug real detectado en producción.
+            pulse = _pulse(db, as_of=period or None)
             if not pulse or not pulse.get("has_data"):
                 return ProductSnapshot(tier=tier, period=period or "—",
                                        payload={"has_data": False}, entity_name=None)
