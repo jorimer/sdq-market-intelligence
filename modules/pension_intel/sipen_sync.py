@@ -6,12 +6,14 @@ snapshot. Live channels (CKAN/XLSX/boletín/estados financieros) replace the
 fixture path in later phases without touching this module's consumers.
 """
 import logging
+from bisect import bisect_right
 from datetime import date
 from typing import Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from shared.data.lineage import Lineage
+from shared.products.periods import period_sort_key
 from shared.data.sipen_client import (
     afp_catalog,
     fetch_sipen_ckan,
@@ -84,38 +86,50 @@ def _upsert_series(
     return touched
 
 
-def _compute_snapshot(db: Session) -> Optional[str]:
-    """Capture each system indicator's LATEST value into a snapshot row.
+def _compute_snapshots(db: Session) -> Optional[str]:
+    """Materialize one system snapshot POR PERÍODO histórico (backfill idempotente).
 
-    Headline = the most recent value of every system series (not just those at one shared
-    period), so a freshly-updated indicator (e.g. CKAN afiliados to 2026-05) doesn't drop
-    a slower one (e.g. fixture rentabilidad at 2025-04) from the headline. The snapshot
-    period is the newest period across them. None if there are no system series yet.
-    """
+    Antes solo se materializaba el período más reciente de cada corrida → el selector
+    de períodos del producto ofrecía únicamente los períodos que fueron "el último"
+    en algún sync (2 opciones en prod), pese a que las series SIPEN traen historia
+    mensual desde 2003-07 — mismo defecto corregido en seguros (PR #552). Ahora cada
+    período con dato del sistema tiene su snapshot: el headline guarda el valor as-of
+    (el más reciente de cada indicador a esa fecha), misma semántica que tenía el
+    snapshot "latest" (un indicador fresco no descarta a uno más lento). A diferencia
+    de seguros, los períodos mezclan formatos ("2025-04" mensual, "2025" anual) →
+    el orden cronológico es ``period_sort_key`` (el año desnudo va DESPUÉS de sus
+    meses: la cifra anual se conoce al cierre del año), no el lexicográfico.
+    Devuelve el período más reciente; None si no hay series del sistema."""
     system = [
         s for s in db.query(PensionSeries).filter(PensionSeries.entity_slug.is_(None)).all()
         if s.value is not None
     ]
     if not system:
         return None
-    latest_by_code: Dict[str, PensionSeries] = {}
+    # str(): a nivel de instancia ya es str; el cast es para mypy (modelo estilo Column).
+    existing: Dict[str, PensionSnapshot] = {
+        str(s.period): s for s in db.query(PensionSnapshot).all()}
+    by_period: Dict[str, List[PensionSeries]] = {}
     for s in system:
-        cur = latest_by_code.get(s.series_code)
-        if cur is None or s.period > cur.period:
+        by_period.setdefault(str(s.period), []).append(s)
+    periods = sorted(by_period, key=period_sort_key)
+    entity_count = float(db.query(PensionEntity).count())
+    # series_count as-of por bisect (una sola query, no un COUNT por período).
+    all_period_keys = sorted(
+        period_sort_key(str(p)) for (p,) in db.query(PensionSeries.period).all())
+    latest_by_code: Dict[str, PensionSeries] = {}
+    for period in periods:  # ascendente cronológico: latest_by_code acumula el as-of
+        for s in by_period[period]:
             latest_by_code[s.series_code] = s
-    headline = {code: s.value for code, s in latest_by_code.items()}
-    latest = max(s.period for s in latest_by_code.values())
-    entity_count = db.query(PensionEntity).count()
-    series_count = db.query(PensionSeries).count()
-
-    snap = db.query(PensionSnapshot).filter(PensionSnapshot.period == latest).first()
-    if snap is None:
-        snap = PensionSnapshot(period=latest)
-        db.add(snap)
-    snap.headline = headline
-    snap.series_count = float(series_count)
-    snap.entity_count = float(entity_count)
-    return latest
+        snap = existing.get(period)
+        if snap is None:
+            snap = PensionSnapshot(period=period)
+            db.add(snap)
+            existing[period] = snap
+        snap.headline = {code: s.value for code, s in latest_by_code.items()}
+        snap.series_count = float(bisect_right(all_period_keys, period_sort_key(period)))
+        snap.entity_count = entity_count
+    return periods[-1]
 
 
 def sipen_pension_sync(
@@ -187,9 +201,9 @@ def sipen_pension_sync(
         for slug, recs in rent_by_slug.items():
             rentabilidad_rows += _upsert_series(db, recs, lineage=lineage, entity_slug=slug)
 
-    set_phase("Snapshot del sistema")
+    set_phase("Snapshot del sistema (backfill por período)")
     db.flush()  # make upserts visible to the snapshot/scoring queries (autoflush=False)
-    snapshot_period = _compute_snapshot(db)
+    snapshot_period = _compute_snapshots(db)
 
     set_phase("Índice de Solidez de AFP (ISA)")
     from modules.pension_intel.scoring.batch import score_and_persist

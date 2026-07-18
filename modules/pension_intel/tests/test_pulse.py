@@ -29,7 +29,10 @@ def db():
 
 def test_pulse_has_headline_and_afp_dispersion(db):
     pulse = build_system_pulse(db)
-    assert pulse["period"] == "2025-04"
+    # Cronológicamente el período más nuevo del fixture es el anual "2025" (comisiones):
+    # el año desnudo ordena después de sus meses (period_sort_key), y su snapshot as-of
+    # ya incluye la rentabilidad de 2025-04.
+    assert pulse["period"] == "2025"
     assert pulse["headline"]["sipen.rentabilidad.cci_nominal_anual"] == 9.4
 
     afp = pulse["afp_rentabilidad"]
@@ -70,6 +73,28 @@ def test_cerebro_axis_is_wired():
     system = build_system("pension_intel", "regulador", "detailed")
     assert "sistema dominicano de pensiones" in system
     assert "Regulador / SIPEN" in system
+
+
+def test_pulse_as_of_serves_historical_view(db, monkeypatch):
+    """Regresión (espejo del PR #552 de seguros): elegir un período histórico debe
+    servir la vista AS-OF, no el pulso actual con la etiqueta del período elegido."""
+    from modules.pension_intel.tests.test_sipen_sync import _fake_rentabilidad_history
+
+    monkeypatch.setattr("modules.pension_intel.sipen_sync.fetch_sipen_rentabilidad",
+                        lambda period=None: _fake_rentabilidad_history())
+    sipen_pension_sync(db)  # segundo sync idempotente: agrega la historia 2023-2024
+
+    p = build_system_pulse(db, as_of="2023-06")
+    assert p["period"] == "2023-06"
+    # Headline as-of: la rentabilidad vigente en 2023-06, no la del último período.
+    assert p["headline"]["sipen.rentabilidad.cci_nominal_anual"] == 8.5
+    # Dispersión por AFP as-of: no ve observaciones posteriores al corte.
+    assert p["afp_rentabilidad"]["period"] == "2023-06"
+    assert p["afp_rentabilidad"]["leader"]["value"] == 8.0  # afp_siembra, 2023-06
+    # Y difiere de la vista actual — no es el mismo reporte.
+    latest = build_system_pulse(db)
+    assert latest["headline"]["sipen.rentabilidad.cci_nominal_anual"] == 9.4
+    assert latest["afp_rentabilidad"]["period"] == "2025-02"
 
 
 def test_pulse_empty_when_no_data():

@@ -60,25 +60,29 @@ def test_sync_seeds_entities_series_and_snapshot(db):
     assert siembra_ret.value == 10.27
     assert siembra_ret.source == "SIPEN"
 
-    # Snapshot captures the latest system period's headline.
-    snap = db.query(PensionSnapshot).one()
-    assert res["snapshot_period"] == snap.period
-    assert snap.headline.get("sipen.rentabilidad.cci_nominal_anual") == 9.4
-    assert snap.entity_count == len(afp_catalog())
+    # One snapshot per system period (backfill); the LATEST one carries the headline.
+    # Chronological latest = "2025" (the bare annual period sorts after its months).
+    from shared.products.periods import period_sort_key
+    snaps = sorted(db.query(PensionSnapshot).all(),
+                   key=lambda s: period_sort_key(s.period))
+    assert res["snapshot_period"] == snaps[-1].period == "2025"
+    assert snaps[-1].headline.get("sipen.rentabilidad.cci_nominal_anual") == 9.4
+    assert snaps[-1].entity_count == len(afp_catalog())
 
 
 def test_sync_is_idempotent(db):
     first = sipen_pension_sync(db)
     n_after_first = db.query(PensionSeries).count()
+    n_snaps_first = db.query(PensionSnapshot).count()
 
     second = sipen_pension_sync(db)
     n_after_second = db.query(PensionSeries).count()
 
-    # No duplicate rows, no duplicate entities on a second run.
+    # No duplicate rows, entities, or snapshots on a second run.
     assert n_after_first == n_after_second
     assert second["entities_created"] == 0
     assert db.query(PensionEntity).count() == len(afp_catalog())
-    assert db.query(PensionSnapshot).count() == 1
+    assert db.query(PensionSnapshot).count() == n_snaps_first
 
 
 def test_fixture_has_no_invented_precision():
@@ -232,3 +236,50 @@ def test_sync_ingests_ckan_series_and_snapshot_uses_latest_per_code(db, monkeypa
     assert snap.period == "2026-05"
     assert snap.headline.get("sipen.afiliados.total") == 5649211.0
     assert "sipen.rentabilidad.cci_nominal_anual" in snap.headline  # older series retained
+
+
+# ── Backfill de snapshots por período + pulso as-of (2026-07-18) ─────────────
+# Regresión (espejo del PR #552 de seguros): en prod solo existían 2 snapshots (los
+# períodos que fueron "el último" en algún sync) pese a que las series SIPEN traen
+# historia mensual desde 2003-07 → el selector de períodos del producto ofrecía 2
+# opciones, y elegir una servía el pulso ACTUAL.
+
+def _fake_rentabilidad_history():
+    """24 meses de rentabilidad live (system + per-AFP) con valor distinto por mes."""
+    from datetime import date
+
+    from shared.data.base_client import Record
+    from shared.data.lineage import Lineage
+
+    lin = Lineage(source="SIPEN", license="x", fetched_at=date.today())
+    sys_recs, ent_recs = [], []
+    for i, (y, m) in enumerate([(y, m) for y in (2023, 2024) for m in range(1, 13)]):
+        p = f"{y}-{m:02d}"
+        sys_recs.append(Record(series="sipen.rentabilidad.cci_nominal_anual", period=p,
+                               value=8.0 + i * 0.1, lineage=lin, unit="%"))
+        ent_recs.append(Record(series="rentabilidad_nominal_anual", period=p,
+                               value=7.5 + i * 0.1, lineage=lin, unit="%",
+                               dimension="afp_siembra"))
+    return sys_recs, ent_recs
+
+
+def test_sync_backfills_snapshot_per_period(db, monkeypatch):
+    from shared.products.periods import period_sort_key
+
+    monkeypatch.setattr("modules.pension_intel.sipen_sync.fetch_sipen_rentabilidad",
+                        lambda period=None: _fake_rentabilidad_history())
+    sipen_pension_sync(db)
+
+    periods = sorted((p for (p,) in db.query(PensionSnapshot.period).all()),
+                     key=period_sort_key)
+    system_periods = sorted({p for (p,) in db.query(PensionSeries.period)
+                             .filter(PensionSeries.entity_slug.is_(None),
+                                     PensionSeries.value.isnot(None)).all()},
+                            key=period_sort_key)
+    assert periods == system_periods          # un snapshot por período con dato
+    assert len(periods) > 12                  # historia real, no solo "el último"
+
+    # El headline de cada snapshot es la vista AS-OF (no la actual): en 2023-06 la
+    # rentabilidad vigente era la de ese mes, no la del último período.
+    snap_2306 = db.query(PensionSnapshot).filter_by(period="2023-06").one()
+    assert snap_2306.headline["sipen.rentabilidad.cci_nominal_anual"] == 8.5

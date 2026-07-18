@@ -102,6 +102,31 @@ def test_pension_pulse_snapshot_is_anonymous(db):
     enforce_anonymized(snap.payload, entity_roster=snap.entity_roster)
 
 
+def test_product_pulse_honors_selected_period(db, monkeypatch):
+    """Regresión (espejo del PR #552 de seguros): el selector de períodos ofrece la
+    historia completa y elegir un período sirve la vista as-of — con la anonimización
+    del Pulse intacta (las AFP son firmas)."""
+    from modules.pension_intel.tests.test_sipen_sync import _fake_rentabilidad_history
+
+    monkeypatch.setattr("modules.pension_intel.sipen_sync.fetch_sipen_rentabilidad",
+                        lambda period=None: _fake_rentabilidad_history())
+    sipen_pension_sync(db)
+
+    prod = PensionProduct(db)
+    assert len(prod.available_periods()) > 12   # historia, no solo "el último"
+
+    snap = prod.snapshot(ProductTier.pulse, "2023-06")
+    assert snap.period == "2023-06"
+    assert snap.payload["headline"]["sipen.rentabilidad.cci_nominal_anual"] == 8.5
+    # La vista histórica sigue anonimizada: roster con nombres, ninguno en el payload.
+    assert snap.entity_name is None
+    enforce_anonymized(snap.payload, entity_roster=snap.entity_roster)
+
+    # Sin período → vista más reciente (comportamiento original intacto).
+    latest = prod.snapshot(ProductTier.pulse, "")
+    assert latest.payload["headline"]["sipen.rentabilidad.cci_nominal_anual"] == 9.4
+
+
 def test_pension_named_requires_scope(db):
     sipen_pension_sync(db)
     with pytest.raises(ValueError):
