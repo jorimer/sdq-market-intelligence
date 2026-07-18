@@ -96,3 +96,67 @@ def test_product_freshness_annual_for_itu_period(db):
     assert sig.cadence == "annual" and sig.sources == ("ITU DataHub",)
     assert sig.coverage == 1.0
     assert sig.freshness_days is not None and sig.freshness_days < 730  # anual fresco
+
+
+# ── parse_indicators_for_year: exact-year, sin arrastrar el futuro ──────────────
+
+def test_parse_for_year_uses_exact_year_not_future():
+    from shared.data.itu_client import parse_indicators_for_year
+    ind = parse_indicators_for_year(BY_CODE, 2023)
+    assert ind["period"] == "2023"
+    assert ind["mobile_penetration"] == pytest.approx(91.8, abs=0.2)   # 10.40M/11.331M×100
+    assert ind["fixed_broadband_penetration"] == 10.9                  # el de 2023, no 11.2
+    # 2023 no tiene % hogares (solo 2024) → None, no se filtra desde 2024.
+    assert ind["households_internet"] is None
+
+
+def test_parse_for_year_missing_year_is_none():
+    from shared.data.itu_client import parse_indicators_for_year
+    ind = parse_indicators_for_year(BY_CODE, 2019)  # sin dato en ningún code
+    assert ind["mobile_penetration"] is None and ind["fixed_broadband_penetration"] is None
+
+
+# ── backfill_scores_itu: un IDT por año de cobertura plena ──────────────────────
+
+def _hist_by_code():
+    # 2019: solo móvil (cobertura parcial → NO se persiste). 2020-2024: 3 pilares.
+    pop = {y: 11_000_000.0 + 90_000.0 * (y - 2019) for y in range(2019, 2025)}
+    mob = {y: 9_000_000.0 + 350_000.0 * (y - 2019) for y in range(2019, 2025)}
+    mbb = {y: 6_500_000.0 + 450_000.0 * (y - 2020) for y in range(2020, 2025)}  # desde 2020
+    fbb = {y: 8.0 + 0.8 * (y - 2020) for y in range(2020, 2025)}                # desde 2020
+    return {CODE_POPULATION: pop, CODE_MOBILE: mob,
+            CODE_MOBILE_BROADBAND: mbb, CODE_FIXED_BROADBAND: fbb, CODE_HH_INTERNET: {}}
+
+
+def test_backfill_persists_only_full_coverage_years(db):
+    from modules.telecom_intel.service import backfill_scores_itu
+    r = backfill_scores_itu(db, by_code=_hist_by_code())
+    periods = sorted(s.period for s in db.query(TelecomScore).all())
+    assert periods == ["2020", "2021", "2022", "2023", "2024"]   # 2019 (parcial) excluido
+    assert r["period"] == "2024" and r["periods"] == periods
+    for s in db.query(TelecomScore).all():
+        assert s.coverage == pytest.approx(1.0, abs=1e-6)         # todos comparables
+
+
+def test_backfill_is_as_of_and_idempotent(db):
+    from modules.telecom_intel.service import backfill_scores_itu
+    bc = _hist_by_code()
+    backfill_scores_itu(db, by_code=bc)
+    n1 = db.query(TelecomScore).count()
+    backfill_scores_itu(db, by_code=bc)                          # re-run
+    assert db.query(TelecomScore).count() == n1                 # upsert por período
+    # As-of: el score 2021 usa la penetración de 2021, no la de 2024.
+    s2021 = db.query(TelecomScore).filter_by(period="2021").first()
+    s2024 = db.query(TelecomScore).filter_by(period="2024").first()
+    assert s2021.mobile_penetration != s2024.mobile_penetration
+    assert s2021.telecom_score != s2024.telecom_score
+
+
+def test_backfill_does_not_touch_indotel_scores(db):
+    # Un score INDOTEL preexistente (2022-Q1) sobrevive al backfill ITU (aditivo).
+    from modules.telecom_intel.service import backfill_scores_itu
+    db.add(TelecomScore(period="2022-Q1", telecom_score=55.0, band="Vigilancia",
+                        coverage=1.0, model_version="1.0"))
+    db.commit()
+    backfill_scores_itu(db, by_code=_hist_by_code())
+    assert db.query(TelecomScore).filter_by(period="2022-Q1").first() is not None
