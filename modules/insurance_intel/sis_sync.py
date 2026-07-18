@@ -60,12 +60,17 @@ def _upsert_series(db: Session, records, *, lineage: Lineage) -> int:
     return touched
 
 
-def _compute_snapshot(db: Session) -> Optional[str]:
-    """Capture the latest market total-premium + active-insurer count into a snapshot.
+def _compute_snapshots(db: Session) -> Optional[str]:
+    """Materialize one market snapshot POR PERÍODO histórico (backfill idempotente).
 
-    Headline holds the most recent value of each market-level (non-dimensioned) series;
-    the snapshot period is the newest month across them. Annual totals / growth / mix
-    are derived on-read in ``service.build_market_pulse`` (kept flexible, not frozen)."""
+    Antes solo se materializaba el período más reciente de cada corrida → el selector
+    de períodos del producto ofrecía únicamente los períodos que fueron "el último"
+    en algún sync (2 opciones en prod), pese a que las series traen historia desde
+    2020-11 — bug real detectado en producción. Ahora cada período con dato de mercado
+    tiene su snapshot: el headline guarda el valor as-of (el más reciente de cada
+    serie de mercado a esa fecha), misma semántica que tenía el snapshot "latest".
+    Los agregados anuales/mix se siguen derivando on-read en
+    ``service.build_market_pulse`` (flexible, no congelado). Devuelve el más reciente."""
     market = [
         s for s in db.query(InsuranceSeries)
         .filter(InsuranceSeries.entity_slug.is_(None), InsuranceSeries.dimension.is_(None))
@@ -74,23 +79,29 @@ def _compute_snapshot(db: Session) -> Optional[str]:
     ]
     if not market:
         return None
+    # str(): a nivel de instancia ya es str; el cast es para mypy (modelo estilo Column).
+    existing: Dict[str, InsuranceSnapshot] = {
+        str(s.period): s for s in db.query(InsuranceSnapshot).all()}
+    periods = sorted({str(s.period) for s in market})
     latest_by_code: Dict[str, InsuranceSeries] = {}
-    for s in market:
-        cur = latest_by_code.get(s.series_code)
-        if cur is None or s.period > cur.period:
-            latest_by_code[s.series_code] = s
-    headline = {code: s.value for code, s in latest_by_code.items()}
-    latest = max(s.period for s in latest_by_code.values())
-    series_count = db.query(InsuranceSeries).count()
-
-    snap = db.query(InsuranceSnapshot).filter(InsuranceSnapshot.period == latest).first()
-    if snap is None:
-        snap = InsuranceSnapshot(period=latest)
-        db.add(snap)
-    snap.headline = headline
-    snap.series_count = float(series_count)
-    snap.entity_count = 0.0  # insurers enumerated in F1b (audited financials)
-    return latest
+    for period in periods:  # ascendente: latest_by_code acumula el as-of de cada período
+        for s in market:
+            if s.period == period:
+                cur = latest_by_code.get(s.series_code)
+                if cur is None or s.period > cur.period:
+                    latest_by_code[s.series_code] = s
+        headline = {code: s.value for code, s in latest_by_code.items()}
+        series_count = db.query(InsuranceSeries).filter(
+            InsuranceSeries.period <= period).count()
+        snap = existing.get(period)
+        if snap is None:
+            snap = InsuranceSnapshot(period=period)
+            db.add(snap)
+            existing[period] = snap
+        snap.headline = headline
+        snap.series_count = float(series_count)
+        snap.entity_count = 0.0  # insurers enumerated in F1b (audited financials)
+    return periods[-1]
 
 
 def sis_insurance_sync(
@@ -120,9 +131,9 @@ def sis_insurance_sync(
 
     market_rows = _upsert_series(db, records, lineage=lineage)
 
-    set_phase("Snapshot del mercado")
+    set_phase("Snapshot del mercado (backfill por período)")
     db.flush()
-    snapshot_period = _compute_snapshot(db)
+    snapshot_period = _compute_snapshots(db)
 
     db.commit()
     set_phase("Completado")

@@ -309,3 +309,47 @@ def test_scope_options_label_is_official_name_not_slug(db, monkeypatch):
                        "group": "Aseguradora"}
     assert opts[1]["label"] == "sin_nombre_oficial"   # fallback honesto sin nombre
     assert len(opts) == 2                             # sin score → no se ofrece
+
+
+# ── Backfill de snapshots por período + pulso as-of (2026-07-18) ─────────────
+# Regresión: en prod solo existían 2 snapshots (los períodos que fueron "el último"
+# en algún sync) pese a que las series traen historia desde 2020-11 → el selector
+# de períodos del producto ofrecía 2 opciones, y elegir una servía el pulso ACTUAL.
+
+def test_sync_backfills_snapshot_per_period(db):
+    sis_insurance_sync(db, mode="fixture")
+    periods = [p for (p,) in db.query(m.InsuranceSnapshot.period)
+               .order_by(m.InsuranceSnapshot.period).all()]
+    market_periods = sorted({p for (p,) in db.query(m.InsuranceSeries.period)
+                             .filter(m.InsuranceSeries.entity_slug.is_(None),
+                                     m.InsuranceSeries.dimension.is_(None),
+                                     m.InsuranceSeries.value.isnot(None)).all()})
+    assert periods == market_periods          # un snapshot por período con dato
+    assert len(periods) > 12                  # historia real, no solo "el último"
+    assert periods[-1] == "2025-12"
+
+
+def test_pulse_as_of_serves_historical_view(db):
+    sis_insurance_sync(db, mode="fixture")
+    p = build_market_pulse(db, as_of="2022-12")
+    assert p["has_data"] and p["latest_year"] == "2022"
+    assert p["period"] == "2022-12"
+    # La vista as-of no ve años posteriores al período elegido.
+    assert all(y <= "2022" for y in p["annual_totals"])
+    # Y el total difiere del de la vista actual (2025) — no es el mismo reporte.
+    latest = build_market_pulse(db)
+    assert p["total_premiums_rd"] != latest["total_premiums_rd"]
+
+
+def test_product_pulse_honors_selected_period(db):
+    from shared.products import ProductTier
+    from shared.products.registry import get_product
+    sis_insurance_sync(db, mode="fixture")
+    prod = get_product("insurance", db)
+    assert len(prod.available_periods()) > 12
+    snap = prod.snapshot(ProductTier.pulse, "2022-12")
+    assert snap.period == "2022-12"
+    assert snap.payload["pulse"]["latest_year"] == "2022"
+    # Sin período → vista más reciente (comportamiento original intacto).
+    latest = prod.snapshot(ProductTier.pulse, "")
+    assert latest.payload["pulse"]["latest_year"] == "2025"
