@@ -190,3 +190,49 @@ def test_compute_and_persist_with_transition(db):
     latest = get_latest(db)
     assert latest.transition_score == pytest.approx(84.0)
     assert latest.breakdown["transition"]["renewable_share"] == 21.0
+
+
+# ── Backfill por año (cobertura plena) — regresión del selector de 1 período ──
+
+def _hist_inputs():
+    cap = {y: 4000.0 + 400.0 * (y - 2018) for y in range(2015, 2026)}  # 2015-2025
+    claims = [{"period": f"{y}-{m:02d}", "recibidas": 4000.0, "en_proceso": 6000.0}
+              for y in range(2019, 2026) for m in range(1, 13)]        # 2019-01…2025-12
+    ren = {y: 10.0 + (y - 2015) for y in range(2015, 2026)}
+    return cap, claims, ren
+
+
+def test_backfill_persists_only_full_coverage_years(db):
+    from modules.energy_intel.service import backfill_scores
+    cap, claims, ren = _hist_inputs()
+    r = backfill_scores(db, capacity_by_year=cap, claims=claims,
+                        renewable_share_by_year=ren)
+    periods = sorted(s.period for s in db.query(EnergyScore).all())
+    # Cobertura plena exige reclamaciones (desde 2019) → nada antes de 2019.
+    assert periods[0] >= "2019" and periods[-1] == "2025"
+    assert len(periods) >= 5                      # serie real, no un punto
+    assert r["period"] == "2025" and r["periods"] == periods
+    for s in db.query(EnergyScore).all():         # todos comparables (3/3 dims)
+        assert s.coverage == pytest.approx(1.0, abs=1e-6)
+
+
+def test_backfill_is_as_of_and_idempotent(db):
+    from modules.energy_intel.service import backfill_scores
+    cap, claims, ren = _hist_inputs()
+    backfill_scores(db, capacity_by_year=cap, claims=claims, renewable_share_by_year=ren)
+    n1 = db.query(EnergyScore).count()
+    backfill_scores(db, capacity_by_year=cap, claims=claims, renewable_share_by_year=ren)
+    assert db.query(EnergyScore).count() == n1    # upsert por período
+    # As-of: el score de 2020 usa la renovable de 2020, no la de 2025.
+    s2020 = db.query(EnergyScore).filter_by(period="2020").first()
+    assert s2020.breakdown["transition"]["renewable_share"] == 15.0
+    assert s2020.breakdown["transition"]["year"] == 2020
+
+
+def test_backfill_without_full_years_falls_back_to_latest(db):
+    from modules.energy_intel.service import backfill_scores
+    cap = {2022: 5000.0, 2023: 5500.0, 2024: 6000.0, 2025: 6600.0}
+    claims = [{"period": "2025-12", "recibidas": 4000.0, "en_proceso": 8000.0}]
+    r = backfill_scores(db, capacity_by_year=cap, claims=claims)  # sin renovables → 2/3
+    assert r["period"] == "2025"                  # cae al comportamiento anterior
+    assert db.query(EnergyScore).count() == 1

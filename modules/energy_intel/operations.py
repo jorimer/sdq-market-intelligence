@@ -6,14 +6,17 @@ from shared.operations import Operation, register_operation
 
 
 def _run_sie_energy_sync(params, user_id, set_phase) -> Dict:
-    """Fetch SIE (capacity + claims) and ONE (generation mix) open data, persist IRSE."""
-    from modules.energy_intel.service import compute_and_persist
+    """Fetch SIE (capacity + claims) and ONE (generation mix) open data, persist IRSE.
+
+    Backfill por año (cobertura plena 3/3): un score por cada año comparable, no solo
+    el más reciente — así el selector de períodos del producto ofrece la serie real."""
+    from modules.energy_intel.service import backfill_scores
 
     set_phase("descargando capacidad, reclamaciones (SIE) y generación por tecnología (ONE)")
     db = SessionLocal()
     try:
-        set_phase("calculando IRSE (resiliencia del sector eléctrico)")
-        return compute_and_persist(db)
+        set_phase("calculando IRSE por año (backfill de cobertura plena)")
+        return backfill_scores(db)
     finally:
         db.close()
 
