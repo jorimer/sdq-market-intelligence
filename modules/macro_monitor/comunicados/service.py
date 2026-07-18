@@ -165,37 +165,46 @@ def comunicado_prompt_context(db: Session, max_findings: int = 3) -> Optional[Di
     }
 
 
-def _decisions_desc(db: Session) -> List[ComunicadoTPM]:
-    """Decisiones de TPM ingeridas (con sentido), de la más reciente a la más antigua."""
-    return (
-        db.query(ComunicadoTPM)
-        .filter(ComunicadoTPM.status == "ok", ComunicadoTPM.action.isnot(None))
-        .order_by(ComunicadoTPM.decision_date.desc().nullslast(),
-                  ComunicadoTPM.article_id.desc())
-        .all()
-    )
+def _decisions_desc(db: Session, as_of: Optional[str] = None) -> List[ComunicadoTPM]:
+    """Decisiones de TPM ingeridas (con sentido), de la más reciente a la más antigua.
+
+    ``as_of`` (``"YYYY-MM-DD"``): solo las decisiones HASTA esa fecha inclusive (vista
+    histórica del selector). Las fechas ISO comparan lexicográficamente en orden real."""
+    q = db.query(ComunicadoTPM).filter(
+        ComunicadoTPM.status == "ok", ComunicadoTPM.action.isnot(None))
+    if as_of:
+        q = q.filter(ComunicadoTPM.decision_date <= as_of)
+    return q.order_by(ComunicadoTPM.decision_date.desc().nullslast(),
+                      ComunicadoTPM.article_id.desc()).all()
 
 
-def trajectory(db: Session, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+def trajectory(db: Session, limit: Optional[int] = None,
+               as_of: Optional[str] = None) -> List[Dict[str, Any]]:
     """Trayectoria completa de la TPM (fecha/sentido/nivel/bps), newest-first. Para el
-    timeline: sin el cap del listado, payload chico (solo la decisión, no el digest)."""
-    rows = _decisions_desc(db)
+    timeline: sin el cap del listado, payload chico (solo la decisión, no el digest).
+    ``as_of`` corta la serie a las decisiones hasta esa fecha (vista histórica)."""
+    rows = _decisions_desc(db, as_of=as_of)
     if limit:
         rows = rows[:limit]
     return [{"fecha": r.decision_date, "sentido": r.action,
              "tpm": r.tpm_level, "bps": r.bps_change} for r in rows]
 
 
-def mp_evaluation_context(db: Session, recent: int = 18) -> Dict[str, Any]:
+def mp_evaluation_context(db: Session, recent: int = 18,
+                          as_of: Optional[str] = None) -> Dict[str, Any]:
     """Contexto para la EVALUACIÓN de política monetaria (postura + impacto macro).
 
     Da al modelo la trayectoria reciente, un resumen del ciclo (holds/cortes/alzas y nivel
     actual vs 12/24 decisiones atrás) y el contexto macro (inflación/actividad) de la última
     decisión digerida. Todas las cifras citables van incluidas (para el numeric_guard).
+
+    ``as_of`` (``"YYYY-MM-DD"``): reconstruye el contexto TAL COMO ERA a esa fecha —
+    ``latest`` = la decisión de ese período, el ciclo y el contexto macro derivan solo de
+    las decisiones hasta entonces (vista histórica del selector).
     """
     from collections import Counter
 
-    rows = _decisions_desc(db)
+    rows = _decisions_desc(db, as_of=as_of)
     if not rows:
         return {"has_data": False, "title": "Evaluación de política monetaria"}
 
