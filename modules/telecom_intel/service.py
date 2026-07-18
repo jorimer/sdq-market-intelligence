@@ -66,8 +66,8 @@ def assemble_telecom_dataset(
     return {"period": period, "index": index}
 
 
-def _persist_index(db: Session, per: str, index: Dict[str, Any]) -> Dict[str, Any]:
-    """Persiste un IDT computado (común a INDOTEL e ITU) + publica ``telecom.updated``."""
+def _write_score(db: Session, per: str, index: Dict[str, Any]) -> TelecomScore:
+    """Upsert del ``TelecomScore`` de *per* (no commitea — el llamador decide)."""
     row = db.query(TelecomScore).filter_by(period=per).first()
     if row is None:
         row = TelecomScore(period=per)
@@ -81,7 +81,12 @@ def _persist_index(db: Session, per: str, index: Dict[str, Any]) -> Dict[str, An
     row.broadband_share = m.get("broadband_share")
     row.breakdown = {"dimensions": index["dimensions"], "metrics": m}
     row.model_version = MODEL_VERSION
+    return row
 
+
+def _persist_index(db: Session, per: str, index: Dict[str, Any]) -> Dict[str, Any]:
+    """Persiste un IDT computado (común a INDOTEL e ITU) + publica ``telecom.updated``."""
+    row = _write_score(db, per, index)
     db.commit()
     db.refresh(row)
     payload = {"period": per, "telecom_score": index["telecom_score"], "band": index["band"]}
@@ -111,6 +116,50 @@ def compute_and_persist_itu(
     """Compute the IDT desde ITU DataHub (fuente vigente), persist + publish."""
     asm = assemble_telecom_dataset_itu(indicators)
     return _persist_index(db, period or asm["period"], asm["index"])
+
+
+def backfill_scores_itu(
+    db: Session,
+    by_code: Optional[Dict[int, Dict[int, float]]] = None,
+) -> Dict[str, Any]:
+    """Compute & persist el IDT para cada AÑO con cobertura PLENA (3/3 pilares) desde ITU.
+
+    Antes solo se persistía el año más reciente → el selector de períodos del producto
+    ofrecía 1 opción real (más un artefacto INDOTEL congelado), pese a que ITU trae
+    historia anual larga (móvil desde 2000, banda ancha móvil desde 2007, fija desde
+    2003). Misma doctrina de comparabilidad que energía/construcción: solo se persisten
+    los años con los TRES pilares medibles (mezclar años de 2 y 3 pilares leería como
+    salto falso del índice) → serie comparable ~2007 en adelante. Cada año usa SU dato
+    (exact-year, sin arrastrar el futuro). Publica el evento UNA vez (último año).
+    Idempotente: upsert por período. NO toca los scores INDOTEL preexistentes."""
+    from shared.data.itu_client import itu_client, parse_indicators_for_year
+    if by_code is None:
+        by_code = itu_client.fetch_by_code()
+    years = sorted({y for series in by_code.values() for y in series})
+
+    persisted: List[str] = []
+    last: Optional[Dict[str, Any]] = None
+    for y in years:
+        ind = parse_indicators_for_year(by_code, y)
+        index = compute_telecom_index_itu(
+            ind["mobile_penetration"], ind["mobile_broadband_penetration"],
+            ind["fixed_broadband_penetration"], ind["households_internet"])
+        if index["telecom_score"] is None or (index["coverage"] or 0.0) < 0.999:
+            continue
+        _write_score(db, str(y), index)
+        persisted.append(str(y))
+        last = {"period": str(y), "telecom_score": index["telecom_score"],
+                "band": index["band"], "coverage": index["coverage"]}
+    if last is None:
+        # Sin ningún año pleno: cae a la vista live (último año, cobertura declarada).
+        return compute_and_persist_itu(db)
+
+    db.commit()
+    publish_telecom_updated({"period": last["period"],
+                             "telecom_score": last["telecom_score"], "band": last["band"]})
+    logger.info("IDT backfill ITU: %d años (%s → %s)",
+                len(persisted), persisted[0], persisted[-1])
+    return {**last, "periods": persisted, "model_version": MODEL_VERSION}
 
 
 def get_latest(db: Session, period: Optional[str] = None) -> Optional[TelecomScore]:

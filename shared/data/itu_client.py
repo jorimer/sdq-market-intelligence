@@ -93,6 +93,31 @@ def parse_indicators(by_code: Dict[int, Dict[int, float]]) -> Dict[str, Any]:
     }
 
 
+def parse_indicators_for_year(by_code: Dict[int, Dict[int, float]], year: int) -> Dict[str, Any]:
+    """Penetraciones de UN año específico (exact-year, sin arrastre de años vecinos).
+
+    Para el backfill anual: cada año usa SU propio dato, nunca el de un año posterior
+    (no se filtra el futuro) ni el de uno anterior (no se inventa continuidad). La
+    población es la del mismo año. Missing → None (la dimensión baja la cobertura)."""
+    pop_series = by_code.get(CODE_POPULATION, {})
+    pop = pop_series.get(year)
+
+    def _pen(code: int) -> Optional[float]:
+        v = by_code.get(code, {}).get(year)
+        return round(v / pop * 100, 1) if (v is not None and pop) else None
+
+    fixedbb = by_code.get(CODE_FIXED_BROADBAND, {}).get(year)  # ya es per-100
+    hh = by_code.get(CODE_HH_INTERNET, {}).get(year)
+    return {
+        "period": str(year),
+        "mobile_penetration": _pen(CODE_MOBILE),
+        "mobile_broadband_penetration": _pen(CODE_MOBILE_BROADBAND),
+        "fixed_broadband_penetration": round(fixedbb, 1) if fixedbb is not None else None,
+        "households_internet": round(hh, 1) if hh is not None else None,
+        "population": int(pop) if pop else None,
+    }
+
+
 class ITUClient:
     source = "ITU DataHub"
     license = "CC BY-NC-SA 3.0 IGO (ITU)"
@@ -100,12 +125,9 @@ class ITUClient:
     codes = (CODE_POPULATION, CODE_MOBILE, CODE_MOBILE_BROADBAND,
              CODE_FIXED_BROADBAND, CODE_HH_INTERNET)
 
-    def fetch_indicators(self) -> Dict[str, Any]:
-        """Descarga los indicadores de penetración telecom de RD de la API ITU v2.
-
-        ``{period, mobile_penetration, mobile_broadband_penetration,
-        fixed_broadband_penetration, households_internet, population}``. Levanta en
-        fallo de red (el sync es best-effort)."""
+    def fetch_by_code(self) -> Dict[int, Dict[int, float]]:
+        """Descarga las series crudas ``{code: {año: valor}}`` de RD (todos los años).
+        Levanta en fallo de red (el sync es best-effort)."""
         import httpx
 
         by_code: Dict[int, Dict[int, float]] = {}
@@ -114,7 +136,14 @@ class ITUClient:
                 resp = http.get(_BASE.format(code=code))
                 resp.raise_for_status()
                 by_code[code] = _series(resp.json())
-        return parse_indicators(by_code)
+        return by_code
+
+    def fetch_indicators(self) -> Dict[str, Any]:
+        """Indicadores de penetración telecom de RD del año más reciente (vista live).
+
+        ``{period, mobile_penetration, mobile_broadband_penetration,
+        fixed_broadband_penetration, households_internet, population}``."""
+        return parse_indicators(self.fetch_by_code())
 
 
 itu_client = ITUClient()

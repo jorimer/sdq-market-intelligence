@@ -6,14 +6,17 @@ from shared.operations import Operation, register_operation
 
 
 def _run_itu_telecom_sync(params, user_id, set_phase) -> Dict:
-    """Fetch ITU DataHub telecom penetration (live source) and persist the IDT."""
-    from modules.telecom_intel.service import compute_and_persist_itu
+    """Fetch ITU DataHub telecom penetration (live source) and persist the IDT.
+
+    Backfill por año (cobertura plena 3/3): un IDT por cada año comparable de la serie
+    ITU, no solo el más reciente — así el selector de períodos ofrece la serie real."""
+    from modules.telecom_intel.service import backfill_scores_itu
 
     set_phase("descargando penetración telecom de RD (ITU DataHub API)")
     db = SessionLocal()
     try:
-        set_phase("calculando IDT (desarrollo telecom)")
-        return compute_and_persist_itu(db)
+        set_phase("calculando IDT por año (backfill de cobertura plena)")
+        return backfill_scores_itu(db)
     finally:
         db.close()
 
