@@ -61,6 +61,11 @@ REPORT_TYPE_LABELS = {
     "sector_outlook": "Perspectiva Sectorial",
 }
 
+# Nivel comercial (metadato de portada/header) → etiqueta ES. Sin este mapeo, el valor
+# crudo de ``tier`` (p.ej. "deep_dive") queda impreso tal cual en la portada del PDF —
+# bug real detectado en producción ("Informe de Calificación Completa · deep_dive").
+TIER_LABELS = {"pulse": "Pulse", "insight": "Insight", "deep_dive": "Deep Dive"}
+
 SUB_COMPONENT_LABELS = {
     "solidez": "Solidez Financiera",
     "calidad": "Calidad de Activos",
@@ -88,6 +93,18 @@ NARRATIVE_SECTION_TITLES = {
     "scenario_analysis": "Análisis de Escenarios",
     "limitations": "Limitaciones",
 }
+
+# Las secciones ESTÁNDAR auto-generadas (metodología/fuentes/glosario, ver
+# shared/products/report_sections.py) llegan en ``narratives`` con esas claves. Sin este
+# merge, ``_build_narrative_sections`` no las reconoce y cae al fallback
+# ``key.replace("_", " ").title()`` → título roto en inglés/snake_case tal cual el código
+# ("Std Methodology", "Std Sources") — bug real detectado en producción, visible en la
+# portada y en cada página del Informe de Calificación Completa.
+try:
+    from shared.products.report_sections import STANDARD_SECTION_TITLES as _STD_TITLES
+    NARRATIVE_SECTION_TITLES = {**NARRATIVE_SECTION_TITLES, **_STD_TITLES}
+except ImportError:  # pragma: no cover — el reporte no debe romper por esto
+    pass
 
 
 # ── Styles ────────────────────────────────────────────────────────
@@ -856,7 +873,7 @@ async def generate_pdf_report(
     # headline (pull-quote de portada), igual que los demás productos.
     title_label = REPORT_TYPE_LABELS.get(report_type, report_type)
     if tier:
-        title_label = f"{title_label} · {tier}"
+        title_label = f"{title_label} · {TIER_LABELS.get(tier, tier)}"
     headline = None
     if rating_tier and rating_tier not in ("N/A", "Sistema"):
         headline = rating_tier + (f" · {overall_score:.1f}/100" if overall_score else "")

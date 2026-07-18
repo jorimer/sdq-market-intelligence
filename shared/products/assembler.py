@@ -131,14 +131,25 @@ async def _content_from_snapshot(
     de anonimización Pulse y produce las narrativas vía el motor (con caché). NO renderiza."""
     level = _assert_system_payload(product, tier, snapshot)
     narratives = await _narratives_cached(product, tier, snapshot, lang, scope)
+    # Glosario automático (audiencia mixta): detecta las siglas/términos técnicos que la
+    # narrativa YA REDACTADA usa y anexa su definición. Va ANTES del merge de las secciones
+    # estándar (metodología/fuentes no llevan jerga propia del eje). Punto único: lo
+    # heredan la vista in-app (JSON) y el PDF/Word para todos los módulos de sector.
+    from shared.products.report_sections import glossary_section, standard_sections
+    # Solo valores str: una fila de caché con un valor no-str (columna JSON) no debe
+    # tumbar la entrega — misma doctrina defensiva que las secciones estándar.
+    glossary = glossary_section(
+        "\n\n".join(v for v in narratives.values() if isinstance(v, str)), tier)
+    if glossary:
+        narratives = {**narratives, **glossary}
     # Secciones ESTÁNDAR auto-generadas (metodología/fuentes) — nuestra ventaja honesta.
     # Se anexan tras las del producto; las heredan online y PDF (docs/REPORT_STANDARD.md).
-    from shared.products.report_sections import standard_sections
     std = standard_sections(product, tier)
     if std:
         narratives = {**narratives, **std}
     _assert_system_narratives(level, snapshot, narratives)
-    order = tuple(level.sections) + tuple(k for k in std if k not in level.sections)
+    extra = {**glossary, **std}
+    order = tuple(level.sections) + tuple(k for k in extra if k not in level.sections)
     return ProductContent(level=level, snapshot=snapshot, narratives=narratives,
                           section_order=order)
 

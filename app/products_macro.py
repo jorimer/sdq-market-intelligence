@@ -346,7 +346,7 @@ class MacroProduct:
         # Niveles nombrados: riesgo-país del PAÍS elegido (no RD prestado).
         iso = (scope or "").strip().upper()
         if not iso:
-            raise ValueError("Seleccioná un país del panel para el Insight/Deep Dive de Macro.")
+            raise ValueError("Selecciona un país del panel para el Insight/Deep Dive de Macro.")
         from modules.macro_political_risk import service as irmp_svc
         snap = irmp_svc.get_snapshot(db, iso, _parse_period(period))
         if snap is None:
