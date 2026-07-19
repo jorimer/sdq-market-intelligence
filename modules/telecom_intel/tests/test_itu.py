@@ -152,11 +152,17 @@ def test_backfill_is_as_of_and_idempotent(db):
     assert s2021.telecom_score != s2024.telecom_score
 
 
-def test_backfill_does_not_touch_indotel_scores(db):
-    # Un score INDOTEL preexistente (2022-Q1) sobrevive al backfill ITU (aditivo).
+def test_backfill_prunes_legacy_quarterly_scores(db):
+    # ITU es la serie canónica anual; el backfill RETIRA los trimestres INDOTEL
+    # heredados (2022-Q1, congelado, otra metodología) para no dejar una serie mixta.
     from modules.telecom_intel.service import backfill_scores_itu
     db.add(TelecomScore(period="2022-Q1", telecom_score=55.0, band="Vigilancia",
                         coverage=1.0, model_version="1.0"))
     db.commit()
-    backfill_scores_itu(db, by_code=_hist_by_code())
-    assert db.query(TelecomScore).filter_by(period="2022-Q1").first() is not None
+    r = backfill_scores_itu(db, by_code=_hist_by_code())
+    assert db.query(TelecomScore).filter_by(period="2022-Q1").first() is None
+    assert r["pruned_legacy"] == 1
+    # Los años ITU (anuales) quedan intactos.
+    periods = {s.period for s in db.query(TelecomScore).all()}
+    assert periods == {"2020", "2021", "2022", "2023", "2024"}
+    assert all("-Q" not in p for p in periods)
