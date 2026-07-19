@@ -4,6 +4,7 @@ Reads INDOTEL's quarterly bulletin via ``indotel_client``, computes the telecom
 development index (IDT) for the latest published quarter and persists it.
 """
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -131,7 +132,13 @@ def backfill_scores_itu(
     los años con los TRES pilares medibles (mezclar años de 2 y 3 pilares leería como
     salto falso del índice) → serie comparable ~2007 en adelante. Cada año usa SU dato
     (exact-year, sin arrastrar el futuro). Publica el evento UNA vez (último año).
-    Idempotente: upsert por período. NO toca los scores INDOTEL preexistentes."""
+    Idempotente: upsert por período.
+
+    ITU es la serie CANÓNICA de telecom (anual, fuente vigente). Al establecerla, se
+    retiran los puntos trimestrales heredados de INDOTEL (fuente muerta, congelada en
+    2022-Q1): tienen otra metodología (conteos absolutos vs. penetración per-100) y
+    sandwicheados entre los años ITU leen como una serie incomparable. ITU cubre esa
+    historia y más (anual desde 2000), así que el retiro es estrictamente una mejora."""
     from shared.data.itu_client import itu_client, parse_indicators_for_year
     if by_code is None:
         by_code = itu_client.fetch_by_code()
@@ -154,12 +161,28 @@ def backfill_scores_itu(
         # Sin ningún año pleno: cae a la vista live (último año, cobertura declarada).
         return compute_and_persist_itu(db)
 
+    pruned = _prune_legacy_quarterly(db)
     db.commit()
     publish_telecom_updated({"period": last["period"],
                              "telecom_score": last["telecom_score"], "band": last["band"]})
-    logger.info("IDT backfill ITU: %d años (%s → %s)",
-                len(persisted), persisted[0], persisted[-1])
-    return {**last, "periods": persisted, "model_version": MODEL_VERSION}
+    logger.info("IDT backfill ITU: %d años (%s → %s); %d trimestres INDOTEL retirados",
+                len(persisted), persisted[0], persisted[-1], pruned)
+    return {**last, "periods": persisted, "pruned_legacy": pruned,
+            "model_version": MODEL_VERSION}
+
+
+_QUARTERLY_PERIOD = re.compile(r"^\d{4}-Q[1-4]$")
+
+
+def _prune_legacy_quarterly(db: Session) -> int:
+    """Retira los ``TelecomScore`` de período trimestral (``YYYY-Qn``, artefactos INDOTEL)
+    para dejar SOLO la serie anual canónica de ITU. Devuelve cuántos borró. No commitea —
+    el llamador (backfill) hace un único commit con la serie nueva + este retiro."""
+    stale = [s for s in db.query(TelecomScore).all()
+             if _QUARTERLY_PERIOD.match(str(s.period or ""))]
+    for row in stale:
+        db.delete(row)
+    return len(stale)
 
 
 def get_latest(db: Session, period: Optional[str] = None) -> Optional[TelecomScore]:
