@@ -19,11 +19,17 @@ firmas → ``entity_roster=()`` (el sensor de anonimización pasa trivialmente).
 Pulse es el pulso del sector; el nivel nombrado nombra al sector (no a una empresa).
 
 Cobertura HONESTA por PROCEDENCIA (no hardcode): G1 acredita el peso del IAI que el
-motor consumió con dato real. Hoy 6/9 variables son live —sector (BCRD ×2), macro
-(contrato), operating_cost (TSS), labor_availability (ENCFT), regulatory_quality
-(WGI nacional)— y 3 siguen rúbrica (ease_of_business, skills_index,
-regulatory_volatility). Cada dimensión a medias acredita media cobertura → ~0.70, no
-0.40. NUNCA inventar data: las rúbricas restantes suben con su conector (no se fingen).
+motor consumió con dato real. Hoy 8/9 variables son live —sector (BCRD ×2), macro
+(contrato), operating_cost (TSS), labor_availability (ENCFT), regulatory_quality y
+regulatory_volatility (WGI nacional), skills_index (WB Human Capital Index)— y queda
+UNA en rúbrica: ``ease_of_business`` (Doing Business se descontinuó y no hay fuente
+viva que lo reemplace). Cada dimensión a medias acredita media cobertura. NUNCA
+inventar data: la rúbrica restante sube con su conector (no se finge).
+
+Matiz que el texto citable declara y este comentario no debe perder: skills_index,
+regulatory_quality y regulatory_volatility son NACIONALES — dato real, pero idéntico
+para los 17 sectores. Suben la cobertura del índice; no mueven el ranking entre
+sectores. Lo que discrimina es sector (BCRD), macro (contrato) y la rentabilidad ENAE.
 
 Eje doctrinal ÚNICO: ``sector_intel`` + thin ``sector_outlook`` → numeric_guard.
 """

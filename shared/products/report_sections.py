@@ -64,6 +64,32 @@ def _methodology_md(sig, val) -> str:
     return "\n\n".join(lines)
 
 
+def _provenance_md(product) -> str:
+    """Párrafo de procedencia por-variable desde ``variable_signals`` del producto.
+
+    Se construye un ``AxisRegistry`` efímero solo con lo que el producto declara — sin DB
+    y sin recorrer el catálogo completo (esto corre dentro del render de un reporte).
+    Producto sin ``variable_signals`` → cadena vacía: silencio honesto, nunca inventar."""
+    fn = getattr(product, "variable_signals", None)
+    if not callable(fn):
+        return ""
+    try:
+        from shared.registry.provenance import provenance_paragraph
+        from shared.registry.signals import AxisRegistry
+
+        raw = fn()
+        signals = tuple(raw.get("signals", ()) if isinstance(raw, dict) else (raw or ()))
+        if not signals:
+            return ""
+        axis = AxisRegistry(
+            sector_key=getattr(product, "sector_key", ""), display_name="",
+            source="", implemented=True, signals=signals,
+        )
+        return provenance_paragraph(axis)
+    except Exception:  # noqa: BLE001 — sección informativa; jamás rompe el reporte
+        return ""
+
+
 def _sources_md(sig) -> str:
     """Lista de fuentes (Deep Dive). Enriquecible con URL/licencia/fecha vía lineage (futuro)."""
     sources = [s for s in (sig.sources or ()) if s] if sig else []
@@ -90,7 +116,14 @@ def standard_sections(product, tier: ProductTier) -> Dict[str, str]:
         val = product.validation_state()
     except Exception:  # noqa: BLE001
         val = None
-    out: Dict[str, str] = {METHODOLOGY_KEY: _methodology_md(sig, val)}
+    methodology = _methodology_md(sig, val)
+    # Procedencia POR VARIABLE, generada del registro en vivo — nunca prosa escrita a
+    # mano (lección Hallazgo 7: la prosa que afirma procedencia envejece con cada
+    # conector; la generada no puede divergir del estado real porque ES el estado real).
+    provenance = _provenance_md(product)
+    if provenance:
+        methodology += f"\n\n**Procedencia por variable:** {provenance}"
+    out: Dict[str, str] = {METHODOLOGY_KEY: methodology}
     if tv in _TIERS_WITH_SOURCES:
         out[SOURCES_KEY] = _sources_md(sig)
     return out

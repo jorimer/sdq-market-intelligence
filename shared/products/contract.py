@@ -50,6 +50,53 @@ class ValidationState:
 
 
 @dataclass(frozen=True)
+class CanonicalSeries:
+    """Descriptor de UNA serie canónica normalizada que el sector publica.
+
+    Es el átomo de la Data API (docs/SPEC_API_DATOS_PROPIETARIOS.md §3): el manifiesto
+    de exposición recorre el catálogo pidiendo ``canonical_series()`` y publica lo que
+    encuentre — por eso una serie nueva se expone sin tocar la capa API.
+
+    ``license`` es OBLIGATORIO en la práctica: una serie sin licencia declarada queda en
+    **cuarentena** (no se sirve). Es deliberado y conservador — misma doctrina que
+    ``normalize_state``, que asume GAP ante lo desconocido: no se redistribuye lo que no
+    consta que se pueda redistribuir.
+    """
+
+    code: str                             # clave estable, p.ej. "gdp_growth"
+    label: str                            # etiqueta legible
+    unit: Optional[str] = None
+    frequency: str = "unknown"            # monthly | quarterly | annual | unknown
+    source: str = ""                      # emisor: "BCRD", "SIB", "SIPEN"…
+    license: Optional[str] = None         # None ⇒ cuarentena (no se expone)
+    # QUÉ es el valor respecto de la fuente. Decide si servirlo es redistribuir o no:
+    #   "verbatim" — el valor del emisor, normalizado (período canónico, unidad, linaje).
+    #                Servirlo ES redistribuir → lo alcanza la licencia de la fuente.
+    #   "derived"  — cálculo de casa sobre uno o más insumos (índice, score, tasa
+    #                deflactada, brecha). Es obra propia: una restricción no-comercial
+    #                del insumo no impide servir el RESULTADO, aunque sí obliga a citar.
+    # Default "verbatim" a propósito: ante la duda se asume lo más restrictivo, igual
+    # que ``normalize_state`` asume GAP.
+    derivation: str = "verbatim"
+    period_first: Optional[str] = None
+    period_latest: Optional[str] = None
+    n_obs: int = 0
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class SeriesObservation:
+    """Una observación de una serie canónica, con su linaje mínimo."""
+
+    period: str                           # "2025", "2025-Q1", "2025-01"
+    value: Optional[float]                # None = falta el dato (NUNCA se imputa)
+    unit: Optional[str] = None
+    source: Optional[str] = None
+    published_at: Optional[str] = None    # ISO date de publicación del emisor
+    reason: Optional[str] = None          # por qué falta, cuando ``value`` es None
+
+
+@dataclass(frozen=True)
 class ProductSnapshot:
     """Datos ya calculados que un nivel necesita para narrar y renderizar.
 
@@ -141,6 +188,17 @@ class SectorProduct(Protocol):
     # ``shared/registry/builders`` (``pattern_a_signals`` para paneles con mapa
     # ``sources``; ``pattern_b_signals`` para índices con ``breakdown.provenance``) —
     # NO duplicar la normalización. Ver docs/SPEC_MOTOR_RESEARCH_CUSTOM.md §3.1.
+
+    # ── Series canónicas para la Data API (OPCIONAL) ──
+    # Un producto PUEDE implementar el par:
+    #   ``canonical_series() -> Iterable[CanonicalSeries]``
+    #   ``series_observations(code, *, start=None, end=None, limit=None)
+    #        -> Iterable[SeriesObservation]``
+    # para publicar sus series normalizadas por la Data API. Se detecta por ``getattr``;
+    # un producto que no lo implemente simplemente no aporta series (brecha honesta, no
+    # error). Implementar SIEMPRE los dos: un descriptor sin lector es una serie que el
+    # catálogo anuncia y nadie puede leer, y el manifiesto lo trata como cuarentena.
+    # Ver docs/SPEC_API_DATOS_PROPIETARIOS.md §3.
 
 
 def required_signal_methods() -> List[str]:
