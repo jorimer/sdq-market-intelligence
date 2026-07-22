@@ -1,7 +1,31 @@
 # Hallazgo 7 — el corpus de "rúbrica declarada" es 89% documentación interna, no doctrina citable
 
-**Estado: diagnóstico confirmado por auditoría de código sobre los 14 documentos del manifest.
-Sección 5 es BORRADOR de contenido — requiere tu revisión antes de entrar a producción.**
+> **CERRADO.** Documento histórico: se conserva por el diagnóstico de §1-2, no como trabajo
+> pendiente. El §3-4 (código) y el §5 (contenido) se implementaron y mergearon el 2026-07-15 en
+> `24e15c0` — `CORPUS_MANIFEST` quedó con los 5 YAML de doctrina, `_passages_from_source` extrae
+> solo el campo `rationale` con parseo YAML real, y hay gate de CI
+> (`shared/knowledge/corpus/tests/test_citability_gate.py`).
+>
+> **Las 3 preguntas del §6 quedaron resueltas así (2026-07-22):**
+> 1. Las 4 notas entre paréntesis del §5 se verificaron contra el código, no de memoria. Tres de
+>    las cuatro seguían siendo válidas (IRC transición en rúbrica; IRMP con rúbrica cero; IDM
+>    entero en dato real). **La del IAI había quedado obsoleta**: el texto publicado declaraba
+>    como rúbrica cuatro variables que ya son dato real (`operating_cost` TSS,
+>    `labor_availability` ENCFT, `regulatory_quality` y `regulatory_volatility` WGI,
+>    `skills_index` WB HCI). De 9 variables, 8 son reales; la única rúbrica viva es
+>    `ease_of_business`. Los `dimension_rationales` de `sectoral.yaml` se corrigieron.
+> 2. Luz verde dada y ejecutada.
+> 3. **Sí** — la advertencia explícita se adoptó, y en ambas direcciones: donde una dimensión es
+>    rúbrica se declara ("supuesto neutral de casa"), y donde es dato real pero de alcance
+>    NACIONAL se declara también, porque un cliente podría leer "dato real" como "diferencia
+>    entre sectores" y no lo hace.
+>
+> Lección que deja: un texto citable que describe el estado de los datos **envejece con cada
+> conector nuevo**. Vale la pena una verificación periódica del rationale contra la procedencia
+> real, no solo del formato — el gate de CI atrapa tablas y código, no afirmaciones vencidas.
+
+**Estado original del documento (2026-07-15): diagnóstico confirmado por auditoría de código
+sobre los 14 documentos del manifest. Sección 5 era BORRADOR de contenido.**
 
 ## 1. Magnitud del problema (no son 2 archivos sueltos)
 

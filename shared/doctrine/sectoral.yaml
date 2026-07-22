@@ -64,8 +64,12 @@ risk_increasing:
 # escala absoluta, sin distorsión. Los defaults de abajo son solo el FALLBACK para el
 # slug sin dato (p.ej. estructural de los 8 sectores fuera del marco ENAE): quedan en
 # 50 y se rotulan rúbrica. Ver ``_load_sgps_historical`` / ``_load_sgps_structural``.
+# Estado real (2026-07): de las 9 variables del IAI, 8 corren con dato real y solo
+# ``ease_of_business`` sigue siendo rúbrica efectiva — el Doing Business del Banco Mundial se
+# descontinuó y no hay fuente viva que lo reemplace. Los otros valores de abajo quedan como
+# FALLBACK si su conector no devuelve dato en un período, no como el estado normal.
 rubric_defaults:
-  ease_of_business: 50
+  ease_of_business: 50   # ÚNICA rúbrica efectiva hoy (sin fuente viva)
   operating_cost: 50
   labor_availability: 50
   skills_index: 50
@@ -87,7 +91,7 @@ bands:
 # directo. Escrito para que un cliente lo lea — sin jerga de config ni identificadores de código.
 dimension_rationales:
   macro: "Mide cómo las condiciones macroeconómicas del país golpean específicamente a este sector — no el macro genérico, sino su exposición particular (ver Doctrina · Contrato macro→sectorial). Es la dimensión de mayor peso porque ningún sector opera aislado del ciclo nacional, y es dato real derivado del contrato macro-sectorial, no juicio de casa."
-  business: "Clima de negocios: facilidad de operar, costo operativo y rentabilidad real del sector. La rentabilidad usa dato real de la Encuesta Nacional de Actividad Económica (ENAE) donde el sector está cubierto (8 de 17 sectores); donde no, la variable queda ausente en vez de rellenarse — evita distorsionar el índice con un valor inventado. Facilidad de negocio y costo operativo son hoy rúbrica uniforme (neutral, no discrimina entre sectores) mientras no haya dato real per-sector."
-  talent: "Disponibilidad y nivel de competencias de la fuerza laboral relevante para el sector. Es hoy rúbrica uniforme (neutral 50 para los 17 sectores) — un limitante estructural de mediano plazo que SDQ aún no discrimina con dato real por sector."
-  regulation: "Calidad y estabilidad del marco regulatorio que enmarca al sector. Pesa menos que negocios o talento porque, a diferencia de estos, hoy también es rúbrica uniforme (neutral) en tanto no se conecte el dato real del WGI que ya alimenta el eje de riesgo regulatorio nacional (IRMP)."
-  sector: "Crecimiento y tamaño relativo del sector dentro del valor agregado nacional — dato real del BCRD para los 17 sectores. Es la dimensión que, junto con el entorno macro, mueve el ranking entre sectores hoy, porque negocios/talento/regulación siguen en rúbrica uniforme."
+  business: "Clima de negocios: facilidad de operar, costo operativo y rentabilidad real del sector. La rentabilidad usa dato real de la Encuesta Nacional de Actividad Económica (ENAE) donde el sector está cubierto (8 de 17 sectores); donde no, la variable queda ausente en vez de rellenarse — evita distorsionar el índice con un valor inventado. El costo operativo también es dato real, del registro de salarios por actividad de la Tesorería de la Seguridad Social. Solo la facilidad de operar sigue siendo un supuesto neutral de casa: el Doing Business del Banco Mundial se descontinuó y no existe hoy una fuente viva que lo reemplace."
+  talent: "Disponibilidad y nivel de competencias de la fuerza laboral relevante para el sector. Ambas variables son dato real: el empleo por rama de actividad viene de la Encuesta Continua de Fuerza de Trabajo, y el nivel de competencias del Índice de Capital Humano del Banco Mundial. El índice de competencias se mide a nivel país, así que aporta la misma lectura a los 17 sectores — sostiene el nivel del índice, pero no es lo que separa a un sector de otro."
+  regulation: "Calidad y estabilidad del marco regulatorio que enmarca al sector, ambas con dato real de los Indicadores de Gobernanza Mundial del Banco Mundial: el nivel de calidad regulatoria y su volatilidad histórica. Se miden a nivel país porque el marco que capturan es nacional, no sectorial; por eso aportan la misma lectura a los 17 sectores. Pesa menos que negocios o talento porque el marco regulatorio actúa sobre el sector de forma más indirecta que sus condiciones operativas."
+  sector: "Crecimiento y tamaño relativo del sector dentro del valor agregado nacional — dato real del BCRD para los 17 sectores. Junto con el entorno macro, es lo que efectivamente diferencia a un sector de otro: las variables de talento y regulación son dato real pero de alcance nacional, de modo que el ranking entre sectores lo mueven estas dos dimensiones y la rentabilidad sectorial."
