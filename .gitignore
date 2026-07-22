@@ -66,3 +66,7 @@ docker-compose.override.yml
 # Claude Code
 .claude/
 docs/reference/seguros/*.pdf
+
+# Artefactos de reportes generados en corridas de auditoría (PDF + PNG de gráficos).
+# Son evidencia reproducible ejecutando el generador, no fuente: no van al repo.
+pdfs/
