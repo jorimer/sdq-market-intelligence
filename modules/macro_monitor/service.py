@@ -1067,10 +1067,11 @@ def signals_for_api(db: Session, *, limit: Optional[int] = None) -> List[Dict[st
     persistió — sin narrativa. Lista vacía = sin señal activa, que es un resultado, no
     un hueco."""
     snap = get_snapshot(db)
-    if snap is None or not (snap.signals or []):
+    if snap is None:
         return []
+    persisted: List[Any] = list(snap.signals or [])
     out: List[Dict[str, Any]] = []
-    for s in snap.signals or []:
+    for s in persisted:
         if not isinstance(s, dict):
             continue
         out.append({

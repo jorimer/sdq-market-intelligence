@@ -474,15 +474,22 @@ def irmp_observations_for_api(
         q = q.filter(IRMPSnapshot.period_end <= end)
     rows = q.order_by(IRMPSnapshot.period_end.desc()).all()
 
+    pairs: List[Any] = list(rows)
     if not subject:
-        # Panel: el snapshot más reciente por país (rows ya vienen desc).
+        # Panel: el snapshot más reciente por país (las filas ya vienen desc).
         seen: set = set()
-        rows = [(s, iso) for s, iso in rows if not (iso in seen or seen.add(iso))]
+        latest: List[Any] = []
+        for snap, iso in pairs:
+            if iso in seen:
+                continue
+            seen.add(iso)
+            latest.append((snap, iso))
+        pairs = latest
     if limit is not None and limit > 0:
-        rows = rows[: int(limit)]
+        pairs = pairs[: int(limit)]
 
     out: List[Dict[str, Any]] = []
-    for snap, iso in rows:
+    for snap, iso in pairs:
         dims = {
             d.dimension: {"score": d.score, "weight": d.weight,
                           "contribution": d.contribution}

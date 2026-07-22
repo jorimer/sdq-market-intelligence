@@ -254,15 +254,24 @@ def irc_observations_for_api(
         q = q.filter(ESGScore.period <= end)
     rows = q.order_by(ESGScore.period.desc()).all()
 
+    scores: List[ESGScore] = list(rows)
     if not subject:
         seen: set = set()
-        rows = [r for r in rows if not (r.entity_key in seen or seen.add(r.entity_key))]
+        latest: List[ESGScore] = []
+        for r in scores:
+            key = str(r.entity_key)
+            if key in seen:
+                continue
+            seen.add(key)
+            latest.append(r)
+        scores = latest
     if limit is not None and limit > 0:
-        rows = rows[: int(limit)]
+        scores = scores[: int(limit)]
 
     out: List[Dict[str, Any]] = []
-    for r in rows:
-        dims = ((r.breakdown or {}).get("dimensions") or None)
+    for r in scores:
+        breakdown: Dict[str, Any] = dict(r.breakdown or {})
+        dims = breakdown.get("dimensions") or None
         out.append({
             "subject": str(r.entity_key),
             "period": str(r.period),
