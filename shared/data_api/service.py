@@ -6,6 +6,7 @@ hash.
 """
 from __future__ import annotations
 
+import secrets
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -151,3 +152,105 @@ def usage_summary(db: Session, *, key_id: str, limit: int = 50) -> Dict[str, Any
             for r in rows
         ],
     }
+
+
+# ─── Webhooks (F3) ────────────────────────────────────────────────────
+
+
+def register_webhook(
+    db: Session,
+    *,
+    api_key_id: str,
+    url: str,
+    events: str = "*",
+    secret: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Registra un webhook para una llave. Devuelve el secreto UNA vez.
+
+    El secreto se genera acá si no se pasa: es lo que el receptor usa para verificar la
+    firma HMAC de cada aviso. Se devuelve en claro solo en el alta (después solo se
+    consulta el resto del registro).
+    """
+    from shared.data_api.models import ApiKey, ApiWebhook
+    from shared.data_api.webhooks import PUBLIC_EVENTS
+
+    key = db.query(ApiKey).filter(ApiKey.id == api_key_id).one_or_none()
+    if key is None:
+        raise ApiKeyError("La llave no existe.")
+    clean_url = (url or "").strip()
+    if not clean_url.startswith("https://"):
+        # HTTP plano expondría el aviso y su firma en tránsito; y un webhook es una URL
+        # que vive en la infraestructura del cliente, no en la nuestra.
+        raise ApiKeyError("La URL del webhook debe ser https://.")
+
+    wanted = [e.strip() for e in (events or "*").split(",") if e.strip()]
+    unknown = [e for e in wanted if e != "*" and e not in PUBLIC_EVENTS]
+    if unknown:
+        raise ApiKeyError(
+            f"Evento(s) desconocido(s): {', '.join(unknown)}. "
+            f"Disponibles: {', '.join(PUBLIC_EVENTS)} (o '*')."
+        )
+
+    row = ApiWebhook(
+        api_key_id=api_key_id, url=clean_url, secret=secret or secrets.token_urlsafe(32),
+        events=",".join(wanted) or "*", active=True, consecutive_failures=0,
+    )
+    db.add(row)
+    db.commit()
+    return {
+        "id": row.id, "api_key_id": row.api_key_id, "url": row.url,
+        "events": row.events, "active": bool(row.active),
+        "secret": row.secret,
+        "secret_note": ("Guarde este secreto: verifica la firma HMAC-SHA256 del header "
+                        "X-SDQ-Signature en cada aviso."),
+    }
+
+
+def list_webhooks(db: Session, *, api_key_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Webhooks registrados. NUNCA devuelve el secreto."""
+    from shared.data_api.models import ApiWebhook
+
+    q = db.query(ApiWebhook)
+    if api_key_id:
+        q = q.filter(ApiWebhook.api_key_id == api_key_id)
+    return [
+        {
+            "id": r.id, "api_key_id": r.api_key_id, "url": r.url, "events": r.events,
+            "active": bool(r.active),
+            "last_delivery_at": r.last_delivery_at.isoformat() if r.last_delivery_at else None,
+            "consecutive_failures": int(r.consecutive_failures or 0),
+        }
+        for r in q.order_by(ApiWebhook.created_at.desc()).all()
+    ]
+
+
+def delete_webhook(db: Session, *, webhook_id: str) -> Dict[str, Any]:
+    from shared.data_api.models import ApiWebhook, ApiWebhookDelivery
+
+    row = db.query(ApiWebhook).filter(ApiWebhook.id == webhook_id).one_or_none()
+    if row is None:
+        raise ApiKeyError("El webhook no existe.")
+    db.query(ApiWebhookDelivery).filter(
+        ApiWebhookDelivery.webhook_id == webhook_id
+    ).delete(synchronize_session=False)
+    db.delete(row)
+    db.commit()
+    return {"id": webhook_id, "deleted": True}
+
+
+def webhook_deliveries(db: Session, *, webhook_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """Últimos intentos de entrega — para diagnosticar "no me llegó el aviso"."""
+    from shared.data_api.models import ApiWebhookDelivery
+
+    rows = (
+        db.query(ApiWebhookDelivery)
+        .filter(ApiWebhookDelivery.webhook_id == webhook_id)
+        .order_by(ApiWebhookDelivery.attempted_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {"event": r.event, "status_code": r.status_code, "error": r.error,
+         "attempted_at": r.attempted_at.isoformat() if r.attempted_at else None}
+        for r in rows
+    ]

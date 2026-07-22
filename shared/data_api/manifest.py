@@ -356,6 +356,74 @@ def _score_assets(db: Optional[Session], entry, pub_state) -> List[ExposedAsset]
     return out
 
 
+def _forecast_assets(db: Optional[Session], entry, pub_state) -> List[ExposedAsset]:
+    """Modelos de pronóstico que declara UN producto (Fase 3).
+
+    Como los scores, son cálculo de casa. El ``note`` del activo carga el track record
+    resumido para que aparezca ya en el catálogo: quien navega el inventario debe ver el
+    acierto ANTES de pedir el recurso."""
+    if not is_implemented(entry.sector_key):
+        return []
+    try:
+        product = get_product(entry.sector_key, db)
+    except Exception as exc:
+        logger.warning("data_api: no se pudo instanciar '%s': %s", entry.sector_key, exc)
+        return []
+    if product is None:
+        return []
+
+    describe = getattr(product, "canonical_forecasts", None)
+    if not callable(describe):
+        return []
+    has_reader = callable(getattr(product, "forecast_observations", None))
+
+    try:
+        described = list(describe() or ())
+    except Exception as exc:
+        logger.warning(
+            "data_api: '%s' falló al describir sus pronósticos: %s", entry.sector_key, exc
+        )
+        try:
+            db.rollback() if db is not None else None
+        except Exception:
+            pass
+        return []
+
+    out: List[ExposedAsset] = []
+    for f in described:
+        n_scored = int(getattr(f, "n_scored", 0) or 0)
+        hit = getattr(f, "hit_rate", None)
+        track = f"acierto {hit:.0%} en {n_scored} puntuados" if hit is not None else \
+            f"{n_scored} pronóstico(s) puntuado(s)"
+        out.append(
+            ExposedAsset(
+                key=f"{entry.sector_key}:forecast:{f.code}",
+                kind="forecast",
+                sector_key=entry.sector_key,
+                code=f.code,
+                label=getattr(f, "label", "") or f.code,
+                unit=None,
+                frequency=getattr(f, "horizon", "") or "unknown",
+                source="SDQ Market Intelligence (modelo propio)",
+                license=SDQ_OWN_LICENSE,
+                n_obs=n_scored,
+                # Un modelo con pocos pronósticos puntuados es "thin" en el sentido que
+                # importa: su tasa de acierto todavía no dice mucho.
+                stability="thin" if n_scored < THIN_OBS else "stable",
+                derivation=DERIVATION_DERIVED,
+                quarantine=_quarantine_for(
+                    entry.sector_key, license_=SDQ_OWN_LICENSE, has_reader=has_reader,
+                    pub_state=pub_state, derivation=DERIVATION_DERIVED,
+                ),
+                note=" · ".join(p for p in (
+                    getattr(f, "target", "") or "", track,
+                    getattr(f, "baseline", "") or "",
+                ) if p),
+            )
+        )
+    return out
+
+
 def build_manifest(db: Optional[Session] = None, *,
                    allow_restricted: bool = False) -> Manifest:
     """El inventario completo, resuelto contra el registro en este instante.
@@ -370,6 +438,7 @@ def build_manifest(db: Optional[Session] = None, *,
     for entry in PRODUCT_CATALOG:
         assets.extend(_series_assets(db, entry, pub_state, allow_restricted))
         assets.extend(_score_assets(db, entry, pub_state))
+        assets.extend(_forecast_assets(db, entry, pub_state))
     return Manifest(
         generated_at=datetime.now(timezone.utc).isoformat(),
         assets=tuple(assets),

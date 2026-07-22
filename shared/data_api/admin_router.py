@@ -105,3 +105,59 @@ async def manifest(
         "summary": m.summary,
         "assets": [a.to_dict() for a in m.assets],
     }
+
+
+class RegisterWebhookRequest(BaseModel):
+    api_key_id: str = Field(..., description="Llave dueña del webhook.")
+    url: str = Field(..., max_length=500, description="Endpoint https:// del cliente.")
+    events: str = Field(
+        "*",
+        description="Eventos separados por coma, o '*' para todos los públicos.",
+    )
+
+
+@router.post("/webhooks", status_code=status.HTTP_201_CREATED)
+async def register_webhook(
+    body: RegisterWebhookRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    """Registra un webhook. El secreto de firma va en la respuesta y no se repite."""
+    try:
+        return service.register_webhook(
+            db, api_key_id=body.api_key_id, url=body.url, events=body.events
+        )
+    except service.ApiKeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/webhooks")
+async def list_webhooks(
+    api_key_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_role(UserRole.admin)),
+) -> List[Dict[str, Any]]:
+    return service.list_webhooks(db, api_key_id=api_key_id)
+
+
+@router.delete("/webhooks/{webhook_id}")
+async def delete_webhook(
+    webhook_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    try:
+        return service.delete_webhook(db, webhook_id=webhook_id)
+    except service.ApiKeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/webhooks/{webhook_id}/deliveries")
+async def webhook_deliveries(
+    webhook_id: str,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_role(UserRole.admin)),
+) -> List[Dict[str, Any]]:
+    """Bitácora de entregas — responde "¿por qué no me llegó el aviso?"."""
+    return service.webhook_deliveries(db, webhook_id=webhook_id, limit=min(max(limit, 1), 500))

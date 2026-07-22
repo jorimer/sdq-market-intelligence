@@ -134,6 +134,52 @@ class ScoreObservation:
 
 
 @dataclass(frozen=True)
+class CanonicalForecast:
+    """Descriptor de UN modelo de pronóstico que el sector publica, con su track record.
+
+    Es el activo más defendible del catálogo: el acierto es **verificable** — cada
+    pronóstico se congela ANTES del hecho y se puntúa contra el resultado publicado por
+    la fuente oficial. Por eso el descriptor lleva las métricas acumuladas: un cliente
+    debe poder juzgar el modelo antes de usarlo, no después.
+    """
+
+    code: str                             # "tpm"
+    label: str                            # "Decisión de política monetaria (TPM)"
+    target: str = ""                      # qué se pronostica, en prosa llana
+    horizon: str = ""                     # "próxima reunión de la Junta Monetaria"
+    classes: Tuple[str, ...] = ()         # ("cut", "hold", "hike") si es clasificador
+    model_version: Optional[str] = None
+    n_scored: int = 0                     # pronósticos ya puntuados (la muestra viva)
+    hit_rate: Optional[float] = None      # aciertos / puntuados
+    brier: Optional[float] = None         # Brier medio multiclase (menor = mejor)
+    baseline: Optional[str] = None        # con qué compararlo para que la cifra signifique algo
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class ForecastObservation:
+    """Un pronóstico congelado y —si ya ocurrió— su resultado real.
+
+    ``status`` distingue el pronóstico VIGENTE (``pending``, aún sin resolver) del
+    histórico puntuado (``scored``). Nunca se reescribe un pronóstico viejo: ese es el
+    punto de un track record honesto.
+    """
+
+    as_of: str                            # fecha en que se emitió (ISO)
+    status: str = "pending"               # "pending" | "scored"
+    predicted: Optional[str] = None
+    probabilities: Optional[Dict] = None  # {clase: prob}
+    implied_level: Optional[float] = None # lectura continua (p.ej. tasa de la regla de Taylor)
+    realized: Optional[str] = None        # lo que efectivamente ocurrió
+    realized_level: Optional[float] = None
+    realized_date: Optional[str] = None
+    correct: Optional[bool] = None
+    brier: Optional[float] = None
+    level_abs_error: Optional[float] = None
+    model_version: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class SignalItem:
     """Una señal determinista (alerta temprana / precursor) emitida por el motor.
 
@@ -259,6 +305,8 @@ class SectorProduct(Protocol):
     #   ``score_observations(code, *, subject=None, start=None, end=None, limit=None)
     #        -> Iterable[ScoreObservation]``
     #   ``canonical_signals(limit=None) -> Iterable[SignalItem]``   (independiente)
+    #   ``canonical_forecasts() -> Iterable[CanonicalForecast]``     (Fase 3)
+    #   ``forecast_observations(code, *, limit=None) -> Iterable[ForecastObservation]``
     # El desglose dimensional numérico SÍ viaja; la narrativa NUNCA (es el producto de
     # reporte). Un producto que no los implemente no aporta scores/señales — brecha
     # honesta, no error.

@@ -81,6 +81,21 @@ Salida del motor de reglas (alerta temprana, precursores): `key`, `label`,
 `severity` (`info|watch|alert`), `period`, `detail`. **Lista vacía = sin señal activa —
 es un resultado, no un hueco.** Sin narrativa: el veredicto es determinista y citable.
 
+### Pronósticos con track record (F3)
+
+```
+GET /forecasts/{sector}[?code=][&limit=]
+```
+
+Cada pronóstico se **congela antes del hecho** y se puntúa contra la publicación oficial;
+nunca se reescribe uno pasado. `meta.forecast` trae el track record acumulado (acierto,
+Brier) **y la línea base** contra la cual esas cifras significan algo. `status` distingue
+el pronóstico vigente (`pending`, sin resultado aún) del histórico (`scored`).
+
+**Leer el caveat `small_sample`**: con pocas observaciones puntuadas, una tasa de acierto
+alta no es informativa. Publicado hoy: `macro`→`tpm` (dirección de la próxima decisión de
+la Junta Monetaria del BCRD).
+
 ### Calidad y procedencia (F2)
 
 ```
@@ -92,6 +107,54 @@ del peso del índice anclada a dato real), estado por variable (`real|rubric|gap
 `scope` (`national` = dato real de país, idéntico para todos los sujetos — no diferencia
 entre ellos) y el párrafo `provenance` generado. **Consultarlo antes de meter un eje a un
 modelo**: dice cuánto del índice es dato y cuánto supuesto declarado, hoy.
+
+### Cambios del inventario (F3)
+
+```
+GET /catalog/changes?since=<ISO>
+```
+
+Altas y bajas desde esa fecha. **Llamarlo en cada corrida**: el inventario crece solo, y
+una serie que *dejó* de publicarse rompe un modelo en silencio si nadie la reporta. Una
+fecha ilegible devuelve 422 (`invalid_since`) en vez de "sin cambios" — silencio y
+"no pasó nada" no deben confundirse.
+
+## Avisos por webhook (F3) — dejar de sondear
+
+En vez de preguntar cada hora si el BCRD publicó, SDQ avisa cuando el snapshot se
+recalcula. Para registrar un endpoint, pedirlo al administrador de MIP (`POST
+/api/v1/admin/data-api/webhooks` con `api_key_id`, `url` https y `events`).
+
+- El aviso **no trae el dato**: solo `{event, occurred_at, summary, hint}`. Tras
+  verificarlo, el cliente vuelve por la API con su llave. Así el webhook no se convierte
+  en un segundo canal de acceso con su propia superficie de permisos.
+- **Verificar SIEMPRE la firma** del header `X-SDQ-Signature` (HMAC-SHA256 del cuerpo con
+  el secreto entregado al registrar). Una URL de webhook es pública por naturaleza: sin
+  firma, cualquiera que la adivine puede hacer que su sistema recalcule con un aviso falso.
+- Eventos: `macro.updated`, `irmp.updated`, `esg.updated`, `trade.updated`,
+  `sector.updated`, `energy.updated`, `telecom.updated`, `tourism.updated`,
+  `construction.updated`, `free_zones.updated` (o `*`).
+- Tras 10 fallos seguidos el webhook se desactiva solo; la bitácora de entregas queda
+  disponible para diagnosticar.
+
+## SDK Python (F3)
+
+[`clients/python/sdq_data_client.py`](../clients/python/sdq_data_client.py) — **un archivo,
+pensado para copiarse dentro del repo del cliente**; única dependencia: `httpx`. Trae
+backoff que respeta `Retry-After`, errores tipados con `code` estable, y
+`verify_webhook()` para el receptor.
+
+```python
+from sdq_data_client import SdqDataClient
+
+sdq = SdqDataClient(api_key=os.environ["SDQ_MIP_API_KEY"])
+for asset in sdq.catalog(kind="series"):        # descubrir, no cablear
+    ...
+obs = sdq.series("bcrd.inflacion.inflacion.interanual", start="2024-01")
+irmp = sdq.scores("macro", subject="DO")
+fc = sdq.forecasts("macro")                     # respuesta completa: el track record
+                                                # vive en meta y los avisos en caveats
+```
 
 ## Receta de integración para SDQ-PMS
 
@@ -105,7 +168,8 @@ modelo**: dice cuánto del índice es dato y cuánto supuesto declarado, hoy.
    no se resuelve en silencio.
 3. **Contexto país para el Outlook/cerebro:** `GET /scores/macro?subject=DO` (IRMP con
    dimensiones) y `GET /signals/macro` (alertas macro deterministas).
-4. **Higiene de consumo:** cachear respuestas ≥1h (las fuentes publican con cadencia
+4. **Higiene de consumo:** registrar un webhook y refrescar por aviso en vez de sondear;
+   como respaldo, cachear respuestas ≥1h (las fuentes publican con cadencia
    mensual/trimestral — martillar no trae dato nuevo); respetar `Retry-After` en 429;
    registrar `meta.generated_at` con cada valor almacenado; tratar `stability: "thin"` y
    los `caveats` como parte del dato, no como ruido.

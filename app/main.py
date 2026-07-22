@@ -153,6 +153,9 @@ register_banking_subscribers()  # banking_score ← irmp.updated (outlook overla
 subscribe_product_events()  # monitor de productos ← *.updated (recálculo de readiness)
 subscribe_billing_events()  # alerta de tarifa ← tariff.published (notifica a suscriptos)
 
+from shared.data_api.webhooks import subscribe_webhook_events
+subscribe_webhook_events()  # webhooks de clientes ← *.updated (aviso de dato nuevo)
+
 # Operation Console: each module registers its operations at import time into the
 # shared registry (shared.operations). Import the register modules so the console
 # sees every operation, then (web-only, env-gated) start the in-app scheduler.

@@ -240,7 +240,7 @@ existe el manifiesto, los recursos entran solos.
 | **F0 · Decisión** | ~~El dueño resuelve §9~~ → **decidido**: se implementa ya; las abiertas se resuelven cuando la necesidad llegue. | ✅ |
 | **F1 · Manifiesto + cimiento** | Manifiesto de exposición sobre el catálogo de productos; cuarentena calculada (readiness · licencia · activación); llaves + hash + scopes + cuotas + bitácora; `/catalog` y `/series` genéricos. | ✅ **Hecho**: 65 tests; el manifiesto de dev expone 4 series y retiene 3 por `no_license`. Pendiente: migración en prod + llave de PMS. |
 | **F2 · Cobertura derivada** | `scores`, `indices`, `signals`, `quality` — todos resueltos por registro, no por sector cableado. | Un sector publicado nuevo expone sus scores sin PR en la capa API. |
-| **F3 · Profundidad** | `forecasts` + track record, `catalog/changes`, webhooks de "nuevo snapshot", SDK Python, portal de documentación. | Un cliente recibe el webhook de cierre trimestral y refresca solo. |
+| **F3 · Profundidad** | ✅ **Hecho**: `forecasts` + track record (TPM), `catalog/changes` sobre ledger de activos, webhooks firmados (HMAC) de "nuevo snapshot", SDK Python vendoreable. Pendiente: portal de documentación público. | ✅ Verificado en dev: aviso entregado a un receptor real con firma válida, sin el dato en el payload; `/catalog/changes` reporta las 10 altas del inventario. |
 
 ### 6.1 Cómo quedó implementada F1
 

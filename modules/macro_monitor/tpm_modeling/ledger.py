@@ -197,3 +197,70 @@ def track_record(db: Session) -> Dict[str, Any]:
         ),
         "caveats": tpm_service.CAVEATS,
     }
+
+
+# ─── Superficie para la Data API (docs/SPEC_API_DATOS_PROPIETARIOS.md F3) ──
+
+
+def describe_forecast_for_api(db: Session) -> Dict[str, Any]:
+    """Descriptor del modelo de TPM + su track record acumulado, para el manifiesto.
+
+    Las métricas van EN EL DESCRIPTOR a propósito: un cliente debe poder juzgar el
+    modelo antes de usarlo. Servir un pronóstico sin su historial de acierto sería
+    vender una opinión con apariencia de medición."""
+    tr = track_record(db)
+    bt = (tr.get("backtest_referencia") or {})
+    baseline = None
+    if bt.get("baseline_always_hold_accuracy") is not None:
+        baseline = (f"clasificador trivial 'siempre mantener': "
+                    f"{float(bt['baseline_always_hold_accuracy']):.2f} de acierto")
+    return {
+        "code": "tpm",
+        "label": "Decisión de política monetaria (TPM del BCRD)",
+        "target": ("dirección de la próxima decisión de la Junta Monetaria: recortar, "
+                   "mantener o subir la Tasa de Política Monetaria"),
+        "horizon": "próxima reunión de la Junta Monetaria",
+        "classes": tuple(ACTIONS),
+        "model_version": (tr.get("pronostico_vigente") or {}).get("model_version"),
+        "n_scored": int(tr.get("n_scored") or 0),
+        "hit_rate": tr.get("hit_rate"),
+        "brier": tr.get("brier_medio"),
+        "baseline": baseline,
+        "note": ("Registro prospectivo: cada pronóstico se congela ANTES de la reunión y "
+                 "se puntúa contra el comunicado oficial. La muestra crece ~1 por "
+                 "reunión; con pocas observaciones puntuadas, leer el acierto con "
+                 "cautela."),
+    }
+
+
+def forecast_observations_for_api(
+    db: Session, *, limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Historial de pronósticos + el vigente, más reciente primero.
+
+    El pronóstico ``pending`` viaja junto al histórico y se distingue por ``status``:
+    es el que aún no tiene resultado. Nunca se reescribe uno viejo — eso es lo que hace
+    verificable al track record."""
+    rows = (
+        db.query(TpmForecastLog)
+        .order_by(TpmForecastLog.as_of.desc())
+        .limit(int(limit) if limit else 200)
+        .all()
+    )
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        out.append({
+            "as_of": str(r.as_of),
+            "status": str(r.status or "pending"),
+            "predicted": r.predicted_action,
+            "probabilities": _probs(r),
+            "implied_level": r.implied_rate,
+            "realized": r.realized_action,
+            "realized_level": r.realized_tpm_level,
+            "realized_date": r.realized_date,
+            "correct": r.correct,
+            "brier": r.brier,
+            "level_abs_error": r.level_abs_error,
+            "model_version": r.model_version,
+        })
+    return out

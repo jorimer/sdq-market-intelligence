@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, status
 
 from shared.data_api.dependencies import ApiContext, api_error, require_api_key
+from shared.data_api.ledger import changes_since, record_manifest
 from shared.data_api.manifest import ExposedAsset, build_manifest
 from shared.data_api.quota import record_usage
 from shared.products.registry import get_product
@@ -69,6 +70,11 @@ async def catalog(
     if sector:
         assets = [a for a in assets if a.sector_key == sector]
 
+    # Registrar el inventario visto: es lo que hace consultable /catalog/changes.
+    # Se registra SIEMPRE el manifiesto completo del sector visible, no la vista
+    # filtrada, para que un filtro del cliente no marque bajas falsas.
+    record_manifest(ctx.db, _visible_assets(ctx, include_quarantined=True))
+
     payload = {
         "meta": {
             **ctx.meta(),
@@ -91,6 +97,46 @@ async def catalog(
     record_usage(
         ctx.db, ctx.key, resource="catalog", status_code=status.HTTP_200_OK,
         rows=len(assets), latency_ms=int((time.perf_counter() - started) * 1000),
+    )
+    return payload
+
+
+@router.get("/catalog/changes", summary="Altas y bajas del inventario desde una fecha")
+async def catalog_changes(
+    ctx: ApiContext = Depends(require_api_key),
+    since: str = Query(..., description="Fecha ISO desde la cual listar cambios."),
+) -> Dict[str, Any]:
+    """Qué entró y qué salió del catálogo desde ``since``.
+
+    Es la contraparte necesaria de la auto-extensión: el inventario crece solo, y un
+    cliente que corre sin supervisión se entera por acá — no por correo. Las bajas
+    viajan igual que las altas: una serie que dejó de publicarse rompe un modelo en
+    silencio si nadie la reporta."""
+    started = time.perf_counter()
+    visible = {a.key for a in _visible_assets(ctx, include_quarantined=True)}
+    try:
+        result = changes_since(ctx.db, since, visible_keys=visible)
+    except ValueError as exc:
+        raise api_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_since", str(exc), str(exc)
+        )
+
+    payload = {
+        "meta": {
+            **ctx.meta(), "resource": "catalog/changes", "since": result["since"],
+            "added": len(result["added"]), "retired": len(result["retired"]),
+        },
+        "data": {"added": result["added"], "retired": result["retired"]},
+        "caveats": [{
+            "code": "ledger_scope",
+            "message": ("El registro arranca la primera vez que se consultó el catálogo: "
+                        "un activo anterior a esa fecha no figura como alta."),
+        }],
+    }
+    record_usage(
+        ctx.db, ctx.key, resource="catalog/changes", status_code=status.HTTP_200_OK,
+        rows=len(result["added"]) + len(result["retired"]),
+        latency_ms=int((time.perf_counter() - started) * 1000),
     )
     return payload
 
@@ -429,6 +475,101 @@ async def quality(
     record_usage(
         ctx.db, ctx.key, resource="quality", asset_key=sector,
         status_code=status.HTTP_200_OK, rows=len(axis.signals),
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
+    return payload
+
+
+@router.get("/forecasts/{sector}", summary="Pronósticos con track record verificable")
+async def forecasts(
+    sector: str,
+    ctx: ApiContext = Depends(require_api_key),
+    code: Optional[str] = Query(None, description="Código del modelo (ver /catalog kind=forecast)."),
+    limit: int = Query(100, ge=1, le=500),
+) -> Dict[str, Any]:
+    """Pronósticos congelados + su resultado real cuando ya ocurrió.
+
+    El track record acumulado viaja en ``meta.forecast`` — acierto, Brier y la línea base
+    contra la cual esas cifras significan algo. Un pronóstico servido sin su historial de
+    aciertos sería una opinión con apariencia de medición."""
+    started = time.perf_counter()
+
+    assets = [a for a in _visible_assets(ctx, include_quarantined=False)
+              if a.kind == "forecast" and a.sector_key == sector]
+    if code:
+        assets = [a for a in assets if a.code == code]
+    if not assets:
+        record_usage(
+            ctx.db, ctx.key, resource="forecasts", asset_key=f"{sector}:{code or '*'}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "forecast_not_found",
+            f"No hay un modelo de pronóstico disponible para '{sector}'.",
+            f"No available forecast model for '{sector}'.",
+        )
+    if len(assets) > 1:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "ambiguous_code",
+            (f"El sector '{sector}' publica varios modelos: "
+             f"{', '.join(sorted(a.code for a in assets))}. Precise 'code'."),
+            (f"Sector '{sector}' publishes several models: "
+             f"{', '.join(sorted(a.code for a in assets))}. Specify 'code'."),
+        )
+
+    asset = assets[0]
+    product = get_product(asset.sector_key, ctx.db)
+    reader = getattr(product, "forecast_observations", None)
+    if not callable(reader):
+        raise api_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "reader_unavailable",
+            "El modelo está declarado pero su lector no está disponible.",
+            "The model is declared but its reader is unavailable.",
+        )
+
+    observations = list(reader(asset.code, limit=limit) or ())
+    scored = [o for o in observations if o.status == "scored"]
+
+    caveats: List[Dict[str, str]] = [{
+        "code": "prospective_record",
+        "message": ("Registro prospectivo: cada pronóstico se congela antes del hecho y "
+                    "se puntúa contra la publicación oficial. Nunca se reescribe uno "
+                    "pasado."),
+    }]
+    # Con muestra chica, el acierto es ruidoso. Decirlo es parte del dato.
+    if len(scored) < 10:
+        caveats.append({
+            "code": "small_sample",
+            "message": (f"Solo {len(scored)} pronóstico(s) puntuado(s): la tasa de acierto "
+                        f"todavía no es estadísticamente informativa. Contrástela con la "
+                        f"línea base declarada en meta.forecast."),
+        })
+
+    payload = {
+        "meta": {
+            **ctx.meta(),
+            "resource": "forecasts",
+            "forecast": asset.to_dict(),
+            "count": len(observations),
+            "n_scored": len(scored),
+        },
+        "data": [
+            {
+                "as_of": o.as_of, "status": o.status, "predicted": o.predicted,
+                "probabilities": o.probabilities, "implied_level": o.implied_level,
+                "realized": o.realized, "realized_level": o.realized_level,
+                "realized_date": o.realized_date, "correct": o.correct,
+                "brier": o.brier, "level_abs_error": o.level_abs_error,
+                "model_version": o.model_version,
+            }
+            for o in observations
+        ],
+        "caveats": caveats,
+    }
+    record_usage(
+        ctx.db, ctx.key, resource="forecasts", asset_key=asset.key,
+        status_code=status.HTTP_200_OK, rows=len(observations),
         latency_ms=int((time.perf_counter() - started) * 1000),
     )
     return payload
