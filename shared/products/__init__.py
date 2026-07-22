@@ -22,11 +22,14 @@ from shared.products.assembler import (
     supports_sample,
 )
 from shared.products.contract import (
+    CanonicalScore,
     CanonicalSeries,
     DataHealth,
     ProductSnapshot,
+    ScoreObservation,
     SectorProduct,
     SeriesObservation,
+    SignalItem,
     ValidationState,
     required_signal_methods,
 )
@@ -60,6 +63,9 @@ __all__ = [
     "ProductSnapshot",
     "CanonicalSeries",
     "SeriesObservation",
+    "CanonicalScore",
+    "ScoreObservation",
+    "SignalItem",
     "required_signal_methods",
     "assemble_product_report",
     "assemble_product_content",

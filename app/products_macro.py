@@ -25,13 +25,16 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.products import (
+    CanonicalScore,
     CanonicalSeries,
     DataHealth,
     Granularity,
     ProductSnapshot,
     ProductTier,
+    ScoreObservation,
     SectorProductManifest,
     SeriesObservation,
+    SignalItem,
     TierLevelSpec,
     ValidationState,
     distinct_periods,
@@ -327,6 +330,51 @@ class MacroProduct:
             for o in mm_svc.series_observations_for_api(
                 self._require_db(), code, start=start, end=end, as_of=as_of, limit=limit
             )
+        ]
+
+    # ── Scores y señales para la Data API (contrato OPCIONAL, Fase 2) ──
+    def canonical_scores(self) -> List[CanonicalScore]:
+        """El IRMP como score de panel por país. Delegado al módulo dueño del dato."""
+        from modules.macro_political_risk import service as irmp_svc
+
+        d = irmp_svc.describe_irmp_for_api(self._require_db())
+        return [CanonicalScore(
+            code=d["code"], label=d["label"], subject_kind=d["subject_kind"],
+            direction=d["direction"], scale=d["scale"],
+            method_version=d.get("method_version"), subjects=tuple(d.get("subjects", ())),
+            period_latest=d.get("period_latest"), n_obs=int(d.get("n_obs") or 0),
+        )]
+
+    def score_observations(
+        self, code: str, *, subject: Optional[str] = None, start: Optional[str] = None,
+        end: Optional[str] = None, limit: Optional[int] = None,
+    ) -> List[ScoreObservation]:
+        from modules.macro_political_risk import service as irmp_svc
+
+        if code != "irmp":
+            return []
+        return [
+            ScoreObservation(
+                subject=o["subject"], period=o["period"], score=o["score"],
+                band=o.get("band"), dimensions=o.get("dimensions"),
+                model_version=o.get("model_version"),
+            )
+            for o in irmp_svc.irmp_observations_for_api(
+                self._require_db(), subject=subject, start=start, end=end, limit=limit
+            )
+        ]
+
+    def canonical_signals(self, limit: Optional[int] = None) -> List[SignalItem]:
+        """Señales de alerta temprana del monitor macro (motor determinista)."""
+        from modules.macro_monitor import service as mm_svc
+
+        return [
+            SignalItem(
+                key=s["key"], label=s["label"], severity=s["severity"],
+                period=s.get("period"), subject=s.get("subject"),
+                detail=s.get("detail") or "",
+            )
+            for s in mm_svc.signals_for_api(self._require_db(), limit=limit)
         ]
 
     # ── Universo de países del panel (alimenta el selector del catálogo) ──

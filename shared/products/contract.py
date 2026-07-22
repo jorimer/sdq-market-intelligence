@@ -97,6 +97,59 @@ class SeriesObservation:
 
 
 @dataclass(frozen=True)
+class CanonicalScore:
+    """Descriptor de UN score/índice propietario que el sector publica por la Data API.
+
+    Cubre tanto el score de entidad (ISA de un banco) como el índice de país en panel
+    (IRMP, IRC): la diferencia es el ``subject_kind``. Los scores son cálculo de casa —
+    obra propia — así que NO llevan licencia de emisor: su "licencia" es la de SDQ, y la
+    cuarentena del manifiesto les aplica solo activación + readiness.
+    """
+
+    code: str                             # "irmp" · "irc" · "isa"
+    label: str                            # "Índice de Riesgo Macro-Político"
+    subject_kind: str = "entity"          # "entity" | "country" | "sector" | "system"
+    direction: str = ""                   # "mayor score = menor riesgo" (¡obligatoria en la práctica!)
+    scale: str = "0-100"
+    method_version: Optional[str] = None
+    subjects: Tuple[str, ...] = ()        # sujetos con score persistido ("DOM", "PER"…)
+    period_latest: Optional[str] = None
+    n_obs: int = 0
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class ScoreObservation:
+    """Un score computado para un sujeto y período, con su desglose dimensional."""
+
+    subject: str                          # ISO3 / entity_key / sector slug
+    period: str
+    score: Optional[float]
+    band: Optional[str] = None
+    # ``{dimension: {score, weight, contribution}}`` — el desglose explicable. Nunca se
+    # sirve la narrativa (esa es el producto de reporte); el desglose numérico sí.
+    dimensions: Optional[Dict] = None
+    model_version: Optional[str] = None
+    reason: Optional[str] = None          # por qué falta, cuando ``score`` es None
+
+
+@dataclass(frozen=True)
+class SignalItem:
+    """Una señal determinista (alerta temprana / precursor) emitida por el motor.
+
+    Es la salida del motor de reglas, no juicio de IA — por eso es exportable: el
+    veredicto numérico-determinista viaja; la lectura narrativa queda en el reporte.
+    """
+
+    key: str                              # identificador estable de la regla
+    label: str                            # legible: "Aceleración de deuda pública"
+    severity: str = "info"                # "info" | "watch" | "alert"
+    period: Optional[str] = None
+    subject: Optional[str] = None
+    detail: str = ""                      # dato que la disparó (determinista, citable)
+
+
+@dataclass(frozen=True)
 class ProductSnapshot:
     """Datos ya calculados que un nivel necesita para narrar y renderizar.
 
@@ -199,6 +252,16 @@ class SectorProduct(Protocol):
     # error). Implementar SIEMPRE los dos: un descriptor sin lector es una serie que el
     # catálogo anuncia y nadie puede leer, y el manifiesto lo trata como cuarentena.
     # Ver docs/SPEC_API_DATOS_PROPIETARIOS.md §3.
+
+    # ── Scores y señales para la Data API (OPCIONAL — Fase 2) ──
+    # Análogo al par de series, con la misma regla (implementar descriptor Y lector):
+    #   ``canonical_scores() -> Iterable[CanonicalScore]``
+    #   ``score_observations(code, *, subject=None, start=None, end=None, limit=None)
+    #        -> Iterable[ScoreObservation]``
+    #   ``canonical_signals(limit=None) -> Iterable[SignalItem]``   (independiente)
+    # El desglose dimensional numérico SÍ viaja; la narrativa NUNCA (es el producto de
+    # reporte). Un producto que no los implemente no aporta scores/señales — brecha
+    # honesta, no error.
 
 
 def required_signal_methods() -> List[str]:

@@ -1058,3 +1058,30 @@ def _parse_iso_date(value: str) -> Optional[date]:
         return date.fromisoformat(value.strip()[:10])
     except (ValueError, AttributeError):
         return None
+
+
+def signals_for_api(db: Session, *, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Señales de alerta temprana del último snapshot cerrado, para la Data API.
+
+    Es la salida del motor determinista (``scoring/signals.detect_signals``) tal como se
+    persistió — sin narrativa. Lista vacía = sin señal activa, que es un resultado, no
+    un hueco."""
+    snap = get_snapshot(db)
+    if snap is None:
+        return []
+    persisted: List[Any] = list(snap.signals or [])
+    out: List[Dict[str, Any]] = []
+    for s in persisted:
+        if not isinstance(s, dict):
+            continue
+        out.append({
+            "key": str(s.get("signal") or s.get("key") or "signal"),
+            "label": str(s.get("label") or s.get("signal") or "señal"),
+            "severity": str(s.get("severity") or "info"),
+            "period": str(snap.period),
+            "subject": s.get("series") or s.get("subject"),
+            "detail": str(s.get("detail") or s.get("framework") or ""),
+        })
+    if limit is not None and limit > 0:
+        out = out[: int(limit)]
+    return out

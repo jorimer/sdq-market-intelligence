@@ -209,3 +209,76 @@ def get_latest(db: Session, entity_key: str) -> Optional[ESGScore]:
         .order_by(ESGScore.period.desc())
         .first()
     )
+
+
+# ─── Superficie para la Data API (docs/SPEC_API_DATOS_PROPIETARIOS.md F2) ──
+
+
+def describe_irc_for_api(db: Session) -> Dict[str, Any]:
+    """Descriptor del IRC para el manifiesto de la Data API."""
+    subjects = get_scored_entities(db)
+    latest = (
+        db.query(ESGScore).order_by(ESGScore.period.desc()).first()
+    )
+    return {
+        "code": "irc",
+        "label": "Índice de Resiliencia Climática (IRC)",
+        "subject_kind": "country",
+        "direction": "mayor score = mayor resiliencia / menor riesgo climático",
+        "scale": "0-100",
+        "method_version": str(latest.model_version) if latest else None,
+        "subjects": tuple(subjects),
+        "period_latest": str(latest.period) if latest else None,
+        "n_obs": int(db.query(ESGScore).count()),
+    }
+
+
+def irc_observations_for_api(
+    db: Session,
+    *,
+    subject: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Observaciones del IRC con desglose dimensional numérico (nunca narrativa).
+
+    Sin ``subject`` = panel del último período; con ``subject`` = trayectoria del país.
+    """
+    q = db.query(ESGScore)
+    if subject:
+        q = q.filter(ESGScore.entity_key == subject.upper())
+    if start:
+        q = q.filter(ESGScore.period >= start)
+    if end:
+        q = q.filter(ESGScore.period <= end)
+    rows = q.order_by(ESGScore.period.desc()).all()
+
+    scores: List[ESGScore] = list(rows)
+    if not subject:
+        seen: set = set()
+        latest: List[ESGScore] = []
+        for r in scores:
+            key = str(r.entity_key)
+            if key in seen:
+                continue
+            seen.add(key)
+            latest.append(r)
+        scores = latest
+    if limit is not None and limit > 0:
+        scores = scores[: int(limit)]
+
+    out: List[Dict[str, Any]] = []
+    for r in scores:
+        breakdown: Dict[str, Any] = dict(r.breakdown or {})
+        dims = breakdown.get("dimensions") or None
+        out.append({
+            "subject": str(r.entity_key),
+            "period": str(r.period),
+            "score": float(r.esg_score) if r.esg_score is not None else None,
+            "band": r.band,
+            "dimensions": dims,
+            "model_version": str(r.model_version) if r.model_version else None,
+            "reason": None if r.esg_score is not None else "sin score computado",
+        })
+    return out

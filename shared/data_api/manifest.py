@@ -43,6 +43,10 @@ Q_LICENSE_RESTRICTS = "license_restricts_redistribution"
 DERIVATION_VERBATIM = "verbatim"
 DERIVATION_DERIVED = "derived"
 
+# Licencia de los activos de cálculo propio (scores/índices/señales): la marca SDQ.
+SDQ_OWN_LICENSE = ("Cálculo propietario de SDQ Market Intelligence — uso según los "
+                   "términos de la llave; atribuir a SDQ al citar.")
+
 # Marcas de licencias que restringen redistribuir el dato tal cual. Se detectan por
 # patrón sobre lo que el conector declara: ITU es CC BY-NC-SA (no-comercial), y
 # SIS/SISALRIL declaran ODbL (share-alike sobre bases derivadas).
@@ -282,6 +286,76 @@ def _series_assets(db: Optional[Session], entry, pub_state,
     return out
 
 
+def _score_assets(db: Optional[Session], entry, pub_state) -> List[ExposedAsset]:
+    """Scores/índices que declara UN producto (Fase 2), mismo patrón que las series.
+
+    Un score es cálculo de casa — obra propia — así que no lleva licencia de emisor ni
+    entra al filtro de redistribución: su cuarentena es solo activación + readiness +
+    lector presente. La ``license`` del activo se fija a la marca SDQ para que el campo
+    nunca viaje vacío (y el fail-closed de licencia no lo retenga por un tecnicismo).
+    """
+    if not is_implemented(entry.sector_key):
+        return []
+    try:
+        product = get_product(entry.sector_key, db)
+    except Exception as exc:
+        logger.warning("data_api: no se pudo instanciar '%s': %s", entry.sector_key, exc)
+        return []
+    if product is None:
+        return []
+
+    describe = getattr(product, "canonical_scores", None)
+    if not callable(describe):
+        return []
+    has_reader = callable(getattr(product, "score_observations", None))
+
+    try:
+        described = list(describe() or ())
+    except Exception as exc:
+        logger.warning(
+            "data_api: '%s' falló al describir sus scores: %s", entry.sector_key, exc
+        )
+        try:
+            db.rollback() if db is not None else None
+        except Exception:
+            pass
+        return []
+
+    out: List[ExposedAsset] = []
+    for s in described:
+        n_obs = int(getattr(s, "n_obs", 0) or 0)
+        out.append(
+            ExposedAsset(
+                key=f"{entry.sector_key}:score:{s.code}",
+                kind="score",
+                sector_key=entry.sector_key,
+                code=s.code,
+                label=getattr(s, "label", "") or s.code,
+                unit=getattr(s, "scale", None),
+                frequency="unknown",
+                source="SDQ Market Intelligence (cálculo propio)",
+                license=SDQ_OWN_LICENSE,
+                period_latest=getattr(s, "period_latest", None),
+                n_obs=n_obs,
+                stability="thin" if n_obs < THIN_OBS else "stable",
+                derivation=DERIVATION_DERIVED,
+                quarantine=_quarantine_for(
+                    entry.sector_key,
+                    license_=SDQ_OWN_LICENSE,
+                    has_reader=has_reader,
+                    pub_state=pub_state,
+                    derivation=DERIVATION_DERIVED,
+                ),
+                note=" · ".join(p for p in (
+                    getattr(s, "direction", "") or "",
+                    f"sujetos: {getattr(s, 'subject_kind', 'entity')}",
+                    getattr(s, "note", "") or "",
+                ) if p),
+            )
+        )
+    return out
+
+
 def build_manifest(db: Optional[Session] = None, *,
                    allow_restricted: bool = False) -> Manifest:
     """El inventario completo, resuelto contra el registro en este instante.
@@ -295,6 +369,7 @@ def build_manifest(db: Optional[Session] = None, *,
     assets: List[ExposedAsset] = []
     for entry in PRODUCT_CATALOG:
         assets.extend(_series_assets(db, entry, pub_state, allow_restricted))
+        assets.extend(_score_assets(db, entry, pub_state))
     return Manifest(
         generated_at=datetime.now(timezone.utc).isoformat(),
         assets=tuple(assets),
