@@ -46,6 +46,15 @@ risk_increasing:
   - operating_cost
   - regulatory_volatility
 
+# Alcance de la medición por variable (default: per_subject). "national" = dato real de
+# alcance país, idéntico para los 17 sectores: sostiene el nivel del índice pero NO mueve
+# el ranking. El generador de procedencia (shared/registry/provenance.py) lo declara al
+# cliente para que "dato real" no se lea como "diferencia entre sectores".
+variable_scopes:
+  skills_index: national
+  regulatory_quality: national
+  regulatory_volatility: national
+
 # Rúbrica declarada (Gate C) — juicio de casa para las dimensiones sin dato
 # sectorial real aún (negocios / talento / regulatoria). La UI las marca "rúbrica".
 # Suben a real luego: regulatoria ← WGI (Eje 4); negocios/talento ← estudios de la ONE.
@@ -89,9 +98,16 @@ bands:
 # Prosa CITABLE A CLIENTE, una por dimensión (Hallazgo 7). Es lo ÚNICO de este archivo que el
 # retrieval indexa; el resto (pesos, variables, bandas, rúbrica) lo lee el motor de scoring
 # directo. Escrito para que un cliente lo lea — sin jerga de config ni identificadores de código.
+#
+# REGLA (definitiva, 2026-07-22): el rationale declara SOLO LO DURABLE — qué mide la dimensión
+# y por qué pesa lo que pesa. NUNCA afirma procedencia ("es dato real", "es rúbrica", "la fuente
+# X aún no existe"): ese estado cambia con cada conector y cada corrida, y la prosa que lo afirma
+# envejece sola. La procedencia la GENERA el registro en la sección de Metodología
+# (shared/registry/provenance.py), del mismo estado que gobierna el gate de honestidad. Un gate
+# de CI (test_provenance_vocabulary_gate) hace cumplir esta separación.
 dimension_rationales:
-  macro: "Mide cómo las condiciones macroeconómicas del país golpean específicamente a este sector — no el macro genérico, sino su exposición particular (ver Doctrina · Contrato macro→sectorial). Es la dimensión de mayor peso porque ningún sector opera aislado del ciclo nacional, y es dato real derivado del contrato macro-sectorial, no juicio de casa."
-  business: "Clima de negocios: facilidad de operar, costo operativo y rentabilidad real del sector. La rentabilidad usa dato real de la Encuesta Nacional de Actividad Económica (ENAE) donde el sector está cubierto (8 de 17 sectores); donde no, la variable queda ausente en vez de rellenarse — evita distorsionar el índice con un valor inventado. El costo operativo también es dato real, del registro de salarios por actividad de la Tesorería de la Seguridad Social. Solo la facilidad de operar sigue siendo un supuesto neutral de casa: el Doing Business del Banco Mundial se descontinuó y no existe hoy una fuente viva que lo reemplace."
-  talent: "Disponibilidad y nivel de competencias de la fuerza laboral relevante para el sector. Ambas variables son dato real: el empleo por rama de actividad viene de la Encuesta Continua de Fuerza de Trabajo, y el nivel de competencias del Índice de Capital Humano del Banco Mundial. El índice de competencias se mide a nivel país, así que aporta la misma lectura a los 17 sectores — sostiene el nivel del índice, pero no es lo que separa a un sector de otro."
-  regulation: "Calidad y estabilidad del marco regulatorio que enmarca al sector, ambas con dato real de los Indicadores de Gobernanza Mundial del Banco Mundial: el nivel de calidad regulatoria y su volatilidad histórica. Se miden a nivel país porque el marco que capturan es nacional, no sectorial; por eso aportan la misma lectura a los 17 sectores. Pesa menos que negocios o talento porque el marco regulatorio actúa sobre el sector de forma más indirecta que sus condiciones operativas."
-  sector: "Crecimiento y tamaño relativo del sector dentro del valor agregado nacional — dato real del BCRD para los 17 sectores. Junto con el entorno macro, es lo que efectivamente diferencia a un sector de otro: las variables de talento y regulación son dato real pero de alcance nacional, de modo que el ranking entre sectores lo mueven estas dos dimensiones y la rentabilidad sectorial."
+  macro: "Mide cómo las condiciones macroeconómicas del país golpean específicamente a este sector — no el macro genérico, sino su exposición particular (ver Doctrina · Contrato macro→sectorial). Es la dimensión de mayor peso porque ningún sector opera aislado del ciclo nacional."
+  business: "Clima de negocios del sector: facilidad de operar, costo operativo y rentabilidad. La rentabilidad se toma de la Encuesta Nacional de Actividad Económica donde el sector está cubierto; donde no, la variable queda ausente en vez de rellenarse, para no distorsionar el índice con un valor inventado. Pesa igual que el entorno macro porque las condiciones operativas son el segundo determinante del atractivo después del ciclo."
+  talent: "Disponibilidad de fuerza laboral y nivel de competencias relevantes para el sector — empleo por rama de actividad y capital humano. Pesa por debajo de macro y negocios porque el talento condiciona la ejecución a mediano plazo más que el resultado inmediato."
+  regulation: "Calidad del marco regulatorio que enmarca al sector y su estabilidad en el tiempo. Pesa menos que las dimensiones operativas porque el marco regulatorio actúa sobre el sector de forma más indirecta que sus condiciones de operación."
+  sector: "Crecimiento y tamaño relativo del sector dentro del valor agregado nacional. Junto con el entorno macro, es la dimensión que más diferencia a un sector de otro en el ranking, porque se mide por sector y no a nivel país."

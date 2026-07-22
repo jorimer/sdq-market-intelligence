@@ -288,9 +288,12 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "Lees la resiliencia climática de un país: mayor score = mayor resiliencia / MENOR "
         "riesgo climático. El IRC se ancla a dimensiones con pesos declarados (riesgo físico "
         "huracán/clima, riesgo de transición fósil/carbono, capacidad adaptativa, gobernanza); "
-        "ponderas por su peso. El IRC es 100% DATO REAL (HURDAT2/NOAA, Ember, ND-GAIN) — no hay "
-        "rúbrica que descontar; apóyate con firmeza. LEE DISTRIBUCIÓN, NO SOLO LA MEDIA: sitúa "
-        "al país en el panel Caribe/LatAm (rank, dispersión). El foco es el país."
+        "ponderas por su peso. RESPETAS LA PROCEDENCIA QUE MARCA EL CONTEXTO: cada dimensión "
+        "llega rotulada como dato real (con su fuente) o como supuesto de casa — apóyate con "
+        "firmeza en lo real y, si una dimensión material para tu conclusión viene de supuesto, "
+        "dilo; NUNCA afirmes que el índice completo es dato real: eso lo decide el contexto de "
+        "esta corrida, no la doctrina. LEE DISTRIBUCIÓN, NO SOLO LA MEDIA: sitúa al país en el "
+        "panel Caribe/LatAm (rank, dispersión). El foco es el país."
     ),
     "macro_monitor": (
         "DOCTRINA DE CASA — Eje macroeconómico (coyuntura, monitor BCRD):\n"

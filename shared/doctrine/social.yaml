@@ -62,8 +62,10 @@ rubric_defaults:
 
 # Prosa CITABLE A CLIENTE, una por dimensión (Hallazgo 7). Lo ÚNICO que el retrieval indexa de
 # este archivo; el resto (pesos, variables, bandas, rúbrica) lo lee el motor de scoring directo.
+# REGLA (2026-07-22): el rationale declara SOLO LO DURABLE — qué mide y por qué pesa. La
+# procedencia (real/rúbrica/brecha) la genera el registro en Metodología; gate de CI la veta aquí.
 dimension_rationales:
-  health: "Esperanza de vida y mortalidad infantil, ambas del WDI nacional. Dato real."
-  education: "Alfabetización y cobertura secundaria neta por región (ONE/ENHOGAR), más años promedio de escolaridad a nivel nacional (ONE no publica esta última por región). Dato real."
-  living_standards: "Ingreso per cápita — proxy declarado de ingreso laboral por hora (ONE), no ingreso per cápita del hogar — y tasa de pobreza por región (ONE). Dato real."
-  inclusion: "Inclusión financiera (cajeros por 100 mil adultos, Banco Mundial Findex, proxy de acceso) e informalidad laboral (ONE/BCRD, Encuesta Continua de Fuerza de Trabajo). Dato real."
+  health: "Salud de la población: esperanza de vida al nacer y mortalidad infantil. Las cuatro dimensiones del índice pesan igual: el desarrollo multidimensional no jerarquiza una carencia sobre otra."
+  education: "Educación: alfabetización y cobertura secundaria neta por región, más años promedio de escolaridad a nivel nacional — esta última no se publica con desagregación regional."
+  living_standards: "Nivel de vida: ingreso — aproximado con el ingreso laboral por hora, no con el ingreso per cápita del hogar, y así se declara — y tasa de pobreza por región."
+  inclusion: "Inclusión económica: acceso al sistema financiero (densidad de cajeros como aproximación de acceso) e informalidad laboral."
