@@ -134,6 +134,15 @@ app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
 from shared.notifications.router import router as notifications_router
 app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["Notificaciones"])
 
+# Data API — contrato PÚBLICO máquina-a-máquina, namespace propio y versionado. Va
+# separado de /api/v1 a propósito: /api/v1 sirve a la SPA y cambia con ella; este
+# contrato lo consumen terceros y no puede romperse por un refactor del frontend.
+from shared.data_api.router import router as data_api_router
+app.include_router(data_api_router, prefix="/api/data/v1", tags=["Data API"])
+
+from shared.data_api.admin_router import router as data_api_admin_router
+app.include_router(data_api_admin_router, prefix="/api/v1/admin/data-api", tags=["Data API · Admin"])
+
 # Event subscriptions across axes (string contract via event_bus)
 from modules.banking_score.events import register_subscribers as register_banking_subscribers
 from shared.products.events import subscribe_product_events
