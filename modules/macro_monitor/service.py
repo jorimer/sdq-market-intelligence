@@ -919,3 +919,142 @@ def get_snapshot(db: Session, period: Optional[str] = None) -> Optional[MacroSna
     closed = [s for s in snaps if (period_start_date(s.period) or date.min) <= today]
     pool = closed or snaps  # degenerate: only future snapshots exist → least-bad
     return max(pool, key=lambda s: (period_end_date(s.period) or date.min, s.period))
+
+
+# ─── Superficie para la Data API (docs/SPEC_API_DATOS_PROPIETARIOS.md) ──
+#
+# El módulo describe y lee sus propias series; la capa API nunca consulta MacroSeries
+# directamente (`shared/*` no importa módulos de sector). Agregar una serie al ingestor
+# la publica sola: estas dos funciones la descubren sin que nadie las edite.
+
+
+def _series_license(rows: List[MacroSeries]) -> Optional[str]:
+    """Licencia de una serie, FAIL-CLOSED.
+
+    Devuelve la licencia solo si TODAS las observaciones la declaran y coinciden. Si
+    falta en alguna fila, o hay dos licencias distintas mezcladas, devuelve ``None`` —
+    y el manifiesto pone la serie en cuarentena. Es deliberado: no se redistribuye lo
+    que no consta que se pueda redistribuir, y una serie con linaje mezclado es
+    justamente el caso donde el error sería caro.
+    """
+    licenses = {(r.license or "").strip() for r in rows}
+    if len(licenses) != 1:
+        return None
+    only = licenses.pop()
+    return only or None
+
+
+def _infer_frequency(periods: List[str]) -> str:
+    """Cadencia DERIVADA del formato del período canónico ("2025" · "2025-Q1" · "2025-01").
+
+    ``MacroSeries.frequency`` existe pero el ingestor no la puebla (los ``Record`` de los
+    conectores no la traen), así que leerla directo devolvería "unknown" para TODAS las
+    series y dejaría al consumidor sin saber si un dato es mensual o anual. El formato del
+    período sí es dato real —lo fija el parser al normalizar—, así que se deriva de ahí.
+    Si la serie mezcla formatos, no se elige uno: "unknown" es la respuesta honesta.
+    """
+    kinds = set()
+    for p in periods:
+        p = (p or "").strip()
+        if re.fullmatch(r"\d{4}", p):
+            kinds.add("annual")
+        elif re.fullmatch(r"\d{4}-Q[1-4]", p, re.IGNORECASE):
+            kinds.add("quarterly")
+        elif re.fullmatch(r"\d{4}-\d{2}", p):
+            kinds.add("monthly")
+        else:
+            kinds.add("unknown")
+    return kinds.pop() if len(kinds) == 1 else "unknown"
+
+
+def canonical_series_for_api(db: Session) -> List[Dict[str, Any]]:
+    """Descriptores de todas las series canónicas normalizadas del monitor macro."""
+    # ``str(...)`` en la frontera: ``MacroSeries`` usa el estilo legacy de SQLAlchemy,
+    # cuyo tipo estático es ``Column[str]`` y no ``str``.
+    rows_by_code: Dict[str, List[MacroSeries]] = defaultdict(list)
+    for row in db.query(MacroSeries).all():
+        rows_by_code[str(row.series_code)].append(row)
+
+    out: List[Dict[str, Any]] = []
+    for code, rows in sorted(rows_by_code.items()):
+        rows.sort(key=lambda r: (period_end_date(str(r.period)) or date.min, str(r.period)))
+        labels = series_label(code)
+        units = [r.unit for r in rows if r.unit]
+        declared = {str(r.frequency) for r in rows if getattr(r, "frequency", None)}
+        sources = {str(r.source) for r in rows if r.source}
+        out.append({
+            "code": code,
+            "label": labels.get("label") or code,
+            "unit": units[-1] if units else labels.get("unit"),
+            # Se prefiere la cadencia DECLARADA; si el ingestor no la pobló (caso
+            # general hoy), se deriva del formato del período.
+            "frequency": (declared.pop() if len(declared) == 1
+                          else _infer_frequency([str(r.period) for r in rows])),
+            "source": ", ".join(sorted(sources)),
+            "license": _series_license(rows),
+            "period_first": rows[0].period if rows else None,
+            "period_latest": rows[-1].period if rows else None,
+            "n_obs": len(rows),
+        })
+    return out
+
+
+def series_observations_for_api(
+    db: Session,
+    code: str,
+    *,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    as_of: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Observaciones de una serie, ordenadas y con linaje.
+
+    ``as_of`` es point-in-time REAL: filtra por la fecha de publicación del emisor. Si
+    la serie no tiene ``published_at`` en su linaje, se levanta ``ValueError`` en vez de
+    devolver la serie completa — servir el dato de hoy rotulado "as-of 2024" sería una
+    mentira point-in-time, que es exactamente lo que el corte as-of existe para evitar.
+    """
+    rows = db.query(MacroSeries).filter_by(series_code=code).all()
+    if not rows:
+        return []
+    rows.sort(key=lambda r: (period_end_date(str(r.period)) or date.min, str(r.period)))
+
+    if as_of:
+        if not any(r.published_at for r in rows):
+            raise ValueError(
+                f"La serie '{code}' no tiene fecha de publicación en su linaje: no se "
+                f"puede honrar un corte point-in-time (as_of)."
+            )
+        cutoff = _parse_iso_date(as_of)
+        if cutoff is None:
+            raise ValueError(f"Fecha as_of inválida: '{as_of}'. Use formato ISO (AAAA-MM-DD).")
+        rows = [r for r in rows if r.published_at and r.published_at <= cutoff]
+
+    if start:
+        floor = period_end_date(start) or date.min
+        rows = [r for r in rows if (period_end_date(str(r.period)) or date.min) >= floor]
+    if end:
+        ceil = period_end_date(end) or date.max
+        rows = [r for r in rows if (period_end_date(str(r.period)) or date.max) <= ceil]
+    if limit is not None and limit > 0:
+        rows = rows[-int(limit):]   # los más RECIENTES, que es lo que se pide por defecto
+
+    return [
+        {
+            "period": r.period,
+            "value": r.value,
+            "unit": r.unit,
+            "source": r.source,
+            "published_at": r.published_at.isoformat() if r.published_at else None,
+            "reason": None if r.value is not None else "sin dato publicado por la fuente",
+        }
+        for r in rows
+    ]
+
+
+def _parse_iso_date(value: str) -> Optional[date]:
+    try:
+        return date.fromisoformat(value.strip()[:10])
+    except (ValueError, AttributeError):
+        return None

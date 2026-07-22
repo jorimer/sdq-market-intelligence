@@ -25,11 +25,13 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.products import (
+    CanonicalSeries,
     DataHealth,
     Granularity,
     ProductSnapshot,
     ProductTier,
     SectorProductManifest,
+    SeriesObservation,
     TierLevelSpec,
     ValidationState,
     distinct_periods,
@@ -287,6 +289,45 @@ class MacroProduct:
         # IRMP con metodología validada (Eje 4 cerrado, Gate A-F); momentum macro operativo.
         return ValidationState(approved=True, score=0.85,
                                notes="IRMP validado (Gate A-F); momentum macro operativo.")
+
+    # ── Series canónicas para la Data API (contrato OPCIONAL) ──
+    def canonical_series(self) -> List[CanonicalSeries]:
+        """Series normalizadas del monitor macro (BCRD y equivalentes).
+
+        Delega en el módulo dueño del dato: el producto no consulta ``MacroSeries``, y la
+        capa API no conoce ninguna serie por nombre. Una serie nueva en el ingestor
+        aparece acá sola — que es la premisa de la auto-extensión."""
+        from modules.macro_monitor import service as mm_svc
+
+        return [
+            CanonicalSeries(
+                code=d["code"], label=d["label"], unit=d.get("unit"),
+                frequency=d.get("frequency") or "unknown", source=d.get("source") or "",
+                license=d.get("license"), period_first=d.get("period_first"),
+                period_latest=d.get("period_latest"), n_obs=int(d.get("n_obs") or 0),
+            )
+            for d in mm_svc.canonical_series_for_api(self._require_db())
+        ]
+
+    def series_observations(
+        self, code: str, *, start: Optional[str] = None, end: Optional[str] = None,
+        as_of: Optional[str] = None, limit: Optional[int] = None,
+    ) -> List[SeriesObservation]:
+        """Observaciones de una serie, con linaje. ``as_of`` es point-in-time real:
+        si el linaje no lo soporta, el módulo levanta ``ValueError`` (la API lo traduce
+        a 422) en vez de devolver la serie de hoy con una etiqueta falsa."""
+        from modules.macro_monitor import service as mm_svc
+
+        return [
+            SeriesObservation(
+                period=o["period"], value=o["value"], unit=o.get("unit"),
+                source=o.get("source"), published_at=o.get("published_at"),
+                reason=o.get("reason"),
+            )
+            for o in mm_svc.series_observations_for_api(
+                self._require_db(), code, start=start, end=end, as_of=as_of, limit=limit
+            )
+        ]
 
     # ── Universo de países del panel (alimenta el selector del catálogo) ──
     def scope_options(self) -> List[Dict[str, str]]:
