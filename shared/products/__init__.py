@@ -22,9 +22,11 @@ from shared.products.assembler import (
     supports_sample,
 )
 from shared.products.contract import (
+    CanonicalForecast,
     CanonicalScore,
     CanonicalSeries,
     DataHealth,
+    ForecastObservation,
     ProductSnapshot,
     ScoreObservation,
     SectorProduct,
@@ -66,6 +68,8 @@ __all__ = [
     "CanonicalScore",
     "ScoreObservation",
     "SignalItem",
+    "CanonicalForecast",
+    "ForecastObservation",
     "required_signal_methods",
     "assemble_product_report",
     "assemble_product_content",

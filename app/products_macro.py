@@ -25,12 +25,14 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.products import (
+    CanonicalForecast,
     CanonicalScore,
     CanonicalSeries,
     DataHealth,
     Granularity,
     ProductSnapshot,
     ProductTier,
+    ForecastObservation,
     ScoreObservation,
     SectorProductManifest,
     SeriesObservation,
@@ -375,6 +377,37 @@ class MacroProduct:
                 detail=s.get("detail") or "",
             )
             for s in mm_svc.signals_for_api(self._require_db(), limit=limit)
+        ]
+
+    def canonical_forecasts(self) -> List[CanonicalForecast]:
+        """El modelo de TPM con su track record verificable (Fase 3)."""
+        from modules.macro_monitor.tpm_modeling.ledger import describe_forecast_for_api
+
+        d = describe_forecast_for_api(self._require_db())
+        return [CanonicalForecast(
+            code=d["code"], label=d["label"], target=d["target"], horizon=d["horizon"],
+            classes=tuple(d.get("classes", ())), model_version=d.get("model_version"),
+            n_scored=int(d.get("n_scored") or 0), hit_rate=d.get("hit_rate"),
+            brier=d.get("brier"), baseline=d.get("baseline"), note=d.get("note", ""),
+        )]
+
+    def forecast_observations(
+        self, code: str, *, limit: Optional[int] = None,
+    ) -> List[ForecastObservation]:
+        from modules.macro_monitor.tpm_modeling.ledger import forecast_observations_for_api
+
+        if code != "tpm":
+            return []
+        return [
+            ForecastObservation(
+                as_of=o["as_of"], status=o["status"], predicted=o.get("predicted"),
+                probabilities=o.get("probabilities"), implied_level=o.get("implied_level"),
+                realized=o.get("realized"), realized_level=o.get("realized_level"),
+                realized_date=o.get("realized_date"), correct=o.get("correct"),
+                brier=o.get("brier"), level_abs_error=o.get("level_abs_error"),
+                model_version=o.get("model_version"),
+            )
+            for o in forecast_observations_for_api(self._require_db(), limit=limit)
         ]
 
     # ── Universo de países del panel (alimenta el selector del catálogo) ──
