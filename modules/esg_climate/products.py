@@ -23,10 +23,12 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.products import (
+    CanonicalScore,
     DataHealth,
     Granularity,
     ProductSnapshot,
     ProductTier,
+    ScoreObservation,
     SectorProductManifest,
     TierLevelSpec,
     ValidationState,
@@ -277,6 +279,38 @@ class ESGProduct:
 
     def has_engine(self) -> bool:
         return self._latest() is not None
+
+    # ── Scores para la Data API (contrato OPCIONAL, Fase 2) ──
+    def canonical_scores(self) -> List[CanonicalScore]:
+        """El IRC como score de panel por país. Delegado al service dueño del dato."""
+        from modules.esg_climate.service import describe_irc_for_api
+
+        d = describe_irc_for_api(self._require_db())
+        return [CanonicalScore(
+            code=d["code"], label=d["label"], subject_kind=d["subject_kind"],
+            direction=d["direction"], scale=d["scale"],
+            method_version=d.get("method_version"), subjects=tuple(d.get("subjects", ())),
+            period_latest=d.get("period_latest"), n_obs=int(d.get("n_obs") or 0),
+        )]
+
+    def score_observations(
+        self, code: str, *, subject: Optional[str] = None, start: Optional[str] = None,
+        end: Optional[str] = None, limit: Optional[int] = None,
+    ) -> List[ScoreObservation]:
+        from modules.esg_climate.service import irc_observations_for_api
+
+        if code != "irc":
+            return []
+        return [
+            ScoreObservation(
+                subject=o["subject"], period=o["period"], score=o["score"],
+                band=o.get("band"), dimensions=o.get("dimensions"),
+                model_version=o.get("model_version"), reason=o.get("reason"),
+            )
+            for o in irc_observations_for_api(
+                self._require_db(), subject=subject, start=start, end=end, limit=limit
+            )
+        ]
 
     def variable_signals(self) -> Dict[str, Any]:
         """Señal por-variable del IRC para el Data Registry (motor de research). Reusa

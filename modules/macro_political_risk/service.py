@@ -423,3 +423,77 @@ def get_governance_profile(
         "dimensions": dimensions,
         "source": "WGI 2025 (World Bank, escala absoluta 0-100)",
     }
+
+
+# ─── Superficie para la Data API (docs/SPEC_API_DATOS_PROPIETARIOS.md F2) ──
+
+
+def describe_irmp_for_api(db: Session) -> Dict[str, Any]:
+    """Descriptor del IRMP para el manifiesto de la Data API. El módulo describe su
+    propio score; la capa API nunca consulta ``mpr_irmp_snapshots`` directamente."""
+    countries = get_scored_countries(db)
+    latest = (
+        db.query(IRMPSnapshot).order_by(IRMPSnapshot.period_end.desc()).first()
+    )
+    n_obs = db.query(IRMPSnapshot).count()
+    return {
+        "code": "irmp",
+        "label": "Índice de Riesgo Macro-Político (IRMP)",
+        "subject_kind": "country",
+        "direction": "mayor score = menor riesgo",
+        "scale": "0-100",
+        "method_version": str(latest.model_version) if latest else None,
+        "subjects": tuple(c.iso_code for c in countries),
+        "period_latest": latest.period_end.isoformat() if latest else None,
+        "n_obs": int(n_obs),
+    }
+
+
+def irmp_observations_for_api(
+    db: Session,
+    *,
+    subject: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Observaciones del IRMP con desglose dimensional numérico (nunca narrativa).
+
+    Sin ``subject`` devuelve el último snapshot de CADA país (la vista de panel);
+    con ``subject`` la trayectoria de ese país. Fechas en ISO (YYYY-MM-DD).
+    """
+    q = (
+        db.query(IRMPSnapshot, Country.iso_code)
+        .join(Country, Country.id == IRMPSnapshot.country_id)
+    )
+    if subject:
+        q = q.filter(Country.iso_code == subject.upper())
+    if start:
+        q = q.filter(IRMPSnapshot.period_end >= start)
+    if end:
+        q = q.filter(IRMPSnapshot.period_end <= end)
+    rows = q.order_by(IRMPSnapshot.period_end.desc()).all()
+
+    if not subject:
+        # Panel: el snapshot más reciente por país (rows ya vienen desc).
+        seen: set = set()
+        rows = [(s, iso) for s, iso in rows if not (iso in seen or seen.add(iso))]
+    if limit is not None and limit > 0:
+        rows = rows[: int(limit)]
+
+    out: List[Dict[str, Any]] = []
+    for snap, iso in rows:
+        dims = {
+            d.dimension: {"score": d.score, "weight": d.weight,
+                          "contribution": d.contribution}
+            for d in snap.dimension_scores
+        }
+        out.append({
+            "subject": iso,
+            "period": snap.period_end.isoformat(),
+            "score": float(snap.irmp_score),
+            "band": snap.risk_band.value if snap.risk_band else None,
+            "dimensions": dims or None,
+            "model_version": str(snap.model_version) if snap.model_version else None,
+        })
+    return out

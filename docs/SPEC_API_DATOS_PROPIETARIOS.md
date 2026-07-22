@@ -1,10 +1,16 @@
 # SPEC — API de datos propietarios (SDQ Data API)
 
-**Estado:** **F1 IMPLEMENTADA** (2026-07-22) — manifiesto auto-extensible + cuarentena
-calculada + llaves con cuota y bitácora + `/catalog` y `/series`, con el monitor macro
-(series BCRD) como primer productor. Verificada contra la base de desarrollo. Falta
-correr la migración en producción y emitir la llave de SDQ-PMS. Las decisiones abiertas
-de §9 se toman cuando se necesiten, por decisión del dueño.
+**Estado:** **F1 EN PRODUCCIÓN + F2 IMPLEMENTADA** (2026-07-22).
+F1 (PRs #559/#561): manifiesto auto-extensible + cuarentena calculada + llaves con cuota y
+bitácora + `/catalog` y `/series`; migración corrida en prod; **llave de SDQ-PMS emitida**
+(`usage=internal`) y verificada E2E — 315 series expuestas, 0 en cuarentena.
+F2: `/scores/{sector}` (desglose dimensional numérico, jamás narrativa), `/signals/{sector}`
+(motor determinista) y `/quality/{sector}` (el registro de honestidad servido al cliente,
+con la prosa de procedencia GENERADA). Productores iniciales: `macro`→IRMP + señales de
+alerta temprana; `esg`→IRC. Auto-extensión también en scores: un sector que declare
+`canonical_scores()` aparece sin tocar la capa API. Guía de consumo para clientes:
+[`GUIA_CONSUMO_DATA_API.md`](GUIA_CONSUMO_DATA_API.md). Las decisiones abiertas de §9 se
+toman cuando se necesiten, por decisión del dueño.
 **Fecha:** 2026-07-22
 **Origen:** "capa de distribución del Anexo B" diferida a Fase 2/3 en
 [`SPEC_PLATFORM_PRODUCTIZATION.md`](SPEC_PLATFORM_PRODUCTIZATION.md) §6 y

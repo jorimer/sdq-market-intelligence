@@ -214,3 +214,221 @@ async def series(
         latency_ms=int((time.perf_counter() - started) * 1000),
     )
     return payload
+
+
+@router.get("/scores/{sector}", summary="Scores e índices propietarios del sector")
+async def scores(
+    sector: str,
+    ctx: ApiContext = Depends(require_api_key),
+    code: Optional[str] = Query(None, description="Código del score (ver /catalog kind=score)."),
+    subject: Optional[str] = Query(
+        None,
+        description=("Sujeto exactamente como aparece en `subjects` del descriptor "
+                     "(/catalog kind=score): código de país del panel, entidad o slug."),
+    ),
+    start: Optional[str] = Query(None, description="Período inicial inclusive."),
+    end: Optional[str] = Query(None, description="Período final inclusive."),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+) -> Dict[str, Any]:
+    """Scores/índices con su desglose dimensional numérico. La narrativa NUNCA viaja
+    por acá — es el producto de reporte; el desglose explicable sí."""
+    started = time.perf_counter()
+
+    assets = [a for a in _visible_assets(ctx, include_quarantined=False)
+              if a.kind == "score" and a.sector_key == sector]
+    if code:
+        assets = [a for a in assets if a.code == code]
+    if not assets:
+        record_usage(
+            ctx.db, ctx.key, resource="scores", asset_key=f"{sector}:{code or '*'}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "score_not_found",
+            f"No hay un score disponible para '{sector}'"
+            + (f" con código '{code}'." if code else "."),
+            f"No available score for '{sector}'"
+            + (f" with code '{code}'." if code else "."),
+        )
+    if len(assets) > 1:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "ambiguous_code",
+            (f"El sector '{sector}' publica varios scores: "
+             f"{', '.join(sorted(a.code for a in assets))}. Precise 'code'."),
+            (f"Sector '{sector}' publishes several scores: "
+             f"{', '.join(sorted(a.code for a in assets))}. Specify 'code'."),
+        )
+
+    asset = assets[0]
+    product = get_product(asset.sector_key, ctx.db)
+    reader = getattr(product, "score_observations", None)
+    if not callable(reader):
+        raise api_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "reader_unavailable",
+            "El score está declarado pero su lector no está disponible.",
+            "The score is declared but its reader is unavailable.",
+        )
+
+    observations = list(
+        reader(asset.code, subject=subject, start=start, end=end, limit=limit) or ()
+    )
+
+    caveats: List[Dict[str, str]] = [{
+        "code": "derived_asset",
+        "message": ("Score de cálculo propietario de SDQ: el desglose dimensional es "
+                    "numérico y explicable; la lectura narrativa pertenece al producto "
+                    "de reporte y no viaja por la API."),
+    }]
+    if asset.note:
+        caveats.append({"code": "score_direction", "message": asset.note})
+
+    payload = {
+        "meta": {
+            **ctx.meta(),
+            "resource": "scores",
+            "score": asset.to_dict(),
+            "count": len(observations),
+        },
+        "data": [
+            {
+                "subject": o.subject,
+                "period": o.period,
+                "score": o.score,
+                "band": o.band,
+                "dimensions": o.dimensions,
+                "model_version": o.model_version,
+                "reason": o.reason,
+            }
+            for o in observations
+        ],
+        "caveats": caveats,
+    }
+    record_usage(
+        ctx.db, ctx.key, resource="scores", asset_key=asset.key,
+        status_code=status.HTTP_200_OK, rows=len(observations),
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
+    return payload
+
+
+@router.get("/signals/{sector}", summary="Señales deterministas de alerta del sector")
+async def signals(
+    sector: str,
+    ctx: ApiContext = Depends(require_api_key),
+    limit: int = Query(100, ge=1, le=1000),
+) -> Dict[str, Any]:
+    """Salida del motor de reglas (alertas tempranas, precursores). Determinista y
+    citable; sin narrativa."""
+    started = time.perf_counter()
+
+    if not ctx.can_read_sector(sector):
+        # Mismo 404 uniforme que el resto: no se revela lo que no se puede leer.
+        record_usage(
+            ctx.db, ctx.key, resource="signals", asset_key=sector,
+            status_code=status.HTTP_404_NOT_FOUND,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "signals_not_found",
+            f"No hay señales disponibles para '{sector}'.",
+            f"No available signals for '{sector}'.",
+        )
+
+    product = get_product(sector, ctx.db)
+    reader = getattr(product, "canonical_signals", None)
+    items = []
+    if callable(reader):
+        try:
+            items = list(reader(limit=limit) or ())
+        except Exception as exc:
+            logger.warning("data_api: señales de '%s' fallaron: %s", sector, exc)
+            items = []
+
+    payload = {
+        "meta": {**ctx.meta(), "resource": "signals", "sector": sector,
+                 "count": len(items)},
+        "data": [
+            {
+                "key": s.key, "label": s.label, "severity": s.severity,
+                "period": s.period, "subject": s.subject, "detail": s.detail,
+            }
+            for s in items
+        ],
+        "caveats": [{
+            "code": "deterministic_rules",
+            "message": ("Señales del motor de reglas determinista: sin señal activa, la "
+                        "lista viaja vacía — la ausencia de alerta es un resultado, no "
+                        "un hueco."),
+        }],
+    }
+    record_usage(
+        ctx.db, ctx.key, resource="signals", asset_key=sector,
+        status_code=status.HTTP_200_OK, rows=len(items),
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
+    return payload
+
+
+@router.get("/quality/{sector}", summary="Calidad y procedencia del sector")
+async def quality(
+    sector: str,
+    ctx: ApiContext = Depends(require_api_key),
+) -> Dict[str, Any]:
+    """Readiness, cobertura real ponderada y estado por variable del sector — el mismo
+    registro que gobierna el gate de honestidad, servido al cliente. Un consumidor que
+    automatiza decide con esto cuánto confiar en cada eje ANTES de usarlo en un modelo."""
+    started = time.perf_counter()
+
+    if not ctx.can_read_sector(sector):
+        record_usage(
+            ctx.db, ctx.key, resource="quality", asset_key=sector,
+            status_code=status.HTTP_404_NOT_FOUND,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "quality_not_found",
+            f"No hay información de calidad disponible para '{sector}'.",
+            f"No available quality information for '{sector}'.",
+        )
+
+    from shared.registry.provenance import provenance_paragraph
+    from shared.registry.service import build_data_registry
+
+    registry = build_data_registry(ctx.db)
+    axis = next((a for a in registry.axes if a.sector_key == sector), None)
+    if axis is None or not axis.implemented:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "quality_not_found",
+            f"No hay información de calidad disponible para '{sector}'.",
+            f"No available quality information for '{sector}'.",
+        )
+
+    payload = {
+        "meta": {**ctx.meta(), "resource": "quality", "sector": sector},
+        "data": {
+            "period": axis.period,
+            "coverage_real": axis.coverage_real,
+            "state_counts": axis.state_counts,
+            "degraded": axis.degraded,
+            # La MISMA prosa de procedencia que llevan los reportes — generada del
+            # registro, nunca escrita a mano (lección Hallazgo 7).
+            "provenance": provenance_paragraph(axis),
+            "variables": [
+                {
+                    "key": s.key, "label": s.label, "state": s.state,
+                    "dimension": s.dimension, "weight": s.weight, "source": s.source,
+                    "cadence": s.cadence, "real_fraction": s.real_fraction,
+                    "scope": s.scope, "note": s.note,
+                }
+                for s in axis.signals
+            ],
+        },
+        "caveats": [],
+    }
+    record_usage(
+        ctx.db, ctx.key, resource="quality", asset_key=sector,
+        status_code=status.HTTP_200_OK, rows=len(axis.signals),
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
+    return payload
