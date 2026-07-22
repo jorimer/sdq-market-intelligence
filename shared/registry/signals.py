@@ -25,6 +25,10 @@ REAL = "real"       # dato real con lineage
 RUBRIC = "rubric"   # rúbrica declarada
 GAP = "gap"         # brecha declarada
 
+# ─── Alcance de la medición (ver ``VariableSignal.scope``) ────────────
+PER_SUBJECT = "per_subject"   # se mide por sujeto → diferencia entre ellos
+NATIONAL = "national"         # dato real de alcance país → igual para todos los sujetos
+
 _STATE_ALIASES = {
     "live": REAL, "real": REAL,
     "rubric": RUBRIC, "rúbrica": RUBRIC,
@@ -63,6 +67,15 @@ class VariableSignal:
     value: Optional[float] = None    # valor indicativo (None en paneles multi-sujeto)
     real_fraction: float = field(default=1.0)  # fracción de sujetos con dato real [0,1]
     note: str = ""                   # nota de trazabilidad (parcialidad, caveat)
+    # ALCANCE de la medición — distingue dos cosas que "dato real" confunde:
+    #   PER_SUBJECT — se mide por sujeto (sector, país, entidad): DIFERENCIA entre ellos
+    #                 y por tanto mueve el ranking.
+    #   NATIONAL    — dato real, pero de alcance país: idéntico para todos los sujetos del
+    #                 panel. Sostiene el nivel del índice; NO mueve el ranking.
+    # Sin este eje, un cliente lee "dato real" y entiende "esto distingue a mi sector de
+    # los demás", que puede ser falso. Default PER_SUBJECT (el caso común); un producto
+    # con variables nacionales lo declara explícitamente.
+    scope: str = "per_subject"
 
 
 @dataclass(frozen=True)

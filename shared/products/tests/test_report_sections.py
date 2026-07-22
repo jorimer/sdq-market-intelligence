@@ -76,3 +76,70 @@ def test_glossary_section_insight_detects_terms():
 def test_glossary_section_empty_when_no_terms():
     from shared.products.report_sections import glossary_section
     assert glossary_section("Texto sin jerga del catálogo.", ProductTier.deep_dive) == {}
+
+
+# ─── Procedencia por variable en Metodología (generada, no escrita) ───
+
+
+class _ProductWithSignals:
+    """Producto mínimo con señal por-variable — lo único que la sección necesita."""
+
+    sector_key = "sector_intel"
+
+    def __init__(self, signals):
+        self._signals = signals
+
+    def product_manifest(self):  # pragma: no cover - no lo usa esta sección
+        raise NotImplementedError
+
+    def data_signals(self):
+        from shared.products.contract import DataHealth
+        return DataHealth(coverage=0.8, freshness_days=30, sources=("BCRD",))
+
+    def validation_state(self):
+        from shared.products.contract import ValidationState
+        return ValidationState(approved=True, score=0.7)
+
+    def variable_signals(self):
+        return {"period": "2025", "signals": self._signals}
+
+
+def test_methodology_includes_generated_provenance():
+    from shared.registry.signals import NATIONAL, REAL, RUBRIC, VariableSignal
+
+    product = _ProductWithSignals([
+        VariableSignal(key="growth", label="crecimiento del sector", state=REAL, weight=0.6),
+        VariableSignal(key="skills", label="nivel de competencias", state=REAL, weight=0.2,
+                       scope=NATIONAL),
+        VariableSignal(key="ease", label="facilidad de operar", state=RUBRIC, weight=0.2),
+    ])
+    out = standard_sections(product, ProductTier.insight)
+    text = out[METHODOLOGY_KEY]
+    assert "Procedencia por variable:" in text
+    assert "facilidad de operar" in text        # la rúbrica se declara
+    assert "nivel de competencias" in text      # el alcance nacional se declara
+
+
+def test_product_without_variable_signals_gets_no_provenance_block():
+    """Silencio honesto: sin señal por-variable no se afirma procedencia."""
+
+    class Bare(_ProductWithSignals):
+        def __init__(self):
+            super().__init__([])
+
+        variable_signals = None  # el atributo existe pero no es invocable
+
+    out = standard_sections(Bare(), ProductTier.insight)
+    assert "Procedencia por variable:" not in out[METHODOLOGY_KEY]
+
+
+def test_provenance_failure_never_breaks_the_report():
+    class Explosive(_ProductWithSignals):
+        def __init__(self):
+            super().__init__([])
+
+        def variable_signals(self):
+            raise RuntimeError("tabla ausente")
+
+    out = standard_sections(Explosive(), ProductTier.insight)
+    assert METHODOLOGY_KEY in out               # la sección sale igual, sin el bloque

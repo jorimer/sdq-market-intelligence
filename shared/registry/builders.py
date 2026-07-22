@@ -15,7 +15,15 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from shared.registry.signals import GAP, REAL, RUBRIC, VariableSignal, normalize_state
+from shared.registry.signals import (
+    GAP,
+    NATIONAL,
+    PER_SUBJECT,
+    REAL,
+    RUBRIC,
+    VariableSignal,
+    normalize_state,
+)
 
 
 def axis_variable_weights(axis: str) -> Dict[str, Tuple[str, float]]:
@@ -41,6 +49,23 @@ def axis_variable_weights(axis: str) -> Dict[str, Tuple[str, float]]:
     return out
 
 
+def axis_variable_scopes(axis: str) -> Dict[str, str]:
+    """``{variable: scope}`` desde el bloque ``variable_scopes:`` de la doctrina.
+
+    La doctrina declara qué variables son de alcance NACIONAL (dato real de país,
+    idéntico para todos los sujetos → sostiene el nivel del índice sin mover el
+    ranking). Sin bloque o sin entrada → PER_SUBJECT, el caso común."""
+    from shared.doctrine import load_doctrine_raw
+
+    try:
+        doc = load_doctrine_raw(axis)
+    except (FileNotFoundError, ValueError):
+        return {}
+    raw = doc.get("variable_scopes", {}) or {}
+    return {k: (NATIONAL if str(v).strip().lower() == "national" else PER_SUBJECT)
+            for k, v in raw.items()}
+
+
 def pattern_a_signals(
     *,
     axis: str,
@@ -60,6 +85,7 @@ def pattern_a_signals(
     """
     labels = labels or {}
     weights = axis_variable_weights(axis)
+    scopes = axis_variable_scopes(axis)
     # Universo de variables: el declarado explícito, o la unión de doctrina + lo visto.
     if variables is None:
         seen = {v for smap in sources.values() for v in smap}
@@ -102,6 +128,7 @@ def pattern_a_signals(
             key=var, label=labels.get(var, var), state=state, dimension=dim,
             weight=weight, source=source_label if state == REAL else "",
             cadence=cadence, value=sample_value, real_fraction=real_fraction, note=note,
+            scope=scopes.get(var, PER_SUBJECT),
         ))
     return out
 
@@ -158,6 +185,7 @@ def nested_breakdown_signals(
     """
     labels = labels or {}
     weights = axis_variable_weights(axis)
+    scopes = axis_variable_scopes(axis)
     out: List[VariableSignal] = []
     for dim, d in (breakdown or {}).items():
         vars_ = ((d or {}).get("variables") or {})
@@ -176,6 +204,7 @@ def nested_breakdown_signals(
                 cadence=cadence,
                 value=float(val) if isinstance(val, (int, float)) else None,
                 real_fraction=1.0 if state == REAL else 0.0, note=note,
+                scope=scopes.get(var, PER_SUBJECT),
             ))
     return out
 
