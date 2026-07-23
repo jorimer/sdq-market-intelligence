@@ -137,6 +137,11 @@ class ScoreObservation:
     dimensions: Optional[Dict] = None
     model_version: Optional[str] = None
     reason: Optional[str] = None          # por qué falta, cuando ``score`` es None
+    # Tamaño del panel contra el que se normalizó. En un índice panel-relativo (min-max
+    # contra el conjunto de pares) el score DEPENDE de con quién se comparó: dos períodos
+    # calculados sobre paneles distintos NO son comparables entre sí, aunque ambos se vean
+    # como un número en la misma escala. Declararlo es lo que permite detectarlo.
+    peer_set_size: Optional[int] = None
 
 
 @dataclass(frozen=True)

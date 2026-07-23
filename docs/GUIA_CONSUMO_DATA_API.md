@@ -93,6 +93,13 @@ la consulta). Si la trayectoria tiene años faltantes, viaja además el caveat
 **`sparse_trajectory`** con los períodos ausentes: **no interpolar ni unir los puntos**
 como si fuera una serie completa — un período ausente no se computó, no vale cero.
 
+**Comparabilidad entre períodos.** Estos índices son **panel-relativos**: cada variable se
+normaliza min-max contra el conjunto de pares del período. Por eso cada observación trae
+`peer_set_size`, y si los períodos servidos usaron paneles de distinto tamaño viaja el
+caveat **`panel_size_varies`**: esos valores están en la misma escala pero **no significan
+lo mismo**, y compararlos como una tendencia es un error. Es la trampa más silenciosa de
+un índice comparado — el número se ve perfectamente normal.
+
 Publicados hoy: `macro`→`irmp` (riesgo macro-político, panel de países) ·
 `esg`→`irc` (resiliencia climática, panel Caribe/LatAm). El resto aparece en el
 catálogo cuando cada sector lo declare.

@@ -361,6 +361,7 @@ class MacroProduct:
                 subject=o["subject"], period=o["period"], score=o["score"],
                 band=o.get("band"), dimensions=o.get("dimensions"),
                 model_version=o.get("model_version"),
+                peer_set_size=o.get("peer_set_size"),
             )
             for o in irmp_svc.irmp_observations_for_api(
                 self._require_db(), subject=subject, start=start, end=end, limit=limit

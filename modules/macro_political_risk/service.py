@@ -504,5 +504,6 @@ def irmp_observations_for_api(
             "band": snap.risk_band.value if snap.risk_band else None,
             "dimensions": dims or None,
             "model_version": str(snap.model_version) if snap.model_version else None,
+            "peer_set_size": int(snap.peer_set_size) if snap.peer_set_size else None,
         })
     return out
