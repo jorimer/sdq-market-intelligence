@@ -42,6 +42,35 @@ def _text(v: Any) -> str:
     return str(v).strip() if v is not None and not isinstance(v, (int, float)) else ""
 
 
+def normalize_unit(raw: Optional[str]) -> Optional[str]:
+    """Reducir un caption a una unidad CORTA y canónica que quepa y se lea igual.
+
+    El objetivo de capturar la unidad es (a) clasificar la naturaleza de la serie y (b)
+    mostrársela al cliente — no archivar el título entero del cuadro. Un caption como
+    "Índices de volumen encadenados, referenciados al año 2018" (57 car.) no es una unidad:
+    la unidad es "Índice". Además la columna es ``VARCHAR(40)``; sin esto, esos títulos
+    largos reventaban la persistencia. Se preserva la señal de "Saldos" (distingue un stock)
+    y la moneda cuando el emisor la declara."""
+    if not raw:
+        return None
+    low = raw.lower()
+    if re.search(r"%|por\s+ciento", low):
+        return "%"
+    if re.search(r"[íi]ndice", low):
+        return "Índice"
+    if re.search(r"millones|mm\s*us\$|us\$|rd\$|d[óo]lar|pesos|euros", low):
+        saldo = "Saldos, " if "saldo" in low else ""
+        if re.search(r"us\$|d[óo]lar", low):
+            moneda = "millones de US$"
+        elif "rd$" in low or "pesos" in low:
+            moneda = "millones de RD$"
+        else:
+            moneda = "millones"
+        out = f"{saldo}{moneda}"
+        return (out[:1].upper() + out[1:])[:40]
+    return raw.strip()[:40]
+
+
 def sheet_unit(grid: Any, upper_bound: Optional[int]) -> Optional[str]:
     """Unidad declarada en la ZONA DE TÍTULO de la hoja (filas sobre el encabezado).
 
@@ -59,11 +88,10 @@ def sheet_unit(grid: Any, upper_bound: Optional[int]) -> Optional[str]:
             if not txt or len(txt) > 80:
                 continue
             if _UNIT_CAPTION.search(txt):
-                cleaned = txt.strip().strip("()").strip()
                 # El primer caption de la zona de título gana; suele ser el más general.
                 if best is None:
-                    best = cleaned
-    return best
+                    best = txt
+    return normalize_unit(best)
 
 
 def split_header_unit(name: str) -> Tuple[str, Optional[str]]:
@@ -78,6 +106,6 @@ def split_header_unit(name: str) -> Tuple[str, Optional[str]]:
     m = _PAREN_UNIT.search(name)
     if not m:
         return name, None
-    unit = m.group(1).strip()
+    unit = normalize_unit(m.group(1).strip())
     cleaned = (name[:m.start()] + name[m.end():]).strip().rstrip("·").strip()
     return (cleaned or name), unit
