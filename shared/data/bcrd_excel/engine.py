@@ -19,8 +19,8 @@ from shared.data.base_client import Record
 
 from .catalog import CatalogEntry
 from .download import DEFAULT_CACHE_DIR, fetch_excel
-from .extract import _slug, extract_records
-from .inference import infer_spec
+from .extract import _slug, default_prefix, extract_records
+from .inference import data_sheets, infer_spec
 from .interpreter import interpret_spec, name_ambiguous_rows
 from .spec import ExtractionSpec
 from .validation import ValidationReport, validate
@@ -191,10 +191,37 @@ def ingest_excel(
         file_label = str(source)
 
     wb = load_workbook(path)
+    # TODAS las hojas con datos, no solo la más densa: un libro del BCRD suele traer
+    # varios cortes de la misma estadística en hojas distintas, y quedarse con una
+    # descartaba el resto en silencio (15 hojas perdidas en 5 de los 23 canónicos).
+    sheets = data_sheets(wb)
     spec = build_spec(wb, file_label, cache=cache, use_claude=use_claude, client=client)
-    records = extract_records(wb, spec)
-    if use_claude:
-        records = _resolve_ambiguous_names(wb, spec, records, cache=cache, client=client)
+    if len(sheets) <= 1:
+        records = extract_records(wb, spec)
+        if use_claude:
+            records = _resolve_ambiguous_names(wb, spec, records, cache=cache, client=client)
+    else:
+        records = []
+        for grid in sheets:
+            sub = Workbook(path=wb.path, grids=[grid])
+            try:
+                sheet_spec = build_spec(sub, file_label, cache=cache,
+                                        use_claude=use_claude, client=client)
+                # El código lleva la hoja: dos cortes de la misma estadística son series
+                # distintas y no deben colisionar (No Residentes vs Residentes).
+                base = sheet_spec.code_prefix or default_prefix(file_label)
+                sheet_spec.code_prefix = f"{base}.{_slug(grid.name)}"
+                sheet_records = extract_records(sub, sheet_spec)
+                if use_claude:
+                    sheet_records = _resolve_ambiguous_names(
+                        sub, sheet_spec, sheet_records, cache=cache, client=client)
+                records.extend(sheet_records)
+            except Exception as e:  # noqa: BLE001 — una hoja rota no cuesta las demás
+                logger.warning("[bcrd_excel] hoja '%s' de %s no extraída: %s",
+                               grid.name, file_label, e)
+        if records:
+            spec = build_spec(wb, file_label, cache=cache, use_claude=use_claude,
+                              client=client)
     report = validate(records, file=file_label, references=references, bands=bands)
     logger.info(
         "[bcrd_excel] %s: %d obs, %d series, validación %s (%s, conf %.2f)",

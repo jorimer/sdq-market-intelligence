@@ -31,6 +31,10 @@ _LICENSE = "datos oficiales BCRD — uso público con cita"
 _FOOTNOTE_RE = re.compile(r"\s*\d+\s*/")  # BCRD footnote markers: "BRUTAS 1/", "2008 3/"
 
 
+# Marcadores de identidad contable que el BCRD antepone a los agregados.
+_MARKER_RE = re.compile(r"^\s*\(\s*[+\-=±]\s*\)\s*")
+
+
 def _clean_label(s: str) -> str:
     """Drop footnote markers so ``"BRUTAS 1/"`` and ``"BRUTAS"`` slug the same."""
     return _FOOTNOTE_RE.sub(" ", normalize_label(s)).strip()
@@ -46,11 +50,16 @@ def _slug(s: str) -> str:
     return slug.strip("_") or "x"
 
 
+def default_prefix(file: str) -> str:
+    """Prefijo de código derivado del nombre de archivo (mismo criterio en todo el motor)."""
+    stem = Path(file).stem.split(".")[0]
+    return f"bcrd.xls.{_slug(stem)}"
+
+
 def _code_prefix(spec: ExtractionSpec) -> str:
     if spec.code_prefix:
         return spec.code_prefix
-    stem = Path(spec.file).stem.split(".")[0]
-    return f"bcrd.xls.{_slug(stem)}"
+    return default_prefix(spec.file)
 
 
 def _lineage(spec: ExtractionSpec) -> Lineage:
@@ -187,6 +196,16 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     # justamente el dato que las distinguía. Ahora la sección se conserva como ancestro y
     # el código se compone con la ruta, que es un nombre y no una coordenada.
     ancestors: Dict[int, str] = {}
+    # Jerarquía por MARCADOR DE TEXTO: cuando la planilla no usa sangría, el BCRD marca
+    # los agregados con el signo de la identidad contable —"(+) Consumo Final" y debajo,
+    # sin marca, "Consumo Privado" / "Consumo Público"—. La sangría no los separa (todo
+    # en la misma columna), pero el marcador sí dice quién es agregado y quién componente.
+    marker_group: Dict[int, str] = {}
+    # Tercer mecanismo: una fila SIN cifras abre un bloque y sigue calificando a las filas
+    # de su MISMA columna (en pib_gasto, "Ponderación" encabeza un segundo bloque que
+    # repite los mismos componentes). Se lleva aparte de `ancestors` a propósito: allá una
+    # fila de la misma columna reemplaza a la anterior, y acá tiene que persistir.
+    section_scope: Dict[int, str] = {}
     for r in range(spec.data_row_start, end):
         raw, raw_col = None, label_col
         for c in range(0, max(label_col + 1, c0)):
@@ -199,15 +218,31 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
         name = str(raw).strip()
         if not name:
             continue
+        marked = _MARKER_RE.match(name)
+        if marked:
+            name = name[marked.end():].strip() or name
         # Al bajar o mantener nivel, los ancestros más profundos dejan de aplicar.
         ancestors = {col: lab for col, lab in ancestors.items() if col < raw_col}
         ancestors[raw_col] = name
+        if marked:
+            marker_group[raw_col] = name          # abre grupo para las filas sin marca
+            marker_group = {c: g for c, g in marker_group.items() if c <= raw_col}
         # Una fila de sección (sin cifras) NO produce serie, pero YA quedó registrada como
         # ancestro: esa es la corrección de fondo — antes se descartaba y con ella se
         # perdía la única información que distinguía a las hojas repetidas.
         if not any(isinstance(grid.cell(r, c), (int, float)) for c in range(c0, c1)):
+            section_scope = {c: g for c, g in section_scope.items() if c < raw_col}
+            section_scope[raw_col] = name
+            marker_group = {c: g for c, g in marker_group.items() if c < raw_col}
             continue
-        path = [ancestors[col] for col in sorted(ancestors)]
+        path = [ancestors[col] for col in sorted(ancestors) if col < raw_col]
+        scope = section_scope.get(raw_col)
+        if scope and scope != name:
+            path.append(scope)
+        group = marker_group.get(raw_col)
+        if group and not marked and group != name:
+            path.append(group)                    # componente: cuelga de su agregado
+        path.append(name)
         code = ".".join(_slug(part) for part in path if _slug(part))
         if code in seen:  # ruta repetida (raro): desempate final por fila, nunca fusionar
             code = f"{code}_r{r}"

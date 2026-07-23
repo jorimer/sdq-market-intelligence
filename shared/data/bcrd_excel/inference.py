@@ -25,6 +25,37 @@ _SUBTOTAL_RE = r"promedio\s+(\d{4})"
 _SCAN_HEADER_ROWS = 12  # header region to mine for names / year rows
 
 
+def sheet_numeric_density(g: Grid) -> int:
+    """Celdas numéricas en la región de cabecera — proxy de "esta hoja trae datos"."""
+    return sum(
+        1
+        for r in range(min(60, g.nrows))
+        for c in range(min(40, g.ncols))
+        if isinstance(g.cell(r, c), (int, float))
+    )
+
+
+def data_sheets(wb: Workbook, *, min_cells: int = 10, min_ratio: float = 0.03) -> List[Grid]:
+    """TODAS las hojas con datos, no solo la más densa.
+
+    Un libro del BCRD suele traer varios cortes de la misma estadística en hojas separadas
+    (llegadas: No Residentes / Residentes / Total; desempleo: cuatro rangos de años).
+    Quedarse con una sola descarta el resto EN SILENCIO — y no siempre se queda con la
+    mejor: en ``tasa_desocupacion.xls`` la hoja más densa es "Anual 1960-1990", así que se
+    ingería la historia vieja y se tiraba la serie moderna.
+
+    Se excluyen portadas y notas por densidad: hace falta un mínimo absoluto de celdas
+    numéricas y una fracción de la hoja más rica. Los umbrales son BAJOS a propósito —
+    una hoja legítima puede ser chica (una serie de doce años son doce celdas), y
+    descartarla sería repetir el defecto que esta función viene a corregir."""
+    scored = [(sheet_numeric_density(g), g) for g in wb.grids]
+    if not scored:
+        return []
+    best = max(n for n, _ in scored)
+    keep = [g for n, g in scored if n >= min_cells and n >= best * min_ratio]
+    return keep or [max(scored, key=lambda t: t[0])[1]]
+
+
 def _pick_sheet(wb: Workbook) -> Grid:
     """The sheet with the most numeric cells (the data sheet, not notes/cover)."""
     best, best_score = wb.grids[0], -1.0
