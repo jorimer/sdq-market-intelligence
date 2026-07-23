@@ -93,3 +93,47 @@ def test_split_sin_parentesis_deja_el_nombre_intacto():
     name, unit = split_header_unit("Deflactor del PIB")
     assert name == "Deflactor del PIB"
     assert unit is None
+
+
+# ── normalización: un caption largo NO es una unidad ──────────────────
+
+
+def test_caption_largo_se_reduce_a_unidad_corta():
+    """La columna es VARCHAR(40); un título de cuadro no cabe ni es una unidad. Se reduce
+    a la forma canónica sin perder la naturaleza."""
+    from shared.data.bcrd_excel.units import normalize_unit
+    casos = {
+        "Índices de volumen encadenados, referenciados al año 2018": "Índice",
+        "Índice de Precios al Consumidor Nacional, Serie Mensual, 1984": "Índice",
+        "En Millones de US$": "Millones de US$",
+        "Saldos en millones de:": "Saldos, millones",
+        "PROMEDIO PONDERADO EN % NOMINAL ANUAL": "%",
+        "Millones de dólares estadounidenses": "Millones de US$",
+    }
+    for raw, esperado in casos.items():
+        got = normalize_unit(raw)
+        assert got == esperado, f"{raw!r} → {got!r} (esperaba {esperado!r})"
+        assert len(got) <= 40
+
+
+def test_ninguna_unidad_extraida_supera_la_columna():
+    """Regresión directa del StringDataRightTruncation: ninguna unidad de los xls reales
+    puede exceder 40 caracteres."""
+    import pathlib
+    from shared.data.bcrd_excel.workbook import load_workbook
+    from shared.data.bcrd_excel.engine import build_spec
+    from shared.data.bcrd_excel.extract import extract_records
+
+    cache = pathlib.Path("data/bcrd_excel/cache")
+    if not cache.exists():
+        import pytest
+        pytest.skip("sin xls cacheados en este entorno")
+    for f in ["pib_2018.xlsx", "imae_2018.xlsx", "ipc_base_2019-2020.xls",
+              "pib_deflactor_2018.xlsx"]:
+        p = cache / f
+        if not p.exists():
+            continue
+        wb = load_workbook(p)
+        recs = extract_records(wb, build_spec(wb, f, use_claude=False))
+        for r in recs:
+            assert r.unit is None or len(r.unit) <= 40, f"{f}: unidad larga {r.unit!r}"
