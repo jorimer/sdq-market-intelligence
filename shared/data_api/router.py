@@ -38,6 +38,26 @@ ORDER_ASC = "period_asc"    # el ÚLTIMO elemento es el más reciente
 ORDER_DESC = "period_desc"  # el PRIMER elemento es el más reciente
 
 
+def _annual_gaps(periods) -> list:
+    """Años faltantes entre el primero y el último de una trayectoria ANUAL.
+
+    Un hueco no es lo mismo que "no hay dato de ese año": puede ser un período que aún no
+    se computó. Declararlo es lo que impide que un consumidor grafique una línea continua
+    sobre un vacío — la doctrina del nulo honesto, aplicada al eje del tiempo. Solo se
+    calcula si TODOS los períodos son anuales (o fechas de cierre anual); ante cadencias
+    mixtas devuelve vacío antes que inventar una expectativa de continuidad."""
+    years = []
+    for value in periods or ():
+        text = str(value)[:4]
+        if not text.isdigit():
+            return []
+        years.append(int(text))
+    if len(years) < 2 or len(years) != len(set(years)):
+        return []
+    present = set(years)
+    return [str(y) for y in range(min(years), max(years) + 1) if y not in present]
+
+
 def _visible_assets(ctx: ApiContext, *, include_quarantined: bool) -> List[ExposedAsset]:
     """Activos que ESTA llave puede ver.
 
@@ -328,6 +348,16 @@ async def scores(
     observations = list(
         reader(asset.code, subject=subject, start=start, end=end, limit=limit) or ()
     )
+    # Períodos declarados por el productor (todo el histórico del score, no solo lo
+    # filtrado en esta consulta): es lo que permite ver el hueco.
+    periods: List[str] = []
+    try:
+        for d in (getattr(product, "canonical_scores", lambda: ())() or ()):
+            if d.code == asset.code:
+                periods = list(getattr(d, "periods", ()) or ())
+                break
+    except Exception:  # noqa: BLE001 — el inventario de períodos nunca rompe la entrega
+        periods = []
 
     caveats: List[Dict[str, str]] = [{
         "code": "derived_asset",
@@ -337,6 +367,14 @@ async def scores(
     }]
     if asset.note:
         caveats.append({"code": "score_direction", "message": asset.note})
+    gaps = _annual_gaps(periods)
+    if gaps:
+        caveats.append({
+            "code": "sparse_trajectory",
+            "message": (f"La trayectoria NO es continua: falta(n) {', '.join(gaps)}. "
+                        f"No interpolar ni unir los puntos como si fuera una serie "
+                        f"completa; el período ausente no se computó, no es un valor cero."),
+        })
 
     # El vigente, servido directo: que un cliente tenga que indexar un arreglo para
     # saber "cuál es el valor de hoy" es una invitación a leer el extremo equivocado.
@@ -354,6 +392,9 @@ async def scores(
                 "subject": latest.subject, "period": latest.period,
                 "score": latest.score, "band": latest.band,
             } if latest else None),
+            # Todo el histórico del score (no solo lo filtrado en esta consulta): es lo
+            # que permite VER la discontinuidad en vez de inferirla.
+            "periods_available": periods,
         },
         "data": [
             {

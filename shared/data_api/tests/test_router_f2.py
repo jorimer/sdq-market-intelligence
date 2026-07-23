@@ -227,3 +227,38 @@ def test_panel_view_has_no_single_latest(env):
     body = env["client"].get(f"/api/data/v1/scores/{SECTOR}", headers=env["auth"]).json()
     assert body["meta"]["order"] == "period_desc"
     assert body["meta"]["latest"] is None
+
+
+# ─── Trayectoria discontinua: el hueco se DECLARA ─────────────────────
+
+
+def test_a_gap_in_the_trajectory_is_declared_not_silent(env):
+    """Un consumidor que grafica no puede distinguir 'no hay dato' de 'no se computó'
+    si la API no lo dice. El hueco viaja como caveat, con los años faltantes."""
+    env["product"].scores[0] = CanonicalScore(
+        code="irmp", label="IRMP", subject_kind="country",
+        periods=("2019-12-31", "2021-12-31", "2024-12-31"), n_obs=72,
+    )
+    body = env["client"].get(f"/api/data/v1/scores/{SECTOR}", headers=env["auth"]).json()
+    gap = next(c for c in body["caveats"] if c["code"] == "sparse_trajectory")
+    assert "2020" in gap["message"] and "2022" in gap["message"] and "2023" in gap["message"]
+    assert body["meta"]["periods_available"] == ["2019-12-31", "2021-12-31", "2024-12-31"]
+
+
+def test_a_continuous_trajectory_raises_no_gap_caveat(env):
+    env["product"].scores[0] = CanonicalScore(
+        code="irmp", label="IRMP", subject_kind="country",
+        periods=("2023-12-31", "2024-12-31", "2025-12-31"), n_obs=72,
+    )
+    body = env["client"].get(f"/api/data/v1/scores/{SECTOR}", headers=env["auth"]).json()
+    assert "sparse_trajectory" not in [c["code"] for c in body["caveats"]]
+
+
+def test_mixed_cadences_do_not_invent_an_expectation_of_continuity(env):
+    """Con períodos no anuales no se puede afirmar qué 'falta': callar es lo honesto."""
+    env["product"].scores[0] = CanonicalScore(
+        code="irmp", label="IRMP", subject_kind="country",
+        periods=("2025-Q1", "2025-Q3"), n_obs=8,
+    )
+    body = env["client"].get(f"/api/data/v1/scores/{SECTOR}", headers=env["auth"]).json()
+    assert "sparse_trajectory" not in [c["code"] for c in body["caveats"]]

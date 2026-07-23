@@ -88,6 +88,11 @@ campo `subjects` del descriptor** (`/catalog?kind=score`) — no asumir formato 
 panel IRMP usa códigos de 2 letras (`DO`, `PE`), el IRC usa ISO3 (`DOM`, `JAM`).
 **Atención a `direction` en el descriptor**: en el IRMP mayor score = MENOR riesgo.
 
+`meta.periods_available` lista **todo** el histórico del score (no solo lo filtrado en
+la consulta). Si la trayectoria tiene años faltantes, viaja además el caveat
+**`sparse_trajectory`** con los períodos ausentes: **no interpolar ni unir los puntos**
+como si fuera una serie completa — un período ausente no se computó, no vale cero.
+
 Publicados hoy: `macro`→`irmp` (riesgo macro-político, panel de países) ·
 `esg`→`irc` (resiliencia climática, panel Caribe/LatAm). El resto aparece en el
 catálogo cuando cada sector lo declare.
