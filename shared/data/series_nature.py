@@ -137,8 +137,11 @@ def infer_nature(unit: Optional[str] = None, label: Optional[str] = None,
         if _UNIT_INDEX.search(u):
             return INDEX
         if _UNIT_MONEY.search(u):
-            # Moneda: distinguir saldo de flujo por la etiqueta; sin señal, flujo.
-            return STOCK if _LABEL_STOCK.search(lab) else FLOW
+            # Moneda: distinguir saldo de flujo. La señal de "saldo" puede venir en la
+            # PROPIA unidad ("Saldos en millones de RD$" — así lo titula el BCRD sus
+            # agregados monetarios) o en la etiqueta ("Posición de inversión"). Sin señal,
+            # flujo. Se mira la unidad y la etiqueta juntas.
+            return STOCK if _LABEL_STOCK.search(f"{u} {lab}") else FLOW
 
     # 2) La etiqueta, si la unidad no alcanzó.
     if lab:
