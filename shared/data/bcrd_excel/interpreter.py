@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .spec import ExtractionSpec
 from .workbook import Grid, Workbook
@@ -152,3 +152,110 @@ def interpret_spec(
     data["confidence"] = 0.8
     logger.info("[bcrd_excel] spec interpretado por Claude para %s", file)
     return ExtractionSpec.from_dict(data)
+
+
+# ─── Nombrado semántico de series ambiguas ────────────────────────────
+
+_NAME_TOOL = {
+    "name": "emit_series_names",
+    "description": (
+        "Devuelve un nombre jerárquico y legible para cada fila ambigua de la planilla."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "names": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "row": {"type": "integer", "description": "índice 0-based de la fila"},
+                        "name": {
+                            "type": "string",
+                            "description": (
+                                "nombre jerárquico separado por ' > ', del grupo más "
+                                "externo a la hoja. Ej: 'Activos > Inversión de cartera > "
+                                "Títulos de deuda > Bancos'"
+                            ),
+                        },
+                    },
+                    "required": ["row", "name"],
+                },
+            }
+        },
+        "required": ["names"],
+    },
+}
+
+
+def name_ambiguous_rows(
+    grid: Grid, rows: List[int], *, client: Any = None, model: Optional[str] = None,
+    context_rows: int = 60,
+) -> Dict[int, str]:
+    """Nombre jerárquico para filas cuya etiqueta se repite en la planilla.
+
+    Es la misma lectura que hace un analista y que la plataforma ya hace en pensiones y
+    seguros: mirar la fila en su contexto —bajo qué grupo cuelga— y nombrarla por su
+    posición en la jerarquía, no por su número de fila.
+
+    Existe porque la heurística de sangría no alcanza cuando el BCRD pone el grupo y sus
+    hijos en la MISMA columna y el grupo trae su propio total: ahí ni la indentación ni la
+    ausencia de cifras distinguen al padre. Un lector humano lo resuelve al instante
+    porque entiende QUÉ significan los rótulos; esto le pide eso mismo al modelo.
+
+    Devuelve ``{fila: nombre}``; las filas que el modelo no resuelva quedan afuera y el
+    llamador conserva su nombre anterior — nunca se inventa un rótulo.
+    """
+    if not rows:
+        return {}
+    client = _resolve_client(client)
+    if model is None:
+        from shared.config.settings import settings
+        model = settings.ANTHROPIC_MODEL
+
+    lo = max(0, min(rows) - context_rows)
+    hi = min(grid.nrows, max(rows) + 5)
+    lines = []
+    for r in range(lo, hi):
+        cells = []
+        for c in range(0, min(grid.ncols, 8)):
+            v = grid.cell(r, c)
+            if v not in (None, ""):
+                cells.append(f"c{c}={str(v)[:40]}")
+        if cells:
+            mark = "  <<< NOMBRAR" if r in rows else ""
+            lines.append(f"fila {r}: " + " | ".join(cells) + mark)
+
+    prompt = (
+        "Eres analista de estadísticas macroeconómicas del Banco Central de la República "
+        "Dominicana. En esta planilla varias filas comparten la misma etiqueta (p.ej. "
+        "'Bancos' u 'Otros Sectores' aparecen bajo distintos grupos), y necesito "
+        "distinguirlas por su POSICIÓN EN LA JERARQUÍA.\n\n"
+        "La columna del rótulo (c0, c2, c4…) indica la sangría, pero OJO: a veces el "
+        "grupo y sus hijos comparten columna, y el grupo puede traer su propio total. "
+        "Usá el significado económico de los rótulos para decidir qué cuelga de qué.\n\n"
+        "Para cada fila marcada '<<< NOMBRAR', devolvé su nombre jerárquico completo "
+        "separado por ' > ', del grupo más externo a la hoja. No inventes conceptos que "
+        "no estén en la planilla.\n\n" + "\n".join(lines)
+    )
+    response = client.messages.create(
+        model=model, max_tokens=2000,
+        tools=[_NAME_TOOL], tool_choice={"type": "tool", "name": "emit_series_names"},
+        messages=[{"role": "user", "content": prompt}],
+    )
+    block = next((b for b in response.content if getattr(b, "type", None) == "tool_use"), None)
+    if block is None:
+        return {}
+    data = block.input if isinstance(block.input, dict) else json.loads(block.input)
+    out: Dict[int, str] = {}
+    wanted = set(rows)
+    for item in data.get("names", []):
+        try:
+            r = int(item["row"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        name = str(item.get("name", "")).strip()
+        if r in wanted and name:
+            out[r] = name
+    logger.info("[bcrd_excel] Claude nombró %d de %d filas ambiguas", len(out), len(rows))
+    return out

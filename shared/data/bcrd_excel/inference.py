@@ -50,6 +50,23 @@ def _month_column(grid: Grid) -> Tuple[Optional[int], int, int]:
     return best_col, best_first, best_count
 
 
+def _standalone_year_rows(grid: Grid, month_col: Optional[int]) -> List[int]:
+    """Filas que traen SOLO un año en la columna de rótulos: cabecera de bloque anual.
+
+    Es la firma de las planillas del BCRD que apilan un bloque por año (llegadas de
+    pasajeros, 1978-2026): ``1978`` en su propia fila y debajo los doce meses. El año no
+    está en un encabezado de columna, así que las detecciones habituales no lo ven."""
+    if month_col is None:
+        return []
+    out: List[int] = []
+    for r in range(grid.nrows):
+        if parse_month(grid.cell(r, month_col)) is not None:
+            continue
+        if _axis_year(grid.cell(r, month_col)) is not None:
+            out.append(r)
+    return out
+
+
 def _axis_year(value) -> Optional[int]:
     """Years for *axis detection* — stricter than ``parse_year`` so a year buried in
     a subtitle ("Bases 1999 y 2010") or a range ("1991-2013") is NOT counted as a
@@ -222,6 +239,27 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
     month_col, first_month_row, month_count = _month_column(grid)
     year_row, year_row_count = _year_header_row(grid)
     sh = wb.structure_hash()
+
+    # Bloques por año: el año va en una FILA SUELTA y debajo cuelgan sus meses; las
+    # columnas son las métricas. Se detecta ANTES que cross_tab porque comparte la señal
+    # "muchos meses en una columna", pero acá los meses SE REPITEN (uno por bloque) y no
+    # son series: son períodos. Sin esto, el extractor bautizaba una serie por cada mes
+    # repetido (`enero`, `enero_r35`, `enero_r48`…) y el archivo entero salía mal armado.
+    year_rows = _standalone_year_rows(grid, month_col)
+    if month_col is not None and month_count >= 24 and len(year_rows) >= 3:
+        metric_rows = [r for r in range(0, min(year_rows) if year_rows else 8)
+                       if any(isinstance(grid.cell(r, c), str) and grid.cell(r, c).strip()
+                              for c in range(month_col + 1, min(grid.ncols, month_col + 9)))]
+        return ExtractionSpec(
+            file=file, sheet=grid.name, orientation="year_blocks",
+            data_row_start=min(year_rows), month_col=month_col,
+            metric_header_row=metric_rows[-1] if metric_rows else None,
+            super_header_row=metric_rows[-2] if len(metric_rows) >= 2 else None,
+            value_col_start=month_col + 1, value_col_end=grid.ncols,
+            structure_hash=sh, confidence=0.85, method="heuristic",
+            notes=(f"year_blocks: {len(year_rows)} años en fila suelta, "
+                   f"{month_count} filas de mes"),
+        )
 
     # Cross-tab: many years across a header row AND months down a column.
     if year_row_count >= 4 and month_col is not None and month_count >= 6:
