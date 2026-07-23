@@ -66,6 +66,32 @@ def _run_bcrd_comunicados_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_canonical_ingest(params, user_id, set_phase) -> Dict:
+    """Re-ingiere el SET CANÓNICO de planillas Excel del BCRD (balanza de pagos, agregados
+    monetarios, IPC, PIB, tasas, llegadas, etc. — las ~600 series normalizadas del macro) y
+    reconstruye el snapshot para refrescar momentum + señales de alerta temprana.
+
+    Es la fuente que alimenta a la Data API (`/series`, `/scores`, `/signals`) que consume
+    PMS. El extractor captura la unidad que el BCRD declara en cada cuadro y de ahí resuelve
+    la naturaleza de la serie (flow/stock/rate/index) para que cada consumidor la lea sin
+    adivinar. Idempotente: hace upsert por (serie, período), nunca duplica. Pesado (~20
+    archivos, algunos vía Claude) → va por la operación, no por endpoint síncrono. Mensual,
+    que es la cadencia con que el BCRD publica estos cuadros."""
+    from modules.macro_monitor.service import build_snapshot, ingest_canonical
+    db = SessionLocal()
+    try:
+        set_phase("ingiriendo el set canónico del BCRD (unidad + naturaleza)")
+        result = ingest_canonical(db, persist=True)
+        set_phase("reconstruyendo snapshot (momentum + señales)")
+        snap = build_snapshot(db)
+        result["snapshot"] = {"period": snap.get("period"),
+                              "series": snap.get("series_count"),
+                              "signals": [s["signal"] for s in snap.get("signals", [])]}
+        return result
+    finally:
+        db.close()
+
+
 def _run_tpm_model_train(params, user_id, set_phase) -> Dict:
     """Entrena el modelo de predicción de TPM (regla de Taylor + clasificador XGBoost),
     corre el backtest time-series y persiste modelo + reporte en AppSetting. Además mantiene
@@ -89,6 +115,17 @@ def _run_tpm_model_train(params, user_id, set_phase) -> Dict:
 
 
 def register() -> None:
+    register_operation(Operation(
+        "macro-canonical-sync", "Re-ingerir set canónico BCRD + snapshot (macro)",
+        "Re-ingiere las ~20 planillas Excel canónicas del BCRD (balanza de pagos, agregados "
+        "monetarios, IPC, PIB, tasas, llegadas…) que producen las ~600 series normalizadas "
+        "del macro, capturando la unidad declarada y resolviendo la naturaleza de cada serie "
+        "(flow/stock/rate/index), y reconstruye el snapshot (momentum + señales de alerta "
+        "temprana). Es la fuente que alimenta la Data API que consume PMS. Idempotente "
+        "(upsert por serie·período). Mensual — la cadencia de publicación del BCRD; la "
+        "aparición de datos nuevos la vigila la auditoría de frescura.",
+        _run_canonical_ingest, default_interval_hours=720,
+    ))
     register_operation(Operation(
         "fiscal-sync", "Sincronizar pulso fiscal (Hacienda + DGII)",
         "Trae las cuentas fiscales del Estado de Operaciones del Ministerio de "
