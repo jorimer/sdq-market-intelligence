@@ -151,3 +151,24 @@ def test_nature_reads_persisted_value_for_excel_series(db):
     db.add(MacroSeries(series_code="bcrd.xls.foo.bar", period="2025", value=1.0, nature="stock"))
     db.commit()
     assert _nature_by_code(db)["bcrd.xls.foo.bar"] == "stock"
+
+
+def test_nature_falls_back_to_the_persisted_unit_when_column_is_null(db):
+    """Conectores fuera de la ingesta de Excel (fiscal, inflación, IPC) nunca escriben la
+    columna `nature`, pero SÍ persisten la unidad. Inferir de esa unidad da el mismo
+    resultado que la ingesta habría dado — cierra el hueco sin adivinar. Era la causa de
+    que 25 series con unidad real (`RD$ millones`, `%`, `índice`) quedaran en `unknown`."""
+    from modules.macro_monitor.service import _nature_by_code
+
+    db.add(MacroSeries(series_code="fiscal_eo.gastos", period="2025",
+                       value=1.0, unit="RD$ millones", nature=None))
+    db.add(MacroSeries(series_code="bcrd.inflacion.interanual", period="2025",
+                       value=1.0, unit="%", nature=None))
+    db.add(MacroSeries(series_code="bcrd.ipc.indice", period="2025",
+                       value=1.0, unit="índice", nature=None))
+    db.commit()
+
+    nats = _nature_by_code(db)
+    assert nats["fiscal_eo.gastos"] == "flow"      # dinero → flujo
+    assert nats["bcrd.inflacion.interanual"] == "rate"  # % → variación en puntos
+    assert nats["bcrd.ipc.indice"] == "index"

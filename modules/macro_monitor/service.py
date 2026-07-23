@@ -718,30 +718,40 @@ def period_start_date(period: Optional[str]) -> Optional[date]:
     return None
 
 
-def _nature_by_code(db: Session) -> Dict[str, str]:
-    """``{series_code: nature}`` para el cómputo.
-
-    Dos orígenes, en orden de autoridad:
+def _effective_nature(code: str, unit: Optional[str], persisted: Optional[str]) -> str:
+    """Naturaleza de una serie, resuelta de UNA sola autoridad, en orden de fuerza:
 
     1. **Declaración propia.** Los códigos que emiten nuestros conectores tipados
        (``remittances``, ``public_debt_gdp``, ``reserves``…) tienen naturaleza
-       DETERMINÍSTICA: la definimos nosotros. No depende de que un ingestor la escriba —
-       de hecho estos códigos no pasan por la ingesta de Excel, así que su columna queda
-       nula. Se resuelve de ``DECLARED`` y gana siempre.
-    2. **Lo persistido.** Para las series de planilla la resolvió el ingestor con la unidad
-       que declaró el emisor; se lee, no se re-infiere.
+       DETERMINÍSTICA: la definimos nosotros. No dependen de que un ingestor la escriba.
+    2. **Columna persistida.** Para las series de planilla la resolvió la ingesta con la
+       unidad que declaró el emisor; se lee tal cual.
+    3. **Unidad de la fila.** Muchos conectores (fiscal, inflación, IPC) NO pasan por la
+       ingesta de Excel y nunca escribieron la columna — pero SÍ persistieron la unidad.
+       Inferir de esa unidad da EXACTAMENTE el mismo resultado que la ingesta habría dado
+       (la unidad no cambia), así que no es adivinar: es cerrar el hueco de que la
+       resolución estuviera partida entre conectores. Sin unidad, ``unknown`` honesto.
+    """
+    from shared.data.series_nature import DECLARED, infer_nature
 
-    Una serie de planilla anterior a esta columna cae a ``unknown`` y el motor no computa
-    porcentajes sobre ella — honesto, y se corrige sola en la próxima ingesta."""
-    from shared.data.series_nature import DECLARED, UNKNOWN, infer_nature
+    leaf = code.split(".")[-1].lower()
+    if leaf in DECLARED or code.lower() in DECLARED:
+        return infer_nature(code=code)
+    if persisted:
+        return persisted
+    return infer_nature(unit=unit, code=code)
 
-    out: Dict[str, str] = {}
-    for code, nat in db.query(MacroSeries.series_code, MacroSeries.nature).distinct():
+
+def _nature_by_code(db: Session) -> Dict[str, str]:
+    """``{series_code: nature}`` para el cómputo, vía :func:`_effective_nature`."""
+    rows: Dict[str, tuple] = {}
+    for code, nat, unit in db.query(
+            MacroSeries.series_code, MacroSeries.nature, MacroSeries.unit).distinct():
         code = str(code)
-        declared = infer_nature(code=code) if code.split(".")[-1].lower() in DECLARED \
-            or code.lower() in DECLARED else None
-        out.setdefault(code, declared or (str(nat) if nat else UNKNOWN))
-    return out
+        # Primera fila con columna/unidad no nula gana; da igual el orden para el resultado.
+        cur = rows.get(code)
+        rows[code] = (nat or (cur[0] if cur else None), unit or (cur[1] if cur else None))
+    return {code: _effective_nature(code, unit, nat) for code, (nat, unit) in rows.items()}
 
 
 def _series_by_code(db: Session, include_future: bool = False) -> Dict[str, List[tuple]]:
@@ -1043,8 +1053,12 @@ def canonical_series_for_api(db: Session) -> List[Dict[str, Any]]:
             # serie y con cuál NO se encadena). Viaja al cliente por la Data API.
             "note": canonical_note_for(code),
             # Naturaleza estadística y en qué unidad se expresa su variación: sin esto un
-            # consumidor no sabe si "+1.12" son puntos porcentuales o un 1.12%.
-            "nature": next((str(r.nature) for r in rows if r.nature), "unknown"),
+            # consumidor no sabe si "+1.12" son puntos porcentuales o un 1.12%. Resuelta por
+            # la MISMA autoridad que usa el cómputo, para que API y snapshot no discrepen.
+            "nature": _effective_nature(
+                code,
+                next((str(r.unit) for r in rows if r.unit), None),
+                next((str(r.nature) for r in rows if r.nature), None)),
             "unit": units[-1] if units else labels.get("unit"),
             # Se prefiere la cadencia DECLARADA; si el ingestor no la pobló (caso
             # general hoy), se deriva del formato del período.
