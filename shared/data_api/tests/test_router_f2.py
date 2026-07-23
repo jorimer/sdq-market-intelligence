@@ -206,3 +206,24 @@ def test_quality_of_unknown_sector_is_404(env, monkeypatch):
     monkeypatch.setattr("shared.registry.service.build_data_registry", lambda db: Empty())
     r = env["client"].get("/api/data/v1/quality/desconocido", headers=env["auth"])
     assert r.status_code == 404
+
+
+# ─── Orden declarado (la trampa que hizo tropezar a PMS) ──────────────
+
+
+def test_scores_declare_their_order_and_expose_the_current_value(env):
+    """PMS leyó data[-1] esperando el vigente y obtuvo el más ANTIGUO: /series va
+    ascendente y /scores descendente. El orden ahora viaja declarado, y el vigente se
+    sirve directo para que nadie tenga que indexar."""
+    body = env["client"].get(f"/api/data/v1/scores/{SECTOR}?subject=DOM",
+                             headers=env["auth"]).json()
+    assert body["meta"]["order"] == "period_desc"
+    assert body["meta"]["latest"]["subject"] == "DOM"
+    assert body["meta"]["latest"]["period"] == body["data"][0]["period"]
+
+
+def test_panel_view_has_no_single_latest(env):
+    """En el panel cada fila YA es el vigente de su sujeto: un 'latest' único mentiría."""
+    body = env["client"].get(f"/api/data/v1/scores/{SECTOR}", headers=env["auth"]).json()
+    assert body["meta"]["order"] == "period_desc"
+    assert body["meta"]["latest"] is None
