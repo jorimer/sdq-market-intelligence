@@ -51,7 +51,10 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          pip install ruff
+          # Versión fijada: `pip install ruff` a secas trae la última, y una release nueva
+          # (0.16 amplió sus defaults con reglas UP) rompe el gate en código preexistente.
+          # El rule set también está fijado en pyproject (select E4/E7/E9/F).
+          pip install ruff==0.16.0
           ruff check modules/ shared/ app/
 
       # mypy con BASELINE (deuda del DD "sin mypy"): los ~1300 errores del código
