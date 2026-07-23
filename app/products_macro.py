@@ -310,7 +310,7 @@ class MacroProduct:
                 frequency=d.get("frequency") or "unknown", source=d.get("source") or "",
                 license=d.get("license"), period_first=d.get("period_first"),
                 period_latest=d.get("period_latest"), n_obs=int(d.get("n_obs") or 0),
-                note=d.get("note", "") or "",
+                note=d.get("note", "") or "", curated=bool(d.get("curated")),
             )
             for d in mm_svc.canonical_series_for_api(self._require_db())
         ]

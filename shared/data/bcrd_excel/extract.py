@@ -31,6 +31,10 @@ _LICENSE = "datos oficiales BCRD — uso público con cita"
 _FOOTNOTE_RE = re.compile(r"\s*\d+\s*/")  # BCRD footnote markers: "BRUTAS 1/", "2008 3/"
 
 
+# Marcadores de identidad contable que el BCRD antepone a los agregados.
+_MARKER_RE = re.compile(r"^\s*\(\s*[+\-=±]\s*\)\s*")
+
+
 def _clean_label(s: str) -> str:
     """Drop footnote markers so ``"BRUTAS 1/"`` and ``"BRUTAS"`` slug the same."""
     return _FOOTNOTE_RE.sub(" ", normalize_label(s)).strip()
@@ -46,11 +50,16 @@ def _slug(s: str) -> str:
     return slug.strip("_") or "x"
 
 
+def default_prefix(file: str) -> str:
+    """Prefijo de código derivado del nombre de archivo (mismo criterio en todo el motor)."""
+    stem = Path(file).stem.split(".")[0]
+    return f"bcrd.xls.{_slug(stem)}"
+
+
 def _code_prefix(spec: ExtractionSpec) -> str:
     if spec.code_prefix:
         return spec.code_prefix
-    stem = Path(spec.file).stem.split(".")[0]
-    return f"bcrd.xls.{_slug(stem)}"
+    return default_prefix(spec.file)
 
 
 def _lineage(spec: ExtractionSpec) -> Lineage:
@@ -179,18 +188,63 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     end = spec.data_row_end if spec.data_row_end is not None else grid.nrows
     out: List[Record] = []
     seen: Dict[str, int] = {}
+    # Ruta jerárquica por INDENTACIÓN: {columna_del_rótulo: texto}. Las planillas de
+    # estadística anidan por sangría —ACTIVOS (c2) › Inversión de Cartera (c3) › Títulos
+    # de deuda (c4) › Autoridades Monetarias (c5)— y la MISMA hoja se repite bajo padres
+    # distintos. Antes se descartaban las filas de sección (no traen números) y las hojas
+    # repetidas se desempataban por número de fila (`otros_sectores_r27`): se tiraba
+    # justamente el dato que las distinguía. Ahora la sección se conserva como ancestro y
+    # el código se compone con la ruta, que es un nombre y no una coordenada.
+    ancestors: Dict[int, str] = {}
+    # Jerarquía por MARCADOR DE TEXTO: cuando la planilla no usa sangría, el BCRD marca
+    # los agregados con el signo de la identidad contable —"(+) Consumo Final" y debajo,
+    # sin marca, "Consumo Privado" / "Consumo Público"—. La sangría no los separa (todo
+    # en la misma columna), pero el marcador sí dice quién es agregado y quién componente.
+    marker_group: Dict[int, str] = {}
+    # Tercer mecanismo: una fila SIN cifras abre un bloque y sigue calificando a las filas
+    # de su MISMA columna (en pib_gasto, "Ponderación" encabeza un segundo bloque que
+    # repite los mismos componentes). Se lleva aparte de `ancestors` a propósito: allá una
+    # fila de la misma columna reemplaza a la anterior, y acá tiene que persistir.
+    section_scope: Dict[int, str] = {}
     for r in range(spec.data_row_start, end):
-        raw = grid.cell(r, label_col)
-        if raw is None or isinstance(raw, (int, float)):
+        raw, raw_col = None, label_col
+        for c in range(0, max(label_col + 1, c0)):
+            cell = grid.cell(r, c)
+            if isinstance(cell, str) and cell.strip():
+                raw, raw_col = cell, c
+                break
+        if raw is None:
             continue
         name = str(raw).strip()
         if not name:
             continue
-        # Skip pure section headers: rows with no numeric value in the grid.
+        marked = _MARKER_RE.match(name)
+        if marked:
+            name = name[marked.end():].strip() or name
+        # Al bajar o mantener nivel, los ancestros más profundos dejan de aplicar.
+        ancestors = {col: lab for col, lab in ancestors.items() if col < raw_col}
+        ancestors[raw_col] = name
+        if marked:
+            marker_group[raw_col] = name          # abre grupo para las filas sin marca
+            marker_group = {c: g for c, g in marker_group.items() if c <= raw_col}
+        # Una fila de sección (sin cifras) NO produce serie, pero YA quedó registrada como
+        # ancestro: esa es la corrección de fondo — antes se descartaba y con ella se
+        # perdía la única información que distinguía a las hojas repetidas.
         if not any(isinstance(grid.cell(r, c), (int, float)) for c in range(c0, c1)):
+            section_scope = {c: g for c, g in section_scope.items() if c < raw_col}
+            section_scope[raw_col] = name
+            marker_group = {c: g for c, g in marker_group.items() if c < raw_col}
             continue
-        code = _slug(name)
-        if code in seen:  # two rows reusing a label → keep them distinct, never merge
+        path = [ancestors[col] for col in sorted(ancestors) if col < raw_col]
+        scope = section_scope.get(raw_col)
+        if scope and scope != name:
+            path.append(scope)
+        group = marker_group.get(raw_col)
+        if group and not marked and group != name:
+            path.append(group)                    # componente: cuelga de su agregado
+        path.append(name)
+        code = ".".join(_slug(part) for part in path if _slug(part))
+        if code in seen:  # ruta repetida (raro): desempate final por fila, nunca fusionar
             code = f"{code}_r{r}"
         seen[code] = r
         for c in range(c0, c1):
@@ -246,6 +300,62 @@ def _extract_cross_tab(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     return out
 
 
+def _extract_year_blocks(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
+                         prefix: str) -> List[Record]:
+    """Bloques apilados por año: ``1978`` en fila suelta, sus doce meses debajo.
+
+    Las SERIES son las columnas (Total mensual, acumulado, tasa de crecimiento…) y el
+    PERÍODO se arma con el año del bloque vigente más el mes de la fila. Antes este layout
+    caía en ``matrix`` y cada mes repetido se volvía una serie —`enero`, `enero_r35`—:
+    no era un problema de nombre sino de forma, el archivo entero salía mal armado.
+    """
+    c0 = spec.value_col_start or 0
+    c1 = spec.value_col_end if spec.value_col_end is not None else grid.ncols
+
+    # Nombre de cada columna: super-encabezado ("Total") + métrica ("Mensual").
+    col_super: Dict[int, str] = {}
+    if spec.super_header_row is not None:
+        current = ""
+        for c in range(c0, c1):
+            lab = _clean_label(grid.cell(spec.super_header_row, c)) or ""
+            if lab:
+                current = lab
+            if current:
+                col_super[c] = current
+    col_name: Dict[int, str] = {}
+    for c in range(c0, c1):
+        metric = ""
+        if spec.metric_header_row is not None:
+            metric = _clean_label(grid.cell(spec.metric_header_row, c)) or ""
+        sup = col_super.get(c, "")
+        name = f"{sup} {metric}".strip() if (sup and metric) else (metric or sup)
+        if name:
+            col_name[c] = name
+
+    out: List[Record] = []
+    year: Optional[int] = None
+    month_col = spec.month_col if spec.month_col is not None else 0
+    for r in range(spec.data_row_start or 0, grid.nrows):
+        label_cell = grid.cell(r, month_col)
+        month = parse_month(label_cell)
+        if month is None:
+            y = parse_year(label_cell)
+            if y is not None:
+                year = y      # cabecera del bloque: cambia el año vigente
+            continue
+        if year is None:
+            continue
+        for c in range(c0, c1):
+            col_label = col_name.get(c, "")
+            if not col_label:
+                continue
+            out.append(Record(
+                series=f"{prefix}.{_slug(col_label)}", period=format_period(year, month),
+                value=coerce_num(grid.cell(r, c)), lineage=lineage, unit=spec.unit,
+            ))
+    return out
+
+
 def extract_records(workbook: Workbook, spec: ExtractionSpec) -> List[Record]:
     """Replay *spec* over *workbook* → ``Record``s (one per series × period)."""
     grid = workbook.grid(spec.sheet)
@@ -253,6 +363,8 @@ def extract_records(workbook: Workbook, spec: ExtractionSpec) -> List[Record]:
     prefix = _code_prefix(spec)
     if spec.data_row_start is None:  # a spec may omit it; start from the top
         spec.data_row_start = 0
+    if spec.orientation == "year_blocks":
+        return _extract_year_blocks(grid, spec, lineage, prefix)
     if spec.orientation == "cross_tab":
         return _extract_cross_tab(grid, spec, lineage, prefix)
     if spec.orientation == "matrix":

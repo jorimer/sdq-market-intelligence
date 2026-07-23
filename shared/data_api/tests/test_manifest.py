@@ -260,3 +260,58 @@ def test_default_derivation_is_the_conservative_one(db, wire):
     _publish(db)
     wire(FakeProduct([_series("x", license_=_ITU)]))
     assert build_manifest(db).assets[0].derivation == "verbatim"
+
+
+# ─── Código inservible: no es etiqueta fea, es no saber qué mide ──────
+
+
+def test_an_unnamed_series_is_SERVED_and_flagged_not_dropped(db, wire):
+    """Decisión del dueño: no se degrada el dato porque el extractor no supo nombrarlo.
+    El valor de remesas es correcto aunque la serie se llame `982770568_431068`; retenerla
+    sería tapar una carencia nuestra escondiendo dato del BCRD. Se sirve y se marca."""
+    _publish(db)
+    wire(FakeProduct([_series("982770568_431068")]))
+    asset = build_manifest(db).assets[0]
+    assert asset.exposed                       # NO se retiene
+    assert asset.label_quality == "unnamed"    # pero se declara
+
+
+def test_a_long_digit_run_is_flagged_too(db, wire):
+    _publish(db)
+    wire(FakeProduct([_series("total_3123456789")]))
+    assert build_manifest(db).assets[0].label_quality == "unnamed"
+
+
+def test_a_readable_code_is_named(db, wire):
+    _publish(db)
+    wire(FakeProduct([_series("egresos_r31")]))
+    a = build_manifest(db).assets[0]
+    assert a.exposed and a.label_quality == "named"
+
+
+def test_the_summary_counts_unnamed_as_a_work_queue(db, wire):
+    """El manifiesto interno cuenta lo no nombrado: es trabajo pendiente del extractor,
+    no un basurero donde el problema desaparece de la vista."""
+    _publish(db)
+    wire(FakeProduct([_series("roa"), _series("982770568_431068")]))
+    assert build_manifest(db).summary["unnamed"] == 1
+
+
+def test_the_guard_is_generic_not_bcrd_specific(db, wire):
+    """El motor de Excel es genérico: el defecto reaparecería con cualquier fuente que se
+    incorpore por planilla, así que el guard no mira el prefijo."""
+    from shared.data_api.manifest import code_is_uninterpretable
+
+    assert code_is_uninterpretable("cualquier.fuente.futura.99887766")
+    assert not code_is_uninterpretable("cualquier.fuente.futura.exportaciones")
+
+
+def test_curated_flag_travels(db, wire):
+    """Es lo que responde '¿cuál cito?': dos series pueden ser dato real y solo una
+    ser citable en un informe a cliente."""
+    from dataclasses import replace
+
+    _publish(db)
+    s = _series("reservas_netas")
+    wire(FakeProduct([replace(s, curated=True)]))
+    assert build_manifest(db).assets[0].curated is True

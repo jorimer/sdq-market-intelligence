@@ -60,6 +60,48 @@ SERIES_NOTES = {
 }
 
 
+# Series CURADAS por código exacto: elegidas y nombradas por un analista, con etiqueta
+# defendible ante un cliente. Todo lo demás que sale del motor de Excel es extracción
+# masiva —dato real, pero con el nombre que la planilla dejó—, y se declara como
+# no-curado para que un informe no lo cite por la ruta de la hoja de cálculo.
+CURATED_LABELS = {
+    "bcrd.xls.reservas_internacionales.reservas_netas":
+        "Reservas internacionales netas (BCRD)",
+    "bcrd.xls.reservas_internacionales.reservas_brutas":
+        "Reservas internacionales brutas (BCRD)",
+    "bcrd.xls.reservas_internacionales.activos_brutos":
+        "Activos externos brutos (BCRD)",
+    "bcrd.xls.remesas_6.valor": "Remesas familiares recibidas (BCRD)",
+    "fiscal_eo.ingresos": "Ingresos del Gobierno Central (Hacienda)",
+    "fiscal_eo.gastos": "Gastos del Gobierno Central (Hacienda)",
+    "fiscal_eo.balance_global": "Balance fiscal global del Gobierno Central (Hacienda)",
+    "fiscal_eo.resultado_operativo": "Resultado operativo del Gobierno Central (Hacienda)",
+    "public_debt_gdp": "Deuda pública (% del PIB)",
+    "gdp_growth": "Crecimiento del PIB real",
+    "inflation_yoy": "Inflación interanual",
+    "remittances": "Remesas",
+    "bcrd.xls.bpagos_6.1_cuenta_corriente":
+        "Cuenta corriente de la balanza de pagos (MBP6)",
+}
+
+
+def curated_label(series_code: str) -> str:
+    """Etiqueta curada de una serie, o cadena vacía si no la tiene."""
+    return CURATED_LABELS.get(str(series_code), "")
+
+
+def is_curated(series_code: str) -> bool:
+    """¿La serie fue elegida y nombrada por un analista?
+
+    Criterio: está en el mapa curado, o proviene de un conector TIPADO (cualquier código
+    que no salga del motor genérico de Excel). El motor de Excel infiere nombres leyendo
+    celdas: produce dato real con nombres que no son defendibles en un informe."""
+    code = str(series_code or "")
+    if code in CURATED_LABELS:
+        return True
+    return not code.startswith("bcrd.xls.")
+
+
 def note_for(series_code: str) -> str:
     """Nota metodológica de una serie, por prefijo. Cadena vacía si no tiene."""
     for prefix, note in SERIES_NOTES.items():

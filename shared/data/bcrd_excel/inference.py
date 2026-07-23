@@ -25,6 +25,37 @@ _SUBTOTAL_RE = r"promedio\s+(\d{4})"
 _SCAN_HEADER_ROWS = 12  # header region to mine for names / year rows
 
 
+def sheet_numeric_density(g: Grid) -> int:
+    """Celdas numéricas en la región de cabecera — proxy de "esta hoja trae datos"."""
+    return sum(
+        1
+        for r in range(min(60, g.nrows))
+        for c in range(min(40, g.ncols))
+        if isinstance(g.cell(r, c), (int, float))
+    )
+
+
+def data_sheets(wb: Workbook, *, min_cells: int = 10, min_ratio: float = 0.03) -> List[Grid]:
+    """TODAS las hojas con datos, no solo la más densa.
+
+    Un libro del BCRD suele traer varios cortes de la misma estadística en hojas separadas
+    (llegadas: No Residentes / Residentes / Total; desempleo: cuatro rangos de años).
+    Quedarse con una sola descarta el resto EN SILENCIO — y no siempre se queda con la
+    mejor: en ``tasa_desocupacion.xls`` la hoja más densa es "Anual 1960-1990", así que se
+    ingería la historia vieja y se tiraba la serie moderna.
+
+    Se excluyen portadas y notas por densidad: hace falta un mínimo absoluto de celdas
+    numéricas y una fracción de la hoja más rica. Los umbrales son BAJOS a propósito —
+    una hoja legítima puede ser chica (una serie de doce años son doce celdas), y
+    descartarla sería repetir el defecto que esta función viene a corregir."""
+    scored = [(sheet_numeric_density(g), g) for g in wb.grids]
+    if not scored:
+        return []
+    best = max(n for n, _ in scored)
+    keep = [g for n, g in scored if n >= min_cells and n >= best * min_ratio]
+    return keep or [max(scored, key=lambda t: t[0])[1]]
+
+
 def _pick_sheet(wb: Workbook) -> Grid:
     """The sheet with the most numeric cells (the data sheet, not notes/cover)."""
     best, best_score = wb.grids[0], -1.0
@@ -50,6 +81,23 @@ def _month_column(grid: Grid) -> Tuple[Optional[int], int, int]:
     return best_col, best_first, best_count
 
 
+def _standalone_year_rows(grid: Grid, month_col: Optional[int]) -> List[int]:
+    """Filas que traen SOLO un año en la columna de rótulos: cabecera de bloque anual.
+
+    Es la firma de las planillas del BCRD que apilan un bloque por año (llegadas de
+    pasajeros, 1978-2026): ``1978`` en su propia fila y debajo los doce meses. El año no
+    está en un encabezado de columna, así que las detecciones habituales no lo ven."""
+    if month_col is None:
+        return []
+    out: List[int] = []
+    for r in range(grid.nrows):
+        if parse_month(grid.cell(r, month_col)) is not None:
+            continue
+        if _axis_year(grid.cell(r, month_col)) is not None:
+            out.append(r)
+    return out
+
+
 def _axis_year(value) -> Optional[int]:
     """Years for *axis detection* — stricter than ``parse_year`` so a year buried in
     a subtitle ("Bases 1999 y 2010") or a range ("1991-2013") is NOT counted as a
@@ -63,6 +111,29 @@ def _axis_year(value) -> Optional[int]:
     if re.fullmatch(r"(19|20)\d{2}", token):
         return int(token)
     return None
+
+
+def _row_is_mostly_numeric(grid: Grid, row: int, c0: int, c1: int) -> bool:
+    """¿La fila trae mayoría de números? Entonces son DATOS, no rótulos.
+
+    Un encabezado nombra; una fila de datos mide. Si se confunden, las series terminan
+    llamándose como el valor de una celda — y el error no se ve en la extracción, se ve
+    meses después cuando un informe cita `serie.280155040_6400002`."""
+    filled = numeric = 0
+    for c in range(c0, c1):
+        cell = grid.cell(row, c)
+        if cell in (None, ""):
+            continue
+        filled += 1
+        if isinstance(cell, (int, float)):
+            numeric += 1
+        else:
+            try:
+                float(str(cell).replace(",", "").strip())
+                numeric += 1
+            except ValueError:
+                pass
+    return filled > 0 and numeric / filled > 0.5
 
 
 def _year_header_row(grid: Grid) -> Tuple[Optional[int], int]:
@@ -200,6 +271,27 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
     year_row, year_row_count = _year_header_row(grid)
     sh = wb.structure_hash()
 
+    # Bloques por año: el año va en una FILA SUELTA y debajo cuelgan sus meses; las
+    # columnas son las métricas. Se detecta ANTES que cross_tab porque comparte la señal
+    # "muchos meses en una columna", pero acá los meses SE REPITEN (uno por bloque) y no
+    # son series: son períodos. Sin esto, el extractor bautizaba una serie por cada mes
+    # repetido (`enero`, `enero_r35`, `enero_r48`…) y el archivo entero salía mal armado.
+    year_rows = _standalone_year_rows(grid, month_col)
+    if month_col is not None and month_count >= 24 and len(year_rows) >= 3:
+        metric_rows = [r for r in range(0, min(year_rows) if year_rows else 8)
+                       if any(isinstance(grid.cell(r, c), str) and grid.cell(r, c).strip()
+                              for c in range(month_col + 1, min(grid.ncols, month_col + 9)))]
+        return ExtractionSpec(
+            file=file, sheet=grid.name, orientation="year_blocks",
+            data_row_start=min(year_rows), month_col=month_col,
+            metric_header_row=metric_rows[-1] if metric_rows else None,
+            super_header_row=metric_rows[-2] if len(metric_rows) >= 2 else None,
+            value_col_start=month_col + 1, value_col_end=grid.ncols,
+            structure_hash=sh, confidence=0.85, method="heuristic",
+            notes=(f"year_blocks: {len(year_rows)} años en fila suelta, "
+                   f"{month_count} filas de mes"),
+        )
+
     # Cross-tab: many years across a header row AND months down a column.
     if year_row_count >= 4 and month_col is not None and month_count >= 6:
         # value columns start just after the month column
@@ -207,12 +299,28 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         years_on_row = [c for c in range(c0, grid.ncols)
                         if _axis_year(grid.cell(year_row, c)) is not None]
         c1 = (max(years_on_row) + 3) if years_on_row else grid.ncols
-        # The metric row is the last header row just above the first data row.
-        metric_row = max(year_row + 1, first_month_row - 1)
+        # Fila de métricas = la última de encabezado justo encima de los datos… SI EXISTE.
+        # Cuando el encabezado de años está pegado a los datos (año en la fila 7, Enero en
+        # la 8) NO hay fila de métricas: el archivo publica una sola magnitud. La fórmula
+        # anterior —max(year_row+1, first_month_row-1)— devolvía igual una fila, y caía
+        # sobre la PRIMERA DE DATOS: cada columna quedaba bautizada con el valor de esa
+        # celda (`remesas_6.280155040_6400002`). No es que no supiéramos nombrar la serie;
+        # estábamos leyendo un dato como si fuera un rótulo.
+        # ``year_row`` es Optional en la firma pero acá ya está resuelto (la rama exige
+    # year_row_count >= 4); se ancla en un int para que el checker lo siga.
+        year_row_i = int(year_row or 0)
+        metric_row = first_month_row - 1 if first_month_row - 1 > year_row_i else None
+        # Cinturón y tirantes: si la fila candidata trae mayoría de números, no es un
+        # encabezado por más que la geometría lo permita. Vale para cualquier planilla
+        # futura con un layout que no anticipamos.
+        if metric_row is not None and _row_is_mostly_numeric(grid, metric_row, c0, c1):
+            metric_row = None
         # A super-header sits between the years and the metrics when that gap has
         # sparse text labels (e.g. ACTIVOS / RESERVAS over BRUTOS / BRUTAS / NETAS).
+        # Sin fila de métricas tampoco hay hueco donde pueda vivir un super-encabezado.
         super_row = None
-        for r in range(year_row + 1, metric_row):
+        for r in range(year_row_i + 1,
+                       metric_row if metric_row is not None else year_row_i + 1):
             texts = sum(1 for c in range(c0, c1)
                         if isinstance(grid.cell(r, c), str) and grid.cell(r, c).strip())
             if texts >= 2:

@@ -115,10 +115,15 @@ def test_ipc_anual_period_rows():
 def test_pib_gasto_matrix_annual():
     spec, recs = _extract("pib_gasto.xls")
     assert spec.orientation == "matrix" and spec.frequency == "annual"
-    # exact code: the absolute-values block (a later "% structure" block reuses the
-    # label and is kept distinct as consumo_final_rN — never merged with this one)
-    cf = _series(recs, ".consumo_final")
+    # El bloque de VALORES ABSOLUTOS. El archivo trae después un bloque de estructura
+    # porcentual que reusa las mismas etiquetas; antes se distinguía por número de fila
+    # (`consumo_final_rN`) y ahora por el encabezado de su bloque
+    # (`…ponderacion.consumo_final`), que dice qué es. El sufijo `.consumo_final` ya no
+    # alcanza para identificarla: ambos terminan igual.
+    cf = _series(recs, "pib_gasto.consumo_final")
     assert cf["1991"] == pytest.approx(106405.2, abs=1e-1)
+    pond = _series(recs, "ponderacion.consumo_final")
+    assert pond["1991"] == pytest.approx(86.2, abs=1e-1)   # % del PIB, no millones
     assert all(len(p) == 4 for p in cf)  # annual columns → "YYYY"
     # distinct concept rows are distinct series (codes unique, never merged)
     codes = [s.code for s in validate(recs).series]

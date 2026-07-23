@@ -19,7 +19,11 @@ from sqlalchemy.orm import Session
 
 from shared.data.base_client import SourceClient
 from shared.data.bcrd_client import bcrd_client, resolve_bcrd_client, series_label
-from shared.data.bcrd_excel.canonical import note_for as canonical_note_for
+from shared.data.bcrd_excel.canonical import (
+    curated_label as canonical_label,
+    is_curated as canonical_is_curated,
+    note_for as canonical_note_for,
+)
 from modules.macro_monitor.events import publish_macro_updated
 from modules.macro_monitor.models.models import MacroSeries, MacroSnapshot
 from modules.macro_monitor.scoring.momentum import compute_series_momentum
@@ -43,9 +47,19 @@ def _upsert_records(db: Session, records) -> int:
     commit (Postgres UniqueViolation on uq_mm_series_period). Last-wins matches the
     per-row upsert semantics.
     """
+    # Dedupe por (serie, período). "Último gana" SALVO que el último sea nulo: un valor
+    # real jamás debe ser pisado por un vacío del mismo lote. Pasa cuando la planilla trae
+    # columnas de relleno a la derecha del último año: el extractor emite el valor real y
+    # luego dos celdas vacías para el mismo período, y el último-gana ingenuo dejaba el
+    # período en None — borrando dato publicado. No fabricar y no destruir son la misma
+    # disciplina.
     deduped: Dict[tuple, Any] = {}
     for r in records:
-        deduped[(r.series, r.period)] = r
+        key = (r.series, r.period)
+        prev = deduped.get(key)
+        if prev is not None and r.value is None and prev.value is not None:
+            continue
+        deduped[key] = r
     records = list(deduped.values())
     touched = 0
     for r in records:
@@ -985,7 +999,10 @@ def canonical_series_for_api(db: Session) -> List[Dict[str, Any]]:
         sources = {str(r.source) for r in rows if r.source}
         out.append({
             "code": code,
-            "label": labels.get("label") or code,
+            # La etiqueta curada MANDA sobre la humanización automática: "Balance fiscal
+            # global del Gobierno Central" en vez de "Fiscal eo · balance global".
+            "label": canonical_label(code) or labels.get("label") or code,
+            "curated": canonical_is_curated(code),
             # Nota metodológica declarada (p.ej. qué manual de balanza de pagos rige la
             # serie y con cuál NO se encadena). Viaja al cliente por la Data API.
             "note": canonical_note_for(code),
