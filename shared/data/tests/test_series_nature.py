@@ -47,3 +47,33 @@ def test_percent_change_validity_by_nature():
 def test_the_code_helps_when_there_is_no_label():
     assert infer_nature(None, None, "bcrd.xls.tasa_desocupacion.anual") == RATE
     assert infer_nature(None, None, "bcrd.xls.piianual.activos") == STOCK
+
+
+# ─── Códigos propios: se DECLARAN, no se adivinan ─────────────────────
+
+
+@pytest.mark.parametrize("code,esperado", [
+    ("public_debt_gdp", RATE),     # es % del PIB: su variación va en puntos
+    ("gdp_growth", RATE),
+    ("inflation_yoy", RATE),
+    ("remittances", FLOW),
+    ("exports", FLOW),
+    ("fdi", FLOW),
+    ("reserves", STOCK),
+])
+def test_our_own_canonical_codes_are_declared(code, esperado):
+    """Los conectores tipados emiten códigos que NOSOTROS elegimos, en inglés. Adivinar
+    lo que uno mismo definió es absurdo — y la inferencia por patrón está en español
+    porque lee planillas del BCRD, así que `public_debt_gdp` caía en `unknown` y perdía
+    su lectura. Se declaran."""
+    assert infer_nature(None, None, code) == esperado
+
+
+def test_a_declared_code_wins_over_the_patterns():
+    assert infer_nature(None, "cualquier etiqueta", "remittances") == FLOW
+
+
+def test_english_patterns_cover_foreign_sources():
+    """WDI/WGI/IMF publican en inglés: los patrones tienen que leerlos igual."""
+    assert infer_nature(None, "Unemployment rate") == RATE
+    assert infer_nature(None, "External debt stock") == STOCK
