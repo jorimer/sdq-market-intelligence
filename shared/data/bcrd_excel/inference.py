@@ -65,6 +65,29 @@ def _axis_year(value) -> Optional[int]:
     return None
 
 
+def _row_is_mostly_numeric(grid: Grid, row: int, c0: int, c1: int) -> bool:
+    """¿La fila trae mayoría de números? Entonces son DATOS, no rótulos.
+
+    Un encabezado nombra; una fila de datos mide. Si se confunden, las series terminan
+    llamándose como el valor de una celda — y el error no se ve en la extracción, se ve
+    meses después cuando un informe cita `serie.280155040_6400002`."""
+    filled = numeric = 0
+    for c in range(c0, c1):
+        cell = grid.cell(row, c)
+        if cell in (None, ""):
+            continue
+        filled += 1
+        if isinstance(cell, (int, float)):
+            numeric += 1
+        else:
+            try:
+                float(str(cell).replace(",", "").strip())
+                numeric += 1
+            except ValueError:
+                pass
+    return filled > 0 and numeric / filled > 0.5
+
+
 def _year_header_row(grid: Grid) -> Tuple[Optional[int], int]:
     """Find a header row carrying several years across columns (cross-tab / matrix)."""
     best_row, best_count = None, 0
@@ -207,12 +230,28 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         years_on_row = [c for c in range(c0, grid.ncols)
                         if _axis_year(grid.cell(year_row, c)) is not None]
         c1 = (max(years_on_row) + 3) if years_on_row else grid.ncols
-        # The metric row is the last header row just above the first data row.
-        metric_row = max(year_row + 1, first_month_row - 1)
+        # Fila de métricas = la última de encabezado justo encima de los datos… SI EXISTE.
+        # Cuando el encabezado de años está pegado a los datos (año en la fila 7, Enero en
+        # la 8) NO hay fila de métricas: el archivo publica una sola magnitud. La fórmula
+        # anterior —max(year_row+1, first_month_row-1)— devolvía igual una fila, y caía
+        # sobre la PRIMERA DE DATOS: cada columna quedaba bautizada con el valor de esa
+        # celda (`remesas_6.280155040_6400002`). No es que no supiéramos nombrar la serie;
+        # estábamos leyendo un dato como si fuera un rótulo.
+        # ``year_row`` es Optional en la firma pero acá ya está resuelto (la rama exige
+    # year_row_count >= 4); se ancla en un int para que el checker lo siga.
+        year_row_i = int(year_row or 0)
+        metric_row = first_month_row - 1 if first_month_row - 1 > year_row_i else None
+        # Cinturón y tirantes: si la fila candidata trae mayoría de números, no es un
+        # encabezado por más que la geometría lo permita. Vale para cualquier planilla
+        # futura con un layout que no anticipamos.
+        if metric_row is not None and _row_is_mostly_numeric(grid, metric_row, c0, c1):
+            metric_row = None
         # A super-header sits between the years and the metrics when that gap has
         # sparse text labels (e.g. ACTIVOS / RESERVAS over BRUTOS / BRUTAS / NETAS).
+        # Sin fila de métricas tampoco hay hueco donde pueda vivir un super-encabezado.
         super_row = None
-        for r in range(year_row + 1, metric_row):
+        for r in range(year_row_i + 1,
+                       metric_row if metric_row is not None else year_row_i + 1):
             texts = sum(1 for c in range(c0, c1)
                         if isinstance(grid.cell(r, c), str) and grid.cell(r, c).strip())
             if texts >= 2:

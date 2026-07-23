@@ -14,7 +14,6 @@ from dataclasses import replace
 
 from shared.data_api.manifest import (
     Q_LICENSE_RESTRICTS,
-    Q_UNINTERPRETABLE,
     Q_LOW_READINESS,
     Q_NO_LICENSE,
     Q_NO_READER,
@@ -266,27 +265,36 @@ def test_default_derivation_is_the_conservative_one(db, wire):
 # ─── Código inservible: no es etiqueta fea, es no saber qué mide ──────
 
 
-def test_a_numeric_code_is_quarantined(db, wire):
-    """`remesas_6.982770568_431068` no es un nombre: es el valor de una celda que el
-    extractor tomó como identificador. Publicarlo es publicar ruido con cara de dato."""
+def test_an_unnamed_series_is_SERVED_and_flagged_not_dropped(db, wire):
+    """Decisión del dueño: no se degrada el dato porque el extractor no supo nombrarlo.
+    El valor de remesas es correcto aunque la serie se llame `982770568_431068`; retenerla
+    sería tapar una carencia nuestra escondiendo dato del BCRD. Se sirve y se marca."""
     _publish(db)
     wire(FakeProduct([_series("982770568_431068")]))
     asset = build_manifest(db).assets[0]
-    assert not asset.exposed and Q_UNINTERPRETABLE in asset.quarantine
+    assert asset.exposed                       # NO se retiene
+    assert asset.label_quality == "unnamed"    # pero se declara
 
 
-def test_a_long_digit_run_is_quarantined(db, wire):
+def test_a_long_digit_run_is_flagged_too(db, wire):
     _publish(db)
     wire(FakeProduct([_series("total_3123456789")]))
-    assert Q_UNINTERPRETABLE in build_manifest(db).assets[0].quarantine
+    assert build_manifest(db).assets[0].label_quality == "unnamed"
 
 
-def test_a_readable_code_with_a_row_suffix_is_NOT_quarantined(db, wire):
-    """`egresos_r31` es feo pero dice qué mide: se sirve, marcado como no curado. El
-    guard solo retiene lo indefendible, no lo mejorable."""
+def test_a_readable_code_is_named(db, wire):
     _publish(db)
     wire(FakeProduct([_series("egresos_r31")]))
-    assert build_manifest(db).assets[0].exposed
+    a = build_manifest(db).assets[0]
+    assert a.exposed and a.label_quality == "named"
+
+
+def test_the_summary_counts_unnamed_as_a_work_queue(db, wire):
+    """El manifiesto interno cuenta lo no nombrado: es trabajo pendiente del extractor,
+    no un basurero donde el problema desaparece de la vista."""
+    _publish(db)
+    wire(FakeProduct([_series("roa"), _series("982770568_431068")]))
+    assert build_manifest(db).summary["unnamed"] == 1
 
 
 def test_the_guard_is_generic_not_bcrd_specific(db, wire):

@@ -47,9 +47,19 @@ def _upsert_records(db: Session, records) -> int:
     commit (Postgres UniqueViolation on uq_mm_series_period). Last-wins matches the
     per-row upsert semantics.
     """
+    # Dedupe por (serie, período). "Último gana" SALVO que el último sea nulo: un valor
+    # real jamás debe ser pisado por un vacío del mismo lote. Pasa cuando la planilla trae
+    # columnas de relleno a la derecha del último año: el extractor emite el valor real y
+    # luego dos celdas vacías para el mismo período, y el último-gana ingenuo dejaba el
+    # período en None — borrando dato publicado. No fabricar y no destruir son la misma
+    # disciplina.
     deduped: Dict[tuple, Any] = {}
     for r in records:
-        deduped[(r.series, r.period)] = r
+        key = (r.series, r.period)
+        prev = deduped.get(key)
+        if prev is not None and r.value is None and prev.value is not None:
+            continue
+        deduped[key] = r
     records = list(deduped.values())
     touched = 0
     for r in records:

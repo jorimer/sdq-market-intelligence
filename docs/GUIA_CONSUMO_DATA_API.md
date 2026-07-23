@@ -75,6 +75,11 @@ cliente final:
 Filtrar por `curated` es la forma correcta de armar la lista de series citables, en vez de
 descartarlas a ojo por cómo se ve el código.
 
+También viaja **`label_quality`**: `"unnamed"` marca las series donde nuestro extractor no
+logró nombrar la magnitud y el código quedó siendo un artefacto de la planilla. **El dato
+se sirve igual y es correcto** — la marca dice que el *nombre* no es confiable, no el
+valor. Es trabajo pendiente nuestro, declarado, no una razón para retenerte el dato.
+
 Series que un informe país suele necesitar, todas curadas y disponibles:
 `bcrd.xls.reservas_internacionales.reservas_netas` (2003→2026, mensual) ·
 `fiscal_eo.balance_global` (2000→2025, mensual) · `bcrd.xls.remesas_6.valor` ·

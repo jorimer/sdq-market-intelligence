@@ -38,9 +38,11 @@ Q_NO_READER = "no_reader"                    # descriptor sin lector: se anuncia
 # La fuente restringe la REDISTRIBUCIÓN (no-comercial / share-alike). Aplica solo a lo
 # verbatim: el cálculo propio sobre ese insumo es obra nuestra y no se retiene.
 Q_LICENSE_RESTRICTS = "license_restricts_redistribution"
-# El código de la serie no permite saber QUÉ mide. No es un problema de etiqueta fea: es
-# que el extractor no pudo nombrarla y quedó el valor de una celda como identificador.
-Q_UNINTERPRETABLE = "uninterpretable_code"
+# NOTA: "código no interpretable" NO es razón de cuarentena. Retener dato válido porque
+# nuestro extractor no supo nombrarlo sería degradar el producto para tapar una carencia
+# propia (decisión del dueño, 2026-07-23): el arreglo es mejorar el extractor, no esconder
+# su salida. Se declara como `label_quality` —visible para el cliente y contable en el
+# manifiesto interno— y así funciona como COLA DE TRABAJO en vez de basurero.
 
 # Doctrina del dueño (2026-07-22): "calculamos, no revendemos la misma info". El eje que
 # decide no es la fuente sino QUÉ se sirve — el valor del emisor, o un cálculo de casa.
@@ -67,8 +69,15 @@ _DIGIT_RUN = re.compile(r"\d{6,}")
 _ONLY_SYMBOLS = re.compile(r"^[\d_.\-]+$")
 
 
+LABEL_NAMED = "named"
+LABEL_UNNAMED = "unnamed"      # el extractor no pudo nombrarla: hay trabajo pendiente
+
+
 def code_is_uninterpretable(code: str) -> bool:
-    """¿El código deja saber qué mide la serie? Conservador: solo marca lo indefendible."""
+    """¿El código deja saber qué mide la serie? Conservador: solo marca lo indefendible.
+
+    Marcar NO es retener: la serie se sirve igual. Es una señal de que el extractor tiene
+    trabajo pendiente con ese archivo, no un permiso para descartar el dato."""
     leaf = str(code or "").split(".")[-1].strip()
     if not leaf:
         return True
@@ -113,6 +122,10 @@ class ExposedAsset:
     # Curada = elegida y nombrada por un analista (citable en un informe). No curada =
     # extracción masiva de planilla: dato real, pero sin nombre defendible ante un cliente.
     curated: bool = False
+    # "unnamed" = el extractor no logró nombrar la serie (el código es un artefacto de la
+    # planilla). El dato SE SIRVE igual; la marca dice que el nombre no es confiable y
+    # que hay trabajo pendiente en el extractor.
+    label_quality: str = LABEL_NAMED
     quarantine: Tuple[str, ...] = field(default=())
     note: str = ""
 
@@ -159,6 +172,9 @@ class Manifest:
             "exposed": len(exposed),
             "quarantined": len(self.assets) - len(exposed),
             "quarantine_reasons": reasons,
+            # Cola de trabajo del extractor: series servidas cuyo nombre no es confiable.
+            # No se descartan; se arreglan.
+            "unnamed": sum(1 for a in self.assets if a.label_quality == LABEL_UNNAMED),
             "sectors": sorted({a.sector_key for a in exposed}),
         }
 
@@ -220,12 +236,9 @@ def _quarantine_for(
     pub_state: Dict[str, Dict[str, Any]],
     derivation: str = DERIVATION_VERBATIM,
     allow_restricted: bool = False,
-    code: str = "",
 ) -> Tuple[str, ...]:
     """Razones por las que un activo NO se sirve. Vacío = se sirve."""
     reasons: List[str] = []
-    if code and code_is_uninterpretable(code):
-        reasons.append(Q_UNINTERPRETABLE)
     if not (license_ or "").strip():
         reasons.append(Q_NO_LICENSE)
     # Servir el valor del emisor tal cual ES redistribuir; servir un cálculo propio, no.
@@ -300,6 +313,8 @@ def _series_assets(db: Optional[Session], entry, pub_state,
                 stability="thin" if n_obs < THIN_OBS else "stable",
                 derivation=derivation,
                 curated=bool(getattr(s, "curated", False)),
+                label_quality=(LABEL_UNNAMED if code_is_uninterpretable(s.code)
+                               else LABEL_NAMED),
                 quarantine=_quarantine_for(
                     entry.sector_key,
                     license_=getattr(s, "license", None),
@@ -307,7 +322,6 @@ def _series_assets(db: Optional[Session], entry, pub_state,
                     pub_state=pub_state,
                     derivation=derivation,
                     allow_restricted=allow_restricted,
-                    code=s.code,
                 ),
                 note=getattr(s, "note", "") or "",
             )
