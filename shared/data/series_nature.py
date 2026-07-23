@@ -53,6 +53,30 @@ CHANGE_UNIT = {
     UNKNOWN: None,
 }
 
+# ── Códigos canónicos PROPIOS: la naturaleza se DECLARA, no se infiere ─
+#
+# Las series que emiten nuestros conectores tipados (no el motor de Excel) llevan códigos
+# cortos en inglés que nosotros elegimos. Para ellas adivinar sería absurdo: sabemos
+# exactamente qué miden. Declararlas también cubre el hueco que la inferencia por patrón
+# no puede cubrir — los patrones están en español porque leen planillas del BCRD, y estos
+# códigos son ingleses (`public_debt_gdp` es un % del PIB y quedaba en `unknown`).
+DECLARED: dict = {
+    "gdp_growth": RATE,             # crecimiento en %
+    "inflation_yoy": RATE,          # inflación interanual en %
+    "public_debt_gdp": RATE,        # deuda como % del PIB
+    "unemployment": RATE,
+    "fiscal_balance_gdp": RATE,
+    "remittances": FLOW,            # flujo en US$
+    "exports": FLOW,
+    "imports": FLOW,
+    "fdi": FLOW,                    # inversión extranjera directa: flujo
+    "capital_flows": FLOW,
+    "reserves": STOCK,              # saldo de reservas
+    "external_debt": STOCK,
+    "fx_rate": FLOW,                # nivel del tipo de cambio
+}
+
+
 # ── Señales en la UNIDAD declarada por el emisor (prioridad 1) ────────
 _UNIT_RATE = re.compile(
     r"(^|[^a-z])(%|por\s*ciento|porcentaje|porcentual|p\.?p\.?|puntos?\s+porcentuales)",
@@ -64,11 +88,13 @@ _UNIT_MONEY = re.compile(
 # ── Señales en la ETIQUETA (prioridad 2, solo si la unidad no alcanza) ─
 _LABEL_RATE = re.compile(
     r"(tasa|variaci[óo]n\s+porcentual|participaci[óo]n|ponderaci[óo]n|cuota|"
-    r"proporci[óo]n|ratio|inflaci[óo]n|desocupaci[óo]n|ocupaci[óo]n)", re.IGNORECASE)
+    r"proporci[óo]n|ratio|inflaci[óo]n|desocupaci[óo]n|ocupaci[óo]n|"
+    r"rate|share|ratio|percent|unemployment|inflation)", re.IGNORECASE)
 _LABEL_INDEX = re.compile(r"[íi]ndice|imae|ipc(?!\w)", re.IGNORECASE)
 _LABEL_STOCK = re.compile(
     r"(saldo|posici[óo]n|reservas?|activos?|pasivos?|deuda|stock|"
-    r"existencias|acervo|circulaci[óo]n)", re.IGNORECASE)
+    r"existencias|acervo|circulaci[óo]n|"
+    r"stock|balance|reserves?|assets?|liabilities|debt|position)", re.IGNORECASE)
 
 
 def infer_nature(unit: Optional[str] = None, label: Optional[str] = None,
@@ -95,6 +121,14 @@ def infer_nature(unit: Optional[str] = None, label: Optional[str] = None,
     """
     u = (unit or "").strip()
     lab = " ".join(x for x in (label or "", code or "") if x)
+
+    # 0) Código propio declarado: no se adivina lo que nosotros mismos definimos.
+    if code:
+        leaf = str(code).split(".")[-1].strip().lower()
+        if leaf in DECLARED:
+            return DECLARED[leaf]
+        if str(code).strip().lower() in DECLARED:
+            return DECLARED[str(code).strip().lower()]
 
     # 1) La unidad manda.
     if u:
