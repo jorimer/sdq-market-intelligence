@@ -311,6 +311,7 @@ class MacroProduct:
                 license=d.get("license"), period_first=d.get("period_first"),
                 period_latest=d.get("period_latest"), n_obs=int(d.get("n_obs") or 0),
                 note=d.get("note", "") or "", curated=bool(d.get("curated")),
+                nature=str(d.get("nature") or "unknown"),
             )
             for d in mm_svc.canonical_series_for_api(self._require_db())
         ]

@@ -122,6 +122,10 @@ class ExposedAsset:
     # Curada = elegida y nombrada por un analista (citable en un informe). No curada =
     # extracción masiva de planilla: dato real, pero sin nombre defendible ante un cliente.
     curated: bool = False
+    # Naturaleza estadística: flow | stock | rate | index | unknown. Decide qué
+    # transformación admite la serie — una `rate` YA es un porcentaje y su variación se
+    # mide en puntos. Ver shared/data/series_nature.py.
+    nature: str = "unknown"
     # "unnamed" = el extractor no logró nombrar la serie (el código es un artefacto de la
     # planilla). El dato SE SIRVE igual; la marca dice que el nombre no es confiable y
     # que hay trabajo pendiente en el extractor.
@@ -313,6 +317,7 @@ def _series_assets(db: Optional[Session], entry, pub_state,
                 stability="thin" if n_obs < THIN_OBS else "stable",
                 derivation=derivation,
                 curated=bool(getattr(s, "curated", False)),
+                nature=str(getattr(s, "nature", "unknown") or "unknown"),
                 label_quality=(LABEL_UNNAMED if code_is_uninterpretable(s.code)
                                else LABEL_NAMED),
                 quarantine=_quarantine_for(
