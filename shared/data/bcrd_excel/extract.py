@@ -34,6 +34,19 @@ _FOOTNOTE_RE = re.compile(r"\s*\d+\s*/")  # BCRD footnote markers: "BRUTAS 1/", 
 # Marcadores de identidad contable que el BCRD antepone a los agregados.
 _MARKER_RE = re.compile(r"^\s*\(\s*[+\-=±]\s*\)\s*")
 
+# Numeración de esquema: "I.", "II.", "1.", "1.1.", "2.3.1". Las planillas de estadística
+# la usan para anidar cuando todo va en la misma columna y no hay sangría que leer. La
+# numeración ES la jerarquía: 1.1 cuelga de 1, y 1 cuelga de I.
+_OUTLINE_RE = re.compile(
+    r"^\s*(?P<num>(?:[IVXLC]+|\d+)(?:\.\d+)*)\s*[.)]?\s+(?=\S)")
+
+
+def _outline_depth(token: str) -> int:
+    """Profundidad de un token de esquema. Los romanos son el nivel más externo."""
+    if re.fullmatch(r"[IVXLC]+", token):
+        return 1
+    return 1 + token.count(".") + 1
+
 
 def _clean_label(s: str) -> str:
     """Drop footnote markers so ``"BRUTAS 1/"`` and ``"BRUTAS"`` slug the same."""
@@ -201,6 +214,11 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
     # sin marca, "Consumo Privado" / "Consumo Público"—. La sangría no los separa (todo
     # en la misma columna), pero el marcador sí dice quién es agregado y quién componente.
     marker_group: Dict[int, str] = {}
+    # Ancestros por NUMERACIÓN de esquema, para las planillas que anidan con "1.1." en vez
+    # de con sangría. Se lleva por profundidad, no por columna: en piianual_6 las 538 filas
+    # están todas en la misma columna y lo único que las ordena es el número.
+    outline: Dict[int, str] = {}
+    outline_last: Optional[str] = None
     # Tercer mecanismo: una fila SIN cifras abre un bloque y sigue calificando a las filas
     # de su MISMA columna (en pib_gasto, "Ponderación" encabeza un segundo bloque que
     # repite los mismos componentes). Se lleva aparte de `ancestors` a propósito: allá una
@@ -221,6 +239,15 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
         marked = _MARKER_RE.match(name)
         if marked:
             name = name[marked.end():].strip() or name
+        numbered = _OUTLINE_RE.match(name)
+        if numbered:
+            depth = _outline_depth(numbered.group("num"))
+            name = name[numbered.end():].strip() or name
+            outline = {d: lab for d, lab in outline.items() if d < depth}
+            outline[depth] = name
+            outline_last = name
+        elif outline and outline_last is not None and name != outline_last:
+            pass    # fila sin numerar: cuelga del último numerado (se arma abajo)
         # Al bajar o mantener nivel, los ancestros más profundos dejan de aplicar.
         ancestors = {col: lab for col, lab in ancestors.items() if col < raw_col}
         ancestors[raw_col] = name
@@ -239,6 +266,10 @@ def _extract_matrix(grid: Grid, spec: ExtractionSpec, lineage: Lineage,
         scope = section_scope.get(raw_col)
         if scope and scope != name:
             path.append(scope)
+        if outline:
+            # La ruta de esquema reemplaza a la de columnas cuando existe: es más precisa
+            # (la sangría puede ser uniforme; el número nunca miente sobre el nivel).
+            path = [outline[d] for d in sorted(outline) if outline[d] != name]
         group = marker_group.get(raw_col)
         if group and not marked and group != name:
             path.append(group)                    # componente: cuelga de su agregado
