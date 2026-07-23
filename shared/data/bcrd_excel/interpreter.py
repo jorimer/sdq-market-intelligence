@@ -190,7 +190,7 @@ _NAME_TOOL = {
 
 def name_ambiguous_rows(
     grid: Grid, rows: List[int], *, client: Any = None, model: Optional[str] = None,
-    context_rows: int = 60,
+    context_rows: int = 400,
 ) -> Dict[int, str]:
     """Nombre jerárquico para filas cuya etiqueta se repite en la planilla.
 
@@ -213,6 +213,9 @@ def name_ambiguous_rows(
         from shared.config.settings import settings
         model = settings.ANTHROPIC_MODEL
 
+    # Contexto GENEROSO: el rótulo que distingue dos filas puede estar decenas de filas
+    # arriba (el encabezado de su bloque). Con una ventana corta el modelo devolvía el
+    # MISMO nombre para filas distintas —no por incapacidad, sino porque no veía al padre.
     lo = max(0, min(rows) - context_rows)
     hi = min(grid.nrows, max(rows) + 5)
     lines = []
@@ -234,6 +237,11 @@ def name_ambiguous_rows(
         "La columna del rótulo (c0, c2, c4…) indica la sangría, pero OJO: a veces el "
         "grupo y sus hijos comparten columna, y el grupo puede traer su propio total. "
         "Usá el significado económico de los rótulos para decidir qué cuelga de qué.\n\n"
+        "REGLA DURA: los nombres deben ser DISTINTOS ENTRE SÍ. Si dos filas marcadas "
+        "reciben el mismo nombre, no se pueden distinguir y el trabajo no sirve — buscá "
+        "hacia arriba el encabezado de bloque, la sección o el agregado que las separa y "
+        "metelo en la ruta. Si de verdad dos filas miden lo mismo, agregá al final lo que "
+        "las diferencie según la planilla (el período del bloque, la columna de origen).\n\n"
         "Para cada fila marcada '<<< NOMBRAR', devolvé su nombre jerárquico completo "
         "separado por ' > ', del grupo más externo a la hoja. No inventes conceptos que "
         "no estén en la planilla.\n\n" + "\n".join(lines)
@@ -249,13 +257,25 @@ def name_ambiguous_rows(
     data = block.input if isinstance(block.input, dict) else json.loads(block.input)
     out: Dict[int, str] = {}
     wanted = set(rows)
+    seen: Dict[str, int] = {}
     for item in data.get("names", []):
         try:
             r = int(item["row"])
         except (KeyError, TypeError, ValueError):
             continue
         name = str(item.get("name", "")).strip()
-        if r in wanted and name:
-            out[r] = name
+        if r not in wanted or not name:
+            continue
+        # Un nombre repetido NO se acepta: fusionaría dos series distintas. Se descarta y
+        # esa fila conserva su desempate por número de fila, que es feo pero honesto.
+        key = name.lower()
+        if key in seen:
+            logger.warning(
+                "[bcrd_excel] nombre repetido '%s' para las filas %d y %d: se descarta "
+                "el segundo (fusionar series distintas sería peor que un nombre feo)",
+                name, seen[key], r)
+            continue
+        seen[key] = r
+        out[r] = name
     logger.info("[bcrd_excel] Claude nombró %d de %d filas ambiguas", len(out), len(rows))
     return out

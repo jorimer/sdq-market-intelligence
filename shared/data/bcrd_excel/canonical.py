@@ -50,6 +50,17 @@ SERIES_NOTES = {
         "VIGENTE del BCRD desde 2010. NO encadenar con la serie MBP5 (bcrd.xls.bpagos.*): "
         "son metodologías distintas y el empalme fabrica un salto que no ocurrió."
     ),
+    "bcrd.xls.piianual_6.": (
+        "Posición de inversión internacional bajo el MBP6 del FMI (sexta edición del "
+        "manual), serie OFICIAL VIGENTE del BCRD desde 2009. NO encadenar con la serie "
+        "MBP5 (bcrd.xls.piianual.*): son metodologías distintas."
+    ),
+    "bcrd.xls.piianual.": (
+        "Posición de inversión internacional bajo el MBP5 (quinta edición del manual), "
+        "2005-2013 — serie HISTÓRICA y DESCONTINUADA. Úsese solo para el período previo "
+        "a 2009. NO es comparable ni encadenable con la serie MBP6 "
+        "(bcrd.xls.piianual_6.*)."
+    ),
     "bcrd.xls.bpagos.": (
         "Balanza de pagos bajo el MBP5 (quinta edición del manual) — serie HISTÓRICA y "
         "DESCONTINUADA: el BCRD dejó de actualizar este archivo en 2019. Úsese solo para el "
@@ -236,8 +247,21 @@ REGISTRY: List[CanonicalSeries] = [
                   "Ojo: las celdas vienen en US$ (no millones pese al rótulo) — verificar unidad.",
         robustness="yellow",  # extrae como matriz; revisar la unidad declarada
     ),
+    # Posición de inversión internacional: MISMA situación que la balanza de pagos —
+    # dos ediciones del manual del FMI, dos archivos, y estábamos leyendo el viejo.
     CanonicalSeries(
-        key="pii", concept="Posición de inversión internacional", sector="sector_externo",
+        key="pii_mbp6", concept="Posición de inversión internacional (MBP6, vigente)",
+        sector="sector_externo",
+        source_file="piianual_6.xlsx", base="US$ MM", frequency="anual",
+        homogenization="nivel directo; serie oficial vigente del BCRD",
+        rationale="Activos y pasivos externos del país bajo la SEXTA edición del Manual "
+                  "de Balanza de Pagos del FMI (MBP6), que es la vigente. Cubre 2009 en "
+                  "adelante y se actualiza.",
+        robustness="green",
+    ),
+    CanonicalSeries(
+        key="pii_mbp5", concept="Posición de inversión internacional (MBP5, histórica)",
+        sector="sector_externo",
         source_file="piianual.xls", base="US$ MM", frequency="anual",
         homogenization="nivel directo",
         rationale="Stock de activos y pasivos externos; solvencia externa.",
