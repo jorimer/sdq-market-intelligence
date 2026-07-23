@@ -29,6 +29,14 @@ router = APIRouter()
 MAX_LIMIT = 5000
 DEFAULT_LIMIT = 1000
 
+# Orden de las colecciones temporales, DECLARADO en `meta.order` de cada respuesta.
+# Los dos órdenes conviven por una razón: una serie se lee como línea de tiempo (natural
+# ascendente), y un score o un pronóstico se consultan casi siempre por "¿cuál es el
+# valor vigente?" (natural descendente). Lo que NO puede pasar es que el cliente tenga
+# que adivinarlo: por eso viaja declarado, y `meta.latest` da el vigente sin indexar.
+ORDER_ASC = "period_asc"    # el ÚLTIMO elemento es el más reciente
+ORDER_DESC = "period_desc"  # el PRIMER elemento es el más reciente
+
 
 def _visible_assets(ctx: ApiContext, *, include_quarantined: bool) -> List[ExposedAsset]:
     """Activos que ESTA llave puede ver.
@@ -240,6 +248,7 @@ async def series(
             "series": asset.to_dict(),
             "as_of": as_of,
             "count": len(observations),
+            "order": ORDER_ASC,
         },
         "data": [
             {
@@ -329,12 +338,22 @@ async def scores(
     if asset.note:
         caveats.append({"code": "score_direction", "message": asset.note})
 
+    # El vigente, servido directo: que un cliente tenga que indexar un arreglo para
+    # saber "cuál es el valor de hoy" es una invitación a leer el extremo equivocado.
+    # Solo aplica a la TRAYECTORIA (con `subject`): en la vista de panel cada fila ya es
+    # el valor vigente de su sujeto, y un "latest" único ahí no significaría nada.
+    latest = observations[0] if (observations and subject) else None
     payload = {
         "meta": {
             **ctx.meta(),
             "resource": "scores",
             "score": asset.to_dict(),
             "count": len(observations),
+            "order": ORDER_DESC,
+            "latest": ({
+                "subject": latest.subject, "period": latest.period,
+                "score": latest.score, "band": latest.band,
+            } if latest else None),
         },
         "data": [
             {
@@ -553,6 +572,7 @@ async def forecasts(
             "forecast": asset.to_dict(),
             "count": len(observations),
             "n_scored": len(scored),
+            "order": ORDER_DESC,
         },
         "data": [
             {

@@ -26,6 +26,26 @@ texto puede cambiar. Relevantes: `missing_key`/`invalid_key`/`key_revoked` (401)
 `ambiguous_code` (400), `as_of_unsupported` (422), `rate_limit`/`quota_exhausted` (429,
 respetar el header `Retry-After`).
 
+## ⚠️ Orden de las colecciones — leer esto antes de indexar
+
+La API tiene **dos órdenes distintos**, y cada respuesta lo declara en `meta.order`:
+
+| Recurso | `meta.order` | El más reciente está en |
+|---|---|---|
+| `/series` | `period_asc` | **`data[-1]`** (último) |
+| `/scores` (con `subject`) | `period_desc` | **`data[0]`** (primero) |
+| `/forecasts` | `period_desc` | **`data[0]`** (primero) |
+| `/scores` (sin `subject`) | — | cada fila ya ES el vigente de su sujeto |
+
+**Nunca asumir el orden: leer `meta.order`.** Aplicar el patrón de `/series` a `/scores`
+devuelve el valor MÁS ANTIGUO en silencio — sin error, sin aviso, solo un número viejo
+que parece bueno. (Pasó en la integración real: PMS leyó `data[-1]` del IRMP y obtuvo el
+score de 2016 creyendo que el índice estaba desactualizado.)
+
+Para el valor vigente de un score, la forma segura no es indexar sino leer
+**`meta.latest`** (presente cuando se consulta con `subject`), que trae `{subject, period,
+score, band}` ya resuelto.
+
 ## El patrón correcto: descubrir, no cablear
 
 El inventario **crece solo** (auto-extensión): series y scores nuevos aparecen sin aviso.
@@ -62,7 +82,8 @@ GET /scores/{sector}[?code=][&subject=][&start=][&end=][&limit=]
 
 Cálculo de casa con **desglose dimensional numérico** (`{dimension: {score, weight,
 contribution}}`). La narrativa no viaja — es el producto de reporte. Sin `subject` =
-panel (último valor por sujeto); con `subject` = trayectoria. **`subject` se toma del
+panel (último valor por sujeto); con `subject` = trayectoria **en orden descendente**
+(`data[0]` es el vigente; o usar `meta.latest`, que lo resuelve sin indexar). **`subject` se toma del
 campo `subjects` del descriptor** (`/catalog?kind=score`) — no asumir formato ISO: el
 panel IRMP usa códigos de 2 letras (`DO`, `PE`), el IRC usa ISO3 (`DOM`, `JAM`).
 **Atención a `direction` en el descriptor**: en el IRMP mayor score = MENOR riesgo.

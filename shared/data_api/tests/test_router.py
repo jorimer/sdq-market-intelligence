@@ -284,3 +284,12 @@ def test_an_invalid_usage_is_rejected_at_creation(env):
 
     with pytest.raises(ApiKeyError):
         create_key(env["db"], user_id=env["user"].id, name="mal", usage="lo_que_sea")
+
+
+def test_series_declare_their_order_explicitly(env):
+    """La API tiene DOS órdenes: /series ascendente, /scores y /forecasts descendente.
+    La inconsistencia hizo que PMS leyera data[-1] y obtuviera 2016 en vez del vigente.
+    Se declara en cada respuesta para que nadie tenga que adivinarlo."""
+    body = env["client"].get("/api/data/v1/series?code=roa", headers=env["auth"]).json()
+    assert body["meta"]["order"] == "period_asc"
+    assert body["data"][-1]["period"] == "2025-Q1"     # el último ES el más reciente
