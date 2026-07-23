@@ -126,3 +126,28 @@ def test_get_indicators_and_snapshot(db):
     latest = get_snapshot(db)
     assert latest is not None
     assert latest.period == "2025-Q2"
+
+
+def test_nature_honors_declared_codes_even_with_null_column(db):
+    """Un código PROPIO (`public_debt_gdp`) tiene naturaleza determinística: la definimos
+    nosotros. No pasa por la ingesta de Excel, así que su columna `nature` queda nula —
+    y aun así `_nature_by_code` debe devolver `rate`, no `unknown`. Esta era la causa de
+    que la señal `sudden_stop` perdiera su insumo: leía `unknown` y no computaba %."""
+    from modules.macro_monitor.service import _nature_by_code
+
+    db.add(MacroSeries(series_code="public_debt_gdp", period="2025", value=62.4, nature=None))
+    db.add(MacroSeries(series_code="remittances", period="2025", value=2180.0, nature=None))
+    db.commit()
+
+    nats = _nature_by_code(db)
+    assert nats["public_debt_gdp"] == "rate"   # % del PIB → variación en puntos
+    assert nats["remittances"] == "flow"       # flujo → admite variación porcentual
+
+
+def test_nature_reads_persisted_value_for_excel_series(db):
+    """Para las series de planilla se lee lo que persistió el ingestor, sin re-inferir."""
+    from modules.macro_monitor.service import _nature_by_code
+
+    db.add(MacroSeries(series_code="bcrd.xls.foo.bar", period="2025", value=1.0, nature="stock"))
+    db.commit()
+    assert _nature_by_code(db)["bcrd.xls.foo.bar"] == "stock"

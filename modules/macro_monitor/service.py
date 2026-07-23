@@ -719,16 +719,28 @@ def period_start_date(period: Optional[str]) -> Optional[date]:
 
 
 def _nature_by_code(db: Session) -> Dict[str, str]:
-    """``{series_code: nature}`` de lo PERSISTIDO en la ingesta.
+    """``{series_code: nature}`` para el cómputo.
 
-    Se lee, no se infiere: la naturaleza la resolvió el ingestor con la unidad que declaró
-    el emisor. Una serie anterior a esta columna cae a ``unknown`` y el motor no computa
+    Dos orígenes, en orden de autoridad:
+
+    1. **Declaración propia.** Los códigos que emiten nuestros conectores tipados
+       (``remittances``, ``public_debt_gdp``, ``reserves``…) tienen naturaleza
+       DETERMINÍSTICA: la definimos nosotros. No depende de que un ingestor la escriba —
+       de hecho estos códigos no pasan por la ingesta de Excel, así que su columna queda
+       nula. Se resuelve de ``DECLARED`` y gana siempre.
+    2. **Lo persistido.** Para las series de planilla la resolvió el ingestor con la unidad
+       que declaró el emisor; se lee, no se re-infiere.
+
+    Una serie de planilla anterior a esta columna cae a ``unknown`` y el motor no computa
     porcentajes sobre ella — honesto, y se corrige sola en la próxima ingesta."""
-    from shared.data.series_nature import UNKNOWN
+    from shared.data.series_nature import DECLARED, UNKNOWN, infer_nature
 
     out: Dict[str, str] = {}
     for code, nat in db.query(MacroSeries.series_code, MacroSeries.nature).distinct():
-        out.setdefault(str(code), str(nat) if nat else UNKNOWN)
+        code = str(code)
+        declared = infer_nature(code=code) if code.split(".")[-1].lower() in DECLARED \
+            or code.lower() in DECLARED else None
+        out.setdefault(code, declared or (str(nat) if nat else UNKNOWN))
     return out
 
 
