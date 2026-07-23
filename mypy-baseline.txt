@@ -884,8 +884,6 @@ shared/data/bcrd_excel/inference.py:0: error: Argument 2 to "_subperiod_row" has
 shared/data/bcrd_excel/inference.py:0: error: Unsupported operand types for + ("None" and "int")  [operator]
 shared/data/bcrd_excel/inference.py:0: error: Unsupported operand types for + ("None" and "int")  [operator]
 shared/data/bcrd_excel/inference.py:0: error: Unsupported operand types for + ("None" and "int")  [operator]
-shared/data/bcrd_excel/inference.py:0: error: Unsupported operand types for + ("None" and "int")  [operator]
-shared/data/bcrd_excel/inference.py:0: error: Unsupported operand types for + ("None" and "int")  [operator]
 shared/data/bcrd_sectors.py:0: error: Unsupported operand types for / ("float" and "None")  [operator]
 shared/data/comtrade_client.py:0: error: Argument 1 to "int" has incompatible type "Any | None"; expected "str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc"  [arg-type]
 shared/data/dga_partners_client.py:0: error: Argument 1 to "float" has incompatible type "object"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
