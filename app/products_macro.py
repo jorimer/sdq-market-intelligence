@@ -344,7 +344,8 @@ class MacroProduct:
             code=d["code"], label=d["label"], subject_kind=d["subject_kind"],
             direction=d["direction"], scale=d["scale"],
             method_version=d.get("method_version"), subjects=tuple(d.get("subjects", ())),
-            period_latest=d.get("period_latest"), n_obs=int(d.get("n_obs") or 0),
+            period_latest=d.get("period_latest"), periods=tuple(d.get("periods", ())),
+            n_obs=int(d.get("n_obs") or 0),
         )]
 
     def score_observations(

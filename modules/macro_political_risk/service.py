@@ -436,6 +436,7 @@ def describe_irmp_for_api(db: Session) -> Dict[str, Any]:
         db.query(IRMPSnapshot).order_by(IRMPSnapshot.period_end.desc()).first()
     )
     n_obs = db.query(IRMPSnapshot).count()
+    periods = sorted({pe.isoformat() for (pe,) in db.query(IRMPSnapshot.period_end).all() if pe})
     return {
         "code": "irmp",
         "label": "Índice de Riesgo Macro-Político (IRMP)",
@@ -445,6 +446,7 @@ def describe_irmp_for_api(db: Session) -> Dict[str, Any]:
         "method_version": str(latest.model_version) if latest else None,
         "subjects": tuple(c.iso_code for c in countries),
         "period_latest": latest.period_end.isoformat() if latest else None,
+        "periods": tuple(periods),
         "n_obs": int(n_obs),
     }
 

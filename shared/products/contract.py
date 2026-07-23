@@ -114,6 +114,12 @@ class CanonicalScore:
     method_version: Optional[str] = None
     subjects: Tuple[str, ...] = ()        # sujetos con score persistido ("DOM", "PER"…)
     period_latest: Optional[str] = None
+    # Períodos con score persistido, ascendentes. Declararlos hace VISIBLE la
+    # discontinuidad: sin esto, un consumidor que grafica la tendencia no puede
+    # distinguir "ese año no existe dato" de "ese año no se computó todavía", y
+    # dibuja una línea continua sobre un hueco. La misma doctrina del nulo honesto,
+    # aplicada al eje del tiempo.
+    periods: Tuple[str, ...] = ()
     n_obs: int = 0
     note: str = ""
 

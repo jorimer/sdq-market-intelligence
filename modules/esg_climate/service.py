@@ -229,6 +229,7 @@ def describe_irc_for_api(db: Session) -> Dict[str, Any]:
         "method_version": str(latest.model_version) if latest else None,
         "subjects": tuple(subjects),
         "period_latest": str(latest.period) if latest else None,
+        "periods": tuple(sorted({str(p) for (p,) in db.query(ESGScore.period).distinct().all()})),
         "n_obs": int(db.query(ESGScore).count()),
     }
 
