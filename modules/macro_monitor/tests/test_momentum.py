@@ -17,7 +17,8 @@ def test_single_obs_is_insufficient():
 
 
 def test_two_obs_change_no_acceleration():
-    res = compute_series_momentum([("2025-Q1", 4.0), ("2025-Q2", 5.0)])
+    # La naturaleza se DECLARA: un flujo admite variación porcentual.
+    res = compute_series_momentum([("2025-Q1", 4.0), ("2025-Q2", 5.0)], nature="flow")
     assert res["change"] == 1.0
     assert res["pct_change"] == 25.0
     assert res["acceleration"] is None

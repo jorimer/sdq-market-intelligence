@@ -458,6 +458,7 @@ modules/macro_monitor/service.py:0: error: Invalid index type "Column[str]" for 
 modules/macro_monitor/service.py:0: error: Invalid index type "Column[str]" for "dict[str, float]"; expected type "str"  [index]
 modules/macro_monitor/service.py:0: error: Invalid index type "Column[str]" for "dict[str, list[Any]]"; expected type "str"  [index]
 modules/macro_monitor/service.py:0: error: Need type annotation for "attention"  [var-annotated]
+modules/macro_monitor/service.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
 modules/macro_monitor/tpm_modeling/backtest.py:0: error: Argument "key" to "max" has incompatible type overloaded function; expected "Callable[[str], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"  [arg-type]
 modules/macro_monitor/tpm_modeling/backtest.py:0: error: Unsupported left operand type for - ("None")  [operator]
 modules/macro_monitor/tpm_modeling/backtest.py:0: error: Unsupported operand types for - ("None" and "float")  [operator]

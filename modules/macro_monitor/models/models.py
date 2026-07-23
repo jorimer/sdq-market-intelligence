@@ -38,6 +38,12 @@ class MacroSeries(UUIDMixin, Base):
     value = Column(Float, nullable=True)               # NULL = missing, no interpolation
     unit = Column(String(40), nullable=True)
     frequency = Column(String(20), nullable=True)      # "annual" / "quarterly" / "monthly"
+    # QUÉ TIPO DE MAGNITUD mide la serie: flow | stock | rate | index | unknown. Lo declara
+    # el emisor en su planilla ("MILLONES DE US$", "%", "Índice base 2018") y hasta ahora lo
+    # tirábamos al extraer, obligando a cada consumidor a adivinar qué transformación
+    # aplicar. Persistirlo es la corrección de raíz: el motor de momentum lo lee en vez de
+    # suponer una variación porcentual para todo. Ver shared/data/series_nature.py.
+    nature = Column(String(12), nullable=True)
     # Lineage
     source = Column(String(40), nullable=True)         # "BCRD"
     published_at = Column(Date, nullable=True)

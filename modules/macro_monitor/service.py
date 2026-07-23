@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from shared.data.base_client import SourceClient
 from shared.data.bcrd_client import bcrd_client, resolve_bcrd_client, series_label
+from shared.data.series_nature import infer_nature
 from shared.data.bcrd_excel.canonical import (
     curated_label as canonical_label,
     is_curated as canonical_is_curated,
@@ -71,10 +72,14 @@ def _upsert_records(db: Session, records) -> int:
         lic = r.lineage.license if r.lineage else None
         pub = r.lineage.published_at if r.lineage else None
         src = r.lineage.source if r.lineage else None
+        # La naturaleza se resuelve EN LA INGESTA, con la unidad que el emisor declaró y el
+        # código de la serie a la vista. Hacerlo al leer obligaría a cada consumidor a
+        # repetir la inferencia — y a equivocarse cada uno a su manera.
+        nat = infer_nature(unit=r.unit, code=r.series)
         if row is None:
             db.add(MacroSeries(
                 series_code=r.series, period=r.period, value=r.value,
-                unit=r.unit, source=src, published_at=pub, license=lic,
+                unit=r.unit, source=src, published_at=pub, license=lic, nature=nat,
             ))
         else:
             row.value = r.value
@@ -82,6 +87,7 @@ def _upsert_records(db: Session, records) -> int:
             row.source = src
             row.published_at = pub
             row.license = lic
+            row.nature = nat
         touched += 1
     db.commit()
     return touched
@@ -712,6 +718,20 @@ def period_start_date(period: Optional[str]) -> Optional[date]:
     return None
 
 
+def _nature_by_code(db: Session) -> Dict[str, str]:
+    """``{series_code: nature}`` de lo PERSISTIDO en la ingesta.
+
+    Se lee, no se infiere: la naturaleza la resolvió el ingestor con la unidad que declaró
+    el emisor. Una serie anterior a esta columna cae a ``unknown`` y el motor no computa
+    porcentajes sobre ella — honesto, y se corrige sola en la próxima ingesta."""
+    from shared.data.series_nature import UNKNOWN
+
+    out: Dict[str, str] = {}
+    for code, nat in db.query(MacroSeries.series_code, MacroSeries.nature).distinct():
+        out.setdefault(str(code), str(nat) if nat else UNKNOWN)
+    return out
+
+
 def _series_by_code(db: Session, include_future: bool = False) -> Dict[str, List[tuple]]:
     """Group observations into ``{series_code: [(period, value), ...]}`` sorted.
 
@@ -742,7 +762,10 @@ def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     if not grouped:
         raise ValueError("No hay series macro ingeridas; corra ingest_series primero.")
 
-    momentum = {code: compute_series_momentum(obs) for code, obs in grouped.items()}
+    # Cada serie se lee según SU naturaleza declarada, no con una transformación única.
+    natures = _nature_by_code(db)
+    momentum = {code: compute_series_momentum(obs, nature=natures.get(code, "unknown"))
+                for code, obs in grouped.items()}
 
     # Early-warning inputs.
     debt_obs = grouped.get(DEBT_SERIES, [])
@@ -878,9 +901,10 @@ def _persist_tpm_series(db: Session, grouped: Dict[str, List[tuple]]) -> None:
 def get_indicators(db: Session) -> List[Dict[str, Any]]:
     """Latest momentum read per series (for the /indicators view)."""
     grouped = _series_by_code(db)
+    natures = _nature_by_code(db)   # cada serie se lee según SU naturaleza declarada
     out = []
     for code, obs in sorted(grouped.items()):
-        m = compute_series_momentum(obs)
+        m = compute_series_momentum(obs, nature=natures.get(code, "unknown"))
         # n_obs lets the UI default the trajectory chart to a series with depth
         # (snapshot-only series have 1-2 points and can't be plotted/projected).
         out.append({"series_code": code, "n_obs": len(obs), **series_label(code), **m})
@@ -1006,6 +1030,9 @@ def canonical_series_for_api(db: Session) -> List[Dict[str, Any]]:
             # Nota metodológica declarada (p.ej. qué manual de balanza de pagos rige la
             # serie y con cuál NO se encadena). Viaja al cliente por la Data API.
             "note": canonical_note_for(code),
+            # Naturaleza estadística y en qué unidad se expresa su variación: sin esto un
+            # consumidor no sabe si "+1.12" son puntos porcentuales o un 1.12%.
+            "nature": next((str(r.nature) for r in rows if r.nature), "unknown"),
             "unit": units[-1] if units else labels.get("unit"),
             # Se prefiere la cadencia DECLARADA; si el ingestor no la pobló (caso
             # general hoy), se deriva del formato del período.

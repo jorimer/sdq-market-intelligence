@@ -83,6 +83,10 @@ class CanonicalSeries:
     # cliente. Sin esta distinción, un consumidor no puede saber cuál de dos series
     # parecidas es la autoritativa, y termina citando la ruta de una hoja de cálculo.
     curated: bool = False
+    # QUÉ TIPO DE MAGNITUD mide: flow | stock | rate | index | unknown. Decide qué
+    # transformación es válida — una serie `rate` ya es un porcentaje y su variación se
+    # mide en PUNTOS, no en porcentaje sobre porcentaje. Sin esto, el consumidor adivina.
+    nature: str = "unknown"
     period_first: Optional[str] = None
     period_latest: Optional[str] = None
     n_obs: int = 0
