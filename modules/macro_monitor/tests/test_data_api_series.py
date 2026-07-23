@@ -166,3 +166,38 @@ def test_declared_frequency_wins_over_the_derived_one(db):
     _obs(db, "cpi", "2025-01", 1.0, frequency="monthly")
     _obs(db, "cpi", "2025-02", 1.2, frequency="monthly")
     assert canonical_series_for_api(db)[0]["frequency"] == "monthly"
+
+
+# ─── Balanza de pagos: dos manuales, dos series, jamás encadenadas ────
+
+
+def test_balance_of_payments_series_declare_their_manual(db):
+    """El BCRD publica la balanza bajo dos ediciones del manual del FMI. En 2010 —el
+    único año que ambas publican— las remesas difieren 23%. Encadenarlas fabricaría un
+    salto que no ocurrió, así que cada serie declara su manual y que no se empalma."""
+    _obs(db, "bcrd.xls.bpagos_6.i_cuenta_corriente", "2024", -3500.0)
+    _obs(db, "bcrd.xls.bpagos.i_cuenta_corriente", "2005", -473.0)
+    by = {d["code"]: d for d in canonical_series_for_api(db)}
+
+    vigente = by["bcrd.xls.bpagos_6.i_cuenta_corriente"]["note"]
+    assert "MBP6" in vigente and "VIGENTE" in vigente
+    assert "NO encadenar" in vigente
+
+    historica = by["bcrd.xls.bpagos.i_cuenta_corriente"]["note"]
+    assert "MBP5" in historica and "DESCONTINUADA" in historica
+    assert "bpagos_6" in historica          # nombra a su contraparte, no la deja adivinar
+
+
+def test_the_two_manuals_never_collapse_into_one_code(db):
+    """Códigos distintos = series distintas en el catálogo. Si compartieran código, el
+    consumidor recibiría un empalme silencioso de dos metodologías."""
+    _obs(db, "bcrd.xls.bpagos_6.i_cuenta_corriente", "2010", -4024.0)
+    _obs(db, "bcrd.xls.bpagos.i_cuenta_corriente", "2010", -4330.0)
+    codes = [d["code"] for d in canonical_series_for_api(db)]
+    assert len(codes) == 2 and len(set(codes)) == 2
+
+
+def test_an_unrelated_series_carries_no_methodology_note(db):
+    """La nota es excepcional: solo donde hay una trampa real que declarar."""
+    _obs(db, "gdp_growth", "2025", 4.8)
+    assert canonical_series_for_api(db)[0]["note"] == ""

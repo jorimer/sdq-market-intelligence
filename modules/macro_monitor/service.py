@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from shared.data.base_client import SourceClient
 from shared.data.bcrd_client import bcrd_client, resolve_bcrd_client, series_label
+from shared.data.bcrd_excel.canonical import note_for as canonical_note_for
 from modules.macro_monitor.events import publish_macro_updated
 from modules.macro_monitor.models.models import MacroSeries, MacroSnapshot
 from modules.macro_monitor.scoring.momentum import compute_series_momentum
@@ -985,6 +986,9 @@ def canonical_series_for_api(db: Session) -> List[Dict[str, Any]]:
         out.append({
             "code": code,
             "label": labels.get("label") or code,
+            # Nota metodológica declarada (p.ej. qué manual de balanza de pagos rige la
+            # serie y con cuál NO se encadena). Viaja al cliente por la Data API.
+            "note": canonical_note_for(code),
             "unit": units[-1] if units else labels.get("unit"),
             # Se prefiere la cadencia DECLARADA; si el ingestor no la pobló (caso
             # general hoy), se deriva del formato del período.

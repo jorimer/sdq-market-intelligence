@@ -39,6 +39,35 @@ class CanonicalSeries:
     excel_series_suffix: Optional[str] = None  # extracted series_code endswith (for ingest/crosscheck)
 
 
+# Notas metodológicas por PREFIJO de código de serie. Viajan al cliente por la Data API
+# (``/catalog`` y ``/series``), que es donde hacen falta: un consumidor que ve dos series de
+# balanza de pagos necesita saber, sin preguntar, que responden a manuales distintos y que
+# encadenarlas fabrica un salto. La medición del quiebre (año 2010, publicado por ambas):
+# remesas 2,998 (MBP5) vs 3,683 (MBP6) = +23%; cuenta corriente −4,330 vs −4,024 = +7%.
+SERIES_NOTES = {
+    "bcrd.xls.bpagos_6.": (
+        "Balanza de pagos bajo el MBP6 del FMI (sexta edición del manual), serie OFICIAL "
+        "VIGENTE del BCRD desde 2010. NO encadenar con la serie MBP5 (bcrd.xls.bpagos.*): "
+        "son metodologías distintas y el empalme fabrica un salto que no ocurrió."
+    ),
+    "bcrd.xls.bpagos.": (
+        "Balanza de pagos bajo el MBP5 (quinta edición del manual) — serie HISTÓRICA y "
+        "DESCONTINUADA: el BCRD dejó de actualizar este archivo en 2019. Úsese solo para el "
+        "período previo a 2010. NO es comparable ni encadenable con la serie MBP6 "
+        "(bcrd.xls.bpagos_6.*): en 2010, el único año que ambas publican, las remesas "
+        "difieren 23%."
+    ),
+}
+
+
+def note_for(series_code: str) -> str:
+    """Nota metodológica de una serie, por prefijo. Cadena vacía si no tiene."""
+    for prefix, note in SERIES_NOTES.items():
+        if str(series_code).startswith(prefix):
+            return note
+    return ""
+
+
 # Order roughly follows the BCRD statistics sectors shown in the portal.
 REGISTRY: List[CanonicalSeries] = [
     # ── Precios ──────────────────────────────────────────────────
@@ -129,11 +158,32 @@ REGISTRY: List[CanonicalSeries] = [
         robustness="green", api_series="bcrd.sector_externo.reservas_internacionales.netas",
         api_transform="identity", excel_series_suffix=".reservas_netas",
     ),
+    # ── Balanza de pagos: DOS series, DOS manuales. NO se encadenan ──
+    # El BCRD publica la balanza en dos archivos que responden a ediciones distintas del
+    # Manual de Balanza de Pagos del FMI. Concatenarlas produciría un salto metodológico
+    # con apariencia de evento económico: en el año que ambas publican (2010), las remesas
+    # difieren 23% (2,998 MBP5 vs 3,683 MBP6) y la cuenta corriente 7%. Por eso viven como
+    # series separadas, cada una declarando su manual y su vigencia.
     CanonicalSeries(
-        key="balanza_pagos", concept="Balanza de pagos", sector="sector_externo",
+        key="balanza_pagos_mbp6", concept="Balanza de pagos (MBP6, vigente)",
+        sector="sector_externo",
+        source_file="bpagos_6.xls", base="US$ MM", frequency="anual",
+        homogenization="nivel directo; serie oficial vigente del BCRD",
+        rationale="Cuenta corriente y financiera bajo la SEXTA edición del Manual de "
+                  "Balanza de Pagos del FMI (MBP6), que es la vigente. Cubre 2010 en "
+                  "adelante y se actualiza; es la serie a usar para análisis actual.",
+        robustness="green",
+    ),
+    CanonicalSeries(
+        key="balanza_pagos_mbp5", concept="Balanza de pagos (MBP5, histórica)",
+        sector="sector_externo",
         source_file="bpagos.xls", base="US$ MM", frequency="anual",
-        homogenization="nivel directo",
-        rationale="Cuenta corriente y financiera: posición externa de la economía.",
+        homogenization="nivel directo; serie DESCONTINUADA",
+        rationale="Balanza bajo la QUINTA edición del manual (MBP5). El BCRD dejó de "
+                  "actualizar este archivo en 2019: sirve solo para la historia previa a "
+                  "2010. NO es comparable ni encadenable con la serie MBP6 — el cambio de "
+                  "manual reclasifica bienes para transformación (zonas francas, material "
+                  "en RD) y cambia convenciones de la cuenta financiera.",
         robustness="yellow",
     ),
     CanonicalSeries(
