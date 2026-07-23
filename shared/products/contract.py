@@ -78,6 +78,11 @@ class CanonicalSeries:
     # Default "verbatim" a propósito: ante la duda se asume lo más restrictivo, igual
     # que ``normalize_state`` asume GAP.
     derivation: str = "verbatim"
+    # ¿Es una serie CURADA —elegida, nombrada y validada por un analista— o un volcado
+    # masivo de planilla? Las dos son dato real; solo una es citable en un informe a
+    # cliente. Sin esta distinción, un consumidor no puede saber cuál de dos series
+    # parecidas es la autoritativa, y termina citando la ruta de una hoja de cálculo.
+    curated: bool = False
     period_first: Optional[str] = None
     period_latest: Optional[str] = None
     n_obs: int = 0

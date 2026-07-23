@@ -16,6 +16,7 @@ acordarse de aprobar nada; ese era el punto de la decisión de amplitud.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -37,6 +38,9 @@ Q_NO_READER = "no_reader"                    # descriptor sin lector: se anuncia
 # La fuente restringe la REDISTRIBUCIÓN (no-comercial / share-alike). Aplica solo a lo
 # verbatim: el cálculo propio sobre ese insumo es obra nuestra y no se retiene.
 Q_LICENSE_RESTRICTS = "license_restricts_redistribution"
+# El código de la serie no permite saber QUÉ mide. No es un problema de etiqueta fea: es
+# que el extractor no pudo nombrarla y quedó el valor de una celda como identificador.
+Q_UNINTERPRETABLE = "uninterpretable_code"
 
 # Doctrina del dueño (2026-07-22): "calculamos, no revendemos la misma info". El eje que
 # decide no es la fuente sino QUÉ se sirve — el valor del emisor, o un cálculo de casa.
@@ -52,6 +56,23 @@ SDQ_OWN_LICENSE = ("Cálculo propietario de SDQ Market Intelligence — uso seg�
 # SIS/SISALRIL declaran ODbL (share-alike sobre bases derivadas).
 _RESTRICTIVE_MARKERS = ("nc-", "-nc", "non-commercial", "no comercial", "nocommercial",
                         "sharealike", "share-alike", "-sa", "sa ", "odbl")
+
+
+# Un código cuya hoja final es puro número —o trae una corrida larga de dígitos— no es
+# un nombre: es un artefacto del extractor (valor de celda leído como identificador).
+# Publicarlo es publicar ruido con apariencia de dato. El guard vive ACÁ y no en el módulo
+# del BCRD a propósito: el motor de Excel es genérico y el defecto reaparece con cualquier
+# fuente que se incorpore por planilla.
+_DIGIT_RUN = re.compile(r"\d{6,}")
+_ONLY_SYMBOLS = re.compile(r"^[\d_.\-]+$")
+
+
+def code_is_uninterpretable(code: str) -> bool:
+    """¿El código deja saber qué mide la serie? Conservador: solo marca lo indefendible."""
+    leaf = str(code or "").split(".")[-1].strip()
+    if not leaf:
+        return True
+    return bool(_ONLY_SYMBOLS.match(leaf) or _DIGIT_RUN.search(leaf))
 
 
 def license_restricts_redistribution(license_: Optional[str]) -> bool:
@@ -89,6 +110,9 @@ class ExposedAsset:
     n_obs: int = 0
     stability: str = "stable"   # "stable" | "thin" (historia corta)
     derivation: str = DERIVATION_VERBATIM   # "verbatim" (dato del emisor) | "derived"
+    # Curada = elegida y nombrada por un analista (citable en un informe). No curada =
+    # extracción masiva de planilla: dato real, pero sin nombre defendible ante un cliente.
+    curated: bool = False
     quarantine: Tuple[str, ...] = field(default=())
     note: str = ""
 
@@ -196,9 +220,12 @@ def _quarantine_for(
     pub_state: Dict[str, Dict[str, Any]],
     derivation: str = DERIVATION_VERBATIM,
     allow_restricted: bool = False,
+    code: str = "",
 ) -> Tuple[str, ...]:
     """Razones por las que un activo NO se sirve. Vacío = se sirve."""
     reasons: List[str] = []
+    if code and code_is_uninterpretable(code):
+        reasons.append(Q_UNINTERPRETABLE)
     if not (license_ or "").strip():
         reasons.append(Q_NO_LICENSE)
     # Servir el valor del emisor tal cual ES redistribuir; servir un cálculo propio, no.
@@ -272,6 +299,7 @@ def _series_assets(db: Optional[Session], entry, pub_state,
                 n_obs=n_obs,
                 stability="thin" if n_obs < THIN_OBS else "stable",
                 derivation=derivation,
+                curated=bool(getattr(s, "curated", False)),
                 quarantine=_quarantine_for(
                     entry.sector_key,
                     license_=getattr(s, "license", None),
@@ -279,6 +307,7 @@ def _series_assets(db: Optional[Session], entry, pub_state,
                     pub_state=pub_state,
                     derivation=derivation,
                     allow_restricted=allow_restricted,
+                    code=s.code,
                 ),
                 note=getattr(s, "note", "") or "",
             )
@@ -339,6 +368,7 @@ def _score_assets(db: Optional[Session], entry, pub_state) -> List[ExposedAsset]
                 n_obs=n_obs,
                 stability="thin" if n_obs < THIN_OBS else "stable",
                 derivation=DERIVATION_DERIVED,
+                curated=True,     # un score es cálculo de casa: curado por definición
                 quarantine=_quarantine_for(
                     entry.sector_key,
                     license_=SDQ_OWN_LICENSE,
@@ -411,6 +441,7 @@ def _forecast_assets(db: Optional[Session], entry, pub_state) -> List[ExposedAss
                 # importa: su tasa de acierto todavía no dice mucho.
                 stability="thin" if n_scored < THIN_OBS else "stable",
                 derivation=DERIVATION_DERIVED,
+                curated=True,
                 quarantine=_quarantine_for(
                     entry.sector_key, license_=SDQ_OWN_LICENSE, has_reader=has_reader,
                     pub_state=pub_state, derivation=DERIVATION_DERIVED,

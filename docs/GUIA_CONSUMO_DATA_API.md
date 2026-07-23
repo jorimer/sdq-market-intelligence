@@ -61,6 +61,25 @@ Cada activo trae `code`, `sector_key`, `label`, `frequency`, `n_obs`, `period_fi
 `source`, `license`, `derivation` (`verbatim` = valor del emisor normalizado; `derived` =
 cálculo de SDQ) y `stability` (`thin` = historia corta: no meterlo a un modelo sin mirar).
 
+### `curated` — cuál se cita en un informe
+
+El catálogo mezcla dos cosas que son ambas dato real pero no valen lo mismo para un
+cliente final:
+
+- **`curated: true`** — serie elegida, nombrada y validada por un analista. Su `label` es
+  defendible en un informe ("Balance fiscal global del Gobierno Central (Hacienda)").
+- **`curated: false`** — extracción masiva de planilla. El dato es real, pero el nombre es
+  el que dejó la hoja de cálculo (`bcrd.xls.agregados_monetarios.total_3_1_2`). **Sirve
+  para calcular; no para citar con ese nombre ante un cliente.**
+
+Filtrar por `curated` es la forma correcta de armar la lista de series citables, en vez de
+descartarlas a ojo por cómo se ve el código.
+
+Series que un informe país suele necesitar, todas curadas y disponibles:
+`bcrd.xls.reservas_internacionales.reservas_netas` (2003→2026, mensual) ·
+`fiscal_eo.balance_global` (2000→2025, mensual) · `bcrd.xls.remesas_6.valor` ·
+`public_debt_gdp`.
+
 ## Recursos
 
 ### Series canónicas normalizadas
