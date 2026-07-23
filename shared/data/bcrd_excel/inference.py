@@ -19,7 +19,30 @@ from typing import List, Optional, Tuple
 
 from .periods import normalize_label, parse_month, parse_quarter, parse_year
 from .spec import ExtractionSpec, SeriesSpec
+from .units import sheet_unit, split_header_unit
 from .workbook import Grid, Workbook
+
+
+def _series_from_columns(grid: Grid, value_cols: List[int], data_row0: int,
+                         sheet_default: Optional[str]) -> List[SeriesSpec]:
+    """``SeriesSpec`` por columna, CAPTURANDO la unidad que el emisor declaró.
+
+    La unidad por-columna (``PIB nominal (Millones de RD$)``) manda; si la columna no la
+    trae, cae a la unidad de hoja (``sheet_default``). Sin ninguna, ``None`` — la serie
+    quedará en naturaleza ``unknown`` honesta, nunca inventada. Códigos duplicados se
+    desempatan por columna, jamás se fusionan."""
+    series: List[SeriesSpec] = []
+    seen: dict[str, int] = {}
+    for c in value_cols:
+        raw = _header_name(grid, c, data_row0)
+        name, unit = split_header_unit(raw)
+        code = _slug(name)
+        if code in seen:
+            code = f"{code}_c{c}"
+        seen[code] = c
+        series.append(SeriesSpec(code=code, name=name, unit=unit or sheet_default,
+                                 value_col=c))
+    return series
 
 _SUBTOTAL_RE = r"promedio\s+(\d{4})"
 _SCAN_HEADER_ROWS = 12  # header region to mine for names / year rows
@@ -287,6 +310,9 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
             metric_header_row=metric_rows[-1] if metric_rows else None,
             super_header_row=metric_rows[-2] if len(metric_rows) >= 2 else None,
             value_col_start=month_col + 1, value_col_end=grid.ncols,
+            # Tasas de interés, etc.: la unidad ("% nominal anual") va en el caption sobre
+            # el primer bloque de año. Aplica a toda la hoja.
+            unit=sheet_unit(grid, min(year_rows)),
             structure_hash=sh, confidence=0.85, method="heuristic",
             notes=(f"year_blocks: {len(year_rows)} años en fila suelta, "
                    f"{month_count} filas de mes"),
@@ -333,6 +359,7 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
             year_header_row=year_row, metric_header_row=metric_row,
             super_header_row=super_row,
             value_col_start=c0, value_col_end=c1,
+            unit=sheet_unit(grid, year_row),
             structure_hash=sh, confidence=round(conf, 2), method="heuristic",
             notes=f"cross_tab: {year_row_count} años en fila {year_row}",
         )
@@ -345,16 +372,9 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
         # Distinct value columns must map to distinct series codes — never merge two
         # columns into one (e.g. "Acumulada" under both "Serie Original" and "Serie
         # Desestacionalizada"). Disambiguate slug collisions by column so the data
-        # of two real series is never silently mixed.
-        series: List[SeriesSpec] = []
-        seen_codes: dict[str, int] = {}
-        for c in value_cols:
-            name = _header_name(grid, c, first_month_row)
-            code = _slug(name)
-            if code in seen_codes:
-                code = f"{code}_c{c}"
-            seen_codes[code] = c
-            series.append(SeriesSpec(code=code, name=name, unit=None, value_col=c))
+        # of two real series is never silently mixed. La unidad se captura del rótulo.
+        series = _series_from_columns(grid, value_cols, first_month_row,
+                                      sheet_unit(grid, first_month_row - 1))
         resolved = subtotal or year_col is not None
         conf = min(0.85, 0.5 + 0.03 * month_count) if (resolved and series) else 0.0
         return ExtractionSpec(
@@ -385,6 +405,10 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
                 data_row_start=data_start, period_header_row=year_row,
                 subperiod_header_row=sub_row, label_col=label_col,
                 value_col_start=c0, value_col_end=c1, frequency=freq,
+                # Una matriz publica UNA magnitud (balanza en US$, saldos monetarios en
+                # RD$): la unidad de la hoja aplica a todas sus filas. Se escanea solo la
+                # zona de título, por encima de la fila de años.
+                unit=sheet_unit(grid, year_row),
                 structure_hash=sh, confidence=round(conf, 2), method="heuristic",
                 notes=f"matrix {freq}: {year_row_count} períodos en fila {year_row}",
             )
@@ -394,15 +418,8 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
     qcol, first_q_row, q_count = _quarter_column(grid)
     if qcol is not None and q_count >= 4 and _has_year_markers(grid, qcol):
         value_cols = _value_columns(grid, qcol, first_q_row)
-        series = []
-        seen_q: dict[str, int] = {}
-        for c in value_cols:
-            name = _header_name(grid, c, first_q_row)
-            code = _slug(name)
-            if code in seen_q:
-                code = f"{code}_c{c}"
-            seen_q[code] = c
-            series.append(SeriesSpec(code=code, name=name, unit=None, value_col=c))
+        series = _series_from_columns(grid, value_cols, first_q_row,
+                                      sheet_unit(grid, first_q_row - 1))
         if series:
             return ExtractionSpec(
                 file=file, sheet=grid.name, orientation="period_rows",
@@ -416,15 +433,8 @@ def infer_spec(wb: Workbook, file: str) -> ExtractionSpec:
     year_col, year_col_count, first_year_row = _year_column(grid)
     if year_col is not None and year_col_count >= 5 and year_col_count >= year_row_count:
         value_cols = _value_columns(grid, year_col, first_year_row)
-        series = []
-        seen: dict[str, int] = {}
-        for c in value_cols:
-            name = _header_name(grid, c, first_year_row)
-            code = _slug(name)
-            if code in seen:
-                code = f"{code}_c{c}"
-            seen[code] = c
-            series.append(SeriesSpec(code=code, name=name, unit=None, value_col=c))
+        series = _series_from_columns(grid, value_cols, first_year_row,
+                                      sheet_unit(grid, first_year_row - 1))
         if series:
             conf = min(0.8, 0.45 + 0.02 * year_col_count)
             return ExtractionSpec(
