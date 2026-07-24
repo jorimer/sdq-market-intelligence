@@ -302,7 +302,7 @@ export function MacroMonitorPage() {
                       </div>
                       <div className="text-xs text-muted mt-0.5">
                         {s.framework}
-                        {s.series ? ` · ${s.series}` : ""}
+                        {(s.label ?? s.series) ? ` · ${s.label ?? s.series}` : ""}
                       </div>
                     </div>
                     <Chip tone={SEVERITY_TONE[s.severity] ?? "muted"}>{s.severity}</Chip>

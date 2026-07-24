@@ -44,8 +44,18 @@ def _yoy_change(clean: List[Tuple[str, float]]) -> Optional[float]:
     """Year-over-year % change of a level series, anchored by period end-dates.
 
     Frequency-agnostic: finds the observation ~1 year before the latest (within a
-    tolerance) and compares. Returns ``None`` when there's no suitable anchor or
-    the base is zero — never fabricated.
+    tolerance) and compares. Returns ``None`` when there's no suitable anchor, the
+    base is zero, or the series crosses zero between anchor and latest — never
+    fabricated.
+
+    Se mide como COCIENTE (``latest/base − 1``), no como ``cambio/|base|``. La forma
+    del cociente es sign-correcta para una serie de signo estable aunque sea negativa:
+    la FDI de la cuenta financiera (MBP6) es negativa —negativo = entrada neta de
+    pasivos— y más entrada la vuelve más negativa; ``−5032/−4523 − 1 = +11,3%`` lee
+    correctamente "la entrada CRECIÓ", mientras que ``cambio/|base|`` daría −11,3% y un
+    sudden-stop lo leería al revés. Por eso el panel de flujos NO necesita un campo de
+    signo: el único caso que el cociente no puede interpretar es el CRUCE DE CERO (la
+    entrada se vuelve salida), y ahí se devuelve ``None`` en vez de un porcentaje basura.
     """
     if len(clean) < 2:
         return None
@@ -67,7 +77,12 @@ def _yoy_change(clean: List[Tuple[str, float]]) -> Optional[float]:
             best = (diff, v)
     if best is None or best[0] > _YOY_TOLERANCE_DAYS or best[1] == 0:
         return None
-    return round((latest_value / best[1] - 1.0) * 100.0, 2)
+    base = best[1]
+    # Cruce de cero: el cociente da un número, pero no es una variación interpretable
+    # (misma doctrina que ``momentum._percent_change``). Honesto declararlo no computable.
+    if (base < 0) != (latest_value < 0):
+        return None
+    return round((latest_value / base - 1.0) * 100.0, 2)
 
 
 def _classify(value: float, fdoc: dict) -> Tuple[str, str]:

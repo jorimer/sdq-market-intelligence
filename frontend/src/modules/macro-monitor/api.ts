@@ -21,6 +21,10 @@ export interface MacroSignal {
   framework: string;
   severity: string;
   series?: string;
+  series_code?: string;
+  label?: string;
+  basis?: string;
+  detail?: string;
   value?: number;
   pct_change?: number;
 }

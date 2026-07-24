@@ -16,7 +16,7 @@ GROUPED = {
     "bcrd.sector_externo.tasas_de_cambio.venta": [("2024-04", 54.0), ("2025-04", 59.3)],  # +9.8% YoY
     "bcrd.xls.reservas_internacionales.reservas_brutas": [("2024-04", 15000.0), ("2025-04", 15771.0)],  # +5.1%
     "public_debt_gdp": [("2025", 62.4)],
-    "bcrd.xls.bpagos.remesas_familiares": [("2024", 2800.0), ("2025", 2998.0)],  # +7.1% YoY
+    "bcrd.xls.remesas_6.valor": [("2024", 2800.0), ("2025", 2998.0)],  # +7.1% YoY
 }
 
 
