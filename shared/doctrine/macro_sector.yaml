@@ -106,7 +106,10 @@ factors:
 
   - key: remittances
     label: "Remesas familiares (interanual)"
-    series_code: "bcrd.xls.bpagos.remesas_familiares"
+    # La serie corta anterior (`bcrd.xls.bpagos.remesas_familiares`) NO existe en prod → el
+    # factor salía "sin dato". La serie mensual viva del BCRD (`remesas_6.valor`, ~200 obs,
+    # fresca a 2026) es la fuente correcta; `_yoy_change` es agnóstica de cadencia.
+    series_code: "bcrd.xls.remesas_6.valor"
     unit: "%"
     mode: change                 # YoY % de las remesas
     good_direction: high
@@ -116,3 +119,43 @@ factors:
     impacted_sectors: [comercio, construccion]
     impacted_agents: [hogar, PyME]
     rationale: "Las remesas sostienen el consumo de los hogares y la autoconstrucción; su dinámica mueve comercio y construcción."
+
+# ── Panel de flujos externos para la señal Calvo `sudden_stop` (Eje 2) ──────────────────
+#
+# La señal de alerta temprana lee estos flujos como variación INTERANUAL (YoY) de su serie
+# canónica VIVA — anual (2025 vs 2024) o mensual (último vs ~12 meses atrás) da igual: el
+# YoY es la misma magnitud económica, así que el panel no mezcla cadencias. Un flujo cuya
+# serie no tenga YoY computable (sin ancla a ~1 año, base cero, o CRUCE DE CERO) se omite
+# HONESTAMENTE y se registra la omisión — nunca se inventa ni se encadena MBP5 con MBP6.
+#
+# NO hay campo de signo, y es deliberado: el YoY se mide como cociente (`latest/base − 1`),
+# que ya es sign-correcto para una serie de signo estable aunque sea negativa. En la cuenta
+# financiera del MBP6 la FDI y la inversión de cartera son NEGATIVAS (negativo = entrada neta
+# de pasivos); más entrada las vuelve más negativas y el cociente de dos negativos da +% —
+# lee "la entrada creció", que es lo correcto. El viejo bug del signo vivía en
+# `momentum.pct_change` (`cambio/|base|`), no en el dato. Ver `macro_context._yoy_change`.
+#
+# Por flujo:
+#   key         : nombre semántico del flujo (viaja como `series` de la señal).
+#   label       : etiqueta legible (viaja en el detalle de la señal a la Data API).
+#   series_code : serie canónica VIVA (debe existir en prod).
+flow_panel:
+  - key: remittances
+    label: "Remesas familiares"
+    series_code: "bcrd.xls.remesas_6.valor"
+  - key: fdi
+    label: "Inversión extranjera directa"
+    series_code: "bcrd.xls.bpagos_6.cuenta_financiera.inversion_directa"
+  - key: exports
+    label: "Exportaciones de bienes"
+    series_code: "bcrd.xls.bpagos_6.cuenta_corriente.balanza_de_bienes_y_servicios.balanza_de_bienes.exportaciones"
+  - key: reserves
+    label: "Reservas internacionales brutas"
+    # Stock con serie mensual profunda (282 obs desde 2003). Su "sudden stop" es una caída
+    # de NIVEL interanual — una descarga de reservas para defender la divisa (marco de Calvo).
+    series_code: "bcrd.xls.reservas_internacionales.reservas_brutas"
+  - key: capital_flows
+    label: "Inversión de cartera (portfolio)"
+    # El "dinero caliente" volátil que el sudden-stop de Calvo apunta. La `cuenta_de_capital`
+    # propia son ceros (inservible); esta es la componente financiera volátil, distinta de FDI.
+    series_code: "bcrd.xls.bpagos_6.cuenta_financiera.inversion_de_cartera"

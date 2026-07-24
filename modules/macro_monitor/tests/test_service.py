@@ -63,16 +63,45 @@ def test_build_snapshot_persists_and_publishes(db):
     snap = db.query(MacroSnapshot).one()
     assert snap.period == "2025-Q2"
     assert "gdp_growth" in snap.momentum
-    # signals: debt elevado (62.4) + sudden stop in remittances (2710 → 2180)
+    # El fixture trimestral dispara debt_overhang (62.4). Ya NO dispara sudden_stop:
+    # esa señal se migró a leer el `flow_panel` de series canónicas VIVAS (remesas_6,
+    # bpagos_6…) por variación interanual — ausentes de este fixture — en vez de la caída
+    # trimestre-a-trimestre de `remittances` (2710→2180), que era un falso positivo
+    # estacional. El camino feliz del sudden_stop se cubre en test_signals.py (unidad) y en
+    # `test_sudden_stop_fires_from_canonical_flow_panel` abajo (end-to-end).
     kinds = {s["signal"] for s in snap.signals}
     assert "debt_overhang" in kinds
-    assert "sudden_stop" in kinds
+    assert "sudden_stop" not in kinds
 
     # published
     assert len(received) == 1
     assert received[0]["period"] == "2025-Q2"
     assert received[0]["signal_count"] == len(snap.signals)
     assert result["snapshot_id"] == snap.id
+
+
+def test_sudden_stop_fires_from_canonical_flow_panel(db):
+    """End-to-end: build_snapshot debe emitir `sudden_stop` cuando una serie canónica del
+    `flow_panel` (remesas_6) cae fuerte INTERANUAL, citando serie y etiqueta. Se siembra la
+    serie viva directo en la DB (dos obs a 12 meses) para ejercitar `_flow_pct_panel` →
+    `detect_signals`, no la caída trimestre-a-trimestre del fixture (que era falso positivo)."""
+    db.add(MacroSeries(series_code="bcrd.xls.remesas_6.valor", period="2025-05",
+                       value=700.0, nature="flow"))
+    db.add(MacroSeries(series_code="bcrd.xls.remesas_6.valor", period="2026-05",
+                       value=500.0, nature="flow"))  # −28.6% interanual → sudden stop
+    db.commit()
+
+    build_snapshot(db)
+    snap = db.query(MacroSnapshot).one()
+
+    stops = [s for s in snap.signals if s["signal"] == "sudden_stop"]
+    assert len(stops) == 1
+    sig = stops[0]
+    assert sig["series"] == "remittances"
+    assert sig["series_code"] == "bcrd.xls.remesas_6.valor"
+    assert sig["label"] == "Remesas familiares"
+    assert sig["basis"] == "yoy"
+    assert sig["pct_change"] < -15
 
 
 def test_build_snapshot_idempotent_per_period(db):

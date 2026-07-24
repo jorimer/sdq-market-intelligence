@@ -39,40 +39,64 @@ def debt_overhang_signal(public_debt_gdp: Optional[float]) -> Optional[Dict]:
     }
 
 
-def sudden_stop_signal(series_code: str, pct_change: Optional[float]) -> Optional[Dict]:
-    """Calvo sudden-stop signal: fire when a flow contracts sharply period-on-period."""
+def sudden_stop_signal(
+    flow_key: str,
+    pct_change: Optional[float],
+    meta: Optional[Dict[str, str]] = None,
+) -> Optional[Dict]:
+    """Calvo sudden-stop signal: fire when an external flow contracts sharply YoY.
+
+    *pct_change* es la variación INTERANUAL del flujo, ya sign-correcta (el productor la
+    construye como cociente, así que "contracción" es siempre negativa incluso para las
+    series negativas del MBP6). Por eso la regla es directa —``pct ≤ −15%``— y no necesita
+    volver a razonar el signo aquí. *meta* trae la serie canónica y la etiqueta del flujo
+    para que la señal sea citable.
+    """
     if pct_change is None:
         return None
     if pct_change > SUDDEN_STOP_PCT:
         return None  # no sharp contraction → no signal
+    meta = meta or {}
+    label = meta.get("label") or flow_key
+    series_code = meta.get("series_code")
     return {
         "signal": "sudden_stop",
         "framework": "Calvo",
         "severity": "alto" if pct_change <= 2 * SUDDEN_STOP_PCT else "elevado",
-        "series": series_code,
+        "series": flow_key,
+        "series_code": series_code,
+        "label": label,
         "pct_change": round(pct_change, 2),
         "threshold": SUDDEN_STOP_PCT,
+        "basis": "yoy",  # variación interanual, agnóstica de cadencia
+        "detail": (f"{label} cae {round(pct_change, 2)}% interanual "
+                   f"(umbral {SUDDEN_STOP_PCT:.0f}%)"),
     }
 
 
 def detect_signals(
     debt_gdp: Optional[float],
-    flow_pct_changes: Dict[str, Optional[float]],
+    flow_pct_changes: Dict[str, float],
+    flow_meta: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> List[Dict]:
     """Collect all fired signals from the latest macro reads.
 
     Args:
         debt_gdp: latest public-debt/GDP ratio (for the debt-overhang signal).
-        flow_pct_changes: ``{series_code: latest_pct_change}`` for flow series
-            (remittances, FDI, reserves, …) to screen for sudden stops.
+        flow_pct_changes: ``{flow_key: yoy_pct}`` para los flujos externos del panel
+            (remesas, FDI, reservas, exportaciones, capital) — YoY ya computado y
+            sign-correcto; el productor ya descartó los flujos sin YoY, así que aquí
+            no hay ``None``.
+        flow_meta: ``{flow_key: {series_code, label}}`` para citar cada flujo.
     """
+    flow_meta = flow_meta or {}
     signals: List[Dict] = []
     debt = debt_overhang_signal(debt_gdp)
     # Only surface the debt signal when it is actually elevated/high.
     if debt and debt["severity"] != "bajo":
         signals.append(debt)
-    for code, pct in flow_pct_changes.items():
-        sig = sudden_stop_signal(code, pct)
+    for key, pct in flow_pct_changes.items():
+        sig = sudden_stop_signal(key, pct, flow_meta.get(key))
         if sig:
             signals.append(sig)
     return signals

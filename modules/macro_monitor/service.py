@@ -34,9 +34,12 @@ logger = logging.getLogger("sdq.macro_monitor.service")
 
 MODEL_VERSION = "1.0"
 
-# Series used by the early-warning signals.
+# Serie usada por la señal de deuda (Reinhart-Rogoff).
 DEBT_SERIES = "public_debt_gdp"
-FLOW_SERIES = {"remittances", "fdi", "reserves", "exports", "capital_flows"}
+
+# El panel de flujos externos de la señal Calvo `sudden_stop` ya NO es un set de códigos
+# cortos: vive como doctrina en `shared/doctrine/macro_sector.yaml` → `flow_panel`, con la
+# serie canónica VIVA de cada flujo. Se lee vía :func:`_flow_pct_panel`.
 
 
 def _upsert_records(db: Session, records) -> int:
@@ -775,6 +778,44 @@ def _series_by_code(db: Session, include_future: bool = False) -> Dict[str, List
     return grouped
 
 
+def _flow_pct_panel(
+    grouped: Dict[str, List[tuple]],
+) -> tuple[Dict[str, float], Dict[str, Dict[str, str]]]:
+    """Contracción INTERANUAL (YoY) de cada flujo externo del panel de `sudden_stop`.
+
+    Lee ``flow_panel`` de la doctrina (``macro_sector.yaml``), y por cada flujo mide el YoY
+    de su serie canónica viva con :func:`macro_context._yoy_change` — agnóstica de cadencia
+    (anual o mensual) y sign-correcta por construir el cambio como cociente. Un flujo cuya
+    serie no exista, no tenga ancla YoY o cruce el cero se OMITE y se registra: la ausencia
+    es un resultado honesto, no un hueco que se rellena.
+
+    Devuelve ``({key: yoy_pct}, {key: {series_code, label}})`` — el mapa de metadatos deja
+    que la señal cite el nombre semántico y la serie canónica sin re-consultar la doctrina.
+    """
+    from shared.doctrine import load_doctrine_raw
+    # Import a nivel de función: macro_context importa este módulo (ciclo si fuera al tope).
+    from modules.macro_monitor.macro_context import _yoy_change
+
+    panel = load_doctrine_raw("macro_sector").get("flow_panel") or []
+    flow_pct: Dict[str, float] = {}
+    flow_meta: Dict[str, Dict[str, str]] = {}
+    for entry in panel:
+        key = entry.get("key")
+        code = entry.get("series_code")
+        if not key or not code:
+            continue
+        clean = [(p, float(v)) for p, v in grouped.get(code, []) if v is not None]
+        yoy = _yoy_change(clean) if len(clean) >= 2 else None
+        if yoy is None:
+            logger.info(
+                "sudden_stop: flujo '%s' omitido — serie '%s' sin YoY computable "
+                "(sin ancla a ~1 año, base cero, cruce de cero o serie ausente)", key, code)
+            continue
+        flow_pct[key] = yoy
+        flow_meta[key] = {"series_code": code, "label": entry.get("label") or key}
+    return flow_pct, flow_meta
+
+
 def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     """Compute momentum + signals across all series, persist and publish.
 
@@ -792,11 +833,11 @@ def build_snapshot(db: Session, period: Optional[str] = None) -> Dict[str, Any]:
     # Early-warning inputs.
     debt_obs = grouped.get(DEBT_SERIES, [])
     debt_latest = next((v for _, v in reversed(debt_obs) if v is not None), None)
-    flow_pct = {
-        code: momentum[code]["pct_change"]
-        for code in grouped if code in FLOW_SERIES
-    }
-    signals = detect_signals(debt_latest, flow_pct)
+    # Panel de flujos externos: YoY canónico y sign-correcto, no el `pct_change`
+    # período-a-período del momentum (que en series mensuales sería ruido estacional y en
+    # las de signo negativo del MBP6 leería el signo al revés).
+    flow_pct, flow_meta = _flow_pct_panel(grouped)
+    signals = detect_signals(debt_latest, flow_pct, flow_meta=flow_meta)
 
     if period is None:
         # Latest CLOSED period (grouped already excludes future), chosen
