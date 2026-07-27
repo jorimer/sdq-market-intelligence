@@ -49,6 +49,7 @@ class BankType(str, enum.Enum):
 class PeriodType(str, enum.Enum):
     quarterly = "quarterly"
     annual = "annual"
+    monthly = "monthly"  # SIB historical ledger (Cronología SB) is monthly
 
 
 class DataSource(str, enum.Enum):
@@ -57,6 +58,7 @@ class DataSource(str, enum.Enum):
     csv_upload = "csv_upload"
     sib_pdf = "sib_pdf"  # fiduciary audited-statement PDFs (SIB supervised portal)
     sib_simbad = "sib_simbad"  # SIMBAD public Superset — fallback when the open API lacks a period
+    sib_historical = "sib_historical"  # Cronología SB historical CSVs (per-entity monthly, 1947→)
 
 
 class ModelType(str, enum.Enum):
@@ -392,4 +394,54 @@ class FideicomisoHealthScore(UUIDMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("fideicomiso_id", "period_end", name="uq_fideicomiso_score_period"),
+    )
+
+
+# ─── SIB Historical Ledger (Cronología SB) ────────────────────────
+
+
+class SibHistoricalLedger(UUIDMixin, Base):
+    """Raw historical financial ledger published by the SIB via *Cronología SB*.
+
+    Landing zone (long format: 1 row = entity × period × chart-of-accounts line)
+    for the per-entity **monthly** balance sheet (``estado='situacion'``,
+    1947→) and income statement (``estado='resultados'``, 1996→). This table is
+    the auditable, re-derivable source; it is NOT scored directly — a downstream
+    crosswalk pivots it into ``banking_data`` rows (``source=sib_historical``).
+
+    ``row_key`` is a stable hash of the natural key (estado, fecha, entity, the
+    four account levels) so re-loading a fresh snapshot upserts the same cell
+    instead of duplicating — and so the constraint behaves identically on SQLite
+    and Postgres regardless of NULL levels (resultados has no nivel_3/4).
+    """
+    __tablename__ = "sib_historical_ledger"
+
+    estado = Column(String(12), nullable=False)          # 'situacion' | 'resultados'
+    fecha = Column(Date, nullable=False)
+    ano = Column(Integer, nullable=False)
+    mes = Column(Integer, nullable=False)
+    periodicidad = Column(String(16), nullable=True)     # Mensual | Trimestral | Semestral | Anual
+
+    entidad_code = Column(String(64), nullable=False)    # ENTIDAD (short code)
+    entidad_nombre = Column(String(255), nullable=True)
+    tipo_entidad = Column(String(96), nullable=True)     # normalised (casing collapsed)
+    sector = Column(String(32), nullable=True)           # Público | Privado
+    tipo_capital = Column(String(48), nullable=True)
+
+    nivel_1 = Column(String(128), nullable=True)         # Activos | Pasivos | Patrimonio | (P&L lines)
+    nivel_2 = Column(String(200), nullable=True)
+    nivel_3 = Column(String(200), nullable=True)         # NULL for resultados
+    nivel_4 = Column(String(200), nullable=True)         # NULL for resultados
+
+    monto = Column(Numeric(22, 2), nullable=True)
+    monto_desagregado = Column(Numeric(22, 2), nullable=True)  # resultados only
+
+    snapshot_date = Column(Date, nullable=True)          # source last-modified
+    source_file = Column(String(80), nullable=True)      # e.g. estadosituacion_1947_1996.csv
+    row_key = Column(String(40), nullable=False)         # sha1 of natural key
+
+    __table_args__ = (
+        UniqueConstraint("row_key", name="uq_sib_hist_row_key"),
+        Index("ix_sib_hist_entity_fecha", "entidad_code", "fecha"),
+        Index("ix_sib_hist_estado_fecha", "estado", "fecha"),
     )
