@@ -336,6 +336,24 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "(afiliados que efectivamente cotizan) son la fragilidad estructural del modelo. El foco "
         "es la sostenibilidad del sistema y la posición relativa de cada AFP, no el ranking del mes."
     ),
+    "insurance_intel": (
+        "DOCTRINA DE CASA — Eje de seguros (aseguradoras, SIS):\n"
+        "Lees la SOLIDEZ de una aseguradora dominicana de forma explicable y auditable: el ISF se "
+        "ancla a cinco dimensiones con sus pesos declarados —solvencia regulatoria (patrimonio "
+        "técnico ajustado / margen de solvencia requerida, Ley 146-02, Art. 164), siniestralidad "
+        "(loss ratio), liquidez regulatoria (disponible / mínimo requerido), escala (activos) y "
+        "resultado técnico (sobre primas)—, sobre dato público de la SIS. Un índice regulatorio "
+        "≥ 1 = cumplimiento; por encima, holgura. Respetas la dirección de cada dimensión (MENOR "
+        "siniestralidad es mejor; MAYOR solvencia, liquidez, escala y resultado es mejor); una "
+        "dimensión fuerte de bajo peso no rescata el ISF. Distingues el MERCADO (agregado: mezcla "
+        "de ramos, concentración, estructura) de una aseguradora individual, y el nivel actual de "
+        "la trayectoria. El ISF es una MEDIDA DE SOLIDEZ por bandas absolutas y posición relativa; "
+        "NO es un rating de crédito ni un dictamen regulatorio de solvencia. TRADUCE EL "
+        "TECNICISMO: cada métrica preséntala por lo que SIGNIFICA para la capacidad de la "
+        "aseguradora de pagar siniestros y sostener resultado —absorber pérdidas técnicas, cubrir "
+        "obligaciones, generar resultado sostenible— y solo entonces respáldala con la cifra. La "
+        "conclusión va primero; el número la sostiene, no la sustituye."
+    ),
     "deal_scoring": (
         "DOCTRINA DE CASA — Eje Deal Scoring (atractivo/cierre de una operación):\n"
         "Lees el atractivo de un deal como índice explicable: mayor score = deal más atractivo. "
@@ -789,6 +807,25 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "Le importa: la brecha de cobertura y la densidad de cotización (informalidad) como "
             "límite estructural del modelo, y el crecimiento del fondo. Tu \"y por tanto\" final "
             "apunta a la palanca de política con mayor retorno sobre la cobertura y la sostenibilidad."
+        ),
+    },
+    "insurance_intel": {
+        "inversionista": (
+            "FRAME DE DECISIÓN — Audiencia: Inversionista / mercado de capitales.\n"
+            "Decide: cómo leer la solidez de una aseguradora y del mercado asegurador como "
+            "oportunidad o riesgo (capital, resultado técnico, escala, crecimiento de primas).\n"
+            "Le importa: la calidad y sostenibilidad del resultado técnico, la holgura de "
+            "solvencia sobre el mínimo regulatorio y la posición competitiva. Tu \"y por tanto\" "
+            "final apunta a dónde la aseguradora o el mercado crea valor o riesgo no descontado, "
+            "sin inventar cifras que no estén en los datos."
+        ),
+        "regulador": (
+            "FRAME DE DECISIÓN — Audiencia: Regulador / SIS.\n"
+            "Decide: dónde poner el foco prudencial sobre la aseguradora y el mercado.\n"
+            "Le importa: la holgura de solvencia y liquidez regulatorias sobre el mínimo (Ley "
+            "146-02), la siniestralidad como señal de suficiencia de tarifas y la aseguradora "
+            "rezagada que amerita atención. Tu \"y por tanto\" final apunta a la prioridad de "
+            "supervisión y la señal a monitorear."
         ),
     },
     "deal_scoring": {
