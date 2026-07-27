@@ -10,6 +10,7 @@ from shared.cache import cache_get, cache_set
 from shared.config.settings import settings
 from shared.llm.budget import budget_allows, record_usage
 from shared.narrative.lang_context import get_request_lang
+from shared.narrative.sanitize import strip_meta_commentary
 
 logger = logging.getLogger(__name__)
 
@@ -989,14 +990,28 @@ class NarrativeEngine:
             logger.warning("No se pudo serializar narrativa a L2 (se omite): %s", e)
 
     def _build_result(self, response) -> NarrativeResult:
-        """NarrativeResult from a Claude response — token/cost accounting, no caching."""
+        """NarrativeResult from a Claude response — token/cost accounting, no caching.
+
+        Punto único de extracción del texto para AMBAS rutas (cerebro y legacy): aquí se
+        aplica la red de seguridad ``strip_meta_commentary`` que garantiza que ningún
+        meta-comentario del modelo (auto-corrección "espera —", duda, tags de razonamiento)
+        llegue al render. Si el sanitizador interviene, se LOGuea a nivel WARNING: es señal
+        de que el prompt anti-meta falló y de que la fuga merece revisión, no un silencio.
+        """
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
         # Contabilidad central: registra el gasto del día (Redis) y devuelve el costo
         # estimado con la tarifa DEL MODELO (antes estaba hardcodeada la de Sonnet).
         cost = record_usage(settings.ANTHROPIC_MODEL, input_tokens, output_tokens)
+        text, removed = strip_meta_commentary(response.content[0].text)
+        if removed:
+            logger.warning(
+                "Meta-comentario del modelo removido de la narrativa (%d fragmento(s)): %s. "
+                "Revisar el prompt anti-meta si recurre.",
+                len(removed), removed,
+            )
         return NarrativeResult(
-            text=response.content[0].text,
+            text=text,
             tokens_used=input_tokens + output_tokens,
             cost_estimate=cost,
             model_used=settings.ANTHROPIC_MODEL,
@@ -1190,8 +1205,10 @@ class NarrativeEngine:
         # de producto para que esa garantía exista en 6 ejes y no en el resto. Deliberadamente
         # SIN BARRA_DE_INSIGHT ni CEREBRO_IDENTITY: la profundidad analítica del cerebro es
         # una decisión de producto aparte; "no fabricar" aplica siempre.
-        from shared.narrative.cerebro import EPISTEMIC_STANDARD, REGISTER_NEUTRO
-        legacy_system = REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
+        from shared.narrative.cerebro import (
+            EPISTEMIC_STANDARD, NO_META_COMMENTARY, REGISTER_NEUTRO)
+        legacy_system = (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
+                         + "\n\n" + NO_META_COMMENTARY)
 
         try:
             # to_thread + semáforo: mismo motivo que la ruta cerebro — liberar el event loop
