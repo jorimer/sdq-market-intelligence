@@ -1859,6 +1859,7 @@
     "history": "History",
     "historySub": "Latest runs",
     "historyEmpty": "No runs recorded yet.",
+    "groupedCount": "{{count}} occurrences grouped in this window",
     "colOperation": "Operation",
     "colOrigin": "Origin",
     "colStatus": "Status",

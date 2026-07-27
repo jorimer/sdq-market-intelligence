@@ -11,11 +11,33 @@ despachador de webhooks de clientes nunca lo reenvía. La doctrina "NO se expone
 IA" se mantiene: esto es telemetría de operación, no dato de cliente.
 """
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from shared.events.event_bus import NARRATIVE_DEGRADED, event_bus
 
 logger = logging.getLogger("sdq.narrative.degradation")
+
+# Un solo registro de incidente por VENTANA: durante un outage se acumulan muchas entregas
+# bloqueadas; en vez de una fila por intento, se agrupan en una sola fila de la Consola de
+# Operaciones cuyo `finished_at` (última ocurrencia) se va refrescando y cuyo `summary.count`
+# se incrementa. Ventana deslizante: si sigue degradando dentro de la hora, sigue en la misma
+# fila; un hueco > 1h abre una fila nueva.
+_INCIDENT_OP = "narrative-degraded"
+_INCIDENT_WINDOW_SECONDS = 3600
+
+
+def _naive_utc_now() -> datetime:
+    """UTC naive, igual que ``operations.service._dt`` (columnas DateTime sin tz)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _incident_error(count: int, target: str, section_count) -> str:
+    if count <= 1:
+        return (f"1 degradación de narrativa — {target}, {section_count} sección(es) de "
+                f"análisis, entrega premium bloqueada.")
+    return (f"{count} degradaciones de narrativa en la última hora "
+            f"(última: {target}, {section_count} sección(es)). Entregas premium bloqueadas.")
 
 
 def emit_narrative_degraded(
@@ -72,26 +94,53 @@ def _on_narrative_degraded(payload: dict) -> None:
 
 
 def _record_ops_incident(payload: dict) -> None:
-    """Escribe un ``OperationRun`` terminal para que la degradación bloqueada aparezca en la
-    Consola de Operaciones. Sesión propia (el evento se publica en el hilo del request, con su
-    propia sesión ocupada); nunca propaga excepción."""
+    """Anota la degradación bloqueada en la Consola de Operaciones, AGRUPADA por ventana.
+
+    Si ya hay una fila ``narrative-degraded`` con ``finished_at`` dentro de la ventana, la
+    ACTUALIZA (incrementa ``count``, refresca ``last_at``/``finished_at``, acumula ``by_target``);
+    si no, crea una nueva. Sesión propia (el evento se publica en el hilo del request, con su
+    sesión ocupada); nunca propaga excepción. Nota: sin bloqueo entre requests concurrentes un
+    outage puede crear alguna fila extra ocasional — aceptable para telemetría."""
     try:
         from shared.database.session import SessionLocal
+        from shared.operations.models import OperationRun
         from shared.operations.service import record_incident
     except Exception:  # noqa: BLE001 — sin ops/DB (tests aislados) no hay historial que escribir
         return
     db = SessionLocal()
     try:
-        sector = payload.get("sector_key")
-        tier = payload.get("tier")
-        secs = payload.get("sections") or []
-        record_incident(
-            db, "narrative-degraded",
-            summary={k: payload.get(k) for k in
-                     ("surface", "sector_key", "tier", "scope", "period",
-                      "sections", "section_count", "cause")},
-            error=(f"Narrativa IA degradada a estático: {sector}/{tier} — "
-                   f"{len(secs)} sección(es) de análisis, entrega premium bloqueada."))
+        now = _naive_utc_now()
+        cutoff = now - timedelta(seconds=_INCIDENT_WINDOW_SECONDS)
+        target = f"{payload.get('sector_key')}/{payload.get('tier')}"
+        detail = {k: payload.get(k) for k in
+                  ("surface", "sector_key", "tier", "scope", "period",
+                   "sections", "section_count", "cause")}
+        section_count = payload.get("section_count")
+        row = (db.query(OperationRun)
+               .filter(OperationRun.operation == _INCIDENT_OP,
+                       OperationRun.finished_at.isnot(None),
+                       OperationRun.finished_at >= cutoff)
+               .order_by(OperationRun.finished_at.desc())
+               .first())
+        if row is None:  # nueva ventana → fila nueva (count=1)
+            record_incident(
+                db, _INCIDENT_OP,
+                summary={"count": 1, "window_seconds": _INCIDENT_WINDOW_SECONDS,
+                         "first_at": now.isoformat(), "last_at": now.isoformat(),
+                         "by_target": {target: 1}, "last": detail},
+                error=_incident_error(1, target, section_count))
+            return
+        summ = dict(row.summary or {})
+        count = int(summ.get("count", 1)) + 1
+        by = dict(summ.get("by_target") or {})
+        by[target] = int(by.get(target, 0)) + 1
+        summ.update(count=count, last_at=now.isoformat(), by_target=by, last=detail)
+        summ.setdefault("window_seconds", _INCIDENT_WINDOW_SECONDS)
+        summ.setdefault("first_at", (row.started_at or now).isoformat())
+        row.summary = summ                       # reasignar dict → SQLAlchemy marca dirty
+        row.finished_at = now
+        row.error = _incident_error(count, target, section_count)
+        db.commit()
     except Exception:  # noqa: BLE001 — la telemetría jamás debe tumbar la entrega
         db.rollback()
         logger.exception("No se pudo registrar el incidente de narrativa degradada en ops")
