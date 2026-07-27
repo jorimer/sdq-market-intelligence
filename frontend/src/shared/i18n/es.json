@@ -1859,6 +1859,7 @@
     "history": "Historial",
     "historySub": "Últimas corridas",
     "historyEmpty": "Aún no hay corridas registradas.",
+    "groupedCount": "{{count}} ocurrencias agrupadas en esta ventana",
     "colOperation": "Operación",
     "colOrigin": "Origen",
     "colStatus": "Estado",

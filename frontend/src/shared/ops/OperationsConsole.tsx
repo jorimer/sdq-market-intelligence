@@ -327,9 +327,26 @@ export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, o
                       </tr>
                     </thead>
                     <tbody>
-                      {history.map((h) => (
+                      {history.map((h) => {
+                        // Incidentes agrupados (p.ej. narrative-degraded): el summary trae un
+                        // `count` acumulado en la ventana. Se muestra como un contador discreto
+                        // junto al nombre; el detalle va en el title (hover). Solo afecta filas
+                        // que lo traen — el resto de operaciones queda igual.
+                        const count =
+                          typeof h.summary?.count === "number" ? h.summary.count : null;
+                        return (
                         <tr key={h.id} className="border-b border-line/60 last:border-0">
-                          <td className="py-2 px-2 text-ink">{h.operation}</td>
+                          <td className="py-2 px-2 text-ink">
+                            {h.operation}
+                            {count && count > 1 ? (
+                              <span
+                                className="ml-2 text-xs text-muted tabular-nums"
+                                title={t("ops.groupedCount", { count })}
+                              >
+                                ×{count}
+                              </span>
+                            ) : null}
+                          </td>
                           <td className="py-2 px-2 text-body">{h.origin}</td>
                           <td className="py-2 px-2">
                             <Chip
@@ -343,7 +360,8 @@ export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, o
                           <td className="py-2 px-2 mono text-body">{fmtDateTime(h.started_at, locale)}</td>
                           <td className="py-2 px-2 mono text-body">{fmtDateTime(h.finished_at, locale)}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

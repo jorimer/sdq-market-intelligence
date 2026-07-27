@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
+from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
 from modules.banking_score.models.models import (
     Bank,
     RatingAction,
@@ -25,6 +26,15 @@ from modules.banking_score.models.models import (
 logger = logging.getLogger("sdq.api.reports")
 
 router = APIRouter()
+
+# Reportes de cliente cuyo VALOR es la narrativa (el "SDQ Rating" / deep dive de la entidad):
+# si el análisis IA se degradó a fallback estático, NO deben marcarse `completed`. Los boletines
+# de sistema (wire/datawatch/sector_outlook/communique/criteria) no se gatean aquí.
+_PREMIUM_REPORT_TYPES = {"full_rating", "scorecard"}
+_NARRATIVE_DEGRADED_MSG = (
+    "El análisis de este informe no está disponible en este momento por un límite temporal "
+    "del servicio de generación. Reintente en unos minutos."
+)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -174,7 +184,7 @@ async def generate_communique(
         report.file_path = file_path
     except Exception as e:
         logger.error("Communiqué PDF failed: %s", e)
-        report.status = ReportStatus.failed
+        report.status = ReportStatus.error
         report.error_message = str(e)
 
     action.communique_report_id = report.id
@@ -417,6 +427,18 @@ async def generate_report(
             period=period_end,
             benchmarks=benchmarks,
         )
+        # GATE DE DEGRADACIÓN: en un reporte premium (SDQ Rating / deep dive de la entidad)
+        # una sola sección de análisis caída a fallback estático produce un PDF hueco. Se
+        # detecta ANTES de renderizar (no se desperdicia el render) y se aborta como `error`
+        # con un mensaje de reintento — nunca `completed`. La causa (outage/429 o presupuesto)
+        # es indistinta: el marcador `static_fallback` la cubre por igual.
+        degraded = degraded_sections(narratives, list(narratives.keys()))
+        if degraded and report_type in _PREMIUM_REPORT_TYPES:
+            from shared.narrative.degradation_events import emit_narrative_degraded
+            emit_narrative_degraded(
+                surface="banking_legacy", sector_key="banking", tier=report_type,
+                sections=degraded, blocked=True, scope=bank.name, period=period_end)
+            raise NarrativeDegradedError(degraded)
         file_path = await generate_pdf_report(
             report_type=report_type,
             bank_name=bank.name,
@@ -435,9 +457,22 @@ async def generate_report(
         report.file_size = len(pdf_bytes)
         report.completed_at = datetime.now(timezone.utc)
         report.narrative_model = "claude" if narratives else "none"
+    except NarrativeDegradedError as d:
+        # No es un fallo de código: es degradación transitoria del servicio de narrativa.
+        # Se marca `error` (con las secciones afectadas) y se responde 503 (reintento).
+        report.status = ReportStatus.error
+        report.narrative_model = "static_fallback"
+        report.error_message = (
+            "Narrativa IA no disponible por límite temporal; reintente. "
+            f"Secciones afectadas: {', '.join(d.sections)}")
+        report.completed_at = None
+        db.commit()
+        logger.warning("Reporte %s premium para %s con %d sección(es) degradada(s): "
+                       "no se completa (%s).", report_type, bank.name, len(d.sections), d.sections)
+        raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
     except Exception as e:
         logger.error("PDF generation failed: %s", e)
-        report.status = ReportStatus.failed
+        report.status = ReportStatus.error
         report.error_message = str(e)
 
     db.commit()
