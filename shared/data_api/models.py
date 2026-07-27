@@ -95,7 +95,9 @@ class ApiUsage(UUIDMixin, Base):
         String, ForeignKey("data_api_key.id"), nullable=False
     )
     resource: Mapped[str] = mapped_column(String(60), nullable=False)  # "catalog" | "series" | …
-    asset_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # 512: guarda el mismo ``asset.key`` ("{sector}:{kind}:{code}") que el ledger; con
+    # códigos BCRD/SIB largos, 255 desbordaba y tumbaba el commit de la llamada servida.
+    asset_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     status_code: Mapped[int] = mapped_column(Integer, nullable=False)
     rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     latency_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -126,11 +128,14 @@ class ApiAssetLedger(Base, UUIDMixin):
 
     __tablename__ = "data_api_asset_ledger"
 
-    asset_key: Mapped[str] = mapped_column(String(255), nullable=False)   # "macro:series:x"
+    # 512, no 255/180: la clave y el code copian ``mm_series.series_code`` (VARCHAR 255,
+    # códigos jerárquicos del motor Excel BCRD/SIB) y la clave le antepone
+    # "{sector}:{kind}:" (~15 chars). 180 desbordaba en Postgres y tumbaba el batch entero.
+    asset_key: Mapped[str] = mapped_column(String(512), nullable=False)   # "macro:series:x"
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     sector_key: Mapped[str] = mapped_column(String(40), nullable=False)
-    code: Mapped[str] = mapped_column(String(180), nullable=False)
-    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    code: Mapped[str] = mapped_column(String(512), nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     # None = sigue vivo. Se rellena cuando el activo desaparece del manifiesto.
