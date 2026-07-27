@@ -143,6 +143,23 @@ DEEP_DIRECTIVE = (
     "una lectura o implicación que la versión breve omitió; nada de relleno."
 )
 
+# Defensa PRIMARIA contra la fuga de meta-comentario (bug 2026-07-27: "espera —" de
+# auto-corrección del modelo llegó a un PDF de cliente). La salida es el TEXTO FINAL que se
+# renderiza tal cual; no hay una capa editorial humana después. El sanitizador
+# (shared.narrative.sanitize) es la red determinista, pero la regla NACE aquí: que el modelo
+# no piense en voz alta ni se corrija dentro de la prosa. Va en el system de AMBAS rutas.
+NO_META_COMMENTARY = (
+    "SALIDA FINAL — SIN META-COMENTARIO (regla dura): tu respuesta se publica TAL CUAL en un "
+    "informe de cliente; no existe una edición humana posterior. Escribe SOLO la narrativa "
+    "final terminada. PROHIBIDO en el cuerpo: pensar en voz alta, dudar o corregirte a ti "
+    "mismo dentro del texto ('espera —', 'un momento', 'corrijo', 'en realidad no', 'wait', "
+    "'let me reconsider', 'mejor dicho'), narrar tu proceso ('veamos', 'déjame revisar'), "
+    "referirte a ti como IA o modelo, o dejar etiquetas de razonamiento (<thinking>, "
+    "[reasoning]…). Si al redactar detectas que una cifra o afirmación estaba mal, "
+    "reconsidérala EN SILENCIO y escribe únicamente la versión corregida y definitiva —nunca "
+    "el titubeo ni la versión descartada—. El lector solo debe ver el juicio final, pulido."
+)
+
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────
 
 AXIS_DOCTRINE: Dict[str, str] = {
@@ -840,4 +857,6 @@ def build_system(axis: str, audience: Optional[str], mode: str) -> str:
     parts.append(BARRA_DE_INSIGHT)
     if mode in ("detailed", "deep"):
         parts.append(DEPTH_DIRECTIVE)
+    # Última instrucción del system: la salida es final, sin meta-comentario ni auto-corrección.
+    parts.append(NO_META_COMMENTARY)
     return "\n\n".join(parts)

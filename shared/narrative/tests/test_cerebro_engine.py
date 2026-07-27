@@ -11,9 +11,14 @@ from shared.narrative.cerebro import (
     CEREBRO_IDENTITY,
     DEEP_DIRECTIVE,
     EPISTEMIC_STANDARD,
+    NO_META_COMMENTARY,
     REGISTER_NEUTRO,
 )
 from shared.narrative.numeric_guard import _parse_unsupported
+
+# El system de la ruta legacy: registro de voz + disciplina epistémica + regla de salida
+# final (anti meta-comentario). Ver claude_engine.generate (ruta legacy).
+_LEGACY_SYSTEM = REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD + "\n\n" + NO_META_COMMENTARY
 
 
 class _FakeMsg:
@@ -69,7 +74,7 @@ def test_legacy_route_is_byte_identical(monkeypatch):
 
     assert len(calls) == 1 and not _judge_calls(calls)   # legacy no invoca el guardrail
     system = calls[0].get("system") or ""
-    assert system == REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
+    assert system == _LEGACY_SYSTEM
     assert REGISTER_NEUTRO in system and EPISTEMIC_STANDARD in system
     assert BARRA_DE_INSIGHT not in system                # no es la ruta cerebro
     assert CEREBRO_IDENTITY not in system
@@ -83,7 +88,7 @@ def test_axis_with_non_thin_template_stays_legacy(monkeypatch):
     asyncio.run(eng.generate({"x": 1}, template="executive_summary", axis="banking"))
     # legacy (sin juez): registro de voz + disciplina epistémica, no la Barra del cerebro.
     assert len(calls) == 1
-    assert calls[0].get("system") == REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
+    assert calls[0].get("system") == _LEGACY_SYSTEM
     assert BARRA_DE_INSIGHT not in (calls[0].get("system") or "")
 
 
@@ -91,7 +96,7 @@ def test_unknown_axis_falls_back_to_legacy_without_keyerror(monkeypatch):
     eng, calls = _engine_capturing(monkeypatch)
     asyncio.run(eng.generate({"x": 1}, template="entity_rating", axis="__sin_doctrina__"))
     assert len(calls) == 1
-    assert calls[0].get("system") == REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
+    assert calls[0].get("system") == _LEGACY_SYSTEM
     assert BARRA_DE_INSIGHT not in (calls[0].get("system") or "")
 
 
