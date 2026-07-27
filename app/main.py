@@ -153,6 +153,9 @@ register_banking_subscribers()  # banking_score ← irmp.updated (outlook overla
 subscribe_product_events()  # monitor de productos ← *.updated (recálculo de readiness)
 subscribe_billing_events()  # alerta de tarifa ← tariff.published (notifica a suscriptos)
 
+from shared.narrative.degradation_events import subscribe_narrative_degradation_events
+subscribe_narrative_degradation_events()  # ops ← narrative.degraded (alerta de PDF hueco bloqueado)
+
 from shared.data_api.webhooks import subscribe_webhook_events
 subscribe_webhook_events()  # webhooks de clientes ← *.updated (aviso de dato nuevo)
 

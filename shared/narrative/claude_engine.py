@@ -881,6 +881,67 @@ STATIC_FALLBACKS = {
     ),
 }
 
+# Modelo reportado por ``_generate_fallback`` cuando la narrativa IA NO se generó (sin API
+# key, error de red, rate-limit sostenido o corte de presupuesto): el ÚNICO marcador
+# confiable de degradación, agnóstico a la causa. Todo consumidor que necesite distinguir
+# "narrativa real" de "relleno estático" debe compararse contra esta constante o usar
+# ``is_static_fallback_text`` (que además cubre el caso en que solo se conserva el texto).
+STATIC_FALLBACK_MODEL = "static_fallback"
+
+# Texto neutro que sirve ``_generate_fallback`` cuando NO hay un fallback por-template en
+# ``STATIC_FALLBACKS``. Es la fuente única: el render lo toma de aquí y el detector lo compara
+# contra aquí, así nunca se desincronizan. En un producto premium este párrafo es JUSTO la
+# señal de "Deep Dive hueco" que NO debe salir a cliente.
+STATIC_FALLBACK_GENERIC = (
+    "Esta sección sintetiza la información cuantitativa del período presentada en este "
+    "informe. El análisis cualitativo ampliado se incorpora en la versión completa del "
+    "producto."
+)
+
+# Conjunto de TODOS los textos que el motor puede emitir como fallback estático (el genérico
+# + los por-template). Se compara con match EXACTO (tras strip) para no tener falsos positivos:
+# ni las Limitaciones, ni los bullets de alerta, ni la metodología, ni las muestras curadas
+# coinciden con estos strings, así que solo una degradación real del motor los reproduce.
+_STATIC_FALLBACK_TEXTS = frozenset(
+    {STATIC_FALLBACK_GENERIC} | {v.strip() for v in STATIC_FALLBACKS.values()}
+)
+
+
+def is_static_fallback_text(text: object) -> bool:
+    """¿*text* es un relleno estático emitido por el motor (narrativa degradada)?
+
+    Se usa cuando solo se conserva el TEXTO de la sección (los productos devuelven
+    ``{sección: str}`` y descartan ``NarrativeResult.model_used``). Match exacto contra los
+    fallbacks conocidos → cero falsos positivos sobre prosa real o secciones legítimamente
+    estáticas (limitaciones, metodología, muestras curadas)."""
+    if not isinstance(text, str):
+        return False
+    return text.strip() in _STATIC_FALLBACK_TEXTS
+
+
+def degraded_sections(narratives: dict, sections) -> list:
+    """Nombres de *sections* cuyo texto en *narratives* es un fallback estático.
+
+    El detector central de degradación para el ensamblado de reportes: alimenta tanto el
+    log de ops como la decisión de fallar-cerrado en productos premium."""
+    n = narratives or {}
+    return [s for s in sections if is_static_fallback_text(n.get(s))]
+
+
+class NarrativeDegradedError(RuntimeError):
+    """La narrativa IA cayó al fallback estático en secciones de ANÁLISIS de un producto
+    premium (Insight/Deep Dive). Degradación transitoria (rate-limit/outage del API o corte
+    de presupuesto): el reporte NO se entrega hueco. El llamador la traduce a un error de
+    reintento en español, en vez de completar un PDF de cliente con relleno."""
+
+    def __init__(self, sections):
+        self.sections = list(sections)
+        super().__init__(
+            "Narrativa IA no disponible por límite temporal del servicio de análisis en "
+            f"{len(self.sections)} sección(es): {', '.join(self.sections)}."
+        )
+
+
 CACHE_TTL_SECONDS = 3600  # 1 hour
 
 # Namespace de la L2 compartida (Redis). Versionado: subir a v2 invalida todo el
@@ -973,7 +1034,7 @@ class NarrativeEngine:
 
     def _set_cache(self, key: str, result: NarrativeResult):
         self._cache[key] = (result, time.time())
-        if result.model_used == "static_fallback":
+        if result.model_used == STATIC_FALLBACK_MODEL:
             # El fallback estático es un degradado transitorio (sin API key, error,
             # presupuesto): se cachea solo por-worker, no se propaga a los demás.
             return
@@ -1094,12 +1155,10 @@ class NarrativeEngine:
             logger.warning("Narrativa sin motor IA (template=%s): se sirvió texto estático "
                            "neutro. Configurar ANTHROPIC_API_KEY para narrativa completa.",
                            template)
-            text = ("Esta sección sintetiza la información cuantitativa del período "
-                    "presentada en este informe. El análisis cualitativo ampliado se "
-                    "incorpora en la versión completa del producto.")
+            text = STATIC_FALLBACK_GENERIC
         return NarrativeResult(
             text=text,
-            model_used="static_fallback",
+            model_used=STATIC_FALLBACK_MODEL,
         )
 
     async def generate(

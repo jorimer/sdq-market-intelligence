@@ -10,6 +10,10 @@ ANALYSIS_COMPLETED = "analysis.completed"
 THRESHOLD_BREACH = "threshold.breach"
 REPORT_GENERATED = "report.generated"
 DATA_UPLOADED = "data.uploaded"
+# Señal INTERNA de ops: la narrativa IA se degradó a fallback estático en un reporte. NO es
+# un evento público (no va en data_api PUBLIC_EVENTS): no se expone al cliente, alimenta la
+# alerta/métrica de operación cuando un premium se bloquea por degradación transitoria.
+NARRATIVE_DEGRADED = "narrative.degraded"
 
 
 class EventBus:
