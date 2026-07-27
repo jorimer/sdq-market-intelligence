@@ -445,3 +445,61 @@ class SibHistoricalLedger(UUIDMixin, Base):
         Index("ix_sib_hist_entity_fecha", "entidad_code", "fecha"),
         Index("ix_sib_hist_estado_fecha", "estado", "fecha"),
     )
+
+
+class SibHistoricalFinancials(UUIDMixin, Base):
+    """Derived monthly financials per entity, computed from the raw ledger.
+
+    The crosswalk (``sib_historical_crosswalk``) pivots :class:`SibHistoricalLedger`
+    into these wide rows — one per entity per month — with the indicator inputs that
+    are *authentically* reconstructable from the accounting ledger. Keyed by
+    ``entidad_code`` (not a ``banks`` FK) on purpose: the historical universe includes
+    ~180 entities, many long-exited, and matching them to the operational ``banks``
+    table would drag in the known matcher pitfalls (APAP→Popular, Bonao→Bonanza). The
+    backtest and forensic reports work off the entity code/name directly.
+
+    Balance ratios (morosidad, cobertura, apalancamiento) are point-in-time and safe;
+    the P&L magnitudes are stored as the SB reports them (YTD-accumulated within the
+    calendar year), so consumers annualise from December or de-accumulate as needed.
+    Capital adequacy (Basel) is NOT here — it's regulatory and absent pre-2004; the
+    leverage ratio (``apalancamiento_pct`` = patrimonio/activos) is the labelled proxy.
+    """
+    __tablename__ = "sib_historical_financials"
+
+    entidad_code = Column(String(64), nullable=False)
+    entidad_nombre = Column(String(255), nullable=True)
+    tipo_entidad = Column(String(96), nullable=True)
+    sector = Column(String(32), nullable=True)
+    fecha = Column(Date, nullable=False)
+    ano = Column(Integer, nullable=False)
+    mes = Column(Integer, nullable=False)
+
+    # ── Balance-derived magnitudes (RD$) ──
+    activos_totales = Column(Numeric(22, 2), nullable=True)
+    cartera_bruta = Column(Numeric(22, 2), nullable=True)
+    cartera_neta = Column(Numeric(22, 2), nullable=True)
+    provisiones = Column(Numeric(22, 2), nullable=True)          # positive
+    cartera_vencida_90d = Column(Numeric(22, 2), nullable=True)  # +90d + cobranza judicial
+    depositos_totales = Column(Numeric(22, 2), nullable=True)
+    patrimonio = Column(Numeric(22, 2), nullable=True)
+    pasivos_totales = Column(Numeric(22, 2), nullable=True)
+    activos_liquidos = Column(Numeric(22, 2), nullable=True)     # efectivo + inversiones + interbancarios
+
+    # ── P&L-derived magnitudes (RD$, YTD-accumulated) ──
+    utilidad_neta = Column(Numeric(22, 2), nullable=True)
+    ingresos_financieros = Column(Numeric(22, 2), nullable=True)
+    gastos_financieros = Column(Numeric(22, 2), nullable=True)
+    gastos_operativos = Column(Numeric(22, 2), nullable=True)
+    margen_financiero_bruto = Column(Numeric(22, 2), nullable=True)
+
+    # ── Point-in-time ratios (%) ──
+    morosidad_pct = Column(Numeric(10, 4), nullable=True)        # vencida / bruta
+    cobertura_pct = Column(Numeric(12, 4), nullable=True)        # provisiones / vencida
+    apalancamiento_pct = Column(Numeric(10, 4), nullable=True)   # patrimonio / activos (proxy de capital)
+
+    snapshot_date = Column(Date, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("entidad_code", "fecha", name="uq_sib_hist_fin_entity_fecha"),
+        Index("ix_sib_hist_fin_fecha", "fecha"),
+    )
