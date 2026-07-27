@@ -233,6 +233,33 @@ def test_short_code_substring_does_not_misroute():
     assert C._match_entity_name("BON") == "Bonanza"
 
 
+def test_single_token_alias_does_not_swallow_longer_entity():
+    """Regression: a bare single-token API alias (e.g. 'POPULAR' → Banco Popular)
+    must NOT substring-match a longer, distinct entity whose full name merely
+    contains that word. APAP's name 'ASOC. POPULAR DE AHORROS Y PRESTAMOS' embeds
+    'POPULAR'; if APAP's exact match ever failed (SIB rename / feed variant), the
+    old first-match substring loop would have misrouted APAP → Popular. Same class
+    of defect as the historical Bonao→Bonanza bug (fix #148)."""
+    from modules.banking_score.external.sib_data_client import SIBDataClient as C
+    # Exact names still resolve correctly (baseline: matching is intact).
+    assert C._match_entity_name("ASOC. POPULAR DE AHORROS Y PRESTAMOS") == "APAP"
+    assert C._match_entity_name("BANCO POPULAR DOMINICANO") == "Popular"
+    assert C._match_entity_name("POPULAR") == "Popular"
+    # An APAP-like variant that does NOT hit the exact map must never fall through
+    # to "Popular" via the bare 'POPULAR' fragment — a wrong route is worse than
+    # None, so it resolves to APAP (its own full name) or to nothing, never Popular.
+    for variant in (
+        "ASOCIACION POPULAR DE AHORROS Y PRESTAMOS",   # 'ASOC.' spelled out
+        "ASOC. POPULAR DE AHORROS Y PRESTAMOS, S.A.",  # trailing suffix
+        "POPULAR DE AHORROS Y PRESTAMOS",              # abbreviated
+    ):
+        assert C._match_entity_name(variant) != "Popular", variant
+    # The bare word is deliberately absent from the substring set (exact-only).
+    assert "POPULAR" not in C._SUBSTRING_NAMES
+    # BACC ('DEL CARIBE') must not be swallowed by the 'CARIBE' bank alias either.
+    assert C._match_entity_name("BANCO DE AHORRO Y CREDITO DEL CARIBE") == "BACC"
+
+
 def test_match_or_create_respects_active_flag(Session):
     """Exited entities are catalogued inactive; active ones stay active."""
     db = Session()

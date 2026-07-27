@@ -1085,17 +1085,24 @@ class SIBDataClient:
     #    nombre_sib, sib_code, short). Codes/abbreviations are safe here because
     #    an exact key never collides.
     #  • _SUBSTRING_NAMES — SUBSTRING fallback. Holds ONLY full descriptive names
-    #    (nombre_sib + explicit API names). Short codes are deliberately excluded:
-    #    a fragment like "BON" (Bonanza's sib_code) is a substring of unrelated
-    #    entities ("BONAO"), so using codes for substring matching misroutes data
-    #    (Bonao's balance once landed on Bonanza this way).
+    #    (nombre_sib + MULTI-TOKEN API names). Two kinds of anchor are deliberately
+    #    excluded because their fragments collide with unrelated, longer entities:
+    #      – Short codes: "BON" (Bonanza's sib_code) is a substring of "BONAO",
+    #        so codes once routed Bonao's balance onto Bonanza.
+    #      – Single-token API aliases: a bare generic word like "POPULAR" is a
+    #        substring of "ASOC. POPULAR DE AHORROS Y PRESTAMOS" (APAP), so it
+    #        would swallow that longer distinct entity. A bare alias is already
+    #        covered by the EXACT map, so it adds no matching power here — only
+    #        collision risk. Only multi-token aliases ("SANTA CRUZ", "LA NACIONAL")
+    #        are distinctive enough to anchor a substring safely.
     _ENTITY_REVERSE_MAP: Dict[str, str] = {}
     _SUBSTRING_NAMES: Dict[str, str] = {}
-    # First: add explicit API name mappings (highest priority) — real names, so
-    # they are valid substring candidates too.
+    # First: add explicit API name mappings (highest priority). All are exact keys;
+    # only multi-token ones are also valid (distinctive) substring candidates.
     for _api_name, _short in SIB_API_NAME_MAP.items():
         _ENTITY_REVERSE_MAP[_api_name.upper()] = _short
-        _SUBSTRING_NAMES[_api_name.upper()] = _short
+        if " " in _api_name.strip():
+            _SUBSTRING_NAMES[_api_name.upper()] = _short
     # Then: add nombre_sib and sib_code mappings. Only nombre_sib (the full
     # descriptive name) is eligible for substring matching.
     for _short, _info in SIB_ENTITY_CODES.items():
@@ -1113,8 +1120,8 @@ class SIBDataClient:
 
         The SIB API 'entidad' field format is unknown — could be full name,
         abbreviation, or code. We try exact match first, then a substring
-        fallback restricted to full descriptive names (never short codes, whose
-        fragments collide with unrelated entities).
+        fallback restricted to full descriptive names (never short codes or bare
+        single-token aliases, whose fragments collide with unrelated entities).
         """
         if not api_entity_name:
             return None
@@ -1125,11 +1132,24 @@ class SIBDataClient:
         if name_upper in cls._ENTITY_REVERSE_MAP:
             return cls._ENTITY_REVERSE_MAP[name_upper]
 
-        # Substring match — full descriptive names only (codes excluded).
-        for known_name, short in cls._SUBSTRING_NAMES.items():
-            if known_name in name_upper or name_upper in known_name:
-                return short
-
+        # Substring fallback — full descriptive names only. Collect every candidate
+        # that overlaps (in either direction), then require an UNAMBIGUOUS winner:
+        # the single longest matching known_name. A longer name is more specific,
+        # so it must beat a shorter fragment that happens to be embedded in the
+        # same string (e.g. "POPULAR" losing to a full APAP name). If the longest
+        # length is shared by names resolving to DIFFERENT entities, the input is
+        # genuinely ambiguous → return None rather than guess.
+        matches = [
+            (known_name, short)
+            for known_name, short in cls._SUBSTRING_NAMES.items()
+            if known_name in name_upper or name_upper in known_name
+        ]
+        if not matches:
+            return None
+        max_len = max(len(known_name) for known_name, _ in matches)
+        finalists = {short for known_name, short in matches if len(known_name) == max_len}
+        if len(finalists) == 1:
+            return next(iter(finalists))
         return None
 
     def get_working_tipos(self) -> List[str]:
