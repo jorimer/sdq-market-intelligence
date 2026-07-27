@@ -62,11 +62,30 @@ async def _narratives_cached(
     fp = _narrative_fingerprint(snapshot.payload, tier.value, lang)
     key = dict(sector_key=product.sector_key, tier=tier.value,
                scope=scope or "", period=snapshot.period or "", lang=lang)
+    from shared.narrative.claude_engine import is_static_fallback_text
     row = None
     try:
         row = db.query(ProductReportCache).filter_by(**key).first()
         if row is not None and row.fingerprint == fp:
-            return dict(row.narratives or {})  # HIT
+            cached = dict(row.narratives or {})
+            # DEFENSA / AUTO-SANADO: una fila escrita ANTES de que existiera el guard
+            # anti-envenenamiento (o por cualquier regresión futura) puede contener fallback
+            # estático. Vive en Postgres → sobrevive deploys y se sirve en un HIT SILENCIOSO
+            # sin tocar el motor: un Deep Dive premium queda hueco de forma permanente y
+            # determinista (el síntoma exacto de las filas cacheadas el 2026-07-27 durante una
+            # degradación transitoria, antes del guard de escritura). Si el HIT está degradado
+            # se trata como MISS: se regenera y —si el motor ya responde— se re-cachea sano,
+            # sin cirugía manual de BD. El log de HIT (antes ausente) da observabilidad.
+            if cached and any(is_static_fallback_text(v) for v in cached.values()):
+                logger.warning(
+                    "caché de narrativas HIT DEGRADADA en %s/%s (scope=%s, período=%s): "
+                    "fila envenenada (fallback estático cacheado) — se ignora y regenera.",
+                    product.sector_key, tier.value, scope or "", snapshot.period or "")
+            else:
+                logger.info(
+                    "caché de narrativas HIT en %s/%s (scope=%s, período=%s).",
+                    product.sector_key, tier.value, scope or "", snapshot.period or "")
+                return cached  # HIT sano
     except Exception as e:  # noqa: BLE001 — la caché jamás debe tumbar la entrega
         logger.warning("caché de narrativas (lectura) no disponible: %s", e)
         return await product.narratives(tier, snapshot, lang)
@@ -76,8 +95,7 @@ async def _narratives_cached(
     # outage o corte de presupuesto), cachearlo serviría el mismo relleno hueco incluso
     # después de que el servicio se recupere (envenenamiento de caché). Se devuelve tal cual
     # para que el gate premium de `_content_from_snapshot` decida; la próxima descarga
-    # regenerará de verdad.
-    from shared.narrative.claude_engine import is_static_fallback_text
+    # regenerará de verdad. (``is_static_fallback_text`` ya importado arriba.)
     if any(is_static_fallback_text(v) for v in narratives.values()):
         logger.warning(
             "Narrativa degradada a fallback estático en %s/%s (scope=%s, período=%s): "
