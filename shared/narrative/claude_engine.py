@@ -653,6 +653,56 @@ THIN_TEMPLATES = {
         "(3) el 'y por tanto' para la audiencia. Es una FOTO trimestral; NO emitas juicio de riesgo "
         "crediticio del emisor. Usa solo las cifras del contexto (montos RD$ y %)."
     ),
+    "insurance_pulse": (
+        "Entrega una PERSPECTIVA DE MERCADO del sector asegurador dominicano (nivel abierto, "
+        "audiencia de mercado), a partir del agregado de la SIS:\n{context}\n\n"
+        "Máximo 350 palabras, formato SCQA. Es una lectura de MERCADO, no de una aseguradora "
+        "individual: no perfiles una compañía por su nombre salvo para ilustrar el líder o el "
+        "rezagado del agregado. Lee en orden de prioridad: (1) SALUD AGREGADA — el nivel de "
+        "solidez del mercado (ISF promedio, peso del núcleo sólido frente a la cola en "
+        "vigilancia); (2) DISPERSIÓN — quién lidera y quién rezaga y por cuánto, como "
+        "diferenciación competitiva; (3) ESTRUCTURA — concentración y mezcla de ramos como "
+        "condicionante de la estabilidad del mercado. Cierra con el 'y por tanto' para la "
+        "audiencia. Usa SOLO las cifras del contexto; si una relación no está precalculada, "
+        "exprésala en palabras sin número."
+    ),
+    "insurance_market_context": (
+        "Lee la ESTRUCTURA y la MEZCLA del mercado asegurador dominicano (dato real SIS) como "
+        "CONTEXTO de la posición de esta aseguradora:\n{context}\n\n"
+        "Máximo 300 palabras. Es una lectura de MERCADO (nivel sistema), no de una aseguradora. "
+        "Lee: (1) la CONCENTRACIÓN del mercado (quién domina, cuota) y qué implica para la "
+        "competencia y el poder de tarifa; (2) la MEZCLA de ramos y la dispersión de solidez "
+        "entre compañías (núcleo sólido frente a cola débil); (3) el 'y por tanto' para la "
+        "audiencia. No perfiles una aseguradora por su nombre si el contexto es agregado. Usa "
+        "SOLO las cifras del contexto; si una relación no está precalculada, exprésala sin número."
+    ),
+    "insurance_peer_positioning": (
+        "Sitúa a esta aseguradora frente a las del mercado usando la TABLA DE PARES servida "
+        "(dato real SIS), dimensión por dimensión:\n{context}\n\n"
+        "Máximo 300 palabras. NO repitas el fundamento del ISF; aquí el foco es la POSICIÓN "
+        "COMPETITIVA con NÚMEROS de los pares. Lee: (1) en qué dimensiones LIDERA y en cuáles "
+        "REZAGA, citando el valor de los pares relevantes (líder y promedio del grupo), no en "
+        "abstracto; (2) la BRECHA concreta con el líder donde más rezaga y qué la explica; (3) "
+        "qué la diferencia estructuralmente del resto. El score de cada dimensión es POSICIÓN "
+        "RELATIVA entre las aseguradoras. Recuerda la dirección: MENOR siniestralidad es mejor. "
+        "Usa SOLO las cifras de la tabla; no inventes valores de pares que no estén. Cierra con "
+        "el 'y por tanto' competitivo para la audiencia."
+    ),
+    "insurance_entity": (
+        "Explica el FUNDAMENTO del Índice de Solidez de la Aseguradora (ISF), con dato real de "
+        "la SIS.\nContexto:\n{context}\n\n"
+        "Máximo 350 palabras. NO es un rating de crédito ni un dictamen de solvencia. Apóyate "
+        "en: el score y la banda de solidez, la posición relativa (rank) frente a las "
+        "aseguradoras, y la(s) dimensión(es) que más la impulsan y las que más la lastran "
+        "(pondera por su peso). Las cinco dimensiones son solvencia regulatoria (PTA/margen, "
+        "Ley 146-02; ≥ 1 = cumple), siniestralidad (loss ratio; MENOR es mejor), liquidez "
+        "regulatoria (disponible/mínimo; ≥ 1 = cumple), escala (activos) y resultado técnico "
+        "(sobre primas). INTERPRETA cada tecnicismo por lo que significa para la capacidad de "
+        "pagar siniestros y sostener resultado, no como cifra suelta. No cubras las cinco por "
+        "igual: ve profundo en la tensión que más condiciona la decisión de la audiencia. Usa "
+        "SOLO las cifras del contexto; si una relación no está precalculada, exprésala en "
+        "palabras sin número."
+    ),
     "risk_assessment": (
         "Explica el FUNDAMENTO del riesgo macro-político (IRMP) de este país.\n"
         "Contexto:\n{context}\n\n"
