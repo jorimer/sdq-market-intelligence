@@ -21,10 +21,10 @@ logger = logging.getLogger("sdq.narrative.degradation")
 # Un solo registro de incidente por VENTANA: durante un outage se acumulan muchas entregas
 # bloqueadas; en vez de una fila por intento, se agrupan en una sola fila de la Consola de
 # Operaciones cuyo `finished_at` (última ocurrencia) se va refrescando y cuyo `summary.count`
-# se incrementa. Ventana deslizante: si sigue degradando dentro de la hora, sigue en la misma
-# fila; un hueco > 1h abre una fila nueva.
+# se incrementa. Ventana deslizante: si sigue degradando dentro del día, sigue en la misma
+# fila; un hueco > 24h abre una fila nueva.
 _INCIDENT_OP = "narrative-degraded"
-_INCIDENT_WINDOW_SECONDS = 3600
+_INCIDENT_WINDOW_SECONDS = 86400
 
 
 def _naive_utc_now() -> datetime:
@@ -36,7 +36,7 @@ def _incident_error(count: int, target: str, section_count) -> str:
     if count <= 1:
         return (f"1 degradación de narrativa — {target}, {section_count} sección(es) de "
                 f"análisis, entrega premium bloqueada.")
-    return (f"{count} degradaciones de narrativa en la última hora "
+    return (f"{count} degradaciones de narrativa en las últimas 24h "
             f"(última: {target}, {section_count} sección(es)). Entregas premium bloqueadas.")
 
 
