@@ -14,6 +14,63 @@ from shared.narrative.sanitize import strip_meta_commentary
 
 logger = logging.getLogger(__name__)
 
+# ── Reintento de sección ante fallos TRANSITORIOS del API ──────────────────────
+# Un Deep Dive premium fanea sus 6 secciones con asyncio.gather; cada sección hace
+# 2-4 llamadas al API (generación + juez numérico + posible regeneración). Esa ráfaga
+# concurrente puede rozar el rate/overload por-organización de Anthropic: el SDK ya
+# reintenta 4 veces por-request (max_retries=4), pero las 6 secciones reintentan EN
+# FASE y no se desincronizan, así que un subconjunto agota los reintentos del SDK
+# dentro de la misma ventana y cae a estático → degradación PARCIAL (p.ej. 4/6). La
+# banca nunca degrada porque genera SECUENCIAL (jamás dispara la ráfaga).
+#
+# Este reintento a nivel de SECCIÓN, con backoff exponencial + JITTER, da headroom
+# extra ADEMÁS del SDK y —clave— desfasa las secciones entre sí para que dejen de
+# competir en lockstep. Es puramente aditivo: sólo puede convertir una sección que
+# HABRÍA caído a estático en una real; nunca al revés. Sólo reintenta errores
+# transitorios (rate limit, overload/5xx, timeout, corte de red); los permanentes
+# (auth, 400, 404) se propagan de una — reintentar no los arregla, sólo demora el
+# fallback.
+_TRANSIENT_RETRY_ATTEMPTS = 3          # intentos de sección, ADEMÁS de los del SDK
+_TRANSIENT_RETRY_BASE_SECONDS = 2.0    # backoff base; crece exponencial + jitter
+
+
+def _is_transient_anthropic_error(exc: Exception) -> bool:
+    """¿El error del API es transitorio (reintentar puede resolverlo)?"""
+    import anthropic
+    if isinstance(exc, (anthropic.RateLimitError, anthropic.APITimeoutError,
+                        anthropic.APIConnectionError, anthropic.InternalServerError)):
+        return True
+    if isinstance(exc, anthropic.APIStatusError):
+        # 429 rate limit, 529 overloaded, 5xx del servidor.
+        return getattr(exc, "status_code", None) in (429, 500, 502, 503, 504, 529)
+    return False
+
+
+def _call_with_transient_retry(fn, *, label: str):
+    """Ejecuta ``fn`` (que hace la llamada bloqueante al API) reintentando SÓLO ante
+    errores transitorios, con backoff exponencial + jitter. Corre dentro de
+    ``asyncio.to_thread`` (worker thread), así que ``time.sleep`` bloqueante es correcto
+    y no toca el event loop. Re-lanza el último error si se agotan los intentos o si el
+    error no es transitorio (para que el caller degrade a estático como siempre)."""
+    import random
+    last_exc: Optional[Exception] = None
+    for attempt in range(_TRANSIENT_RETRY_ATTEMPTS + 1):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if attempt >= _TRANSIENT_RETRY_ATTEMPTS or not _is_transient_anthropic_error(exc):
+                raise
+            delay = _TRANSIENT_RETRY_BASE_SECONDS * (2 ** attempt) + random.uniform(0, 1.5)
+            logger.warning(
+                "API transitorio en %s (intento %d/%d): %s — reintento de sección en %.1fs",
+                label, attempt + 1, _TRANSIENT_RETRY_ATTEMPTS, exc, delay,
+            )
+            time.sleep(delay)
+    assert last_exc is not None  # inalcanzable; el loop siempre retorna o relanza
+    raise last_exc
+
+
 # Directiva que fuerza el idioma de salida. Va al FINAL del prompt (la última
 # instrucción manda), así no hay que reescribir los ~16 templates por idioma:
 # Claude genera nativo en el idioma destino respetando esta orden.
@@ -1152,9 +1209,12 @@ class NarrativeEngine:
             CORRECTION_NOTICE, deterministic_unsupported, verify_figures)
 
         def _gen(user_msg):
-            resp = client.messages.create(
-                model=settings.ANTHROPIC_MODEL, max_tokens=max_tokens,
-                system=system, messages=[{"role": "user", "content": user_msg}],
+            resp = _call_with_transient_retry(
+                lambda: client.messages.create(
+                    model=settings.ANTHROPIC_MODEL, max_tokens=max_tokens,
+                    system=system, messages=[{"role": "user", "content": user_msg}],
+                ),
+                label=f"cerebro:{template}",
             )
             return self._build_result(resp)
 
@@ -1324,11 +1384,14 @@ class NarrativeEngine:
             # para que el gather de secciones no se serialice, con la concurrencia acotada.
             async with self._get_sem():
                 response = await asyncio.to_thread(
-                    client.messages.create,
-                    model=settings.ANTHROPIC_MODEL,
-                    max_tokens=max_tokens,
-                    system=legacy_system,
-                    messages=[{"role": "user", "content": prompt}],
+                    _call_with_transient_retry,
+                    lambda: client.messages.create(
+                        model=settings.ANTHROPIC_MODEL,
+                        max_tokens=max_tokens,
+                        system=legacy_system,
+                        messages=[{"role": "user", "content": prompt}],
+                    ),
+                    label=f"legacy:{template}",
                 )
             return self._result_from_response(response, cache_key, template)
 
