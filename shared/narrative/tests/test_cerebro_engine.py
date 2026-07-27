@@ -121,6 +121,38 @@ def test_cerebro_route_uses_system_and_thin(monkeypatch):
     assert res.guard_unsupported == []
 
 
+def test_insurance_intel_is_wired_to_cerebro(monkeypatch):
+    """Regresión (2026-07-27): insurance_intel NO estaba en AXIS_DOCTRINE y sus templates no
+    existían en THIN_TEMPLATES → seguros caía a la ruta legacy con el prompt genérico
+    executive_summary (sin doctrina de seguros ni Barra de Insight). Este test fija que el eje
+    y sus 4 templates estén cableados y que la generación tome la ruta cerebro."""
+    from shared.narrative.cerebro import AXIS_DOCTRINE
+    assert "insurance_intel" in AXIS_DOCTRINE
+    for t in ("insurance_pulse", "insurance_market_context",
+              "insurance_peer_positioning", "insurance_entity"):
+        assert t in THIN_TEMPLATES, f"falta thin template {t}"
+    assert "insurance_intel" in AUDIENCE_FRAMES
+    assert "inversionista" in AUDIENCE_FRAMES["insurance_intel"]
+
+    eng, calls = _engine_capturing(monkeypatch)
+    ctx = {"entity_name": "Seguros Reservas, S.A.", "isf_score": 66, "banda": "Adecuada"}
+    asyncio.run(eng.generate(
+        ctx, template="insurance_entity", mode="standard", lang="es",
+        axis="insurance_intel", audience="inversionista",
+    ))
+    gen = _gen_calls(calls)[0]
+    # ruta cerebro: system ensamblado (identidad + doctrina de seguros + frame), NO legacy
+    assert CEREBRO_IDENTITY in gen["system"]
+    assert BARRA_DE_INSIGHT in gen["system"]
+    assert AXIS_DOCTRINE["insurance_intel"] in gen["system"]
+    assert AUDIENCE_FRAMES["insurance_intel"]["inversionista"] in gen["system"]
+    # usa el thin template de seguros, NO el executive_summary genérico de la ruta legacy
+    context_str = claude_engine.json.dumps(ctx, indent=2, ensure_ascii=False, default=str)
+    assert gen["messages"][0]["content"] == _apply_lang(
+        THIN_TEMPLATES["insurance_entity"].format(context=context_str), "es")
+    assert "Eres un analista financiero senior" not in gen["messages"][0]["content"]
+
+
 def test_deep_mode_appends_directive_and_raises_max_tokens(monkeypatch):
     """`mode="deep"`: el override de longitud (DEEP_DIRECTIVE) se anexa al FINAL del
     mensaje de tarea (gana sobre el tope del thin) y max_tokens sube a 4096. En
