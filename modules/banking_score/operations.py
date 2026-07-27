@@ -88,6 +88,36 @@ def _run_backtest(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_sib_historical_load(params, user_id, set_phase) -> Dict:
+    """Carga el ledger histórico de la SB (Cronología SB, 1947→) y deriva los financials.
+
+    Descarga los 7 CSV públicos, los carga a ``sib_historical_ledger`` (idempotente,
+    replace por archivo) y reconstruye ``sib_historical_financials`` vía el crosswalk.
+    Corre server-side (alcanza la DB interna, descarga en el servidor). Bajo demanda: el
+    snapshot de la SB se actualiza esporádicamente; re-correr re-descarga ~518 MB.
+    """
+    from modules.banking_score.external import sib_historical_client as hist
+    from modules.banking_score import sib_historical_crosswalk as xw
+    db = SessionLocal()
+    try:
+        loaded: Dict[str, int] = {}
+        n = len(hist.FILES)
+        for i, rec in enumerate(hist.FILES, 1):
+            name = hist.source_file_name(rec)
+            set_phase(f"descargando y cargando {name} ({i}/{n})")
+            try:
+                loaded[name] = hist.load_file(db, rec)
+            except Exception as e:  # noqa: BLE001 — un archivo no debe abortar el resto
+                loaded[name] = -1
+                set_phase(f"{name} falló: {e}")
+        total = sum(v for v in loaded.values() if v and v > 0)
+        set_phase(f"derivando financials por entidad ({total:,} filas en el ledger)")
+        derived = xw.derive_all(db)
+        return {"ledger_rows": total, "derived_rows": derived, "files": loaded}
+    finally:
+        db.close()
+
+
 def register() -> None:
     """Register banking-score operations into the shared console (idempotent)."""
     register_operation(Operation(
@@ -118,6 +148,13 @@ def register() -> None:
         "backtest", "Backtest del rating",
         "Recalcula la validación de discriminación del rating (Gini + curva de distress por tier).",
         _run_backtest, default_interval_hours=720,
+    ))
+    register_operation(Operation(
+        "sib-historical-load", "Cargar histórico SIB (1947→)",
+        "Descarga los CSV históricos de la SB (Cronología SB) y carga el ledger crudo "
+        "por-entidad mensual (balance 1947→, resultados 1996→), luego deriva los financials. "
+        "Bajo demanda (~518 MB): correr cuando la SB publique un snapshot nuevo.",
+        _run_sib_historical_load, default_interval_hours=0,
     ))
 
 

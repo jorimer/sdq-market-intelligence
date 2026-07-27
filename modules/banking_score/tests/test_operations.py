@@ -158,3 +158,13 @@ def test_run_due_skips_not_yet_due(Session):
     db.commit()
     db.close()
     assert operations.run_due_schedules() == 0
+
+
+def test_sib_historical_load_operation_registered():
+    """La carga histórica SIB se registra como operación bajo demanda de la consola."""
+    from shared.operations.service import OPERATIONS, is_on_demand
+    op = OPERATIONS.get("sib-historical-load")
+    assert op is not None
+    assert op.default_interval_hours == 0  # bajo demanda (snapshot, ~518 MB)
+    assert is_on_demand(op)
+    assert not op.needs_params
