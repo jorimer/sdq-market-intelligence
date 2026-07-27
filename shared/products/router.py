@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user, require_role
 from shared.auth.models import AccessTier, User, UserRole, tier_satisfies
 from shared.database.session import get_db
+from shared.narrative.claude_engine import NarrativeDegradedError
 from shared.narrative.lang_context import resolve_request_lang
 from shared.products.access import (
     AccessDecision,
@@ -53,6 +54,14 @@ from shared.products.subscriptions import (
 from shared.products.tiers import Granularity, ProductTier
 
 router = APIRouter()
+
+# Mensaje de degradación transitoria de la narrativa IA (rate-limit/outage del servicio de
+# análisis o corte de presupuesto). Un producto premium NO se entrega hueco: se responde 503
+# (reintento) en vez de un PDF con relleno. Español, orientado al usuario final.
+_NARRATIVE_DEGRADED_MSG = (
+    "El análisis de este informe no está disponible en este momento por un límite temporal "
+    "del servicio de generación. Reintente en unos minutos."
+)
 
 
 def _parse_tier(tier: str) -> ProductTier:
@@ -240,6 +249,9 @@ async def get_product_report(
     try:
         content = await assemble_product_content(
             product, access.tier, period=period or "", scope=scope, lang=lang)
+    except NarrativeDegradedError:
+        # Narrativa IA degradada a fallback estático en un premium: no se sirve hueco.
+        raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
     except AnonymizationError:
         # Invariante del framework violada (un Pulse filtró un nombre): bug, no input.
         raise HTTPException(status_code=500,
@@ -284,6 +296,9 @@ async def get_product_pdf(
     try:
         path = await assemble_product_report(
             product, access.tier, period=period or "", scope=scope, lang=lang, fmt=fmt)
+    except NarrativeDegradedError:
+        # Narrativa IA degradada a fallback estático en un premium: no se descarga hueco.
+        raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
     except AnonymizationError:
         raise HTTPException(status_code=500,
                             detail="Error de gobernanza al ensamblar el producto.")

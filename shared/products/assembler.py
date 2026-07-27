@@ -72,6 +72,18 @@ async def _narratives_cached(
         return await product.narratives(tier, snapshot, lang)
 
     narratives = await product.narratives(tier, snapshot, lang)  # MISS → generar
+    # NUNCA persistir texto degradado: si el motor IA cayó al fallback estático (rate-limit,
+    # outage o corte de presupuesto), cachearlo serviría el mismo relleno hueco incluso
+    # después de que el servicio se recupere (envenenamiento de caché). Se devuelve tal cual
+    # para que el gate premium de `_content_from_snapshot` decida; la próxima descarga
+    # regenerará de verdad.
+    from shared.narrative.claude_engine import is_static_fallback_text
+    if any(is_static_fallback_text(v) for v in narratives.values()):
+        logger.warning(
+            "Narrativa degradada a fallback estático en %s/%s (scope=%s, período=%s): "
+            "no se cachea; la próxima descarga reintenta.",
+            product.sector_key, tier.value, scope or "", snapshot.period or "")
+        return narratives
     try:
         if row is None:
             row = ProductReportCache(**key)
@@ -133,6 +145,30 @@ async def _content_from_snapshot(
     de anonimización Pulse y produce las narrativas vía el motor (con caché). NO renderiza."""
     level = _assert_system_payload(product, tier, snapshot)
     narratives = await _narratives_cached(product, tier, snapshot, lang, scope)
+    # GATE DE DEGRADACIÓN: si el motor IA cayó al fallback estático en secciones de ANÁLISIS
+    # del nivel, un Deep Dive/Insight —que ES el producto pago completo— saldría hueco
+    # ("El análisis ampliado se incorpora en la versión completa del producto"), engañoso y
+    # dañino para la marca. Se detecta sobre el TEXTO ya ensamblado (los productos descartan
+    # model_used) y se decide por tier: los premium (nombrados) FALLAN cerrado con un error de
+    # reintento; el Pulse (abierto) solo se registra. Umbral = 1: una sola sección de análisis
+    # degradada ya invalida un premium. La caché nunca guardó este texto (ver _narratives_cached),
+    # así que al recuperarse el servicio la próxima descarga regenera de verdad.
+    from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
+    degraded = degraded_sections(narratives, level.sections)
+    if degraded:
+        blocked = level.granularity is not Granularity.system
+        logger.warning(
+            "Reporte %s/%s (scope=%s, período=%s) con %d/%d sección(es) de análisis "
+            "degradada(s) a fallback estático: %s",
+            product.sector_key, tier.value, scope or "", snapshot.period or "",
+            len(degraded), len(level.sections), degraded)
+        # Telemetría de ops (evento interno, no público). Best-effort: no rompe la entrega.
+        from shared.narrative.degradation_events import emit_narrative_degraded
+        emit_narrative_degraded(
+            surface="products", sector_key=product.sector_key, tier=tier.value,
+            sections=degraded, blocked=blocked, scope=scope, period=snapshot.period)
+        if blocked:
+            raise NarrativeDegradedError(degraded)
     # Glosario automático (audiencia mixta): detecta las siglas/términos técnicos que la
     # narrativa YA REDACTADA usa y anexa su definición. Va ANTES del merge de las secciones
     # estándar (metodología/fuentes no llevan jerga propia del eje). Punto único: lo

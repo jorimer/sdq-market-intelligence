@@ -7,6 +7,8 @@ Validates:
 - Data endpoints (template, raw data)
 - Stats endpoint
 """
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -20,7 +22,20 @@ from shared.notifications.service import Notification  # noqa: F401
 from modules.banking_score.models.models import (  # noqa: F401
     Bank, BankingData, RatingResult, RatingAction, Report,
 )
+from modules.banking_score.reports.narrative import REPORT_SECTIONS
 from app.main import app
+
+# El entorno de test/CI no tiene ANTHROPIC_API_KEY → la narrativa degradaría a fallback
+# estático y el guard anti-PDF-hueco respondería 503 en los reportes premium (full_rating/
+# scorecard). Estos tests validan la MECÁNICA del endpoint (crear/descargar), no el motor IA,
+# así que simulan la narrativa sana que en producción SÍ se genera (la key está siempre). El
+# path 503 de degradación se cubre aparte en test_reports_degradation.py.
+_PATCH_NARRATIVE = "modules.banking_score.reports.narrative.generate_report_narratives"
+
+
+async def _healthy_narratives(report_type, bank_name, scoring_result, period, benchmarks=None):
+    return {s: f"Análisis sustantivo de {s} para {bank_name} en {period}."
+            for s in REPORT_SECTIONS.get(report_type, ["executive_summary"])}
 
 # ─── Test DB Setup ───────────────────────────────────────────────
 
@@ -383,10 +398,11 @@ class TestReportsEndpoints:
         # Score first so rating exists
         client.post(f"/api/v1/banking-score/{bank_id}/run?period_end=2024-12-31", headers=headers)
 
-        resp = client.post(
-            f"/api/v1/banking-score/reports/{bank_id}/generate?period_end=2024-12-31&report_type=full_rating",
-            headers=headers,
-        )
+        with patch(_PATCH_NARRATIVE, _healthy_narratives):
+            resp = client.post(
+                f"/api/v1/banking-score/reports/{bank_id}/generate?period_end=2024-12-31&report_type=full_rating",
+                headers=headers,
+            )
         assert resp.status_code == 200
         data = resp.json()
         assert data["report_type"] == "full_rating"
@@ -423,13 +439,14 @@ class TestReportsEndpoints:
 
         client.post(f"/api/v1/banking-score/{bank_id}/run?period_end=2024-12-31", headers=headers)
 
-        for rt in ["scorecard", "communique", "wire"]:
-            resp = client.post(
-                f"/api/v1/banking-score/reports/{bank_id}/generate?period_end=2024-12-31&report_type={rt}",
-                headers=headers,
-            )
-            assert resp.status_code == 200, f"Failed for {rt}"
-            assert resp.json()["report_type"] == rt
+        with patch(_PATCH_NARRATIVE, _healthy_narratives):
+            for rt in ["scorecard", "communique", "wire"]:
+                resp = client.post(
+                    f"/api/v1/banking-score/reports/{bank_id}/generate?period_end=2024-12-31&report_type={rt}",
+                    headers=headers,
+                )
+                assert resp.status_code == 200, f"Failed for {rt}"
+                assert resp.json()["report_type"] == rt
 
 
 class TestDataUpload:
@@ -632,10 +649,11 @@ class TestReportGeneration:
         bank_id = bank.id
         db.close()
         client.post(f"/api/v1/banking-score/{bank_id}/run?period_end=2024-12-31", headers=headers)
-        resp = client.post(
-            f"/api/v1/banking-score/reports/{bank_id}/generate?period_end=2024-12-31&report_type=scorecard",
-            headers=headers,
-        )
+        with patch(_PATCH_NARRATIVE, _healthy_narratives):
+            resp = client.post(
+                f"/api/v1/banking-score/reports/{bank_id}/generate?period_end=2024-12-31&report_type=scorecard",
+                headers=headers,
+            )
         assert resp.status_code == 200
         report_id = resp.json()["report_id"]
         resp = client.get(

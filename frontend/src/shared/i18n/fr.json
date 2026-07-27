@@ -1859,6 +1859,7 @@
     "history": "Historique",
     "historySub": "Dernières exécutions",
     "historyEmpty": "Aucune exécution enregistrée pour l'instant.",
+    "groupedCount": "{{count}} occurrences regroupées dans cette fenêtre",
     "colOperation": "Opération",
     "colOrigin": "Origine",
     "colStatus": "État",

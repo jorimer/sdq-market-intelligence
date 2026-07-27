@@ -192,6 +192,19 @@ def _finish_run(db: Session, run_id: str, status: str, summary=None, error=None)
     db.commit()
 
 
+def record_incident(db: Session, operation: str, *, summary=None, error=None,
+                    origin: str = "event") -> str:
+    """Registra un INCIDENTE puntual como ``OperationRun`` terminal (no una operación de la
+    consola, sino un evento que merece quedar en el historial de ops que ve el admin).
+
+    Corre y termina en el mismo instante (``status='error'``), así aparece en el feed de
+    ``recent_runs`` / la Consola de Operaciones sin estar registrado en ``OPERATIONS``. Lo usa
+    la telemetría de narrativa degradada (entrega premium bloqueada)."""
+    now = _dt()
+    return _record_run(db, operation, origin, None, "error", now,
+                       finished_at=now, summary=summary, error=error)
+
+
 def recent_runs(db: Session, limit: int = 20) -> List[Dict]:
     rows = db.query(OperationRun).order_by(OperationRun.created_at.desc()).limit(limit).all()
     return [
