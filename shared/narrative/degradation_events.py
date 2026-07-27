@@ -64,6 +64,39 @@ def _on_narrative_degraded(payload: dict) -> None:
             payload.get("sections"),
             "ENTREGA BLOQUEADA (premium)" if blocked else "registrado (nivel abierto)")
     (logger.error if blocked else logger.warning)(msg, *args)
+    # Solo las degradaciones que BLOQUEAN una entrega premium se anotan en el historial de la
+    # Consola de Operaciones (que ve el admin/superadmin). Las de nivel abierto (Pulse) quedan
+    # solo en log para no inundar el feed. Best-effort: un fallo de persistencia no rompe nada.
+    if blocked:
+        _record_ops_incident(payload)
+
+
+def _record_ops_incident(payload: dict) -> None:
+    """Escribe un ``OperationRun`` terminal para que la degradación bloqueada aparezca en la
+    Consola de Operaciones. Sesión propia (el evento se publica en el hilo del request, con su
+    propia sesión ocupada); nunca propaga excepción."""
+    try:
+        from shared.database.session import SessionLocal
+        from shared.operations.service import record_incident
+    except Exception:  # noqa: BLE001 — sin ops/DB (tests aislados) no hay historial que escribir
+        return
+    db = SessionLocal()
+    try:
+        sector = payload.get("sector_key")
+        tier = payload.get("tier")
+        secs = payload.get("sections") or []
+        record_incident(
+            db, "narrative-degraded",
+            summary={k: payload.get(k) for k in
+                     ("surface", "sector_key", "tier", "scope", "period",
+                      "sections", "section_count", "cause")},
+            error=(f"Narrativa IA degradada a estático: {sector}/{tier} — "
+                   f"{len(secs)} sección(es) de análisis, entrega premium bloqueada."))
+    except Exception:  # noqa: BLE001 — la telemetría jamás debe tumbar la entrega
+        db.rollback()
+        logger.exception("No se pudo registrar el incidente de narrativa degradada en ops")
+    finally:
+        db.close()
 
 
 def subscribe_narrative_degradation_events() -> None:
