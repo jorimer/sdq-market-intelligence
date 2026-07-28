@@ -857,7 +857,8 @@
       "fideicomisos": "Fideicomisos",
       "model": "Modelo",
       "validation": "Validación",
-      "reports": "Reportes"
+      "reports": "Reportes",
+      "historico": "Histórico"
     },
     "entityType": {
       "all": "Todos",
