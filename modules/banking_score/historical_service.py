@@ -7,6 +7,8 @@ Alerta Temprana. Todo dato real de fuente pública.
 """
 from __future__ import annotations
 
+from datetime import date
+from statistics import median
 from typing import Dict, List, Optional
 
 from modules.banking_score import sib_historical_backtest as bt
@@ -139,16 +141,33 @@ def forensic_package(db, nombre: str) -> Optional[Dict]:
         return None
 
     dates = sorted(series_rows)
+    tipo = series_rows[dates[-1]].tipo_entidad
+
+    # Mediana de pares: morosidad mensual de las OTRAS entidades del MISMO tipo (contexto para
+    # leer si la mora de la entidad se despega de su cohorte, no solo su nivel absoluto).
+    peer_by_month: Dict[date, List[float]] = {}
+    for nm, rows in by_name.items():
+        if nm == nombre:
+            continue
+        for pd, pr in rows.items():
+            if pr.tipo_entidad != tipo:
+                continue
+            pm = _f(pr.morosidad_pct)
+            if pm is not None and 0 <= pm <= 100:
+                peer_by_month.setdefault(pd, []).append(pm)
+
     series: List[Dict] = []
     prev_dep = None
     for d in dates:
         r = series_rows[d]
         dep = _f(r.depositos_totales)
         dep_mom = round(100 * (dep / prev_dep - 1), 1) if (dep and prev_dep) else None
+        peers = peer_by_month.get(d)
         series.append({
             "fecha": d.isoformat(),
             "activos_totales": _f(r.activos_totales),
             "morosidad_pct": _f(r.morosidad_pct),
+            "peer_mora_pct": round(median(peers), 2) if peers else None,
             "cobertura_pct": _f(r.cobertura_pct),
             "apalancamiento_pct": _f(r.apalancamiento_pct),
             "depositos": dep,

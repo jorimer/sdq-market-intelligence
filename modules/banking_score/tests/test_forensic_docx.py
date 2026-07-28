@@ -9,6 +9,7 @@ def _pkg():
         series.append({
             "fecha": f"{y}-{m:02d}-01", "activos_totales": 1000.0,
             "morosidad_pct": (1.0 if i < 12 else 40.0),
+            "peer_mora_pct": 3.0,
             "cobertura_pct": (200.0 if i < 12 else 20.0),
             "apalancamiento_pct": 10.0, "depositos": 600.0,
             "dep_mom_pct": (-23.0 if i == 12 else 1.0),

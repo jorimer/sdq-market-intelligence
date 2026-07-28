@@ -12,6 +12,7 @@ def _pkg():
         series.append({
             "fecha": f"{y}-{m:02d}-01", "activos_totales": 1000.0,
             "morosidad_pct": (1.0 if i < 12 else 40.0),
+            "peer_mora_pct": 3.0,
             "cobertura_pct": (200.0 if i < 12 else 20.0),
             "apalancamiento_pct": 10.0, "depositos": 600.0,
             "dep_mom_pct": (-23.0 if i == 12 else 1.0),
@@ -31,11 +32,14 @@ def _pkg():
 
 def test_charts_write_png():
     d = tempfile.mkdtemp()
-    c1, c2 = os.path.join(d, "a.png"), os.path.join(d, "b.png")
-    fp._chart_credito(_pkg()["series"], c1)
-    fp._chart_deposito(_pkg()["series"], c2)
-    assert os.path.getsize(c1) > 0 and os.path.getsize(c2) > 0
-    for f in (c1, c2):
+    pkg = _pkg()
+    marks = fp.marker_indices(pkg)
+    c1, c2, c3 = (os.path.join(d, n) for n in ("a.png", "b.png", "c.png"))
+    fp._chart_morosidad(pkg["series"], marks, c1)
+    fp._chart_cobertura(pkg["series"], marks, c2)
+    fp._chart_deposito(pkg["series"], marks, c3)
+    assert all(os.path.getsize(c) > 0 for c in (c1, c2, c3))
+    for f in (c1, c2, c3):
         os.remove(f)
     os.rmdir(d)
 
