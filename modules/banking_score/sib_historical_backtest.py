@@ -27,6 +27,9 @@ from modules.banking_score import early_warning as ew
 
 logger = logging.getLogger("sdq.banking.sib_historical_backtest")
 
+_NEAR_EXIT = 18   # el run de deterioro debe llegar a ≤18m de la salida para fechar la quiebra
+_RUN_GAP = 6      # respiros (meses sin cluster) tolerados dentro del run final
+
 # Cohorte de quiebras SISTÉMICAS (Bancos Múltiples) de la crisis de 2003, con su fecha de
 # intervención conocida. El backtest es fiable para este tier: entidades de escala con
 # ratios significativos. NO se incluyen entidades diminutas (p.ej. Banco Peravia, Ahorro y
@@ -114,34 +117,65 @@ def backtest_entity(series: Dict[date, object], *, all_series: Optional[Dict] = 
     fuga de depósitos. Exigir el cluster distingue el deterioro agudo del ruido estructural,
     y deja al descubierto —honestamente— que contra el fraude ocultado (Baninter) el cluster
     llega tarde: los ratios no ven la contabilidad paralela.
+
+    ANCLA AL RUN FINAL (no al primer cluster): el onset es el inicio del RUN de deterioro que
+    entra a la salida, no el primer parpadeo de la historia. Un banco con 20-40 años de dato
+    tiene ruido temprano (libro chico → ratios volátiles) que dispara clusters décadas antes
+    del colapso real — por eso "primer cluster" daba 247 meses en Bancrédito y 77 en Global.
+    Se recorre HACIA ATRÁS desde la salida el run de meses en cluster de deterioro de CRÉDITO
+    (≥``min_cluster`` altas incluyendo salto/nivel de morosidad), tolerando respiros de hasta
+    ``_RUN_GAP`` meses; y el run debe llegar a ≤``_NEAR_EXIT`` meses de la salida para contar
+    como onset de la quiebra (si el último deterioro quedó lejos, se resolvió y no la causó).
     """
     dates = sorted(series)
     exit_date = salida or (dates[-1] if dates else None)
     timeline: List[Dict] = []
     first_high: Optional[date] = None
-    onset: Optional[date] = None
     n_high = 0
 
+    credit_codes = {"salto_morosidad", "morosidad_nivel"}
     idx = [d for d in dates if not (exit_date and d > exit_date)]
-    onset_score: Optional[float] = None
+    det_months: List[date] = []            # meses en cluster de deterioro de crédito
+    det_scores: Dict[date, float] = {}
     for d in idx:
         m = _monthly_metrics(dates, series, dates.index(d), bank_type)
         peers = {"growth_p90": _peer_growth_p90(all_series, d) if all_series else None,
                  "funding_p90": None}
         alerts = ew.evaluate(m, peers)
-        n_altas = sum(1 for a in alerts if a.severity == "alta")
-        if n_altas >= 1:
+        altas = [a for a in alerts if a.severity == "alta"]
+        if altas:
             n_high += 1
             if first_high is None:
                 first_high = d
-        if n_altas >= min_cluster and onset is None:
-            onset = d
-            onset_score = ew.ensemble_score(alerts)["score"]
+        if len(altas) >= min_cluster and any(a.code in credit_codes for a in altas):
+            det_months.append(d)
+            det_scores[d] = ew.ensemble_score(alerts)["score"]
         if alerts:
             timeline.append({"period": d.isoformat(),
                              "score": ew.ensemble_score(alerts)["score"],
                              "alerts": [{"code": a.code, "severity": a.severity, "value": a.value}
                                         for a in alerts]})
+
+    # Onset = inicio del run FINAL de deterioro que llega cerca de la salida.
+    onset: Optional[date] = None
+    onset_score: Optional[float] = None
+    if det_months:
+        last = det_months[-1]
+        m2e = ((exit_date.year - last.year) * 12 + (exit_date.month - last.month)
+               if exit_date else 0)
+        if exit_date is None or m2e <= _NEAR_EXIT:
+            det_set = set(det_months)
+            onset = last
+            gap = 0
+            for j in range(idx.index(last) - 1, -1, -1):
+                if idx[j] in det_set:
+                    onset = idx[j]
+                    gap = 0
+                else:
+                    gap += 1
+                    if gap > _RUN_GAP:
+                        break
+            onset_score = det_scores.get(onset)
 
     lead_months = None
     if onset and exit_date:

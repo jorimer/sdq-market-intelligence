@@ -51,3 +51,55 @@ def test_legibility_legible_vs_punto_ciego():
     ciego = fc.legibility(_pkg(onset=None, lead=None), _ctx(cluster_en_onset=[]))
     assert ciego["legible"] is False and "ciego" in ciego["title"].lower()
     assert "Baninter" in ciego["text"]              # nombra el punto ciego del fraude
+
+
+# ── Clasificación de la naturaleza de la salida ──────────────────────────────────
+
+def _exit_pkg(nombre, tipo, mora, cob, onset=None):
+    """pkg con 6 meses finales a (mora, cob) — para ejercitar classify_exit."""
+    series = [{"fecha": f"2021-{m:02d}-01", "morosidad_pct": mora, "cobertura_pct": cob,
+               "dep_mom_pct": 2.0, "peer_mora_pct": 2.0} for m in range(1, 13)]
+    return {"meta": {"nombre": nombre, "tipo_entidad": tipo, "primer": "2021-01-01",
+                     "ultimo": "2021-12-01"},
+            "series": series,
+            "backtest": {"onset_cluster": onset, "lead_months": (11 if onset else None),
+                         "exit_date": "2021-12-01", "first_high_raw": None, "n_high_months": 0}}
+
+
+def test_classify_no_quiebra_salida_sana():
+    # banco múltiple que sale con mora 1.5% (< piso 5) y cobertura 300% → fusión/renombre
+    pkg = _exit_pkg("Banco Vivo", "Bancos Múltiples", 1.5, 300.0)
+    assert fc.classify_exit(pkg, _ctx()) == fc.NO_QUIEBRA
+
+
+def test_classify_quiebra_por_distress_o_roster():
+    # sale enfermo (mora 20% > piso) → quiebra
+    assert fc.classify_exit(_exit_pkg("Chico", "Bancos Múltiples", 20.0, 40.0), _ctx()) == fc.QUIEBRA
+    # en el roster curado → quiebra aunque los ratios finales se vean bien
+    roster = _exit_pkg("Banco Global", "Bancos Múltiples", 1.0, 300.0)
+    assert fc.classify_exit(roster, _ctx()) == fc.QUIEBRA
+
+
+def test_classify_umbral_relativo_al_tipo():
+    # 10% de mora: sobre el piso del múltiple (quiebra) pero normal para corporación (no)
+    assert fc.classify_exit(_exit_pkg("M", "Bancos Múltiples", 10.0, 200.0), _ctx()) == fc.QUIEBRA
+    corp = fc.classify_exit(_exit_pkg("C", "Corporaciones de Crédito", 10.0, 200.0), _ctx())
+    assert corp == fc.NO_QUIEBRA
+
+
+def test_reframe_no_quiebra_dice_otras_causas():
+    pkg = _exit_pkg("Banco Vivo", "Bancos Múltiples", 1.5, 300.0)
+    kind = fc.classify_exit(pkg, _ctx())
+    h = fc.headings(pkg, _ctx(), kind)
+    assert "no quebró" in h["verdict"] and "otras causas" in h["verdict"]
+    tl = fc.model_timeline(pkg, _ctx(), kind)
+    assert tl[0]["flag"] == "SIN ALERTA"
+    leg = fc.legibility(pkg, _ctx(), kind)
+    assert "no fue una quiebra" in leg["title"].lower()
+    cards = fc.stat_cards(pkg, _ctx(), kind)
+    assert cards[3]["value"] == "No fue quiebra"
+
+
+def test_verdict_lead_cero_no_dice_cero_meses():
+    h = fc.headings(_pkg(onset="2003-09-01", lead=0), _ctx(), fc.QUIEBRA)
+    assert "0 meses" not in h["verdict"] and "señal tardía" in h["verdict"]
