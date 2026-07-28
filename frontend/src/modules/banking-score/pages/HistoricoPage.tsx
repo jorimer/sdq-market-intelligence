@@ -11,17 +11,51 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { History, TrendingDown } from "lucide-react";
+import { History, TrendingDown, FileText, ExternalLink } from "lucide-react";
 import { PageHead, Card, CardHead, StatTile, StateBlock, Chip } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import {
   getCohortBacktest,
   getForensic,
+  getForensicNarrative,
+  forensicReportUrl,
   getHistoricalEntities,
   type CohortResponse,
+  type ForensicNarrative,
   type ForensicPackage,
   type HistoricalEntity,
 } from "../api";
+
+/** Render mínimo de la narrativa (## encabezados · **negrita** · párrafos). */
+function renderNarrative(md: string): JSX.Element[] {
+  const out: JSX.Element[] = [];
+  const bold = (s: string) =>
+    s.split(/(\*\*[^*]+\*\*)/g).map((seg, i) =>
+      seg.startsWith("**") && seg.endsWith("**") ? (
+        <strong key={i} className="text-ink">
+          {seg.slice(2, -2)}
+        </strong>
+      ) : (
+        <span key={i}>{seg}</span>
+      ),
+    );
+  md.split("\n").forEach((raw, i) => {
+    const s = raw.trim();
+    if (!s || s === "---") return;
+    if (s.startsWith("## "))
+      out.push(
+        <h3 key={i} className="font-display text-[15px] font-bold text-ink mt-4 mb-1.5">
+          {s.slice(3)}
+        </h3>,
+      );
+    else out.push(
+      <p key={i} className="text-sm text-body mb-2">
+        {bold(s)}
+      </p>,
+    );
+  });
+  return out;
+}
 
 /** Etiquetas legibles de los códigos de alerta del motor de Alerta Temprana. */
 const ALERT_LABEL: Record<string, string> = {
@@ -53,6 +87,8 @@ export function HistoricoPage() {
   const [entities, setEntities] = useState<HistoricalEntity[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [pkg, setPkg] = useState<ForensicPackage | null>(null);
+  const [narrative, setNarrative] = useState<ForensicNarrative | null>(null);
+  const [narrStatus, setNarrStatus] = useState<"idle" | "loading" | "error" | "ready">("idle");
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [detailStatus, setDetailStatus] = useState<"idle" | "loading" | "error" | "ready">("idle");
 
@@ -82,9 +118,24 @@ export function HistoricoPage() {
     }
   }, []);
 
+  const loadNarrative = useCallback(async (nombre: string) => {
+    if (!nombre) return;
+    setNarrStatus("loading");
+    setNarrative(null);
+    try {
+      setNarrative(await getForensicNarrative(nombre));
+      setNarrStatus("ready");
+    } catch {
+      setNarrStatus("error");
+    }
+  }, []);
+
   useEffect(() => {
-    if (selected) loadDetail(selected);
-  }, [selected, loadDetail]);
+    if (selected) {
+      loadDetail(selected);
+      loadNarrative(selected);
+    }
+  }, [selected, loadDetail, loadNarrative]);
 
   const chartData = useMemo(
     () =>
@@ -279,6 +330,41 @@ export function HistoricoPage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </Card>
+
+          <Card>
+            <CardHead
+              icon={FileText}
+              title="Lectura forense"
+              subtitle="Anatomía de la quiebra, escrita por el Cerebro sobre el dato real"
+              right={
+                <a
+                  href={forensicReportUrl(pkg.meta.nombre)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-soft inline-flex items-center gap-1.5 text-sm shrink-0"
+                >
+                  <ExternalLink size={15} />
+                  Ver informe completo
+                </a>
+              }
+            />
+            {narrStatus === "loading" && (
+              <p className="text-sm text-muted">Generando la lectura forense…</p>
+            )}
+            {narrStatus === "error" && (
+              <p className="text-sm text-muted">No se pudo generar la lectura en este momento.</p>
+            )}
+            {narrStatus === "ready" && narrative && (
+              narrative.degraded || !narrative.narrative ? (
+                <p className="text-sm text-muted">
+                  La lectura narrativa no está disponible ahora (motor IA sin presupuesto). Los datos
+                  y el backtest de arriba son completos; el informe descargable incluye los gráficos.
+                </p>
+              ) : (
+                <div>{renderNarrative(narrative.narrative)}</div>
+              )
             )}
           </Card>
 

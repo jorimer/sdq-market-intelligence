@@ -509,3 +509,21 @@ export async function getForensic(nombre: string): Promise<ForensicPackage> {
   const { data } = await client.get<ForensicPackage>(`${HIST}/forensic`, { params: { nombre } });
   return data;
 }
+
+export interface ForensicNarrative {
+  nombre: string;
+  narrative: string;
+  degraded: boolean;
+}
+
+export async function getForensicNarrative(nombre: string): Promise<ForensicNarrative> {
+  const { data } = await client.get<ForensicNarrative>(`${HIST}/forensic/narrative`, {
+    params: { nombre },
+  });
+  return data;
+}
+
+/** URL absoluta del informe forense branded (HTML) — para abrir/descargar en pestaña nueva. */
+export function forensicReportUrl(nombre: string): string {
+  return `/api/v1${HIST}/forensic/report?nombre=${encodeURIComponent(nombre)}`;
+}

@@ -64,6 +64,70 @@ def cohort_backtest(db) -> Dict:
     }
 
 
+def _at(series: List[Dict], fecha: Optional[str], key: str) -> Optional[float]:
+    if not fecha:
+        return None
+    return next((p[key] for p in series if p["fecha"] == fecha), None)
+
+
+def forensic_narrative_context(pkg: Dict) -> Dict:
+    """Contexto compacto para la narrativa forense (template ``banking_forensic``).
+
+    Trae SOLO cifras reales del paquete —onset, anticipación, morosidad/cobertura en el
+    punto de inflexión y en el pico, la peor fuga de depósitos, fechas— para que el guardrail
+    numérico pueda respaldar cada número que cite la prosa. Los superlativos y las cifras que
+    no estén aquí no deben aparecer en el texto."""
+    meta, bt, series = pkg["meta"], pkg["backtest"], pkg["series"]
+    onset = bt.get("onset_cluster")
+    moras = [p["morosidad_pct"] for p in series if p["morosidad_pct"] is not None]
+    deps = [p["dep_mom_pct"] for p in series if p["dep_mom_pct"] is not None]
+    peor_fuga = min(deps) if deps else None
+    peor_fuga_fecha = next((p["fecha"] for p in series if p["dep_mom_pct"] == peor_fuga), None)
+    onset_alerts = next((t["alerts"] for t in bt.get("timeline", []) if t["period"] == onset), [])
+    return {
+        "entidad": meta["nombre"],
+        "tipo_entidad": meta["tipo_entidad"],
+        "salio_del_sistema": meta["salio_del_sistema"],
+        "periodo_dato": f"{meta['primer']} → {meta['ultimo']}",
+        "colapso_fecha": bt.get("exit_date"),
+        "onset_deterioro": onset,
+        "anticipacion_meses": bt.get("lead_months"),
+        "meses_en_alerta": bt.get("n_high_months"),
+        "morosidad_en_onset_pct": _at(series, onset, "morosidad_pct"),
+        "cobertura_en_onset_pct": _at(series, onset, "cobertura_pct"),
+        "morosidad_maxima_pct": max(moras) if moras else None,
+        "peor_fuga_depositos_pct": peor_fuga,
+        "peor_fuga_fecha": peor_fuga_fecha,
+        "cluster_en_onset": [a["code"] for a in onset_alerts if a["severity"] == "alta"],
+        "fuente": "Superintendencia de Bancos — Cronología SB (estados financieros mensuales, dato real)",
+        "nota": ("Capital regulatorio Basilea NO existe en el balance contable pre-2004 (no citar "
+                 "solvencia Basel); apalancamiento patrimonio/activos es proxy. Informe "
+                 "retrospectivo/forense, no una calificación emitida en su momento."),
+    }
+
+
+async def forensic_narrative(db, nombre: str) -> Optional[Dict]:
+    """Genera la LECTURA FORENSE (prosa SCQA) de una entidad vía el cerebro. ``None`` si no
+    hay dato. Best-effort: si el motor IA no está disponible, devuelve narrativa vacía."""
+    pkg = forensic_package(db, nombre)
+    if pkg is None:
+        return None
+    from shared.narrative.claude_engine import narrative_engine
+    ctx = forensic_narrative_context(pkg)
+    narrativa, degraded = "", False
+    try:
+        res = await narrative_engine.generate(
+            context=ctx, template="banking_forensic", mode="deep",
+            axis="banking", audience="comite_credito")
+        if res.model_used != "static_fallback":
+            narrativa = (res.text or "").strip()
+        else:
+            degraded = True
+    except Exception:  # noqa: BLE001 — la lectura nunca rompe el endpoint
+        degraded = True
+    return {"nombre": nombre, "context": ctx, "narrative": narrativa, "degraded": degraded}
+
+
 def forensic_package(db, nombre: str) -> Optional[Dict]:
     """Paquete forense de UNA entidad: trayectoria mensual de ratios + timeline de alertas.
 
