@@ -141,12 +141,22 @@ def rule_liquidity(liq_ratio: Optional[float], deposit_qoq: Optional[float]) -> 
                  "caída trimestral de depósitos %" if run else "activos líquidos/pasivos exigibles %")
 
 
-def rule_concentration(concentration_pct: Optional[float]) -> Optional[Alert]:
+def rule_concentration(concentration_pct: Optional[float],
+                       is_state_owned: bool = False) -> Optional[Alert]:
     if concentration_pct is None or concentration_pct <= CONCENTRATION:
         return None
+    # El encuadre de la bandera es CONSCIENTE de la naturaleza de la entidad: en banca de
+    # propiedad estatal la concentración top-10 es en parte ESTRUCTURAL (grandes deudores
+    # públicos/sectoriales por mandato), no un proxy de préstamos vinculados. Encuadrarla como
+    # precursor del fraude de 2003 (calibrado sobre la banca privada) es un error de categoría
+    # que además fuerza a la narrativa a justificarlo al revés.
+    basis = ("En banca de propiedad estatal la concentración top-10 refleja en parte exposición "
+             "estructural a grandes deudores públicos/sectoriales por mandato; el foco de riesgo "
+             "es la CALIDAD de esa cartera dirigida, no un patrón de préstamos vinculados"
+             if is_state_owned else
+             "Los préstamos vinculados fueron el corazón del fraude (proxy visible)")
     return Alert("concentracion", "Concentración elevada (top-10)", "media",
-                 round(concentration_pct, 1), CONCENTRATION,
-                 "Los préstamos vinculados fueron el corazón del fraude (proxy visible)",
+                 round(concentration_pct, 1), CONCENTRATION, basis,
                  "top-10 / cartera bruta %")
 
 
@@ -159,7 +169,7 @@ def evaluate(m: Dict, peers: Dict) -> List[Alert]:
         rule_morosidad(m.get("morosidad_pct"), m.get("morosidad_prev4")),
         rule_solvency(m.get("solvencia_pct")),
         rule_liquidity(m.get("liq_ratio"), m.get("deposit_qoq")),
-        rule_concentration(m.get("concentration_pct")),
+        rule_concentration(m.get("concentration_pct"), m.get("is_state_owned", False)),
     ]
     order = {"alta": 0, "media": 1}
     return sorted((a for a in candidates if a is not None), key=lambda a: order.get(a.severity, 9))
@@ -215,9 +225,17 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
                                    if m["funding_cost"] is not None], 0.90),
     }
 
+    from modules.banking_score.scoring.support import STATE_OWNED
+    # Ids de entidades de propiedad estatal (una pasada; evita acceso indexado al dict
+    # ``names`` —tipado con claves Column por el modelo— dentro del loop).
+    state_ids = {b for b, nm in names.items() if nm in STATE_OWNED}
+
     banks: List[Dict] = []
     summary: Dict[str, int] = {}
     for bid, m in metrics.items():
+        # Naturaleza de la entidad → la bandera de concentración se encuadra distinto en
+        # banca estatal (concentración estructural por mandato, no proxy de vinculados).
+        m["is_state_owned"] = bid in state_ids
         alerts = evaluate(m, peers)
         if not alerts:
             continue
