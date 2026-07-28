@@ -7,8 +7,7 @@ autenticado). El dato es real y de fuente pública; no es un producto del catál
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
@@ -67,20 +66,22 @@ async def historical_forensic_narrative(
     return res
 
 
-@router.get("/forensic/report", summary="Informe forense branded (HTML descargable)")
+@router.get("/forensic/report", summary="Informe forense branded (PDF descargable)")
 async def historical_forensic_report(
     nombre: str = Query(..., description="Nombre exacto de la entidad (entidad_nombre)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Documento forense autocontenido (portada SDQ·MIP + gráficos + lectura + fuentes),
-    imprimible/descargable — la versión 'informe' de la vista Histórico."""
-    from modules.banking_score.reports.forensic_report import render_forensic_html
+    """Documento forense en PDF (portada SDQ·MIP + gráficos del dato real + lectura +
+    fuentes) — la versión 'informe' descargable de la vista Histórico."""
+    from modules.banking_score.reports.forensic_pdf import render_forensic_pdf
 
     pkg = svc.forensic_package(db, nombre)
     if pkg is None:
         raise HTTPException(status_code=404, detail=f"Sin dato histórico para '{nombre}'.")
     narr = await svc.forensic_narrative(db, nombre)
-    html = render_forensic_html(pkg, (narr or {}).get("narrative", ""),
-                                degraded=bool((narr or {}).get("degraded")))
-    return HTMLResponse(content=html)
+    pdf = render_forensic_pdf(pkg, (narr or {}).get("narrative", ""),
+                              degraded=bool((narr or {}).get("degraded")))
+    safe = "".join(c if c.isalnum() else "_" for c in nombre)[:60]
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="Informe_Forense_{safe}.pdf"'})

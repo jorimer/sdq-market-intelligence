@@ -68,7 +68,7 @@ def test_forensic_missing_entity_returns_none(db):
     assert svc.forensic_package(db, "No Existe") is None
 
 
-def test_forensic_narrative_context_and_html(db):
+def test_forensic_narrative_context(db):
     healthy = [dict(mora=1.0, cob=200.0)] * 12
     bad = [dict(mora=40.0, cob=20.0)] * 6
     _seed(db, "Banco Quebrado", healthy + bad)
@@ -78,11 +78,3 @@ def test_forensic_narrative_context_and_html(db):
     assert ctx["anticipacion_meses"] is not None
     assert ctx["morosidad_maxima_pct"] == 40.0
     assert "salto_morosidad" in ctx["cluster_en_onset"]
-    # el render produce un documento HTML con la marca y los gráficos SVG
-    from modules.banking_score.reports.forensic_report import render_forensic_html
-    doc = render_forensic_html(pkg, "## Lectura central\nEl **deterioro** empezó en 2002-01.")
-    assert doc.startswith("<!doctype html>")
-    assert "Banco Quebrado" in doc
-    assert "SDQ·MIP" in doc
-    assert "<svg" in doc  # gráficos computados
-    assert "<strong>deterioro</strong>" in doc  # markdown → html

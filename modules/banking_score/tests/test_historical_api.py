@@ -87,5 +87,6 @@ def test_forensic_narrative_and_report():
     # el informe branded se sirve como HTML aunque la narrativa esté degradada
     rep = client.get("/api/v1/banking-score/historical/forensic/report",
                      params={"nombre": "Banco Quebrado"})
-    assert rep.status_code == 200 and rep.text.startswith("<!doctype html>")
-    assert "Banco Quebrado" in rep.text
+    assert rep.status_code == 200
+    assert rep.headers["content-type"] == "application/pdf"
+    assert rep.content.startswith(b"%PDF")

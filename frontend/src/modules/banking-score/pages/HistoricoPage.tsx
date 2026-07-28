@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { History, TrendingDown, FileText, ExternalLink } from "lucide-react";
+import { History, TrendingDown, FileText, Download } from "lucide-react";
 import { PageHead, Card, CardHead, StatTile, StateBlock, Chip } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import {
@@ -345,8 +345,8 @@ export function HistoricoPage() {
                   rel="noopener noreferrer"
                   className="btn btn-soft inline-flex items-center gap-1.5 text-sm shrink-0"
                 >
-                  <ExternalLink size={15} />
-                  Ver informe completo
+                  <Download size={15} />
+                  Descargar informe (PDF)
                 </a>
               }
             />
