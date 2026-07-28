@@ -107,8 +107,8 @@ def _md_to_html(md: str) -> str:
         elif s.startswith("# "):
             flush()
             html_parts.append(f"<h2>{_inline(s[2:].strip())}</h2>")
-        elif not s:
-            flush()
+        elif not s or s == "---":
+            flush()  # línea vacía o separador markdown → cierra el párrafo, no se renderiza
         else:
             para.append(s)
     flush()
