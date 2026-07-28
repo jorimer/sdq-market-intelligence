@@ -39,6 +39,11 @@ FAILED_COHORT: List[Dict] = [
     {"nombre": "Banco Mercantil", "salida": date(2003, 9, 1), "bank_type": "banca_multiple", "episodio": "Crisis 2003"},
     {"nombre": "Banco Intercontinental (Baninter)", "salida": date(2003, 5, 1), "bank_type": "banca_multiple", "episodio": "Crisis 2003 (fraude)"},
     {"nombre": "Banco Global", "salida": date(2003, 6, 1), "bank_type": "banca_multiple", "episodio": "Crisis 2003"},
+    # Episodio de quiebras de inicios de los 90 (confirmado por el dueño). Salida = último mes
+    # reportado en el histórico. Panamericano tiene serie corta (~17m) → el fechado de su onset
+    # es menos fiable, pero se documenta como quiebra conocida del roster.
+    {"nombre": "Banco Universal", "salida": date(1992, 9, 1), "bank_type": "banca_multiple", "episodio": "Quiebra inicios de los 90"},
+    {"nombre": "Banco Panamericano", "salida": date(1992, 4, 1), "bank_type": "banca_multiple", "episodio": "Quiebra inicios de los 90 (serie corta)"},
 ]
 
 

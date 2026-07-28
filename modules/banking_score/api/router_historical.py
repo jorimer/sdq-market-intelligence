@@ -66,22 +66,33 @@ async def historical_forensic_narrative(
     return res
 
 
-@router.get("/forensic/report", summary="Informe forense branded (PDF descargable)")
+@router.get("/forensic/report", summary="Informe forense branded (PDF o Word descargable)")
 async def historical_forensic_report(
     nombre: str = Query(..., description="Nombre exacto de la entidad (entidad_nombre)"),
+    fmt: str = Query("pdf", description="Formato del informe: 'pdf' o 'docx' (Word)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Documento forense en PDF (portada SDQ·MIP + gráficos del dato real + lectura +
-    fuentes) — la versión 'informe' descargable de la vista Histórico."""
-    from modules.banking_score.reports.forensic_pdf import render_forensic_pdf
-
+    """Documento forense branded (portada SDQ·MIP + gráficos del dato real + lectura +
+    fuentes) — la versión 'informe' descargable de la vista Histórico. ``fmt=pdf`` (default)
+    o ``fmt=docx`` para el Word editable con la misma anatomía."""
     pkg = svc.forensic_package(db, nombre)
     if pkg is None:
         raise HTTPException(status_code=404, detail=f"Sin dato histórico para '{nombre}'.")
     narr = await svc.forensic_narrative(db, nombre)
-    pdf = render_forensic_pdf(pkg, (narr or {}).get("narrative", ""),
-                              degraded=bool((narr or {}).get("degraded")))
+    narrative = (narr or {}).get("narrative", "")
+    degraded = bool((narr or {}).get("degraded"))
     safe = "".join(c if c.isalnum() else "_" for c in nombre)[:60]
+
+    if fmt == "docx":
+        from modules.banking_score.reports.forensic_docx import render_forensic_docx
+        data = render_forensic_docx(pkg, narrative, degraded=degraded)
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="Informe_Forense_{safe}.docx"'})
+
+    from modules.banking_score.reports.forensic_pdf import render_forensic_pdf
+    pdf = render_forensic_pdf(pkg, narrative, degraded=degraded)
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="Informe_Forense_{safe}.pdf"'})

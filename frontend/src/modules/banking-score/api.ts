@@ -523,7 +523,7 @@ export async function getForensicNarrative(nombre: string): Promise<ForensicNarr
   return data;
 }
 
-/** URL absoluta del informe forense branded (HTML) — para abrir/descargar en pestaña nueva. */
-export function forensicReportUrl(nombre: string): string {
-  return `/api/v1${HIST}/forensic/report?nombre=${encodeURIComponent(nombre)}`;
+/** URL absoluta del informe forense branded (PDF por defecto, o Word con fmt="docx"). */
+export function forensicReportUrl(nombre: string, fmt: "pdf" | "docx" = "pdf"): string {
+  return `/api/v1${HIST}/forensic/report?nombre=${encodeURIComponent(nombre)}&fmt=${fmt}`;
 }

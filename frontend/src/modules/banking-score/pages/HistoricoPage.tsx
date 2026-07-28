@@ -339,15 +339,26 @@ export function HistoricoPage() {
               title="Lectura forense"
               subtitle="Anatomía de la quiebra, escrita por el Cerebro sobre el dato real"
               right={
-                <a
-                  href={forensicReportUrl(pkg.meta.nombre)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-soft inline-flex items-center gap-1.5 text-sm shrink-0"
-                >
-                  <Download size={15} />
-                  Descargar informe (PDF)
-                </a>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={forensicReportUrl(pkg.meta.nombre, "pdf")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-soft inline-flex items-center gap-1.5 text-sm"
+                  >
+                    <Download size={15} />
+                    Informe (PDF)
+                  </a>
+                  <a
+                    href={forensicReportUrl(pkg.meta.nombre, "docx")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-soft inline-flex items-center gap-1.5 text-sm"
+                  >
+                    <Download size={15} />
+                    Word
+                  </a>
+                </div>
               }
             />
             {narrStatus === "loading" && (
