@@ -293,9 +293,11 @@ async def get_product_pdf(
     Mismo gate y mismo contenido que la vista in-app (vía ``assemble_product_report``)."""
     fmt = format if format in _DOC_FORMATS else "pdf"
     product = _resolve_product(sector, db)
+    meta: Dict[str, Any] = {}
     try:
         path = await assemble_product_report(
-            product, access.tier, period=period or "", scope=scope, lang=lang, fmt=fmt)
+            product, access.tier, period=period or "", scope=scope, lang=lang, fmt=fmt,
+            out=meta)
     except NarrativeDegradedError:
         # Narrativa IA degradada a fallback estático en un premium: no se descarga hueco.
         raise HTTPException(status_code=503, detail=_NARRATIVE_DEGRADED_MSG)
@@ -304,9 +306,14 @@ async def get_product_pdf(
                             detail="Error de gobernanza al ensamblar el producto.")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    # El path lo genera el ensamblador (nunca input del usuario). El filename sí
-    # interpola `period` del query: lo saneamos a [A-Za-z0-9_-] por higiene del header.
-    safe_period = re.sub(r"[^A-Za-z0-9_-]", "", period or "latest") or "latest"
+    # El path lo genera el ensamblador (nunca input del usuario). El filename nombra el
+    # período REAL del reporte (``snapshot.period`` vía ``out``), no el pedido: el Deep Dive
+    # resuelve al último dato disponible, así que pedir "2025" produce un corte "2026-05" —
+    # el nombre del archivo debe coincidir con la portada, no con el query. Fallback al
+    # pedido si el ensamblador no reportó período. Saneado a [A-Za-z0-9_-] por higiene del
+    # header (un "—" o espacios no van en un filename).
+    eff_period = meta.get("period") or period or "latest"
+    safe_period = re.sub(r"[^A-Za-z0-9_-]", "", eff_period) or "latest"
     filename = f"SDQ_{sector}_{access.tier.value}_{safe_period}.{fmt}"
     return FileResponse(path=path, media_type=_DOC_FORMATS[fmt], filename=filename)
 
