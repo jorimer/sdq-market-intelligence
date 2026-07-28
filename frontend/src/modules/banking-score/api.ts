@@ -419,3 +419,93 @@ export async function getSystemAlerts(): Promise<SystemAlerts> {
   const { data } = await client.get<SystemAlerts>("/banking-score/alerts");
   return data;
 }
+
+// ── Histórico (Cronología SB): cohorte de quiebras + forense por entidad ─────────
+
+export interface HistoricalEntity {
+  nombre: string;
+  tipo_entidad: string | null;
+  primer: string | null;
+  ultimo: string | null;
+  n_periodos: number;
+  salio_del_sistema: boolean;
+}
+
+export interface CohortResult {
+  nombre: string;
+  episodio: string;
+  found: boolean;
+  exit_date?: string | null;
+  onset_cluster?: string | null;
+  lead_months?: number | null;
+}
+
+export interface CohortResponse {
+  cohort: CohortResult[];
+  n_found: number;
+  leads: Record<string, number | null>;
+}
+
+export interface ForensicSeriesPoint {
+  fecha: string;
+  activos_totales: number | null;
+  morosidad_pct: number | null;
+  cobertura_pct: number | null;
+  apalancamiento_pct: number | null;
+  depositos: number | null;
+  dep_mom_pct: number | null;
+  patrimonio: number | null;
+  utilidad_neta: number | null;
+}
+
+export interface ForensicAlert {
+  code: string;
+  severity: string;
+  value: number | null;
+}
+
+export interface ForensicTimelinePoint {
+  period: string;
+  alerts: ForensicAlert[];
+}
+
+export interface ForensicPackage {
+  meta: {
+    nombre: string;
+    tipo_entidad: string | null;
+    sector: string | null;
+    primer: string;
+    ultimo: string;
+    n_periodos: number;
+    salio_del_sistema: boolean;
+  };
+  series: ForensicSeriesPoint[];
+  backtest: {
+    exit_date: string | null;
+    onset_cluster: string | null;
+    first_high_raw: string | null;
+    lead_months: number | null;
+    n_high_months: number;
+    n_flagged_months: number;
+    timeline: ForensicTimelinePoint[];
+  };
+}
+
+const HIST = "/banking-score/historical";
+
+export async function getHistoricalEntities(onlyExited = false): Promise<HistoricalEntity[]> {
+  const { data } = await client.get<{ entities: HistoricalEntity[] }>(`${HIST}/entities`, {
+    params: { only_exited: onlyExited },
+  });
+  return data.entities;
+}
+
+export async function getCohortBacktest(): Promise<CohortResponse> {
+  const { data } = await client.get<CohortResponse>(`${HIST}/cohort`);
+  return data;
+}
+
+export async function getForensic(nombre: string): Promise<ForensicPackage> {
+  const { data } = await client.get<ForensicPackage>(`${HIST}/forensic`, { params: { nombre } });
+  return data;
+}

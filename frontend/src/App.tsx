@@ -29,6 +29,7 @@ const ModelPage = lazyPage(() => import("@/modules/banking-score/pages/ModelPage
 const ValidationPage = lazyPage(() => import("@/modules/banking-score/pages/ValidationPage"), "ValidationPage");
 const ScenariosPage = lazyPage(() => import("@/modules/banking-score/pages/ScenariosPage"), "ScenariosPage");
 const ComparePage = lazyPage(() => import("@/modules/banking-score/pages/ComparePage"), "ComparePage");
+const HistoricoPage = lazyPage(() => import("@/modules/banking-score/pages/HistoricoPage"), "HistoricoPage");
 const FideicomisosPage = lazyPage(() => import("@/modules/banking-score/pages/FideicomisosPage"), "FideicomisosPage");
 const BankingScoreLayout = lazyPage(() => import("@/modules/banking-score/components/BankingScoreLayout"), "BankingScoreLayout");
 
@@ -85,6 +86,7 @@ export default function App() {
               <Route path="reports" element={<ReportsPage />} />
               <Route path="model" element={<ModelPage />} />
               <Route path="validation" element={<ValidationPage />} />
+              <Route path="historico" element={<HistoricoPage />} />
               <Route path="scenarios" element={<ScenariosPage />} />
               <Route path="compare" element={<ComparePage />} />
               <Route path="fideicomisos" element={<FideicomisosPage />} />

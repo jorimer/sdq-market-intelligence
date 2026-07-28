@@ -857,7 +857,8 @@
       "fideicomisos": "Fiducies",
       "model": "Modèle",
       "validation": "Validation",
-      "reports": "Rapports"
+      "reports": "Rapports",
+      "historico": "Historique"
     },
     "entityType": {
       "all": "Tous",

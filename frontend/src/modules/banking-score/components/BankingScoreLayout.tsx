@@ -16,6 +16,7 @@ const TABS: { to: string; key: string; end?: boolean }[] = [
   { to: "/banking-score/fideicomisos", key: "fideicomisos" },
   { to: "/banking-score/model", key: "model" },
   { to: "/banking-score/validation", key: "validation" },
+  { to: "/banking-score/historico", key: "historico" },
   { to: "/banking-score/reports", key: "reports" },
 ];
 
