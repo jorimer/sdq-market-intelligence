@@ -65,6 +65,7 @@ const ALERT_LABEL: Record<string, string> = {
   crecimiento_anomalo: "Crecimiento anómalo de activos",
   fondeo_caro: "Fondeo por encima del sistema",
   solvencia_piso: "Solvencia cerca del piso",
+  capital_delgado: "Capitalización delgada (patrimonio/activos)",
   concentracion: "Concentración elevada",
 };
 

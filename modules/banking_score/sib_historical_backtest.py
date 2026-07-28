@@ -64,6 +64,7 @@ def _monthly_metrics(dates: List[date], rows: Dict[date, object], i: int) -> Dic
         "morosidad_pct": _g(cur, "morosidad_pct"),
         "morosidad_prev4": _g(p12, "morosidad_pct"),
         "solvencia_pct": None,         # Basel ausente pre-2004
+        "apalancamiento_pct": _g(cur, "apalancamiento_pct"),  # proxy de capital (estimador temprano)
         "liq_ratio": ew._pct(_g(cur, "activos_liquidos"), _g(cur, "pasivos_totales")),  # proxy
         "deposit_qoq": ew._yoy(_g(cur, "depositos_totales"), _g(p3, "depositos_totales")),
         "concentration_pct": None,     # top-10 no disponible

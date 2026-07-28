@@ -55,6 +55,17 @@ def test_liquidity_por_fuga_o_piso():
     assert rule_liquidity(20.0, 0.0) is None
 
 
+def test_capitalization():
+    """Apalancamiento (patrimonio/activos) — el estimador temprano calibrado del histórico."""
+    from modules.banking_score.early_warning import rule_capitalization
+    assert rule_capitalization(15.6) is None          # sobrevivientes ~mediana → no marca
+    assert rule_capitalization(11.0).severity == "media"   # delgado
+    assert rule_capitalization(8.5).severity == "alta"     # crítico (nivel de los quebrados 2003)
+    assert rule_capitalization(None) is None
+    a = rule_capitalization(10.0)
+    assert a.code == "capital_delgado" and "patrimonio/activos" in a.metric
+
+
 def test_concentration():
     assert rule_concentration(35) is not None
     assert rule_concentration(25) is None

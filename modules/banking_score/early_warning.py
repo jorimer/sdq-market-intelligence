@@ -31,6 +31,13 @@ SOLV_HIGH = 10.5
 LIQ_FLOOR = 15.0           # (activos_líquidos/pasivos_exigibles)×100
 DEPOSIT_DROP = -0.10       # caída trimestral de depósitos ≥ 10% (proxy de corrida)
 CONCENTRATION = 30.0       # top-10 / cartera bruta %  (proxy de vinculados)
+# Capitalización (apalancamiento patrimonio/activos) — CALIBRADO sobre el histórico: los
+# bancos del 2003 corrían con ~8.5–10% de patrimonio/activos ya 12 MESES antes de la salida
+# (Baninter 8.5, Mercantil 8.9, Bancrédito 9.1, Global 10.0), vs. mediana de sobrevivientes
+# 15.6%. Es el ESTIMADOR MÁS TEMPRANO y funciona sin Basilea (ausente pre-2004). Complementa
+# la solvencia regulatoria (que el histórico no tiene).
+CAPITAL_WARN = 12.0        # patrimonio/activos % — capitalización delgada
+CAPITAL_HIGH = 9.0         # …crítica (los quebrados del 2003 estaban aquí a −12m)
 
 # Solo entidades CAPTADORAS DE DEPÓSITOS — los precursores de la crisis 2003 (fuga de
 # depósitos, fondeo, provisiones, morosidad) aplican a la banca de intermediación, no a
@@ -128,6 +135,20 @@ def rule_solvency(solvencia_pct: Optional[float]) -> Optional[Alert]:
                  "solvencia %")
 
 
+def rule_capitalization(apalancamiento_pct: Optional[float]) -> Optional[Alert]:
+    """Apalancamiento (patrimonio/activos) delgado — el estimador MÁS TEMPRANO de fragilidad,
+    calibrado sobre el histórico. A diferencia de la solvencia Basilea, se computa del balance
+    contable y funciona aun donde esa no existe (histórico) y como cross-check."""
+    if apalancamiento_pct is None or apalancamiento_pct >= CAPITAL_WARN:
+        return None
+    sev = "alta" if apalancamiento_pct < CAPITAL_HIGH else "media"
+    return Alert("capital_delgado", "Capitalización delgada (patrimonio/activos)", sev,
+                 round(apalancamiento_pct, 2), CAPITAL_WARN,
+                 "Los bancos del 2003 corrían con patrimonio/activos ~8.5–10% ya 12 meses antes "
+                 "de la salida, vs. ~15.6% de los sobrevivientes (calibrado sobre el histórico)",
+                 "patrimonio/activos %")
+
+
 def rule_liquidity(liq_ratio: Optional[float], deposit_qoq: Optional[float]) -> Optional[Alert]:
     low = liq_ratio is not None and liq_ratio < LIQ_FLOOR
     run = deposit_qoq is not None and deposit_qoq <= DEPOSIT_DROP
@@ -168,6 +189,7 @@ def evaluate(m: Dict, peers: Dict) -> List[Alert]:
         rule_coverage(m.get("cobertura_pct")),
         rule_morosidad(m.get("morosidad_pct"), m.get("morosidad_prev4")),
         rule_solvency(m.get("solvencia_pct")),
+        rule_capitalization(m.get("apalancamiento_pct")),
         rule_liquidity(m.get("liq_ratio"), m.get("deposit_qoq")),
         rule_concentration(m.get("concentration_pct"), m.get("is_state_owned", False)),
     ]
@@ -196,6 +218,7 @@ def _bank_metrics(rows_by_period: Dict[date, "object"], period: date) -> Dict:
         "morosidad_pct": f(cur, "morosidad_pct"),
         "morosidad_prev4": f(prev_4, "morosidad_pct"),
         "solvencia_pct": f(cur, "solvencia_pct"),
+        "apalancamiento_pct": _pct(f(cur, "patrimonio_promedio"), f(cur, "activos_totales")),
         "liq_ratio": _pct(f(cur, "activos_liquidos"), f(cur, "pasivos_exigibles")),
         "deposit_qoq": _yoy(f(cur, "depositos_totales"), f(prev_q, "depositos_totales")),
         "concentration_pct": _pct(f(cur, "suma_top10"), f(cur, "cartera_bruta")),
