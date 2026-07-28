@@ -60,6 +60,21 @@ def test_concentration():
     assert rule_concentration(25) is None
 
 
+def test_concentration_encuadre_consciente_de_naturaleza():
+    """La bandera dispara igual, pero el encuadre cambia según la naturaleza de la entidad:
+    banca privada → proxy de vinculados/fraude; banca estatal → concentración estructural."""
+    privada = rule_concentration(47.2, is_state_owned=False)
+    estatal = rule_concentration(47.2, is_state_owned=True)
+    # ambas disparan, misma severidad y valor
+    assert privada.code == estatal.code == "concentracion"
+    assert privada.severity == estatal.severity == "media"
+    assert privada.value == estatal.value == 47.2
+    # el encuadre difiere: privada invoca el fraude; estatal NO, lo lee como estructural
+    assert "fraude" in privada.basis and "vinculados" in privada.basis
+    assert "estructural" in estatal.basis and "mandato" in estatal.basis
+    assert "fraude" not in estatal.basis
+
+
 def test_evaluate_ordena_alta_primero():
     m = {"solvencia_pct": 10.2, "cobertura_pct": 80, "concentration_pct": 40}
     peers = {"growth_p90": None, "funding_p90": None}
