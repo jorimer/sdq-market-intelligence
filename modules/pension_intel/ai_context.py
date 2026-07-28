@@ -8,6 +8,39 @@ Mirrors :mod:`trade_intel.ai_context`. Source: SIPEN (dato real).
 from typing import Any, Dict, List
 
 
+def _dim_positions(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Posición relativa de la AFP en CADA dimensión (rank + líder), computada del panel.
+
+    Sin esto, la narrativa de la §1 solo conoce sus scores propios y su rank GLOBAL, así que
+    infiere superlativos transversales falsos ('el mayor del sistema', 'la solvencia más alta
+    del panel') cuando en realidad es #1 global pero #2 en escala/solvencia. Un score mayor =
+    mejor posición en toda dimensión (el score ya está orientado, incl. costo). Devuelve
+    ``{label_dimensión: {rank, n, es_lider, lider_afp, lider_score}}``.
+    """
+    my_slug = rating.get("slug")
+    out: Dict[str, Any] = {}
+    for d in rating.get("dimensions") or []:
+        key, label = d.get("key"), d.get("label")
+        if key is None:
+            continue
+        rows = []
+        for p in peers:
+            pd = next((x for x in (p.get("dimensions") or []) if x.get("key") == key), None)
+            if pd and pd.get("score") is not None:
+                rows.append((p.get("name"), p.get("slug"), float(pd["score"])))
+        if not rows:
+            continue
+        rows.sort(key=lambda t: t[2], reverse=True)
+        rank = next((i + 1 for i, t in enumerate(rows) if t[1] == my_slug), None)
+        leader = rows[0]
+        out[label or key] = {
+            "dimension": label or key, "rank": rank, "n": len(rows),
+            "es_lider": bool(rank == 1),
+            "lider_afp": leader[0], "lider_score": round(leader[2], 2),
+        }
+    return out
+
+
 def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Compact context for one AFP's ISA narrative (template ``pension_entity``).
 
@@ -18,6 +51,7 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
     dims = rating.get("dimensions") or []
     ranked = [r for r in peers if r.get("overall_score") is not None]
     rank = next((i + 1 for i, r in enumerate(ranked) if r["slug"] == rating.get("slug")), None)
+    posiciones = _dim_positions(rating, peers)
     # Retorno real (Fase 5): la dimensión rentabilidad puede traer raw_real + inflación
     # (deflactada por BCRD). Se expone aparte para que la narrativa lea la magnitud real.
     rdim = next((d for d in dims if d.get("key") == "rentabilidad"), None)
@@ -44,6 +78,11 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
                  "los retornos mensuales del valor cuota, ventana ~30m); menor σ = más consistente. "
                  "La σ es baja en parte por valoración a costo amortizado de la cartera (caveat, no "
                  "sobreinterpretar).")
+    _note += (" POSICIÓN POR DIMENSIÓN: cada dimensión trae 'posicion' {rank, n, es_lider, "
+              "lider_afp}. NO afirmes que esta AFP es 'el mayor/el más alto/el líder del sistema "
+              "o del panel' en una dimensión salvo que 'es_lider' sea true en ESA dimensión; si "
+              "no lidera, di su posición real y nombra a quién lidera (lider_afp). El rank GLOBAL "
+              "#1 NO implica liderar cada dimensión.")
     ctx: Dict[str, Any] = {
         "afp": rating.get("name"),
         "isa_score_relativo": rating.get("overall_score"),
@@ -56,9 +95,15 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
                 "dimension": d["label"], "score": d["score"], "peso": d["weight"],
                 "valor_real": d["raw"], "procedencia": d["provenance"],
                 "presente": d["present"],
+                # Posición relativa en ESTA dimensión (rank + líder). Sin esto la narrativa
+                # inventaba superlativos transversales desde su rank global.
+                "posicion": posiciones.get(d["label"]),
             }
             for d in dims
         ],
+        # Mapa compacto {dimensión: {rank,n,es_lider,lider_afp}} — lo lee también el
+        # numeric_guard para vetar 'el mayor/más alto del sistema' donde no lidera.
+        "posiciones_dimension": posiciones,
         "direction": ("mayor score = mejor solidez; con solvencia hay BANDA ABSOLUTA y también "
                       "posición relativa entre AFP" if solv_present
                       else "mayor score = mejor POSICIÓN RELATIVA entre las AFP (no veredicto absoluto)"),

@@ -326,6 +326,59 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
                         f"'{n} trimestres {side} de {m.group('thr')}': la serie reciente "
                         f"({', '.join(str(round(v, 2)) for v in last)}) no cumple")
 
+        # (8) SUPERLATIVO TRANSVERSAL ('el mayor/más alto/líder … del sistema/panel') en una
+        #     dimensión donde la entidad NO lidera. Lee ``posiciones_dimension`` {label:
+        #     {rank,n,es_lider,lider_afp}} — el modo de error del Deep Dive de pensiones: rank
+        #     global #1 mal-generalizado a "el mayor" en escala/solvencia que otro lidera.
+        pos = context.get("posiciones_dimension") or {}
+        if pos:
+            _SYN = {
+                "escala": ("escala", "activos", "fondo", "aum", "tamaño", "tamano", "masa"),
+                "solvencia": ("solvencia", "patrimon", "capital", "apalancam"),
+                "rentabilidad": ("rentabilidad", "retorno", "rendimiento"),
+                "riesgo": ("riesgo", "volatil", "consistencia", "sharpe"),
+                "costo": ("costo", "comisi", "eficien"),
+            }
+
+            def _group(label: str):
+                low = label.lower()
+                for g, kws in _SYN.items():
+                    if any(k in low for k in kws):
+                        return g
+                return None
+
+            not_led = {}
+            for label, info in pos.items():
+                if info and info.get("es_lider") is False:
+                    kws = set(_SYN.get(_group(str(label)), ())) | {str(label).lower().split()[0]}
+                    not_led[label] = (info, kws)
+
+            _SUPER = re.compile(
+                r"(mayor|m[áa]s\s+alt[oa]|m[áa]s\s+baj[oa]|l[íi]der|dominante)"
+                r"[^.\n]{0,50}?(del\s+sistema|del\s+panel|del\s+mercado|de\s+las\s+afp|"
+                r"entre\s+las\s+afp)", re.I)
+            for m in _SUPER.finditer(text):
+                pre = text[max(0, m.start() - 30):m.start()].lower()
+                if re.search(r"\b(no|tampoco|ni)\b|sin\s+ser", pre):
+                    continue  # superlativo NEGADO ('no es el mayor') — no es una afirmación
+                lo = max(0, m.start() - 70)
+                window = text[lo:min(len(text), m.end() + 15)].lower()
+                anchor = m.start() - lo  # posición del superlativo dentro de la ventana
+                # Elegí la dimensión no-líder cuyo keyword esté MÁS CERCA del superlativo
+                # (evita cruzar 'activos' de escala cuando el claim es de solvencia).
+                best, best_dist = None, 10 ** 9
+                for label, (info, kws) in not_led.items():
+                    for k in kws:
+                        idx = window.rfind(k, 0, anchor + (m.end() - m.start()))
+                        if idx != -1 and abs(anchor - idx) < best_dist:
+                            best, best_dist = (label, info), abs(anchor - idx)
+                if best:
+                    label, info = best
+                    flags.append(
+                        f"'{m.group(0).strip()}' en {label}: la entidad no lidera esa "
+                        f"dimensión (rank {info.get('rank')}/{info.get('n')}; lidera "
+                        f"{info.get('lider_afp')})")
+
         # (4) 'aporta(n) N puntos' que no traza a ningún aporte ni suma de aportes
         aportes = []
         for s in subs:
