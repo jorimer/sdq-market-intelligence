@@ -35,10 +35,10 @@ logger = logging.getLogger("sdq.banking.sib_historical_backtest")
 # puede fechar su quiebra de forma fiable (mismo punto ciego ante el fraude, amplificado por
 # el ruido de escala). Es una limitación declarada, no un dato ocultado.
 FAILED_COHORT: List[Dict] = [
-    {"nombre": "Banco Nacional de Crédito", "salida": date(2003, 6, 1), "episodio": "Crisis 2003 (Bancrédito)"},
-    {"nombre": "Banco Mercantil", "salida": date(2003, 9, 1), "episodio": "Crisis 2003"},
-    {"nombre": "Banco Intercontinental (Baninter)", "salida": date(2003, 5, 1), "episodio": "Crisis 2003 (fraude)"},
-    {"nombre": "Banco Global", "salida": date(2003, 6, 1), "episodio": "Crisis 2003"},
+    {"nombre": "Banco Nacional de Crédito", "salida": date(2003, 6, 1), "bank_type": "banca_multiple", "episodio": "Crisis 2003 (Bancrédito)"},
+    {"nombre": "Banco Mercantil", "salida": date(2003, 9, 1), "bank_type": "banca_multiple", "episodio": "Crisis 2003"},
+    {"nombre": "Banco Intercontinental (Baninter)", "salida": date(2003, 5, 1), "bank_type": "banca_multiple", "episodio": "Crisis 2003 (fraude)"},
+    {"nombre": "Banco Global", "salida": date(2003, 6, 1), "bank_type": "banca_multiple", "episodio": "Crisis 2003"},
 ]
 
 
@@ -47,23 +47,32 @@ def _g(row, attr) -> Optional[float]:
     return float(v) if v is not None else None
 
 
-def _monthly_metrics(dates: List[date], rows: Dict[date, object], i: int) -> Dict:
+def _monthly_metrics(dates: List[date], rows: Dict[date, object], i: int,
+                     bank_type: Optional[str] = None) -> Dict:
     """Métricas de early-warning en el mes *i*, con offsets MENSUALES.
 
     solvencia/concentración/fondeo quedan en None: no son reconstruibles del histórico
     contable (regulatorio / top-10 / P&L acumulado YTD). Esas reglas no disparan — es el
-    punto ciego declarado ante el fraude.
+    punto ciego declarado ante el fraude. Capital: proxy = apalancamiento contable
+    (patrimonio/activos); su CAÍDA en 12m alimenta la erosión de capital. El nivel de
+    morosidad se juzga contra el umbral relativo al ``bank_type``, y ``morosidad_chronic``
+    (24m atrás) distingue el zombi crónico del deterioro agudo.
     """
     cur = rows[dates[i]]
     p3 = rows[dates[i - 3]] if i >= 3 else None
     p12 = rows[dates[i - 12]] if i >= 12 else None
+    p24 = rows[dates[i - 24]] if i >= 24 else None
     return {
         "assets_yoy": ew._yoy(_g(cur, "activos_totales"), _g(p12, "activos_totales")),
         "funding_cost": None,          # gastos_financieros es YTD → ratio ruidoso, se omite
         "cobertura_pct": _g(cur, "cobertura_pct"),
         "morosidad_pct": _g(cur, "morosidad_pct"),
         "morosidad_prev4": _g(p12, "morosidad_pct"),
+        "morosidad_chronic": _g(p24, "morosidad_pct"),   # ~2 años atrás → zombi vs deterioro
         "solvencia_pct": None,         # Basel ausente pre-2004
+        "capital_now": _g(cur, "apalancamiento_pct"),    # patrimonio/activos (None si no está)
+        "capital_prior": _g(p12, "apalancamiento_pct"),
+        "bank_type": bank_type,
         "liq_ratio": ew._pct(_g(cur, "activos_liquidos"), _g(cur, "pasivos_totales")),  # proxy
         "deposit_qoq": ew._yoy(_g(cur, "depositos_totales"), _g(p3, "depositos_totales")),
         "concentration_pct": None,     # top-10 no disponible
@@ -87,7 +96,8 @@ def _peer_growth_p90(all_series: Dict[str, Dict[date, object]], month: date) -> 
 
 
 def backtest_entity(series: Dict[date, object], *, all_series: Optional[Dict] = None,
-                    salida: Optional[date] = None, min_cluster: int = 2) -> Dict:
+                    salida: Optional[date] = None, min_cluster: int = 2,
+                    bank_type: Optional[str] = None) -> Dict:
     """Corre el motor mes a mes y fecha el **inicio del deterioro** como el primer mes con
     un *cluster* de ≥``min_cluster`` alertas de severidad alta simultáneas.
 
@@ -108,8 +118,9 @@ def backtest_entity(series: Dict[date, object], *, all_series: Optional[Dict] = 
     n_high = 0
 
     idx = [d for d in dates if not (exit_date and d > exit_date)]
+    onset_score: Optional[float] = None
     for d in idx:
-        m = _monthly_metrics(dates, series, dates.index(d))
+        m = _monthly_metrics(dates, series, dates.index(d), bank_type)
         peers = {"growth_p90": _peer_growth_p90(all_series, d) if all_series else None,
                  "funding_p90": None}
         alerts = ew.evaluate(m, peers)
@@ -120,8 +131,10 @@ def backtest_entity(series: Dict[date, object], *, all_series: Optional[Dict] = 
                 first_high = d
         if n_altas >= min_cluster and onset is None:
             onset = d
+            onset_score = ew.ensemble_score(alerts)["score"]
         if alerts:
             timeline.append({"period": d.isoformat(),
+                             "score": ew.ensemble_score(alerts)["score"],
                              "alerts": [{"code": a.code, "severity": a.severity, "value": a.value}
                                         for a in alerts]})
 
@@ -131,6 +144,7 @@ def backtest_entity(series: Dict[date, object], *, all_series: Optional[Dict] = 
     return {
         "exit_date": exit_date.isoformat() if exit_date else None,
         "onset_cluster": onset.isoformat() if onset else None,
+        "onset_score": onset_score,
         "first_high_raw": first_high.isoformat() if first_high else None,
         "lead_months": lead_months,
         "n_high_months": n_high,
@@ -162,7 +176,8 @@ def backtest_cohort(db, cohort: Optional[List[Dict]] = None) -> List[Dict]:
             results.append({"nombre": spec["nombre"], "episodio": spec["episodio"],
                             "found": False})
             continue
-        bt = backtest_entity(series, all_series=by_name, salida=spec.get("salida"))
+        bt = backtest_entity(series, all_series=by_name, salida=spec.get("salida"),
+                             bank_type=spec.get("bank_type"))
         results.append({"nombre": spec["nombre"], "episodio": spec["episodio"],
                         "found": True, **bt})
     return results

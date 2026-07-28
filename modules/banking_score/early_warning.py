@@ -32,6 +32,44 @@ LIQ_FLOOR = 15.0           # (activos_líquidos/pasivos_exigibles)×100
 DEPOSIT_DROP = -0.10       # caída trimestral de depósitos ≥ 10% (proxy de corrida)
 CONCENTRATION = 30.0       # top-10 / cartera bruta %  (proxy de vinculados)
 
+# ── Calibración del CONJUNTO ponderado (derivada del histórico SIB) ─────────────
+# La alerta temprana no es una señal suelta: es un CONJUNTO con pesos. Estos se calibraron
+# sobre la cohorte de 35 terminaciones AGUDAS del histórico SIB (entidades que venían sanas,
+# se deterioraron y salieron del sistema — la etiqueta económica correcta en un régimen que
+# absorbía/renombraba en vez de quebrar formalmente), con regresión logística estandarizada
+# validada leave-one-entity-out. Reproducen el peso con que cada señal separó quiebras de
+# sobrevivientes; no son ad-hoc. Hallazgos que codifican:
+#   • la morosidad (nivel 0.38 + salto 0.11) domina, pero NO es sola;
+#   • cobertura (0.20) y erosión de capital (0.14) suman ~1/3 del conjunto;
+#   • el boom de crédito (0.08) es la señal MÁS temprana (la burbuja precede al estallido);
+#   • la fuga de depósitos (0.02) pesa poco: CONFIRMA tarde (dispara en 14/35 casos), no anticipa.
+ALERT_WEIGHTS: Dict[str, float] = {
+    "morosidad_nivel": 0.38,
+    "brecha_provisiones": 0.20,
+    "erosion_capital": 0.14,
+    "salto_morosidad": 0.11,
+    "crecimiento_anomalo": 0.08,
+    "solvencia_piso": 0.06,
+    "estres_liquidez": 0.02,
+    # concentracion / fondeo_caro: contexto de monitoreo; sin peso predictivo confiable en el
+    # histórico contable (top-10 y fondeo YTD no son reconstruibles pre-2004).
+}
+
+# Umbral de morosidad RELATIVO al tipo de entidad: lo "normal" difiere por modelo de negocio
+# (una corporación de crédito opera con mora de dos dígitos; un banco múltiple no). Un umbral
+# plano marcaría en falso a las pequeñas y subreaccionaría en las grandes — la misma lección
+# que la bandera de capital revertida (#598): los umbrales de balance dependen del TIPO.
+MOROSIDAD_FLOOR_BY_TYPE: Dict[str, float] = {
+    "banca_multiple": 5.0,
+    "aap": 7.0,
+    "banco_ahorro_credito": 9.0,
+    "corporacion_credito": 15.0,
+}
+DEFAULT_MOROSIDAD_FLOOR = 7.0
+CAPITAL_EROSION_WARN = -1.0   # caída de patrimonio/activos (pp en 12m) que enciende la señal
+CAPITAL_EROSION_HIGH = -3.0
+CHRONIC_LOOKBACK_Q = 8        # ~2 años atrás: si ya estaba enferma entonces → zombi, no deterioro nuevo
+
 # Solo entidades CAPTADORAS DE DEPÓSITOS — los precursores de la crisis 2003 (fuga de
 # depósitos, fondeo, provisiones, morosidad) aplican a la banca de intermediación, no a
 # agentes de cambio (``cambiaria``) ni a fiduciarias (perfil off-balance distinto).
@@ -160,6 +198,80 @@ def rule_concentration(concentration_pct: Optional[float],
                  "top-10 / cartera bruta %")
 
 
+def rule_morosidad_nivel(mora_pct: Optional[float],
+                         bank_type: Optional[str] = None) -> Optional[Alert]:
+    """Nivel de morosidad sobre el umbral RELATIVO a su tipo (la señal de mayor peso del
+    conjunto, 0.38). Distinta del *salto*: captura el nivel podrido, no el cambio. El umbral
+    depende del tipo porque lo 'normal' difiere por modelo de negocio (histórico SIB)."""
+    if mora_pct is None:
+        return None
+    floor = MOROSIDAD_FLOOR_BY_TYPE.get(bank_type or "", DEFAULT_MOROSIDAD_FLOOR)
+    if mora_pct <= floor:
+        return None
+    sev = "alta" if mora_pct >= 2 * floor else "media"
+    return Alert("morosidad_nivel", "Morosidad sobre el umbral de su tipo", sev,
+                 round(mora_pct, 2), round(floor, 1),
+                 "Nivel de cartera vencida sobre lo normal para su tipo de entidad "
+                 "(umbral relativo calibrado del histórico SIB)",
+                 "morosidad %")
+
+
+def rule_capital_erosion(capital_now: Optional[float],
+                         capital_prior: Optional[float]) -> Optional[Alert]:
+    """Erosión de capital: caída del ratio patrimonio/activos (o solvencia) en 12m. Es el
+    CAMBIO, no el nivel — a diferencia de la bandera de nivel revertida (#598), que marcaba
+    en falso a los bancos grandes sanos que corren apalancamiento estructuralmente bajo. El
+    adelgazamiento sostenido del colchón sí precede a la quiebra (histórico SIB, peso 0.14)."""
+    if capital_now is None or capital_prior is None:
+        return None
+    drop = capital_now - capital_prior
+    if drop > CAPITAL_EROSION_WARN:
+        return None
+    sev = "alta" if drop <= CAPITAL_EROSION_HIGH else "media"
+    return Alert("erosion_capital", "Erosión de capital", sev,
+                 round(drop, 2), CAPITAL_EROSION_WARN,
+                 "El colchón patrimonial se adelgaza antes de la quiebra; discrimina la caída, "
+                 "no el nivel (histórico SIB)",
+                 "Δ patrimonio/activos pp (12m)")
+
+
+def ensemble_score(alerts: List[Alert]) -> Dict:
+    """Puntaje del CONJUNTO ponderado (0..100): la alerta temprana como suma de señales con
+    sus pesos calibrados, no como banderas sueltas. Una 'alta' cuenta 1.5× su peso base.
+    Devuelve el score, su banda y las señales que contribuyen ordenadas por peso."""
+    max_possible = sum(ALERT_WEIGHTS.values()) * 1.5
+    weighted = sum(ALERT_WEIGHTS.get(a.code, 0.0) * (1.5 if a.severity == "alta" else 1.0)
+                   for a in alerts)
+    score = round(min(100.0, weighted / max_possible * 100.0), 1) if max_possible else 0.0
+    band = "alta" if score >= 55 else "media" if score >= 25 else "baja"
+    # Ordena los Alert (tipados) por su peso calibrado antes de proyectarlos al dict de salida
+    # — evita ordenar sobre el dict heterogéneo (weight quedaría como ``object``).
+    ranked = sorted((a for a in alerts if a.code in ALERT_WEIGHTS),
+                    key=lambda a: (-ALERT_WEIGHTS[a.code], a.code))
+    contributors = [{"code": a.code, "label": a.label, "weight": ALERT_WEIGHTS[a.code],
+                     "severity": a.severity} for a in ranked]
+    return {"score": score, "band": band, "contributors": contributors}
+
+
+def classify_profile(m: Dict, alerts: List[Alert]) -> Optional[str]:
+    """Dos naturalezas de riesgo que el histórico separa nítidamente:
+      • 'agudo'   — deterioro reciente desde un estado sano → alerta temprana con lead real.
+      • 'cronico' — morosidad alta SOSTENIDA (zombi tolerado): ya estaba podrida ~2 años atrás;
+                    no hay 'temprano' que dar, la respuesta es NOMBRAR la insolvencia, no predecirla.
+    Devuelve None si no hay señal de nivel de morosidad activa (nada que clasificar)."""
+    floor = MOROSIDAD_FLOOR_BY_TYPE.get(m.get("bank_type") or "", DEFAULT_MOROSIDAD_FLOOR)
+    mora_now = m.get("morosidad_pct")
+    if mora_now is None or mora_now <= floor:
+        return None
+    mora_prior = m.get("morosidad_chronic")   # morosidad ~2 años atrás
+    fired = {a.code for a in alerts}
+    change_active = bool({"salto_morosidad", "erosion_capital"} & fired)
+    was_sick = mora_prior is not None and mora_prior > floor
+    if was_sick and not change_active:
+        return "cronico"
+    return "agudo"
+
+
 def evaluate(m: Dict, peers: Dict) -> List[Alert]:
     """Todas las reglas sobre las métricas *m* de un banco + contexto de pares *peers*."""
     candidates = [
@@ -167,6 +279,8 @@ def evaluate(m: Dict, peers: Dict) -> List[Alert]:
         rule_funding(m.get("funding_cost"), peers.get("funding_p90")),
         rule_coverage(m.get("cobertura_pct")),
         rule_morosidad(m.get("morosidad_pct"), m.get("morosidad_prev4")),
+        rule_morosidad_nivel(m.get("morosidad_pct"), m.get("bank_type")),
+        rule_capital_erosion(m.get("capital_now"), m.get("capital_prior")),
         rule_solvency(m.get("solvencia_pct")),
         rule_liquidity(m.get("liq_ratio"), m.get("deposit_qoq")),
         rule_concentration(m.get("concentration_pct"), m.get("is_state_owned", False)),
@@ -184,6 +298,7 @@ def _bank_metrics(rows_by_period: Dict[date, "object"], period: date) -> Dict:
     cur = rows_by_period[period]
     prev_q = rows_by_period[periods[idx - 1]] if idx >= 1 else None
     prev_4 = rows_by_period[periods[idx - 4]] if idx >= 4 else None
+    prev_chr = rows_by_period[periods[idx - CHRONIC_LOOKBACK_Q]] if idx >= CHRONIC_LOOKBACK_Q else None
 
     def f(row, attr):
         v = getattr(row, attr, None) if row is not None else None
@@ -195,7 +310,12 @@ def _bank_metrics(rows_by_period: Dict[date, "object"], period: date) -> Dict:
         "cobertura_pct": f(cur, "cobertura_pct"),
         "morosidad_pct": f(cur, "morosidad_pct"),
         "morosidad_prev4": f(prev_4, "morosidad_pct"),
+        "morosidad_chronic": f(prev_chr, "morosidad_pct"),   # ~2 años atrás → distingue zombi de deterioro
         "solvencia_pct": f(cur, "solvencia_pct"),
+        # Erosión de capital: proxy operativo = solvencia (Basel) hoy vs 4T atrás. Es el CAMBIO,
+        # no el nivel (evita el falso positivo de la bandera de nivel revertida en #598).
+        "capital_now": f(cur, "solvencia_pct"),
+        "capital_prior": f(prev_4, "solvencia_pct"),
         "liq_ratio": _pct(f(cur, "activos_liquidos"), f(cur, "pasivos_exigibles")),
         "deposit_qoq": _yoy(f(cur, "depositos_totales"), f(prev_q, "depositos_totales")),
         "concentration_pct": _pct(f(cur, "suma_top10"), f(cur, "cartera_bruta")),
@@ -207,8 +327,10 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
     del sistema: bancos con banderas activas ordenados por severidad, + resumen por código."""
     from modules.banking_score.models.models import Bank, BankingData
 
-    names = {b.id: b.name for b in db.query(Bank)
-             .filter(Bank.is_active.is_(True), Bank.bank_type.in_(MONITORED_TYPES)).all()}
+    monitored = db.query(Bank).filter(
+        Bank.is_active.is_(True), Bank.bank_type.in_(MONITORED_TYPES)).all()
+    names = {b.id: b.name for b in monitored}
+    types = {str(b.id): b.bank_type for b in monitored}
     by_bank: Dict[str, Dict[date, object]] = {}
     for r in db.query(BankingData).all():
         if r.bank_id in names:
@@ -232,23 +354,33 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
 
     banks: List[Dict] = []
     summary: Dict[str, int] = {}
+    profiles: Dict[str, int] = {}
     for bid, m in metrics.items():
         # Naturaleza de la entidad → la bandera de concentración se encuadra distinto en
-        # banca estatal (concentración estructural por mandato, no proxy de vinculados).
+        # banca estatal (concentración estructural por mandato, no proxy de vinculados); y el
+        # umbral de morosidad de nivel es relativo al tipo.
         m["is_state_owned"] = bid in state_ids
+        m["bank_type"] = types.get(str(bid), None)
         alerts = evaluate(m, peers)
         if not alerts:
             continue
+        ens = ensemble_score(alerts)
+        perfil = classify_profile(m, alerts)
         for a in alerts:
             summary[a.code] = summary.get(a.code, 0) + 1
+        if perfil:
+            profiles[perfil] = profiles.get(perfil, 0) + 1
         banks.append({
             "bank_id": bid, "name": names.get(bid, bid),
             "max_severity": alerts[0].severity,
+            "score": ens["score"], "band": ens["band"], "perfil": perfil,
+            "ensemble": ens,
             "alerts": [asdict(a) for a in alerts],
         })
-    banks.sort(key=lambda b: (b["max_severity"] != "alta", -len(b["alerts"]), b["name"]))
+    # Orden por presión del conjunto (score), luego severidad — el conjunto ponderado manda.
+    banks.sort(key=lambda b: (-float(b["score"]), b["max_severity"] != "alta", b["name"]))
     return {"period": target.isoformat(), "banks": banks, "summary": summary,
-            "n_alerts": sum(len(b["alerts"]) for b in banks)}
+            "profiles": profiles, "n_alerts": sum(len(b["alerts"]) for b in banks)}
 
 
 def bank_alerts(db: Session, bank_id: str) -> Dict:
@@ -257,7 +389,10 @@ def bank_alerts(db: Session, bank_id: str) -> Dict:
     entry = next((b for b in block["banks"] if b["bank_id"] == bank_id), None)
     return {"period": block["period"],
             "alerts": entry["alerts"] if entry else [],
-            "max_severity": entry["max_severity"] if entry else None}
+            "max_severity": entry["max_severity"] if entry else None,
+            "score": entry["score"] if entry else None,
+            "band": entry["band"] if entry else None,
+            "perfil": entry["perfil"] if entry else None}
 
 
 def format_alerts_text(block: Optional[Dict]) -> str:
@@ -270,6 +405,19 @@ def format_alerts_text(block: Optional[Dict]) -> str:
                 "fraude ni contabilidad paralela.")
     lines = ["Señales de monitoreo activas —precursores detectables de la crisis bancaria de 2003 "
              "(complemento del rating, no un veredicto; no detectan fraude):", ""]
+    ens = (block or {}).get("ensemble")
+    score = (block or {}).get("score")
+    band = (block or {}).get("band")
+    if score is None and ens:
+        score, band = ens.get("score"), ens.get("band")
+    perfil = (block or {}).get("perfil")
+    if score is not None:
+        etiqueta = {"agudo": "deterioro agudo (alerta temprana con anticipación real)",
+                    "cronico": "insolvencia crónica (zombi tolerado; no es un deterioro nuevo)"}.get(perfil or "")
+        cab = f"Índice de presión de deterioro del conjunto: **{score}/100** (banda {band})"
+        if etiqueta:
+            cab += f" — perfil: {etiqueta}"
+        lines = [cab + ".", ""] + lines
     for a in alerts:
         lines.append(f"- **{a['label']}** ({a['severity']}) — {a['metric']}: {a['value']} "
                      f"(umbral {a['threshold']}). {a['basis']}.")
