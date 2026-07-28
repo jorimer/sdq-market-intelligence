@@ -237,6 +237,7 @@ async def assemble_product_report(
     lang: str = "es",
     output_dir: Optional[str] = None,
     fmt: str = "pdf",
+    out: Optional[dict] = None,
 ) -> str:
     """Ensambla el reporte (sector, nivel) y devuelve el path (PDF o Word según ``fmt``).
 
@@ -244,9 +245,18 @@ async def assemble_product_report(
     framework conozca su implementación. Reusa ``assemble_product_content`` (mismo
     snapshot + narrativas + sensor de anonimización que la vista in-app) y solo añade
     el render. ``fmt`` = "pdf" | "docx" — misma anatomía de marca.
+
+    ``out`` (opcional): si se pasa un dict, se rellena con metadatos del reporte —hoy
+    ``out["period"]`` = el período REAL de los datos ensamblados (``snapshot.period``),
+    que puede diferir del ``period`` PEDIDO (p.ej. el Deep Dive resuelve al último dato
+    disponible: se pide "2025" y el corte real es "2026-05"). El caller lo usa para
+    nombrar la descarga en coherencia con la portada; sin ``out`` el comportamiento no
+    cambia (los tests no lo pasan).
     """
     content = await assemble_product_content(
         product, tier, period=period, scope=scope, lang=lang)
+    if out is not None:
+        out["period"] = content.snapshot.period
     return await product.render(
         tier, content.snapshot, content.narratives,
         sample=sample, lang=lang, output_dir=output_dir, fmt=fmt,
