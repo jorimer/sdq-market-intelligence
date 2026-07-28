@@ -16,6 +16,9 @@ from docx import Document
 from docx.shared import Inches, RGBColor
 
 from modules.banking_score.reports.forensic_common import (
+    classify_exit,
+    exit_label,
+    headings,
     humanize_month,
     legibility,
     marker_indices,
@@ -58,8 +61,9 @@ def render_forensic_docx(pkg: Dict, narrative_md: str, *, degraded: bool = False
     meta, btk, series = pkg["meta"], pkg["backtest"], pkg["series"]
     ctx = forensic_narrative_context(pkg)
     marks = marker_indices(pkg)
-    lead = btk.get("lead_months")
-    onset = btk.get("onset_cluster")
+    kind = classify_exit(pkg, ctx)
+    head = headings(pkg, ctx, kind)
+    ex_txt = exit_label(kind)
 
     doc = Document()
     _furniture(doc, f"SDQ·MIP — Informe Forense · {meta['nombre']}", None, False)
@@ -73,22 +77,17 @@ def render_forensic_docx(pkg: Dict, narrative_md: str, *, degraded: bool = False
     cell = band.rows[0].cells[0]
     _shade(cell, _NAVY_HEX)
     _add_runs(cell.paragraphs[0], meta["nombre"], color=_WHITE, size=22, bold_all=True)
-    _add_runs(doc.add_paragraph(),
-              "Anatomía de una quiebra · reconstrucción del deterioro sobre dato mensual real",
-              color=_BLUE, size=12)
+    _add_runs(doc.add_paragraph(), head["subtitle"], color=_BLUE, size=12)
     _add_runs(doc.add_paragraph(),
               f"**Período revisado:** {humanize_month(meta['primer'])} → {humanize_month(meta['ultimo'])}",
               color=_NAVY, size=10)
-    verdict = (f"Deterioro detectable desde {humanize_month(onset)} — {lead} meses antes del "
-               f"colapso." if onset and lead is not None
-               else "Los ratios reportados nunca formaron un cluster de alerta antes de la salida.")
     vq = doc.add_paragraph()
     _left_accent(vq, _SIGNAL)
-    _add_runs(vq, verdict, color=_NAVY, size=13)
+    _add_runs(vq, head["verdict"], color=_NAVY, size=13)
 
     # ── Stat cards (4 cifras) ──
     _add_runs(doc.add_paragraph(), "Resumen ejecutivo", color=_NAVY, size=15, bold_all=True)
-    cards = stat_cards(pkg, ctx)
+    cards = stat_cards(pkg, ctx, kind)
     ct = doc.add_table(rows=1, cols=4)
     ct.style = "Light Grid Accent 1"
     for cell, c in zip(ct.rows[0].cells, cards):
@@ -100,24 +99,24 @@ def render_forensic_docx(pkg: Dict, narrative_md: str, *, degraded: bool = False
     tmp = tempfile.mkdtemp(prefix="forensic_docx_")
     try:
         cm, cc, cd = (os.path.join(tmp, n) for n in ("mora.png", "cob.png", "dep.png"))
-        _chart_morosidad(series, marks, cm)
-        _chart_cobertura(series, marks, cc)
-        _chart_deposito(series, marks, cd)
+        _chart_morosidad(series, marks, cm, ex_txt)
+        _chart_cobertura(series, marks, cc, ex_txt)
+        _chart_deposito(series, marks, cd, ex_txt)
         for titulo, png in (("Riesgo de crédito — la morosidad se despega de sus pares", cm),
                             ("Colchón de provisiones — la cobertura se agota", cc),
                             ("Fuga de depósitos (variación intermensual)", cd)):
             _add_runs(doc.add_paragraph(), titulo, color=_NAVY, size=14, bold_all=True)
             doc.add_picture(png, width=Inches(6.2))
 
-        _add_runs(doc.add_paragraph(), "Qué habría marcado Alerta Temprana, y cuándo",
+        _add_runs(doc.add_paragraph(), "Qué marcó Alerta Temprana, y cuándo",
                   color=_NAVY, size=14, bold_all=True)
-        for r in model_timeline(pkg, ctx):
+        for r in model_timeline(pkg, ctx, kind):
             p = doc.add_paragraph(style="List Bullet")
             _add_runs(p, f"[{r['flag']}] ", color=_TONE.get(r["tone"], _WARN), bold_all=True)
             _add_runs(p, f"{r['fecha']} — ", color=_NAVY, bold_all=True)
             _add_runs(p, r["text"])
 
-        leg = legibility(pkg, ctx)
+        leg = legibility(pkg, ctx, kind)
         lbox = doc.add_table(rows=1, cols=1)
         lcell = lbox.rows[0].cells[0]
         _shade(lcell, "E5F3EC" if leg["legible"] else "FBF1DD")

@@ -30,6 +30,9 @@ from reportlab.platypus import (  # noqa: E402
 )
 
 from modules.banking_score.reports.forensic_common import (  # noqa: E402
+    classify_exit,
+    exit_label,
+    headings,
     humanize_month,
     legibility,
     marker_indices,
@@ -73,10 +76,11 @@ def _style_axis(ax, series: List[Dict]) -> None:
     ax.spines[["top", "right"]].set_visible(False)
 
 
-def _draw_marks(ax, series: List[Dict], marks: Dict[str, Optional[int]]) -> None:
+def _draw_marks(ax, series: List[Dict], marks: Dict[str, Optional[int]],
+                exit_txt: str = "colapso") -> None:
     top = ax.get_ylim()[1]
     for key, color, txt, ha in (("onset", _WARN, "onset", "left"),
-                                ("exit", _ALERT, "colapso", "right")):
+                                ("exit", _ALERT, exit_txt, "right")):
         i = marks.get(key)
         if i is not None:
             ax.axvline(i, color=color, lw=1.2, ls=(0, (3, 3)))
@@ -84,7 +88,7 @@ def _draw_marks(ax, series: List[Dict], marks: Dict[str, Optional[int]]) -> None
                     color=color, fontsize=7.5, va="top", ha=ha, fontweight="bold")
 
 
-def _chart_morosidad(series: List[Dict], marks: Dict, path: str) -> None:
+def _chart_morosidad(series: List[Dict], marks: Dict, path: str, exit_txt: str = "colapso") -> None:
     xs = list(range(len(series)))
     mora = [_nan(p.get("morosidad_pct")) for p in series]
     peer = [_nan(p.get("peer_mora_pct")) for p in series]
@@ -94,13 +98,13 @@ def _chart_morosidad(series: List[Dict], marks: Dict, path: str) -> None:
         ax.plot(xs, peer, color=_PEER, lw=1.6, ls=(0, (4, 3)), label="Mediana de su tipo")
     ax.set_ylabel("Morosidad %", fontsize=8, color=_MUTED)
     _style_axis(ax, series)
-    _draw_marks(ax, series, marks)
+    _draw_marks(ax, series, marks, exit_txt)
     ax.legend(fontsize=8, frameon=False, loc="upper left")
     fig.savefig(path, dpi=140, bbox_inches="tight")
     plt.close(fig)
 
 
-def _chart_cobertura(series: List[Dict], marks: Dict, path: str) -> None:
+def _chart_cobertura(series: List[Dict], marks: Dict, path: str, exit_txt: str = "colapso") -> None:
     xs = list(range(len(series)))
     cob = [_nan(p.get("cobertura_pct")) for p in series]
     fig, ax = plt.subplots(figsize=(9, 2.6))
@@ -109,12 +113,12 @@ def _chart_cobertura(series: List[Dict], marks: Dict, path: str) -> None:
     ax.text(0, 100, " 100% (piso Fitch)", color=_MUTED, fontsize=7, va="bottom")
     ax.set_ylabel("Cobertura %", fontsize=8, color=_MUTED)
     _style_axis(ax, series)
-    _draw_marks(ax, series, marks)
+    _draw_marks(ax, series, marks, exit_txt)
     fig.savefig(path, dpi=140, bbox_inches="tight")
     plt.close(fig)
 
 
-def _chart_deposito(series: List[Dict], marks: Dict, path: str) -> None:
+def _chart_deposito(series: List[Dict], marks: Dict, path: str, exit_txt: str = "colapso") -> None:
     vals = [(i, float(p["dep_mom_pct"])) for i, p in enumerate(series)
             if p.get("dep_mom_pct") is not None]
     fig, ax = plt.subplots(figsize=(9, 2.4))
@@ -124,7 +128,7 @@ def _chart_deposito(series: List[Dict], marks: Dict, path: str) -> None:
     ax.axhline(0, color="#D6DEEC", lw=1)
     ax.set_ylabel("Δ depósitos %", fontsize=8, color=_MUTED)
     _style_axis(ax, series)
-    _draw_marks(ax, series, marks)
+    _draw_marks(ax, series, marks, exit_txt)
     fig.savefig(path, dpi=140, bbox_inches="tight")
     plt.close(fig)
 
@@ -204,15 +208,14 @@ def render_forensic_pdf(pkg: Dict, narrative_md: str, *, degraded: bool = False)
     ctx = forensic_narrative_context(pkg)
     styles = _get_styles()
     marks = marker_indices(pkg)
-    lead = btk.get("lead_months")
-    onset = btk.get("onset_cluster")
-    verdict = (f"Deterioro detectable desde {humanize_month(onset)} — {lead} meses antes del "
-               f"colapso." if onset and lead is not None
-               else "Los ratios reportados nunca formaron un cluster de alerta antes de la salida.")
+    kind = classify_exit(pkg, ctx)
+    head = headings(pkg, ctx, kind)
+    verdict = head["verdict"]
+    ex_txt = exit_label(kind)
 
     body: List = []
     body.append(Paragraph("Resumen ejecutivo", styles["SDQHeading"]))
-    body.append(_stat_cards(stat_cards(pkg, ctx), styles))
+    body.append(_stat_cards(stat_cards(pkg, ctx, kind), styles))
     body.append(Spacer(1, 14))
 
     charts = tempfile.mkdtemp(prefix="forensic_pdf_")
@@ -221,9 +224,9 @@ def render_forensic_pdf(pkg: Dict, narrative_md: str, *, degraded: bool = False)
         cm = os.path.join(charts, "mora.png")
         cc = os.path.join(charts, "cob.png")
         cd = os.path.join(charts, "dep.png")
-        _chart_morosidad(series, marks, cm)
-        _chart_cobertura(series, marks, cc)
-        _chart_deposito(series, marks, cd)
+        _chart_morosidad(series, marks, cm, ex_txt)
+        _chart_cobertura(series, marks, cc, ex_txt)
+        _chart_deposito(series, marks, cd, ex_txt)
         body.append(Paragraph("Riesgo de crédito — la morosidad se despega de sus pares",
                               styles["SDQSubHeading"]))
         body.append(_img(cm, 3.0))
@@ -236,11 +239,10 @@ def render_forensic_pdf(pkg: Dict, narrative_md: str, *, degraded: bool = False)
         body.append(_img(cd, 2.4))
         body.append(Spacer(1, 14))
 
-        body.append(Paragraph("Qué habría marcado Alerta Temprana, y cuándo",
-                              styles["SDQSubHeading"]))
-        body.extend(_timeline(model_timeline(pkg, ctx), styles))
+        body.append(Paragraph("Qué marcó Alerta Temprana, y cuándo", styles["SDQSubHeading"]))
+        body.extend(_timeline(model_timeline(pkg, ctx, kind), styles))
         body.append(Spacer(1, 8))
-        body.append(_legibility_box(legibility(pkg, ctx), styles))
+        body.append(_legibility_box(legibility(pkg, ctx, kind), styles))
         body.append(Spacer(1, 14))
 
         body.append(Paragraph("Lectura forense", styles["SDQHeading"]))
@@ -254,9 +256,11 @@ def render_forensic_pdf(pkg: Dict, narrative_md: str, *, degraded: bool = False)
         body.append(Paragraph("Metodología y fuentes", styles["SDQHeading"]))
         body.append(Paragraph(
             "Todas las cifras salen del estado de situación y de resultados mensual por entidad "
-            "publicado por la Superintendencia de Bancos (Cronología SB). El inicio del deterioro "
-            "es el primer mes con un cluster de ≥2 alertas altas simultáneas; la mediana de pares "
-            "es la morosidad mensual de las entidades del mismo tipo.", styles["SDQBody"]))
+            "publicado por la Superintendencia de Bancos (Cronología SB). El onset del deterioro "
+            "es el primer mes con un cluster de ≥2 alertas altas que incluye una señal de CRÉDITO "
+            "(morosidad); la mediana de pares es la morosidad mensual de las entidades del mismo "
+            "tipo. La naturaleza de la salida (quiebra vs otras causas) la decide el modelo leyendo "
+            "los ratios en la ventana de salida.", styles["SDQBody"]))
         body.append(Spacer(1, 6))
         body.append(_sources_table(meta, styles))
         body.append(Spacer(1, 6))
@@ -269,8 +273,7 @@ def render_forensic_pdf(pkg: Dict, narrative_md: str, *, degraded: bool = False)
         build_branded_pdf(
             path=path, title="Informe Forense · Retrospectivo", display_name=meta["nombre"],
             period=f"{humanize_month(meta['primer'])} → {humanize_month(meta['ultimo'])}",
-            body=body, headline=verdict,
-            subtitle="Anatomía de una quiebra · reconstrucción del deterioro sobre dato mensual real",
+            body=body, headline=verdict, subtitle=head["subtitle"],
             add_disclaimer=True)
         with open(path, "rb") as fh:
             return fh.read()
