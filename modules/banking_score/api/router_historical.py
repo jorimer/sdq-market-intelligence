@@ -8,6 +8,7 @@ autenticado). El dato es real y de fuente pública; no es un producto del catál
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from shared.auth.dependencies import get_current_user
@@ -51,3 +52,35 @@ async def historical_forensic(
     if pkg is None:
         raise HTTPException(status_code=404, detail=f"Sin dato histórico para '{nombre}'.")
     return pkg
+
+
+@router.get("/forensic/narrative", summary="Lectura forense (narrativa IA) de una entidad")
+async def historical_forensic_narrative(
+    nombre: str = Query(..., description="Nombre exacto de la entidad (entidad_nombre)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Genera la prosa forense ('anatomía de una quiebra') vía el cerebro, sobre el dato real."""
+    res = await svc.forensic_narrative(db, nombre)
+    if res is None:
+        raise HTTPException(status_code=404, detail=f"Sin dato histórico para '{nombre}'.")
+    return res
+
+
+@router.get("/forensic/report", summary="Informe forense branded (HTML descargable)")
+async def historical_forensic_report(
+    nombre: str = Query(..., description="Nombre exacto de la entidad (entidad_nombre)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Documento forense autocontenido (portada SDQ·MIP + gráficos + lectura + fuentes),
+    imprimible/descargable — la versión 'informe' de la vista Histórico."""
+    from modules.banking_score.reports.forensic_report import render_forensic_html
+
+    pkg = svc.forensic_package(db, nombre)
+    if pkg is None:
+        raise HTTPException(status_code=404, detail=f"Sin dato histórico para '{nombre}'.")
+    narr = await svc.forensic_narrative(db, nombre)
+    html = render_forensic_html(pkg, (narr or {}).get("narrative", ""),
+                                degraded=bool((narr or {}).get("degraded")))
+    return HTMLResponse(content=html)
