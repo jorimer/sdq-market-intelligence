@@ -101,7 +101,7 @@ SAMPLE_NARRATIVES = {
         "La solidez financiera constituye el principal soporte del perfil de Banco Demo "
         "(**score 85/100**). El índice de solvencia se ubica en **16.8%**, holgadamente por "
         "encima del mínimo regulatorio (10%) y del promedio del sistema, lo que otorga a la "
-        "entidad un colchón de capital equivalente a varios años de pérdidas esperadas. "
+        "entidad un margen de capital equivalente a varios años de pérdidas esperadas. "
         "Dicha holgura no tiene carácter coyuntural: habilita el sostenimiento del "
         "crecimiento, la absorción de un deterioro de cartera y la resistencia a un "
         "escenario de estrés sin comprometer la viabilidad. Para un comité de crédito, una "
@@ -220,7 +220,7 @@ SAMPLE_NARRATIVES = {
         "Señales de monitoreo activas —precursores detectables de la crisis bancaria de 2003 "
         "(complemento del rating, no un veredicto; no detectan fraude):\n\n"
         "- **Concentración elevada (top-10)** (media) — top-10 / cartera bruta %: 34.0 (umbral "
-        "30.0). Los préstamos vinculados fueron el corazón del fraude (proxy visible).\n"
+        "30.0). Los préstamos vinculados fueron el mecanismo central del fraude (proxy visible).\n"
         "- **Fondeo por encima del sistema** (media) — gastos_financieros/depósitos %: 7.2 "
         "(umbral 6.1). Baninter pagaba tasas pasivas sobre el sistema desde 1999 (Panel §24)."
     ),

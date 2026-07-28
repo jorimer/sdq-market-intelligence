@@ -140,6 +140,35 @@ _SELF_REFERENCE = re.compile(
 )
 
 
+# ── Lint de REGISTRO (marca, NO borra) ────────────────────────────────────────
+# Léxico VISCERAL/COLOQUIAL impropio de un informe tier-1. A diferencia del meta-comentario,
+# NO se remueve: borrar una palabra rompería la oración y podría alterar el sentido. Se MARCA
+# para telemetría/QA —señal de que el prompt de registro (REGISTER_NEUTRO, la defensa
+# primaria) necesita refuerzo—. Es la red de observabilidad, no un editor automático.
+_REGISTER_LEXICON = [
+    r"se\s+pudre", r"pudri[ée]ndose", r"\bpodrid[oa]s?\b",
+    r"se\s+adelgaza", r"\badelgaza(?:ndo|n|r)?\b",
+    r"\baguanta(?:r|n|ndo)?\b",
+    r"sin\s+tocar\s+(?:el\s+)?(?:patrimonio|capital)",
+    r"\bluzca\b", r"luce\s+(?:controlad|san[oa]|saludable)",
+    r"viento\s+de\s+cola",
+    r"coraz[óo]n\s+del\s+(?:problema|fraude|asunto|negocio)",
+    r"eslab[óo]n\s+m[áa]s\s+(?:fr[áa]gil|d[ée]bil)",
+    r"el\s+elefante\s+en\s+la\s+sala",
+]
+_REGISTER_RE = re.compile("|".join(_REGISTER_LEXICON), re.IGNORECASE)
+
+
+def flag_register_violations(text: str) -> List[str]:
+    """Marca (SIN borrar) el léxico visceral/coloquial impropio de un informe tier-1.
+
+    Devuelve la lista de coincidencias para logging/QA; lista vacía ⇒ registro limpio. No
+    modifica el texto —la corrección va en el prompt de registro, no removiendo palabras—."""
+    if not text:
+        return []
+    return [m.group(0).strip() for m in _REGISTER_RE.finditer(text)]
+
+
 def _tidy(text: str) -> str:
     """Normaliza el espacio/puntuación huérfana que deja una remoción."""
     # espacio antes de puntuación de cierre. NO se incluye "%": en la tipografía de estos

@@ -4,7 +4,7 @@ Cubre: (1) el artefacto real del bug BPD, (2) variantes de auto-corrección/duda
 español e inglés, (3) tags de razonamiento, (4) — crítico — que NO muerda prosa
 financiera legítima donde "espera", "corrección" o "un momento" son palabras reales.
 """
-from shared.narrative.sanitize import strip_meta_commentary
+from shared.narrative.sanitize import flag_register_violations, strip_meta_commentary
 
 
 # ── El bug real ───────────────────────────────────────────────────────────────
@@ -132,3 +132,26 @@ def test_figures_never_altered():
     clean, _ = strip_meta_commentary(txt)
     for fig in ["1.4 %", "2.1 %", "1.67 %"]:
         assert fig in clean
+
+
+# ── Lint de registro (marca, no borra) ────────────────────────────────────────
+def test_register_lint_marca_lexico_visceral():
+    """La frase real que el dueño marcó + otros coloquialismos → se marcan, NO se borran."""
+    txt = ("Esa dinámica —cartera que se pudre mientras el colchón se adelgaza— deja a la "
+           "entidad sin margen; la liquidez aguanta choques y la mora luzca controlada, con "
+           "viento de cola.")
+    flags = flag_register_violations(txt)
+    low = " ".join(flags).lower()
+    for term in ["se pudre", "se adelgaza", "aguanta", "luzca", "viento de cola"]:
+        assert term in low
+    # NO modifica el texto (borrar rompería la oración)
+    assert flag_register_violations.__doc__  # existe; el contrato es no-mutación
+
+
+def test_register_lint_prosa_institucional_limpia():
+    """Prosa tier-1 correcta no dispara ninguna marca (sin falsos positivos)."""
+    txt = ("El margen de capital se erosiona de forma sostenida; el amortiguador de solvencia "
+           "resiste choques de corto plazo, aunque el rezago estructural en rentabilidad "
+           "condiciona la generación orgánica de capital.")
+    assert flag_register_violations(txt) == []
+    assert flag_register_violations("") == []

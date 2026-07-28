@@ -192,7 +192,7 @@ def rule_concentration(concentration_pct: Optional[float],
              "estructural a grandes deudores públicos/sectoriales por mandato; el foco de riesgo "
              "es la CALIDAD de esa cartera dirigida, no un patrón de préstamos vinculados"
              if is_state_owned else
-             "Los préstamos vinculados fueron el corazón del fraude (proxy visible)")
+             "Los préstamos vinculados fueron el mecanismo central del fraude (proxy visible)")
     return Alert("concentracion", "Concentración elevada (top-10)", "media",
                  round(concentration_pct, 1), CONCENTRATION, basis,
                  "top-10 / cartera bruta %")
@@ -221,7 +221,7 @@ def rule_capital_erosion(capital_now: Optional[float],
     """Erosión de capital: caída del ratio patrimonio/activos (o solvencia) en 12m. Es el
     CAMBIO, no el nivel — a diferencia de la bandera de nivel revertida (#598), que marcaba
     en falso a los bancos grandes sanos que corren apalancamiento estructuralmente bajo. El
-    adelgazamiento sostenido del colchón sí precede a la quiebra (histórico SIB, peso 0.14)."""
+    erosión sostenida del margen de capital sí precede a la quiebra (histórico SIB, peso 0.14)."""
     if capital_now is None or capital_prior is None:
         return None
     drop = capital_now - capital_prior
@@ -230,7 +230,7 @@ def rule_capital_erosion(capital_now: Optional[float],
     sev = "alta" if drop <= CAPITAL_EROSION_HIGH else "media"
     return Alert("erosion_capital", "Erosión de capital", sev,
                  round(drop, 2), CAPITAL_EROSION_WARN,
-                 "El colchón patrimonial se adelgaza antes de la quiebra; discrimina la caída, "
+                 "El margen de capital se erosiona antes de la quiebra; discrimina la caída, "
                  "no el nivel (histórico SIB)",
                  "Δ patrimonio/activos pp (12m)")
 

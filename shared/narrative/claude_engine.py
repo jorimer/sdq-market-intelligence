@@ -10,7 +10,7 @@ from shared.cache import cache_get, cache_set
 from shared.config.settings import settings
 from shared.llm.budget import budget_allows, record_usage
 from shared.narrative.lang_context import get_request_lang
-from shared.narrative.sanitize import strip_meta_commentary
+from shared.narrative.sanitize import flag_register_violations, strip_meta_commentary
 
 logger = logging.getLogger(__name__)
 
@@ -1200,6 +1200,15 @@ class NarrativeEngine:
                 "Meta-comentario del modelo removido de la narrativa (%d fragmento(s)): %s. "
                 "Revisar el prompt anti-meta si recurre.",
                 len(removed), removed,
+            )
+        # Lint de REGISTRO: marca (no borra) el léxico visceral/coloquial. La corrección va en
+        # el prompt (REGISTER_NEUTRO); esto lo hace observable si algo se cuela al informe.
+        register_flags = flag_register_violations(text)
+        if register_flags:
+            logger.warning(
+                "Registro impropio en la narrativa (%d marca(s)): %s. Léxico visceral/coloquial "
+                "que no pertenece a un informe tier-1; reforzar REGISTER_NEUTRO si recurre.",
+                len(register_flags), register_flags,
             )
         return NarrativeResult(
             text=text,
