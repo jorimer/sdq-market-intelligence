@@ -63,6 +63,7 @@ from modules.banking_score.api.router_scoring import router as scoring_router
 from modules.banking_score.api.router_data import router as data_router
 from modules.banking_score.api.router_reports import router as reports_router
 from modules.banking_score.api.router_model import router as model_router
+from modules.banking_score.api.router_historical import router as banking_historical_router
 from modules.macro_political_risk.api.router_scoring import router as mpr_scoring_router
 from modules.macro_monitor.api.router import router as macro_monitor_router
 from modules.trade_intel.api.router import router as trade_intel_router
@@ -84,6 +85,8 @@ app.include_router(scoring_router, prefix="/api/v1/banking-score", tags=["Bankin
 app.include_router(data_router, prefix="/api/v1/banking-score/data", tags=["Banking Data"])
 app.include_router(reports_router, prefix="/api/v1/banking-score/reports", tags=["Banking Reports"])
 app.include_router(model_router, prefix="/api/v1/banking-score/model", tags=["ML Model"])
+app.include_router(banking_historical_router, prefix="/api/v1/banking-score/historical",
+                   tags=["Banking Histórico"])
 app.include_router(mpr_scoring_router, prefix="/api/v1/macro-political-risk", tags=["Macro-Political Risk"])
 app.include_router(macro_monitor_router, prefix="/api/v1/macro-monitor", tags=["Macro Monitor"])
 app.include_router(trade_intel_router, prefix="/api/v1/trade-intel", tags=["Trade Intel"])
