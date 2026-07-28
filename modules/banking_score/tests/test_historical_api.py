@@ -31,14 +31,17 @@ def _fake_user():
     return User(id="u1", email="t@sdq.do", password_hash="x", full_name="T", role=UserRole.admin)
 
 
-app.dependency_overrides[get_db] = _override_db
-app.dependency_overrides[get_current_user] = _fake_user
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
 def _db():
+    # Overrides SOLO durante estos tests, con save/restore — un override a nivel de módulo
+    # sobre el `app` compartido contamina a otros suites (p.ej. la auth de test_api.py).
     Base.metadata.create_all(engine, tables=[F.__table__])
+    saved = dict(app.dependency_overrides)
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_current_user] = _fake_user
     db = TestSession()
     y, m = 2001, 1
     for i in range(18):
@@ -54,6 +57,8 @@ def _db():
     db.commit()
     db.close()
     yield
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(saved)
     Base.metadata.drop_all(engine)
 
 
