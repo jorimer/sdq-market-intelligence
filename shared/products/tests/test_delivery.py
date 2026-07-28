@@ -232,6 +232,28 @@ def test_download_returns_pdf(db, monkeypatch, tmp_path):
     assert r.content.startswith(b"%PDF")
 
 
+def test_download_filename_uses_resolved_period(db, monkeypatch, tmp_path):
+    # El Deep Dive resuelve el período PEDIDO al último dato disponible (pides "2025",
+    # el corte real es "2026-05"). El nombre de la descarga debe reflejar el período REAL
+    # del reporte (``snapshot.period`` que el ensamblador reporta vía ``out``), no el del
+    # query — así el filename coincide con la portada del PDF.
+    _activate(db, "banking", ProductTier.pulse)
+    pdf = tmp_path / "demo.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+    c = _client(db, AccessTier.free, monkeypatch, pdf_path=str(pdf))
+
+    async def _fake_report(product, tier, *, period, scope=None, lang="es", out=None, **kw):
+        if out is not None:
+            out["period"] = "2026-05"  # dato real ≠ período pedido
+        return str(pdf)
+    monkeypatch.setattr(prod_router, "assemble_product_report", _fake_report)
+
+    r = c.get("/api/v1/products/banking/pulse/download?period=2025")
+    assert r.status_code == 200
+    cd = r.headers["content-disposition"]
+    assert "2026-05" in cd and "_2025." not in cd
+
+
 def test_download_respects_gate_402(db, monkeypatch):
     _activate(db, "banking", ProductTier.deep_dive)
     c = _client(db, AccessTier.pro, monkeypatch)
