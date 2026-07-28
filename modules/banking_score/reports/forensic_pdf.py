@@ -1,147 +1,284 @@
 """Informe forense en PDF branded (reportlab + matplotlib).
 
-Versión PDF del documento forense (la que el dueño pide al "informe completo"). Reusa los
-helpers de ``pdf_generator`` (estilos SDQ, pull-quote, markdown→flowables, tabla branded) y
-el patrón matplotlib del radar para los gráficos del dato real. Devuelve bytes.
+Versión PDF del documento forense ("informe completo" de la vista Histórico). Usa el shell
+de marca compartido (`build_branded_pdf`: portada navy + logo Arco + chrome de página) y arma
+un CUERPO propio con paridad al mockup: stat cards, gráficos con marcas de onset/colapso y
+mediana de pares, timeline de la lectura del modelo, dictamen de legibilidad (ratios vs
+fraude) y fuentes. La lógica de negocio (fechas, cards, timeline, legibilidad) vive en
+`forensic_common` para no divergir del Word. Devuelve bytes.
 """
 from __future__ import annotations
 
 import os
 import tempfile
-from io import BytesIO
 from typing import Dict, List, Optional
 
 import matplotlib
 
 matplotlib.use("Agg")  # sin display (servidor)
 import matplotlib.pyplot as plt  # noqa: E402
-from reportlab.lib.pagesizes import letter  # noqa: E402
+from reportlab.lib.colors import HexColor  # noqa: E402
+from reportlab.lib.enums import TA_LEFT  # noqa: E402
+from reportlab.lib.styles import ParagraphStyle  # noqa: E402
 from reportlab.lib.units import inch  # noqa: E402
 from reportlab.platypus import (  # noqa: E402
     Image as RLImage,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
+    Table,
+    TableStyle,
 )
 
+from modules.banking_score.reports.forensic_common import (  # noqa: E402
+    humanize_month,
+    legibility,
+    marker_indices,
+    model_timeline,
+    stat_cards,
+)
 from modules.banking_score.reports.pdf_generator import (  # noqa: E402
     _branded_table,
     _get_styles,
     _md_to_flowables,
-    _pull_quote,
 )
+
+_ALERT, _WARN, _OK, _MUTED = "#C8392E", "#B7791F", "#15875A", "#76829C"
+_PEER, _INK, _CARD_BG, _BORDER = "#76829C", "#0A1A3A", "#F1F5FB", "#E7ECF3"
+_TEAL = "#0F7E7E"
+_TONE = {"alert": _ALERT, "warn": _WARN, "ok": _OK, "ink": _INK}
 
 
 def _nan(v):
     return float("nan") if v is None else v
 
 
-def _chart_credito(series: List[Dict], path: str) -> None:
-    xs = list(range(len(series)))
-    mora = [_nan(p.get("morosidad_pct")) for p in series]
-    cob = [_nan(p.get("cobertura_pct")) for p in series]
-    fig, ax = plt.subplots(figsize=(9, 3.1))
-    ax.plot(xs, mora, color="#C8392E", lw=2, label="Morosidad %")
-    ax.plot(xs, cob, color="#0F7E7E", lw=2, label="Cobertura %")
-    step = max(1, len(series) // 8)
-    ax.set_xticks(xs[::step])
-    ax.set_xticklabels([series[i]["fecha"][:7] for i in xs[::step]], fontsize=8, color="#76829C")
-    ax.tick_params(axis="y", labelsize=8, colors="#76829C")
+# ── Gráficos (matplotlib) con marcas de onset/colapso y ejes humanizados ────────
+
+def _xticks(series: List[Dict]):
+    n = len(series)
+    step = max(1, n // 8)
+    idxs = list(range(0, n, step))
+    year_only = n > 36   # spans largos → solo el año; cortos → 'mmm aaaa'
+    labels = [series[i]["fecha"][:4] if year_only else humanize_month(series[i]["fecha"])
+              for i in idxs]
+    return idxs, labels
+
+
+def _style_axis(ax, series: List[Dict]) -> None:
+    idxs, labels = _xticks(series)
+    ax.set_xticks(idxs)
+    ax.set_xticklabels(labels, fontsize=8, color=_MUTED)
+    ax.tick_params(axis="y", labelsize=8, colors=_MUTED)
     ax.grid(True, color="#EAEFF6", lw=0.8)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(fontsize=9, frameon=False, loc="upper left")
-    fig.savefig(path, dpi=130, bbox_inches="tight")
+
+
+def _draw_marks(ax, series: List[Dict], marks: Dict[str, Optional[int]]) -> None:
+    top = ax.get_ylim()[1]
+    for key, color, txt, ha in (("onset", _WARN, "onset", "left"),
+                                ("exit", _ALERT, "colapso", "right")):
+        i = marks.get(key)
+        if i is not None:
+            ax.axvline(i, color=color, lw=1.2, ls=(0, (3, 3)))
+            ax.text(i, top, f" {txt} · {humanize_month(series[i]['fecha'])} ",
+                    color=color, fontsize=7.5, va="top", ha=ha, fontweight="bold")
+
+
+def _chart_morosidad(series: List[Dict], marks: Dict, path: str) -> None:
+    xs = list(range(len(series)))
+    mora = [_nan(p.get("morosidad_pct")) for p in series]
+    peer = [_nan(p.get("peer_mora_pct")) for p in series]
+    fig, ax = plt.subplots(figsize=(9, 3.0))
+    ax.plot(xs, mora, color=_ALERT, lw=2.2, label="Entidad")
+    if any(v == v for v in peer):  # noqa: PLR0124 — algún peer no-NaN
+        ax.plot(xs, peer, color=_PEER, lw=1.6, ls=(0, (4, 3)), label="Mediana de su tipo")
+    ax.set_ylabel("Morosidad %", fontsize=8, color=_MUTED)
+    _style_axis(ax, series)
+    _draw_marks(ax, series, marks)
+    ax.legend(fontsize=8, frameon=False, loc="upper left")
+    fig.savefig(path, dpi=140, bbox_inches="tight")
     plt.close(fig)
 
 
-def _chart_deposito(series: List[Dict], path: str) -> None:
+def _chart_cobertura(series: List[Dict], marks: Dict, path: str) -> None:
+    xs = list(range(len(series)))
+    cob = [_nan(p.get("cobertura_pct")) for p in series]
+    fig, ax = plt.subplots(figsize=(9, 2.6))
+    ax.plot(xs, cob, color=_TEAL, lw=2.2)
+    ax.axhline(100, color="#D6DEEC", lw=1, ls=(0, (2, 2)))
+    ax.text(0, 100, " 100% (piso Fitch)", color=_MUTED, fontsize=7, va="bottom")
+    ax.set_ylabel("Cobertura %", fontsize=8, color=_MUTED)
+    _style_axis(ax, series)
+    _draw_marks(ax, series, marks)
+    fig.savefig(path, dpi=140, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _chart_deposito(series: List[Dict], marks: Dict, path: str) -> None:
     vals = [(i, float(p["dep_mom_pct"])) for i, p in enumerate(series)
             if p.get("dep_mom_pct") is not None]
     fig, ax = plt.subplots(figsize=(9, 2.4))
     xs = [i for i, _ in vals]
     ys = [v for _, v in vals]
-    ax.bar(xs, ys, color=["#C8392E" if y < 0 else "#15875A" for y in ys], width=0.7)
+    ax.bar(xs, ys, color=[_ALERT if y < 0 else _OK for y in ys], width=0.7)
     ax.axhline(0, color="#D6DEEC", lw=1)
-    step = max(1, len(series) // 8)
-    ax.set_xticks(list(range(0, len(series), step)))
-    ax.set_xticklabels([series[i]["fecha"][:7] for i in range(0, len(series), step)],
-                       fontsize=8, color="#76829C")
-    ax.tick_params(axis="y", labelsize=8, colors="#76829C")
-    ax.grid(True, axis="y", color="#EAEFF6", lw=0.8)
-    ax.spines[["top", "right"]].set_visible(False)
-    fig.savefig(path, dpi=130, bbox_inches="tight")
+    ax.set_ylabel("Δ depósitos %", fontsize=8, color=_MUTED)
+    _style_axis(ax, series)
+    _draw_marks(ax, series, marks)
+    fig.savefig(path, dpi=140, bbox_inches="tight")
     plt.close(fig)
 
 
+# ── Flowables de marca del cuerpo ───────────────────────────────────────────────
+
+def _card_style() -> ParagraphStyle:
+    return ParagraphStyle("ForensicCard", fontName="Helvetica", fontSize=10,
+                          leading=13, alignment=TA_LEFT)
+
+
+def _stat_cards(cards: List[Dict], styles) -> Table:
+    cs = _card_style()
+    cells = [Paragraph(
+        f'<font size="16" color="{_TONE.get(c["tone"], _INK)}"><b>{c["value"]}</b></font><br/>'
+        f'<font size="7.5" color="{_MUTED}">{c["label"]}</font>', cs) for c in cards]
+    t = Table([cells], colWidths=[1.62 * inch] * 4)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), HexColor(_CARD_BG)),
+        ("BOX", (0, 0), (-1, -1), 0.5, HexColor(_BORDER)),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, HexColor(_BORDER)),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    return t
+
+
+def _timeline(rows: List[Dict], styles) -> List:
+    out: List = []
+    for r in rows:
+        col = _TONE.get(r["tone"], _WARN)
+        out.append(Paragraph(
+            f'<font color="{col}"><b>[{r["flag"]}]</b></font> '
+            f'<font color="{_INK}"><b>{r["fecha"]}</b></font> — {r["text"]}', styles["SDQBullet"]))
+        out.append(Spacer(1, 3))
+    return out
+
+
+def _legibility_box(leg: Dict, styles) -> Table:
+    col = _OK if leg["legible"] else _WARN
+    bg = "#E5F3EC" if leg["legible"] else "#FBF1DD"
+    inner = [Paragraph(f'<font color="{col}"><b>{leg["title"]}</b></font>', styles["SDQBodyBold"]),
+             Spacer(1, 3), Paragraph(leg["text"], styles["SDQBody"])]
+    t = Table([[inner]], colWidths=[6.5 * inch])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), HexColor(bg)),
+        ("BOX", (0, 0), (-1, -1), 0.6, HexColor(col)),
+        ("TOPPADDING", (0, 0), (-1, -1), 11), ("BOTTOMPADDING", (0, 0), (-1, -1), 11),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12), ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+    ]))
+    return t
+
+
+def _sources_table(meta: Dict, styles) -> Table:
+    rows = [
+        ["Fuente", "Serie", "Cobertura"],
+        ["SB — Cronología SB", "Estado de situación mensual, por entidad",
+         f"{humanize_month(meta['primer'])} → {humanize_month(meta['ultimo'])}"],
+        ["SB — Cronología SB", "Estado de resultados mensual, por entidad", "ene 1996 → abr 2026"],
+    ]
+    return _branded_table(rows, [1.9 * inch, 3.0 * inch, 1.6 * inch], styles, font_size=8)
+
+
+def _img(path: str, fig_h: float) -> RLImage:
+    w = 6.5 * inch
+    return RLImage(path, width=w, height=w * fig_h / 9.0)
+
+
 def render_forensic_pdf(pkg: Dict, narrative_md: str, *, degraded: bool = False) -> bytes:
-    """Documento forense en PDF (bytes)."""
+    """Documento forense en PDF (bytes) — portada branded + cuerpo con paridad al mockup."""
+    from shared.products.render import build_branded_pdf
+
     from modules.banking_score.historical_service import forensic_narrative_context
 
-    meta, bt, series = pkg["meta"], pkg["backtest"], pkg["series"]
+    meta, btk, series = pkg["meta"], pkg["backtest"], pkg["series"]
     ctx = forensic_narrative_context(pkg)
     styles = _get_styles()
-    story: List = []
-
-    story.append(Paragraph("SDQ·MIP — Informe Forense · Retrospectivo", styles["SDQSmall"]))
-    story.append(Paragraph(f"{meta['nombre']}", styles["SDQTitle"]))
-    story.append(Paragraph("Anatomía de una quiebra · reconstrucción del deterioro sobre dato "
-                           "mensual real", styles["SDQSubHeading"]))
-    lead = bt.get("lead_months")
-    verdict = (f"Deterioro detectable desde {bt.get('onset_cluster')} — {lead} meses antes del "
-               f"colapso." if bt.get("onset_cluster") and lead is not None
+    marks = marker_indices(pkg)
+    lead = btk.get("lead_months")
+    onset = btk.get("onset_cluster")
+    verdict = (f"Deterioro detectable desde {humanize_month(onset)} — {lead} meses antes del "
+               f"colapso." if onset and lead is not None
                else "Los ratios reportados nunca formaron un cluster de alerta antes de la salida.")
-    story.append(Spacer(1, 6))
-    story.append(_pull_quote(verdict, styles))
-    story.append(Spacer(1, 8))
 
-    # Resumen (tabla branded de 4 cifras)
-    stat_rows = [
-        ["Inicio del deterioro", "Anticipación", "Morosidad máx.", "Meses en alerta"],
-        [bt.get("onset_cluster") or "—",
-         f"{lead} meses" if lead is not None else "—",
-         f"{ctx['morosidad_maxima_pct']:.1f}%" if ctx.get("morosidad_maxima_pct") is not None else "—",
-         f"{bt.get('n_high_months', 0)} de {meta['n_periodos']}"],
-    ]
-    story.append(_branded_table(stat_rows, [1.6 * inch, 1.5 * inch, 1.5 * inch, 1.6 * inch], styles))
-    story.append(Spacer(1, 12))
+    body: List = []
+    body.append(Paragraph("Resumen ejecutivo", styles["SDQHeading"]))
+    body.append(_stat_cards(stat_cards(pkg, ctx), styles))
+    body.append(Spacer(1, 14))
 
-    tmp = tempfile.mkdtemp(prefix="forensic_pdf_")
+    charts = tempfile.mkdtemp(prefix="forensic_pdf_")
+    pdf_dir = tempfile.mkdtemp(prefix="forensic_out_")
     try:
-        c1, c2 = os.path.join(tmp, "credito.png"), os.path.join(tmp, "dep.png")
-        _chart_credito(series, c1)
-        _chart_deposito(series, c2)
-        story.append(Paragraph("Riesgo de crédito y colchón de provisiones", styles["SDQSubHeading"]))
-        story.append(RLImage(c1, width=6.5 * inch, height=6.5 * 3.1 / 9 * inch))
-        story.append(Spacer(1, 8))
-        story.append(Paragraph("Fuga de depósitos (variación intermensual)", styles["SDQSubHeading"]))
-        story.append(RLImage(c2, width=6.5 * inch, height=6.5 * 2.4 / 9 * inch))
-        story.append(Spacer(1, 12))
+        cm = os.path.join(charts, "mora.png")
+        cc = os.path.join(charts, "cob.png")
+        cd = os.path.join(charts, "dep.png")
+        _chart_morosidad(series, marks, cm)
+        _chart_cobertura(series, marks, cc)
+        _chart_deposito(series, marks, cd)
+        body.append(Paragraph("Riesgo de crédito — la morosidad se despega de sus pares",
+                              styles["SDQSubHeading"]))
+        body.append(_img(cm, 3.0))
+        body.append(Spacer(1, 8))
+        body.append(Paragraph("Colchón de provisiones — la cobertura se agota",
+                              styles["SDQSubHeading"]))
+        body.append(_img(cc, 2.6))
+        body.append(Spacer(1, 8))
+        body.append(Paragraph("Fuga de depósitos (variación intermensual)", styles["SDQSubHeading"]))
+        body.append(_img(cd, 2.4))
+        body.append(Spacer(1, 14))
 
-        story.append(Paragraph("Lectura forense", styles["SDQHeading"]))
+        body.append(Paragraph("Qué habría marcado Alerta Temprana, y cuándo",
+                              styles["SDQSubHeading"]))
+        body.extend(_timeline(model_timeline(pkg, ctx), styles))
+        body.append(Spacer(1, 8))
+        body.append(_legibility_box(legibility(pkg, ctx), styles))
+        body.append(Spacer(1, 14))
+
+        body.append(Paragraph("Lectura forense", styles["SDQHeading"]))
         if narrative_md and not degraded:
-            story.extend(_md_to_flowables(narrative_md, styles))
+            body.extend(_md_to_flowables(narrative_md, styles))
         else:
-            story.append(Paragraph("La lectura narrativa no está disponible en este momento; los "
-                                   "datos y el backtest de arriba son completos.", styles["SDQBody"]))
-        story.append(Spacer(1, 10))
+            body.append(Paragraph("La lectura narrativa no está disponible en este momento; los "
+                                  "datos y el backtest de arriba son completos.", styles["SDQBody"]))
+        body.append(Spacer(1, 12))
 
-        story.append(Paragraph("Metodología y fuentes", styles["SDQHeading"]))
-        story.append(Paragraph(
+        body.append(Paragraph("Metodología y fuentes", styles["SDQHeading"]))
+        body.append(Paragraph(
             "Todas las cifras salen del estado de situación y de resultados mensual por entidad "
-            "publicado por la Superintendencia de Bancos (Cronología SB). El inicio del deterioro es "
-            "el primer mes con un cluster de ≥2 alertas altas simultáneas.", styles["SDQBody"]))
-        story.append(Paragraph(
+            "publicado por la Superintendencia de Bancos (Cronología SB). El inicio del deterioro "
+            "es el primer mes con un cluster de ≥2 alertas altas simultáneas; la mediana de pares "
+            "es la morosidad mensual de las entidades del mismo tipo.", styles["SDQBody"]))
+        body.append(Spacer(1, 6))
+        body.append(_sources_table(meta, styles))
+        body.append(Spacer(1, 6))
+        body.append(Paragraph(
             "Límite: el capital regulatorio Basilea no existe en el balance contable pre-2004 — el "
             "apalancamiento patrimonio/activos es un proxy etiquetado. Informe retrospectivo/forense, "
             "no una calificación emitida en su momento.", styles["SDQSmall"]))
 
-        buf = BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.7 * inch,
-                                bottomMargin=0.7 * inch, leftMargin=0.75 * inch, rightMargin=0.75 * inch)
-        doc.build(story)
-        return buf.getvalue()
+        path = os.path.join(pdf_dir, "forensic.pdf")
+        build_branded_pdf(
+            path=path, title="Informe Forense · Retrospectivo", display_name=meta["nombre"],
+            period=f"{humanize_month(meta['primer'])} → {humanize_month(meta['ultimo'])}",
+            body=body, headline=verdict,
+            subtitle="Anatomía de una quiebra · reconstrucción del deterioro sobre dato mensual real",
+            add_disclaimer=True)
+        with open(path, "rb") as fh:
+            return fh.read()
     finally:
-        for f in (os.path.join(tmp, "credito.png"), os.path.join(tmp, "dep.png")):
-            if os.path.exists(f):
-                os.remove(f)
-        os.rmdir(tmp)
+        for d, files in ((charts, ("mora.png", "cob.png", "dep.png")), (pdf_dir, ("forensic.pdf",))):
+            for f in files:
+                p = os.path.join(d, f)
+                if os.path.exists(p):
+                    os.remove(p)
+            if os.path.exists(d):
+                os.rmdir(d)
