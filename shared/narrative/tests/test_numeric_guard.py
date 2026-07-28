@@ -204,3 +204,53 @@ def test_punto_suelto_no_rompe_el_detector():
     # un '.' antes de 'sobre la mediana' no debe tirar el detector (regresion: float('.'))
     txt = "El banco es sólido. sobre la mediana de pares hay margen; aporta 40.0 puntos."
     assert isinstance(deterministic_unsupported(_ctx(), txt), list)
+
+
+# ── (8) Superlativo transversal ('el mayor del sistema' donde no lidera) ──────────
+
+def _pos_ctx():
+    """Contexto con posiciones por dimensión: la entidad es #1 GLOBAL pero #2 en escala
+    (lidera Popular) y #2 en solvencia (lidera Romana) — el caso del Deep Dive de pensiones."""
+    return {
+        "posiciones_dimension": {
+            "Escala (fondos administrados / AUM)": {
+                "rank": 2, "n": 7, "es_lider": False, "lider_afp": "AFP Popular"},
+            "Solvencia (patrimonio/activos)": {
+                "rank": 2, "n": 7, "es_lider": False, "lider_afp": "AFP Romana"},
+            "Costo (comisión/AUM)": {
+                "rank": 1, "n": 7, "es_lider": True, "lider_afp": "AFP Reservas"},
+        }
+    }
+
+
+def test_superlative_escala_flagged():
+    text = ("AFP Reservas administra un fondo acumulado de RD$ 348,007 millones "
+            "—el mayor del sistema—, con un puntaje de 84.73.")
+    flags = deterministic_unsupported(_pos_ctx(), text)
+    assert any("no lidera" in f and "Escala" in f and "Popular" in f for f in flags), flags
+
+
+def test_superlative_solvencia_flagged():
+    text = "combina la mayor base de activos con el índice de solvencia más alto del panel."
+    flags = deterministic_unsupported(_pos_ctx(), text)
+    assert any("Solvencia" in f and "Romana" in f for f in flags), flags
+
+
+def test_superlative_where_leader_not_flagged():
+    """Si la entidad SÍ lidera la dimensión (costo), el superlativo es válido → no se marca."""
+    text = "tiene la comisión más baja del sistema."
+    flags = deterministic_unsupported(_pos_ctx(), text)
+    assert not any("Costo" in f for f in flags), flags
+
+
+def test_negated_superlative_not_flagged():
+    """'No es el mayor del sistema' es un superlativo NEGADO → no es afirmación, no se marca."""
+    text = "No es la solvencia más alta del panel, pero su escala compensa."
+    flags = deterministic_unsupported(_pos_ctx(), text)
+    assert not any("Solvencia" in f for f in flags), flags
+
+
+def test_no_positions_no_crosssectional_flags():
+    """Sin ``posiciones_dimension`` el patrón se salta (best-effort, no rompe)."""
+    text = "es el mayor del sistema en escala."
+    assert deterministic_unsupported({}, text) == []
