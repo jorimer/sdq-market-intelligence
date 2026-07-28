@@ -83,7 +83,7 @@ def forensic_narrative_context(pkg: Dict) -> Dict:
     deps = [p["dep_mom_pct"] for p in series if p["dep_mom_pct"] is not None]
     peor_fuga = min(deps) if deps else None
     peor_fuga_fecha = next((p["fecha"] for p in series if p["dep_mom_pct"] == peor_fuga), None)
-    onset_alerts = next((t["alerts"] for t in bt.get("timeline", []) if t["period"] == onset), [])
+    onset_alerts: list = next((t["alerts"] for t in bt.get("timeline", []) if t["period"] == onset), [])
     return {
         "entidad": meta["nombre"],
         "tipo_entidad": meta["tipo_entidad"],

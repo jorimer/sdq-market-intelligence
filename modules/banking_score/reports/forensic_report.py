@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import html as _html
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 def _fnum(x: Optional[float], d: int = 1) -> str:
@@ -57,7 +57,8 @@ def _line_chart(series: List[Dict], keys: List[Dict], *, ymax: float, ymin: floa
 
 def _bar_chart(series: List[Dict], field: str, *, W: int = 720, H: int = 170) -> str:
     pl, pb, pt, pr = 44, 26, 12, 12
-    vals = [(p["fecha"], p.get(field)) for p in series if p.get(field) is not None]
+    vals: List[Tuple[str, float]] = [
+        (str(p["fecha"]), float(p[field])) for p in series if p.get(field) is not None]
     n = len(vals)
     if n < 2:
         return ""
@@ -90,7 +91,8 @@ def _bar_chart(series: List[Dict], field: str, *, W: int = 720, H: int = 170) ->
 
 def _md_to_html(md: str) -> str:
     lines = (md or "").splitlines()
-    html_parts, para = [], []
+    html_parts: List[str] = []
+    para: List[str] = []
 
     def flush():
         if para:
