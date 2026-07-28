@@ -86,6 +86,10 @@ def forensic_narrative_context(pkg: Dict) -> Dict:
     peor_fuga = min(deps) if deps else None
     peor_fuga_fecha = next((p["fecha"] for p in series if p["dep_mom_pct"] == peor_fuga), None)
     onset_alerts: list = next((t["alerts"] for t in bt.get("timeline", []) if t["period"] == onset), [])
+    # Ratios en la VENTANA DE SALIDA (últimos 6 meses) — sostienen la lectura de "no quiebra".
+    tail = series[-6:]
+    tail_mora = [p["morosidad_pct"] for p in tail if p["morosidad_pct"] is not None]
+    tail_cob = [p["cobertura_pct"] for p in tail if p["cobertura_pct"] is not None]
     return {
         "entidad": meta["nombre"],
         "tipo_entidad": meta["tipo_entidad"],
@@ -97,6 +101,8 @@ def forensic_narrative_context(pkg: Dict) -> Dict:
         "meses_en_alerta": bt.get("n_high_months"),
         "morosidad_en_onset_pct": _at(series, onset, "morosidad_pct"),
         "cobertura_en_onset_pct": _at(series, onset, "cobertura_pct"),
+        "morosidad_al_salir_pct": round(sum(tail_mora) / len(tail_mora), 2) if tail_mora else None,
+        "cobertura_al_salir_pct": round(sum(tail_cob) / len(tail_cob), 1) if tail_cob else None,
         "morosidad_maxima_pct": max(moras) if moras else None,
         "peor_fuga_depositos_pct": peor_fuga,
         "peor_fuga_fecha": peor_fuga_fecha,
@@ -115,7 +121,12 @@ async def forensic_narrative(db, nombre: str) -> Optional[Dict]:
     if pkg is None:
         return None
     from shared.narrative.claude_engine import narrative_engine
+
+    from modules.banking_score.reports.forensic_common import classify_exit
     ctx = forensic_narrative_context(pkg)
+    # La naturaleza de la salida (quiebra vs otras causas) gobierna la prosa: sin esto el
+    # cerebro escribiría "anatomía de una quiebra" para un banco sano que salió por fusión.
+    ctx["naturaleza_salida"] = classify_exit(pkg, ctx)
     narrativa, degraded = "", False
     try:
         res = await narrative_engine.generate(
