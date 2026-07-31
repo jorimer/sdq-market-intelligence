@@ -218,7 +218,7 @@ export function DecisionDrawer({
       {check && !checking && (
         <div
           className={`rounded-lg p-3 text-sm ${
-            check.feasible ? "bg-ok-soft text-ok" : "bg-danger-soft text-danger"
+            check.feasible ? "bg-ok-soft text-ok" : "bg-alert-soft text-alert"
           }`}
         >
           <div className="font-semibold">
@@ -237,7 +237,7 @@ export function DecisionDrawer({
         </div>
       )}
 
-      {error && <p className="text-sm rounded-lg bg-danger-soft text-danger p-3">{error}</p>}
+      {error && <p className="text-sm rounded-lg bg-alert-soft text-alert p-3">{error}</p>}
 
       <div className="flex items-center gap-2">
         <button className="btn btn-primary" disabled={!valid || busy} onClick={submit}>

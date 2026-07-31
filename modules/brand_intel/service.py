@@ -37,6 +37,8 @@ from modules.brand_intel.models.models import (
     BrandDecision,
     BrandEngagement,
     BrandEntity,
+    BrandExtraction,
+    BrandExtractionCell,
     BrandForecast,
     BrandObservation,
     BrandWave,
@@ -110,6 +112,43 @@ def brands(db: Session, engagement_id: str) -> List[BrandEntity]:
         .order_by(BrandEntity.sort_order, BrandEntity.name)
         .all()
     )
+
+
+#: Every table that hangs off an engagement. Deleting the engagement without emptying
+#: these leaves a client's private rows alive with no owner — and `engagement_id` is the
+#: only thing that gates access to them, so orphans are unreachable *and* undeletable
+#: through the API. Listed children-first: that is also the safe write order.
+_OWNED_BY_ENGAGEMENT = (
+    BrandExtractionCell,
+    BrandExtraction,
+    BrandForecast,
+    BrandDecision,
+    BrandObservation,
+    BrandEntity,
+    BrandWave,
+)
+
+
+def delete_engagement(db: Session, engagement: BrandEngagement) -> Dict[str, int]:
+    """Erase an engagement and everything that belongs to it.
+
+    Irreversible on purpose: the alternative on the table was `is_active`, and the owner
+    chose deletion for an engagement created by a broken build. What must not happen is a
+    *partial* deletion, so the count of every table is returned — a caller that sees rows
+    it did not expect knows the model grew a child this function does not know about.
+    """
+    removed: Dict[str, int] = {}
+    for model in _OWNED_BY_ENGAGEMENT:
+        removed[model.__tablename__] = (
+            db.query(model)
+            .filter(model.engagement_id == engagement.id)
+            .delete(synchronize_session=False)
+        )
+    slug = str(engagement.slug)
+    db.delete(engagement)
+    db.commit()
+    logger.info("Encargo brand_intel '%s' eliminado: %s", slug, removed)
+    return removed
 
 
 def brand_slug(name: str) -> str:

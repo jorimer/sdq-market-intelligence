@@ -152,7 +152,7 @@ export function NewEngagementDrawer({ onClose, onCreated }: Props) {
       </div>
 
       {error && (
-        <p className="text-sm rounded-lg bg-danger-soft text-danger p-3">{error}</p>
+        <p className="text-sm rounded-lg bg-alert-soft text-alert p-3">{error}</p>
       )}
 
       <div className="flex items-center gap-2">

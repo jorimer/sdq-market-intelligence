@@ -70,6 +70,9 @@ body {
   .btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
   .btn-soft { background: var(--accent-soft); color: var(--accent-ink); }
   .btn-soft:hover { filter: brightness(.97); }
+  /* Acción destructiva: no debe parecerse a la primaria de la misma pantalla. */
+  .btn-alert { background: var(--alert); color: #fff; }
+  .btn-alert:hover { filter: brightness(.93); }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
 
   .field {

@@ -10,6 +10,7 @@ import {
   Plus,
   Radar,
   Scale,
+  Trash2,
   Upload,
   Wallet,
 } from "lucide-react";
@@ -63,6 +64,7 @@ import { NewEngagementDrawer } from "../components/NewEngagementDrawer";
 import { DecisionDrawer } from "../components/DecisionDrawer";
 import { ExtractionReviewDrawer } from "../components/ExtractionReviewDrawer";
 import { StructureDrawer } from "../components/StructureDrawer";
+import { DeleteEngagementDrawer } from "../components/DeleteEngagementDrawer";
 
 type Status = "loading" | "error" | "ready";
 
@@ -536,6 +538,7 @@ export function BrandIntelPage() {
   const [detail, setDetail] = useState<EngagementDetail | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [showStructure, setShowStructure] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [showDecision, setShowDecision] = useState(false);
   const [forecastMsg, setForecastMsg] = useState<string | null>(null);
   const [extractions, setExtractions] = useState<ExtractionSummary[]>([]);
@@ -753,6 +756,14 @@ export function BrandIntelPage() {
               <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
                 <Upload size={15} /> {busy ? "Cargando…" : "Subir Excel"}
               </button>
+              {/* Un encargo que quedó a medias es justo el que hay que poder quitar, y
+                  este estado no tiene barra de acciones donde ofrecerlo. */}
+              <button
+                className="btn btn-ghost text-alert"
+                onClick={() => setShowDelete(true)}
+              >
+                <Trash2 size={15} /> Eliminar encargo
+              </button>
             </div>
           }
         />
@@ -774,6 +785,24 @@ export function BrandIntelPage() {
             onAdopted={() => {
               setShowStructure(false);
               void load(slug);
+            }}
+          />
+        )}
+        {showDelete && current && (
+          <DeleteEngagementDrawer
+            slug={slug}
+            focalBrand={detail.focal_brand}
+            client={current.client}
+            waves={0}
+            brands={0}
+            extractions={extractions.length}
+            onClose={() => setShowDelete(false)}
+            onDeleted={() => {
+              setShowDelete(false);
+              void listEngagements().then((rows) => {
+                setEngagements(rows);
+                setSlug(rows[0]?.slug ?? "");
+              });
             }}
           />
         )}
@@ -865,6 +894,16 @@ export function BrandIntelPage() {
             <button className="btn btn-primary text-sm" onClick={() => void downloadReport(slug)}>
               <FileText size={15} /> Informe
             </button>
+            {/* Separado del resto y sin etiqueta de acción: es la única irreversible de
+                la fila, y no debe quedar a un pixel de «Informe». */}
+            <button
+              className="btn btn-ghost text-sm text-alert"
+              onClick={() => setShowDelete(true)}
+              title="Eliminar el encargo y todos sus datos"
+              aria-label="Eliminar el encargo"
+            >
+              <Trash2 size={15} />
+            </button>
             <input
               ref={fileRef}
               type="file"
@@ -933,7 +972,7 @@ export function BrandIntelPage() {
                   connection — loses every figure on it. Counting it nowhere is the same
                   as pretending the deck had one slide fewer, so it is named here. */}
               {pdfReport.errores_por_pagina.length > 0 && (
-                <div className="text-xs text-danger">
+                <div className="text-xs text-alert">
                   <span className="font-semibold">
                     {pdfReport.errores_por_pagina.length} lámina(s) no se pudieron leer
                   </span>{" "}
@@ -1250,6 +1289,27 @@ export function BrandIntelPage() {
           onAdopted={() => {
             setShowStructure(false);
             void load(slug);
+          }}
+        />
+      )}
+
+      {showDelete && detail && current && (
+        <DeleteEngagementDrawer
+          slug={slug}
+          focalBrand={detail.focal_brand}
+          client={current.client}
+          waves={detail.waves.length}
+          brands={detail.brands.length}
+          extractions={extractions.length}
+          onClose={() => setShowDelete(false)}
+          onDeleted={() => {
+            setShowDelete(false);
+            // The engagement this page is pointed at no longer exists, so reloading it
+            // would 404. Go back to the list and let it pick whatever is left.
+            void listEngagements().then((rows) => {
+              setEngagements(rows);
+              setSlug(rows[0]?.slug ?? "");
+            });
           }}
         />
       )}

@@ -212,7 +212,7 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
         })}
       </div>
 
-      {error && <p className="text-sm rounded-lg bg-danger-soft text-danger p-3">{error}</p>}
+      {error && <p className="text-sm rounded-lg bg-alert-soft text-alert p-3">{error}</p>}
 
       {!outcome && (
         <div className="flex items-center gap-2">
