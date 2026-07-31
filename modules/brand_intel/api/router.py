@@ -225,6 +225,88 @@ async def ingest_pdf(
     return report.as_dict()
 
 
+@router.post("/engagements/{slug}/discover",
+             summary="Descubrir las olas y las marcas que trae una presentación")
+async def discover_structure(
+    slug: str,
+    file: UploadFile = File(..., description="Presentación .pdf del proveedor"),
+    sample: int = Query(5, ge=1, le=15,
+                        description="Cuántas láminas leer para el set de marcas"),
+    with_brands: bool = Query(True, description="Incluir el pase de marcas (usa el modelo)"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Propose the deck's waves and brands. Creates nothing.
+
+    Exists because an engagement is born with a client and a focal brand and no
+    structure, while the ingest maps printed labels onto declared waves and brands. A
+    client with slides and no workbook had no way to declare them; this reads the deck's
+    own vocabulary so a reviewer can adopt it.
+    """
+    import asyncio
+
+    from modules.brand_intel.ingest import discovery as dsc
+
+    _resolve(db, slug, user)
+    if not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Se espera un archivo .pdf.")
+    content = await file.read()
+
+    try:
+        proposal = await asyncio.to_thread(
+            dsc.discover_structure, content, sample, None, None, with_brands,
+        )
+    except Exception as exc:  # noqa: BLE001 — the caller must see why, not a blank panel
+        logger.exception("Fallo el descubrimiento de estructura en %s", slug)
+        raise HTTPException(status_code=400,
+                            detail=f"No se pudo leer el PDF: {exc}") from exc
+    return {"document": file.filename, **proposal.as_dict()}
+
+
+class WaveIn(BaseModel):
+    code: str = Field(..., min_length=4, max_length=30)
+    label: str = Field(..., min_length=1, max_length=40)
+    period_date: Optional[str] = None
+    nominal_base: Optional[int] = Field(None, ge=1)
+
+
+class BrandIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    slug: Optional[str] = Field(None, max_length=60)
+    is_focal: bool = False
+    in_category_set: bool = True
+
+
+class StructureIn(BaseModel):
+    waves: List[WaveIn] = Field(default_factory=list)
+    brands: List[BrandIn] = Field(default_factory=list)
+
+
+@router.post("/engagements/{slug}/structure",
+             summary="Adoptar las olas y las marcas del encargo")
+def adopt_structure(
+    slug: str,
+    payload: StructureIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Create the engagement's waves and brands from a reviewed proposal."""
+    eng = _resolve(db, slug, user)
+    if not payload.waves and not payload.brands:
+        raise HTTPException(status_code=400,
+                            detail="No se recibió ninguna ola ni marca que adoptar.")
+    try:
+        result = svc.adopt_structure(
+            db, eng,
+            [w.model_dump() for w in payload.waves],
+            [b.model_dump() for b in payload.brands],
+        )
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
+
+
 @router.get("/engagements/{slug}/extractions", summary="Extracciones del encargo")
 def list_extractions(slug: str, db: Session = Depends(get_db),
                      user: User = Depends(get_current_user)) -> List[Dict[str, Any]]:
@@ -255,12 +337,23 @@ def extraction_cells(slug: str, extraction_id: str, db: Session = Depends(get_db
     cells = (db.query(BrandExtractionCell)
              .filter(BrandExtractionCell.extraction_id == row.id)
              .order_by(BrandExtractionCell.page_number).all())
+    # The reviewer is comparing each row against the slide in front of them, and the
+    # slide prints "McDonald's" and "Mar '26" — not `mcdonalds` and `2026-03`. The metric
+    # was already resolved to its label here; the brand and the wave were not.
+    brand_names: Dict[str, str] = {
+        str(b.slug): str(b.name) for b in svc.brands(db, str(eng.id))
+    }
+    wave_labels: Dict[str, str] = {
+        str(w.code): str(w.label) for w in svc.waves(db, str(eng.id))
+    }
     return {
         "id": row.id, "document": row.document_name, "status": row.status,
         "note": row.note, "summary": row.summary,
         "cells": [
             {"id": c.id, "page": c.page_number, "chart": c.chart_label,
-             "wave": c.wave_code, "brand": c.brand_slug, "metric": c.metric_code,
+             "wave": wave_labels.get(str(c.wave_code or ""), c.wave_code),
+             "brand": brand_names.get(str(c.brand_slug or ""), c.brand_slug),
+             "metric": c.metric_code,
              "label": label_for(c.metric_code), "segment": c.segment,
              "value": c.value, "base_n": c.base_n,
              "source_method": c.source_method, "validation": c.validation,

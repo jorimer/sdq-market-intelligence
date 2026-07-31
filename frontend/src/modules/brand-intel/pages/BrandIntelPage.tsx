@@ -6,6 +6,7 @@ import {
   Filter,
   ListChecks,
   FileSearch,
+  Layers,
   Plus,
   Radar,
   Scale,
@@ -39,7 +40,7 @@ import {
   issueForecast,
   scoreForecasts,
   downloadTemplate,
-  openReport,
+  downloadReport,
   uploadWorkbook,
   type AgendaItem,
   type AttributionAnalysis,
@@ -61,6 +62,7 @@ import {
 import { NewEngagementDrawer } from "../components/NewEngagementDrawer";
 import { DecisionDrawer } from "../components/DecisionDrawer";
 import { ExtractionReviewDrawer } from "../components/ExtractionReviewDrawer";
+import { StructureDrawer } from "../components/StructureDrawer";
 
 type Status = "loading" | "error" | "ready";
 
@@ -79,6 +81,30 @@ const DECISION_LABEL: Record<DecisionStatus, string> = {
   unevaluable: "Inevaluable",
   open: "Abierta",
 };
+
+/**
+ * Collapse the rejection list to one line per printed label.
+ *
+ * A single chart with four series and four waves rejects sixteen rows for one unknown
+ * label; listing them one by one buries the only thing the reviewer has to decide, which
+ * is whether that label is a brand the structure is missing or a segment it should keep
+ * refusing.
+ */
+function groupRejections(
+  rows: { page: number; reason: string; detail: string }[],
+): { key: string; reason: string; detail: string; count: number }[] {
+  const byLabel = new Map<string, { reason: string; detail: string; count: number }>();
+  for (const r of rows) {
+    const key = `${r.reason}|${r.detail}`;
+    const seen = byLabel.get(key);
+    if (seen) seen.count += 1;
+    else byLabel.set(key, { reason: r.reason, detail: r.detail, count: 1 });
+  }
+  return [...byLabel.entries()]
+    .map(([key, v]) => ({ key, ...v }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+}
 
 /** Share of category, wave by wave. The denominator the tracker does not build. */
 function ShareTable({ data }: { data: CategoryAnalysis }) {
@@ -509,6 +535,7 @@ export function BrandIntelPage() {
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<EngagementDetail | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [showStructure, setShowStructure] = useState(false);
   const [showDecision, setShowDecision] = useState(false);
   const [forecastMsg, setForecastMsg] = useState<string | null>(null);
   const [extractions, setExtractions] = useState<ExtractionSummary[]>([]);
@@ -546,6 +573,10 @@ export function BrandIntelPage() {
       setDetail(det);
       setCategory(cat);
       listExtractions(target).then(setExtractions).catch(() => setExtractions([]));
+      // The header reads its wave count from the engagement list, which is fetched once
+      // on mount. Loading data changes that count, so without this the page shows fresh
+      // figures under a subtitle still claiming the engagement has none.
+      listEngagements().then(setEngagements).catch(() => undefined);
       setFunnel(fun);
       setTicket(tic);
       setSignal(sig);
@@ -676,6 +707,80 @@ export function BrandIntelPage() {
   }
 
   const current = engagements.find((e) => e.slug === slug);
+
+  // An engagement is created with a client and a focal brand and no structure. The
+  // ingest maps printed labels onto declared waves and brands, so until those exist it
+  // rejects every cell — this is the way out, and it must be the first thing offered.
+  if (detail && !detail.waves.length && !detail.brands.length) {
+    return (
+      <>
+        <PageHead
+          eyebrow="Contexto de Mercado"
+          title={detail.focal_brand}
+          sub={`${detail.client} · sin estructura cargada`}
+          right={
+            engagements.length > 1 ? (
+              <select
+                className="field text-sm w-auto"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                aria-label="Encargo"
+              >
+                {engagements.map((e) => (
+                  <option key={e.slug} value={e.slug}>
+                    {e.focal_brand} — {e.client}
+                  </option>
+                ))}
+              </select>
+            ) : undefined
+          }
+        />
+        <StateBlock
+          kind="empty"
+          title="Falta la estructura del tracker"
+          message="El encargo aún no tiene olas ni marcas, y la carga de datos solo acepta cifras que encajen en ellas. Léelas de la propia presentación, o cárgalas con la plantilla Excel."
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="btn btn-primary" onClick={() => setShowStructure(true)}>
+                <FileSearch size={15} /> Leer de la presentación
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={() => void downloadTemplate(slug)}
+              >
+                <Download size={15} /> Plantilla Excel
+              </button>
+              <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
+                <Upload size={15} /> {busy ? "Cargando…" : "Subir Excel"}
+              </button>
+            </div>
+          }
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xlsm"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void onUpload(f);
+          }}
+        />
+        {showStructure && (
+          <StructureDrawer
+            slug={slug}
+            focalBrand={detail.focal_brand}
+            onClose={() => setShowStructure(false)}
+            onAdopted={() => {
+              setShowStructure(false);
+              void load(slug);
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   const growth = category?.category_growth_pct;
   const reading = category?.divergence_reading;
   const weakest = funnel?.weakest_step;
@@ -690,7 +795,13 @@ export function BrandIntelPage() {
             ? [
                 current.category,
                 current.market,
-                `${current.waves} ola${current.waves === 1 ? "" : "s"}`,
+                // `current.waves` counts waves WITH data. Since the structure can now be
+                // adopted from a deck before any figure is loaded, that count and the
+                // number of declared waves diverge — and reading "0 olas" right after
+                // adopting four is indistinguishable from the adoption having failed.
+                current.waves > 0
+                  ? `${current.waves} ola${current.waves === 1 ? "" : "s"} con dato`
+                  : `${detail?.waves.length ?? 0} ola${(detail?.waves.length ?? 0) === 1 ? "" : "s"} · sin datos aún`,
                 current.provider ? `Tracker: ${current.provider}` : null,
               ]
                 .filter(Boolean)
@@ -715,6 +826,13 @@ export function BrandIntelPage() {
             )}
             <button className="btn btn-ghost text-sm" onClick={() => setShowNew(true)}>
               <Plus size={15} /> Encargo
+            </button>
+            <button
+              className="btn btn-ghost text-sm"
+              onClick={() => setShowStructure(true)}
+              title="Leer olas y marcas de una presentación"
+            >
+              <Layers size={15} /> Estructura
             </button>
             <button className="btn btn-ghost text-sm" onClick={() => void downloadTemplate(slug)}>
               <Download size={15} /> Plantilla
@@ -744,7 +862,7 @@ export function BrandIntelPage() {
                 if (f) void onUploadPdf(f);
               }}
             />
-            <button className="btn btn-primary text-sm" onClick={() => void openReport(slug)}>
+            <button className="btn btn-primary text-sm" onClick={() => void downloadReport(slug)}>
               <FileText size={15} /> Informe
             </button>
             <input
@@ -800,15 +918,56 @@ export function BrandIntelPage() {
             subtitle="Las cifras extraídas esperan revisión antes de convertirse en datos"
           />
           {pdfReport && (
-            <p className="text-sm text-body rounded-lg bg-surface2 p-3 mb-3">
-              {pdfReport.nota_cobertura}
-              {pdfReport.total_rechazadas > 0 && (
+            <div className="rounded-lg bg-surface2 p-3 mb-3 space-y-2">
+              <p className="text-sm text-body">
+                {pdfReport.nota_cobertura}{" "}
                 <span className="text-muted">
-                  {" "}
-                  {pdfReport.total_rechazadas} fila(s) no pudieron mapearse al encargo.
+                  {pdfReport.paginas.leidas} lámina(s) con cifras
+                  {pdfReport.paginas.omitidas > 0
+                    ? `, ${pdfReport.paginas.omitidas} sin cifras que leer`
+                    : ""}
+                  .
                 </span>
+              </p>
+              {/* A slide the model could not return — a truncated response, a dropped
+                  connection — loses every figure on it. Counting it nowhere is the same
+                  as pretending the deck had one slide fewer, so it is named here. */}
+              {pdfReport.errores_por_pagina.length > 0 && (
+                <div className="text-xs text-danger">
+                  <span className="font-semibold">
+                    {pdfReport.errores_por_pagina.length} lámina(s) no se pudieron leer
+                  </span>{" "}
+                  — sus cifras no están en esta extracción. Vuelve a subir la
+                  presentación para reintentarlas.
+                  {pdfReport.errores_por_pagina.slice(0, 3).map((e) => (
+                    <div key={e.page} className="text-muted mono truncate">
+                      Lámina {e.page}: {e.error}
+                    </div>
+                  ))}
+                </div>
               )}
-            </p>
+              {/* Grouped by what was printed, not one line per row: a chart with four
+                  series produces four identical rejections, and the reviewer needs to
+                  judge the label — often a segment like «QSR» that is correctly refused,
+                  sometimes a competitor genuinely missing from the structure. */}
+              {pdfReport.total_rechazadas > 0 && (
+                <div className="text-xs">
+                  <span className="text-body font-semibold">
+                    {pdfReport.total_rechazadas} fila(s) no encajaron en la estructura
+                  </span>
+                  {groupRejections(pdfReport.rechazadas).map((r) => (
+                    <div key={r.key} className="text-muted truncate">
+                      {r.reason}: {r.detail} · {r.count} fila(s)
+                    </div>
+                  ))}
+                  <p className="text-muted mt-1">
+                    Si alguna es una marca del estudio, añádela en «Estructura» y vuelve a
+                    subir la presentación. Un segmento o un total de categoría no es una
+                    marca: adoptarlo partiría la serie.
+                  </p>
+                </div>
+              )}
+            </div>
           )}
           <div className="space-y-2">
             {extractions.map((x) => (
@@ -1080,6 +1239,18 @@ export function BrandIntelPage() {
         <NewEngagementDrawer
           onClose={() => setShowNew(false)}
           onCreated={onEngagementCreated}
+        />
+      )}
+
+      {showStructure && detail && (
+        <StructureDrawer
+          slug={slug}
+          focalBrand={detail.focal_brand}
+          onClose={() => setShowStructure(false)}
+          onAdopted={() => {
+            setShowStructure(false);
+            void load(slug);
+          }}
         />
       )}
 

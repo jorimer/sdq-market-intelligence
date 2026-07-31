@@ -296,3 +296,24 @@ def test_report_states_missing_sections_instead_of_hiding_them(db, engagement):
     html = rpt.render_html(rpt.build_report(db, engagement))
     assert "El ticket en pesos constantes" in html
     assert "empty" in html          # the ticket section renders its stated reason
+
+
+def test_category_refuses_a_denominator_of_one_brand(db, engagement):
+    """A share against a one-member category is 100% by construction, not a finding."""
+    from modules.brand_intel.models.models import BrandObservation, BrandWave
+
+    db.query(BrandObservation).filter(
+        BrandObservation.engagement_id == engagement.id).delete()
+    wave = db.query(BrandWave).filter(
+        BrandWave.engagement_id == engagement.id).order_by(BrandWave.sort_order).first()
+    for value in (27.0, 25.0):
+        db.add(BrandObservation(
+            engagement_id=engagement.id, wave_id=wave.id, brand_slug="focal",
+            metric_code=svc.REACH_METRIC, segment="total", value=value, base_n=300,
+        ))
+        break
+    db.commit()
+
+    out = svc.category_analysis(db, engagement.id)
+    assert out["available"] is False
+    assert "no es una categoría" in out["reason"]

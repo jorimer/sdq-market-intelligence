@@ -462,3 +462,53 @@ def test_confirm_updates_an_existing_observation_in_place(db, engagement):
     assert out["actualizadas"] == 1
     assert db.query(BrandObservation).filter(
         BrandObservation.metric_code == "delivery_t2b").count() == 1
+
+
+def test_confirm_survives_the_same_figure_appearing_on_two_slides(db, engagement):
+    """A deck repeats its headline number; the observation key is unique.
+
+    Before this was handled, two staged cells for one key produced two INSERTs and the
+    unique constraint aborted the whole commit — the reviewer lost an entire confirmation
+    they had already worked through, and nothing was saved.
+    """
+    pipe.ingest_pdf(
+        db, engagement, b"pdf", "t.pdf",
+        extractor=_stub_page([_row("delivery_t2b", "Focal", "Ola 1", 91)]),
+        renderer=_stub_render(2),          # the same slide read twice
+    )
+    db.commit()
+    extraction = db.query(BrandExtraction).one()
+    assert db.query(BrandExtractionCell).count() == 2
+
+    out = pipe.confirm_extraction(db, extraction, confirmed_by="a@b.com")
+    db.commit()                            # the commit itself is the assertion
+
+    assert out["creadas"] == 1
+    assert out["repetidas_coincidentes"] == 1
+    assert db.query(BrandObservation).filter(
+        BrandObservation.metric_code == "delivery_t2b").count() == 1
+
+
+def test_confirm_refuses_a_key_the_deck_states_two_ways(db, engagement):
+    """Two slides, one key, two numbers: choosing one would invent which was misread."""
+    pages = iter([
+        [_row("delivery_t2b", "Focal", "Ola 1", 91)],
+        [_row("delivery_t2b", "Focal", "Ola 1", 87)],
+    ])
+
+    def _extract(image, page_number, brands, waves):
+        return PageExtraction(page_number, "Lámina", True, "", next(pages), "claude-opus-5")
+
+    pipe.ingest_pdf(db, engagement, b"pdf", "t.pdf",
+                    extractor=_extract, renderer=_stub_render(2))
+    db.commit()
+    extraction = db.query(BrandExtraction).one()
+
+    out = pipe.confirm_extraction(db, extraction, confirmed_by="a@b.com")
+    db.commit()
+
+    assert out["creadas"] == 0
+    assert out["omitidas_por_discrepancia"] == 1
+    assert out["discrepancias"][0]["valores"] == [87.0, 91.0]
+    assert db.query(BrandObservation).filter(
+        BrandObservation.metric_code == "delivery_t2b").count() == 0
