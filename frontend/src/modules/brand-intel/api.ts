@@ -376,6 +376,21 @@ export async function createEngagement(
   return data;
 }
 
+/**
+ * Erases the engagement and everything under it. There is no undo.
+ *
+ * The slug travels twice on purpose — the backend refuses the request unless `confirm`
+ * matches — so a DELETE cannot be replayed from a stale tab or a copied URL.
+ */
+export async function deleteEngagement(
+  slug: string,
+): Promise<{ deleted: string; removed: Record<string, number> }> {
+  const { data } = await client.delete(`${base}/engagements/${slug}`, {
+    params: { confirm: slug },
+  });
+  return data;
+}
+
 export async function createDecision(
   slug: string, payload: DecisionInput,
 ): Promise<{ id: string; status: DecisionStatus; feasibility: Feasibility }> {

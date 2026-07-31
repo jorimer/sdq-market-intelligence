@@ -133,7 +133,7 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
             </span>
           </label>
           {error && (
-            <div className="text-xs text-danger flex items-start gap-2">
+            <div className="text-xs text-alert flex items-start gap-2">
               <AlertTriangle size={14} className="shrink-0 mt-px" />
               <span>{error}</span>
             </div>
@@ -280,7 +280,7 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
             </div>
           )}
           {error && (
-            <div className="text-xs text-danger flex items-start gap-2">
+            <div className="text-xs text-alert flex items-start gap-2">
               <AlertTriangle size={14} className="shrink-0 mt-px" />
               <span>{error}</span>
             </div>

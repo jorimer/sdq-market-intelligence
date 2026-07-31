@@ -27,6 +27,7 @@ def _client(db, role=UserRole.admin, org=None):
         def __init__(self, r, o):
             self.role = r
             self.organization_id = o
+            self.email = "analista@sdq.test"      # destructive routes log the actor
 
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: _U(role, org)
@@ -204,3 +205,69 @@ def test_report_json_and_html(db, engagement):
     r = c.get("/api/v1/brand-intel/engagements/demo/report.html")
     assert r.status_code == 200
     assert r.text.startswith("<!doctype html>")
+
+
+# ── borrado ───────────────────────────────────────────────────────────
+
+def test_delete_removes_the_engagement_and_every_row_that_belongs_to_it(db, engagement):
+    """A surviving child row is private client data with no owner and no access path."""
+    from modules.brand_intel.models.models import (
+        BrandEntity, BrandObservation, BrandWave,
+    )
+
+    assert db.query(BrandObservation).filter(
+        BrandObservation.engagement_id == engagement.id).count() > 0
+
+    r = _client(db).delete(
+        f"/api/v1/brand-intel/engagements/{engagement.slug}",
+        params={"confirm": engagement.slug},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["deleted"] == engagement.slug
+
+    for model in (BrandObservation, BrandEntity, BrandWave):
+        assert db.query(model).filter(model.engagement_id == engagement.id).count() == 0
+    assert db.query(BrandEngagement).filter(
+        BrandEngagement.slug == engagement.slug).count() == 0
+
+
+def test_delete_without_the_echoed_slug_changes_nothing(db, engagement):
+    """A DELETE that fires on the URL alone is one stale tab away from a lost dataset."""
+    r = _client(db).delete(
+        f"/api/v1/brand-intel/engagements/{engagement.slug}", params={"confirm": "otra"})
+    assert r.status_code == 400
+    assert db.query(BrandEngagement).filter(
+        BrandEngagement.slug == engagement.slug).count() == 1
+
+
+def test_an_analyst_cannot_delete_an_engagement(db, engagement):
+    r = _client(db, role=UserRole.analyst).delete(
+        f"/api/v1/brand-intel/engagements/{engagement.slug}",
+        params={"confirm": engagement.slug},
+    )
+    assert r.status_code == 403
+    assert db.query(BrandEngagement).filter(
+        BrandEngagement.slug == engagement.slug).count() == 1
+
+
+def test_delete_is_gated_by_role_before_the_engagement_is_even_looked_up(db, engagement):
+    """The refusal must not depend on the slug, or it becomes an existence oracle.
+
+    Deletion is admin-only, and admins are staff who can already see every engagement, so
+    here the isolation boundary is the role — not the organization check that guards
+    reads. A non-admin gets the same 403 whether the engagement exists or not.
+    """
+    c = _client(db, role=UserRole.analyst, org="org-2")
+    existing = c.delete(f"/api/v1/brand-intel/engagements/{engagement.slug}",
+                        params={"confirm": engagement.slug})
+    absent = c.delete("/api/v1/brand-intel/engagements/fantasma",
+                      params={"confirm": "fantasma"})
+    assert existing.status_code == absent.status_code == 403
+    assert db.query(BrandEngagement).filter(
+        BrandEngagement.slug == engagement.slug).count() == 1
+
+
+def test_delete_of_an_unknown_engagement_is_404_for_an_admin(db, engagement):
+    r = _client(db).delete("/api/v1/brand-intel/engagements/fantasma",
+                           params={"confirm": "fantasma"})
+    assert r.status_code == 404

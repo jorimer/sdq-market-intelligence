@@ -147,6 +147,32 @@ def engagement_detail(
     }
 
 
+@router.delete("/engagements/{slug}", summary="Eliminar un encargo y todos sus datos")
+def delete_engagement(
+    slug: str,
+    confirm: str = Query(..., description="Repetir el identificador del encargo"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    """Erase the engagement and every row that belongs to it. There is no undo.
+
+    Requires the slug echoed back in ``confirm``. A DELETE that fires on a URL alone is
+    one mis-click or one stale browser tab away from destroying a client's dataset, and
+    this is the only endpoint in the module whose damage cannot be undone by re-running
+    something. Restricted to admins: the module's ordinary writes are analyst-level, but
+    those all leave the data recoverable.
+    """
+    eng = _resolve(db, slug, user)
+    if confirm != slug:
+        raise HTTPException(
+            status_code=400,
+            detail="Para eliminar, repite el identificador exacto del encargo.",
+        )
+    removed = svc.delete_engagement(db, eng)
+    logger.warning("%s eliminó el encargo brand_intel '%s' (%s)", user.email, slug, removed)
+    return {"deleted": slug, "removed": removed}
+
+
 # ── ingest ────────────────────────────────────────────────────────────
 
 @router.get("/template.xlsx", summary="Descargar la plantilla de carga")
