@@ -337,6 +337,15 @@ def confirm_extraction(
     Refuses to promote a cell that failed an invariant even if it is still flagged for
     inclusion: the reviewer's judgement resolves *conflicts* and *unchecked* readings, but
     a value the machine proved inconsistent is not theirs to wave through.
+
+    A deck names the same figure on more than one slide — a headline number repeated in a
+    summary, a series charted twice from different angles — so several staged cells can
+    land on one observation key. They are grouped first, before anything is written, for
+    two reasons. The mechanical one: an observation key is unique, and adding two rows for
+    it aborts the whole commit, losing a confirmation the reviewer already worked through.
+    The substantive one: when the readings **disagree**, picking one is inventing an
+    answer. Nothing here is qualified to say which slide was misread, so the key is left
+    out and named, which is the same rule the invariants follow.
     """
     from datetime import datetime, timezone
 
@@ -348,7 +357,10 @@ def confirm_extraction(
         .filter(BrandWave.engagement_id == extraction.engagement_id).all()
     }
 
-    created = updated = skipped_failed = skipped_dropped = 0
+    skipped_failed = skipped_dropped = 0
+    # The key is the observation's natural key, read straight off the ORM rows; typing it
+    # as the tuple of column values it is keeps mypy out of the `Column[str]` weeds.
+    grouped: Dict[Tuple[Any, ...], List[BrandExtractionCell]] = {}
     for c in cells:
         if c.validation == val.FAILED:
             skipped_failed += 1
@@ -360,21 +372,36 @@ def confirm_extraction(
         if not wid:
             skipped_dropped += 1
             continue
+        grouped.setdefault((wid, c.brand_slug, c.metric_code, c.segment), []).append(c)
+
+    created = updated = duplicated = 0
+    disagreements: List[Dict[str, Any]] = []
+    for (wid, slug, metric, segment), group in grouped.items():
+        readings = {round(float(x.value), 6) for x in group}
+        if len(readings) > 1:
+            disagreements.append({
+                "marca": slug or "categoría", "metrica": metric, "segmento": segment,
+                "laminas": sorted({x.page_number for x in group if x.page_number}),
+                "valores": sorted(readings),
+            })
+            continue
+        duplicated += len(group) - 1
+        c = group[0]
 
         existing = (
             db.query(BrandObservation)
             .filter(
                 BrandObservation.engagement_id == extraction.engagement_id,
                 BrandObservation.wave_id == wid,
-                BrandObservation.brand_slug == c.brand_slug,
-                BrandObservation.metric_code == c.metric_code,
-                BrandObservation.segment == c.segment,
+                BrandObservation.brand_slug == slug,
+                BrandObservation.metric_code == metric,
+                BrandObservation.segment == segment,
             )
             .first()
         )
         target = existing or BrandObservation(
             engagement_id=extraction.engagement_id, wave_id=wid,
-            brand_slug=c.brand_slug, metric_code=c.metric_code, segment=c.segment,
+            brand_slug=slug, metric_code=metric, segment=segment,
         )
         target.value = c.value
         target.base_n = c.base_n
@@ -397,5 +424,8 @@ def confirm_extraction(
         "creadas": created, "actualizadas": updated,
         "omitidas_por_inconsistencia": skipped_failed,
         "descartadas_por_revision": skipped_dropped,
+        "repetidas_coincidentes": duplicated,
+        "omitidas_por_discrepancia": len(disagreements),
+        "discrepancias": disagreements,
         "confirmada_por": confirmed_by,
     }

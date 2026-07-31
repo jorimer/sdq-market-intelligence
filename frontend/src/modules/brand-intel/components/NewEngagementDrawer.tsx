@@ -7,11 +7,17 @@ interface Props {
   onCreated: (slug: string) => void;
 }
 
-/** Slug from the focal brand: stable key, lowercase, no accents, dash-separated. */
+/**
+ * Slug from the focal brand: stable key, lowercase, no accents, dash-separated.
+ *
+ * Apostrophes are dropped rather than split on — they sit inside a word, and a brand
+ * called "McDonald's" should propose `mcdonalds`, not `mcdonald-s`.
+ */
 function slugify(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
+    .replace(/['‘’ʼ`´]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")

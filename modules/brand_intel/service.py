@@ -117,10 +117,14 @@ def brand_slug(name: str) -> str:
 
     Must agree with the workbook's own slugs, because an engagement can be populated
     from either source and the two must not produce a second entity for one brand.
+    The template's own example is ``mcdonalds`` for "McDonald's", which is why the
+    apostrophe is dropped rather than treated as a separator: it sits inside a word, and
+    splitting there yields ``mcdonald-s`` — a second entity for a brand already loaded.
     """
     decomposed = unicodedata.normalize("NFD", name or "")
     stripped = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
-    slug = re.sub(r"[^a-z0-9]+", "-", stripped.lower()).strip("-")
+    unquoted = re.sub(r"['‘’ʼ`´]", "", stripped)
+    slug = re.sub(r"[^a-z0-9]+", "-", unquoted.lower()).strip("-")
     return slug[:60]
 
 
@@ -276,6 +280,21 @@ def category_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
                       "no puede construirse el denominador de categoría.",
         }
 
+    # The denominator is the sum of reach across the in-set brands that were actually
+    # measured. When a deck only charts reach for the focal brand, that sum is the focal
+    # brand's own number and its share comes out at 100% — arithmetic that is correct and
+    # a finding that is false. A category needs more than one member, and saying so is
+    # cheaper than letting a client read "100% de la categoría".
+    measured = {c.brand for c in reach if c.brand is not None and c.brand in set(in_set)}
+    if len(measured) < 2:
+        only = next((b.name for b in ents if b.slug in measured), "una sola marca")
+        return {
+            "available": False,
+            "reason": f"'{label_for(REACH_METRIC)}' solo está medida para {only}: "
+                      "con un único miembro el denominador no es una categoría y el "
+                      "share saldría 100%.",
+        }
+
     sizes = cat.category_size(reach, in_set)
     points = cat.share_by_brand(reach, in_set)
     growth = cat.category_growth(sizes, wave_codes)
@@ -426,7 +445,8 @@ def funnel_analysis(
     """Step conversion for every brand in the latest (or given) wave with data."""
     ws = data_waves(db, engagement_id)
     if not ws:
-        return {"available": False, "reason": "El encargo no tiene olas cargadas."}
+        return {"available": False,
+                "reason": "Ninguna ola del encargo tiene observaciones todavía."}
     target = next((w for w in ws if w.code == wave_code), ws[-1])
     ents = brands(db, engagement_id)
     focal = next((b.slug for b in ents if b.is_focal), None)
@@ -727,7 +747,8 @@ def signal_filter(
     """What each indicator would need to move to carry a decision."""
     ws = data_waves(db, engagement_id)
     if not ws:
-        return {"available": False, "reason": "El encargo no tiene olas cargadas."}
+        return {"available": False,
+                "reason": "Ninguna ola del encargo tiene observaciones todavía."}
     target = next((w for w in ws if w.code == wave_code), ws[-1])
     ents = brands(db, engagement_id)
     focal = next((b.slug for b in ents if b.is_focal), None)

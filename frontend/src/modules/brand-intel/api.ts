@@ -552,10 +552,30 @@ export async function getExtraction(
   return data;
 }
 
+/** One observation key read twice with two different numbers. Neither is promoted. */
+export interface CellDisagreement {
+  marca: string;
+  metrica: string;
+  segmento: string;
+  laminas: number[];
+  valores: number[];
+}
+
+export interface ConfirmResult {
+  creadas: number;
+  actualizadas: number;
+  omitidas_por_inconsistencia: number;
+  descartadas_por_revision: number;
+  repetidas_coincidentes: number;
+  omitidas_por_discrepancia: number;
+  discrepancias: CellDisagreement[];
+  confirmada_por: string;
+}
+
 export async function confirmExtraction(
   slug: string, extractionId: string,
   decisions: { cell_id: string; included: boolean }[],
-): Promise<Record<string, number | string>> {
+): Promise<ConfirmResult> {
   const { data } = await client.post(
     `${base}/engagements/${slug}/extractions/${extractionId}/confirm`, decisions,
   );
@@ -580,14 +600,21 @@ export async function downloadTemplate(slug: string): Promise<void> {
   triggerDownload(data, `SDQ-MIP_plantilla_tracker_${slug}.xlsx`);
 }
 
-export async function openReport(slug: string): Promise<void> {
+/**
+ * The report as a file, the same way every other document in the platform is delivered.
+ *
+ * It used to open a blob URL in a new tab. A blob `window.open` is what popup blockers
+ * and embedded browsers drop first, and when they do the click produces nothing at all —
+ * no tab, no file, no error — for the one artefact the engagement exists to produce.
+ * Downloading cannot be swallowed, and the file is a self-contained page the client can
+ * open, read and print to PDF.
+ */
+export async function downloadReport(slug: string): Promise<void> {
   const { data } = await client.get(`${base}/engagements/${slug}/report.html`, {
     responseType: "blob",
   });
-  const url = URL.createObjectURL(new Blob([data], { type: "text/html" }));
-  window.open(url, "_blank", "noopener");
-  // Revoke late: the new tab needs the object URL to survive its own load.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  triggerDownload(new Blob([data], { type: "text/html" }),
+                  `SDQ-MIP_informe_contexto_${slug}.html`);
 }
 
 function triggerDownload(blob: Blob, filename: string): void {

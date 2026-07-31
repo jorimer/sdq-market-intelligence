@@ -299,7 +299,7 @@ def discover_brands(
             read = extract(images[0], page_no, [], list(known_waves))
         except Exception as exc:  # noqa: BLE001 — a bad slide must not lose the pass
             logger.warning("Descubrimiento: página %s ilegible: %s", page_no, exc)
-            errors.append(f"p{page_no}: {exc}")
+            errors.append(str(exc) or exc.__class__.__name__)
             continue
         for cell in read.cells or []:
             label = (cell.get("brand_label") or "").strip()
@@ -328,7 +328,13 @@ def discover_brands(
 
     error = ""
     if errors and not brands:
-        error = "; ".join(errors[:3])
+        # Every sampled slide usually fails for the same reason — a missing key, a
+        # dropped connection. Repeating one SDK message once per page turns the panel
+        # into a wall the reviewer cannot read, so identical causes are stated once.
+        distinct = list(dict.fromkeys(errors))
+        error = "; ".join(m[:200] for m in distinct[:2])
+        if len(errors) > 1:
+            error += f" (falló en {len(errors)} de {len(pages)} láminas muestreadas)"
     return brands, pages, error
 
 

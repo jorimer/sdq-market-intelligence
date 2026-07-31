@@ -337,12 +337,23 @@ def extraction_cells(slug: str, extraction_id: str, db: Session = Depends(get_db
     cells = (db.query(BrandExtractionCell)
              .filter(BrandExtractionCell.extraction_id == row.id)
              .order_by(BrandExtractionCell.page_number).all())
+    # The reviewer is comparing each row against the slide in front of them, and the
+    # slide prints "McDonald's" and "Mar '26" — not `mcdonalds` and `2026-03`. The metric
+    # was already resolved to its label here; the brand and the wave were not.
+    brand_names: Dict[str, str] = {
+        str(b.slug): str(b.name) for b in svc.brands(db, str(eng.id))
+    }
+    wave_labels: Dict[str, str] = {
+        str(w.code): str(w.label) for w in svc.waves(db, str(eng.id))
+    }
     return {
         "id": row.id, "document": row.document_name, "status": row.status,
         "note": row.note, "summary": row.summary,
         "cells": [
             {"id": c.id, "page": c.page_number, "chart": c.chart_label,
-             "wave": c.wave_code, "brand": c.brand_slug, "metric": c.metric_code,
+             "wave": wave_labels.get(str(c.wave_code or ""), c.wave_code),
+             "brand": brand_names.get(str(c.brand_slug or ""), c.brand_slug),
+             "metric": c.metric_code,
              "label": label_for(c.metric_code), "segment": c.segment,
              "value": c.value, "base_n": c.base_n,
              "source_method": c.source_method, "validation": c.validation,

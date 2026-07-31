@@ -26,6 +26,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
+from shared.config.settings import settings
+
 from modules.brand_intel.engines.metrics import METRICS
 
 logger = logging.getLogger("sdq.brand_intel.pdf_vision")
@@ -188,7 +190,18 @@ def extract_page(
     """Read one rendered slide. Raises on API failure so the caller can report the page."""
     import anthropic
 
-    client = client or anthropic.Anthropic()
+    # The key comes from settings, as it does at every other call site in the platform.
+    # Letting the SDK pick it up from the ambient environment works in production only
+    # because Railway exports it; anywhere the process is started without that export —
+    # local dev, a worker, a script — every slide would fail on authentication while the
+    # rest of the platform's AI kept working, which reads as "vision is broken".
+    if client is None:
+        key = settings.ANTHROPIC_API_KEY
+        if not key:
+            raise RuntimeError(
+                "Falta la clave de Anthropic: la lectura de láminas no está disponible."
+            )
+        client = anthropic.Anthropic(api_key=key)
     b64 = base64.standard_b64encode(image_png).decode("utf-8")
 
     # `output_config` constrains the response to the schema at decode time, which is what

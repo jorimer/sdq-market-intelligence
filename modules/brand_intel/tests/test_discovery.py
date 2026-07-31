@@ -267,9 +267,28 @@ def test_adoption_warns_when_no_brand_is_focal(db):
 
 
 @pytest.mark.parametrize("name,expected", [
-    ("McDonald's", "mcdonald-s"),
-    ("Domino's Pizza", "domino-s-pizza"),
+    # The workbook template prints `mcdonalds` as its own example for "McDonald's", and
+    # this must agree with it: an apostrophe sits inside a word, so splitting there gives
+    # `mcdonald-s` — a second entity for a brand the workbook already loaded, which
+    # splits the series in two with nothing downstream able to notice.
+    ("McDonald's", "mcdonalds"),
+    ("Domino's Pizza", "dominos-pizza"),
+    ("Wendy´s", "wendys"),
     ("Café Santo Domingo", "cafe-santo-domingo"),
 ])
 def test_brand_slug_folds_accents_and_punctuation(name, expected):
     assert svc.brand_slug(name) == expected
+
+
+def test_the_same_failure_on_every_slide_is_reported_once():
+    """A wall of identical SDK messages is a panel the reviewer cannot read."""
+    def render(content, first=None, last=None, **kw):
+        return [b"png"]
+
+    def extract(image, page, brands, waves):
+        raise RuntimeError("Could not resolve authentication method")
+
+    _, _, err = dsc.discover_brands(
+        b"x", ["a" * 10, "b" * 10, "c" * 10], sample=3, renderer=render, extractor=extract)
+    assert err.count("Could not resolve authentication method") == 1
+    assert "3 de 3" in err

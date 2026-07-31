@@ -6,6 +6,7 @@ import {
   confirmExtraction,
   getExtraction,
   type CellValidation,
+  type ConfirmResult,
   type ExtractionCell,
   type ExtractionDetail,
 } from "../api";
@@ -40,6 +41,7 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
   const [dropped, setDropped] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<ConfirmResult | null>(null);
 
   useEffect(() => {
     getExtraction(slug, extractionId)
@@ -77,10 +79,17 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
     setBusy(true);
     setError(null);
     try {
-      await confirmExtraction(
+      const result = await confirmExtraction(
         slug, extractionId,
         cells.map((c) => ({ cell_id: c.id, included: !dropped.has(c.id) })),
       );
+      // A key the deck stated twice with two different numbers is left out on purpose.
+      // Closing on it would report a clean confirmation over a silent hole, so the
+      // drawer stays open until the reviewer has seen which figures did not land.
+      if (result.discrepancias.length > 0) {
+        setOutcome(result);
+        return;
+      }
       onConfirmed();
     } catch (e: unknown) {
       const detailMsg =
@@ -102,6 +111,34 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
         Las marcadas como inconsistentes no se promueven aunque las dejes marcadas — una
         invariante ya demostró que no cuadran.
       </p>
+
+      {outcome && (
+        <div className="space-y-2">
+          <p className="text-sm text-body rounded-lg bg-surface2 p-3">
+            Se guardaron {outcome.creadas} observación(es) nueva(s) y se actualizaron{" "}
+            {outcome.actualizadas}.{" "}
+            <span className="text-muted">
+              {outcome.omitidas_por_discrepancia} quedaron fuera porque la presentación da
+              dos cifras distintas para el mismo dato: elegir una sería inventar cuál de
+              las dos láminas se leyó mal. Corrígelas en la presentación, o cárgalas con la
+              plantilla Excel.
+            </span>
+          </p>
+          <ul className="space-y-1">
+            {outcome.discrepancias.slice(0, 8).map((d, i) => (
+              <li key={i} className="text-xs text-muted mono truncate">
+                {d.marca} · {d.metrica}
+                {d.segmento !== "total" ? ` · ${d.segmento}` : ""} ={" "}
+                {d.valores.join(" vs ")}
+                {d.laminas.length ? ` · láminas ${d.laminas.join(", ")}` : ""}
+              </li>
+            ))}
+          </ul>
+          <button className="btn btn-primary" onClick={onConfirmed}>
+            Entendido
+          </button>
+        </div>
+      )}
 
       {detail?.note && (
         <p className="text-sm text-body rounded-lg bg-surface2 p-3">{detail.note}</p>
@@ -126,7 +163,7 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
         </ul>
       )}
 
-      <div className="space-y-2">
+      <div className={`space-y-2 ${outcome ? "hidden" : ""}`}>
         {cells.map((c: ExtractionCell) => {
           const isDropped = dropped.has(c.id);
           const blocked = c.validation === "failed";
@@ -177,18 +214,20 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
 
       {error && <p className="text-sm rounded-lg bg-danger-soft text-danger p-3">{error}</p>}
 
-      <div className="flex items-center gap-2">
-        <button
-          className="btn btn-primary"
-          disabled={busy || promotable === 0 || detail?.status === "confirmed"}
-          onClick={submit}
-        >
-          {busy ? "Confirmando…" : `Confirmar ${promotable} celda(s)`}
-        </button>
-        <button className="btn btn-ghost" onClick={onClose} disabled={busy}>
-          Cancelar
-        </button>
-      </div>
+      {!outcome && (
+        <div className="flex items-center gap-2">
+          <button
+            className="btn btn-primary"
+            disabled={busy || promotable === 0 || detail?.status === "confirmed"}
+            onClick={submit}
+          >
+            {busy ? "Confirmando…" : `Confirmar ${promotable} celda(s)`}
+          </button>
+          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>
+            Cancelar
+          </button>
+        </div>
+      )}
     </InsightDrawerShell>
   );
 }
