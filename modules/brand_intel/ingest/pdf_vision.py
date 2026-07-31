@@ -188,10 +188,12 @@ def extract_page(
     client = client or anthropic.Anthropic()
     b64 = base64.standard_b64encode(image_png).decode("utf-8")
 
-    # `output_config` is passed through `extra_body`: the pinned SDK in this project
-    # predates the typed parameter, and bumping it would touch every other Claude call in
-    # the platform. The SDK forwards unknown body keys unchanged, so the request on the
-    # wire is identical to the typed form.
+    # `output_config` goes through `extra_body` rather than the typed parameter, because
+    # the SDK version differs between environments: the lockfile (and therefore the
+    # container) pins a release that types it, while some developer machines still carry
+    # an older one that rejects the keyword outright. `extra_body` is accepted by both and
+    # puts the identical JSON on the wire, so the same code path runs everywhere instead
+    # of working in the container and failing locally.
     response = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
