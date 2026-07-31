@@ -188,20 +188,18 @@ def extract_page(
     client = client or anthropic.Anthropic()
     b64 = base64.standard_b64encode(image_png).decode("utf-8")
 
-    # `output_config` goes through `extra_body` rather than the typed parameter, because
-    # the SDK version differs between environments: the lockfile (and therefore the
-    # container) pins a release that types it, while some developer machines still carry
-    # an older one that rejects the keyword outright. `extra_body` is accepted by both and
-    # puts the identical JSON on the wire, so the same code path runs everywhere instead
-    # of working in the container and failing locally.
+    # `output_config` constrains the response to the schema at decode time, which is what
+    # lets the caller treat the reply as parsed data rather than text to be salvaged: the
+    # model cannot return a field we do not validate, and cannot omit one we require.
+    # This is the SDK's typed parameter, so a malformed config fails here and not on the
+    # wire — it requires anthropic>=0.100, which `requirements.lock` pins for every
+    # environment.
     response = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         system=_system_prompt(brands, waves),
-        extra_body={
-            "output_config": {
-                "format": {"type": "json_schema", "schema": EXTRACTION_SCHEMA},
-            },
+        output_config={
+            "format": {"type": "json_schema", "schema": EXTRACTION_SCHEMA},
         },
         messages=[{
             "role": "user",
