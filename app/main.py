@@ -78,6 +78,7 @@ from modules.tourism_intel.api.router import router as tourism_intel_router
 from modules.construction_intel.api.router import router as construction_intel_router
 from modules.pension_intel.api.router import router as pension_intel_router
 from modules.insurance_intel.api.router import router as insurance_intel_router
+from modules.brand_intel.api.router import router as brand_intel_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users_admin_router, prefix="/api/v1/admin/users", tags=["User Admin"])
@@ -103,6 +104,9 @@ app.include_router(construction_intel_router, prefix="/api/v1/construction-intel
                    tags=["Construction Intel"])
 app.include_router(pension_intel_router, prefix="/api/v1/pension-intel", tags=["Pension Intel"])
 app.include_router(insurance_intel_router, prefix="/api/v1/insurance-intel", tags=["Insurance Intel"])
+# Brand Intel: datos PRIVADOS por cliente. Deliberadamente fuera del catálogo de productos
+# sectoriales y de la Data API — el aislamiento se hace por encargo dentro del router.
+app.include_router(brand_intel_router, prefix="/api/v1/brand-intel", tags=["Brand Intel"])
 
 from shared.settings.router import router as settings_router
 app.include_router(settings_router, prefix="/api/v1/settings", tags=["Settings"])

@@ -8,6 +8,7 @@ import {
   Leaf,
   Target,
   Sparkles,
+  Gauge,
   Wrench,
   LayoutDashboard,
   GitCompare,
@@ -72,6 +73,7 @@ export const NAV: NavGroup[] = [
     title: "Herramientas",
     items: [
       { to: "/tools/research", label: "Research a Medida", icon: ScanSearch, ready: true },
+      { to: "/brand-intel", label: "Contexto de Marca", icon: Gauge, ready: true },
       { to: "/tools/deal-scoring", label: "Deal Scoring", icon: Target },
       { to: "/tools/market-brief", label: "Market Brief", icon: Sparkles },
     ],
