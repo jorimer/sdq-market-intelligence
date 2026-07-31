@@ -47,6 +47,8 @@ const EsgClimatePage = lazyPage(() => import("@/modules/esg-climate/pages/EsgCli
 const PensionIntelPage = lazyPage(() => import("@/modules/pension-intel/pages/PensionIntelPage"), "PensionIntelPage");
 const DatosPensionesPage = lazyPage(() => import("@/modules/pension-intel/pages/DatosPensionesPage"), "DatosPensionesPage");
 const InsuranceIntelPage = lazyPage(() => import("@/modules/insurance-intel/pages/InsuranceIntelPage"), "InsuranceIntelPage");
+// Brand Intel: capa de contexto sobre el tracker de un cliente. Datos privados por encargo.
+const BrandIntelPage = lazyPage(() => import("@/modules/brand-intel/pages/BrandIntelPage"), "BrandIntelPage");
 
 // Plataforma
 const OverviewPage = lazyPage(() => import("@/modules/platform/pages/OverviewPage"), "OverviewPage");
@@ -118,6 +120,7 @@ export default function App() {
             <Route path="/esg-climate" element={<EsgClimatePage />} />
             <Route path="/pension-intel" element={<PensionIntelPage />} />
             <Route path="/insurance-intel" element={<InsuranceIntelPage />} />
+            <Route path="/brand-intel" element={<BrandIntelPage />} />
 
             {/* Herramientas */}
             <Route path="/tools/research" element={<ResearchPage />} />

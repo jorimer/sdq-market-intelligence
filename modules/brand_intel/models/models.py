@@ -1,0 +1,247 @@
+"""SQLAlchemy models for Brand Intel — the market-context layer over a client's brand tracker.
+
+**This module is the platform's first one holding PRIVATE, per-client data.** Every other
+module reads public sources (SIB, BCRD, SIPEN) and serves all subscribers alike. A brand
+tracker belongs to ONE client, so ``engagement_id`` is a mandatory isolation key on every
+table and every query path filters by it. By owner's decision this module is deliberately
+**outside the public product catalog** and is never exposed through the Data API.
+
+Tables:
+  - BrandEngagement  — the mandate: client, focal brand, market, research provider.
+  - BrandWave        — one tracker wave: period, fieldwork window, nominal sample.
+  - BrandEntity      — a brand in the engagement's competitive set.
+  - BrandObservation — one measurement: wave x brand x metric x segment, WITH its base.
+  - BrandDecision    — the ledger: a client decision with metric, baseline, window, verdict.
+  - BrandForecast    — a frozen forecast and, later, its score against the actual.
+
+``base_n`` on the observation is not bookkeeping: it is what makes every confidence band
+computable. An observation without its base can be displayed but can never sustain a
+verdict — the significance engine treats it as unscoreable rather than assuming a base.
+"""
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+
+from shared.database.base import Base, UUIDMixin
+
+
+class BrandEngagement(UUIDMixin, Base):
+    """A per-client mandate. The isolation boundary for everything else in this module."""
+
+    __tablename__ = "brand_engagements"
+    __table_args__ = (UniqueConstraint("slug", name="uq_brand_engagement_slug"),)
+
+    slug = Column(String(60), nullable=False)            # "mcdonalds-rd"
+    client_name = Column(String(200), nullable=False)    # who pays for the tracker
+    focal_brand = Column(String(120), nullable=False)    # the brand the report is about
+    market = Column(String(80), nullable=False, default="República Dominicana")
+    category = Column(String(80), nullable=True)         # "QSR", "banca minorista", …
+    research_provider = Column(String(120), nullable=True)  # "Ipsos Dominicana"
+    # Access control: only users of this organization may read the engagement.
+    organization_id = Column(String(64), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    notes = Column(Text, nullable=True)
+
+
+class BrandWave(UUIDMixin, Base):
+    """One wave of the tracker."""
+
+    __tablename__ = "brand_waves"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "code", name="uq_brand_wave_code"),
+        Index("ix_brand_wave_engagement", "engagement_id", "sort_order"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    code = Column(String(30), nullable=False)            # "2026-03", stable key
+    label = Column(String(40), nullable=False)           # "Mar '26"
+    sort_order = Column(Integer, nullable=False)         # 1..N, chronological
+    period_date = Column(Date, nullable=True)            # reference date (deflator anchor)
+    field_start = Column(Date, nullable=True)
+    field_end = Column(Date, nullable=True)
+    nominal_base = Column(Integer, nullable=True)        # declared n for the wave
+    is_projection = Column(Boolean, default=False, nullable=False)  # future wave, no data yet
+
+
+class BrandEntity(UUIDMixin, Base):
+    """A brand in the competitive set of an engagement."""
+
+    __tablename__ = "brand_entities"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "slug", name="uq_brand_entity_slug"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    slug = Column(String(60), nullable=False)            # "mcdonalds"
+    name = Column(String(120), nullable=False)           # "McDonald's"
+    is_focal = Column(Boolean, default=False, nullable=False)
+    in_category_set = Column(Boolean, default=True, nullable=False)
+    # Whether this brand counts toward the category denominator. A brand measured for
+    # context but outside the category (an ice-cream chain in a QSR study) is tracked
+    # yet excluded from share, so the denominator stays honest.
+    sort_order = Column(Integer, default=0, nullable=False)
+
+
+class BrandObservation(UUIDMixin, Base):
+    """One measurement. ``brand_slug`` NULL = a category/market-level metric.
+
+    ``base_n`` is the effective base of THIS cell — not the wave's nominal n. A brand-level
+    attribute measured among "considerers" has a smaller base than the wave, and every
+    confidence band depends on getting that right.
+    """
+
+    __tablename__ = "brand_observations"
+    __table_args__ = (
+        UniqueConstraint(
+            "engagement_id", "wave_id", "brand_slug", "metric_code", "segment",
+            name="uq_brand_observation",
+        ),
+        Index("ix_brand_obs_lookup", "engagement_id", "metric_code", "segment"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    wave_id = Column(String, nullable=False)
+    brand_slug = Column(String(60), nullable=True)       # NULL = category-level
+    metric_code = Column(String(60), nullable=False)     # see engines/metrics.py
+    segment = Column(String(60), nullable=False, default="total")
+    value = Column(Float, nullable=False)
+    base_n = Column(Integer, nullable=True)              # NULL → unscoreable, never assumed
+    unit = Column(String(20), nullable=False, default="pct")
+    source = Column(String(200), nullable=True)          # "Ipsos Hot Tracker · lámina 18"
+
+
+class BrandDecision(UUIDMixin, Base):
+    """The accountability ledger. The subject is THE CLIENT and its decisions.
+
+    Not the research provider's recommendations: a decision may originate in the tracker,
+    the agency or the operation. Five fields are mandatory by design — a decision that
+    cannot name its metric, baseline, window and threshold cannot be evaluated, and the
+    ledger refuses it before budget is spent on it.
+    """
+
+    __tablename__ = "brand_decisions"
+    __table_args__ = (Index("ix_brand_decision_engagement", "engagement_id", "status"),)
+
+    engagement_id = Column(String, nullable=False)
+    title = Column(String(300), nullable=False)
+    rationale = Column(Text, nullable=True)
+    # The five mandatory fields
+    metric_code = Column(String(60), nullable=False)
+    segment = Column(String(60), nullable=False, default="total")
+    brand_slug = Column(String(60), nullable=True)
+    baseline_wave_id = Column(String, nullable=False)
+    baseline_value = Column(Float, nullable=True)        # resolved from observations
+    target_wave_id = Column(String, nullable=True)       # the evaluation window
+    success_threshold = Column(Float, nullable=True)     # pp of expected movement
+    owner = Column(String(120), nullable=True)           # who executes, client-side
+    # Verdict, written by the ledger engine when the target wave lands
+    status = Column(String(20), nullable=False, default="open")
+    # open | achieved | not_detectable | worsened | unevaluable
+    verdict_note = Column(Text, nullable=True)
+    observed_delta = Column(Float, nullable=True)
+    detectable_threshold = Column(Float, nullable=True)  # MDD at 95% for that base
+
+
+class BrandExtraction(UUIDMixin, Base):
+    """One ingested presentation: the staging boundary between a PDF and the data.
+
+    Extraction never writes to ``BrandObservation`` directly. A document lands here with
+    its cells (below), gets validated against structural invariants, and only a human
+    confirmation promotes the surviving cells into observations.
+
+    The reason is not caution for its own sake: an extraction error that reaches
+    observations is invisible afterwards — every chart, share and verdict downstream
+    silently inherits it, and nothing in the analysis can tell a mis-read number from a
+    real one. Staging is where that is still cheap to catch.
+    """
+
+    __tablename__ = "brand_extractions"
+    __table_args__ = (
+        Index("ix_brand_extraction_engagement", "engagement_id", "status"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    document_name = Column(String(300), nullable=False)
+    n_pages = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=False, default="draft")
+    # draft | validated | confirmed | rejected
+    model_used = Column(String(60), nullable=True)     # provenance of the vision pass
+    method = Column(String(40), nullable=False, default="vision")
+    # vision | coordinates | vision+coordinates
+    summary = Column(JSON, nullable=True)              # counts by validation outcome
+    note = Column(Text, nullable=True)
+    confirmed_by = Column(String(120), nullable=True)
+    confirmed_at = Column(DateTime, nullable=True)
+
+
+class BrandExtractionCell(UUIDMixin, Base):
+    """One proposed observation, with where it came from and whether it survived checks.
+
+    ``value`` is what was read; ``validation`` is whether an invariant confirmed it. A cell
+    that fails or cannot be checked is still stored — the reviewer needs to see what was
+    read and why it is doubtful, not an empty space where a number should be.
+    """
+
+    __tablename__ = "brand_extraction_cells"
+    __table_args__ = (
+        Index("ix_brand_cell_extraction", "extraction_id", "validation"),
+    )
+
+    extraction_id = Column(String, nullable=False)
+    engagement_id = Column(String, nullable=False)
+    page_number = Column(Integer, nullable=True)
+    chart_label = Column(String(300), nullable=True)   # the slide's own title, as read
+
+    wave_code = Column(String(30), nullable=True)
+    brand_slug = Column(String(60), nullable=True)
+    metric_code = Column(String(60), nullable=False)
+    segment = Column(String(60), nullable=False, default="total")
+    value = Column(Float, nullable=False)
+    base_n = Column(Integer, nullable=True)
+    unit = Column(String(20), nullable=False, default="pct")
+
+    source_method = Column(String(40), nullable=False, default="vision")
+    # vision | coordinates | both  ("both" = the two agreed)
+    validation = Column(String(30), nullable=False, default="unchecked")
+    # passed | failed | unchecked | conflict
+    validation_note = Column(Text, nullable=True)
+    coordinate_value = Column(Float, nullable=True)    # the second source, when available
+    included = Column(Boolean, default=True, nullable=False)  # reviewer's keep/drop
+
+
+class BrandForecast(UUIDMixin, Base):
+    """A frozen forecast, scored when the wave lands. Mirrors the TPM ledger discipline.
+
+    At most one ``pending`` forecast per (engagement, metric, brand, segment): the current
+    one. The past is never seeded — that is what the backtest is for.
+    """
+
+    __tablename__ = "brand_forecasts"
+    __table_args__ = (
+        Index("ix_brand_forecast_pending", "engagement_id", "status"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    target_wave_id = Column(String, nullable=False)
+    brand_slug = Column(String(60), nullable=True)
+    metric_code = Column(String(60), nullable=False)
+    segment = Column(String(60), nullable=False, default="total")
+    point = Column(Float, nullable=False)                # central forecast
+    lo = Column(Float, nullable=False)                   # 95% band
+    hi = Column(Float, nullable=False)
+    rule = Column(String(40), nullable=False)            # winning rule from the backtest
+    issued_at_wave_id = Column(String, nullable=False)   # history available when issued
+    status = Column(String(20), nullable=False, default="pending")  # pending | scored
+    actual = Column(Float, nullable=True)
+    inside_band = Column(Boolean, nullable=True)
+    abs_error = Column(Float, nullable=True)
