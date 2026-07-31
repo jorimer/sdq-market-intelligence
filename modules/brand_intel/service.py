@@ -11,6 +11,9 @@ Nothing in this module fabricates a value. Where an input is missing the output 
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
+from datetime import date
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
@@ -107,6 +110,110 @@ def brands(db: Session, engagement_id: str) -> List[BrandEntity]:
         .order_by(BrandEntity.sort_order, BrandEntity.name)
         .all()
     )
+
+
+def brand_slug(name: str) -> str:
+    """Fold a printed brand name into a stable key.
+
+    Must agree with the workbook's own slugs, because an engagement can be populated
+    from either source and the two must not produce a second entity for one brand.
+    """
+    decomposed = unicodedata.normalize("NFD", name or "")
+    stripped = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+    slug = re.sub(r"[^a-z0-9]+", "-", stripped.lower()).strip("-")
+    return slug[:60]
+
+
+def adopt_structure(
+    db: Session,
+    engagement: BrandEngagement,
+    waves_in: Sequence[Dict[str, Any]],
+    brands_in: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Create the engagement's waves and brands from a reviewed proposal.
+
+    Upserts by natural key, so re-adopting after adding one brand does not duplicate the
+    others and never orphans observations already tied to an existing wave or brand.
+    Chronological order is derived from the wave code rather than trusted from the
+    caller: ``sort_order`` drives every series in the module, and a wrong one silently
+    reverses trends.
+    """
+    created_w = updated_w = created_b = updated_b = 0
+    warnings: List[str] = []
+
+    for item in sorted(waves_in, key=lambda w: str(w.get("code") or "")):
+        code = (item.get("code") or "").strip()
+        if not code:
+            continue
+        known_wave = (
+            db.query(BrandWave)
+            .filter(BrandWave.engagement_id == engagement.id, BrandWave.code == code)
+            .first()
+        )
+        wave = known_wave or BrandWave(engagement_id=engagement.id, code=code)
+        # Provisional: the column is NOT NULL, and the real chronology is recomputed
+        # over the full set once every wave in this call exists.
+        if wave.sort_order is None:
+            wave.sort_order = 0
+        wave.label = (item.get("label") or code).strip()[:40]
+        period = item.get("period_date")
+        if isinstance(period, str) and period:
+            period = date.fromisoformat(period)
+        if period is not None:
+            wave.period_date = period
+        if item.get("nominal_base") is not None:
+            wave.nominal_base = int(item["nominal_base"])
+        if wave.period_date is None:
+            warnings.append(f"Ola '{wave.label}' sin fecha de referencia: "
+                            "no podrá deflactarse.")
+        if known_wave:
+            updated_w += 1
+        else:
+            db.add(wave)
+            created_w += 1
+
+    focal_seen = False
+    for order, item in enumerate(brands_in, start=1):
+        name = (item.get("name") or "").strip()
+        slug = (item.get("slug") or brand_slug(name)).strip()
+        if not slug:
+            continue
+        known_brand = (
+            db.query(BrandEntity)
+            .filter(BrandEntity.engagement_id == engagement.id, BrandEntity.slug == slug)
+            .first()
+        )
+        brand = known_brand or BrandEntity(engagement_id=engagement.id, slug=slug)
+        brand.name = name or slug
+        is_focal = bool(item.get("is_focal"))
+        brand.is_focal = is_focal
+        brand.in_category_set = bool(item.get("in_category_set", True))
+        brand.sort_order = order
+        focal_seen = focal_seen or is_focal
+        if known_brand:
+            updated_b += 1
+        else:
+            db.add(brand)
+            created_b += 1
+
+    db.flush()
+
+    # Chronology is recomputed over the whole set, not just the rows in this call: a
+    # wave adopted later can fall between two that already exist.
+    for i, w in enumerate(sorted(waves(db, str(engagement.id)),
+                                 key=lambda x: str(x.code)), start=1):
+        w.sort_order = i
+
+    if brands_in and not focal_seen:
+        warnings.append("Ninguna marca quedó marcada como focal: las secciones que "
+                        "comparan la marca del cliente contra la categoría no se "
+                        "podrán calcular.")
+    db.commit()
+    return {
+        "waves_created": created_w, "waves_updated": updated_w,
+        "brands_created": created_b, "brands_updated": updated_b,
+        "warnings": warnings,
+    }
 
 
 def _cells(

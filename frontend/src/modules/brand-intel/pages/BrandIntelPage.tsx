@@ -6,6 +6,7 @@ import {
   Filter,
   ListChecks,
   FileSearch,
+  Layers,
   Plus,
   Radar,
   Scale,
@@ -61,6 +62,7 @@ import {
 import { NewEngagementDrawer } from "../components/NewEngagementDrawer";
 import { DecisionDrawer } from "../components/DecisionDrawer";
 import { ExtractionReviewDrawer } from "../components/ExtractionReviewDrawer";
+import { StructureDrawer } from "../components/StructureDrawer";
 
 type Status = "loading" | "error" | "ready";
 
@@ -509,6 +511,7 @@ export function BrandIntelPage() {
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<EngagementDetail | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [showStructure, setShowStructure] = useState(false);
   const [showDecision, setShowDecision] = useState(false);
   const [forecastMsg, setForecastMsg] = useState<string | null>(null);
   const [extractions, setExtractions] = useState<ExtractionSummary[]>([]);
@@ -676,6 +679,80 @@ export function BrandIntelPage() {
   }
 
   const current = engagements.find((e) => e.slug === slug);
+
+  // An engagement is created with a client and a focal brand and no structure. The
+  // ingest maps printed labels onto declared waves and brands, so until those exist it
+  // rejects every cell — this is the way out, and it must be the first thing offered.
+  if (detail && !detail.waves.length && !detail.brands.length) {
+    return (
+      <>
+        <PageHead
+          eyebrow="Contexto de Mercado"
+          title={detail.focal_brand}
+          sub={`${detail.client} · sin estructura cargada`}
+          right={
+            engagements.length > 1 ? (
+              <select
+                className="field text-sm w-auto"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                aria-label="Encargo"
+              >
+                {engagements.map((e) => (
+                  <option key={e.slug} value={e.slug}>
+                    {e.focal_brand} — {e.client}
+                  </option>
+                ))}
+              </select>
+            ) : undefined
+          }
+        />
+        <StateBlock
+          kind="empty"
+          title="Falta la estructura del tracker"
+          message="El encargo aún no tiene olas ni marcas, y la carga de datos solo acepta cifras que encajen en ellas. Léelas de la propia presentación, o cárgalas con la plantilla Excel."
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="btn btn-primary" onClick={() => setShowStructure(true)}>
+                <FileSearch size={15} /> Leer de la presentación
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={() => void downloadTemplate(slug)}
+              >
+                <Download size={15} /> Plantilla Excel
+              </button>
+              <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
+                <Upload size={15} /> {busy ? "Cargando…" : "Subir Excel"}
+              </button>
+            </div>
+          }
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xlsm"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void onUpload(f);
+          }}
+        />
+        {showStructure && (
+          <StructureDrawer
+            slug={slug}
+            focalBrand={detail.focal_brand}
+            onClose={() => setShowStructure(false)}
+            onAdopted={() => {
+              setShowStructure(false);
+              void load(slug);
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   const growth = category?.category_growth_pct;
   const reading = category?.divergence_reading;
   const weakest = funnel?.weakest_step;
@@ -715,6 +792,13 @@ export function BrandIntelPage() {
             )}
             <button className="btn btn-ghost text-sm" onClick={() => setShowNew(true)}>
               <Plus size={15} /> Encargo
+            </button>
+            <button
+              className="btn btn-ghost text-sm"
+              onClick={() => setShowStructure(true)}
+              title="Leer olas y marcas de una presentación"
+            >
+              <Layers size={15} /> Estructura
             </button>
             <button className="btn btn-ghost text-sm" onClick={() => void downloadTemplate(slug)}>
               <Download size={15} /> Plantilla
@@ -1080,6 +1164,18 @@ export function BrandIntelPage() {
         <NewEngagementDrawer
           onClose={() => setShowNew(false)}
           onCreated={onEngagementCreated}
+        />
+      )}
+
+      {showStructure && detail && (
+        <StructureDrawer
+          slug={slug}
+          focalBrand={detail.focal_brand}
+          onClose={() => setShowStructure(false)}
+          onAdopted={() => {
+            setShowStructure(false);
+            void load(slug);
+          }}
         />
       )}
 

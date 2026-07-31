@@ -475,6 +475,69 @@ export async function uploadPdf(
   return data;
 }
 
+export interface WaveCandidate {
+  code: string;
+  label: string;
+  period_date: string;
+  occurrences: number;
+  pages: number[];
+  spellings: string[];
+}
+
+export interface BrandCandidate {
+  name: string;
+  occurrences: number;
+  pages: number[];
+  spellings: string[];
+}
+
+export interface StructureProposal {
+  document: string;
+  waves: WaveCandidate[];
+  brands: BrandCandidate[];
+  n_pages: number;
+  pages_sampled: number[];
+  brand_pass_error: string;
+  discarded_waves: { label: string; occurrences: number; pages: number[] }[];
+  note: string;
+}
+
+export interface AdoptionResult {
+  waves_created: number;
+  waves_updated: number;
+  brands_created: number;
+  brands_updated: number;
+  warnings: string[];
+}
+
+/** Reads the deck's own vocabulary. Creates nothing — the reviewer adopts. */
+export async function discoverStructure(
+  slug: string, file: File, sample = 5,
+): Promise<StructureProposal> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await client.post(`${base}/engagements/${slug}/discover`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    params: { sample },
+    // A handful of slides still means a handful of vision calls.
+    timeout: 10 * 60 * 1000,
+  });
+  return data;
+}
+
+export async function adoptStructure(
+  slug: string,
+  payload: {
+    waves: { code: string; label: string; period_date?: string | null;
+             nominal_base?: number | null }[];
+    brands: { name: string; slug?: string; is_focal: boolean;
+              in_category_set: boolean }[];
+  },
+): Promise<AdoptionResult> {
+  const { data } = await client.post(`${base}/engagements/${slug}/structure`, payload);
+  return data;
+}
+
 export async function listExtractions(slug: string): Promise<ExtractionSummary[]> {
   const { data } = await client.get(`${base}/engagements/${slug}/extractions`);
   return data;
