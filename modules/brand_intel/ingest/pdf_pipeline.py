@@ -28,7 +28,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from modules.brand_intel.engines import validation as val
-from modules.brand_intel.engines.metrics import get_metric
+from modules.brand_intel.engines.metrics import TRACKER_VOCABULARY, Vocabulary
 from modules.brand_intel.ingest import pdf_vision
 from modules.brand_intel.models.models import (
     BrandEngagement,
@@ -176,12 +176,18 @@ def _to_validation_cells(
     raw: Sequence[Tuple[int, str, Dict[str, Any]]],
     resolver: _LabelResolver,
     report: IngestReport,
+    vocab: Vocabulary = TRACKER_VOCABULARY,
 ) -> List[val.Cell]:
-    """Turn the model's rows into validation cells, rejecting what cannot be placed."""
+    """Turn the model's rows into validation cells, rejecting what cannot be placed.
+
+    ``vocab`` is the engagement's own vocabulary when it declares one — a study that is
+    not a brand tracker measures things the canonical dictionary has never heard of, and
+    checking against the wrong dictionary rejects every figure it has.
+    """
     cells: List[val.Cell] = []
     for idx, (page, chart_title, row) in enumerate(raw):
         metric = (row.get("metric_code") or "").strip()
-        if get_metric(metric) is None:
+        if vocab.get(metric) is None:
             report.reject(page, "Métrica fuera del diccionario",
                           f"«{metric}» en «{chart_title}»")
             continue
@@ -244,6 +250,9 @@ def ingest_pdf(
     render = renderer or pdf_vision.render_pages
     extract = extractor or pdf_vision.extract_page
 
+    from modules.brand_intel import service as svc
+
+    vocab = svc.vocabulary_for(db, str(engagement.id))
     brands = (db.query(BrandEntity)
               .filter(BrandEntity.engagement_id == engagement.id).all())
     waves = (db.query(BrandWave)
@@ -287,8 +296,8 @@ def ingest_pdf(
     ]
     dist_verdicts = val.distribution_verdicts(full_slide)
 
-    cells = _to_validation_cells(raw, resolver, report)
-    result = val.validate(cells, distribution_results=dist_verdicts)
+    cells = _to_validation_cells(raw, resolver, report, vocab)
+    result = val.validate(cells, distribution_results=dist_verdicts, vocab=vocab)
     report.cells_extracted = len(cells)
     report.validation = result.as_dict()
     report.coverage_note = val.coverage_note(result)

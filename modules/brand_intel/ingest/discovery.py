@@ -112,6 +112,24 @@ class BrandCandidate:
         }
 
 
+@dataclass(frozen=True)
+class MetricCandidate:
+    """An indicator the deck measures, with the type the reader proposed for it."""
+
+    code: str
+    label: str
+    kind: str                     # proportion | index | currency | count
+    evidence: str                 # qué se vio que justifica el tipo
+    confident: bool
+    pages: Tuple[int, ...]
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {"code": self.code, "label": self.label, "kind": self.kind,
+                "evidence": self.evidence, "confident": self.confident,
+                "pages": list(self.pages[:8]),
+                "supports_bands": self.kind == "proportion"}
+
+
 @dataclass
 class StructureProposal:
     """What the deck appears to contain. Nothing here is adopted."""
@@ -122,6 +140,8 @@ class StructureProposal:
     pages_sampled: Tuple[int, ...] = ()
     brand_pass_error: str = ""
     discarded_waves: List[Dict[str, Any]] = field(default_factory=list)
+    metrics: List[MetricCandidate] = field(default_factory=list)
+    metric_pass_error: str = ""
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -131,6 +151,8 @@ class StructureProposal:
             "pages_sampled": list(self.pages_sampled),
             "brand_pass_error": self.brand_pass_error,
             "discarded_waves": self.discarded_waves,
+            "metrics": [m.as_dict() for m in self.metrics],
+            "metric_pass_error": self.metric_pass_error,
             "note": self._note(),
         }
 
@@ -344,8 +366,14 @@ def discover_structure(
     renderer: Optional[Callable[..., List[bytes]]] = None,
     extractor: Optional[Callable[..., Any]] = None,
     with_brands: bool = True,
+    with_metrics: bool = False,
 ) -> StructureProposal:
-    """Both passes over one deck. Proposes; adopts nothing."""
+    """The passes over one deck. Proposes; adopts nothing.
+
+    ``with_metrics`` is off by default because a brand tracker does not need it: it is
+    validated against the canonical dictionary. A study that measures anything else turns
+    it on, and pays one more vision pass over the same sample of slides.
+    """
     texts = _page_texts(content)
     waves, dropped = discover_waves(texts)
 
@@ -360,4 +388,86 @@ def discover_structure(
     proposal.brands = brands
     proposal.pages_sampled = tuple(pages)
     proposal.brand_pass_error = error
+
+    if with_metrics:
+        metrics, m_error = discover_metrics(content, texts, sample=sample,
+                                            renderer=renderer)
+        proposal.metrics = metrics
+        proposal.metric_pass_error = m_error
     return proposal
+
+
+def discover_metrics(
+    content: bytes,
+    page_texts: Sequence[str],
+    sample: int = BRAND_SAMPLE_PAGES,
+    renderer: Optional[Callable[..., List[bytes]]] = None,
+    reader: Optional[Callable[..., List[Dict[str, Any]]]] = None,
+) -> Tuple[List[MetricCandidate], str]:
+    """Ask a sample of slides what the study measures, and how it should be typed.
+
+    Only needed when the study is not a brand tracker: a tracker is validated against the
+    canonical dictionary and does not declare a vocabulary. Here the model proposes, and
+    the reviewer approves — which is what keeps ``kind`` trustworthy, because ``kind`` is
+    the field that decides whether a figure may carry a confidence band.
+
+    A code seen on several slides with two different types is proposed with the one that
+    does *not* unlock bands, and flagged unconfident. Disagreement is itself the evidence
+    that the reader could not tell.
+    """
+    from modules.brand_intel.ingest import pdf_vision
+
+    render = renderer or pdf_vision.render_pages
+    read = reader or pdf_vision.discover_metrics_on_page
+
+    #: Menos permisivo primero: ante desacuerdo gana el que no habilita banda.
+    rank = {"count": 0, "index": 1, "currency": 2, "proportion": 3}
+
+    pages = pick_sample_pages(page_texts, sample)
+    seen: Dict[str, Dict[str, Any]] = {}
+    errors: List[str] = []
+    for page_no in pages:
+        try:
+            images = render(content, first=page_no, last=page_no)
+            if not images:
+                continue
+            proposals = read(images[0], page_no)
+        except Exception as exc:  # noqa: BLE001 — una lámina mala no pierde el pase
+            logger.warning("Métricas: página %s ilegible: %s", page_no, exc)
+            errors.append(str(exc) or exc.__class__.__name__)
+            continue
+        for row in proposals:
+            code = (row.get("code") or "").strip().lower()
+            kind = (row.get("kind") or "").strip()
+            if not code or kind not in rank:
+                continue
+            prev = seen.get(code)
+            if prev is None:
+                seen[code] = {
+                    "label": (row.get("label") or code).strip(),
+                    "kind": kind, "evidence": (row.get("evidence") or "").strip(),
+                    "confident": bool(row.get("confident")), "pages": {page_no},
+                }
+                continue
+            prev["pages"].add(page_no)
+            if kind != prev["kind"]:
+                # Dos láminas lo tipan distinto: quedarse con el más permisivo sería
+                # inventar precisión. Se baja al menos permisivo y se marca la duda.
+                if rank[kind] < rank[prev["kind"]]:
+                    prev["kind"] = kind
+                    prev["evidence"] = (row.get("evidence") or "").strip()
+                prev["confident"] = False
+            prev["confident"] = prev["confident"] and bool(row.get("confident"))
+
+    out = [
+        MetricCandidate(code=code, label=str(v["label"]), kind=str(v["kind"]),
+                        evidence=str(v["evidence"]), confident=bool(v["confident"]),
+                        pages=tuple(sorted(v["pages"])))
+        for code, v in seen.items()
+    ]
+    out.sort(key=lambda m: (-len(m.pages), m.code))
+    error = ""
+    if errors and not out:
+        distinct = list(dict.fromkeys(errors))
+        error = "; ".join(m[:200] for m in distinct[:2])
+    return out, error

@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from openpyxl import load_workbook
 from sqlalchemy.orm import Session
 
-from modules.brand_intel.engines.metrics import get_metric
+from modules.brand_intel.engines.metrics import TRACKER_VOCABULARY, Vocabulary
 from modules.brand_intel.models.models import (
     BrandEngagement,
     BrandEntity,
@@ -135,7 +135,10 @@ def ingest_workbook(
     _ingest_waves(db, engagement, wb["Olas"], report)
     _ingest_brands(db, engagement, wb["Marcas"], report)
     db.flush()
-    _ingest_observations(db, engagement, wb["Observaciones"], report)
+    from modules.brand_intel import service as svc
+
+    _ingest_observations(db, engagement, wb["Observaciones"], report,
+                         svc.vocabulary_for(db, str(engagement.id)))
     return report
 
 
@@ -198,7 +201,8 @@ def _ingest_brands(db, engagement, ws, report: IngestReport) -> None:
             report.brands_created += 1
 
 
-def _ingest_observations(db, engagement, ws, report: IngestReport) -> None:
+def _ingest_observations(db, engagement, ws, report: IngestReport,
+                         vocab: Vocabulary = TRACKER_VOCABULARY) -> None:
     waves = {
         w.code: w.id
         for w in db.query(BrandWave).filter(BrandWave.engagement_id == engagement.id).all()
@@ -223,7 +227,7 @@ def _ingest_observations(db, engagement, ws, report: IngestReport) -> None:
             continue
 
         metric = _norm(row[2])
-        if not metric or get_metric(metric) is None:
+        if not metric or vocab.get(metric) is None:
             report.reject("Observaciones", rownum,
                           f"Métrica desconocida: '{metric}'. Ver la hoja Diccionario.")
             continue

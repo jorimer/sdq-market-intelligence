@@ -30,7 +30,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from modules.brand_intel.engines.metrics import FUNNEL_LADDER, get_metric
+from modules.brand_intel.engines.metrics import TRACKER_VOCABULARY, Vocabulary
 
 PASSED = "passed"
 FAILED = "failed"
@@ -104,10 +104,10 @@ def _mark(cell: Cell, status: str, note: str) -> None:
         cell.validation_note = note
 
 
-def check_range(cells: Sequence[Cell]) -> None:
+def check_range(cells: Sequence[Cell], vocab: Vocabulary = TRACKER_VOCABULARY) -> None:
     """A proportion outside [0, 100] is impossible, not merely suspicious."""
     for c in cells:
-        m = get_metric(c.metric_code)
+        m = vocab.get(c.metric_code)
         if m is None or m.kind != "proportion":
             continue
         if not 0.0 <= c.value <= 100.0:
@@ -137,10 +137,16 @@ def check_distributions(cells: Sequence[Cell]) -> List[Dict[str, str]]:
     return findings
 
 
-def check_funnel_monotonicity(cells: Sequence[Cell]) -> List[Dict[str, str]]:
-    """Each rung of the reach ladder must be ≤ the rung above it, per brand and wave."""
+def check_funnel_monotonicity(
+    cells: Sequence[Cell], vocab: Vocabulary = TRACKER_VOCABULARY,
+) -> List[Dict[str, str]]:
+    """Each rung of the ladder must be ≤ the rung above it, per brand and wave.
+
+    A study that declares no ladder has nothing to check here — which is the point: the
+    invariant applies where a conversion sequence exists, not everywhere.
+    """
     findings: List[Dict[str, str]] = []
-    ladder_pos = {code: i for i, code in enumerate(FUNNEL_LADDER)}
+    ladder_pos = {code: i for i, code in enumerate(vocab.ladder)}
 
     grouped: Dict[Tuple[Optional[str], Optional[str], str], List[Cell]] = defaultdict(list)
     for c in cells:
@@ -253,6 +259,7 @@ def distribution_verdicts(cells: Sequence[Cell]) -> Dict[str, Tuple[str, str]]:
 def validate(
     cells: Sequence[Cell],
     distribution_results: Optional[Dict[str, Tuple[str, str]]] = None,
+    vocab: Vocabulary = TRACKER_VOCABULARY,
 ) -> ValidationReport:
     """Run every invariant over the extracted cells and summarise the outcome.
 
@@ -261,7 +268,7 @@ def validate(
     subset that reached this point cannot be expected to sum to 100.
     """
     findings: List[Dict[str, str]] = []
-    check_range(cells)
+    check_range(cells, vocab)
     if distribution_results is None:
         findings += check_distributions(cells)
     else:
@@ -273,7 +280,7 @@ def validate(
             {"kind": "distribution", "id": did, "detail": note}
             for did, (status, note) in distribution_results.items() if status == FAILED
         ]
-    findings += check_funnel_monotonicity(cells)
+    findings += check_funnel_monotonicity(cells, vocab)
     findings += check_internal_duplicates(cells)
     findings += check_cross_source(cells)
 

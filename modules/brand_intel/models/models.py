@@ -92,6 +92,45 @@ class BrandEntity(UUIDMixin, Base):
     sort_order = Column(Integer, default=0, nullable=False)
 
 
+class BrandMetric(UUIDMixin, Base):
+    """A metric this engagement measures, when the study is not a brand tracker.
+
+    The module ships a canonical vocabulary for brand trackers (``engines/metrics.py``)
+    and both ingest paths reject anything outside it — which is what stops a misread
+    label from inventing an indicator, and is also why a study measuring anything else
+    had every one of its figures rejected. An engagement that declares its own metrics
+    is validated against those instead; one that declares none keeps using the tracker
+    vocabulary, so nothing already loaded changes.
+
+    ``kind`` is the load-bearing field and the reason a person has to approve it. It
+    decides which statistics are legitimate: only ``proportion`` admits a binomial
+    confidence band, so a metric wrongly typed as one manufactures intervals out of
+    nothing. The reading pass proposes a kind with the evidence it saw; when that
+    evidence is thin it proposes one that does *not* unlock bands, because the failure
+    that matters is the one that invents precision.
+    """
+
+    __tablename__ = "brand_metrics"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "code", name="uq_brand_metric_code"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    code = Column(String(60), nullable=False)            # "nps", "satisfaccion_t2b"
+    label = Column(String(160), nullable=False)          # como se imprime en la lámina
+    kind = Column(String(20), nullable=False, default="count")
+    # proportion | index | currency | count  — ver MetricDef.supports_bands
+    is_core = Column(Boolean, default=False, nullable=False)
+    # Entra al pronóstico congelado y al panel de vigilancia cada ola.
+    higher_is_better = Column(Boolean, default=True, nullable=False)
+    category_denominator = Column(Boolean, default=False, nullable=False)
+    # Posición en una escalera de conversión, si el estudio tiene una. NULL = no aplica;
+    # la invariante de monotonía solo corre sobre las métricas que la declaran.
+    funnel_order = Column(Integer, nullable=True)
+    sort_order = Column(Integer, default=0, nullable=False)
+    description = Column(Text, nullable=True)
+
+
 class BrandObservation(UUIDMixin, Base):
     """One measurement. ``brand_slug`` NULL = a category/market-level metric.
 

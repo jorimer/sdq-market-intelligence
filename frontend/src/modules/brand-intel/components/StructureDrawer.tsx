@@ -6,6 +6,7 @@ import {
   adoptStructure,
   discoverStructure,
   type BrandCandidate,
+  type MetricCandidate,
   type StructureProposal,
   type WaveCandidate,
 } from "../api";
@@ -26,6 +27,17 @@ interface BrandRow extends BrandCandidate {
   keep: boolean;
   inSet: boolean;
 }
+
+interface MetricRow extends MetricCandidate {
+  keep: boolean;
+}
+
+const KIND_LABEL: Record<MetricCandidate["kind"], string> = {
+  proportion: "% sobre una base",
+  index: "índice o escala",
+  currency: "moneda",
+  count: "conteo",
+};
 
 function foldName(value: string): string {
   return value
@@ -48,6 +60,8 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
   const [proposal, setProposal] = useState<StructureProposal | null>(null);
   const [waves, setWaves] = useState<WaveRow[]>([]);
   const [brands, setBrands] = useState<BrandRow[]>([]);
+  const [metrics, setMetrics] = useState<MetricRow[]>([]);
+  const [askMetrics, setAskMetrics] = useState(false);
   const [focal, setFocal] = useState<string>("");
   const [phase, setPhase] = useState<"idle" | "reading" | "review" | "saving">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -56,11 +70,12 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
     setPhase("reading");
     setError(null);
     try {
-      const p = await discoverStructure(slug, f);
+      const p = await discoverStructure(slug, f, 5, askMetrics);
       setProposal(p);
       setWaves(p.waves.map((w) => ({ ...w, keep: true, period: w.period_date })));
       const rows = p.brands.map((b) => ({ ...b, keep: true, inSet: true }));
       setBrands(rows);
+      setMetrics(p.metrics.map((m) => ({ ...m, keep: true })));
       // The engagement already named its focal brand; match it so the reviewer does not
       // have to re-pick what they already told us.
       const target = foldName(focalBrand);
@@ -91,6 +106,9 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
             is_focal: b.name === focal,
             in_category_set: b.inSet,
           })),
+        metrics: metrics
+          .filter((m) => m.keep)
+          .map((m) => ({ code: m.code, label: m.label, kind: m.kind })),
       });
       onAdopted();
     } catch (e: unknown) {
@@ -130,6 +148,23 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
             <span className="text-xs text-muted">
               Las olas salen del texto del PDF sin costo. Las marcas se leen de una
               muestra de láminas, no del mazo completo.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-xs text-muted">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={askMetrics}
+              onChange={(e) => setAskMetrics(e.target.checked)}
+            />
+            <span>
+              <span className="text-body font-semibold">
+                No es un tracker de marca: leer también qué indicadores mide
+              </span>
+              <br />
+              Un tracker usa el diccionario del módulo y no lo necesita. Un estudio que
+              mida otra cosa sí: sin declarar sus indicadores, la carga rechaza todas sus
+              cifras. Cuesta una lectura más por lámina muestreada.
             </span>
           </label>
           {error && (
@@ -260,6 +295,79 @@ export function StructureDrawer({ slug, focalBrand, onClose, onAdopted }: Props)
               </div>
             ))}
           </section>
+
+          {(metrics.length > 0 || proposal.metric_pass_error) && (
+            <section className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <h3 className="text-sm font-semibold text-body truncate min-w-0 flex-1">
+                  Indicadores encontrados
+                </h3>
+                <span className="text-xs text-muted mono shrink-0 tabular-nums">
+                  {metrics.filter((m) => m.keep).length}/{metrics.length}
+                </span>
+              </div>
+              <p className="text-xs text-muted">
+                El tipo decide qué estadística es legítima después: solo «% sobre una
+                base» admite banda de confianza. Ante evidencia débil se propone el tipo
+                que NO la habilita — equivocarse hacia el porcentaje fabrica precisión que
+                el estudio no tiene.
+              </p>
+              {proposal.metric_pass_error && (
+                <p className="text-xs text-alert">{proposal.metric_pass_error}</p>
+              )}
+              {metrics.map((m, i) => (
+                <div key={m.code} className="flex items-start gap-3 py-1">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={m.keep}
+                    onChange={(e) =>
+                      setMetrics((prev) =>
+                        prev.map((x, j) => (j === i ? { ...x, keep: e.target.checked } : x)),
+                      )
+                    }
+                    aria-label={`Adoptar ${m.label}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-body truncate">{m.label}</div>
+                    <div className="text-xs text-muted mono truncate">
+                      {m.code} · {KIND_LABEL[m.kind]}
+                      {m.evidence ? ` · ${m.evidence}` : ""}
+                    </div>
+                  </div>
+                  <select
+                    className="field w-auto text-xs shrink-0"
+                    value={m.kind}
+                    onChange={(e) =>
+                      setMetrics((prev) =>
+                        prev.map((x, j) =>
+                          j === i
+                            ? { ...x, kind: e.target.value as MetricCandidate["kind"] }
+                            : x,
+                        ),
+                      )
+                    }
+                    aria-label={`Tipo de ${m.label}`}
+                  >
+                    {(Object.keys(KIND_LABEL) as MetricCandidate["kind"][]).map((k) => (
+                      <option key={k} value={k}>
+                        {KIND_LABEL[k]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              {metrics.some((m) => m.keep && !m.confident) && (
+                <div className="text-xs text-muted flex items-start gap-2">
+                  <AlertTriangle size={14} className="shrink-0 mt-px" />
+                  <span>
+                    Alguno se leyó sin evidencia explícita del tipo. Confírmalo contra la
+                    lámina antes de adoptar: es el campo del que dependen las bandas.
+                  </span>
+                </div>
+              )}
+            </section>
+          )}
 
           {noDate && (
             <div className="text-xs text-muted flex items-start gap-2">

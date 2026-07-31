@@ -17,7 +17,7 @@ That is why ``supports_bands`` exists and why every engine consults it before sc
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -87,3 +87,45 @@ def label_for(code: str) -> str:
 def supports_bands(code: str) -> bool:
     m = _BY_CODE.get(code)
     return bool(m and m.supports_bands)
+
+
+@dataclass(frozen=True)
+class Vocabulary:
+    """The metric vocabulary one engagement is validated and analysed against.
+
+    A brand tracker uses the canonical set above; a study measuring anything else brings
+    its own, declared on the engagement. Both are the same shape, so every engine keeps
+    consulting ``kind`` before deciding what statistics are legitimate — which is the
+    property that must survive opening the vocabulary up.
+
+    The funnel ladder stops being a constant: a tracker declares the reach ladder, and a
+    study with no conversion sequence declares none, so the monotonicity invariant simply
+    finds nothing to check instead of being wrong about a study it does not understand.
+    """
+
+    metrics: Tuple[MetricDef, ...]
+    ladder: Tuple[str, ...]
+
+    def get(self, code: str) -> Optional[MetricDef]:
+        return self._by_code.get(code)
+
+    @property
+    def _by_code(self) -> Dict[str, MetricDef]:
+        return {m.code: m for m in self.metrics}
+
+    def label_for(self, code: str) -> str:
+        m = self.get(code)
+        return m.label if m else code
+
+    def core(self) -> List[MetricDef]:
+        return [m for m in self.metrics if m.is_core]
+
+    def supports_bands(self, code: str) -> bool:
+        m = self.get(code)
+        return bool(m and m.supports_bands)
+
+
+#: The tracker vocabulary, used by any engagement that declares no metrics of its own.
+#: Keeping it as the fallback is what makes this change invisible to everything already
+#: loaded — a tracker engagement behaves exactly as before.
+TRACKER_VOCABULARY = Vocabulary(metrics=tuple(METRICS), ladder=tuple(FUNNEL_LADDER))

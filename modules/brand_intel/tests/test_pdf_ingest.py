@@ -596,3 +596,67 @@ def test_reconfirming_the_same_deck_does_not_pile_up_readings(db, engagement):
 
     assert db.query(BrandObservationReading).filter(
         BrandObservationReading.metric_code == "reach_7d").count() == 1
+
+
+# ── estudios que no son trackers de marca ─────────────────────────────
+
+def test_a_study_with_its_own_metrics_is_no_longer_rejected_wholesale(db, engagement):
+    """El callejón sin salida de un estudio distinto: 100% de celdas rechazadas.
+
+    El diccionario canónico es de tracker de marca. Un estudio que mida otra cosa —aquí
+    NPS y satisfacción del personal— no tenía forma de entrar: cada cifra se rechazaba
+    como «Métrica fuera del diccionario», que es el mismo callejón que ya tuvo el encargo
+    sin olas ni marcas, un piso más arriba.
+    """
+    from modules.brand_intel import service as svc
+
+    filas = [_row("nps", "Focal", "Ola 1", 42.0, base_n=300),
+             _row("clima_t2b", "Focal", "Ola 1", 71.0, base_n=300)]
+
+    # Sin vocabulario propio: el encargo es un tracker y no reconoce ninguna de las dos.
+    antes = pipe.ingest_pdf(db, engagement, b"pdf", "clima.pdf",
+                            extractor=_stub_page(filas), renderer=_stub_render())
+    assert antes.cells_extracted == 0
+    assert all(r["reason"] == "Métrica fuera del diccionario" for r in antes.rejected)
+
+    # Declarando sus métricas, el mismo mazo entra.
+    svc.adopt_structure(db, engagement, [], [], [
+        {"code": "nps", "label": "NPS", "kind": "index"},
+        {"code": "clima_t2b", "label": "Clima laboral (T2B)", "kind": "proportion",
+         "is_core": True},
+    ])
+    db.commit()
+
+    despues = pipe.ingest_pdf(db, engagement, b"pdf", "clima.pdf",
+                              extractor=_stub_page(filas), renderer=_stub_render())
+    db.commit()
+    assert despues.cells_extracted == 2
+    assert despues.rejected == []
+
+
+def test_an_unknown_kind_never_silently_becomes_a_proportion(db, engagement):
+    """`proportion` es el único tipo que habilita banda: adivinarlo inventa precisión."""
+    from modules.brand_intel import service as svc
+
+    out = svc.adopt_structure(db, engagement, [], [], [
+        {"code": "raro", "label": "Métrica rara", "kind": "porcentaje"},
+    ])
+    db.commit()
+    vocab = svc.vocabulary_for(db, engagement.id)
+    assert vocab.get("raro").kind == "count"
+    assert vocab.supports_bands("raro") is False
+    assert any("no admite banda" in w for w in out["warnings"])
+
+
+def test_a_study_without_a_ladder_is_not_judged_by_the_funnel_invariant(db, engagement):
+    """La monotonía aplica donde hay secuencia de conversión, no en todas partes."""
+    from modules.brand_intel import service as svc
+
+    svc.adopt_structure(db, engagement, [], [], [
+        {"code": "nps", "label": "NPS", "kind": "index"},
+    ])
+    db.commit()
+    vocab = svc.vocabulary_for(db, engagement.id)
+    assert vocab.ladder == ()
+    cells = [val.Cell(key="a", metric_code="nps", value=42.0)]
+    assert val.check_funnel_monotonicity(cells, vocab) == []

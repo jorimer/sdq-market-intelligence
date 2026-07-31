@@ -506,6 +506,18 @@ export interface BrandCandidate {
   spellings: string[];
 }
 
+/** Un indicador que el mazo mide, con el tipo que el lector propuso. */
+export interface MetricCandidate {
+  code: string;
+  label: string;
+  kind: "proportion" | "index" | "currency" | "count";
+  evidence: string;
+  confident: boolean;
+  pages: number[];
+  /** Solo `proportion` admite banda de confianza. */
+  supports_bands: boolean;
+}
+
 export interface StructureProposal {
   document: string;
   waves: WaveCandidate[];
@@ -514,6 +526,8 @@ export interface StructureProposal {
   pages_sampled: number[];
   brand_pass_error: string;
   discarded_waves: { label: string; occurrences: number; pages: number[] }[];
+  metrics: MetricCandidate[];
+  metric_pass_error: string;
   note: string;
 }
 
@@ -522,18 +536,20 @@ export interface AdoptionResult {
   waves_updated: number;
   brands_created: number;
   brands_updated: number;
+  metrics_created: number;
+  metrics_updated: number;
   warnings: string[];
 }
 
 /** Reads the deck's own vocabulary. Creates nothing — the reviewer adopts. */
 export async function discoverStructure(
-  slug: string, file: File, sample = 5,
+  slug: string, file: File, sample = 5, withMetrics = false,
 ): Promise<StructureProposal> {
   const form = new FormData();
   form.append("file", file);
   const { data } = await client.post(`${base}/engagements/${slug}/discover`, form, {
     headers: { "Content-Type": "multipart/form-data" },
-    params: { sample },
+    params: { sample, with_metrics: withMetrics },
     // A handful of slides still means a handful of vision calls.
     timeout: 10 * 60 * 1000,
   });
@@ -547,6 +563,7 @@ export async function adoptStructure(
              nominal_base?: number | null }[];
     brands: { name: string; slug?: string; is_focal: boolean;
               in_category_set: boolean }[];
+    metrics?: { code: string; label: string; kind: string; is_core?: boolean }[];
   },
 ): Promise<AdoptionResult> {
   const { data } = await client.post(`${base}/engagements/${slug}/structure`, payload);
