@@ -37,6 +37,7 @@ from modules.brand_intel.engines.metrics import (
     label_for,
 )
 from modules.brand_intel.models.models import (
+    BrandClient,
     BrandDecision,
     BrandEngagement,
     BrandEntity,
@@ -159,6 +160,49 @@ def delete_engagement(db: Session, engagement: BrandEngagement) -> Dict[str, int
     db.commit()
     logger.info("Encargo brand_intel '%s' eliminado: %s", slug, removed)
     return removed
+
+
+def client_code(name: str) -> str:
+    """Un código legible desde el nombre. Se propone; se puede editar antes de crear."""
+    decomposed = unicodedata.normalize("NFD", name or "")
+    stripped = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+    code = re.sub(r"[^A-Z0-9]+", "-", stripped.upper()).strip("-")
+    return (code or "CLIENTE")[:40]
+
+
+def clients(db: Session, organization_id: Optional[str] = None) -> List[BrandClient]:
+    """Clientes visibles. ``None`` = staff de la plataforma, ve todos.
+
+    Filtra por la organización del cliente solo para no ofrecer a un usuario clientes que
+    nunca podrá abrir; el permiso real sigue resolviéndose sobre el encargo.
+    """
+    q = db.query(BrandClient).filter(BrandClient.is_active.is_(True))
+    if organization_id is not None:
+        q = q.filter(BrandClient.organization_id == organization_id)
+    return q.order_by(BrandClient.name).all()
+
+
+def get_client(db: Session, code_or_id: str) -> Optional[BrandClient]:
+    return (
+        db.query(BrandClient)
+        .filter(BrandClient.is_active.is_(True))
+        .filter((BrandClient.code == code_or_id) | (BrandClient.id == code_or_id))
+        .first()
+    )
+
+
+def engagement_counts_by_client(
+    db: Session, organization_id: Optional[str] = None
+) -> Dict[str, int]:
+    """Cuántos estudios cuelgan de cada cliente, para el selector."""
+    q = db.query(BrandEngagement).filter(BrandEngagement.is_active.is_(True))
+    if organization_id is not None:
+        q = q.filter(BrandEngagement.organization_id == organization_id)
+    out: Dict[str, int] = {}
+    for e in q.all():
+        if e.client_id:
+            out[str(e.client_id)] = out.get(str(e.client_id), 0) + 1
+    return out
 
 
 def has_own_metrics(db: Session, engagement_id: str) -> bool:

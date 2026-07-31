@@ -35,6 +35,30 @@ from sqlalchemy import (
 from shared.database.base import Base, UUIDMixin
 
 
+class BrandClient(UUIDMixin, Base):
+    """Quien contrata. Un cliente puede tener varios estudios, no solo su tracker.
+
+    Antes el cliente era texto libre dentro del encargo, así que dos estudios del mismo
+    cliente no estaban atados por nada y "Operador RD" y "Operador R.D." eran clientes
+    distintos. Con código propio, el cliente se elige primero y los estudios cuelgan de él.
+
+    **No es la frontera de aislamiento.** Esa sigue siendo ``BrandEngagement.organization_id``,
+    que es lo que gobierna el 404-no-403 y por tanto lo único que no se toca aquí: el
+    cliente es una agrupación *dentro* de la organización. Su ``organization_id`` sirve
+    para heredarlo al crear un estudio, no para conceder acceso — precisamente porque un
+    cliente existe antes de que nadie suyo tenga login, que es el caso de hoy.
+    """
+
+    __tablename__ = "brand_clients"
+    __table_args__ = (UniqueConstraint("code", name="uq_brand_client_code"),)
+
+    code = Column(String(40), nullable=False)            # "MCD-RD" — llave legible
+    name = Column(String(200), nullable=False)           # "Operador RD"
+    organization_id = Column(String(64), nullable=True)  # se hereda al crear un estudio
+    is_active = Column(Boolean, default=True, nullable=False)
+    notes = Column(Text, nullable=True)
+
+
 class BrandEngagement(UUIDMixin, Base):
     """A per-client mandate. The isolation boundary for everything else in this module."""
 
@@ -43,6 +67,10 @@ class BrandEngagement(UUIDMixin, Base):
 
     slug = Column(String(60), nullable=False)            # "mcdonalds-rd"
     client_name = Column(String(200), nullable=False)    # who pays for the tracker
+    # El cliente al que pertenece el estudio. Nullable mientras haya encargos anteriores
+    # a la entidad; `client_name` se conserva porque es lo que el informe imprime y no
+    # depende de que el vínculo exista.
+    client_id = Column(String, nullable=True)
     focal_brand = Column(String(120), nullable=False)    # the brand the report is about
     market = Column(String(80), nullable=False, default="República Dominicana")
     category = Column(String(80), nullable=True)         # "QSR", "banca minorista", …

@@ -1,9 +1,20 @@
 import client from "@/shared/api/client";
 
 /** An engagement is one client's brand-tracker mandate. Private data, isolated per client. */
+/** Quien contrata. Un cliente agrupa varios estudios, no solo su tracker. */
+export interface BrandClient {
+  code: string;
+  name: string;
+  id: string;
+  organization_id: string | null;
+  engagements: number;
+}
+
 export interface Engagement {
   slug: string;
   client: string;
+  /** Código del cliente al que pertenece; null en estudios anteriores a la entidad. */
+  client_code?: string | null;
   focal_brand: string;
   market: string;
   category: string | null;
@@ -320,6 +331,8 @@ export interface Feasibility {
 const base = "/brand-intel";
 
 export interface EngagementInput {
+  /** Código del cliente. Sin él, el estudio queda sin agrupar. */
+  client?: string;
   slug: string;
   client_name: string;
   focal_brand: string;
@@ -366,6 +379,18 @@ export async function listEngagements(): Promise<Engagement[]> {
 
 export async function getEngagementDetail(slug: string): Promise<EngagementDetail> {
   const { data } = await client.get(`${base}/engagements/${slug}`);
+  return data;
+}
+
+export async function listClients(): Promise<BrandClient[]> {
+  const { data } = await client.get(`${base}/clients`);
+  return data;
+}
+
+export async function createClient(payload: {
+  code: string; name: string; organization_id?: string | null;
+}): Promise<BrandClient> {
+  const { data } = await client.post(`${base}/clients`, payload);
   return data;
 }
 
