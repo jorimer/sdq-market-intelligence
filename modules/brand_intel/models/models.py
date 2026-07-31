@@ -118,6 +118,55 @@ class BrandObservation(UUIDMixin, Base):
     base_n = Column(Integer, nullable=True)              # NULL → unscoreable, never assumed
     unit = Column(String(20), nullable=False, default="pct")
     source = Column(String(200), nullable=True)          # "Ipsos Hot Tracker · lámina 18"
+    # Which reading this value is a projection of. `source` is prose for a human to read;
+    # this is the registry entry, and it is what makes the current value traceable back
+    # to the exact delivery that produced it. See BrandObservationReading.
+    source_extraction_id = Column(String, nullable=True)
+
+
+class BrandObservationReading(UUIDMixin, Base):
+    """What one delivery said about one figure. Append-only; nothing here is overwritten.
+
+    A tracker restates its earlier waves in every delivery, and the numbers are not always
+    identical: a provider corrects a base, revises a weighting, fixes a chart. With one
+    row per figure the second delivery had to overwrite the first, which made the truth
+    depend on the order the client happened to upload the files — loading a year of decks
+    out of order walked corrected figures backwards, silently.
+
+    So every reading is kept as it was read, tied to the delivery it came from, and
+    ``brand_observations`` becomes a *projection*: the reading from the most recent deck
+    wins, and the rest stay on the record. That ordering is not an implementation detail —
+    it is the answer to "¿esta cifra cambió?", which for a client paying to be told what
+    its tracker really says is an output of the product, not bookkeeping.
+
+    Precedence uses the deck's **vintage** (the most recent wave it contains), not the
+    upload time: which delivery is newer is a fact about the deck, and a client uploading
+    last year's backlog today must not thereby make it authoritative.
+    """
+
+    __tablename__ = "brand_observation_readings"
+    __table_args__ = (
+        UniqueConstraint(
+            "extraction_id", "wave_id", "brand_slug", "metric_code", "segment",
+            name="uq_brand_reading",
+        ),
+        Index("ix_brand_reading_key",
+              "engagement_id", "wave_id", "brand_slug", "metric_code", "segment"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    extraction_id = Column(String, nullable=True)        # NULL = libro Excel del proveedor
+    wave_id = Column(String, nullable=False)
+    brand_slug = Column(String(60), nullable=True)
+    metric_code = Column(String(60), nullable=False)
+    segment = Column(String(60), nullable=False, default="total")
+    value = Column(Float, nullable=False)
+    base_n = Column(Integer, nullable=True)
+    unit = Column(String(20), nullable=False, default="pct")
+    # Ola más reciente que trae el mazo del que sale esta lectura ("2026-03"). Decide la
+    # precedencia; se guarda porque el mazo puede borrarse y la lectura permanece.
+    deck_vintage = Column(String(30), nullable=True)
+    source = Column(String(200), nullable=True)
 
 
 class BrandDecision(UUIDMixin, Base):

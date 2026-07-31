@@ -238,6 +238,8 @@ modules/brand_intel/ingest/pdf_pipeline.py:0: error: Incompatible types in assig
 modules/brand_intel/ingest/pdf_pipeline.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
 modules/brand_intel/ingest/pdf_pipeline.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
 modules/brand_intel/ingest/pdf_pipeline.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
+modules/brand_intel/ingest/pdf_pipeline.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
+modules/brand_intel/ingest/pdf_pipeline.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
 modules/brand_intel/report.py:0: error: Argument 2 to "_sources" has incompatible type "Column[str]"; expected "str"  [arg-type]
 modules/brand_intel/report.py:0: error: Argument 2 to "attribution_analysis" has incompatible type "Column[str]"; expected "str"  [arg-type]
 modules/brand_intel/report.py:0: error: Argument 2 to "category_analysis" has incompatible type "Column[str]"; expected "str"  [arg-type]

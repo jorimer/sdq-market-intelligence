@@ -83,10 +83,10 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
         slug, extractionId,
         cells.map((c) => ({ cell_id: c.id, included: !dropped.has(c.id) })),
       );
-      // A key the deck stated twice with two different numbers is left out on purpose.
-      // Closing on it would report a clean confirmation over a silent hole, so the
-      // drawer stays open until the reviewer has seen which figures did not land.
-      if (result.discrepancias.length > 0) {
+      // Anything that did not land as stated stays on screen. Closing on it would
+      // report a clean confirmation over a silent hole — whether the hole is a figure
+      // the deck stated two ways, or one a later delivery already corrected.
+      if (result.discrepancias.length > 0 || result.cifras_que_cambian.length > 0) {
         setOutcome(result);
         return;
       }
@@ -113,27 +113,69 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
       </p>
 
       {outcome && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-sm text-body rounded-lg bg-surface2 p-3">
             Se guardaron {outcome.creadas} observación(es) nueva(s) y se actualizaron{" "}
             {outcome.actualizadas}.{" "}
             <span className="text-muted">
-              {outcome.omitidas_por_discrepancia} quedaron fuera porque la presentación da
-              dos cifras distintas para el mismo dato: elegir una sería inventar cuál de
-              las dos láminas se leyó mal. Corrígelas en la presentación, o cárgalas con la
-              plantilla Excel.
+              Esta entrega llega hasta {outcome.anada_del_mazo || "—"}; lo que dijo queda
+              en el registro aunque otra entrega mande sobre la cifra vigente.
             </span>
           </p>
-          <ul className="space-y-1">
-            {outcome.discrepancias.slice(0, 8).map((d, i) => (
-              <li key={i} className="text-xs text-muted mono truncate">
-                {d.marca} · {d.metrica}
-                {d.segmento !== "total" ? ` · ${d.segmento}` : ""} ={" "}
-                {d.valores.join(" vs ")}
-                {d.laminas.length ? ` · láminas ${d.laminas.join(", ")}` : ""}
-              </li>
-            ))}
-          </ul>
+
+          {outcome.omitidas_por_discrepancia > 0 && (
+            <div className="space-y-1">
+              <p className="text-sm text-body">
+                <span className="font-semibold">
+                  {outcome.omitidas_por_discrepancia}
+                </span>{" "}
+                quedaron fuera porque la presentación da dos cifras distintas para el mismo
+                dato: elegir una sería inventar cuál de las dos láminas se leyó mal.
+              </p>
+              <ul className="space-y-1">
+                {outcome.discrepancias.slice(0, 8).map((d, i) => (
+                  <li key={i} className="text-xs text-muted mono truncate">
+                    {d.marca} · {d.metrica}
+                    {d.segmento !== "total" ? ` · ${d.segmento}` : ""} ={" "}
+                    {d.valores.join(" vs ")}
+                    {d.laminas.length ? ` · láminas ${d.laminas.join(", ")}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Que el proveedor haya cambiado una cifra no es ruido de carga: es una
+              lectura sobre el propio tracker, y el cliente paga por saberla. */}
+          {outcome.cifras_que_cambian.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-sm text-body">
+                <span className="font-semibold">
+                  {outcome.cifras_que_cambian.length} cifra(s) cambian respecto a lo que ya
+                  estaba cargado
+                </span>
+                {outcome.no_reemplazan_por_mazo_mas_nuevo > 0 && (
+                  <>
+                    {" "}
+                    — de ellas {outcome.no_reemplazan_por_mazo_mas_nuevo} no reemplazan
+                    nada: una entrega posterior ya manda sobre esa ola. Quedan en el
+                    registro.
+                  </>
+                )}
+              </p>
+              <ul className="space-y-1">
+                {outcome.cifras_que_cambian.slice(0, 8).map((c, i) => (
+                  <li key={i} className="text-xs text-muted mono truncate">
+                    {c.marca} · {c.metrica} · {c.ola} ={" "}
+                    {c.corregida != null
+                      ? `${c.anterior} → ${c.corregida}`
+                      : `${c.vigente} (vigente, de ${c.mazo_vigente}) · este mazo decía ${c.este_mazo}`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <button className="btn btn-primary" onClick={onConfirmed}>
             Entendido
           </button>

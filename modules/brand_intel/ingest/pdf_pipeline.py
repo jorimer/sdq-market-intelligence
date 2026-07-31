@@ -24,6 +24,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from modules.brand_intel.engines import validation as val
@@ -35,6 +36,7 @@ from modules.brand_intel.models.models import (
     BrandExtraction,
     BrandExtractionCell,
     BrandObservation,
+    BrandObservationReading,
     BrandWave,
 )
 
@@ -346,15 +348,35 @@ def confirm_extraction(
     The substantive one: when the readings **disagree**, picking one is inventing an
     answer. Nothing here is qualified to say which slide was misread, so the key is left
     out and named, which is the same rule the invariants follow.
+
+    **Nothing a delivery said is overwritten.** Every reading is kept in
+    ``brand_observation_readings`` tied to the deck it came from, and the observation is a
+    projection of them: the reading from the deck with the most recent wave wins. Order of
+    upload therefore stops deciding the truth — loading a year of decks back-to-front used
+    to walk corrected figures backwards in silence — and "the provider changed this
+    number" survives as something the report can state instead of something that is lost
+    the moment the newer deck lands.
     """
     from datetime import datetime, timezone
 
     cells = (db.query(BrandExtractionCell)
              .filter(BrandExtractionCell.extraction_id == extraction.id).all())
-    wave_id = {
-        w.code: w.id
-        for w in db.query(BrandWave)
-        .filter(BrandWave.engagement_id == extraction.engagement_id).all()
+    waves = (db.query(BrandWave)
+             .filter(BrandWave.engagement_id == extraction.engagement_id).all())
+    wave_id = {w.code: w.id for w in waves}
+    wave_code = {w.id: w.code for w in waves}
+    # A deck's vintage is the newest wave it carries: a fact about the deck, not about
+    # when someone got round to uploading it.
+    vintage: str = max((str(c.wave_code) for c in cells if c.wave_code), default="")
+    # Read once. Resolving this per cell is a query per figure, and a real deck confirms
+    # several hundred at a time.
+    vintage_of: Dict[str, str] = {
+        str(eid): str(v or "")
+        for eid, v in db.query(BrandObservationReading.extraction_id,
+                               func.max(BrandObservationReading.deck_vintage))
+        .filter(BrandObservationReading.engagement_id == extraction.engagement_id)
+        .group_by(BrandObservationReading.extraction_id).all()
+        if eid
     }
 
     skipped_failed = skipped_dropped = 0
@@ -374,20 +396,51 @@ def confirm_extraction(
             continue
         grouped.setdefault((wid, c.brand_slug, c.metric_code, c.segment), []).append(c)
 
-    created = updated = duplicated = 0
+    created = updated = duplicated = superseded = 0
     disagreements: List[Dict[str, Any]] = []
+    corrections: List[Dict[str, Any]] = []
     for (wid, slug, metric, segment), group in grouped.items():
-        readings = {round(float(x.value), 6) for x in group}
-        if len(readings) > 1:
+        values = {round(float(x.value), 6) for x in group}
+        if len(values) > 1:
             disagreements.append({
                 "marca": slug or "categoría", "metrica": metric, "segmento": segment,
                 "laminas": sorted({x.page_number for x in group if x.page_number}),
-                "valores": sorted(readings),
+                "valores": sorted(values),
             })
             continue
         duplicated += len(group) - 1
         c = group[0]
+        source = (
+            f"{extraction.document_name} · lámina {c.page_number} · "
+            f"extracción asistida confirmada por {confirmed_by}"
+        )
 
+        # 1. The reading. Re-confirming the same deck updates its own row; it never
+        #    touches what another delivery said.
+        reading = (
+            db.query(BrandObservationReading)
+            .filter(
+                BrandObservationReading.extraction_id == extraction.id,
+                BrandObservationReading.wave_id == wid,
+                BrandObservationReading.brand_slug == slug,
+                BrandObservationReading.metric_code == metric,
+                BrandObservationReading.segment == segment,
+            )
+            .first()
+        ) or BrandObservationReading(
+            engagement_id=extraction.engagement_id, extraction_id=extraction.id,
+            wave_id=wid, brand_slug=slug, metric_code=metric, segment=segment,
+        )
+        reading.value = c.value
+        reading.base_n = c.base_n
+        reading.unit = c.unit
+        reading.deck_vintage = vintage
+        reading.source = source
+        if reading.id is None:
+            db.add(reading)
+
+        # 2. The projection. An older deck restating a figure a newer one already
+        #    corrected is on the record but does not become the current value.
         existing = (
             db.query(BrandObservation)
             .filter(
@@ -399,6 +452,26 @@ def confirm_extraction(
             )
             .first()
         )
+        if existing is not None:
+            held_by = vintage_of.get(str(existing.source_extraction_id or ""), "")
+            if held_by > vintage:
+                if round(float(existing.value), 6) not in values:
+                    superseded += 1
+                    corrections.append({
+                        "marca": slug or "categoría", "metrica": metric,
+                        "ola": wave_code.get(wid, ""), "segmento": segment,
+                        "vigente": float(existing.value), "este_mazo": float(c.value),
+                        "mazo_vigente": held_by, "este": vintage,
+                    })
+                continue
+            if round(float(existing.value), 6) not in values:
+                corrections.append({
+                    "marca": slug or "categoría", "metrica": metric,
+                    "ola": wave_code.get(wid, ""), "segmento": segment,
+                    "anterior": float(existing.value), "corregida": float(c.value),
+                    "mazo_vigente": held_by, "este": vintage,
+                })
+
         target = existing or BrandObservation(
             engagement_id=extraction.engagement_id, wave_id=wid,
             brand_slug=slug, metric_code=metric, segment=segment,
@@ -406,10 +479,8 @@ def confirm_extraction(
         target.value = c.value
         target.base_n = c.base_n
         target.unit = c.unit
-        target.source = (
-            f"{extraction.document_name} · lámina {c.page_number} · "
-            f"extracción asistida confirmada por {confirmed_by}"
-        )
+        target.source = source
+        target.source_extraction_id = extraction.id
         if existing:
             updated += 1
         else:
@@ -427,5 +498,9 @@ def confirm_extraction(
         "repetidas_coincidentes": duplicated,
         "omitidas_por_discrepancia": len(disagreements),
         "discrepancias": disagreements,
+        "no_reemplazan_por_mazo_mas_nuevo": superseded,
+        "cifras_que_cambian": corrections,
+        "anada_del_mazo": vintage,
         "confirmada_por": confirmed_by,
     }
+

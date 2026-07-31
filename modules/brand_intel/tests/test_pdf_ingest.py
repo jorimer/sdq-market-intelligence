@@ -512,3 +512,87 @@ def test_confirm_refuses_a_key_the_deck_states_two_ways(db, engagement):
     assert out["discrepancias"][0]["valores"] == [87.0, 91.0]
     assert db.query(BrandObservation).filter(
         BrandObservation.metric_code == "delivery_t2b").count() == 0
+
+
+# ── acumulación entre entregas ────────────────────────────────────────
+
+def _deck(db, engagement, name, by_wave):
+    """Una entrega: adopta las olas que trae y confirma sus cifras."""
+    from modules.brand_intel import service as svc
+
+    svc.adopt_structure(
+        db, engagement,
+        [{"code": w, "label": w, "period_date": f"{w}-01"} for w in by_wave],
+        [{"name": "Focal", "slug": "focal", "is_focal": True}],
+    )
+    rows = [_row("reach_7d", "Focal", w, v) for w, v in by_wave.items()]
+    rep = pipe.ingest_pdf(db, engagement, b"pdf", name,
+                          extractor=_stub_page(rows), renderer=_stub_render())
+    db.commit()
+    extraction = db.query(BrandExtraction).filter(
+        BrandExtraction.id == rep.extraction_id).one()
+    out = pipe.confirm_extraction(db, extraction, "cliente@x.com")
+    db.commit()
+    return out
+
+
+def _value(db, engagement, wave_code):
+    from modules.brand_intel import service as svc
+
+    wid = {w.code: w.id for w in svc.waves(db, engagement.id)}[wave_code]
+    return db.query(BrandObservation).filter(
+        BrandObservation.engagement_id == engagement.id,
+        BrandObservation.wave_id == wid,
+        BrandObservation.metric_code == "reach_7d").one().value
+
+
+def test_a_later_deck_correcting_an_earlier_wave_wins(db, engagement):
+    _deck(db, engagement, "ola3.pdf", {"2025-05": 24.0, "2025-11": 25.0})
+    out = _deck(db, engagement, "ola4.pdf", {"2025-05": 24.0, "2025-11": 26.0,
+                                             "2026-03": 27.0})
+    assert _value(db, engagement, "2025-11") == 26.0
+    assert any(c.get("corregida") == 26.0 for c in out["cifras_que_cambian"])
+
+
+def test_an_older_deck_uploaded_last_does_not_walk_the_figure_back(db, engagement):
+    """The truth must not depend on the order the client happened to upload the files."""
+    _deck(db, engagement, "ola4.pdf", {"2025-05": 24.0, "2025-11": 26.0, "2026-03": 27.0})
+    out = _deck(db, engagement, "ola3.pdf", {"2025-05": 24.0, "2025-11": 25.0})
+
+    assert _value(db, engagement, "2025-11") == 26.0        # sigue corregida
+    assert out["no_reemplazan_por_mazo_mas_nuevo"] == 1     # solo la que discrepa
+    # El mazo viejo no cambia nada: donde coincide no hay qué actualizar, y donde
+    # discrepa no manda. Queda en el registro, no en el valor vigente.
+    assert out["actualizadas"] == 0
+    assert out["creadas"] == 0
+
+
+def test_every_delivery_keeps_what_it_said(db, engagement):
+    """La base conserva el dato original: la corrección no borra la cifra publicada."""
+    from modules.brand_intel.models.models import BrandObservationReading
+    from modules.brand_intel import service as svc
+
+    _deck(db, engagement, "ola3.pdf", {"2025-11": 25.0})
+    _deck(db, engagement, "ola4.pdf", {"2025-11": 26.0, "2026-03": 27.0})
+
+    wid = {w.code: w.id for w in svc.waves(db, engagement.id)}["2025-11"]
+    leidas = sorted(
+        r.value for r in db.query(BrandObservationReading).filter(
+            BrandObservationReading.wave_id == wid,
+            BrandObservationReading.metric_code == "reach_7d").all()
+    )
+    assert leidas == [25.0, 26.0]
+    assert _value(db, engagement, "2025-11") == 26.0
+
+
+def test_reconfirming_the_same_deck_does_not_pile_up_readings(db, engagement):
+    from modules.brand_intel.models.models import BrandObservationReading
+
+    _deck(db, engagement, "ola4.pdf", {"2026-03": 27.0})
+    extraction = db.query(BrandExtraction).order_by(
+        BrandExtraction.created_at.desc()).first()
+    pipe.confirm_extraction(db, extraction, "cliente@x.com")
+    db.commit()
+
+    assert db.query(BrandObservationReading).filter(
+        BrandObservationReading.metric_code == "reach_7d").count() == 1

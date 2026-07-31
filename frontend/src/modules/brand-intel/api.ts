@@ -576,6 +576,22 @@ export interface CellDisagreement {
   valores: number[];
 }
 
+/** Una cifra que esta entrega mueve — o que quiso mover y no le tocaba. */
+export interface FigureChange {
+  marca: string;
+  metrica: string;
+  ola: string;
+  segmento: string;
+  /** Cuando este mazo manda: lo que había y lo que queda. */
+  anterior?: number;
+  corregida?: number;
+  /** Cuando manda un mazo más nuevo: lo vigente y lo que traía este. */
+  vigente?: number;
+  este_mazo?: number;
+  mazo_vigente: string;
+  este: string;
+}
+
 export interface ConfirmResult {
   creadas: number;
   actualizadas: number;
@@ -584,6 +600,11 @@ export interface ConfirmResult {
   repetidas_coincidentes: number;
   omitidas_por_discrepancia: number;
   discrepancias: CellDisagreement[];
+  /** Cifras que este mazo trae distintas pero NO reemplazan: manda una entrega posterior. */
+  no_reemplazan_por_mazo_mas_nuevo: number;
+  cifras_que_cambian: FigureChange[];
+  /** Ola más reciente del mazo: lo que decide la precedencia. */
+  anada_del_mazo: string;
   confirmada_por: string;
 }
 
