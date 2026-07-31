@@ -116,7 +116,10 @@ def render_pages(content: bytes, dpi: int = RENDER_DPI,
     """Render PDF pages to PNG bytes. Requires poppler (already a platform dependency)."""
     from pdf2image import convert_from_bytes
 
-    images = convert_from_bytes(content, dpi=dpi, first_page=first, last_page=last)
+    # pdf2image annotates first_page/last_page as `int` while defaulting both to None;
+    # None is its documented "no bound" value, so the annotation is wrong, not the call.
+    images = convert_from_bytes(content, dpi=dpi,
+                                first_page=first, last_page=last)  # type: ignore[arg-type]
     out: List[bytes] = []
     for img in images:
         buf = io.BytesIO()

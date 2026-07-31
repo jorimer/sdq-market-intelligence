@@ -12,7 +12,7 @@ usable statement.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from modules.brand_intel.engines.metrics import FUNNEL_LADDER, label_for
 
@@ -53,20 +53,27 @@ def weakest_step(focal: BrandFunnel, peers: Sequence[BrandFunnel]) -> Optional[D
     of the funnel: it names *which* step to fix rather than restating that the brand is
     behind overall.
     """
-    best_gap: Optional[Dict[str, object]] = None
+    best_gap: Optional[Dict[str, Any]] = None
+    best_value: Optional[float] = None
     for i, step in enumerate(focal.steps):
         if step.conversion is None:
             continue
-        rivals = [
-            (p.brand, p.steps[i].conversion)
-            for p in peers
-            if p.brand != focal.brand and i < len(p.steps) and p.steps[i].conversion is not None
-        ]
+        # Built with an explicit loop rather than a comprehension so the None check and
+        # the value it admits are the same expression — a filtered comprehension reads
+        # the attribute twice, and only the second read reaches the arithmetic.
+        rivals: List[Tuple[str, float]] = []
+        for p in peers:
+            if p.brand == focal.brand or i >= len(p.steps):
+                continue
+            conv = p.steps[i].conversion
+            if conv is not None:
+                rivals.append((p.brand, conv))
         if not rivals:
             continue
         leader, leader_conv = max(rivals, key=lambda r: r[1])
         gap = leader_conv - step.conversion
-        if best_gap is None or gap > best_gap["gap"]:
+        if best_value is None or gap > best_value:
+            best_value = gap
             best_gap = {
                 "step_label": step.label,
                 "from_metric": step.from_metric,
@@ -84,13 +91,13 @@ def step_gap_series(
     rival_by_wave: Dict[str, BrandFunnel],
     step_index: int,
     waves: Sequence[str],
-) -> List[Dict[str, Optional[float]]]:
+) -> List[Dict[str, Any]]:
     """The same step, tracked across waves against one rival.
 
     A gap that holds wave after wave is structural; one that appears once is noise. This
     is what lets the report distinguish the two instead of asserting either.
     """
-    rows: List[Dict[str, Optional[float]]] = []
+    rows: List[Dict[str, Any]] = []
     for w in waves:
         f = focal_by_wave.get(w)
         r = rival_by_wave.get(w)

@@ -23,7 +23,7 @@ outside the study. The reports must say so wherever the number appears.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 
 @dataclass(frozen=True)
@@ -101,7 +101,7 @@ def category_growth(sizes: Dict[str, float], waves: Sequence[str]) -> Optional[f
 
 def share_shift(
     points: Sequence[SharePoint], waves: Sequence[str]
-) -> List[Dict[str, float]]:
+) -> List[Dict[str, Any]]:
     """Share change per brand between the first and last wave, ranked by gain.
 
     The arithmetic identity behind the reading: shares sum to 100, so the gainers' total
@@ -116,11 +116,11 @@ def share_shift(
     for p in points:
         if p.wave in (first, last):
             idx.setdefault(p.brand, {})[p.wave] = p.share
-    rows = [
+    rows: List[Dict[str, Any]] = [
         {
             "brand": brand,
-            "share_first": vals.get(first),
-            "share_last": vals.get(last),
+            "share_first": vals[first],
+            "share_last": vals[last],
             "delta": vals[last] - vals[first],
         }
         for brand, vals in idx.items()
@@ -155,16 +155,20 @@ def divergence_reading(points: Sequence[DivergencePoint]) -> Optional[Dict[str, 
     Returns None when either series is incomplete — an absent reading rather than a
     guessed one.
     """
-    usable = [p for p in points if p.attitude is not None and p.behaviour is not None]
+    # Unpacked into plain floats rather than filtered in place: the guard and the
+    # arithmetic then live in the same expression, so a later edit cannot separate them.
+    usable = [(p.wave, p.attitude, p.behaviour) for p in points
+              if p.attitude is not None and p.behaviour is not None]
     if len(usable) < 2:
         return None
-    prev, curr = usable[-2], usable[-1]
-    d_att = curr.attitude - prev.attitude
-    d_beh = curr.behaviour - prev.behaviour
+    (prev_wave, att_prev, beh_prev) = usable[-2]
+    (curr_wave, att_curr, beh_curr) = usable[-1]
+    d_att = att_curr - att_prev
+    d_beh = beh_curr - beh_prev
     diverging = (d_att > 0) != (d_beh > 0) and d_att != 0 and d_beh != 0
     return {
-        "wave_from": prev.wave,
-        "wave_to": curr.wave,
+        "wave_from": prev_wave,
+        "wave_to": curr_wave,
         "delta_attitude": d_att,
         "delta_behaviour": d_beh,
         "diverging": diverging,

@@ -185,8 +185,8 @@ def _to_validation_cells(
             continue
 
         try:
-            value = float(row.get("value"))
-        except (TypeError, ValueError):
+            value = float(row["value"])
+        except (KeyError, TypeError, ValueError):
             report.reject(page, "Valor no numérico", f"«{chart_title}»")
             continue
 
@@ -259,19 +259,19 @@ def ingest_pdf(
     model_used = None
     for i, image in enumerate(images, start=1):
         try:
-            page = extract(image, i, resolver.brand_names, resolver.wave_labels)
+            read = extract(image, i, resolver.brand_names, resolver.wave_labels)
         except Exception as exc:  # noqa: BLE001 — one bad page must not lose the document
             logger.warning("Página %s ilegible: %s", i, exc)
             report.page_errors.append({"page": i, "error": str(exc)})
             continue
 
-        model_used = model_used or page.model_used
-        if not page.readable or not page.cells:
+        model_used = model_used or read.model_used
+        if not read.readable or not read.cells:
             report.pages_skipped += 1
             continue
         report.pages_read += 1
-        for row in page.cells:
-            raw.append((i, page.chart_title, row))
+        for row in read.cells:
+            raw.append((i, read.chart_title, row))
 
     # Judge distributions on the full slide first — before the engagement filter drops
     # brands the client does not track. Afterwards the surviving subset could never sum

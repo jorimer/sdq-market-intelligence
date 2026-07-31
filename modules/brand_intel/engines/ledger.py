@@ -112,9 +112,10 @@ def evaluate(
     if a.verdict in ("unscoreable", "base_insufficient"):
         return Verdict(UNEVALUABLE, a.delta, a.threshold, a.note)
 
-    if not a.is_finding:
+    if not a.is_finding or a.delta is None:
         # Covers both 'not_detectable' and the explicit 'marginal' edge case: neither
-        # licenses claiming the decision worked.
+        # licenses claiming the decision worked. A finding always carries a delta —
+        # the check states that rather than trusting it.
         prefix = ("Movimiento en el filo del umbral. " if a.verdict != NOT_DETECTABLE else "")
         return Verdict(INCONCLUSIVE, a.delta, a.threshold, prefix + a.note)
 

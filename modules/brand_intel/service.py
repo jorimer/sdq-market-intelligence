@@ -11,7 +11,7 @@ Nothing in this module fabricates a value. Where an input is missing the output 
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -71,7 +71,7 @@ def can_access(engagement: BrandEngagement, organization_id: Optional[str],
         return True
     if engagement.organization_id is None:
         return False
-    return engagement.organization_id == organization_id
+    return bool(engagement.organization_id == organization_id)
 
 
 def waves(db: Session, engagement_id: str) -> List[BrandWave]:
@@ -402,7 +402,11 @@ def ticket_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
     last_code = [r["wave"] for r in series if r["value"] is not None][-1]
     detail = defl.price_level_factor(inflation, base_d, wave_dates[last_code])
 
-    reals = [(c, real.get(c)) for c in nominal if real.get(c) is not None]
+    reals: List[Tuple[str, float]] = []
+    for c in nominal:
+        rv = real.get(c)
+        if rv is not None:
+            reals.append((c, rv))
     peak_code, peak_val = max(reals, key=lambda kv: kv[1]) if reals else (None, None)
     last_real = real.get(last_code)
     from_peak = ((last_real / peak_val - 1) * 100.0
@@ -591,10 +595,10 @@ def rule_backtest(db: Session, engagement_id: str, segment: str = "total") -> Di
         return {"available": False,
                 "reason": "Historia insuficiente: se requieren al menos tres olas."}
 
-    ranked = sorted(
-        ({"rule": k, "mae": sum(v) / len(v), "n_series": len(v)} for k, v in per_rule.items()),
-        key=lambda r: r["mae"],
-    )
+    scored: List[Dict[str, Any]] = [
+        {"rule": k, "mae": sum(v) / len(v), "n_series": len(v)} for k, v in per_rule.items()
+    ]
+    ranked = sorted(scored, key=lambda r: r["mae"])
     return {
         "available": True,
         "ranking": ranked,
@@ -731,7 +735,8 @@ def scenarios_analysis(
     macro = macro_context(db)
     env = macro["_env"]
 
-    dispersions, sensitivities = [], []
+    disp_objs: List[scn.RuleDispersion] = []
+    sensitivities: List[Dict[str, Any]] = []
     for m in core_metrics():
         values = [r["value"] for r in _series_for(db, engagement_id, m.code, focal, segment)
                   if r["value"] is not None]
@@ -743,11 +748,7 @@ def scenarios_analysis(
 
         d = scn.rule_dispersion(m.code, m.label, values, halfwidth)
         if d:
-            dispersions.append({
-                "metric_code": d.metric_code, "label": d.label,
-                "by_rule": d.by_rule, "spread": d.spread,
-                "robust": d.robust, "note": d.note,
-            })
+            disp_objs.append(d)
         if f:
             s = scn.base_sensitivity(f.point, base)
             sensitivities.append({
@@ -756,10 +757,12 @@ def scenarios_analysis(
                 "rows": s.rows, "note": s.note,
             })
 
-    disp_objs = [
-        scn.RuleDispersion(d["metric_code"], d["label"], d["by_rule"],
-                           d["spread"], d["robust"], d["note"])
-        for d in dispersions
+    # Serialised once, at the boundary. The engine's own objects travel through the
+    # function; only the response needs them flattened.
+    dispersions = [
+        {"metric_code": d.metric_code, "label": d.label, "by_rule": d.by_rule,
+         "spread": d.spread, "robust": d.robust, "note": d.note}
+        for d in disp_objs
     ]
     scenarios = scn.build_scenarios(env)
 
