@@ -5,6 +5,7 @@ import {
   FileText,
   Filter,
   ListChecks,
+  FileSearch,
   Plus,
   Radar,
   Scale,
@@ -33,6 +34,8 @@ import {
   getScenarios,
   getVigilance,
   getEngagementDetail,
+  uploadPdf,
+  listExtractions,
   issueForecast,
   scoreForecasts,
   downloadTemplate,
@@ -48,6 +51,8 @@ import {
   type EngagementDetail,
   type FunnelAnalysis,
   type IngestReport,
+  type ExtractionSummary,
+  type PdfIngestReport,
   type ScenariosAnalysis,
   type SignalFilter,
   type TicketAnalysis,
@@ -55,6 +60,7 @@ import {
 } from "../api";
 import { NewEngagementDrawer } from "../components/NewEngagementDrawer";
 import { DecisionDrawer } from "../components/DecisionDrawer";
+import { ExtractionReviewDrawer } from "../components/ExtractionReviewDrawer";
 
 type Status = "loading" | "error" | "ready";
 
@@ -505,7 +511,11 @@ export function BrandIntelPage() {
   const [showNew, setShowNew] = useState(false);
   const [showDecision, setShowDecision] = useState(false);
   const [forecastMsg, setForecastMsg] = useState<string | null>(null);
+  const [extractions, setExtractions] = useState<ExtractionSummary[]>([]);
+  const [pdfReport, setPdfReport] = useState<PdfIngestReport | null>(null);
+  const [reviewing, setReviewing] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     listEngagements()
@@ -535,6 +545,7 @@ export function BrandIntelPage() {
       ]);
       setDetail(det);
       setCategory(cat);
+      listExtractions(target).then(setExtractions).catch(() => setExtractions([]));
       setFunnel(fun);
       setTicket(tic);
       setSignal(sig);
@@ -595,6 +606,23 @@ export function BrandIntelPage() {
       setForecastMsg("No se pudieron puntuar los pronósticos.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const onUploadPdf = async (file: File) => {
+    setBusy(true);
+    setPdfReport(null);
+    try {
+      const report = await uploadPdf(slug, file);
+      setPdfReport(report);
+      setExtractions(await listExtractions(slug));
+      if (report.extraction_id) setReviewing(report.extraction_id);
+    } catch {
+      setPdfReport(null);
+      setForecastMsg("No se pudo procesar el PDF.");
+    } finally {
+      setBusy(false);
+      if (pdfRef.current) pdfRef.current.value = "";
     }
   };
 
@@ -696,8 +724,26 @@ export function BrandIntelPage() {
               disabled={busy}
               onClick={() => fileRef.current?.click()}
             >
-              <Upload size={15} /> {busy ? "Cargando…" : "Cargar datos"}
+              <Upload size={15} /> {busy ? "Cargando…" : "Excel"}
             </button>
+            <button
+              className="btn btn-ghost text-sm"
+              disabled={busy}
+              onClick={() => pdfRef.current?.click()}
+              title="Lee las láminas del informe y las deja en revisión"
+            >
+              <FileSearch size={15} /> Presentación
+            </button>
+            <input
+              ref={pdfRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onUploadPdf(f);
+              }}
+            />
             <button className="btn btn-primary text-sm" onClick={() => void openReport(slug)}>
               <FileText size={15} /> Informe
             </button>
@@ -740,6 +786,57 @@ export function BrandIntelPage() {
             {ingest.advertencias.map((w, i) => (
               <div key={`w-${i}`} className="text-xs text-muted">
                 {w}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {(pdfReport || extractions.length > 0) && (
+        <Card>
+          <CardHead
+            icon={FileSearch}
+            title="Presentaciones leídas"
+            subtitle="Las cifras extraídas esperan revisión antes de convertirse en datos"
+          />
+          {pdfReport && (
+            <p className="text-sm text-body rounded-lg bg-surface2 p-3 mb-3">
+              {pdfReport.nota_cobertura}
+              {pdfReport.total_rechazadas > 0 && (
+                <span className="text-muted">
+                  {" "}
+                  {pdfReport.total_rechazadas} fila(s) no pudieron mapearse al encargo.
+                </span>
+              )}
+            </p>
+          )}
+          <div className="space-y-2">
+            {extractions.map((x) => (
+              <div
+                key={x.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-hair p-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-ink truncate">{x.document}</div>
+                  <div className="text-xs text-muted mt-0.5">
+                    {x.pages ?? "—"} láminas
+                    {x.summary ? ` · ${x.summary.passed}/${x.summary.total} confirmadas` : ""}
+                    {x.confirmed_by ? ` · confirmada por ${x.confirmed_by}` : ""}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Chip tone={x.status === "confirmed" ? "ok" : "warn"}>
+                    {x.status === "confirmed" ? "Confirmada" : "Pendiente"}
+                  </Chip>
+                  {x.status !== "confirmed" && (
+                    <button
+                      className="btn btn-ghost text-xs"
+                      onClick={() => setReviewing(x.id)}
+                    >
+                      Revisar
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -983,6 +1080,20 @@ export function BrandIntelPage() {
         <NewEngagementDrawer
           onClose={() => setShowNew(false)}
           onCreated={onEngagementCreated}
+        />
+      )}
+
+      {reviewing && (
+        <ExtractionReviewDrawer
+          slug={slug}
+          extractionId={reviewing}
+          onClose={() => setReviewing(null)}
+          onConfirmed={() => {
+            setReviewing(null);
+            setPdfReport(null);
+            void load(slug);
+            listExtractions(slug).then(setExtractions).catch(() => undefined);
+          }}
         />
       )}
 

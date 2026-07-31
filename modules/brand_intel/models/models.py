@@ -19,9 +19,11 @@ computable. An observation without its base can be displayed but can never susta
 verdict — the significance engine treats it as unscoreable rather than assuming a base.
 """
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     Date,
+    DateTime,
     Float,
     Index,
     Integer,
@@ -148,6 +150,73 @@ class BrandDecision(UUIDMixin, Base):
     verdict_note = Column(Text, nullable=True)
     observed_delta = Column(Float, nullable=True)
     detectable_threshold = Column(Float, nullable=True)  # MDD at 95% for that base
+
+
+class BrandExtraction(UUIDMixin, Base):
+    """One ingested presentation: the staging boundary between a PDF and the data.
+
+    Extraction never writes to ``BrandObservation`` directly. A document lands here with
+    its cells (below), gets validated against structural invariants, and only a human
+    confirmation promotes the surviving cells into observations.
+
+    The reason is not caution for its own sake: an extraction error that reaches
+    observations is invisible afterwards — every chart, share and verdict downstream
+    silently inherits it, and nothing in the analysis can tell a mis-read number from a
+    real one. Staging is where that is still cheap to catch.
+    """
+
+    __tablename__ = "brand_extractions"
+    __table_args__ = (
+        Index("ix_brand_extraction_engagement", "engagement_id", "status"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    document_name = Column(String(300), nullable=False)
+    n_pages = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=False, default="draft")
+    # draft | validated | confirmed | rejected
+    model_used = Column(String(60), nullable=True)     # provenance of the vision pass
+    method = Column(String(40), nullable=False, default="vision")
+    # vision | coordinates | vision+coordinates
+    summary = Column(JSON, nullable=True)              # counts by validation outcome
+    note = Column(Text, nullable=True)
+    confirmed_by = Column(String(120), nullable=True)
+    confirmed_at = Column(DateTime, nullable=True)
+
+
+class BrandExtractionCell(UUIDMixin, Base):
+    """One proposed observation, with where it came from and whether it survived checks.
+
+    ``value`` is what was read; ``validation`` is whether an invariant confirmed it. A cell
+    that fails or cannot be checked is still stored — the reviewer needs to see what was
+    read and why it is doubtful, not an empty space where a number should be.
+    """
+
+    __tablename__ = "brand_extraction_cells"
+    __table_args__ = (
+        Index("ix_brand_cell_extraction", "extraction_id", "validation"),
+    )
+
+    extraction_id = Column(String, nullable=False)
+    engagement_id = Column(String, nullable=False)
+    page_number = Column(Integer, nullable=True)
+    chart_label = Column(String(300), nullable=True)   # the slide's own title, as read
+
+    wave_code = Column(String(30), nullable=True)
+    brand_slug = Column(String(60), nullable=True)
+    metric_code = Column(String(60), nullable=False)
+    segment = Column(String(60), nullable=False, default="total")
+    value = Column(Float, nullable=False)
+    base_n = Column(Integer, nullable=True)
+    unit = Column(String(20), nullable=False, default="pct")
+
+    source_method = Column(String(40), nullable=False, default="vision")
+    # vision | coordinates | both  ("both" = the two agreed)
+    validation = Column(String(30), nullable=False, default="unchecked")
+    # passed | failed | unchecked | conflict
+    validation_note = Column(Text, nullable=True)
+    coordinate_value = Column(Float, nullable=True)    # the second source, when available
+    included = Column(Boolean, default=True, nullable=False)  # reviewer's keep/drop
 
 
 class BrandForecast(UUIDMixin, Base):

@@ -59,7 +59,8 @@ from modules.insurance_intel.models.models import (  # noqa: F401
     InsuranceEntity, InsuranceRating, InsuranceSeries, InsuranceSnapshot,
 )
 from modules.brand_intel.models.models import (  # noqa: F401
-    BrandDecision, BrandEngagement, BrandEntity, BrandForecast, BrandObservation, BrandWave,
+    BrandDecision, BrandEngagement, BrandEntity, BrandExtraction, BrandExtractionCell,
+    BrandForecast, BrandObservation, BrandWave,
 )
 # Solo la clase mapeada (los enums Sector/DealType no van aquí: 'Sector' colisiona
 # con sector_intel y Alembic solo necesita la tabla).

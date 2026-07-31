@@ -252,6 +252,63 @@ export interface IngestReport {
   total_rechazadas: number;
 }
 
+/** A presentation read into staging — proposals, not observations. */
+export interface PdfIngestReport {
+  extraction_id: string | null;
+  paginas: { leidas: number; omitidas: number };
+  celdas_extraidas: number;
+  rechazadas: { page: number; reason: string; detail: string }[];
+  errores_por_pagina: { page: number; error: string }[];
+  validacion: {
+    total: number; passed: number; failed: number;
+    unchecked: number; conflict: number; clean: boolean;
+    findings: { kind: string; id: string; detail: string }[];
+  };
+  nota_cobertura: string;
+  total_rechazadas: number;
+}
+
+export type CellValidation = "passed" | "failed" | "unchecked" | "conflict";
+
+export interface ExtractionCell {
+  id: string;
+  page: number | null;
+  chart: string | null;
+  wave: string | null;
+  brand: string | null;
+  metric: string;
+  label: string;
+  segment: string;
+  value: number;
+  base_n: number | null;
+  source_method: string;
+  validation: CellValidation;
+  validation_note: string;
+  included: boolean;
+}
+
+export interface ExtractionDetail {
+  id: string;
+  document: string;
+  status: string;
+  note: string | null;
+  summary: PdfIngestReport["validacion"] | null;
+  cells: ExtractionCell[];
+}
+
+export interface ExtractionSummary {
+  id: string;
+  document: string;
+  pages: number | null;
+  status: string;
+  method: string;
+  model: string | null;
+  summary: PdfIngestReport["validacion"] | null;
+  note: string | null;
+  confirmed_by: string | null;
+  created_at: string | null;
+}
+
 export interface Feasibility {
   feasible: boolean;
   detectable_threshold: number | null;
@@ -401,6 +458,44 @@ export async function checkDecision(
   },
 ): Promise<Feasibility> {
   const { data } = await client.post(`${base}/engagements/${slug}/decisions/check`, body);
+  return data;
+}
+
+export async function uploadPdf(
+  slug: string, file: File, maxPages?: number,
+): Promise<PdfIngestReport> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await client.post(`${base}/engagements/${slug}/ingest-pdf`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    params: maxPages ? { max_pages: maxPages } : undefined,
+    // Vision reads one slide at a time; a full deck legitimately takes minutes.
+    timeout: 20 * 60 * 1000,
+  });
+  return data;
+}
+
+export async function listExtractions(slug: string): Promise<ExtractionSummary[]> {
+  const { data } = await client.get(`${base}/engagements/${slug}/extractions`);
+  return data;
+}
+
+export async function getExtraction(
+  slug: string, extractionId: string,
+): Promise<ExtractionDetail> {
+  const { data } = await client.get(
+    `${base}/engagements/${slug}/extractions/${extractionId}`,
+  );
+  return data;
+}
+
+export async function confirmExtraction(
+  slug: string, extractionId: string,
+  decisions: { cell_id: string; included: boolean }[],
+): Promise<Record<string, number | string>> {
+  const { data } = await client.post(
+    `${base}/engagements/${slug}/extractions/${extractionId}/confirm`, decisions,
+  );
   return data;
 }
 

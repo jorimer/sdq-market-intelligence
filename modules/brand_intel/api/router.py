@@ -27,7 +27,13 @@ from modules.brand_intel import report as rpt
 from modules.brand_intel import service as svc
 from modules.brand_intel.ingest.excel_ingest import ingest_workbook
 from modules.brand_intel.ingest.template import build_template, template_filename
-from modules.brand_intel.models.models import BrandDecision, BrandEngagement
+from modules.brand_intel.engines.metrics import label_for
+from modules.brand_intel.models.models import (
+    BrandDecision,
+    BrandEngagement,
+    BrandExtraction,
+    BrandExtractionCell,
+)
 
 logger = logging.getLogger("sdq.api.brand_intel")
 
@@ -183,6 +189,121 @@ async def ingest(
                             detail=f"No se pudo leer el archivo: {exc}") from exc
     db.commit()
     return report.as_dict()
+
+
+@router.post("/engagements/{slug}/ingest-pdf",
+             summary="Cargar una presentación (extracción asistida a revisión)")
+async def ingest_pdf(
+    slug: str,
+    file: UploadFile = File(..., description="Presentación .pdf del proveedor"),
+    max_pages: Optional[int] = Query(None, ge=1, le=200,
+                                     description="Limitar a las primeras N láminas"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Read a presentation into staging. Nothing reaches the observations table here."""
+    import asyncio
+
+    from modules.brand_intel.ingest.pdf_pipeline import ingest_pdf as run_ingest
+
+    eng = _resolve(db, slug, user)
+    if not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Se espera un archivo .pdf.")
+    content = await file.read()
+
+    try:
+        # The vision pass is synchronous and long; keep it off the event loop.
+        report = await asyncio.to_thread(
+            run_ingest, db, eng, content, file.filename or "documento.pdf", max_pages,
+        )
+    except Exception as exc:  # noqa: BLE001 — surface the failure, never half-commit
+        db.rollback()
+        logger.exception("Fallo la extracción de %s", slug)
+        raise HTTPException(status_code=400,
+                            detail=f"No se pudo procesar el PDF: {exc}") from exc
+    db.commit()
+    return report.as_dict()
+
+
+@router.get("/engagements/{slug}/extractions", summary="Extracciones del encargo")
+def list_extractions(slug: str, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)) -> List[Dict[str, Any]]:
+    eng = _resolve(db, slug, user)
+    rows = (db.query(BrandExtraction)
+            .filter(BrandExtraction.engagement_id == eng.id)
+            .order_by(BrandExtraction.created_at.desc()).all())
+    return [
+        {"id": r.id, "document": r.document_name, "pages": r.n_pages,
+         "status": r.status, "method": r.method, "model": r.model_used,
+         "summary": r.summary, "note": r.note,
+         "confirmed_by": r.confirmed_by,
+         "created_at": r.created_at.isoformat() if r.created_at else None}
+        for r in rows
+    ]
+
+
+@router.get("/engagements/{slug}/extractions/{extraction_id}",
+            summary="Celdas propuestas, para revisión")
+def extraction_cells(slug: str, extraction_id: str, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    eng = _resolve(db, slug, user)
+    row = (db.query(BrandExtraction)
+           .filter(BrandExtraction.id == extraction_id,
+                   BrandExtraction.engagement_id == eng.id).first())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Extracción no encontrada.")
+    cells = (db.query(BrandExtractionCell)
+             .filter(BrandExtractionCell.extraction_id == row.id)
+             .order_by(BrandExtractionCell.page_number).all())
+    return {
+        "id": row.id, "document": row.document_name, "status": row.status,
+        "note": row.note, "summary": row.summary,
+        "cells": [
+            {"id": c.id, "page": c.page_number, "chart": c.chart_label,
+             "wave": c.wave_code, "brand": c.brand_slug, "metric": c.metric_code,
+             "label": label_for(c.metric_code), "segment": c.segment,
+             "value": c.value, "base_n": c.base_n,
+             "source_method": c.source_method, "validation": c.validation,
+             "validation_note": c.validation_note, "included": c.included}
+            for c in cells
+        ],
+    }
+
+
+class CellDecision(BaseModel):
+    cell_id: str
+    included: bool
+
+
+@router.post("/engagements/{slug}/extractions/{extraction_id}/confirm",
+             summary="Confirmar la extracción y promover a observaciones")
+def confirm_extraction(
+    slug: str, extraction_id: str,
+    decisions: Optional[List[CellDecision]] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    from modules.brand_intel.ingest.pdf_pipeline import confirm_extraction as run_confirm
+
+    eng = _resolve(db, slug, user)
+    row = (db.query(BrandExtraction)
+           .filter(BrandExtraction.id == extraction_id,
+                   BrandExtraction.engagement_id == eng.id).first())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Extracción no encontrada.")
+    if row.status == "confirmed":
+        raise HTTPException(status_code=409, detail="Esta extracción ya fue confirmada.")
+
+    for d in decisions or []:
+        cell = (db.query(BrandExtractionCell)
+                .filter(BrandExtractionCell.id == d.cell_id,
+                        BrandExtractionCell.extraction_id == row.id).first())
+        if cell is not None:
+            cell.included = d.included
+
+    out = run_confirm(db, row, confirmed_by=getattr(user, "email", "—"))
+    db.commit()
+    return out
 
 
 # ── analysis ──────────────────────────────────────────────────────────
