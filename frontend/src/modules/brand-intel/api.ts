@@ -262,8 +262,81 @@ export interface Feasibility {
 
 const base = "/brand-intel";
 
+export interface EngagementInput {
+  slug: string;
+  client_name: string;
+  focal_brand: string;
+  market?: string;
+  category?: string;
+  research_provider?: string;
+}
+
+export interface EngagementDetail {
+  slug: string;
+  client: string;
+  focal_brand: string;
+  market: string;
+  category: string | null;
+  provider: string | null;
+  waves: { code: string; label: string; order: number; period: string | null; base: number | null }[];
+  brands: { slug: string; name: string; is_focal: boolean; in_category_set: boolean }[];
+}
+
+export interface DecisionInput {
+  title: string;
+  metric_code: string;
+  baseline_wave_code: string;
+  rationale?: string;
+  segment?: string;
+  brand_slug?: string | null;
+  target_wave_code?: string;
+  success_threshold?: number;
+  owner?: string;
+}
+
+export interface ForecastIssued {
+  issued: { metric: string; label: string; point: number; lo: number; hi: number;
+            rule: string; basis: string }[];
+  skipped: { metric: string; label: string; reason: string }[];
+  target_wave?: string;
+  error?: string;
+}
+
 export async function listEngagements(): Promise<Engagement[]> {
   const { data } = await client.get(`${base}/engagements`);
+  return data;
+}
+
+export async function getEngagementDetail(slug: string): Promise<EngagementDetail> {
+  const { data } = await client.get(`${base}/engagements/${slug}`);
+  return data;
+}
+
+export async function createEngagement(
+  payload: EngagementInput,
+): Promise<{ slug: string; id: string }> {
+  const { data } = await client.post(`${base}/engagements`, payload);
+  return data;
+}
+
+export async function createDecision(
+  slug: string, payload: DecisionInput,
+): Promise<{ id: string; status: DecisionStatus; feasibility: Feasibility }> {
+  const { data } = await client.post(`${base}/engagements/${slug}/decisions`, payload);
+  return data;
+}
+
+export async function issueForecast(slug: string, wave: string): Promise<ForecastIssued> {
+  const { data } = await client.post(
+    `${base}/engagements/${slug}/forecast/issue`, null, { params: { wave } },
+  );
+  return data;
+}
+
+export async function scoreForecasts(
+  slug: string,
+): Promise<{ scored: { label: string; actual: number; inside_band: boolean; note: string }[]; n: number }> {
+  const { data } = await client.post(`${base}/engagements/${slug}/forecast/score`);
   return data;
 }
 

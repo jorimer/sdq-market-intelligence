@@ -5,6 +5,7 @@ import {
   FileText,
   Filter,
   ListChecks,
+  Plus,
   Radar,
   Scale,
   Upload,
@@ -31,6 +32,9 @@ import {
   getAttribution,
   getScenarios,
   getVigilance,
+  getEngagementDetail,
+  issueForecast,
+  scoreForecasts,
   downloadTemplate,
   openReport,
   uploadWorkbook,
@@ -41,6 +45,7 @@ import {
   type DecisionStatus,
   type DecisionsPayload,
   type Engagement,
+  type EngagementDetail,
   type FunnelAnalysis,
   type IngestReport,
   type ScenariosAnalysis,
@@ -48,6 +53,8 @@ import {
   type TicketAnalysis,
   type VigilanceAnalysis,
 } from "../api";
+import { NewEngagementDrawer } from "../components/NewEngagementDrawer";
+import { DecisionDrawer } from "../components/DecisionDrawer";
 
 type Status = "loading" | "error" | "ready";
 
@@ -494,6 +501,10 @@ export function BrandIntelPage() {
   const [vigilance, setVigilance] = useState<VigilanceAnalysis | null>(null);
   const [ingest, setIngest] = useState<IngestReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [detail, setDetail] = useState<EngagementDetail | null>(null);
+  const [showNew, setShowNew] = useState(false);
+  const [showDecision, setShowDecision] = useState(false);
+  const [forecastMsg, setForecastMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -510,7 +521,8 @@ export function BrandIntelPage() {
     if (!target) return;
     setStatus("loading");
     try {
-      const [cat, fun, tic, sig, dec, bt, att, scn, vig] = await Promise.all([
+      const [det, cat, fun, tic, sig, dec, bt, att, scn, vig] = await Promise.all([
+        getEngagementDetail(target),
         getCategory(target),
         getFunnel(target),
         getTicket(target),
@@ -521,6 +533,7 @@ export function BrandIntelPage() {
         getScenarios(target),
         getVigilance(target),
       ]);
+      setDetail(det);
       setCategory(cat);
       setFunnel(fun);
       setTicket(tic);
@@ -539,6 +552,51 @@ export function BrandIntelPage() {
   useEffect(() => {
     if (slug) void load(slug);
   }, [slug, load]);
+
+  const onEngagementCreated = async (newSlug: string) => {
+    setShowNew(false);
+    const rows = await listEngagements();
+    setEngagements(rows);
+    setSlug(newSlug);
+  };
+
+  const onIssueForecast = async () => {
+    const target = detail?.waves?.[detail.waves.length - 1]?.code;
+    if (!target) return;
+    setBusy(true);
+    setForecastMsg(null);
+    try {
+      const out = await issueForecast(slug, target);
+      setForecastMsg(
+        out.issued.length
+          ? `Pronóstico congelado para ${out.target_wave}: ${out.issued.length} indicador(es), regla «${out.issued[0].rule}».`
+          : "No se pudo emitir: historia o base insuficiente.",
+      );
+      await load(slug);
+    } catch {
+      setForecastMsg("No se pudo emitir el pronóstico.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onScoreForecasts = async () => {
+    setBusy(true);
+    setForecastMsg(null);
+    try {
+      const out = await scoreForecasts(slug);
+      setForecastMsg(
+        out.n
+          ? `${out.n} pronóstico(s) puntuado(s) contra el dato real.`
+          : "No hay pronósticos pendientes con dato para puntuar.",
+      );
+      await load(slug);
+    } catch {
+      setForecastMsg("No se pudieron puntuar los pronósticos.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const onUpload = async (file: File) => {
     setBusy(true);
@@ -568,11 +626,24 @@ export function BrandIntelPage() {
 
   if (!engagements.length) {
     return (
-      <StateBlock
-        kind="empty"
-        title="Sin encargos"
-        message="Aún no hay encargos de tracker cargados para tu organización."
-      />
+      <>
+        <StateBlock
+          kind="empty"
+          title="Sin encargos"
+          message="Un encargo agrupa las olas, marcas y observaciones de un tracker. Crea el primero para empezar a cargar datos."
+          action={
+            <button className="btn btn-primary" onClick={() => setShowNew(true)}>
+              <Plus size={15} /> Nuevo encargo
+            </button>
+          }
+        />
+        {showNew && (
+          <NewEngagementDrawer
+            onClose={() => setShowNew(false)}
+            onCreated={onEngagementCreated}
+          />
+        )}
+      </>
     );
   }
 
@@ -588,15 +659,21 @@ export function BrandIntelPage() {
         title={current ? current.focal_brand : "Brand Intel"}
         sub={
           current
-            ? `${current.category ?? "—"} · ${current.market} · ${current.waves} olas` +
-              (current.provider ? ` · Tracker: ${current.provider}` : "")
+            ? [
+                current.category,
+                current.market,
+                `${current.waves} ola${current.waves === 1 ? "" : "s"}`,
+                current.provider ? `Tracker: ${current.provider}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
             : undefined
         }
         right={
           <div className="flex flex-wrap items-center gap-2">
             {engagements.length > 1 && (
               <select
-                className="input text-sm"
+                className="field text-sm w-auto"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 aria-label="Encargo"
@@ -608,6 +685,9 @@ export function BrandIntelPage() {
                 ))}
               </select>
             )}
+            <button className="btn btn-ghost text-sm" onClick={() => setShowNew(true)}>
+              <Plus size={15} /> Encargo
+            </button>
             <button className="btn btn-ghost text-sm" onClick={() => void downloadTemplate(slug)}>
               <Download size={15} /> Plantilla
             </button>
@@ -851,6 +931,15 @@ export function BrandIntelPage() {
               icon={ListChecks}
               title="Ledger de decisiones"
               subtitle="Decisiones del cliente, con veredicto"
+              right={
+                <button
+                  className="btn btn-ghost text-xs"
+                  onClick={() => setShowDecision(true)}
+                  disabled={!signal?.rows?.length}
+                >
+                  <Plus size={14} /> Registrar
+                </button>
+              }
             />
             {decisions && <DecisionsBlock data={decisions} />}
           </Card>
@@ -859,11 +948,58 @@ export function BrandIntelPage() {
               icon={Activity}
               title="Regla de pronóstico"
               subtitle="Seleccionada por backtest sobre la historia del encargo"
+              right={
+                <div className="flex items-center gap-1.5">
+                  <button
+                    className="btn btn-ghost text-xs"
+                    onClick={() => void onIssueForecast()}
+                    disabled={busy || !detail?.waves?.length}
+                    title="Congela un pronóstico para la última ola del encargo"
+                  >
+                    Congelar
+                  </button>
+                  <button
+                    className="btn btn-ghost text-xs"
+                    onClick={() => void onScoreForecasts()}
+                    disabled={busy}
+                    title="Puntúa los pronósticos pendientes contra el dato real"
+                  >
+                    Puntuar
+                  </button>
+                </div>
+              }
             />
+            {forecastMsg && (
+              <p className="text-xs text-body rounded-lg bg-surface2 p-2.5 mb-3">
+                {forecastMsg}
+              </p>
+            )}
             {backtest && <BacktestBlock data={backtest} />}
           </Card>
         </div>
       </div>
+
+      {showNew && (
+        <NewEngagementDrawer
+          onClose={() => setShowNew(false)}
+          onCreated={onEngagementCreated}
+        />
+      )}
+
+      {showDecision && detail && (
+        <DecisionDrawer
+          slug={slug}
+          dataWaves={category?.waves ?? []}
+          allWaves={detail.waves.map((w) => ({ code: w.code, label: w.label }))}
+          metrics={signal?.rows ?? []}
+          focalBrand={detail.brands.find((b) => b.is_focal)?.slug ?? null}
+          onClose={() => setShowDecision(false)}
+          onCreated={() => {
+            setShowDecision(false);
+            void load(slug);
+          }}
+        />
+      )}
     </div>
   );
 }
