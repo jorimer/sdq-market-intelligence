@@ -29,6 +29,7 @@ from modules.brand_intel.ingest.excel_ingest import ingest_workbook
 from modules.brand_intel.ingest.template import build_template, template_filename
 from modules.brand_intel.engines.metrics import label_for
 from modules.brand_intel.models.models import (
+    BrandClient,
     BrandDecision,
     BrandEngagement,
     BrandExtraction,
@@ -60,8 +61,18 @@ def _resolve(db: Session, slug: str, user: User) -> BrandEngagement:
 
 # ── schemas ───────────────────────────────────────────────────────────
 
+class ClientIn(BaseModel):
+    code: str = Field(..., min_length=2, max_length=40)
+    name: str = Field(..., min_length=2, max_length=200)
+    organization_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class EngagementIn(BaseModel):
     slug: str = Field(..., min_length=2, max_length=60)
+    # El cliente al que pertenece el estudio. Se acepta su código o su id; si no viene,
+    # `client_name` sigue funcionando y el estudio queda sin agrupar, como los anteriores.
+    client: Optional[str] = None
     client_name: str = Field(..., min_length=2, max_length=200)
     focal_brand: str = Field(..., min_length=1, max_length=120)
     market: str = "República Dominicana"
@@ -91,6 +102,38 @@ class FeasibilityIn(BaseModel):
     success_threshold: Optional[float] = None
 
 
+# ── clientes ──────────────────────────────────────────────────────────
+
+@router.get("/clients", summary="Clientes visibles para el usuario")
+def list_clients(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    org = None if _is_staff(user) else getattr(user, "organization_id", None)
+    rows = svc.clients(db, organization_id=org)
+    counts = svc.engagement_counts_by_client(db, org)
+    return [
+        {"code": c.code, "name": c.name, "id": c.id,
+         "organization_id": c.organization_id,
+         "engagements": counts.get(str(c.id), 0)}
+        for c in rows
+    ]
+
+
+@router.post("/clients", summary="Crear un cliente", status_code=201)
+def create_client(
+    payload: ClientIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    if svc.get_client(db, payload.code):
+        raise HTTPException(status_code=409,
+                            detail=f"Ya existe un cliente con el código '{payload.code}'.")
+    row = BrandClient(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    return {"code": row.code, "name": row.name, "id": row.id}
+
+
 # ── engagements ───────────────────────────────────────────────────────
 
 @router.get("/engagements", summary="Encargos visibles para el usuario")
@@ -99,6 +142,7 @@ def list_engagements(
 ) -> List[Dict[str, Any]]:
     org = None if _is_staff(user) else getattr(user, "organization_id", None)
     rows = svc.list_engagements(db, organization_id=org)
+    codes = {str(c.id): c.code for c in svc.clients(db, organization_id=org)}
     return [
         {
             "slug": e.slug, "client": e.client_name, "focal_brand": e.focal_brand,
@@ -106,6 +150,7 @@ def list_engagements(
             # Waves WITH data: a projection wave holding a frozen forecast is not a wave
             # the client has results for, and counting it overstates the engagement.
             "waves": len(svc.data_waves(db, e.id)),
+            "client_code": codes.get(str(e.client_id)) if e.client_id else None,
         }
         for e in rows
     ]
@@ -119,10 +164,22 @@ def create_engagement(
 ) -> Dict[str, Any]:
     if svc.get_engagement(db, payload.slug):
         raise HTTPException(status_code=409, detail=f"Ya existe el encargo '{payload.slug}'.")
-    eng = BrandEngagement(**payload.model_dump())
+    data = payload.model_dump()
+    ref = data.pop("client", None)
+    client = svc.get_client(db, ref) if ref else None
+    if ref and client is None:
+        raise HTTPException(status_code=404, detail=f"Cliente '{ref}' no encontrado.")
+    if client is not None:
+        data["client_id"] = client.id
+        data["client_name"] = client.name
+        # La organización se hereda del cliente salvo que se declare una: es lo que evita
+        # crear un estudio invisible para el propio cliente por olvidar el campo.
+        if not data.get("organization_id"):
+            data["organization_id"] = client.organization_id
+    eng = BrandEngagement(**data)
     db.add(eng)
     db.commit()
-    return {"slug": eng.slug, "id": eng.id}
+    return {"slug": eng.slug, "id": eng.id, "client": client.code if client else None}
 
 
 @router.get("/engagements/{slug}", summary="Detalle del encargo")
@@ -143,6 +200,13 @@ def engagement_detail(
             {"slug": b.slug, "name": b.name, "is_focal": b.is_focal,
              "in_category_set": b.in_category_set}
             for b in svc.brands(db, eng.id)
+        ],
+        # Vacío = el encargo es un tracker de marca y usa el diccionario canónico.
+        "metrics": [
+            {"code": m.code, "label": m.label, "kind": m.kind, "is_core": m.is_core,
+             "supports_bands": m.supports_bands}
+            for m in (svc.vocabulary_for(db, str(eng.id)).metrics
+                      if svc.has_own_metrics(db, str(eng.id)) else [])
         ],
     }
 
@@ -259,6 +323,11 @@ async def discover_structure(
     sample: int = Query(5, ge=1, le=15,
                         description="Cuántas láminas leer para el set de marcas"),
     with_brands: bool = Query(True, description="Incluir el pase de marcas (usa el modelo)"),
+    with_metrics: bool = Query(
+        False,
+        description="Proponer también las métricas del estudio. Solo hace falta si NO es "
+                    "un tracker de marca: un tracker usa el diccionario canónico.",
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(require_role(UserRole.analyst)),
 ) -> Dict[str, Any]:
@@ -281,6 +350,7 @@ async def discover_structure(
     try:
         proposal = await asyncio.to_thread(
             dsc.discover_structure, content, sample, None, None, with_brands,
+            with_metrics,
         )
     except Exception as exc:  # noqa: BLE001 — the caller must see why, not a blank panel
         logger.exception("Fallo el descubrimiento de estructura en %s", slug)
@@ -303,9 +373,23 @@ class BrandIn(BaseModel):
     in_category_set: bool = True
 
 
+class MetricIn(BaseModel):
+    code: str = Field(..., min_length=1, max_length=60)
+    label: str = Field(..., min_length=1, max_length=160)
+    # Sin tipo válido se guarda como conteo: `proportion` es el único que habilita banda
+    # de confianza, y adivinarlo inventa precisión que el estudio no tiene.
+    kind: str = Field("count", max_length=20)
+    is_core: bool = False
+    higher_is_better: bool = True
+    category_denominator: bool = False
+    funnel_order: Optional[int] = Field(None, ge=1, le=50)
+    description: Optional[str] = None
+
+
 class StructureIn(BaseModel):
     waves: List[WaveIn] = Field(default_factory=list)
     brands: List[BrandIn] = Field(default_factory=list)
+    metrics: List[MetricIn] = Field(default_factory=list)
 
 
 @router.post("/engagements/{slug}/structure",
@@ -318,14 +402,16 @@ def adopt_structure(
 ) -> Dict[str, Any]:
     """Create the engagement's waves and brands from a reviewed proposal."""
     eng = _resolve(db, slug, user)
-    if not payload.waves and not payload.brands:
-        raise HTTPException(status_code=400,
-                            detail="No se recibió ninguna ola ni marca que adoptar.")
+    if not payload.waves and not payload.brands and not payload.metrics:
+        raise HTTPException(
+            status_code=400,
+            detail="No se recibió ninguna ola, marca ni métrica que adoptar.")
     try:
         result = svc.adopt_structure(
             db, eng,
             [w.model_dump() for w in payload.waves],
             [b.model_dump() for b in payload.brands],
+            [m.model_dump() for m in payload.metrics],
         )
     except ValueError as exc:
         db.rollback()

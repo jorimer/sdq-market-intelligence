@@ -29,22 +29,31 @@ from modules.brand_intel.engines import ledger as ldg
 from modules.brand_intel.engines import significance as sig
 from modules.brand_intel.engines.metrics import (
     FUNNEL_LADDER,
+    TRACKER_VOCABULARY,
+    MetricDef,
+    Vocabulary,
     core_metrics,
     get_metric,
     label_for,
 )
 from modules.brand_intel.models.models import (
+    BrandClient,
     BrandDecision,
     BrandEngagement,
     BrandEntity,
+    BrandMetric,
     BrandExtraction,
     BrandExtractionCell,
     BrandForecast,
     BrandObservation,
+    BrandObservationReading,
     BrandWave,
 )
 
 logger = logging.getLogger("sdq.brand_intel")
+
+#: Los tipos que `MetricDef.kind` admite. Solo `proportion` habilita banda.
+_METRIC_KINDS = {"proportion", "index", "currency", "count"}
 
 REACH_METRIC = "reach_7d"
 ATTITUDE_METRIC = "favourite_place"
@@ -121,9 +130,11 @@ def brands(db: Session, engagement_id: str) -> List[BrandEntity]:
 _OWNED_BY_ENGAGEMENT = (
     BrandExtractionCell,
     BrandExtraction,
+    BrandObservationReading,
     BrandForecast,
     BrandDecision,
     BrandObservation,
+    BrandMetric,
     BrandEntity,
     BrandWave,
 )
@@ -151,6 +162,88 @@ def delete_engagement(db: Session, engagement: BrandEngagement) -> Dict[str, int
     return removed
 
 
+def client_code(name: str) -> str:
+    """Un código legible desde el nombre. Se propone; se puede editar antes de crear."""
+    decomposed = unicodedata.normalize("NFD", name or "")
+    stripped = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+    code = re.sub(r"[^A-Z0-9]+", "-", stripped.upper()).strip("-")
+    return (code or "CLIENTE")[:40]
+
+
+def clients(db: Session, organization_id: Optional[str] = None) -> List[BrandClient]:
+    """Clientes visibles. ``None`` = staff de la plataforma, ve todos.
+
+    Filtra por la organización del cliente solo para no ofrecer a un usuario clientes que
+    nunca podrá abrir; el permiso real sigue resolviéndose sobre el encargo.
+    """
+    q = db.query(BrandClient).filter(BrandClient.is_active.is_(True))
+    if organization_id is not None:
+        q = q.filter(BrandClient.organization_id == organization_id)
+    return q.order_by(BrandClient.name).all()
+
+
+def get_client(db: Session, code_or_id: str) -> Optional[BrandClient]:
+    return (
+        db.query(BrandClient)
+        .filter(BrandClient.is_active.is_(True))
+        .filter((BrandClient.code == code_or_id) | (BrandClient.id == code_or_id))
+        .first()
+    )
+
+
+def engagement_counts_by_client(
+    db: Session, organization_id: Optional[str] = None
+) -> Dict[str, int]:
+    """Cuántos estudios cuelgan de cada cliente, para el selector."""
+    q = db.query(BrandEngagement).filter(BrandEngagement.is_active.is_(True))
+    if organization_id is not None:
+        q = q.filter(BrandEngagement.organization_id == organization_id)
+    out: Dict[str, int] = {}
+    for e in q.all():
+        if e.client_id:
+            out[str(e.client_id)] = out.get(str(e.client_id), 0) + 1
+    return out
+
+
+def has_own_metrics(db: Session, engagement_id: str) -> bool:
+    """Whether this engagement declares its own vocabulary — i.e. is not a tracker."""
+    return db.query(BrandMetric).filter(
+        BrandMetric.engagement_id == engagement_id).first() is not None
+
+
+def vocabulary_for(db: Session, engagement_id: str) -> Vocabulary:
+    """The metric vocabulary this engagement is read and scored against.
+
+    An engagement that declares its own metrics is a study that is not a brand tracker;
+    one that declares none falls back to the tracker vocabulary, which is what keeps this
+    invisible to everything already loaded.
+    """
+    rows = (
+        db.query(BrandMetric)
+        .filter(BrandMetric.engagement_id == engagement_id)
+        .order_by(BrandMetric.sort_order, BrandMetric.code)
+        .all()
+    )
+    if not rows:
+        return TRACKER_VOCABULARY
+    ladder = [str(r.code) for r in sorted(
+        (r for r in rows if r.funnel_order is not None),
+        key=lambda r: int(r.funnel_order or 0),
+    )]
+    return Vocabulary(
+        metrics=tuple(
+            MetricDef(
+                code=str(r.code), label=str(r.label), kind=str(r.kind),
+                is_core=bool(r.is_core), higher_is_better=bool(r.higher_is_better),
+                category_denominator=bool(r.category_denominator),
+                description=str(r.description or ""),
+            )
+            for r in rows
+        ),
+        ladder=tuple(ladder),
+    )
+
+
 def brand_slug(name: str) -> str:
     """Fold a printed brand name into a stable key.
 
@@ -172,6 +265,7 @@ def adopt_structure(
     engagement: BrandEngagement,
     waves_in: Sequence[Dict[str, Any]],
     brands_in: Sequence[Dict[str, Any]],
+    metrics_in: Sequence[Dict[str, Any]] = (),
 ) -> Dict[str, Any]:
     """Create the engagement's waves and brands from a reviewed proposal.
 
@@ -239,6 +333,38 @@ def adopt_structure(
             db.add(brand)
             created_b += 1
 
+    created_m = updated_m = 0
+    for order, item in enumerate(metrics_in, start=1):
+        code = (item.get("code") or "").strip()
+        if not code:
+            continue
+        known = (
+            db.query(BrandMetric)
+            .filter(BrandMetric.engagement_id == engagement.id, BrandMetric.code == code)
+            .first()
+        )
+        metric = known or BrandMetric(engagement_id=engagement.id, code=code)
+        metric.label = (item.get("label") or code).strip()[:160]
+        # An unrecognised kind must not silently become a proportion: that is the one
+        # value that unlocks confidence bands, and inventing precision is the failure
+        # this whole vocabulary exists to prevent.
+        kind = str(item.get("kind") or "").strip()
+        metric.kind = kind if kind in _METRIC_KINDS else "count"
+        if kind and kind not in _METRIC_KINDS:
+            warnings.append(f"Métrica '{code}': tipo '{kind}' desconocido; se guarda como "
+                            "conteo, que no admite banda de confianza.")
+        metric.is_core = bool(item.get("is_core"))
+        metric.higher_is_better = bool(item.get("higher_is_better", True))
+        metric.category_denominator = bool(item.get("category_denominator"))
+        metric.funnel_order = item.get("funnel_order")
+        metric.description = item.get("description") or None
+        metric.sort_order = order
+        if known:
+            updated_m += 1
+        else:
+            db.add(metric)
+            created_m += 1
+
     db.flush()
 
     # Chronology is recomputed over the whole set, not just the rows in this call: a
@@ -255,6 +381,7 @@ def adopt_structure(
     return {
         "waves_created": created_w, "waves_updated": updated_w,
         "brands_created": created_b, "brands_updated": updated_b,
+        "metrics_created": created_m, "metrics_updated": updated_m,
         "warnings": warnings,
     }
 

@@ -512,3 +512,151 @@ def test_confirm_refuses_a_key_the_deck_states_two_ways(db, engagement):
     assert out["discrepancias"][0]["valores"] == [87.0, 91.0]
     assert db.query(BrandObservation).filter(
         BrandObservation.metric_code == "delivery_t2b").count() == 0
+
+
+# ── acumulación entre entregas ────────────────────────────────────────
+
+def _deck(db, engagement, name, by_wave):
+    """Una entrega: adopta las olas que trae y confirma sus cifras."""
+    from modules.brand_intel import service as svc
+
+    svc.adopt_structure(
+        db, engagement,
+        [{"code": w, "label": w, "period_date": f"{w}-01"} for w in by_wave],
+        [{"name": "Focal", "slug": "focal", "is_focal": True}],
+    )
+    rows = [_row("reach_7d", "Focal", w, v) for w, v in by_wave.items()]
+    rep = pipe.ingest_pdf(db, engagement, b"pdf", name,
+                          extractor=_stub_page(rows), renderer=_stub_render())
+    db.commit()
+    extraction = db.query(BrandExtraction).filter(
+        BrandExtraction.id == rep.extraction_id).one()
+    out = pipe.confirm_extraction(db, extraction, "cliente@x.com")
+    db.commit()
+    return out
+
+
+def _value(db, engagement, wave_code):
+    from modules.brand_intel import service as svc
+
+    wid = {w.code: w.id for w in svc.waves(db, engagement.id)}[wave_code]
+    return db.query(BrandObservation).filter(
+        BrandObservation.engagement_id == engagement.id,
+        BrandObservation.wave_id == wid,
+        BrandObservation.metric_code == "reach_7d").one().value
+
+
+def test_a_later_deck_correcting_an_earlier_wave_wins(db, engagement):
+    _deck(db, engagement, "ola3.pdf", {"2025-05": 24.0, "2025-11": 25.0})
+    out = _deck(db, engagement, "ola4.pdf", {"2025-05": 24.0, "2025-11": 26.0,
+                                             "2026-03": 27.0})
+    assert _value(db, engagement, "2025-11") == 26.0
+    assert any(c.get("corregida") == 26.0 for c in out["cifras_que_cambian"])
+
+
+def test_an_older_deck_uploaded_last_does_not_walk_the_figure_back(db, engagement):
+    """The truth must not depend on the order the client happened to upload the files."""
+    _deck(db, engagement, "ola4.pdf", {"2025-05": 24.0, "2025-11": 26.0, "2026-03": 27.0})
+    out = _deck(db, engagement, "ola3.pdf", {"2025-05": 24.0, "2025-11": 25.0})
+
+    assert _value(db, engagement, "2025-11") == 26.0        # sigue corregida
+    assert out["no_reemplazan_por_mazo_mas_nuevo"] == 1     # solo la que discrepa
+    # El mazo viejo no cambia nada: donde coincide no hay qué actualizar, y donde
+    # discrepa no manda. Queda en el registro, no en el valor vigente.
+    assert out["actualizadas"] == 0
+    assert out["creadas"] == 0
+
+
+def test_every_delivery_keeps_what_it_said(db, engagement):
+    """La base conserva el dato original: la corrección no borra la cifra publicada."""
+    from modules.brand_intel.models.models import BrandObservationReading
+    from modules.brand_intel import service as svc
+
+    _deck(db, engagement, "ola3.pdf", {"2025-11": 25.0})
+    _deck(db, engagement, "ola4.pdf", {"2025-11": 26.0, "2026-03": 27.0})
+
+    wid = {w.code: w.id for w in svc.waves(db, engagement.id)}["2025-11"]
+    leidas = sorted(
+        r.value for r in db.query(BrandObservationReading).filter(
+            BrandObservationReading.wave_id == wid,
+            BrandObservationReading.metric_code == "reach_7d").all()
+    )
+    assert leidas == [25.0, 26.0]
+    assert _value(db, engagement, "2025-11") == 26.0
+
+
+def test_reconfirming_the_same_deck_does_not_pile_up_readings(db, engagement):
+    from modules.brand_intel.models.models import BrandObservationReading
+
+    _deck(db, engagement, "ola4.pdf", {"2026-03": 27.0})
+    extraction = db.query(BrandExtraction).order_by(
+        BrandExtraction.created_at.desc()).first()
+    pipe.confirm_extraction(db, extraction, "cliente@x.com")
+    db.commit()
+
+    assert db.query(BrandObservationReading).filter(
+        BrandObservationReading.metric_code == "reach_7d").count() == 1
+
+
+# ── estudios que no son trackers de marca ─────────────────────────────
+
+def test_a_study_with_its_own_metrics_is_no_longer_rejected_wholesale(db, engagement):
+    """El callejón sin salida de un estudio distinto: 100% de celdas rechazadas.
+
+    El diccionario canónico es de tracker de marca. Un estudio que mida otra cosa —aquí
+    NPS y satisfacción del personal— no tenía forma de entrar: cada cifra se rechazaba
+    como «Métrica fuera del diccionario», que es el mismo callejón que ya tuvo el encargo
+    sin olas ni marcas, un piso más arriba.
+    """
+    from modules.brand_intel import service as svc
+
+    filas = [_row("nps", "Focal", "Ola 1", 42.0, base_n=300),
+             _row("clima_t2b", "Focal", "Ola 1", 71.0, base_n=300)]
+
+    # Sin vocabulario propio: el encargo es un tracker y no reconoce ninguna de las dos.
+    antes = pipe.ingest_pdf(db, engagement, b"pdf", "clima.pdf",
+                            extractor=_stub_page(filas), renderer=_stub_render())
+    assert antes.cells_extracted == 0
+    assert all(r["reason"] == "Métrica fuera del diccionario" for r in antes.rejected)
+
+    # Declarando sus métricas, el mismo mazo entra.
+    svc.adopt_structure(db, engagement, [], [], [
+        {"code": "nps", "label": "NPS", "kind": "index"},
+        {"code": "clima_t2b", "label": "Clima laboral (T2B)", "kind": "proportion",
+         "is_core": True},
+    ])
+    db.commit()
+
+    despues = pipe.ingest_pdf(db, engagement, b"pdf", "clima.pdf",
+                              extractor=_stub_page(filas), renderer=_stub_render())
+    db.commit()
+    assert despues.cells_extracted == 2
+    assert despues.rejected == []
+
+
+def test_an_unknown_kind_never_silently_becomes_a_proportion(db, engagement):
+    """`proportion` es el único tipo que habilita banda: adivinarlo inventa precisión."""
+    from modules.brand_intel import service as svc
+
+    out = svc.adopt_structure(db, engagement, [], [], [
+        {"code": "raro", "label": "Métrica rara", "kind": "porcentaje"},
+    ])
+    db.commit()
+    vocab = svc.vocabulary_for(db, engagement.id)
+    assert vocab.get("raro").kind == "count"
+    assert vocab.supports_bands("raro") is False
+    assert any("no admite banda" in w for w in out["warnings"])
+
+
+def test_a_study_without_a_ladder_is_not_judged_by_the_funnel_invariant(db, engagement):
+    """La monotonía aplica donde hay secuencia de conversión, no en todas partes."""
+    from modules.brand_intel import service as svc
+
+    svc.adopt_structure(db, engagement, [], [], [
+        {"code": "nps", "label": "NPS", "kind": "index"},
+    ])
+    db.commit()
+    vocab = svc.vocabulary_for(db, engagement.id)
+    assert vocab.ladder == ()
+    cells = [val.Cell(key="a", metric_code="nps", value=42.0)]
+    assert val.check_funnel_monotonicity(cells, vocab) == []

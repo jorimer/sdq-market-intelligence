@@ -271,3 +271,73 @@ def test_delete_of_an_unknown_engagement_is_404_for_an_admin(db, engagement):
     r = _client(db).delete("/api/v1/brand-intel/engagements/fantasma",
                            params={"confirm": "fantasma"})
     assert r.status_code == 404
+
+
+# ── clientes ──────────────────────────────────────────────────────────
+
+def test_create_client_and_reject_a_duplicate_code(db):
+    c = _client(db)
+    payload = {"code": "MCD-RD", "name": "Operador RD"}
+    assert c.post("/api/v1/brand-intel/clients", json=payload).status_code == 201
+    # Un código duplicado uniría dos clientes que no son el mismo.
+    assert c.post("/api/v1/brand-intel/clients", json=payload).status_code == 409
+
+
+def test_an_engagement_created_under_a_client_inherits_its_organization(db):
+    """Olvidar la organización creaba un estudio invisible para el propio cliente."""
+    c = _client(db)
+    c.post("/api/v1/brand-intel/clients",
+           json={"code": "MCD-RD", "name": "Operador RD", "organization_id": "org-9"})
+    r = c.post("/api/v1/brand-intel/engagements",
+               json={"slug": "mcd-tracker", "client": "MCD-RD",
+                     "client_name": "ignorado", "focal_brand": "McDonald's"})
+    assert r.status_code == 201
+    assert r.json()["client"] == "MCD-RD"
+
+    eng = db.query(BrandEngagement).filter(BrandEngagement.slug == "mcd-tracker").one()
+    assert eng.organization_id == "org-9"
+    assert eng.client_name == "Operador RD"      # el nombre lo manda el cliente
+
+
+def test_several_studies_hang_off_one_client(db):
+    c = _client(db)
+    c.post("/api/v1/brand-intel/clients", json={"code": "MCD-RD", "name": "Operador RD"})
+    for slug, brand in [("mcd-tracker", "McDonald's"), ("mcd-clima", "Clima interno")]:
+        assert c.post("/api/v1/brand-intel/engagements",
+                      json={"slug": slug, "client": "MCD-RD",
+                            "client_name": "se ignora", "focal_brand": brand},
+                      ).status_code == 201
+
+    listado = c.get("/api/v1/brand-intel/clients").json()
+    assert [(x["code"], x["engagements"]) for x in listado] == [("MCD-RD", 2)]
+    encargos = c.get("/api/v1/brand-intel/engagements").json()
+    assert {e["client_code"] for e in encargos if e["slug"].startswith("mcd")} == {"MCD-RD"}
+
+
+def test_an_unknown_client_is_refused_rather_than_silently_ignored(db):
+    r = _client(db).post("/api/v1/brand-intel/engagements",
+                         json={"slug": "huerfano", "client": "NO-EXISTE",
+                               "client_name": "Cliente", "focal_brand": "Marca"})
+    assert r.status_code == 404
+    assert db.query(BrandEngagement).filter(
+        BrandEngagement.slug == "huerfano").count() == 0
+
+
+def test_the_client_is_not_the_isolation_boundary(db, engagement):
+    """El acceso se sigue resolviendo sobre el encargo, no sobre el cliente.
+
+    Si el cliente concediera acceso, bastaría pertenecer a su organización para leer un
+    estudio marcado para otra — y esta es la propiedad que no puede romperse al añadir
+    una capa por encima.
+    """
+    c = _client(db)
+    c.post("/api/v1/brand-intel/clients",
+           json={"code": "ACME", "name": "Acme", "organization_id": "org-1"})
+    c.post("/api/v1/brand-intel/engagements",
+           json={"slug": "acme-otro", "client": "ACME", "client_name": "Acme",
+                 "focal_brand": "Marca", "organization_id": "org-2"})
+
+    # Un usuario de la organización del CLIENTE no puede abrir un estudio de otra.
+    r = _client(db, role=UserRole.viewer, org="org-1").get(
+        "/api/v1/brand-intel/engagements/acme-otro")
+    assert r.status_code == 404

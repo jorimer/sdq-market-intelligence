@@ -1,9 +1,20 @@
 import client from "@/shared/api/client";
 
 /** An engagement is one client's brand-tracker mandate. Private data, isolated per client. */
+/** Quien contrata. Un cliente agrupa varios estudios, no solo su tracker. */
+export interface BrandClient {
+  code: string;
+  name: string;
+  id: string;
+  organization_id: string | null;
+  engagements: number;
+}
+
 export interface Engagement {
   slug: string;
   client: string;
+  /** Código del cliente al que pertenece; null en estudios anteriores a la entidad. */
+  client_code?: string | null;
   focal_brand: string;
   market: string;
   category: string | null;
@@ -320,6 +331,8 @@ export interface Feasibility {
 const base = "/brand-intel";
 
 export interface EngagementInput {
+  /** Código del cliente. Sin él, el estudio queda sin agrupar. */
+  client?: string;
   slug: string;
   client_name: string;
   focal_brand: string;
@@ -366,6 +379,18 @@ export async function listEngagements(): Promise<Engagement[]> {
 
 export async function getEngagementDetail(slug: string): Promise<EngagementDetail> {
   const { data } = await client.get(`${base}/engagements/${slug}`);
+  return data;
+}
+
+export async function listClients(): Promise<BrandClient[]> {
+  const { data } = await client.get(`${base}/clients`);
+  return data;
+}
+
+export async function createClient(payload: {
+  code: string; name: string; organization_id?: string | null;
+}): Promise<BrandClient> {
+  const { data } = await client.post(`${base}/clients`, payload);
   return data;
 }
 
@@ -506,6 +531,18 @@ export interface BrandCandidate {
   spellings: string[];
 }
 
+/** Un indicador que el mazo mide, con el tipo que el lector propuso. */
+export interface MetricCandidate {
+  code: string;
+  label: string;
+  kind: "proportion" | "index" | "currency" | "count";
+  evidence: string;
+  confident: boolean;
+  pages: number[];
+  /** Solo `proportion` admite banda de confianza. */
+  supports_bands: boolean;
+}
+
 export interface StructureProposal {
   document: string;
   waves: WaveCandidate[];
@@ -514,6 +551,8 @@ export interface StructureProposal {
   pages_sampled: number[];
   brand_pass_error: string;
   discarded_waves: { label: string; occurrences: number; pages: number[] }[];
+  metrics: MetricCandidate[];
+  metric_pass_error: string;
   note: string;
 }
 
@@ -522,18 +561,20 @@ export interface AdoptionResult {
   waves_updated: number;
   brands_created: number;
   brands_updated: number;
+  metrics_created: number;
+  metrics_updated: number;
   warnings: string[];
 }
 
 /** Reads the deck's own vocabulary. Creates nothing — the reviewer adopts. */
 export async function discoverStructure(
-  slug: string, file: File, sample = 5,
+  slug: string, file: File, sample = 5, withMetrics = false,
 ): Promise<StructureProposal> {
   const form = new FormData();
   form.append("file", file);
   const { data } = await client.post(`${base}/engagements/${slug}/discover`, form, {
     headers: { "Content-Type": "multipart/form-data" },
-    params: { sample },
+    params: { sample, with_metrics: withMetrics },
     // A handful of slides still means a handful of vision calls.
     timeout: 10 * 60 * 1000,
   });
@@ -547,6 +588,7 @@ export async function adoptStructure(
              nominal_base?: number | null }[];
     brands: { name: string; slug?: string; is_focal: boolean;
               in_category_set: boolean }[];
+    metrics?: { code: string; label: string; kind: string; is_core?: boolean }[];
   },
 ): Promise<AdoptionResult> {
   const { data } = await client.post(`${base}/engagements/${slug}/structure`, payload);
@@ -576,6 +618,22 @@ export interface CellDisagreement {
   valores: number[];
 }
 
+/** Una cifra que esta entrega mueve — o que quiso mover y no le tocaba. */
+export interface FigureChange {
+  marca: string;
+  metrica: string;
+  ola: string;
+  segmento: string;
+  /** Cuando este mazo manda: lo que había y lo que queda. */
+  anterior?: number;
+  corregida?: number;
+  /** Cuando manda un mazo más nuevo: lo vigente y lo que traía este. */
+  vigente?: number;
+  este_mazo?: number;
+  mazo_vigente: string;
+  este: string;
+}
+
 export interface ConfirmResult {
   creadas: number;
   actualizadas: number;
@@ -584,6 +642,11 @@ export interface ConfirmResult {
   repetidas_coincidentes: number;
   omitidas_por_discrepancia: number;
   discrepancias: CellDisagreement[];
+  /** Cifras que este mazo trae distintas pero NO reemplazan: manda una entrega posterior. */
+  no_reemplazan_por_mazo_mas_nuevo: number;
+  cifras_que_cambian: FigureChange[];
+  /** Ola más reciente del mazo: lo que decide la precedencia. */
+  anada_del_mazo: string;
   confirmada_por: string;
 }
 

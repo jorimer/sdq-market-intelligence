@@ -35,6 +35,30 @@ from sqlalchemy import (
 from shared.database.base import Base, UUIDMixin
 
 
+class BrandClient(UUIDMixin, Base):
+    """Quien contrata. Un cliente puede tener varios estudios, no solo su tracker.
+
+    Antes el cliente era texto libre dentro del encargo, así que dos estudios del mismo
+    cliente no estaban atados por nada y "Operador RD" y "Operador R.D." eran clientes
+    distintos. Con código propio, el cliente se elige primero y los estudios cuelgan de él.
+
+    **No es la frontera de aislamiento.** Esa sigue siendo ``BrandEngagement.organization_id``,
+    que es lo que gobierna el 404-no-403 y por tanto lo único que no se toca aquí: el
+    cliente es una agrupación *dentro* de la organización. Su ``organization_id`` sirve
+    para heredarlo al crear un estudio, no para conceder acceso — precisamente porque un
+    cliente existe antes de que nadie suyo tenga login, que es el caso de hoy.
+    """
+
+    __tablename__ = "brand_clients"
+    __table_args__ = (UniqueConstraint("code", name="uq_brand_client_code"),)
+
+    code = Column(String(40), nullable=False)            # "MCD-RD" — llave legible
+    name = Column(String(200), nullable=False)           # "Operador RD"
+    organization_id = Column(String(64), nullable=True)  # se hereda al crear un estudio
+    is_active = Column(Boolean, default=True, nullable=False)
+    notes = Column(Text, nullable=True)
+
+
 class BrandEngagement(UUIDMixin, Base):
     """A per-client mandate. The isolation boundary for everything else in this module."""
 
@@ -43,6 +67,10 @@ class BrandEngagement(UUIDMixin, Base):
 
     slug = Column(String(60), nullable=False)            # "mcdonalds-rd"
     client_name = Column(String(200), nullable=False)    # who pays for the tracker
+    # El cliente al que pertenece el estudio. Nullable mientras haya encargos anteriores
+    # a la entidad; `client_name` se conserva porque es lo que el informe imprime y no
+    # depende de que el vínculo exista.
+    client_id = Column(String, nullable=True)
     focal_brand = Column(String(120), nullable=False)    # the brand the report is about
     market = Column(String(80), nullable=False, default="República Dominicana")
     category = Column(String(80), nullable=True)         # "QSR", "banca minorista", …
@@ -92,6 +120,45 @@ class BrandEntity(UUIDMixin, Base):
     sort_order = Column(Integer, default=0, nullable=False)
 
 
+class BrandMetric(UUIDMixin, Base):
+    """A metric this engagement measures, when the study is not a brand tracker.
+
+    The module ships a canonical vocabulary for brand trackers (``engines/metrics.py``)
+    and both ingest paths reject anything outside it — which is what stops a misread
+    label from inventing an indicator, and is also why a study measuring anything else
+    had every one of its figures rejected. An engagement that declares its own metrics
+    is validated against those instead; one that declares none keeps using the tracker
+    vocabulary, so nothing already loaded changes.
+
+    ``kind`` is the load-bearing field and the reason a person has to approve it. It
+    decides which statistics are legitimate: only ``proportion`` admits a binomial
+    confidence band, so a metric wrongly typed as one manufactures intervals out of
+    nothing. The reading pass proposes a kind with the evidence it saw; when that
+    evidence is thin it proposes one that does *not* unlock bands, because the failure
+    that matters is the one that invents precision.
+    """
+
+    __tablename__ = "brand_metrics"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "code", name="uq_brand_metric_code"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    code = Column(String(60), nullable=False)            # "nps", "satisfaccion_t2b"
+    label = Column(String(160), nullable=False)          # como se imprime en la lámina
+    kind = Column(String(20), nullable=False, default="count")
+    # proportion | index | currency | count  — ver MetricDef.supports_bands
+    is_core = Column(Boolean, default=False, nullable=False)
+    # Entra al pronóstico congelado y al panel de vigilancia cada ola.
+    higher_is_better = Column(Boolean, default=True, nullable=False)
+    category_denominator = Column(Boolean, default=False, nullable=False)
+    # Posición en una escalera de conversión, si el estudio tiene una. NULL = no aplica;
+    # la invariante de monotonía solo corre sobre las métricas que la declaran.
+    funnel_order = Column(Integer, nullable=True)
+    sort_order = Column(Integer, default=0, nullable=False)
+    description = Column(Text, nullable=True)
+
+
 class BrandObservation(UUIDMixin, Base):
     """One measurement. ``brand_slug`` NULL = a category/market-level metric.
 
@@ -118,6 +185,55 @@ class BrandObservation(UUIDMixin, Base):
     base_n = Column(Integer, nullable=True)              # NULL → unscoreable, never assumed
     unit = Column(String(20), nullable=False, default="pct")
     source = Column(String(200), nullable=True)          # "Ipsos Hot Tracker · lámina 18"
+    # Which reading this value is a projection of. `source` is prose for a human to read;
+    # this is the registry entry, and it is what makes the current value traceable back
+    # to the exact delivery that produced it. See BrandObservationReading.
+    source_extraction_id = Column(String, nullable=True)
+
+
+class BrandObservationReading(UUIDMixin, Base):
+    """What one delivery said about one figure. Append-only; nothing here is overwritten.
+
+    A tracker restates its earlier waves in every delivery, and the numbers are not always
+    identical: a provider corrects a base, revises a weighting, fixes a chart. With one
+    row per figure the second delivery had to overwrite the first, which made the truth
+    depend on the order the client happened to upload the files — loading a year of decks
+    out of order walked corrected figures backwards, silently.
+
+    So every reading is kept as it was read, tied to the delivery it came from, and
+    ``brand_observations`` becomes a *projection*: the reading from the most recent deck
+    wins, and the rest stay on the record. That ordering is not an implementation detail —
+    it is the answer to "¿esta cifra cambió?", which for a client paying to be told what
+    its tracker really says is an output of the product, not bookkeeping.
+
+    Precedence uses the deck's **vintage** (the most recent wave it contains), not the
+    upload time: which delivery is newer is a fact about the deck, and a client uploading
+    last year's backlog today must not thereby make it authoritative.
+    """
+
+    __tablename__ = "brand_observation_readings"
+    __table_args__ = (
+        UniqueConstraint(
+            "extraction_id", "wave_id", "brand_slug", "metric_code", "segment",
+            name="uq_brand_reading",
+        ),
+        Index("ix_brand_reading_key",
+              "engagement_id", "wave_id", "brand_slug", "metric_code", "segment"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    extraction_id = Column(String, nullable=True)        # NULL = libro Excel del proveedor
+    wave_id = Column(String, nullable=False)
+    brand_slug = Column(String(60), nullable=True)
+    metric_code = Column(String(60), nullable=False)
+    segment = Column(String(60), nullable=False, default="total")
+    value = Column(Float, nullable=False)
+    base_n = Column(Integer, nullable=True)
+    unit = Column(String(20), nullable=False, default="pct")
+    # Ola más reciente que trae el mazo del que sale esta lectura ("2026-03"). Decide la
+    # precedencia; se guarda porque el mazo puede borrarse y la lectura permanece.
+    deck_vintage = Column(String(30), nullable=True)
+    source = Column(String(200), nullable=True)
 
 
 class BrandDecision(UUIDMixin, Base):

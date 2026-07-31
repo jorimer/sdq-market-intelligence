@@ -246,3 +246,100 @@ def extract_page(
         cells=data.get("cells") or [],
         model_used=response.model,
     )
+
+
+# ── descubrimiento de métricas ────────────────────────────────────────
+
+#: Lo que el modelo puede devolver al proponer el vocabulario de un estudio. Cerrado como
+#: el de extracción: no puede introducir un campo que no validemos.
+METRIC_DISCOVERY_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["metrics"],
+    "properties": {
+        "metrics": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["code", "label", "kind", "evidence", "confident"],
+                "properties": {
+                    "code": {"type": "string",
+                             "description": "snake_case, en inglés o español, estable"},
+                    "label": {"type": "string",
+                              "description": "la etiqueta tal como se imprime"},
+                    "kind": {"type": "string",
+                             "enum": ["proportion", "index", "currency", "count"]},
+                    "evidence": {"type": "string",
+                                 "description": "qué se vio que justifica el tipo"},
+                    "confident": {"type": "boolean"},
+                },
+            },
+        },
+    },
+}
+
+_METRIC_DISCOVERY_PROMPT = """Eres un analista de investigación de mercados leyendo una
+lámina de un informe. NO transcribas cifras: tu única tarea es decir QUÉ INDICADORES mide
+esta lámina, para que una persona los apruebe como vocabulario del estudio.
+
+Por cada indicador distinto que veas, devuelve:
+- `label`: la etiqueta tal como está impresa.
+- `code`: un identificador snake_case corto y estable ("satisfaccion_t2b", "nps").
+- `kind`, que decide qué estadística es legítima después:
+  * `proportion` — un porcentaje SOBRE UNA BASE de respondentes (un % con su n).
+  * `index`      — un índice o puntuación sobre una escala (100 = promedio, NPS, 1-10).
+  * `currency`   — dinero.
+  * `count`      — un conteo absoluto.
+- `evidence`: qué viste que justifica ese tipo (el símbolo %, la base impresa, la moneda,
+  el rango de la escala).
+- `confident`: true solo si la evidencia es explícita en la lámina.
+
+REGLA CRÍTICA SOBRE `kind`: solo `proportion` habilita bandas de confianza más adelante.
+Si no ves con claridad que la cifra sea un porcentaje sobre una base de respondentes, NO
+lo marques como `proportion` — usa `index` o `count` y pon `confident: false`. Equivocarse
+hacia `proportion` fabrica intervalos de confianza que el estudio no tiene; equivocarse en
+la otra dirección solo hace que una persona lo corrija.
+
+No inventes indicadores que no estén impresos. Si la lámina es una portada, un índice o
+metodología, devuelve la lista vacía."""
+
+
+def discover_metrics_on_page(
+    image_png: bytes, page_number: int, client: Any = None,
+) -> List[Dict[str, Any]]:
+    """Ask what a slide measures, not what it says. Proposes; nothing is created."""
+    import anthropic
+
+    if client is None:
+        key = settings.ANTHROPIC_API_KEY
+        if not key:
+            raise RuntimeError(
+                "Falta la clave de Anthropic: la lectura de láminas no está disponible."
+            )
+        client = anthropic.Anthropic(api_key=key)
+    b64 = base64.standard_b64encode(image_png).decode("utf-8")
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=4000,
+        system=_METRIC_DISCOVERY_PROMPT,
+        output_config={
+            "format": {"type": "json_schema", "schema": METRIC_DISCOVERY_SCHEMA},
+        },
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image",
+                 "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                {"type": "text",
+                 "text": "¿Qué indicadores mide esta lámina?"},
+            ],
+        }],
+    )
+    if response.stop_reason == "refusal":
+        raise RuntimeError(f"La lectura de la página {page_number} fue rechazada.")
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    if not text:
+        raise RuntimeError(f"Respuesta vacía al leer la página {page_number}.")
+    return list(json.loads(text).get("metrics") or [])

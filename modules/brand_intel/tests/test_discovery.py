@@ -292,3 +292,68 @@ def test_the_same_failure_on_every_slide_is_reported_once():
         b"x", ["a" * 10, "b" * 10, "c" * 10], sample=3, renderer=render, extractor=extract)
     assert err.count("Could not resolve authentication method") == 1
     assert "3 de 3" in err
+
+
+# ── descubrimiento de métricas (estudios que no son trackers) ──────────
+
+def _fake_metric_reader(by_page):
+    def render(content, first=None, last=None, **kw):
+        return [b"png"]
+
+    def read(image, page, **kw):
+        return by_page.get(page, [])
+    return render, read
+
+
+def test_metric_discovery_proposes_code_label_and_kind():
+    render, read = _fake_metric_reader({1: [
+        {"code": "clima_t2b", "label": "Clima laboral (T2B)", "kind": "proportion",
+         "evidence": "porcentaje con base n=300", "confident": True},
+    ]})
+    out, err = dsc.discover_metrics(b"x", ["a" * 10], sample=1,
+                                   renderer=render, reader=read)
+    assert err == ""
+    assert [(m.code, m.kind, m.confident) for m in out] == [
+        ("clima_t2b", "proportion", True)]
+    assert out[0].as_dict()["supports_bands"] is True
+
+
+def test_two_slides_typing_a_metric_differently_fall_back_to_no_bands():
+    """`proportion` es el único tipo que habilita banda: ante duda, no se concede.
+
+    Quedarse con el tipo más permisivo fabricaría intervalos de confianza a partir de un
+    desacuerdo, que es exactamente la precisión que este módulo se niega a inventar.
+    """
+    render, read = _fake_metric_reader({
+        1: [{"code": "nps", "label": "NPS", "kind": "proportion",
+             "evidence": "%", "confident": True}],
+        2: [{"code": "nps", "label": "NPS", "kind": "index",
+             "evidence": "escala -100 a 100", "confident": True}],
+    })
+    out, _ = dsc.discover_metrics(b"x", ["a" * 10, "b" * 10], sample=2,
+                                  renderer=render, reader=read)
+    assert out[0].kind == "index"
+    assert out[0].confident is False
+    assert out[0].as_dict()["supports_bands"] is False
+
+
+def test_a_metric_with_an_unknown_kind_is_not_proposed():
+    render, read = _fake_metric_reader({1: [
+        {"code": "raro", "label": "Raro", "kind": "porcentaje",
+         "evidence": "", "confident": True},
+    ]})
+    out, _ = dsc.discover_metrics(b"x", ["a" * 10], sample=1,
+                                  renderer=render, reader=read)
+    assert out == []
+
+
+def test_a_tracker_deck_does_not_pay_for_the_metric_pass_by_default():
+    """El pase de métricas es una llamada de visión más por lámina muestreada.
+
+    Un tracker se valida contra el diccionario canónico y no lo necesita, así que el
+    coste tiene que estar apagado salvo que el estudio lo pida.
+    """
+    import inspect
+
+    assert inspect.signature(
+        dsc.discover_structure).parameters["with_metrics"].default is False

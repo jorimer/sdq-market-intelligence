@@ -747,6 +747,11 @@ export function BrandIntelPage() {
               <button className="btn btn-primary" onClick={() => setShowStructure(true)}>
                 <FileSearch size={15} /> Leer de la presentación
               </button>
+              {/* Un cliente puede tener varios estudios, y este estado no ofrecía
+                  crear el siguiente: quedaba encerrado en el que está a medias. */}
+              <button className="btn btn-ghost" onClick={() => setShowNew(true)}>
+                <Plus size={15} /> Otro encargo
+              </button>
               <button
                 className="btn btn-ghost"
                 onClick={() => void downloadTemplate(slug)}
@@ -786,6 +791,12 @@ export function BrandIntelPage() {
               setShowStructure(false);
               void load(slug);
             }}
+          />
+        )}
+        {showNew && (
+          <NewEngagementDrawer
+            onClose={() => setShowNew(false)}
+            onCreated={onEngagementCreated}
           />
         )}
         {showDelete && current && (
