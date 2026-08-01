@@ -959,6 +959,58 @@ THIN_TEMPLATES = {
         "valores; NO recalcules aportes ni declares un superlativo (mayor/menor/el más…) que no "
         "coincida con lo servido. Si una relación no está precalculada, exprésala sin número."
     ),
+    # Informe de Contexto de Mercado (brand_intel): tres secciones narradas por el cerebro
+    # sobre lo que el motor determinista (engines/explain.py + service) YA calculó. El LLM
+    # sintetiza; nunca decide causalidad ni recalcula el reparto explicadas/competitivas.
+    "brand_context_executive": (
+        "Redacta el RESUMEN EJECUTIVO del Informe de Contexto de Mercado del trimestre: la "
+        "síntesis de qué le pasó a la marca y a su entorno entre las olas del contexto — NO "
+        "un conteo de hallazgos ni un inventario de secciones.\nContexto:\n{context}\n\n"
+        "Máximo 180 palabras, 1-2 párrafos corridos, sin encabezados ni viñetas. ABRE con la "
+        "lectura del trimestre (qué movió la aguja y de quién es el movimiento: entorno, "
+        "categoría o marca), respáldala con las 2-3 cifras que más importan y cierra con el "
+        "foco del próximo trimestre. NO enumeres las conclusiones del proveedor una por una "
+        "ni digas cuántas fueron explicadas: sintetiza. REGLA DURA DE CIFRAS: usa SOLO "
+        "números servidos en el contexto; no derives ni inventes ninguno. REGLA DURA DE "
+        "CAUSALIDAD: la lectura entorno-vs-marca de cada movimiento ya viene decidida en el "
+        "contexto ('explicadas'/'competitivas'); no la recalcules ni la contradigas."
+    ),
+    "brand_context_reading": (
+        "Redacta la LECTURA DEL TRIMESTRE del Informe de Contexto de Mercado: lo que el "
+        "estudio del proveedor concluye, leído con los datos de entorno de SDQ.\n"
+        "Contexto:\n{context}\n\n"
+        "Máximo 350 palabras, prosa corrida (viñetas solo si agrupan de verdad; SIN "
+        "encabezados — el documento ya titula la sección). El lector "
+        "YA LEYÓ el informe del proveedor: NO repitas sus conclusiones una por una ni uses "
+        "el patrón «el proveedor concluye X / lectura SDQ Y». Estructura por GRUPOS de "
+        "lectura: (1) el entorno del período, declarado UNA vez con sus valores; (2) qué "
+        "movimientos de consumo/gasto ese entorno ayuda a explicar ('explicadas' — sintetiza "
+        "el mecanismo común; cita textual al proveedor SOLO cuando la cifra sostiene el "
+        "argumento, máximo 2-3 citas en toda la sección); (3) qué movimientos el entorno NO "
+        "explica ('competitivas' — la negativa es la lectura: percepción es dinámica "
+        "competitiva, accionable por la marca; léelas por grupo y dirección, no una frase "
+        "por conclusión). REGLA DURA DE CAUSALIDAD: el reparto explicadas/competitivas y la "
+        "lectura de cada una ya vienen decididos por el motor determinista; sintetiza y "
+        "prioriza, NUNCA recalcules, amplíes ni contradigas ese reparto. REGLA DURA DE "
+        "CIFRAS: usa SOLO números servidos en el contexto; no derives ni inventes ninguno."
+    ),
+    "brand_context_priorities": (
+        "Redacta la sección QUÉ MOVER Y QUÉ NO del Informe de Contexto de Mercado: la "
+        "agenda accionable del trimestre cruzada con la disciplina de señal (qué movimiento "
+        "puede sostener una decisión).\nContexto:\n{context}\n\n"
+        "Máximo 300 palabras, SIN encabezados (el documento ya titula la sección). "
+        "Integra en UNA lectura: (1) los puntos que el trimestre "
+        "justifica discutir ('agenda'), en su orden de prioridad; (2) la disciplina de "
+        "umbral: qué movimientos superan el mínimo detectable de la muestra y cuáles no "
+        "alcanzan para decidir ('filtro_senal' — si ningún indicador superó su umbral, esa "
+        "continuidad ES la lectura del trimestre); (3) los riesgos que podrían invalidar la "
+        "lectura ('escenarios'), como reserva declarada, no como pronóstico propio. Cierra "
+        "con el reparto de foco del próximo trimestre: qué mover, qué no tocar y qué esperar "
+        "a confirmar con la próxima ola. NO inventes prioridades que no estén en 'agenda'; "
+        "si la agenda viene vacía, dilo: el trimestre no justifica una discusión "
+        "extraordinaria. REGLA DURA DE CIFRAS: usa SOLO números servidos en el contexto "
+        "(umbrales, movimientos, bases muestrales); no derives ni inventes ninguno."
+    ),
     "deal_outlook": (
         "Explica el FUNDAMENTO del score de atractivo/cierre de este deal.\n"
         "Contexto:\n{context}\n\n"

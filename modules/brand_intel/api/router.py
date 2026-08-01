@@ -888,8 +888,17 @@ def report_document(
         raise HTTPException(status_code=404, detail="Formato no disponible.")
     eng = _resolve(db, slug, user)
     payload = rpt.build_report(db, eng)
+    # Las tres secciones narrativas del cliente van por la ruta cerebro (doctrina +
+    # guard numérico). La degradación es estructural, no promesa: cualquier fallo de la
+    # generación cae a la composición determinista, nunca tumba la descarga.
     try:
-        path = report_docs.render(payload, fmt=fmt)
+        ai = rpt.ai_narratives_sync(payload)
+    except Exception:  # noqa: BLE001
+        logger.exception("Narrativa cerebro no disponible para %s; composición "
+                         "determinista", slug)
+        ai = {}
+    try:
+        path = report_docs.render(payload, fmt=fmt, ai=ai)
     except Exception as exc:  # noqa: BLE001 — el fallo se dice, no se sirve en blanco
         logger.exception("No se pudo renderizar el informe %s de %s", fmt, slug)
         raise HTTPException(status_code=500,
