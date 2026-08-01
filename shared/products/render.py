@@ -389,6 +389,7 @@ def render_product_pdf(
     sample: bool = False,
     output_dir: Optional[str] = None,
     fmt: str = "pdf",
+    tables_last: bool = False,
 ) -> str:
     """Renderiza el reporte de marca de un producto y devuelve el path (docs/REPORT_STANDARD.md).
 
@@ -397,6 +398,9 @@ def render_product_pdf(
     interior lleva encabezado corrido + nº de página; ``watermark``/``sample`` estampan el
     pie por tier. ``headline`` es la cifra/banda clave para el pull-quote de portada.
     ``fmt="docx"`` produce el Word equivalente (misma anatomía) — punto de entrada único.
+    ``tables_last`` mueve el bloque de tablas DESPUÉS de las secciones narrativas: un
+    informe que abre con páginas de tablas antes de una sola frase se lee como un anexo,
+    no como un informe (pedido del dueño sobre el de brand_intel). Opt-in por producto.
     """
     if fmt == "docx":
         from shared.products.render_docx import render_product_docx
@@ -404,7 +408,7 @@ def render_product_pdf(
             sector_key=sector_key, display_name=display_name, title=title, period=period,
             narratives=narratives, section_titles=section_titles, tables=tables, charts=charts,
             subtitle=subtitle, headline=headline, watermark=watermark, sample=sample,
-            output_dir=output_dir)
+            output_dir=output_dir, tables_last=tables_last)
     out_dir = output_dir or settings.REPORTS_DIR
     os.makedirs(out_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -432,10 +436,16 @@ def render_product_pdf(
             h, w = MAX_IMG_H, MAX_IMG_H / ratio
         body.append(Image(png, width=w, height=h))
         body.append(Spacer(1, 0.2 * inch))
+    table_flow: List = []
     for heading, rows in (tables or []):
         if rows:
-            body += _data_table(heading, rows, styles)
+            table_flow += _data_table(heading, rows, styles)
+    if not tables_last:
+        body += table_flow
     body += _narrative_flowables(narratives, section_titles or {}, styles)
+    if tables_last and table_flow:
+        body.append(Paragraph("Anexo de datos", styles["PHead"]))
+        body += table_flow
 
     return build_branded_pdf(
         path=path, title=title, display_name=display_name, period=period, body=body,
