@@ -352,6 +352,53 @@ class BrandExtractionCell(UUIDMixin, Base):
     included = Column(Boolean, default=True, nullable=False)  # reviewer's keep/drop
 
 
+class BrandConclusion(UUIDMixin, Base):
+    """Una afirmación que sostiene el estudio del proveedor, con su recibo.
+
+    El resto del módulo guarda **cifras**. Con cifras solo se puede describir, y describir
+    es lo que el proveedor ya hizo: repetirlo no se puede cobrar. Lo que SDQ añade es
+    explicar por qué pasó lo que el proveedor observó — y para eso su conclusión tiene que
+    existir como fila, no como prosa dentro de un PDF.
+
+    **Esta tabla no pasa por confirmación humana, y las observaciones sí.** No es un
+    descuido: el portón de confirmación protege a las cifras, porque un número mal leído
+    entra en la serie y desde ahí ningún gráfico puede distinguirlo de uno bueno. Una
+    conclusión no alimenta aritmética alguna y se comprueba contra su lámina en cualquier
+    momento. Lo que la protege es ``claim`` + ``page_number``: el texto literal y dónde
+    está escrito. Sin eso, «el proveedor concluye X» sería impublicable.
+
+    ``claim`` es LITERAL a propósito. Un resumen propio pondría en boca del socio palabras
+    que no dijo, en un documento que llega a su cliente. El informe del cliente igual lee
+    natural: la lámina se guarda aquí y sale en la vista interna y en el documento que se
+    discute con el proveedor, no en la prosa.
+    """
+
+    __tablename__ = "brand_conclusions"
+    __table_args__ = (
+        Index("ix_brand_conclusion_engagement", "engagement_id", "kind"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    extraction_id = Column(String, nullable=True)      # de qué entrega salió
+    page_number = Column(Integer, nullable=False)      # el recibo: dónde está escrita
+    claim = Column(Text, nullable=False)               # literal, nunca reescrita
+
+    kind = Column(String(20), nullable=False, default="hallazgo")
+    # hallazgo | recomendacion | contexto
+    # Las marcas de las que trata, tal como están impresas, y resueltas contra el set.
+    # Es una LISTA porque las afirmaciones reales lo son: «Little Caesars, KFC y Wendy's
+    # muestran tendencia creciente» habla de tres marcas, y guardarla como una sola la
+    # dejaría sin resolver — es decir, sin poder explicarse ni contrastarse.
+    subjects = Column(JSON, nullable=True)             # ["Little Caesars", "KFC"]
+    subject_slugs = Column(JSON, nullable=True)        # ["little-caesars", "kfc"]
+    topic = Column(String(200), nullable=True)
+    metric_code = Column(String(60), nullable=True)    # resuelto contra el diccionario
+    direction = Column(String(20), nullable=True)      # sube | baja | estable | None
+    wave_label = Column(String(60), nullable=True)     # tal como está impresa
+    wave_code = Column(String(30), nullable=True)      # resuelta contra las olas
+    confident = Column(Boolean, default=True, nullable=False)
+
+
 class BrandForecast(UUIDMixin, Base):
     """A frozen forecast, scored when the wave lands. Mirrors the TPM ledger discipline.
 

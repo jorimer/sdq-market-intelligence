@@ -38,6 +38,7 @@ from modules.brand_intel.engines.metrics import (
 )
 from modules.brand_intel.models.models import (
     BrandClient,
+    BrandConclusion,
     BrandDecision,
     BrandEngagement,
     BrandEntity,
@@ -129,6 +130,7 @@ def brands(db: Session, engagement_id: str) -> List[BrandEntity]:
 #: through the API. Listed children-first: that is also the safe write order.
 _OWNED_BY_ENGAGEMENT = (
     BrandExtractionCell,
+    BrandConclusion,
     BrandExtraction,
     BrandObservationReading,
     BrandForecast,

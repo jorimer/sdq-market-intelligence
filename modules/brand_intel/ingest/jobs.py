@@ -123,6 +123,9 @@ def run_extraction(extraction_id: str) -> Dict[str, Any]:
         extraction.error = None
         db.commit()
 
+        content = bytes(extraction.source_pdf)
+        _read_conclusions(db, extraction, content)
+
         def _progress(done: int) -> None:
             # El total ya se conoce desde que se encoló (`page_count`), así que la
             # pantalla enseña "7 de 59" desde el primer segundo y no un contador que
@@ -130,7 +133,6 @@ def run_extraction(extraction_id: str) -> Dict[str, Any]:
             extraction.pages_done = done
             db.commit()
 
-        content = bytes(extraction.source_pdf)
         report = ingest_pdf(db, engagement, content, str(extraction.document_name),
                             max_pages=extraction.max_pages, on_page=_progress,
                             into=extraction)
@@ -153,6 +155,37 @@ def run_extraction(extraction_id: str) -> Dict[str, Any]:
         return {"status": ERROR, "error": str(exc)}
     finally:
         db.close()
+
+
+def _read_conclusions(db: Session, extraction: BrandExtraction, content: bytes) -> None:
+    """Recoge lo que el estudio AFIRMA, antes de leer sus cifras.
+
+    Va primero por dos razones. Cuesta una sola llamada sobre la capa de texto, frente a
+    una por lámina de la pasada de visión: si el trabajo muere a mitad, lo barato ya está
+    guardado. Y es lo que el informe necesita para explicar en vez de describir, así que
+    conviene que exista aunque las cifras se queden a medias.
+
+    Nunca tumba el trabajo. Las cifras son la carga principal y un mazo sin capa de texto
+    —escaneado como imágenes— es un caso legítimo: se anota y se sigue.
+    """
+    from modules.brand_intel import service as svc
+    from modules.brand_intel.ingest import conclusions as conc
+    from modules.brand_intel.ingest.discovery import _page_texts
+
+    try:
+        vocab = svc.vocabulary_for(db, str(extraction.engagement_id))
+        found = conc.read_conclusions(_page_texts(content), vocab=vocab)
+        resumen = conc.store_conclusions(db, str(extraction.engagement_id), found,
+                                         extraction_id=str(extraction.id))
+        db.commit()
+        logger.info("Conclusiones leídas en %s: %s", extraction.document_name, resumen)
+    except Exception as exc:  # noqa: BLE001 — las cifras mandan; esto es aditivo
+        logger.exception("No se pudieron leer las conclusiones de %s",
+                         extraction.document_name)
+        db.rollback()
+        nota = f"Las cifras se leyeron; las conclusiones del estudio no: {str(exc)[:300]}"
+        extraction.note = nota  # type: ignore[assignment]
+        db.commit()
 
 
 def _fail(db: Session, extraction: BrandExtraction, message: str) -> None:
