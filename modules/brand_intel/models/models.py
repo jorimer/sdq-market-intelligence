@@ -399,6 +399,45 @@ class BrandConclusion(UUIDMixin, Base):
     confident = Column(Boolean, default=True, nullable=False)
 
 
+class BrandDiscrepancy(UUIDMixin, Base):
+    """Un desacuerdo defendible entre las cifras confirmadas y una conclusión del proveedor.
+
+    Existe por una regla de la alianza: **no se audita al proveedor delante de su
+    cliente**. Cuando el contraste encuentra que los datos sostienen lo contrario de lo
+    que el estudio afirma —con significancia, no con corazonada—, eso no va al informe:
+    viene aquí, a una mesa aparte, y se discute con el proveedor primero. El informe del
+    cliente solo puede apoyarse en conclusiones sin discrepancia abierta, y esa exclusión
+    se garantiza en el ensamblador, no en la buena memoria de quien redacta.
+
+    La conclusión viaja COPIADA (claim, lámina, marcas), no solo referida: las
+    conclusiones se reemplazan cuando una entrega se relee, y una discrepancia en
+    discusión con el proveedor no puede quedarse apuntando al vacío.
+
+    Estados: ``abierta`` → ``discutida`` → ``acordada`` | ``retirada``. Mientras esté en
+    las dos primeras, ninguna explicación del informe puede montarse sobre su conclusión.
+    """
+
+    __tablename__ = "brand_discrepancies"
+    __table_args__ = (
+        Index("ix_brand_discrepancy_engagement", "engagement_id", "status"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    conclusion_id = Column(String, nullable=True)      # la fila viva, si aún existe
+    claim = Column(Text, nullable=False)               # copia literal: sobrevive relecturas
+    page_number = Column(Integer, nullable=False)
+    subject_slugs = Column(JSON, nullable=True)
+    metric_code = Column(String(60), nullable=False)
+    provider_direction = Column(String(20), nullable=False)   # lo que afirma el estudio
+    data_note = Column(Text, nullable=False)           # lo que sostienen las cifras y por qué
+    per_brand = Column(JSON, nullable=True)            # delta y veredicto por marca
+
+    status = Column(String(20), nullable=False, default="abierta")
+    # abierta | discutida | acordada | retirada
+    resolution_note = Column(Text, nullable=True)      # qué se acordó, o por qué se retiró
+    updated_by = Column(String(120), nullable=True)
+
+
 class BrandForecast(UUIDMixin, Base):
     """A frozen forecast, scored when the wave lands. Mirrors the TPM ledger discipline.
 

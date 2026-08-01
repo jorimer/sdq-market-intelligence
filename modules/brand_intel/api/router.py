@@ -33,6 +33,7 @@ from modules.brand_intel.models.models import (
     BrandClient,
     BrandConclusion,
     BrandDecision,
+    BrandDiscrepancy,
     BrandEngagement,
     BrandExtraction,
     BrandExtractionCell,
@@ -523,6 +524,68 @@ def list_conclusions(slug: str, db: Session = Depends(get_db),
             for r in rows
         ],
     }
+
+
+@router.post("/engagements/{slug}/contrast",
+             summary="Contrastar las conclusiones del proveedor con las cifras")
+def run_contrast(slug: str, db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Corre el contraste y abre discrepancias donde los datos sostienen lo contrario.
+
+    Idempotente: repetirlo refresca la evidencia de las discrepancias ya abiertas sin
+    duplicarlas ni reabrir las que una persona ya trabajó.
+    """
+    eng = _resolve(db, slug, user)
+    out = svc.contrast_conclusions(db, str(eng.id))
+    db.commit()
+    return out
+
+
+@router.get("/engagements/{slug}/discrepancies",
+            summary="La mesa con el proveedor: desacuerdos defendibles y su estado")
+def list_discrepancies(slug: str, db: Session = Depends(get_db),
+                       user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    eng = _resolve(db, slug, user)
+    rows = (db.query(BrandDiscrepancy)
+            .filter(BrandDiscrepancy.engagement_id == eng.id)
+            .order_by(BrandDiscrepancy.created_at).all())
+    return {
+        "total": len(rows),
+        "bloqueantes": sum(1 for r in rows if r.status in svc.BLOCKING_STATES),
+        "discrepancies": [
+            {"id": r.id, "claim": r.claim, "page_number": r.page_number,
+             "subject_slugs": r.subject_slugs or [], "metric_code": r.metric_code,
+             "provider_direction": r.provider_direction, "data_note": r.data_note,
+             "per_brand": r.per_brand or [], "status": r.status,
+             "resolution_note": r.resolution_note, "updated_by": r.updated_by,
+             "created_at": r.created_at.isoformat() if r.created_at else None}
+            for r in rows
+        ],
+    }
+
+
+@router.patch("/engagements/{slug}/discrepancies/{discrepancy_id}",
+              summary="Avanzar una discrepancia de estado")
+def patch_discrepancy(
+    slug: str, discrepancy_id: str, payload: Dict[str, Any],
+    db: Session = Depends(get_db), user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """El contraste abre; solo una persona cierra, con su nombre y su nota."""
+    eng = _resolve(db, slug, user)
+    try:
+        d = svc.update_discrepancy(
+            db, str(eng.id), discrepancy_id,
+            status=str(payload.get("status") or ""),
+            resolution_note=payload.get("resolution_note"),
+            actor=str(user.email),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if d is None:
+        raise HTTPException(status_code=404, detail="Discrepancia no encontrada.")
+    db.commit()
+    return {"id": d.id, "status": d.status, "resolution_note": d.resolution_note,
+            "updated_by": d.updated_by}
 
 
 @router.get("/engagements/{slug}/extractions/{extraction_id}",
