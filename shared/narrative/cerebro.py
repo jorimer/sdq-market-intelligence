@@ -367,6 +367,33 @@ AXIS_DOCTRINE: Dict[str, str] = {
         "obligaciones, generar resultado sostenible— y solo entonces respáldala con la cifra. La "
         "conclusión va primero; el número la sostiene, no la sustituye."
     ),
+    "brand_intel": (
+        "DOCTRINA DE CASA — Eje de inteligencia de marca (Informe de Contexto de Mercado):\n"
+        "Escribes la capa de contexto económico de un tracker de marca que un proveedor de "
+        "investigación (Ipsos u otro) ya entregó al mismo lector, con más autoridad muestral "
+        "que la tuya. SDQ NO repite ni re-mide lo que ese informe ya dice: tu aporte es (a) el "
+        "PORQUÉ económico — qué parte de cada movimiento la explica el entorno (inflación, tasa "
+        "de política, actividad, tipo de cambio) y qué parte es dinámica competitiva de la "
+        "marca —, (b) la separación categoría/marca de la atribución, y (c) la disciplina de "
+        "decisión: qué movimiento supera el mínimo detectable de la muestra y puede sostener "
+        "una decisión, y cuál es ruido muestral. NO cites las conclusiones del proveedor una "
+        "por una: el lector ya las leyó; cita la fuente solo cuando la cifra específica "
+        "sostiene el argumento, y sintetiza el resto por grupos (qué explica el entorno, qué "
+        "no).\n"
+        "REGLA DURA DE CAUSALIDAD: la decisión de qué factor macro explica cada movimiento YA "
+        "está tomada por el motor determinista del módulo y llega servida en el contexto "
+        "('entorno', 'explicadas', 'competitivas', 'sin_capa'); tu trabajo es sintetizar y "
+        "priorizar esa lectura, NUNCA recalcularla, ampliarla ni contradecirla. En particular: "
+        "una métrica de percepción (favorito, imagen, fidelidad, satisfacción, delivery, "
+        "atributos) NUNCA se explica con el entorno económico — si cayó con el entorno a "
+        "favor, esa negativa ES la lectura: dinámica competitiva, accionable por la marca.\n"
+        "TRADUCE EL TECNICISMO del tracking: T2B (los dos escalones superiores de la escala: "
+        "quienes evalúan bien), awareness espontáneo y top-of-mind (la marca que sale sin "
+        "ayuda / la primera que sale), índice de atributo por doble indexación (fortaleza "
+        "relativa de imagen, no un porcentaje de personas), movimiento mínimo detectable (el "
+        "cambio que la muestra puede distinguir del azar) — di qué significa para la decisión "
+        "antes de la sigla o la cifra."
+    ),
     "deal_scoring": (
         "DOCTRINA DE CASA — Eje Deal Scoring (atractivo/cierre de una operación):\n"
         "Lees el atractivo de un deal como índice explicable: mayor score = deal más atractivo. "
@@ -839,6 +866,19 @@ AUDIENCE_FRAMES: Dict[str, Dict[str, str]] = {
             "146-02), la siniestralidad como señal de suficiencia de tarifas y la aseguradora "
             "rezagada que amerita atención. Tu \"y por tanto\" final apunta a la prioridad de "
             "supervisión y la señal a monitorear."
+        ),
+    },
+    "brand_intel": {
+        "cliente_marca": (
+            "FRAME DE DECISIÓN — Audiencia: Quien dirige la marca en su mercado (producto, "
+            "marketing, operación de la franquicia).\n"
+            "Decide: dónde poner presupuesto y foco operativo el próximo trimestre, y qué "
+            "movimientos del tracker ameritan reacción frente a cuáles son marea del entorno "
+            "o ruido muestral.\n"
+            "Le importa: qué movimientos son suyos (accionables por la marca) y cuáles son de "
+            "la categoría o del entorno; cuáles superan el umbral de decisión que la muestra "
+            "permite; y qué señal vigilar en la próxima ola. Tu \"y por tanto\" final apunta a "
+            "esa asignación de foco: qué mover, qué no tocar y qué esperar a confirmar."
         ),
     },
     "deal_scoring": {

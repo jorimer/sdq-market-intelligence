@@ -11,6 +11,7 @@ absence of problems.
 """
 from __future__ import annotations
 
+import asyncio
 import html
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -101,6 +102,11 @@ def _executive(p: Dict[str, Any]) -> Dict[str, Any]:
     porqué económico, el veredicto entorno-vs-marca, y el ticket en pesos constantes.
     Una versión anterior lideraba con share, divergencia y embudo — re-análisis del dato
     del propio proveedor, que es exactamente lo que este informe ya no hace.
+
+    Desde el reenfoque narrativo, estos findings ya NO son el resumen ejecutivo que ve el
+    cliente: son parte del CONTEXTO que se le sirve al cerebro (``cerebro_contexts``) para
+    que redacte una síntesis real del trimestre, y el fallback determinista del documento
+    cuando la narrativa IA no está disponible. El ``empty_reason`` se conserva con ese rol.
     """
     findings: List[Dict[str, str]] = []
     brand = p["engagement"]["focal_brand"]
@@ -159,6 +165,152 @@ def _executive(p: Dict[str, Any]) -> Dict[str, Any]:
                          "entorno: sube la presentación del tracker para que el informe "
                          "tenga qué explicar."),
     }
+
+
+# ── narrativa vía cerebro ─────────────────────────────────────────────
+# El informe del cliente se narra por el motor compartido (shared/narrative/cerebro.py),
+# igual que los otros ejes: doctrina en AXIS_DOCTRINE["brand_intel"], frame en
+# AUDIENCE_FRAMES, thin templates brand_context_*. El LLM narra sobre lo que
+# engines/explain.py y service.py YA calcularon — nunca decide causalidad ni cifras;
+# si degrada (sin API key, presupuesto), el documento cae a la composición determinista.
+
+CEREBRO_AXIS = "brand_intel"
+CEREBRO_AUDIENCE = "cliente_marca"
+
+_CEREBRO_TEMPLATES = {
+    "executive": "brand_context_executive",
+    "explanations": "brand_context_reading",
+    "priorities": "brand_context_priorities",
+}
+
+
+def group_competitivas(xp: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Las conclusiones de percepción agrupadas por dirección del movimiento.
+
+    Servirle al modelo decenas de frases casi idénticas invita al patrón cita-por-cita
+    que este informe elimina; agrupadas por dirección (la lectura del motor determinista
+    depende solo de dirección × postura del entorno) el contexto empuja a sintetizar.
+    """
+    grupos: Dict[str, Dict[str, Any]] = {}
+    for c in xp.get("competitivas") or []:
+        d = str(c.get("direction") or "sin_direccion")
+        g = grupos.setdefault(d, {"n": 0, "lectura": c.get("reading"), "conclusiones": []})
+        g["n"] += 1
+        g["conclusiones"].append({"claim": c.get("claim"),
+                                  "subjects": c.get("subjects") or []})
+    return grupos
+
+
+def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Los tres contextos que el cerebro narra. Solo re-empaqueta lo YA calculado.
+
+    Nada se recalcula aquí: cada campo viene tal cual de ``build_report``. Si al narrar
+    falta una lectura, el arreglo es servir más contexto calculado, nunca dejar que el
+    modelo la derive por su cuenta.
+    """
+    s = p["sections"]
+    eng = p["engagement"]
+    xp = s.get("explanations") or {}
+    vig = s.get("vigilance") or {}
+    ag = (vig.get("agenda") or {}) if vig.get("available") else {}
+    sf = s.get("signal_filter") or {}
+    esc = s.get("scenarios") or {}
+    att = s.get("attribution") or {}
+    tic = s.get("ticket") or {}
+    dec = s.get("decisions") or {}
+    bt = s.get("forecast_backtest") or {}
+    tr = s.get("forecast_track_record") or {}
+
+    base = {
+        "marca": eng.get("focal_brand"), "cliente": eng.get("client"),
+        "proveedor": eng.get("provider"), "mercado": eng.get("market"),
+        "categoria": eng.get("category"),
+        "olas": [w.get("label") for w in p.get("waves") or []],
+    }
+    explicadas = [
+        {"claim": e.get("claim"), "subjects": e.get("subjects") or [],
+         "direction": e.get("direction"), "canal": e.get("channel"),
+         "lectura": e.get("reading")}
+        for e in xp.get("explicadas") or []
+    ]
+    competitivas = group_competitivas(xp)
+
+    lectura = {
+        **base,
+        "entorno": xp.get("entorno") or {},
+        "postura_entorno": xp.get("environment_stance"),
+        "explicadas": explicadas,
+        "competitivas_por_direccion": competitivas,
+        "sin_capa_n": len(xp.get("sin_capa") or []),
+        "nota_motor": xp.get("note"),
+    }
+    prioridades = {
+        **base,
+        "agenda": {"items": ag.get("items") or [],
+                   "nota": ag.get("note") or ag.get("empty_reason")},
+        "filtro_senal": ({"rows": sf.get("rows"), "nota": sf.get("note")}
+                         if sf.get("available") else {"nota": sf.get("reason")}),
+        "senales_vigilancia": (vig.get("signals") if vig.get("available") else None),
+        "escenarios": ({"escenarios": esc.get("scenarios"),
+                        "riesgos": esc.get("risks"),
+                        "dispersion_reglas": esc.get("rule_dispersion"),
+                        "nota": esc.get("note")} if esc.get("available") else None),
+        "decisiones": (dec.get("summary") if dec.get("decisions") else None),
+        "pronostico": {"regla_ganadora": bt.get("winner"), "nota": bt.get("note"),
+                       "track_record": (tr if tr.get("available") else tr.get("reason"))},
+    }
+    ejecutivo = {
+        **base,
+        "hallazgos_deterministas": (p.get("executive") or {}).get("findings") or [],
+        "entorno": xp.get("entorno") or {},
+        "postura_entorno": xp.get("environment_stance"),
+        "explicadas": explicadas,
+        "competitivas_por_direccion": competitivas,
+        "atribucion": ({"variacion_categoria_pct": att.get("category_delta_pct"),
+                        "rows": att.get("rows"), "nota": att.get("note")}
+                       if att.get("available") else None),
+        "ticket": ({"series": tic.get("series"),
+                    "variacion_real_desde_maximo_pct": tic.get("change_from_peak_pct"),
+                    "nota_deflactor": tic.get("deflator_note")}
+                   if tic.get("available") else None),
+        "agenda": ag.get("items") or [],
+        "nota_umbral": sf.get("note"),
+    }
+    return {"executive": ejecutivo, "explanations": lectura, "priorities": prioridades}
+
+
+async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
+    """Las tres narrativas del documento del cliente, generadas por la ruta cerebro.
+
+    Devuelve solo las secciones con narrativa REAL: una que degradó a fallback estático
+    se omite, y el documento cae a su composición determinista — nunca relleno hueco en
+    un PDF de cliente (misma doctrina que ``NarrativeDegradedError`` en los Deep Dive).
+    Sin conclusiones utilizables del proveedor no hay qué narrar: devuelve vacío y manda
+    el ``empty_reason`` determinista.
+    """
+    from shared.narrative.claude_engine import is_static_fallback_text, narrative_engine
+
+    xp = payload["sections"].get("explanations") or {}
+    if not xp.get("available"):
+        return {}
+    ctxs = cerebro_contexts(payload)
+
+    async def _gen(section: str, ctx: Dict[str, Any]):
+        res = await narrative_engine.generate(
+            context=ctx, template=_CEREBRO_TEMPLATES[section], mode="detailed",
+            axis=CEREBRO_AXIS, audience=CEREBRO_AUDIENCE)
+        return section, res.text
+
+    out: Dict[str, str] = {}
+    for section, text in await asyncio.gather(*(_gen(s, c) for s, c in ctxs.items())):
+        if text and not is_static_fallback_text(text):
+            out[section] = text
+    return out
+
+
+def ai_narratives_sync(payload: Dict[str, Any]) -> Dict[str, str]:
+    """Envoltura síncrona para los endpoints ``def`` (corren en threadpool)."""
+    return asyncio.run(ai_narratives(payload))
 
 
 def _methodology(p: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -240,7 +392,11 @@ def _limits(p: Dict[str, Any]) -> List[str]:
         limits.append(f"Posición competitiva no disponible: {cat.get('reason')}")
 
     tick = p["sections"]["ticket"]
-    if tick.get("available") and not tick.get("deflated"):
+    if not tick.get("available"):
+        # La sección del ticket no ocupa un título propio cuando no hay serie: su
+        # ausencia se declara aquí, donde el estándar de la casa declara lo que falta.
+        limits.append(f"El ticket en pesos constantes no se calcula: {tick.get('reason')}")
+    elif tick.get("available") and not tick.get("deflated"):
         limits.append(f"Ticket sin deflactar: {tick.get('reason')}")
     elif tick.get("available") and (tick.get("coverage") or 1.0) < 1.0:
         limits.append(
@@ -269,6 +425,10 @@ def _limits(p: Dict[str, Any]) -> List[str]:
             )
 
     attribution = p["sections"].get("attribution") or {}
+    if not attribution.get("available"):
+        limits.append(
+            f"La atribución categoría/marca no se calcula: {attribution.get('reason')}"
+        )
     env = (attribution.get("environment") or {})
     if attribution.get("available") and not env.get("available"):
         limits.append(
@@ -294,6 +454,18 @@ def _limits(p: Dict[str, Any]) -> List[str]:
                 "Pronósticos sensibles a la regla elegida (la dispersión entre reglas "
                 f"supera la banda muestral): {', '.join(fragile)}."
             )
+
+    # Las secciones estructuralmente vacías con pocas olas (pronóstico puntuado, ledger
+    # de decisiones) ya no ocupan un título propio en el documento: su estado honesto
+    # se declara aquí. Un informe con tres títulos seguidos de "aún no hay X" se lee
+    # incompleto; uno que lo declara en Límites se lee honesto.
+    dec = p["sections"].get("decisions") or {}
+    if not (dec.get("decisions") or []):
+        limits.append(
+            "Aún no hay decisiones del cliente registradas para seguimiento. Cada "
+            "decisión requiere métrica, línea base, ventana de evaluación, umbral de "
+            "éxito y responsable; el ledger aparecerá cuando exista la primera."
+        )
 
     vig = p["sections"].get("vigilance") or {}
     if vig.get("available") and (vig.get("agenda") or {}).get("dropped"):
