@@ -501,17 +501,55 @@ export async function checkDecision(
   return data;
 }
 
+/** Un trabajo de lectura en curso, o terminado. */
+export interface ExtractionJob {
+  extraction_id: string;
+  document: string;
+  status: "queued" | "reading" | "validated" | "rejected" | "confirmed" | "error";
+  running: boolean;
+  pages_done: number;
+  pages_total: number;
+  cells_staged: number;
+  error: string | null;
+  report: PdfIngestReport | null;
+  note: string | null;
+}
+
+/**
+ * Encola la lectura del mazo. Devuelve de inmediato: no espera a que lea.
+ *
+ * Leer un mazo real son decenas de llamadas de visión. Esperarlas dentro de la petición
+ * moría contra el presupuesto de tiempo del proxy después de haberlas pagado todas, sin
+ * dejar nada. El avance se consulta con `getExtractionStatus`.
+ */
 export async function uploadPdf(
   slug: string, file: File, maxPages?: number,
-): Promise<PdfIngestReport> {
+): Promise<ExtractionJob> {
   const form = new FormData();
   form.append("file", file);
   const { data } = await client.post(`${base}/engagements/${slug}/ingest-pdf`, form, {
     headers: { "Content-Type": "multipart/form-data" },
     params: maxPages ? { max_pages: maxPages } : undefined,
-    // Vision reads one slide at a time; a full deck legitimately takes minutes.
-    timeout: 20 * 60 * 1000,
+    // Solo sube el fichero y encola; un mazo grande tarda en viajar, nada más.
+    timeout: 5 * 60 * 1000,
   });
+  return data;
+}
+
+export async function getExtractionStatus(
+  slug: string, extractionId: string,
+): Promise<ExtractionJob> {
+  const { data } = await client.get(
+    `${base}/engagements/${slug}/extractions/${extractionId}/status`);
+  return data;
+}
+
+/** Vuelve a despachar un trabajo interrumpido. No repaga las láminas ya leídas. */
+export async function resumeExtraction(
+  slug: string, extractionId: string,
+): Promise<ExtractionJob> {
+  const { data } = await client.post(
+    `${base}/engagements/${slug}/extractions/${extractionId}/resume`);
   return data;
 }
 
