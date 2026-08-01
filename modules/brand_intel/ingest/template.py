@@ -98,18 +98,26 @@ def build_template(
     ws = wb.create_sheet("Observaciones")
     _write_header(
         ws,
-        ["ola", "marca", "metrica", "segmento", "valor", "base_n", "unidad", "fuente"],
-        [14, 20, 26, 20, 12, 10, 10, 34],
+        ["entrega", "ola", "marca", "metrica", "segmento", "valor", "base_n",
+         "unidad", "fuente"],
+        [22, 14, 20, 26, 20, 12, 10, 10, 34],
     )
-    ws.cell(row=2, column=1, value="2025-05")
-    ws.cell(row=2, column=2, value="mcdonalds")
-    ws.cell(row=2, column=3, value="reach_7d")
-    ws.cell(row=2, column=4, value="total")
-    ws.cell(row=2, column=5, value=26)
-    ws.cell(row=2, column=6, value=300)
-    ws.cell(row=2, column=7, value="pct")
-    ws.cell(row=2, column=8, value="Hot Tracker · lámina 18")
+    ws.cell(row=2, column=1, value="Ola 4 · mar\'26")
+    ws.cell(row=2, column=2, value="2025-05")
+    ws.cell(row=2, column=3, value="mcdonalds")
+    ws.cell(row=2, column=4, value="reach_7d")
+    ws.cell(row=2, column=5, value="total")
+    ws.cell(row=2, column=6, value=26)
+    ws.cell(row=2, column=7, value=300)
+    ws.cell(row=2, column=8, value="pct")
+    ws.cell(row=2, column=9, value="Hot Tracker · lámina 18")
     ws.cell(row=3, column=1,
+            value="entrega = de qué informe salió la cifra. Un tracker reexpone sus olas "
+                  "anteriores en cada entrega y a veces las corrige: sin esta columna, "
+                  "cargar dos informes en un mismo libro funde lo que dijo cada uno y la "
+                  "cifra vigente pasa a depender del orden de las filas. "
+                  "Vacío = todo el libro es una sola entrega.").font = _NOTE_FONT
+    ws.cell(row=4, column=1,
             value="marca vacía = métrica de categoría · base_n vacío = el dato se muestra "
                   "pero no puede sostener un veredicto").font = _NOTE_FONT
 

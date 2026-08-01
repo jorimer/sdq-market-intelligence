@@ -112,8 +112,9 @@ def test_ingest_accepts_a_valid_workbook(db, engagement):
     ws.append(["slug", "nombre", "es_focal", "en_set_categoria", "orden"])
     ws.append(["focal", "Focal", "SI", "SI", 1])
     ws = wb.create_sheet("Observaciones")
-    ws.append(["ola", "marca", "metrica", "segmento", "valor", "base_n", "unidad", "fuente"])
-    ws.append(["w4", "focal", "reach_7d", "total", 50, 300, "pct", "test"])
+    ws.append(["entrega", "ola", "marca", "metrica", "segmento", "valor", "base_n",
+               "unidad", "fuente"])
+    ws.append(["Ola 4", "w4", "focal", "reach_7d", "total", 50, 300, "pct", "test"])
     buf = io.BytesIO()
     wb.save(buf)
 

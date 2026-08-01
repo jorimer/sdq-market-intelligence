@@ -272,7 +272,8 @@ async def ingest(
         raise HTTPException(status_code=400, detail="Se espera un archivo .xlsx.")
     content = await file.read()
     try:
-        report = ingest_workbook(db, eng, content)
+        report = ingest_workbook(db, eng, content,
+                                 document_name=file.filename or "libro.xlsx")
     except Exception as exc:  # noqa: BLE001 — surface the parse failure, never half-commit
         db.rollback()
         logger.exception("Fallo la ingesta de %s", slug)

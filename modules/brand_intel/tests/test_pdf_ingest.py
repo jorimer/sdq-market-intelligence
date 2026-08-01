@@ -573,7 +573,7 @@ def test_an_older_deck_uploaded_last_does_not_walk_the_figure_back(db, engagemen
     out = _deck(db, engagement, "ola3.pdf", {"2025-05": 24.0, "2025-11": 25.0})
 
     assert _value(db, engagement, "2025-11") == 26.0        # sigue corregida
-    assert out["no_reemplazan_por_mazo_mas_nuevo"] == 1     # solo la que discrepa
+    assert out["no_reemplazan_por_entrega_mas_nueva"] == 1     # solo la que discrepa
     # El mazo viejo no cambia nada: donde coincide no hay qué actualizar, y donde
     # discrepa no manda. Queda en el registro, no en el valor vigente.
     assert out["actualizadas"] == 0
