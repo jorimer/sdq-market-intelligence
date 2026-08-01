@@ -13,6 +13,7 @@ exposed through the Data API.
 """
 from __future__ import annotations
 
+import asyncio
 import functools
 import logging
 from typing import Any, Dict, List, Optional
@@ -37,6 +38,8 @@ from modules.brand_intel.models.models import (
     BrandEngagement,
     BrandExtraction,
     BrandExtractionCell,
+    BrandPlanDocument,
+    BrandPlanGoal,
 )
 
 logger = logging.getLogger("sdq.api.brand_intel")
@@ -87,7 +90,9 @@ class EngagementIn(BaseModel):
 
 class DecisionIn(BaseModel):
     title: str = Field(..., min_length=3, max_length=300)
-    metric_code: str
+    # La medida: métrica del tracker XOR fuente externa declarada (exactamente una).
+    metric_code: Optional[str] = None
+    external_measure: Optional[str] = Field(None, max_length=200)
     baseline_wave_code: str
     rationale: Optional[str] = None
     segment: str = "total"
@@ -98,7 +103,8 @@ class DecisionIn(BaseModel):
 
 
 class FeasibilityIn(BaseModel):
-    metric_code: str
+    metric_code: Optional[str] = None
+    external_measure: Optional[str] = Field(None, max_length=200)
     baseline_wave_code: str
     segment: str = "total"
     brand_slug: Optional[str] = None
@@ -766,6 +772,13 @@ def decisions(slug: str, db: Session = Depends(get_db),
 def decision_check(slug: str, payload: FeasibilityIn, db: Session = Depends(get_db),
                    user: User = Depends(get_current_user)) -> Dict[str, Any]:
     eng = _resolve(db, slug, user)
+    # El mismo XOR del alta: un check que acepta ambas medidas en silencio miente
+    # sobre lo que el registro va a aceptar.
+    if bool(payload.metric_code) == bool(payload.external_measure):
+        raise HTTPException(
+            status_code=422,
+            detail="El chequeo requiere exactamente UNA medida: metric_code o "
+                   "external_measure.")
     wave = next((w for w in svc.waves(db, eng.id) if w.code == payload.baseline_wave_code), None)
     if wave is None:
         raise HTTPException(status_code=400,
@@ -773,6 +786,7 @@ def decision_check(slug: str, payload: FeasibilityIn, db: Session = Depends(get_
     return svc.check_decision_feasibility(
         db, eng.id, payload.metric_code, payload.brand_slug, payload.segment,
         wave.id, payload.success_threshold,
+        external_measure=payload.external_measure,
     )
 
 
@@ -781,6 +795,28 @@ def decision_check(slug: str, payload: FeasibilityIn, db: Session = Depends(get_
 def create_decision(slug: str, payload: DecisionIn, db: Session = Depends(get_db),
                     user: User = Depends(require_role(UserRole.analyst))) -> Dict[str, Any]:
     eng = _resolve(db, slug, user)
+    row, check = _register_decision(db, eng, payload)
+    db.commit()
+    # A decision that cannot be evaluated is still recorded — with the reason attached,
+    # so it can be redesigned rather than quietly re-proposed next quarter.
+    return {"id": row.id, "status": row.status, "feasibility": check}
+
+
+def _register_decision(db: Session, eng: BrandEngagement,
+                       payload: DecisionIn) -> tuple:
+    """El ÚNICO camino por el que nace una decisión — a mano o adoptando una meta.
+
+    Un segundo camino divergiría en validaciones y factibilidad; la adopción de metas
+    reusa este para que una meta adoptada sea indistinguible de una tecleada.
+    No commitea: el llamador decide la transacción.
+    """
+    # La medida es UNA: métrica del tracker o fuente externa. Sin ninguna no hay contra
+    # qué emitir veredicto; con ambas no se sabe cuál manda.
+    if bool(payload.metric_code) == bool(payload.external_measure):
+        raise HTTPException(
+            status_code=422,
+            detail="La decisión requiere exactamente UNA medida: metric_code (métrica "
+                   "del tracker) o external_measure (fuente externa declarada).")
     waves = {w.code: w for w in svc.waves(db, eng.id)}
     base = waves.get(payload.baseline_wave_code)
     if base is None:
@@ -794,10 +830,12 @@ def create_decision(slug: str, payload: DecisionIn, db: Session = Depends(get_db
     check = svc.check_decision_feasibility(
         db, eng.id, payload.metric_code, payload.brand_slug, payload.segment,
         base.id, payload.success_threshold,
+        external_measure=payload.external_measure,
     )
     row = BrandDecision(
         engagement_id=eng.id, title=payload.title, rationale=payload.rationale,
-        metric_code=payload.metric_code, segment=payload.segment,
+        metric_code=payload.metric_code, external_measure=payload.external_measure,
+        segment=payload.segment,
         brand_slug=payload.brand_slug, baseline_wave_id=base.id,
         baseline_value=check.get("baseline_value"),
         target_wave_id=target.id if target else None,
@@ -807,10 +845,277 @@ def create_decision(slug: str, payload: DecisionIn, db: Session = Depends(get_db
         detectable_threshold=check.get("detectable_threshold"),
     )
     db.add(row)
+    db.flush()
+    return row, check
+
+
+# ── planes del cliente ────────────────────────────────────────────────
+
+class AdoptGoalIn(BaseModel):
+    """Los campos finales de la adopción — lo que el revisor pudo ajustar.
+
+    Todo es opcional: el default de cada campo sale de la meta extraída. El portón
+    humano está en el ACTO de adoptar, no en obligar a reteclear lo que el lector leyó.
+    """
+
+    title: Optional[str] = Field(None, min_length=3, max_length=300)
+    metric_code: Optional[str] = None
+    external_measure: Optional[str] = Field(None, max_length=200)
+    segment: Optional[str] = None
+    brand_slug: Optional[str] = None
+    baseline_wave_code: str
+    target_wave_code: Optional[str] = None
+    success_threshold: Optional[float] = None
+    owner: Optional[str] = None
+
+
+class DismissGoalIn(BaseModel):
+    note: str = Field(..., min_length=5, max_length=1000)
+
+
+def _goal_dict(g: BrandPlanGoal) -> Dict[str, Any]:
+    return {
+        "id": g.id, "claim": g.claim, "page_number": g.page_number, "kind": g.kind,
+        "metric_code": g.metric_code, "segment": g.segment,
+        "target_from": g.target_from, "target_to": g.target_to,
+        "expected_move": g.expected_move, "owner_declared": g.owner_declared,
+        "measure_source": g.measure_source, "confident": g.confident,
+        "status": g.status, "adopted_decision_id": g.adopted_decision_id,
+        "dismiss_note": g.dismiss_note,
+    }
+
+
+def _plan_dict(p: BrandPlanDocument, goals: List[BrandPlanGoal]) -> Dict[str, Any]:
+    return {
+        "id": p.id, "filename": p.filename, "title": p.title,
+        "source_org": p.source_org, "uploaded_by": p.uploaded_by,
+        "page_count": p.page_count, "status": p.status, "note": p.note,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+        "goals": {
+            "total": len(goals),
+            "propuestas": sum(1 for g in goals if g.status == "propuesta"),
+            "adoptadas": sum(1 for g in goals if g.status == "adoptada"),
+            "descartadas": sum(1 for g in goals if g.status == "descartada"),
+        },
+    }
+
+
+def _plan_goals(db: Session, plan_id: str) -> List[BrandPlanGoal]:
+    return (db.query(BrandPlanGoal)
+            .filter(BrandPlanGoal.plan_document_id == plan_id)
+            .order_by(BrandPlanGoal.page_number, BrandPlanGoal.created_at)
+            .all())
+
+
+def _resolve_plan(db: Session, eng: BrandEngagement, plan_id: str) -> BrandPlanDocument:
+    plan = (db.query(BrandPlanDocument)
+            .filter(BrandPlanDocument.id == plan_id,
+                    BrandPlanDocument.engagement_id == eng.id)
+            .first())
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Plan no encontrado.")
+    return plan
+
+
+@router.post("/engagements/{slug}/plans", status_code=201,
+             summary="S5 · Subir un plan del cliente (el lector propone sus metas)")
+async def upload_plan(
+    slug: str,
+    file: UploadFile = File(..., description="Plan del cliente: .pdf o .html"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Lee el plan sobre su capa de texto y deja sus metas como PROPUESTAS.
+
+    Nada entra al ledger aquí: el lector propone, y solo la adopción (revisión humana)
+    convierte una meta en decisión. Síncrono a propósito — la capa de texto son 1-2
+    llamadas, no la pasada de visión por lámina de los mazos.
+    """
+    from modules.brand_intel.ingest import plans as plan_reader
+    from modules.brand_intel.ingest.discovery import _page_texts
+
+    eng = _resolve(db, slug, user)
+    name = (file.filename or "").lower()
+    if not name.endswith((".pdf", ".html", ".htm")):
+        raise HTTPException(status_code=400, detail="Se espera un archivo .pdf o .html.")
+    content = await file.read()
+
+    # El vocabulario se resuelve ANTES (la sesión de DB no viaja a otro thread); la
+    # lectura —cliente Anthropic síncrono, 30-60 s— corre en un worker thread para no
+    # congelar el event loop entero (mismo patrón que discover_structure y #491).
+    vocab = svc.vocabulary_for(db, str(eng.id))
+    try:
+        if name.endswith(".pdf"):
+            pages = await asyncio.to_thread(_page_texts, content)
+            page_count: Optional[int] = len(pages)
+        else:
+            pages = [plan_reader.html_to_text(content)]
+            page_count = None
+        reading = await asyncio.to_thread(plan_reader.read_plan, pages, vocab=vocab)
+    except Exception as exc:  # noqa: BLE001 — surface the failure, never half-commit
+        db.rollback()
+        logger.exception("No se pudo leer el plan de %s", slug)
+        # Un fallo del lector (sin clave, refusal, corte del API) es del SERVIDOR, no
+        # del archivo del usuario: 502 con mensaje saneado, nunca la excepción cruda.
+        raise HTTPException(status_code=502,
+                            detail="La lectura del plan no está disponible en este "
+                                   "momento. El documento no se guardó; intenta de "
+                                   "nuevo o revisa el estado del servicio.") from exc
+
+    # Resubir el MISMO archivo relee sobre el mismo plan: el store reemplaza solo las
+    # propuestas pendientes y preserva lo que un humano ya adoptó o descartó. Sin esta
+    # reconciliación, cada subida duplicaría todas las metas junto a las adoptadas.
+    filename = file.filename or "plan"
+    plan = (db.query(BrandPlanDocument)
+            .filter(BrandPlanDocument.engagement_id == eng.id,
+                    BrandPlanDocument.filename == filename)
+            .first())
+    if plan is None:
+        plan = BrandPlanDocument(engagement_id=eng.id, filename=filename)
+        db.add(plan)
+    plan.title = reading.title or None                     # type: ignore[assignment]
+    plan.source_org = reading.source_org or None           # type: ignore[assignment]
+    plan.uploaded_by = getattr(user, "email", None)        # type: ignore[assignment]
+    plan.page_count = page_count                           # type: ignore[assignment]
+    plan.raw_text = "\n\n".join(pages)[:plan_reader.MAX_CHARS]  # type: ignore[assignment]
+    plan.note = (None if reading.goals else                # type: ignore[assignment]
+                 "El lector no encontró metas: documento sin capa de texto o sin "
+                 "compromisos medibles.")
+    db.flush()
+    summary = plan_reader.store_plan_goals(db, str(eng.id), str(plan.id), reading)
+    _refresh_plan_status(db, plan)
     db.commit()
-    # A decision that cannot be evaluated is still recorded — with the reason attached,
-    # so it can be redesigned rather than quietly re-proposed next quarter.
-    return {"id": row.id, "status": row.status, "feasibility": check}
+    return {**_plan_dict(plan, _plan_goals(db, str(plan.id))), "lectura": summary}
+
+
+@router.get("/engagements/{slug}/plans", summary="S5 · Planes del cliente")
+def list_plans(slug: str, db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)) -> List[Dict[str, Any]]:
+    eng = _resolve(db, slug, user)
+    plans = (db.query(BrandPlanDocument)
+             .filter(BrandPlanDocument.engagement_id == eng.id)
+             .order_by(BrandPlanDocument.created_at.desc())
+             .all())
+    return [_plan_dict(p, _plan_goals(db, str(p.id))) for p in plans]
+
+
+@router.get("/engagements/{slug}/plans/{plan_id}",
+            summary="S5 · Un plan con sus metas propuestas")
+def plan_detail(slug: str, plan_id: str, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    eng = _resolve(db, slug, user)
+    plan = _resolve_plan(db, eng, plan_id)
+    goals = _plan_goals(db, str(plan.id))
+    return {**_plan_dict(plan, goals), "metas": [_goal_dict(g) for g in goals]}
+
+
+def _refresh_plan_status(db: Session, plan: BrandPlanDocument) -> None:
+    """`revisado` cuando ninguna meta queda propuesta — estado derivado, nunca a mano."""
+    db.flush()  # la sesión corre con autoflush=False: sin esto el conteo lee el estado viejo
+    pending = (db.query(BrandPlanGoal)
+               .filter(BrandPlanGoal.plan_document_id == plan.id,
+                       BrandPlanGoal.status == "propuesta")
+               .count())
+    plan.status = "propuesto" if pending else "revisado"  # type: ignore[assignment]
+
+
+@router.post("/engagements/{slug}/plans/{plan_id}/goals/{goal_id}/adopt",
+             summary="S5 · Adoptar una meta del plan como decisión del ledger")
+def adopt_goal(slug: str, plan_id: str, goal_id: str, payload: AdoptGoalIn,
+               db: Session = Depends(get_db),
+               user: User = Depends(require_role(UserRole.analyst))) -> Dict[str, Any]:
+    """El portón humano: la meta propuesta se vuelve una BrandDecision por el MISMO
+    camino que una decisión tecleada (validación y factibilidad incluidas)."""
+    eng = _resolve(db, slug, user)
+    plan = _resolve_plan(db, eng, plan_id)
+    goal = (db.query(BrandPlanGoal)
+            .filter(BrandPlanGoal.id == goal_id,
+                    BrandPlanGoal.plan_document_id == plan.id)
+            .first())
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Meta no encontrada.")
+    # Claim ATÓMICO: el UPDATE condicionado al estado detiene la doble adopción
+    # concurrente (dos pestañas, doble clic) — un chequeo-y-luego-escritura no.
+    # Nada se commitea hasta el final: si el registro falla, el rollback lo deshace.
+    claimed = (db.query(BrandPlanGoal)
+               .filter(BrandPlanGoal.id == goal.id,
+                       BrandPlanGoal.status == "propuesta")
+               .update({"status": "adoptada"}, synchronize_session="fetch"))
+    if not claimed:
+        raise HTTPException(status_code=409,
+                            detail=f"La meta ya está {goal.status}: solo una meta "
+                                   "propuesta se puede adoptar.")
+
+    # Defaults desde la meta extraída; el revisor solo ajusta lo que quiera ajustar.
+    # El MODO lo decide cuál medida llega en el payload: el drawer manda una U otra, y
+    # Pydantic no distingue null de omitido — heredar la métrica de la meta cuando el
+    # revisor eligió fuente externa dejaba AMBAS medidas y el XOR rechazaba la adopción.
+    goal_metric = str(goal.metric_code) if goal.metric_code is not None else None
+    goal_source = str(goal.measure_source) if goal.measure_source else None
+    if goal_source and goal_source.strip().lower() == "tracker":
+        # "tracker" es el marcador del lector, no una fuente externa nombrable.
+        goal_source = None
+    if payload.external_measure:
+        metric, external = None, payload.external_measure
+    elif payload.metric_code:
+        metric, external = payload.metric_code, None
+    else:
+        metric = goal_metric
+        external = None if metric else goal_source
+    goal_move = float(goal.expected_move) if goal.expected_move is not None else None
+    decision_in = DecisionIn(
+        title=payload.title or str(goal.claim)[:300],
+        metric_code=metric or None,
+        external_measure=external,
+        baseline_wave_code=payload.baseline_wave_code,
+        rationale=(f"Adoptada del plan «{plan.title or plan.filename}»"
+                   + (f", página {goal.page_number}" if goal.page_number else "")
+                   + f": «{goal.claim}»"),
+        segment=payload.segment or str(goal.segment or "total"),
+        brand_slug=payload.brand_slug,
+        target_wave_code=payload.target_wave_code,
+        success_threshold=(payload.success_threshold
+                           if payload.success_threshold is not None
+                           else goal_move),
+        owner=payload.owner or (str(goal.owner_declared)
+                                if goal.owner_declared else None),
+    )
+    try:
+        row, check = _register_decision(db, eng, decision_in)
+    except HTTPException:
+        # El claim atómico ya marcó la meta: si el registro la rechaza (XOR, ola
+        # inexistente), se deshace EXPLÍCITAMENTE — confiar en el teardown de la
+        # sesión dejaría la meta "adoptada" sin decisión en sesiones compartidas.
+        db.rollback()
+        raise
+    goal.adopted_decision_id = row.id
+    _refresh_plan_status(db, plan)
+    db.commit()
+    return {"decision_id": row.id, "status": row.status, "feasibility": check,
+            "goal": _goal_dict(goal)}
+
+
+@router.post("/engagements/{slug}/plans/{plan_id}/goals/{goal_id}/dismiss",
+             summary="S5 · Descartar una meta propuesta (con motivo)")
+def dismiss_goal(slug: str, plan_id: str, goal_id: str, payload: DismissGoalIn,
+                 db: Session = Depends(get_db),
+                 user: User = Depends(require_role(UserRole.analyst))) -> Dict[str, Any]:
+    eng = _resolve(db, slug, user)
+    plan = _resolve_plan(db, eng, plan_id)
+    goal = (db.query(BrandPlanGoal)
+            .filter(BrandPlanGoal.id == goal_id,
+                    BrandPlanGoal.plan_document_id == plan.id)
+            .first())
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Meta no encontrada.")
+    if goal.status != "propuesta":
+        raise HTTPException(status_code=409,
+                            detail=f"La meta ya está {goal.status}.")
+    goal.status = "descartada"  # type: ignore[assignment]
+    goal.dismiss_note = payload.note  # type: ignore[assignment]
+    _refresh_plan_status(db, plan)
+    db.commit()
+    return _goal_dict(goal)
 
 
 # ── report ────────────────────────────────────────────────────────────

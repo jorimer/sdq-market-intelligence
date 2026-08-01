@@ -47,6 +47,7 @@ def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
     decisions = svc.evaluate_decisions(db, eid)
     scenarios = svc.scenarios_analysis(db, eid)
     vigilance = svc.vigilance_analysis(db, eid)
+    plan = svc.plan_readiness(db, str(eid))
 
     payload: Dict[str, Any] = {
         "engagement": {
@@ -76,6 +77,7 @@ def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
             "decisions": decisions,
             "scenarios": scenarios,
             "vigilance": vigilance,
+            "plan": plan,
         },
     }
     payload["executive"] = _executive(payload)
@@ -181,6 +183,7 @@ _CEREBRO_TEMPLATES = {
     "executive": "brand_context_executive",
     "explanations": "brand_context_reading",
     "priorities": "brand_context_priorities",
+    "plan": "brand_plan_readiness",
 }
 
 
@@ -259,6 +262,27 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         "pronostico": {"regla_ganadora": bt.get("winner"), "nota": bt.get("note"),
                        "track_record": (tr if tr.get("available") else tr.get("reason"))},
     }
+    plan = s.get("plan") or {}
+    plan_ctx = {
+        **base,
+        "documentos": plan.get("documents") or [],
+        "metas_extraidas": plan.get("goals") or [],
+        # Cada fila trae el veredicto MECÁNICO de medibilidad (feasible/gap/needs/
+        # umbral detectable) recomputado por el ledger: el modelo lo narra y
+        # prescribe sobre él; jamás lo recalcula.
+        "compromisos": plan.get("rows") or [],
+        "nota_motor": plan.get("note"),
+        "instrumento": {
+            "olas_con_dato": base["olas"],
+            "metricas_cargadas": [
+                {"metric_code": r.get("metric_code"), "label": r.get("label"),
+                 "corte": r.get("segment"), "base": r.get("base_n"),
+                 "minimo_detectable_pp": r.get("threshold")}
+                for r in (sf.get("rows") or [])
+            ] if sf.get("available") else [],
+            "ticket_con_serie": bool(tic.get("available")),
+        },
+    }
     ejecutivo = {
         **base,
         "hallazgos_deterministas": (p.get("executive") or {}).get("findings") or [],
@@ -276,7 +300,8 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         "agenda": ag.get("items") or [],
         "nota_umbral": sf.get("note"),
     }
-    return {"executive": ejecutivo, "explanations": lectura, "priorities": prioridades}
+    return {"executive": ejecutivo, "explanations": lectura,
+            "priorities": prioridades, "plan": plan_ctx}
 
 
 async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -285,15 +310,22 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
     Devuelve solo las secciones con narrativa REAL: una que degradó a fallback estático
     se omite, y el documento cae a su composición determinista — nunca relleno hueco en
     un PDF de cliente (misma doctrina que ``NarrativeDegradedError`` en los Deep Dive).
-    Sin conclusiones utilizables del proveedor no hay qué narrar: devuelve vacío y manda
-    el ``empty_reason`` determinista.
+    Cada sección narra solo si su insumo existe: las tres del trimestre requieren
+    conclusiones utilizables; la del plan, planes o decisiones registradas.
     """
     from shared.narrative.claude_engine import is_static_fallback_text, narrative_engine
 
     xp = payload["sections"].get("explanations") or {}
-    if not xp.get("available"):
-        return {}
+    plan = payload["sections"].get("plan") or {}
     ctxs = cerebro_contexts(payload)
+    if not xp.get("available"):
+        ctxs.pop("executive", None)
+        ctxs.pop("explanations", None)
+        ctxs.pop("priorities", None)
+    if not plan.get("available"):
+        ctxs.pop("plan", None)
+    if not ctxs:
+        return {}
 
     async def _gen(section: str, ctx: Dict[str, Any]):
         res = await narrative_engine.generate(
@@ -465,6 +497,29 @@ def _limits(p: Dict[str, Any]) -> List[str]:
             "Aún no hay decisiones del cliente registradas para seguimiento. Cada "
             "decisión requiere métrica, línea base, ventana de evaluación, umbral de "
             "éxito y responsable; el ledger aparecerá cuando exista la primera."
+        )
+
+    # Brechas de instrumento que el PLAN del cliente refiere — generadas del ledger,
+    # nunca escritas a mano. La imparcialidad manda: un corte sin cargar es un hueco
+    # de NUESTRA base, y se declara como tal.
+    plan = p["sections"].get("plan") or {}
+    cortes = sorted({
+        f"«{r['segment']}» ({r['medida']})"
+        for r in (plan.get("rows") or [])
+        if r.get("gap") == "sin_datos_del_corte" and (r.get("segment") or "total") != "total"
+    })
+    if cortes:
+        limits.append(
+            "El plan del cliente refiere cortes del tracker sin datos en la base "
+            f"cargada por SDQ: {', '.join(cortes)}. Hasta cargarlos (o pedirlos en la "
+            "próxima entrega del proveedor), esas decisiones quedan inevaluables."
+        )
+    externas = sum(1 for r in (plan.get("rows") or []) if r.get("gap") == "dato_externo")
+    if externas:
+        limits.append(
+            f"{externas} compromiso(s) del plan se mide(n) con fuentes externas al "
+            "tracker (plataformas, dato transaccional): el informe los registra y "
+            "vigila, pero su veredicto requiere ese dato del cliente."
         )
 
     vig = p["sections"].get("vigilance") or {}

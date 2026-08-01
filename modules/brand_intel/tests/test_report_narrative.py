@@ -78,7 +78,7 @@ def test_generate_routes_through_the_cerebro_not_legacy(monkeypatch):
 
 def test_sections_list_is_the_new_compact_one():
     keys = [k for k, _ in report_docs.SECTIONS]
-    assert keys == ["executive", "explanations", "priorities", "ticket",
+    assert keys == ["executive", "explanations", "priorities", "plan", "ticket",
                     "attribution", "methodology", "sources", "limits"]
     # Las secciones que eran títulos con "aún no hay X" ya no existen como sección.
     for gone in ("forecast", "forecast_backtest", "forecast_track_record",
@@ -106,6 +106,9 @@ def _payload(**overrides) -> Dict[str, Any]:
             "decisions": {"decisions": [], "summary": {}},
             "scenarios": {"available": False, "reason": "—"},
             "vigilance": {"available": False, "reason": "—"},
+            "plan": {"available": False, "documents": [], "goals": [], "rows": [],
+                     "note": "Aún no hay planes del cliente cargados ni decisiones "
+                             "registradas para seguimiento."},
         },
         "executive": {"findings": [], "empty_reason": "Sin conclusiones del proveedor "
                       "utilizables ni insumos de entorno."},
@@ -229,7 +232,7 @@ def test_cerebro_contexts_only_repackage_what_was_computed():
     assert grupos["baja"]["n"] == 2 and grupos["sube"]["n"] == 1
     assert grupos["baja"]["lectura"] == "r1"
     assert lectura["sin_capa_n"] == 1
-    assert set(ctxs) == {"executive", "explanations", "priorities"}
+    assert set(ctxs) == {"executive", "explanations", "priorities", "plan"}
 
 
 def test_ai_narratives_skip_when_there_is_nothing_to_narrate():

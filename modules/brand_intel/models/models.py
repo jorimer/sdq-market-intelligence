@@ -12,6 +12,8 @@ Tables:
   - BrandEntity      — a brand in the engagement's competitive set.
   - BrandObservation — one measurement: wave x brand x metric x segment, WITH its base.
   - BrandDecision    — the ledger: a client decision with metric, baseline, window, verdict.
+  - BrandPlanDocument— a client plan document (agency strategy, media plan) with its text.
+  - BrandPlanGoal    — a goal the reader extracted from a plan, pending human adoption.
   - BrandForecast    — a frozen forecast and, later, its score against the actual.
 
 ``base_n`` on the observation is not bookkeeping: it is what makes every confidence band
@@ -241,9 +243,15 @@ class BrandDecision(UUIDMixin, Base):
     """The accountability ledger. The subject is THE CLIENT and its decisions.
 
     Not the research provider's recommendations: a decision may originate in the tracker,
-    the agency or the operation. Five fields are mandatory by design — a decision that
-    cannot name its metric, baseline, window and threshold cannot be evaluated, and the
-    ledger refuses it before budget is spent on it.
+    the agency or the operation. A decision names its measure, baseline, window and
+    threshold — one that cannot is refused before budget is spent on it.
+
+    The measure is EITHER a tracker metric (``metric_code``) OR a declared external
+    source (``external_measure``: platform analytics, transactional data…). External
+    goals exist because half of a real client plan lives outside the survey — leaving
+    them out would make the ledger blind to most of what the client committed to. They
+    never enter the sampling arithmetic: the ledger keeps them visible as
+    "se mide con {fuente}; el tracker no la evalúa" instead of pretending a verdict.
     """
 
     __tablename__ = "brand_decisions"
@@ -252,8 +260,9 @@ class BrandDecision(UUIDMixin, Base):
     engagement_id = Column(String, nullable=False)
     title = Column(String(300), nullable=False)
     rationale = Column(Text, nullable=True)
-    # The five mandatory fields
-    metric_code = Column(String(60), nullable=False)
+    # The measure: tracker metric XOR external source (validated at the API boundary).
+    metric_code = Column(String(60), nullable=True)
+    external_measure = Column(Text, nullable=True)
     segment = Column(String(60), nullable=False, default="total")
     brand_slug = Column(String(60), nullable=True)
     baseline_wave_id = Column(String, nullable=False)
@@ -436,6 +445,78 @@ class BrandDiscrepancy(UUIDMixin, Base):
     # abierta | discutida | acordada | retirada
     resolution_note = Column(Text, nullable=True)      # qué se acordó, o por qué se retiró
     updated_by = Column(String(120), nullable=True)
+
+
+class BrandPlanDocument(UUIDMixin, Base):
+    """Un documento de plan que el cliente compartió, con su texto como recibo maestro.
+
+    Es la puerta de entrada de los planes al ledger: hasta ahora una decisión solo nacía
+    tecleada en el formulario, y los documentos reales del cliente (la estrategia de su
+    agencia, su plan de medios) se quedaban fuera del sistema. El documento se guarda con
+    su capa de texto completa porque cada meta extraída se cita contra él — mismo
+    principio del recibo que las conclusiones del proveedor.
+
+    Dato privado del encargo: ``engagement_id`` gobierna el acceso (404, no 403), fuera
+    del catálogo y de la Data API, como todo el módulo. Y es contenido NO CONFIABLE:
+    de un plan se EXTRAE, jamás se obedece — el lector lo trata como dato.
+    """
+
+    __tablename__ = "brand_plan_documents"
+    __table_args__ = (
+        Index("ix_brand_plan_document_engagement", "engagement_id", "status"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    filename = Column(String(300), nullable=False)
+    title = Column(String(300), nullable=True)          # del documento, si el lector lo ve
+    source_org = Column(String(200), nullable=True)     # agencia/autor declarado en el doc
+    uploaded_by = Column(String(120), nullable=True)
+    page_count = Column(Integer, nullable=True)         # None para HTML (sin páginas)
+    raw_text = Column(Text, nullable=True)              # la capa de texto: recibo maestro
+    status = Column(String(20), nullable=False, default="propuesto")
+    # propuesto (metas pendientes de revisión) | revisado (todas adoptadas o descartadas)
+    note = Column(Text, nullable=True)
+
+
+class BrandPlanGoal(UUIDMixin, Base):
+    """Una meta extraída de un plan del cliente, pendiente de adopción humana.
+
+    El lector PROPONE; solo una persona ADOPTA. A diferencia de las conclusiones del
+    proveedor (sin portón, porque no alimentan aritmética), una meta adoptada se vuelve
+    una ``BrandDecision``: fija umbral, responsable y sale en el informe del cliente con
+    veredicto ola tras ola. Ese portón es el mismo de las cifras, y por el mismo motivo.
+
+    ``claim`` es LITERAL — la meta con las palabras del documento — y ``page_number``
+    la ancla. Una meta sin métrica del tracker no se descarta: lleva su fuente externa
+    declarada (``measure_source``), porque la mitad de un plan real vive fuera de la
+    encuesta y un seguimiento que la ignora queda cojo.
+    """
+
+    __tablename__ = "brand_plan_goals"
+    __table_args__ = (
+        Index("ix_brand_plan_goal_engagement", "engagement_id", "status"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    plan_document_id = Column(String, nullable=False)
+    claim = Column(Text, nullable=False)                # literal, nunca reescrita
+    page_number = Column(Integer, nullable=True)        # None para HTML sin paginación
+    kind = Column(String(20), nullable=False, default="meta")
+    # meta (con objetivo evaluable) | accion (sin métrica: citable, no evaluable)
+    metric_code = Column(String(60), nullable=True)     # mapeada al diccionario, si aplica
+    segment = Column(String(60), nullable=False, default="total")
+    target_from = Column(Float, nullable=True)          # nivel de partida declarado
+    target_to = Column(Float, nullable=True)            # nivel objetivo declarado
+    expected_move = Column(Float, nullable=True)        # movimiento esperado (pp o unidad)
+    owner_declared = Column(String(200), nullable=True) # a quién el documento la asigna
+    measure_source = Column(String(200), nullable=True)
+    # "tracker" | fuente externa declarada ("analytics de plataformas", "dato transaccional")
+    confident = Column(Boolean, default=True, nullable=False)
+
+    status = Column(String(20), nullable=False, default="propuesta")
+    # propuesta | adoptada | descartada
+    adopted_decision_id = Column(String, nullable=True)  # FK lógica → BrandDecision
+    dismiss_note = Column(Text, nullable=True)
 
 
 class BrandForecast(UUIDMixin, Base):

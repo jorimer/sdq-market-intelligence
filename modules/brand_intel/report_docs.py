@@ -36,6 +36,7 @@ SECTIONS: List[Tuple[str, str]] = [
     ("executive", "Resumen ejecutivo"),
     ("explanations", "Lectura del trimestre"),
     ("priorities", "Qué mover y qué no"),
+    ("plan", "El plan bajo el instrumento"),
     ("ticket", "El ticket en pesos constantes"),
     ("attribution", "¿La marca o el mercado?"),
     ("methodology", "Metodología"),
@@ -65,6 +66,15 @@ _PRIORITY_LABEL = {"alta": "Alta", "media": "Media", "baja": "Baja"}
 _STATUS_LABEL = {"achieved": "Lograda", "worsened": "Empeoró",
                  "not_detectable": "No detectable", "unevaluable": "Inevaluable",
                  "open": "Abierta"}
+
+#: Estados de medibilidad de un compromiso del plan (categorías mecánicas del ledger).
+_GAP_LABEL = {
+    "evaluable": "Evaluable hoy",
+    "sub_detectable": "Meta menor al mínimo detectable",
+    "sin_datos_del_corte": "Sin datos del corte en el libro",
+    "sin_umbral": "Sin umbral de éxito declarado",
+    "dato_externo": "Se mide con fuente externa",
+}
 
 
 def _md_list(items: Sequence[str]) -> str:
@@ -149,6 +159,24 @@ def _fallback_priorities(s: Dict[str, Any]) -> str:
     return "\n\n".join(p for p in partes if p)
 
 
+def _fallback_plan(plan: Dict[str, Any]) -> str:
+    """El plan bajo el instrumento, composición determinista: los veredictos mecánicos
+    de medibilidad con su prescripción corta — cifras correctas, sin prosa de juicio."""
+    rows = plan.get("rows") or []
+    partes: List[str] = [str(plan.get("note") or "")]
+    if rows:
+        partes.append(_md_list([
+            f"**{r['title']}** — {_GAP_LABEL.get(r['gap'], r['gap'])}. {r['needs']}"
+            for r in rows]))
+    docs = plan.get("documents") or []
+    if docs:
+        partes.append("Documentos del plan cargados: " + "; ".join(
+            f"«{d.get('title') or d.get('filename')}»"
+            + (f" ({d['source_org']})" if d.get("source_org") else "")
+            for d in docs) + ".")
+    return "\n\n".join(x for x in partes if x)
+
+
 def narratives_and_tables(
     payload: Dict[str, Any],
     ai: Optional[Dict[str, str]] = None,
@@ -212,9 +240,26 @@ def narratives_and_tables(
                        [["Decisión", "Indicador", "Estado", "Movimiento",
                          "Mínimo detectable"]] +
                        [[r["title"], r["label"],
-                         _STATUS_LABEL.get(r["status"], r["status"]),
+                         ("Fuente externa" if r.get("external_measure")
+                          else _STATUS_LABEL.get(r["status"], r["status"])),
                          _fmt(r["observed_delta"], " pp"),
                          _fmt(r["detectable_threshold"], " pp")] for r in filas_dec]))
+
+    # ── El plan bajo el instrumento ── (solo con planes o decisiones; sin ellos, el
+    # estado vive en Límites en vez de un título con una frase de disculpa)
+    plan = s.get("plan") or {}
+    if plan.get("available"):
+        n["plan"] = ai.get("plan") or _fallback_plan(plan)
+        filas_plan = plan.get("rows") or []
+        if filas_plan:
+            tables.append(("Metas del plan y su medibilidad",
+                           [["Meta", "Medida", "Corte", "Estado",
+                             "Mínimo detectable", "Qué falta"]] +
+                           [[r["title"], r["medida"], r["segment"],
+                             _GAP_LABEL.get(r["gap"], r["gap"]),
+                             _fmt(r["detectable_threshold"], " pp")
+                             if r.get("detectable_threshold") is not None else "—",
+                             r["needs"]] for r in filas_plan]))
 
     # ── Ticket ── (solo con serie; sin serie, el motivo ya está en Límites)
     tic = s.get("ticket") or {}

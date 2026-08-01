@@ -70,6 +70,7 @@ import { ExtractionReviewDrawer } from "../components/ExtractionReviewDrawer";
 import { StructureDrawer } from "../components/StructureDrawer";
 import { DeleteEngagementDrawer } from "../components/DeleteEngagementDrawer";
 import { ConclusionsPanel } from "../components/ConclusionsPanel";
+import { PlansPanel } from "../components/PlansPanel";
 
 type Status = "loading" | "error" | "ready";
 
@@ -1205,6 +1206,17 @@ export function BrandIntelPage() {
       )}
 
       <ConclusionsPanel slug={slug} />
+
+      {detail && (
+        <PlansPanel
+          slug={slug}
+          dataWaves={category?.waves ?? []}
+          allWaves={detail.waves.map((w) => ({ code: w.code, label: w.label }))}
+          metrics={signal?.rows ?? []}
+          focalBrand={detail.brands.find((b) => b.is_focal)?.slug ?? null}
+          onLedgerChange={() => void load(slug)}
+        />
+      )}
 
       {category?.available ? (
         <>

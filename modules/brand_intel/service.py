@@ -49,6 +49,8 @@ from modules.brand_intel.models.models import (
     BrandForecast,
     BrandObservation,
     BrandObservationReading,
+    BrandPlanDocument,
+    BrandPlanGoal,
     BrandWave,
 )
 
@@ -993,6 +995,28 @@ def evaluate_decisions(db: Session, engagement_id: str) -> Dict[str, Any]:
     )
     results, verdicts = [], []
     for d in rows:
+        if d.metric_code is None:
+            # Medida EXTERNA: el tracker no puede evaluarla. El veredicto queda
+            # declarado como inevaluable-por-instrumento con su fuente — nunca entra
+            # a la aritmética muestral ni finge un estado que ninguna ola resolverá.
+            v = ldg.Verdict(ldg.UNEVALUABLE, None, None,
+                            external_measure_note(d.external_measure or "una fuente externa"))
+            d.status = v.status
+            d.verdict_note = v.note
+            verdicts.append(v)
+            results.append({
+                "id": d.id, "title": d.title, "metric": None,
+                "label": f"Fuente externa: {d.external_measure}",
+                "segment": d.segment, "owner": d.owner,
+                "baseline_wave": ws[d.baseline_wave_id].label if d.baseline_wave_id in ws else None,
+                "target_wave": ws[d.target_wave_id].label if d.target_wave_id in ws else None,
+                "baseline_value": None, "target_value": None,
+                "status": v.status, "observed_delta": None,
+                "detectable_threshold": None, "note": v.note,
+                "external_measure": d.external_measure,
+            })
+            continue
+
         base_obs = _decision_obs(db, engagement_id, d, d.baseline_wave_id)
         targ_obs = _decision_obs(db, engagement_id, d, d.target_wave_id) if d.target_wave_id else None
         m = get_metric(d.metric_code)
@@ -1023,6 +1047,7 @@ def evaluate_decisions(db: Session, engagement_id: str) -> Dict[str, Any]:
             "target_value": targ_obs.value if targ_obs else None,
             "status": v.status, "observed_delta": v.observed_delta,
             "detectable_threshold": v.detectable_threshold, "note": v.note,
+            "external_measure": None,
         })
 
     return {"decisions": results, "summary": ldg.summarize(verdicts)}
@@ -1207,11 +1232,30 @@ def vigilance_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
     }
 
 
+def external_measure_note(external_measure: str) -> str:
+    """La nota canónica de una decisión con medida externa — una sola redacción."""
+    return (f"Se mide con {external_measure}; el tracker no la evalúa — el veredicto "
+            "requiere ese dato externo.")
+
+
 def check_decision_feasibility(
-    db: Session, engagement_id: str, metric_code: str, brand_slug: Optional[str],
+    db: Session, engagement_id: str, metric_code: Optional[str],
+    brand_slug: Optional[str],
     segment: str, baseline_wave_id: str, success_threshold: Optional[float],
+    external_measure: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Can this decision ever be evaluated? Run before committing budget to it."""
+    if metric_code is None:
+        # Meta con medida EXTERNA: registrable y visible, pero fuera de la aritmética
+        # muestral — ninguna ola del tracker podrá emitirle veredicto.
+        return {
+            "feasible": False,
+            "detectable_threshold": None,
+            "reason": external_measure_note(external_measure or "una fuente externa"),
+            "baseline_value": None,
+            "baseline_base_n": None,
+            "external": True,
+        }
     obs = (
         db.query(BrandObservation)
         .filter(
@@ -1235,6 +1279,109 @@ def check_decision_feasibility(
         "reason": check.reason,
         "baseline_value": obs.value if obs else None,
         "baseline_base_n": obs.base_n if obs else None,
+    }
+
+
+#: Categorías MECÁNICAS de brecha de medibilidad — derivadas del motivo de la
+#: factibilidad, nunca del juicio del modelo. El LLM las narra y prescribe sobre ellas.
+GAP_EVALUABLE = "evaluable"
+GAP_SUB_DETECTABLE = "sub_detectable"
+GAP_SIN_DATOS = "sin_datos_del_corte"
+GAP_SIN_UMBRAL = "sin_umbral"
+GAP_EXTERNA = "dato_externo"
+
+
+def plan_readiness(db: Session, engagement_id: str) -> Dict[str, Any]:
+    """El plan del cliente bajo el instrumento: qué puede medirse HOY y qué falta.
+
+    La aritmética es la del ledger (``check_decision_feasibility``), recomputada aquí a
+    propósito: ``evaluate_decisions`` sobreescribe el veredicto de registro con el estado
+    de evaluación ("abierta" mientras no llegue la ola), y la MEDIBILIDAD es una pregunta
+    distinta del RESULTADO — este bloque responde la primera. Nada de LLM en las
+    categorías: el modelo narra y prescribe sobre lo que aquí se computa.
+    """
+    docs = (db.query(BrandPlanDocument)
+            .filter(BrandPlanDocument.engagement_id == engagement_id)
+            .order_by(BrandPlanDocument.created_at)
+            .all())
+    goals = (db.query(BrandPlanGoal)
+             .filter(BrandPlanGoal.engagement_id == engagement_id,
+                     BrandPlanGoal.status != "descartada")
+             .order_by(BrandPlanGoal.page_number)
+             .all())
+    decisions = (db.query(BrandDecision)
+                 .filter(BrandDecision.engagement_id == engagement_id)
+                 .all())
+
+    rows: List[Dict[str, Any]] = []
+    for d in decisions:
+        if d.metric_code is None:
+            check: Dict[str, Any] = {
+                "feasible": False, "detectable_threshold": None,
+                "reason": external_measure_note(d.external_measure or "una fuente externa"),
+                "baseline_value": None,
+            }
+            gap = GAP_EXTERNA
+            needs = f"Dato de {d.external_measure or 'la fuente externa declarada'}."
+            medida = f"Fuente externa: {d.external_measure}"
+        else:
+            check = check_decision_feasibility(
+                db, engagement_id, str(d.metric_code),
+                str(d.brand_slug) if d.brand_slug is not None else None,
+                str(d.segment or "total"), str(d.baseline_wave_id),
+                float(d.success_threshold) if d.success_threshold is not None else None,
+            )
+            medida = label_for(str(d.metric_code))
+            if check["feasible"]:
+                gap, needs = GAP_EVALUABLE, "Nada: la próxima ola la evalúa."
+            elif check.get("baseline_value") is None:
+                gap = GAP_SIN_DATOS
+                needs = (f"Cargar el corte «{d.segment}» del tracker."
+                         if (d.segment or "total") != "total"
+                         else "Cargar la serie de esta métrica en el libro.")
+            elif d.success_threshold is None or d.success_threshold <= 0:
+                gap = GAP_SIN_UMBRAL
+                needs = "Declarar el umbral de éxito de la decisión."
+            else:
+                gap = GAP_SUB_DETECTABLE
+                needs = ("Redimensionar la meta, ampliar la base muestral o evaluarla "
+                         "en dos olas sostenidas.")
+        rows.append({
+            "decision_id": d.id, "title": d.title,
+            "metric_code": d.metric_code, "medida": medida,
+            "segment": d.segment, "owner": d.owner,
+            "success_threshold": d.success_threshold,
+            "baseline_value": check.get("baseline_value"),
+            "detectable_threshold": check.get("detectable_threshold"),
+            "feasible": bool(check.get("feasible")),
+            "gap": gap, "needs": needs, "reason": check.get("reason"),
+            "external_measure": d.external_measure,
+            "rationale": (d.rationale or "")[:500] or None,
+        })
+
+    evaluables = sum(1 for r in rows if r["gap"] == GAP_EVALUABLE)
+    return {
+        "available": bool(docs or decisions),
+        "documents": [
+            {"id": p.id, "title": p.title, "filename": p.filename,
+             "source_org": p.source_org, "status": p.status}
+            for p in docs
+        ],
+        "goals": [
+            {"claim": g.claim, "page_number": g.page_number, "kind": g.kind,
+             "metric_code": g.metric_code, "segment": g.segment,
+             "target_from": g.target_from, "target_to": g.target_to,
+             "expected_move": g.expected_move,
+             "owner_declared": g.owner_declared,
+             "measure_source": g.measure_source, "status": g.status}
+            for g in goals
+        ],
+        "rows": rows,
+        "note": (f"{evaluables} de {len(rows)} compromiso(s) del plan puede(n) "
+                 "certificarse con el instrumento actual."
+                 if rows else
+                 "Aún no hay planes del cliente cargados ni decisiones registradas "
+                 "para seguimiento."),
     }
 
 
