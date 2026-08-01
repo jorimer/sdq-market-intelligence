@@ -756,3 +756,87 @@ function triggerDownload(blob: Blob, filename: string): void {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// ── conclusiones del proveedor y mesa de discrepancias ──────────────
+
+export interface ProviderConclusion {
+  id: string;
+  claim: string;
+  page_number: number;
+  kind: "hallazgo" | "recomendacion" | "contexto";
+  subjects: string[];
+  subject_slugs: string[];
+  topic: string | null;
+  metric_code: string | null;
+  direction: "sube" | "baja" | "estable" | null;
+  wave_label: string | null;
+  wave_code: string | null;
+  confident: boolean;
+  document: string | null;
+}
+
+export interface ConclusionsPayload {
+  total: number;
+  conclusions: ProviderConclusion[];
+}
+
+export type DiscrepancyStatus = "abierta" | "discutida" | "acordada" | "retirada";
+
+export interface Discrepancy {
+  id: string;
+  claim: string;
+  page_number: number;
+  subject_slugs: string[];
+  metric_code: string;
+  provider_direction: string;
+  data_note: string;
+  per_brand: {
+    brand: string;
+    data_direction: string | null;
+    delta: number | null;
+    verdict: string;
+    note: string;
+  }[];
+  status: DiscrepancyStatus;
+  resolution_note: string | null;
+  updated_by: string | null;
+  created_at: string | null;
+}
+
+export interface DiscrepanciesPayload {
+  total: number;
+  bloqueantes: number;
+  discrepancies: Discrepancy[];
+}
+
+export interface ContrastResult {
+  conclusiones: number;
+  coinciden: number;
+  discrepan: number;
+  no_evaluables: number;
+  discrepancias_abiertas_ahora: { claim: string; page_number: number }[];
+}
+
+export async function getConclusions(slug: string): Promise<ConclusionsPayload> {
+  const { data } = await client.get(`${base}/engagements/${slug}/conclusions`);
+  return data;
+}
+
+export async function getDiscrepancies(slug: string): Promise<DiscrepanciesPayload> {
+  const { data } = await client.get(`${base}/engagements/${slug}/discrepancies`);
+  return data;
+}
+
+export async function runContrast(slug: string): Promise<ContrastResult> {
+  const { data } = await client.post(`${base}/engagements/${slug}/contrast`);
+  return data;
+}
+
+export async function updateDiscrepancy(
+  slug: string, id: string, status: DiscrepancyStatus, resolutionNote?: string,
+): Promise<{ id: string; status: DiscrepancyStatus }> {
+  const { data } = await client.patch(
+    `${base}/engagements/${slug}/discrepancies/${id}`,
+    { status, resolution_note: resolutionNote ?? null });
+  return data;
+}
