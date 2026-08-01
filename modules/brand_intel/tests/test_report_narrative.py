@@ -192,7 +192,8 @@ def test_fallback_priorities_keep_the_decisions_summary():
     }
     narratives, tables = report_docs.narratives_and_tables(p)
     assert "1 de 3" in narratives["priorities"]
-    assert any(t == "Seguimiento de las decisiones del cliente" for t, _ in tables)
+    # El ledger ya no se imprime como tabla: el plan es del cliente (2026-08-01).
+    assert not any(t == "Seguimiento de las decisiones del cliente" for t, _ in tables)
 
 
 def test_ai_overlay_wins_over_the_deterministic_fallback():

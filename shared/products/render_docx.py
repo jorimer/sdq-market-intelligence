@@ -187,6 +187,7 @@ def render_product_docx(
     watermark: Optional[str] = None,
     sample: bool = False,
     output_dir: Optional[str] = None,
+    tables_last: bool = False,
 ) -> str:
     """Renderiza el .docx de marca de un producto y devuelve el path."""
     from shared.products.report_sections import STANDARD_SECTION_TITLES
@@ -228,28 +229,36 @@ def render_product_docx(
     for _ctitle, png in render_charts(charts, out_dir, f"{sector_key}_{ts}"):
         doc.add_picture(png, width=Inches(6.0))
 
-    # ── Tablas de datos ──
-    for heading, rows in (tables or []):
-        if not rows:
-            continue
-        _add_runs(doc.add_paragraph(), heading, color=_NAVY, size=15, bold_all=True)
-        ncol = max((len(r) for r in rows), default=1)
-        t = doc.add_table(rows=0, cols=ncol)
-        t.style = "Light Grid Accent 1"
-        for ri, row in enumerate(rows):
-            cells = t.add_row().cells
-            for ci in range(ncol):
-                val = str(row[ci]) if ci < len(row) else ""
-                _add_runs(cells[ci].paragraphs[0], val,
-                          color=(_WHITE if ri == 0 else None), bold_all=(ri == 0))
-                if ri == 0:
-                    _shade(cells[ci], _NAVY_HEX)
+    # ── Tablas de datos ── (con tables_last van DESPUÉS del texto, como anexo)
+    def _emit_tables() -> None:
+        for heading, rows in (tables or []):
+            if not rows:
+                continue
+            _add_runs(doc.add_paragraph(), heading, color=_NAVY, size=15, bold_all=True)
+            ncol = max((len(r) for r in rows), default=1)
+            t = doc.add_table(rows=0, cols=ncol)
+            t.style = "Light Grid Accent 1"
+            for ri, row in enumerate(rows):
+                cells = t.add_row().cells
+                for ci in range(ncol):
+                    val = str(row[ci]) if ci < len(row) else ""
+                    _add_runs(cells[ci].paragraphs[0], val,
+                              color=(_WHITE if ri == 0 else None), bold_all=(ri == 0))
+                    if ri == 0:
+                        _shade(cells[ci], _NAVY_HEX)
+
+    if not tables_last:
+        _emit_tables()
 
     # ── Secciones narrativas numeradas ──
     for n, (key, text) in enumerate(narratives.items(), start=1):
         ttl = section_titles.get(key, key.replace("_", " ").title())
         _add_runs(doc.add_paragraph(), f"{n}.  {ttl}", color=_NAVY, size=15, bold_all=True)
         _md_body(doc, text)
+
+    if tables_last and tables:
+        _add_runs(doc.add_paragraph(), "Anexo de datos", color=_BLUE, size=13, bold_all=True)
+        _emit_tables()
 
     _add_runs(doc.add_paragraph(), "Disclaimer", color=_BLUE, size=12, bold_all=True)
     _add_runs(doc.add_paragraph(), DISCLAIMER_ES, color=_GRAY, size=8)

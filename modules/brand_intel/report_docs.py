@@ -63,10 +63,6 @@ _SOURCE_LABEL = {"forecast": "Pronóstico", "tracker": "Tracker",
 
 _PRIORITY_LABEL = {"alta": "Alta", "media": "Media", "baja": "Baja"}
 
-_STATUS_LABEL = {"achieved": "Lograda", "worsened": "Empeoró",
-                 "not_detectable": "No detectable", "unevaluable": "Inevaluable",
-                 "open": "Abierta"}
-
 #: Estados de medibilidad de un compromiso del plan (categorías mecánicas del ledger).
 _GAP_LABEL = {
     "evaluable": "Evaluable hoy",
@@ -159,15 +155,29 @@ def _fallback_priorities(s: Dict[str, Any]) -> str:
     return "\n\n".join(p for p in partes if p)
 
 
+def _is_measurable(r: Dict[str, Any]) -> bool:
+    """Un compromiso con algo que medir: métrica del tracker o umbral declarado.
+
+    El resto son compromisos operativos (acciones adoptadas del plan) — legítimos en el
+    ledger, pero enumerarlos en el documento del cliente es devolverle su propio plan."""
+    return bool(r.get("metric_code")) or r.get("success_threshold") is not None
+
+
 def _fallback_plan(plan: Dict[str, Any]) -> str:
-    """El plan bajo el instrumento, composición determinista: los veredictos mecánicos
-    de medibilidad con su prescripción corta — cifras correctas, sin prosa de juicio."""
+    """El plan bajo el instrumento, composición determinista y AGREGADA: los veredictos
+    mecánicos de las metas medibles — nunca la lista completa de un plan de 100 puntos."""
     rows = plan.get("rows") or []
+    medibles = [r for r in rows if _is_measurable(r)]
+    operativos = len(rows) - len(medibles)
     partes: List[str] = [str(plan.get("note") or "")]
-    if rows:
-        partes.append(_md_list([
+    if medibles:
+        partes.append("**Metas con medida:**\n" + _md_list([
             f"**{r['title']}** — {_GAP_LABEL.get(r['gap'], r['gap'])}. {r['needs']}"
-            for r in rows]))
+            for r in medibles]))
+    if operativos:
+        partes.append(f"Además, {operativos} compromiso(s) operativo(s) del plan "
+                      "quedaron en seguimiento sin meta numérica propia; su detalle "
+                      "vive en el registro de la plataforma.")
     docs = plan.get("documents") or []
     if docs:
         partes.append("Documentos del plan cargados: " + "; ".join(
@@ -232,34 +242,19 @@ def narratives_and_tables(
                              x["reading"],
                              _STRENGTH_LABEL.get(x["strength"], x["strength"])]
                             for x in señales]))
-    dec = s.get("decisions") or {}
-    filas_dec = dec.get("decisions") or []
-    if filas_dec:
-        # El ledger solo aparece cuando existe; vacío, su estado vive en Límites.
-        tables.append(("Seguimiento de las decisiones del cliente",
-                       [["Decisión", "Indicador", "Estado", "Movimiento",
-                         "Mínimo detectable"]] +
-                       [[r["title"], r["label"],
-                         ("Fuente externa" if r.get("external_measure")
-                          else _STATUS_LABEL.get(r["status"], r["status"])),
-                         _fmt(r["observed_delta"], " pp"),
-                         _fmt(r["detectable_threshold"], " pp")] for r in filas_dec]))
+    # El ledger de decisiones NO se imprime como tabla en el documento del cliente:
+    # fue el cliente quien envió su plan, y una tabla que se lo repite no es informe.
+    # El seguimiento con veredictos vive en la vista interna; cuando una ola emita
+    # veredictos, la narrativa de prioridades los lee desde el contexto.
 
     # ── El plan bajo el instrumento ── (solo con planes o decisiones; sin ellos, el
-    # estado vive en Límites en vez de un título con una frase de disculpa)
+    # estado vive en Límites). PROSA SOLA, sin tabla: el plan es DEL CLIENTE — él ya lo
+    # conoce, y devolvérselo fila por fila no aporta. Lo que SDQ agrega es la lectura
+    # estratégica y qué puede certificarse; el detalle por meta vive en la vista
+    # interna de la app, no en el documento (decisión del dueño, 2026-08-01).
     plan = s.get("plan") or {}
     if plan.get("available"):
         n["plan"] = ai.get("plan") or _fallback_plan(plan)
-        filas_plan = plan.get("rows") or []
-        if filas_plan:
-            tables.append(("Metas del plan y su medibilidad",
-                           [["Meta", "Medida", "Corte", "Estado",
-                             "Mínimo detectable", "Qué falta"]] +
-                           [[r["title"], r["medida"], r["segment"],
-                             _GAP_LABEL.get(r["gap"], r["gap"]),
-                             _fmt(r["detectable_threshold"], " pp")
-                             if r.get("detectable_threshold") is not None else "—",
-                             r["needs"]] for r in filas_plan]))
 
     # ── Ticket ── (solo con serie; sin serie, el motivo ya está en Límites)
     tic = s.get("ticket") or {}
@@ -336,4 +331,7 @@ def render(payload: Dict[str, Any], fmt: str = "pdf",
         watermark="Documento confidencial · uso interno del cliente",
         output_dir=output_dir,
         fmt=fmt,
+        # Las tablas van DESPUÉS del texto, como anexo: un informe que abre con
+        # páginas de tablas se lee como un volcado de datos (pedido del dueño).
+        tables_last=True,
     )

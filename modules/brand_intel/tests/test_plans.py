@@ -390,6 +390,57 @@ def test_dismiss_requires_a_note_and_marks_the_plan_reviewed(db, engagement, mon
     assert plans[0]["status"] == "revisado"
 
 
+def test_client_document_never_replays_the_plan_as_tables(db, engagement):
+    """El plan es DEL CLIENTE: el documento no se lo devuelve fila por fila. Ni la
+    tabla de medibilidad ni el ledger de decisiones se imprimen; la sección es prosa
+    y las tablas restantes van al FINAL del documento (tables_last)."""
+    c = _client(db)
+    c.post("/api/v1/brand-intel/engagements/demo/decisions",
+           json={"title": "Subir alcance 10 puntos", "metric_code": "reach_7d",
+                 "baseline_wave_code": "w2", "brand_slug": "focal",
+                 "success_threshold": 10.0})
+    p = rpt.build_report(db, engagement)
+    narratives, tables = report_docs.narratives_and_tables(p)
+    titles = [t for t, _ in tables]
+    assert "Metas del plan y su medibilidad" not in titles
+    assert "Seguimiento de las decisiones del cliente" not in titles
+    assert "plan" in narratives                      # la sección existe, en prosa
+
+    captured = {}
+
+    def _fake_render(**kwargs):
+        captured.update(kwargs)
+        return "/tmp/x.pdf"
+
+    import shared.products.render as spr
+    orig = spr.render_product_pdf
+    spr.render_product_pdf = _fake_render
+    try:
+        report_docs.render(p, fmt="pdf")
+    finally:
+        spr.render_product_pdf = orig
+    assert captured["tables_last"] is True
+
+
+def test_fallback_plan_aggregates_operational_commitments():
+    """Un cliente que adopta el plan entero (100+ compromisos) no recibe un inventario:
+    lo operativo se agrega a un conteo y solo lo medible se detalla."""
+    rows = ([{"title": f"Acción operativa {i}", "metric_code": None,
+              "success_threshold": None, "gap": "dato_externo",
+              "needs": "Dato externo.", "medida": "x", "segment": "total",
+              "detectable_threshold": None}
+             for i in range(40)] +
+            [{"title": "Meta medible", "metric_code": "reach_1m",
+              "success_threshold": 8.0, "gap": "evaluable",
+              "needs": "Nada: la próxima ola la evalúa.", "medida": "Consumo último mes",
+              "segment": "total", "detectable_threshold": 7.9}])
+    texto = report_docs._fallback_plan({"rows": rows, "note": "1 de 41.",
+                                        "documents": []})
+    assert "Meta medible" in texto
+    assert "40 compromiso(s) operativo(s)" in texto
+    assert "Acción operativa 7" not in texto
+
+
 def test_plans_are_isolated_per_engagement(db, engagement, monkeypatch):
     engagement.organization_id = "org-1"
     db.commit()
@@ -449,9 +500,8 @@ def test_section_absent_without_plan_and_present_with_it(db, engagement):
                            "metric_code": "reach_7d", "baseline_wave_code": "w2",
                            "brand_slug": "focal", "success_threshold": 10.0})
     p2 = rpt.build_report(db, engagement)
-    narratives2, tables2 = report_docs.narratives_and_tables(p2)
+    narratives2, _tables2 = report_docs.narratives_and_tables(p2)
     assert "plan" in narratives2
-    assert any(t == "Metas del plan y su medibilidad" for t, _ in tables2)
 
 
 def test_plan_context_serves_mechanical_verdicts_verbatim(db, engagement):
@@ -463,7 +513,7 @@ def test_plan_context_serves_mechanical_verdicts_verbatim(db, engagement):
                            "success_threshold": 0.5})
     p = rpt.build_report(db, engagement)
     ctx = rpt.cerebro_contexts(p)["plan"]
-    row = ctx["compromisos"][0]
+    row = ctx["compromisos_medibles"][0]
     assert row["feasible"] is False
     assert row["gap"] == svc.GAP_SUB_DETECTABLE
     assert row["detectable_threshold"] is not None

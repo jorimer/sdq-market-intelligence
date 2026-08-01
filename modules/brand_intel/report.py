@@ -263,14 +263,35 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
                        "track_record": (tr if tr.get("available") else tr.get("reason"))},
     }
     plan = s.get("plan") or {}
+    # Un cliente real adopta el plan ENTERO (100+ compromisos): el contexto separa lo
+    # que tiene medida (completo, con su veredicto mecánico) de lo operativo (agregado
+    # con ejemplos) — servirle cien filas casi iguales al modelo invita al inventario.
+    plan_rows = plan.get("rows") or []
+
+    def _measurable(r: Dict[str, Any]) -> bool:
+        return bool(r.get("metric_code")) or r.get("success_threshold") is not None
+
+    medibles = [r for r in plan_rows if _measurable(r)]
+    operativos = [r for r in plan_rows if not _measurable(r)]
+    plan_goals = plan.get("goals") or []
+    goal_metas = [g for g in plan_goals if g.get("kind") == "meta"]
+    goal_acciones = [g for g in plan_goals if g.get("kind") != "meta"]
     plan_ctx = {
         **base,
         "documentos": plan.get("documents") or [],
-        "metas_extraidas": plan.get("goals") or [],
+        "metas_extraidas": goal_metas,
+        "acciones_del_plan": {
+            "n": len(goal_acciones),
+            "ejemplos": [g.get("claim") for g in goal_acciones[:10]],
+        },
         # Cada fila trae el veredicto MECÁNICO de medibilidad (feasible/gap/needs/
         # umbral detectable) recomputado por el ledger: el modelo lo narra y
         # prescribe sobre él; jamás lo recalcula.
-        "compromisos": plan.get("rows") or [],
+        "compromisos_medibles": medibles,
+        "compromisos_operativos": {
+            "n": len(operativos),
+            "ejemplos": [r.get("title") for r in operativos[:10]],
+        },
         "nota_motor": plan.get("note"),
         "instrumento": {
             "olas_con_dato": base["olas"],
