@@ -354,11 +354,64 @@ export interface EngagementDetail {
 
 export interface DecisionInput {
   title: string;
-  metric_code: string;
+  /** La medida es UNA: métrica del tracker XOR fuente externa declarada. */
+  metric_code?: string | null;
+  external_measure?: string | null;
   baseline_wave_code: string;
   rationale?: string;
   segment?: string;
   brand_slug?: string | null;
+  target_wave_code?: string;
+  success_threshold?: number;
+  owner?: string;
+}
+
+// ── planes del cliente ──────────────────────────────────────────────
+
+export type PlanGoalStatus = "propuesta" | "adoptada" | "descartada";
+
+export interface PlanGoal {
+  id: string;
+  claim: string;
+  page_number: number | null;
+  kind: "meta" | "accion";
+  metric_code: string | null;
+  segment: string;
+  target_from: number | null;
+  target_to: number | null;
+  expected_move: number | null;
+  owner_declared: string | null;
+  measure_source: string | null;
+  confident: boolean;
+  status: PlanGoalStatus;
+  adopted_decision_id: string | null;
+  dismiss_note: string | null;
+}
+
+export interface PlanDocument {
+  id: string;
+  filename: string;
+  title: string | null;
+  source_org: string | null;
+  uploaded_by: string | null;
+  page_count: number | null;
+  status: "propuesto" | "revisado";
+  note: string | null;
+  created_at: string | null;
+  goals: { total: number; propuestas: number; adoptadas: number; descartadas: number };
+}
+
+export interface PlanDetail extends PlanDocument {
+  metas: PlanGoal[];
+}
+
+export interface AdoptGoalInput {
+  title?: string;
+  metric_code?: string | null;
+  external_measure?: string | null;
+  segment?: string;
+  brand_slug?: string | null;
+  baseline_wave_code: string;
   target_wave_code?: string;
   success_threshold?: number;
   owner?: string;
@@ -490,7 +543,8 @@ export async function getTrackRecord(slug: string): Promise<TrackRecord> {
 export async function checkDecision(
   slug: string,
   body: {
-    metric_code: string;
+    metric_code?: string | null;
+    external_measure?: string | null;
     baseline_wave_code: string;
     segment?: string;
     brand_slug?: string | null;
@@ -533,6 +587,51 @@ export async function uploadPdf(
     // Solo sube el fichero y encola; un mazo grande tarda en viajar, nada más.
     timeout: 5 * 60 * 1000,
   });
+  return data;
+}
+
+/**
+ * Sube un plan del cliente (.pdf o .html) y deja sus metas como PROPUESTAS.
+ *
+ * Síncrono: el lector trabaja sobre la capa de texto (1-2 llamadas), no la pasada de
+ * visión por lámina de los mazos. Nada entra al ledger aquí — el portón es la adopción.
+ */
+export async function uploadPlan(
+  slug: string, file: File,
+): Promise<PlanDocument & { lectura: Record<string, number> }> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await client.post(`${base}/engagements/${slug}/plans`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 5 * 60 * 1000,
+  });
+  return data;
+}
+
+export async function listPlans(slug: string): Promise<PlanDocument[]> {
+  const { data } = await client.get(`${base}/engagements/${slug}/plans`);
+  return data;
+}
+
+export async function getPlanDetail(slug: string, planId: string): Promise<PlanDetail> {
+  const { data } = await client.get(`${base}/engagements/${slug}/plans/${planId}`);
+  return data;
+}
+
+export async function adoptPlanGoal(
+  slug: string, planId: string, goalId: string, payload: AdoptGoalInput,
+): Promise<{ decision_id: string; status: DecisionStatus; feasibility: Feasibility;
+             goal: PlanGoal }> {
+  const { data } = await client.post(
+    `${base}/engagements/${slug}/plans/${planId}/goals/${goalId}/adopt`, payload);
+  return data;
+}
+
+export async function dismissPlanGoal(
+  slug: string, planId: string, goalId: string, note: string,
+): Promise<PlanGoal> {
+  const { data } = await client.post(
+    `${base}/engagements/${slug}/plans/${planId}/goals/${goalId}/dismiss`, { note });
   return data;
 }
 
