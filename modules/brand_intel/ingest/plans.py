@@ -363,6 +363,18 @@ def _parse(row: Dict[str, Any]) -> Optional[PlanGoal]:
     )
 
 
+def _clip(s: Optional[str], n: int) -> Optional[str]:
+    """Recorta al tamaño de la columna VARCHAR destino, con elipsis.
+
+    El texto de un documento real desborda cualquier largo que se asuma (un "responsable"
+    de 122 caracteres tumbó la primera adopción en prod). SQLite no valida largos y
+    Postgres sí — la frontera de escritura es el único lugar donde esto se garantiza."""
+    if not s:
+        return None
+    s = s.strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
 def store_plan_goals(
     db: Any, engagement_id: str, plan_document_id: str, reading: PlanReading,
 ) -> Dict[str, Any]:
@@ -395,11 +407,11 @@ def store_plan_goals(
         db.add(BrandPlanGoal(
             engagement_id=engagement_id, plan_document_id=plan_document_id,
             claim=g.claim, page_number=g.page_number, kind=g.kind,
-            metric_code=metric_code, segment=g.segment,
+            metric_code=metric_code, segment=_clip(g.segment, 60) or "total",
             target_from=g.target_from, target_to=g.target_to,
             expected_move=g.expected_move,
-            owner_declared=g.owner_declared or None,
-            measure_source=g.measure_source or None,
+            owner_declared=_clip(g.owner_declared, 200),
+            measure_source=_clip(g.measure_source, 200),
             confident=g.confident,
         ))
 

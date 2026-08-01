@@ -832,14 +832,20 @@ def _register_decision(db: Session, eng: BrandEngagement,
         base.id, payload.success_threshold,
         external_measure=payload.external_measure,
     )
+    # Recorte al tamaño de columna en la ÚNICA frontera de escritura: el texto que
+    # viene de un documento (responsable, corte) desborda cualquier largo asumido, y
+    # Postgres —a diferencia del SQLite de dev— lo rechaza con un 500.
+    from modules.brand_intel.ingest.plans import _clip
+
     row = BrandDecision(
         engagement_id=eng.id, title=payload.title, rationale=payload.rationale,
         metric_code=payload.metric_code, external_measure=payload.external_measure,
-        segment=payload.segment,
+        segment=_clip(payload.segment, 60) or "total",
         brand_slug=payload.brand_slug, baseline_wave_id=base.id,
         baseline_value=check.get("baseline_value"),
         target_wave_id=target.id if target else None,
-        success_threshold=payload.success_threshold, owner=payload.owner,
+        success_threshold=payload.success_threshold,
+        owner=_clip(payload.owner, 120),
         status="open" if check["feasible"] else "unevaluable",
         verdict_note=None if check["feasible"] else check["reason"],
         detectable_threshold=check.get("detectable_threshold"),
@@ -965,7 +971,7 @@ async def upload_plan(
     # Resubir el MISMO archivo relee sobre el mismo plan: el store reemplaza solo las
     # propuestas pendientes y preserva lo que un humano ya adoptó o descartó. Sin esta
     # reconciliación, cada subida duplicaría todas las metas junto a las adoptadas.
-    filename = file.filename or "plan"
+    filename = plan_reader._clip(file.filename, 300) or "plan"
     plan = (db.query(BrandPlanDocument)
             .filter(BrandPlanDocument.engagement_id == eng.id,
                     BrandPlanDocument.filename == filename)
@@ -973,8 +979,8 @@ async def upload_plan(
     if plan is None:
         plan = BrandPlanDocument(engagement_id=eng.id, filename=filename)
         db.add(plan)
-    plan.title = reading.title or None                     # type: ignore[assignment]
-    plan.source_org = reading.source_org or None           # type: ignore[assignment]
+    plan.title = plan_reader._clip(reading.title, 300)     # type: ignore[assignment]
+    plan.source_org = plan_reader._clip(reading.source_org, 200)  # type: ignore[assignment]
     plan.uploaded_by = getattr(user, "email", None)        # type: ignore[assignment]
     plan.page_count = page_count                           # type: ignore[assignment]
     plan.raw_text = "\n\n".join(pages)[:plan_reader.MAX_CHARS]  # type: ignore[assignment]

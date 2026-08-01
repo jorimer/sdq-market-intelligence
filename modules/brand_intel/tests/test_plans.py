@@ -350,6 +350,29 @@ def test_ai_narratives_narrate_the_plan_alone_without_explanations(monkeypatch):
     assert calls == ["brand_plan_readiness"]
 
 
+def test_document_text_is_clipped_to_column_sizes_at_the_write_boundary(
+        db, engagement, monkeypatch):
+    """El caso real que tumbó la primera adopción en prod: un 'responsable' de 122
+    caracteres contra owner VARCHAR(120). SQLite no valida largos y Postgres sí — el
+    recorte vive en la frontera de escritura, así que se prueba sobre lo GUARDADO."""
+    owner_122 = ("Todos · Recomendación especial para: KFC RD (ya tiene cultura "
+                 "multi-plataforma) o Little Caesars (ya tiene el brand voice)")
+    assert len(owner_122) > 120
+    c, body = _upload(db, monkeypatch, [_goal_row(
+        metric_code="", measure_source="analytics de plataformas sociales",
+        owner_declared=owner_122, segment="S" * 80)])
+    plan_id = body["id"]
+    goal = c.get(f"/api/v1/brand-intel/engagements/demo/plans/{plan_id}").json()["metas"][0]
+    assert len(goal["segment"]) <= 60                         # recortado al guardar
+
+    r = c.post(f"/api/v1/brand-intel/engagements/demo/plans/{plan_id}"
+               f"/goals/{goal['id']}/adopt", json={"baseline_wave_code": "w2"})
+    assert r.status_code in (200, 201), r.text
+    dec = db.query(BrandDecision).one()
+    assert dec.owner is not None and len(dec.owner) <= 120
+    assert len(dec.segment) <= 60
+
+
 def test_dismiss_requires_a_note_and_marks_the_plan_reviewed(db, engagement, monkeypatch):
     c, body = _upload(db, monkeypatch, [_goal_row()])
     plan_id = body["id"]
