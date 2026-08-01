@@ -35,6 +35,7 @@ def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
     # statement the report makes about how much history there is.
     ws = svc.data_waves(db, eid)
 
+    explanations = svc.explanations_analysis(db, str(eid))
     category = svc.category_analysis(db, eid)
     funnel = svc.funnel_analysis(db, eid)
     ticket = svc.ticket_analysis(db, eid)
@@ -63,6 +64,7 @@ def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
             for w in ws
         ],
         "sections": {
+            "explanations": explanations,
             "category": category,
             "funnel": funnel,
             "ticket": ticket,
@@ -93,50 +95,54 @@ def _fmt(v: Optional[float], suffix: str = "%", dec: int = 1) -> str:
 
 
 def _executive(p: Dict[str, Any]) -> Dict[str, Any]:
-    """At most three findings. A report that leads with everything leads with nothing."""
+    """At most three findings. A report that leads with everything leads with nothing.
+
+    Lo que lidera es lo que SOLO SDQ aporta: cuántas conclusiones del proveedor tienen
+    porqué económico, el veredicto entorno-vs-marca, y el ticket en pesos constantes.
+    Una versión anterior lideraba con share, divergencia y embudo — re-análisis del dato
+    del propio proveedor, que es exactamente lo que este informe ya no hace.
+    """
     findings: List[Dict[str, str]] = []
-    cat = p["sections"]["category"]
     brand = p["engagement"]["focal_brand"]
+    provider = p["engagement"].get("provider") or "el proveedor"
 
-    if cat.get("available"):
-        growth = cat.get("category_growth_pct")
-        if growth is not None:
-            direction = ("no creció" if abs(growth) < 1.0
-                         else "creció" if growth > 0 else "se contrajo")
+    xp = p["sections"].get("explanations") or {}
+    if xp.get("available"):
+        n_x = len(xp.get("explicadas") or [])
+        n_c = len(xp.get("competitivas") or [])
+        if n_x:
             findings.append({
-                "title": f"La categoría {direction}",
-                "figure": _fmt(growth),
-                "detail": (
-                    "Variación del tamaño de la categoría entre la primera y la última ola. "
-                    + str(cat.get("growth_basis") or "") + " "
-                    + ("Todo lo ocurrido entre marcas fue redistribución, no crecimiento."
-                       if abs(growth) < 1.0 else "")
-                ).strip(),
+                "title": "El porqué económico de lo que el estudio concluye",
+                "figure": str(n_x),
+                "detail": (f"Conclusiones de {provider} sobre consumo y gasto que los "
+                           "datos de entorno de SDQ ayudan a explicar — inflación, tasa "
+                           "de política, actividad económica y tipo de cambio, con sus "
+                           "valores del período."),
             })
-
-        reading = cat.get("divergence_reading")
-        if reading and reading.get("diverging"):
-            up = reading["direction"] == "converting_above_attitude"
+        stance = xp.get("environment_stance")
+        caidas_sin_excusa = [c for c in (xp.get("competitivas") or [])
+                             if c.get("direction") == "baja"] if stance == "favorable" else []
+        if caidas_sin_excusa:
             findings.append({
-                "title": ("Actitud y comportamiento se cruzan" if up
-                          else "La preferencia va por delante de la conversión"),
-                "figure": (f"{reading['delta_attitude']:+.1f} pp / "
-                           f"{reading['delta_behaviour']:+.1f} pp"),
-                "detail": (
-                    f"Entre {reading['wave_from']} y {reading['wave_to']}, la preferencia "
-                    f"declarada y el share de tráfico efectivo se movieron en direcciones "
-                    f"opuestas. " + (
-                        f"{brand} captura más tráfico del que su preferencia declarada explica."
-                        if up else
-                        f"{brand} declara más preferencia de la que convierte en tráfico."
-                    )
-                ),
+                "title": "Retrocesos que el entorno no explica",
+                "figure": str(len(caidas_sin_excusa)),
+                "detail": ("El entorno del período fue favorable: estos movimientos de "
+                           "percepción son dinámica competitiva, no marea del mercado — "
+                           "y por eso son accionables por la marca."),
+            })
+        elif n_c and len(findings) < 3:
+            findings.append({
+                "title": "Lo que es de la marca, no del entorno",
+                "figure": str(n_c),
+                "detail": ("Conclusiones de percepción (favorito, imagen, fidelidad) "
+                           "donde invocar el entorno económico sería inventar: su "
+                           "lectura es competitiva."),
             })
 
     tick = p["sections"]["ticket"]
     if tick.get("available") and tick.get("deflated"):
         chg = tick.get("change_from_peak_pct")
-        if chg is not None and chg < -1.0:
+        if chg is not None and chg < -1.0 and len(findings) < 3:
             findings.append({
                 "title": "El ticket real retrocede",
                 "figure": _fmt(chg),
@@ -146,22 +152,12 @@ def _executive(p: Dict[str, Any]) -> Dict[str, Any]:
                 ),
             })
 
-    fun = p["sections"]["funnel"]
-    if fun.get("available") and fun.get("weakest_step") and len(findings) < 3:
-        w = fun["weakest_step"]
-        findings.append({
-            "title": "El escalón que concentra la pérdida",
-            "figure": f"{w['gap']:.1f} pp",
-            "detail": (
-                f"En «{w['step_label']}», {brand} convierte {w['focal_conversion']:.0f}% "
-                f"frente al {w['leader_conversion']:.0f}% de {w.get('leader_name', w['leader'])}."
-            ),
-        })
-
     return {
         "findings": findings[:3],
         "empty_reason": (None if findings else
-                         "Ninguna sección reunió los insumos mínimos para un hallazgo."),
+                         "Sin conclusiones del proveedor utilizables ni insumos de "
+                         "entorno: sube la presentación del tracker para que el informe "
+                         "tenga qué explicar."),
     }
 
 
@@ -398,10 +394,9 @@ def render_html(p: Dict[str, Any]) -> str:
     ]
 
     parts.append(_render_executive(p))
+    parts.append(_render_explanations(p["sections"].get("explanations") or {},
+                                      p["engagement"].get("provider") or "el proveedor"))
     parts.append(_render_agenda(p["sections"]["vigilance"]))
-    parts.append(_render_category(p["sections"]["category"]))
-    parts.append(_render_divergence(p["sections"]["category"]))
-    parts.append(_render_funnel(p["sections"]["funnel"]))
     parts.append(_render_ticket(p["sections"]["ticket"]))
     parts.append(_render_attribution(p["sections"]["attribution"]))
     parts.append(_render_forecast(p["sections"]))
@@ -420,6 +415,50 @@ def render_html(p: Dict[str, Any]) -> str:
     return "".join(parts)
 
 
+def _render_explanations(x: Dict[str, Any], provider: str) -> str:
+    """«El proveedor concluye X → lectura SDQ».
+
+    El entorno se declara UNA vez con sus valores; cada conclusión lleva su lectura
+    propia — el cruce de su dirección con la postura del período. La conclusión va
+    LITERAL y entre comillas — voz del proveedor, nunca paráfrasis. La lámina NO se
+    imprime: el recibo vive en el registro (vista interna y mesa con el proveedor).
+    """
+    out = ["<section><div class='kicker'>El porqué económico</div>",
+           f"<h2>Lo que concluye {_e(provider)}, explicado con datos SDQ</h2>"]
+    if not x.get("available"):
+        out.append(_empty(x.get("reason") or "Sin conclusiones utilizables del proveedor."))
+        out.append("</section>")
+        return "".join(out)
+
+    entorno = x.get("entorno") or {}
+    if entorno:
+        out.append("<h3>El entorno del período</h3><ul>")
+        for f in entorno.values():
+            val = _fmt(f.get("value")) if f.get("unit") == "%" else \
+                f"{f.get('value')}{f.get('unit') or ''}"
+            out.append(f"<li><b>{_e(str(f.get('label')))}: {_e(val)}</b> "
+                       f"({_e(str(f.get('direction')))}) — {_e(str(f.get('doctrine')))}.</li>")
+        out.append("</ul>")
+
+    for e in x.get("explicadas") or []:
+        out.append("<div class='finding'><div>")
+        out.append(f"<h3>{_e(provider)} concluye</h3><p>«{_e(e['claim'])}»</p>")
+        out.append(f"<h3>Lectura SDQ</h3><p>{_e(str(e.get('reading') or ''))}</p>")
+        out.append("</div></div>")
+
+    comp = x.get("competitivas") or []
+    if comp:
+        out.append("<h3>Lo que el entorno no explica</h3>")
+        out.append("<p>Indicadores de percepción: invocar el entorno económico aquí "
+                   "sería inventar. Su lectura es competitiva.</p><ul>")
+        for c in comp:
+            out.append(f"<li>«{_e(c['claim'])}» — {_e(c.get('reading') or '')}</li>")
+        out.append("</ul>")
+    out.append(f"<p class='note'>{_e(str(x.get('note') or ''))}</p>")
+    out.append("</section>")
+    return "".join(out)
+
+
 def _render_executive(p: Dict[str, Any]) -> str:
     ex = p["executive"]
     out = ["<section><div class='kicker'>Resumen ejecutivo</div>",
@@ -431,105 +470,6 @@ def _render_executive(p: Dict[str, Any]) -> str:
             f"<div class='finding'><div class='figure'>{_e(f['figure'])}</div>"
             f"<div><h3>{_e(f['title'])}</h3><p>{_e(f['detail'])}</p></div></div>"
         )
-    out.append("</section>")
-    return "".join(out)
-
-
-def _render_category(c: Dict[str, Any]) -> str:
-    out = ["<section><div class='kicker'>S1 · Posición competitiva efectiva</div>",
-           "<h2>Tamaño de la categoría y share</h2>"]
-    if not c.get("available"):
-        return "".join(out) + _empty(c.get("reason")) + "</section>"
-
-    waves = c["waves"]
-    out.append("<p class='lede'>El denominador que el tracker no construye: cuánto pesa la "
-               "categoría y qué porción sostiene cada marca.</p>")
-    out.append("<table><thead><tr><th>Marca</th>"
-               + "".join(f"<th class='num'>{_e(w['label'])}</th>" for w in waves)
-               + "<th class='num'>Δ</th></tr></thead><tbody>")
-    for b in c["share"]:
-        series = {s["wave"]: s["share"] for s in b["series"]}
-        first = next((series[w["code"]] for w in waves if series.get(w["code"]) is not None), None)
-        last = next((series[w["code"]] for w in reversed(waves)
-                     if series.get(w["code"]) is not None), None)
-        delta = (last - first) if first is not None and last is not None else None
-        cls = " class='focal'" if b["is_focal"] else ""
-        out.append(f"<tr{cls}><td>{_e(b['name'])}</td>"
-                   + "".join(f"<td class='num'>{_fmt(series.get(w['code']))}</td>" for w in waves)
-                   + f"<td class='num'>{_fmt(delta, ' pp')}</td></tr>")
-    out.append("</tbody></table>")
-
-    # Las olas sin denominador se nombran: una celda "n/d" sin explicación se lee como
-    # un fallo de carga, cuando lo que dice es que esa ola no midió bastantes marcas.
-    sin_den = c.get("waves_without_denominator") or []
-    if sin_den:
-        etiquetas = ", ".join(_e(w["label"]) for w in sin_den)
-        out.append(
-            f"<div class='note'>Sin share en {etiquetas}: esa(s) ola(s) no miden alcance "
-            f"en al menos {cat_engine.MIN_DENOMINATOR_BRANDS} marcas del set, y repartir "
-            "sobre una sola daría 100% por construcción.</div>"
-        )
-
-    growth = c.get("category_growth_pct")
-    if growth is not None:
-        flat = abs(growth) < 1.0
-        out.append(
-            f"<div class='note{'' if flat else ' red'}'>Tamaño de la categoría: "
-            f"<b>{_fmt(growth)}</b> entre la primera y la última ola. "
-            + _e(str(c.get("growth_basis") or ""))
-            + (" La torta está plana: todo movimiento entre marcas fue redistribución."
-               if flat else "")
-            + "</div>"
-        )
-    elif c.get("growth_basis"):
-        out.append(f"<div class='note'>{_e(str(c['growth_basis']))}</div>")
-    shift = c.get("share_shift") or []
-    if len(shift) >= 2:
-        top, bottom = shift[0], shift[-1]
-        out.append(
-            f"<div class='note'>Mayor avance: <b>{_e(top['name'])}</b> "
-            f"({top['delta']:+.1f} pp). Mayor retroceso: <b>{_e(bottom['name'])}</b> "
-            f"({bottom['delta']:+.1f} pp). Los shares suman 100, de modo que lo ganado equivale "
-            "a lo cedido — es una identidad contable, no una afirmación causal.</div>"
-        )
-    out.append("</section>")
-    return "".join(out)
-
-
-def _render_divergence(c: Dict[str, Any]) -> str:
-    out = ["<section><div class='kicker'>S1 · Actitud contra comportamiento</div>",
-           "<h2>Preferencia declarada y tráfico efectivo</h2>"]
-    if not c.get("available") or not c.get("divergence"):
-        return "".join(out) + _empty(
-            "Requiere preferencia declarada y alcance en las mismas olas.") + "</section>"
-
-    out.append("<table><thead><tr><th>Ola</th>"
-               "<th class='num'>Preferencia declarada</th>"
-               "<th class='num'>Share de tráfico</th></tr></thead><tbody>")
-    for d in c["divergence"]:
-        out.append(f"<tr><td>{_e(d['label'])}</td>"
-                   f"<td class='num'>{_fmt(d['attitude'])}</td>"
-                   f"<td class='num'>{_fmt(d['behaviour'])}</td></tr>")
-    out.append("</tbody></table>")
-
-    r = c.get("divergence_reading")
-    if r:
-        if r["diverging"]:
-            up = r["direction"] == "converting_above_attitude"
-            out.append(
-                f"<div class='note{'' if up else ' red'}'>Entre {_e(r['wave_from'])} y "
-                f"{_e(r['wave_to'])} los dos indicadores se movieron en direcciones opuestas: "
-                f"preferencia {r['delta_attitude']:+.1f} pp, tráfico {r['delta_behaviour']:+.1f} pp. "
-                + ("La marca convierte por encima de su capital actitudinal: sostenible "
-                   "mientras dure la base instalada, expuesto si la preferencia no se repone."
-                   if up else
-                   "La preferencia declarada va por delante de la conversión: hay intención "
-                   "que no se traduce en visita.")
-                + "</div>"
-            )
-        else:
-            out.append("<div class='note'>Ambos indicadores se mueven en el mismo sentido: "
-                       "actitud y comportamiento están alineados.</div>")
     out.append("</section>")
     return "".join(out)
 
@@ -697,39 +637,6 @@ def _render_vigilance(v: Dict[str, Any]) -> str:
             "<div class='note'>Ningún indicador del tracker superó su umbral detectable "
             "en esta transición de olas. La ausencia de movimiento confirmado es, en sí, "
             "una lectura: el trimestre fue de continuidad.</div>"
-        )
-    out.append("</section>")
-    return "".join(out)
-
-
-def _render_funnel(f: Dict[str, Any]) -> str:
-    out = ["<section><div class='kicker'>S1 · Embudo</div>",
-           "<h2>Conversión por escalón</h2>"]
-    if not f.get("available"):
-        return "".join(out) + _empty(f.get("reason")) + "</section>"
-
-    steps = f["funnels"][0]["steps"] if f["funnels"] else []
-    out.append(f"<p class='lede'>Ola {_e(f['wave']['label'])}. La conversión normaliza el "
-               "tamaño de la marca, de modo que los escalones son comparables entre "
-               "competidores.</p>")
-    out.append("<table><thead><tr><th>Marca</th>"
-               + "".join(f"<th class='num'>{_e(s['label'])}</th>" for s in steps)
-               + "<th class='num'>Total</th></tr></thead><tbody>")
-    for b in f["funnels"]:
-        cls = " class='focal'" if b["is_focal"] else ""
-        out.append(f"<tr{cls}><td>{_e(b['name'])}</td>"
-                   + "".join(f"<td class='num'>{_fmt(s['conversion'], '%', 0)}</td>"
-                             for s in b["steps"])
-                   + f"<td class='num'>{_fmt(b['end_to_end'], '%', 1)}</td></tr>")
-    out.append("</tbody></table>")
-
-    w = f.get("weakest_step")
-    if w:
-        out.append(
-            f"<div class='note red'>Escalón de mayor rezago: <b>{_e(w['step_label'])}</b>. "
-            f"La marca focal convierte {w['focal_conversion']:.0f}% frente al "
-            f"{w['leader_conversion']:.0f}% de {_e(w.get('leader_name', w['leader']))} — "
-            f"una brecha de {w['gap']:.1f} pp.</div>"
         )
     out.append("</section>")
     return "".join(out)
