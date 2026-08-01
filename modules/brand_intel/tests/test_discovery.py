@@ -117,34 +117,30 @@ def test_sample_pages_prefer_the_densest_slides():
 
 # ── brand discovery: sampled vision pass ──────────────────────────────
 
-class _FakeRead:
-    def __init__(self, cells):
-        self.cells = cells
-        self.chart_title = "t"
-        self.readable = True
-        self.skip_reason = ""
-        self.model_used = "fake"
+def _fake_vision(brands_by_page):
+    """El lector dedicado: devuelve solo los nombres impresos, no las cifras.
 
-
-def _fake_vision(cells_by_page):
+    `occurrences` = a cuántas cifras rotula esa marca en la lámina, que es la semántica
+    que el umbral y la fusión de grafías comparaban antes contando celdas.
+    """
     def render(content, first=None, last=None, **kw):
         return [b"png"]
 
-    def extract(image, page, brands, waves):
-        return _FakeRead(cells_by_page.get(page, []))
+    def read(image, page, **kw):
+        return brands_by_page.get(page, [])
 
-    return render, extract
+    return render, read
 
 
 def test_brand_discovery_groups_spellings_of_one_brand():
     """A deck really does print "Little Ceasars" on one slide and "Little Caesars" on
     another; adopting both would split the series in two."""
-    render, extract = _fake_vision({
-        1: [{"brand_label": "Little Caesars"}, {"brand_label": "McDonald's"}],
-        2: [{"brand_label": "Little Ceasars"}, {"brand_label": "McDonald's"}],
+    render, read = _fake_vision({
+        1: [{"name": "Little Caesars", "occurrences": 1}, {"name": "McDonald's", "occurrences": 1}],
+        2: [{"name": "Little Ceasars", "occurrences": 1}, {"name": "McDonald's", "occurrences": 1}],
     })
     brands, pages, err = dsc.discover_brands(
-        b"x", ["a" * 10, "b" * 10], sample=2, renderer=render, extractor=extract)
+        b"x", ["a" * 10, "b" * 10], sample=2, renderer=render, reader=read)
     assert err == ""
     names = {b.name for b in brands}
     assert "McDonald's" in names
@@ -157,38 +153,38 @@ def test_brand_discovery_groups_spellings_of_one_brand():
 
 def test_two_genuinely_different_brands_are_not_merged():
     """The tolerance must not swallow real competitors that happen to look alike."""
-    render, extract = _fake_vision({
-        1: [{"brand_label": "Pizza Hut"}, {"brand_label": "Papa John's Pizza"}],
-        2: [{"brand_label": "Pizza Hut"}, {"brand_label": "Papa John's Pizza"}],
+    render, read = _fake_vision({
+        1: [{"name": "Pizza Hut", "occurrences": 1}, {"name": "Papa John's Pizza", "occurrences": 1}],
+        2: [{"name": "Pizza Hut", "occurrences": 1}, {"name": "Papa John's Pizza", "occurrences": 1}],
     })
     brands, _, _ = dsc.discover_brands(
-        b"x", ["a" * 10, "b" * 10], sample=2, renderer=render, extractor=extract)
+        b"x", ["a" * 10, "b" * 10], sample=2, renderer=render, reader=read)
     assert {b.name for b in brands} == {"Pizza Hut", "Papa John's Pizza"}
 
 
 def test_short_names_are_never_merged():
     """Short names are too easy to confuse; the resolver refuses them and so does this."""
-    render, extract = _fake_vision({
-        1: [{"brand_label": "KFC"}, {"brand_label": "KFD"}],
-        2: [{"brand_label": "KFC"}, {"brand_label": "KFD"}],
+    render, read = _fake_vision({
+        1: [{"name": "KFC", "occurrences": 1}, {"name": "KFD", "occurrences": 1}],
+        2: [{"name": "KFC", "occurrences": 1}, {"name": "KFD", "occurrences": 1}],
     })
     brands, _, _ = dsc.discover_brands(
-        b"x", ["a" * 10, "b" * 10], sample=2, renderer=render, extractor=extract)
+        b"x", ["a" * 10, "b" * 10], sample=2, renderer=render, reader=read)
     assert {b.name for b in brands} == {"KFC", "KFD"}
 
 
 def test_category_level_figures_do_not_become_a_brand():
     """A cell with no brand label is a category figure, not a nameless brand."""
-    render, extract = _fake_vision({1: [{"brand_label": ""}, {"brand_label": "  "}]})
+    render, read = _fake_vision({1: [{"name": "", "occurrences": 1}, {"name": "  ", "occurrences": 1}]})
     brands, _, _ = dsc.discover_brands(
-        b"x", ["a" * 10], sample=1, renderer=render, extractor=extract)
+        b"x", ["a" * 10], sample=1, renderer=render, reader=read)
     assert brands == []
 
 
 def test_a_brand_seen_once_on_one_slide_is_too_thin_to_propose():
-    render, extract = _fake_vision({1: [{"brand_label": "Marca Fugaz"}]})
+    render, read = _fake_vision({1: [{"name": "Marca Fugaz", "occurrences": 1}]})
     brands, _, _ = dsc.discover_brands(
-        b"x", ["a" * 10], sample=1, renderer=render, extractor=extract)
+        b"x", ["a" * 10], sample=1, renderer=render, reader=read)
     assert brands == []
 
 
@@ -196,13 +192,13 @@ def test_one_unreadable_slide_does_not_lose_the_pass():
     def render(content, first=None, last=None, **kw):
         return [b"png"]
 
-    def extract(image, page, brands, waves):
+    def read(image, page, **kw):
         if page == 1:
             raise RuntimeError("ilegible")
-        return _FakeRead([{"brand_label": "McDonald's"}, {"brand_label": "McDonald's"}])
+        return [{"name": "McDonald's", "occurrences": 2}]
 
     brands, _, err = dsc.discover_brands(
-        b"x", ["a" * 10, "b" * 10], sample=2, renderer=render, extractor=extract)
+        b"x", ["a" * 10, "b" * 10], sample=2, renderer=render, reader=read)
     assert [b.name for b in brands] == ["McDonald's"]
     assert err == ""      # partial success is success; the error only surfaces if nothing landed
 
@@ -285,11 +281,11 @@ def test_the_same_failure_on_every_slide_is_reported_once():
     def render(content, first=None, last=None, **kw):
         return [b"png"]
 
-    def extract(image, page, brands, waves):
+    def read(image, page, **kw):
         raise RuntimeError("Could not resolve authentication method")
 
     _, _, err = dsc.discover_brands(
-        b"x", ["a" * 10, "b" * 10, "c" * 10], sample=3, renderer=render, extractor=extract)
+        b"x", ["a" * 10, "b" * 10, "c" * 10], sample=3, renderer=render, reader=read)
     assert err.count("Could not resolve authentication method") == 1
     assert "3 de 3" in err
 
@@ -357,3 +353,39 @@ def test_a_tracker_deck_does_not_pay_for_the_metric_pass_by_default():
 
     assert inspect.signature(
         dsc.discover_structure).parameters["with_metrics"].default is False
+
+
+def test_brand_discovery_does_not_ask_for_the_slides_figures():
+    """El pase de marcas no puede pagar una transcripción completa por lámina.
+
+    Reutilizar el extractor ordinario producía cientos de celdas contra un esquema de 16k
+    tokens para quedarse con ~15 nombres, y el muestreo elige a propósito las láminas más
+    densas: con el mazo real de 59 láminas el pase corría durante minutos y moría contra
+    el presupuesto de la petición antes de devolver nada.
+    """
+    import inspect
+
+    from modules.brand_intel.ingest import pdf_vision
+
+    # El lector por defecto es el dedicado, no el extractor de cifras.
+    assert inspect.signature(
+        dsc.discover_brands).parameters["reader"].default is None
+    fuente = inspect.getsource(dsc.discover_brands)
+    assert "discover_brands_on_page" in fuente
+    assert "extract_page" not in fuente
+
+    # Y su esquema no tiene dónde devolver una cifra.
+    campos = pdf_vision.BRAND_DISCOVERY_SCHEMA["properties"]["brands"]["items"]["properties"]
+    assert set(campos) == {"name", "occurrences"}
+
+
+def test_occurrences_keep_counting_figures_not_slides():
+    """El umbral y la fusión de grafías comparaban celdas: la semántica no puede cambiar.
+
+    Si `occurrences` pasara a contar láminas, una marca que rotula ocho cifras en una sola
+    lámina caería por debajo del umbral y desaparecería de la propuesta.
+    """
+    render, read = _fake_vision({1: [{"name": "Barra Payán", "occurrences": 8}]})
+    brands, _, _ = dsc.discover_brands(
+        b"x", ["a" * 10], sample=1, renderer=render, reader=read)
+    assert [(b.name, b.occurrences) for b in brands] == [("Barra Payán", 8)]

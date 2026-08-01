@@ -294,19 +294,25 @@ def discover_brands(
     known_waves: Sequence[str] = (),
     sample: int = BRAND_SAMPLE_PAGES,
     renderer: Optional[Callable[..., List[bytes]]] = None,
-    extractor: Optional[Callable[..., Any]] = None,
+    reader: Optional[Callable[..., List[Dict[str, Any]]]] = None,
 ) -> Tuple[List[BrandCandidate], List[int], str]:
     """Read the competitive set off a sample of slides.
 
-    Reuses the ordinary extraction call with an empty brand list, so the model returns
-    whatever brand labels it sees printed. The names are grouped by folded key, and each
-    group reports every spelling encountered — that is how a reviewer sees a typo for
-    what it is instead of adopting two brands.
+    Uses a reader that returns **only the printed brand names**, not the slide's figures.
+    This pass used to reuse the ordinary extraction call and throw away everything except
+    ``brand_label`` — hundreds of cell objects transcribed against a 16k-token schema to
+    keep fifteen strings. Sampling picks the densest slides *on purpose*, because that is
+    where the whole competitive set appears, so the waste landed exactly on the heaviest
+    slides in the deck: on a real 59-slide deck the pass ran for minutes and died against
+    the request budget before returning anything.
+
+    Names are grouped by folded key and each group reports every spelling encountered —
+    that is how a reviewer sees a typo for what it is instead of adopting two brands.
     """
     from modules.brand_intel.ingest import pdf_vision
 
     render = renderer or pdf_vision.render_pages
-    extract = extractor or pdf_vision.extract_page
+    read_brands = reader or pdf_vision.discover_brands_on_page
 
     pages = pick_sample_pages(page_texts, sample)
     counts: Dict[str, Counter] = defaultdict(Counter)
@@ -318,19 +324,26 @@ def discover_brands(
             images = render(content, first=page_no, last=page_no)
             if not images:
                 continue
-            read = extract(images[0], page_no, [], list(known_waves))
+            found = read_brands(images[0], page_no)
         except Exception as exc:  # noqa: BLE001 — a bad slide must not lose the pass
             logger.warning("Descubrimiento: página %s ilegible: %s", page_no, exc)
             errors.append(str(exc) or exc.__class__.__name__)
             continue
-        for cell in read.cells or []:
-            label = (cell.get("brand_label") or "").strip()
+        for row in found or []:
+            label = (row.get("name") or "").strip()
             if not label:
-                continue          # a category-level figure, not a brand
+                continue
             key = _norm_brand(label)
             if not key:
                 continue
-            counts[key][label] += 1
+            # `occurrences` conserva la semántica anterior —cuántas cifras rotula esa
+            # marca en la lámina— para que el umbral y la fusión de grafías sigan
+            # comparando lo mismo que antes.
+            try:
+                n = max(1, int(row.get("occurrences") or 1))
+            except (TypeError, ValueError):
+                n = 1
+            counts[key][label] += n
             seen_pages[key].add(page_no)
 
     merged_counts, merged_pages = _merge_near_duplicates(counts, seen_pages)
@@ -364,7 +377,7 @@ def discover_structure(
     content: bytes,
     sample: int = BRAND_SAMPLE_PAGES,
     renderer: Optional[Callable[..., List[bytes]]] = None,
-    extractor: Optional[Callable[..., Any]] = None,
+    brand_reader: Optional[Callable[..., List[Dict[str, Any]]]] = None,
     with_brands: bool = True,
     with_metrics: bool = False,
 ) -> StructureProposal:
@@ -383,7 +396,7 @@ def discover_structure(
 
     brands, pages, error = discover_brands(
         content, texts, known_waves=[w.label for w in waves],
-        sample=sample, renderer=renderer, extractor=extractor,
+        sample=sample, renderer=renderer, reader=brand_reader,
     )
     proposal.brands = brands
     proposal.pages_sampled = tuple(pages)
