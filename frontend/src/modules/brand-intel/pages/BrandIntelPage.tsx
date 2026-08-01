@@ -69,6 +69,7 @@ import { DecisionDrawer } from "../components/DecisionDrawer";
 import { ExtractionReviewDrawer } from "../components/ExtractionReviewDrawer";
 import { StructureDrawer } from "../components/StructureDrawer";
 import { DeleteEngagementDrawer } from "../components/DeleteEngagementDrawer";
+import { ConclusionsPanel } from "../components/ConclusionsPanel";
 
 type Status = "loading" | "error" | "ready";
 
@@ -1202,6 +1203,8 @@ export function BrandIntelPage() {
           <AgendaBlock data={vigilance} />
         </Card>
       )}
+
+      <ConclusionsPanel slug={slug} />
 
       {category?.available ? (
         <>

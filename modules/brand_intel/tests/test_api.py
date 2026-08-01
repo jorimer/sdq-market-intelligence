@@ -403,3 +403,77 @@ def test_conclusions_of_another_organization_are_404(db, engagement):
     r = _client(db, role=UserRole.viewer, org="org-2").get(
         "/api/v1/brand-intel/engagements/demo/conclusions")
     assert r.status_code == 404
+
+
+# ── contraste y discrepancias ─────────────────────────────────────────
+
+def _open_discrepancy(db, engagement):
+    """Fabrica un movimiento significativo y deja una discrepancia abierta."""
+    from modules.brand_intel.ingest import conclusions as conc
+    from modules.brand_intel.models.models import BrandObservation, BrandWave
+
+    w2 = (db.query(BrandWave).filter(BrandWave.engagement_id == engagement.id,
+                                     BrandWave.code == "w2").one())
+    obs = (db.query(BrandObservation)
+           .filter(BrandObservation.engagement_id == engagement.id,
+                   BrandObservation.wave_id == w2.id,
+                   BrandObservation.brand_slug == "focal",
+                   BrandObservation.metric_code == "favourite_place").one())
+    obs.value = 60.0
+    conc.store_conclusions(db, str(engagement.id), [conc.Conclusion(
+        claim="Focal pierde preferencia de forma sostenida.", page_number=19,
+        kind="hallazgo", subjects=("Focal",), topic="",
+        metric_code="favourite_place", direction="baja",
+        wave_label="Ola 2", confident=True,
+    )])
+    db.commit()
+    r = _client(db).post("/api/v1/brand-intel/engagements/demo/contrast")
+    assert r.status_code == 200
+    return r.json()
+
+
+def test_contrast_opens_a_discrepancy_and_lists_it(db, engagement):
+    out = _open_discrepancy(db, engagement)
+    assert out["discrepan"] == 1
+
+    r = _client(db).get("/api/v1/brand-intel/engagements/demo/discrepancies")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1 and body["bloqueantes"] == 1
+    assert body["discrepancies"][0]["status"] == "abierta"
+    assert body["discrepancies"][0]["page_number"] == 19
+
+
+def test_discrepancy_can_be_advanced_with_a_note(db, engagement):
+    _open_discrepancy(db, engagement)
+    did = _client(db).get(
+        "/api/v1/brand-intel/engagements/demo/discrepancies").json()[
+        "discrepancies"][0]["id"]
+
+    r = _client(db).patch(
+        f"/api/v1/brand-intel/engagements/demo/discrepancies/{did}",
+        json={"status": "retirada",
+              "resolution_note": "Ipsos usa media móvil; el corte difiere."})
+    assert r.status_code == 200
+    assert r.json()["status"] == "retirada"
+    assert r.json()["updated_by"] == "analista@sdq.test"
+
+
+def test_closing_without_a_note_is_422(db, engagement):
+    _open_discrepancy(db, engagement)
+    did = _client(db).get(
+        "/api/v1/brand-intel/engagements/demo/discrepancies").json()[
+        "discrepancies"][0]["id"]
+    r = _client(db).patch(
+        f"/api/v1/brand-intel/engagements/demo/discrepancies/{did}",
+        json={"status": "acordada"})
+    assert r.status_code == 422
+
+
+def test_discrepancies_of_another_organization_are_404(db, engagement):
+    """La mesa con el proveedor es tan privada como las cifras del cliente."""
+    engagement.organization_id = "org-1"
+    db.commit()
+    r = _client(db, role=UserRole.viewer, org="org-2").get(
+        "/api/v1/brand-intel/engagements/demo/discrepancies")
+    assert r.status_code == 404

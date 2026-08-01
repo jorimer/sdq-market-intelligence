@@ -40,6 +40,7 @@ from modules.brand_intel.models.models import (
     BrandClient,
     BrandConclusion,
     BrandDecision,
+    BrandDiscrepancy,
     BrandEngagement,
     BrandEntity,
     BrandMetric,
@@ -131,6 +132,7 @@ def brands(db: Session, engagement_id: str) -> List[BrandEntity]:
 _OWNED_BY_ENGAGEMENT = (
     BrandExtractionCell,
     BrandConclusion,
+    BrandDiscrepancy,
     BrandExtraction,
     BrandObservationReading,
     BrandForecast,
@@ -1234,3 +1236,147 @@ def check_decision_feasibility(
         "baseline_value": obs.value if obs else None,
         "baseline_base_n": obs.base_n if obs else None,
     }
+
+
+# ── contraste conclusiones vs cifras y canal de discrepancias ─────────
+
+DISCREPANCY_STATES = ("abierta", "discutida", "acordada", "retirada")
+#: Mientras la discrepancia esté en uno de estos estados, la conclusión que la origina
+#: NO puede sostener ninguna explicación en el informe del cliente.
+BLOCKING_STATES = ("abierta", "discutida")
+
+
+def _confirmed_series(
+    db: Session, engagement_id: str,
+) -> Tuple[Dict[Tuple[str, str], List[Tuple[str, Optional[float], Optional[int]]]], List[str]]:
+    """Toda la serie confirmada, indexada como la espera el motor de contraste."""
+    ws = data_waves(db, engagement_id)
+    wave_code = {str(w.id): str(w.code) for w in ws}
+    order = {str(w.code): i for i, w in enumerate(ws)}
+    series: Dict[Tuple[str, str], List[Tuple[str, Optional[float], Optional[int]]]] = {}
+    rows = (db.query(BrandObservation)
+            .filter(BrandObservation.engagement_id == engagement_id,
+                    BrandObservation.segment == "total",
+                    BrandObservation.brand_slug.isnot(None)).all())
+    for r in rows:
+        code = wave_code.get(str(r.wave_id))
+        if code:
+            series.setdefault((str(r.brand_slug), str(r.metric_code)), []).append(
+                (code, float(r.value), int(r.base_n) if r.base_n is not None else None))
+    for pts in series.values():
+        pts.sort(key=lambda p: order.get(p[0], -1))
+    return series, [str(w.code) for w in ws]
+
+
+def contrast_conclusions(db: Session, engagement_id: str) -> Dict[str, Any]:
+    """Contrasta cada conclusión del proveedor contra las cifras confirmadas.
+
+    Los veredictos ``discrepa`` abren (o refrescan) una fila en el canal de
+    discrepancias; los demás solo se reportan. La discrepancia se abre con la conclusión
+    COPIADA — claim y lámina — porque las conclusiones se reemplazan al releer una
+    entrega y una discusión con el proveedor no puede quedarse apuntando al vacío.
+
+    Idempotente por (claim, métrica): correr el contraste dos veces no duplica la mesa, y
+    una discrepancia ya trabajada (discutida/acordada/retirada) no se reabre sola — el
+    estado lo maneja una persona, porque la conversación con el proveedor es suya.
+    """
+    from modules.brand_intel.engines import contrast as ctr
+
+    series, wave_order = _confirmed_series(db, engagement_id)
+    rows = (db.query(BrandConclusion)
+            .filter(BrandConclusion.engagement_id == engagement_id,
+                    BrandConclusion.kind == "hallazgo").all())
+
+    existing = {
+        (str(d.claim), str(d.metric_code)): d
+        for d in db.query(BrandDiscrepancy)
+        .filter(BrandDiscrepancy.engagement_id == engagement_id).all()
+    }
+
+    verdicts = {ctr.COINCIDE: 0, ctr.DISCREPA: 0, ctr.NO_EVALUABLE: 0}
+    opened: List[Dict[str, Any]] = []
+    results: List[Dict[str, Any]] = []
+    for c in rows:
+        out = ctr.contrast_conclusion(c, series, wave_order)
+        verdicts[out.verdict] += 1
+        results.append({**out.as_dict(), "claim": c.claim,
+                        "page_number": c.page_number})
+        if out.verdict != ctr.DISCREPA:
+            continue
+        key = (str(c.claim), str(c.metric_code))
+        prev = existing.get(key)
+        if prev is not None:
+            # Ya está en la mesa: se refresca la evidencia, no el estado.
+            prev.conclusion_id = c.id
+            prev.per_brand = list(out.per_brand)      # type: ignore[assignment]
+            prev.data_note = out.note                 # type: ignore[assignment]
+            continue
+        d = BrandDiscrepancy(
+            engagement_id=engagement_id, conclusion_id=c.id,
+            claim=c.claim, page_number=c.page_number,
+            subject_slugs=list(c.subject_slugs or []),
+            metric_code=str(c.metric_code),
+            provider_direction=str(c.direction),
+            data_note=out.note, per_brand=list(out.per_brand),
+            status="abierta",
+        )
+        db.add(d)
+        existing[key] = d
+        opened.append({"claim": c.claim, "page_number": c.page_number,
+                       "metric_code": c.metric_code})
+
+    return {
+        "conclusiones": len(rows),
+        "coinciden": verdicts[ctr.COINCIDE],
+        "discrepan": verdicts[ctr.DISCREPA],
+        "no_evaluables": verdicts[ctr.NO_EVALUABLE],
+        "discrepancias_abiertas_ahora": opened,
+        "resultados": results,
+    }
+
+
+def usable_conclusions(db: Session, engagement_id: str) -> List[BrandConclusion]:
+    """Las conclusiones sobre las que el informe del cliente PUEDE montarse.
+
+    Ésta es la garantía estructural del canal: el ensamblador del informe llama aquí y
+    solo aquí — nunca a la tabla de discrepancias, cuyo contenido es materia de la mesa
+    con el proveedor. Una conclusión cuya afirmación tiene discrepancia en estado
+    bloqueante simplemente no llega al redactor, así que no hay frase que vigilar.
+    """
+    blocked = {
+        (str(d.claim), str(d.metric_code))
+        for d in db.query(BrandDiscrepancy)
+        .filter(BrandDiscrepancy.engagement_id == engagement_id,
+                BrandDiscrepancy.status.in_(BLOCKING_STATES)).all()
+    }
+    rows = (db.query(BrandConclusion)
+            .filter(BrandConclusion.engagement_id == engagement_id)
+            .order_by(BrandConclusion.page_number).all())
+    return [c for c in rows
+            if (str(c.claim), str(c.metric_code)) not in blocked]
+
+
+def update_discrepancy(
+    db: Session, engagement_id: str, discrepancy_id: str,
+    status: str, resolution_note: Optional[str], actor: str,
+) -> Optional[BrandDiscrepancy]:
+    """Avanza una discrepancia de estado. Lo hace una persona, con su nombre.
+
+    El contraste abre; solo una persona cierra. ``acordada`` y ``retirada`` exigen nota:
+    qué se acordó con el proveedor, o por qué se retira la objeción — sin eso, dentro de
+    tres meses nadie sabrá por qué esta conclusión volvió a ser utilizable.
+    """
+    if status not in DISCREPANCY_STATES:
+        raise ValueError(f"Estado desconocido: '{status}'.")
+    if status in ("acordada", "retirada") and not (resolution_note or "").strip():
+        raise ValueError("Cerrar una discrepancia exige la nota de resolución.")
+    d = (db.query(BrandDiscrepancy)
+         .filter(BrandDiscrepancy.id == discrepancy_id,
+                 BrandDiscrepancy.engagement_id == engagement_id).first())
+    if d is None:
+        return None
+    d.status = status                                 # type: ignore[assignment]
+    if resolution_note:
+        d.resolution_note = resolution_note           # type: ignore[assignment]
+    d.updated_by = actor                              # type: ignore[assignment]
+    return d
