@@ -725,12 +725,25 @@ export async function downloadTemplate(slug: string): Promise<void> {
  * Downloading cannot be swallowed, and the file is a self-contained page the client can
  * open, read and print to PDF.
  */
-export async function downloadReport(slug: string): Promise<void> {
-  const { data } = await client.get(`${base}/engagements/${slug}/report.html`, {
+export type ReportFormat = "pdf" | "docx" | "html";
+
+const REPORT_MIME: Record<ReportFormat, string> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  html: "text/html",
+};
+
+export async function downloadReport(
+  slug: string, fmt: ReportFormat = "pdf",
+): Promise<void> {
+  const { data } = await client.get(`${base}/engagements/${slug}/report.${fmt}`, {
     responseType: "blob",
+    // El PDF y el Word se arman en el servidor con el chrome de marca; un informe con
+    // muchas olas y marcas tarda unos segundos.
+    timeout: 3 * 60 * 1000,
   });
-  triggerDownload(new Blob([data], { type: "text/html" }),
-                  `SDQ-MIP_informe_contexto_${slug}.html`);
+  triggerDownload(new Blob([data], { type: REPORT_MIME[fmt] }),
+                  `SDQ-MIP_informe_contexto_${slug}.${fmt}`);
 }
 
 function triggerDownload(blob: Blob, filename: string): void {

@@ -44,6 +44,7 @@ import {
   scoreForecasts,
   downloadTemplate,
   downloadReport,
+  type ReportFormat,
   uploadWorkbook,
   type AgendaItem,
   type AttributionAnalysis,
@@ -944,9 +945,30 @@ export function BrandIntelPage() {
                 if (f) void onUploadPdf(f);
               }}
             />
-            <button className="btn btn-primary text-sm" onClick={() => void downloadReport(slug)}>
-              <FileText size={15} /> Informe
-            </button>
+            {/* El estándar de la casa entrega online · PDF · Word. El PDF encabeza por
+                ser lo que se manda a un cliente; el HTML queda para leerlo en pantalla. */}
+            <div className="flex items-center gap-1">
+              <button
+                className="btn btn-primary text-sm"
+                onClick={() => void downloadReport(slug, "pdf")}
+              >
+                <FileText size={15} /> Informe PDF
+              </button>
+              <select
+                className="field !w-auto !py-1.5 text-xs shrink-0"
+                value=""
+                onChange={(e) => {
+                  const f = e.target.value as ReportFormat;
+                  if (f) void downloadReport(slug, f);
+                  e.target.value = "";
+                }}
+                aria-label="Otros formatos del informe"
+              >
+                <option value="">Otro formato…</option>
+                <option value="docx">Word (.docx)</option>
+                <option value="html">HTML imprimible</option>
+              </select>
+            </div>
             {/* Separado del resto y sin etiqueta de acción: es la única irreversible de
                 la fila, y no debe quedar a un pixel de «Informe». */}
             <button
