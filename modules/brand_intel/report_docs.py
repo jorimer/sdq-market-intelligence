@@ -22,12 +22,13 @@ from modules.brand_intel.report import _fmt
 
 #: Orden y título de cada sección en el documento. Es el mismo del HTML: un cliente que
 #: recibe los dos no debería tener que reconciliarlos.
+#: Fuera del documento del cliente: share, divergencia y embudo — re-análisis del dato
+#: del propio proveedor, que es lo que este informe ya no hace. El cliente los recibe
+#: del proveedor; repetírselos no se puede cobrar y compite con el socio.
 SECTIONS: List[Tuple[str, str]] = [
     ("executive", "Las lecturas del trimestre"),
+    ("explanations", "Lo que el estudio concluye, explicado con datos SDQ"),
     ("vigilance_agenda", "Lo que el trimestre justifica discutir"),
-    ("category", "Tamaño de la categoría y share"),
-    ("divergence", "Preferencia declarada y tráfico efectivo"),
-    ("funnel", "Conversión por escalón"),
     ("ticket", "El ticket en pesos constantes"),
     ("attribution", "¿La marca o el mercado?"),
     ("forecast", "Regla de pronóstico y track record"),
@@ -80,68 +81,36 @@ def narratives_and_tables(
                  or "El trimestre no justifica una reunión de resultados.")
     )
 
-    # ── Categoría y share ──
-    cat = s["category"]
-    motivo = _unavailable(cat)
-    if motivo:
-        n["category"] = motivo
+    # ── El porqué económico ──
+    # El entorno se declara UNA vez con sus valores; cada conclusión lleva su lectura
+    # propia (dirección × postura del período). La conclusión va LITERAL — voz del
+    # proveedor, nunca paráfrasis. La lámina NO se imprime: el recibo vive en el
+    # registro y lo enseñan la vista interna y la mesa con el proveedor.
+    xp = s.get("explanations") or {}
+    proveedor = payload["engagement"].get("provider") or "el proveedor"
+    if not xp.get("available"):
+        n["explanations"] = str(xp.get("reason")
+                                or "Sin conclusiones utilizables del proveedor.")
     else:
-        olas = cat.get("waves") or []
-        filas_share = [["Marca"] + [w["label"] for w in olas]]
-        for row in cat.get("share") or []:
-            por_ola = {p["wave"]: p["share"] for p in row["series"]}
-            filas_share.append(
-                [row["name"]] + [_fmt(por_ola.get(w["code"])) for w in olas])
-        if len(filas_share) > 1:
-            tables.append(("Share de la categoría, ola a ola", filas_share))
-        partes = [str(cat.get("denominator_note") or "")]
-        crec = cat.get("category_growth_pct")
-        if crec is not None:
-            partes.append(f"Tamaño de la categoría: **{_fmt(crec)}** entre la primera y la "
-                          "última ola con denominador.")
-        partes.append(str(cat.get("growth_basis") or ""))
-        for w in cat.get("waves_without_denominator") or []:
-            partes.append(f"{w['label']} no tiene share: no mide alcance en suficientes "
-                          "marcas del set.")
-        n["category"] = "\n\n".join(p for p in partes if p)
-
-    # ── Actitud vs comportamiento ──
-    div = cat.get("divergence") or []
-    lectura = cat.get("divergence_reading")
-    if div:
-        tables.append(("Preferencia declarada contra tráfico efectivo",
-                       [["Ola", "Preferencia declarada", "Share de tráfico"]] +
-                       [[d["label"], _fmt(d["attitude"]), _fmt(d["behaviour"])] for d in div]))
-    n["divergence"] = (
-        (f"Entre {lectura['wave_from']} y {lectura['wave_to']} preferencia y tráfico se "
-         f"movieron en direcciones opuestas: preferencia {_fmt(lectura['delta_attitude'], ' pp')}, "
-         f"tráfico {_fmt(lectura['delta_behaviour'], ' pp')}.")
-        if lectura and lectura.get("diverging") else
-        ("Actitud y comportamiento se mueven en el mismo sentido: están alineados."
-         if lectura else "Requiere preferencia declarada y alcance en las mismas olas.")
-    )
-
-    # ── Embudo ──
-    fun = s["funnel"]
-    motivo = _unavailable(fun)
-    if motivo:
-        n["funnel"] = motivo
-    else:
-        marcas = fun.get("funnels") or []
-        if marcas:
-            pasos = [st["label"] for st in marcas[0]["steps"]]
-            tables.append((f"Conversión por escalón · ola {fun['wave']['label']}",
-                           [["Marca"] + pasos + ["Total"]] +
-                           [[m["name"]] + [_fmt(st["conversion"]) for st in m["steps"]]
-                            + [_fmt(m["end_to_end"])] for m in marcas]))
-        peor = fun.get("weakest_step")
-        n["funnel"] = (
-            f"Escalón de mayor rezago: **{peor['step_label']}**. La marca focal convierte "
-            f"{_fmt(peor['focal_conversion'])} frente al {_fmt(peor['leader_conversion'])} de "
-            f"{peor.get('leader_name') or peor['leader']} — una brecha de "
-            f"{_fmt(peor['gap'], ' pp')}."
-            if peor else "Sin escalón de rezago identificable."
-        )
+        partes: List[str] = []
+        entorno = xp.get("entorno") or {}
+        if entorno:
+            partes.append("**El entorno del período:**\n" + _md_list([
+                f"**{f.get('label')}: "
+                f"{_fmt(f.get('value')) if f.get('unit') == '%' else str(f.get('value')) + str(f.get('unit') or '')}** "
+                f"({f.get('direction')}) — {f.get('doctrine')}."
+                for f in entorno.values()]))
+        for e in xp.get("explicadas") or []:
+            partes.append(f"**{proveedor} concluye:** «{e['claim']}»\n\n"
+                          f"**Lectura SDQ:** {e.get('reading') or ''}")
+        comp = xp.get("competitivas") or []
+        if comp:
+            partes.append("**Lo que el entorno no explica** — indicadores de percepción; "
+                          "invocar el entorno económico aquí sería inventar. Su lectura "
+                          "es competitiva:\n" + _md_list(
+                              [f"«{c['claim']}» — {c.get('reading') or ''}" for c in comp]))
+        partes.append(str(xp.get("note") or ""))
+        n["explanations"] = "\n\n".join(x for x in partes if x)
 
     # ── Ticket ──
     tic = s["ticket"]

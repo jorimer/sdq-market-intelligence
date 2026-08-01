@@ -258,8 +258,9 @@ def test_vigilance_keeps_only_movements_that_clear_their_threshold(db, engagemen
 def test_report_builds_every_section(db, engagement):
     p = rpt.build_report(db, engagement)
     assert set(p["sections"]) == {
-        "category", "funnel", "ticket", "attribution", "forecast_backtest",
-        "forecast_track_record", "signal_filter", "decisions", "scenarios", "vigilance",
+        "explanations", "category", "funnel", "ticket", "attribution",
+        "forecast_backtest", "forecast_track_record", "signal_filter", "decisions",
+        "scenarios", "vigilance",
     }
     assert p["engagement"]["focal_brand"] == "Focal"
 
@@ -274,9 +275,14 @@ def test_report_limits_are_generated_from_the_analysis_state(db, engagement):
     assert "Ninguna cifra fue estimada por IA" in joined
 
 
-def test_report_executive_surfaces_the_divergence(db, engagement):
-    titles = [f["title"] for f in rpt.build_report(db, engagement)["executive"]["findings"]]
-    assert any("cruzan" in t for t in titles)
+def test_report_executive_leads_with_what_only_sdq_adds(db, engagement):
+    """El resumen ya no lidera con share/divergencia/embudo — re-análisis del dato del
+    proveedor. Sin conclusiones utilizables ni entorno, lo honesto es decirlo."""
+    ex = rpt.build_report(db, engagement)["executive"]
+    titles = [f["title"] for f in ex["findings"]]
+    assert not any("cruzan" in t for t in titles)
+    if not ex["findings"]:
+        assert "conclusiones del proveedor" in ex["empty_reason"]
 
 
 def test_report_caps_the_executive_at_three_findings(db, engagement):

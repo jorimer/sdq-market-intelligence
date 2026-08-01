@@ -1380,3 +1380,31 @@ def update_discrepancy(
         d.resolution_note = resolution_note           # type: ignore[assignment]
     d.updated_by = actor                              # type: ignore[assignment]
     return d
+
+
+def explanations_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
+    """La capa explicativa: conclusiones utilizables × contrato macro.
+
+    Solo lee ``usable_conclusions`` — nunca la tabla de conclusiones directa. Es la
+    garantía del canal de discrepancias: una conclusión en discusión con el proveedor no
+    llega aquí, así que ninguna explicación puede montarse sobre ella por accidente.
+    """
+    from modules.brand_intel.engines import explain as xp
+
+    rows = usable_conclusions(db, engagement_id)
+    macro = macro_context(db)
+    out = xp.explain_conclusions(
+        rows,
+        macro.get("factors") or [],
+        environment_stance=macro.get("stance") if macro.get("available") else None,
+    )
+    out["macro_period"] = macro.get("period")
+    blocked = (db.query(BrandDiscrepancy)
+               .filter(BrandDiscrepancy.engagement_id == engagement_id,
+                       BrandDiscrepancy.status.in_(BLOCKING_STATES)).count())
+    out["conclusions_blocked"] = blocked
+    if not rows:
+        out["reason"] = ("El encargo no tiene conclusiones del proveedor utilizables: "
+                         "sube su presentación para que se lean, o resuelve las "
+                         "discrepancias abiertas.")
+    return out
