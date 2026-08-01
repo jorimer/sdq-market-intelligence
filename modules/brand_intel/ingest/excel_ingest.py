@@ -108,6 +108,28 @@ def _as_date(v: Any) -> Optional[date]:
     return None
 
 
+def _headers(ws) -> Dict[str, int]:
+    """Índice de columna por nombre de cabecera, normalizado.
+
+    Las columnas se leían por POSICIÓN, así que añadir `entrega` al principio corrió todas
+    las demás y un libro descargado antes del cambio veía rechazadas sus 503 filas con
+    «Ola desconocida: 'mcdonalds'». Leer por nombre hace que una columna nueva no rompa
+    los libros que ya existen — y este formato lo rellena gente, no un programa.
+    """
+    out: Dict[str, int] = {}
+    for i, cell in enumerate(next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())):
+        nombre = _norm(cell)
+        if nombre:
+            out[nombre] = i
+    return out
+
+
+def _col(row, headers: Dict[str, int], nombre: str):
+    """El valor de una columna por nombre. ``None`` si el libro no la trae."""
+    i = headers.get(nombre)
+    return row[i] if i is not None and i < len(row) else None
+
+
 def _rows(ws, min_row: int = 2):
     """Yield (row_number, values) skipping blank and note rows."""
     for idx, row in enumerate(ws.iter_rows(min_row=min_row, values_only=True), start=min_row):
@@ -115,6 +137,11 @@ def _rows(ws, min_row: int = 2):
             continue
         first = _norm(row[0])
         if first and first.startswith("("):     # the template's inline notes
+            continue
+        # La plantilla escribe sus notas como una fila con texto SOLO en la primera
+        # columna. Rechazarlas como si fueran datos hace que un libro correcto reporte
+        # "1 fila rechazada" por una frase que escribió el propio sistema.
+        if first and all(c is None or str(c).strip() == "" for c in row[1:]):
             continue
         yield idx, row
 
@@ -227,29 +254,40 @@ def _ingest_observations(db, engagement, ws, report: IngestReport,
         for b in db.query(BrandEntity).filter(BrandEntity.engagement_id == engagement.id).all()
     }
 
+    headers = _headers(ws)
+    if "ola" not in headers or "metrica" not in headers:
+        report.reject("Observaciones", 1,
+                      "Faltan columnas obligatorias: se esperan al menos 'ola' y 'metrica'.")
+        return
+    if "entrega" not in headers:
+        report.warnings.append(
+            f"El libro no declara la columna 'entrega': todo se carga como una sola "
+            f"({document_name}). Si trae más de un informe del tracker, descarga la "
+            "plantilla otra vez y rellena esa columna para separarlos.")
+
     por_entrega: Dict[str, List[Any]] = {}
     for rownum, row in _rows(ws):
-        entrega = (_norm(row[0]) if len(row) > 0 else "") or document_name
-        wave_code = _norm(row[1]) if len(row) > 1 else ""
-        wave_id = waves.get(wave_code or "")
+        entrega = _norm(_col(row, headers, "entrega")) or document_name
+        wave_code = _norm(_col(row, headers, "ola")) or ""
+        wave_id = waves.get(wave_code)
         if not wave_id:
             report.reject("Observaciones", rownum,
                           f"Ola desconocida: '{wave_code}'. Debe existir en la hoja Olas.")
             continue
 
-        brand = (_norm(row[2]) if len(row) > 2 else "") or ""
+        brand = _norm(_col(row, headers, "marca")) or ""
         if brand and brand not in brands:
             report.reject("Observaciones", rownum,
                           f"Marca desconocida: '{brand}'. Debe existir en la hoja Marcas.")
             continue
 
-        metric = (_norm(row[3]) if len(row) > 3 else "") or ""
+        metric = _norm(_col(row, headers, "metrica")) or ""
         if not metric or vocab.get(metric) is None:
             report.reject("Observaciones", rownum,
                           f"Métrica desconocida: '{metric}'. Ver la hoja Diccionario.")
             continue
 
-        value = _as_float(row[5]) if len(row) > 5 else None
+        value = _as_float(_col(row, headers, "valor"))
         if value is None:
             report.reject("Observaciones", rownum, "Valor ausente o no numérico.")
             continue
@@ -258,11 +296,11 @@ def _ingest_observations(db, engagement, ws, report: IngestReport,
             wave_id=str(wave_id),
             brand_slug=brand or None,
             metric_code=metric,
-            segment=(_norm(row[4]) if len(row) > 4 else "") or "total",
+            segment=_norm(_col(row, headers, "segmento")) or "total",
             value=value,
-            base_n=_as_int(row[6]) if len(row) > 6 else None,
-            unit=(_norm(row[7]) if len(row) > 7 else "") or "pct",
-            source=(_norm(row[8]) if len(row) > 8 else "") or entrega,
+            base_n=_as_int(_col(row, headers, "base_n")),
+            unit=_norm(_col(row, headers, "unidad")) or "pct",
+            source=_norm(_col(row, headers, "fuente")) or entrega,
         ))
 
     # Una fila de extracción por entrega: es lo que ata cada lectura a su informe y lo que
