@@ -343,3 +343,92 @@ def discover_metrics_on_page(
     if not text:
         raise RuntimeError(f"Respuesta vacía al leer la página {page_number}.")
     return list(json.loads(text).get("metrics") or [])
+
+
+# ── descubrimiento de marcas ──────────────────────────────────────────
+
+#: Qué puede devolver el modelo al listar las marcas de una lámina. Cerrado, como los
+#: demás: no puede introducir un campo que no validemos.
+BRAND_DISCOVERY_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["brands"],
+    "properties": {
+        "brands": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["name", "occurrences"],
+                "properties": {
+                    "name": {"type": "string",
+                             "description": "la marca tal como está impresa"},
+                    "occurrences": {"type": "integer",
+                                    "description": "cuántas cifras rotula en esta lámina"},
+                },
+            },
+        },
+    },
+}
+
+_BRAND_DISCOVERY_PROMPT = """Eres un analista leyendo una lámina de un estudio de mercado.
+Tu única tarea es listar QUÉ MARCAS aparecen rotuladas en ella. NO transcribas cifras.
+
+Por cada marca distinta devuelve:
+- `name`: el nombre TAL COMO ESTÁ IMPRESO, con su grafía exacta, acentos y apóstrofos.
+  Si la lámina escribe "Wendy´s", devuelve "Wendy´s", no "Wendy's".
+- `occurrences`: a cuántas cifras de esta lámina rotula esa marca.
+
+REGLAS
+1. Solo marcas que estén impresas. No completes el set competitivo de memoria ni añadas
+   competidores que "deberían" estar.
+2. Los totales de categoría y los segmentos NO son marcas: «Total», «QSR», «Food Service»,
+   «Mercado», un nivel socioeconómico o una ciudad no van en la lista.
+3. Si la lámina no rotula ninguna marca (portada, índice, metodología, una cifra global),
+   devuelve la lista vacía."""
+
+
+def discover_brands_on_page(
+    image_png: bytes, page_number: int, client: Any = None,
+) -> List[Dict[str, Any]]:
+    """List the brands a slide labels. Deliberately NOT the full extraction call.
+
+    Discovery only needs the names, and the ordinary extractor transcribes every figure
+    on the slide against a 16k-token schema — on the densest slide of a real deck that is
+    hundreds of cell objects produced to keep fifteen strings. Sampling picks the densest
+    slides *on purpose*, so the waste lands exactly where it hurts: the discovery pass on
+    a 59-slide deck ran for minutes and died against the request budget.
+    """
+    import anthropic
+
+    if client is None:
+        key = settings.ANTHROPIC_API_KEY
+        if not key:
+            raise RuntimeError(
+                "Falta la clave de Anthropic: la lectura de láminas no está disponible."
+            )
+        client = anthropic.Anthropic(api_key=key)
+    b64 = base64.standard_b64encode(image_png).decode("utf-8")
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=2000,
+        system=_BRAND_DISCOVERY_PROMPT,
+        output_config={
+            "format": {"type": "json_schema", "schema": BRAND_DISCOVERY_SCHEMA},
+        },
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image",
+                 "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                {"type": "text", "text": "¿Qué marcas rotula esta lámina?"},
+            ],
+        }],
+    )
+    if response.stop_reason == "refusal":
+        raise RuntimeError(f"La lectura de la página {page_number} fue rechazada.")
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    if not text:
+        raise RuntimeError(f"Respuesta vacía al leer la página {page_number}.")
+    return list(json.loads(text).get("brands") or [])

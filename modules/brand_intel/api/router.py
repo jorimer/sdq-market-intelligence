@@ -13,6 +13,7 @@ exposed through the Data API.
 """
 from __future__ import annotations
 
+import functools
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -349,8 +350,10 @@ async def discover_structure(
 
     try:
         proposal = await asyncio.to_thread(
-            dsc.discover_structure, content, sample, None, None, with_brands,
-            with_metrics,
+            functools.partial(
+                dsc.discover_structure, content, sample=sample,
+                with_brands=with_brands, with_metrics=with_metrics,
+            )
         )
     except Exception as exc:  # noqa: BLE001 — the caller must see why, not a blank panel
         logger.exception("Fallo el descubrimiento de estructura en %s", slug)
