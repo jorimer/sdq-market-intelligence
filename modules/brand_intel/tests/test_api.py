@@ -342,3 +342,31 @@ def test_the_client_is_not_the_isolation_boundary(db, engagement):
     r = _client(db, role=UserRole.viewer, org="org-1").get(
         "/api/v1/brand-intel/engagements/acme-otro")
     assert r.status_code == 404
+
+
+# ── el informe como documento ─────────────────────────────────────────
+
+@pytest.mark.parametrize("fmt,firma,mime", [
+    ("pdf", b"%PDF", "application/pdf"),
+    ("docx", b"PK", "wordprocessingml"),
+])
+def test_the_report_downloads_as_a_document(db, engagement, tmp_path, fmt, firma, mime):
+    """El estándar de la casa pide online · PDF · Word; el módulo solo daba HTML."""
+    r = _client(db).get(f"/api/v1/brand-intel/engagements/demo/report.{fmt}")
+    assert r.status_code == 200, r.text
+    assert r.content[:4].startswith(firma)
+    assert mime in r.headers["content-type"]
+    assert f"informe_contexto_demo.{fmt}" in r.headers["content-disposition"]
+
+
+def test_the_html_route_still_wins_over_the_document_route(db, engagement):
+    """`.html` tiene su propio renderizador: una ruta comodín declarada antes se lo traga."""
+    r = _client(db).get("/api/v1/brand-intel/engagements/demo/report.html")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert r.text.lstrip().startswith("<!doctype html")
+
+
+def test_an_unknown_report_format_is_404(db, engagement):
+    assert _client(db).get(
+        "/api/v1/brand-intel/engagements/demo/report.xlsx").status_code == 404

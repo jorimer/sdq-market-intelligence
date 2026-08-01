@@ -732,3 +732,37 @@ def report_html(slug: str, db: Session = Depends(get_db),
     payload = rpt.build_report(db, eng)
     db.commit()
     return Response(content=rpt.render_html(payload), media_type="text/html; charset=utf-8")
+
+
+@router.get("/engagements/{slug}/report.{fmt}",
+            summary="Informe completo como documento (pdf | docx)")
+def report_document(
+    slug: str, fmt: str, db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """El informe en PDF o Word, con el chrome de marca de la plataforma.
+
+    El módulo entregaba solo HTML imprimible, contra `docs/REPORT_STANDARD.md`, que pide
+    online · PDF · Word. Un cliente que paga un informe espera un documento.
+    """
+    from modules.brand_intel import report_docs
+
+    if fmt not in ("pdf", "docx"):
+        raise HTTPException(status_code=404, detail="Formato no disponible.")
+    eng = _resolve(db, slug, user)
+    payload = rpt.build_report(db, eng)
+    try:
+        path = report_docs.render(payload, fmt=fmt)
+    except Exception as exc:  # noqa: BLE001 — el fallo se dice, no se sirve en blanco
+        logger.exception("No se pudo renderizar el informe %s de %s", fmt, slug)
+        raise HTTPException(status_code=500,
+                            detail=f"No se pudo generar el documento: {exc}") from exc
+    with open(path, "rb") as fh:
+        content = fh.read()
+    media = ("application/pdf" if fmt == "pdf" else
+             "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition":
+                 f'attachment; filename="SDQ-MIP_informe_contexto_{slug}.{fmt}"'},
+    )
