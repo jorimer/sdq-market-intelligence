@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from modules.brand_intel import service as svc
+from modules.brand_intel.engines import category as cat_engine
 from modules.brand_intel.engines.metrics import label_for
 from modules.brand_intel.models.models import BrandEngagement, BrandObservation
 
@@ -107,9 +108,10 @@ def _executive(p: Dict[str, Any]) -> Dict[str, Any]:
                 "figure": _fmt(growth),
                 "detail": (
                     "Variación del tamaño de la categoría entre la primera y la última ola. "
+                    + str(cat.get("growth_basis") or "") + " "
                     + ("Todo lo ocurrido entre marcas fue redistribución, no crecimiento."
                        if abs(growth) < 1.0 else "")
-                ),
+                ).strip(),
             })
 
         reading = cat.get("divergence_reading")
@@ -457,16 +459,30 @@ def _render_category(c: Dict[str, Any]) -> str:
                    + f"<td class='num'>{_fmt(delta, ' pp')}</td></tr>")
     out.append("</tbody></table>")
 
+    # Las olas sin denominador se nombran: una celda "n/d" sin explicación se lee como
+    # un fallo de carga, cuando lo que dice es que esa ola no midió bastantes marcas.
+    sin_den = c.get("waves_without_denominator") or []
+    if sin_den:
+        etiquetas = ", ".join(_e(w["label"]) for w in sin_den)
+        out.append(
+            f"<div class='note'>Sin share en {etiquetas}: esa(s) ola(s) no miden alcance "
+            f"en al menos {cat_engine.MIN_DENOMINATOR_BRANDS} marcas del set, y repartir "
+            "sobre una sola daría 100% por construcción.</div>"
+        )
+
     growth = c.get("category_growth_pct")
     if growth is not None:
         flat = abs(growth) < 1.0
         out.append(
             f"<div class='note{'' if flat else ' red'}'>Tamaño de la categoría: "
-            f"<b>{_fmt(growth)}</b> entre la primera y la última ola."
+            f"<b>{_fmt(growth)}</b> entre la primera y la última ola. "
+            + _e(str(c.get("growth_basis") or ""))
             + (" La torta está plana: todo movimiento entre marcas fue redistribución."
                if flat else "")
             + "</div>"
         )
+    elif c.get("growth_basis"):
+        out.append(f"<div class='note'>{_e(str(c['growth_basis']))}</div>")
     shift = c.get("share_shift") or []
     if len(shift) >= 2:
         top, bottom = shift[0], shift[-1]

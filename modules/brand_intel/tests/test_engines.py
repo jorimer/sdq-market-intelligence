@@ -350,3 +350,60 @@ def test_summary_counts_every_status():
     ])
     assert out == {"total": 3, "achieved": 1, "worsened": 0, "inconclusive": 1,
                    "unevaluable": 0, "open": 1, "closed": 2}
+
+
+# ── el denominador se juzga OLA POR OLA ───────────────────────────────
+
+def test_a_wave_with_one_measured_brand_yields_no_share():
+    """Reproduce el informe que salió mal: mayo con una marca dio 100% y +226%.
+
+    Una guarda anterior comprobaba que hubiera ≥2 marcas medidas en el encargo entero y
+    daba por buena una ola con una sola. Pero el denominador se calcula por ola: con un
+    único miembro el share es 100% por construcción, y la "categoría" crece cuando en la
+    ola siguiente entran las demás. Es cobertura, no consumo.
+    """
+    cells = [
+        cat.Cell("2025-05", "mcdonalds", 44.0),                 # solo la focal
+        cat.Cell("2026-03", "mcdonalds", 27.0),
+        cat.Cell("2026-03", "burger-king", 16.0),
+        cat.Cell("2026-03", "little-caesars", 31.0),
+    ]
+    in_set = ["mcdonalds", "burger-king", "little-caesars"]
+
+    sizes = cat.category_size(cells, in_set)
+    assert sizes["2025-05"] is None            # una marca no es una categoría
+    assert sizes["2026-03"] == 74.0
+
+    puntos = cat.share_by_brand(cells, in_set)
+    assert [p for p in puntos if p.wave == "2025-05"] == []
+    assert all(p.share < 100.0 for p in puntos)
+
+
+def test_growth_is_measured_on_the_brands_present_in_every_wave():
+    """Si el denominador cambia de miembros, la variación mide cobertura, no categoría."""
+    cells = [
+        cat.Cell("2025-05", "mcdonalds", 20.0), cat.Cell("2025-05", "burger-king", 10.0),
+        cat.Cell("2026-03", "mcdonalds", 22.0), cat.Cell("2026-03", "burger-king", 11.0),
+        cat.Cell("2026-03", "kfc", 40.0),       # entra tarde: no puede inflar el total
+    ]
+    in_set = ["mcdonalds", "burger-king", "kfc"]
+
+    sizes, comunes = cat.comparable_size(cells, ["2025-05", "2026-03"], in_set)
+    assert comunes == ["burger-king", "mcdonalds"]
+    assert sizes == {"2025-05": 30.0, "2026-03": 33.0}
+    assert cat.category_growth(sizes, ["2025-05", "2026-03"]) == pytest.approx(10.0)
+
+    # Sobre el tamaño sin balancear, la misma serie "crecería" un 143%.
+    crudo = cat.category_size(cells, in_set)
+    assert cat.category_growth(crudo, ["2025-05", "2026-03"]) == pytest.approx(143.3, abs=0.1)
+
+
+def test_growth_is_refused_when_no_two_brands_span_the_waves():
+    cells = [
+        cat.Cell("2025-05", "mcdonalds", 44.0),
+        cat.Cell("2026-03", "burger-king", 16.0), cat.Cell("2026-03", "kfc", 30.0),
+    ]
+    sizes, comunes = cat.comparable_size(
+        cells, ["2025-05", "2026-03"], ["mcdonalds", "burger-king", "kfc"])
+    assert sizes == {}
+    assert cat.category_growth(sizes, ["2025-05", "2026-03"]) is None
