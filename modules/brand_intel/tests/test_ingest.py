@@ -236,3 +236,84 @@ def test_a_workbook_without_the_delivery_column_is_one_delivery(db, engagement):
     nombres = {e.document_name for e in db.query(BrandExtraction)
                .filter(BrandExtraction.method == "excel").all()}
     assert nombres == {"mi-libro.xlsx"}
+
+
+# ── compatibilidad con libros anteriores a la columna `entrega` ────────
+
+def test_a_workbook_from_before_the_delivery_column_still_loads(db, engagement):
+    """La regresión: añadir `entrega` al principio corrió TODAS las columnas.
+
+    Un libro descargado antes del cambio —y ya rellenado por una persona— veía rechazadas
+    sus 503 filas con «Ola desconocida: 'mcdonalds'», porque la marca caía donde el lector
+    esperaba la ola. Las columnas se leen por NOMBRE de cabecera, no por posición.
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Olas"
+    ws.append(["codigo", "etiqueta", "orden", "fecha_referencia",
+               "campo_inicio", "campo_fin", "base_nominal"])
+    ws.append(["v1", "Ola vieja", 1, None, None, None, 300])
+    ws = wb.create_sheet("Marcas")
+    ws.append(["slug", "nombre", "es_focal", "en_set_categoria", "orden"])
+    ws.append(["focal", "Focal", "SI", "SI", 1])
+    ws = wb.create_sheet("Observaciones")
+    # Cabecera VIEJA: sin `entrega`.
+    ws.append(["ola", "marca", "metrica", "segmento", "valor", "base_n", "unidad", "fuente"])
+    ws.append(["v1", "focal", "reach_7d", "total", 41, 300, "pct", "Hot Tracker · lámina 18"])
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    rep = ingest_workbook(db, engagement, buf.getvalue(), document_name="viejo.xlsx")
+    db.commit()
+    d = rep.as_dict()
+    assert d["total_rechazadas"] == 0, d["rechazadas"]
+    assert d["observaciones"]["creadas"] == 1
+    # Y se avisa de que el libro no separa entregas, en vez de callarlo.
+    assert any("no declara la columna 'entrega'" in w for w in d["advertencias"])
+
+
+def test_the_templates_own_note_rows_are_not_rejected_as_data(db, engagement):
+    """Un libro correcto no puede reportar filas rechazadas por una frase que escribió
+    el propio sistema al generar la plantilla."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Olas"
+    ws.append(["codigo", "etiqueta", "orden", "fecha_referencia",
+               "campo_inicio", "campo_fin", "base_nominal"])
+    ws.append(["v1", "Ola", 1, None, None, None, 300])
+    ws = wb.create_sheet("Marcas")
+    ws.append(["slug", "nombre", "es_focal", "en_set_categoria", "orden"])
+    ws.append(["focal", "Focal", "SI", "SI", 1])
+    ws = wb.create_sheet("Observaciones")
+    ws.append(["entrega", "ola", "marca", "metrica", "segmento", "valor", "base_n",
+               "unidad", "fuente"])
+    ws.append(["Ola 1", "v1", "focal", "reach_7d", "total", 41, 300, "pct", ""])
+    ws.append(["marca vacía = métrica de categoría · base_n vacío = …"])   # la nota
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    d = ingest_workbook(db, engagement, buf.getvalue()).as_dict()
+    assert d["total_rechazadas"] == 0, d["rechazadas"]
+    assert d["observaciones"]["creadas"] == 1
+
+
+def test_a_workbook_missing_the_required_columns_says_so_once(db, engagement):
+    """Rechazar 500 filas una a una esconde que el problema es la cabecera."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Olas"
+    ws.append(["codigo", "etiqueta", "orden", "fecha_referencia",
+               "campo_inicio", "campo_fin", "base_nominal"])
+    ws.append(["v1", "Ola", 1, None, None, None, 300])
+    ws = wb.create_sheet("Marcas")
+    ws.append(["slug", "nombre", "es_focal", "en_set_categoria", "orden"])
+    ws.append(["focal", "Focal", "SI", "SI", 1])
+    ws = wb.create_sheet("Observaciones")
+    ws.append(["periodo", "brand", "kpi", "valor"])          # cabecera equivocada
+    ws.append(["v1", "focal", "reach_7d", 41])
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    d = ingest_workbook(db, engagement, buf.getvalue()).as_dict()
+    assert d["total_rechazadas"] == 1
+    assert "columnas obligatorias" in d["rechazadas"][0]["reason"]
