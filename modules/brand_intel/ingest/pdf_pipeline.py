@@ -244,8 +244,19 @@ def ingest_pdf(
     max_pages: Optional[int] = None,
     extractor: Optional[Callable[..., pdf_vision.PageExtraction]] = None,
     renderer: Optional[Callable[..., List[bytes]]] = None,
+    on_page: Optional[Callable[[int], None]] = None,
+    into: Optional[BrandExtraction] = None,
 ) -> IngestReport:
-    """Read a presentation into staging. Nothing reaches observations here."""
+    """Read a presentation into staging, page by page. Nothing reaches observations here.
+
+    Runs inside the worker, not the web request. Reading a real deck is dozens of vision
+    calls — the first version did it in one HTTP request and died against the time budget
+    with nothing to show, after paying for every call it had made.
+
+    Each page is committed as it is read, so the work already done survives a crash, and
+    ``pages_done`` is where a re-run picks up. That is also what makes the progress on
+    screen真 rather than a spinner: it is the number of slides actually persisted.
+    """
     report = IngestReport()
     render = renderer or pdf_vision.render_pages
     extract = extractor or pdf_vision.extract_page
@@ -264,34 +275,54 @@ def ingest_pdf(
         return report
 
     resolver = _LabelResolver(brands, waves)
-    images = render(content, last=max_pages)
-
-    raw: List[Tuple[int, str, Dict[str, Any]]] = []
     model_used = None
-    for i, image in enumerate(images, start=1):
+
+    # Se avanza lámina a lámina hasta que el render no devuelve nada: el mazo dice dónde
+    # termina. Renderizarlo entero por adelantado tenía además un coste de memoria que
+    # crece con el mazo — 59 PNG a 140 ppp viven todos a la vez.
+    raw: List[Tuple[int, str, Dict[str, Any]]] = []
+    page_no = 0
+    while max_pages is None or page_no < max_pages:
+        page_no += 1
         try:
-            read = extract(image, i, resolver.brand_names, resolver.wave_labels)
+            images = render(content, first=page_no, last=page_no)
+            if not images:
+                page_no -= 1
+                break
+            read = extract(images[0], page_no, resolver.brand_names, resolver.wave_labels)
         except Exception as exc:  # noqa: BLE001 — one bad page must not lose the document
-            logger.warning("Página %s ilegible: %s", i, exc)
-            report.page_errors.append({"page": i, "error": str(exc)})
+            logger.warning("Página %s ilegible: %s", page_no, exc)
+            report.page_errors.append({"page": page_no, "error": str(exc)})
+            if on_page:
+                on_page(page_no)
             continue
 
         model_used = model_used or read.model_used
         if not read.readable or not read.cells:
             report.pages_skipped += 1
-            continue
-        report.pages_read += 1
-        for row in read.cells:
-            raw.append((i, read.chart_title, row))
+        else:
+            report.pages_read += 1
+            for row in read.cells:
+                raw.append((page_no, read.chart_title, row))
+        if on_page:
+            on_page(page_no)
+
+    n_pages = page_no
 
     # Judge distributions on the full slide first — before the engagement filter drops
     # brands the client does not track. Afterwards the surviving subset could never sum
     # to 100, and every real deck would fail the check.
+    #
+    # The id is namespaced by page because the model invents it per slide: two slides that
+    # both call their distribution "preferencia" are not one distribution, and merging
+    # them makes the sum ~200 and fails both.
     full_slide = [
         val.Cell(key=f"raw-{i}", metric_code=(row.get("metric_code") or ""),
                  value=float(row.get("value") or 0),
-                 distribution_id=(row.get("distribution_id") or "").strip() or None)
-        for i, (_, _, row) in enumerate(raw)
+                 distribution_id=(f"p{page}:{did}"
+                                  if (did := (row.get("distribution_id") or "").strip())
+                                  else None))
+        for i, (page, _, row) in enumerate(raw)
         if isinstance(row.get("value"), (int, float))
     ]
     dist_verdicts = val.distribution_verdicts(full_slide)
@@ -302,17 +333,19 @@ def ingest_pdf(
     report.validation = result.as_dict()
     report.coverage_note = val.coverage_note(result)
 
-    extraction = BrandExtraction(
-        engagement_id=engagement.id,
-        document_name=document_name,
-        n_pages=len(images),
-        status="validated" if cells else "rejected",
-        model_used=model_used,
-        method="vision",
-        summary=result.as_dict(),
-        note=report.coverage_note,
-    )
-    db.add(extraction)
+    # `into` es la fila del trabajo, que ya existe desde que se encoló: rellenarla deja
+    # UNA fila por documento, desde `queued` hasta `validated`. Sin ella —el camino de los
+    # tests y del Excel— se crea aquí.
+    extraction = into or BrandExtraction(
+        engagement_id=engagement.id, document_name=document_name, method="vision")
+    extraction.n_pages = n_pages
+    extraction.pages_done = n_pages
+    extraction.status = "validated" if cells else "rejected"
+    extraction.model_used = model_used
+    extraction.summary = result.as_dict()
+    extraction.note = report.coverage_note
+    if into is None:
+        db.add(extraction)
     db.flush()
 
     title_by_page = {p: t for p, t, _ in raw}

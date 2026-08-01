@@ -37,6 +37,8 @@ import {
   getVigilance,
   getEngagementDetail,
   uploadPdf,
+  getExtractionStatus,
+  resumeExtraction,
   listExtractions,
   issueForecast,
   scoreForecasts,
@@ -54,6 +56,7 @@ import {
   type FunnelAnalysis,
   type IngestReport,
   type ExtractionSummary,
+  type ExtractionJob,
   type PdfIngestReport,
   type ScenariosAnalysis,
   type SignalFilter,
@@ -543,6 +546,7 @@ export function BrandIntelPage() {
   const [forecastMsg, setForecastMsg] = useState<string | null>(null);
   const [extractions, setExtractions] = useState<ExtractionSummary[]>([]);
   const [pdfReport, setPdfReport] = useState<PdfIngestReport | null>(null);
+  const [job, setJob] = useState<ExtractionJob | null>(null);
   const [reviewing, setReviewing] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
@@ -643,20 +647,58 @@ export function BrandIntelPage() {
     }
   };
 
+  /**
+   * Sube el mazo y sigue el trabajo hasta que termina.
+   *
+   * La lectura ya no ocurre dentro de la petición: subir encola y devuelve enseguida, y
+   * aquí se pregunta por el avance. Cerrar la pestaña no cancela nada — el trabajo vive
+   * en el servidor y se recupera entrando de nuevo.
+   */
   const onUploadPdf = async (file: File) => {
     setBusy(true);
     setPdfReport(null);
     try {
-      const report = await uploadPdf(slug, file);
-      setPdfReport(report);
+      let current = await uploadPdf(slug, file);
+      setJob(current);
       setExtractions(await listExtractions(slug));
-      if (report.extraction_id) setReviewing(report.extraction_id);
+      while (current.running) {
+        await new Promise((r) => setTimeout(r, 4000));
+        current = await getExtractionStatus(slug, current.extraction_id);
+        setJob(current);
+      }
+      setExtractions(await listExtractions(slug));
+      if (current.report) setPdfReport(current.report);
+      if (current.status === "error") {
+        setForecastMsg(`La lectura falló: ${current.error ?? "motivo desconocido"}`);
+      } else if (current.status === "validated") {
+        setReviewing(current.extraction_id);
+      }
     } catch {
-      setPdfReport(null);
-      setForecastMsg("No se pudo procesar el PDF.");
+      setForecastMsg(
+        "No se pudo subir la presentación. El trabajo, si llegó a encolarse, sigue " +
+        "en «Presentaciones leídas».",
+      );
     } finally {
       setBusy(false);
       if (pdfRef.current) pdfRef.current.value = "";
+    }
+  };
+
+  /** Reanuda un trabajo interrumpido: las láminas ya leídas no se vuelven a pagar. */
+  const onResume = async (extractionId: string) => {
+    try {
+      let current = await resumeExtraction(slug, extractionId);
+      setJob(current);
+      while (current.running) {
+        await new Promise((r) => setTimeout(r, 4000));
+        current = await getExtractionStatus(slug, current.extraction_id);
+        setJob(current);
+      }
+      setExtractions(await listExtractions(slug));
+      if (current.report) setPdfReport(current.report);
+      if (current.status === "validated") setReviewing(current.extraction_id);
+    } catch {
+      setForecastMsg("No se pudo reanudar la lectura; vuelve a subir la presentación.");
     }
   };
 
@@ -967,6 +1009,53 @@ export function BrandIntelPage() {
             title="Presentaciones leídas"
             subtitle="Las cifras extraídas esperan revisión antes de convertirse en datos"
           />
+          {/* El trabajo en curso: leer un mazo son decenas de llamadas de visión, y un
+              spinner sin cifras durante media hora es indistinguible de un cuelgue. */}
+          {job && job.running && (
+            <div className="rounded-lg bg-surface2 p-3 mb-3 space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm text-body truncate min-w-0 flex-1">
+                  {job.status === "queued"
+                    ? "En cola…"
+                    : `Leyendo ${job.document}`}
+                </span>
+                <span className="text-xs text-muted mono shrink-0 tabular-nums">
+                  {job.pages_done}/{job.pages_total} láminas
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-line overflow-hidden">
+                <div
+                  className="h-full bg-accent transition-all"
+                  style={{
+                    width: `${job.pages_total
+                      ? Math.round((job.pages_done / job.pages_total) * 100)
+                      : 0}%`,
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted">
+                Las cifras se validan contra el mazo completo, así que aparecen todas
+                juntas al terminar; el contador de láminas es el avance real. El trabajo
+                corre en el servidor: puedes cerrar esta pantalla y volver, no se pierde.
+              </p>
+            </div>
+          )}
+
+          {job && job.status === "error" && (
+            <div className="rounded-lg bg-alert-soft p-3 mb-3 space-y-2">
+              <p className="text-sm text-alert">
+                La lectura se interrumpió tras {job.pages_done} de {job.pages_total}{" "}
+                lámina(s): {job.error}
+              </p>
+              <button
+                className="btn btn-ghost text-xs"
+                onClick={() => void onResume(job.extraction_id)}
+              >
+                Reanudar desde donde iba
+              </button>
+            </div>
+          )}
+
           {pdfReport && (
             <div className="rounded-lg bg-surface2 p-3 mb-3 space-y-2">
               <p className="text-sm text-body">

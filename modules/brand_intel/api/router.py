@@ -292,10 +292,14 @@ async def ingest_pdf(
     db: Session = Depends(get_db),
     user: User = Depends(require_role(UserRole.analyst)),
 ) -> Dict[str, Any]:
-    """Read a presentation into staging. Nothing reaches the observations table here."""
-    import asyncio
+    """Encola la lectura del mazo y responde de inmediato. No lee ni una lámina aquí.
 
-    from modules.brand_intel.ingest.pdf_pipeline import ingest_pdf as run_ingest
+    Leer un mazo real son decenas de llamadas de visión. Hacerlo dentro de la petición
+    moría contra el presupuesto de tiempo del proxy **después de pagar** las llamadas que
+    alcanzaba, sin dejar nada. El trabajo vive ahora en su propia fila y la pantalla
+    pregunta por el avance con ``GET .../extractions/{id}/status``.
+    """
+    from modules.brand_intel.ingest import jobs
 
     eng = _resolve(db, slug, user)
     if not (file.filename or "").lower().endswith(".pdf"):
@@ -303,17 +307,62 @@ async def ingest_pdf(
     content = await file.read()
 
     try:
-        # The vision pass is synchronous and long; keep it off the event loop.
-        report = await asyncio.to_thread(
-            run_ingest, db, eng, content, file.filename or "documento.pdf", max_pages,
-        )
+        extraction = jobs.queue_extraction(
+            db, eng, content, file.filename or "documento.pdf", max_pages)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 — surface the failure, never half-commit
         db.rollback()
-        logger.exception("Fallo la extracción de %s", slug)
+        logger.exception("No se pudo encolar la lectura de %s", slug)
         raise HTTPException(status_code=400,
                             detail=f"No se pudo procesar el PDF: {exc}") from exc
-    db.commit()
-    return report.as_dict()
+    return jobs.job_status(db, extraction)
+
+
+@router.get("/engagements/{slug}/extractions/{extraction_id}/status",
+            summary="Avance de la lectura de un mazo")
+def extraction_status(
+    slug: str, extraction_id: str, db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Cuántas láminas lleva, si sigue corriendo y por qué falló si falló."""
+    from modules.brand_intel.ingest import jobs
+
+    eng = _resolve(db, slug, user)
+    row = (db.query(BrandExtraction)
+           .filter(BrandExtraction.id == extraction_id,
+                   BrandExtraction.engagement_id == eng.id).first())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Extracción no encontrada.")
+    return jobs.job_status(db, row)
+
+
+@router.post("/engagements/{slug}/extractions/{extraction_id}/resume",
+             summary="Reanudar una lectura interrumpida")
+def resume_extraction(
+    slug: str, extraction_id: str, db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Vuelve a despachar un trabajo que quedó a medias.
+
+    Solo sirve mientras el trabajo conserve su PDF: al terminar se suelta, y reanudar un
+    trabajo terminado no significa nada. Las láminas ya leídas no se vuelven a pagar.
+    """
+    from modules.brand_intel.ingest import jobs
+
+    eng = _resolve(db, slug, user)
+    row = (db.query(BrandExtraction)
+           .filter(BrandExtraction.id == extraction_id,
+                   BrandExtraction.engagement_id == eng.id).first())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Extracción no encontrada.")
+    if not row.source_pdf:
+        raise HTTPException(
+            status_code=409,
+            detail="Este trabajo ya no conserva el PDF: vuelve a subir la presentación.")
+    jobs._dispatch(str(row.id))
+    return jobs.job_status(db, row)
 
 
 @router.post("/engagements/{slug}/discover",

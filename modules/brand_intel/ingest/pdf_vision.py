@@ -432,3 +432,15 @@ def discover_brands_on_page(
     if not text:
         raise RuntimeError(f"Respuesta vacía al leer la página {page_number}.")
     return list(json.loads(text).get("brands") or [])
+
+
+def page_count(content: bytes) -> int:
+    """Cuántas láminas tiene el mazo, sin renderizar ninguna.
+
+    Hace falta para saber el tamaño del trabajo antes de empezarlo: la pantalla enseña
+    "lámina 7 de 59" desde el primer segundo, no un contador que solo existe al final.
+    """
+    import pdfplumber
+
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+        return len(pdf.pages)

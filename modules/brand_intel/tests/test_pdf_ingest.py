@@ -290,7 +290,20 @@ def _stub_page(cells, title="Lámina", readable=True):
 
 
 def _stub_render(n=1):
-    return lambda content, last=None: [b"png"] * n
+    """Un mazo falso de `n` láminas, que respeta la página pedida como el real.
+
+    Importa: el pipeline avanza lámina a lámina hasta que el render no devuelve nada, así
+    que un doble que ignore `first`/`last` y devuelva siempre algo nunca termina. El falso
+    tiene que mentir en el contenido, no en la forma.
+    """
+    def render(content, dpi=None, first=None, last=None, **kw):
+        if first is not None and first > n:
+            return []
+        if first is not None:
+            return [b"png"]
+        return [b"png"] * n
+
+    return render
 
 
 def _row(metric, brand, wave, value, **kw):
@@ -660,3 +673,128 @@ def test_a_study_without_a_ladder_is_not_judged_by_the_funnel_invariant(db, enga
     assert vocab.ladder == ()
     cells = [val.Cell(key="a", metric_code="nps", value=42.0)]
     assert val.check_funnel_monotonicity(cells, vocab) == []
+
+
+# ── la lectura como trabajo ───────────────────────────────────────────
+
+def test_the_distribution_id_is_namespaced_by_slide(db, engagement):
+    """Dos láminas que llaman igual a su distribución no son una distribución.
+
+    El modelo inventa el identificador por lámina («preferencia»), así que dos gráficos
+    distintos pueden coincidir. Sin separar por lámina se suman las dos, el total da ~200
+    y ambas se marcan inconsistentes: dos gráficos correctos rechazados.
+    """
+    def _extract(image, page, brands, waves):
+        return PageExtraction(page, "Preferencia", True, "", [
+            _row("favourite_place", "Focal", "Ola 1", 60, distribution_id="preferencia"),
+            _row("favourite_place", "Rival", "Ola 1", 40, distribution_id="preferencia"),
+        ], "m")
+
+    report = pipe.ingest_pdf(db, engagement, b"pdf", "t.pdf",
+                             extractor=_extract, renderer=_stub_render(2))
+    db.commit()
+    assert report.validation["failed"] == 0
+    assert report.validation["passed"] == 4      # las dos láminas, cada una suma 100
+
+
+def test_the_job_reports_progress_slide_by_slide(db, engagement):
+    """El avance en pantalla es el de láminas realmente persistidas, no un spinner."""
+    vistas = []
+    pipe.ingest_pdf(db, engagement, b"pdf", "t.pdf",
+                    extractor=_stub_page([_row("delivery_t2b", "Focal", "Ola 1", 91)]),
+                    renderer=_stub_render(4), on_page=vistas.append)
+    assert vistas == [1, 2, 3, 4]
+
+
+def test_queueing_reads_nothing_and_keeps_the_pdf(db, engagement, monkeypatch):
+    """La petición solo encola: si leyera aquí, volvería a morir contra el reloj."""
+    from modules.brand_intel.ingest import jobs
+
+    despachos = []
+    monkeypatch.setattr(jobs, "_dispatch", lambda eid: despachos.append(eid) or "test")
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_vision.page_count",
+                        lambda content: 59)
+
+    row = jobs.queue_extraction(db, engagement, b"%PDF-falso", "mazo.pdf")
+    assert row.status == "queued"
+    assert row.n_pages == 59
+    assert row.pages_done == 0
+    assert bytes(row.source_pdf) == b"%PDF-falso"   # el worker lo necesita después
+    assert despachos == [str(row.id)]
+    assert db.query(BrandExtractionCell).filter(
+        BrandExtractionCell.extraction_id == row.id).count() == 0
+
+
+def test_a_finished_job_lets_go_of_the_pdf(db, engagement, monkeypatch):
+    """Guardarlo de por vida engordaría la base con un mazo por documento."""
+    from modules.brand_intel.ingest import jobs
+
+    monkeypatch.setattr(jobs, "_dispatch", lambda eid: "test")
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_vision.page_count",
+                        lambda content: 1)
+    row = jobs.queue_extraction(db, engagement, b"%PDF-falso", "mazo.pdf")
+
+    monkeypatch.setattr("shared.database.session.SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+    monkeypatch.setattr(
+        "modules.brand_intel.ingest.pdf_pipeline.pdf_vision.render_pages",
+        _stub_render(1))
+    monkeypatch.setattr(
+        "modules.brand_intel.ingest.pdf_pipeline.pdf_vision.extract_page",
+        _stub_page([_row("delivery_t2b", "Focal", "Ola 1", 91)]))
+
+    jobs.run_extraction(str(row.id))
+    db.refresh(row)
+    assert row.status == "validated"
+    assert row.source_pdf is None
+    assert row.pages_done == 1
+    assert row.finished_at is not None
+    # Una sola fila por documento: el trabajo y su resultado son la misma.
+    assert db.query(BrandExtraction).filter(
+        BrandExtraction.document_name == "mazo.pdf").count() == 1
+
+
+def test_a_failed_job_says_why_and_can_be_retried(db, engagement, monkeypatch):
+    from modules.brand_intel.ingest import jobs
+
+    monkeypatch.setattr(jobs, "_dispatch", lambda eid: "test")
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_vision.page_count",
+                        lambda content: 3)
+    row = jobs.queue_extraction(db, engagement, b"%PDF-falso", "mazo.pdf")
+
+    monkeypatch.setattr("shared.database.session.SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+
+    def _revienta(*a, **kw):
+        raise RuntimeError("se cayó el proveedor")
+
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_pipeline.ingest_pdf", _revienta)
+    out = jobs.run_extraction(str(row.id))
+    db.refresh(row)
+    assert out["status"] == "error"
+    assert row.status == "error"
+    assert "se cayó el proveedor" in (row.error or "")
+    estado = jobs.job_status(db, row)
+    assert estado["running"] is False
+    assert estado["pages_total"] == 3
+
+
+def test_a_job_that_already_finished_is_not_read_again(db, engagement, monkeypatch):
+    """`task_acks_late` reencola el trabajo si el worker muere: no puede volver a pagar."""
+    from modules.brand_intel.ingest import jobs
+
+    monkeypatch.setattr(jobs, "_dispatch", lambda eid: "test")
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_vision.page_count",
+                        lambda content: 1)
+    row = jobs.queue_extraction(db, engagement, b"%PDF-falso", "mazo.pdf")
+    row.status = "validated"
+    db.commit()
+
+    monkeypatch.setattr("shared.database.session.SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+
+    def _no_deberia(*a, **kw):
+        raise AssertionError("no debería releer un trabajo terminado")
+
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_pipeline.ingest_pdf", _no_deberia)
+    assert jobs.run_extraction(str(row.id))["status"] == "validated"

@@ -27,6 +27,7 @@ from sqlalchemy import (
     Float,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -290,12 +291,28 @@ class BrandExtraction(UUIDMixin, Base):
     document_name = Column(String(300), nullable=False)
     n_pages = Column(Integer, nullable=True)
     status = Column(String(20), nullable=False, default="draft")
-    # draft | validated | confirmed | rejected
+    # queued | reading | validated | confirmed | rejected | error
     model_used = Column(String(60), nullable=True)     # provenance of the vision pass
     method = Column(String(40), nullable=False, default="vision")
     # vision | coordinates | vision+coordinates
     summary = Column(JSON, nullable=True)              # counts by validation outcome
     note = Column(Text, nullable=True)
+
+    # ── el trabajo, no solo su resultado ──────────────────────────────
+    # Leer un mazo real son decenas de llamadas de visión: no cabe en una petición HTTP,
+    # y la primera versión moría contra el presupuesto de tiempo sin dejar nada. La fila
+    # es ahora el trabajo: guarda su propio PDF, cuántas láminas lleva, y se reanuda por
+    # donde iba si el proceso muere.
+    pages_done = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    error = Column(Text, nullable=True)
+    report = Column(JSON, nullable=True)               # el IngestReport completo
+    # El PDF vive aquí mientras dura el trabajo, y se borra al terminar. En la base y no
+    # en un bucket a propósito: es dato privado de un cliente, y `engagement_id` es lo
+    # único que gobierna su acceso — un bucket necesitaría su propio control.
+    source_pdf = Column(LargeBinary, nullable=True)
+    max_pages = Column(Integer, nullable=True)
     confirmed_by = Column(String(120), nullable=True)
     confirmed_at = Column(DateTime, nullable=True)
 
