@@ -833,6 +833,44 @@ def report_html(slug: str, db: Session = Depends(get_db),
     return Response(content=rpt.render_html(payload), media_type="text/html; charset=utf-8")
 
 
+@router.get("/engagements/{slug}/mesa.{fmt}",
+            summary="Nota técnica para la mesa con el proveedor (PDF/Word)")
+def mesa_document(
+    slug: str, fmt: str, db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """El documento espejo del informe: aquí SÍ van las láminas y los umbrales.
+
+    Es material de trabajo SDQ ↔ proveedor, nunca del cliente — otro título, otra marca
+    de agua, otro endpoint. Con la mesa vacía responde 404 con el motivo: una nota que
+    dice «no hay nada que discutir» solo sirve para agendar una reunión que no hace falta.
+    """
+    from modules.brand_intel import mesa_docs
+
+    if fmt not in ("pdf", "docx"):
+        raise HTTPException(status_code=404, detail="Formato no disponible.")
+    eng = _resolve(db, slug, user)
+    try:
+        path = mesa_docs.render(db, eng, fmt=fmt)
+    except Exception as exc:  # noqa: BLE001 — el fallo se dice, no se sirve en blanco
+        logger.exception("No se pudo renderizar la nota de mesa %s de %s", fmt, slug)
+        raise HTTPException(status_code=500,
+                            detail=f"No se pudo generar el documento: {exc}") from exc
+    if path is None:
+        raise HTTPException(status_code=404,
+                            detail="La mesa está vacía: no hay discrepancias que "
+                                   "documentar para este encargo.")
+    with open(path, "rb") as fh:
+        content = fh.read()
+    media = ("application/pdf" if fmt == "pdf" else
+             "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition":
+                 f'attachment; filename="SDQ-MIP_nota_mesa_{slug}.{fmt}"'},
+    )
+
+
 @router.get("/engagements/{slug}/report.{fmt}",
             summary="Informe completo como documento (pdf | docx)")
 def report_document(

@@ -202,3 +202,97 @@ def test_discutida_sigue_bloqueando(db, engagement):
     db.flush()
 
     assert svc.usable_conclusions(db, str(engagement.id)) == []
+
+
+# ───────────────── la nota para la mesa con el proveedor ─────────────────
+
+def test_la_mesa_vacia_no_produce_documento(db, engagement):
+    from modules.brand_intel import mesa_docs
+
+    assert mesa_docs.build_mesa(db, engagement) is None
+
+
+def test_la_nota_lleva_el_recibo_completo(db, engagement):
+    """En la nota SÍ van la lámina, el literal y el umbral: es la mesa, y en la mesa se
+    abre el mazo. Todo lo que el informe del cliente omite a propósito vive aquí."""
+    from modules.brand_intel import mesa_docs
+
+    test_una_discrepancia_defendible_se_abre_con_la_conclusion_copiada(db, engagement)
+    mesa = mesa_docs.build_mesa(db, engagement)
+    n, titles = mesa_docs.narratives_for(mesa)
+
+    punto = n["punto_1"]
+    assert "lámina 19" in punto
+    assert "«Focal pierde preferencia de forma sostenida.»" in punto
+    assert "umbral" in n["preambulo"] and "95%" in n["preambulo"]
+    assert "Lugar favorito" in titles["punto_1"]
+    assert "pendiente de discusión" in punto        # el estado viaja con cada frase
+
+
+def test_la_nota_ordena_lo_abierto_primero(db, engagement):
+    from modules.brand_intel import mesa_docs
+    from modules.brand_intel.models.models import BrandDiscrepancy
+
+    test_una_discrepancia_defendible_se_abre_con_la_conclusion_copiada(db, engagement)
+    db.add(BrandDiscrepancy(
+        engagement_id=str(engagement.id), claim="Punto ya resuelto.", page_number=3,
+        metric_code="reach_7d", provider_direction="sube",
+        data_note="nota", status="retirada", resolution_note="Se revisó el corte."))
+    db.flush()
+
+    mesa = mesa_docs.build_mesa(db, engagement)
+    estados = [str(d.status) for d in mesa["discrepancies"]]
+    assert estados == ["abierta", "retirada"]
+    n, titles = mesa_docs.narratives_for(mesa)
+    # Agrupada por métrica: la retirada (reach_7d) es su propio punto, con su resolución.
+    punto_reach = next(k for k, v in titles.items() if "Incidencia" in v)
+    assert "Se revisó el corte." in n[punto_reach]
+
+
+def test_el_movimiento_se_dice_una_vez_por_tema(db, engagement):
+    """Tres discrepancias de la misma métrica repetían tres veces «+X pp sobre ±Y pp».
+    Agrupadas, el movimiento observado aparece UNA vez y las frases cuelgan debajo."""
+    from modules.brand_intel import mesa_docs
+
+    test_una_discrepancia_defendible_se_abre_con_la_conclusion_copiada(db, engagement)
+    _store(db, engagement, "Otra frase del mazo sobre el mismo indicador.", "baja")
+    svc.contrast_conclusions(db, str(engagement.id))
+    db.flush()
+
+    mesa = mesa_docs.build_mesa(db, engagement)
+    assert mesa["total"] == 2
+    n, titles = mesa_docs.narratives_for(mesa)
+    puntos = [k for k in titles if k.startswith("punto_")]
+    assert len(puntos) == 1                        # un TEMA, no dos repeticiones
+    cuerpo = n["punto_1"]
+    assert cuerpo.count("umbral de") == 1          # el movimiento, una sola vez
+    assert cuerpo.count("«") == 2                  # ambas frases citadas debajo
+
+
+def test_los_huecos_de_nuestra_base_no_se_le_cargan_al_proveedor(db, engagement):
+    """Una marca sin dos olas confirmadas es cobertura NUESTRA: no puede aparecer en el
+    punto como si fuera inconsistencia del proveedor. Va al alcance, atribuida."""
+    from modules.brand_intel import mesa_docs
+
+    test_una_discrepancia_defendible_se_abre_con_la_conclusion_copiada(db, engagement)
+    from modules.brand_intel.models.models import BrandEntity
+    db.add(BrandEntity(engagement_id=str(engagement.id), slug="tercera",
+                       name="Tercera", sort_order=9))
+    db.flush()
+    conc.store_conclusions(db, str(engagement.id), [conc.Conclusion(
+        claim="Focal y Tercera pierden preferencia de forma sostenida.",
+        page_number=20, kind="hallazgo", subjects=("Focal", "Tercera"),
+        topic="", metric_code="favourite_place", direction="baja",
+        wave_label="Ola 2", confident=True,
+    )], extraction_id="ext-b")
+    db.flush()
+    svc.contrast_conclusions(db, str(engagement.id))
+    db.flush()
+
+    mesa = mesa_docs.build_mesa(db, engagement)
+    n, _ = mesa_docs.narratives_for(mesa)
+    # La cita literal SÍ nombra a Tercera (es la voz del proveedor); lo que no puede
+    # existir es una línea de cifras suya presentada como evidencia en su contra.
+    assert "- Tercera:" not in n["punto_1"]
+    assert "Tercera" in n["alcance"]
+    assert "nuestra propia carga" in n["alcance"]

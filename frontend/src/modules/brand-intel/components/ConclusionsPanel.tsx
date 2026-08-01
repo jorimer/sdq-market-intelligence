@@ -12,6 +12,7 @@ import { Quote, Scale } from "lucide-react";
 import { Card, CardHead, Chip } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
 import {
+  downloadMesa,
   getConclusions,
   getDiscrepancies,
   runContrast,
@@ -176,9 +177,26 @@ export function ConclusionsPanel({ slug }: { slug: string }) {
           title="Mesa de discrepancias con el proveedor"
           subtitle="Desacuerdos defendibles con las cifras. Se discuten con el proveedor antes de que nada llegue al cliente"
           right={
-            bloqueantes > 0 ? (
-              <Chip tone="alert">{bloqueantes} bloqueante(s)</Chip>
-            ) : undefined
+            <div className="flex items-center gap-2 shrink-0">
+              {bloqueantes > 0 && <Chip tone="alert">{bloqueantes} bloqueante(s)</Chip>}
+              {(mesa?.total ?? 0) > 0 && (
+                <button
+                  type="button"
+                  className="btn-ghost text-sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    // La nota lleva láminas y umbrales: es material SDQ ↔ proveedor,
+                    // nunca del cliente — el propio documento lo estampa en su pie.
+                    downloadMesa(slug)
+                      .catch(() => setError("No se pudo descargar la nota de mesa."))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Nota para la mesa (PDF)
+                </button>
+              )}
+            </div>
           }
         />
         {mesa == null ? (

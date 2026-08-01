@@ -477,3 +477,25 @@ def test_discrepancies_of_another_organization_are_404(db, engagement):
     r = _client(db, role=UserRole.viewer, org="org-2").get(
         "/api/v1/brand-intel/engagements/demo/discrepancies")
     assert r.status_code == 404
+
+
+def test_mesa_document_downloads_with_its_own_watermarked_identity(db, engagement):
+    _open_discrepancy(db, engagement)
+    r = _client(db).get("/api/v1/brand-intel/engagements/demo/mesa.pdf")
+    assert r.status_code == 200
+    assert r.content[:5] == b"%PDF-"
+    assert "nota_mesa_demo.pdf" in r.headers["content-disposition"]
+
+
+def test_mesa_document_is_404_when_the_table_is_empty(db, engagement):
+    r = _client(db).get("/api/v1/brand-intel/engagements/demo/mesa.pdf")
+    assert r.status_code == 404
+    assert "vacía" in r.json()["detail"]
+
+
+def test_mesa_document_of_another_organization_is_404(db, engagement):
+    engagement.organization_id = "org-1"
+    db.commit()
+    r = _client(db, role=UserRole.viewer, org="org-2").get(
+        "/api/v1/brand-intel/engagements/demo/mesa.pdf")
+    assert r.status_code == 404
