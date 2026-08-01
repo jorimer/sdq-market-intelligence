@@ -431,12 +431,14 @@ def _series_for(
 def category_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
     """Category size, share by brand, share shift and the attitude/behaviour divergence."""
     ws = data_waves(db, engagement_id)
-    wave_codes = [w.code for w in ws]
-    labels = {w.code: w.label for w in ws}
+    # Coercionados a `str` en el origen: en tiempo de ejecución ya lo son, y arrastrarlos
+    # como `Column[str]` obliga a silenciar el tipado en cada sitio que los usa.
+    wave_codes: List[str] = [str(w.code) for w in ws]
+    labels: Dict[str, str] = {str(w.code): str(w.label) for w in ws}
     ents = brands(db, engagement_id)
-    in_set = [b.slug for b in ents if b.in_category_set]
-    focal = next((b.slug for b in ents if b.is_focal), None)
-    names = {b.slug: b.name for b in ents}
+    in_set: List[str] = [str(b.slug) for b in ents if b.in_category_set]
+    focal = next((str(b.slug) for b in ents if b.is_focal), None)
+    names: Dict[str, str] = {str(b.slug): str(b.name) for b in ents}
 
     reach = _cells(db, engagement_id, REACH_METRIC)
     if not reach:
@@ -446,25 +448,51 @@ def category_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
                       "no puede construirse el denominador de categoría.",
         }
 
-    # The denominator is the sum of reach across the in-set brands that were actually
-    # measured. When a deck only charts reach for the focal brand, that sum is the focal
-    # brand's own number and its share comes out at 100% — arithmetic that is correct and
-    # a finding that is false. A category needs more than one member, and saying so is
-    # cheaper than letting a client read "100% de la categoría".
-    measured = {c.brand for c in reach if c.brand is not None and c.brand in set(in_set)}
-    if len(measured) < 2:
-        only = next((b.name for b in ents if b.slug in measured), "una sola marca")
+    # El denominador se juzga OLA POR OLA, no sobre el encargo entero. Una versión
+    # anterior comprobaba que hubiera ≥2 marcas medidas en total y daba por buena una ola
+    # con una sola: su share salía 100% y la categoría "crecía" 226% cuando en la ola
+    # siguiente entraban las demás. Eso llegó impreso al informe de un cliente.
+    sizes = cat.category_size(reach, in_set)
+    con_denominador = [w for w in wave_codes if sizes.get(w) is not None]
+    if not con_denominador:
+        medidas = {c.brand for c in reach if c.brand and c.brand in set(in_set)}
+        quien = next((b.name for b in ents if b.slug in medidas), "una sola marca")
         return {
             "available": False,
-            "reason": f"'{label_for(REACH_METRIC)}' solo está medida para {only}: "
-                      "con un único miembro el denominador no es una categoría y el "
-                      "share saldría 100%.",
+            "reason": f"Ninguna ola tiene '{label_for(REACH_METRIC)}' en al menos "
+                      f"{cat.MIN_DENOMINATOR_BRANDS} marcas del set (solo {quien}): con un "
+                      "único miembro el denominador no es una categoría y el share "
+                      "saldría 100%.",
         }
 
-    sizes = cat.category_size(reach, in_set)
     points = cat.share_by_brand(reach, in_set)
-    growth = cat.category_growth(sizes, wave_codes)
     shift = cat.share_shift(points, wave_codes)
+
+    # El crecimiento se mide entre las olas QUE TIENEN denominador, y sobre las marcas
+    # presentes en todas ellas. Dos razones distintas: una ola sin denominador no puede
+    # ser extremo de la comparación, y si el conjunto de marcas cambia entre olas lo que
+    # varía es la cobertura del estudio, no el tamaño de la categoría.
+    comparables, comunes = cat.comparable_size(reach, con_denominador, in_set)
+    growth = cat.category_growth(comparables, con_denominador) if comparables else None
+    nombres = names
+    sin_denominador = [w for w in wave_codes if sizes.get(w) is None]
+
+    if growth is not None:
+        entre = f"{labels.get(con_denominador[0])} → {labels.get(con_denominador[-1])}"
+        growth_basis = (
+            f"Medido entre {entre}, sobre las {len(comunes)} marcas con alcance en todas "
+            f"esas olas ({', '.join(nombres.get(b, b) for b in comunes)})."
+        )
+        if sin_denominador:
+            fuera = ", ".join(labels.get(w, w) for w in sin_denominador)
+            growth_basis += (f" {fuera} queda(n) fuera de la comparación por no medir "
+                             f"alcance en al menos {cat.MIN_DENOMINATOR_BRANDS} marcas.")
+    else:
+        growth_basis = (
+            "No se puede medir el crecimiento: no hay dos olas con al menos "
+            f"{cat.MIN_DENOMINATOR_BRANDS} marcas comunes con alcance. Cualquier cifra "
+            "reflejaría cambios de cobertura del estudio, no de la categoría."
+        )
 
     attitude = _cells(db, engagement_id, ATTITUDE_METRIC)
     divergence, reading = [], None
@@ -481,6 +509,10 @@ def category_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
         "waves": [{"code": c, "label": labels.get(c, c)} for c in wave_codes],
         "category_size": [{"wave": c, "value": sizes.get(c)} for c in wave_codes],
         "category_growth_pct": growth,
+        "growth_basis": growth_basis,
+        "waves_without_denominator": [
+            {"wave": c, "label": labels.get(c, c)} for c in sin_denominador
+        ],
         "share": [
             {
                 "brand": slug,

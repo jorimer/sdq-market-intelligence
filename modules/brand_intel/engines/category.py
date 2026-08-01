@@ -23,7 +23,7 @@ outside the study. The reports must say so wherever the number appears.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -53,20 +53,67 @@ def _by_wave(cells: Sequence[Cell]) -> Dict[str, Dict[str, float]]:
     return out
 
 
+#: Cuántas marcas medidas hacen falta para que la suma sea una categoría.
+#: Con una sola, el denominador ES esa marca: su share sale 100% por construcción y la
+#: "categoría" crece cuando en la ola siguiente entran las demás. No es un hallazgo, es un
+#: artefacto de cobertura — y salió impreso como titular de un informe.
+MIN_DENOMINATOR_BRANDS = 2
+
+
+def measured_by_wave(
+    cells: Sequence[Cell], in_set: Optional[Sequence[str]] = None
+) -> Dict[str, Dict[str, float]]:
+    """Alcance por ola y marca, restringido al set declarado."""
+    allowed = set(in_set) if in_set is not None else None
+    out: Dict[str, Dict[str, float]] = {}
+    for wave, brands in _by_wave(cells).items():
+        kept = {b: v for b, v in brands.items() if allowed is None or b in allowed}
+        if kept:
+            out[wave] = kept
+    return out
+
+
 def category_size(
     cells: Sequence[Cell], in_set: Optional[Sequence[str]] = None
-) -> Dict[str, float]:
-    """Sum of reach across in-set brands, per wave.
+) -> Dict[str, Optional[float]]:
+    """Suma del alcance de las marcas del set, por ola.
 
-    Not a population estimate — an index of category activity. Its value is comparative:
-    whether the pie grew, shrank or stayed flat between waves.
+    No es una estimación de población: es un índice de actividad de la categoría, y su
+    valor es comparativo. Una ola con menos de ``MIN_DENOMINATOR_BRANDS`` marcas medidas
+    devuelve ``None`` en vez de una cifra — con una sola marca la suma no es una categoría
+    y todo lo que se derive de ella (share, crecimiento) es falso, no impreciso.
     """
-    grid = _by_wave(cells)
-    allowed = set(in_set) if in_set is not None else None
     return {
-        wave: sum(v for b, v in brands.items() if allowed is None or b in allowed)
-        for wave, brands in grid.items()
+        wave: (sum(brands.values())
+               if len(brands) >= MIN_DENOMINATOR_BRANDS else None)
+        for wave, brands in measured_by_wave(cells, in_set).items()
     }
+
+
+def comparable_size(
+    cells: Sequence[Cell], waves: Sequence[str], in_set: Optional[Sequence[str]] = None
+) -> Tuple[Dict[str, Optional[float]], List[str]]:
+    """Tamaño de categoría sobre el conjunto de marcas medido en TODAS las olas dadas.
+
+    El crecimiento entre dos olas solo significa algo si el denominador está hecho de las
+    mismas marcas: si en mayo hay una marca medida y en marzo cuatro, la "categoría" crece
+    porque medimos más, no porque haya más consumo. Devuelve también qué marcas
+    sostuvieron la comparación, porque el informe tiene que poder decirlo.
+    """
+    grid = measured_by_wave(cells, in_set)
+    presentes = [grid[w] for w in waves if w in grid]
+    if len(presentes) < 2:
+        return {}, []
+    comun = set(presentes[0])
+    for otra in presentes[1:]:
+        comun &= set(otra)
+    if len(comun) < MIN_DENOMINATOR_BRANDS:
+        return {}, sorted(comun)
+    sizes: Dict[str, Optional[float]] = {
+        w: sum(v for b, v in grid[w].items() if b in comun)
+        for w in waves if w in grid
+    }
+    return sizes, sorted(comun)
 
 
 def share_by_brand(
@@ -78,8 +125,10 @@ def share_by_brand(
     allowed = set(in_set) if in_set is not None else None
     out: List[SharePoint] = []
     for wave, brands in grid.items():
-        total = sizes.get(wave) or 0.0
-        if total <= 0:
+        total = sizes.get(wave)
+        # Una ola sin denominador válido no produce share: repartir sobre una sola marca
+        # da 100% por construcción, que es peor que no decir nada.
+        if not total or total <= 0:
             continue
         for brand, reach in brands.items():
             if allowed is not None and brand not in allowed:
@@ -88,13 +137,19 @@ def share_by_brand(
     return out
 
 
-def category_growth(sizes: Dict[str, float], waves: Sequence[str]) -> Optional[float]:
-    """Percent change in category size between the first and last wave given."""
-    ordered = [w for w in waves if w in sizes]
+def category_growth(
+    sizes: Dict[str, Optional[float]], waves: Sequence[str]
+) -> Optional[float]:
+    """Variación del tamaño de categoría entre la primera y la última ola con dato.
+
+    Las olas sin denominador válido no entran: compararse contra una ola cuyo tamaño es
+    el de una sola marca no mide crecimiento, mide cobertura.
+    """
+    ordered = [w for w in waves if sizes.get(w) is not None]
     if len(ordered) < 2:
         return None
     first, last = sizes[ordered[0]], sizes[ordered[-1]]
-    if not first:
+    if not first or last is None:
         return None
     return (last / first - 1.0) * 100.0
 
