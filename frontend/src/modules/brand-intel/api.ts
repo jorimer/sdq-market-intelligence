@@ -832,6 +832,15 @@ export async function runContrast(slug: string): Promise<ContrastResult> {
   return data;
 }
 
+export async function downloadMesa(slug: string, fmt: "pdf" | "docx" = "pdf"): Promise<void> {
+  const { data } = await client.get(`${base}/engagements/${slug}/mesa.${fmt}`, {
+    responseType: "blob",
+    timeout: 3 * 60 * 1000,
+  });
+  triggerDownload(new Blob([data], { type: REPORT_MIME[fmt] }),
+                  `SDQ-MIP_nota_mesa_${slug}.${fmt}`);
+}
+
 export async function updateDiscrepancy(
   slug: string, id: string, status: DiscrepancyStatus, resolutionNote?: string,
 ): Promise<{ id: string; status: DiscrepancyStatus }> {
