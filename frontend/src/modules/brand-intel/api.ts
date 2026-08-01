@@ -667,8 +667,8 @@ export interface FigureChange {
   corregida?: number;
   /** Cuando manda un mazo más nuevo: lo vigente y lo que traía este. */
   vigente?: number;
-  este_mazo?: number;
-  mazo_vigente: string;
+  esta_entrega?: number;
+  entrega_vigente: string;
   este: string;
 }
 
@@ -681,10 +681,10 @@ export interface ConfirmResult {
   omitidas_por_discrepancia: number;
   discrepancias: CellDisagreement[];
   /** Cifras que este mazo trae distintas pero NO reemplazan: manda una entrega posterior. */
-  no_reemplazan_por_mazo_mas_nuevo: number;
+  no_reemplazan_por_entrega_mas_nueva: number;
   cifras_que_cambian: FigureChange[];
   /** Ola más reciente del mazo: lo que decide la precedencia. */
-  anada_del_mazo: string;
+  anada_de_la_entrega: string;
   confirmada_por: string;
 }
 

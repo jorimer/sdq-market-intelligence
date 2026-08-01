@@ -118,7 +118,7 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
             Se guardaron {outcome.creadas} observación(es) nueva(s) y se actualizaron{" "}
             {outcome.actualizadas}.{" "}
             <span className="text-muted">
-              Esta entrega llega hasta {outcome.anada_del_mazo || "—"}; lo que dijo queda
+              Esta entrega llega hasta {outcome.anada_de_la_entrega || "—"}; lo que dijo queda
               en el registro aunque otra entrega mande sobre la cifra vigente.
             </span>
           </p>
@@ -154,10 +154,10 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
                   {outcome.cifras_que_cambian.length} cifra(s) cambian respecto a lo que ya
                   estaba cargado
                 </span>
-                {outcome.no_reemplazan_por_mazo_mas_nuevo > 0 && (
+                {outcome.no_reemplazan_por_entrega_mas_nueva > 0 && (
                   <>
                     {" "}
-                    — de ellas {outcome.no_reemplazan_por_mazo_mas_nuevo} no reemplazan
+                    — de ellas {outcome.no_reemplazan_por_entrega_mas_nueva} no reemplazan
                     nada: una entrega posterior ya manda sobre esa ola. Quedan en el
                     registro.
                   </>
@@ -169,7 +169,7 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
                     {c.marca} · {c.metrica} · {c.ola} ={" "}
                     {c.corregida != null
                       ? `${c.anterior} → ${c.corregida}`
-                      : `${c.vigente} (vigente, de ${c.mazo_vigente}) · este mazo decía ${c.este_mazo}`}
+                      : `${c.vigente} (vigente, de ${c.entrega_vigente}) · esta entrega decía ${c.esta_entrega}`}
                   </li>
                 ))}
               </ul>

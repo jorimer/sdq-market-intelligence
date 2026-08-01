@@ -9,6 +9,7 @@ import io
 import pytest
 from openpyxl import Workbook, load_workbook
 
+from modules.brand_intel import service as svc
 from modules.brand_intel.ingest.excel_ingest import ingest_workbook
 from modules.brand_intel.ingest.template import build_template
 from modules.brand_intel.models.models import (
@@ -34,9 +35,11 @@ def _workbook(waves, brands, observations) -> bytes:
         ws.append(row)
 
     ws = wb.create_sheet("Observaciones")
-    ws.append(["ola", "marca", "metrica", "segmento", "valor", "base_n", "unidad", "fuente"])
+    ws.append(["entrega", "ola", "marca", "metrica", "segmento", "valor", "base_n",
+               "unidad", "fuente"])
     for row in observations:
-        ws.append(row)
+        # Las filas de los tests se escriben sin `entrega`: el libro entero es una sola.
+        ws.append([""] + list(row) if len(row) < 9 else list(row))
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -170,3 +173,66 @@ def test_missing_sheet_is_reported_not_crashed(db, blank_engagement):
     wb.save(buf)
     report = ingest_workbook(db, blank_engagement, buf.getvalue())
     assert any(r["reason"] == "Hoja ausente en el archivo." for r in report.rejected)
+
+
+# ── dos entregas en un mismo libro ────────────────────────────────────
+
+def test_two_deliveries_in_one_workbook_are_kept_apart(db, engagement):
+    """El caso real: un libro con los resultados de dos informes del tracker.
+
+    Sin la columna `entrega` las dos se fundían y la cifra vigente dependía del orden de
+    las filas. Aquí la Ola 4 reexpone Nov '25 con una corrección (25 → 26): debe ganar la
+    entrega cuya ola más reciente es posterior, esté donde esté en el libro.
+    """
+    from modules.brand_intel.models.models import (
+        BrandExtraction, BrandObservation, BrandObservationReading,
+    )
+
+    # La entrega vieja va DESPUÉS en el libro, que es lo que antes decidía el resultado.
+    content = _workbook(
+        waves=[("e4", "Mar '26", 4, None, None, None, 300),
+               ("e3", "Nov '25", 3, None, None, None, 300)],
+        brands=[("focal", "Focal", "SI", "SI", 1)],
+        observations=[
+            ("Ola 4 · mar'26", "e3", "focal", "reach_7d", "total", 26, 300, "pct", ""),
+            ("Ola 4 · mar'26", "e4", "focal", "reach_7d", "total", 27, 300, "pct", ""),
+            ("Ola 3 · nov'25", "e3", "focal", "reach_7d", "total", 25, 300, "pct", ""),
+        ],
+    )
+    ingest_workbook(db, engagement, content, document_name="dos-olas.xlsx")
+    db.commit()
+
+    # Dos entregas registradas, no una.
+    entregas = {e.document_name for e in db.query(BrandExtraction)
+                .filter(BrandExtraction.method == "excel").all()}
+    assert entregas == {"Ola 4 · mar'26", "Ola 3 · nov'25"}
+
+    # Lo que dijo cada una queda: dos lecturas para Nov '25, sin pisarse.
+    e3 = next(w.id for w in svc.waves(db, engagement.id) if w.code == "e3")
+    lecturas = sorted(
+        r.value for r in db.query(BrandObservationReading)
+        .filter(BrandObservationReading.wave_id == e3,
+                BrandObservationReading.metric_code == "reach_7d").all())
+    assert lecturas == [25.0, 26.0]
+
+    # Y la vigente es la de la entrega más reciente, pese al orden de las filas.
+    vigente = (db.query(BrandObservation)
+               .filter(BrandObservation.wave_id == e3,
+                       BrandObservation.metric_code == "reach_7d").one())
+    assert vigente.value == 26.0
+
+
+def test_a_workbook_without_the_delivery_column_is_one_delivery(db, engagement):
+    """Compatibilidad: un libro que no declara entrega es una sola, con el nombre del fichero."""
+    from modules.brand_intel.models.models import BrandExtraction
+
+    content = _workbook(
+        waves=[("e4", "Mar '26", 4, None, None, None, 300)],
+        brands=[("focal", "Focal", "SI", "SI", 1)],
+        observations=[("e4", "focal", "reach_7d", "total", 27, 300, "pct", "")],
+    )
+    ingest_workbook(db, engagement, content, document_name="mi-libro.xlsx")
+    db.commit()
+    nombres = {e.document_name for e in db.query(BrandExtraction)
+               .filter(BrandExtraction.method == "excel").all()}
+    assert nombres == {"mi-libro.xlsx"}
