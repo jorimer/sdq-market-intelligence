@@ -31,6 +31,7 @@ from modules.brand_intel.ingest.template import build_template, template_filenam
 from modules.brand_intel.engines.metrics import label_for
 from modules.brand_intel.models.models import (
     BrandClient,
+    BrandConclusion,
     BrandDecision,
     BrandEngagement,
     BrandExtraction,
@@ -487,6 +488,41 @@ def list_extractions(slug: str, db: Session = Depends(get_db),
          "created_at": r.created_at.isoformat() if r.created_at else None}
         for r in rows
     ]
+
+
+@router.get("/engagements/{slug}/conclusions",
+            summary="Lo que AFIRMA el estudio del proveedor, con su lámina")
+def list_conclusions(slug: str, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Las conclusiones leídas del mazo, con el recibo a la vista.
+
+    Esta es la vista interna, y por eso aquí SÍ va la lámina: es donde se comprueba que
+    lo que el sistema atribuye al proveedor está efectivamente escrito en su mazo. En el
+    informe del cliente esa referencia no aparece — la prosa se leería mecánica y al
+    destinatario no le aporta nada. El recibo vive en el registro, no en el texto.
+    """
+    eng = _resolve(db, slug, user)
+    rows = (db.query(BrandConclusion)
+            .filter(BrandConclusion.engagement_id == eng.id)
+            .order_by(BrandConclusion.page_number).all())
+    documents = {
+        str(r.id): str(r.document_name)
+        for r in db.query(BrandExtraction)
+        .filter(BrandExtraction.engagement_id == eng.id).all()
+    }
+    return {
+        "total": len(rows),
+        "conclusions": [
+            {"id": r.id, "claim": r.claim, "page_number": r.page_number,
+             "kind": r.kind, "subjects": r.subjects or [],
+             "subject_slugs": r.subject_slugs or [], "topic": r.topic,
+             "metric_code": r.metric_code, "direction": r.direction,
+             "wave_label": r.wave_label, "wave_code": r.wave_code,
+             "confident": r.confident,
+             "document": documents.get(str(r.extraction_id or ""))}
+            for r in rows
+        ],
+    }
 
 
 @router.get("/engagements/{slug}/extractions/{extraction_id}",

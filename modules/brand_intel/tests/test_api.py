@@ -370,3 +370,36 @@ def test_the_html_route_still_wins_over_the_document_route(db, engagement):
 def test_an_unknown_report_format_is_404(db, engagement):
     assert _client(db).get(
         "/api/v1/brand-intel/engagements/demo/report.xlsx").status_code == 404
+
+
+# ── conclusiones del proveedor ────────────────────────────────────────
+
+def test_conclusions_endpoint_lists_what_the_provider_claims(db, engagement):
+    from modules.brand_intel.ingest import conclusions as conc
+
+    conc.store_conclusions(db, str(engagement.id), [conc.Conclusion(
+        claim="Focal mantiene el liderazgo como marca favorita.", page_number=19,
+        kind="hallazgo", subjects=("Focal",), topic="Lugar favorito",
+        metric_code="", direction="estable", wave_label="Ola 2", confident=True,
+    )])
+    db.commit()
+
+    r = _client(db).get("/api/v1/brand-intel/engagements/demo/conclusions")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    row = body["conclusions"][0]
+    # La lámina SÍ viaja en esta vista: es el recibo que permite comprobar que lo que se
+    # atribuye al proveedor está escrito en su mazo. En el informe del cliente no aparece.
+    assert row["page_number"] == 19
+    assert row["subject_slugs"] == ["focal"]
+    assert row["metric_code"] == "favourite_place"
+
+
+def test_conclusions_of_another_organization_are_404(db, engagement):
+    """Lo que concluyó el estudio de otro cliente es tan privado como sus cifras."""
+    engagement.organization_id = "org-1"
+    db.commit()
+    r = _client(db, role=UserRole.viewer, org="org-2").get(
+        "/api/v1/brand-intel/engagements/demo/conclusions")
+    assert r.status_code == 404
