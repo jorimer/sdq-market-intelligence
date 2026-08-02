@@ -140,7 +140,8 @@ def _notify_publishable_transitions(
         body = (f"«{name}» cruzó el umbral de publicación en: {niveles}. "
                 f"Revisar en el monitor para activar (la activación es manual).")
         for uid in admin_ids:
-            notification_service.create(db, user_id=uid, type="success", title=title, body=body)
+            notification_service.create(db, user_id=uid, type="success", title=title,
+                                        body=body, action_url="/products")
 
 
 def build_matrix(db: Session) -> Dict[str, Any]:

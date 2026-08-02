@@ -18,6 +18,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from shared.auth.models import User, UserRole
+from shared.contracts.sovereign_ratings import STALE_AFTER_MONTHS
 from shared.database.session import SessionLocal
 from shared.notifications.service import notification_service
 from shared.operations.models import OperationRun
@@ -36,12 +37,12 @@ FRESHNESS_OP_NAME = "data-freshness-audit"
 # pequeño retraso de publicación de la fuente).
 _GRACE = 1.5
 
-# Umbral de antigüedad de la ÚLTIMA ACCIÓN de rating soberano (ancla S&P) antes de
-# PROPONER verificación. Las agencias suelen actuar/afirmar dentro de ~2 años; una acción
-# más vieja no significa que la nota cambió, pero sí que el dato declarado debe re-verificarse
-# (este fue el síntoma que se pudrió con RD). El sistema propone; el humano dispone (nunca
-# sobrescribe una nota por su cuenta).
-_SOVEREIGN_MAX_AGE_MONTHS = 24
+# Umbral de antigüedad del último toque verificado del rating soberano (acción de agencia
+# o afirmación anotada) antes de PROPONER verificación. Un dato más viejo no significa que
+# la nota cambió, pero sí que debe re-verificarse (el síntoma que se pudrió con RD). El
+# sistema propone; el humano dispone. El valor vive en el contrato para que el panel
+# (API/UI de Gobernanza) muestre el mismo criterio que audita esto.
+_SOVEREIGN_MAX_AGE_MONTHS = STALE_AFTER_MONTHS
 # Cadencia de re-propuesta del aviso soberano (~mensual), reusa el dedupe de _recently_notified.
 _SOVEREIGN_RENOTIFY_HOURS = 24 * 30
 
@@ -165,7 +166,8 @@ def _audit_sovereign_ratings(db: Session, admin_ids: List[str], now: datetime) -
         try:
             for uid in admin_ids:
                 notification_service.create(db, user_id=uid, type="warning",
-                                            title=title, body=body)
+                                            title=title, body=body,
+                                            action_url="/datos/gobernanza")
             _mark_notified(db, key)
             proposed.append(s["iso"])
         except Exception as e:  # noqa: BLE001
@@ -215,7 +217,8 @@ def _audit_publications(db: Session, admin_ids: List[str], now: datetime) -> Lis
             try:
                 for uid in admin_ids:
                     notification_service.create(db, user_id=uid, type="warning",
-                                                title=title, body=body)
+                                                title=title, body=body,
+                                                action_url="/datos/macro?tab=publicaciones")
                 _mark_notified(db, akey)
                 alerted.append(key)
             except Exception as e:  # noqa: BLE001
@@ -279,7 +282,8 @@ def run_freshness_audit(db: Session) -> Dict:
         # abortar la auditoría de las demás ni dejar avisos a medias sin marcar (re-spam).
         try:
             for uid in admin_ids:
-                notification_service.create(db, user_id=uid, type="warning", title=title, body=body)
+                notification_service.create(db, user_id=uid, type="warning", title=title,
+                                            body=body, action_url="/datos/operaciones")
             _mark_notified(db, name)
             notified += 1
         except Exception as e:  # noqa: BLE001

@@ -25,12 +25,38 @@ class Notification(UUIDMixin, Base):
     title = Column(String(200), nullable=False)
     body = Column(Text, nullable=True)
     read = Column(Boolean, default=False, nullable=False)
+    # Ruta INTERNA del frontend a la que lleva el click ("/products", "/datos/macro?tab=…").
+    # Nullable: un aviso puramente informativo no navega.
+    action_url = Column(String(300), nullable=True)
+
+
+# Resolución de destino para notificaciones ANTERIORES a action_url (filas viejas con la
+# columna en NULL): por prefijo del título, que es estable por productor. Así el buzón ya
+# acumulado se vuelve navegable sin migrar datos. Un productor nuevo debe pasar
+# ``action_url`` explícito, no agregar prefijos acá.
+_LEGACY_ACTIONS = (
+    ("Inteligencia de Fuentes", "/source-intel"),
+    ("Listo para publicar", "/products"),
+    ("Cambio de tarifa programado", "/mi-plan"),
+    ("Dato desactualizado", "/datos/operaciones"),
+    ("Publicación por verificar", "/datos/macro?tab=publicaciones"),
+    ("Decisión de TPM por verificar", "/datos/macro?tab=comunicados"),
+    ("Rating soberano por verificar", "/datos/gobernanza"),
+)
+
+
+def _legacy_action_url(title: str) -> Optional[str]:
+    for prefix, url in _LEGACY_ACTIONS:
+        if title.startswith(prefix):
+            return url
+    return None
 
 
 def _serialize(n: Notification) -> Dict[str, Any]:
     return {
         "id": n.id, "type": n.type, "title": n.title, "body": n.body,
         "read": bool(n.read),
+        "action_url": n.action_url or _legacy_action_url(str(n.title or "")),
         "created_at": n.created_at.isoformat() if n.created_at else None,
     }
 
@@ -39,9 +65,11 @@ class NotificationService:
     """Buzón in-app por usuario: crear (persistido), listar, marcar leído."""
 
     def create(self, db: Session, *, user_id: str, type: str, title: str,
-               body: str = "") -> Notification:
-        """Persiste una notificación para un usuario. Devuelve la fila creada."""
-        row = Notification(user_id=user_id, type=type, title=title, body=body, read=False)
+               body: str = "", action_url: Optional[str] = None) -> Notification:
+        """Persiste una notificación para un usuario. Devuelve la fila creada.
+        ``action_url``: ruta interna del frontend a la que navega el click (opcional)."""
+        row = Notification(user_id=user_id, type=type, title=title, body=body, read=False,
+                           action_url=action_url)
         db.add(row)
         db.commit()
         logger.info("NOTIFICATION [%s] to user %s: %s", type, user_id, title)

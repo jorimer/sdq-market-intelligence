@@ -203,7 +203,8 @@
     "markAll": "Mark all read",
     "loading": "Loading…",
     "error": "Couldn't load notifications.",
-    "empty": "You have no notifications."
+    "empty": "You have no notifications.",
+    "view": "View"
   },
   "lang": {
     "label": "Language",
@@ -2098,8 +2099,28 @@
     "gobernanza": {
       "eyebrow": "Data · Governance",
       "title": "Governance · WGI",
-      "sub": "Governance ingest (World Bank Worldwide Governance Indicators), IRMP computation per country, instability events (GDELT) and methodology backtest.",
-      "empty": "No Governance operations registered."
+      "sub": "Governance ingest (World Bank Worldwide Governance Indicators), IRMP computation per country, instability events (GDELT), sovereign ratings and methodology backtest.",
+      "empty": "No Governance operations registered.",
+      "sovereign": {
+        "title": "Sovereign panel",
+        "subtitle": "Rating per country and agency · anchor {{anchor}} · verification proposed after {{months}} months without action or affirmation",
+        "error": "Couldn't load the sovereign panel. Retry.",
+        "colCountry": "Country",
+        "colAgency": "Agency",
+        "colRating": "Rating",
+        "colAction": "Last action",
+        "colAffirm": "Annotated affirmation",
+        "anchorTag": "anchor",
+        "staleChip": "To verify",
+        "affirmLabel": "Affirmation date for {{iso}}",
+        "affirmSave": "Annotate",
+        "saving": "Annotating…",
+        "saved": "Affirmation annotated.",
+        "saveError": "Couldn't annotate. Retry.",
+        "storeMeta": "Synced store: {{source}} · {{fetched}}",
+        "noStore": "No synced store — showing the declared floor; run \"Sync sovereign rating (Wikipedia)\"",
+        "hint": "If you verified the grade is still current, annotate the affirmation date: that silences the freshness proposal. The system never changes a grade on its own."
+      }
     },
     "banca": {
       "eyebrow": "SIB · SIMBAD",

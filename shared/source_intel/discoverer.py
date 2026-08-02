@@ -151,4 +151,5 @@ def _notify(db: Session, n: int) -> None:
     body = (f"El descubridor encontró {n} dataset(s) real(es) en el catálogo nacional "
             f"(datos.gob.do) para brechas del readiness. Revisar en el tablero.")
     for uid in admin_ids:
-        notification_service.create(db, user_id=uid, type="info", title=title, body=body)
+        notification_service.create(db, user_id=uid, type="info", title=title, body=body,
+                                    action_url="/source-intel")
