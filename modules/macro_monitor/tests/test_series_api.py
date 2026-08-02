@@ -99,7 +99,8 @@ def test_series_with_ai_true_best_effort(db):
     r = c.get("/api/v1/macro-monitor/series/bcrd.test.serie", params={"with_ai": "true"})
     assert r.status_code == 200
     ai = r.json()["ai_insight"]
-    # No API key in tests → static fallback (best-effort never breaks the endpoint).
+    # El conftest raíz neutraliza ANTHROPIC_API_KEY → static fallback garantizado
+    # (best-effort never breaks the endpoint), aunque el .env local tenga key real.
     assert ai is not None
     assert "text" in ai and ai["text"]
     assert ai["model_used"] == "static_fallback"

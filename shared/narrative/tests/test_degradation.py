@@ -35,7 +35,8 @@ def test_generic_and_per_template_fallbacks_are_detected():
 
 def test_engine_fallback_output_is_detected_for_every_deep_dive_template():
     """El motor SIN key degrada: cada template de Deep Dive → static_fallback + detectado.
-    (Este worktree no tiene ANTHROPIC_API_KEY, así que la ruta de fallback es la viva.)"""
+    (El conftest raíz neutraliza ANTHROPIC_API_KEY, así que la ruta de fallback es la viva
+    aunque el .env local tenga una key real.)"""
     for tmpl in _DEEP_DIVE_TEMPLATES:
         res = asyncio.run(narrative_engine.generate(
             context={"x": 1}, template=tmpl, axis="pension_intel"))
