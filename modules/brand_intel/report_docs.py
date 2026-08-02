@@ -234,7 +234,11 @@ def narratives_and_tables(
                         for r in esc["scenarios"]]))
     vig = s.get("vigilance") or {}
     if vig.get("available"):
-        señales = [x for grupo in (vig.get("signals") or {}).values() for x in grupo]
+        # Las señales de fuente "decision" NO se imprimen: son el plan del cliente
+        # volviendo a desfilar por otra puerta (misma doctrina que sacó el ledger del
+        # documento). Sus veredictos llegan por la narrativa; el detalle, en la app.
+        señales = [x for grupo in (vig.get("signals") or {}).values() for x in grupo
+                   if x.get("source") != "decision"]
         if señales:
             tables.append(("Qué se movió desde la última entrega",
                            [["Fuente", "Señal", "Lectura", "Fuerza"]] +

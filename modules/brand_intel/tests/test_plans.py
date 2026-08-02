@@ -422,6 +422,34 @@ def test_client_document_never_replays_the_plan_as_tables(db, engagement):
     assert captured["tables_last"] is True
 
 
+def test_unevaluable_decisions_never_flood_the_vigilance_panel(db, engagement):
+    """El caso de prod: un plan adoptado entero (100+ inevaluables) reaparecía fila
+    por fila en «Qué se movió desde la última entrega». Inevaluable = estado estático,
+    no movimiento: ni el motor lo emite ni la tabla del cliente lo imprime."""
+    from modules.brand_intel.engines import vigilance as vg
+
+    sigs = vg.decision_signals([
+        {"status": "unevaluable", "title": "Meta externa", "label": "x", "note": ""},
+        {"status": "worsened", "title": "Meta que retrocedió", "label": "y", "note": ""},
+        {"status": "not_detectable", "title": "Meta en ruido", "label": "z", "note": ""},
+    ])
+    assert [s.strength for s in sigs] == ["confirmada", "marginal"]  # sin unevaluable
+
+    c = _client(db)
+    c.post("/api/v1/brand-intel/engagements/demo/decisions",
+           json={"title": "Meta externa del plan",
+                 "external_measure": "analytics de plataformas",
+                 "baseline_wave_code": "w2"})
+    p = rpt.build_report(db, engagement)
+    _n, tables = report_docs.narratives_and_tables(p)
+    panel = next((rows for t, rows in tables
+                  if t == "Qué se movió desde la última entrega"), None)
+    if panel is not None:
+        assert not any("Meta externa del plan" in " ".join(map(str, r)) for r in panel)
+    ctx = rpt.cerebro_contexts(p)["priorities"]
+    assert "decision" not in (ctx["senales_vigilancia"] or {})
+
+
 def test_fallback_plan_aggregates_operational_commitments():
     """Un cliente que adopta el plan entero (100+ compromisos) no recibe un inventario:
     lo operativo se agrega a un conteo y solo lo medible se detalla."""

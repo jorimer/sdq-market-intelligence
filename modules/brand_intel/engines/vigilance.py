@@ -110,13 +110,16 @@ def forecast_signals(scored: Sequence[Dict[str, Any]]) -> List[Signal]:
 
 
 def decision_signals(decisions: Sequence[Dict[str, Any]]) -> List[Signal]:
-    """Decisions that closed badly or could not be settled."""
+    """Decisions that closed badly or landed in the noise. NOT the unevaluable ones:
+    "no puede medirse" es un estado estático, no un movimiento — con un plan adoptado
+    entero (100+ compromisos) emitir una señal por cada inevaluable inunda el panel
+    con filas idénticas que no cambiaron desde la última entrega ni cambiarán."""
     out: List[Signal] = []
     for d in decisions:
         status = d.get("status")
         if status == "worsened":
             strength, direction = "confirmada", "adverso"
-        elif status in ("not_detectable", "unevaluable"):
+        elif status == "not_detectable":
             strength, direction = "marginal", "neutral"
         else:
             continue
