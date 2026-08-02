@@ -9,8 +9,8 @@ from sqlalchemy.pool import StaticPool
 from shared.database.base import Base
 from shared.settings.models import AppSetting  # noqa: F401 — registra la tabla
 from shared.contracts.sovereign_ratings import (
-    ANCHOR_AGENCY, agency_score, combined_anchor, load_sovereign_ratings,
-    overdue_ratings, save_sovereign_ratings)
+    ANCHOR_AGENCY, agency_score, annotate_affirmation, combined_anchor,
+    load_sovereign_ratings, overdue_ratings, save_sovereign_ratings)
 
 
 @pytest.fixture()
@@ -98,3 +98,42 @@ def test_overdue_ratings_flags_old_action(db):
     assert "DO" in isos and "CR" not in isos
     do = next(s for s in stale if s["iso"] == "DO")
     assert do["age_months"] > 24 and do["rating"] == "BB"
+
+
+def test_overdue_ratings_respects_recent_affirmation(db):
+    # Acción vieja pero afirmación anotada reciente → NO se propone (la afirmación ES la
+    # verificación humana que la propuesta pedía).
+    save_sovereign_ratings(db, {
+        "DO": {"sp": {"rating": "BB", "action_date": "2022-12-19",
+                      "affirm_date": "2026-06-15"}},
+        "PA": {"sp": {"rating": "BBB", "action_date": "2022-01-10"}},
+    })
+    stale = overdue_ratings(db, max_age_months=24, today=date(2026, 7, 1))
+    isos = {s["iso"] for s in stale}
+    assert "DO" not in isos and "PA" in isos
+    pa = next(s for s in stale if s["iso"] == "PA")
+    assert pa["affirm_date"] is None
+
+
+def test_annotate_affirmation_writes_store_and_silences(db):
+    save_sovereign_ratings(db, {
+        "DO": {"sp": {"rating": "BB", "action_date": "2022-12-19"}},
+    })
+    assert annotate_affirmation(db, "DO", "2026-06-15") is True
+    panel = load_sovereign_ratings(db)
+    assert panel["DO"]["sp"]["affirm_date"] == "2026-06-15"
+    assert overdue_ratings(db, max_age_months=24, today=date(2026, 7, 1)) == []
+
+
+def test_annotate_affirmation_missing_country_or_store(db):
+    # Sin store → nada que anotar (la auditoría solo vigila el store).
+    assert annotate_affirmation(db, "DO", "2026-06-15") is False
+    save_sovereign_ratings(db, {"DO": {"sp": {"rating": "BB", "action_date": "2022-12-19"}}})
+    assert annotate_affirmation(db, "CR", "2026-06-15") is False       # país fuera del store
+    assert annotate_affirmation(db, "DO", "2026-06-15", agency="fitch") is False
+
+
+def test_annotate_affirmation_invalid_date(db):
+    save_sovereign_ratings(db, {"DO": {"sp": {"rating": "BB", "action_date": "2022-12-19"}}})
+    with pytest.raises(ValueError):
+        annotate_affirmation(db, "DO", "15/06/2026")

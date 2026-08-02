@@ -109,3 +109,54 @@ def test_send_compat_does_not_persist(db):
     # `send` es el compat de solo-log (sin sesión): no persiste nada.
     notification_service.send(user_id="u1", type="info", title="solo log", body="x")
     assert notification_service.list_for_user(db, "u1") == []
+
+
+# ── Destino navegable (action_url) ────────────────────────────────────
+
+def test_action_url_persists_and_serializes(db):
+    notification_service.create(db, user_id="u1", type="success",
+                                title="Listo para publicar: Seguros",
+                                action_url="/products")
+    items = notification_service.list_for_user(db, "u1")
+    assert items[0]["action_url"] == "/products"
+
+
+def test_action_url_legacy_resolved_by_title(db):
+    # Filas anteriores a action_url (columna NULL): el destino se resuelve al servir por
+    # prefijo del título — el buzón acumulado se vuelve navegable sin migrar datos.
+    for title, expected in [
+        ("Inteligencia de Fuentes: datasets descubiertos", "/source-intel"),
+        ("Listo para publicar: SDQ Macro & Country Risk", "/products"),
+        ("Cambio de tarifa programado", "/mi-plan"),
+        ("Dato desactualizado: SIMBAD", "/datos/operaciones"),
+        ("Publicación por verificar: IPoM", "/datos/macro?tab=publicaciones"),
+        ("Decisión de TPM por verificar", "/datos/macro?tab=comunicados"),
+        ("Rating soberano por verificar: DO", "/datos/gobernanza"),
+        ("Un aviso genérico sin destino", None),
+    ]:
+        notification_service.create(db, user_id="u9", type="info", title=title)
+    items = notification_service.list_for_user(db, "u9")
+    by_title = {i["title"]: i["action_url"] for i in items}
+    assert by_title["Inteligencia de Fuentes: datasets descubiertos"] == "/source-intel"
+    assert by_title["Listo para publicar: SDQ Macro & Country Risk"] == "/products"
+    assert by_title["Cambio de tarifa programado"] == "/mi-plan"
+    assert by_title["Dato desactualizado: SIMBAD"] == "/datos/operaciones"
+    assert by_title["Publicación por verificar: IPoM"] == "/datos/macro?tab=publicaciones"
+    assert by_title["Decisión de TPM por verificar"] == "/datos/macro?tab=comunicados"
+    assert by_title["Rating soberano por verificar: DO"] == "/datos/gobernanza"
+    assert by_title["Un aviso genérico sin destino"] is None
+
+
+def test_explicit_action_url_wins_over_legacy(db):
+    notification_service.create(db, user_id="u1", type="info",
+                                title="Listo para publicar: X",
+                                action_url="/products?sector=insurance")
+    items = notification_service.list_for_user(db, "u1")
+    assert items[0]["action_url"] == "/products?sector=insurance"
+
+
+def test_api_exposes_action_url(db):
+    notification_service.create(db, user_id="u1", type="info", title="Hola",
+                                action_url="/mi-plan")
+    body = _client(db).get("/api/v1/notifications").json()
+    assert body["notifications"][0]["action_url"] == "/mi-plan"

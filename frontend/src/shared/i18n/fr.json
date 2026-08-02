@@ -203,7 +203,8 @@
     "markAll": "Tout marquer comme lu",
     "loading": "Chargement…",
     "error": "Impossible de charger les notifications.",
-    "empty": "Vous n'avez aucune notification."
+    "empty": "Vous n'avez aucune notification.",
+    "view": "Voir"
   },
   "lang": {
     "label": "Langue",
@@ -2098,8 +2099,28 @@
     "gobernanza": {
       "eyebrow": "Données · Gouvernance",
       "title": "Gouvernance · WGI",
-      "sub": "Ingestion de gouvernance (Worldwide Governance Indicators de la Banque mondiale), calcul de l'IRMP par pays, événements d'instabilité (GDELT) et backtest de la méthodologie.",
-      "empty": "Aucune opération Gouvernance enregistrée."
+      "sub": "Ingestion de gouvernance (Worldwide Governance Indicators de la Banque mondiale), calcul de l'IRMP par pays, événements d'instabilité (GDELT), notation souveraine et backtest de la méthodologie.",
+      "empty": "Aucune opération Gouvernance enregistrée.",
+      "sovereign": {
+        "title": "Panneau souverain",
+        "subtitle": "Notation par pays et agence · ancre {{anchor}} · vérification proposée après {{months}} mois sans action ni affirmation",
+        "error": "Impossible de charger le panneau souverain. Réessayez.",
+        "colCountry": "Pays",
+        "colAgency": "Agence",
+        "colRating": "Notation",
+        "colAction": "Dernière action",
+        "colAffirm": "Affirmation annotée",
+        "anchorTag": "ancre",
+        "staleChip": "À vérifier",
+        "affirmLabel": "Date d'affirmation pour {{iso}}",
+        "affirmSave": "Annoter",
+        "saving": "Annotation…",
+        "saved": "Affirmation annotée.",
+        "saveError": "Impossible d'annoter. Réessayez.",
+        "storeMeta": "Store synchronisé : {{source}} · {{fetched}}",
+        "noStore": "Aucun store synchronisé — affichage du plancher déclaré ; lancez « Synchroniser la notation souveraine (Wikipedia) »",
+        "hint": "Si vous avez vérifié que la note reste en vigueur, annotez la date d'affirmation : cela fait taire la proposition de fraîcheur. Le système ne change jamais une note de lui-même."
+      }
     },
     "banca": {
       "eyebrow": "SIB · SIMBAD",

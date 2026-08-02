@@ -50,7 +50,7 @@ def _on_tariff_published(payload: Dict[str, Any]) -> None:
                 f"vigente desde el {when}.")
         for user in users:
             notification_service.create(db, user_id=user.id, type="info",
-                                        title=title, body=body)
+                                        title=title, body=body, action_url="/mi-plan")
         logger.info("Alerta de tarifa '%s' enviada a %d suscriptos", sku, len(users))
     except Exception:  # noqa: BLE001 — notificar no debe romper la publicación de la tarifa
         logger.exception("Fallo al alertar el cambio de tarifa '%s'", sku)

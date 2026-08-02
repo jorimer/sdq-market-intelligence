@@ -119,3 +119,49 @@ export async function runBacktest(): Promise<{ started: boolean; reason?: string
   const { data } = await client.post("/operations/irmp-backtest/run", {});
   return data;
 }
+
+/* ── Panel soberano (multi-agencia) + anotación de afirmación ── */
+
+export interface SovereignAgencyRow {
+  agency: string;
+  name: string;
+  rating: string;
+  outlook: string | null;
+  action_date: string | null;
+  affirm_date: string | null;
+  score: number | null;
+  is_anchor: boolean;
+}
+
+export interface SovereignCountry {
+  iso: string;
+  in_store: boolean; // solo lo sincronizado admite anotación (el piso yaml va por PR)
+  stale: boolean;
+  agencies: SovereignAgencyRow[];
+}
+
+export interface SovereignPanel {
+  countries: SovereignCountry[];
+  anchor_agency: string;
+  anchor_name: string;
+  stale_after_months: number;
+  store_source: string | null;
+  store_fetched_at: string | null;
+  can_annotate: boolean;
+}
+
+export async function getSovereignPanel(): Promise<SovereignPanel> {
+  const { data } = await client.get("/macro-political-risk/sovereign-panel");
+  return data;
+}
+
+export async function affirmSovereignRating(
+  iso: string,
+  affirmDate: string,
+  agency?: string,
+): Promise<void> {
+  await client.post(
+    `/macro-political-risk/sovereign-panel/${encodeURIComponent(iso)}/affirm`,
+    { affirm_date: affirmDate, ...(agency ? { agency } : {}) },
+  );
+}

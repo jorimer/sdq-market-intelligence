@@ -7,6 +7,8 @@ export interface AppNotification {
   title: string;
   body: string | null;
   read: boolean;
+  /** Ruta interna a la que navega el click (null = solo informativa). */
+  action_url: string | null;
   created_at: string | null;
 }
 
