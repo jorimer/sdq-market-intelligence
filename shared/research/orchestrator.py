@@ -181,6 +181,12 @@ async def answer_question(question: str, db: Optional[Session] = None, *,
     question = " ".join((question or "").split())
     # 1-2. Resolver eje+entidad y recibir el resultado de los motores.
     targets = resolve_targets(question, db)
+    # Candado de pertinencia (entity_check): una entidad con match DÉBIL se verifica con el
+    # Cerebro ANTES de cosechar — una entidad espuria no solo trae un pull de más: ancla el
+    # reporte profundo entero a su ficha y esquiva el gate de scoping (caso Citibank←"sucursal").
+    if narrate and targets.entities:
+        from shared.research.entity_check import verify_entity_pertinence
+        await verify_entity_pertinence(question, targets)
     axis_pulls: List[EnginePull] = []
     # El enrutador semántico (LLM) + la cosecha concurrente en worker-threads rompieron el
     # endpoint para TODA consulta sin caché (502 ~7s = latencia del router). Se gatea detrás
