@@ -25,7 +25,7 @@ from shared.products.registry import PRODUCT_CATALOG, get_product, is_implemente
 AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
     "banking": ("banco", "banca", "bancari", "rating", "calificacion", "solidez",
                 "liquidez", "mora", "cartera", "solvencia", "eficiencia", "deposito",
-                "aeh", "asociacion de ahorro"),
+                "aeh", "asociacion de ahorro", "ahorro", "prestamo"),
     "macro": ("macro", "inflacion", "pib", "crecimiento", "riesgo pais", "fiscal",
               "deficit", "reservas", "tipo de cambio", "soberano"),
     "monetary_policy": ("politica monetaria", "tpm", "tasa de politica", "tasa de interes",
@@ -66,10 +66,29 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
 # nombres del roster: "banco", "multiple" aparecen en casi todos los labels bancarios).
 # Los gentilicios/país tampoco distinguen (hallazgo del piloto Fase 2: "mercado asegurador
 # dominicano" resolvía "Banco Popular DOMINICANO" y "Qik ... DOMINICANO" — ruido).
+# "sucursal"/"ahorros"/"prestamos" son forma legal, no identidad: "Citibank N.A. SUCURSAL
+# República Dominicana" colgaba de la palabra "sucursal" y una pregunta sobre abrir una
+# sucursal de comida rápida resolvía Citibank y anclaba TODO el informe a su rating.
 _ENTITY_STOPWORDS = frozenset(
-    "banco banca multiple ahorro credito servicios sa srl de del la el los las asociacion "
+    "banco banca multiple ahorro ahorros credito creditos prestamo prestamos servicios "
+    "sa srl de del la el los las asociacion sucursal sucursales bank "
     "aseguradora seguros compania cia fondo afp administradora s a "
     "dominicano dominicana dominicanos dominicanas republica".split())
+
+# Tokens AMBIGUOS: sí distinguen una entidad dentro del roster, pero son palabras comunes
+# del español (o topónimos) que aparecen en preguntas que NO tratan de esa entidad:
+# "reservas" (Banreservas / reservas internacionales), "popular" (Banco Popular / "la marca
+# más popular"), "motor" (Motor Crédito / "el motor de la economía"), "caribe" (Banco Caribe /
+# la región), "crecer"/"siembra" (AFP / el verbo y la agricultura), "colonial" (aseguradora /
+# la zona colonial)… Curado desde la auditoría del roster real (banca 35 + AFP + países).
+# Un match colgado SOLO de un token ambiguo exige corroboración: que la pregunta también
+# active el eje de esa entidad (p.ej. "banco"/"rating"). Sin eje, se descarta — el caso
+# Citibank←"sucursal" del informe McDonald's. La segunda capa (``entity_check``) deja que
+# el Cerebro vete lo que la corroboración léxica no alcanza a distinguir.
+_AMBIGUOUS_TOKENS = frozenset(
+    "nacional popular real romana caribe internacional reservas motor digital union "
+    "santa cruz costa cibao duarte vega crecer siembra atlantico atlantica "
+    "colonial universal general monumental humano futuro confianza progreso".split())
 
 
 def _norm(s: str) -> str:
@@ -94,6 +113,10 @@ class ResolvedEntity:
     scope_value: str      # lo que snapshot(scope=…) resuelve (id o nombre)
     label: str            # nombre visible de la entidad
     matched_on: str = ""  # token distintivo que disparó el match
+    # Match DÉBIL: colgado de un token ambiguo, o sin que la pregunta active el eje de la
+    # entidad. Es la señal para que ``entity_check`` (Cerebro) verifique la pertinencia
+    # antes de anclar el informe a esta entidad. Un match fuerte+eje no se re-verifica.
+    weak: bool = False
 
 
 @dataclass
@@ -138,16 +161,21 @@ def resolve_entities(question: str, db: Optional[Session],
                      axes: Optional[List[str]] = None) -> List[ResolvedEntity]:
     """Resuelve entidades nombradas en la pregunta contra el roster ``scope_options()`` de
     los productos (los de *axes* si se da, si no todos los implementados). Match por token
-    distintivo (evita colgar de 'banco'/'seguros'). Resiliente por producto."""
+    distintivo (evita colgar de 'banco'/'seguros'). Un token AMBIGUO (palabra común que
+    además nombra una entidad: 'reservas', 'popular', 'motor'…) solo ancla si la pregunta
+    también activa el eje de esa entidad — sin esa corroboración, se descarta (el informe
+    McDonald's se ancló a Citibank por la palabra 'sucursal'). Resiliente por producto."""
     if db is None:
         return []
     q = _norm(question)
+    detected = frozenset(axes or ())
     candidates = axes if axes else [e.sector_key for e in PRODUCT_CATALOG]
     out: List[ResolvedEntity] = []
     seen: set = set()
     for sk in candidates:
         if not is_implemented(sk):
             continue
+        axis_detected = sk in detected
         try:
             product = get_product(sk, db)
             fn = getattr(product, "scope_options", None)
@@ -155,14 +183,21 @@ def resolve_entities(question: str, db: Optional[Session],
                 continue
             for opt in fn():
                 label = str(opt.get("label", ""))
-                for tok in _distinctive_tokens(label):
-                    if re.search(rf"\b{re.escape(tok)}\b", q):
-                        key = (sk, str(opt.get("value")))
-                        if key not in seen:
-                            seen.add(key)
-                            out.append(ResolvedEntity(sector_key=sk, scope_value=str(opt.get("value")),
-                                                      label=label, matched_on=tok))
-                        break
+                hits = [tok for tok in _distinctive_tokens(label)
+                        if re.search(rf"\b{re.escape(tok)}\b", q)]
+                if not hits:
+                    continue
+                strong = [tok for tok in hits if tok not in _AMBIGUOUS_TOKENS]
+                if not strong and not axis_detected:
+                    continue  # solo tokens ambiguos y sin eje corroborante → espurio
+                key = (sk, str(opt.get("value")))
+                if key not in seen:
+                    seen.add(key)
+                    out.append(ResolvedEntity(
+                        sector_key=sk, scope_value=str(opt.get("value")), label=label,
+                        matched_on=(strong or hits)[0],
+                        # fuerte+eje = confianza plena; lo demás lo re-verifica el Cerebro.
+                        weak=not (strong and axis_detected)))
         except Exception:  # noqa: BLE001 — un roster que falla no rompe la resolución
             if db is not None:
                 try:
@@ -221,11 +256,12 @@ def context_axes(question: str, primary: List[str]) -> List[str]:
     return out
 
 
-def resolve_targets(question: str, db: Optional[Session]) -> Targets:
-    """Ejes detectados + entidades resueltas. Las entidades se buscan primero en los ejes
-    detectados; si no hay eje detectado pero sí una entidad, su eje entra igual."""
-    axes = detect_axes(question)
-    entities = resolve_entities(question, db, axes or None)
+def finalize_targets(question: str, axes: List[str],
+                     entities: List[ResolvedEntity]) -> Targets:
+    """Arma el ``Targets`` final desde ejes detectados + entidades. Reutilizable: cuando
+    ``entity_check`` descarta una entidad espuria, el contexto se recomputa desde acá (si
+    no, el contexto sembrado por la entidad falsa —monetario/macro de un banco que no
+    venía al caso— sobreviviría al descarte)."""
     # Un eje con entidad resuelta ya se cubre por la entidad; deja en `axes` solo los
     # ejes SIN entidad (para pull a-nivel-sistema).
     axes_with_entity = {e.sector_key for e in entities}
@@ -233,3 +269,11 @@ def resolve_targets(question: str, db: Optional[Session]) -> Targets:
     primary = list(axes) + [e.sector_key for e in entities]
     return Targets(axes=axes_only, entities=entities,
                    context=context_axes(question, primary))
+
+
+def resolve_targets(question: str, db: Optional[Session]) -> Targets:
+    """Ejes detectados + entidades resueltas. Las entidades se buscan primero en los ejes
+    detectados; si no hay eje detectado pero sí una entidad, su eje entra igual."""
+    axes = detect_axes(question)
+    entities = resolve_entities(question, db, axes or None)
+    return finalize_targets(question, axes, entities)
