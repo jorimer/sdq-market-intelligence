@@ -77,13 +77,13 @@ def test_forensic_package_endpoint():
 
 
 def test_forensic_narrative_and_report():
-    # Robusto al entorno: en CI (sin ANTHROPIC_API_KEY) la narrativa degrada; en local con
-    # key genera. No asertamos el valor de 'degraded', solo la mecánica del endpoint.
+    # El conftest raíz neutraliza ANTHROPIC_API_KEY → la narrativa degrada SIEMPRE
+    # (determinista, sin gastar llamadas reales aunque el .env local tenga key).
     r = client.get("/api/v1/banking-score/historical/forensic/narrative",
                    params={"nombre": "Banco Quebrado"})
     assert r.status_code == 200
     body = r.json()
-    assert isinstance(body["degraded"], bool) and body["nombre"] == "Banco Quebrado"
+    assert body["degraded"] is True and body["nombre"] == "Banco Quebrado"
     # el informe branded se sirve como HTML aunque la narrativa esté degradada
     rep = client.get("/api/v1/banking-score/historical/forensic/report",
                      params={"nombre": "Banco Quebrado"})

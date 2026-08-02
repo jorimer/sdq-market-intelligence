@@ -25,7 +25,7 @@ from modules.banking_score.models.models import (  # noqa: F401
 from modules.banking_score.reports.narrative import REPORT_SECTIONS
 from app.main import app
 
-# El entorno de test/CI no tiene ANTHROPIC_API_KEY → la narrativa degradaría a fallback
+# El conftest raíz neutraliza ANTHROPIC_API_KEY → la narrativa degradaría a fallback
 # estático y el guard anti-PDF-hueco respondería 503 en los reportes premium (full_rating/
 # scorecard). Estos tests validan la MECÁNICA del endpoint (crear/descargar), no el motor IA,
 # así que simulan la narrativa sana que en producción SÍ se genera (la key está siempre). El
