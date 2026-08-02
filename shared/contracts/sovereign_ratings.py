@@ -34,6 +34,11 @@ APP_SETTING_KEY = "sovereign_ratings"
 # Combination policy (owner 2026-07-01): S&P is the anchor whose rating feeds the index.
 ANCHOR_AGENCY = "sp"
 
+# Months since the last verified touch (agency action OR manual affirmation) before the
+# freshness audit PROPOSES re-verification. Lives here so the audit and the sovereign
+# panel (API/UI) share one criterion. Agencies usually act/affirm within ~2 years.
+STALE_AFTER_MONTHS = 24
+
 AGENCY_NAMES: Dict[str, str] = {"sp": "S&P", "fitch": "Fitch", "moodys": "Moody's"}
 # Display order for the context panel (anchor first).
 AGENCY_ORDER = ("sp", "fitch", "moodys")
@@ -191,6 +196,31 @@ def combined_anchor(iso: str, db=None) -> Dict[str, Any]:
     }
 
 
+def annotate_affirmation(db, iso: str, affirm_date: str,
+                         agency: str = ANCHOR_AGENCY) -> bool:
+    """Anota (o corrige) la fecha de AFIRMACIÓN manual de un rating en el store — la acción
+    humana que pide la auditoría de frescura ("verificar que siga vigente y anotar"). Escribe
+    ``affirm_date`` en ``panel[iso][agency]`` preservando el resto del sobre (source,
+    fetched_at); el sync la arrastra hacia adelante en cada refresco. Devuelve False si no
+    hay store o el país/agencia no está en el panel (la auditoría solo vigila el store, así
+    que no hay nada que silenciar): nunca fabrica una entrada.
+
+    ``affirm_date`` debe ser ISO ``YYYY-MM-DD``; inválida → ValueError (el borde del API la
+    traduce a 422 en español)."""
+    date.fromisoformat(affirm_date)  # valida; ValueError si viene mal
+    from shared.settings.models import AppSetting
+
+    envelope = _read_store(db)
+    info = ((envelope.get("panel") or {}).get(iso) or {}).get(agency)
+    if not info:
+        return False
+    info["affirm_date"] = affirm_date
+    row = db.query(AppSetting).filter(AppSetting.key == APP_SETTING_KEY).first()
+    row.value = json.dumps(envelope, ensure_ascii=False)
+    db.commit()
+    return True
+
+
 def _months_between(iso_date: str, today: date) -> Optional[int]:
     """Whole months between an ISO ``YYYY-MM-DD`` and *today*, or None if unparseable."""
     try:
@@ -217,9 +247,15 @@ def overdue_ratings(db, max_age_months: int, today: Optional[date] = None,
     for iso, country in panel.items():
         info = (country or {}).get(agency) or {}
         action = info.get("action_date")
-        age = _months_between(action, today) if action else None
+        # La frescura se mide desde el último toque HUMANO-verificado: la acción de la
+        # agencia o una afirmación anotada a mano, lo más reciente. Sin esto, anotar la
+        # afirmación (lo que la propuesta pide hacer) no silenciaba la propuesta.
+        touches = [d for d in (action, info.get("affirm_date")) if d]
+        ages = [a for a in (_months_between(d, today) for d in touches) if a is not None]
+        age = min(ages) if ages else None
         if age is not None and age > max_age_months:
             stale.append({"iso": iso, "agency": agency, "rating": info.get("rating"),
-                          "action_date": action, "age_months": age})
+                          "action_date": action, "affirm_date": info.get("affirm_date"),
+                          "age_months": age})
     stale.sort(key=lambda r: r["age_months"], reverse=True)
     return stale

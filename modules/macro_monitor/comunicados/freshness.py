@@ -55,7 +55,8 @@ def audit_comunicados_freshness(db: Session, admin_ids: List[str], now: datetime
             f"conviene verificar si hay un comunicado nuevo sin capturar.")
     try:
         for uid in admin_ids:
-            notification_service.create(db, user_id=uid, type="warning", title=title, body=body)
+            notification_service.create(db, user_id=uid, type="warning", title=title,
+                                        body=body, action_url="/datos/macro?tab=comunicados")
         _mark_notified(db, _KEY)
         return [_KEY]
     except Exception as e:  # noqa: BLE001

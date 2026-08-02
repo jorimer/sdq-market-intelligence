@@ -8,7 +8,7 @@ auditable IRMP breakdown.  Persistence will be layered on top later.
 """
 import logging
 from datetime import date
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -304,3 +304,111 @@ async def snapshot_history(
         for s in snaps
     ]
     return {"country_code": country_code, "history": history, "count": len(history)}
+
+
+# ---------------------------------------------------------------------------
+# Panel soberano (multi-agencia) + anotación de afirmación
+#
+# La auditoría de frescura PROPONE "verificar el rating y anotar la fecha de
+# afirmación", y su notificación lleva a Datos·Gobernanza — estas rutas son la
+# superficie donde esa acción se completa: ver el panel (cualquier autenticado)
+# y anotar la afirmación (admin; escribe en el store, el sync la preserva).
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/sovereign-panel",
+    summary="Panel de ratings soberanos (multi-agencia, ancla S&P)",
+    description=(
+        "Ratings por país y agencia (store sincronizado desde Wikipedia + piso "
+        "declarado), con fecha de acción, afirmación anotada y señal de frescura."
+    ),
+)
+async def sovereign_panel(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from shared.auth.models import UserRole, role_satisfies
+    from shared.contracts.sovereign_ratings import (
+        AGENCY_NAMES,
+        AGENCY_ORDER,
+        ANCHOR_AGENCY,
+        STALE_AFTER_MONTHS,
+        _read_store,
+        agency_score,
+        load_sovereign_ratings,
+        overdue_ratings,
+    )
+
+    envelope = _read_store(db)
+    store_isos = set((envelope.get("panel") or {}).keys())
+    stale_isos = {s["iso"] for s in overdue_ratings(db, STALE_AFTER_MONTHS)}
+    panel = load_sovereign_ratings(db)
+
+    countries = []
+    for iso in sorted(panel):
+        agencies = []
+        for agency in AGENCY_ORDER:
+            info = (panel[iso] or {}).get(agency) or {}
+            if not info.get("rating"):
+                continue
+            agencies.append({
+                "agency": agency,
+                "name": AGENCY_NAMES.get(agency, agency),
+                "rating": info.get("rating"),
+                "outlook": info.get("outlook"),
+                "action_date": info.get("action_date"),
+                "affirm_date": info.get("affirm_date"),
+                "score": agency_score(agency, info.get("rating")),
+                "is_anchor": agency == ANCHOR_AGENCY,
+            })
+        countries.append({
+            "iso": iso,
+            # Solo lo que vive en el store sincronizado admite anotación (el piso
+            # declarado se gobierna por PR en el yaml, no por anotaciones).
+            "in_store": iso in store_isos,
+            "stale": iso in stale_isos,
+            "agencies": agencies,
+        })
+    return {
+        "countries": countries,
+        "anchor_agency": ANCHOR_AGENCY,
+        "anchor_name": AGENCY_NAMES.get(ANCHOR_AGENCY, ANCHOR_AGENCY),
+        "stale_after_months": STALE_AFTER_MONTHS,
+        "store_source": envelope.get("source"),
+        "store_fetched_at": envelope.get("fetched_at"),
+        "can_annotate": role_satisfies(cast("UserRole", current_user.role), UserRole.admin),
+    }
+
+
+@router.post(
+    "/sovereign-panel/{iso}/affirm",
+    summary="Anotar la fecha de afirmación de un rating soberano (admin)",
+    description=(
+        "Registra la afirmación manual verificada por un humano. No cambia la nota "
+        "(el sistema nunca la sobrescribe solo); silencia la propuesta de frescura."
+    ),
+)
+async def affirm_sovereign_rating(
+    iso: str,
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from shared.auth.models import UserRole, role_satisfies
+    from shared.contracts.sovereign_ratings import ANCHOR_AGENCY, annotate_affirmation
+
+    if not role_satisfies(cast("UserRole", current_user.role), UserRole.admin):
+        raise HTTPException(status_code=403, detail="Se requiere rol admin.")
+    affirm_date = str(payload.get("affirm_date") or "").strip()
+    agency = str(payload.get("agency") or ANCHOR_AGENCY).strip().lower()
+    try:
+        ok = annotate_affirmation(db, iso.upper(), affirm_date, agency=agency)
+    except ValueError:
+        raise HTTPException(status_code=422,
+                            detail="Fecha de afirmación inválida; usa AAAA-MM-DD.")
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail=("Ese país/agencia no está en el store sincronizado. Corre primero "
+                    "la operación «Sincronizar rating soberano (Wikipedia)»."))
+    return {"iso": iso.upper(), "agency": agency, "affirm_date": affirm_date}

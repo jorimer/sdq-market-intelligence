@@ -203,7 +203,8 @@
     "markAll": "Marcar todas",
     "loading": "Cargando…",
     "error": "No se pudieron cargar las notificaciones.",
-    "empty": "No tienes notificaciones."
+    "empty": "No tienes notificaciones.",
+    "view": "Ver"
   },
   "lang": {
     "label": "Idioma",
@@ -2098,8 +2099,28 @@
     "gobernanza": {
       "eyebrow": "Datos · Gobernanza",
       "title": "Gobernanza · WGI",
-      "sub": "Ingesta de gobernanza (Worldwide Governance Indicators del Banco Mundial), cálculo del IRMP por país, eventos de inestabilidad (GDELT) y backtest de la metodología.",
-      "empty": "No hay operaciones de Gobernanza registradas."
+      "sub": "Ingesta de gobernanza (Worldwide Governance Indicators del Banco Mundial), cálculo del IRMP por país, eventos de inestabilidad (GDELT), rating soberano y backtest de la metodología.",
+      "empty": "No hay operaciones de Gobernanza registradas.",
+      "sovereign": {
+        "title": "Panel soberano",
+        "subtitle": "Rating por país y agencia · ancla {{anchor}} · se propone verificar tras {{months}} meses sin acción ni afirmación",
+        "error": "No se pudo cargar el panel soberano. Reintenta.",
+        "colCountry": "País",
+        "colAgency": "Agencia",
+        "colRating": "Rating",
+        "colAction": "Última acción",
+        "colAffirm": "Afirmación anotada",
+        "anchorTag": "ancla",
+        "staleChip": "Por verificar",
+        "affirmLabel": "Fecha de afirmación de {{iso}}",
+        "affirmSave": "Anotar",
+        "saving": "Anotando…",
+        "saved": "Afirmación anotada.",
+        "saveError": "No se pudo anotar. Reintenta.",
+        "storeMeta": "Store sincronizado: {{source}} · {{fetched}}",
+        "noStore": "Sin store sincronizado — se muestra el piso declarado; corre «Sincronizar rating soberano (Wikipedia)»",
+        "hint": "Si verificaste que la nota sigue vigente, anota la fecha de afirmación: eso silencia la propuesta de frescura. El sistema nunca cambia una nota por su cuenta."
+      }
     },
     "banca": {
       "eyebrow": "SIB · SIMBAD",

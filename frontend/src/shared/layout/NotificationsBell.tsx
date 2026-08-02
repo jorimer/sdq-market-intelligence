@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, CheckCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ArrowRight, Bell, CheckCheck } from "lucide-react";
 import {
   AppNotification,
   getNotifications,
@@ -15,6 +16,7 @@ const POLL_MS = 60_000; // refresco del contador de no-leídas
  * Lee el buzón in-app del usuario (gateado/aislado por el backend). */
 export function NotificationsBell() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<AppNotification[]>([]);
@@ -67,7 +69,18 @@ export function NotificationsBell() {
     if (next) loadList();
   };
 
+  // Solo rutas internas de la SPA: cualquier otra cosa (absoluta, protocolo) se ignora.
+  const internalPath = (n: AppNotification) =>
+    n.action_url && n.action_url.startsWith("/") && !n.action_url.startsWith("//")
+      ? n.action_url
+      : null;
+
   const onItemClick = async (n: AppNotification) => {
+    const to = internalPath(n);
+    if (to) {
+      setOpen(false);
+      navigate(to);
+    }
     if (n.read) return;
     setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
     setUnread((u) => Math.max(0, u - 1));
@@ -164,8 +177,16 @@ export function NotificationsBell() {
                           {n.body && (
                             <div className="text-xs text-body mt-0.5">{n.body}</div>
                           )}
-                          <div className="text-[10px] text-faint mono mt-1">
-                            {fmt(n.created_at)}
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="text-[10px] text-faint mono">
+                              {fmt(n.created_at)}
+                            </span>
+                            {internalPath(n) && (
+                              <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-semibold text-accent">
+                                {t("notifications.view")}
+                                <ArrowRight size={10} />
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

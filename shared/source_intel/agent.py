@@ -181,4 +181,5 @@ def _notify_agent_proposals(db: Session, n: int) -> None:
     body = (f"El agente propuso {n} fuente(s) candidata(s) para cerrar brechas del readiness. "
             f"Revisar y decidir en el tablero (el sistema ya las evaluó).")
     for uid in admin_ids:
-        notification_service.create(db, user_id=uid, type="info", title=title, body=body)
+        notification_service.create(db, user_id=uid, type="info", title=title, body=body,
+                                    action_url="/source-intel")
