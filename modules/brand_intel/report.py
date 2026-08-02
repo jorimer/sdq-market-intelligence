@@ -253,7 +253,11 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
                    "nota": ag.get("note") or ag.get("empty_reason")},
         "filtro_senal": ({"rows": sf.get("rows"), "nota": sf.get("note")}
                          if sf.get("available") else {"nota": sf.get("reason")}),
-        "senales_vigilancia": (vig.get("signals") if vig.get("available") else None),
+        # Sin la fuente "decision": el resumen de decisiones ya viaja aparte, y con un
+        # plan adoptado entero esas señales repiten cien títulos casi idénticos.
+        "senales_vigilancia": (
+            {k: v for k, v in (vig.get("signals") or {}).items() if k != "decision"}
+            if vig.get("available") else None),
         "escenarios": ({"escenarios": esc.get("scenarios"),
                         "riesgos": esc.get("risks"),
                         "dispersion_reglas": esc.get("rule_dispersion"),
