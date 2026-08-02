@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     # apagarlo sin deploy si hiciera falta. Fail-safe: sin Cerebro/presupuesto/error → GAP.
     RESEARCH_RELEVANCE_CHECK: bool = True
 
+    # Verificación de pertinencia de ENTIDAD del research custom: cuando el matcher léxico
+    # resuelve una entidad con match DÉBIL (token ambiguo, o sin que la pregunta active su
+    # eje), una llamada LLM sí/no confirma que la pregunta trate de esa entidad antes de
+    # anclar el informe a su ficha (el informe McDonald's quedó anclado a Citibank por la
+    # palabra "sucursal"). Fail-safe INVERSO a la relevancia: sin Cerebro/presupuesto/error
+    # → la entidad se CONSERVA (el piso determinista no depende del LLM).
+    RESEARCH_ENTITY_CHECK: bool = True
+
     # Auth
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"
