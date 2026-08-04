@@ -235,7 +235,7 @@ def test_findex_financial_inclusion_goes_live_latest_available(db):
 
 
 def test_sync_wb_findex_upserts_national(db, monkeypatch):
-    import shared.data.wdi_client as wdi  # not re-exported by the package → real module
+    import shared.data.wdi_client as wdi
 
     monkeypatch.setattr(
         wdi, "fetch_wb_indicator",
@@ -256,9 +256,8 @@ def test_sync_wb_findex_upserts_national(db, monkeypatch):
 
 
 def test_sync_one_schooling_upserts_national(db, monkeypatch):
-    import sys
+    import shared.data.one_client as oc_mod
 
-    oc_mod = sys.modules["shared.data.one_client"]  # patch the real module (re-export shadow)
     monkeypatch.setattr(oc_mod, "fetch_one_education_schooling",
                         lambda: [(2023, 9.61), (2024, 9.61)])
     from modules.social_dev.social_sync import _sync_one_schooling
@@ -275,9 +274,8 @@ def test_sync_one_schooling_upserts_national(db, monkeypatch):
 
 
 def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
-    import sys
+    import shared.data.one_client as oc_mod
 
-    oc_mod = sys.modules["shared.data.one_client"]
     monkeypatch.setattr(
         oc_mod, "fetch_one_education_coverage",
         lambda: [("enriquillo", 2024, 66.8), ("ozama", 2024, 67.7)],
@@ -310,8 +308,7 @@ def test_discover_labor_links_matches_by_slug():
 
 
 def test_sync_one_labor_upserts_national(db, monkeypatch):
-    import sys  # the package re-exports `one_client`, shadowing the submodule attr →
-    oc_mod = sys.modules["shared.data.one_client"]  # patch the real module object
+    import shared.data.one_client as oc_mod
 
     monkeypatch.setattr(
         oc_mod, "fetch_one_labor",
