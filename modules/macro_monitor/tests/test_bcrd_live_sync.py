@@ -6,13 +6,12 @@ APLICACIÓN (HTTP 500 con ``success:false``), indistinguible de un token mal cop
 observaciones: la fuente quedaba caída sin dejar rastro. Estos tests fijan el contrato
 contrario — sin dato y con rechazo de credencial, la corrida FALLA y avisa.
 """
-from importlib import import_module
-
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import shared.data.bcrd_client as bcrd_mod
 import shared.settings.models  # noqa: F401 — registra app_settings antes del create_all
 from shared.auth.models import User, UserRole
 from shared.data.bcrd_api import BcrdApiError
@@ -27,11 +26,6 @@ from modules.macro_monitor.operations import (
     _bcrd_auth_alert,
     _bcrd_auth_alert_clear,
 )
-
-# ``shared.data.__init__`` reexporta la INSTANCIA ``bcrd_client``, que tapa al submódulo del
-# mismo nombre: ``from shared.data import bcrd_client`` devuelve el objeto, no el módulo.
-# Resolvemos por sys.modules para poder parchear su ``fetch_bcrd_variable``.
-bcrd_mod = import_module("shared.data.bcrd_client")
 
 # Una variable con dato real: grupo con ``date`` → value-group (cada métrica es su serie).
 _PAYLOAD_OK = {
