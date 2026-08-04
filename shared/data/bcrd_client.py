@@ -319,13 +319,23 @@ class BCRDClient(FixtureBackedClient):
         lineage = Lineage(source=self.source, license=self.license, fetched_at=date.today())
         default_period = date.today().strftime("%Y-%m")
         records: List[Record] = []
+        auth_error: Optional[BcrdApiError] = None
         for variable in LIVE_VARIABLES:
             try:
                 payload = fetch_bcrd_variable(self.token, variable, base_url=self.base_url)
             except (BcrdApiError, httpx.HTTPError, ValueError) as e:
+                if isinstance(e, BcrdApiError) and e.is_auth:
+                    auth_error = auth_error or e
                 logger.warning("[BCRD live] %s falló: %s", variable, e)
                 continue
             records.extend(parse_variable(variable, payload, lineage, default_period))
+        # Credencial muerta ⇒ falla RUIDOSA, no una ingesta vacía "exitosa". El BCRD
+        # desactiva la cuenta del API por inactividad y devuelve el rechazo como error de
+        # aplicación; tragárselo por variable dejaba la cuenta caída invisible (pasaron 50
+        # días así). Una falla PARCIAL sigue siendo best-effort: solo escalamos cuando no
+        # sobrevivió NINGUNA observación y hubo al menos un rechazo de credencial.
+        if not records and auth_error is not None:
+            raise auth_error
         if series:
             records = [r for r in records if r.series == series]
         if period:
