@@ -169,6 +169,21 @@ NO_META_COMMENTARY = (
     "el titubeo ni la versión descartada—. El lector solo debe ver el juicio final, pulido."
 )
 
+# Defensa PRIMARIA contra la comparación INVERTIDA (bug 2026-08-05: el resumen ejecutivo de
+# BPD afirmó que una mora de 1.67% estaba "por debajo" del promedio de pares de 1.5%,
+# contradiciendo la tabla del propio informe). Las cifras eran correctas y estaban en el
+# contexto: lo que se invirtió fue el sentido. El chequeo determinista
+# (numeric_guard.deterministic_direction_errors) es la red; la regla nace acá.
+DIRECTION_DISCIPLINE = (
+    "DIRECCIÓN DE LAS COMPARACIONES (regla dura): antes de escribir 'por encima', 'por "
+    "debajo', 'superior a', 'inferior a' o 'supera', RESTA los dos valores y mira el signo. "
+    "Una comparación con el sentido invertido es un error de hecho tan grave como una cifra "
+    "inventada, y es peor cuando el propio informe muestra la tabla que la desmiente. Ojo con "
+    "el caso frecuente: un indicador puede estar por DEBAJO del promedio del sistema y a la "
+    "vez por ENCIMA del promedio de su grupo de pares —son bases distintas—; nombra contra "
+    "CUÁL base comparas y verifica el signo contra ESA base, no contra la otra."
+)
+
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────
 
 AXIS_DOCTRINE: Dict[str, str] = {
@@ -945,6 +960,7 @@ def build_system(axis: str, audience: Optional[str], mode: str) -> str:
     if resolved:
         parts.append(AUDIENCE_FRAMES[axis][resolved])
     parts.append(BARRA_DE_INSIGHT)
+    parts.append(DIRECTION_DISCIPLINE)
     if mode in ("detailed", "deep"):
         parts.append(DEPTH_DIRECTIVE)
     # Última instrucción del system: la salida es final, sin meta-comentario ni auto-corrección.

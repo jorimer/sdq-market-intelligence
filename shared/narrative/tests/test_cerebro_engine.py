@@ -10,15 +10,17 @@ from shared.narrative.cerebro import (
     BARRA_DE_INSIGHT,
     CEREBRO_IDENTITY,
     DEEP_DIRECTIVE,
+    DIRECTION_DISCIPLINE,
     EPISTEMIC_STANDARD,
     NO_META_COMMENTARY,
     REGISTER_NEUTRO,
 )
 from shared.narrative.numeric_guard import _parse_unsupported
 
-# El system de la ruta legacy: registro de voz + disciplina epistémica + regla de salida
-# final (anti meta-comentario). Ver claude_engine.generate (ruta legacy).
-_LEGACY_SYSTEM = REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD + "\n\n" + NO_META_COMMENTARY
+# El system de la ruta legacy: registro de voz + disciplina epistémica + dirección de las
+# comparaciones + regla de salida final (anti meta-comentario). Ver claude_engine.generate.
+_LEGACY_SYSTEM = (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD + "\n\n"
+                  + DIRECTION_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
 
 
 class _FakeMsg:

@@ -254,3 +254,165 @@ def test_no_positions_no_crosssectional_flags():
     """Sin ``posiciones_dimension`` el patrón se salta (best-effort, no rompe)."""
     text = "es el mayor del sistema en escala."
     assert deterministic_unsupported({}, text) == []
+
+
+# ── Dirección de las comparaciones ────────────────────────────────────────────
+#
+# Bug 2026-08-05 (BPD, full_rating): la §1 afirmó que una mora de 1.67% estaba "por debajo"
+# del promedio de pares grandes (1.5%), contradiciendo la tabla del propio informe. Ambas
+# cifras estaban en el contexto y eran correctas — lo invertido era el sentido, que el juez
+# LLM dejó pasar. El listón de estos tests es doble: agarrar el caso real Y no gritar en
+# falso sobre prosa legítima (un guard ruidoso se aprende a ignorar).
+
+from shared.narrative.numeric_guard import deterministic_direction_errors  # noqa: E402
+
+
+def _bank_ctx():
+    """Contexto con la forma REAL de una sección de panorama de banca."""
+    return {
+        "indicators": {
+            "morosidad": {"raw": 1.67, "score": 83.3},
+            "solvencia": {"raw": 16.44, "score": 100.0},
+            "roa": {"raw": 1.59, "score": 100.0},
+            "ltd": {"raw": 88.4745, "score": 99.36},
+        },
+        "benchmarks": {
+            "sector_averages": {"npl": 1.8, "car": 16.5, "roa": 2.1, "ltd": 78.0},
+            "peer_groups": {"large_banks": {"npl_avg": 1.5, "car_avg": 15.8,
+                                            "roa_avg": 2.3}},
+        },
+    }
+
+
+def test_real_bpd_inverted_comparison_is_flagged():
+    """El caso exacto que llegó al PDF de cliente."""
+    text = ("La tasa de mora (1.67%) se sitúa por debajo del umbral de alerta regulatoria "
+            "y del promedio del grupo de bancos grandes (1.5%), con el 98.25% de la "
+            "cartera en la categoría de menor riesgo.")
+    flags = deterministic_direction_errors(_bank_ctx(), text)
+    assert any("morosidad" in f for f in flags), flags
+
+
+def test_correct_direction_against_sector_not_flagged():
+    """La MISMA mora sí está por debajo del sistema (1.8%): afirmación válida."""
+    text = "la morosidad de 1.67% es inferior a la del promedio sectorial (1.8%)."
+    assert deterministic_direction_errors(_bank_ctx(), text) == []
+
+
+def test_correct_direction_above_peers_not_flagged():
+    text = "la mora de 1.67% se ubica por encima del promedio de pares grandes (1.5%)."
+    assert deterministic_direction_errors(_bank_ctx(), text) == []
+
+
+def test_prospective_threshold_not_flagged():
+    """Falso positivo real: umbrales prospectivos que no son ni el valor de la entidad ni
+    una referencia conocida ('si la solvencia cae por debajo de 18%…')."""
+    text = ("Una caída de la solvencia por debajo de 18% —que comprimiría el margen sobre "
+            "el mínimo regulatorio de 15%— o un incremento de la ratio préstamos-depósitos "
+            "por encima del 93% activaría la revisión.")
+    assert deterministic_direction_errors(_bank_ctx(), text) == []
+
+
+def test_chained_clauses_not_flagged():
+    """Falso positivo real: dos cláusulas independientes unidas por punto y coma."""
+    text = ("Un ROA de 1.0% o superior abriría espacio para ampliar la línea; un "
+            "estancamiento por debajo de 0.5% obligaría a revisar.")
+    assert deterministic_direction_errors(_bank_ctx(), text) == []
+
+
+def test_cross_indicator_numbers_not_paired():
+    """Falso positivo real: una fila de tabla pegada a la frase siguiente mezcla números de
+    indicadores DISTINTOS (ROA 1.59 con CAR de pares 15.8). No deben parearse."""
+    text = ("ROA 1.59% 2.3% 2.1% Costo-ingreso 44.36% La capitalización del banco (16.44%) "
+            "supera la media del grupo grande (15.8%).")
+    assert deterministic_direction_errors(_bank_ctx(), text) == []
+
+
+def test_reference_must_follow_the_marker():
+    """La entidad debe ser el SUJETO: con los operandos al revés no se afirma nada sobre
+    ella, así que no se juzga (mejor callar que marcar mal)."""
+    text = "el promedio de pares grandes (1.5%) está por debajo de la mora de 1.67%."
+    assert deterministic_direction_errors(_bank_ctx(), text) == []
+
+
+def test_indistinguishable_values_not_flagged():
+    """Si a la precisión citada entidad y referencia coinciden, la dirección no es
+    afirmable ni refutable."""
+    ctx = {"indicators": {"morosidad": {"raw": 1.52}},
+           "benchmarks": {"peer_groups": {"large_banks": {"npl_avg": 1.5}}}}
+    text = "la mora de 1.5% está por debajo del promedio de pares (1.5%)."
+    assert deterministic_direction_errors(ctx, text) == []
+
+
+def test_rounded_citation_still_matches():
+    """Citar 1.7% para una mora real de 1.67% es redondeo legítimo — y sigue siendo un
+    error de dirección contra 1.5%."""
+    text = "la mora de 1.7% se sitúa por debajo del promedio de pares grandes (1.5%)."
+    flags = deterministic_direction_errors(_bank_ctx(), text)
+    assert any("morosidad" in f for f in flags), flags
+
+
+def test_subcomponent_context_key_supported():
+    """Las secciones de sub-componente usan la clave 'indicadores' (en español)."""
+    ctx = {"indicadores": {"morosidad": {"raw": 1.67}},
+           "benchmarks": {"peer_groups": {"large_banks": {"npl_avg": 1.5}}}}
+    text = "una mora de 1.67%, inferior a la del promedio de pares grandes (1.5%)."
+    assert deterministic_direction_errors(ctx, text)
+
+
+def test_unknown_indicator_is_never_judged():
+    """Sin benchmark reconocido no se emite veredicto (seguros/pensiones usan otras claves)."""
+    ctx = {"indicators": {"siniestralidad": {"raw": 80.0}}, "benchmarks": {}}
+    text = "una siniestralidad de 80.0% por debajo del promedio de 60.0%."
+    assert deterministic_direction_errors(ctx, text) == []
+
+
+def test_empty_and_missing_context_are_safe():
+    assert deterministic_direction_errors({}, "texto sin cifras") == []
+    assert deterministic_direction_errors(_bank_ctx(), "") == []
+
+
+def test_contrastive_pair_not_flagged_bpd():
+    """Falso positivo REAL (BPD, sección Liquidez): 'supera el mínimo (15%) PERO se sitúa
+    por debajo del promedio (28.5%)' es prosa CORRECTA — el 28.5 es operando del segundo
+    marcador, no del primero."""
+    ctx = {"indicators": {"liquidez_inmediata": {"raw": 22.2888}},
+           "benchmarks": {"sector_averages": {"liquidity_ratio": 28.5}}}
+    text = ("La liquidez inmediata de 22.29% supera el mínimo regulatorio (15%) pero se "
+            "sitúa por debajo del promedio sectorial (28.5%), lo que indica márgenes de "
+            "corto plazo más ajustados.")
+    assert deterministic_direction_errors(ctx, text) == []
+
+
+def test_contrastive_chain_with_two_references_not_flagged_lafise():
+    """Falso positivo REAL (Lafise): 'supera el mínimo de 10.0% y el piso de 10.5%, pero se
+    sitúa por debajo del promedio (16.5%) y por debajo de la banca mediana (17.2%)' — las
+    tres afirmaciones son correctas y cada referencia pertenece a su propio marcador."""
+    ctx = {"indicators": {"solvencia": {"raw": 11.57}},
+           "benchmarks": {"sector_averages": {"car": 16.5},
+                          "peer_groups": {"medium_banks": {"car_avg": 17.2}}}}
+    text = ("El índice de adecuación de capital (ICAP) de 11.57% supera el mínimo "
+            "regulatorio de 10.0% y el piso de Basilea III de 10.5%, pero se sitúa 4.93 "
+            "puntos porcentuales por debajo del promedio del sistema (16.5%) y 5.63 puntos "
+            "por debajo de la banca mediana (17.2%).")
+    assert deterministic_direction_errors(ctx, text) == []
+
+
+def test_second_marker_still_judged_when_actually_wrong():
+    """El corte por marcador no debe volverse ciego: si la afirmación del SEGUNDO marcador
+    es falsa, se marca igual."""
+    ctx = {"indicators": {"morosidad": {"raw": 1.67}},
+           "benchmarks": {"peer_groups": {"large_banks": {"npl_avg": 1.5}}}}
+    text = ("La mora de 1.67% supera el umbral interno de 1.2% y se sitúa por debajo del "
+            "promedio de pares grandes (1.5%).")
+    flags = deterministic_direction_errors(ctx, text)
+    assert any("morosidad" in f for f in flags), flags
+
+
+def test_wrapped_sentence_across_lines_is_still_checked():
+    """El texto renderizado envuelve la oración en varias líneas; cortar por '\\n' dejaba el
+    sujeto y la referencia en fragmentos distintos y el error se escapaba."""
+    text = ("La tasa de mora (1.67%) se sitúa por debajo del umbral de alerta\n"
+            "regulatoria y del promedio del grupo de bancos grandes (1.5%), con el\n"
+            "98.25% de la cartera en la categoría de menor riesgo.")
+    assert deterministic_direction_errors(_bank_ctx(), text)

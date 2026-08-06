@@ -64,6 +64,18 @@ CORRECTION_NOTICE = (
     "explícitas de ellos). Si no tenés una cifra, no la des."
 )
 
+# Aviso PROPIO para la dirección invertida: acá las cifras SÍ están en el contexto y son
+# correctas — lo que está mal es el sentido de la comparación. Reusar CORRECTION_NOTICE
+# mandaría al modelo a "no inventar cifras", que no es el problema, y probablemente le
+# haría borrar la comparación en vez de corregirle el signo.
+DIRECTION_CORRECTION_NOTICE = (
+    "\n\nCORRECCIÓN OBLIGATORIA: en una versión previa de este análisis una comparación "
+    "quedó INVERTIDA respecto de los datos: {bad}. Las cifras son correctas; lo que está "
+    "mal es el sentido. Reescribí esas afirmaciones con la dirección correcta (restá y "
+    "mirá el signo antes de escribir 'por encima' / 'por debajo'), sin alterar ningún "
+    "número y sin eliminar la comparación."
+)
+
 
 def _parse_unsupported(raw: str) -> List[str]:
     """Extract the ``unsupported`` list from the judge's JSON reply (tolerant)."""
@@ -399,6 +411,167 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
         logger.warning("Chequeo determinista falló (se omite): %s", e)
         return flags
     # dedupe preservando orden
+    seen, out = set(), []
+    for f in flags:
+        if f not in seen:
+            seen.add(f)
+            out.append(f)
+    return out
+
+
+# ─── Dirección de las comparaciones ──────────────────────────────────────────────
+#
+# Modo de error DISTINTO al de `deterministic_unsupported`: ahí la cifra no se traza al
+# contexto; acá las DOS cifras están en el contexto y son correctas, pero el sentido de la
+# comparación está invertido ("la mora de 1.67% se sitúa por debajo del promedio de pares
+# (1.5%)"). El juez LLM no lo ve —corrió sobre ese texto y lo dejó pasar—, y no debería:
+# comparar dos floats es decidible, así que se resuelve mecánicamente y con garantía.
+
+# Indicador → clave del benchmark. Espeja el mapeo de ``shared/data/sib_client.py``; se
+# replica acá a propósito para no acoplar el guardrail de narrativa (transversal) al
+# cliente de datos de banca.
+_BENCH_KEY = {
+    "solvencia": "car",
+    "morosidad": "npl",
+    "roa": "roa",
+    "roe": "roe",
+    "margen_financiero": "nim",
+    "cost_to_income": "cost_to_income",
+    "liquidez_inmediata": "liquidity_ratio",
+    "leverage": "leverage_ratio",
+    "cobertura_provisiones": "coverage_ratio",
+    "ltd": "ltd",
+}
+
+_MENOR = r"por\s+debajo|inferior(?:es)?\s+a|menor(?:es)?\s+(?:que|a)"
+_MAYOR = r"por\s+encima|superior(?:es)?\s+a|supera|excede|mayor(?:es)?\s+(?:que|a)"
+_CITED = re.compile(r"(\d+(?:[.,]\d+)?)\s*%")
+
+
+def _cited_matches(cited: str, value: float) -> bool:
+    """¿La cifra citada *cited* es este *value*, a la precisión con que fue escrita?
+
+    Comparar con una tolerancia absoluta fija no sirve acá: ``_TOL`` (0.3) se tragaría
+    justo el caso real (1.67 vs 1.5 difieren 0.17). Se compara redondeando el valor a los
+    decimales que el autor escribió — así "1.7" y "1.67" ambos casan con 1.67, pero 1.5 no.
+    """
+    txt = cited.replace(",", ".")
+    decimals = len(txt.split(".")[1]) if "." in txt else 0
+    try:
+        return abs(round(value, decimals) - float(txt)) < 1e-9
+    except (TypeError, ValueError):
+        return False
+
+
+def _direction_refs(context: dict) -> List[tuple]:
+    """``[(indicador, valor_entidad, [(etiqueta_referencia, valor), ...]), ...]``.
+
+    Tolerante por diseño: acepta las dos grafías de la clave de indicadores (``indicators``
+    en las secciones de panorama, ``indicadores`` en las de sub-componente) y si no
+    reconoce el indicador simplemente no lo evalúa — nunca inventa un veredicto.
+    """
+    inds = context.get("indicators") or context.get("indicadores") or {}
+    bench = context.get("benchmarks") or {}
+    sector = bench.get("sector_averages") or {}
+    peers = bench.get("peer_groups") or {}
+    out: List[tuple] = []
+    for name, blob in inds.items():
+        bkey = _BENCH_KEY.get(name)
+        if not bkey or not isinstance(blob, dict):
+            continue
+        raw_val = blob.get("raw")
+        if raw_val is None:
+            continue
+        try:
+            raw = float(raw_val)
+        except (TypeError, ValueError):
+            continue
+        refs = []
+        if sector.get(bkey) is not None:
+            try:
+                refs.append(("promedio sectorial", float(sector[bkey])))
+            except (TypeError, ValueError):
+                pass
+        for gname, grp in peers.items():
+            if not isinstance(grp, dict):
+                continue
+            v = grp.get(f"{bkey}_avg")
+            if v is None:
+                continue
+            try:
+                refs.append((f"promedio {gname}", float(v)))
+            except (TypeError, ValueError):
+                pass
+        if refs:
+            out.append((name, raw, refs))
+    return out
+
+
+def deterministic_direction_errors(context: dict, text: str) -> List[str]:
+    """Comparaciones del *text* cuyo SENTIDO contradice los datos del contexto.
+
+    Solo evalúa el subconjunto DECIDIBLE, y por eso puede dar garantía: exige reconocer,
+    en la misma oración, el valor de la entidad y un valor de referencia CONOCIDO del MISMO
+    indicador, con el valor de la entidad ANTES del marcador direccional y la referencia
+    DESPUÉS —el orden que hace de la entidad el sujeto de la comparación— y ADEMÁS que esa
+    referencia sea el operando de ESE marcador y no de uno posterior.
+
+    Cada una de esas restricciones nació de un falso positivo REAL sobre PDFs de venta:
+    umbrales prospectivos ("si la solvencia cae por debajo de 18%"), cláusulas encadenadas
+    por punto y coma, filas de tabla pegadas a la frase siguiente, y sobre todo el patrón
+    "X supera el mínimo (10%) PERO se sitúa por debajo del promedio (16.5%)", que es prosa
+    correcta. Un guard que grita en falso se vuelve ruido que se aprende a ignorar, así que
+    ante la duda NO marca. Best-effort: nunca lanza.
+    """
+    flags: List[str] = []
+    try:
+        refs = _direction_refs(context)
+        if not refs:
+            return []
+        # Se corta SOLO por puntuación de fin de cláusula, nunca por salto de línea: una
+        # oración larga viene envuelta en varias líneas y partirla ahí deja el sujeto en un
+        # fragmento y la referencia en el siguiente (falso NEGATIVO — así se escapaba el
+        # caso real de BPD al leerlo del PDF). Las filas de tabla, que no traen punto, no
+        # necesitan corte: el pareo por MISMO indicador ya impide cruzar sus números.
+        for sent in re.split(r"(?<=[.;:])\s+", re.sub(r"\s+", " ", text)):
+            marks = sorted(
+                [(m.start(), m.end(), kind)
+                 for kind, pat in (("menor", _MENOR), ("mayor", _MAYOR))
+                 for m in re.finditer(pat, sent, re.I)]
+            )
+            for i, (start, end, kind) in enumerate(marks):
+                # La referencia debe ser el operando de ESTE marcador: la ventana derecha
+                # termina donde empieza el siguiente. Sin ese corte, en "supera el mínimo
+                # (10%) PERO se sitúa por debajo del promedio (16.5%)" —prosa correcta— el
+                # 16.5 del segundo marcador se leía como operando de "supera" y se marcaba
+                # un error inexistente. La ventana izquierda sí queda abierta: el sujeto se
+                # enuncia una vez al principio y los marcadores siguientes lo eliden.
+                stop = marks[i + 1][0] if i + 1 < len(marks) else len(sent)
+                left, right = sent[:start], sent[end:stop]
+                cited_l = _CITED.findall(left)
+                cited_r = _CITED.findall(right)
+                if not cited_l or not cited_r:
+                    continue
+                for name, raw, candidates in refs:
+                    if not any(_cited_matches(c, raw) for c in cited_l):
+                        continue
+                    for label, ref in candidates:
+                        # Si entidad y referencia son indistinguibles a la precisión
+                        # citada, la dirección no es afirmable ni refutable: se salta.
+                        if any(_cited_matches(c, raw) and _cited_matches(c, ref)
+                               for c in cited_r):
+                            continue
+                        if not any(_cited_matches(c, ref) for c in cited_r):
+                            continue
+                        if (raw < ref) if kind == "menor" else (raw > ref):
+                            continue
+                        sentido = "por debajo" if kind == "menor" else "por encima"
+                        flags.append(
+                            f"{name}: se afirma que {raw} está {sentido} del {label} "
+                            f"({ref}), pero es al revés")
+    except Exception as e:  # noqa: BLE001 — best-effort; jamás rompe la generación
+        logger.warning("Chequeo de dirección no pudo completarse: %s", e)
+        return flags
     seen, out = set(), []
     for f in flags:
         if f not in seen:
