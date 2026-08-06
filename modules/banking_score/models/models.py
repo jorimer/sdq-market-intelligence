@@ -292,7 +292,9 @@ class Report(UUIDMixin, Base):
     """Generated PDF report."""
     __tablename__ = "reports"
 
-    bank_id = Column(String, ForeignKey("banks.id"), nullable=False)
+    # NULL = informe de SISTEMA (criteria/wire/datawatch/sector_outlook): describe la
+    # metodología o el sistema entero, no cuelga de una entidad.
+    bank_id = Column(String, ForeignKey("banks.id"), nullable=True)
     period_end = Column(Date, nullable=True)
 
     report_type = Column(Enum(ReportType), nullable=False)
