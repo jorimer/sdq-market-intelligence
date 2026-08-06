@@ -799,6 +799,67 @@ class TestReportDownload:
         assert resp.status_code == 404
 
 
+class TestSystemReportPersistence:
+    """Los informes de SISTEMA (criteria/wire/datawatch/sector_outlook) no cuelgan de un
+    banco. Antes solo devolvían una ruta del FS efímero: sin fila ``Report`` no había
+    ``report_id`` y por tanto no eran descargables. Ahora siguen el mismo contrato que el
+    endpoint por banco."""
+
+    ENDPOINTS = [
+        ("criteria", "/api/v1/banking-score/reports/criteria/generate"),
+        ("wire", "/api/v1/banking-score/reports/wire/generate?period_end=2024-12-31"),
+        ("datawatch", "/api/v1/banking-score/reports/datawatch/generate?period_end=2024-12-31"),
+        ("sector_outlook",
+         "/api/v1/banking-score/reports/sector-outlook/generate?period_end=2024-12-31"),
+    ]
+
+    @pytest.mark.parametrize("report_type,url", ENDPOINTS)
+    def test_system_report_is_persisted_and_downloadable(self, report_type, url):
+        headers = auth_headers(register_and_login())
+
+        gen = client.post(url, headers=headers)
+        assert gen.status_code == 200
+        body = gen.json()
+        assert body["success"] is True
+        assert body["report_type"] == report_type
+        rid = body["report_id"]
+        assert rid, "el informe de sistema debe devolver un report_id descargable"
+
+        from modules.banking_score.models.models import Report, ReportStatus
+        db = TestSessionLocal()
+        row = db.query(Report).filter_by(id=rid).first()
+        assert row is not None
+        assert row.bank_id is None          # informe de sistema: sin entidad
+        assert row.status == ReportStatus.completed
+        assert row.file_blob                # bytes durables, no solo la ruta en disco
+        assert row.file_size == len(row.file_blob)
+        db.close()
+
+        dl = client.get(f"/api/v1/banking-score/reports/download/{rid}", headers=headers)
+        assert dl.status_code == 200
+        assert dl.headers["content-type"] == "application/pdf"
+        assert dl.content.startswith(b"%PDF")
+        # `criteria` no tiene período: el nombre no debe arrastrar un "None".
+        assert "None" not in dl.headers["content-disposition"]
+
+    def test_system_report_survives_disk_loss(self):
+        """El PDF se sirve del blob aunque el archivo del contenedor desaparezca."""
+        from pathlib import Path
+        headers = auth_headers(register_and_login())
+        rid = client.post(self.ENDPOINTS[0][1], headers=headers).json()["report_id"]
+
+        from modules.banking_score.models.models import Report
+        db = TestSessionLocal()
+        path = db.query(Report).filter_by(id=rid).first().file_path
+        db.close()
+        if path:
+            Path(path).unlink(missing_ok=True)
+
+        resp = client.get(f"/api/v1/banking-score/reports/download/{rid}", headers=headers)
+        assert resp.status_code == 200
+        assert resp.content.startswith(b"%PDF")
+
+
 try:
     import xgboost as _xgb  # noqa: F401
     _XGB_OK = True

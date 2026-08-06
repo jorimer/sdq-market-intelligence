@@ -36,6 +36,102 @@ _NARRATIVE_DEGRADED_MSG = (
     "del servicio de generación. Reintente en unos minutos."
 )
 
+# Informes de SISTEMA: no cuelgan de una entidad (``bank_id`` NULL). Describen la
+# metodología (criteria) o el sistema entero (wire/datawatch/sector_outlook).
+_SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook"}
+
+
+def _attach_pdf(report: Report, file_path: str, narratives: dict) -> None:
+    """Marca el reporte completado y guarda los bytes del PDF en la DB.
+
+    El archivo en disco vive en el FS EFÍMERO del contenedor y desaparece en cada
+    redeploy; sin el blob la fila sobrevive pero la re-descarga da 404. ``file_path`` se
+    conserva por compatibilidad y para derivar el nombre de archivo.
+    """
+    from pathlib import Path
+
+    pdf_bytes = Path(file_path).read_bytes()
+    report.status = ReportStatus.completed
+    report.file_path = file_path
+    report.file_blob = pdf_bytes
+    report.file_size = len(pdf_bytes)
+    report.completed_at = datetime.now(timezone.utc)
+    report.narrative_model = "claude" if narratives else "none"
+
+
+async def _generate_system_report(
+    *,
+    report_type: str,
+    scope_name: str,
+    period: str,
+    db: Session,
+    current_user: User,
+    benchmarks: dict | None = None,
+    extra: dict | None = None,
+) -> dict:
+    """Genera y PERSISTE un informe de sistema, devolviendo un ``report_id`` descargable.
+
+    Estos boletines antes solo devolvían ``file_path``: sin fila ``Report`` no existía
+    ``GET /reports/download/{report_id}`` para ellos, y el PDF moría con el FS efímero
+    del contenedor. Ahora siguen el mismo contrato que el endpoint por banco.
+    """
+    from modules.banking_score.reports.narrative import generate_report_narratives
+    from modules.banking_score.reports.pdf_generator import generate_pdf_report
+
+    pe = None
+    if period:
+        try:
+            pe = date.fromisoformat(period)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+
+    report = Report(
+        bank_id=None,
+        period_end=pe,
+        report_type=ReportType(report_type),
+        status=ReportStatus.generating,
+        narrative_model="pending",
+        generated_by=current_user.id,
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+
+    scoring_result = {
+        "overall_score": 0, "rating_tier": "N/A", "sub_components": {}, "indicators": {},
+    }
+    try:
+        narratives = await generate_report_narratives(
+            report_type=report_type, bank_name=scope_name,
+            scoring_result=scoring_result, period=period, benchmarks=benchmarks,
+        )
+        file_path = await generate_pdf_report(
+            report_type=report_type, bank_name=scope_name,
+            scoring_result=scoring_result, period=period, narratives=narratives,
+        )
+        _attach_pdf(report, file_path, narratives)
+    except Exception as e:
+        logger.error("%s generation failed: %s", report_type, e)
+        report.status = ReportStatus.error
+        report.error_message = str(e)
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    db.commit()
+    logger.info("Informe de sistema %s generado | ID=%s | %d bytes",
+                report_type, report.id, report.file_size or 0)
+
+    return {
+        "success": True,
+        "report_id": report.id,
+        "report_type": report_type,
+        "period_end": period or None,
+        "status": report.status.value,
+        "file_path": report.file_path,
+        **(extra or {}),
+    }
+
 
 # ═══════════════════════════════════════════════════════════════
 # STATIC ROUTES — must come BEFORE /{bank_id}/* dynamic routes
@@ -64,9 +160,14 @@ async def download_report(
             detail=f"Reporte no completado (estado: {report.status.value})",
         )
 
-    bank = db.query(Bank).filter_by(id=report.bank_id).first()
-    bank_name = (bank.name if bank else "entity").replace(" ", "_")
-    filename = f"SDQ_{report.report_type.value}_{bank_name}_{report.period_end}.pdf"
+    # Un informe de sistema no tiene banco ni, en el caso de `criteria`, período: el
+    # nombre se arma con las partes que existen para no emitir "..._None.pdf".
+    bank = db.query(Bank).filter_by(id=report.bank_id).first() if report.bank_id else None
+    scope = (bank.name if bank else "Sistema").replace(" ", "_")
+    parts = [f"SDQ_{report.report_type.value}", scope]
+    if report.period_end:
+        parts.append(str(report.period_end))
+    filename = "_".join(parts) + ".pdf"
 
     # Primary: serve the PDF bytes from the DB (durable, survives redeploys).
     if report.file_blob:
@@ -180,8 +281,9 @@ async def generate_communique(
             period=str(action.period_end),
             narratives=narratives,
         )
-        report.status = ReportStatus.completed
-        report.file_path = file_path
+        # Mismo defecto que tenían las rutas estáticas: sin el blob la fila sobrevive al
+        # redeploy pero la descarga da 404 (el FS del contenedor es efímero).
+        _attach_pdf(report, file_path, narratives)
     except Exception as e:
         logger.error("Communiqué PDF failed: %s", e)
         report.status = ReportStatus.error
@@ -212,23 +314,10 @@ async def generate_wire(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        from modules.banking_score.reports.narrative import generate_report_narratives
-        from modules.banking_score.reports.pdf_generator import generate_pdf_report
-
-        scoring_result = {"overall_score": 0, "rating_tier": "N/A", "sub_components": {}, "indicators": {}}
-        narratives = await generate_report_narratives(
-            report_type="wire", bank_name="Sistema Bancario",
-            scoring_result=scoring_result, period=period_end,
-        )
-        file_path = await generate_pdf_report(
-            report_type="wire", bank_name="Sistema Bancario",
-            scoring_result=scoring_result, period=period_end, narratives=narratives,
-        )
-        return {"success": True, "file_path": file_path, "period_end": period_end}
-    except Exception as e:
-        logger.error("Wire generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _generate_system_report(
+        report_type="wire", scope_name="Sistema Bancario", period=period_end,
+        db=db, current_user=current_user,
+    )
 
 
 # ─── DataWatch ───────────────────────────────────────────────────
@@ -243,25 +332,13 @@ async def generate_datawatch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        from modules.banking_score.reports.narrative import generate_report_narratives
-        from modules.banking_score.reports.pdf_generator import generate_pdf_report
-        from modules.banking_score.external.sib_client import sib_client
+    from modules.banking_score.external.sib_client import sib_client
 
-        benchmarks = sib_client.get_sector_benchmarks()
-        scoring_result = {"overall_score": 0, "rating_tier": "N/A", "sub_components": {}, "indicators": {}}
-        narratives = await generate_report_narratives(
-            report_type="datawatch", bank_name="Sistema Bancario",
-            scoring_result=scoring_result, period=period_end, benchmarks=benchmarks,
-        )
-        file_path = await generate_pdf_report(
-            report_type="datawatch", bank_name="Sistema Bancario",
-            scoring_result=scoring_result, period=period_end, narratives=narratives,
-        )
-        return {"success": True, "file_path": file_path, "period_end": period_end}
-    except Exception as e:
-        logger.error("DataWatch generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _generate_system_report(
+        report_type="datawatch", scope_name="Sistema Bancario", period=period_end,
+        db=db, current_user=current_user,
+        benchmarks=sib_client.get_sector_benchmarks(),
+    )
 
 
 # ─── Sector Outlook ──────────────────────────────────────────────
@@ -277,25 +354,14 @@ async def generate_sector_outlook(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        from modules.banking_score.reports.narrative import generate_report_narratives
-        from modules.banking_score.reports.pdf_generator import generate_pdf_report
-        from modules.banking_score.external.sib_client import sib_client
+    from modules.banking_score.external.sib_client import sib_client
 
-        benchmarks = sib_client.get_sector_benchmarks()
-        scoring_result = {"overall_score": 0, "rating_tier": "N/A", "sub_components": {}, "indicators": {}}
-        narratives = await generate_report_narratives(
-            report_type="sector_outlook", bank_name=f"Sector: {sector}",
-            scoring_result=scoring_result, period=period_end, benchmarks=benchmarks,
-        )
-        file_path = await generate_pdf_report(
-            report_type="sector_outlook", bank_name=f"Sector: {sector}",
-            scoring_result=scoring_result, period=period_end, narratives=narratives,
-        )
-        return {"success": True, "file_path": file_path, "period_end": period_end, "sector": sector}
-    except Exception as e:
-        logger.error("Sector Outlook generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _generate_system_report(
+        report_type="sector_outlook", scope_name=f"Sector: {sector}", period=period_end,
+        db=db, current_user=current_user,
+        benchmarks=sib_client.get_sector_benchmarks(),
+        extra={"sector": sector},
+    )
 
 
 # ─── Criteria ────────────────────────────────────────────────────
@@ -309,23 +375,10 @@ async def generate_criteria(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        from modules.banking_score.reports.narrative import generate_report_narratives
-        from modules.banking_score.reports.pdf_generator import generate_pdf_report
-
-        scoring_result = {"overall_score": 0, "rating_tier": "N/A", "sub_components": {}, "indicators": {}}
-        narratives = await generate_report_narratives(
-            report_type="criteria", bank_name="SDQ Rating",
-            scoring_result=scoring_result, period="",
-        )
-        file_path = await generate_pdf_report(
-            report_type="criteria", bank_name="SDQ Rating",
-            scoring_result=scoring_result, period="", narratives=narratives,
-        )
-        return {"success": True, "file_path": file_path}
-    except Exception as e:
-        logger.error("Criteria generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _generate_system_report(
+        report_type="criteria", scope_name="SDQ Rating", period="",
+        db=db, current_user=current_user,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -446,17 +499,7 @@ async def generate_report(
             period=period_end,
             narratives=narratives,
         )
-        # Persist the PDF bytes in the DB (durable). The disk file lives on the
-        # container's ephemeral FS and vanishes on redeploy — without this, the
-        # row survives but re-download 404s. Keep file_path for filename/compat.
-        from pathlib import Path
-        pdf_bytes = Path(file_path).read_bytes()
-        report.status = ReportStatus.completed
-        report.file_path = file_path
-        report.file_blob = pdf_bytes
-        report.file_size = len(pdf_bytes)
-        report.completed_at = datetime.now(timezone.utc)
-        report.narrative_model = "claude" if narratives else "none"
+        _attach_pdf(report, file_path, narratives)
     except NarrativeDegradedError as d:
         # No es un fallo de código: es degradación transitoria del servicio de narrativa.
         # Se marca `error` (con las secciones afectadas) y se responde 503 (reintento).
