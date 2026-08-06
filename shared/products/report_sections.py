@@ -12,7 +12,7 @@ Anonimización-seguras: hablan de fuentes/cobertura, no de entidades.
 """
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 from shared.products.tiers import ProductTier
 
@@ -40,9 +40,40 @@ def _pct(x) -> str:
         return "—"
 
 
-def _methodology_md(sig, val) -> str:
-    """Markdown de Metodología desde ``DataHealth`` (sig) + ``ValidationState`` (val)."""
+def _periodo_posterior(texto: str, corte: str) -> bool:
+    """¿*texto* menciona una fecha ISO POSTERIOR a *corte*? Conservador: sin fecha → False.
+
+    Sirve para no imprimir, en un informe fechado al corte, una lectura del dato que habla
+    de un período que todavía no había ocurrido.
+    """
+    import re as _re
+
+    if not corte:
+        return False
+    c = str(corte)[:10]
+    for m in _re.finditer(r"\d{4}-\d{2}(?:-\d{2})?", str(texto or "")):
+        f = m.group(0)
+        if len(f) == 7:            # 'YYYY-MM' → compara al mismo grano
+            if f > c[:7]:
+                return True
+        elif f > c:
+            return True
+    return False
+
+
+def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
+    """Markdown de Metodología desde ``DataHealth`` (sig) + ``ValidationState`` (val).
+
+    ``as_of`` es el CORTE del informe. Con él, la metodología deja de hablar del estado
+    actual de la plataforma y habla del informe: la frescura se ancla al corte y se omite
+    una "lectura del dato" que mencione un período posterior. Un informe "al 31-dic-2025"
+    que declara cobertura a marzo-2026 es la misma inconsistencia que la trayectoria que ya
+    se recortó, solo que en la sección de metodología.
+    """
     lines = []
+    if as_of:
+        lines.append(f"**Corte del informe:** {as_of}. Todas las cifras, posiciones y capas "
+                     "de contexto de este documento corresponden a esa fecha.")
     sources = ", ".join(s for s in (sig.sources or ()) if s) if sig else ""
     lines.append(f"**Fuentes de dato:** {sources or '—'}.")
     cadence = (sig.cadence if sig else None) or "—"
@@ -54,8 +85,9 @@ def _methodology_md(sig, val) -> str:
     if sig and sig.coverage is not None:
         lines.append(f"**Cobertura:** {_pct(sig.coverage)} del índice se sostiene en dato real; "
                      "lo no cubierto se declara como rúbrica o brecha — nunca se fabrica.")
-    if sig and getattr(sig, "detail", None):
-        lines.append(f"**Lectura del dato:** {sig.detail}")
+    detail = getattr(sig, "detail", None) if sig else None
+    if detail and not _periodo_posterior(detail, as_of or ""):
+        lines.append(f"**Lectura del dato:** {detail}")
     if val is not None:
         note = f" {val.notes}" if getattr(val, "notes", None) else ""
         score = getattr(val, "score", None)
@@ -100,7 +132,8 @@ def _sources_md(sig) -> str:
     return "\n".join(out)
 
 
-def standard_sections(product, tier: ProductTier) -> Dict[str, str]:
+def standard_sections(product, tier: ProductTier,
+                      as_of: Optional[str] = None) -> Dict[str, str]:
     """``{key: markdown}`` de las secciones estándar para *product* en *tier*.
 
     Derivadas de ``product.data_signals()`` + ``product.validation_state()``. Tier-gated:
@@ -116,7 +149,7 @@ def standard_sections(product, tier: ProductTier) -> Dict[str, str]:
         val = product.validation_state()
     except Exception:  # noqa: BLE001
         val = None
-    methodology = _methodology_md(sig, val)
+    methodology = _methodology_md(sig, val, as_of)
     # Procedencia POR VARIABLE, generada del registro en vivo — nunca prosa escrita a
     # mano (lección Hallazgo 7: la prosa que afirma procedencia envejece con cada
     # conector; la generada no puede divergir del estado real porque ES el estado real).

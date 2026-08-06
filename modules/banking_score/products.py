@@ -14,6 +14,7 @@ verifica con el roster que ``snapshot`` adjunta).
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Any, Dict, List, Optional, cast
 
@@ -39,6 +40,8 @@ from modules.banking_score.scoring.market_concentration import compute_market_co
 from modules.banking_score.scoring.sensitivity import sensitivity_table
 from modules.banking_score.scoring.support import support_overlay
 from modules.banking_score.scoring.system_aggregate import system_pulse_aggregate
+
+logger = logging.getLogger("sdq.banking.products")
 
 SECTOR_KEY = "banking"
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
@@ -324,6 +327,27 @@ def _parse_period(period: Optional[str]) -> Optional[date]:
 _NAMED_PEERS_TOP_N = 5
 
 
+def _posterior_al_corte(periodo: Optional[str], corte: date) -> bool:
+    """¿*periodo* (``YYYY``, ``YYYY-MM`` o ``YYYY-MM-DD``) cae DESPUÉS del corte del informe?
+
+    Regla del informe: el corte manda sobre TODA la información mostrada. Una capa de
+    contexto fechada más adelante que la portada se omite, no se rotula — rotularla fue lo
+    que llevó al modelo a inventar "proyectado"/"preliminar" para explicar una cifra del
+    futuro. Ante un período no parseable devuelve False: no se oculta por las dudas.
+    """
+    p = str(periodo or "").strip()
+    if not p:
+        return False
+    try:
+        if len(p) == 4:                      # "2026" → compara contra el año del corte
+            return int(p) > corte.year
+        if len(p) == 7:                      # "2026-03"
+            return (int(p[:4]), int(p[5:7])) > (corte.year, corte.month)
+        return date.fromisoformat(p[:10]) > corte
+    except (ValueError, TypeError):
+        return False
+
+
 def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str, object]]:
     """Pares NOMBRADOS de *bank* en *period_end*: su posición (sistema y mismo tipo) + los
     líderes de su MISMO TIPO con score/rating reales. Complementa el percentil (anónimo) con
@@ -539,8 +563,16 @@ class BankingProduct:
             # Solo factores con dato real; si no hay contrato, se omite (no se fabrica).
             macro = load_macro_contract(db)
             factors = [f for f in (macro.get("factors") or []) if f.get("direction") != "n/d"]
-            if factors:
+            # El telón macro es el ÚLTIMO snapshot disponible, no una serie que se pueda
+            # cortar: si su período es POSTERIOR al corte del informe, se omite. Un informe
+            # "al 31-dic-2025" no puede describir el entorno macro de 2026 — el corte debe
+            # ser cónsono con TODA la información mostrada, no solo con la trayectoria.
+            # Omitir es la salida honesta: la alternativa sería mostrar contexto del futuro.
+            if factors and not _posterior_al_corte(macro.get("period"), cast(date, rr.period_end)):
                 scoring_result["entorno_macro"] = {"period": macro.get("period"), "factors": factors}
+            elif factors:
+                logger.info("Entorno Operativo omitido: el telón macro (%s) es posterior al "
+                            "corte del informe (%s).", macro.get("period"), rr.period_end)
             # Sensibilidades: qué sube / qué baja el score, con umbral en valor crudo.
             scoring_result["sensibilidades"] = sensitivity_table(
                 scoring_result["indicators"], entity_type)

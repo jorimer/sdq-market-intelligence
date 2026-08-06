@@ -45,6 +45,36 @@ def sovereign_anchor(db: Optional[Session] = None) -> Dict[str, Any]:
     return combined_anchor(COUNTRY, db=db)
 
 
+def _after(fecha: Any, corte: date) -> bool:
+    """¿La fecha ISO *fecha* es POSTERIOR al corte del informe? No parseable → False."""
+    try:
+        return date.fromisoformat(str(fecha)[:10]) > corte
+    except (ValueError, TypeError):
+        return False
+
+
+def _sovereign_as_of(sov: Dict[str, Any], corte: date) -> Dict[str, Any]:
+    """Ancla soberana vista DESDE el corte del informe.
+
+    El rating soberano vigente al corte es dato legítimo, pero dos fechas del sobre pueden
+    ser posteriores y no deben mostrarse en un informe fechado antes: la ``affirm_date`` (la
+    anotación humana de "verifiqué que sigue vigente", que es metadato de verificación, no
+    un hecho del período) y cualquier agencia cuya ÚLTIMA ACCIÓN ocurrió después del corte
+    —esa acción todavía no existía—. El corte debe ser cónsono con TODA la información
+    mostrada. No se altera el rating ni el score: solo se recorta lo que aún no había pasado.
+    """
+    out = dict(sov or {})
+    if _after(out.get("affirm_date"), corte):
+        out["affirm_date"] = None
+    if _after(out.get("as_of"), corte):
+        # La acción del ancla es posterior al corte: no hay ancla verificable a esa fecha.
+        out["as_of"] = None
+    ags = [a for a in (out.get("agencies") or [])
+           if not _after((a or {}).get("action_date"), corte)]
+    out["agencies"] = ags
+    return out
+
+
 def _entity_share(db: Session, bank: Bank, period_end: date, metric: str) -> Optional[Dict[str, Any]]:
     """Cuota (%) y rank de *bank* en *metric* (activos/depósitos) del universo EIF, o None
     si no está entre los mayores (top-10) o no hay dato."""
@@ -119,7 +149,7 @@ def support_overlay(db: Session, bank: Bank, standalone_score: float,
     else:
         sys_label = "No sistémica (fuera del top-10 por activos)"
 
-    sov = sovereign_anchor(db)
+    sov = _sovereign_as_of(sovereign_anchor(db), period_end)
     return {
         "state_owned": state_owned,
         # Procedencia del flag: set de configuración declarado (regla de casa), no un
