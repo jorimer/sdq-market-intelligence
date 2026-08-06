@@ -1330,7 +1330,8 @@ class NarrativeEngine:
         recording figures still unverified (if the regen also failed) — best-effort, never
         blanks the insight."""
         from shared.narrative.numeric_guard import (
-            CORRECTION_NOTICE, deterministic_unsupported, verify_figures)
+            CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE,
+            deterministic_direction_errors, deterministic_unsupported, verify_figures)
 
         def _gen(user_msg):
             resp = _call_with_transient_retry(
@@ -1344,7 +1345,11 @@ class NarrativeEngine:
 
         guard_model = settings.ANTHROPIC_GUARD_MODEL
 
-        def _check(text: str) -> list:
+        def _check(text: str) -> tuple:
+            """``(cifras_sin_respaldo, comparaciones_invertidas)`` — se devuelven POR
+            SEPARADO porque piden correcciones distintas: una cifra sin respaldo se corrige
+            no inventando; una dirección invertida se corrige cambiándole el signo SIN tocar
+            los números (y sin borrar la comparación)."""
             # determinista primero (gratis, garantía mecánica) + juez LLM (semántico)
             det = deterministic_unsupported(context or {}, text)
             llm = verify_figures(client, guard_model, context_str, text)
@@ -1353,26 +1358,32 @@ class NarrativeEngine:
                 if f not in seen:
                     seen.add(f)
                     merged.append(f)
-            return merged
+            return merged, deterministic_direction_errors(context or {}, text)
 
         result = _gen(user)
-        bad = _check(result.text)
-        if bad:
-            logger.warning("Guardrail (%s): cifras sin respaldo %s — regenerando una vez",
-                           template, bad)
+        bad, wrong_dir = _check(result.text)
+        if bad or wrong_dir:
+            logger.warning("Guardrail (%s): cifras sin respaldo %s | dirección invertida %s "
+                           "— regenerando una vez", template, bad, wrong_dir)
             try:
-                corrected = _gen(user + CORRECTION_NOTICE.format(bad="; ".join(bad)))
+                notice = ""
+                if bad:
+                    notice += CORRECTION_NOTICE.format(bad="; ".join(bad))
+                if wrong_dir:
+                    notice += DIRECTION_CORRECTION_NOTICE.format(bad="; ".join(wrong_dir))
+                corrected = _gen(user + notice)
                 # acumula tokens/costo de ambas llamadas (transparencia)
                 corrected.tokens_used += result.tokens_used
                 corrected.cost_estimate += result.cost_estimate
-                corrected.guard_unsupported = _check(corrected.text)
+                still_bad, still_dir = _check(corrected.text)
+                corrected.guard_unsupported = still_bad + still_dir
                 if corrected.guard_unsupported:
-                    logger.warning("Guardrail (%s): persisten cifras tras regenerar: %s",
+                    logger.warning("Guardrail (%s): persisten hallazgos tras regenerar: %s",
                                    template, corrected.guard_unsupported)
                 result = corrected
             except Exception as e:  # noqa: BLE001 — best-effort; sirve el original marcado
                 logger.error("Regeneración del guardrail falló: %s", e)
-                result.guard_unsupported = bad
+                result.guard_unsupported = bad + wrong_dir
         self._set_cache(cache_key, result)
         logger.info("Narrative (cerebro) template=%s tokens=%d guard_flags=%d",
                     template, result.tokens_used, len(result.guard_unsupported))
@@ -1499,9 +1510,9 @@ class NarrativeEngine:
         # SIN BARRA_DE_INSIGHT ni CEREBRO_IDENTITY: la profundidad analítica del cerebro es
         # una decisión de producto aparte; "no fabricar" aplica siempre.
         from shared.narrative.cerebro import (
-            EPISTEMIC_STANDARD, NO_META_COMMENTARY, REGISTER_NEUTRO)
+            DIRECTION_DISCIPLINE, EPISTEMIC_STANDARD, NO_META_COMMENTARY, REGISTER_NEUTRO)
         legacy_system = (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
-                         + "\n\n" + NO_META_COMMENTARY)
+                         + "\n\n" + DIRECTION_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
 
         try:
             # to_thread + semáforo: mismo motivo que la ruta cerebro — liberar el event loop
