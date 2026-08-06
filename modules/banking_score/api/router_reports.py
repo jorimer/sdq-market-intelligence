@@ -41,6 +41,10 @@ _NARRATIVE_DEGRADED_MSG = (
 # metodología (criteria) o el sistema entero (wire/datawatch/sector_outlook).
 _SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook"}
 
+# Boletines de sistema que se NARRAN con IA y cuyo único insumo son las cifras del sector.
+# `criteria` no está: es determinista, se genera del motor y no consume benchmarks.
+_NARRATED_SYSTEM_TYPES = {"wire", "datawatch", "sector_outlook"}
+
 
 def _attach_pdf(report: Report, file_path: str, narratives: dict,
                 model: Optional[str] = None) -> None:
@@ -105,6 +109,14 @@ async def _generate_system_report(
     scoring_result = {
         "overall_score": 0, "rating_tier": "N/A", "sub_components": {}, "indicators": {},
     }
+    # Un boletín NARRADO de sistema sin benchmarks no tiene NADA que analizar: su único
+    # insumo son las cifras del sector. `wire` se generó siempre sin ellos —datawatch y
+    # sector_outlook sí los pasaban— y el modelo, correctamente, respondía que no había
+    # cifras sectoriales; esa negativa quedaba impresa como cuerpo del PDF. Se resuelven acá
+    # y no en cada endpoint para que el próximo boletín no pueda nacer con el mismo hueco.
+    if benchmarks is None and report_type in _NARRATED_SYSTEM_TYPES:
+        from modules.banking_score.external.sib_client import sib_client
+        benchmarks = sib_client.get_sector_benchmarks()
     try:
         if report_type == "criteria":
             # El documento de criterios es la METODOLOGÍA: determinista, no varía por
