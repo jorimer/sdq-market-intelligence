@@ -187,6 +187,27 @@ DIRECTION_DISCIPLINE = (
     "bases distintas—; nombra siempre contra CUÁL base comparas."
 )
 
+# Defensa PRIMARIA contra dos errores de ALCANCE que el dato no sostiene, ambos hallados en
+# el Deep Dive de banca (2026-08-06). Van juntos porque son el mismo vicio: afirmar más de
+# lo que la cifra midió.
+#   (1) Atribuir a una DIMENSIÓN un ranking que es GLOBAL. La §Comparativo dijo "segunda
+#       posición en solidez financiera" citando el ranking por calificación global, mientras
+#       la tabla del propio informe daba 100/100 y percentil 100 en esa dimensión.
+#   (2) Convertir un percentil en un superlativo HISTÓRICO ("sin precedente en el sistema").
+#       El percentil describe la muestra ACTUAL; sobre la historia no se midió nada.
+SCOPE_DISCIPLINE = (
+    "ALCANCE DE LO QUE AFIRMAS (regla dura): 1) Un ranking o una posición valen SOLO para la "
+    "métrica con la que se calcularon. Si el contexto trae 'ranking_por', respeta ese rótulo: "
+    "un puesto por calificación GLOBAL no es un puesto en un sub-componente, y decir lo "
+    "contrario contradice la tabla del propio informe. Si el contexto trae "
+    "'posiciones_dimension', esa es la posición POR DIMENSIÓN: úsala para hablar de una "
+    "dimensión concreta y nombra a quién lidera cuando la entidad no lidera. 2) Un percentil, "
+    "un primer lugar o un máximo describen la MUESTRA ACTUAL, no la historia: nunca los "
+    "narres como 'sin precedente', 'nunca visto' o 'inigualable' —eso afirma sobre períodos "
+    "que no se midieron—. Di 'el más alto del panel en este corte', que es lo que el dato "
+    "sostiene."
+)
+
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────
 
 AXIS_DOCTRINE: Dict[str, str] = {
@@ -964,6 +985,7 @@ def build_system(axis: str, audience: Optional[str], mode: str) -> str:
         parts.append(AUDIENCE_FRAMES[axis][resolved])
     parts.append(BARRA_DE_INSIGHT)
     parts.append(DIRECTION_DISCIPLINE)
+    parts.append(SCOPE_DISCIPLINE)
     if mode in ("detailed", "deep"):
         parts.append(DEPTH_DIRECTIVE)
     # Última instrucción del system: la salida es final, sin meta-comentario ni auto-corrección.

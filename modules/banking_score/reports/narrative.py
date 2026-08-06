@@ -97,6 +97,44 @@ def _section_mode(section: str, base_mode: str) -> str:
     return base_mode
 
 
+# Boletines cuyo sujeto es el SISTEMA, no una entidad. `criteria` no está: no se narra en
+# absoluto (se genera del motor, ver criteria_doc).
+_SYSTEM_REPORT_TYPES = frozenset({"wire", "datawatch", "sector_outlook"})
+
+
+def _build_system_context(report_type: str, scope_name: str, period: str,
+                          benchmarks: Optional[Dict]) -> Dict:
+    """Contexto de un boletín de SISTEMA: promedios sectoriales y de grupos de pares.
+
+    Deliberadamente NO incluye `overall_score`, `sub_components` ni `indicators`: un reporte
+    de sistema no tiene entidad, y pasarlos en cero era exactamente lo que hacía que el
+    modelo respondiera "el score consolidado es cero, no puedo analizar" en el cuerpo de un
+    PDF de cliente. Lo que sí tiene —y basta para un resumen ejecutivo del sistema— son los
+    benchmarks que `trend_analysis` y `sector_outlook` ya consumen bien.
+    """
+    ctx: Dict = {
+        "ambito": scope_name,
+        "period": period,
+        "tipo_de_boletin": report_type,
+        "encuadre": (
+            "Este boletín describe el SISTEMA bancario dominicano en su conjunto. No hay "
+            "entidad individual bajo análisis: no la pidas ni señales su ausencia."
+        ),
+    }
+    if benchmarks and isinstance(benchmarks, dict):
+        if benchmarks.get("sector_averages"):
+            ctx["promedios_sistema"] = benchmarks["sector_averages"]
+        if benchmarks.get("peer_groups"):
+            ctx["grupos_de_pares"] = benchmarks["peer_groups"]
+        if benchmarks.get("regulatory_limits"):
+            ctx["limites_regulatorios"] = benchmarks["regulatory_limits"]
+        # Cualquier otra clave del bloque (p. ej. concentración del sistema) pasa tal cual.
+        for k, v in benchmarks.items():
+            if k not in ("sector_averages", "peer_groups", "regulatory_limits") and v:
+                ctx.setdefault(k, v)
+    return ctx
+
+
 # Etiqueta LEGIBLE de cada grupo de pares — la que el analista debe usar al nombrar la base
 # de la comparación. Nombrar contra qué se compara no es cosmético: un indicador puede estar
 # por debajo del sistema y por encima de su grupo de pares a la vez (la mora de BPD lo está),
@@ -286,6 +324,14 @@ def _build_section_context(
         ctx["sensibilidades"] = scoring_result["sensibilidades"]
     if benchmarks:
         ctx["benchmarks"] = benchmarks
+        # El veto de superlativos de `numeric_guard` lee `posiciones_dimension` en el NIVEL
+        # SUPERIOR del contexto; viene anidada bajo los pares nombrados. Sin elevarla, el
+        # patrón se salta entero y la narrativa puede afirmar "el mayor del sistema" en una
+        # dimensión que otro lidera.
+        pos = ((benchmarks.get("named_peers") or {}).get("posiciones_dimension")
+               if isinstance(benchmarks, dict) else None)
+        if pos:
+            ctx["posiciones_dimension"] = pos
         # Las comparaciones contra sistema y pares llegan RESUELTAS: el resumen ejecutivo y
         # el comparativo son las secciones donde el modelo más las enuncia, y donde erró el
         # sentido teniendo las dos cifras correctas a la vista.
@@ -317,12 +363,22 @@ async def generate_report_narratives(
 
     sections = REPORT_SECTIONS.get(report_type, ["executive_summary"])
     narratives: Dict[str, str] = {}
+    # Boletines de SISTEMA: su sujeto es el sistema, no una entidad. `executive_summary`
+    # resolvía a `banking_summary` —plantilla POR BANCO— y recibía un `scoring_result` en
+    # ceros, así que el modelo se negaba a analizar y esa disculpa quedaba impresa. En
+    # DataWatch convivía con una sección de Tendencias completa sobre el mismo período: se
+    # lee como bug en vivo, no como función pendiente.
+    is_system = report_type in _SYSTEM_REPORT_TYPES
 
     for section in sections:
-        template = _SECTION_TO_TEMPLATE.get(section, "banking_summary")
-        context = _build_section_context(
-            section, bank_name, scoring_result, period, benchmarks,
-        )
+        if is_system and section == "executive_summary":
+            template = "system_summary"
+            context = _build_system_context(report_type, bank_name, period, benchmarks)
+        else:
+            template = _SECTION_TO_TEMPLATE.get(section, "banking_summary")
+            context = _build_section_context(
+                section, bank_name, scoring_result, period, benchmarks,
+            )
 
         # Use 'detailed' mode for full_rating to get longer outputs; las secciones de
         # panorama suben a 'deep' (4096) para no truncarse (ver _section_mode).

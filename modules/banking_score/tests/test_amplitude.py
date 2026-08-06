@@ -124,3 +124,41 @@ def test_period_percentiles_bottom_of_pack(db):
     # bm1 es el más bajo de 2 → percentil 50 (solo él está <= a su valor)
     assert pct["overall"]["sector"]["percentile"] == 50.0
     assert pct["indicators"]["solvencia"]["sector"]["percentile"] == 50.0
+
+
+# ── Recorte al corte del informe ──────────────────────────────────────────────
+#
+# Hallazgo 2026-08-06 (Deep Dive de BPD "al 31-dic-2025"): la trayectoria arrastraba el
+# rating REAL de marzo-2026, posterior al período de portada. La narrativa no tiene forma de
+# saber qué es esa cifra, así que la racionalizó inventando etiquetas distintas en cada
+# sección: "proyectado" en Eficiencia, "preliminar" en Solidez, "histórica y proyectada" en
+# Liquidez. La palabra "proyectado" no existe en el código — el motor no proyecta nada.
+
+def test_trajectory_excludes_periods_after_the_cut(db):
+    bank = Bank(name="Banco Corte", bank_type=BankType.banca_multiple)
+    db.add(bank)
+    db.flush()
+    _rr(db, bank, date(2025, 6, 30), 80.0, [80, 80, 80, 80, 80])
+    _rr(db, bank, date(2025, 9, 30), 85.0, [85, 85, 85, 85, 85])
+    _rr(db, bank, date(2025, 12, 31), 90.0, [90, 90, 90, 90, 90])
+    _rr(db, bank, date(2026, 3, 31), 89.9, [89, 89, 89, 89, 89])  # POSTERIOR al corte
+    db.commit()
+
+    traj = entity_trajectories(db, bank, as_of=date(2025, 12, 31))
+    periodos = [p["period_end"] for p in traj["overall"]]
+    assert "2026-03-31" not in periodos, periodos
+    assert periodos[-1] == "2025-12-31"
+    assert traj["n_periods"] == 3
+
+
+def test_trajectory_without_as_of_keeps_every_period(db):
+    """Sin corte explícito el comportamiento no cambia (otros consumidores)."""
+    bank = Bank(name="Banco Libre", bank_type=BankType.banca_multiple)
+    db.add(bank)
+    db.flush()
+    _rr(db, bank, date(2025, 12, 31), 90.0, [90, 90, 90, 90, 90])
+    _rr(db, bank, date(2026, 3, 31), 89.9, [89, 89, 89, 89, 89])
+    db.commit()
+
+    periodos = [p["period_end"] for p in entity_trajectories(db, bank)["overall"]]
+    assert "2026-03-31" in periodos

@@ -33,13 +33,17 @@ _SUB_SCORE_ATTR: Dict[str, str] = {
 }
 
 
-def entity_trajectories(db: Session, bank: Bank, n: int = 8) -> Dict[str, Any]:
+def entity_trajectories(db: Session, bank: Bank, n: int = 8,
+                        as_of: Optional[date] = None) -> Dict[str, Any]:
     """Serie cronológica (ascendente, últimos *n* trimestres) del score global, de
     cada sub-componente y de cada indicador para *bank*.
 
     Un solo query del historial determinista. Los indicadores salen del JSON
     ``indicator_details``; se omiten los períodos donde el indicador es N/D, de modo
     que la serie de cada indicador solo contiene puntos medidos.
+
+    ``as_of`` recorta la serie a ese corte (inclusive). Un informe se emite AL CORTE, así
+    que su trayectoria no debe contener períodos posteriores al que anuncia la portada.
 
     Shape::
 
@@ -51,13 +55,21 @@ def entity_trajectories(db: Session, bank: Bank, n: int = 8) -> Dict[str, Any]:
                                         "score": float}, ...], ...},
         }
     """
-    ratings = (
-        db.query(RatingResult)
-        .filter(RatingResult.bank_id == bank.id,
-                RatingResult.model_type == ModelType.deterministic)
-        .order_by(RatingResult.period_end.asc())
-        .all()
+    q = db.query(RatingResult).filter(
+        RatingResult.bank_id == bank.id,
+        RatingResult.model_type == ModelType.deterministic,
     )
+    # Recorte al CORTE del informe. Sin esto la serie arrastraba períodos POSTERIORES al
+    # que anuncia la portada: un informe "al 31-dic-2025" mostraba el rating real de
+    # marzo-2026, y la narrativa —que no tiene forma de saber qué es ese número— lo
+    # racionalizó inventando etiquetas, distintas en cada sección ("proyectado" en
+    # Eficiencia, "preliminar" en Solidez, "trayectoria histórica y proyectada" en
+    # Liquidez). La palabra "proyectado" no existe en el código: el motor no proyecta nada.
+    # El informe es un documento AL CORTE — su score, sus percentiles y sus indicadores ya
+    # lo son; la trayectoria debe serlo también.
+    if as_of is not None:
+        q = q.filter(RatingResult.period_end <= as_of)
+    ratings = q.order_by(RatingResult.period_end.asc()).all()
     if not ratings:
         return {"n_periods": 0, "overall": [], "sub": {}, "indicators": {}}
 
