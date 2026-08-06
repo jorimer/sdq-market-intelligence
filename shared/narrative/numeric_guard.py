@@ -21,6 +21,13 @@ from typing import List
 
 logger = logging.getLogger("sdq.narrative.numeric_guard")
 
+# Versión de la LÓGICA del guardrail, para la huella de caché de la narrativa.
+# Los prompts se cubren solos (la huella hashea el system ensamblado), pero un cambio en
+# el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
+# pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
+# Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
+GUARD_VERSION = "2"  # "2": chequeo de dirección de las comparaciones (2026-08-05)
+
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
     "del ANÁLISIS que NO estén respaldadas por el CONTEXTO. No evalúas estilo ni calidad."
