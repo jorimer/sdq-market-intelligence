@@ -3,12 +3,9 @@ from datetime import date
 
 import pytest
 
-from shared.data import (
-    LicenseError,
-    Record,
-    bcrd_client,
-)
+from shared.data import LicenseError, Record
 from shared.data.base_client import FixtureBackedClient
+from shared.data.bcrd_client import bcrd_client
 from shared.data.lineage import Lineage
 
 

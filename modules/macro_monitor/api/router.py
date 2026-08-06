@@ -85,7 +85,14 @@ def refresh(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    ingest_series(db)
+    try:
+        ingest_series(db)
+    except BcrdApiError as e:
+        # Un token rechazado (p.ej. cuenta del API desactivada por inactividad) no debe
+        # devolver un snapshot viejo como si el refresh hubiera funcionado.
+        detail = (f"Token del BCRD rechazado: {e.message}. Revise Configuración → BCRD."
+                  if e.is_auth else f"BCRD: {e.message}")
+        raise HTTPException(status_code=400 if e.is_auth else 502, detail=detail)
     try:
         return build_snapshot(db, period=period)
     except ValueError as e:
