@@ -100,3 +100,40 @@ def test_entidad_sin_score_en_la_dimension_no_produce_posicion():
 def test_panel_vacio_o_invalido_es_seguro():
     assert posiciones_por_dimension("x", []) == {}
     assert posiciones_por_dimension("x", [{"id": "y", "name": "Y"}]) == {}
+
+
+def test_empate_comparte_el_mejor_puesto():
+    """Ranking de COMPETICIÓN. Con orden simple, dos entidades con el mismo score quedaban
+    1.ª y 2.ª arbitrariamente: el informe mostró "2.º" para un banco con puntaje MÁXIMO,
+    contradiciendo su propio percentil 100 y la prosa que decía que superaba a todo su grupo."""
+    panel = [
+        {"id": "a", "name": "A", "dimensiones": {"Solidez": 100.0}},
+        {"id": "b", "name": "B", "dimensiones": {"Solidez": 100.0}},
+        {"id": "c", "name": "C", "dimensiones": {"Solidez": 90.0}},
+    ]
+    for quien in ("a", "b"):
+        pos = posiciones_por_dimension(quien, panel)["Solidez"]
+        assert pos["rank"] == 1, quien
+        assert pos["es_lider"] is True, quien
+        assert pos["empatados_en_su_puesto"] == 2
+
+
+def test_empate_no_genera_falso_positivo_en_el_guard():
+    """Si el empatado en el tope quedara `es_lider: False`, el guardrail vetaría como falso
+    un superlativo que SÍ es cierto — el falso positivo que hay que evitar."""
+    from shared.narrative.numeric_guard import deterministic_unsupported
+
+    panel = [{"id": "a", "name": "A", "dimensiones": {"Solidez": 100.0}},
+             {"id": "b", "name": "B", "dimensiones": {"Solidez": 100.0}}]
+    ctx = {"posiciones_dimension": posiciones_por_dimension("a", panel)}
+    assert deterministic_unsupported(ctx, "Registra la solvencia más alta del sistema.") == []
+
+
+def test_el_puesto_salta_tras_un_empate():
+    """Competición estándar: 1, 1, 3 — no 1, 1, 2."""
+    panel = [
+        {"id": "a", "name": "A", "dimensiones": {"X": 10.0}},
+        {"id": "b", "name": "B", "dimensiones": {"X": 10.0}},
+        {"id": "c", "name": "C", "dimensiones": {"X": 5.0}},
+    ]
+    assert posiciones_por_dimension("c", panel)["X"]["rank"] == 3

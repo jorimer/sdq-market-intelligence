@@ -212,16 +212,25 @@ def posiciones_por_dimension(
         if not filas:
             continue
         filas.sort(key=lambda t: t[2], reverse=True)
-        rank = next((i + 1 for i, t in enumerate(filas) if t[1] == subject_id), None)
-        if rank is None:
+        mia = next((t for t in filas if t[1] == subject_id), None)
+        if mia is None:
             continue  # la entidad no puntúa esta dimensión: no se afirma posición
-        lider = filas[0]
+        # Ranking de COMPETICIÓN: los empatados comparten el mejor puesto. Con orden simple,
+        # dos entidades con el mismo score quedaban 1.ª y 2.ª de forma arbitraria — el
+        # informe mostraba "2.º" para un banco con puntaje máximo, contradiciendo su propio
+        # percentil 100 y la prosa que decía que superaba a todo su grupo. Además haría que
+        # el guardrail vetara como falso un superlativo que SÍ es cierto (empatado en el
+        # tope), justo el falso positivo que hay que evitar.
+        mejor = filas[0][2]
+        rank = sum(1 for t in filas if t[2] > mia[2]) + 1
+        empatados = [t for t in filas if t[2] == mia[2]]
         out[etiqueta] = {
             "dimension": etiqueta,
             "rank": rank,
             "n": len(filas),
-            "es_lider": rank == 1,
-            "lider": lider[0],
-            "lider_score": round(lider[2], 2),
+            "es_lider": mia[2] >= mejor,
+            "empatados_en_su_puesto": len(empatados),
+            "lider": filas[0][0],
+            "lider_score": round(mejor, 2),
         }
     return out

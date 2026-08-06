@@ -384,8 +384,14 @@ def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str
     # que sin este dato se saltaba entero en banca.
     from shared.narrative.derived import posiciones_por_dimension
 
+    # El panel es el GRUPO DE PARES (mismo tipo), igual que la tabla comparativa — no el
+    # sistema entero. Contra las 86 entidades, los "líderes" por dimensión salían agentes de
+    # cambio: scores altos en un negocio incomparable con una banca múltiple. Es la misma
+    # lección que ya documenta el docstring de esta función, y comparar contra ellos ubicaba
+    # a un banco con puntaje máximo en "2.º". El percentil vs. el sistema ya se reporta
+    # aparte (period_percentiles): esto es la POSICIÓN entre pares.
     panel = []
-    for e in entries:
+    for e in pool:
         subs = e.get("_sub")
         if not isinstance(subs, dict):
             continue
@@ -409,6 +415,10 @@ def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str
         # global a un sub-componente.
         "ranking_por": "calificación global (0-100), NO un sub-componente",
         "rows": out_rows,
+        # Nombrar la BASE, por lo mismo que se nombra la métrica: una posición sin decir
+        # contra quién se mide invita a atribuirla a la base equivocada.
+        "posiciones_base": ("grupo de pares del mismo tipo" if len(same) >= 2
+                            else "sistema (sin pares del mismo tipo)"),
         "posiciones_dimension": posiciones,
     }
 
