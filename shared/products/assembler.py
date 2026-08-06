@@ -24,20 +24,52 @@ from shared.products.tiers import Granularity, ProductTier, TierLevelSpec
 
 logger = logging.getLogger("sdq.products.assembler")
 
-# Bumpear para invalidar TODA la caché de narrativas cuando cambie la lógica de generación
-# (plantillas, prompt, guard). El fingerprint del payload cubre los cambios de DATO; esta
-# versión cubre los cambios de CÓDIGO.
+# Bump MANUAL para cambios de lógica que no viven en los prompts (p. ej. el ensamblado de
+# secciones acá). Los cambios de PROMPT/modelo/guardrail ya NO dependen de esta constante:
+# los cubre `_narrative_logic_version()`.
 # "2": doctrina 2026-07-17 (TRADUCE EL TECNICISMO + registro llano de PROCEDENCIA/
 # INCERTIDUMBRE) — sin el bump, los reportes cacheados seguirían sirviendo la voz vieja.
 NARRATIVE_CACHE_VERSION = "2"
 
 
+def _narrative_logic_version() -> str:
+    """Huella de la RECETA de narrativa (prompts compartidos + doctrina + modelo + guard).
+
+    Por qué derivada y no una constante a mano: esta caché vive en Postgres y —a diferencia
+    de la L2 de Redis— **no tiene TTL**; se invalida solo si cambia el dato. En un sector con
+    el dato quieto, una narrativa cacheada vive indefinidamente. El bump manual estaba
+    documentado ("sin el bump… seguirían sirviendo la voz vieja") y aun así no se movió desde
+    que se creó: entre medio se desplegaron `NO_META_COMMENTARY` (#580), el veto de léxico
+    visceral y `DIRECTION_DISCIPLINE` (#631), o sea tres arreglos de cara al cliente que
+    pudieron quedar sin efecto acá. Un mecanismo correcto que depende de que alguien recuerde
+    es un mecanismo roto; se deriva del contenido real de los prompts.
+    """
+    from shared.config.settings import settings
+    from shared.narrative import cerebro
+    from shared.narrative.numeric_guard import GUARD_VERSION
+
+    parts = [
+        GUARD_VERSION,
+        settings.ANTHROPIC_MODEL or "",
+        cerebro.REGISTER_NEUTRO,
+        cerebro.EPISTEMIC_STANDARD,
+        cerebro.NO_META_COMMENTARY,
+        cerebro.DIRECTION_DISCIPLINE,
+        cerebro.BARRA_DE_INSIGHT,
+        cerebro.CEREBRO_IDENTITY,
+    ]
+    parts += [v for _, v in sorted(cerebro.AXIS_DOCTRINE.items())]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:12]
+
+
 def _narrative_fingerprint(payload: Optional[Dict], tier: str, lang: str) -> str:
-    """Hash del snapshot (dato) + tier + idioma + versión → clave de frescura de la caché.
-    Si el dato subyacente cambia, el fingerprint cambia → MISS → se regenera."""
+    """Hash del snapshot (dato) + tier + idioma + versión + RECETA → clave de frescura.
+    Si cambia el dato subyacente O la forma de generar el texto, el fingerprint cambia →
+    MISS → se regenera. Sin la receta, un arreglo de prompt no se veía nunca acá."""
     raw = json.dumps(payload or {}, sort_keys=True, default=str, ensure_ascii=False)
     return hashlib.sha256(
-        f"{raw}|{tier}|{lang}|{NARRATIVE_CACHE_VERSION}".encode("utf-8")).hexdigest()
+        f"{raw}|{tier}|{lang}|{NARRATIVE_CACHE_VERSION}|"
+        f"{_narrative_logic_version()}".encode("utf-8")).hexdigest()
 
 
 async def _narratives_cached(

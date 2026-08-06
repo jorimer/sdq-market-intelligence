@@ -84,3 +84,46 @@ def test_no_db_falls_back_to_direct_generation():
     p = _FakeProduct(None)
     n = asyncio.run(_narratives_cached(p, ProductTier.deep_dive, _snap({"a": 1}), "es", None))
     assert p.calls == 1 and n == {"risk_assessment": "generación #1"}
+
+
+# ── La receta entra en el fingerprint ─────────────────────────────────────────
+#
+# Esta caché vive en Postgres y NO tiene TTL: se invalida solo si cambia el dato. El bump
+# manual estaba documentado y aun así no se movió en tres arreglos de prompt seguidos
+# (#580, veto de léxico visceral, #631), que pudieron quedar sin efecto acá.
+
+def test_prompt_change_invalidates_the_product_cache(monkeypatch):
+    from shared.products import assembler as asm
+    payload = {"periodo": "2026-03", "isf": 66}
+    before = asm._narrative_fingerprint(payload, "deep_dive", "es")
+
+    import shared.narrative.cerebro as cerebro
+    monkeypatch.setattr(cerebro, "NO_META_COMMENTARY",
+                        cerebro.NO_META_COMMENTARY + "\nREGLA NUEVA", raising=False)
+    assert asm._narrative_fingerprint(payload, "deep_dive", "es") != before
+
+
+def test_guard_version_invalidates_the_product_cache(monkeypatch):
+    from shared.products import assembler as asm
+    payload = {"periodo": "2026-03"}
+    before = asm._narrative_fingerprint(payload, "deep_dive", "es")
+
+    import shared.narrative.numeric_guard as ng
+    monkeypatch.setattr(ng, "GUARD_VERSION", "999", raising=False)
+    assert asm._narrative_fingerprint(payload, "deep_dive", "es") != before
+
+
+def test_stable_recipe_and_data_keeps_the_hit():
+    """La caché existe para que la descarga no espere 15-90 s: sin cambios, HIT sigue HIT."""
+    from shared.products import assembler as asm
+    payload = {"periodo": "2026-03", "isf": 66}
+    assert (asm._narrative_fingerprint(payload, "deep_dive", "es")
+            == asm._narrative_fingerprint(dict(payload), "deep_dive", "es"))
+
+
+def test_data_change_still_invalidates():
+    """La invalidación por DATO, que ya existía, sigue funcionando."""
+    from shared.products import assembler as asm
+    a = asm._narrative_fingerprint({"isf": 66}, "deep_dive", "es")
+    b = asm._narrative_fingerprint({"isf": 67}, "deep_dive", "es")
+    assert a != b
