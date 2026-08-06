@@ -5,7 +5,38 @@ The narrative engine receives a SMALL, pre-digested context — the system headl
 laggard, spread) — never the full series set, so prompts stay cheap and focused.
 Mirrors :mod:`trade_intel.ai_context`. Source: SIPEN (dato real).
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+
+def _comparaciones(rating, peers) -> list:
+    """Comparaciones dimensión↔panel con la DIRECCIÓN ya resuelta.
+
+    Misma cura que en banca: el modelo no debe derivar "por encima / por debajo" —
+    erra la relación aunque las cifras sean correctas. Se computa acá contra la MEDIANA
+    del panel en cada dimensión y se sirve para que la COPIE. También es lo que activa
+    el detector de ``numeric_guard``, que fuera de banca estaba ciego por depender del
+    mapeo de indicadores bancarios.
+    """
+    import statistics as st
+
+    from shared.narrative.derived import comparaciones_vs_referencia
+
+    valores: Dict[str, Optional[float]] = {}
+    referencias: Dict[str, Dict[str, Optional[float]]] = {}
+    for d in rating.get("dimensions") or []:
+        label, mio = d.get("label"), d.get("score")
+        if not label or mio is None:
+            continue
+        otros = []
+        for p in peers or []:
+            for pd in p.get("dimensions") or []:
+                if pd.get("label") == label and pd.get("score") is not None:
+                    otros.append(float(pd["score"]))
+        if len(otros) < 3:      # panel muy chico: la mediana no representa
+            continue
+        valores[str(label)] = float(mio)
+        referencias[str(label)] = {"mediana del panel": round(st.median(otros), 2)}
+    return comparaciones_vs_referencia(valores, referencias)
 
 
 def _dim_positions(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -82,7 +113,10 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
               "lider_afp}. NO afirmes que esta AFP es 'el mayor/el más alto/el líder del sistema "
               "o del panel' en una dimensión salvo que 'es_lider' sea true en ESA dimensión; si "
               "no lidera, di su posición real y nombra a quién lidera (lider_afp). El rank GLOBAL "
-              "#1 NO implica liderar cada dimensión.")
+              "#1 NO implica liderar cada dimensión."
+              " DIRECCIÓN: si el contexto trae 'comparaciones', la dirección ya está "
+              "resuelta ahí ('direccion': por encima / por debajo / en línea): COPIALA, "
+              "no la deduzcas. 'en línea' significa que la brecha no es material.")
     ctx: Dict[str, Any] = {
         "afp": rating.get("name"),
         "isa_score_relativo": rating.get("overall_score"),
@@ -104,6 +138,10 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
         # Mapa compacto {dimensión: {rank,n,es_lider,lider_afp}} — lo lee también el
         # numeric_guard para vetar 'el mayor/más alto del sistema' donde no lidera.
         "posiciones_dimension": posiciones,
+        # Dirección de cada comparación contra el panel, YA RESUELTA: el modelo la
+        # copia, no la deriva. Además activa el detector de numeric_guard, que
+        # fuera de banca estaba ciego.
+        "comparaciones": _comparaciones(rating, peers),
         "direction": ("mayor score = mejor solidez; con solvencia hay BANDA ABSOLUTA y también "
                       "posición relativa entre AFP" if solv_present
                       else "mayor score = mejor POSICIÓN RELATIVA entre las AFP (no veredicto absoluto)"),

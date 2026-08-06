@@ -227,9 +227,24 @@ def calc_pct_cartera_a(d) -> IndicatorResult:
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
+def concentracion_top10_pct(d) -> float:
+    """Concentración top-10 (%) — DEFINICIÓN ÚNICA, compartida con Alerta Temprana.
+
+    Existe como función pública porque el motor de alertas la recalculaba por su cuenta con
+    OTRO denominador (``cartera_bruta`` en vez de ``cartera_total``), y el mismo informe
+    mostraba dos valores para el mismo concepto y el mismo corte: 50,90% en Calidad de
+    Activos y en la tabla de indicadores, 51,5% en Alerta Temprana. Para un comité que lee
+    el PDF una vez, eso no se lee como diferencia de definición sino como dato inconsistente.
+
+    No era un criterio metodológico distinto: era el mismo cálculo escrito dos veces. La
+    cura es que exista una sola vez.
+    """
+    return _safe_div(d.suma_top10, d.cartera_total or d.cartera_bruta) * 100
+
+
 def calc_concentracion_top10(d) -> IndicatorResult:
     """Top-10 Concentration: suma_top10 / cartera_total (inverse)."""
-    raw = _safe_div(d.suma_top10, d.cartera_total or d.cartera_bruta) * 100
+    raw = concentracion_top10_pct(d)
     score = _clamp(max(0, 100 - (raw - 30) * 1.5))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
