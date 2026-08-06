@@ -232,7 +232,9 @@ async def _content_from_snapshot(
         narratives = {**narratives, **glossary}
     # Secciones ESTÁNDAR auto-generadas (metodología/fuentes) — nuestra ventaja honesta.
     # Se anexan tras las del producto; las heredan online y PDF (docs/REPORT_STANDARD.md).
-    std = standard_sections(product, tier)
+    # El corte del snapshot ancla la metodología: sin él la sección habla del estado ACTUAL
+    # de la plataforma (cobertura, frescura) dentro de un informe fechado antes.
+    std = standard_sections(product, tier, as_of=snapshot.period or None)
     if std:
         narratives = {**narratives, **std}
     _assert_system_narratives(level, snapshot, narratives)
