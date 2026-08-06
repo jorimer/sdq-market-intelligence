@@ -20,6 +20,8 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from modules.banking_score.scoring.engine import concentracion_top10_pct
+
 # ── Umbrales (calibrables) ─────────────────────────────────────────────────────
 GROWTH_ABS = 0.25          # crecimiento interanual mínimo para marcar (sanity floor)
 COVERAGE_WARN = 100.0      # cobertura de provisiones % (Fitch: "100% coverage")
@@ -318,7 +320,11 @@ def _bank_metrics(rows_by_period: Dict[date, "object"], period: date) -> Dict:
         "capital_prior": f(prev_4, "solvencia_pct"),
         "liq_ratio": _pct(f(cur, "activos_liquidos"), f(cur, "pasivos_exigibles")),
         "deposit_qoq": _yoy(f(cur, "depositos_totales"), f(prev_q, "depositos_totales")),
-        "concentration_pct": _pct(f(cur, "suma_top10"), f(cur, "cartera_bruta")),
+        # DEFINICIÓN ÚNICA compartida con el motor de rating. Antes se recalculaba acá con
+        # `cartera_bruta` mientras el indicador usaba `cartera_total`: el MISMO informe
+        # mostraba 50,90% en Calidad de Activos y 51,5% en Alerta Temprana para el mismo
+        # corte. No eran dos criterios: era el mismo cálculo escrito dos veces.
+        "concentration_pct": (concentracion_top10_pct(cur) if cur is not None else None),
     }
 
 

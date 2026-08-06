@@ -4,7 +4,7 @@ Each builder digests a read-side payload into a flat, source-stamped context dic
 for ``shared.narrative`` templates. Numbers only — the narrative engine never counts,
 it interprets (numeric_guard). Mirrors ``pension_intel.ai_context``.
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def _dims(rating: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -13,6 +13,37 @@ def _dims(rating: Dict[str, Any]) -> List[Dict[str, Any]]:
          "valor_real": d.get("raw"), "presente": d.get("present")}
         for d in rating.get("dimensions") or []
     ]
+
+
+def _comparaciones(rating, peers) -> list:
+    """Comparaciones dimensión↔panel con la DIRECCIÓN ya resuelta.
+
+    Misma cura que en banca: el modelo no debe derivar "por encima / por debajo" —
+    erra la relación aunque las cifras sean correctas. Se computa acá contra la MEDIANA
+    del panel en cada dimensión y se sirve para que la COPIE. También es lo que activa
+    el detector de ``numeric_guard``, que fuera de banca estaba ciego por depender del
+    mapeo de indicadores bancarios.
+    """
+    import statistics as st
+
+    from shared.narrative.derived import comparaciones_vs_referencia
+
+    valores: Dict[str, Optional[float]] = {}
+    referencias: Dict[str, Dict[str, Optional[float]]] = {}
+    for d in rating.get("dimensions") or []:
+        label, mio = d.get("label"), d.get("score")
+        if not label or mio is None:
+            continue
+        otros = []
+        for p in peers or []:
+            for pd in p.get("dimensions") or []:
+                if pd.get("label") == label and pd.get("score") is not None:
+                    otros.append(float(pd["score"]))
+        if len(otros) < 3:      # panel muy chico: la mediana no representa
+            continue
+        valores[str(label)] = float(mio)
+        referencias[str(label)] = {"mediana del panel": round(st.median(otros), 2)}
+    return comparaciones_vs_referencia(valores, referencias)
 
 
 def _posiciones(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -42,6 +73,8 @@ _ANTI_SUPERLATIVO = (
     "dimensión. Y un percentil o un primer lugar describen la MUESTRA ACTUAL: nunca los "
     "narres como 'sin precedente' o 'nunca visto' — eso afirma sobre la historia, que no se "
     "midió."
+    " DIRECCIÓN: si el contexto trae 'comparaciones', la dirección ya está resuelta "
+    "ahí ('direccion': por encima / por debajo / en línea): COPIALA, no la deduzcas."
 )
 
 
@@ -59,6 +92,7 @@ def insurance_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]
         "periodo": rating.get("period"),
         "dimensiones": _dims(rating),
         "posiciones_dimension": _posiciones(rating, peers),
+        "comparaciones": _comparaciones(rating, peers),
         "direction": "mayor solvencia/liquidez/resultado y menor siniestralidad = más sólida",
         "source": "SIS — estados financieros auditados por compañía (dato real)",
         "note": ("El ISF integra cinco dimensiones sobre los estados financieros auditados que "
@@ -88,6 +122,7 @@ def insurance_peer_context(name: str, rating: Dict[str, Any],
         "lider_isf": ranked[0].get("name") if ranked else None,
         "promedio_isf": avg,
         "posiciones_dimension": _posiciones(rating, peers),
+        "comparaciones": _comparaciones(rating, peers),
         "source": "SIS — estados financieros auditados por compañía (dato real)",
         "note": ("Posición relativa por bandas de solidez (0-100). No es un rating de crédito."
                  + _ANTI_SUPERLATIVO),
