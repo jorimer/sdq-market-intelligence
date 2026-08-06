@@ -84,7 +84,10 @@ _CEREBRO_TEMPLATES = frozenset({
 # nunca inflado); el resto sigue el mode del nivel (detailed en niveles nombrados). Las
 # secciones de ruta legacy con tablas verbosas (trend_analysis) suben a 'deep' SOLO por
 # presupuesto de tokens (ahí 'deep' no agrega DEEP_DIRECTIVE).
-_DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis"})
+# `sector_outlook` se suma tras un PDF entregado TRUNCADO a mitad de oración: su plantilla
+# pide hasta 800 palabras y corría con el presupuesto `standard` (1024 tokens), que en
+# español no alcanza (~1.120). `trend_analysis` ya estaba acá por lo mismo.
+_DEEP_SECTIONS = frozenset({"risk_assessment", "trend_analysis", "sector_outlook"})
 
 
 def _section_mode(section: str, base_mode: str) -> str:
@@ -128,6 +131,22 @@ def _build_system_context(report_type: str, scope_name: str, period: str,
             ctx["grupos_de_pares"] = benchmarks["peer_groups"]
         if benchmarks.get("regulatory_limits"):
             ctx["limites_regulatorios"] = benchmarks["regulatory_limits"]
+        # UNIVERSO declarado: dos poblaciones distintas dan cifras distintas para el mismo
+        # período. Sin decirlo en el cuerpo, dos lectores comparan peras con naranjas sin
+        # saberlo — y el informe se vende como "determinista y reproducible".
+        proc = benchmarks.get("procedencia") or {}
+        if proc.get("universo"):
+            ctx["universo"] = {
+                "descripcion": proc["universo"],
+                "n_entidades": proc.get("n_sistema"),
+                "composicion": proc.get("composicion"),
+                "estadistico": proc.get("estadistico"),
+            }
+            ctx["encuadre"] = ctx.get("encuadre", "") + (
+                f" DECLARÁ EL UNIVERSO: los agregados son la {proc['estadistico']} de "
+                f"{proc.get('n_sistema')} {proc['universo']}. Dilo explícitamente al menos "
+                "una vez —cuántas entidades y de qué tipos— para que el lector nunca compare "
+                "cifras de poblaciones distintas sin saberlo.")
         # Cualquier otra clave del bloque (p. ej. concentración del sistema) pasa tal cual.
         for k, v in benchmarks.items():
             if k not in ("sector_averages", "peer_groups", "regulatory_limits") and v:

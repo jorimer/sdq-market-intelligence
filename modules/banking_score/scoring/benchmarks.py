@@ -43,6 +43,23 @@ logger = logging.getLogger("sdq.banking.benchmarks")
 # puñado que reportó, no al grupo — y un benchmark que no representa es peor que ninguno.
 MIN_N = 5
 
+# UNIVERSO canónico de "Sistema Bancario" (decisión del dueño, 2026-08-06): las
+# instituciones de CRÉDITO supervisadas. Quedan fuera los agentes de cambio y las
+# fiduciarias — no captan depósitos ni tienen libro de crédito, así que no pertenecen al
+# agregado que un comité entiende por "el sistema".
+#
+# Importa: al computar los promedios sobre las 89 supervisadas, dos corridas del mismo
+# período mostraban eficiencia 52% y 77,85% sin que nada del cálculo hubiera cambiado —
+# cambió la población. El detalle que el dato obligó a matizar: los agentes de cambio (47%
+# del padrón) NO reportan métricas de cartera, así que solo movían ROE/ROA; el salto de
+# eficiencia venía de las instituciones de crédito pequeñas (AAyP, ahorro y crédito,
+# corporaciones), que operan con costos estructuralmente más altos por su menor escala.
+# Por eso el universo se DECLARA en el informe: no basta con elegirlo bien.
+SISTEMA_TIPOS = frozenset({
+    "banca_multiple", "aap", "banco_ahorro_credito", "corporacion_credito",
+})
+SISTEMA_LABEL = "instituciones de crédito supervisadas por la SIB"
+
 # Tipo de entidad → etiqueta legible del grupo de pares. Reemplaza a las listas de nombres
 # fijas de las constantes ("BPD, BHD León, Popular, Reservas"), que envejecen con cada
 # fusión: el grupo se deriva del catálogo.
@@ -118,7 +135,10 @@ def panel_benchmarks(db: Session, period_end: Optional[date]) -> Dict[str, Any]:
         logger.warning("Panel de benchmarks no disponible (%s): se declaran constantes.", e)
         return declarados
 
-    sector = _medians(rows)
+    # El agregado del SISTEMA se computa SOLO sobre instituciones de crédito; los grupos de
+    # pares siguen cubriendo todos los tipos, para que cualquier entidad encuentre el suyo.
+    del_sistema = [r for r in rows if r["tipo"] in SISTEMA_TIPOS]
+    sector = _medians(del_sistema)
     if not sector:
         logger.info("Sin observaciones suficientes en %s: benchmarks declarados.", period_end)
         return declarados
@@ -141,11 +161,18 @@ def panel_benchmarks(db: Session, period_end: Optional[date]) -> Dict[str, Any]:
         "procedencia": {
             "medido": True,
             "period": str(period_end),
-            "n_sistema": len(rows),
+            "n_sistema": len(del_sistema),
+            "n_supervisadas": len(rows),
+            "universo": SISTEMA_LABEL,
+            "composicion": {t: sum(1 for r in del_sistema if r["tipo"] == t)
+                            for t in sorted({r["tipo"] for r in del_sistema})},
             "estadistico": "mediana",
-            "nota": (f"Promedios MEDIDOS del panel supervisado al {period_end} "
-                     f"({len(rows)} entidades), mediana. Comparan el MISMO corte que el "
-                     "informe: si el sistema tiene estacionalidad, se cancela a ambos lados. "
-                     "Los límites regulatorios son mínimos normativos declarados."),
+            "nota": (f"Promedios MEDIDOS al {period_end} sobre {len(del_sistema)} "
+                     f"{SISTEMA_LABEL} (mediana). El universo se declara porque dos "
+                     "poblaciones distintas producen cifras distintas para el mismo período: "
+                     "quedan fuera los agentes de cambio y las fiduciarias, que no tienen "
+                     "libro de crédito. Comparan el MISMO corte que el informe, así que la "
+                     "estacionalidad se cancela a ambos lados. Los límites regulatorios son "
+                     "mínimos normativos declarados."),
         },
     }
