@@ -254,3 +254,82 @@ def test_semaphore_invalid_value_falls_back_to_default(monkeypatch):
     assert _sem_value(NarrativeEngine()) == 10
     monkeypatch.setattr(claude_engine.settings, "NARRATIVE_MAX_CONCURRENCY", -3, raising=False)
     assert _sem_value(NarrativeEngine()) == 10
+
+
+# ── Huella de RECETA en la clave de caché ─────────────────────────────────────
+#
+# Hallazgo 2026-08-06: la clave hasheaba la PREGUNTA (contexto/plantilla/modo/idioma/eje/
+# audiencia) pero no la RECETA. Como la L2 es Redis con TTL de 1 h y SOBREVIVE al deploy,
+# un arreglo de prompt de cara al cliente podía quedar sin efecto hasta una hora, en
+# silencio. Pasó de verdad: #580, el veto de léxico visceral y #631 se desplegaron sin que
+# ninguna entrada se invalidara.
+
+def test_prompt_change_rotates_the_cache_key(monkeypatch):
+    """Cambiar el system DEBE cambiar la clave: es el corazón del arreglo."""
+    eng = NarrativeEngine()
+    ctx, kw = {"score": 77}, dict(template="entity_rating", mode="detailed", lang="es",
+                                  axis="banking", audience="comite_credito")
+    before = eng._cache_key(ctx, **kw)
+
+    import shared.narrative.cerebro as cerebro
+    monkeypatch.setattr(cerebro, "NO_META_COMMENTARY",
+                        cerebro.NO_META_COMMENTARY + "\nREGLA NUEVA", raising=False)
+    assert eng._cache_key(ctx, **kw) != before
+
+
+def test_guard_logic_change_rotates_the_cache_key(monkeypatch):
+    """Un cambio en el CÓDIGO del guardrail no toca ningún prompt: lo cubre GUARD_VERSION."""
+    eng = NarrativeEngine()
+    ctx, kw = {"score": 77}, dict(template="entity_rating", mode="detailed", lang="es",
+                                  axis="banking", audience="comite_credito")
+    before = eng._cache_key(ctx, **kw)
+
+    import shared.narrative.numeric_guard as ng
+    monkeypatch.setattr(ng, "GUARD_VERSION", "999", raising=False)
+    assert eng._cache_key(ctx, **kw) != before
+
+
+def test_model_change_rotates_the_cache_key(monkeypatch):
+    """Cambiar de modelo cambia la salida; antes se seguía sirviendo la del modelo viejo."""
+    eng = NarrativeEngine()
+    ctx, kw = {"score": 77}, dict(template="entity_rating", mode="detailed", lang="es",
+                                  axis="banking", audience="comite_credito")
+    before = eng._cache_key(ctx, **kw)
+    monkeypatch.setattr(claude_engine.settings, "ANTHROPIC_MODEL", "otro-modelo",
+                        raising=False)
+    assert eng._cache_key(ctx, **kw) != before
+
+
+def test_same_recipe_and_context_keeps_the_hit():
+    """El propósito de la caché es NO esperar 15-90 s: sin cambios, la clave es estable."""
+    eng = NarrativeEngine()
+    ctx, kw = {"score": 77}, dict(template="entity_rating", mode="detailed", lang="es",
+                                  axis="banking", audience="comite_credito")
+    assert eng._cache_key(ctx, **kw) == eng._cache_key(dict(ctx), **kw)
+
+
+def test_unrelated_axis_is_not_invalidated(monkeypatch):
+    """Surgical, no mazazo: tocar la doctrina de banca NO debe rotar la clave de pensiones
+    (a diferencia de namespear por el SHA del deploy, que tira todo en cada despliegue)."""
+    eng = NarrativeEngine()
+    import shared.narrative.cerebro as cerebro
+    pension_kw = dict(template="entity_rating", mode="detailed", lang="es",
+                      axis="pension_intel", audience=None)
+    before = eng._cache_key({"x": 1}, **pension_kw)
+
+    doctrine = dict(cerebro.AXIS_DOCTRINE)
+    doctrine["banking"] = doctrine["banking"] + "\nMATIZ NUEVO SOLO DE BANCA"
+    monkeypatch.setattr(cerebro, "AXIS_DOCTRINE", doctrine, raising=False)
+
+    assert eng._cache_key({"x": 1}, **pension_kw) == before
+
+
+def test_fingerprint_branch_matches_execution():
+    """La huella y la ejecución deben coincidir en la ruta elegida: si divergieran, la
+    huella describiría una receta distinta de la que corre — el mismo modo de falla que
+    este cambio cierra. Por eso ambas consultan `_uses_cerebro`."""
+    from shared.narrative.claude_engine import _uses_cerebro
+    assert _uses_cerebro("entity_rating", "banking")
+    assert not _uses_cerebro("entity_rating", None)          # sin eje → legacy
+    assert not _uses_cerebro("executive_summary", "banking")  # sin thin → legacy
+    assert not _uses_cerebro("entity_rating", "__sin_doctrina__")

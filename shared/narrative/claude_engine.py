@@ -1171,6 +1171,33 @@ CACHE_TTL_SECONDS = 3600  # 1 hour
 _L2_NS = "narr:v1:"
 
 
+def _legacy_system() -> str:
+    """System de la ruta legacy (market_brief, cross_compare, deal_outlook, etc.).
+
+    Aplica el registro de voz Y la disciplina anti-fabricación/incertidumbre — hallazgo del
+    2026-07-17: esta ruta corría con SOLO el registro de voz, sin la regla dura que prohíbe
+    inventar cifras ni la distinción dato/inferencia/conjetura. No hay razón de producto
+    para que esa garantía exista en 6 ejes y no en el resto. Deliberadamente SIN
+    BARRA_DE_INSIGHT ni CEREBRO_IDENTITY: la profundidad analítica del cerebro es una
+    decisión de producto aparte; "no fabricar" aplica siempre.
+    """
+    from shared.narrative.cerebro import (
+        DIRECTION_DISCIPLINE, EPISTEMIC_STANDARD, NO_META_COMMENTARY, REGISTER_NEUTRO)
+    return (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
+            + "\n\n" + DIRECTION_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
+
+
+def _uses_cerebro(template: str, axis: Optional[str]) -> bool:
+    """¿Esta (plantilla, eje) va por la ruta cerebro? Fuente ÚNICA de la decisión.
+
+    La consultan tanto ``generate`` (para ejecutar) como ``_recipe_fingerprint`` (para
+    cachear). Duplicar la condición sería exactamente el modo de falla que este cambio
+    viene a cerrar: la huella describiría una receta distinta de la que se ejecuta.
+    """
+    from shared.narrative.cerebro import AXIS_DOCTRINE
+    return bool(axis) and template in THIN_TEMPLATES and axis in AXIS_DOCTRINE
+
+
 @dataclass
 class NarrativeResult:
     text: str
@@ -1221,10 +1248,42 @@ class NarrativeEngine:
                 logger.warning("anthropic package not installed, using fallback templates")
         return self._client
 
+    def _recipe_fingerprint(self, template: str, mode: str, axis: Optional[str],
+                            audience: Optional[str]) -> str:
+        """Huella de CÓMO se produce el texto: system ensamblado + plantilla + modelo + guard.
+
+        La clave de caché hashea la PREGUNTA (contexto, plantilla, modo, idioma, eje,
+        audiencia) pero no la RECETA, así que asume "misma pregunta ⇒ misma respuesta". Es
+        falso cada vez que cambiamos un prompt, el modelo o el guardrail: la caché seguía
+        sirviendo el texto viejo —hasta 1 h en Redis, que sobrevive al deploy— y un arreglo
+        de cara al cliente quedaba sin efecto en silencio. Pasó de verdad: `NO_META_COMMENTARY`
+        (#580), el veto de léxico visceral y `DIRECTION_DISCIPLINE` (#631) se desplegaron sin
+        que ninguna entrada cacheada se invalidara.
+
+        Al hashear el system REAL, un cambio de prompt rota solas las entradas afectadas: no
+        hay bump que recordar (el que existía nunca se movió) y —a diferencia de namespear
+        por el SHA del deploy— NO se tira la caché entera en cada despliegue. Esa distinción
+        importa: esta caché existe para que la descarga no espere ~15-90 s, y en régimen
+        normal (misma receta, mismo dato) el HIT sigue siendo HIT.
+        """
+        from shared.narrative.cerebro import DEEP_DIRECTIVE, build_system
+        from shared.narrative.numeric_guard import GUARD_VERSION
+
+        parts = [settings.ANTHROPIC_MODEL or "", GUARD_VERSION]
+        if _uses_cerebro(template, axis) and axis:  # `and axis` es redundante: estrecha el tipo
+            parts += [build_system(axis, audience, mode), THIN_TEMPLATES[template]]
+            if mode == "deep":
+                parts.append(DEEP_DIRECTIVE)
+        else:
+            parts += [_legacy_system(),
+                      TEMPLATES.get(template) or TEMPLATES["executive_summary"]]
+        return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
+
     def _cache_key(self, context: dict, template: str, mode: str, lang: str,
                    axis: Optional[str] = None, audience: Optional[str] = None) -> str:
         content = (json.dumps(context, sort_keys=True, default=str)
-                   + template + mode + lang + (axis or "") + (audience or ""))
+                   + template + mode + lang + (axis or "") + (audience or "")
+                   + self._recipe_fingerprint(template, mode, axis, audience))
         return hashlib.sha256(content.encode()).hexdigest()
 
     def _get_cached(self, key: str) -> Optional[NarrativeResult]:
@@ -1462,16 +1521,16 @@ class NarrativeEngine:
         max_tokens = 4096 if mode == "deep" else 2048 if mode == "detailed" else 1024
 
         if axis:  # ── ruta cerebro: system ensamblado + template thin ──
-            from shared.narrative.cerebro import AXIS_DOCTRINE, DEEP_DIRECTIVE, build_system
-            thin = THIN_TEMPLATES.get(template)
-            if not thin or axis not in AXIS_DOCTRINE:
+            from shared.narrative.cerebro import DEEP_DIRECTIVE, build_system
+            if not _uses_cerebro(template, axis):
                 # axis sin doctrina o template sin thin → ruta legacy (nunca KeyError:
-                # generate_report_narratives no tiene try/except propio).
+                # generate_report_narratives no tiene try/except propio). La decisión la
+                # toma `_uses_cerebro`, la MISMA que consulta la huella de caché.
                 logger.warning("Cerebro no aplicable (axis=%s, template=%s); ruta legacy",
                                axis, template)
             else:
                 system = build_system(axis, audience, mode)
-                user_body = thin.format(context=context_str)
+                user_body = THIN_TEMPLATES[template].format(context=context_str)
                 if mode == "deep":  # override de longitud al final → gana sobre el tope del thin
                     user_body = f"{user_body}\n\n{DEEP_DIRECTIVE}"
                 user = _apply_lang(user_body, lang)
@@ -1502,17 +1561,7 @@ class NarrativeEngine:
 
         prompt = _apply_lang(prompt_template.format(context=context_str), lang)
 
-        # Aun en la ruta legacy (market_brief, cross_compare, deal_outlook, etc.) se aplica el
-        # registro de voz Y la disciplina anti-fabricación/incertidumbre — hallazgo del
-        # 2026-07-17: esta ruta corría con SOLO el registro de voz, sin la regla dura que
-        # prohíbe inventar cifras ni la distinción dato/inferencia/conjetura. No hay razón
-        # de producto para que esa garantía exista en 6 ejes y no en el resto. Deliberadamente
-        # SIN BARRA_DE_INSIGHT ni CEREBRO_IDENTITY: la profundidad analítica del cerebro es
-        # una decisión de producto aparte; "no fabricar" aplica siempre.
-        from shared.narrative.cerebro import (
-            DIRECTION_DISCIPLINE, EPISTEMIC_STANDARD, NO_META_COMMENTARY, REGISTER_NEUTRO)
-        legacy_system = (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
-                         + "\n\n" + DIRECTION_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
+        legacy_system = _legacy_system()
 
         try:
             # to_thread + semáforo: mismo motivo que la ruta cerebro — liberar el event loop
