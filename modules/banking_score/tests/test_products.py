@@ -446,7 +446,10 @@ def test_named_snapshot_includes_named_peers(db):
     assert subj["rank"] == 3 and subj["rank_in_type"] == 1  # rank global se conserva
     by_name = {r["name"]: r for r in rows}
     # el par del MISMO tipo entra con su dato real
-    assert by_name["Financiera Par SA"]["score"] == 55.0
+    # `overall_score`: el campo NOMBRA la métrica. Con `score` a secas la §Comparativo
+    # atribuyó el ranking global al sub-componente de solidez.
+    assert by_name["Financiera Par SA"]["overall_score"] == 55.0
+    assert "score" not in by_name["Financiera Par SA"]
     assert by_name["Financiera Par SA"]["rank_in_type"] == 2
     # los líderes de OTRO tipo quedan FUERA del grupo de pares
     assert "Banco Grande SA" not in by_name and "Banco Medio SA" not in by_name

@@ -111,6 +111,25 @@ TEMPLATES = {
         "Incluye: factores de riesgo principales, mitigantes, perspectiva, "
         "y comparación con benchmarks del sector. Máximo 600 palabras."
     ),
+    # Resumen ejecutivo de un boletín de SISTEMA (wire / datawatch). Existe porque
+    # `executive_summary` resolvía a `banking_summary`, que es la plantilla POR ENTIDAD: a un
+    # reporte sin banco se le entregaba un `scoring_result` en ceros y el modelo —bien— se
+    # negaba a analizar, dejando la disculpa impresa como cuerpo del PDF. Peor en DataWatch:
+    # esa disculpa convivía con una sección de Tendencias completa y con cifras reales sobre
+    # el MISMO período, que se lee como bug en vivo y no como función pendiente. Esta
+    # plantilla lee el sistema (benchmarks sectoriales), que es lo que el reporte sí tiene.
+    "system_summary": (
+        "Eres el analista jefe de un boletín sobre el SISTEMA bancario dominicano en su "
+        "conjunto. El sujeto es el SISTEMA, no una entidad: no existe ni se espera un banco "
+        "individual, y no debes pedir datos de entidad ni señalar su ausencia.\n\n"
+        "Datos del sistema:\n{context}\n\n"
+        "Escribe el resumen ejecutivo en formato SCQA (situación, complicación, pregunta, "
+        "respuesta). Apóyate en los promedios sectoriales y de los grupos de pares que trae "
+        "el contexto (capitalización, morosidad, rentabilidad, eficiencia, liquidez) y en los "
+        "límites regulatorios cuando ayuden a dimensionar. Da la lectura del sistema: qué "
+        "sostiene su solidez agregada, dónde está la tensión y qué vigilar en el próximo "
+        "corte. Máximo 400 palabras. Usa SOLO cifras del contexto; ninguna inventada."
+    ),
     "trend_analysis": (
         "Eres un analista financiero especializado en tendencias del sector bancario dominicano.\n\n"
         "Analiza las tendencias para:\n{context}\n\n"
@@ -1182,9 +1201,11 @@ def _legacy_system() -> str:
     decisión de producto aparte; "no fabricar" aplica siempre.
     """
     from shared.narrative.cerebro import (
-        DIRECTION_DISCIPLINE, EPISTEMIC_STANDARD, NO_META_COMMENTARY, REGISTER_NEUTRO)
+        DIRECTION_DISCIPLINE, EPISTEMIC_STANDARD, NO_META_COMMENTARY, REGISTER_NEUTRO,
+        SCOPE_DISCIPLINE)
     return (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD
-            + "\n\n" + DIRECTION_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
+            + "\n\n" + DIRECTION_DISCIPLINE + "\n\n" + SCOPE_DISCIPLINE
+                         + "\n\n" + NO_META_COMMENTARY)
 
 
 def _uses_cerebro(template: str, axis: Optional[str]) -> bool:

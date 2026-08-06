@@ -416,3 +416,55 @@ def test_wrapped_sentence_across_lines_is_still_checked():
             "regulatoria y del promedio del grupo de bancos grandes (1.5%), con el\n"
             "98.25% de la cartera en la categoría de menor riesgo.")
     assert deterministic_direction_errors(_bank_ctx(), text)
+
+
+# ── Superlativo transversal: ahora también banca y seguros ────────────────────
+#
+# Hallazgos del Deep Dive de banca (2026-08-06). El patrón 8 existía pero era LETRA MUERTA
+# fuera de pensiones: sólo `pension_intel` inyectaba `posiciones_dimension`, y su léxico y
+# sus sinónimos de dimensión eran del vocabulario de AFP.
+
+def _banca_pos():
+    return {"posiciones_dimension": {
+        "Solidez Financiera": {"rank": 1, "n": 16, "es_lider": True,
+                               "lider": "Banco Popular Dominicano", "lider_score": 100.0},
+        "Liquidez": {"rank": 12, "n": 16, "es_lider": False,
+                     "lider": "BDI", "lider_score": 88.0},
+    }}
+
+
+def test_superlativo_de_banca_en_dimension_que_no_lidera():
+    """Ámbito 'de la banca múltiple' — antes el regex sólo reconocía 'del sistema/de las AFP'."""
+    txt = "Su liquidez es la más alta de la banca múltiple."
+    flags = deterministic_direction_errors  # noqa: F841 — evita import no usado en el módulo
+    out = deterministic_unsupported(_banca_pos(), txt)
+    assert any("Liquidez" in f for f in out), out
+
+
+def test_sin_precedente_es_un_salto_de_alcance_temporal():
+    """El hallazgo #3: percentil 100 dice 'el mejor de la muestra ACTUAL', no 'nunca visto'."""
+    txt = "Presenta una capacidad de liquidez sin precedente en el sistema."
+    out = deterministic_unsupported(_banca_pos(), txt)
+    assert any("Liquidez" in f for f in out), out
+
+
+def test_superlativo_valido_en_la_dimension_que_si_lidera():
+    """Popular SÍ lidera solidez (100/100, percentil 100): la afirmación es cierta."""
+    txt = "Registra la solvencia más alta del sistema."
+    out = deterministic_unsupported(_banca_pos(), txt)
+    assert not any("Solidez" in f for f in out), out
+
+
+def test_lider_generico_en_el_mensaje():
+    """El campo transversal es `lider`; `lider_afp` sigue funcionando para pensiones."""
+    out = deterministic_unsupported(_banca_pos(), "La liquidez más alta del sistema.")
+    assert any("BDI" in f for f in out), out
+    legacy = {"posiciones_dimension": {"Escala (AUM)": {
+        "rank": 2, "n": 7, "es_lider": False, "lider_afp": "AFP Popular"}}}
+    out2 = deterministic_unsupported(legacy, "Tiene la mayor escala del sistema.")
+    assert any("AFP Popular" in f for f in out2), out2
+
+
+def test_sin_posiciones_no_se_juzga_superlativo():
+    """Best-effort: sin el dato no se inventa un veredicto."""
+    assert deterministic_unsupported({}, "Es el mayor del sistema en liquidez.") == []

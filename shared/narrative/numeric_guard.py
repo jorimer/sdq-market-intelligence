@@ -351,12 +351,22 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
         #     global #1 mal-generalizado a "el mayor" en escala/solvencia que otro lidera.
         pos = context.get("posiciones_dimension") or {}
         if pos:
+            # Sinónimos TRANSVERSALES: además de las dimensiones de pensiones (donde nació
+            # el patrón) cubren las de banca (solidez/calidad/eficiencia/liquidez/
+            # diversificación) y seguros (siniestralidad/técnico). Sin esto el patrón
+            # reconocía la dimensión sólo en el vocabulario de pensiones.
             _SYN = {
-                "escala": ("escala", "activos", "fondo", "aum", "tamaño", "tamano", "masa"),
-                "solvencia": ("solvencia", "patrimon", "capital", "apalancam"),
-                "rentabilidad": ("rentabilidad", "retorno", "rendimiento"),
-                "riesgo": ("riesgo", "volatil", "consistencia", "sharpe"),
-                "costo": ("costo", "comisi", "eficien"),
+                "escala": ("escala", "activos", "fondo", "aum", "tamaño", "tamano", "masa",
+                           "primas", "cartera"),
+                "solvencia": ("solvencia", "patrimon", "capital", "apalancam", "solidez",
+                              "icap", "cobertura"),
+                "rentabilidad": ("rentabilidad", "retorno", "rendimiento", "roa", "roe",
+                                 "margen", "utilidad", "resultado"),
+                "riesgo": ("riesgo", "volatil", "consistencia", "sharpe", "calidad",
+                           "morosidad", "mora", "siniestral"),
+                "costo": ("costo", "comisi", "eficien", "gasto"),
+                "liquidez": ("liquidez", "liquid", "fondeo", "depósit", "deposit"),
+                "diversificacion": ("diversificaci", "concentraci", "hhi", "herfindahl"),
             }
 
             def _group(label: str):
@@ -372,10 +382,24 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
                     kws = set(_SYN.get(_group(str(label)), ())) | {str(label).lower().split()[0]}
                     not_led[label] = (info, kws)
 
+            # Léxico del superlativo. "sin precedente / nunca visto / inigualable" se suma
+            # tras el hallazgo del Deep Dive de banca ("capacidad de absorción de pérdidas
+            # sin precedente en el sistema"): un percentil 100 dice "el mejor de la muestra
+            # ACTUAL", jamás "nunca visto en la historia del sistema" — es un salto de
+            # alcance temporal, no solo un superlativo transversal.
+            # El ámbito se amplía a los grupos de banca y seguros; antes sólo reconocía el
+            # vocabulario de pensiones, así que en esos ejes no disparaba nunca.
             _SUPER = re.compile(
-                r"(mayor|m[áa]s\s+alt[oa]|m[áa]s\s+baj[oa]|l[íi]der|dominante)"
-                r"[^.\n]{0,50}?(del\s+sistema|del\s+panel|del\s+mercado|de\s+las\s+afp|"
-                r"entre\s+las\s+afp)", re.I)
+                r"(mayor|m[áa]s\s+alt[oa]|m[áa]s\s+baj[oa]|l[íi]der|dominante|"
+                r"sin\s+precedente[s]?|nunca\s+vist[oa]|inigualable|insuperable|"
+                r"sin\s+par(?:ang[óo]n)?|el\s+mejor|la\s+mejor)"
+                # La ventana se queda en 50: ampliarla deja que un superlativo LEJANO se
+                # coma el claim de otra dimensión ("la mayor base de activos con el índice
+                # de solvencia más alto del panel" se anclaba en escala en vez de solvencia).
+                r"[^.\n]{0,50}?(del\s+sistema|en\s+el\s+sistema|del\s+panel|del\s+mercado|"
+                r"de\s+las\s+afp|entre\s+las\s+afp|de\s+la\s+banca|entre\s+los\s+bancos|"
+                r"del\s+grupo|de\s+sus\s+pares|entre\s+sus\s+pares|del\s+sector|"
+                r"de\s+las\s+aseguradoras|entre\s+las\s+aseguradoras)", re.I)
             for m in _SUPER.finditer(text):
                 pre = text[max(0, m.start() - 30):m.start()].lower()
                 if re.search(r"\b(no|tampoco|ni)\b|sin\s+ser", pre):
@@ -393,10 +417,13 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
                             best, best_dist = (label, info), abs(anchor - idx)
                 if best:
                     label, info = best
+                    # `lider` es el campo transversal; `lider_afp` se conserva por el
+                    # contexto de pensiones, que lo emite con ese nombre.
+                    lider = info.get("lider") or info.get("lider_afp")
                     flags.append(
                         f"'{m.group(0).strip()}' en {label}: la entidad no lidera esa "
                         f"dimensión (rank {info.get('rank')}/{info.get('n')}; lidera "
-                        f"{info.get('lider_afp')})")
+                        f"{lider})")
 
         # (4) 'aporta(n) N puntos' que no traza a ningún aporte ni suma de aportes
         aportes = []

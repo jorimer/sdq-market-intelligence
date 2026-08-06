@@ -15,6 +15,36 @@ def _dims(rating: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
+def _posiciones(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Posición de la aseguradora en CADA dimensión, para vetar el superlativo transversal.
+
+    El patrón nació y se curó en pensiones, pero su input (``posiciones_dimension``) sólo se
+    inyectaba allí: el veto de ``numeric_guard`` se saltaba entero en seguros, así que un
+    rank ISF global podía narrarse como "la más sólida del mercado" en una dimensión que
+    otra lidera. Mismo helper transversal que usa banca.
+    """
+    from shared.narrative.derived import posiciones_por_dimension
+
+    panel = [
+        {"id": p.get("slug"), "name": p.get("name") or p.get("slug"),
+         "dimensiones": {d.get("label"): d.get("score")
+                         for d in (p.get("dimensions") or []) if d.get("label")}}
+        for p in peers or []
+    ]
+    return posiciones_por_dimension(rating.get("slug"), panel)
+
+
+_ANTI_SUPERLATIVO = (
+    " POSICIÓN POR DIMENSIÓN: 'posiciones_dimension' trae {rank, n, es_lider, lider} por "
+    "dimensión. NO afirmes que esta aseguradora es 'la mayor / la más alta / la líder del "
+    "mercado' en una dimensión salvo que 'es_lider' sea true en ESA dimensión; si no lidera, "
+    "da su posición real y nombra a quién lidera. El rank ISF GLOBAL no implica liderar cada "
+    "dimensión. Y un percentil o un primer lugar describen la MUESTRA ACTUAL: nunca los "
+    "narres como 'sin precedente' o 'nunca visto' — eso afirma sobre la historia, que no se "
+    "midió."
+)
+
+
 def insurance_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Context for a named insurer's ISF assessment (template ``insurance_entity``)."""
     ranked = [p for p in peers if p.get("overall_score") is not None]
@@ -28,12 +58,13 @@ def insurance_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]
         "n_aseguradoras_rankeadas": len(ranked),
         "periodo": rating.get("period"),
         "dimensiones": _dims(rating),
+        "posiciones_dimension": _posiciones(rating, peers),
         "direction": "mayor solvencia/liquidez/resultado y menor siniestralidad = más sólida",
         "source": "SIS — estados financieros auditados por compañía (dato real)",
         "note": ("El ISF integra cinco dimensiones sobre los estados financieros auditados que "
                  "publica la SIS: solvencia (patrimonio/activos), siniestralidad (loss ratio), "
                  "liquidez, escala y resultado técnico. Es una medida de solidez por bandas, no "
-                 "un rating de crédito ni una clasificación de Solvencia II."),
+                 "un rating de crédito ni una clasificación de Solvencia II." + _ANTI_SUPERLATIVO),
     }
 
 
@@ -56,8 +87,10 @@ def insurance_peer_context(name: str, rating: Dict[str, Any],
         "tabla_pares": [_cell(p) for p in ranked[:12]],
         "lider_isf": ranked[0].get("name") if ranked else None,
         "promedio_isf": avg,
+        "posiciones_dimension": _posiciones(rating, peers),
         "source": "SIS — estados financieros auditados por compañía (dato real)",
-        "note": "Posición relativa por bandas de solidez (0-100). No es un rating de crédito.",
+        "note": ("Posición relativa por bandas de solidez (0-100). No es un rating de crédito."
+                 + _ANTI_SUPERLATIVO),
     }
 
 

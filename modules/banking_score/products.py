@@ -15,7 +15,7 @@ verifica con el roster que ``snapshot`` adjunta).
 from __future__ import annotations
 
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -352,9 +352,21 @@ def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str
         entries.append({
             "bank_id": b.id, "name": b.name,
             "type": b.bank_type.value if b.bank_type else "",
-            "score": float(rr.overall_score), "tier": rr.rating_tier,
+            # `overall_score`, no `score` a secas. El campo pelado no decía DE QUÉ era el
+            # puntaje y la §Comparativo lo rotuló como "solidez financiera" —el
+            # sub-componente de 40%— contradiciendo su propia tabla, donde esa dimensión
+            # marca 100/100. Pensiones y seguros ya nombraban el campo así; banca era la
+            # excepción. El nombre es la mitad del dato.
+            "overall_score": float(rr.overall_score), "tier": rr.rating_tier,
             "rank": rank, "rank_in_type": type_rank if same_type else None,
             "is_subject": b.id == bank.id,
+            "_sub": {  # interno: alimenta las posiciones por dimensión, se descarta abajo
+                "Solidez Financiera": rr.solidez_score,
+                "Calidad de Activos": rr.calidad_score,
+                "Eficiencia y Rentabilidad": rr.eficiencia_score,
+                "Liquidez": rr.liquidez_score,
+                "Diversificación": rr.diversificacion_score,
+            },
         })
     n_type = type_rank
     subject = next(e for e in entries if e["is_subject"])
@@ -364,12 +376,40 @@ def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str
     picked: Dict[str, Dict[str, object]] = {e["bank_id"]: e for e in pool[:_NAMED_PEERS_TOP_N]}
     picked.setdefault(subject["bank_id"], subject)
     out_rows = sorted(picked.values(), key=lambda e: e["rank"])
+
+    # Posición de la entidad en CADA sub-componente, computada del panel COMPLETO (no del
+    # corte de 5 mostrado). Es lo que faltaba para que el comparativo pueda decir la verdad
+    # —"#1 del sistema en solidez, 2º en calificación global"— en vez de colapsar ambas
+    # cosas en una sola frase; y es lo que activa el veto de superlativos del guardrail,
+    # que sin este dato se saltaba entero en banca.
+    from shared.narrative.derived import posiciones_por_dimension
+
+    panel = []
+    for e in entries:
+        subs = e.get("_sub")
+        if not isinstance(subs, dict):
+            continue
+        panel.append({
+            "id": e["bank_id"], "name": e["name"],
+            "dimensiones": {k: (float(v) if v is not None else None)
+                            for k, v in subs.items()},
+        })
+    posiciones = posiciones_por_dimension(str(bank.id), panel)
+
     for e in out_rows:
         e.pop("bank_id", None)  # el payload narra nombres, no ids internos
+        e.pop("_sub", None)
+    for e in entries:
+        e.pop("_sub", None)
+
     return {
         "entity_type": btype.value if btype else "",
         "n_system": len(entries), "n_type": n_type,
+        # Rótulo EXPLÍCITO de qué ordena la tabla: sin él, la narrativa atribuyó el ranking
+        # global a un sub-componente.
+        "ranking_por": "calificación global (0-100), NO un sub-componente",
         "rows": out_rows,
+        "posiciones_dimension": posiciones,
     }
 
 
@@ -476,7 +516,10 @@ class BankingProduct:
         # indicador. Se calculan aquí (con DB) y viajan en el scoring_result porque
         # narratives()/render() operan sin DB. Degradan con gracia (dicts vacíos) para
         # entidades con un solo período o sin pares.
-        scoring_result["trayectorias"] = entity_trajectories(db, bank)
+        # `as_of` = el corte del informe: la trayectoria no arrastra períodos posteriores
+        # al que anuncia la portada (ver entity_trajectories).
+        scoring_result["trayectorias"] = entity_trajectories(
+            db, bank, as_of=cast(date, rr.period_end))
         scoring_result["percentiles"] = period_percentiles(db, bank, rr.period_end)
         entity_type = bank.bank_type.value if bank.bank_type else None
         # Entorno Operativo + Sensibilidades (Fase 4) son amplitud EXCLUSIVA del Deep Dive

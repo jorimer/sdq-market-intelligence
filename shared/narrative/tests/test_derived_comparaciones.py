@@ -64,3 +64,39 @@ def test_valores_ausentes_o_no_numericos_se_saltan():
 def test_indicador_sin_referencia_no_produce_fila():
     comps = comparaciones_vs_referencia({"a": 1.0, "b": 2.0}, {"a": {"ref": 3.0}})
     assert [c["indicador"] for c in comps] == ["a"]
+
+
+# ── Posiciones por dimensión (transversal) ────────────────────────────────────
+#
+# El input del veto de superlativos. Sólo lo inyectaba pensiones, así que el patrón 8 de
+# `numeric_guard` era letra muerta en banca y seguros.
+
+from shared.narrative.derived import posiciones_por_dimension  # noqa: E402
+
+_PANEL = [
+    {"id": "bpd", "name": "Banco Popular", "dimensiones": {"Solidez": 100.0, "Liquidez": 71.5}},
+    {"id": "bdi", "name": "BDI", "dimensiones": {"Solidez": 98.0, "Liquidez": 88.0}},
+    {"id": "bhd", "name": "BHD", "dimensiones": {"Solidez": 95.0, "Liquidez": 80.0}},
+]
+
+
+def test_lider_y_no_lider_en_el_mismo_panel():
+    """El caso real: #1 en solidez pero rezagado en liquidez. Colapsar ambas en una sola
+    afirmación fue el bug."""
+    pos = posiciones_por_dimension("bpd", _PANEL)
+    assert pos["Solidez"]["es_lider"] is True and pos["Solidez"]["rank"] == 1
+    assert pos["Liquidez"]["es_lider"] is False
+    assert pos["Liquidez"]["rank"] == 3
+    assert pos["Liquidez"]["lider"] == "BDI"
+
+
+def test_entidad_sin_score_en_la_dimension_no_produce_posicion():
+    """Mejor callar que afirmar una posición que no se puede computar."""
+    panel = [{"id": "a", "name": "A", "dimensiones": {"X": None}},
+             {"id": "b", "name": "B", "dimensiones": {"X": 10.0}}]
+    assert posiciones_por_dimension("a", panel) == {}
+
+
+def test_panel_vacio_o_invalido_es_seguro():
+    assert posiciones_por_dimension("x", []) == {}
+    assert posiciones_por_dimension("x", [{"id": "y", "name": "Y"}]) == {}

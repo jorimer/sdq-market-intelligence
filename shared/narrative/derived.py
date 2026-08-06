@@ -164,3 +164,64 @@ def comparaciones_vs_referencia(
                 "brecha_pp": brecha,
             })
     return out
+
+
+# ── Posición por dimensión (anti-superlativo transversal) ────────────────────
+#
+# Sin esto la narrativa solo conoce sus scores propios y su rank GLOBAL, así que infiere
+# superlativos falsos: "el mayor del sistema", "capacidad sin precedente" — cuando en
+# realidad es #1 global pero #2 en esa dimensión concreta. El modo se diagnosticó y se curó
+# en pensiones; vivía sólo ahí, así que en banca y seguros el guard de `numeric_guard`
+# (patrón 8) se saltaba entero por falta de este dato. Esta es la versión transversal.
+
+def posiciones_por_dimension(
+    subject_id: Optional[str],
+    panel: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Posición de la entidad en CADA dimensión, computada del panel.
+
+    Args:
+        subject_id: identificador de la entidad analizada dentro del panel.
+        panel: ``[{"id": str, "name": str, "dimensiones": {etiqueta: score}}]``. Forma
+            normalizada: cada eje adapta la suya (pensiones/seguros traen ``dimensions``
+            como lista de dicts; banca, columnas de sub-componente).
+
+    Returns:
+        ``{etiqueta: {dimension, rank, n, es_lider, lider, lider_score}}``. Un score mayor
+        es siempre mejor posición (los scores ya vienen orientados, incluido costo).
+        Lo lee la narrativa y también ``numeric_guard`` para vetar el superlativo donde la
+        entidad no lidera.
+    """
+    out: Dict[str, Any] = {}
+    etiquetas: List[str] = []
+    for ent in panel or []:
+        for et in (ent.get("dimensiones") or {}):
+            if et not in etiquetas:
+                etiquetas.append(et)
+
+    for etiqueta in etiquetas:
+        filas = []
+        for ent in panel or []:
+            val = (ent.get("dimensiones") or {}).get(etiqueta)
+            if val is None:
+                continue
+            try:
+                filas.append((ent.get("name"), ent.get("id"), float(val)))
+            except (TypeError, ValueError):
+                continue
+        if not filas:
+            continue
+        filas.sort(key=lambda t: t[2], reverse=True)
+        rank = next((i + 1 for i, t in enumerate(filas) if t[1] == subject_id), None)
+        if rank is None:
+            continue  # la entidad no puntúa esta dimensión: no se afirma posición
+        lider = filas[0]
+        out[etiqueta] = {
+            "dimension": etiqueta,
+            "rank": rank,
+            "n": len(filas),
+            "es_lider": rank == 1,
+            "lider": lider[0],
+            "lider_score": round(lider[2], 2),
+        }
+    return out
