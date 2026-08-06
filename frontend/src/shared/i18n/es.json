@@ -1045,6 +1045,10 @@
     "repColPeriod": "Período",
     "repColStatus": "Estado",
     "repColAction": "Acción",
+    "repSystemTitle": "Informes de sistema",
+    "repSystemSub": "Metodología y boletines del sistema — no dependen de una entidad.",
+    "repSystemEmpty": "Aún no hay informes de sistema generados.",
+    "repNoPeriod": "sin período",
     "repType": {
       "full_rating": "Rating completo",
       "scorecard": "Scorecard",

@@ -306,6 +306,15 @@ async def generate_report_narratives(
 
     Returns ``{section_key: narrative_text}``.
     """
+    # El documento de criterios NO se narra: es la metodología, determinista y generada de
+    # la configuración del motor. Se intercepta acá —el choke point de AMBAS rutas (informe
+    # de sistema y por-banco)— para que ninguna pueda pedirle a la IA que narre una
+    # plantilla por-banco con un scoring_result vacío, que era el defecto original. Sin
+    # sesión de DB se omite el backtest vivo; jamás se inventa una cifra.
+    if report_type == "criteria":
+        from modules.banking_score.reports.criteria_doc import build_criteria_document
+        return build_criteria_document()
+
     sections = REPORT_SECTIONS.get(report_type, ["executive_summary"])
     narratives: Dict[str, str] = {}
 

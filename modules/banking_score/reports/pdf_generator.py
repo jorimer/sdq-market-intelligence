@@ -94,6 +94,14 @@ NARRATIVE_SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 
+# Documento de Criterios — secciones DETERMINISTAS generadas del motor (criteria_doc).
+try:
+    from modules.banking_score.reports.criteria_doc import (
+        SECTION_TITLES as _CRIT_TITLES)
+    NARRATIVE_SECTION_TITLES = {**NARRATIVE_SECTION_TITLES, **_CRIT_TITLES}
+except ImportError:  # pragma: no cover — el reporte no debe romper por esto
+    pass
+
 # Las secciones ESTÁNDAR auto-generadas (metodología/fuentes/glosario, ver
 # shared/products/report_sections.py) llegan en ``narratives`` con esas claves. Sin este
 # merge, ``_build_narrative_sections`` no las reconoce y cae al fallback
