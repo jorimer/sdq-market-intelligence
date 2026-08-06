@@ -389,9 +389,16 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
             "profiles": profiles, "n_alerts": sum(len(b["alerts"]) for b in banks)}
 
 
-def bank_alerts(db: Session, bank_id: str) -> Dict:
-    """Alertas de UNA entidad al último período (para el deep dive / endpoint por-banco)."""
-    block = compute_alerts(db)
+def bank_alerts(db: Session, bank_id: str, period: Optional[date] = None) -> Dict:
+    """Alertas de UNA entidad EN *period* (el corte del informe), o al último si no se indica.
+
+    El parámetro existe porque sin él el bloque de alertas de un Deep Dive "al 31-dic-2025"
+    mostraba el corte de marzo-2026: el MISMO informe reportaba la concentración top-10 en
+    50,9% (§Calidad de Activos, dic) y 51,5% (§Alerta Temprana, mar). Se leía como dato
+    inconsistente cuando en realidad eran dos FECHAS. Misma familia que la trayectoria y las
+    capas de contexto: el corte del informe manda sobre todo lo que muestra.
+    """
+    block = compute_alerts(db, period)
     entry = next((b for b in block["banks"] if b["bank_id"] == bank_id), None)
     return {"period": block["period"],
             "alerts": entry["alerts"] if entry else [],
