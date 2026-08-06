@@ -583,7 +583,11 @@ class BankingProduct:
             # Alerta temprana (C): banderas de monitoreo de la entidad (precursores 2003).
             # Se computa con DB aquí; narratives() la formatea sin DB. Solo Deep Dive.
             from modules.banking_score.early_warning import bank_alerts
-            scoring_result["early_warning"] = bank_alerts(db, bank.id)
+            # AL CORTE del informe, no al último período disponible: si no, un Deep Dive
+            # de diciembre mostraba las alertas de marzo y sus cifras contradecían las
+            # propias del documento.
+            scoring_result["early_warning"] = bank_alerts(
+                db, bank.id, cast(date, rr.period_end))
         conc = compute_market_concentration(db, rr.period_end, "activos")
         peer_block: Dict[str, object] = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
                                           "cr10": conc["cr10"], "hhi": conc["hhi"]}
