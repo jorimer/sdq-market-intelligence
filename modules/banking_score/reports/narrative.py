@@ -140,12 +140,22 @@ def _build_system_context(report_type: str, scope_name: str, period: str,
 # por debajo del sistema y por encima de su grupo de pares a la vez (la mora de BPD lo está),
 # y confundir las bases fue justamente el bug de dirección del 2026-08-05.
 _PEER_GROUP_LABEL: Dict[str, str] = {
-    "large_banks": "promedio de bancos grandes",
-    "medium_banks": "promedio de bancos medianos",
+    # Claves de los benchmarks MEDIDOS del panel (por tipo de entidad supervisada). El
+    # grupo se deriva del catálogo, no de una lista de nombres fija que envejece con cada
+    # fusión. Se conservan las claves viejas mientras exista el fallback declarado.
+    "banca_multiple": "promedio de bancos múltiples",
+    "aap": "promedio de asociaciones de ahorros y préstamos",
+    "banco_ahorro_credito": "promedio de bancos de ahorro y crédito",
+    "corporacion_credito": "promedio de corporaciones de crédito",
+    "cambiaria": "promedio de agentes de cambio",
+    "fiduciaria": "promedio de fiduciarias",
+    "large_banks": "promedio de bancos grandes (referencia declarada)",
+    "medium_banks": "promedio de bancos medianos (referencia declarada)",
 }
 
 
-def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict]) -> list:
+def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
+                             entity_type: Optional[str] = None) -> list:
     """Comparaciones indicador↔referencia con la DIRECCIÓN ya computada.
 
     El modelo no debe derivar "por encima / por debajo": erra la relación aunque las cifras
@@ -172,8 +182,16 @@ def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict]) -
         if sector.get(bkey) is not None:
             refs["promedio del sistema"] = sector[bkey]
         for gname, grp in peers.items():
+            # Solo el grupo de pares de la PROPIA entidad. Comparar un banco múltiple
+            # contra el promedio de agentes de cambio o de fiduciarias es ruido, no señal
+            # — es la lección que ya documentaba `_named_peers` y que un panel por tipo
+            # vuelve a poner al alcance. Sin tipo conocido se usan todos (compat).
+            if entity_type and gname != entity_type and gname in _PEER_GROUP_LABEL:
+                continue
             if isinstance(grp, dict) and grp.get(f"{bkey}_avg") is not None:
-                refs[_PEER_GROUP_LABEL.get(gname, f"promedio {gname}")] = grp[f"{bkey}_avg"]
+                etiqueta = grp.get("label")
+                refs[f"promedio de {etiqueta}" if etiqueta
+                     else _PEER_GROUP_LABEL.get(gname, f"promedio {gname}")] = grp[f"{bkey}_avg"]
         if refs:
             valores[ind] = raw
             referencias[ind] = refs
@@ -281,7 +299,8 @@ def _build_section_context(
             if sub_bench:
                 ctx["pares"] = sub_bench
         # Direcciones ya resueltas, acotadas a los indicadores de ESTA dimensión.
-        comps = [c for c in _comparaciones_resueltas(all_indicators, benchmarks)
+        comps = [c for c in _comparaciones_resueltas(
+                     all_indicators, benchmarks, scoring_result.get("entity_type"))
                  if c["indicador"] in ind]
         if comps:
             ctx["comparaciones"] = comps
@@ -335,7 +354,8 @@ def _build_section_context(
         # Las comparaciones contra sistema y pares llegan RESUELTAS: el resumen ejecutivo y
         # el comparativo son las secciones donde el modelo más las enuncia, y donde erró el
         # sentido teniendo las dos cifras correctas a la vista.
-        comps = _comparaciones_resueltas(all_indicators, benchmarks)
+        comps = _comparaciones_resueltas(all_indicators, benchmarks,
+                                         scoring_result.get("entity_type"))
         if comps:
             ctx["comparaciones"] = comps
     return ctx
