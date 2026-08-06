@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText, Download } from "lucide-react";
+import { FileText, Download, Layers } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useEntityPeriodGuard } from "../components/EntityPeriodNotice";
@@ -9,6 +9,11 @@ import {
   listReports,
   generateReport,
   downloadReport,
+  listSystemReports,
+  generateSystemReport,
+  SYSTEM_REPORT_TYPES,
+  SYSTEM_REPORT_NEEDS_PERIOD,
+  SystemReportType,
   ReportItem,
 } from "../api";
 
@@ -32,6 +37,31 @@ export function ReportsPage() {
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const { blocked, notice } = useEntityPeriodGuard(bankId, bankName);
+  // Informes de SISTEMA: no dependen de la entidad seleccionada, así que llevan su propio
+  // estado y su propio listado (el de banco los filtra fuera — su `bank_id` es NULL).
+  const [sysReports, setSysReports] = useState<ReportItem[]>([]);
+  const [sysBusy, setSysBusy] = useState<string | null>(null);
+  const [sysMsg, setSysMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const loadSystemReports = useCallback(() => {
+    listSystemReports().then(setSysReports).catch(() => setSysReports([]));
+  }, []);
+
+  useEffect(() => { loadSystemReports(); }, [loadSystemReports]);
+
+  const generateSystem = async (type: SystemReportType) => {
+    setSysBusy(type);
+    setSysMsg(null);
+    try {
+      await generateSystemReport(type, periodEnd);
+      setSysMsg({ ok: true, text: t("banking.repMsgOk") });
+      loadSystemReports();
+    } catch (err: any) {
+      setSysMsg({ ok: false, text: err?.response?.data?.detail || t("banking.repMsgErr") });
+    } finally {
+      setSysBusy(null);
+    }
+  };
 
   const loadReports = useCallback((id: string) => {
     if (!id) return;
@@ -96,6 +126,71 @@ export function ReportsPage() {
           <div className={`mt-3 text-sm p-3 rounded-[10px] ${msg.ok ? "bg-ok-soft text-ok" : "bg-alert-soft text-alert"}`}>
             {msg.text}
           </div>
+        )}
+      </Card>
+
+      <Card className="mb-5">
+        <CardHead
+          icon={Layers}
+          title={t("banking.repSystemTitle")}
+          subtitle={t("banking.repSystemSub")}
+        />
+        <div className="flex flex-wrap gap-2 mb-3">
+          {SYSTEM_REPORT_TYPES.map((type) => (
+            <button
+              key={type}
+              onClick={() => generateSystem(type)}
+              disabled={sysBusy !== null}
+              className="btn btn-ghost text-xs"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {sysBusy === type
+                ? t("banking.repBtnGenerating")
+                : t(`banking.repType.${type}`, type)}
+              {!SYSTEM_REPORT_NEEDS_PERIOD[type] && (
+                <span className="text-muted ml-1">· {t("banking.repNoPeriod")}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        {sysMsg && (
+          <div className={`mb-3 text-sm p-3 rounded-[10px] ${sysMsg.ok ? "bg-ok-soft text-ok" : "bg-alert-soft text-alert"}`}>
+            {sysMsg.text}
+          </div>
+        )}
+        {sysReports.length === 0 ? (
+          <p className="text-sm text-muted py-4 text-center">{t("banking.repSystemEmpty")}</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted border-b border-line">
+                <th className="py-2 px-2 font-medium">{t("banking.repColType")}</th>
+                <th className="py-2 px-2 font-medium">{t("banking.repColPeriod")}</th>
+                <th className="py-2 px-2 font-medium">{t("banking.repColStatus")}</th>
+                <th className="py-2 px-2 font-medium text-right">{t("banking.repColAction")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sysReports.map((r) => (
+                <tr key={r.id} className="border-b border-line/60 last:border-0">
+                  <td className="py-2.5 px-2 text-ink">{t(`banking.repType.${r.report_type}`, r.report_type ?? "—")}</td>
+                  <td className="py-2.5 px-2 mono text-body">{r.period_end ?? "—"}</td>
+                  <td className="py-2.5 px-2">
+                    <Chip tone={STATUS_TONE[r.status ?? ""] ?? "muted"}>{r.status ?? "—"}</Chip>
+                  </td>
+                  <td className="py-2.5 px-2 text-right">
+                    <button
+                      onClick={() => downloadReport(r.id)}
+                      disabled={r.status !== "completed"}
+                      className="btn btn-ghost !py-1 !px-2.5 text-xs"
+                    >
+                      <Download className="w-3.5 h-3.5" /> PDF
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </Card>
 

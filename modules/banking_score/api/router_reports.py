@@ -5,6 +5,7 @@ Extracted from monolith router_banking_scoring.py.
 """
 import logging
 from datetime import date, datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
@@ -41,7 +42,8 @@ _NARRATIVE_DEGRADED_MSG = (
 _SYSTEM_REPORT_TYPES = {"criteria", "wire", "datawatch", "sector_outlook"}
 
 
-def _attach_pdf(report: Report, file_path: str, narratives: dict) -> None:
+def _attach_pdf(report: Report, file_path: str, narratives: dict,
+                model: Optional[str] = None) -> None:
     """Marca el reporte completado y guarda los bytes del PDF en la DB.
 
     El archivo en disco vive en el FS EFÍMERO del contenedor y desaparece en cada
@@ -56,7 +58,9 @@ def _attach_pdf(report: Report, file_path: str, narratives: dict) -> None:
     report.file_blob = pdf_bytes
     report.file_size = len(pdf_bytes)
     report.completed_at = datetime.now(timezone.utc)
-    report.narrative_model = "claude" if narratives else "none"
+    # `model` explícito para el documento determinista: registrar "claude" en un texto que
+    # ningún modelo escribió sería una traza falsa de procedencia.
+    report.narrative_model = model or ("claude" if narratives else "none")
 
 
 async def _generate_system_report(
@@ -102,15 +106,26 @@ async def _generate_system_report(
         "overall_score": 0, "rating_tier": "N/A", "sub_components": {}, "indicators": {},
     }
     try:
-        narratives = await generate_report_narratives(
-            report_type=report_type, bank_name=scope_name,
-            scoring_result=scoring_result, period=period, benchmarks=benchmarks,
-        )
+        if report_type == "criteria":
+            # El documento de criterios es la METODOLOGÍA: determinista, no varía por
+            # corrida. Se GENERA de la configuración del motor (pesos, escala, registro de
+            # indicadores, backtest vivo) para que no pueda desviarse de cómo se califica
+            # realmente. Antes se pedía a la IA narrar una plantilla por-banco con un
+            # scoring_result vacío: el estándar epistémico se negaba —correctamente— a
+            # fabricar, y ese rechazo terminaba impreso en el PDF de cliente.
+            from modules.banking_score.reports.criteria_doc import build_criteria_document
+            narratives = build_criteria_document(db)
+        else:
+            narratives = await generate_report_narratives(
+                report_type=report_type, bank_name=scope_name,
+                scoring_result=scoring_result, period=period, benchmarks=benchmarks,
+            )
         file_path = await generate_pdf_report(
             report_type=report_type, bank_name=scope_name,
             scoring_result=scoring_result, period=period, narratives=narratives,
         )
-        _attach_pdf(report, file_path, narratives)
+        _attach_pdf(report, file_path, narratives,
+                    model="deterministic" if report_type == "criteria" else None)
     except Exception as e:
         logger.error("%s generation failed: %s", report_type, e)
         report.status = ReportStatus.error
@@ -193,6 +208,48 @@ async def download_report(
         status_code=404,
         detail="Archivo de reporte no disponible. Vuelva a generar el reporte.",
     )
+
+
+# ─── List System Reports ────────────────────────────────────────
+
+@router.get(
+    "/system/list",
+    summary="Listar informes de sistema",
+    description="Lista los informes transversales (criteria/wire/datawatch/sector_outlook), "
+                "que no cuelgan de una entidad.",
+)
+async def list_system_reports(
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Contraparte de ``/{bank_id}/list`` para los informes sin banco.
+
+    Sin esto no eran DESCUBRIBLES: el listado por banco filtra por ``bank_id`` y estos lo
+    tienen NULL, así que el ``report_id`` solo existía en la respuesta de la generación —
+    si se perdía, el informe quedaba inalcanzable salvo por consulta directa a la BD.
+    """
+    reports = (
+        db.query(Report)
+        .filter(Report.bank_id.is_(None))
+        .order_by(Report.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "reports": [
+            {
+                "id": r.id,
+                "report_type": r.report_type.value if r.report_type else None,
+                "period_end": str(r.period_end) if r.period_end else None,
+                "status": r.status.value if r.status else None,
+                "created_at": str(r.created_at) if r.created_at else None,
+                "file_size": r.file_size,
+            }
+            for r in reports
+        ],
+        "count": len(reports),
+    }
 
 
 # ─── All Rating Actions (cross-bank) ────────────────────────────

@@ -268,6 +268,57 @@ export async function generateReport(
   });
 }
 
+// ─── Informes de SISTEMA (no cuelgan de una entidad) ───────────────
+//
+// criteria/wire/datawatch/sector_outlook describen la metodología o el sistema entero, así
+// que no aparecen en el listado por banco (su `bank_id` es NULL) ni pueden generarse desde
+// el selector de entidad: tienen sus propios endpoints y su propio listado.
+
+export const SYSTEM_REPORT_TYPES = [
+  "criteria",
+  "wire",
+  "datawatch",
+  "sector_outlook",
+] as const;
+
+export type SystemReportType = (typeof SYSTEM_REPORT_TYPES)[number];
+
+/** `criteria` es la metodología: no depende de un período. */
+export const SYSTEM_REPORT_NEEDS_PERIOD: Record<SystemReportType, boolean> = {
+  criteria: false,
+  wire: true,
+  datawatch: true,
+  sector_outlook: true,
+};
+
+const SYSTEM_REPORT_PATH: Record<SystemReportType, string> = {
+  criteria: "criteria",
+  wire: "wire",
+  datawatch: "datawatch",
+  sector_outlook: "sector-outlook",
+};
+
+export async function listSystemReports(): Promise<ReportItem[]> {
+  const { data } = await client.get<{ reports: ReportItem[] }>(
+    "/banking-score/reports/system/list",
+  );
+  return data.reports ?? [];
+}
+
+export async function generateSystemReport(
+  reportType: SystemReportType,
+  periodEnd: string,
+): Promise<void> {
+  const params = SYSTEM_REPORT_NEEDS_PERIOD[reportType]
+    ? { period_end: periodEnd }
+    : undefined;
+  await client.post(
+    `/banking-score/reports/${SYSTEM_REPORT_PATH[reportType]}/generate`,
+    null,
+    { params },
+  );
+}
+
 export async function downloadReport(reportId: string): Promise<void> {
   const r = await client.get(`/banking-score/reports/download/${reportId}`, {
     responseType: "blob",

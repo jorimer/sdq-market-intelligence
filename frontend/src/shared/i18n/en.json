@@ -1045,6 +1045,10 @@
     "repColPeriod": "Period",
     "repColStatus": "Status",
     "repColAction": "Action",
+    "repSystemTitle": "System reports",
+    "repSystemSub": "Methodology and system-wide bulletins — not tied to an entity.",
+    "repSystemEmpty": "No system reports generated yet.",
+    "repNoPeriod": "no period",
     "repType": {
       "full_rating": "Full rating",
       "scorecard": "Scorecard",

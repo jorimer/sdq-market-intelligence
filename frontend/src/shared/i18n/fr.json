@@ -1045,6 +1045,10 @@
     "repColPeriod": "Période",
     "repColStatus": "Statut",
     "repColAction": "Action",
+    "repSystemTitle": "Rapports système",
+    "repSystemSub": "Méthodologie et bulletins du système — indépendants d'une entité.",
+    "repSystemEmpty": "Aucun rapport système généré pour l'instant.",
+    "repNoPeriod": "sans période",
     "repType": {
       "full_rating": "Notation complète",
       "scorecard": "Scorecard",
