@@ -17,7 +17,7 @@ guardrail nunca debe empeorar la salida ni romper el endpoint.
 import json
 import logging
 import re
-from typing import List
+from typing import Dict, List
 
 logger = logging.getLogger("sdq.narrative.numeric_guard")
 
@@ -479,7 +479,12 @@ _BENCH_KEY = {
 
 _MENOR = r"por\s+debajo|inferior(?:es)?\s+a|menor(?:es)?\s+(?:que|a)"
 _MAYOR = r"por\s+encima|superior(?:es)?\s+a|supera|excede|mayor(?:es)?\s+(?:que|a)"
-_CITED = re.compile(r"(\d+(?:[.,]\d+)?)\s*%")
+# El % era heredado de banca, donde todo indicador es porcentaje. En seguros y pensiones
+# los scores van sin él ("solvencia 80", "80/100"), así que el detector no veía nada. Se
+# acepta la cifra desnuda: lo que evita el falso positivo NO es el %, sino el pareo estricto
+# —debe casar con un valor CONOCIDO a la precisión citada, entidad antes del marcador y
+# referencia después, acotada al operando de ESE marcador—.
+_CITED = re.compile(r"(\d+(?:[.,]\d+)?)\s*%?")
 
 
 def _cited_matches(cited: str, value: float) -> bool:
@@ -503,7 +508,34 @@ def _direction_refs(context: dict) -> List[tuple]:
     Tolerante por diseño: acepta las dos grafías de la clave de indicadores (``indicators``
     en las secciones de panorama, ``indicadores`` en las de sub-componente) y si no
     reconoce el indicador simplemente no lo evalúa — nunca inventa un veredicto.
+
+    Vía PREFERENTE y agnóstica de eje: si el contexto trae ``comparaciones`` YA RESUELTAS
+    (las que inyecta ``derived.comparaciones_vs_referencia``), se usan como índice tal cual.
+    Eso hace que el detector cubra seguros y pensiones sin conocer su vocabulario: la vía de
+    abajo depende de ``_BENCH_KEY``, que es el mapeo de BANCA, y por eso el guard estaba
+    ciego fuera de ese eje. Con las comparaciones inyectadas, verificar la dirección es leer
+    el mismo dato que el analista debía copiar.
     """
+    comps = context.get("comparaciones")
+    if isinstance(comps, list) and comps:
+        por_indicador: Dict[str, tuple] = {}
+        for c in comps:
+            if not isinstance(c, dict):
+                continue
+            ind, val = c.get("indicador"), c.get("valor")
+            etiqueta, ref = c.get("referencia"), c.get("valor_referencia")
+            if ind is None or val is None or ref is None or not etiqueta:
+                continue
+            try:
+                mio, referencia = float(val), float(ref)
+            except (TypeError, ValueError):
+                continue
+            if ind not in por_indicador:
+                por_indicador[ind] = (ind, mio, [])
+            por_indicador[ind][2].append((str(etiqueta), referencia))
+        if por_indicador:
+            return list(por_indicador.values())
+
     inds = context.get("indicators") or context.get("indicadores") or {}
     bench = context.get("benchmarks") or {}
     sector = bench.get("sector_averages") or {}
