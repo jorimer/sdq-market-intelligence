@@ -484,3 +484,38 @@ def test_pulse_stays_anonymized_with_named_peers_feature(db):
     _seed_typed(db, "Banco Dos SA", 60, "SDQ-BBB", BankType.banca_multiple)
     snap = BankingProduct(db).snapshot(ProductTier.pulse, "2024-12-31")
     assert "Banco Uno SA" not in str(snap.payload)
+
+
+def test_posiciones_dimension_se_miden_contra_el_grupo_de_pares(db):
+    """Las posiciones POR DIMENSIÓN se computan contra el MISMO TIPO, no contra el sistema.
+
+    Verificando en prod salió que los "líderes" por dimensión de un banco múltiple eran
+    agentes de cambio —scores altos en un negocio incomparable—, así que una entidad con
+    puntaje MÁXIMO en solidez aparecía "2.º". Es la misma lección que ya documenta
+    `_named_peers` para la tabla comparativa, aplicada también a las posiciones.
+    """
+    from modules.banking_score.models.models import BankType
+
+    def _sub(b, period, solidez):
+        rr = (db.query(RatingResult)
+              .filter_by(bank_id=b.id, period_end=period).first())
+        rr.solidez_score = solidez
+        db.commit()
+
+    per = date(2024, 12, 31)
+    subject = _seed_typed(db, "Banco Multi A", 80.0, "SDQ-AA-", BankType.banca_multiple, per)
+    par = _seed_typed(db, "Banco Multi B", 70.0, "SDQ-A", BankType.banca_multiple, per)
+    cambiaria = _seed_typed(db, "Agc Ruido", 99.0, "SDQ-AAA", BankType.cambiaria, per)
+    _sub(subject, per, 95.0)
+    _sub(par, per, 60.0)
+    _sub(cambiaria, per, 100.0)   # líder del SISTEMA, pero de otro negocio
+
+    snap = BankingProduct(db).snapshot(ProductTier.insight, "2024-12-31", scope=subject.id)
+    named = (snap.payload.get("peer_block") or {}).get("named_peers")
+    pos = named["posiciones_dimension"]["Solidez Financiera"]
+
+    assert pos["es_lider"] is True, "lidera su grupo de pares"
+    assert pos["rank"] == 1
+    assert pos["n"] == 2, "el panel es el grupo de pares, no las 3 entidades del sistema"
+    assert "Ruido" not in (pos["lider"] or "")
+    assert named["posiciones_base"] == "grupo de pares del mismo tipo"

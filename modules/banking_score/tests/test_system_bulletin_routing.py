@@ -67,3 +67,53 @@ def test_el_mapeo_por_entidad_sigue_intacto_para_full_rating():
     """El arreglo NO debe cambiar el informe por banco."""
     assert _SECTION_TO_TEMPLATE["executive_summary"] == "banking_summary"
     assert "full_rating" not in _SYSTEM_REPORT_TYPES
+
+
+# ── Un boletín narrado sin benchmarks no tiene nada que analizar ──────────────
+#
+# `wire` se generó SIEMPRE sin benchmarks (datawatch y sector_outlook sí los pasaban), así
+# que su contexto llegaba vacío de cifras del sector y el modelo —correctamente— respondía
+# que no había datos. Esa negativa quedaba impresa como cuerpo del PDF.
+
+def test_los_boletines_narrados_no_incluyen_criteria():
+    """`criteria` es determinista: no consume benchmarks ni pasa por el motor."""
+    from modules.banking_score.api.router_reports import (
+        _NARRATED_SYSTEM_TYPES, _SYSTEM_REPORT_TYPES)
+    assert "criteria" in _SYSTEM_REPORT_TYPES
+    assert "criteria" not in _NARRATED_SYSTEM_TYPES
+
+
+def test_todo_boletin_narrado_recibe_benchmarks(monkeypatch):
+    """Regresión estructural: el fallback vive en `_generate_system_report`, así que ningún
+    endpoint puede volver a nacer sin las cifras del sector."""
+    import asyncio
+
+    from modules.banking_score.api import router_reports as rr
+
+    vistos = {}
+
+    async def _fake_narratives(*, report_type, bank_name, scoring_result, period, benchmarks):
+        vistos[report_type] = benchmarks
+        raise RuntimeError("corta acá: sólo interesa qué contexto se pasó")
+
+    monkeypatch.setattr(
+        "modules.banking_score.reports.narrative.generate_report_narratives",
+        _fake_narratives)
+
+    class _Db:
+        def add(self, *a): pass
+        def commit(self): pass
+        def refresh(self, *a): pass
+
+    class _User:
+        id = "u1"
+
+    for rt in sorted(rr._NARRATED_SYSTEM_TYPES):
+        try:
+            asyncio.run(rr._generate_system_report(
+                report_type=rt, scope_name="Sistema Bancario", period="2026-03-31",
+                db=_Db(), current_user=_User()))
+        except Exception:
+            pass
+        assert vistos.get(rt), f"{rt} se generó SIN benchmarks"
+        assert vistos[rt].get("sector_averages"), f"{rt} sin promedios del sistema"
