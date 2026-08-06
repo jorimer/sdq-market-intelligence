@@ -17,7 +17,7 @@ from modules.banking_score.scoring.engine import (
     calc_exposicion_re,
     calc_roa,
     calculate_all_indicators,
-    _ytd_annualization_factor,
+    _ttm_profit,
 )
 
 
@@ -209,19 +209,35 @@ def test_map_utilidad_uses_pretax_subtotal_not_leaf():
     assert mapped["utilidad_neta"] == 24226
 
 
-# ── Engine: ROA/ROE annualized from YTD by the period month ──
+# ── Engine: ROA/ROE sobre la ventana móvil de 12 MESES ──
+#
+# Antes se anualizaba el acumulado por 12/mes. Ese factor asume que todos los trimestres
+# pesan igual y el panel lo refuta: el Q1 concentra una mediana de 9,9% de la utilidad anual
+# (71 banco-años, 2021-2025). Ver scoring/ttm.
 
-def test_ytd_annualization_factor():
-    assert _ytd_annualization_factor(SimpleNamespace(period_end=date(2025, 3, 31))) == 4.0
-    assert _ytd_annualization_factor(SimpleNamespace(period_end=date(2025, 6, 30))) == 2.0
-    assert _ytd_annualization_factor(SimpleNamespace(period_end=date(2025, 12, 31))) == 1.0
-    assert _ytd_annualization_factor(SimpleNamespace(period_end=None)) == 1.0
+def test_ttm_profit_por_corte():
+    # Diciembre: el acumulado del ejercicio YA es la ventana de doce meses.
+    assert _ttm_profit(SimpleNamespace(period_end=date(2025, 12, 31),
+                                       utilidad_neta=24)) == 24.0
+    # Corte intermedio SIN ventana → None (el indicador se declara no disponible).
+    assert _ttm_profit(SimpleNamespace(period_end=date(2025, 3, 31), utilidad_neta=6)) is None
+    # Corte intermedio CON ventana adjunta → se usa.
+    assert _ttm_profit(SimpleNamespace(period_end=date(2025, 3, 31), utilidad_neta=6,
+                                       utilidad_ttm=24)) == 24.0
+    # Sin período (muestras sintéticas): comportamiento anual histórico.
+    assert _ttm_profit(SimpleNamespace(period_end=None, utilidad_neta=24)) == 24.0
 
 
-def test_roa_annualized_for_q1():
-    # utilidad 6 (YTD Q1) / activos 1000 → 0.6% × 4 = 2.4% annual
-    d = _data(utilidad_neta=6, activos_promedio=1000, period_end=date(2025, 3, 31))
-    assert calc_roa(d)["raw"] == 2.4
-    # Q4 (full year) → no annualization
+def test_roa_es_la_misma_tasa_en_q1_y_en_el_cierre():
+    """El diente de sierra desaparece: mismo negocio ⇒ misma tasa anual."""
+    q1 = _data(utilidad_neta=6, activos_promedio=1000, period_end=date(2025, 3, 31))
+    q1.utilidad_ttm = 24          # ventana móvil: doce meses cerrados en el Q1
+    assert calc_roa(q1)["raw"] == 2.4
     d4 = _data(utilidad_neta=24, activos_promedio=1000, period_end=date(2025, 12, 31))
     assert calc_roa(d4)["raw"] == 2.4
+
+
+def test_q1_sin_ventana_no_se_puntua():
+    """No se cae al acumulado anualizado: se declara no disponible."""
+    q1 = _data(utilidad_neta=6, activos_promedio=1000, period_end=date(2025, 3, 31))
+    assert calculate_all_indicators(q1)["roa"]["available"] is False
