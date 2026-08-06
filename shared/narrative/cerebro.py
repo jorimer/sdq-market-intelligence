@@ -175,13 +175,16 @@ NO_META_COMMENTARY = (
 # contexto: lo que se invirtió fue el sentido. El chequeo determinista
 # (numeric_guard.deterministic_direction_errors) es la red; la regla nace acá.
 DIRECTION_DISCIPLINE = (
-    "DIRECCIÓN DE LAS COMPARACIONES (regla dura): antes de escribir 'por encima', 'por "
-    "debajo', 'superior a', 'inferior a' o 'supera', RESTA los dos valores y mira el signo. "
-    "Una comparación con el sentido invertido es un error de hecho tan grave como una cifra "
-    "inventada, y es peor cuando el propio informe muestra la tabla que la desmiente. Ojo con "
-    "el caso frecuente: un indicador puede estar por DEBAJO del promedio del sistema y a la "
-    "vez por ENCIMA del promedio de su grupo de pares —son bases distintas—; nombra contra "
-    "CUÁL base comparas y verifica el signo contra ESA base, no contra la otra."
+    "DIRECCIÓN DE LAS COMPARACIONES (regla dura): si el contexto trae 'comparaciones', la "
+    "dirección YA ESTÁ RESUELTA ahí — COPIA el campo 'direccion' ('por encima' / 'por debajo' "
+    "/ 'en línea') y la etiqueta de 'referencia'. NO la deduzcas ni la recalcules: no es tu "
+    "trabajo, es un dato. 'en línea' significa que la brecha no es material: dilo así, no "
+    "fuerces un lado. Si una comparación NO está en 'comparaciones', resta los dos valores y "
+    "mira el signo antes de escribir. Una comparación con el sentido invertido es un error de "
+    "hecho tan grave como una cifra inventada, y es peor cuando el propio informe muestra la "
+    "tabla que la desmiente. Ojo con el caso frecuente: un indicador puede estar por DEBAJO "
+    "del promedio del sistema y a la vez por ENCIMA del promedio de su grupo de pares —son "
+    "bases distintas—; nombra siempre contra CUÁL base comparas."
 )
 
 # ── POR MÓDULO — Doctrina del eje ─────────────────────────────────────────────

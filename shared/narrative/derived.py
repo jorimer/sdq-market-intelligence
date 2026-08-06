@@ -95,3 +95,72 @@ def derived_figures(
         if cortes_q1:
             out["cortes_q1_marzo"] = cortes_q1
     return out
+
+
+# ── Comparaciones contra referencia (dirección RESUELTA, no derivada) ─────────
+#
+# Bug 2026-08-05/06: dos informes de cliente afirmaron una comparación con el sentido
+# invertido ("mora de 1.67% por debajo del promedio de pares (1.5%)"; "ICAP de 16.44% por
+# encima del promedio del sistema (16.5%)"), contradiciendo la tabla del propio informe.
+# Las cifras eran correctas: lo que el modelo erró fue la RELACIÓN entre ellas — el mismo
+# modo de falla que este módulo ya cura para aportes, deltas y extremos. La cura es la
+# misma: servir la dirección YA RESUELTA para que la COPIE. Un detector solo avisa; esto
+# elimina el modo de falla.
+
+# Por debajo de esta brecha no se afirma dirección. Nace del caso real: 16.44 vs 16.5
+# difieren 0.06 pp — forzar "por encima/por debajo" ahí invita a elegir el lado equivocado
+# y, sobre todo, no informa nada. "en línea con" es la lectura honesta.
+MATERIALIDAD_PP = 0.1
+
+
+def comparaciones_vs_referencia(
+    valores: Dict[str, Optional[float]],
+    referencias: Dict[str, Dict[str, Optional[float]]],
+    *,
+    materialidad_pp: float = MATERIALIDAD_PP,
+) -> List[Dict[str, Any]]:
+    """Dirección y brecha de cada (indicador, referencia), ya resueltas.
+
+    Args:
+        valores: ``{indicador: valor_de_la_entidad}``.
+        referencias: ``{indicador: {etiqueta_legible: valor_de_referencia}}``. La etiqueta
+            es la que el analista debe usar al nombrar la base ("promedio del sistema",
+            "promedio de pares grandes"): nombrar CONTRA QUÉ se compara es la mitad del
+            problema, porque un indicador puede estar bajo el sistema y sobre su grupo de
+            pares a la vez.
+
+    Returns:
+        Lista de ``{indicador, valor, referencia, valor_referencia, direccion, brecha_pp}``
+        con ``direccion`` ∈ {"por encima", "por debajo", "en línea"}. Agnóstica de eje: el
+        llamador arma el mapeo indicador→referencias con el vocabulario de su dominio.
+    """
+    out: List[Dict[str, Any]] = []
+    for indicador, refs in (referencias or {}).items():
+        val = (valores or {}).get(indicador)
+        if val is None or not isinstance(refs, dict):
+            continue
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            continue
+        for etiqueta, ref in refs.items():
+            if ref is None:
+                continue
+            try:
+                r = float(ref)
+            except (TypeError, ValueError):
+                continue
+            brecha = round(v - r, 2)
+            if abs(brecha) < materialidad_pp:
+                direccion = "en línea"
+            else:
+                direccion = "por encima" if brecha > 0 else "por debajo"
+            out.append({
+                "indicador": indicador,
+                "valor": round(v, 4),
+                "referencia": etiqueta,
+                "valor_referencia": round(r, 4),
+                "direccion": direccion,
+                "brecha_pp": brecha,
+            })
+    return out

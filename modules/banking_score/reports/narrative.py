@@ -97,6 +97,51 @@ def _section_mode(section: str, base_mode: str) -> str:
     return base_mode
 
 
+# Etiqueta LEGIBLE de cada grupo de pares — la que el analista debe usar al nombrar la base
+# de la comparación. Nombrar contra qué se compara no es cosmético: un indicador puede estar
+# por debajo del sistema y por encima de su grupo de pares a la vez (la mora de BPD lo está),
+# y confundir las bases fue justamente el bug de dirección del 2026-08-05.
+_PEER_GROUP_LABEL: Dict[str, str] = {
+    "large_banks": "promedio de bancos grandes",
+    "medium_banks": "promedio de bancos medianos",
+}
+
+
+def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict]) -> list:
+    """Comparaciones indicador↔referencia con la DIRECCIÓN ya computada.
+
+    El modelo no debe derivar "por encima / por debajo": erra la relación aunque las cifras
+    sean correctas (dos informes de cliente salieron con el sentido invertido, contradiciendo
+    su propia tabla de pares). Misma cura que ``derived_figures`` aplica a aportes y deltas —
+    servir el resultado para que lo COPIE. El detector de ``numeric_guard`` queda como alarma
+    de regresión, no como corrector de turno.
+    """
+    from shared.data.sib_client import INDICATOR_TO_BENCHMARK
+    from shared.narrative.derived import comparaciones_vs_referencia
+
+    if not isinstance(benchmarks, dict):
+        return []
+    sector = benchmarks.get("sector_averages") or {}
+    peers = benchmarks.get("peer_groups") or {}
+
+    valores, referencias = {}, {}
+    for ind, bkey in INDICATOR_TO_BENCHMARK.items():
+        blob = all_indicators.get(ind)
+        raw = blob.get("raw") if isinstance(blob, dict) else None
+        if raw is None:
+            continue
+        refs: Dict[str, Optional[float]] = {}
+        if sector.get(bkey) is not None:
+            refs["promedio del sistema"] = sector[bkey]
+        for gname, grp in peers.items():
+            if isinstance(grp, dict) and grp.get(f"{bkey}_avg") is not None:
+                refs[_PEER_GROUP_LABEL.get(gname, f"promedio {gname}")] = grp[f"{bkey}_avg"]
+        if refs:
+            valores[ind] = raw
+            referencias[ind] = refs
+    return comparaciones_vs_referencia(valores, referencias)
+
+
 # Sub-component key lookup for focused sections
 _SUB_COMPONENT_MAP: Dict[str, str] = {
     "solidez_financiera": "solidez",
@@ -197,6 +242,11 @@ def _build_section_context(
             sub_bench = benchmarks.get(sub_key) or benchmarks.get(section)
             if sub_bench:
                 ctx["pares"] = sub_bench
+        # Direcciones ya resueltas, acotadas a los indicadores de ESTA dimensión.
+        comps = [c for c in _comparaciones_resueltas(all_indicators, benchmarks)
+                 if c["indicador"] in ind]
+        if comps:
+            ctx["comparaciones"] = comps
         return ctx
 
     # Overview sections (executive summary, comparative, recommendation…) keep the
@@ -236,6 +286,12 @@ def _build_section_context(
         ctx["sensibilidades"] = scoring_result["sensibilidades"]
     if benchmarks:
         ctx["benchmarks"] = benchmarks
+        # Las comparaciones contra sistema y pares llegan RESUELTAS: el resumen ejecutivo y
+        # el comparativo son las secciones donde el modelo más las enuncia, y donde erró el
+        # sentido teniendo las dos cifras correctas a la vista.
+        comps = _comparaciones_resueltas(all_indicators, benchmarks)
+        if comps:
+            ctx["comparaciones"] = comps
     return ctx
 
 

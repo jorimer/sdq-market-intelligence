@@ -18,6 +18,23 @@ logger = logging.getLogger(__name__)
 
 # ── Hardcoded defaults (Level 3 fallback) ────────────────────────
 
+# Indicador del motor de scoring → clave en `sector_averages` / `{clave}_avg` de los grupos
+# de pares. Constante de módulo (antes vivía dentro de `compare_to_sector`) porque la
+# consume también la INYECCIÓN de comparaciones ya resueltas al contexto de narrativa: la
+# dirección de una comparación se computa acá, no la deriva el modelo.
+INDICATOR_TO_BENCHMARK: Dict[str, str] = {
+    "solvencia": "car",
+    "morosidad": "npl",
+    "roa": "roa",
+    "roe": "roe",
+    "margen_financiero": "nim",
+    "cost_to_income": "cost_to_income",
+    "liquidez_inmediata": "liquidity_ratio",
+    "leverage": "leverage_ratio",
+    "cobertura_provisiones": "coverage_ratio",
+    "ltd": "ltd",
+}
+
 DEFAULT_BENCHMARKS: Dict = {
     "sector_averages": {
         "car": 16.5,
@@ -225,22 +242,8 @@ class SuperintendenciaBancosClient:
         benchmarks = self.get_sector_benchmarks()
         sector = benchmarks.get("sector_averages", {})
 
-        # Indicator name → sector benchmark key
-        mapping = {
-            "solvencia": "car",
-            "morosidad": "npl",
-            "roa": "roa",
-            "roe": "roe",
-            "margen_financiero": "nim",
-            "cost_to_income": "cost_to_income",
-            "liquidez_inmediata": "liquidity_ratio",
-            "leverage": "leverage_ratio",
-            "cobertura_provisiones": "coverage_ratio",
-            "ltd": "ltd",
-        }
-
         comparisons: Dict[str, Dict] = {}
-        for indicator, sector_key in mapping.items():
+        for indicator, sector_key in INDICATOR_TO_BENCHMARK.items():
             if indicator in indicator_scores and sector_key in sector:
                 value = indicator_scores[indicator]
                 sector_val = sector[sector_key]
