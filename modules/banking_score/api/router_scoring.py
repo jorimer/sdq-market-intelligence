@@ -32,6 +32,7 @@ from modules.banking_score.scoring.engine import (
     simulate_from_scores,
 )
 from modules.banking_score.scoring.batch import detect_rating_action, score_period
+from modules.banking_score.scoring.ttm import attach_ttm
 from modules.banking_score.ml.xgboost_model import xgboost_model
 from modules.banking_score.scoring.indicator_detail import ai_context, build_indicator_detail
 from modules.banking_score.scoring.entity_insight import ai_context_entity, build_entity_insight
@@ -139,6 +140,9 @@ async def run_bank_scoring(
         )
 
     try:
+        # Ventana móvil de 12 meses para ROA/ROE: el motor es puro (sin DB) y la necesita
+        # como insumo. Sin ella esos dos indicadores se declaran NO disponibles.
+        attach_ttm(db, data)
         # Indicators & sub-components are always computed deterministically — they
         # are also the ML model's feature inputs.
         result = run_scoring(data, entity_type=bank.bank_type.value if bank.bank_type else None)

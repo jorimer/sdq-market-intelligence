@@ -27,6 +27,7 @@ from modules.banking_score.models.models import (
     RatingResult,
 )
 from modules.banking_score.scoring.engine import run_scoring
+from modules.banking_score.scoring.ttm import attach_ttm
 
 logger = logging.getLogger("sdq.banking.scoring.batch")
 
@@ -173,6 +174,8 @@ def score_period(
         try:
             bank = db.query(Bank).filter_by(id=record.bank_id).first()
             entity_type = bank.bank_type.value if bank and bank.bank_type else None
+            # Ventana móvil de 12 meses (ROA/ROE). Ver scoring/ttm.
+            attach_ttm(db, record)
             scoring_result = run_scoring(record, entity_type=entity_type)
             _upsert_rating(db, record.bank_id, period_end, scoring_result, created_by)
             action_info = detect_rating_action(db, record.bank_id, period_end, scoring_result, created_by)

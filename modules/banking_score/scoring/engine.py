@@ -42,15 +42,29 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, value))
 
 
-def _ytd_annualization_factor(d) -> float:
-    """The SIB income statement is YTD cumulative (Q1 = 3 months, Q2 = 6, …), but the
-    ROA/ROE scoring curves expect an ANNUAL rate. Annualize by the period's month so
-    intra-year quarters are comparable: month 3→×4, 6→×2, 9→×4/3, 12→×1. Defaults to
-    ×1 when the period month is unknown (e.g. synthetic test data)."""
+def _ttm_profit(d) -> Optional[float]:
+    """Utilidad de los ÚLTIMOS 12 MESES, o ``None`` si no es computable.
+
+    Reemplaza a la anualización por ``12/mes`` que se usaba antes. Ese factor asumía que
+    todos los trimestres pesan igual, y el panel lo refuta: sobre 71 banco-años de 16 bancos
+    múltiples (2021-2025) el PRIMER TRIMESTRE concentra una mediana de 9,9% de la utilidad
+    anual —97% de los casos bajo el 20%— mientras Q2/Q3/Q4 aportan ~30% cada uno. Multiplicar
+    ×4 un trimestre que vale 9,9% proyecta ~40% de la tasa anual real: BPD marcaba ROE 10,2%
+    al Q1 contra 24,2% al cierre, con el score cayendo de 100 a 68 sin cambio de negocio.
+
+    La ventana móvil la calcula ``scoring/ttm.attach_ttm`` (necesita DB) y llega como
+    ``utilidad_ttm``. En un corte de DICIEMBRE el acumulado del ejercicio ya es la ventana de
+    doce meses, así que se usa directo. Sin período conocido (muestras sintéticas y tests) se
+    asume anual, que es el comportamiento histórico de esos contextos.
+    """
+    ttm = getattr(d, "utilidad_ttm", None)
+    if ttm is not None:
+        return float(ttm)
     month = getattr(getattr(d, "period_end", None), "month", None)
-    if month in (3, 6, 9):
-        return 12.0 / month
-    return 1.0
+    if month in (None, 12):
+        u = getattr(d, "utilidad_neta", None)
+        return float(u) if u is not None else None
+    return None  # corte intermedio sin historia → el indicador se declara NO disponible
 
 
 # ─── Data protocol ──────────────────────────────────────────────
@@ -279,15 +293,21 @@ def calc_composite_calidad(indicators: Dict[str, IndicatorResult]) -> IndicatorR
 
 
 def calc_roa(d) -> IndicatorResult:
-    """Return on Assets: utilidad_neta / activos_promedio (annualized from YTD)."""
-    raw = _safe_div(d.utilidad_neta, d.activos_promedio) * 100 * _ytd_annualization_factor(d)
+    """Return on Assets: utilidad de los ÚLTIMOS 12 MESES / activos_promedio."""
+    ttm = _ttm_profit(d)
+    if ttm is None:
+        return {"raw": 0.0, "score": 0.0}   # `available=False` lo declara no disponible
+    raw = _safe_div(ttm, d.activos_promedio) * 100
     score = _clamp(min(100, (raw / 1.5) * 100))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 def calc_roe(d) -> IndicatorResult:
-    """Return on Equity: utilidad_neta / patrimonio_promedio (annualized from YTD)."""
-    raw = _safe_div(d.utilidad_neta, d.patrimonio_promedio) * 100 * _ytd_annualization_factor(d)
+    """Return on Equity: utilidad de los ÚLTIMOS 12 MESES / patrimonio_promedio."""
+    ttm = _ttm_profit(d)
+    if ttm is None:
+        return {"raw": 0.0, "score": 0.0}   # `available=False` lo declara no disponible
+    raw = _safe_div(ttm, d.patrimonio_promedio) * 100
     score = _clamp(min(100, (raw / 15) * 100))
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
@@ -446,6 +466,11 @@ INDICATOR_PCT_FIELD = {
 def _indicator_available(data, name: str) -> bool:
     """True when the indicator can be computed — either from its pre-computed SIB
     ratio field, or from all of its required absolute inputs (not None)."""
+    # ROA/ROE se miden sobre la ventana móvil de 12 meses: sin ella se DECLARAN no
+    # disponibles (decisión del dueño), nunca se cae al acumulado anualizado — un número
+    # calculado sobre un supuesto refutado es peor que un hueco declarado.
+    if name in ("roa", "roe") and _ttm_profit(data) is None:
+        return False
     pf = INDICATOR_PCT_FIELD.get(name)
     if pf is not None and getattr(data, pf, None) is not None:
         return True
