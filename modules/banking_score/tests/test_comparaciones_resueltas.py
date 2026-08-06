@@ -23,7 +23,10 @@ def _find(comps, ind, ref):
 def test_seccion_de_panorama_recibe_comparaciones():
     ctx = _build_section_context("executive_summary", "BPD", _SCORING, "2026-03-31", _BENCH)
     comps = ctx["comparaciones"]
-    assert _find(comps, "morosidad", "promedio de bancos grandes")["direccion"] == "por encima"
+    # La clave LEGADA `large_banks` es una constante: su etiqueta lo declara.
+    assert _find(comps, "morosidad",
+                 "promedio de bancos grandes (referencia declarada)"
+                 )["direccion"] == "por encima"
     assert _find(comps, "morosidad", "promedio del sistema")["direccion"] == "por debajo"
     assert _find(comps, "solvencia", "promedio del sistema")["direccion"] == "en línea"
 
@@ -42,5 +45,8 @@ def test_etiqueta_de_pares_es_legible():
     """La etiqueta es la que el analista debe usar al nombrar la base."""
     ctx = _build_section_context("executive_summary", "BPD", _SCORING, "2026-03-31", _BENCH)
     etiquetas = {c["referencia"] for c in ctx["comparaciones"]}
-    assert "promedio de bancos grandes" in etiquetas
+    assert "promedio de bancos grandes (referencia declarada)" in etiquetas
     assert not any("large_banks" in e for e in etiquetas)
+    # Una referencia DECLARADA debe verse como tal: si no es medida del panel,
+    # el informe no puede presentarla como si lo fuera.
+    assert any("declarada" in e for e in etiquetas)

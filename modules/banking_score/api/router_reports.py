@@ -15,6 +15,7 @@ from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
 from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
+from modules.banking_score.scoring.benchmarks import panel_benchmarks
 from modules.banking_score.models.models import (
     Bank,
     RatingAction,
@@ -115,8 +116,7 @@ async def _generate_system_report(
     # cifras sectoriales; esa negativa quedaba impresa como cuerpo del PDF. Se resuelven acá
     # y no en cada endpoint para que el próximo boletín no pueda nacer con el mismo hueco.
     if benchmarks is None and report_type in _NARRATED_SYSTEM_TYPES:
-        from modules.banking_score.external.sib_client import sib_client
-        benchmarks = sib_client.get_sector_benchmarks()
+        benchmarks = panel_benchmarks(db, pe)
     try:
         if report_type == "criteria":
             # El documento de criterios es la METODOLOGÍA: determinista, no varía por
@@ -401,12 +401,9 @@ async def generate_datawatch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from modules.banking_score.external.sib_client import sib_client
-
     return await _generate_system_report(
         report_type="datawatch", scope_name="Sistema Bancario", period=period_end,
         db=db, current_user=current_user,
-        benchmarks=sib_client.get_sector_benchmarks(),
     )
 
 
@@ -423,12 +420,9 @@ async def generate_sector_outlook(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from modules.banking_score.external.sib_client import sib_client
-
     return await _generate_system_report(
         report_type="sector_outlook", scope_name=f"Sector: {sector}", period=period_end,
         db=db, current_user=current_user,
-        benchmarks=sib_client.get_sector_benchmarks(),
         extra={"sector": sector},
     )
 
@@ -526,6 +520,9 @@ async def generate_report(
                 "diversificacion": float(rating.diversificacion_score or 0),
             },
             "indicators": rating.indicator_details or {},
+            # Tipo de entidad: acota la comparación a SU grupo de pares —
+            # medir un banco múltiple contra agentes de cambio es ruido.
+            "entity_type": bank.bank_type.value if bank.bank_type else None,
         }
     else:
         scoring_result = {
@@ -539,9 +536,9 @@ async def generate_report(
     try:
         from modules.banking_score.reports.narrative import generate_report_narratives
         from modules.banking_score.reports.pdf_generator import generate_pdf_report
-        from modules.banking_score.external.sib_client import sib_client
-
-        benchmarks = sib_client.get_sector_benchmarks()
+        # Benchmarks MEDIDOS del panel en el MISMO corte del informe: comparar un Q1
+        # contra una constante ANUAL invertía la conclusión (ver scoring/benchmarks).
+        benchmarks = panel_benchmarks(db, pe)
         narratives = await generate_report_narratives(
             report_type=report_type,
             bank_name=bank.name,
