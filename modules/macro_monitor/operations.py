@@ -4,10 +4,122 @@ Persists the fiscal dimension of Eje 2 (Hacienda Estado de Operaciones + DGII
 recaudación) into MacroSeries, triggerable/monitorable/schedulable from the shared
 operation console (Gate F).
 """
+import logging
+from datetime import datetime, timezone
 from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+
+logger = logging.getLogger(__name__)
+
+# Marcador anti-spam de la alerta de credencial del API del BCRD. Bajo la cadencia diaria
+# de ``macro-live-sync`` esto rinde ~un aviso por día mientras el acceso siga caído — que es
+# la frecuencia correcta para algo que solo se arregla escribiéndole al BCRD.
+_BCRD_AUTH_ALERT_KEY = "alert:bcrd_api_auth"
+_BCRD_AUTH_RENOTIFY_HOURS = 20
+
+
+def _bcrd_auth_alert(db, message: str) -> None:
+    """Avisa a los admin que el API del BCRD rechazó la credencial (best-effort).
+
+    El BCRD desactiva la cuenta del API por inactividad y devuelve el rechazo como error de
+    aplicación, indistinguible de un token mal escrito. El correo de desactivación llega al
+    buzón personal del titular, no a la plataforma: sin este aviso la fuente queda caída y
+    nadie se entera hasta que alguien abre el macro.
+    """
+    from shared.auth.models import User, UserRole
+    from shared.settings.models import AppSetting
+    from shared.notifications.service import notification_service
+
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == _BCRD_AUTH_ALERT_KEY).first()
+        now = datetime.now(timezone.utc)
+        if row and row.value:
+            try:
+                if (now - datetime.fromisoformat(row.value)).total_seconds() < \
+                        _BCRD_AUTH_RENOTIFY_HOURS * 3600:
+                    return
+            except (ValueError, TypeError):
+                pass
+        admins = (db.query(User)
+                  .filter(User.is_active.is_(True),
+                          User.role.in_([UserRole.admin, UserRole.super_admin])).all())
+        body = (f"El API del BCRD rechazó la credencial: {message}. Las causas conocidas son "
+                "(1) la cuenta desactivada por inactividad —el BCRD la desactiva sola y avisa "
+                "por correo al titular—, (2) el token vencido o mal copiado, y (3) la IP de "
+                "salida fuera de su lista blanca. Reactivar con apibcrd@bancentral.gov.do y "
+                "verificar el token en Configuración → BCRD.")
+        for u in admins:
+            notification_service.create(db, user_id=u.id, type="error",
+                                        title="API del BCRD sin acceso", body=body,
+                                        action_url="/settings")
+        if row:
+            row.value = now.isoformat()
+            row.is_secret = False
+        else:
+            db.add(AppSetting(key=_BCRD_AUTH_ALERT_KEY, value=now.isoformat(), is_secret=False))
+        db.commit()
+    except Exception as e:  # noqa: BLE001 — el aviso jamás debe tapar el error real
+        db.rollback()
+        logger.warning("no se pudo avisar del rechazo de credencial del BCRD: %s", e)
+
+
+def _bcrd_auth_alert_clear(db) -> None:
+    """El acceso volvió → limpiar el marcador para re-avisar de inmediato si recae."""
+    from shared.settings.models import AppSetting
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == _BCRD_AUTH_ALERT_KEY).first()
+        if row:
+            db.delete(row)
+            db.commit()
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logger.warning("no se pudo limpiar el marcador de alerta del BCRD: %s", e)
+
+
+def _run_macro_live_sync(params, user_id, set_phase) -> Dict:
+    """Consulta el API autenticado del BCRD (MacroVariables: inflación, agregados
+    monetarios, sector real, sector externo → ~25 series) y reconstruye el snapshot macro.
+
+    Es la ÚNICA vía por la que la plataforma usa el token del BCRD de forma recurrente: el
+    resto de la ingesta macro (planillas canónicas, publicaciones, comunicados, sectores)
+    va por el CDN público, sin credencial. De ahí que la cuenta del API pueda morir por
+    inactividad sin que se caiga ningún dato — y que haya que sostenerla con uso REAL, no
+    con un ping vacío.
+
+    Diaria: el API entrega el ÚLTIMO valor publicado (snapshot, sin profundidad histórica),
+    así que consultarlo a diario es lo que da valor —dato fresco entre las cargas mensuales
+    de Excel— y de paso mantiene la cuenta viva. Son 4 POST idempotentes (upsert por
+    serie·período), no acumulan nada si el BCRD no publicó nada nuevo.
+    """
+    from shared.data.bcrd_api import BcrdApiError
+    from shared.settings.service import get_sector_api_key
+
+    from modules.macro_monitor.service import build_snapshot, ingest_series
+    db = SessionLocal()
+    try:
+        if not get_sector_api_key(db, "bcrd"):
+            raise ValueError(
+                "Falta el token del BCRD o la fuente está deshabilitada: pegue la clave en "
+                "Configuración → BCRD, marque 'Habilitado' y guarde. Sin esto la cuenta del "
+                "API se desactiva por inactividad.")
+        set_phase("consultando el API del BCRD (4 variables)")
+        try:
+            touched = ingest_series(db)
+        except BcrdApiError as e:
+            if e.is_auth:
+                _bcrd_auth_alert(db, e.message)
+            raise
+        _bcrd_auth_alert_clear(db)
+        set_phase("reconstruyendo snapshot (momentum + señales)")
+        snap = build_snapshot(db)
+        return {
+            "observaciones": touched,
+            "snapshot": {"period": snap.get("period"), "series": snap.get("series_count")},
+        }
+    finally:
+        db.close()
 
 
 def _run_fiscal_sync(params, user_id, set_phase) -> Dict:
@@ -115,6 +227,18 @@ def _run_tpm_model_train(params, user_id, set_phase) -> Dict:
 
 
 def register() -> None:
+    register_operation(Operation(
+        "macro-live-sync", "Sincronizar macro en vivo (API BCRD)",
+        "Consulta el API autenticado del BCRD (MacroVariables: inflación, agregados "
+        "monetarios, sector real y sector externo → ~25 series) y reconstruye el snapshot. "
+        "Es el ÚNICO consumo recurrente del token del BCRD: todo lo demás (planillas "
+        "canónicas, publicaciones, comunicados, sectores) baja del CDN público sin "
+        "credencial. Diaria — el API sirve el último valor publicado, así que a diario "
+        "trae dato fresco entre las cargas mensuales de Excel y sostiene la cuenta, que el "
+        "BCRD desactiva por inactividad. Idempotente (upsert por serie·período). Si el "
+        "BCRD rechaza la credencial, avisa a los admin y falla en vez de ingerir vacío.",
+        _run_macro_live_sync, default_interval_hours=24,
+    ))
     register_operation(Operation(
         "macro-canonical-sync", "Re-ingerir set canónico BCRD + snapshot (macro)",
         "Re-ingiere las ~20 planillas Excel canónicas del BCRD (balanza de pagos, agregados "
