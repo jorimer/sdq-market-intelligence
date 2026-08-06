@@ -1230,6 +1230,10 @@ class NarrativeResult:
     # Cifras del output que el guardrail numérico no pudo trazar al contexto tras
     # regenerar (cerebro). Vacío = verificado limpio o ruta sin guardrail.
     guard_unsupported: list = field(default_factory=list)
+    # True cuando el modelo se quedó SIN PRESUPUESTO de tokens: el texto está cortado, no
+    # terminado. Un PDF entregado a mitad de oración —pasó con Perspectiva Sectorial— es
+    # peor que un error visible: parece el documento final.
+    truncated: bool = False
 
 
 class NarrativeEngine:
@@ -1382,11 +1386,21 @@ class NarrativeEngine:
                 "que no pertenece a un informe tier-1; reforzar REGISTER_NEUTRO si recurre.",
                 len(register_flags), register_flags,
             )
+        # Corte por PRESUPUESTO: la API lo declara en `stop_reason`. Sin este chequeo el
+        # texto truncado viaja como si estuviera terminado y se imprime a mitad de oración.
+        truncated = getattr(response, "stop_reason", None) == "max_tokens"
+        if truncated:
+            logger.warning(
+                "Narrativa TRUNCADA por presupuesto de tokens (%d de salida): el texto está "
+                "cortado, no terminado. Subir el modo de la sección o acortar la plantilla.",
+                output_tokens,
+            )
         return NarrativeResult(
             text=text,
             tokens_used=input_tokens + output_tokens,
             cost_estimate=cost,
             model_used=settings.ANTHROPIC_MODEL,
+            truncated=truncated,
         )
 
     def _result_from_response(self, response, cache_key: str, template: str) -> NarrativeResult:
