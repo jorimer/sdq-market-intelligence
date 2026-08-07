@@ -45,6 +45,8 @@ class InsurerFinancials:
     gastos_operativos: Optional[float]       # comisiones + G&A + otros gastos de operación
     primas_cedidas: Optional[float]          # prima cedida al reasegurador (seguro directo)
     recuperables_reaseguro: Optional[float]  # siniestros a cargo de reaseguradores
+    # {ramo: {"primas": x, "siniestros": y}} — y es None cuando el catálogo no lo abre.
+    por_ramo: Dict[str, Dict[str, Optional[float]]]
     reconciled: bool
 
     def as_series(self) -> Dict[str, Optional[float]]:
@@ -63,6 +65,37 @@ class InsurerFinancials:
             "primas_cedidas": self.primas_cedidas,
             "recuperables_reaseguro": self.recuperables_reaseguro,
         }
+
+
+# ── Desglose por RAMO (spec §5.6) ──────────────────────────────────────────────
+#
+# Los leaves de 6 dígitos bajo los sub-headers de primas y siniestros son el desglose por
+# ramo del catálogo regulatorio. En SEGUROS GENERALES el sufijo de dos dígitos parea directo
+# (``4301XX`` primas ↔ ``5301XX`` siniestros, los mismos 15 ramos). En PERSONAS no: primas
+# tiene 8 sub-cuentas y siniestros solo 5, con otro orden — vida individual se abre en
+# "primer año" y "renovación" del lado de las primas y se consolida del lado de los
+# siniestros. Emparejar por posición daría un loss ratio de vida contra siniestros de
+# accidentes, así que el mapeo va explícito.
+RAMOS_GENERALES = {
+    "01": "incendio_no_catastrofico", "02": "incendio_catastrofico",
+    "03": "naves_maritimas", "04": "naves_aereas", "05": "transporte",
+    "06": "vehiculos_motor", "07": "agricola_pecuario", "08": "responsabilidad_civil",
+    "09": "ramos_tecnicos", "10": "otros_seguros", "11": "fianzas_fidelidad",
+    "12": "fianzas_construccion", "13": "fianzas_aduanales", "14": "fianzas_judiciales",
+    "15": "otras_fianzas",
+}
+# ramo → (sufijos de primas 4101, sufijo de siniestros 5101)
+RAMOS_PERSONAS = {
+    "vida_individual": (("01", "02"), "01"),   # primer año + renovación → vida individual
+    "vida_colectivo": (("03",), "02"),
+    "accidentes_personales": (("04",), "03"),
+    "invalidez": (("05",), "04"),
+    "salud": (("07",), "05"),
+    # Rentas (06) y otros seguros de personas (08) no tienen contraparte de siniestros en el
+    # catálogo: se exponen con primas y ``siniestros=None``, nunca con un cero fabricado.
+    "rentas": (("06",), None),
+    "otros_personas": (("08",), None),
+}
 
 
 def slugify_insurer(name: str) -> str:
@@ -168,6 +201,25 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
     primas_cedidas = heads_sum(("51", "53"), "PRIMAS DE REASEG", "CEDID")
     recuperables = heads_sum(("41", "43"), "RECLAMAC", "A CARGO DE REASEG")
 
+    def leaf(code: str) -> Optional[float]:
+        return cta.get(code)
+
+    def suma(codes) -> Optional[float]:
+        vals = [cta[c] for c in codes if c in cta]
+        return round(sum(vals), 2) if vals else None
+
+    # Desglose por ramo (§5.6). El catálogo lo trae; el extractor lo colapsaba al total.
+    por_ramo: Dict[str, Dict[str, Optional[float]]] = {}
+    for sufijo, ramo in RAMOS_GENERALES.items():
+        p, s = leaf(f"4301{sufijo}"), leaf(f"5301{sufijo}")
+        if p is not None or s is not None:
+            por_ramo[ramo] = {"primas": p, "siniestros": s}
+    for ramo, (suf_primas, suf_sin) in RAMOS_PERSONAS.items():
+        p = suma([f"4101{x}" for x in suf_primas])
+        s = leaf(f"5101{suf_sin}") if suf_sin else None
+        if p is not None or s is not None:
+            por_ramo[ramo] = {"primas": p, "siniestros": s}
+
     reconciled = bool(
         activos and pasivos is not None and patrimonio is not None
         and abs(activos - pasivos - patrimonio) / activos < 0.01
@@ -182,7 +234,7 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
         reservas_tecnicas=reservas, activos_liquidos=liq,
         primas=primas, siniestros=siniestros, ingresos=ingresos, gastos=gastos,
         gastos_operativos=gastos_operativos, primas_cedidas=primas_cedidas,
-        recuperables_reaseguro=recuperables,
+        recuperables_reaseguro=recuperables, por_ramo=por_ramo,
         reconciled=reconciled)
 
 

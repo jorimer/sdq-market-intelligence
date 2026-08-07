@@ -249,18 +249,78 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
 - [ ] Exponer Perfil SDQ en API y frontend, y decidir la convivencia con la notación de letras
       durante la transición (§9: re-etiquetado retroactivo ya decidido; falta el cómo).
 
+## CALIBRACIÓN FINAL — una sola pasada al cierre (decisión del dueño, 2026-08-07)
+
+> Se difiere A PROPÓSITO, no por inercia: hoy se tocaron cuatro motores y calibrar sobre una
+> base que todavía se está moviendo obliga a recalibrar dos veces y publica un vaivén sin
+> significado. Se hace una vez, al final, sobre todo lo tocado. **Esta lista es el inventario
+> completo de lo que quedó sin calibrar** — si algo no está acá, se pierde.
+
+- [ ] **`cambiaria.py`** — umbrales v1 declarados como calibratables por el propio módulo.
+      42 de 92 entidades; explican casi todo el 59% de Resiliencia en "Sólida". Diagnóstico
+      hecho: `_calidad_activos` satura con 70% de activos líquidos, `_exposicion_credito` con
+      cero cartera.
+- [ ] **`fiduciaria.py`** — mismos umbrales v1 declarados como calibratables. N=4.
+- [ ] **Los otros 4 sub-componentes de banca** (calidad, eficiencia, liquidez, diversificación).
+      Hoy solo se recalibró SOLIDEZ; los demás no se auditaron y pueden tener el mismo defecto
+      de techos alcanzables. Medir saturación con el mismo método.
+- [ ] **Cortes de banda de Ejecución** — hoy son cuartiles del panel. Validar contra varios
+      cortes temporales: un cuartil que se mueve cada trimestre hace que una entidad cambie de
+      banda sin cambiar de desempeño.
+- [ ] **Bandas de Resiliencia (75/60/45)** — heredadas del ISF sin validar contra la escala de
+      banca. Tras el fix de solidez la mediana quedó en 78.1, o sea la mitad del sistema sobre
+      el corte de "Sólida". Revisar si los cortes calzan o si conviene otro anclaje.
+- [ ] **Cortes de `RATING_SCALE`** — fijados para una escala saturada. Si Perfil SDQ reemplaza
+      la notación de letras (§9), puede que no haga falta tocarlos; decidir explícitamente en
+      vez de dejarlo implícito.
+- [ ] **Anclajes del ISF** — recalibrados hoy contra 33 aseguradoras de UN corte (2024).
+      Re-verificar contra el histórico 2018-2024 ya cargado.
+- [ ] **Umbral `_MIN_N = 12`** de `robust_bounds` y del panel propio de Ejecución. Elegido por
+      criterio ("≈3 observaciones por cuadrante"), no medido. Validar.
+
 ## FASE 2 — Seguros (§5)
 
-- [ ] **2a.** Extractor por ramo (§5.6) — exponer los 15+8 ramos, no solo el total.
-- [ ] **2b.** Ejecución = combined ratio (loss + expense), ancla 100%, promedio 3-5 años (ingesta ya
-      existe, §0.6).
-- [ ] **2c.** Reaseguro como dimensión de Resiliencia, scoring en U invertida; Escala sale.
-      Banda "sana" a calibrar con la distribución real de las 33, no inventada.
-- [ ] **2d.** Siniestros incurridos ≈ pagados + Δreservas (§5.3), con la limitación declarada.
-- [ ] **2e.** Gates: peso×dispersión (§5.8), estabilidad de ranking, correlación (§8), cortes por
-      percentil. **Todos corribles en local** desde el Excel público.
-- [ ] **2f.** Documentar los pesos 35/20/15/15/15 como juicio experto (§5.7) en la superficie de
-      metodología visible al cliente.
+- [x] **2a.** Desglose por ramo (§5.6): 15 ramos generales + 7 de personas, persistidos en la
+      columna `dimension` que el modelo ya tenía para eso. **El mapeo de personas es EXPLÍCITO,
+      no posicional**: primas abre vida individual en "primer año" + "renovación" y siniestros la
+      consolida, así que emparejar por posición daría el loss ratio de vida contra siniestros de
+      accidentes. Rentas y "otros personas" no tienen contraparte de siniestros → `None`, nunca
+      un cero fabricado.
+      La **dispersión se pondera por prima**: sin ponderar, en Seguros Universal naves aéreas
+      (RD$14M, loss 164%) pesaría igual que salud (RD$6.022M, loss 71.8%) — eso describe una
+      anécdota, no la cartera. Queda como MÉTRICA expuesta, fuera del score (§5.6 la deja como
+      candidata a extensión, no como parte del mapeo mínimo).
+- [x] **2b.** Ejecución = combined ratio promedio de 3-5 ejercicios, ancla en el breakeven
+      (100%). **Validado con el panel 2018-2024: la mediana de |último año − promedio 5 años|
+      es 5.9 puntos, con casos de 21** — Aseguradora Agropecuaria da 71.5% en 2024 y 92.5% en
+      el ciclo. Sin ciclo suficiente (<3 ejercicios) NO se emite Ejecución.
+- [x] **2c.** Reaseguro como dimensión de Resiliencia con U invertida; **Escala SALE**.
+      Parámetros derivados del panel, no inventados: 8 de 33 aseguradoras ceden <5%
+      (desprotección) y 3 ceden >70% (fronting). **La banda intermedia (5-70%) es PLANA a
+      propósito**: ahí el dato no distingue "sano" de "muy sano" — haría falta un benchmark
+      del mercado reasegurador caribeño que no tenemos, y fabricar precisión sería peor.
+      De regalo: entra la VOLATILIDAD del loss ratio, que es distinta de su nivel (el ISF
+      solo medía el nivel; para aguantar un shock importa la estabilidad).
+- [x] **2d.** Siniestros incurridos ≈ pagados + Δreservas — implementado y **deliberadamente
+      FUERA del score**. Medido sobre el panel: el ajuste sube el loss ratio en **35 de 44
+      aseguradoras**, un sesgo alcista sistemático y no ruido simétrico — la prima no devengada
+      crece con la cartera y ese crecimiento se cuela como si fuera siniestralidad. Meterlo al
+      índice cambiaría una base gameable por una sesgada. Se expone marcado (`aproximado=True`)
+      con la limitación explícita. Lo habilitaría aislar la sub-cuenta de reserva de siniestros
+      pendientes en el extractor.
+- [x] **2e-parcial.** Gate §8 corrido: **correlación Ejecución×Resiliencia = 0.501** sobre 35
+      aseguradoras. PASA el umbral (<0.7) pero es **notablemente más alta que en banca
+      (−0.145)**, y tiene sentido: una aseguradora con buen combined ratio acumula capital, así
+      que los ejes se tocan más. Vale vigilarlo.
+      Bandas resultantes — Ejecución 9/14/7/5, Resiliencia 18/8/6/3.
+- [ ] **2e-resto.** Faltan: peso×dispersión (§5.8), estabilidad de ranking, y validar los cortes
+      contra varios ejercicios. Van con la CALIBRACIÓN FINAL.
+- [x] **2f.** Pesos declarados como juicio experto en el bloque `metodologia` de la respuesta
+      de `GET /perfil-sdq` — superficie de cliente, no solo el código. Incluye por qué Escala
+      quedó fuera y la advertencia de que no es una calificación de riesgo.
+- [x] **2g.** `GET /api/v1/insurance-intel/perfil-sdq` sirve los dos ejes con sus bandas,
+      dimensiones, ejercicios usados y marca de frescura.
+- [ ] **Pendiente de PRODUCTO:** frontend. El endpoint existe; ninguna pantalla lo consume.
 
 ## FASE 3 — Pensiones (§6)
 
