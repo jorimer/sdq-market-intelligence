@@ -32,19 +32,19 @@ from sqlalchemy.orm import Session
 # pesan más hacia lo absoluto que las dimensiones puramente relativas.
 DIMENSIONS = [
     {"key": "solvencia", "label": "Solvencia regulatoria (PTA/margen requerido, Ley 146-02)",
-     "weight": 0.35, "direction": "higher", "lo": 0.60, "hi": 3.00, "log": False, "wabs": 0.75},
+     "weight": 0.35, "direction": "higher", "lo": 0.60, "ref": 1.00, "hi": 4.00,
+     "log": False, "wabs": 0.75},
     {"key": "siniestralidad", "label": "Siniestralidad (loss ratio)", "weight": 0.20,
-     "direction": "lower", "lo": 0.85, "hi": 0.25, "log": False},
+     "direction": "lower", "lo": 0.80, "ref": 0.45, "hi": 0.20, "log": False},
     {"key": "liquidez", "label": "Liquidez regulatoria (disponible/mínimo, Ley 146-02)",
-     "weight": 0.15, "direction": "higher", "lo": 0.50, "hi": 5.00, "log": False, "wabs": 0.65},
+     "weight": 0.15, "direction": "higher", "lo": 0.60, "ref": 1.00, "hi": 4.00,
+     "log": False, "wabs": 0.65},
     {"key": "escala", "label": "Escala (activos totales)", "weight": 0.15,
-     "direction": "higher", "lo": 5e8, "hi": 3.5e10, "log": True},
-    # Margen técnico = 1 − combined ratio. Anclajes heredados de la definición anterior a
-    # propósito: así el delta observado corresponde SOLO al cambio de definición y no se
-    # mezcla con una recalibración. Los anclajes de las 5 dimensiones se revisan aparte
-    # (docs/PROPUESTA_ANCLAJES_ISF.md), donde 0.00 = breakeven pasa a valer 50 puntos.
+     "direction": "higher", "lo": 1.5e8, "ref": 1.0e9, "hi": 1.8e10, "log": True},
+    # Margen técnico = 1 − combined ratio; ``ref`` = 0.00 es el breakeven técnico
+    # (combined ratio 100%), el único de los tres cortes con ancla económica real.
     {"key": "resultado_tecnico", "label": "Margen técnico (1 − combined ratio)", "weight": 0.15,
-     "direction": "higher", "lo": -0.05, "hi": 0.20, "log": False},
+     "direction": "higher", "lo": -0.15, "ref": 0.00, "hi": 0.25, "log": False},
 ]
 _WABS = 0.5  # hybrid weight of the absolute band vs. peer min-max
 _MIN_COVERAGE = 0.50
@@ -61,22 +61,65 @@ def band_for(score: Optional[float]) -> Optional[str]:
 
 
 def _absolute(raw: float, spec: Dict) -> float:
-    lo, hi = spec["lo"], spec["hi"]
+    """Banda absoluta en dos tramos: ``lo``→0, **``ref``→50**, ``hi``→100.
+
+    ``ref`` es el hecho económico de la dimensión — el umbral regulatorio de la Ley 146-02
+    (índice 1.0 = cumple) o el breakeven técnico (combined ratio 100%). Anclarlo en 50 es lo
+    que hace que el número signifique algo por sí solo: cumplir la ley es "adecuado", no un
+    punto arbitrario de una recta.
+
+    La versión anterior era una sola recta ``lo``→``hi`` con extremos fijados por rangos
+    teóricos, no observados, y el resultado era un índice que no podía dar bien: la liquidez
+    entregaba mediana 28/100 **con el mercado entero cumpliendo el mínimo legal**, porque el
+    techo estaba en 5.0 y nadie llega. Ver ``docs/PROPUESTA_ANCLAJES_ISF.md``.
+
+    Sin ``ref`` declarada se mantiene la recta simple, así que la función sigue sirviendo a
+    dimensiones que no tienen un punto de referencia económico.
+    """
+    lo, hi, ref = spec["lo"], spec["hi"], spec.get("ref")
     if spec.get("log"):
         raw = math.log10(max(raw, 1.0))
         lo, hi = math.log10(lo), math.log10(hi)
-    frac = (raw - lo) / (hi - lo) if hi != lo else 0.5
-    return max(0.0, min(1.0, frac)) * 100
+        ref = math.log10(ref) if ref is not None else None
+    if ref is None:
+        frac = (raw - lo) / (hi - lo) if hi != lo else 0.5
+        return max(0.0, min(1.0, frac)) * 100
+    # Dos tramos. Funciona igual con dimensiones invertidas (hi < lo < ref), donde "mejor"
+    # es un valor más bajo: la comparación con ref se hace en el sentido de la escala.
+    bajo_ref = raw <= ref if hi > lo else raw >= ref
+    if bajo_ref:
+        frac = (raw - lo) / (ref - lo) if ref != lo else 1.0
+        return max(0.0, min(1.0, frac)) * 50
+    frac = (raw - ref) / (hi - ref) if hi != ref else 1.0
+    return 50 + max(0.0, min(1.0, frac)) * 50
 
 
-def _minmax(raw: float, peers: List[float], direction: str) -> Optional[float]:
+def _minmax(raw: float, peers: List[float], spec: Dict) -> Optional[float]:
+    """Peer min-max en el MISMO espacio que la banda absoluta, con límites robustos.
+
+    Dos correcciones sobre la versión anterior:
+
+    * **Respeta el flag ``log`` de la dimensión.** ``escala`` se declara logarítmica y la
+      banda absoluta lo aplicaba, pero el min-max corría en escala lineal: contra un máximo
+      de RD$33.000 millones, una aseguradora en la mediana (RD$983 millones) sacaba ~3
+      puntos. Media dimensión medía en una escala y la otra media en otra.
+    * **Acota con la valla de Tukey** (``robust_bounds``) para que un outlier no comprima al
+      resto. Sobre una distribución sesgada como los activos, la valla hay que calcularla en
+      el espacio log o recorta la cola alta legítima como si fuera anomalía.
+    """
+    from shared.indices.normalization import robust_bounds
+
     if len(peers) < 2:
         return None
-    lo, hi = min(peers), max(peers)
+    v, vals = raw, peers
+    if spec.get("log"):
+        v = math.log10(max(raw, 1.0))
+        vals = [math.log10(max(p, 1.0)) for p in peers]
+    lo, hi = robust_bounds(vals)
     if hi == lo:
         return 50.0
-    frac = (raw - lo) / (hi - lo)
-    if direction == "lower":
+    frac = (v - lo) / (hi - lo)
+    if spec["direction"] == "lower":
         frac = 1 - frac
     return max(0.0, min(1.0, frac)) * 100
 
@@ -138,7 +181,7 @@ def score_insurers(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             score = None
             if present:
                 a = _absolute(raw, d)
-                mm = _minmax(raw, pools[d["key"]], d["direction"])
+                mm = _minmax(raw, pools[d["key"]], d)
                 wabs = d.get("wabs", _WABS)
                 score = round(wabs * a + (1 - wabs) * mm, 1) if mm is not None else round(a, 1)
                 num += score * d["weight"]

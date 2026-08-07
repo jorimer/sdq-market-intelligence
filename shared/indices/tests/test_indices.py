@@ -140,3 +140,39 @@ class TestEngine:
         res = run_index("DO", DATASET, _config())
         for d in res["dimensions"].values():
             assert d["contribution"] == round(d["score"] * d["weight"], 2)
+
+
+# ── robust_bounds — peer min-max que no se deja dominar por un outlier ──────────
+
+def test_robust_bounds_sin_outliers_no_cambia_nada():
+    """Panel limpio → min/max intactos. El fix no debe mover paneles sanos."""
+    from shared.indices.normalization import robust_bounds
+    assert robust_bounds([1, 2, 3, 4, 5]) == (1.0, 5.0)
+
+
+def test_robust_bounds_acota_el_outlier():
+    """Un valor extremo deja de estirar el límite; el resto recupera dispersión."""
+    from shared.indices.normalization import robust_bounds
+    lo, hi = robust_bounds(list(range(1, 20)) + [500])
+    assert hi < 500 and lo == 1.0
+
+
+def test_robust_bounds_panel_chico_no_recorta():
+    """Debajo del panel mínimo, min/max crudos: el IQR subestimaría la dispersión real.
+
+    Caso medido: con las 7 AFP del ISA la valla acotaba los DOS extremos de rentabilidad
+    (5.99-8.78 → 7.21-8.33), exagerando la diferencia entre la mejor y la peor.
+    """
+    from shared.indices.normalization import robust_bounds
+    assert robust_bounds([1, 50, 100]) == (1.0, 100.0)
+    assert robust_bounds([7]) == (7.0, 7.0)
+    afp_rentabilidad = [5.99, 7.21, 7.4, 7.83, 8.05, 8.33, 8.78]
+    assert robust_bounds(afp_rentabilidad) == (5.99, 8.78)
+
+
+def test_robust_bounds_nunca_expande_mas_alla_del_dato():
+    """La valla acota hacia adentro; jamás inventa un rango mayor al observado."""
+    from shared.indices.normalization import robust_bounds
+    vals = [10, 11, 12, 13, 14, 15]
+    lo, hi = robust_bounds(vals)
+    assert lo >= min(vals) and hi <= max(vals)
