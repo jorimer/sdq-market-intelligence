@@ -58,16 +58,30 @@ def _seed_entities(db: Session, fins) -> int:
 
 
 def _persist_entity_series(db: Session, fins, period: str, lineage: Lineage) -> int:
+    """Persiste los totales por aseguradora + el desglose POR RAMO.
+
+    El desglose usa la columna ``dimension`` que el modelo ya tiene para eso (la usan las
+    series de mercado por ramo). Sin persistirlo, el loss ratio por ramo —que mide skill de
+    pricing y es más difícil de maquillar que el margen agregado— no es computable aguas
+    abajo aunque el catálogo lo traiga (spec §5.6).
+    """
     touched = 0
     for f in fins:
-        for code, value in f.as_series().items():
-            row = (db.query(InsuranceSeries)
-                   .filter(InsuranceSeries.series_code == code,
-                           InsuranceSeries.period == period,
-                           InsuranceSeries.entity_slug == f.slug,
-                           InsuranceSeries.dimension.is_(None)).first())
+        celdas = [(code, None, value) for code, value in f.as_series().items()]
+        for ramo, v in (getattr(f, "por_ramo", None) or {}).items():
+            celdas.append(("primas_suscritas", ramo, v.get("primas")))
+            celdas.append(("siniestros_pagados", ramo, v.get("siniestros")))
+        for code, dim, value in celdas:
+            q = (db.query(InsuranceSeries)
+                 .filter(InsuranceSeries.series_code == code,
+                         InsuranceSeries.period == period,
+                         InsuranceSeries.entity_slug == f.slug))
+            q = (q.filter(InsuranceSeries.dimension == dim) if dim
+                 else q.filter(InsuranceSeries.dimension.is_(None)))
+            row = q.first()
             if row is None:
-                row = InsuranceSeries(series_code=code, period=period, entity_slug=f.slug)
+                row = InsuranceSeries(series_code=code, period=period,
+                                      entity_slug=f.slug, dimension=dim)
                 db.add(row)
             row.value = value
             row.unit = "RD$"

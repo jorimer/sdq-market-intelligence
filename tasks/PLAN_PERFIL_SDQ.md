@@ -250,7 +250,16 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
 
 ## FASE 2 — Seguros (§5)
 
-- [ ] **2a.** Extractor por ramo (§5.6) — exponer los 15+8 ramos, no solo el total.
+- [x] **2a.** Desglose por ramo (§5.6): 15 ramos generales + 7 de personas, persistidos en la
+      columna `dimension` que el modelo ya tenía para eso. **El mapeo de personas es EXPLÍCITO,
+      no posicional**: primas abre vida individual en "primer año" + "renovación" y siniestros la
+      consolida, así que emparejar por posición daría el loss ratio de vida contra siniestros de
+      accidentes. Rentas y "otros personas" no tienen contraparte de siniestros → `None`, nunca
+      un cero fabricado.
+      La **dispersión se pondera por prima**: sin ponderar, en Seguros Universal naves aéreas
+      (RD$14M, loss 164%) pesaría igual que salud (RD$6.022M, loss 71.8%) — eso describe una
+      anécdota, no la cartera. Queda como MÉTRICA expuesta, fuera del score (§5.6 la deja como
+      candidata a extensión, no como parte del mapeo mínimo).
 - [x] **2b.** Ejecución = combined ratio promedio de 3-5 ejercicios, ancla en el breakeven
       (100%). **Validado con el panel 2018-2024: la mediana de |último año − promedio 5 años|
       es 5.9 puntos, con casos de 21** — Aseguradora Agropecuaria da 71.5% en 2024 y 92.5% en
@@ -262,7 +271,13 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       del mercado reasegurador caribeño que no tenemos, y fabricar precisión sería peor.
       De regalo: entra la VOLATILIDAD del loss ratio, que es distinta de su nivel (el ISF
       solo medía el nivel; para aguantar un shock importa la estabilidad).
-- [ ] **2d.** Siniestros incurridos ≈ pagados + Δreservas (§5.3), con la limitación declarada.
+- [x] **2d.** Siniestros incurridos ≈ pagados + Δreservas — implementado y **deliberadamente
+      FUERA del score**. Medido sobre el panel: el ajuste sube el loss ratio en **35 de 44
+      aseguradoras**, un sesgo alcista sistemático y no ruido simétrico — la prima no devengada
+      crece con la cartera y ese crecimiento se cuela como si fuera siniestralidad. Meterlo al
+      índice cambiaría una base gameable por una sesgada. Se expone marcado (`aproximado=True`)
+      con la limitación explícita. Lo habilitaría aislar la sub-cuenta de reserva de siniestros
+      pendientes en el extractor.
 - [x] **2e-parcial.** Gate §8 corrido: **correlación Ejecución×Resiliencia = 0.501** sobre 35
       aseguradoras. PASA el umbral (<0.7) pero es **notablemente más alta que en banca
       (−0.145)**, y tiene sentido: una aseguradora con buen combined ratio acumula capital, así
@@ -270,11 +285,12 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       Bandas resultantes — Ejecución 9/14/7/5, Resiliencia 18/8/6/3.
 - [ ] **2e-resto.** Faltan: peso×dispersión (§5.8), estabilidad de ranking, y validar los cortes
       contra varios ejercicios. Van con la CALIBRACIÓN FINAL.
-- [ ] **2f.** Documentar los pesos como juicio experto (§5.7) en la superficie de metodología
-      **visible al cliente**. Está en el docstring de `perfil_sdq.py`, que NO es superficie de
-      cliente — sigue sin cumplirse la promesa del spec.
-- [ ] **2g (nuevo).** Exponer Perfil SDQ de seguros en API/frontend. El motor existe y está
-      testeado, pero ninguna superficie lo sirve todavía.
+- [x] **2f.** Pesos declarados como juicio experto en el bloque `metodologia` de la respuesta
+      de `GET /perfil-sdq` — superficie de cliente, no solo el código. Incluye por qué Escala
+      quedó fuera y la advertencia de que no es una calificación de riesgo.
+- [x] **2g.** `GET /api/v1/insurance-intel/perfil-sdq` sirve los dos ejes con sus bandas,
+      dimensiones, ejercicios usados y marca de frescura.
+- [ ] **Pendiente de PRODUCTO:** frontend. El endpoint existe; ninguna pantalla lo consume.
 
 ## FASE 3 — Pensiones (§6)
 

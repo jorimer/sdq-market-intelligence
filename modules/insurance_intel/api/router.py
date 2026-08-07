@@ -117,6 +117,73 @@ async def pulse_insight(
     return {"audience": aud, "ai_insight": ai, "has_data": True}
 
 
+@router.get("/perfil-sdq")
+async def perfil_sdq(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Perfil SDQ de seguros: **Ejecución** y **Resiliencia**, dos ejes independientes.
+
+    Reemplaza la lectura de un símbolo único por dos números con significado propio:
+    Ejecución mide qué tan bien le va (combined ratio del ciclo) y Resiliencia qué tan
+    expuesta está (solvencia, liquidez, reaseguro y volatilidad de siniestralidad).
+
+    Ejecución se calcula sobre el **promedio de 3-5 ejercicios**, no sobre el último año:
+    con un solo corte, una catástrofe puntual reclasifica a una aseguradora bien manejada.
+    Una entidad sin ciclo suficiente devuelve ``ejecucion: null`` en vez de un promedio
+    fabricado con dos años.
+    """
+    from modules.insurance_intel.scoring.perfil_sdq import (
+        PESOS_RESILIENCIA, band_resiliencia_o_none, bandas_ejecucion_por_combined,
+        calcular_ejes, metricas_del_ciclo, panel_por_aseguradora,
+    )
+    from shared.indices.freshness import annotate_freshness
+
+    panel = panel_por_aseguradora(db)
+    filas = []
+    for slug, info in panel.items():
+        ejes = calcular_ejes(metricas_del_ciclo(info["ejercicios"]),
+                             info.get("indice_solvencia"), info.get("indice_liquidez"))
+        filas.append({
+            "slug": slug, "name": info["name"], "period": info.get("period"),
+            "ejecucion": ejes["ejecucion"],
+            "banda_ejecucion": bandas_ejecucion_por_combined(ejes["combined_promedio"]),
+            "combined_ratio_promedio": ejes["combined_promedio"],
+            "ejercicios": ejes["ejercicios"],
+            "resiliencia": ejes["resiliencia"],
+            "banda_resiliencia": band_resiliencia_o_none(ejes["resiliencia"]),
+            "cobertura_resiliencia": ejes["cobertura_resiliencia"],
+            "dimensiones_resiliencia": ejes["dimensiones"],
+        })
+    filas.sort(key=lambda f: (f["ejecucion"] is not None, f["ejecucion"] or 0), reverse=True)
+    corte = annotate_freshness(filas)
+    return {
+        "perfil": filas, "count": len(filas), "period_end": corte,
+        "ejes": {
+            "ejecucion": ("Combined ratio (siniestros + gastos operativos sobre primas) "
+                          "promediado sobre 3-5 ejercicios. Ancla: 100% = breakeven técnico."),
+            "resiliencia": ("Solvencia y liquidez regulatorias (Ley 146-02), reaseguro y "
+                            "volatilidad del loss ratio."),
+        },
+        # Promesa de transparencia del spec §5.7, en la superficie que ve el cliente y no
+        # solo en el código: los pesos NO se derivaron empíricamente.
+        "metodologia": {
+            "pesos_resiliencia": PESOS_RESILIENCIA,
+            "origen_de_los_pesos": (
+                "Juicio experto, no derivado empíricamente. Los pesos reflejan la "
+                "importancia relativa que la metodología asigna a cada dimensión; no salen "
+                "de una optimización sobre datos históricos."),
+            "escala_excluida": (
+                "El tamaño de activos NO participa de Resiliencia: lo que convierte tamaño "
+                "en resiliencia real es cuánto y cómo reasegura la entidad, que se mide "
+                "directamente."),
+            "no_es_calificacion_de_riesgo": (
+                "Perfil SDQ no es una calificación crediticia ni es comparable con la "
+                "notación de una agencia calificadora."),
+        },
+    }
+
+
 @router.get("/rankings")
 async def rankings(
     db: Session = Depends(get_db),

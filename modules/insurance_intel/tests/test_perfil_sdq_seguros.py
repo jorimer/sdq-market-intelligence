@@ -108,3 +108,89 @@ def test_bandas_de_ejecucion_anclan_en_el_breakeven():
     # El corte entre Competitiva y Rezagada ES el breakeven, no un número redondo cualquiera.
     assert bandas_ejecucion_por_combined(0.999) == "Competitiva"
     assert bandas_ejecucion_por_combined(1.001) == "Rezagada"
+
+
+# ── Desglose por ramo (§5.6) ───────────────────────────────────────────────────
+
+def test_el_extractor_parea_los_ramos_de_generales_por_sufijo():
+    """En generales el sufijo coincide: 4301XX primas ↔ 5301XX siniestros."""
+    from modules.insurance_intel.external.audited_excel_extractor import _extract_sheet
+    rows = [
+        ("1", "ACTIVO", None), ("1101", "INV", 700.0), ("1201", "EFE", 300.0),
+        ("2", "PASIVO", None), ("2101", "RES", 500.0),
+        ("3", "PATRIMONIO", None), ("3101", "CAP", 500.0),
+        ("4", "INGRESOS", None), ("4301", "PRIMAS SUSCRITAS", None),
+        ("430106", "VEHICULOS", 1000.0), ("430107", "AGRICOLA", 500.0),
+        ("5", "GASTOS", None), ("5301", "RECLAMACIONES PAGADAS POR SINIESTROS", None),
+        ("530106", "VEHICULOS", 700.0), ("530107", "AGRICOLA", 100.0),
+    ]
+    f = _extract_sheet(rows, "Test", "2024")
+    assert f.por_ramo["vehiculos_motor"] == {"primas": 1000.0, "siniestros": 700.0}
+    assert f.por_ramo["agricola_pecuario"] == {"primas": 500.0, "siniestros": 100.0}
+
+
+def test_en_personas_el_mapeo_es_explicito_no_posicional():
+    """Primas abre vida individual en 'primer año' + 'renovación'; siniestros la consolida.
+
+    Emparejar por posición daría el loss ratio de vida contra siniestros de accidentes.
+    """
+    from modules.insurance_intel.external.audited_excel_extractor import _extract_sheet
+    rows = [
+        ("1", "ACTIVO", None), ("1101", "INV", 1000.0),
+        ("2", "PASIVO", None), ("2101", "RES", 500.0),
+        ("3", "PATRIMONIO", None), ("3101", "CAP", 500.0),
+        ("4", "INGRESOS", None), ("4101", "PRIMAS SUSCRITAS", None),
+        ("410101", "VIDA IND PRIMER AÑO", 300.0), ("410102", "VIDA IND RENOVACION", 200.0),
+        ("410104", "ACCIDENTES PERSONALES", 400.0), ("410106", "RENTAS", 50.0),
+        ("5", "GASTOS", None), ("5101", "RECLAMACIONES PAGADAS POR SINIESTRO", None),
+        ("510101", "VIDA INDIVIDUAL", 150.0), ("510103", "ACCIDENTES PERSONALES", 250.0),
+    ]
+    f = _extract_sheet(rows, "Test", "2024")
+    # Vida individual suma las dos sub-cuentas de prima contra UNA de siniestros.
+    assert f.por_ramo["vida_individual"] == {"primas": 500.0, "siniestros": 150.0}
+    assert f.por_ramo["accidentes_personales"] == {"primas": 400.0, "siniestros": 250.0}
+    # Rentas no tiene contraparte en el catálogo: siniestros None, nunca un cero fabricado.
+    assert f.por_ramo["rentas"] == {"primas": 50.0, "siniestros": None}
+
+
+def test_la_dispersion_por_ramo_pondera_por_prima():
+    """Sin ponderar, un ramo residual domina el resultado.
+
+    Caso real: en Seguros Universal, naves aéreas mueve RD$14M con loss ratio 164% y salud
+    mueve RD$6.022M con 71.8%. Tratarlos igual describe una anécdota, no la cartera.
+    """
+    from modules.insurance_intel.scoring.perfil_sdq import dispersion_loss_por_ramo
+    d = dispersion_loss_por_ramo({
+        "salud": {"primas": 6_000e6, "siniestros": 4_300e6},        # 71.7%, dominante
+        "vehiculos_motor": {"primas": 3_600e6, "siniestros": 2_500e6},  # 69.4%
+        "naves_aereas": {"primas": 14e6, "siniestros": 23e6},       # 164%, residual
+    })
+    assert d["n_ramos"] == 3
+    # El loss ponderado queda cerca de los ramos grandes, no arrastrado por el chico.
+    assert 0.68 < d["loss_ponderado"] < 0.75
+    # Y la dispersión es baja pese al outlier: pesa por su participación real.
+    assert d["dispersion"] < 0.15
+
+
+def test_la_dispersion_descarta_los_ramos_residuales_y_los_incompletos():
+    from modules.insurance_intel.scoring.perfil_sdq import dispersion_loss_por_ramo
+    assert dispersion_loss_por_ramo({"a": {"primas": 100, "siniestros": 50}}) is None
+    assert dispersion_loss_por_ramo(
+        {"a": {"primas": 5e6, "siniestros": None}, "b": {"primas": 5e6, "siniestros": 1e6}}
+    ) is None   # un solo ramo con dato completo no da dispersión
+    assert dispersion_loss_por_ramo({}) is None
+
+
+# ── Siniestros incurridos (§5.3) ───────────────────────────────────────────────
+
+def test_incurridos_ajustan_por_la_variacion_de_reservas():
+    from modules.insurance_intel.scoring.perfil_sdq import siniestros_incurridos
+    r = siniestros_incurridos(pagados=100.0, reservas_actual=520.0, reservas_previa=500.0)
+    assert r["incurridos"] == 120.0 and r["ajuste_reservas"] == 20.0
+    assert r["aproximado"] is True and r["limitacion"]
+
+
+def test_incurridos_sin_reserva_previa_no_se_inventan():
+    from modules.insurance_intel.scoring.perfil_sdq import siniestros_incurridos
+    assert siniestros_incurridos(100.0, 520.0, None) is None
+    assert siniestros_incurridos(None, 520.0, 500.0) is None

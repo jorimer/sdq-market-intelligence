@@ -94,6 +94,46 @@ def score_reaseguro(cesion: Optional[float]) -> Optional[float]:
     return 100.0
 
 
+def siniestros_incurridos(pagados: Optional[float],
+                          reservas_actual: Optional[float],
+                          reservas_previa: Optional[float]) -> Optional[Dict[str, Any]]:
+    """Aproxima los siniestros INCURRIDOS: pagados + variación de reservas técnicas (§5.3).
+
+    La base pagados es **gameable**: demorar el reconocimiento o el pago de reclamaciones
+    mejora el loss ratio del ejercicio sin que haya mejorado nada. Los incurridos capturan
+    lo que ocurrió, no lo que se desembolsó.
+
+    **La limitación se declara, no se esconde — y está MEDIDA.** ``reservas_tecnicas`` tal
+    como se extrae hoy mezcla la reserva de siniestros pendientes con la de riesgos en curso
+    (prima no devengada, ``21xx`` + ``22xx``). Sobre el panel 2018-2024, el ajuste sube el
+    loss ratio en **35 de 44 aseguradoras** — un sesgo alcista sistemático, no ruido
+    simétrico: la prima no devengada crece con la cartera y ese crecimiento se cuela en el
+    ajuste como si fuera siniestralidad.
+
+    **Por eso esta función NO alimenta el score.** Se expone como métrica marcada
+    (``aproximado=True``), con el ajuste explícito para que quien la consuma pueda decir de
+    dónde sale la diferencia. Meterla al índice con este sesgo empeoraría la medición en vez
+    de mejorarla — el problema que se quería resolver (una base gameable) se reemplazaría por
+    otro (una base sesgada hacia arriba en las aseguradoras que crecen).
+
+    Refinamiento que la habilitaría: que el extractor aísle la sub-cuenta de reserva de
+    siniestros pendientes (mismo patrón ``children_sum_where``, descripción tipo
+    "RESERVA.*SINIESTRO"). Con eso el ajuste deja de arrastrar el crecimiento de cartera.
+    """
+    if pagados is None or reservas_actual is None or reservas_previa is None:
+        return None
+    ajuste = reservas_actual - reservas_previa
+    return {
+        "incurridos": pagados + ajuste,
+        "pagados": pagados,
+        "ajuste_reservas": ajuste,
+        "aproximado": True,
+        "limitacion": ("reservas_tecnicas mezcla siniestros pendientes con riesgos en curso; "
+                       "el ajuste se sobreestima si la prima no devengada se mueve por "
+                       "crecimiento de cartera"),
+    }
+
+
 def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict[str, Any]]:
     """Métricas de la ventana a partir de ``{año: {loss, exp, cesion, ...}}``.
 
@@ -148,10 +188,102 @@ def calcular_ejes(ciclo: Optional[Dict[str, Any]],
     }
 
 
+def dispersion_loss_por_ramo(
+        por_ramo: Dict[str, Dict[str, Optional[float]]],
+        prima_minima: float = 1e6) -> Optional[Dict[str, Any]]:
+    """Dispersión del loss ratio entre ramos, PONDERADA por participación de prima (§5.6).
+
+    Si el pricing es bueno, el loss ratio debería ser parejo entre segmentos: la prima
+    sigue al riesgo. Mucha dispersión esconde subsidio cruzado que el agregado no muestra —
+    y es más difícil de maquillar que el margen agregado, porque exige mover varios ramos a
+    la vez.
+
+    **Ponderada, no simple.** Sin ponderar, un ramo residual domina el resultado: en Seguros
+    Universal, naves aéreas mueve RD$14 millones con un loss ratio de 164% y salud mueve
+    RD$6.022 millones con 71.8%. Tratarlos igual describe una anécdota, no la cartera.
+    Los ramos por debajo de *prima_minima* quedan fuera por la misma razón.
+
+    Es un CANDIDATO a extensión de Ejecución (spec §5.6), no parte del mapeo mínimo del
+    §5.9: se expone como métrica y no entra al score hasta validarlo.
+    """
+    # (ramo, primas, siniestros) ya desempaquetado: deja los tipos explícitos y evita
+    # re-derivar el filtro en cada comprensión.
+    ramos: List[tuple] = []
+    for nombre, v in (por_ramo or {}).items():
+        primas, siniestros = v.get("primas"), v.get("siniestros")
+        if primas is not None and siniestros is not None and primas >= prima_minima:
+            ramos.append((nombre, float(primas), float(siniestros)))
+    if len(ramos) < 2:
+        return None
+    total = sum(p for _n, p, _s in ramos)
+    if total <= 0:
+        return None
+    pares = [(p / total, s / p) for _n, p, s in ramos]
+    media = sum(peso * lr for peso, lr in pares)
+    var = sum(peso * (lr - media) ** 2 for peso, lr in pares)
+    return {
+        "n_ramos": len(ramos),
+        "loss_ponderado": round(media, 4),
+        "dispersion": round(math.sqrt(var), 4),
+        "ramos": {n: round(s / p, 4) for n, p, s in ramos},
+    }
+
+
 def correlacion(xs: Sequence[float], ys: Sequence[float]) -> Optional[float]:
     """Gate del §8, idéntico al de banca — reexportado para no duplicar el criterio."""
     from modules.banking_score.scoring.perfil_sdq import correlacion as _c
     return _c(xs, ys)
+
+
+def band_resiliencia_o_none(score: Optional[float]) -> Optional[str]:
+    """Banda de Resiliencia reusando la del ISF — incluido su techo por incumplimiento."""
+    from modules.insurance_intel.scoring.isf import band_for
+    return band_for(score)
+
+
+def panel_por_aseguradora(db) -> Dict[str, Dict[str, Any]]:
+    """Arma ``{slug: {name, ejercicios: {año: {loss, exp, cesion}}, índices, period}}``.
+
+    Reusa ``isf._load_financials`` para la identidad canónica —agrupar por el roster oficial,
+    no por el slug del año— y después recorre ``insurance_series`` para reconstruir la serie
+    plurianual por entidad, que es lo que Ejecución necesita y el ISF no usa (el ISF toma
+    solo el último valor de cada serie).
+    """
+    from modules.insurance_intel.models.models import InsuranceSeries
+    from modules.insurance_intel.scoring.isf import _load_financials
+
+    ultimos = {f["slug"]: f for f in _load_financials(db)}
+    if not ultimos:
+        return {}
+
+    rows = (db.query(InsuranceSeries)
+            .filter(InsuranceSeries.entity_slug.in_(list(ultimos)),
+                    InsuranceSeries.dimension.is_(None),
+                    InsuranceSeries.value.isnot(None)).all())
+    por: Dict[str, Dict[str, Dict[str, float]]] = {}
+    for r in rows:
+        por.setdefault(r.entity_slug, {}).setdefault(r.period, {})[r.series_code] = r.value
+
+    salida: Dict[str, Dict[str, Any]] = {}
+    for slug, fin in ultimos.items():
+        ejercicios: Dict[str, Dict[str, float]] = {}
+        for periodo, s in (por.get(slug) or {}).items():
+            primas = s.get("primas_suscritas")
+            sin_, gop = s.get("siniestros_pagados"), s.get("gastos_operativos")
+            if not primas or sin_ is None or gop is None:
+                continue  # ejercicio incompleto: se omite, no se rellena
+            ejercicios[periodo] = {
+                "loss": sin_ / primas, "exp": gop / primas,
+                "cesion": (s.get("primas_cedidas") or 0.0) / primas,
+            }
+        salida[slug] = {
+            "name": fin.get("name", slug),
+            "period": fin.get("period"),
+            "ejercicios": ejercicios,
+            "indice_solvencia": fin.get("indice_solvencia"),
+            "indice_liquidez": fin.get("indice_liquidez"),
+        }
+    return salida
 
 
 def bandas_ejecucion_por_combined(combined: Optional[float]) -> Optional[str]:
