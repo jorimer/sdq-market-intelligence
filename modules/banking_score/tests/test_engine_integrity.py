@@ -65,7 +65,7 @@ def test_overall_renormalizes_over_available_subcomponents():
     tw = sum(wp[k] for k in present)
     expected = round(sum(present[k] * wp[k] for k in present) / tw, 2)
     assert abs(res["overall_score"] - expected) < 0.05
-    assert res["model_version"] == "1.1"
+    assert res["model_version"] == "1.2"
 
 
 def test_fully_populated_data_still_scores_all_subcomponents():

@@ -1,0 +1,69 @@
+RECALIBRACIÓN DE SOLIDEZ (banca) — model_version 1.1 → 1.2
+Fuente: producción, corte 2026-03-31. Generado 2026-08-07.
+
+SATURACIÓN ANTES (46 entidades con dato):
+   solvencia 67% en 100 · tier1 96% · leverage 96% · cobertura 96% · patrim/activos 70%
+   → el sub-componente de MAYOR PESO (40%) no discriminaba.
+
+entidad                                   antes  después      Δ   tier
+------------------------------------------------------------------------------------
+Banco Popular Dominicano                   91.9     80.1  -11.7   SDQ-AA+ → SDQ-AA-  ⬅
+Banco Múltiple BDI                         91.2     77.3  -13.8   SDQ-AA+ → SDQ-A+  ⬅
+Banco de Reservas de la República Domin    90.8     80.9   -9.9   SDQ-AA+ → SDQ-AA-  ⬅
+Banco Múltiple BHD                         90.6     77.8  -12.8   SDQ-AA+ → SDQ-A+  ⬅
+Banco Múltiple Santa Cruz                  90.1     76.3  -13.8   SDQ-AA+ → SDQ-A+  ⬅
+Banco Múltiple López de Haro               88.2     77.1  -11.1   SDQ-AA → SDQ-A+  ⬅
+Scotiabank República Dominicana            88.1     76.3  -11.8   SDQ-AA → SDQ-A+  ⬅
+Banco Múltiple Ademi                       88.0     75.8  -12.2   SDQ-AA → SDQ-A+  ⬅
+Corporación de Crédito Monumental          85.4     75.6   -9.8   SDQ-AA → SDQ-A+  ⬅
+Citibank N.A. Sucursal República Domini    84.6     74.6  -10.0   SDQ-AA- → SDQ-A  ⬅
+Banco de Ahorros y Créditos Bancotui       84.6     74.9   -9.7   SDQ-AA- → SDQ-A  ⬅
+Asociación Mocana de Ahorros y Préstamo    84.4     79.7   -4.7   SDQ-AA- → SDQ-A+  ⬅
+Banco de Ahorro y Crédito FONDESA          83.5     72.2  -11.2   SDQ-AA- → SDQ-A  ⬅
+Asociación Maguana de Ahorros y Préstam    83.4     72.3  -11.1   SDQ-AA- → SDQ-A  ⬅
+Asociación Popular de Ahorros y Préstam    83.3     78.7   -4.6   SDQ-AA- → SDQ-A+  ⬅
+Banco de Ahorro y Crédito Óptima           83.2     70.6  -12.6   SDQ-AA- → SDQ-A  ⬅
+Banco Múltiple Promérica de la Repúblic    82.5     69.9  -12.6   SDQ-AA- → SDQ-A-  ⬅
+Banco Múltiple Vimenca                     82.0     68.7  -13.3   SDQ-AA- → SDQ-A-  ⬅
+Banco ADOPEM de Ahorro y Crédito           81.9     73.5   -8.4   SDQ-AA- → SDQ-A  ⬅
+Asociación La Vega Real de Ahorros y Pr    81.8     76.8   -5.0   SDQ-AA- → SDQ-A+  ⬅
+Asociación Duarte de Ahorros y Préstamo    81.5     73.3   -8.2   SDQ-AA- → SDQ-A  ⬅
+Corporación de Crédito Nordestana de Pr    81.5     72.1   -9.4   SDQ-AA- → SDQ-A  ⬅
+Asociación Cibao de Ahorros y Préstamos    81.0     76.7   -4.3   SDQ-AA- → SDQ-A+  ⬅
+Asociación La Nacional de Ahorros y Pré    80.6     71.6   -9.0   SDQ-AA- → SDQ-A  ⬅
+Motor Crédito Banco de Ahorro y Crédito    80.5     67.6  -12.9   SDQ-AA- → SDQ-A-  ⬅
+Banco Múltiple Lafise                      80.3     68.4  -11.9   SDQ-AA- → SDQ-A-  ⬅
+Banesco Banco Múltiple                     80.3     66.4  -13.9   SDQ-AA- → SDQ-A-  ⬅
+Banco de Ahorro y Crédito del Caribe       79.9     74.9   -5.0   SDQ-A+ → SDQ-A  ⬅
+Banco de Ahorro y Crédito Fihogar          79.9     66.7  -13.2   SDQ-A+ → SDQ-A-  ⬅
+Banco Múltiple Caribe Internacional        79.7     65.5  -14.2   SDQ-A+ → SDQ-A-  ⬅
+Asociación de Ahorros y Préstamos Roman    79.2     69.0  -10.2   SDQ-A+ → SDQ-A-  ⬅
+Banco de Ahorro y Crédito Cofaci           79.2     75.9   -3.3   SDQ-A+ → SDQ-A+
+Corporación de Crédito Reidco              78.6     68.7   -9.9   SDQ-A+ → SDQ-A-  ⬅
+Banco de Ahorro y Crédito Bonanza          78.3     72.9   -5.4   SDQ-A+ → SDQ-A  ⬅
+Banco de Ahorro y Crédito Atlántico        77.9     63.7  -14.2   SDQ-A+ → SDQ-BBB+  ⬅
+Banco de Ahorro y Crédito Unión            77.9     63.7  -14.1   SDQ-A+ → SDQ-BBB+  ⬅
+Banco de Ahorro y Crédito Confisa          77.5     77.3   -0.2   SDQ-A+ → SDQ-A+
+Corporación de Crédito Oficorp             77.4     74.2   -3.2   SDQ-A+ → SDQ-A  ⬅
+Asociación Peravia de Ahorros y Préstam    77.3     66.6  -10.7   SDQ-A+ → SDQ-A-  ⬅
+Asociación Bonao de Ahorros y Préstamos    77.1     67.2   -9.9   SDQ-A+ → SDQ-A-  ⬅
+JMMB Bank Banco Múltiple                   76.7     63.8  -12.9   SDQ-A+ → SDQ-BBB+  ⬅
+Banco de Ahorro y Crédito Gruficorp        76.3     62.1  -14.2   SDQ-A+ → SDQ-BBB+  ⬅
+Qik Banco Digital Dominicano               76.1     70.8   -5.2   SDQ-A+ → SDQ-A  ⬅
+Leasing Confisa Banco de Ahorro y Crédi    73.3     63.2  -10.1   SDQ-A → SDQ-BBB+  ⬅
+Banco de Ahorro y Crédito Empire           65.7     56.6   -9.1   SDQ-A- → SDQ-BBB+  ⬅
+Banco Múltiple Activo                      56.8     50.2   -6.6   SDQ-BBB+ → SDQ-BBB  ⬅
+------------------------------------------------------------------------------------
+
+cambian de tier: 44/46 — TODAS hacia abajo, ninguna sube.
+Aceptado por el dueño como CORRECCIÓN: los techos bajos venían inflando el overall.
+
+concentración  antes: top-2 tiers = 34/46 (74%)
+               después: top-2 tiers = 26/46 (57%)
+
+en SDQ-D: antes 0 → después 0
+
+DATO AUSENTE ≠ CERO (fix de denominador cero):
+   Citibank (sucursal SIN cartera vencida) puntuaba 0 en cobertura y perdía 16 puntos
+   por no tener mora. Con el fix pierde 10, por la recalibración y no por el hueco.
+   Empire y Activo ya no caen a SDQ-D por datos faltantes.

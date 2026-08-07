@@ -56,6 +56,14 @@ def detect_rating_action(
     prev_tier = previous.rating_tier
     new_tier = scoring_result["rating_tier"]
 
+    # ¿El cambio viene de la METODOLOGÍA o de la entidad? Si la versión de modelo difiere,
+    # el movimiento no es deterioro ni mejora del banco: es que la vara cambió. El
+    # `action_type` sigue siendo el real, pero la marca evita que una recalibración se lea
+    # en el histórico como 44 downgrades simultáneos.
+    metodologica = bool(previous.model_version
+                        and scoring_result.get("model_version")
+                        and previous.model_version != scoring_result["model_version"])
+
     if new_tier != prev_tier:
         action_type = (
             ActionType.upgrade
@@ -93,12 +101,14 @@ def detect_rating_action(
             "diversificacion": float(previous.diversificacion_score or 0),
         },
         new_sub_components=scoring_result["sub_components"],
+        metodologica=metodologica,
         created_by=user_id,
     )
     db.add(action)
 
     return {
         "action_type": action_type.value,
+        "metodologica": metodologica,
         "previous_tier": prev_tier,
         "new_tier": new_tier,
         "score_delta": score_delta,
