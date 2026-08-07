@@ -179,6 +179,58 @@ def _ranked_ratings(db: Session) -> List[Dict[str, Any]]:
     return payloads
 
 
+@router.get("/perfil-sdq")
+async def perfil_sdq(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Perfil SDQ de pensiones: **Ejecución** y **Resiliencia** sobre las dimensiones del ISA.
+
+    Separa desempeño de exposición, que el índice único fusionaba. Caso medido: AFP Atlántico
+    y AFP JMMB BDI comparten banda "Frágil" en el ISA por razones opuestas — la primera es
+    sólida y rinde mal; la segunda tiene un problema de solvencia, no de desempeño.
+
+    **Escala queda fuera de los dos ejes** (§6.4): el ISA ya tiene una señal de riesgo real
+    —la volatilidad del NAV mensual— así que el proxy de tamaño no aporta nada que la señal
+    directa no diga mejor. Medido: AFP Romana es la más pequeña del sistema y la más
+    resiliente; con Escala dentro, su tamaño la castigaba.
+
+    Con 7 AFP la banda sola engaña, así que cada fila trae su posición en ambos ejes (§4.2).
+    """
+    from modules.pension_intel.scoring.perfil_sdq import (
+        FUERA_DE_LOS_EJES, PESOS_EJECUCION, PESOS_RESILIENCIA, perfil_panel,
+    )
+    from shared.indices.freshness import annotate_freshness
+
+    afps = []
+    for p in _ranked_ratings(db):
+        dims = {d.get("key"): d.get("score") for d in (p.get("dimensions") or [])
+                if d.get("present")}
+        afps.append({"slug": p["slug"], "name": p["name"], "period": p.get("period"),
+                     "isa": p.get("overall_score"), "banda_isa": p.get("band"),
+                     "dimension_scores": dims})
+    res = perfil_panel(afps)
+    corte = annotate_freshness(res["perfil"])
+    return {
+        **res, "period_end": corte,
+        "ejes": {
+            "ejecucion": "Rentabilidad y costo (comisión sobre AUM).",
+            "resiliencia": "Solvencia y riesgo (volatilidad del NAV mensual, ~30 observaciones).",
+        },
+        "metodologia": {
+            "pesos_resiliencia": PESOS_RESILIENCIA,
+            "pesos_ejecucion": PESOS_EJECUCION,
+            "fuera_de_los_ejes": FUERA_DE_LOS_EJES,
+            "origen_de_los_pesos": (
+                "Juicio experto, no derivado empíricamente. Renormalizados desde los del ISA "
+                "sin alterar las proporciones relativas entre dimensiones."),
+            "no_es_calificacion_de_riesgo": (
+                "Perfil SDQ no es una calificación crediticia ni es comparable con la "
+                "notación de una agencia calificadora."),
+        },
+    }
+
+
 @router.get("/rankings")
 async def rankings(
     db: Session = Depends(get_db),

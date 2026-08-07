@@ -322,10 +322,33 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       dimensiones, ejercicios usados y marca de frescura.
 - [ ] **Pendiente de PRODUCTO:** frontend. El endpoint existe; ninguna pantalla lo consume.
 
-## FASE 3 — Pensiones (§6)
+## FASE 3 — Pensiones (§6) · COMPLETA
 
-- [ ] Confirmar cobertura de `patrimonio`/`activos_totales` en `pension_series` — **requiere prod**.
-- [ ] Mapeo §6.5; Escala fuera de Resiliencia; N=7 → posición relativa obligatoria.
+- [x] **§6.2 resuelto sin trabajo**: las 7 AFP ya tienen `coverage 1.0` en producción, así que
+      el "declared gap" de solvencia que asumía el spec no existe. El mapeo va con peso completo.
+- [x] Mapeo §6.5 con pesos **exactos**, no el redondeo del spec: `0.35/0.50` y `0.25/0.35`.
+      Usar 0.71/0.29 daba una razón de 2.448 en vez de 2.5 — medio punto de desvío silencioso.
+- [x] **Escala fuera de los dos ejes (§6.4), y no se reemplaza.** En seguros hizo falta poner
+      Reaseguro en su lugar; acá no: el ISA ya tiene volatilidad del NAV, una señal REAL del
+      fenómeno que Escala proxeaba. **Y estaba metiendo ruido: AFP Romana es la más pequeña del
+      sistema (escala 1.65/100) y la más resiliente (96.1, 1ª de 7)** — con Escala dentro, su
+      tamaño la hundía al 2º puesto del ISA.
+- [x] **Ambos ejes ABSOLUTOS**, a diferencia de banca: rentabilidad y costo ya se puntúan contra
+      bandas absolutas dentro del ISA. Con 7 AFP, además, unos cuartiles serían puro ruido —
+      cada corte se apoyaría en menos de dos observaciones.
+- [x] Regla de N chico (§4.2): posición relativa en **ambos** ejes, siempre visible.
+- [x] Gate §8: **correlación 0.443** — pasa. Entre banca (−0.145) y seguros (0.501).
+- [x] `GET /api/v1/pension-intel/perfil-sdq` con metodología declarada.
+
+**El split separa dos "Frágil" del ISA por razones opuestas:** AFP Atlántico (Resiliencia 66.8
+Adecuada · Ejecución 16.8 Deficiente — sólida pero rinde mal) y AFP JMMB BDI (Resiliencia 39.5
+Frágil · Ejecución 48.3, 4ª de 7 — problema de solvencia, no de desempeño). Un índice único no
+puede decir eso.
+
+⚠️ Para la CALIBRACIÓN FINAL: **el score de costo está comprimido** — las 7 AFP caen entre 40.7
+y 68.6, con cinco entre 40 y 50. Todas cobran comisiones parecidas y el anclaje las castiga a
+todas por igual. Mismo patrón que la saturación de banca, en el otro extremo.
+
 
 ## FASE 4 — Migración de superficie
 
