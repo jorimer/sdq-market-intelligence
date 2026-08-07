@@ -453,3 +453,61 @@ def test_product_pulse_honors_selected_period(db):
     # Sin período → vista más reciente (comportamiento original intacto).
     latest = prod.snapshot(ProductTier.pulse, "")
     assert latest.payload["pulse"]["latest_year"] == "2025"
+
+
+# ── Frescura y cumplimiento regulatorio en el ranking ──────────────────────────
+
+def _rank_rows(monkeypatch, results):
+    """Ejecuta el handler de /rankings contra un compute_isf falseado."""
+    import asyncio
+    import modules.insurance_intel.api.router as router
+    monkeypatch.setattr(router, "compute_isf", lambda _db: results)
+    return asyncio.run(router.rankings(db=None, current_user=None))
+
+
+def test_ranking_marca_las_aseguradoras_con_corte_viejo(monkeypatch):
+    """El panel mezcla cortes: una fila de 2020 no puede compararse sin advertencia.
+
+    Caso real: Autoseguro se rankeaba con estados de 2020 y Confederación del Canadá con
+    los de 2023, junto a 33 aseguradoras de 2024 y sin ninguna marca.
+    """
+    res = [
+        {"slug": "a", "name": "Al día", "overall_score": 70.0, "band": "Adecuada",
+         "coverage": 1.0, "period": "2024", "dimensions": []},
+        {"slug": "b", "name": "Rezagada", "overall_score": 68.0, "band": "Adecuada",
+         "coverage": 1.0, "period": "2020", "dimensions": []},
+    ]
+    out = _rank_rows(monkeypatch, res)
+    filas = {r["slug"]: r for r in out["rankings"]}
+    assert out["period_end"] == "2024"
+    assert filas["a"]["stale"] is False and filas["a"]["years_behind"] == 0
+    assert filas["b"]["stale"] is True and filas["b"]["years_behind"] == 4
+
+
+def test_ranking_expone_el_incumplimiento_regulatorio(monkeypatch):
+    """Los índices de la Ley 146-02 valen 1.0 al cumplir: incumplir es binario, no un matiz.
+
+    Diluido dentro del híbrido ponderado, el score no distingue a una aseguradora que
+    incumple el margen de una que apenas va floja en otra dimensión.
+    """
+    def dims(solv, liq):
+        return [{"key": "solvencia", "raw": solv, "present": True},
+                {"key": "liquidez", "raw": liq, "present": True}]
+    res = [
+        {"slug": "cumple", "name": "Cumple", "overall_score": 70.0, "band": "Adecuada",
+         "coverage": 1.0, "period": "2024", "dimensions": dims(2.83, 1.72)},
+        {"slug": "incumple", "name": "Incumple", "overall_score": 40.0, "band": "Frágil",
+         "coverage": 1.0, "period": "2024", "dimensions": dims(0.79, 0.59)},
+    ]
+    filas = {r["slug"]: r for r in _rank_rows(monkeypatch, res)["rankings"]}
+    assert filas["cumple"]["incumple_solvencia"] is False
+    assert filas["incumple"]["incumple_solvencia"] is True
+    assert filas["incumple"]["incumple_liquidez"] is True
+
+
+def test_sin_dato_regulatorio_la_bandera_es_none_no_false(monkeypatch):
+    """Sin índice ingerido no se puede afirmar que cumple: la bandera queda en None."""
+    res = [{"slug": "x", "name": "X", "overall_score": 50.0, "band": None, "coverage": 0.5,
+            "period": "2024", "dimensions": [{"key": "solvencia", "raw": None, "present": False}]}]
+    fila = _rank_rows(monkeypatch, res)["rankings"][0]
+    assert fila["incumple_solvencia"] is None and fila["incumple_liquidez"] is None

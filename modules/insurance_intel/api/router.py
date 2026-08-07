@@ -122,15 +122,41 @@ async def rankings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Insurers ranked by ISF. Empty until F1b (audited financials) — honest."""
+    """Insurers ranked by ISF. Empty until F1b (audited financials) — honest.
+
+    Cada fila lleva dos marcas que el score solo no transmite:
+
+    * ``stale``/``years_behind`` — el panel MEZCLA cortes. Autoseguro se rankea con estados
+      de 2020 y Confederación del Canadá con los de 2023, junto a 33 aseguradoras de 2024.
+      Sus scores aparecían comparables de igual a igual sin ninguna advertencia. Paridad con
+      lo que banca ya hace (``stale``/``months_behind`` en su propio ranking).
+    * ``incumple_solvencia``/``incumple_liquidez`` — los índices de la Ley 146-02 valen 1.0
+      cuando la entidad cumple. Incumplirlos es un hecho regulatorio binario, no un matiz de
+      score, y hoy se diluye dentro del híbrido ponderado: en el cierre 2024 hay 5
+      aseguradoras bajo el mínimo de solvencia y 2 bajo el de liquidez.
+    """
     results = compute_isf(db)
-    ranked = [
-        {"rank": i + 1, "slug": r["slug"], "name": r.get("name") or r["slug"],
-         "overall_score": r["overall_score"], "band": r["band"],
-         "coverage": r["coverage"], "period": r["period"]}
-        for i, r in enumerate(results) if r["overall_score"] is not None
-    ]
-    return {"rankings": ranked, "count": len(ranked),
+    scored = [r for r in results if r["overall_score"] is not None]
+    corte = max((r["period"] for r in scored if r["period"]), default=None)
+
+    def _raw(r: Dict[str, Any], key: str) -> Optional[float]:
+        d = next((x for x in r.get("dimensions") or [] if x.get("key") == key), None)
+        return d.get("raw") if d and d.get("present") else None
+
+    ranked = []
+    for i, r in enumerate(scored):
+        solv, liq = _raw(r, "solvencia"), _raw(r, "liquidez")
+        atraso = (int(corte) - int(r["period"])
+                  if corte and r["period"] and corte.isdigit() and r["period"].isdigit() else 0)
+        ranked.append({
+            "rank": i + 1, "slug": r["slug"], "name": r.get("name") or r["slug"],
+            "overall_score": r["overall_score"], "band": r["band"],
+            "coverage": r["coverage"], "period": r["period"],
+            "stale": atraso > 0, "years_behind": atraso,
+            "incumple_solvencia": None if solv is None else solv < 1.0,
+            "incumple_liquidez": None if liq is None else liq < 1.0,
+        })
+    return {"rankings": ranked, "count": len(ranked), "period_end": corte,
             "scale": "ISF 0-100 (Sólida/Adecuada/En vigilancia/Frágil)",
             "note": None if ranked else "ISF pendiente: estados financieros auditados no ingeridos (F1b)."}
 

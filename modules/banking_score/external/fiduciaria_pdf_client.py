@@ -40,6 +40,22 @@ FIDUCIARY_ENTITIES: Dict[str, str] = {
     "fiduapap": "FiduAPAP",
 }
 
+# Fiduciarias que la SB supervisa pero que NO publican estados financieros en su ficha del
+# portal. Verificado 2026-08-07: la página de FiduAPAP responde 200 y tiene contenido, pero
+# cero PDFs, mientras las otras cuatro publican seis cada una. Es una brecha de FUENTE, no
+# del parser — el slug es el correcto, sale del índice oficial de la SB.
+#
+# Consecuencia para el producto: el universo PUNTUABLE de fiduciarias es 4, no 5. Cualquier
+# regla que dependa del tamaño del panel (la de N chico del spec de Perfil SDQ, que asume 5)
+# debe usar este conteo, y el reporte debe declarar la ausencia en vez de dejar pensar que
+# la entidad no fue evaluada por descuido.
+FIDUCIARIES_WITHOUT_PUBLISHED_STATEMENTS = frozenset({"fiduapap"})
+
+SCORABLE_FIDUCIARIES: Dict[str, str] = {
+    slug: name for slug, name in FIDUCIARY_ENTITIES.items()
+    if slug not in FIDUCIARIES_WITHOUT_PUBLISHED_STATEMENTS
+}
+
 # Public-trust filename stems (entity statements are "NN-de-diciembre-YYYY" or
 # "...auditados...YYYY"). Anything whose stem starts with one of these prefixes is a
 # trust, not the entity. Derived from the Reservas page (the only one with trusts).

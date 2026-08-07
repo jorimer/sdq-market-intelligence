@@ -149,11 +149,16 @@ todas las aseguradoras, la cobertura cae a 0.85 y **el ISF deja de emitir banda*
 - [ ] **Winsorizar el pool de peer min-max.** Un solo outlier (Creciendo, combined 831%) comprime
       el ranking de las otras 30. Afecta a ISF, ISA e ISARS por igual — los tres usan min-max crudo.
       NO se incluyó en el Fix 0 para no mezclar efectos en el delta aprobado.
-- [ ] **Bandera de incumplimiento regulatorio.** 5 de 33 aseguradoras incumplen el margen de
-      solvencia (<1.0) y 2 la liquidez; hoy la señal se diluye en el híbrido. Candidato al motor de
-      Alerta Temprana de seguros.
-- [ ] **FiduAPAP sin score.** Está en `FIDUCIARY_ENTITIES` pero prod solo puntúa 4 fiduciarias.
-      Averiguar si falta ingesta o dejó de reportar.
+- [x] **Bandera de incumplimiento regulatorio (PR #648).** `incumple_solvencia` /
+      `incumple_liquidez` en cada fila del ranking. Incumplir la Ley 146-02 es un hecho binario,
+      no un matiz de score, y diluido en el híbrido ponderado no se distinguía de "flojo en otra
+      dimensión". Sin dato ingerido la bandera es `None`, no `False`: no se puede afirmar que
+      cumple.
+- [x] **FiduAPAP — es brecha de FUENTE, no de ingeniería (PR #648).** Verificado contra el portal
+      de la SB: su ficha responde 200 con contenido pero **cero PDFs**, mientras las otras cuatro
+      publican seis cada una; y el slug es el correcto, sale del índice oficial. No se fuerza: se
+      declara. `SCORABLE_FIDUCIARIES` deja explícito que **el universo puntuable es 4, no 5** —
+      dato que la regla de N chico del spec necesita (asume 5).
 
 ## FASE 1 — Motor de dos ejes: banca + fiduciarias (§3.1, §7.3)
 
