@@ -9,10 +9,15 @@ from modules.insurance_intel.scoring.isf import compute_isf
 
 logger = logging.getLogger("sdq.insurance_intel.batch")
 
-# 0.2 — el resultado técnico pasa a ser el margen técnico (1 − combined ratio), corrigiendo
-# el doble conteo de siniestros de la 0.1. Todo score recalculado queda marcado con esta
-# versión: un cambio de banda entre 0.1 y 0.2 es metodológico, NO deterioro de la entidad.
-MODEL_VERSION = "0.2"
+# Versión de metodología. Todo score recalculado queda marcado con la suya: un cambio de
+# banda ENTRE versiones es metodológico, NO deterioro de la entidad. Sin esto, una
+# recalibración se leería en el histórico como si la aseguradora hubiera empeorado.
+#   0.2 — el resultado técnico pasa a ser el margen técnico (1 − combined ratio),
+#         corrigiendo el doble conteo de siniestros de la 0.1.
+#   0.3 — recalibración: peer min-max con límites robustos, `escala` medida en espacio log
+#         también en el min-max, y bandas absolutas de dos tramos ancladas en el umbral
+#         regulatorio / breakeven (docs/PROPUESTA_ANCLAJES_ISF.md).
+MODEL_VERSION = "0.3"
 
 
 def score_and_persist(db: Session) -> Dict:

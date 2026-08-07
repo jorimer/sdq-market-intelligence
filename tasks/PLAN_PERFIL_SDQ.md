@@ -162,17 +162,27 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       De regalo: `escala` medía en **dos escalas a la vez** (banda absoluta en log, min-max en
       lineal), que es buena parte de por qué daba mediana 9/100.
       Efecto: 6 cambios de banda; `evidence/ISF-recalibracion-2024.txt`.
-- [ ] **Bandera de incumplimiento regulatorio.** 5 de 33 aseguradoras incumplen el margen de
-      solvencia (<1.0) y 2 la liquidez; hoy la señal se diluye en el híbrido. Candidato al motor de
-      Alerta Temprana de seguros.
-- [ ] **FiduAPAP sin score.** Está en `FIDUCIARY_ENTITIES` pero prod solo puntúa 4 fiduciarias.
-      Averiguar si falta ingesta o dejó de reportar.
-- [ ] **El ranking de seguros mezcla períodos sin avisar** (hallazgo 2026-08-07, no estaba en el
-      spec). Autoseguro se rankea con datos de **2020** y Confederación del Canadá con los de
-      **2023**, junto a 33 aseguradoras de 2024 y sin ninguna marca de rezago. Banca ya resuelve
-      esto (`stale` + `months_behind` en su ranking); seguros y pensiones no. Ambas tienen
-      cobertura 0.5 y banda `None`, así que el motor las degrada — pero su **score sigue siendo
-      comparable de igual a igual** en la tabla, que es lo engañoso.
+- [x] **Bandera de incumplimiento regulatorio (PR #648).** `incumple_solvencia` /
+      `incumple_liquidez` en cada fila del ranking. Incumplir la Ley 146-02 es un hecho binario,
+      no un matiz de score, y diluido en el híbrido ponderado no se distinguía de "flojo en otra
+      dimensión". Sin dato ingerido la bandera es `None`, no `False`: no se puede afirmar que
+      cumple.
+- [x] **FiduAPAP — es brecha de FUENTE, no de ingeniería (PR #648).** Verificado contra el portal
+      de la SB: su ficha responde 200 con contenido pero **cero PDFs**, mientras las otras cuatro
+      publican seis cada una; y el slug es el correcto, sale del índice oficial. No se fuerza: se
+      declara. `SCORABLE_FIDUCIARIES` deja explícito que **el universo puntuable es 4, no 5** —
+      dato que la regla de N chico del spec necesita (asume 5).
+- [x] **El ranking de seguros mezclaba períodos sin avisar (PR #648).** `stale` + `years_behind`
+      por fila y `period_end` del panel, en paridad con lo que banca ya hacía. Autoseguro se
+      rankeaba con estados de **2020** y Confederación del Canadá con los de **2023**, junto a 33
+      aseguradoras de 2024: el motor las degradaba por cobertura, pero su score seguía apareciendo
+      comparable de igual a igual.
+- [x] **`MODEL_VERSION` 0.2 → 0.3 (PR #648).** Descuido detectado al mergear #647: la
+      recalibración cambia scores por metodología y no había subido la versión, que es el
+      mecanismo de trazabilidad establecido en el Fix 0. Sin eso, un cambio de banda por
+      recalibración se leería como deterioro de la entidad.
+- [ ] **Pendiente: la misma marca de frescura en pensiones.** El ISA tiene el mismo patrón y no se
+      revisó en esta pasada.
 
 ## FASE 1 — Motor de dos ejes: banca + fiduciarias (§3.1, §7.3)
 
