@@ -251,15 +251,30 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
 ## FASE 2 — Seguros (§5)
 
 - [ ] **2a.** Extractor por ramo (§5.6) — exponer los 15+8 ramos, no solo el total.
-- [ ] **2b.** Ejecución = combined ratio (loss + expense), ancla 100%, promedio 3-5 años (ingesta ya
-      existe, §0.6).
-- [ ] **2c.** Reaseguro como dimensión de Resiliencia, scoring en U invertida; Escala sale.
-      Banda "sana" a calibrar con la distribución real de las 33, no inventada.
+- [x] **2b.** Ejecución = combined ratio promedio de 3-5 ejercicios, ancla en el breakeven
+      (100%). **Validado con el panel 2018-2024: la mediana de |último año − promedio 5 años|
+      es 5.9 puntos, con casos de 21** — Aseguradora Agropecuaria da 71.5% en 2024 y 92.5% en
+      el ciclo. Sin ciclo suficiente (<3 ejercicios) NO se emite Ejecución.
+- [x] **2c.** Reaseguro como dimensión de Resiliencia con U invertida; **Escala SALE**.
+      Parámetros derivados del panel, no inventados: 8 de 33 aseguradoras ceden <5%
+      (desprotección) y 3 ceden >70% (fronting). **La banda intermedia (5-70%) es PLANA a
+      propósito**: ahí el dato no distingue "sano" de "muy sano" — haría falta un benchmark
+      del mercado reasegurador caribeño que no tenemos, y fabricar precisión sería peor.
+      De regalo: entra la VOLATILIDAD del loss ratio, que es distinta de su nivel (el ISF
+      solo medía el nivel; para aguantar un shock importa la estabilidad).
 - [ ] **2d.** Siniestros incurridos ≈ pagados + Δreservas (§5.3), con la limitación declarada.
-- [ ] **2e.** Gates: peso×dispersión (§5.8), estabilidad de ranking, correlación (§8), cortes por
-      percentil. **Todos corribles en local** desde el Excel público.
-- [ ] **2f.** Documentar los pesos 35/20/15/15/15 como juicio experto (§5.7) en la superficie de
-      metodología visible al cliente.
+- [x] **2e-parcial.** Gate §8 corrido: **correlación Ejecución×Resiliencia = 0.501** sobre 35
+      aseguradoras. PASA el umbral (<0.7) pero es **notablemente más alta que en banca
+      (−0.145)**, y tiene sentido: una aseguradora con buen combined ratio acumula capital, así
+      que los ejes se tocan más. Vale vigilarlo.
+      Bandas resultantes — Ejecución 9/14/7/5, Resiliencia 18/8/6/3.
+- [ ] **2e-resto.** Faltan: peso×dispersión (§5.8), estabilidad de ranking, y validar los cortes
+      contra varios ejercicios. Van con la CALIBRACIÓN FINAL.
+- [ ] **2f.** Documentar los pesos como juicio experto (§5.7) en la superficie de metodología
+      **visible al cliente**. Está en el docstring de `perfil_sdq.py`, que NO es superficie de
+      cliente — sigue sin cumplirse la promesa del spec.
+- [ ] **2g (nuevo).** Exponer Perfil SDQ de seguros en API/frontend. El motor existe y está
+      testeado, pero ninguna superficie lo sirve todavía.
 
 ## FASE 3 — Pensiones (§6)
 
