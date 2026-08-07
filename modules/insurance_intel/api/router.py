@@ -145,12 +145,13 @@ async def rankings(
 
     ranked = []
     for i, r in enumerate(scored):
-        solv, liq = _raw(r, "solvencia"), _raw(r, "liquidez")
+        liq = _raw(r, "liquidez")
         ranked.append({
             "rank": i + 1, "slug": r["slug"], "name": r.get("name") or r["slug"],
             "overall_score": r["overall_score"], "band": r["band"],
+            "band_capped": r.get("band_capped", False),
             "coverage": r["coverage"], "period": r["period"],
-            "incumple_solvencia": None if solv is None else solv < 1.0,
+            "incumple_solvencia": r.get("incumple_solvencia"),
             "incumple_liquidez": None if liq is None else liq < 1.0,
         })
     corte = annotate_freshness(ranked)
@@ -221,19 +222,14 @@ async def ars_rankings(
     names = {e.slug: e.name for e in db.query(InsuranceEntity)
              .filter(InsuranceEntity.entity_type == "ars").all()}
 
-    def _margen(r: Dict[str, Any]) -> Optional[float]:
-        d = next((x for x in r.get("dimensions") or []
-                  if x.get("key") == "margen_solvencia"), None)
-        return d.get("raw") if d and d.get("present") else None
-
     ranked = []
     for i, r in enumerate(x for x in results if x["overall_score"] is not None):
-        m = _margen(r)
         ranked.append(
             {"rank": i + 1, "slug": r["slug"], "name": names.get(r["slug"], r["slug"]),
              "category": r.get("category"), "overall_score": r["overall_score"],
-             "band": r["band"], "coverage": r["coverage"], "period": r["period"],
-             "incumple_margen_solvencia": None if m is None else m < 1.0})
+             "band": r["band"], "band_capped": r.get("band_capped", False),
+             "coverage": r["coverage"], "period": r["period"],
+             "incumple_margen_solvencia": r.get("incumple_margen_solvencia")})
     corte = annotate_freshness(ranked)
     return {"rankings": ranked, "count": len(ranked), "period_end": corte,
             "scale": "ISARS 0-100 (Sólida/Adecuada/En vigilancia/Frágil)",

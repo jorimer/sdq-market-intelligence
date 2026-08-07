@@ -37,14 +37,25 @@ _WABS = 0.5
 _MIN_COVERAGE = 0.50
 _BANDS = [(75, "Sólida"), (60, "Adecuada"), (45, "En vigilancia"), (0, "Frágil")]
 
+# Mismo techo de banda que el ISF, sobre el margen de solvencia de SISALRIL (ind. 405,
+# < 1.0 = incumple). Decisión de producto del dueño, 2026-08-07: quien está bajo el mínimo
+# de capital no puede mostrar una banda que se lea como "está bien". Medido en producción:
+# ARS Renacer (0.779) y ARS Dr. Yunén (0.764) incumplen.
+BAND_CAP_INCUMPLIMIENTO = "En vigilancia"
+_BAND_ORDER = [name for _t, name in _BANDS]  # mejor → peor
 
-def band_for(score: Optional[float]) -> Optional[str]:
+
+def band_for(score: Optional[float], margen_incumplido: bool = False) -> Optional[str]:
+    """Banda del score, topeada si la ARS incumple el margen de solvencia requerido.
+
+    El tope no toca el ``overall_score``: solo acota la etiqueta cualitativa, que es la que
+    un lector lee como afirmación."""
     if score is None:
         return None
-    for threshold, name in _BANDS:
-        if score >= threshold:
-            return name
-    return "Frágil"
+    band = next((name for threshold, name in _BANDS if score >= threshold), "Frágil")
+    if margen_incumplido and _BAND_ORDER.index(band) < _BAND_ORDER.index(BAND_CAP_INCUMPLIMIENTO):
+        return BAND_CAP_INCUMPLIMIENTO
+    return band
 
 
 def _absolute(raw: float, spec: Dict) -> float:
@@ -113,9 +124,14 @@ def score_ars(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                          "score": score, "provenance": "real", "present": present})
         coverage = round(wsum / total_weight, 4) if total_weight else 0.0
         overall = round(num / wsum, 1) if wsum and coverage >= _MIN_COVERAGE else None
+        margen = raws[slug].get("margen_solvencia")
+        incumple = margen is not None and margen < 1.0
+        band = band_for(overall, incumple) if coverage >= 0.99 else None
         out.append({"slug": slug, "name": f.get("name", slug), "period": f.get("period"),
                     "category": f.get("category"),
-                    "overall_score": overall, "band": band_for(overall) if coverage >= 0.99 else None,
+                    "overall_score": overall, "band": band,
+                    "band_capped": bool(band and incumple and band != band_for(overall)),
+                    "incumple_margen_solvencia": None if margen is None else incumple,
                     "coverage": coverage, "dimensions": dims,
                     "score_kind": "absolute" if coverage >= 0.99 else "relative"})
     out.sort(key=lambda r: (r["overall_score"] is not None, r["overall_score"] or 0), reverse=True)
