@@ -36,7 +36,7 @@ class InsuranceEntity(UUIDMixin, Base):
         UniqueConstraint("slug", name="uq_insurance_entity_slug"),
     )
 
-    slug = Column(String(40), nullable=False)        # stable key: "seguros_universal"
+    slug = Column(String(80), nullable=False)        # stable key: "seguros_universal"
     name = Column(String(200), nullable=False)
     entity_type = Column(String(20), default="aseguradora", nullable=False)  # aseguradora | ars
     entity_code = Column(String(20), nullable=True)  # SIS/SISALRIL code, when known
@@ -63,7 +63,7 @@ class InsuranceSeries(UUIDMixin, Base):
     value = Column(Float, nullable=True)               # NULL = missing, no interpolation
     unit = Column(String(40), nullable=True)           # "RD$", "%", "conteo"
     frequency = Column(String(20), nullable=True)      # "annual" / "quarterly" / "monthly"
-    entity_slug = Column(String(40), nullable=True)    # NULL = market; set = per-entity
+    entity_slug = Column(String(80), nullable=True)    # NULL = market; set = per-entity
     dimension = Column(String(40), nullable=True)      # ramo slug (line of business), when split
     # Lineage
     source = Column(String(40), nullable=True)         # "SIS" / "SISALRIL"
@@ -85,7 +85,7 @@ class InsuranceRating(UUIDMixin, Base):
         Index("ix_insurance_rating_entity_period", "entity_slug", "period"),
     )
 
-    entity_slug = Column(String(40), nullable=False)
+    entity_slug = Column(String(80), nullable=False)
     period = Column(String(10), nullable=False)        # as-of label (latest input period)
     overall_score = Column(Float, nullable=True)       # 0-100, NULL = no scoreable data
     band = Column(String(20), nullable=True)           # Sólida / Adecuada / En vigilancia / Frágil

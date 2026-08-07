@@ -133,10 +133,19 @@ todas las aseguradoras, la cobertura cae a 0.85 y **el ISF deja de emitir banda*
 
 ## FASE 0-bis — Defectos encontrados durante la auditoría (nuevos, no estaban en el spec)
 
-- [ ] **Unificar los dos caminos de cálculo del ISF.** `/rankings` calcula en vivo
-      (`compute_isf`), `/{slug}/detail` lee la tabla congelada `InsuranceRating`. Divergen: 2
-      aseguradoras con solvencia errónea y 14 sin dimensiones regulatorias en la tabla persistida.
-      Ver `docs/PROPUESTA_ANCLAJES_ISF.md` §5.
+- [x] **La "tabla congelada" tenía causa raíz, no era falta de sync (PR #644).** El slug oficial de
+      AGRODOSA (`aseguradora_agropecuaria_dominicana_agrodosa`, 44 car.) no entra en el `VARCHAR(40)`
+      de `entity_slug`. En Postgres eso aborta la transacción de `score_and_persist` y hace rollback
+      del sync completo; en SQLite el ancho no se aplica, así que el defecto solo existía en prod
+      ([[dev-prod-sqlite-postgres-parity]] otra vez). Verificado: ni AGRODOSA ni Cuna Mutual —la
+      primera del ranking— existían en `insurance_ratings`. Migración `c9f2e07b41da` a `VARCHAR(80)`
+      + test de regresión que corre contra el catálogo de nombres, no contra la base.
+      **Lección de método:** un síntoma bien medido no es una causa diagnosticada. Documenté
+      "dos caminos que nadie sincroniza" cuando en realidad uno no podía escribir.
+- [ ] **RE-MEDIR la divergencia ranking/detalle post-sync.** Lo observado (La Colonial 57.5 vs 54.5)
+      se midió contra una tabla que llevaba tiempo sin poder escribirse. Si tras el sync siguen
+      divergiendo, entonces sí hay un problema de diseño en tener un camino vivo y otro persistido.
+      Si convergen, el defecto era solo la escritura rota.
 - [ ] **Winsorizar el pool de peer min-max.** Un solo outlier (Creciendo, combined 831%) comprime
       el ranking de las otras 30. Afecta a ISF, ISA e ISARS por igual — los tres usan min-max crudo.
       NO se incluyó en el Fix 0 para no mezclar efectos en el delta aprobado.
