@@ -208,16 +208,46 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       `band_capped` distingue "En vigilancia por su score" de "En vigilancia porque incumple".
       El tope NO altera el `overall_score`: el índice sigue auditable contra sus dimensiones.
 
-## FASE 1 — Motor de dos ejes: banca + fiduciarias (§3.1, §7.3)
+## FASE 1 — Motor de dos ejes: banca + fiduciarias (§3.1, §7.3) · MOTOR COMPLETO
 
-- [ ] Módulo nuevo de agregación (no tocar `rating_scale.py` todavía) con Ejecución/Resiliencia por
-      re-normalización; sin recalibrar pesos.
-- [ ] Bandas de Ejecución §4.1 tal cual (Sobresaliente/Competitiva/Rezagada/Deficiente).
-- [ ] Regla de N chico §4.2 en el display (banca N grande; fiduciarias N=5 → posición relativa obligatoria).
-- [ ] Cortes por percentil sobre distribución real — **requiere prod** (banca/fiduciarias). Si no hay
-      acceso: dejar el script listo, sin ejecutar. No simular con fixture.
-- [ ] Gate de correlación §8 por sector.
-- [ ] Fijar el docstring stale de `fiduciaria.py` (cita pesos v1 35/20/25/10/10 vs. `weights.py` real).
+- [x] `scoring/perfil_sdq.py`: reagregación por renormalización, reusando
+      `calculate_deterministic_score` (que ya renormaliza sobre los pesos que recibe y ya
+      excluye los N/D). Genérica para **los 6 perfiles de peso**, no solo los 2 del spec.
+- [x] Bandas de Ejecución §4.1 tal cual. **Los dos ejes NO son simétricos, y es deliberado:**
+      Resiliencia es ABSOLUTA (hereda 75/60/45 del ISF); Ejecución es RELATIVA al panel, porque
+      no existe un "breakeven de eficiencia bancaria" análogo al índice regulatorio o al
+      combined ratio 100%. Inventarle un corte fijo sería repetir el error de los anclajes.
+- [x] **Cortes por TIPO de entidad, no sobre el universo.** Medido: mediana de Ejecución 37.8 en
+      cambiarias vs 73.5 en banca múltiple. Con cortes únicos, casi toda la intermediación
+      cambiaria caería en "Deficiente" y casi toda la banca múltiple en "Sobresaliente" —
+      describiendo la diferencia entre dos modelos de negocio como diferencia de desempeño.
+      Tipo con <12 entidades usa los del universo y lo DECLARA en `cortes_origen`.
+- [x] Regla de N chico §4.2: `posicion_ejecucion` / `universo` / `requiere_posicion_visible`.
+- [x] **Gate de correlación §8 PASADO con datos reales de producción: −0.145 global**, y ningún
+      sector supera 0.39. Los dos ejes miden cosas genuinamente distintas — el diseño del spec
+      se sostiene contra el panel real.
+- [x] Docstring de `fiduciaria.py` corregido (citaba pesos v1 desactualizados).
+- [x] **La Fase 1 destapó la saturación de solidez (PR #651)**, que era la causa real de que
+      Resiliencia no discriminara. Tras corregirla: de **89% en una sola banda a 59%**, las
+      cuatro bandas ocupadas, mediana 78.1 y rango 36.9–97.0.
+      Caso que ilustra por qué existe el spec: **Qik Banco Digital** (Resiliencia 77.8 Sólida ·
+      Ejecución 31.6 Deficiente) contra **Banco Popular** (77.0 Sólida · 97.8 Sobresaliente) —
+      casi la misma Resiliencia, Ejecución en extremos opuestos. El tier único los fusionaba.
+
+### Residuo identificado, con diagnóstico hecho
+
+- [ ] **Los umbrales de `cambiaria.py` son una v1 sin calibrar** — el propio módulo lo declara
+      ("Thresholds here are a v1 and are explicitly calibratable"). `_calidad_activos` da 100 con
+      70% de activos líquidos y `_exposicion_credito` da 100 con cero cartera: una cambiaria
+      normal satura ambos. Son **42 de las 92 entidades** y explican casi todo el 59% restante
+      de Resiliencia en "Sólida" (mediana del tipo: 96.0 contra 72.8 de banca múltiple).
+      Mismo patrón que solidez, misma cura: distribución real → curva con referencia económica.
+      **Sin las cambiarias, Resiliencia ya discrimina bien** en los cinco tipos restantes.
+
+### Pendiente de producto (no técnico)
+
+- [ ] Exponer Perfil SDQ en API y frontend, y decidir la convivencia con la notación de letras
+      durante la transición (§9: re-etiquetado retroactivo ya decidido; falta el cómo).
 
 ## CALIBRACIÓN FINAL — una sola pasada al cierre (decisión del dueño, 2026-08-07)
 
