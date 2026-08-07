@@ -9,7 +9,10 @@ from modules.insurance_intel.scoring.isf import compute_isf
 
 logger = logging.getLogger("sdq.insurance_intel.batch")
 
-MODEL_VERSION = "0.1"
+# 0.2 — el resultado técnico pasa a ser el margen técnico (1 − combined ratio), corrigiendo
+# el doble conteo de siniestros de la 0.1. Todo score recalculado queda marcado con esta
+# versión: un cambio de banda entre 0.1 y 0.2 es metodológico, NO deterioro de la entidad.
+MODEL_VERSION = "0.2"
 
 
 def score_and_persist(db: Session) -> Dict:

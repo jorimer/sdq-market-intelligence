@@ -8,6 +8,17 @@
 
 ---
 
+## 🔴 PROPUESTO (pendiente aprobación) — Perfil SDQ + Fix 0 del ISF
+> Spec: `docs/SPEC_PERFIL_SDQ_TAXONOMIA.md` (v1.3). Desglose fino:
+> **`tasks/PLAN_PERFIL_SDQ.md`**. Verificación previa hecha 2026-08-07 contra el Excel
+> crudo del SIS: bug de doble conteo CONFIRMADO (siniestros = 19% mediana de
+> `gastos_totales`, 47% máx.), reaseguro y desglose por ramo CONFIRMADOS como
+> disponibles en la fuente. **Corrección al spec §5.2**: el expense ratio no puede ser
+> `gastos_totales − siniestros` (la sección 5 incluye cesión de reaseguro y reservas).
+> Nada implementado todavía.
+
+---
+
 ## ✅ COMPLETADO — Cerebro de Insights (7 ejes, MULTI-AUDIENCIA)
 > Spec: `Spec_Implementacion_Cerebro_Piloto_BankingScore_v0.1.md` + arquitectura.
 > Evidencia: piloto en `evidence/PILOTO-banking-cerebro.md`; generalización + receta en

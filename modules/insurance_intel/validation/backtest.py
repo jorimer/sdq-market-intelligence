@@ -144,17 +144,24 @@ def _solvency_by_insurer(db: Session) -> Dict[str, Dict[str, float]]:
 
 
 def _underwriting_by_insurer(db: Session) -> Dict[str, Dict[str, float]]:
-    """Resultado técnico = (ingresos − gastos) / primas, por aseguradora y año."""
-    ing = _series_by_insurer(db, "ingresos_totales")
-    gas = _series_by_insurer(db, "gastos_totales")
+    """Margen técnico = 1 − combined ratio, por aseguradora y año.
+
+    Misma definición que ``isf._raw_metric('resultado_tecnico')`` — antes replicaba aquí la
+    fórmula ``(ingresos − gastos) / primas``, que contaba los siniestros dos veces (la
+    sección 5 del catálogo SIS los incluye). Un período sin ``gastos_operativos`` ingerido
+    queda FUERA del backtest en vez de reconstruirse con la fórmula vieja: validar contra
+    una métrica defectuosa es peor que validar contra menos períodos.
+    """
+    sin = _series_by_insurer(db, "siniestros_pagados")
+    gop = _series_by_insurer(db, "gastos_operativos")
     pri = _series_by_insurer(db, "primas_suscritas")
     out: Dict[str, Dict[str, float]] = {}
-    for slug, imap in ing.items():
-        gmap, pmap = gas.get(slug, {}), pri.get(slug, {})
-        for period, i in imap.items():
+    for slug, smap in sin.items():
+        gmap, pmap = gop.get(slug, {}), pri.get(slug, {})
+        for period, s in smap.items():
             g, p = gmap.get(period), pmap.get(period)
-            if g is not None and p:
-                out.setdefault(slug, {})[period] = (i - g) / p
+            if s is not None and g is not None and p:
+                out.setdefault(slug, {})[period] = 1.0 - (s + g) / p
     return out
 
 

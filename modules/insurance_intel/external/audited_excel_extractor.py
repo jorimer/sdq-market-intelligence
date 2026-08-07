@@ -42,6 +42,9 @@ class InsurerFinancials:
     siniestros: Optional[float]  # reclamaciones pagadas por siniestro (directo)
     ingresos: Optional[float]
     gastos: Optional[float]
+    gastos_operativos: Optional[float]       # comisiones + G&A + otros gastos de operación
+    primas_cedidas: Optional[float]          # prima cedida al reasegurador (seguro directo)
+    recuperables_reaseguro: Optional[float]  # siniestros a cargo de reaseguradores
     reconciled: bool
 
     def as_series(self) -> Dict[str, Optional[float]]:
@@ -56,6 +59,9 @@ class InsurerFinancials:
             "siniestros_pagados": self.siniestros,
             "ingresos_totales": self.ingresos,
             "gastos_totales": self.gastos,
+            "gastos_operativos": self.gastos_operativos,
+            "primas_cedidas": self.primas_cedidas,
+            "recuperables_reaseguro": self.recuperables_reaseguro,
         }
 
 
@@ -109,6 +115,22 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
                     seen = True
         return round(total, 2) if seen else None
 
+    def heads_sum(prefixes: tuple, *desc_kws: str) -> Optional[float]:
+        """Σ of 6-digit leaves under 4-digit sub-headers whose code starts with one of
+        *prefixes* (the section, e.g. ``51``/``53`` = seguro DIRECTO) and whose description
+        contains ALL of *desc_kws*. Selecting by section keeps numerator and denominator on
+        the same book: the ISF's premiums are direct, so its costs must be direct too."""
+        heads = [c for c in codes_present
+                 if len(c) == 4 and c.isdigit() and c.startswith(prefixes)
+                 and all(k in desc_by_code.get(c, "") for k in desc_kws)]
+        total, seen = 0.0, False
+        for h in heads:
+            for c, v in cta.items():
+                if len(c) == 6 and c.isdigit() and c.startswith(h):
+                    total += v
+                    seen = True
+        return round(total, 2) if seen else None
+
     activos = leaves_sum("1")
     pasivos = leaves_sum("2")
     patrimonio = leaves_sum("3")
@@ -122,10 +144,29 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
         liq = round((inv or 0) + (efe or 0), 2)
 
     # Income statement: 6-digit leaves under 4/5 sub-headers → total ingresos/gastos.
+    # ⚠️ ``gastos`` es el LADO DEUDOR BRUTO de la sección 5, no "gastos" en sentido
+    # económico: incluye siniestros, prima cedida al reasegurador y movimientos de
+    # reservas. No usarlo como numerador de un expense ratio (ver ``gastos_operativos``).
     ingresos = leaves_sum("4", ndig=6)
     gastos = leaves_sum("5", ndig=6)
     primas = children_sum_where("PRIMAS SUSCRITAS")
     siniestros = children_sum_where("RECLAMACIONES PAGADAS POR SINIESTRO")
+
+    # Gasto operativo del SEGURO DIRECTO (51xx personas + 53xx generales), por selección
+    # explícita de cuentas: comisiones de adquisición + gastos generales y administrativos
+    # + otros gastos de operación. Excluye 5501 (gastos financieros: resultado financiero,
+    # no técnico) y todo el reaseguro aceptado (52xx/54xx), cuyas primas no están en el
+    # denominador. Mutuamente excluyente con ``siniestros`` por construcción.
+    _com = heads_sum(("51", "53"), "COMISIONES A INTERMEDIARIOS")
+    _ga = heads_sum(("51", "53"), "GASTOS GENERALES Y ADMINISTRATIVOS")
+    _otros = heads_sum(("55",), "OTROS GASTOS DE OPERACIONES")
+    gastos_operativos = (round(sum(x for x in (_com, _ga, _otros) if x is not None), 2)
+                         if any(x is not None for x in (_com, _ga, _otros)) else None)
+
+    # Reaseguro (insumo de la dimensión de Resiliencia, spec §5.5): prima cedida y
+    # siniestros recuperables a cargo de reaseguradores, ambos del seguro directo.
+    primas_cedidas = heads_sum(("51", "53"), "PRIMAS DE REASEG", "CEDID")
+    recuperables = heads_sum(("41", "43"), "RECLAMAC", "A CARGO DE REASEG")
 
     reconciled = bool(
         activos and pasivos is not None and patrimonio is not None
@@ -140,6 +181,8 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
         activos=activos, pasivos=pasivos, patrimonio=patrimonio,
         reservas_tecnicas=reservas, activos_liquidos=liq,
         primas=primas, siniestros=siniestros, ingresos=ingresos, gastos=gastos,
+        gastos_operativos=gastos_operativos, primas_cedidas=primas_cedidas,
+        recuperables_reaseguro=recuperables,
         reconciled=reconciled)
 
 

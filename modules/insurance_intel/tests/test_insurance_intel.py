@@ -115,7 +115,7 @@ def test_named_tier_without_scope_raises(db):
 # ── F1b · ISF (entity rating) ─────────────────────────────────────
 _SYNTH_CODES = ("patrimonio", "activos_totales", "primas_suscritas", "siniestros_pagados",
                 "reservas_tecnicas", "activos_liquidos", "ingresos_totales", "gastos_totales",
-                "indice_solvencia", "indice_liquidez")
+                "gastos_operativos", "indice_solvencia", "indice_liquidez")
 
 
 # Real authorized-insurer names (must match the official roster fixture so the canonical
@@ -125,17 +125,17 @@ def _synthetic_financials():
         {"slug": "universal", "name": "Seguros Universal, S. A.", "period": "2024",
          "patrimonio": 8e9, "activos_totales": 33e9, "primas_suscritas": 28e9,
          "siniestros_pagados": 10e9, "reservas_tecnicas": 12e9, "activos_liquidos": 14e9,
-         "ingresos_totales": 30e9, "gastos_totales": 28e9,
+         "ingresos_totales": 30e9, "gastos_totales": 28e9, "gastos_operativos": 7e9,
          "indice_solvencia": 2.5, "indice_liquidez": 3.0},
         {"slug": "bupa", "name": "Bupa Dominicana, S.A.", "period": "2024",
          "patrimonio": 1.3e9, "activos_totales": 1.5e9, "primas_suscritas": 0.7e9,
          "siniestros_pagados": 0.2e9, "reservas_tecnicas": 0.15e9, "activos_liquidos": 0.4e9,
-         "ingresos_totales": 0.8e9, "gastos_totales": 0.6e9,
+         "ingresos_totales": 0.8e9, "gastos_totales": 0.6e9, "gastos_operativos": 0.21e9,
          "indice_solvencia": 3.5, "indice_liquidez": 4.0},
         {"slug": "creciendo", "name": "Creciendo Seguros, S.A.", "period": "2024",
          "patrimonio": 0.15e9, "activos_totales": 1.7e9, "primas_suscritas": 3.9e9,
          "siniestros_pagados": 3.1e9, "reservas_tecnicas": 1.0e9, "activos_liquidos": 0.3e9,
-         "ingresos_totales": 4.0e9, "gastos_totales": 4.1e9,
+         "ingresos_totales": 4.0e9, "gastos_totales": 4.1e9, "gastos_operativos": 1.2e9,
          "indice_solvencia": 0.6, "indice_liquidez": 0.7},
     ]
 
@@ -152,6 +152,63 @@ def test_score_insurers_ranks_and_bands():
     def sini(r):
         return next(d["score"] for d in by[r]["dimensions"] if d["key"] == "siniestralidad")
     assert sini("bupa") > sini("creciendo")
+
+
+def test_margen_tecnico_no_cuenta_siniestros_dos_veces():
+    """El margen técnico es 1 − (siniestros + gastos operativos)/primas.
+
+    Regresión del doble conteo: la definición vieja usaba ``gastos_totales``, que en el
+    catálogo SIS (Ley 146-02) incluye las reclamaciones pagadas — los siniestros pesaban
+    en ``siniestralidad`` y otra vez, escondidos, en el resultado técnico.
+    """
+    from modules.insurance_intel.scoring.isf import _raw_metric
+    fin = {"primas_suscritas": 100.0, "siniestros_pagados": 60.0, "gastos_operativos": 30.0,
+           # gastos_totales incluye los siniestros + cesión + reservas: NO debe usarse acá
+           "ingresos_totales": 150.0, "gastos_totales": 140.0}
+    assert _raw_metric(fin, "resultado_tecnico") == pytest.approx(0.10)  # combined 90%
+    # La fórmula vieja habría dado (150−140)/100 = 0.10 por casualidad; con otra mezcla no:
+    fin2 = dict(fin, gastos_totales=200.0)
+    assert _raw_metric(fin2, "resultado_tecnico") == pytest.approx(0.10)  # inmune a gastos_totales
+
+
+def test_margen_tecnico_es_brecha_declarada_sin_gastos_operativos():
+    """Sin ``gastos_operativos`` la dimensión se declara ausente — nunca se reconstruye con
+    la fórmula vieja, aunque ingresos/gastos totales estén disponibles."""
+    from modules.insurance_intel.scoring.isf import _raw_metric
+    fin = {"primas_suscritas": 100.0, "siniestros_pagados": 60.0,
+           "ingresos_totales": 150.0, "gastos_totales": 140.0}
+    assert _raw_metric(fin, "resultado_tecnico") is None
+
+
+def test_extractor_separa_gastos_operativos_de_siniestros_y_cesion():
+    """El gasto operativo excluye reclamaciones (5101/5301) y prima cedida (5106-11/5305-10)."""
+    from modules.insurance_intel.external.audited_excel_extractor import _extract_sheet
+    rows = [
+        ("1", "ACTIVO", None), ("1101", "INVERSIONES", 700.0), ("1201", "EFECTIVO", 300.0),
+        ("2", "PASIVO", None), ("2101", "RESERVAS", 400.0), ("2201", "RESERVAS ESP", 100.0),
+        ("3", "PATRIMONIO", None), ("3101", "CAPITAL", 500.0),
+        ("4", "INGRESOS", None),
+        ("4301", "PRIMAS SUSCRITAS", None), ("430101", "INCENDIO", 1000.0),
+        ("4307", "RECLAMACIONES POR SINIESTROS A CARGO DE REASEGURADORES", None),
+        ("430701", "INCENDIO", 50.0),
+        ("5", "GASTOS", None),
+        ("5301", "RECLAMACIONES PAGADAS POR SINIESTROS", None), ("530101", "INCENDIO", 600.0),
+        ("5302", "COMISIONES A INTERMEDIARIOS", None), ("530201", "INCENDIO", 150.0),
+        ("5305", "PRIMAS DE REASEGUROS CONTRACTUALES CEDIDOS LOCALMENTE", None),
+        ("530501", "INCENDIO", 300.0),
+        ("5316", "GASTOS GENERALES Y ADMINISTRATIVOS", None), ("531601", "GENERAL", 100.0),
+        ("5501", "GASTOS FINANCIEROS", None), ("550101", "FIN", 999.0),
+        ("5502", "OTROS GASTOS DE OPERACIONES", None), ("550201", "OTROS", 50.0),
+    ]
+    f = _extract_sheet(rows, "Test Seguros", "2024")
+    assert f is not None and f.reconciled
+    assert f.siniestros == 600.0
+    assert f.primas_cedidas == 300.0
+    assert f.recuperables_reaseguro == 50.0
+    # comisiones 150 + G&A 100 + otros gastos de operación 50 = 300.
+    # NO incluye siniestros (600), ni cesión (300), ni gastos financieros (999).
+    assert f.gastos_operativos == 300.0
+    assert f.gastos == 600 + 150 + 300 + 100 + 999 + 50  # la sección 5 bruta sigue igual
 
 
 def test_named_tier_renders_isf(db):
