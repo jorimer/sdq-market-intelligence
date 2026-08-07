@@ -6,8 +6,9 @@ morosidad, so the 19 bank indicators don't apply. Their audited annual statement
 available figures onto the SAME 5 sub-components (persistence, weights and the output
 contract are unchanged) with fiduciary-appropriate indicators.
 
-Weight profile lives in ``weights.py`` ("fiduciaria": solidez 35 · calidad 20 ·
-eficiencia 25 · liquidez 10 · diversificación 10). Thresholds here are a v1 and are
+Weight profile lives in ``weights.py`` ("fiduciaria": solidez 37 · calidad 22 ·
+eficiencia 26 · liquidez 10 · diversificación 5, calibración v1.1 2026-06-11).
+Thresholds here are a v1 and are
 explicitly calibratable. Data is ANNUAL (period_type=annual).
 """
 from typing import Dict
