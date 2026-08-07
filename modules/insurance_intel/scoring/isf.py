@@ -11,7 +11,7 @@ real data.
     siniestralidad    0.20  siniestros / primas (loss ratio)     lower ratio=better
     liquidez          0.15  activos líquidos / reservas técnicas  higher=better
     escala            0.15  activos totales (log)                 higher=better
-    resultado_tecnico 0.15  (ingresos − gastos) / primas          higher=better
+    resultado_tecnico 0.15  1 − combined ratio (margen técnico)   higher=better
 
 With audited statements ingested, coverage ≈ 1.0 → the ISF emits an ABSOLUTE band
 (Sólida/Adecuada/En vigilancia/Frágil) besides ranking. Missing inputs → the
@@ -39,7 +39,11 @@ DIMENSIONS = [
      "weight": 0.15, "direction": "higher", "lo": 0.50, "hi": 5.00, "log": False, "wabs": 0.65},
     {"key": "escala", "label": "Escala (activos totales)", "weight": 0.15,
      "direction": "higher", "lo": 5e8, "hi": 3.5e10, "log": True},
-    {"key": "resultado_tecnico", "label": "Resultado técnico (sobre primas)", "weight": 0.15,
+    # Margen técnico = 1 − combined ratio. Anclajes heredados de la definición anterior a
+    # propósito: así el delta observado corresponde SOLO al cambio de definición y no se
+    # mezcla con una recalibración. Los anclajes de las 5 dimensiones se revisan aparte
+    # (docs/PROPUESTA_ANCLAJES_ISF.md), donde 0.00 = breakeven pasa a valer 50 puntos.
+    {"key": "resultado_tecnico", "label": "Margen técnico (1 − combined ratio)", "weight": 0.15,
      "direction": "higher", "lo": -0.05, "hi": 0.20, "log": False},
 ]
 _WABS = 0.5  # hybrid weight of the absolute band vs. peer min-max
@@ -89,8 +93,23 @@ def _raw_metric(fin: Dict[str, Any], key: str) -> Optional[float]:
     if key == "escala":
         return g("activos_totales")
     if key == "resultado_tecnico":
-        ing, gas, pri = g("ingresos_totales"), g("gastos_totales"), g("primas_suscritas")
-        return ((ing - gas) / pri) if (ing is not None and gas is not None and pri) else None
+        # Margen técnico = 1 − combined ratio (loss ratio + expense ratio).
+        #
+        # La definición anterior era ``(ingresos_totales − gastos_totales) / primas`` y
+        # CONTABA LOS SINIESTROS DOS VECES: la sección 5 del catálogo SIS (Ley 146-02) no
+        # es "gastos" en sentido económico — es el lado deudor bruto e incluye las
+        # reclamaciones pagadas (5101/5301), que ya pesan en ``siniestralidad``, además de
+        # la prima cedida al reasegurador y los movimientos de reservas. Restarle solo los
+        # siniestros tampoco alcanzaba: dejaba cesión y reservas dentro del expense ratio.
+        #
+        # ``gastos_operativos`` se arma por selección explícita de cuentas (comisiones +
+        # G&A + otros gastos de operación del seguro directo), así que loss y expense son
+        # mutuamente excluyentes por construcción. Ancla económica: margen 0 = combined
+        # ratio 100% = breakeven técnico.
+        sin, gop, pri = g("siniestros_pagados"), g("gastos_operativos"), g("primas_suscritas")
+        if sin is None or gop is None or not pri:
+            return None  # brecha declarada — nunca se reconstruye con la fórmula vieja
+        return 1.0 - (sin + gop) / pri
     return None
 
 

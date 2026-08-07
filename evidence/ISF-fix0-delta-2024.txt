@@ -1,0 +1,87 @@
+
+EXCLUIDAS del pool — primas no es denominador representativo (§guard nuevo)
+
+==========================================================================================================================
+DELTA POR COMPAÑÍA — ejercicio 2024 · pool winsorizado p5/p95 · Δ = efecto exacto sobre el ÍNDICE ISF
+==========================================================================================================================
+compañía                            rt_act   rt_new    loss  expense  combined   cesión   sc_ant   sc_new  Δ ÍNDICE
+--------------------------------------------------------------------------------------------------------------------------
+Compañía Dominicana de Seguros,      0.053    0.417   12.0%    46.4%     58.3%    42.4%     40.5    100.0     +8.92
+Seguros Reservas, S. A.              0.055    0.348   32.9%    32.2%     65.2%    47.1%     41.2     96.9     +8.36
+Aseguradora Agropecuaria Domini      0.046    0.285   36.2%    35.2%     71.5%    51.3%     38.8     94.1     +8.29
+Seguros Sura, S. A.                  0.070    0.371   32.2%    30.7%     62.9%    60.8%     45.0     97.9     +7.94
+Seguros Universal, S. A.             0.083    0.397   36.3%    24.0%     60.3%    45.5%     48.6     99.1     +7.57
+La Colonial, Compañía de Seguro      0.102    0.338   36.1%    30.1%     66.2%    45.7%     53.8     96.4     +6.39
+MAPFRE BHD, Compañía de Seguros      0.111    0.335   34.3%    32.2%     66.5%    56.7%     56.0     96.3     +6.04
+Hylseg Seguros, S. A.                0.110    0.289    9.7%    61.4%     71.1%    18.5%     55.9     94.2     +5.75
+Seguros Ademi, S. A.                 0.103    0.242   28.3%    47.4%     75.8%    44.7%     53.9     92.1     +5.73
+Angloamericana de Seguros, S. A      0.135    0.345   25.9%    39.6%     65.5%    60.8%     62.5     96.8     +5.14
+Cooperativa Nacional de Seguros      0.069    0.133   32.6%    54.0%     86.7%    19.6%     44.9     73.8     +4.33
+One Alliance Seguros, S. A.          0.058    0.116   40.1%    48.3%     88.4%    64.2%     42.0     69.5     +4.12
+Unit, S. A.                         -0.248   -0.165   48.1%    68.4%    116.5%     1.6%      0.0     23.6     +3.54
+Midas Seguros, S. A.                 0.232    0.325    3.0%    64.5%     67.5%     2.6%     81.9     95.9     +2.10
+Humano Seguros, S. A.                0.115    0.115   56.4%    32.1%     88.5%     5.2%     57.0     69.3     +1.84
+Seguros Crecer, S. A.                0.231    0.270   12.3%    60.7%     73.0%    51.7%     81.8     93.4     +1.74
+Seguros APS, S. A.                   0.279    0.203    2.3%    77.4%     79.7%     1.0%     85.0     90.3     +0.79
+La Monumental de Seguros, S. A.      0.347    0.281   27.9%    44.0%     71.9%     9.4%     89.5     93.9     +0.66
+Patria, S. A., Compañía de Sgro      0.039   -0.005   24.3%    76.2%    100.5%     0.9%     36.9     39.8     +0.43
+Cuna Mutual Insurance(TRUSTAGE)      0.505    0.423   43.4%    14.3%     57.7%     0.0%    100.0    100.0     +0.00
+Seguros Yunén, S. A.                -0.418   -0.685  131.9%    36.5%    168.5%     0.0%      0.0      0.0     +0.00
+Bupa Dominicana, S. A.               0.114    0.051   54.1%    40.8%     94.9%    45.5%     56.9     53.7     -0.48
+Worldwide Seguros, S. A.             0.016   -0.082   78.7%    29.5%    108.2%    93.8%     30.7     27.4     -0.50
+Seguros La Internacional, S. A.      0.173    0.109   50.6%    38.5%     89.1%     0.0%     72.6     67.9     -0.70
+General de Seguros, S. A.            0.011   -0.166   22.7%    93.9%    116.6%    40.9%     29.5     23.6     -0.88
+Atlántica Seguros, S. A.             0.046   -0.047   52.8%    51.9%    104.7%     3.4%     38.7     29.7     -1.35
+Multiseguros SU, S. A.               0.070   -0.024   32.8%    69.6%    102.4%     9.5%     45.3     35.2     -1.51
+Seguros Pepín, S. A.                 0.196    0.106   35.5%    53.9%     89.4%     2.7%     78.6     67.1     -1.72
+BMI, Compañía de Seguros, S. A.      0.042   -0.279   86.6%    41.2%    127.9%     4.4%     37.8     18.4     -2.91
+Futuro Seguros, S. A.                0.066   -0.196   52.6%    67.0%    119.6%     1.9%     44.0     22.2     -3.27
+Creciendo Seguros, S. A.             1.317   -7.309  580.0%   250.9%    830.9%    60.1%    100.0      0.0    -15.00
+--------------------------------------------------------------------------------------------------------------------------
+N=31  Δ mediano=+1.74  rango [-15.00, +8.92]  suben=19  bajan=10
+
+==============================================================================
+CORTES DE EJECUCIÓN — combined ratio, percentiles reales 2018-2024
+==============================================================================
+  N=218 obs (7 años)   p10=62.3%  p25=72.4%  p50=88.4%  p75=104.7%  p90=122.3%
+
+  Cortes del spec (90/100/110) sobre 2024:
+     Sobresaliente   20/31  ████████████████████
+     Competitiva      1/31  █
+     Rezagada         4/31  ████
+     Deficiente       6/31  ██████
+
+  Cortes por CUARTIL real (72%/88%/105%):
+     Sobresaliente   12/31  ████████████
+     Competitiva      4/31  ████
+     Rezagada         8/31  ████████
+     Deficiente       7/31  ███████
+
+==============================================================================
+CESIÓN DE REASEGURO — banda empírica para la U invertida (§5.5)
+==============================================================================
+  p10=0.9%  p25=2.6%  mediana=19.6%  p75=51.3%  p90=60.8%
+  cesión ~0% (desprotección): 7   cesión >70% (fronting): 1
+
+
+================================================================================
+VALIDACIÓN FINAL — motor real, definición vieja vs. nueva (2026-08-07)
+Fuente: Excel auditado SIS 2024 + Índices de Solvencia y Liquidez Auditado 2024.
+La columna ANTES reproduce los scores publicados en producción (Reservas 65.7,
+Universal 51.3, La Colonial 57.5, Humano 41.8 — coinciden), así que la réplica es fiel.
+Cobertura completa: 28/33 aseguradoras.
+
+CAMBIOS DE BANDA: 10
+   Seguros Reservas                65.7 → 75.4   Adecuada      → Sólida
+   Aseguradora Agropecuaria        48.6 → 68.5   En vigilancia → Adecuada
+   Hylseg Seguros                  58.8 → 66.6   En vigilancia → Adecuada
+   La Colonial                     57.5 → 65.6   En vigilancia → Adecuada
+   Angloamericana                  56.4 → 63.3   En vigilancia → Adecuada
+   Seguros APS                     59.1 → 63.3   En vigilancia → Adecuada
+   Seguros Sura                    51.8 → 61.0   En vigilancia → Adecuada
+   Seguros Universal               51.3 → 60.1   En vigilancia → Adecuada
+   Humano Seguros                  41.8 → 46.8   Frágil        → En vigilancia
+   Compañía Dominicana de Seguros  35.4 → 45.2   Frágil        → En vigilancia
+
+Único descenso: Creciendo Seguros 15.2 → 0.2 (loss ratio real 580%, combined 831%).
+La definición vieja le daba el score MÁXIMO del panel en resultado técnico (1.317).
