@@ -42,6 +42,31 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, value))
 
 
+def _score_tramos(raw: float, lo: float, ref: float, hi: float) -> float:
+    """Puntúa un indicador en dos tramos: ``lo``→0, **``ref``→50**, ``hi``→100.
+
+    ``ref`` es el hecho económico del indicador — el mínimo regulatorio, o el punto donde
+    las provisiones cubren la cartera vencida. Cumplirlo vale 50: ni "aprobado con lo justo
+    = 100", ni "aprobado = reprobado".
+
+    Reemplaza a las rectas del tipo ``min(100, raw / techo * 100)`` que tenían el techo
+    apenas por encima del mínimo regulatorio y saturaban a casi todo el sistema. Medido en
+    producción (2026-08-07, 46 entidades con dato): **96% de las entidades marcaba 100/100
+    en tier1, leverage y cobertura de provisiones**, y 67% en solvencia. El sub-componente
+    de mayor peso (solidez, 40%) no discriminaba: casi todas sacaban casi el máximo, y eso
+    empujaba al 89% del sistema a una sola banda de Resiliencia.
+
+    Los techos salen del percentil 90 observado, no de un número redondo: el objetivo es
+    separar a las entidades bien capitalizadas de las MUY bien capitalizadas, que es
+    justamente lo que un techo bajo vuelve imposible.
+    """
+    if raw <= lo:
+        return 0.0
+    if raw <= ref:
+        return _clamp((raw - lo) / (ref - lo) * 50) if ref > lo else 50.0
+    return _clamp(50 + (raw - ref) / (hi - ref) * 50) if hi > ref else 100.0
+
+
 def _ttm_profit(d) -> Optional[float]:
     """Utilidad de los ÚLTIMOS 12 MESES, o ``None`` si no es computable.
 
@@ -166,7 +191,9 @@ def calc_solvencia(d) -> IndicatorResult:
     if raw is None:
         denom = float(d.apr or 0) + float(d.contingentes or 0) + float(d.riesgo_mercado or 0)
         raw = _safe_div(d.patrimonio_tecnico, denom) * 100
-    score = _clamp(min(100, (raw / 15) * 100))
+    # ref = 10%: mínimo regulatorio de solvencia en RD (Reglamento de Normas Prudenciales).
+    # hi = 31.3: percentil 90 del sistema. El techo anterior (15%) lo alcanzaba el 67%.
+    score = _score_tramos(raw, lo=6.0, ref=10.0, hi=31.3)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
@@ -176,14 +203,18 @@ def calc_tier1_ratio(d) -> IndicatorResult:
     raw = _sib_ratio_positive(d, "tier1_pct")
     if raw is None:
         raw = _safe_div(d.capital_primario, d.apr) * 100
-    score = _clamp(min(100, ((raw - 4.5) / 4) * 100)) if raw >= 4.5 else 0
+    # ref = 6%: Tier 1 mínimo de Basilea III. hi = 32.5: percentil 90 del sistema.
+    # El techo anterior (8.5%) lo alcanzaba el 96% de las entidades.
+    score = _score_tramos(raw, lo=3.6, ref=6.0, hi=32.5)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 def calc_leverage(d) -> IndicatorResult:
     """Leverage Ratio: capital_tier1 / exposicion_total."""
     raw = _safe_div(d.capital_tier1, d.exposicion_total) * 100
-    score = _clamp(min(100, (raw / 6) * 100))
+    # ref = 3%: leverage ratio mínimo de Basilea III. hi = 30.2: percentil 90 del sistema.
+    # El techo anterior (6%) lo alcanzaba el 96%.
+    score = _score_tramos(raw, lo=1.8, ref=3.0, hi=30.2)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
@@ -193,14 +224,20 @@ def calc_cobertura_provisiones(d) -> IndicatorResult:
     raw = _pct(d, "cobertura_pct")
     if raw is None:
         raw = _safe_div(d.provisiones, d.cartera_vencida_90d) * 100
-    score = _clamp(min(100, raw))
+    # ref = 100%: las provisiones cubren exactamente la cartera vencida >90d. hi = 243.8:
+    # percentil 90. El techo anterior (100%) lo alcanzaba el 96% — cubrir la cartera es el
+    # piso de lo esperable, no la excelencia.
+    score = _score_tramos(raw, lo=60.0, ref=100.0, hi=243.8)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
 def calc_patrimonio_activos(d) -> IndicatorResult:
     """Equity-to-Assets: patrimonio_tecnico / activos_totales."""
     raw = _safe_div(d.patrimonio_tecnico, d.activos_totales) * 100
-    score = _clamp(min(100, (raw / 12) * 100))
+    # Sin mínimo regulatorio directo: ref = 8%, el percentil 10 del sistema, que funciona
+    # como piso observado de capitalización. hi = 28.0: percentil 90. El techo anterior
+    # (12%) lo alcanzaba el 70% de las entidades.
+    score = _score_tramos(raw, lo=4.8, ref=8.0, hi=28.0)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
@@ -478,6 +515,26 @@ INDICATOR_PCT_FIELD = {
 }
 
 
+# Denominador de cada ratio. Un denominador en CERO no da un ratio de cero: da un ratio
+# indefinido, y el indicador debe declararse no disponible en vez de puntuar 0.
+#
+# `_safe_div` devuelve su default (0.0) cuando el denominador es 0 o None, así que la
+# ausencia de dato terminaba puntuando como el peor valor posible. Estaba enmascarado
+# mientras los demás indicadores saturaban en 100 y compensaban el hueco; al quitar la
+# saturación quedó a la vista. Casos medidos en producción (2026-08-07): Citibank —una
+# sucursal SIN cartera vencida— puntuaba 0 en cobertura de provisiones y perdía 16 puntos
+# de rating por no tener mora; Banco Empire puntuaba 0 en solvencia, tier1 y leverage por
+# falta de datos, no por estar descapitalizado.
+INDICATOR_DENOMINATOR: Dict[str, str] = {
+    "solvencia": "apr",
+    "tier1_ratio": "apr",
+    "leverage": "exposicion_total",
+    "cobertura_provisiones": "cartera_vencida_90d",
+    "patrimonio_activos": "activos_totales",
+    "morosidad": "cartera_bruta",
+}
+
+
 def _indicator_available(data, name: str) -> bool:
     """True when the indicator can be computed — either from its pre-computed SIB
     ratio field, or from all of its required absolute inputs (not None)."""
@@ -489,7 +546,15 @@ def _indicator_available(data, name: str) -> bool:
     pf = INDICATOR_PCT_FIELD.get(name)
     if pf is not None and getattr(data, pf, None) is not None:
         return True
-    return all(getattr(data, f, None) is not None for f in INDICATOR_REQUIRES.get(name, []))
+    if not all(getattr(data, f, None) is not None for f in INDICATOR_REQUIRES.get(name, [])):
+        return False
+    # Denominador en cero → ratio indefinido, no ratio cero. Ver INDICATOR_DENOMINATOR.
+    den = INDICATOR_DENOMINATOR.get(name)
+    if den is not None:
+        v = getattr(data, den, None)
+        if v is None or float(v) == 0:
+            return False
+    return True
 
 
 # ─── Public API ─────────────────────────────────────────────────
@@ -608,7 +673,10 @@ def run_scoring(data, entity_type=None) -> Dict[str, Any]:
             for name, v in indicators.items()
         },
         "model_type": "deterministic",
-        "model_version": "1.1",
+        # 1.2 — recalibración de los 5 indicadores de solidez a curvas de dos tramos con la
+        # referencia regulatoria en 50 (antes saturaban al 96% del sistema), y denominador
+        # cero tratado como indicador NO disponible en vez de score 0.
+        "model_version": "1.2",
     }
 
 

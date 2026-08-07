@@ -266,6 +266,11 @@ class RatingAction(UUIDMixin, Base):
     # Computed deltas
     score_delta = Column(Numeric(6, 2), nullable=True)
     tier_levels_changed = Column(Integer, default=0)
+    # True cuando el cambio de tier viene de un cambio de METODOLOGÍA (la versión de modelo
+    # difiere de la del período anterior), no de un cambio en la entidad. El `action_type`
+    # sigue siendo el real —el tier efectivamente bajó o subió— pero sin esta marca una
+    # recalibración se lee en el histórico como deterioro de 44 entidades a la vez.
+    metodologica = Column(Boolean, default=False, nullable=False)
 
     # Outlook
     outlook = Column(Enum(Outlook), default=Outlook.estable)

@@ -156,14 +156,16 @@ class TestTier1Ratio:
     def test_healthy_bank(self, healthy_bank):
         r = calc_tier1_ratio(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 12000/100000 = 12% → ((12-4.5)/4)*100 = 187.5 → clamped to 100
-        assert r["score"] == 100.0
+        # 12% con ref=6 (Basilea III) y hi=32.5 → 50 + (12-6)/26.5*50 ≈ 61.3.
+        # Antes daba 100: el techo de 8.5% lo alcanzaba el 96% del sistema.
+        assert r["score"] == pytest.approx(61.3, abs=0.5)
 
     def test_below_minimum(self):
         d = BankingDataInput(capital_primario=4_000, apr=100_000)
         r = calc_tier1_ratio(d)
-        # 4% < 4.5% → score = 0
-        assert r["score"] == 0.0
+        # 4% está bajo el mínimo de Basilea III (6%) pero sobre el piso (3.6%):
+        # el tramo inferior lo puntúa por debajo de 50, no en 0.
+        assert 0 < r["score"] < 50
 
     def test_negative_sib_ratio_falls_back_to_structural(self):
         # Regresión: el SIB envió tier1_pct NEGADO (≈ -valor real) en algunos
@@ -172,37 +174,48 @@ class TestTier1Ratio:
         r = calc_tier1_ratio(d)
         assert r["raw"] > 0          # no propaga el negativo del SIB
         assert round(r["raw"], 1) == 13.8   # = capital_primario/apr*100
-        assert r["score"] == 100.0
+        assert r["score"] == pytest.approx(64.7, abs=0.5)
 
 
 class TestLeverage:
     def test_healthy_bank(self, healthy_bank):
         r = calc_leverage(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 11000/150000 = 7.33% → (7.33/6)*100 ≈ 122 → clamped 100
-        assert r["score"] == 100.0
+        # 7.33% con ref=3 (Basilea III) y hi=30.2 → 50 + (7.33-3)/27.2*50 ≈ 58.0
+        assert r["score"] == pytest.approx(58.0, abs=0.5)
 
 
 class TestCoberturaProvisiones:
     def test_healthy_bank(self, healthy_bank):
         r = calc_cobertura_provisiones(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 3000/2000 = 150% → min(100, 150) = 100
-        assert r["score"] == 100.0
+        # 150% con ref=100 (cubre la vencida) y hi=243.8 → 50 + 50/143.8*50 ≈ 67.4.
+        # Antes daba 100: cubrir la cartera vencida es el piso esperable, no la excelencia.
+        assert r["score"] == pytest.approx(67.4, abs=0.5)
 
     def test_low_coverage(self):
         d = BankingDataInput(provisiones=500, cartera_vencida_90d=2_000)
         r = calc_cobertura_provisiones(d)
-        # 500/2000 = 25%
-        assert r["score"] == pytest.approx(25.0, abs=0.1)
+        # 25% está bajo el piso de 60% → 0
+        assert r["score"] == 0.0
+
+    def test_sin_cartera_vencida_no_es_cobertura_cero(self):
+        """Denominador cero = ratio indefinido, no ratio cero.
+
+        Caso real: Citibank —sucursal SIN cartera vencida— puntuaba 0 en cobertura y
+        perdía 16 puntos de rating por no tener mora.
+        """
+        from modules.banking_score.scoring.engine import _indicator_available
+        d = BankingDataInput(provisiones=3_000, cartera_vencida_90d=0)
+        assert _indicator_available(d, "cobertura_provisiones") is False
 
 
 class TestPatrimonioActivos:
     def test_healthy_bank(self, healthy_bank):
         r = calc_patrimonio_activos(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 15000/200000 = 7.5% → (7.5/12)*100 = 62.5
-        assert r["score"] == pytest.approx(62.5, abs=0.1)
+        # 7.5% con ref=8 (p10 del sistema) y lo=4.8 → tramo inferior: (7.5-4.8)/3.2*50 ≈ 42.2
+        assert r["score"] == pytest.approx(42.2, abs=0.5)
 
 
 # ─── CALIDAD DE ACTIVOS ──────────────────────────────────────────

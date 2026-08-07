@@ -47,6 +47,18 @@ def _higher(k: float, offset: float = 0.0) -> _Curve:
     return _Curve("higher", lambda s, _cur: offset + s * k / 100.0)
 
 
+def _tramos(lo: float, ref: float, hi: float) -> _Curve:
+    """Inversa de ``engine._score_tramos``: dos tramos, ``ref`` en 50.
+
+    Sin esta inversa las simulaciones de "¿qué necesito para subir de tier?" mentirían —
+    devolverían el raw de una fórmula que el motor ya no usa. El test round-trip de
+    ``test_sensitivity`` fija que ambas curvas coincidan.
+    """
+    def to_raw(s: float, _cur: float) -> float:
+        return lo + (s / 50.0) * (ref - lo) if s <= 50 else ref + ((s - 50.0) / 50.0) * (hi - ref)
+    return _Curve("higher", to_raw)
+
+
 def _lower(to_raw: Callable[[float], float]) -> _Curve:
     return _Curve("lower", lambda s, _cur: to_raw(s))
 
@@ -59,11 +71,13 @@ def _target(to_raw_side: Callable[[float, float], float]) -> _Curve:
 # está: es derivado, no una palanca de entrada.
 _CURVES: Dict[str, _Curve] = {
     # Solidez — higher is better, min(100, raw/K*100)
-    "solvencia": _higher(15.0),
-    "tier1_ratio": _higher(4.0, offset=4.5),   # (raw-4.5)/4*100
-    "leverage": _higher(6.0),
-    "cobertura_provisiones": _higher(100.0),   # score = min(100, raw) → K=100
-    "patrimonio_activos": _higher(12.0),
+    # Solidez — curva de dos tramos con la referencia regulatoria en 50 (ver
+    # engine._score_tramos). Los techos anteriores saturaban al 96% del sistema.
+    "solvencia": _tramos(6.0, 10.0, 31.3),
+    "tier1_ratio": _tramos(3.6, 6.0, 32.5),
+    "leverage": _tramos(1.8, 3.0, 30.2),
+    "cobertura_provisiones": _tramos(60.0, 100.0, 243.8),
+    "patrimonio_activos": _tramos(4.8, 8.0, 28.0),
     # Calidad
     "morosidad": _lower(lambda s: (100.0 - s) / 10.0),
     "pct_cartera_a": _higher(90.0),
