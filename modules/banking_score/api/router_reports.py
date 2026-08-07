@@ -676,5 +676,9 @@ def _action_to_dict(action: RatingAction) -> dict:
         "new_tier": action.new_tier,
         "score_delta": float(action.score_delta) if action.score_delta else None,
         "outlook": action.outlook.value if action.outlook else None,
+        # Un movimiento de tier causado por un cambio de METODOLOGÍA, no de la entidad.
+        # Sin exponerlo, quien lea las acciones no puede distinguir un deterioro real de
+        # una recalibración — y el `action_type` por sí solo dice "downgrade" en ambos casos.
+        "metodologica": bool(action.metodologica),
         "created_at": str(action.created_at) if action.created_at else None,
     }
