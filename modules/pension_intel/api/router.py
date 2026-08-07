@@ -184,14 +184,30 @@ async def rankings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """AFPs ranked by the Índice de Solidez (ISA). Band index, not a credit rating."""
+    """AFPs ranked by the Índice de Solidez (ISA). Band index, not a credit rating.
+
+    ``stale``/``periods_behind`` marca a las AFP cuyo corte quedó atrás del panel. Hoy las 7
+    reportan el mismo período, así que la marca no cambia nada — se agrega igual porque el
+    día que una deje de reportar, su score seguiría apareciendo comparable de igual a igual
+    con los demás, que es exactamente lo que pasó sin avisar en el ISF (Autoseguro con datos
+    de 2020) y en el ISARS (SeNaSa un mes atrás).
+
+    Sin bandera de incumplimiento regulatorio, a diferencia del ISF y el ISARS: la
+    ``solvencia`` del ISA es ``patrimonio/activos``, un ratio sin umbral legal — no existe un
+    "1.0 = cumple" que declarar. Inventarle un corte sería fabricar una señal regulatoria.
+    """
+    from shared.indices.freshness import annotate_freshness
+
     payloads = _ranked_ratings(db)
+    rankings = [
+        {k: p[k] for k in ("rank", "slug", "name", "overall_score", "band", "coverage", "period")}
+        for p in payloads
+    ]
+    corte = annotate_freshness(rankings)
     return {
-        "rankings": [
-            {k: p[k] for k in ("rank", "slug", "name", "overall_score", "band", "coverage", "period")}
-            for p in payloads
-        ],
-        "count": len(payloads),
+        "rankings": rankings,
+        "count": len(rankings),
+        "period_end": corte,
         # Relative, partial position score (0-100). Absolute bands deferred until solvency.
         "scale": "isa_relative_partial",
     }

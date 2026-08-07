@@ -515,8 +515,8 @@ def test_ranking_marca_las_aseguradoras_con_corte_viejo(monkeypatch):
     out = _rank_rows(monkeypatch, res)
     filas = {r["slug"]: r for r in out["rankings"]}
     assert out["period_end"] == "2024"
-    assert filas["a"]["stale"] is False and filas["a"]["years_behind"] == 0
-    assert filas["b"]["stale"] is True and filas["b"]["years_behind"] == 4
+    assert filas["a"]["stale"] is False and filas["a"]["periods_behind"] == 0
+    assert filas["b"]["stale"] is True and filas["b"]["periods_behind"] == 4
 
 
 def test_ranking_expone_el_incumplimiento_regulatorio(monkeypatch):

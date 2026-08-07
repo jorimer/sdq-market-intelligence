@@ -126,18 +126,18 @@ async def rankings(
 
     Cada fila lleva dos marcas que el score solo no transmite:
 
-    * ``stale``/``years_behind`` — el panel MEZCLA cortes. Autoseguro se rankea con estados
+    * ``stale``/``periods_behind`` — el panel MEZCLA cortes. Autoseguro se rankea con estados
       de 2020 y Confederación del Canadá con los de 2023, junto a 33 aseguradoras de 2024.
-      Sus scores aparecían comparables de igual a igual sin ninguna advertencia. Paridad con
-      lo que banca ya hace (``stale``/``months_behind`` en su propio ranking).
+      Sus scores aparecían comparables de igual a igual sin ninguna advertencia.
     * ``incumple_solvencia``/``incumple_liquidez`` — los índices de la Ley 146-02 valen 1.0
       cuando la entidad cumple. Incumplirlos es un hecho regulatorio binario, no un matiz de
       score, y hoy se diluye dentro del híbrido ponderado: en el cierre 2024 hay 5
       aseguradoras bajo el mínimo de solvencia y 2 bajo el de liquidez.
     """
+    from shared.indices.freshness import annotate_freshness
+
     results = compute_isf(db)
     scored = [r for r in results if r["overall_score"] is not None]
-    corte = max((r["period"] for r in scored if r["period"]), default=None)
 
     def _raw(r: Dict[str, Any], key: str) -> Optional[float]:
         d = next((x for x in r.get("dimensions") or [] if x.get("key") == key), None)
@@ -146,16 +146,14 @@ async def rankings(
     ranked = []
     for i, r in enumerate(scored):
         solv, liq = _raw(r, "solvencia"), _raw(r, "liquidez")
-        atraso = (int(corte) - int(r["period"])
-                  if corte and r["period"] and corte.isdigit() and r["period"].isdigit() else 0)
         ranked.append({
             "rank": i + 1, "slug": r["slug"], "name": r.get("name") or r["slug"],
             "overall_score": r["overall_score"], "band": r["band"],
             "coverage": r["coverage"], "period": r["period"],
-            "stale": atraso > 0, "years_behind": atraso,
             "incumple_solvencia": None if solv is None else solv < 1.0,
             "incumple_liquidez": None if liq is None else liq < 1.0,
         })
+    corte = annotate_freshness(ranked)
     return {"rankings": ranked, "count": len(ranked), "period_end": corte,
             "scale": "ISF 0-100 (Sólida/Adecuada/En vigilancia/Frágil)",
             "note": None if ranked else "ISF pendiente: estados financieros auditados no ingeridos (F1b)."}
@@ -205,19 +203,39 @@ async def ars_rankings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """ARS (health-risk managers) ranked by ISARS. Empty until the ARS sync runs."""
+    """ARS (health-risk managers) ranked by ISARS. Empty until the ARS sync runs.
+
+    Mismas dos marcas que el ISF, por las mismas razones y verificadas contra producción:
+
+    * ``stale``/``periods_behind`` — SeNaSa (la ARS pública más grande del país) y SEMMA se
+      rankeaban con corte 2026-03 contra 2026-04 del resto, sin ninguna advertencia.
+    * ``incumple_margen_solvencia`` — el indicador 405 de SISALRIL vale 1.0 cuando la ARS
+      cumple. ARS Renacer (0.779) y ARS Dr. Yunén (0.764) lo incumplen y aparecían en banda
+      "En vigilancia": el híbrido ponderado diluye un hecho regulatorio binario.
+    """
     from modules.insurance_intel.models.models import InsuranceEntity
     from modules.insurance_intel.scoring.ars_rating import compute_ars
+    from shared.indices.freshness import annotate_freshness
+
     results = compute_ars(db)
     names = {e.slug: e.name for e in db.query(InsuranceEntity)
              .filter(InsuranceEntity.entity_type == "ars").all()}
-    ranked = [
-        {"rank": i + 1, "slug": r["slug"], "name": names.get(r["slug"], r["slug"]),
-         "category": r.get("category"), "overall_score": r["overall_score"],
-         "band": r["band"], "coverage": r["coverage"], "period": r["period"]}
-        for i, r in enumerate(results) if r["overall_score"] is not None
-    ]
-    return {"rankings": ranked, "count": len(ranked),
+
+    def _margen(r: Dict[str, Any]) -> Optional[float]:
+        d = next((x for x in r.get("dimensions") or []
+                  if x.get("key") == "margen_solvencia"), None)
+        return d.get("raw") if d and d.get("present") else None
+
+    ranked = []
+    for i, r in enumerate(x for x in results if x["overall_score"] is not None):
+        m = _margen(r)
+        ranked.append(
+            {"rank": i + 1, "slug": r["slug"], "name": names.get(r["slug"], r["slug"]),
+             "category": r.get("category"), "overall_score": r["overall_score"],
+             "band": r["band"], "coverage": r["coverage"], "period": r["period"],
+             "incumple_margen_solvencia": None if m is None else m < 1.0})
+    corte = annotate_freshness(ranked)
+    return {"rankings": ranked, "count": len(ranked), "period_end": corte,
             "scale": "ISARS 0-100 (Sólida/Adecuada/En vigilancia/Frágil)",
             "note": None if ranked else "ISARS pendiente: sincronización de ARS (BDFINAC) no ejecutada.",
             "caveat": ("Índice sobre los indicadores regulatorios OFICIALES de SISALRIL "
