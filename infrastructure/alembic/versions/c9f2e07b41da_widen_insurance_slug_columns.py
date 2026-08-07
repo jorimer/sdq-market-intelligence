@@ -32,13 +32,24 @@ _WIDEN = [
 ]
 
 
+def _es_sqlite() -> bool:
+    """SQLite no aplica el ancho de VARCHAR (por eso el defecto solo existía en prod) y
+    tampoco soporta ``ALTER COLUMN ... TYPE``. Ampliar ahí no es necesario ni posible:
+    la migración es un no-op deliberado, no un caso sin cubrir."""
+    return op.get_bind().dialect.name == "sqlite"
+
+
 def upgrade() -> None:
+    if _es_sqlite():
+        return
     for table, col, nullable in _WIDEN:
         op.alter_column(table, col, existing_type=sa.String(40), type_=sa.String(80),
                         existing_nullable=nullable)
 
 
 def downgrade() -> None:
+    if _es_sqlite():
+        return
     # Reversible sólo si ningún slug supera los 40 caracteres; con AGRODOSA cargada, el
     # downgrade fallaría por truncamiento. Se acota primero y luego se estrecha.
     for table, col, nullable in _WIDEN:
