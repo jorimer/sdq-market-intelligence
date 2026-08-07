@@ -219,6 +219,35 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
 - [ ] Gate de correlación §8 por sector.
 - [ ] Fijar el docstring stale de `fiduciaria.py` (cita pesos v1 35/20/25/10/10 vs. `weights.py` real).
 
+## CALIBRACIÓN FINAL — una sola pasada al cierre (decisión del dueño, 2026-08-07)
+
+> Se difiere A PROPÓSITO, no por inercia: hoy se tocaron cuatro motores y calibrar sobre una
+> base que todavía se está moviendo obliga a recalibrar dos veces y publica un vaivén sin
+> significado. Se hace una vez, al final, sobre todo lo tocado. **Esta lista es el inventario
+> completo de lo que quedó sin calibrar** — si algo no está acá, se pierde.
+
+- [ ] **`cambiaria.py`** — umbrales v1 declarados como calibratables por el propio módulo.
+      42 de 92 entidades; explican casi todo el 59% de Resiliencia en "Sólida". Diagnóstico
+      hecho: `_calidad_activos` satura con 70% de activos líquidos, `_exposicion_credito` con
+      cero cartera.
+- [ ] **`fiduciaria.py`** — mismos umbrales v1 declarados como calibratables. N=4.
+- [ ] **Los otros 4 sub-componentes de banca** (calidad, eficiencia, liquidez, diversificación).
+      Hoy solo se recalibró SOLIDEZ; los demás no se auditaron y pueden tener el mismo defecto
+      de techos alcanzables. Medir saturación con el mismo método.
+- [ ] **Cortes de banda de Ejecución** — hoy son cuartiles del panel. Validar contra varios
+      cortes temporales: un cuartil que se mueve cada trimestre hace que una entidad cambie de
+      banda sin cambiar de desempeño.
+- [ ] **Bandas de Resiliencia (75/60/45)** — heredadas del ISF sin validar contra la escala de
+      banca. Tras el fix de solidez la mediana quedó en 78.1, o sea la mitad del sistema sobre
+      el corte de "Sólida". Revisar si los cortes calzan o si conviene otro anclaje.
+- [ ] **Cortes de `RATING_SCALE`** — fijados para una escala saturada. Si Perfil SDQ reemplaza
+      la notación de letras (§9), puede que no haga falta tocarlos; decidir explícitamente en
+      vez de dejarlo implícito.
+- [ ] **Anclajes del ISF** — recalibrados hoy contra 33 aseguradoras de UN corte (2024).
+      Re-verificar contra el histórico 2018-2024 ya cargado.
+- [ ] **Umbral `_MIN_N = 12`** de `robust_bounds` y del panel propio de Ejecución. Elegido por
+      criterio ("≈3 observaciones por cuadrante"), no medido. Validar.
+
 ## FASE 2 — Seguros (§5)
 
 - [ ] **2a.** Extractor por ramo (§5.6) — exponer los 15+8 ramos, no solo el total.
