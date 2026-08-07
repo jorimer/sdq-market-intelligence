@@ -235,6 +235,25 @@ def test_extractor_separa_gastos_operativos_de_siniestros_y_cesion():
     assert f.gastos == 600 + 150 + 300 + 100 + 999 + 50  # la sección 5 bruta sigue igual
 
 
+def test_detail_devuelve_el_periodo_mas_reciente(db):
+    """Con el histórico ingerido hay una fila por período: el detalle debe tomar la última.
+
+    Sin ``order_by`` el ``.first()`` devolvía una fila arbitraria y la ficha mostraba un año
+    viejo mientras el ranking mostraba el actual (La Colonial: 65.6 vs 54.5).
+    """
+    from modules.insurance_intel.models.models import InsuranceRating
+
+    for period, score in (("2019", 41.0), ("2024", 65.6), ("2021", 52.3)):
+        db.add(InsuranceRating(entity_slug="acme", period=period, overall_score=score,
+                               band="Adecuada", coverage=1.0, dimensions=[],
+                               model_version="0.2"))
+    db.flush()
+    r = (db.query(InsuranceRating)
+         .filter(InsuranceRating.entity_slug == "acme")
+         .order_by(InsuranceRating.period.desc()).first())
+    assert r.period == "2024" and r.overall_score == 65.6
+
+
 def test_named_tier_renders_isf(db):
     import asyncio
     from shared.products.registry import get_product

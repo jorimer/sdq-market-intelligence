@@ -141,11 +141,17 @@ async def entity_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    r = db.query(InsuranceRating).filter(InsuranceRating.entity_slug == slug).first()
+    # ``insurance_ratings`` tiene UNA FILA POR PERÍODO desde que se ingiere el histórico
+    # (2018→2024). Sin ``order_by`` el ``.first()`` devolvía una fila arbitraria, así que el
+    # detalle podía mostrar un año viejo mientras ``/rankings`` —que calcula sobre el último
+    # período— mostraba el actual: La Colonial daba 65.6 en el ranking y 54.5 en el detalle.
+    r = (db.query(InsuranceRating)
+         .filter(InsuranceRating.entity_slug == slug)
+         .order_by(InsuranceRating.period.desc()).first())
     if not r:
         return {"found": False, "slug": slug,
                 "note": "Sin ISF para esta aseguradora (estados financieros no ingeridos)."}
-    return {"found": True, "slug": slug, "overall_score": r.overall_score,
+    return {"found": True, "slug": slug, "period": r.period, "overall_score": r.overall_score,
             "band": r.band, "coverage": r.coverage, "dimensions": r.dimensions}
 
 
