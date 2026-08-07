@@ -181,8 +181,18 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       recalibración cambia scores por metodología y no había subido la versión, que es el
       mecanismo de trazabilidad establecido en el Fix 0. Sin eso, un cambio de banda por
       recalibración se leería como deterioro de la entidad.
-- [ ] **Pendiente: la misma marca de frescura en pensiones.** El ISA tiene el mismo patrón y no se
-      revisó en esta pasada.
+- [x] **Frescura y cumplimiento en TODOS los motores (PR #649).** Lo había dejado como pendiente
+      para pensiones sin una razón real — por inercia, no por criterio. Al ir a hacerlo aparecieron
+      dos cosas que estaban pasando en silencio en el ISARS:
+      **SeNaSa (la ARS pública más grande del país) y SEMMA se rankeaban con corte 2026-03** contra
+      2026-04 del resto; y **ARS Renacer (0.779) y ARS Dr. Yunén (0.764) incumplen el margen de
+      solvencia** (SISALRIL ind. 405, ≥1 = cumple) apareciendo en banda "En vigilancia".
+      La marca se factorizó en `shared.indices.freshness.annotate_freshness` en vez de escribirla
+      por tercera vez; maneja paneles anuales y mensuales y **no mezcla unidades** (restar "2024"
+      contra "2026-04" daría un atraso inventado). El ISF se refactorizó para usarla:
+      `years_behind` → `periods_behind` + `period_unit`.
+      **Pensiones NO lleva bandera de incumplimiento**: su `solvencia` es `patrimonio/activos`, un
+      ratio sin umbral legal. Inventarle un corte sería fabricar una señal regulatoria.
 
 ## FASE 1 — Motor de dos ejes: banca + fiduciarias (§3.1, §7.3)
 
