@@ -154,6 +154,30 @@ def test_score_insurers_ranks_and_bands():
     assert sini("bupa") > sini("creciendo")
 
 
+def test_los_slugs_oficiales_entran_en_la_columna():
+    """Ningún slug del roster oficial puede exceder el ancho de ``entity_slug``.
+
+    SQLite (dev) ignora el largo de VARCHAR, Postgres (prod) no: el slug de AGRODOSA (44
+    caracteres) reventaba ``score_and_persist`` con StringDataRightTruncation y hacía
+    rollback del sync entero, dejando ``insurance_ratings`` congelada. Este test corre
+    contra el catálogo de nombres, sin depender del motor de base de datos.
+    """
+    from modules.insurance_intel.external.audited_excel_extractor import slugify_insurer
+    from modules.insurance_intel.models.models import InsuranceRating
+
+    ancho = InsuranceRating.__table__.c.entity_slug.type.length
+    nombres = [
+        "Aseguradora Agropecuaria Dominicana, S. A. (AGRODOSA)",
+        "Cuna Mutual Insurance Society Dominicana, S.A.",
+        "Cooperativa Nacional de Seguros, INC. (COOPSEGUROS)",
+        "Creciendo Seguros, S.A. (Antiguo Banesco Seguros)",
+        "REHSA, Compañía de Seguros y Reaseguros, S. A.",
+    ]
+    largos = {n: len(slugify_insurer(n)) for n in nombres}
+    excedidos = {n: ln for n, ln in largos.items() if ln > ancho}
+    assert not excedidos, f"slugs más largos que VARCHAR({ancho}): {excedidos}"
+
+
 def test_margen_tecnico_no_cuenta_siniestros_dos_veces():
     """El margen técnico es 1 − (siniestros + gastos operativos)/primas.
 
