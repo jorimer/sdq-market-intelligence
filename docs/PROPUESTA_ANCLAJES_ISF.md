@@ -96,8 +96,16 @@ con dato coinciden al cuarto decimal con la fuente.
 | `/rankings` | `compute_isf(db)` — calcula **en vivo** desde `insurance_series` | actual |
 | `/{slug}/detail` | lee `InsuranceRating` — **tabla persistida** por el último `score_and_persist` | congelado |
 
-Nada re-sincroniza la tabla persistida cuando cambian los datos vivos, así que el detalle sirve el
-ISF de la última corrida de sync mientras el ranking sirve el de hoy. Consecuencias medidas:
+**CAUSA RAÍZ IDENTIFICADA (2026-08-07, corrige el diagnóstico inicial de esta sección):** no es
+que "nadie re-sincronice" la tabla — es que **la escritura viene fallando**. El slug oficial de
+AGRODOSA (`aseguradora_agropecuaria_dominicana_agrodosa`, 44 caracteres) no entra en el
+`VARCHAR(40)` de la columna; en Postgres eso aborta la transacción entera de `score_and_persist`
+y hace rollback del sync completo. En SQLite (dev) el límite no se aplica, así que el defecto
+solo existía en producción. Verificado: ni AGRODOSA ni Cuna Mutual —la primera del ranking—
+existen en `insurance_ratings`. Corregido en PR #644 (migración `c9f2e07b41da`, columnas a
+`VARCHAR(80)` + test de regresión sobre el catálogo de nombres).
+
+Consecuencias que se habían medido con la tabla ya congelada:
 
 - **2 aseguradoras con solvencia distinta**: La Colonial (persistida 0.2962 vs. oficial **2.3395**)
   y Seguros Patria (0.4040 vs. **1.4277**). Ambas aparecen incumpliendo el margen regulatorio
@@ -124,10 +132,15 @@ Alerta Temprana de banca y pensiones.
 
 ## 6. Pendiente separado
 
-**El detalle no reconstruye el ranking.** Aun con los datos sincronizados, La Colonial da 57.5 en el
-ranking y 54.5 sumando sus propias dimensiones ponderadas (Crecer: 61.5 vs 62.0). Hay que unificar
-los dos caminos de cálculo — o el detalle recalcula en vivo, o el ranking lee lo persistido, pero no
-uno de cada uno.
+**Re-medir la divergencia una vez que la tabla se pueble.** Las diferencias observadas (La Colonial
+57.5 en el ranking vs. 54.5 sumando sus dimensiones; Crecer 61.5 vs 62.0) se midieron contra una
+tabla que llevaba tiempo sin poder escribirse. Con PR #644 desplegado y el sync corrido hay que
+volver a comparar: si siguen divergiendo, entonces sí hay un problema de diseño en tener un camino
+vivo y otro persistido, y hay que unificarlos. Si convergen, el defecto era solo la escritura rota.
+
+**Los percentiles de esta propuesta hay que recalcularlos post-sync.** Los del §1 y §3 salieron del
+archivo oficial del SIS, así que son correctos para solvencia y liquidez — pero conviene
+re-verificarlos contra el estado limpio de producción antes de fijar los anclajes definitivos.
 
 **Orden de implementación acordado con el dueño:** Fix 0 (doble conteo) → auditoría del dato de
 solvencia → esta recalibración.
