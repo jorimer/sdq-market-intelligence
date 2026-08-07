@@ -1,0 +1,52 @@
+RECALIBRACIÓN DEL ISF — winsorización + espacio log + anclajes de dos tramos
+Fuente: estado de producción post-Fix 0 (cierre 2024). Generado 2026-08-07.
+
+compañía                                     antes  después       Δ   banda
+----------------------------------------------------------------------------------------
+Cuna Mutual Insurance Society Dominicana,     83.5     84.0    +0.5   Sólida → Sólida
+Seguros Crecer, S. A.                         66.1     78.6   +12.5   Adecuada → Sólida  ⬅
+Seguros Ademi, S.A.                           71.9     78.3    +6.4   Adecuada → Sólida  ⬅
+Cooperativa Nacional de Seguros, INC. (CO     68.0     76.6    +8.6   Adecuada → Sólida  ⬅
+Seguros Reservas, S.A.                        75.4     75.3    -0.1   Sólida → Sólida
+Midas Seguros, S.A.                           69.1     74.6    +5.5   Adecuada → Adecuada
+Reaseguradora Santo Domingo, S.A.             53.9     74.6   +20.7   — → —
+Seguros Pepín, S. A.                          66.8     73.6    +6.8   Adecuada → Adecuada
+MAPFRE- BHD Seguros, S.A.                     71.4     73.5    +2.1   Adecuada → Adecuada
+Seguros APS, S.A.                             63.3     73.1    +9.8   Adecuada → Adecuada
+HYLSEG Seguros, S. A.                         66.6     72.5    +5.9   Adecuada → Adecuada
+Bupa Dominicana, S.A.                         67.1     72.1    +5.0   Adecuada → Adecuada
+La Monumental de Seguros, S.A.                66.1     71.6    +5.5   Adecuada → Adecuada
+La Colonial, S.A.                             65.6     71.6    +6.0   Adecuada → Adecuada
+Angloamericana de Seguros, S. A.              63.3     69.9    +6.6   Adecuada → Adecuada
+Seguros Sura, S. A.                           61.0     69.8    +8.8   Adecuada → Adecuada
+Seguros Universal, S. A.                      60.1     66.1    +6.0   Adecuada → Adecuada
+Aseguradora Agropecuaria Dominicana, S.A.     63.3     65.7    +2.4   Adecuada → Adecuada
+REHSA Compañía de Seguros y Reaseguros, S     50.8     65.0   +14.2   — → —
+Compañía Dominicana de Seguros, S.A.          45.2     64.0   +18.8   En vigilancia → Adecuada  ⬅
+General de Seguros, S.A.                      51.4     59.7    +8.3   En vigilancia → En vigilancia
+Seguros Patria, S. A.                         42.5     56.6   +14.1   Frágil → En vigilancia  ⬅
+Humano Seguros, S.A.                          46.8     55.2    +8.4   En vigilancia → En vigilancia
+Seguros La Internacional, S. A.               47.7     55.1    +7.4   En vigilancia → En vigilancia
+Autoseguro, S.A.                              53.9     51.7    -2.2   — → —
+One Alliance Seguros, S. A.                   36.2     48.1   +11.9   Frágil → En vigilancia  ⬅
+Multiseguros S.U., S.A.                       32.7     44.9   +12.2   Frágil → Frágil
+UNIT, S. A.                                   41.3     43.1    +1.8   Frágil → Frágil
+WorldWide Seguros, S.A                        31.8     42.4   +10.6   Frágil → Frágil
+Atlántica Seguros, S.A.                       29.8     42.1   +12.3   Frágil → Frágil
+BMI Compañía de Seguros, S.A.                 31.9     38.3    +6.4   Frágil → Frágil
+Futuro Seguros, S. A.                         31.0     33.3    +2.3   Frágil → Frágil
+Confederación del Canada Dominicana, S.A.     37.4     21.9   -15.5   — → —
+Seguros Yunen, S.A.                           22.1     17.5    -4.6   Frágil → Frágil
+Creciendo Seguros, S.A. (Antiguo Banesco       0.2      1.3    +1.1   Frágil → Frágil
+----------------------------------------------------------------------------------------
+
+distribución  antes: {'Sólida': 2, 'Adecuada': 15, 'En vigilancia': 4, 'Frágil': 10}
+             después: {'Sólida': 5, 'Adecuada': 13, 'En vigilancia': 5, 'Frágil': 8}
+
+VALIDACIÓN CRUZADA — las 5 que INCUMPLEN el margen de solvencia (índice < 1.0)
+quedan todas en el fondo de la tabla, sin que el índice las mire explícitamente:
+   Multiseguros S.U., S.A.                         44.9  Frágil
+   Futuro Seguros, S. A.                           33.3  Frágil
+   Atlántica Seguros, S.A.                         42.1  Frágil
+   Seguros Yunen, S.A.                             17.5  Frágil
+   Creciendo Seguros, S.A. (Antiguo Banesco Seg     1.3  Frágil

@@ -509,7 +509,6 @@ modules/insurance_intel/scoring/isf.py:0: error: Argument 1 to "_minmax" has inc
 modules/insurance_intel/scoring/isf.py:0: error: Argument 1 to "brand_key" has incompatible type "Column[str]"; expected "str"  [arg-type]
 modules/insurance_intel/scoring/isf.py:0: error: Argument 2 to "_minmax" has incompatible type "list[float | None]"; expected "list[float]"  [arg-type]
 modules/insurance_intel/scoring/isf.py:0: error: Argument 2 to "_raw_metric" has incompatible type "object"; expected "str"  [arg-type]
-modules/insurance_intel/scoring/isf.py:0: error: Argument 3 to "_minmax" has incompatible type "object"; expected "str"  [arg-type]
 modules/insurance_intel/scoring/isf.py:0: error: Generator has incompatible item type "object"; expected "bool"  [misc]
 modules/insurance_intel/scoring/isf.py:0: error: Incompatible types in assignment (expression has type "Column[str]", target has type "str")  [assignment]
 modules/insurance_intel/scoring/isf.py:0: error: Invalid index type "Column[str]" for "dict[str, Any]"; expected type "str"  [index]

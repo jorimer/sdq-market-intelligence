@@ -1,8 +1,9 @@
 # PROPUESTA — Recalibración de los anclajes absolutos del ISF
 
-> v1 · 2026-08-07 · Estado: **aprobada en principio por el dueño, GUARDADA para implementar
-> más adelante.** No implementar todavía: depende de la auditoría del dato de solvencia
-> (ver §5) y del Fix 0 del doble conteo.
+> v2 · 2026-08-07 · Estado: **IMPLEMENTADA.** Los anclajes de §3 están en
+> `modules/insurance_intel/scoring/isf.py` (`DIMENSIONS`, campo `ref`) junto con la
+> winsorización del peer min-max y la corrección del espacio log en `escala`.
+> Efecto medido sobre producción: `evidence/ISF-recalibracion-2024.txt`.
 > Contexto: `docs/SPEC_PERFIL_SDQ_TAXONOMIA.md` · Plan: `tasks/PLAN_PERFIL_SDQ.md`
 
 ---
@@ -64,19 +65,32 @@ es defendible ante un cliente o un regulador, que es la prueba que tiene que pas
 Se mantienen sin cambio: los pesos (35/20/15/15/15), los `wabs` del híbrido, y los cortes de banda
 (75/60/45).
 
-## 4. Efecto simulado
+## 4. Efecto medido (ya no simulado)
 
-Sobre los raws reales de producción, la distribución de bandas pasa de:
+Sobre el estado limpio de producción (33 aseguradoras con dato, cierre 2024), la distribución pasa de:
 
 ```
-ACTUAL      Sólida  0 · Adecuada 10 · En vigilancia  4 · Frágil 9
-PROPUESTA   Sólida  4 · Adecuada  9 · En vigilancia  3 · Frágil 7
+ANTES     Sólida 2 · Adecuada 15 · En vigilancia 4 · Frágil 10
+DESPUÉS   Sólida 5 · Adecuada 13 · En vigilancia 5 · Frágil  8
 ```
 
-No es un ablande general: Yunén, Patria y Futuro siguen en Frágil. Corrige el sesgo y deja que la
-dimensión discrimine.
+6 cambios de banda. Detalle completo en `evidence/ISF-recalibracion-2024.txt`.
 
-⚠️ **La simulación es DIRECCIONAL, no definitiva** — ver §5.
+**La validación cruzada más fuerte:** las **5 aseguradoras que incumplen el margen de solvencia
+regulatorio** (índice < 1.0) quedan **todas en el fondo de la tabla** — Creciendo 1.3, Yunén 17.5,
+Futuro 33.3, Atlántica 42.1, Multiseguros 44.9 — sin que el índice mire el incumplimiento de forma
+explícita. Un índice bien calibrado debería ordenar así por su cuenta; el anterior no lo hacía.
+
+### 4-bis. Dos correcciones que aparecieron al implementar
+
+- **`escala` medía en dos escalas a la vez.** La dimensión se declara logarítmica y la banda
+  absoluta lo aplicaba, pero el peer min-max corría en escala **lineal**: contra un techo de
+  RD$33.000 millones, una aseguradora en la mediana (RD$983 millones) sacaba ~3 puntos de 100. Es
+  buena parte de por qué la dimensión daba mediana 9/100. El min-max ahora respeta el flag.
+- **La valla de Tukey no se aplica a paneles chicos** (`_MIN_N = 12`). Medido sobre las 7 AFP del
+  ISA, la valla habría acotado los **dos** extremos de `rentabilidad` (5.99-8.78 → 7.21-8.33),
+  clampeando a la mejor y la peor en 100 y 0 — exactamente lo contrario de lo que la winsorización
+  existe para evitar. Pensiones (7) y fiduciarias (4) quedan por debajo del umbral y **no cambian**.
 
 ## 5. Auditoría del dato de solvencia — RESUELTA (2026-08-07)
 
