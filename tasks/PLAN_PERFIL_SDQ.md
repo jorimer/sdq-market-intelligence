@@ -119,17 +119,17 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       definición. Un período sin `gastos_operativos` queda FUERA del backtest en vez de
       reconstruirse con la fórmula vieja.
 
-### ⚠️ PENDIENTE OPERATIVO — bloquea el deploy
+### ✅ DESPLEGADO Y VERIFICADO EN PRODUCCIÓN (2026-08-07)
 
-`resultado_tecnico` ahora depende de `gastos_operativos`, serie que **todavía no existe en
-producción**. Si el código se despliega sin re-ingerir, la dimensión queda como brecha declarada en
-todas las aseguradoras, la cobertura cae a 0.85 y **el ISF deja de emitir banda** (requiere ≥0.99).
-
-- [ ] **0h.** Desplegar y correr la re-ingesta en la MISMA ventana:
-      `POST /api/v1/insurance-intel/financials/history/sync` (2018→2024, puebla las tres series
-      nuevas en todo el histórico). Requiere autorización del dueño: es escritura en producción.
-- [ ] **0i.** Verificar en prod post-sync que las 33 vuelven a tener cobertura completa y que las
-      bandas coinciden con `evidence/ISF-fix0-delta-2024.txt`.
+- [x] **0h.** PR #643 mergeado y desplegado + re-ingesta corrida. El histórico 2018→2024 quedó
+      cargado: **2.784 filas de series**, las tres nuevas en los siete años.
+      ⚠️ Aprendizaje operativo: el primer `history/sync` devolvió 500 por una **carrera con la
+      migración**, que aún corría. Reintentado después, pasó en 23 s. No había nada roto en el sync.
+- [x] **0i.** Verificado en prod: **31 con banda, 31 con cobertura completa** y los **10 cambios de
+      banda coinciden exactamente** con `evidence/ISF-fix0-delta-2024.txt` (Reservas 75.4 Sólida,
+      La Colonial 65.6, HYLSEG 66.6, Angloamericana 63.3, Agropecuaria 63.3, APS 63.3, Sura 61.0,
+      Universal 60.1, Humano 46.8, Cía. Dominicana 45.2).
+      Distribución: de `1 Sólida / 9 Adecuada / 9 En vigilancia / 12 Frágil` a **`2 / 15 / 4 / 10`**.
 
 ## FASE 0-bis — Defectos encontrados durante la auditoría (nuevos, no estaban en el spec)
 
@@ -142,10 +142,15 @@ todas las aseguradoras, la cobertura cae a 0.85 y **el ISF deja de emitir banda*
       + test de regresión que corre contra el catálogo de nombres, no contra la base.
       **Lección de método:** un síntoma bien medido no es una causa diagnosticada. Documenté
       "dos caminos que nadie sincroniza" cuando en realidad uno no podía escribir.
-- [ ] **RE-MEDIR la divergencia ranking/detalle post-sync.** Lo observado (La Colonial 57.5 vs 54.5)
-      se midió contra una tabla que llevaba tiempo sin poder escribirse. Si tras el sync siguen
-      divergiendo, entonces sí hay un problema de diseño en tener un camino vivo y otro persistido.
-      Si convergen, el defecto era solo la escritura rota.
+- [x] **La divergencia ranking/detalle tenía DOS causas, y las dos están cerradas.** Además del
+      `VARCHAR(40)`, `/{slug}/detail` hacía `.first()` sin `order_by`: con una fila por aseguradora
+      daba igual, pero al poblar el histórico pasaron a ser siete por entidad y devolvía una
+      arbitraria (La Colonial: ranking 65.6, ficha 54.5). Corregido en **PR #645**
+      (`order_by(period.desc())` + `period` en la respuesta, para que la ficha sea auditable).
+      **Verificado en prod: las 35 coinciden ranking↔detalle, y la suma ponderada de dimensiones
+      reconstruye el score publicado en todas.**
+      **Lección:** poblar datos correctos destapa bugs que la escasez de datos escondía. El
+      `.first()` era latente desde siempre; solo se volvió visible al haber más de un período.
 - [ ] **Winsorizar el pool de peer min-max.** Un solo outlier (Creciendo, combined 831%) comprime
       el ranking de las otras 30. Afecta a ISF, ISA e ISARS por igual — los tres usan min-max crudo.
       NO se incluyó en el Fix 0 para no mezclar efectos en el delta aprobado.
