@@ -286,10 +286,18 @@ def _raw_values(db: Session, slugs: List[str]) -> Dict[str, Dict[str, Any]]:
 
 def _normalize(values: Dict[str, float], direction: str) -> Dict[str, float]:
     """Peer min-max → 0-100 (best=100). For 'lower' dims, invert. A single peer or
-    a flat panel (min==max) maps everyone to a neutral 50 (no spurious spread)."""
+    a flat panel (min==max) maps everyone to a neutral 50 (no spurious spread).
+
+    Los límites se acotan con la valla de Tukey para que un outlier no comprima el panel
+    (``shared.indices.normalization.robust_bounds``); los valores fuera de la valla quedan
+    clampeados en 0/100, no se descartan."""
+    from shared.indices.normalization import robust_bounds
+
     if not values:
         return {}
-    lo, hi = min(values.values()), max(values.values())
+    # Límites robustos (valla de Tukey): con 7 AFP, una sola con un valor extremo
+    # aplastaría a las otras seis contra el borde opuesto.
+    lo, hi = robust_bounds(values.values())
     if hi == lo:
         return {k: 50.0 for k in values}
     out = {}

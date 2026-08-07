@@ -178,6 +178,41 @@ def test_los_slugs_oficiales_entran_en_la_columna():
     assert not excedidos, f"slugs más largos que VARCHAR({ancho}): {excedidos}"
 
 
+def test_minmax_de_escala_mide_en_espacio_log():
+    """``escala`` se declara logarítmica: el min-max debe medir en log, como la banda absoluta.
+
+    Antes la banda absoluta usaba log y el min-max escala lineal, así que media dimensión
+    medía en una escala y la otra media en otra: contra un máximo de RD$33.000 millones, una
+    aseguradora en la mediana (RD$983 millones) sacaba ~3 puntos de 100.
+    """
+    from modules.insurance_intel.scoring.isf import DIMENSIONS, _minmax
+    spec = next(d for d in DIMENSIONS if d["key"] == "escala")
+    peers = [5e7, 1e8, 5e8, 1e9, 5e9, 3.3e10]
+    mediana_log = _minmax(1e9, peers, spec)
+    # En escala lineal 1e9 contra un techo de 3.3e10 daría ~3; en log queda a media tabla.
+    assert 35 < mediana_log < 75
+
+
+def test_minmax_no_se_deja_aplastar_por_un_outlier():
+    """Un outlier extremo no debe comprimir al resto del panel contra el borde opuesto.
+
+    Panel del tamaño real del ISF (33 aseguradoras); con paneles chicos la valla no se
+    aplica a propósito — ver ``robust_bounds``.
+    """
+    from modules.insurance_intel.scoring.isf import DIMENSIONS, _minmax
+    spec = next(d for d in DIMENSIONS if d["key"] == "resultado_tecnico")
+    sanos = [-0.08, -0.05, 0.0, 0.03, 0.06, 0.09, 0.11, 0.14, 0.17, 0.2,
+             0.24, 0.28, 0.31, 0.34, 0.38, 0.42]
+    con_outlier = [-7.31] + sanos  # Creciendo Seguros, combined ratio 831%
+
+    aplastado = _minmax(0.11, sanos + [-7.31], spec)
+    # El orden no se toca: el mejor sigue en 100 y el outlier en 0.
+    assert _minmax(0.42, con_outlier, spec) == 100.0
+    assert _minmax(-7.31, con_outlier, spec) == 0.0
+    # Y uno del medio conserva dispersión en vez de quedar pegado al techo.
+    assert 20 < aplastado < 90
+
+
 def test_margen_tecnico_no_cuenta_siniestros_dos_veces():
     """El margen técnico es 1 − (siniestros + gastos operativos)/primas.
 

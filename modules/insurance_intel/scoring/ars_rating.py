@@ -56,9 +56,13 @@ def _absolute(raw: float, spec: Dict) -> float:
 
 
 def _minmax(raw: float, peers: List[float], direction: str) -> Optional[float]:
+    """Peer min-max con límites robustos (valla de Tukey): un outlier extremo no comprime
+    al resto del panel. Ver ``shared.indices.normalization.robust_bounds``."""
+    from shared.indices.normalization import robust_bounds
+
     if len(peers) < 2:
         return None
-    lo, hi = min(peers), max(peers)
+    lo, hi = robust_bounds(peers)
     if hi == lo:
         return 50.0
     frac = (raw - lo) / (hi - lo)

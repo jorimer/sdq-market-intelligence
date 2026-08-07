@@ -151,14 +151,28 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       reconstruye el score publicado en todas.**
       **Lección:** poblar datos correctos destapa bugs que la escasez de datos escondía. El
       `.first()` era latente desde siempre; solo se volvió visible al haber más de un período.
-- [ ] **Winsorizar el pool de peer min-max.** Un solo outlier (Creciendo, combined 831%) comprime
-      el ranking de las otras 30. Afecta a ISF, ISA e ISARS por igual — los tres usan min-max crudo.
-      NO se incluyó en el Fix 0 para no mezclar efectos en el delta aprobado.
+- [x] **Winsorizar el pool de peer min-max + recalibrar anclajes (PR #647).** Implementados juntos
+      a propósito: por separado, Seguros Universal bajaba de banda con la winsorización y volvía a
+      subir con los anclajes — un vaivén visible en producción sin ningún significado.
+      `shared.indices.normalization.robust_bounds` (valla de Tukey) es único para los tres motores,
+      respetando la doctrina de `shared/indices` de no reimplementar normalización.
+      **Umbral `_MIN_N = 12`:** con paneles chicos la valla recorta dispersión legítima — medido
+      sobre las 7 AFP, habría acotado los dos extremos de `rentabilidad`. Pensiones y fiduciarias
+      quedan debajo del umbral y no cambian.
+      De regalo: `escala` medía en **dos escalas a la vez** (banda absoluta en log, min-max en
+      lineal), que es buena parte de por qué daba mediana 9/100.
+      Efecto: 6 cambios de banda; `evidence/ISF-recalibracion-2024.txt`.
 - [ ] **Bandera de incumplimiento regulatorio.** 5 de 33 aseguradoras incumplen el margen de
       solvencia (<1.0) y 2 la liquidez; hoy la señal se diluye en el híbrido. Candidato al motor de
       Alerta Temprana de seguros.
 - [ ] **FiduAPAP sin score.** Está en `FIDUCIARY_ENTITIES` pero prod solo puntúa 4 fiduciarias.
       Averiguar si falta ingesta o dejó de reportar.
+- [ ] **El ranking de seguros mezcla períodos sin avisar** (hallazgo 2026-08-07, no estaba en el
+      spec). Autoseguro se rankea con datos de **2020** y Confederación del Canadá con los de
+      **2023**, junto a 33 aseguradoras de 2024 y sin ninguna marca de rezago. Banca ya resuelve
+      esto (`stale` + `months_behind` en su ranking); seguros y pensiones no. Ambas tienen
+      cobertura 0.5 y banda `None`, así que el motor las degrada — pero su **score sigue siendo
+      comparable de igual a igual** en la tabla, que es lo engañoso.
 
 ## FASE 1 — Motor de dos ejes: banca + fiduciarias (§3.1, §7.3)
 
