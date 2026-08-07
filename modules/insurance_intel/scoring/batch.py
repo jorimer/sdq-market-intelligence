@@ -17,7 +17,10 @@ logger = logging.getLogger("sdq.insurance_intel.batch")
 #   0.3 — recalibración: peer min-max con límites robustos, `escala` medida en espacio log
 #         también en el min-max, y bandas absolutas de dos tramos ancladas en el umbral
 #         regulatorio / breakeven (docs/PROPUESTA_ANCLAJES_ISF.md).
-MODEL_VERSION = "0.3"
+#   0.4 — techo de banda por incumplimiento del margen de SOLVENCIA (Ley 146-02): quien está
+#         bajo el mínimo de capital no puede superar "En vigilancia". No altera el score,
+#         solo la etiqueta cualitativa. Decisión de producto del dueño.
+MODEL_VERSION = "0.4"
 
 
 def score_and_persist(db: Session) -> Dict:

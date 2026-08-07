@@ -194,6 +194,20 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
       **Pensiones NO lleva bandera de incumplimiento**: su `solvencia` es `patrimonio/activos`, un
       ratio sin umbral legal. Inventarle un corte sería fabricar una señal regulatoria.
 
+- [x] **DECISIÓN DE PRODUCTO CERRADA: el incumplimiento topea la banda, pero solo por
+      SOLVENCIA (PR #650).** Elegida por el dueño 2026-08-07 entre cuatro opciones.
+      El capital regulatorio es la condición que define si la entidad puede seguir operando;
+      la liquidez fluctúa (Aseguradora Agropecuaria, agrícola, incumple liquidez por
+      estacionalidad de siniestros teniendo solvencia 3.22). Sin graduar por materialidad: un
+      umbral tipo "solo si está 10% corto" agrega un parámetro arbitrario que habría que
+      defender ante un cliente, mientras que "cumple o no cumple" es la definición legal.
+      **Efecto hoy: CERO bandas topeadas** — las 5 aseguradoras que incumplen ya están en
+      Frágil y las 2 ARS en "En vigilancia". Es una regla preventiva, no una recalificación.
+      Va en el MOTOR, no en el router: en el router, la ficha de detalle mostraría otra banda
+      que el ranking y reabriría la divergencia cerrada en #644/#645.
+      `band_capped` distingue "En vigilancia por su score" de "En vigilancia porque incumple".
+      El tope NO altera el `overall_score`: el índice sigue auditable contra sus dimensiones.
+
 ## FASE 1 — Motor de dos ejes: banca + fiduciarias (§3.1, §7.3)
 
 - [ ] Módulo nuevo de agregación (no tocar `rating_scale.py` todavía) con Ejecución/Resiliencia por

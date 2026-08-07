@@ -50,14 +50,36 @@ _WABS = 0.5  # hybrid weight of the absolute band vs. peer min-max
 _MIN_COVERAGE = 0.50
 _BANDS = [(75, "Sólida"), (60, "Adecuada"), (45, "En vigilancia"), (0, "Frágil")]
 
+# Techo de banda para quien incumple el margen de SOLVENCIA regulatorio (Ley 146-02, índice
+# < 1.0). Decisión de producto del dueño, 2026-08-07: el capital regulatorio es la condición
+# que define si la entidad puede seguir operando, así que ninguna entidad por debajo del
+# mínimo puede mostrar una banda que un lector interpreta como "está bien".
+#
+# El tope aplica SOLO a solvencia, no a liquidez: el capital es estructural y la liquidez
+# fluctúa —Aseguradora Agropecuaria, agrícola, incumple liquidez por estacionalidad de
+# siniestros teniendo solvencia 3.22—. Y aplica sin graduar por materialidad: un umbral del
+# tipo "solo si está 10% corto" agrega un parámetro arbitrario que habría que defender ante
+# un cliente, mientras que "cumple o no cumple" es la propia definición legal.
+BAND_CAP_INCUMPLIMIENTO = "En vigilancia"
+_BAND_ORDER = [name for _t, name in _BANDS]  # mejor → peor
 
-def band_for(score: Optional[float]) -> Optional[str]:
+
+def _cap(band: str, cap: str) -> str:
+    """La peor entre *band* y *cap*, en el orden de ``_BANDS``."""
+    return band if _BAND_ORDER.index(band) >= _BAND_ORDER.index(cap) else cap
+
+
+def band_for(score: Optional[float], solvencia_incumplida: bool = False) -> Optional[str]:
+    """Banda del score, topeada si la entidad incumple el margen de solvencia.
+
+    El tope NO cambia el ``overall_score`` — el índice sigue siendo el índice y su número se
+    puede auditar contra las dimensiones. Solo acota la etiqueta cualitativa, que es la que
+    un lector lee como afirmación.
+    """
     if score is None:
         return None
-    for threshold, name in _BANDS:
-        if score >= threshold:
-            return name
-    return "Frágil"
+    band = next((name for threshold, name in _BANDS if score >= threshold), "Frágil")
+    return _cap(band, BAND_CAP_INCUMPLIMIENTO) if solvencia_incumplida else band
 
 
 def _absolute(raw: float, spec: Dict) -> float:
@@ -191,9 +213,17 @@ def score_insurers(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                          "score": score, "provenance": "real", "present": present})
         coverage = round(wsum / total_weight, 4) if total_weight else 0.0
         overall = round(num / wsum, 1) if wsum and coverage >= _MIN_COVERAGE else None
+        # Incumplir el margen de solvencia (Ley 146-02, índice < 1.0) topea la banda.
+        solv = raws[slug].get("solvencia")
+        incumple = solv is not None and solv < 1.0
+        band = band_for(overall, incumple) if coverage >= 0.99 else None
         out.append({
             "slug": slug, "name": fin.get("name", slug), "period": fin.get("period"),
-            "overall_score": overall, "band": band_for(overall) if coverage >= 0.99 else None,
+            "overall_score": overall, "band": band,
+            # ``band_capped`` distingue "En vigilancia por su score" de "En vigilancia porque
+            # incumple": sin esta marca, la etiqueta sola no dice cuál de las dos cosas pasó.
+            "band_capped": bool(band and incumple and band != band_for(overall)),
+            "incumple_solvencia": None if solv is None else incumple,
             "coverage": coverage, "dimensions": dims,
             "score_kind": "absolute" if coverage >= 0.99 else "relative",
         })

@@ -528,11 +528,15 @@ def test_ranking_expone_el_incumplimiento_regulatorio(monkeypatch):
     def dims(solv, liq):
         return [{"key": "solvencia", "raw": solv, "present": True},
                 {"key": "liquidez", "raw": liq, "present": True}]
+    # ``incumple_solvencia`` lo calcula el MOTOR (donde también topea la banda); el router
+    # lo reexpone. ``incumple_liquidez`` sí se deriva en el router: no topea nada.
     res = [
         {"slug": "cumple", "name": "Cumple", "overall_score": 70.0, "band": "Adecuada",
-         "coverage": 1.0, "period": "2024", "dimensions": dims(2.83, 1.72)},
+         "coverage": 1.0, "period": "2024", "dimensions": dims(2.83, 1.72),
+         "incumple_solvencia": False},
         {"slug": "incumple", "name": "Incumple", "overall_score": 40.0, "band": "Frágil",
-         "coverage": 1.0, "period": "2024", "dimensions": dims(0.79, 0.59)},
+         "coverage": 1.0, "period": "2024", "dimensions": dims(0.79, 0.59),
+         "incumple_solvencia": True},
     ]
     filas = {r["slug"]: r for r in _rank_rows(monkeypatch, res)["rankings"]}
     assert filas["cumple"]["incumple_solvencia"] is False
@@ -546,3 +550,54 @@ def test_sin_dato_regulatorio_la_bandera_es_none_no_false(monkeypatch):
             "period": "2024", "dimensions": [{"key": "solvencia", "raw": None, "present": False}]}]
     fila = _rank_rows(monkeypatch, res)["rankings"][0]
     assert fila["incumple_solvencia"] is None and fila["incumple_liquidez"] is None
+
+
+# ── Techo de banda por incumplimiento del margen de solvencia ──────────────────
+
+def test_incumplir_solvencia_topea_la_banda():
+    """Quien está bajo el mínimo de capital no puede mostrar una banda que suene bien."""
+    from modules.insurance_intel.scoring.isf import band_for
+    assert band_for(90.0) == "Sólida"
+    assert band_for(90.0, solvencia_incumplida=True) == "En vigilancia"
+    assert band_for(65.0, solvencia_incumplida=True) == "En vigilancia"
+
+
+def test_el_techo_nunca_mejora_una_banda():
+    """El tope solo puede empeorar: una Frágil no sube a En vigilancia por incumplir."""
+    from modules.insurance_intel.scoring.isf import band_for
+    assert band_for(20.0, solvencia_incumplida=True) == "Frágil"
+    assert band_for(50.0, solvencia_incumplida=True) == "En vigilancia"  # ya estaba ahí
+
+
+def test_el_techo_no_toca_el_score_solo_la_etiqueta():
+    """El índice sigue siendo auditable contra sus dimensiones: el tope no altera el número."""
+    from modules.insurance_intel.scoring.isf import score_insurers
+    fins = _synthetic_financials()
+    por_slug = {r["slug"]: r for r in score_insurers(fins)}
+    creciendo = por_slug["creciendo"]  # indice_solvencia 0.6 en el fixture → incumple
+    assert creciendo["incumple_solvencia"] is True
+    assert creciendo["band"] in ("En vigilancia", "Frágil")
+    # El overall se reconstruye desde las dimensiones pese al tope.
+    ds = [d for d in creciendo["dimensions"] if d["score"] is not None]
+    calc = sum(d["score"] * d["weight"] for d in ds) / sum(d["weight"] for d in ds)
+    assert abs(calc - creciendo["overall_score"]) < 0.1
+
+
+def test_band_capped_distingue_el_motivo_de_la_banda():
+    """"En vigilancia por score" y "En vigilancia por incumplir" no son lo mismo."""
+    from modules.insurance_intel.scoring.isf import score_insurers
+    fins = _synthetic_financials()
+    # 'universal' cumple (2.5) y 'creciendo' no (0.6).
+    por_slug = {r["slug"]: r for r in score_insurers(fins)}
+    assert por_slug["universal"]["band_capped"] is False
+    # creciendo: capped solo si su score le habría dado una banda mejor que el tope.
+    from modules.insurance_intel.scoring.isf import band_for
+    esperado = band_for(por_slug["creciendo"]["overall_score"]) != por_slug["creciendo"]["band"]
+    assert por_slug["creciendo"]["band_capped"] is esperado
+
+
+def test_el_techo_de_ars_usa_el_indicador_405():
+    from modules.insurance_intel.scoring.ars_rating import band_for as ars_band
+    assert ars_band(88.0) == "Sólida"
+    assert ars_band(88.0, margen_incumplido=True) == "En vigilancia"
+    assert ars_band(10.0, margen_incumplido=True) == "Frágil"
