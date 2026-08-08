@@ -118,8 +118,31 @@ def _run_sib_historical_load(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_perfil_sdq(set_phase, params):
+    """Recomputa Perfil SDQ sobre TODO el histórico, sin re-escorear indicadores.
+
+    Distinto de `rescore`: parte de los sub-componentes ya persistidos y solo reagrega, así
+    que es rápido y —lo importante— **no genera acciones de rating**. Recalcular el histórico
+    entero con `rescore` produciría movimientos de tier entre períodos que no ocurrieron.
+    """
+    from shared.database.session import SessionLocal
+    from modules.banking_score.scoring.perfil_backfill import backfill_perfil_sdq
+
+    db = SessionLocal()
+    try:
+        return backfill_perfil_sdq(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def register() -> None:
     """Register banking-score operations into the shared console (idempotent)."""
+    register_operation(Operation(
+        "perfil-sdq-backfill", "Recomputar Perfil SDQ (histórico)",
+        "Calcula Ejecución y Resiliencia para todos los períodos desde los sub-componentes "
+        "ya guardados. No re-escorea indicadores ni genera acciones de rating.",
+        _run_perfil_sdq, default_interval_hours=0,
+    ))
     register_operation(Operation(
         "rescore", "Recalcular ratings",
         "Recalcula los ratings desde los datos existentes, sin descargar del SIB.",

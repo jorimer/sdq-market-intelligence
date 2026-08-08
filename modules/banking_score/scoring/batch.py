@@ -118,6 +118,39 @@ def detect_rating_action(
     }
 
 
+def _persistir_perfil_del_periodo(db: Session, period_end: date) -> int:
+    """Calcula y persiste los dos ejes de Perfil SDQ para el panel de un período.
+
+    Se llama una vez terminado el scoring del período completo: los cortes de Ejecución son
+    los cuartiles de las entidades del MISMO tipo y período, así que no existen mientras el
+    panel esté a medio escorear.
+    """
+    from modules.banking_score.scoring.perfil_sdq import perfil_panel
+
+    filas = (db.query(RatingResult)
+             .filter(RatingResult.period_end == period_end,
+                     RatingResult.model_type == ModelType.deterministic).all())
+    if not filas:
+        return 0
+    tipos = {b.id: b.bank_type for b in db.query(Bank).all()}
+
+    def _f(v):
+        return float(v) if v is not None else None
+
+    entradas = [{"_row": r, "entity_type": tipos.get(r.bank_id), "sub_scores": {
+        "solidez": _f(r.solidez_score), "calidad": _f(r.calidad_score),
+        "eficiencia": _f(r.eficiencia_score), "liquidez": _f(r.liquidez_score),
+        "diversificacion": _f(r.diversificacion_score)}} for r in filas]
+    for e in perfil_panel(entradas)["entidades"]:
+        row = e["_row"]
+        row.ejecucion_score = e["ejecucion"]
+        row.resiliencia_score = e["resiliencia"]
+        row.banda_ejecucion = e["banda_ejecucion"]
+        row.banda_resiliencia = e["banda_resiliencia"]
+    db.commit()
+    return len(entradas)
+
+
 def _upsert_rating(
     db: Session,
     bank_id: str,
@@ -200,6 +233,14 @@ def score_period(
             errors.append({"bank_id": record.bank_id, "error": str(e)})
 
     db.commit()
+
+    # Perfil SDQ se calcula sobre el PANEL COMPLETO del período, no entidad por entidad: los
+    # cortes de Ejecución salen de los cuartiles de las entidades de su mismo tipo, así que no
+    # existen hasta que todas están escoreadas. Por eso va acá y no dentro de `_upsert_rating`.
+    try:
+        _persistir_perfil_del_periodo(db, period_end)
+    except Exception as e:  # noqa: BLE001 — Perfil SDQ nunca debe tumbar el scoring
+        logger.warning("Perfil SDQ no persistido para %s: %s", period_end, e)
 
     summary = {"upgrades": 0, "downgrades": 0, "confirmaciones": 0, "observaciones": 0}
     for r in results:

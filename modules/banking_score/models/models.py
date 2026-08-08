@@ -222,6 +222,14 @@ class RatingResult(UUIDMixin, Base):
     liquidez_score = Column(Numeric(6, 2), nullable=True)
     diversificacion_score = Column(Numeric(6, 2), nullable=True)
 
+    # Perfil SDQ — dos ejes independientes que reemplazan la lectura del símbolo único.
+    # `rating_tier` convive DEPRECADO mientras la superficie migra: retirarlo en el mismo
+    # paso que se introduce el reemplazo dejaría sin salida si algo hay que revisar.
+    ejecucion_score = Column(Numeric(6, 2), nullable=True)
+    resiliencia_score = Column(Numeric(6, 2), nullable=True)
+    banda_ejecucion = Column(String(20), nullable=True)
+    banda_resiliencia = Column(String(20), nullable=True)
+
     # Full indicator breakdown
     indicator_details = Column(JSON, nullable=True)
 
