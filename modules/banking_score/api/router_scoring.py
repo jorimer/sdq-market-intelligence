@@ -713,6 +713,22 @@ async def get_rankings(
                             "calificación crediticia ni es comparable con la notación de "
                             "una agencia calificadora."),
         },
+        "metodologia": {
+            "banda_resiliencia": (
+                "ABSOLUTA: cortes fijos 75/60/45, los mismos en los cuatro sectores."),
+            "banda_ejecucion": (
+                "RELATIVA AL TIPO DE ENTIDAD: cuartiles del panel comparable, no cortes "
+                "fijos. En banca no existe un ancla económica de eficiencia —como sí lo son "
+                "el mínimo regulatorio en solvencia o el breakeven en seguros— y la "
+                "rentabilidad difiere por MODELO DE NEGOCIO, no solo por desempeño: la "
+                "mediana de Ejecución es 37.8 en intermediación cambiaria y 73.5 en banca "
+                "múltiple. Con cortes fijos, casi toda la intermediación cambiaria caería en "
+                "\"Deficiente\" por su estructura de capital —están sobrecapitalizadas, lo que "
+                "deprime el ROE de forma mecánica— y no por ser ineficientes."),
+            "como_leerla": (
+                "\"Sobresaliente\" significa \"en el cuartil superior de su tipo de entidad\", "
+                "no un nivel absoluto. Por eso cada fila trae su posición dentro del grupo."),
+        },
     }
 
 

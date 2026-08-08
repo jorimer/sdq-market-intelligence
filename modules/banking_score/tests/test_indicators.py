@@ -239,22 +239,25 @@ class TestPctCarteraA:
     def test_healthy_bank(self, healthy_bank):
         r = calc_pct_cartera_a(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 108000/120000 = 90% → (90/90)*100 = 100
-        assert r["score"] == 100.0
+        # 90% de cartera A con ref=94 (p10 del panel) → tramo inferior, bajo 50.
+        # Antes daba 100: toda la banca dominicana supera 94%, así que el umbral de 90
+        # premiaba por igual a un banco con 94% y a uno con 98.7%.
+        assert r["score"] == 0.0
 
 
 class TestConcentracionTop10:
     def test_healthy_bank(self, healthy_bank):
         r = calc_concentracion_top10(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 36000/120000 = 30% → 100 - (30-30)*1.5 = 100
-        assert r["score"] == 100.0
+        # 30% de concentración sobre un techo de 57 (p90 del panel) → ~47.
+        # Antes daba 100 a todo lo que estuviera bajo 30%: el 67% del panel.
+        assert r["score"] == pytest.approx(47.4, abs=0.5)
 
     def test_high_concentration(self):
         d = BankingDataInput(suma_top10=80_000, cartera_bruta=100_000)
         r = calc_concentracion_top10(d)
-        # 80% → 100 - (80-30)*1.5 = 100 - 75 = 25
-        assert r["score"] == pytest.approx(25.0, abs=0.1)
+        # 80% de concentración supera el techo de 57 (p90 del panel) → 0.
+        assert r["score"] == 0.0
 
 
 class TestHhiSectorial:
@@ -279,8 +282,10 @@ class TestCastigosPct:
     def test_healthy_bank(self, healthy_bank):
         r = calc_castigos_pct(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 600/120000 = 0.5% → 100 - 0.5*5 = 97.5
-        assert r["score"] == pytest.approx(97.5, abs=0.1)
+        # 0.5% de castigos sobre un techo de 3.43 (p90 del panel) → ~85.4.
+        # Antes daba 97.5: el factor ×5 descontaba solo 5 puntos por castigar 1% de la
+        # cartera, así que casi todo el panel quedaba sobre 95.
+        assert r["score"] == pytest.approx(85.4, abs=0.5)
 
 
 class TestExposicionRe:
@@ -330,8 +335,10 @@ class TestRoa:
     def test_healthy_bank(self, healthy_bank):
         r = calc_roa(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # 2500/195000 = 1.28% → (1.28/1.5)*100 = 85.5
-        assert r["score"] == pytest.approx(85.47, abs=0.1)
+        # ROA 1.28% con ref=1.24 (la mediana del panel) → apenas sobre 50.
+        # Antes daba 85.5 con techo 1.5%, que alcanzaba el 46% de las entidades: un banco
+        # con ROA 1.5% puntuaba igual que uno con 3.5%.
+        assert r["score"] == pytest.approx(51.0, abs=1.0)
 
 
 class TestRoe:
@@ -346,8 +353,10 @@ class TestMargenFinanciero:
     def test_healthy_bank(self, healthy_bank):
         r = calc_margen_financiero(healthy_bank)
         assert 0 <= r["score"] <= 100
-        # (18000-8000)/170000 = 5.88% → (5.88/6)*100 = 98.0
-        assert r["score"] == pytest.approx(98.04, abs=0.1)
+        # Margen 5.88% queda BAJO el p10 del panel (6.71) → 0.
+        # Antes daba 98: el techo de 6% estaba por debajo del percentil 10 real, así que el
+        # 96% del panel marcaba 100 y el indicador era una constante (IQR de 0.0 puntos).
+        assert r["score"] == 0.0
 
 
 class TestCostToIncome:

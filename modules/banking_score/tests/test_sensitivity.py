@@ -42,7 +42,9 @@ _ENGINE_CASES = {
 # donde el inverso es válido.
 _TEST_RAW = {
     "solvencia": 12.0, "tier1_ratio": 6.5, "cobertura_provisiones": 70.0,
-    "morosidad": 3.0, "pct_cartera_a": 80.0, "castigos_pct": 5.0,
+    # Valores dentro del rango útil de cada curva recalibrada (2026-08-08): un raw que
+    # satura no puede validar el inverso, porque la curva forward pierde información.
+    "morosidad": 3.0, "pct_cartera_a": 96.0, "castigos_pct": 1.5,
     "exposicion_re": 55.0, "leverage": 4.0, "patrimonio_activos": 9.0,
     "concentracion_top10": 45.0, "cost_to_income": 62.0, "liquidez_inmediata": 20.0,
     "liquidez_ajustada": 60.0, "ltd": 95.0, "hhi_sectorial": 2000.0, "hhi_ingresos": 6000.0,

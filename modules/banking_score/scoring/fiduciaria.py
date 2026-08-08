@@ -11,7 +11,7 @@ eficiencia 26 · liquidez 10 · diversificación 5, calibración v1.1 2026-06-11
 Thresholds here are a v1 and are
 explicitly calibratable. Data is ANNUAL (period_type=annual).
 """
-from typing import Dict
+from typing import Any, Dict
 
 from modules.banking_score.scoring.engine import _clamp, _safe_div
 
@@ -36,15 +36,21 @@ def _lin(x: float, lo: float, hi: float) -> float:
 # ─── Fiduciaria indicators (raw + 0..100 score) ─────────────────
 
 def _capitalizacion(d) -> IndicatorResult:
-    # Patrimonio / Activos — fiduciaries are equity-funded service companies.
+    """Patrimonio / Activos — una fiduciaria es una sociedad de servicios fondeada con capital.
+
+    Calibrado contra la SERIE 2020-2025 de las 4 entidades (24 observaciones, no 4): p10
+    58.12 · mediana 76.39 · p90 87.42. El techo anterior (60%) lo superaba el 88% del panel
+    histórico — con capital propio como única fuente de fondeo, 60% no es excelencia sino el
+    piso del modelo de negocio.
+    """
     raw = _safe_div(_g(d, "patrimonio_tecnico"), _g(d, "activos_totales")) * 100
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 15, 60), 2)}
+    return {"raw": round(raw, 4), "score": round(_lin(raw, 58.12, 87.42), 2)}
 
 
 def _apalancamiento(d) -> IndicatorResult:
-    # Pasivos / Patrimonio — lower is sounder (reverse scale).
+    """Pasivos / Patrimonio — menos es más sólido. Serie 2020-2025: p10 0.14 · p90 0.72."""
     raw = _safe_div(_g(d, "pasivos_exigibles"), _g(d, "patrimonio_tecnico"))
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 2.0, 0.0), 2)}
+    return {"raw": round(raw, 4), "score": round(_lin(raw, 0.72, 0.14), 2)}
 
 
 def _calidad_activos(d) -> IndicatorResult:
@@ -54,14 +60,25 @@ def _calidad_activos(d) -> IndicatorResult:
 
 
 def _cost_to_income(d) -> IndicatorResult:
-    # Gastos operacionales / Ingresos — lower is more efficient (reverse scale).
-    raw = _safe_div(_g(d, "gastos_operacionales"), _g(d, "ingresos_operacionales")) * 100
+    """Gastos operacionales / Ingresos — menos es más eficiente.
+
+    Sin ingresos operacionales el ratio es INDEFINIDO, no cero. ``_safe_div`` devolvía 0.0 y
+    eso se leía como "eficiencia perfecta": en la serie histórica, el 25% de las
+    observaciones marcaba 0.00 de cost-to-income y sacaba 100 puntos. Mismo defecto que
+    corrigió el motor de banca para los denominadores en cero.
+    """
+    ingresos = _g(d, "ingresos_operacionales")
+    if not ingresos:
+        return {"raw": 0.0, "score": 0.0, "available": False}
+    raw = _safe_div(_g(d, "gastos_operacionales"), ingresos) * 100
     return {"raw": round(raw, 4), "score": round(_lin(raw, 95, 45), 2)}
 
 
 def _roa(d) -> IndicatorResult:
+    # Serie 2020-2025: p10 −8.54 · mediana 10.05 · p90 21.20. El techo anterior (15%) lo
+    # alcanzaba un tercio del panel histórico.
     raw = _safe_div(_g(d, "utilidad_neta"), _g(d, "activos_totales")) * 100
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 0.0, 15.0), 2)}
+    return {"raw": round(raw, 4), "score": round(_lin(raw, -8.54, 21.20), 2)}
 
 
 def _roe(d) -> IndicatorResult:
@@ -70,8 +87,16 @@ def _roe(d) -> IndicatorResult:
 
 
 def _cobertura_liquida(d) -> IndicatorResult:
-    # Activos líquidos / Pasivos circulantes — capacity to meet near-term obligations.
-    raw = _safe_div(_g(d, "activos_liquidos"), _g(d, "pasivos_cp")) * 100
+    """Activos líquidos / Pasivos circulantes — capacidad de cubrir lo exigible a corto plazo.
+
+    Sin pasivos circulantes la cobertura es INDEFINIDA (o infinita), nunca cero: una
+    fiduciaria sin obligaciones de corto plazo no tiene un problema de liquidez, tiene una
+    razón que no se puede calcular. ``_safe_div`` devolvía 0.0 y la penalizaba con 0 puntos.
+    """
+    pasivos = _g(d, "pasivos_cp")
+    if not pasivos:
+        return {"raw": 0.0, "score": 0.0, "available": False}
+    raw = _safe_div(_g(d, "activos_liquidos"), pasivos) * 100
     return {"raw": round(raw, 4), "score": round(_lin(raw, 50, 200), 2)}
 
 
@@ -81,6 +106,14 @@ def _diversificacion(d) -> IndicatorResult:
     hhi = _g(d, "hhi_ingresos_raw")
     if hhi <= 0:
         return {"raw": 0.0, "score": 0.0}
+    # ⚠️ CONSTANTE ESTRUCTURAL, no un indicador. Las 4 fiduciarias son mono-línea —~100%
+    # comisiones fiduciarias— así que el HHI da 1.0 en todas y el score 0 en todas.
+    # `weights.py` ya lo documenta y por eso le recortó el peso (0.10 → 0.05), pero seguía
+    # puntuando cero para el panel entero: no informaba nada y arrastraba el sub-componente
+    # hacia abajo por igual. Se declara NO DISPONIBLE, como `exposicion_credito` en las EIC.
+    # Si alguna diversificara sus ingresos, el indicador vuelve a informar y entra solo.
+    if hhi >= 0.99:
+        return {"raw": round(hhi, 4), "score": 0.0, "available": False}
     return {"raw": round(hhi, 4), "score": round(_lin(hhi, 1.0, 0.3), 2)}
 
 
@@ -108,9 +141,17 @@ def calculate_fiduciaria_indicators(data) -> Dict[str, IndicatorResult]:
     return out
 
 
-def calculate_fiduciaria_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str, float]:
-    sub: Dict[str, float] = {}
+def calculate_fiduciaria_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str, Any]:
+    """Promedia solo los indicadores DISPONIBLES. Sin ninguno → ``None``, no ``0.0``.
+
+    Mismo defecto que tenía el agregador de EIC: ignoraba el flag ``available`` (así que
+    declarar un indicador ausente no surtía efecto) y un sub-componente sin datos puntuaba
+    como el PEOR valor posible en vez de declararse N/D, sin llegar nunca a
+    ``calculate_deterministic_score``, que sí excluye los ``None`` y renormaliza.
+    """
+    sub: Dict[str, Any] = {}
     for comp, funcs in _SUB.items():
-        scores = [indicators[_NAMES[fn]]["score"] for fn in funcs if _NAMES[fn] in indicators]
-        sub[comp] = round(sum(scores) / len(scores), 2) if scores else 0.0
+        scores = [indicators[_NAMES[fn]]["score"] for fn in funcs
+                  if _NAMES[fn] in indicators and indicators[_NAMES[fn]].get("available", True)]
+        sub[comp] = round(sum(scores) / len(scores), 2) if scores else None
     return sub

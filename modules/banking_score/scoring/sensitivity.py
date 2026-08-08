@@ -80,18 +80,18 @@ _CURVES: Dict[str, _Curve] = {
     "patrimonio_activos": _tramos(4.8, 8.0, 28.0),
     # Calidad
     "morosidad": _lower(lambda s: (100.0 - s) / 10.0),
-    "pct_cartera_a": _higher(90.0),
-    "concentracion_top10": _lower(lambda s: 30.0 + (100.0 - s) / 1.5),
+    "pct_cartera_a": _tramos(90.0, 94.0, 98.7),
+    "concentracion_top10": _lower(lambda s: (100.0 - s) * 57.0 / 100.0),
     "hhi_sectorial": _lower(lambda s: 2500.0 - 10.0 * s),
-    "castigos_pct": _lower(lambda s: (100.0 - s) / 5.0),
+    "castigos_pct": _lower(lambda s: (100.0 - s) * 3.43 / 100.0),
     "exposicion_re": _target(
         lambda s, cur: 40.0 + (1.0 if cur >= 40.0 else -1.0) * (100.0 - s) * 1.5),
     "migracion": _target(
         lambda s, cur: (1.0 if cur >= 0.0 else -1.0) * (100.0 - s) / 5.0),
     # Eficiencia
-    "roa": _higher(1.5),
+    "roa": _tramos(0.0, 1.24, 3.46),
     "roe": _higher(15.0),
-    "margen_financiero": _higher(6.0),
+    "margen_financiero": _Curve("higher", lambda s, _c: 6.71 + s * (17.95 - 6.71) / 100.0),
     "cost_to_income": _lower(lambda s: 90.0 - 0.5 * s),
     # Liquidez
     "liquidez_inmediata": _higher(30.0),

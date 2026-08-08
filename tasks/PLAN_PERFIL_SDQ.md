@@ -290,9 +290,16 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
 
 ### Lo que queda anotado, con criterio
 
-- [ ] **`fiduciaria.py`** — umbrales v1 igual que cambiaria, pero **N=4**: cualquier percentil se
-      apoyaría en una sola observación. Calibrar contra 4 entidades sería inventar precisión.
-      Requiere serie histórica (los estados son anuales, hay 2022-2025) o dejarlo declarado.
+- [x] **`fiduciaria.py` — CALIBRADO contra la SERIE, no contra el corte.** Con 4 entidades
+      cualquier percentil se apoyaba en una sola observación; usando 2020-2025 son **24
+      observaciones**. `capitalizacion` tenía **88% en ≥99** (el techo de 60% lo supera todo el
+      panel: con capital propio como única fuente de fondeo, 60% es el piso del modelo, no
+      excelencia), `roa` 33%, `apalancamiento` comprimido. Recalibrados a p10→p90 de la serie:
+      saturación a 12-17% y el rango intercuartil de `capitalizacion` pasa de **0.0 a 37.8**.
+      De regalo, el mismo defecto de "denominador cero" por tercera vez: **16 de 48
+      observaciones** de `cost_to_income` y `cobertura_liquida` tenían el denominador en cero y
+      puntuaban en el extremo EQUIVOCADO — una fiduciaria sin pasivos circulantes sacaba 0 en
+      liquidez, y una sin ingresos operacionales sacaba 100 en eficiencia.
 - [ ] **`RATING_SCALE`** — no se toca **a propósito**: Perfil SDQ la reemplaza (§9). Recalibrar
       los cortes de una notación que está por salir es trabajo que se tira.
 - [ ] **Bandas de Resiliencia (75/60/45) y umbral `_MIN_N`** — re-medir DESPUÉS de que esta
