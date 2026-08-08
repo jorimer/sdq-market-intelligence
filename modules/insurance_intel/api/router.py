@@ -134,7 +134,7 @@ async def perfil_sdq(
     fabricado con dos años.
     """
     from modules.insurance_intel.scoring.perfil_sdq import (
-        PESOS_RESILIENCIA, band_resiliencia_o_none, bandas_ejecucion_por_combined,
+        PESOS_RESILIENCIA, band_resiliencia_o_none, banda_ejecucion,
         calcular_ejes, metricas_del_ciclo, panel_por_aseguradora,
     )
     from shared.indices.freshness import annotate_freshness
@@ -147,7 +147,9 @@ async def perfil_sdq(
         filas.append({
             "slug": slug, "name": info["name"], "period": info.get("period"),
             "ejecucion": ejes["ejecucion"],
-            "banda_ejecucion": bandas_ejecucion_por_combined(ejes["combined_promedio"]),
+            "banda_ejecucion": banda_ejecucion(ejes["ejecucion"]),
+            # El combined ratio queda como la MÉTRICA SUBYACENTE que alimenta el índice, no
+            # como una segunda escala visible en paralelo (§5.2).
             "combined_ratio_promedio": ejes["combined_promedio"],
             "ejercicios": ejes["ejercicios"],
             "resiliencia": ejes["resiliencia"],
@@ -160,8 +162,10 @@ async def perfil_sdq(
     return {
         "perfil": filas, "count": len(filas), "period_end": corte,
         "ejes": {
-            "ejecucion": ("Combined ratio (siniestros + gastos operativos sobre primas) "
-                          "promediado sobre 3-5 ejercicios. Ancla: 100% = breakeven técnico."),
+            "ejecucion": ("Índice 0-100 derivado del combined ratio (siniestros + gastos "
+                          "operativos sobre primas) promediado sobre 3-5 ejercicios. Misma "
+                          "escala y mismas bandas que banca, pensiones y fiduciarias: "
+                          "combined 90% → 75, breakeven 100% → 60, 110% → 45."),
             "resiliencia": ("Solvencia y liquidez regulatorias (Ley 146-02), reaseguro y "
                             "volatilidad del loss ratio."),
         },

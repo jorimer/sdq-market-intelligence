@@ -3,9 +3,11 @@ import pytest
 
 from modules.insurance_intel.scoring.perfil_sdq import (
     MIN_EJERCICIOS,
+    banda_ejecucion,
     bandas_ejecucion_por_combined,
     calcular_ejes,
     metricas_del_ciclo,
+    score_ejecucion_desde_combined,
     score_reaseguro,
 )
 
@@ -98,16 +100,41 @@ def test_la_volatilidad_del_loss_ratio_es_distinta_de_su_nivel():
 
 # ── Bandas de Ejecución ────────────────────────────────────────────────────────
 
-def test_bandas_de_ejecucion_anclan_en_el_breakeven():
-    """A diferencia de banca, en seguros SÍ existe el ancla económica: combined 100%."""
-    assert bandas_ejecucion_por_combined(0.70) == "Sobresaliente"
-    assert bandas_ejecucion_por_combined(0.95) == "Competitiva"
-    assert bandas_ejecucion_por_combined(1.05) == "Rezagada"
-    assert bandas_ejecucion_por_combined(1.30) == "Deficiente"
-    assert bandas_ejecucion_por_combined(None) is None
-    # El corte entre Competitiva y Rezagada ES el breakeven, no un número redondo cualquiera.
+def test_la_conversion_pone_a_seguros_en_la_misma_escala():
+    """§5.2 — el hueco que cerró la nota post-v1.3.
+
+    El combined ratio es un porcentaje donde MENOS es mejor; Ejecución en los otros tres
+    sectores es un índice 0-100 donde MÁS es mejor. Sin conversión explícita, seguros quedaba
+    en una escala paralela y rompía la promesa de un lenguaje único entre sectores.
+
+    La pendiente no es un número nuevo: sale de los tres cortes que el §5.9 ya fijaba sobre
+    combined ratio, que calzan EXACTAMENTE con los tres límites de banda de §4.
+    """
+    assert score_ejecucion_desde_combined(0.90) == 75.0   # borde de Sobresaliente
+    assert score_ejecucion_desde_combined(1.00) == 60.0   # breakeven → borde de Competitiva
+    assert score_ejecucion_desde_combined(1.10) == 45.0   # borde de Rezagada
+    assert score_ejecucion_desde_combined(None) is None
+    # Clampeada a [0, 100]: un combined ratio absurdo no produce un score fuera de escala.
+    assert score_ejecucion_desde_combined(0.10) == 100.0
+    assert score_ejecucion_desde_combined(8.31) == 0.0    # Creciendo Seguros, CR 831%
+
+
+def test_las_bandas_son_las_MISMAS_de_los_otros_sectores():
+    """Los cortes de §4 (75/60/45), no un sistema propio de seguros."""
+    from modules.pension_intel.scoring.perfil_sdq import banda_ejecucion as banda_pensiones
+    for score in (95.0, 75.0, 74.9, 60.0, 45.0, 10.0):
+        assert banda_ejecucion(score) == banda_pensiones(score), (
+            f"seguros y pensiones deben coincidir en {score}")
+    assert banda_ejecucion(None) is None
+
+
+def test_el_breakeven_cae_en_el_borde_de_competitiva():
+    """Breakeven es aceptable, no sobresaliente — y el corte de 100% es el único con ancla
+    económica real de los tres."""
     assert bandas_ejecucion_por_combined(0.999) == "Competitiva"
     assert bandas_ejecucion_por_combined(1.001) == "Rezagada"
+    assert bandas_ejecucion_por_combined(0.899) == "Sobresaliente"
+    assert bandas_ejecucion_por_combined(1.101) == "Deficiente"
 
 
 # ── Desglose por ramo (§5.6) ───────────────────────────────────────────────────

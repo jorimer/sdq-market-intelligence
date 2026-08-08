@@ -192,6 +192,13 @@ Deficiente/Regular/Bueno/Muy Bueno/Excepcional) — mismo espíritu, vocabulario
 Chequeado contra vocabulario bloqueado de `brand-kit/CLAUDE.md`: ninguna de las cuatro palabras
 aparece en la lista bloqueada; registro consultivo-experto, sin admiraciones, sin clichés.
 
+**Nota de consistencia (post-v1.3):** los nombres de banda estaban cerrados, pero su relación con la
+taxonomía numérica no quedó explícita para seguros al momento de escribir la revisión actuarial —
+seguros definía Ejecución sobre combined ratio (%, menos-es-mejor) mientras el resto de los sectores
+usa un índice 0-100 (más-es-mejor) con los cortes de esta sección. Se cerró en §5.2 con una función
+de conversión explícita — las cuatro bandas significan lo mismo (mismos cortes 0-100 de esta tabla)
+en los cuatro sectores, sin excepción.
+
 ### 4.2 Regla de N chico — decisión cerrada
 
 **4 bandas en los cuatro sectores, sin excepción — se prioriza la homologación por encima de ajustar
@@ -248,6 +255,26 @@ con dos componentes mutuamente excluyentes:
   cómo ya se ancla solvencia en 1.0 = cumple (§1). Los puntos intermedios de banda (§5.9) siguen
   pendientes de calibrar contra distribución real — el ancla en 100% da un punto de referencia no
   arbitrario, no resuelve solo eso.
+
+**Conversión a índice 0-100 (cierra un hueco de la v1.3 inicial, no estaba explícito):** el combined
+ratio es un porcentaje donde *menos es mejor*, mientras que Ejecución en banca/pensiones/fiduciarias
+(§3.1, §6.5, §7.3) es un promedio ponderado 0-100 donde *más es mejor*, con los cortes de banda de
+§4 (≥75/≥60/≥45). Sin una conversión explícita, seguros quedaba en una escala paralela — rompía la
+promesa central de Perfil SDQ de un lenguaje único entre sectores. Se resuelve con una función lineal
+anclada en los tres cortes que §5.9 ya fijaba sobre combined ratio (90/100/110), que calzan
+exactamente con los tres límites de banda de §4 (75/60/45):
+
+```
+score_ejecucion = clamp(60 − 1.5 × (combined_ratio − 100), 0, 100)
+```
+
+Breakeven (100%) cae en score 60 — el borde inferior de "Competitiva", consistente con que breakeven
+es aceptable pero no sobresaliente. Con esto, seguros reporta Ejecución en la misma escala 0-100 y
+usa las mismas bandas de §4 que los otros tres sectores; el combined ratio queda como la métrica
+subyacente que alimenta el índice, no como una segunda escala visible en paralelo. La pendiente
+(1.5) se deriva de los cortes ya elegidos, no es un número nuevo inventado — sigue siendo provisional
+en el mismo sentido que todo lo demás en este spec: a validar contra la distribución real una vez
+haya datos (§5.9).
 
 Resuelve el doble conteo de raíz: loss ratio y expense ratio son mutuamente excluyentes por
 construcción, a diferencia de siniestralidad y resultado_tecnico en el diseño de la v1.2.
@@ -377,10 +404,13 @@ pesos finales de cada eje.
 | Fuera de ambos ejes | Escala | — | Sale de Resiliencia, reemplazada por Reaseguro (§5.5) |
 | Candidato a extensión, no mínimo | Dispersión de loss ratio por ramo | Último período o promedio | Gate: extractor expone desglose por ramo (§5.6) |
 
-**Bandas de Ejecución (§4.1) sobre combined ratio, punto de partida a validar contra distribución
-real:** Sobresaliente (<90%) · Competitiva (90-100%) · Rezagada (100-110%) · Deficiente (>110%). El
-corte en 100% es el único no arbitrario (breakeven); 90/110 son provisionales igual que el resto de
-los cortes de este spec.
+**Bandas de Ejecución:** se aplican sobre `score_ejecucion` (§5.2), no sobre el combined ratio
+directo — mismos cortes de §4 que banca/pensiones/fiduciarias (≥75/≥60/≥45). Expresado en combined
+ratio, que es como lo va a pensar cualquier lector técnico, esos cortes equivalen a: Sobresaliente
+(<90%) · Competitiva (90-100%) · Rezagada (100-110%) · Deficiente (>110%). El corte en 100% es el
+único no arbitrario (breakeven); 90/110 son provisionales igual que el resto de los cortes de este
+spec — y son los mismos números que fijan la pendiente de la conversión en §5.2, no un segundo
+sistema de cortes independiente.
 
 **N chico:** con 33 aseguradoras, la regla de §4.2 aplica igual (universo <15 → mostrar posición
 relativa junto a la banda), aunque acá es menos urgente que en pensiones/fiduciarias. Las 4 bandas se
@@ -593,6 +623,9 @@ notaciones distintas frente al mismo cliente para el mismo período.
       aseguradora recalculada a mano para confirmar que `expense_ratio` ya no incluye siniestros.
 - [ ] Combined ratio (loss ratio + expense ratio, ancla 100%) implementado como Ejecución en seguros
       (§5.2) — `resultado_tecnico` retirado del cálculo de Ejecución.
+- [ ] Conversión combined ratio → `score_ejecucion` 0-100 implementada (§5.2, fórmula
+      `60 − 1.5×(CR−100)` clamped) — seguros reporta Ejecución en la misma escala y con las mismas
+      bandas de §4 que banca/pensiones/fiduciarias, no en combined ratio directo.
 - [ ] Confirmado contra el Excel crudo de SIS (no asumido) si existen cuentas de cesión/recuperables
       de reaseguro (§5.5) y si los leaves de 6 dígitos de primas/siniestros son desglose por ramo
       (§5.6), antes de construir sobre esos supuestos.
