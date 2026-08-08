@@ -40,8 +40,11 @@ def _lin(x: float, lo: float, hi: float) -> float:
 
 def _capitalizacion(d) -> IndicatorResult:
     # Patrimonio / Activos — FX agents are equity-funded; higher is sounder.
+    # Calibrado contra el panel: p10 40.6 · mediana 91.1 · p90 99.8. El techo anterior (30%)
+    # lo superaba casi todo el panel — las EIC se financian con capital propio, así que un
+    # 30% de capitalización no es excelencia, es el piso del negocio.
     raw = _safe_div(_g(d, "patrimonio_tecnico"), _g(d, "activos_totales")) * 100
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 5, 30), 2)}
+    return {"raw": round(raw, 4), "score": round(_lin(raw, 40.6, 99.8), 2)}
 
 
 def _apalancamiento(d) -> IndicatorResult:
@@ -52,14 +55,27 @@ def _apalancamiento(d) -> IndicatorResult:
 
 def _calidad_activos(d) -> IndicatorResult:
     # Activos líquidos / Activos — productive/liquid vs immobilized assets.
+    # Calibrado contra las 42 EIC del panel (2026-08-07): p10 46.5 · mediana 90.5 · p90 99.2.
+    # El techo anterior (70%) lo superaba el 71% de las entidades — un agente de cambio sano
+    # tiene casi todo su activo líquido, así que 70 no separaba a nadie.
     raw = _safe_div(_g(d, "activos_liquidos"), _g(d, "activos_totales")) * 100
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 10, 70), 2)}
+    return {"raw": round(raw, 4), "score": round(_lin(raw, 46.5, 99.2), 2)}
 
 
 def _exposicion_credito(d) -> IndicatorResult:
-    # Cartera / Activos — an off-mission credit book is mild extra risk for an
-    # FX agent; penalize gently, don't zero it out.
+    """Cartera / Activos — riesgo extra por un libro de crédito fuera de misión.
+
+    ⚠️ En el panel actual este indicador es una CONSTANTE: las 42 EIC tienen 0% de cartera
+    —no otorgan crédito, por definición del negocio— así que todas sacaban el mismo 100 y el
+    indicador no aportaba información, solo empujaba el sub-componente de calidad hacia
+    arriba. Un valor idéntico para todo el panel no discrimina; se declara NO DISPONIBLE.
+
+    No se elimina: si una EIC llegara a tener cartera, el indicador vuelve a informar y el
+    motor lo incluye solo.
+    """
     raw = _safe_div(_g(d, "cartera_bruta"), _g(d, "activos_totales")) * 100
+    if raw <= 0:
+        return {"raw": 0.0, "score": 0.0, "available": False}
     return {"raw": round(raw, 4), "score": round(_lin(raw, 80, 10), 2)}
 
 
@@ -74,9 +90,23 @@ def _roe(d) -> IndicatorResult:
 
 
 def _cobertura_liquida(d) -> IndicatorResult:
-    # Activos líquidos / Pasivos exigibles — capacity to operate/settle.
+    """Activos líquidos / Pasivos exigibles — capacidad de operar y liquidar.
+
+    En ESCALA LOGARÍTMICA. El ratio explota cuando los pasivos exigibles son mínimos, que es
+    lo normal en un agente de cambio: el panel va de 94% a **34.284%**, tres órdenes de
+    magnitud. En escala lineal, el techo anterior de 120% lo superaba el 86% de las entidades
+    y las diferencias entre las que cubren 200% y 30.000% desaparecían por igual.
+
+    Anclajes en los percentiles observados: p10 93.8 → p90 34.283,6.
+    """
+    import math
+
     raw = _safe_div(_g(d, "activos_liquidos"), _g(d, "pasivos_exigibles")) * 100
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 20, 120), 2)}
+    if raw <= 0:
+        return {"raw": 0.0, "score": 0.0, "available": False}
+    lg = math.log10(raw)
+    return {"raw": round(raw, 4),
+            "score": round(_lin(lg, math.log10(93.8), math.log10(34283.6)), 2)}
 
 
 def _diversificacion(d) -> IndicatorResult:
@@ -113,9 +143,23 @@ def calculate_cambiaria_indicators(data) -> Dict[str, IndicatorResult]:
     return out
 
 
-def calculate_cambiaria_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str, float]:
-    sub: Dict[str, float] = {}
+def calculate_cambiaria_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str, Any]:
+    """Promedia solo los indicadores DISPONIBLES de cada sub-componente.
+
+    Dos correcciones sobre la versión anterior:
+
+    * **Respeta ``available``.** Un indicador marcado como no disponible —``exposicion_credito``
+      cuando la EIC no tiene cartera, que es siempre— se excluía del flag pero se seguía
+      promediando, así que su 100 constante empujaba el sub-componente hacia arriba sin
+      informar nada.
+    * **Sin indicadores disponibles → ``None``, no ``0.0``.** Un sub-componente sin datos
+      puntuaba como el PEOR valor posible en vez de declararse ausente, y
+      ``calculate_deterministic_score`` —que sí excluye los ``None`` y renormaliza— nunca
+      llegaba a verlo. Mismo defecto que el de ``_safe_div`` en el motor de banca.
+    """
+    sub: Dict[str, Any] = {}
     for comp, funcs in _SUB.items():
-        scores = [indicators[_NAMES[fn]]["score"] for fn in funcs if _NAMES[fn] in indicators]
-        sub[comp] = round(sum(scores) / len(scores), 2) if scores else 0.0
+        scores = [indicators[_NAMES[fn]]["score"] for fn in funcs
+                  if _NAMES[fn] in indicators and indicators[_NAMES[fn]].get("available", True)]
+        sub[comp] = round(sum(scores) / len(scores), 2) if scores else None
     return sub
