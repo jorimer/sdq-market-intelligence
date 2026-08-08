@@ -604,6 +604,54 @@ async def get_rating_history(
 
 # ─── Rankings ────────────────────────────────────────────────────
 
+# Etiquetas legibles para la prosa de metodología. Un tipo sin etiqueta usa su propio
+# valor: preferimos un nombre feo a omitir un tipo del texto.
+_TIPO_LABEL = {
+    "banca_multiple": "banca múltiple",
+    "cambiaria": "intermediación cambiaria",
+    "banco_ahorro_credito": "bancos de ahorro y crédito",
+    "corporacion_credito": "corporaciones de crédito",
+    "aap": "asociaciones de ahorros y préstamos",
+    "fiduciaria": "fiduciarias",
+}
+
+# Bajo este umbral la mediana de un tipo se apoya en muy pocas entidades y no sirve para
+# sostener una afirmación de metodología (§4.2, misma lógica del panel chico).
+_MIN_TIPO_PARA_CITAR = 5
+
+
+def _medianas_ejecucion_por_tipo(rankings: List[Dict]) -> Dict[str, Dict]:
+    """Mediana de Ejecución por tipo de entidad, computada del panel que se acaba de servir."""
+    por_tipo: Dict[str, List[float]] = {}
+    for r in rankings:
+        if r.get("bank_type") and r.get("ejecucion") is not None:
+            por_tipo.setdefault(r["bank_type"], []).append(float(r["ejecucion"]))
+    out: Dict[str, Dict] = {}
+    for tipo, vals in por_tipo.items():
+        vals.sort()
+        n = len(vals)
+        mediana = vals[n // 2] if n % 2 else (vals[n // 2 - 1] + vals[n // 2]) / 2
+        out[tipo] = {"mediana": round(mediana, 1), "n": n}
+    return out
+
+
+def _frase_brecha_medianas(medianas: Dict[str, Dict]) -> str:
+    """Frase que cita la brecha real entre los dos tipos más separados, o cadena vacía.
+
+    Devuelve "" cuando no hay dos tipos con panel suficiente: sin evidencia no se afirma.
+    """
+    citables = {t: m for t, m in medianas.items() if m["n"] >= _MIN_TIPO_PARA_CITAR}
+    if len(citables) < 2:
+        return ""
+    orden = sorted(citables.items(), key=lambda kv: kv[1]["mediana"])
+    bajo, alto = orden[0], orden[-1]
+    return (
+        f": la mediana de Ejecución es {bajo[1]['mediana']} en "
+        f"{_TIPO_LABEL.get(bajo[0], bajo[0])} y {alto[1]['mediana']} en "
+        f"{_TIPO_LABEL.get(alto[0], alto[0])}"
+    )
+
+
 @router.get(
     "/rankings",
     summary="Rankings de bancos",
@@ -703,6 +751,13 @@ async def get_rankings(
             # el reemplazo.
             "rating_tier": rr.rating_tier,
         })
+    # La justificación de por qué la banda de Ejecución es relativa se apoya en la brecha
+    # de medianas entre tipos de entidad. Esa brecha es un HECHO DEL PANEL: se computa acá
+    # y el texto la cita, nunca al revés — un número escrito en la prosa queda obsoleto en
+    # la primera recalibración y pasa a afirmar algo falso con tono de metodología.
+    _medianas = _medianas_ejecucion_por_tipo(rankings)
+    _brecha = _frase_brecha_medianas(_medianas)
+
     return {
         "rankings": rankings, "count": len(rankings),
         "period_end": period_end or "latest",
@@ -720,11 +775,12 @@ async def get_rankings(
                 "RELATIVA AL TIPO DE ENTIDAD: cuartiles del panel comparable, no cortes "
                 "fijos. En banca no existe un ancla económica de eficiencia —como sí lo son "
                 "el mínimo regulatorio en solvencia o el breakeven en seguros— y la "
-                "rentabilidad difiere por MODELO DE NEGOCIO, no solo por desempeño: la "
-                "mediana de Ejecución es 37.8 en intermediación cambiaria y 73.5 en banca "
-                "múltiple. Con cortes fijos, casi toda la intermediación cambiaria caería en "
+                "rentabilidad difiere por MODELO DE NEGOCIO, no solo por desempeño"
+                + _brecha +
+                ". Con cortes fijos, casi toda la intermediación cambiaria caería en "
                 "\"Deficiente\" por su estructura de capital —están sobrecapitalizadas, lo que "
                 "deprime el ROE de forma mecánica— y no por ser ineficientes."),
+            "medianas_ejecucion_por_tipo": _medianas,
             "como_leerla": (
                 "\"Sobresaliente\" significa \"en el cuartil superior de su tipo de entidad\", "
                 "no un nivel absoluto. Por eso cada fila trae su posición dentro del grupo."),

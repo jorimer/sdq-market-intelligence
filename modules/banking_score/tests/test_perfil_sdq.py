@@ -121,3 +121,71 @@ def test_gate_de_correlacion():
     assert correlacion([1, 2, 3, 4], [4, 3, 2, 1]) == pytest.approx(-1.0)
     assert correlacion([5, 5, 5], [1, 2, 3]) is None   # sin dispersión, no hay correlación
     assert correlacion([1], [1]) is None
+
+
+# ─── Metodología: la brecha de medianas se COMPUTA, no se escribe ──────────────
+# Regresión de un defecto real: el texto de metodología citaba "37.8 en cambiarias y
+# 73.5 en banca múltiple". La calibración movió esas medianas a 30.3 y 51.0, y la prosa
+# quedó afirmando algo falso con tono de metodología. Las relaciones se computan.
+
+class TestBrechaMedianasComputada:
+
+    def _rk(self, *filas):
+        return [{"bank_type": t, "ejecucion": e} for t, e in filas]
+
+    def test_cita_las_medianas_reales_del_panel(self):
+        from modules.banking_score.api.router_scoring import (
+            _frase_brecha_medianas, _medianas_ejecucion_por_tipo,
+        )
+        rk = self._rk(
+            *[("cambiaria", v) for v in (10.0, 20.0, 30.0, 40.0, 50.0)],
+            *[("banca_multiple", v) for v in (60.0, 65.0, 70.0, 75.0, 80.0)],
+        )
+        med = _medianas_ejecucion_por_tipo(rk)
+        assert med["cambiaria"] == {"mediana": 30.0, "n": 5}
+        assert med["banca_multiple"] == {"mediana": 70.0, "n": 5}
+        frase = _frase_brecha_medianas(med)
+        assert "30.0 en intermediación cambiaria" in frase
+        assert "70.0 en banca múltiple" in frase
+
+    def test_la_frase_sigue_al_dato_cuando_el_dato_cambia(self):
+        """Mover el panel debe mover el texto. Si no, el número está clavado."""
+        from modules.banking_score.api.router_scoring import (
+            _frase_brecha_medianas, _medianas_ejecucion_por_tipo,
+        )
+        base = self._rk(
+            *[("cambiaria", v) for v in (10.0, 20.0, 30.0, 40.0, 50.0)],
+            *[("banca_multiple", v) for v in (60.0, 65.0, 70.0, 75.0, 80.0)],
+        )
+        movido = self._rk(
+            *[("cambiaria", v) for v in (11.0, 21.0, 31.0, 41.0, 51.0)],
+            *[("banca_multiple", v) for v in (61.0, 66.0, 71.0, 76.0, 81.0)],
+        )
+        f1 = _frase_brecha_medianas(_medianas_ejecucion_por_tipo(base))
+        f2 = _frase_brecha_medianas(_medianas_ejecucion_por_tipo(movido))
+        assert f1 != f2, "la frase no siguió al panel: hay una cifra hardcodeada"
+
+    def test_sin_panel_suficiente_no_afirma_nada(self):
+        """Menos de dos tipos citables → cadena vacía. Sin evidencia no se afirma."""
+        from modules.banking_score.api.router_scoring import (
+            _frase_brecha_medianas, _medianas_ejecucion_por_tipo,
+        )
+        rk = self._rk(("cambiaria", 10.0), ("cambiaria", 20.0), ("banca_multiple", 70.0))
+        assert _frase_brecha_medianas(_medianas_ejecucion_por_tipo(rk)) == ""
+
+    def test_ignora_entidades_sin_ejecucion(self):
+        """Una brecha declarada no puede contarse como si fuera un 0."""
+        from modules.banking_score.api.router_scoring import _medianas_ejecucion_por_tipo
+        rk = [{"bank_type": "cambiaria", "ejecucion": None}] + self._rk(
+            *[("cambiaria", v) for v in (10.0, 20.0, 30.0, 40.0, 50.0)])
+        assert _medianas_ejecucion_por_tipo(rk)["cambiaria"] == {"mediana": 30.0, "n": 5}
+
+    def test_la_prosa_no_contiene_cifras_de_panel(self):
+        """Gate: ningún decimal suelto en el texto de metodología del router."""
+        import inspect
+        import re
+        from modules.banking_score.api import router_scoring
+        src = inspect.getsource(router_scoring.get_rankings)
+        prosa = " ".join(re.findall(r'"([^"]{40,})"', src))
+        assert not re.search(r"\b\d+\.\d\b", prosa), (
+            "hay una cifra de panel escrita en la prosa de metodología; computala")
