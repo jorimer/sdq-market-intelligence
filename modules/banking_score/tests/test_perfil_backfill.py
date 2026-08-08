@@ -93,3 +93,22 @@ def test_no_genera_acciones_de_rating(db):
 def test_sin_ratings_no_revienta(db):
     r = backfill_perfil_sdq(db)
     assert r["ratings"] == 0 and r["periodos"] == 0
+
+
+def test_todas_las_operaciones_comparten_la_firma_del_runner():
+    """El runner las invoca como ``fn(params, user_id, set_phase)``.
+
+    Regresión de un error propio: `_run_perfil_sdq` se escribió como `(set_phase, params)` y
+    el registro no lo detecta —la firma solo se verifica al EJECUTAR la operación en
+    producción, donde falló con "takes 2 positional arguments but 3 were given". Este test
+    lo atrapa antes.
+    """
+    import inspect
+    import modules.banking_score.operations as ops
+
+    runners = [v for k, v in vars(ops).items() if k.startswith("_run_") and callable(v)]
+    assert runners, "no se encontró ningún runner de operación"
+    for fn in runners:
+        params = list(inspect.signature(fn).parameters)
+        assert params[:3] == ["params", "user_id", "set_phase"], (
+            f"{fn.__name__} tiene la firma {params}, no la del runner")

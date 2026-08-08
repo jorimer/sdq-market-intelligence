@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
 import client from "@/shared/api/client";
-import { RatingBadge } from "../components/RatingBadge";
 import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
 import { PageHead, Card, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { fmtNum } from "@/shared/lib/format";
@@ -15,8 +14,45 @@ interface Rank {
   bank_name: string;
   bank_type: string | null;
   overall_score: number;
+  // Perfil SDQ — los dos ejes que reemplazan la lectura del símbolo único.
+  ejecucion: number | null;
+  banda_ejecucion: string | null;
+  resiliencia: number | null;
+  banda_resiliencia: string | null;
+  /** DEPRECADO: convive durante la transición a Perfil SDQ. */
   rating_tier: string;
   period_end: string;
+}
+
+/** Banda → tono, compartido con el componente PerfilSDQ. */
+function tonoBanda(banda: string | null): string {
+  switch (banda) {
+    case "Sólida":
+    case "Sobresaliente":
+      return "bg-ok-soft text-ok";
+    case "Adecuada":
+    case "Competitiva":
+      return "bg-accent-soft text-accent-ink";
+    case "En vigilancia":
+    case "Rezagada":
+      return "bg-warn-soft text-warn";
+    case "Frágil":
+    case "Deficiente":
+      return "bg-alert-soft text-alert";
+    default:
+      return "bg-surface2 text-muted";
+  }
+}
+
+function CeldaEje({ score, banda }: { score: number | null; banda: string | null }) {
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <span className="mono text-ink">{score == null ? "—" : score.toFixed(1)}</span>
+      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${tonoBanda(banda)}`}>
+        {banda ?? "sin dato"}
+      </span>
+    </div>
+  );
 }
 
 export function RankingsPage() {
@@ -104,7 +140,8 @@ export function RankingsPage() {
                   <th className="py-2 px-2 font-medium">#</th>
                   <th className="py-2 px-2 font-medium">{t("banking.rankColEntity")}</th>
                   <th className="py-2 px-2 font-medium text-right">{t("banking.rankColScore")}</th>
-                  <th className="py-2 px-2 font-medium text-center">{t("banking.rankColRating")}</th>
+                  <th className="py-2 px-2 font-medium text-right">Ejecución</th>
+                  <th className="py-2 px-2 font-medium text-right">Resiliencia</th>
                   <th className="py-2 px-2 font-medium text-right">{t("banking.rankColPeriod")}</th>
                   <th className="w-8" />
                 </tr>
@@ -123,8 +160,11 @@ export function RankingsPage() {
                     <td className="py-2.5 px-2 text-right mono font-semibold text-ink">
                       {fmtNum(r.overall_score, 1)}
                     </td>
-                    <td className="py-2.5 px-2 text-center">
-                      <RatingBadge tier={r.rating_tier} size="sm" />
+                    <td className="py-2.5 px-2 text-right">
+                      <CeldaEje score={r.ejecucion} banda={r.banda_ejecucion} />
+                    </td>
+                    <td className="py-2.5 px-2 text-right">
+                      <CeldaEje score={r.resiliencia} banda={r.banda_resiliencia} />
                     </td>
                     <td className="py-2.5 px-2 text-right mono text-xs text-muted">{r.period_end}</td>
                     <td className="py-2.5 pr-2 text-right">

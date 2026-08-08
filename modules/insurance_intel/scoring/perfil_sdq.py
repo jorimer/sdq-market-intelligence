@@ -35,11 +35,21 @@ MIN_EJERCICIOS = 3
 PESOS_RESILIENCIA = {"solvencia": 0.47, "liquidez": 0.20, "reaseguro": 0.20,
                      "volatilidad_loss": 0.13}
 
-# ── Anclajes, derivados del panel 2018-2024 (33 aseguradoras, outliers extremos excluidos)
-
-# Combined ratio: 100% = breakeven técnico, el único corte con ancla económica real del
-# spec. Piso y techo en el p90/p10 observados (1.139 y 0.660).
-CR_PEOR, CR_REF, CR_MEJOR = 1.15, 1.00, 0.66
+# ── Conversión del combined ratio a la escala 0-100 (spec §5.2) ────────────────
+#
+# El combined ratio es un porcentaje donde MENOS es mejor; Ejecución en banca, pensiones y
+# fiduciarias es un índice 0-100 donde MÁS es mejor, con los cortes de §4 (75/60/45). Sin una
+# conversión explícita, seguros quedaba en una escala paralela — y eso rompe la promesa central
+# de Perfil SDQ, que es un lenguaje único entre sectores.
+#
+# La pendiente NO es un número nuevo: sale de los tres cortes que el §5.9 ya fijaba sobre
+# combined ratio (90/100/110), que calzan exactamente con los tres límites de banda de §4.
+#
+#     CR  90% → 75  (borde de Sobresaliente)
+#     CR 100% → 60  (borde de Competitiva — breakeven es aceptable, no sobresaliente)
+#     CR 110% → 45  (borde de Rezagada)
+CR_BREAKEVEN_SCORE = 60.0
+CR_PENDIENTE = 1.5
 
 # Volatilidad del loss ratio (σ sobre la ventana): mediana 0.043, p90 0.130.
 VOL_PEOR, VOL_MEJOR = 0.130, 0.023
@@ -63,16 +73,24 @@ def _lineal(v: float, peor: float, mejor: float) -> float:
     return max(0.0, min(100.0, (v - peor) / (mejor - peor) * 100.0))
 
 
-def _tramos(v: float, peor: float, ref: float, mejor: float) -> float:
-    """Dos tramos con la referencia económica en 50 — mismo patrón que el ISF y el motor
-    de banca. Para el combined ratio, ``ref`` es el breakeven técnico (100%)."""
-    if (mejor < ref and v >= peor) or (mejor > ref and v <= peor):
-        return 0.0
-    hacia_abajo = mejor < ref  # combined ratio: menos es mejor
-    en_tramo_bajo = v >= ref if hacia_abajo else v <= ref
-    if en_tramo_bajo:
-        return max(0.0, min(50.0, (v - peor) / (ref - peor) * 50.0))
-    return max(50.0, min(100.0, 50.0 + (v - ref) / (mejor - ref) * 50.0))
+def score_ejecucion_desde_combined(combined: Optional[float]) -> Optional[float]:
+    """Combined ratio (fracción, 1.0 = 100%) → índice 0-100 donde más es mejor (§5.2).
+
+    ``clamp(60 − 1.5 × (CR% − 100), 0, 100)``. Lineal y anclada en el breakeven: es la función
+    que pone a seguros en la MISMA escala y con las MISMAS bandas que los otros tres sectores,
+    en vez de una escala paralela sobre porcentajes.
+
+    >>> score_ejecucion_desde_combined(0.90)   # borde de Sobresaliente
+    75.0
+    >>> score_ejecucion_desde_combined(1.00)   # breakeven → borde de Competitiva
+    60.0
+    >>> score_ejecucion_desde_combined(1.10)   # borde de Rezagada
+    45.0
+    """
+    if combined is None:
+        return None
+    pct = combined * 100.0
+    return round(max(0.0, min(100.0, CR_BREAKEVEN_SCORE - CR_PENDIENTE * (pct - 100.0))), 1)
 
 
 def score_reaseguro(cesion: Optional[float]) -> Optional[float]:
@@ -163,7 +181,7 @@ def calcular_ejes(ciclo: Optional[Dict[str, Any]],
     ejecucion = None
     dims: Dict[str, Optional[float]] = {}
     if ciclo:
-        ejecucion = round(_tramos(ciclo["combined_promedio"], CR_PEOR, CR_REF, CR_MEJOR), 1)
+        ejecucion = score_ejecucion_desde_combined(ciclo["combined_promedio"])
         dims["volatilidad_loss"] = round(
             _lineal(ciclo["loss_volatilidad"], VOL_PEOR, VOL_MEJOR), 1)
         dims["reaseguro"] = score_reaseguro(ciclo["cesion_promedio"])
@@ -286,20 +304,26 @@ def panel_por_aseguradora(db) -> Dict[str, Dict[str, Any]]:
     return salida
 
 
-def bandas_ejecucion_por_combined(combined: Optional[float]) -> Optional[str]:
-    """Banda de Ejecución sobre el combined ratio promedio.
+# Cortes de §4, los MISMOS que banca/pensiones/fiduciarias. No hay un segundo sistema de
+# cortes propio de seguros: el combined ratio queda como la métrica subyacente que alimenta el
+# índice, no como una escala visible en paralelo.
+BANDAS_EJECUCION = [(75.0, "Sobresaliente"), (60.0, "Competitiva"), (45.0, "Rezagada"),
+                    (0.0, "Deficiente")]
 
-    A diferencia de banca —donde Ejecución es relativa al panel por falta de un breakeven—
-    en seguros SÍ existe el ancla económica: 100% es el punto donde la suscripción deja de
-    dar pérdida. Los otros dos cortes salen de los cuartiles observados (p25 0.778,
-    p75 1.010), no de números redondos.
+
+def banda_ejecucion(score: Optional[float]) -> Optional[str]:
+    """Banda de Ejecución sobre el índice 0-100, con los cortes de §4.
+
+    Expresado en combined ratio —que es como lo va a pensar cualquier lector técnico— esos
+    cortes equivalen a Sobresaliente <90% · Competitiva 90-100% · Rezagada 100-110% ·
+    Deficiente >110%. Son los mismos números que fijan la pendiente de la conversión, no un
+    sistema aparte.
     """
-    if combined is None:
+    if score is None:
         return None
-    if combined < 0.78:
-        return "Sobresaliente"
-    if combined < 1.00:
-        return "Competitiva"
-    if combined < 1.14:
-        return "Rezagada"
-    return "Deficiente"
+    return next((n for t, n in BANDAS_EJECUCION if score >= t), "Deficiente")
+
+
+def bandas_ejecucion_por_combined(combined: Optional[float]) -> Optional[str]:
+    """Atajo: banda directamente desde el combined ratio, vía la conversión de §5.2."""
+    return banda_ejecucion(score_ejecucion_desde_combined(combined))
