@@ -48,9 +48,14 @@ def _capitalizacion(d) -> IndicatorResult:
 
 
 def _apalancamiento(d) -> IndicatorResult:
-    # Pasivos / Patrimonio — lower is sounder (reverse scale).
+    """Pasivos / Patrimonio — menos es más sólido.
+
+    Calibrado contra el panel: p10 0.00 · mediana 0.09 · p90 1.13. El umbral anterior (4.0)
+    lo cumplían todas con enorme margen —una EIC casi no toma pasivos— así que 18 de 42
+    marcaban 100 y el indicador no separaba a nadie.
+    """
     raw = _safe_div(_g(d, "pasivos_exigibles"), _g(d, "patrimonio_tecnico"))
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 4.0, 0.0), 2)}
+    return {"raw": round(raw, 4), "score": round(_lin(raw, 1.13, 0.0), 2)}
 
 
 def _calidad_activos(d) -> IndicatorResult:
@@ -79,14 +84,26 @@ def _exposicion_credito(d) -> IndicatorResult:
     return {"raw": round(raw, 4), "score": round(_lin(raw, 80, 10), 2)}
 
 
+# ⚠️ Rentabilidad de una EIC: NO hay ancla económica externa.
+#
+# A diferencia de la solvencia (mínimo regulatorio) o del combined ratio en seguros
+# (breakeven), no existe un "ROE correcto" para un agente de cambio. Y su ROE es
+# estructuralmente bajo por una razón que NO es ineficiencia: están sobrecapitalizadas
+# —mediana de patrimonio/activos 91%— y el patrimonio grande deprime el ROE de forma
+# mecánica. Lo mismo que las hace puntuar alto en solidez las hace puntuar bajo en
+# rentabilidad.
+#
+# Los anclajes salen de la distribución observada del panel (p10 → p90), que es lo único
+# defendible cuando no hay referencia externa. El umbral anterior de ROE (0 → 18%) era el de
+# un banco apalancado: con una mediana de 2.66%, mandaba a la mitad del sector a ~15 puntos.
 def _roa(d) -> IndicatorResult:
     raw = _safe_div(_g(d, "utilidad_neta"), _g(d, "activos_totales")) * 100
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 0.0, 4.0), 2)}
+    return {"raw": round(raw, 4), "score": round(_lin(raw, -0.85, 8.52), 2)}
 
 
 def _roe(d) -> IndicatorResult:
     raw = _safe_div(_g(d, "utilidad_neta"), _g(d, "patrimonio_tecnico")) * 100
-    return {"raw": round(raw, 4), "score": round(_lin(raw, 0.0, 18.0), 2)}
+    return {"raw": round(raw, 4), "score": round(_lin(raw, -0.86, 13.60), 2)}
 
 
 def _cobertura_liquida(d) -> IndicatorResult:

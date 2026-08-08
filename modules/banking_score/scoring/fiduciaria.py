@@ -11,7 +11,7 @@ eficiencia 26 · liquidez 10 · diversificación 5, calibración v1.1 2026-06-11
 Thresholds here are a v1 and are
 explicitly calibratable. Data is ANNUAL (period_type=annual).
 """
-from typing import Dict
+from typing import Any, Dict
 
 from modules.banking_score.scoring.engine import _clamp, _safe_div
 
@@ -81,6 +81,14 @@ def _diversificacion(d) -> IndicatorResult:
     hhi = _g(d, "hhi_ingresos_raw")
     if hhi <= 0:
         return {"raw": 0.0, "score": 0.0}
+    # ⚠️ CONSTANTE ESTRUCTURAL, no un indicador. Las 4 fiduciarias son mono-línea —~100%
+    # comisiones fiduciarias— así que el HHI da 1.0 en todas y el score 0 en todas.
+    # `weights.py` ya lo documenta y por eso le recortó el peso (0.10 → 0.05), pero seguía
+    # puntuando cero para el panel entero: no informaba nada y arrastraba el sub-componente
+    # hacia abajo por igual. Se declara NO DISPONIBLE, como `exposicion_credito` en las EIC.
+    # Si alguna diversificara sus ingresos, el indicador vuelve a informar y entra solo.
+    if hhi >= 0.99:
+        return {"raw": round(hhi, 4), "score": 0.0, "available": False}
     return {"raw": round(hhi, 4), "score": round(_lin(hhi, 1.0, 0.3), 2)}
 
 
@@ -108,9 +116,17 @@ def calculate_fiduciaria_indicators(data) -> Dict[str, IndicatorResult]:
     return out
 
 
-def calculate_fiduciaria_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str, float]:
-    sub: Dict[str, float] = {}
+def calculate_fiduciaria_sub_components(indicators: Dict[str, IndicatorResult]) -> Dict[str, Any]:
+    """Promedia solo los indicadores DISPONIBLES. Sin ninguno → ``None``, no ``0.0``.
+
+    Mismo defecto que tenía el agregador de EIC: ignoraba el flag ``available`` (así que
+    declarar un indicador ausente no surtía efecto) y un sub-componente sin datos puntuaba
+    como el PEOR valor posible en vez de declararse N/D, sin llegar nunca a
+    ``calculate_deterministic_score``, que sí excluye los ``None`` y renormaliza.
+    """
+    sub: Dict[str, Any] = {}
     for comp, funcs in _SUB.items():
-        scores = [indicators[_NAMES[fn]]["score"] for fn in funcs if _NAMES[fn] in indicators]
-        sub[comp] = round(sum(scores) / len(scores), 2) if scores else 0.0
+        scores = [indicators[_NAMES[fn]]["score"] for fn in funcs
+                  if _NAMES[fn] in indicators and indicators[_NAMES[fn]].get("available", True)]
+        sub[comp] = round(sum(scores) / len(scores), 2) if scores else None
     return sub
