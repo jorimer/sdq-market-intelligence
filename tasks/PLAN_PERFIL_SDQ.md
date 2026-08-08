@@ -371,14 +371,40 @@ y 68.6, con cinco entre 40 y 50. Todas cobran comisiones parecidas y el anclaje 
 todas por igual. Mismo patrón que la saturación de banca, en el otro extremo.
 
 
-## FASE 4 — Migración de superficie
+## FASE 4 — Migración de superficie · BACKEND COMPLETO
 
-- [ ] 47 archivos / 252 ocurrencias de notación de letras (§0.1).
-- [ ] Remapeo de `rating_results` / `rating_actions` — **decisión del dueño pendiente** (§9):
-      re-etiquetar el histórico vs. corte de fecha.
-- [ ] Plan de reissue del Deep Dive de Banco Popular (§10.6).
+- [x] **Perfil SDQ persistido** en `rating_results` (migración `e5b71c9f4a02`): los dos ejes y
+      sus bandas junto al score. Se calcula sobre el PANEL del período —los cortes de Ejecución
+      son los cuartiles de las entidades del mismo tipo— así que se persiste al terminar el
+      scoring del período, no entidad por entidad.
+- [x] **§9 resuelto recomputando, no re-etiquetando.** "Re-etiquetar" en sentido literal es
+      imposible y sería deshonesto: **no existe un mapeo de `SDQ-AA+` a dos ejes**, porque un
+      símbolo único no contiene la información que los ejes separan; traducirlo inventaría una
+      lectura que nadie calculó. Pero `rating_results` guarda los 5 sub-componentes de cada
+      período, así que Perfil SDQ es DERIVABLE hacia atrás. `perfil_backfill.py` aplica la
+      metodología nueva a los datos que ya existían — que es lo que "retroactivo" puede
+      significar sin fabricar nada.
+- [x] **El backfill NO genera acciones de rating**, a diferencia de `rescore`. Recalcular el
+      histórico entero con rescore produciría movimientos de tier entre períodos que nunca
+      ocurrieron. Operación registrada: `perfil-sdq-backfill`.
+- [x] **Los cortes son del PERÍODO, no globales.** Comparar la eficiencia de un banco de 2021
+      contra los cuartiles de 2026 mediría el paso del tiempo, no su desempeño. Hay un test que
+      lo fija: el mejor de cada período es "Sobresaliente" en SU período, aunque los niveles
+      absolutos no tengan relación entre sí.
+- [x] **`rating_tier` queda DEPRECADO, no eliminado.** Convive mientras la superficie migra, y
+      la respuesta lo declara explícitamente. Retirarlo en el mismo paso que se introduce el
+      reemplazo dejaría sin salida si algo del reemplazo hay que revisar.
+      Verificado antes de decidir: **la Data API pública expone `band`, no `rating_tier`**, así
+      que ningún consumidor externo (SDQ-PMS) se rompe.
+- [x] Expuesto en `GET /api/v1/banking-score/rankings` con el bloque `notacion`.
 
----
+### Pendiente — es el tercer tema, no parte de la Fase 4
+
+- [ ] **Frontend**: 6 archivos usan `rating_tier` (`types/index.ts`, `banking-score/api.ts`,
+      `EntityInsightDrawer.tsx`, y los 3 de i18n). Ninguna pantalla consume Perfil SDQ todavía.
+- [ ] **Texto residual**: ~237 ocurrencias de la notación en docs, tests y strings de reporte.
+      Se migran cuando el frontend cierre; no bloquean nada.
+
 
 ## Decisiones que necesito del dueño antes de arrancar
 

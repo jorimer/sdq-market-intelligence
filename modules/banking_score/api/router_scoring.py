@@ -692,12 +692,27 @@ async def get_rankings(
             "months_behind": mb,
             "stale": (mb is not None and mb >= STALE_MONTHS),
             "overall_score": float(rr.overall_score),
+            # Perfil SDQ — los dos ejes que reemplazan la lectura del símbolo único.
+            "ejecucion": float(rr.ejecucion_score) if rr.ejecucion_score is not None else None,
+            "banda_ejecucion": rr.banda_ejecucion,
+            "resiliencia": float(rr.resiliencia_score) if rr.resiliencia_score is not None else None,
+            "banda_resiliencia": rr.banda_resiliencia,
+            # DEPRECADO: convive mientras la superficie migra a Perfil SDQ (§9). Usa la
+            # gramática de una calificadora sin serlo, y `SDQ-D` cubre 45 puntos de rango
+            # aplicándose a entidades que operan con normalidad — el problema que originó
+            # el reemplazo.
             "rating_tier": rr.rating_tier,
         })
     return {
         "rankings": rankings, "count": len(rankings),
         "period_end": period_end or "latest",
         "latest_period_end": str(latest_pe) if latest_pe else None,
+        "notacion": {
+            "primaria": "Perfil SDQ — Ejecución y Resiliencia, dos ejes independientes.",
+            "rating_tier": ("DEPRECADO. Se mantiene durante la transición; no es una "
+                            "calificación crediticia ni es comparable con la notación de "
+                            "una agencia calificadora."),
+        },
     }
 
 
