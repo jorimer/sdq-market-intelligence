@@ -118,7 +118,7 @@ def _run_sib_historical_load(params, user_id, set_phase) -> Dict:
         db.close()
 
 
-def _run_perfil_sdq(set_phase, params):
+def _run_perfil_sdq(params, user_id, set_phase) -> Dict:
     """Recomputa Perfil SDQ sobre TODO el histórico, sin re-escorear indicadores.
 
     Distinto de `rescore`: parte de los sub-componentes ya persistidos y solo reagrega, así
