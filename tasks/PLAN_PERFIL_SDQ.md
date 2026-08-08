@@ -249,34 +249,55 @@ períodos si una compañía deja de reportar una serie. Revisar al tocar multi-a
 - [ ] Exponer Perfil SDQ en API y frontend, y decidir la convivencia con la notación de letras
       durante la transición (§9: re-etiquetado retroactivo ya decidido; falta el cómo).
 
-## CALIBRACIÓN FINAL — una sola pasada al cierre (decisión del dueño, 2026-08-07)
+## CALIBRACIÓN FINAL — HECHA (2026-08-07)
 
-> Se difiere A PROPÓSITO, no por inercia: hoy se tocaron cuatro motores y calibrar sobre una
-> base que todavía se está moviendo obliga a recalibrar dos veces y publica un vaivén sin
-> significado. Se hace una vez, al final, sobre todo lo tocado. **Esta lista es el inventario
-> completo de lo que quedó sin calibrar** — si algo no está acá, se pierde.
+> Diagnóstico sistemático sobre los 15 sub-componentes de los tres motores, con un criterio
+> explícito: **SATURADO** = mediana ≥90 o >30% de las entidades en ≥99; **COMPRIMIDO** = rango
+> intercuartil < 15 puntos. Medido contra producción, no estimado.
 
-- [ ] **`cambiaria.py`** — umbrales v1 declarados como calibratables por el propio módulo.
-      42 de 92 entidades; explican casi todo el 59% de Resiliencia en "Sólida". Diagnóstico
-      hecho: `_calidad_activos` satura con 70% de activos líquidos, `_exposicion_credito` con
-      cero cartera.
-- [ ] **`fiduciaria.py`** — mismos umbrales v1 declarados como calibratables. N=4.
-- [ ] **Los otros 4 sub-componentes de banca** (calidad, eficiencia, liquidez, diversificación).
-      Hoy solo se recalibró SOLIDEZ; los demás no se auditaron y pueden tener el mismo defecto
-      de techos alcanzables. Medir saturación con el mismo método.
-- [ ] **Cortes de banda de Ejecución** — hoy son cuartiles del panel. Validar contra varios
-      cortes temporales: un cuartil que se mueve cada trimestre hace que una entidad cambie de
-      banda sin cambiar de desempeño.
-- [ ] **Bandas de Resiliencia (75/60/45)** — heredadas del ISF sin validar contra la escala de
-      banca. Tras el fix de solidez la mediana quedó en 78.1, o sea la mitad del sistema sobre
-      el corte de "Sólida". Revisar si los cortes calzan o si conviene otro anclaje.
-- [ ] **Cortes de `RATING_SCALE`** — fijados para una escala saturada. Si Perfil SDQ reemplaza
-      la notación de letras (§9), puede que no haga falta tocarlos; decidir explícitamente en
-      vez de dejarlo implícito.
-- [ ] **Anclajes del ISF** — recalibrados hoy contra 33 aseguradoras de UN corte (2024).
-      Re-verificar contra el histórico 2018-2024 ya cargado.
-- [ ] **Umbral `_MIN_N = 12`** de `robust_bounds` y del panel propio de Ejecución. Elegido por
-      criterio ("≈3 observaciones por cuadrante"), no medido. Validar.
+### Lo que se corrigió
+
+- [x] **`cambiaria.py` — la causa del residuo de Resiliencia.** Los umbrales v1 los superaba
+      casi todo el panel: `calidad_activos` 71% en ≥99, `capitalizacion` 93%, `cobertura_liquida`
+      86%. Recalibrados a los percentiles observados de las 42 EIC.
+      `cobertura_liquida` pasa a **escala logarítmica**: el ratio va de 94% a **34.284%**, tres
+      órdenes de magnitud, y en escala lineal las diferencias entre cubrir 200% y 30.000%
+      desaparecían por igual.
+      Efecto: saturación de 71-93% → **12-19%**, y la dispersión SUBE en los tres (σ de ~24 a ~34).
+- [x] **`exposicion_credito` era una CONSTANTE**: las 42 EIC tienen 0% de cartera —no otorgan
+      crédito por definición del negocio— así que las 42 sacaban el mismo 100 y el indicador
+      empujaba "calidad" hacia arriba sin informar nada. Ahora se declara no disponible. No se
+      elimina: si una EIC llegara a tener cartera, vuelve a informar.
+- [x] **El agregador de cambiarias ignoraba `available` y devolvía `0.0` sin datos.** Dos
+      defectos en una línea: el flag no se respetaba (así que declarar un indicador ausente no
+      tenía efecto) y un sub-componente sin datos puntuaba como el PEOR valor posible en vez de
+      declararse N/D. Mismo patrón que el `_safe_div` del motor de banca.
+
+### Lo que se verificó y NO hacía falta tocar
+
+- [x] **ISF (seguros): los 5 sub-componentes salieron sanos.** La recalibración de la mañana
+      funcionó — ninguno saturado ni comprimido.
+- [x] **`solidez` de banca: sana** tras el fix de #651 (21% en ≥99, mediana 86.8).
+- [x] **`calidad` y `liquidez` de banca: la saturación era de las cambiarias, no del indicador.**
+      Sin ellas, ambas quedan en **2% en ≥99**. Atacar los indicadores generales habría dañado a
+      los 50 bancos para arreglar un problema de otras 42 entidades.
+- [x] **Pensiones: `costo` y `rentabilidad` NO están mal calibrados.** El criterio de IQR marcó
+      un falso positivo. El anclaje de costo es absoluto y económicamente correcto (0.4% bueno /
+      1.2% malo sobre AUM); que las 7 AFP cobren entre 0.65% y 0.87% es **un hecho del mercado
+      dominicano, no un defecto de la vara**. Igual con rentabilidad: cinco de siete rinden casi
+      igual y el score las separa correctamente (47-57) mientras manda a Atlántico a 7.1.
+      Distinto de banca, donde el 96% TOCABA el techo; acá nadie satura.
+
+### Lo que queda anotado, con criterio
+
+- [ ] **`fiduciaria.py`** — umbrales v1 igual que cambiaria, pero **N=4**: cualquier percentil se
+      apoyaría en una sola observación. Calibrar contra 4 entidades sería inventar precisión.
+      Requiere serie histórica (los estados son anuales, hay 2022-2025) o dejarlo declarado.
+- [ ] **`RATING_SCALE`** — no se toca **a propósito**: Perfil SDQ la reemplaza (§9). Recalibrar
+      los cortes de una notación que está por salir es trabajo que se tira.
+- [ ] **Bandas de Resiliencia (75/60/45) y umbral `_MIN_N`** — re-medir DESPUÉS de que esta
+      recalibración llegue a producción; los números de hoy salen del panel pre-cambiarias.
+
 
 ## FASE 2 — Seguros (§5)
 
