@@ -11,6 +11,8 @@ discovered live (slugs use hyphens):
 from datetime import date
 from types import SimpleNamespace
 
+import pytest
+
 from modules.banking_score.external.sib_data_client import SIBDataClient
 from modules.banking_score.scoring.engine import (
     calc_castigos_pct,
@@ -50,7 +52,8 @@ def _data(**kw):
 def test_castigos_prefers_pct_ratio():
     res = calc_castigos_pct(_data(castigos_pct=2.0))
     assert res["raw"] == 2.0
-    assert res["score"] == 90.0  # 100 - 2*5
+    # 2% de castigos sobre el techo de 3.43 (p90 del panel) → ~41.7.
+    assert res["score"] == pytest.approx(41.7, abs=0.5)
 
 
 def test_exposicion_re_prefers_pct_ratio():

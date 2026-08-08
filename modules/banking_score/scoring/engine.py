@@ -260,7 +260,10 @@ def calc_pct_cartera_a(d) -> IndicatorResult:
     raw = _pct(d, "cartera_vigente_pct")
     if raw is None:
         raw = _safe_div(d.cartera_categoria_a, d.cartera_total or d.cartera_bruta) * 100
-    score = _clamp(min(100, (raw / 90) * 100))
+    # Calibrado: p10 94.03 · mediana 97.81 · p90 98.71. El umbral anterior (90%) lo superaba
+    # el 96% del panel — toda la banca dominicana tiene la cartera A sobre 94%, así que el
+    # indicador daba 100 a casi todos y no separaba a nadie.
+    score = _score_tramos(raw, lo=90.0, ref=94.0, hi=98.7)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
@@ -282,7 +285,9 @@ def concentracion_top10_pct(d) -> float:
 def calc_concentracion_top10(d) -> IndicatorResult:
     """Top-10 Concentration: suma_top10 / cartera_total (inverse)."""
     raw = concentracion_top10_pct(d)
-    score = _clamp(max(0, 100 - (raw - 30) * 1.5))
+    # Menos concentración es mejor. Calibrado: p10 0.0 · mediana 10.64 · p90 57.01. El umbral
+    # anterior daba 100 a todo lo que estuviera bajo 30% de concentración — el 67% del panel.
+    score = _clamp(100.0 - (raw / 57.0) * 100.0)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
@@ -304,7 +309,10 @@ def calc_castigos_pct(d) -> IndicatorResult:
     raw = _pct(d, "castigos_pct")
     if raw is None:
         raw = _safe_div(d.castigos, d.cartera_bruta) * 100
-    score = _clamp(max(0, 100 - raw * 5))
+    # Menos castigos es mejor. Calibrado: p10 0.14 · mediana 0.91 · p90 3.43. El factor
+    # anterior (×5) dejaba a casi todo el panel sobre 95 puntos: castigar 1% de la cartera
+    # descontaba solo 5 puntos.
+    score = _clamp(100.0 - (raw / 3.43) * 100.0)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
@@ -350,7 +358,9 @@ def calc_roa(d) -> IndicatorResult:
     if ttm is None:
         return {"raw": 0.0, "score": 0.0}   # `available=False` lo declara no disponible
     raw = _safe_div(ttm, d.activos_promedio) * 100
-    score = _clamp(min(100, (raw / 1.5) * 100))
+    # Calibrado: p10 0.06 · mediana 1.24 · p90 3.46. El techo anterior (1.5%) lo alcanzaba
+    # el 46% del panel, así que un banco con ROA 1.5% puntuaba igual que uno con 3.5%.
+    score = _score_tramos(raw, lo=0.0, ref=1.24, hi=3.46)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
@@ -371,7 +381,10 @@ def calc_margen_financiero(d) -> IndicatorResult:
     if raw is None:
         neto = float(d.ingresos_financieros or 0) - float(d.gastos_financieros or 0)
         raw = _safe_div(neto, d.activos_productivos_avg) * 100
-    score = _clamp(min(100, (raw / 6) * 100))
+    # Calibrado: p10 6.71 · mediana 9.43 · p90 17.95. El techo anterior (6%) quedaba POR
+    # DEBAJO del percentil 10 del panel: el 96% de las entidades marcaba 100 y el indicador
+    # era literalmente una constante (rango intercuartil de 0.0 puntos).
+    score = _clamp((raw - 6.71) / (17.95 - 6.71) * 100.0)
     return {"raw": round(raw, 4), "score": round(score, 2)}
 
 
