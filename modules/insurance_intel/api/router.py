@@ -188,6 +188,61 @@ async def perfil_sdq(
     }
 
 
+@router.get("/mezcla-ramos")
+async def mezcla_ramos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mezcla de primas por ramo y **tipo de compañía derivado** de esa mezcla.
+
+    El catálogo del SIS no trae un campo "tipo de compañía". Pero el desglose de primas por
+    ramo sí está persistido por compañía y ejercicio, así que el tipo se computa del negocio
+    real en vez de declararse a mano.
+
+    Existe porque el ancla de Ejecución —breakeven del combined ratio en 100%— es un hecho
+    económico **para daños**. Salud y personas operan con siniestralidad estructuralmente
+    distinta, y sin la mezcla no se puede distinguir "ejecuta mal" de "es otro negocio".
+    """
+    from modules.insurance_intel.scoring.mezcla_ramos import (
+        UMBRAL_MIXTA, UMBRAL_PERSONAS, agrupar_por_entidad, mezcla_de_una,
+    )
+
+    rows = (db.query(InsuranceSeries)
+            .filter(InsuranceSeries.series_code == "primas_suscritas",
+                    InsuranceSeries.entity_slug.isnot(None),
+                    InsuranceSeries.dimension.isnot(None))
+            .all())
+    filas = [{"entity_slug": r.entity_slug, "dimension": r.dimension,
+              "value": r.value, "period": r.period} for r in rows]
+
+    salida: list[Dict[str, Any]] = []
+    for slug, fs in sorted(agrupar_por_entidad(filas).items()):
+        m = mezcla_de_una(fs)
+        if m is None:
+            # Sin desglose no se clasifica: asumir "daños" por defecto sería clasificar por
+            # ausencia de dato, que es justo lo que la doctrina de brecha declarada prohíbe.
+            salida.append({"slug": slug, "mezcla": None, "tipo": None})
+            continue
+        salida.append({"slug": slug, "tipo": m.pop("tipo"), "mezcla": m,
+                       "ejercicios": sorted({f["period"] for f in fs})})
+
+    return {
+        "entidades": salida, "count": len(salida),
+        "metodologia": {
+            "origen_del_tipo": (
+                "DERIVADO de la mezcla de primas por ramo, no declarado. El catálogo "
+                "regulatorio del SIS no trae tipo de compañía."),
+            "cortes": (
+                f"personas ≥ {UMBRAL_PERSONAS:.0%} de la prima · mixta ≥ "
+                f"{UMBRAL_MIXTA:.0%} · daños por debajo. Cortes de JUICIO, no derivados "
+                f"empíricamente."),
+            "sin_mezcla": (
+                "Una compañía sin desglose por ramo devuelve tipo null. No se asume daños "
+                "por defecto: sería clasificar por ausencia de dato."),
+        },
+    }
+
+
 @router.get("/rankings")
 async def rankings(
     db: Session = Depends(get_db),
