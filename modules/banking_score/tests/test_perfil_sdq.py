@@ -66,10 +66,12 @@ def test_bandas_de_ejecucion_son_relativas_al_panel():
 def test_los_cortes_se_calculan_por_TIPO_no_sobre_el_universo():
     """La distribución de Ejecución difiere demasiado entre familias para compartir cortes.
 
-    Medido en producción: mediana 37.8 en cambiarias contra 73.5 en banca múltiple. Con
-    cortes únicos, casi toda la intermediación cambiaria caería en "Deficiente" y casi toda
-    la banca múltiple en "Sobresaliente" — describiendo la diferencia entre dos modelos de
-    negocio como si fuera diferencia de desempeño.
+    La brecha entre familias es del orden de 20 puntos de mediana, medida en producción y
+    recomputada en cada corte (el endpoint la expone en `medianas_ejecucion_por_tipo`; no se
+    fija acá porque cada recalibración la mueve). Con cortes únicos, casi toda la
+    intermediación cambiaria caería en "Deficiente" y casi toda la banca múltiple en
+    "Sobresaliente" — describiendo la diferencia entre dos modelos de negocio como si fuera
+    diferencia de desempeño.
     """
     bajos = [{"entity_type": "cambiaria", "sub_scores": dict(_SUBS, eficiencia=v)}
              for v in range(10, 22)]           # 12 entidades, eficiencia 10-21
