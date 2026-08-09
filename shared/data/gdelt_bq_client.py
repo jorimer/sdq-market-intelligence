@@ -18,7 +18,7 @@ import json
 import logging
 import os
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from shared.data.base_client import Record
 from shared.data.lineage import Lineage
@@ -264,7 +264,7 @@ def adm1_rows_to_records(rows: List[dict], period: Optional[str] = None,
 
 
 def adm1_volume_report(rows: List[dict],
-                       min_records: int = MIN_ADM1_RECORDS) -> Dict[str, object]:
+                       min_records: int = MIN_ADM1_RECORDS) -> Dict[str, Any]:
     """Resumen de la PRUEBA DE VOLUMEN: cuántas provincias quedan medibles.
 
     Es el gate que decide si esta señal se publica. Una dimensión de eventos que solo
@@ -315,7 +315,7 @@ def fetch_events_by_adm1(days: int = WINDOW_DAYS,
 
 
 def adm1_volume_test(days: int = WINDOW_DAYS,
-                     fips: str = DO_FIPS) -> Dict[str, object]:  # pragma: no cover - needs BigQuery + creds
+                     fips: str = DO_FIPS) -> Dict[str, Any]:  # pragma: no cover - needs BigQuery + creds
     """Corre la consulta ADM1 y devuelve el informe de volumen (sin persistir nada).
 
     Este es el paso que debe correrse ANTES de publicar la señal provincial."""
