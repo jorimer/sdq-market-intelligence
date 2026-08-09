@@ -6,7 +6,7 @@ data instead of the illustrative regions. Mirrors
 :mod:`modules.sector_intel.sectors_sync`.
 """
 import logging
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -88,11 +88,7 @@ def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
     from shared.data.one_client import fetch_one_labor
 
     set_phase("trabajo nacional (ONE: informalidad + ingreso)")
-    try:
-        rows = fetch_one_labor()
-    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
-        logger.warning("[social] ONE labour sync falló: %s", e)
-        return 0
+    rows = fetch_one_labor()   # la excepción sube a _best_effort, que la DECLARA
     synced = 0
     for theme, year, value in rows:
         _upsert_indicator(db, theme=theme, entity=HEALTH_ENTITY, period=str(year),
@@ -114,11 +110,7 @@ def _sync_one_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
     from shared.data.one_client import fetch_one_education_coverage
 
     set_phase("cobertura educativa por región y provincia (ONE: secundaria)")
-    try:
-        rows = fetch_one_education_coverage()
-    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
-        logger.warning("[social] ONE coverage sync falló: %s", e)
-        return 0
+    rows = fetch_one_education_coverage()   # la excepción sube a _best_effort
     synced = 0
     for level, slug, year, value in rows:
         _upsert_indicator(db, theme=COVERAGE_THEME, entity=slug, period=str(year),
@@ -143,11 +135,7 @@ def _sync_siuben_provincial(db: Session, set_phase: Callable[[str], None]) -> in
     from shared.data.siuben_client import fetch_siuben_provincial, theme_spec
 
     set_phase("indicadores provinciales (SIUBEN: 32 provincias)")
-    try:
-        rows = fetch_siuben_provincial()
-    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
-        logger.warning("[social] SIUBEN sync falló: %s", e)
-        return 0
+    rows = fetch_siuben_provincial()   # la excepción sube a _best_effort
     if not rows:
         return 0
 
@@ -212,17 +200,38 @@ def _sync_one_schooling(db: Session, set_phase: Callable[[str], None]) -> int:
     from shared.data.one_client import fetch_one_education_schooling
 
     set_phase("escolaridad nacional (ONE: años promedio de educación)")
-    try:
-        rows = fetch_one_education_schooling()
-    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
-        logger.warning("[social] ONE schooling sync falló: %s", e)
-        return 0
+    rows = fetch_one_education_schooling()   # la excepción sube a _best_effort
     synced = 0
     for year, value in rows:
         _upsert_indicator(db, theme="schooling_years", entity=HEALTH_ENTITY, period=str(year),
                           value=float(value), source="ONE", disagg="nacional", unit="años")
         synced += 1
     return synced
+
+
+def _best_effort(label: str, fn: Callable[[], int], errors: List[str]) -> int:
+    """Corre una sub-sincronización y DEJA RASTRO de por qué no trajo nada.
+
+    Antes cada sub-sync se tragaba su excepción y devolvía 0, así que la operación
+    terminaba con cuatro fuentes en cero y ``errors: []`` — un éxito aparente. Pasó de
+    verdad: el 2026-08-09 el portal de la ONE y el SIUBEN devolvieron cero desde
+    producción y la consola no lo dijo. Un guard que no reporta no protege: esconde.
+
+    Las dos causas se distinguen a propósito, porque se actúan distinto:
+
+    * **no se pudo llegar** (excepción) → problema nuestro o de red: hay que investigar;
+    * **la fuente no devolvió nada** (cero sin excepción) → puede ser legítimo (el emisor
+      no publicó todavía) y no amerita alarma, pero tiene que constar.
+    """
+    try:
+        n = fn()
+    except Exception as e:  # noqa: BLE001 — best-effort, pero NUNCA silencioso
+        logger.warning("[social] %s falló: %s", label, e)
+        errors.append(f"{label}: no se pudo obtener el dato ({type(e).__name__}: {e})")
+        return 0
+    if n == 0:
+        errors.append(f"{label}: la fuente respondió sin observaciones")
+    return n
 
 
 def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
@@ -253,12 +262,19 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         _upsert_indicator(db, theme=theme, entity=region, period=period,
                           value=r.value, source="ONE", disagg="region", unit=r.unit)
         synced += 1
-    health_synced = _sync_wdi_health(db, set_phase)
-    labor_synced = _sync_one_labor(db, set_phase)
-    coverage_synced = _sync_one_coverage(db, set_phase)
-    schooling_synced = _sync_one_schooling(db, set_phase)
-    findex_synced = _sync_wb_findex(db, set_phase)
-    provincial_synced = _sync_siuben_provincial(db, set_phase)
+    health_synced = _best_effort(
+        "salud nacional (WDI)", lambda: _sync_wdi_health(db, set_phase), errors)
+    labor_synced = _best_effort(
+        "trabajo nacional (ONE)", lambda: _sync_one_labor(db, set_phase), errors)
+    coverage_synced = _best_effort(
+        "cobertura educativa (ONE)", lambda: _sync_one_coverage(db, set_phase), errors)
+    schooling_synced = _best_effort(
+        "escolaridad nacional (ONE)", lambda: _sync_one_schooling(db, set_phase), errors)
+    findex_synced = _best_effort(
+        "inclusión financiera (BM Findex)", lambda: _sync_wb_findex(db, set_phase), errors)
+    provincial_synced = _best_effort(
+        "indicadores provinciales (SIUBEN)",
+        lambda: _sync_siuben_provincial(db, set_phase), errors)
     db.commit()
     return {
         "synced": synced,
