@@ -52,13 +52,12 @@ def test_fixture_client_offline():
 
 def test_sync_persists_and_is_idempotent(db, monkeypatch):
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
-    # WDI health + ONE labour/coverage hit the network — stub them (live sensors cover).
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, set_phase: 0)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_labor", lambda db, set_phase: 0)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_coverage", lambda db, set_phase: 0)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, set_phase: 0)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, set_phase: 0)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_siuben_provincial", lambda db, set_phase: 0)
+    # Las demás fuentes pegan a la red — se sustituyen. Devuelven un conteo POSITIVO
+    # porque hacen de sub-syncs que funcionan: un 0 ahora significa "la fuente no trajo
+    # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
+    for _fn in ("_sync_wdi_health", "_sync_one_labor", "_sync_one_coverage",
+                "_sync_one_schooling", "_sync_wb_findex", "_sync_siuben_provincial"):
+        monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase: 1)
 
     first = one_social_sync(db)
     assert first["errors"] == []
@@ -77,6 +76,49 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
         .first()
     )
     assert row is not None and row.source == "ONE" and row.disaggregation == "region"
+
+
+def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
+    """Un cero sin explicación es un éxito aparente. Pasó en producción el 2026-08-09:
+    cuatro fuentes devolvieron cero y la operación reportó ``errors: []``, así que la
+    consola mostró la corrida como buena. Un guard que no reporta no protege: esconde.
+
+    Las dos causas se distinguen porque se actúan distinto — 'no pudimos llegar' es un
+    problema a investigar; 'la fuente no publicó' puede ser legítimo."""
+    monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, sp: 7)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_labor", lambda db, sp: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, sp: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, sp: 0)
+
+    def _boom(db, sp):
+        raise ConnectionError("403 Forbidden")
+
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_coverage", _boom)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_siuben_provincial", _boom)
+
+    res = one_social_sync(db)
+    errores = " · ".join(res["errors"])
+
+    # No se pudo llegar → la causa VIAJA (tipo y mensaje), no se pierde en un log.
+    assert "cobertura educativa (ONE)" in errores and "403 Forbidden" in errores
+    assert "indicadores provinciales (SIUBEN)" in errores
+    assert "ConnectionError" in errores
+    # Cero sin excepción → también consta, con otra redacción.
+    assert "la fuente respondió sin observaciones" in errores
+    # Lo que sí trajo dato NO ensucia el reporte.
+    assert "salud nacional" not in errores
+    assert res["coverage_synced"] == 0 and res["provincial_synced"] == 0
+    assert res["health_synced"] == 7
+
+
+def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
+    """El contrapeso del test anterior: si todo trajo dato, ``errors`` queda vacío."""
+    monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
+    for fn in ("_sync_wdi_health", "_sync_one_labor", "_sync_one_coverage",
+               "_sync_one_schooling", "_sync_wb_findex", "_sync_siuben_provincial"):
+        monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp: 3)
+    assert one_social_sync(db)["errors"] == []
 
 
 def _ind(db, entity, theme, period, value, source="ONE"):
