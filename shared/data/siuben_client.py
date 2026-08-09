@@ -257,29 +257,64 @@ def discover_resources(packages: Sequence[dict]) -> Dict[str, str]:
     return by_theme
 
 
+class SiubenUnavailable(RuntimeError):
+    """Ningún tablero pudo leerse. Lleva el motivo, no solo el hecho."""
+
+
 def fetch_siuben_provincial() -> List[Tuple[str, str, str, float]]:  # pragma: no cover - network I/O
     """Live: descubre por CKAN, descarga y parsea los cinco tableros →
-    ``[(theme, province_slug, period, value)]``. Best-effort por tablero."""
+    ``[(theme, province_slug, period, value)]``.
+
+    **Tolerante en lo parcial, ruidoso en lo total.** Que un tablero falle no debe
+    tumbar a los otros cuatro; que fallen TODOS no es un resultado vacío legítimo, es una
+    caída — y se levanta :class:`SiubenUnavailable` con los motivos acumulados.
+
+    La distinción importa porque la primera versión devolvía ``[]`` en ambos casos, y
+    aguas arriba eso se leyó como "la fuente no publicó nada". Un conector que se traga
+    la razón obliga a ir a buscarla a los logs del contenedor, que es justo donde nadie
+    mira (pasó el 2026-08-09)."""
     import httpx
 
-    resp = httpx.get(CKAN_SEARCH, params={"fq": f"organization:{SIUBEN_ORG}", "rows": 50},
-                     timeout=45, follow_redirects=True)
-    resp.raise_for_status()
-    packages = resp.json().get("result", {}).get("results", [])
+    try:
+        resp = httpx.get(CKAN_SEARCH, params={"fq": f"organization:{SIUBEN_ORG}", "rows": 50},
+                         timeout=45, follow_redirects=True, headers=_HEADERS)
+        resp.raise_for_status()
+        packages = resp.json().get("result", {}).get("results", [])
+    except (httpx.HTTPError, ValueError) as e:
+        raise SiubenUnavailable(
+            f"el catálogo CKAN de datos.gob.do no respondió ({type(e).__name__}: {e})")
+
     urls = discover_resources(packages)
+    if not urls:
+        raise SiubenUnavailable(
+            f"CKAN respondió con {len(packages)} paquete(s) del SIUBEN pero ninguno "
+            "expuso un recurso CSV de los cinco tableros esperados (¿renombraron los "
+            "recursos?)")
 
     out: List[Tuple[str, str, str, float]] = []
+    reasons: List[str] = []
     for spec in DATASETS:
         url = urls.get(spec.theme)
         if not url:
+            reasons.append(f"{spec.theme}: sin recurso CSV en CKAN")
             continue
         try:
             f = httpx.get(url, timeout=90, follow_redirects=True, headers=_HEADERS)
             f.raise_for_status()
-            for slug, period, value in parse_siuben_csv(_decode(f.content), spec):
-                out.append((spec.theme, slug, period, value))
+            rows = parse_siuben_csv(_decode(f.content), spec)
         except (httpx.HTTPError, ValueError) as e:
-            logger.warning("[SIUBEN] descarga/parseo de %s falló: %s", spec.theme, e)
+            reasons.append(f"{spec.theme}: {type(e).__name__}: {e}")
+            continue
+        if not rows:
+            reasons.append(f"{spec.theme}: descargado pero sin filas utilizables")
+            continue
+        out.extend((spec.theme, slug, period, value) for slug, period, value in rows)
+
+    if not out:
+        raise SiubenUnavailable("ningún tablero pudo leerse — " + " · ".join(reasons))
+    if reasons:
+        logger.warning("[SIUBEN] tableros con problema (%d de %d): %s",
+                       len(reasons), len(DATASETS), " · ".join(reasons))
     return out
 
 

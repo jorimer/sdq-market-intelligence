@@ -126,6 +126,91 @@ def test_descubrimiento_calza_por_nombre_de_recurso_y_exige_csv():
     assert "siuben_disability_icv1_share" not in found
 
 
+def test_falla_total_levanta_con_los_motivos_acumulados(monkeypatch):
+    """Que fallen los cinco tableros no es un resultado vacío legítimo: es una caída.
+
+    La primera versión devolvía ``[]`` tanto si la fuente no publicó como si no se pudo
+    llegar, y aguas arriba se leyó lo segundo como lo primero — la corrida del
+    2026-08-09 reportó 'la fuente respondió sin observaciones' cuando en realidad no
+    había podido descargar nada."""
+    import httpx
+
+    import shared.data.siuben_client as sc
+
+    class _Resp:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"result": {"results": [{"resources": [
+                {"format": "CSV", "name": "Distribución de Jefes/as", "url": "jefes.csv"}]}]}}
+
+    def _get(url, **kw):
+        if url == sc.CKAN_SEARCH:
+            return _Resp()
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx, "get", _get)
+    with pytest.raises(sc.SiubenUnavailable) as exc:
+        sc.fetch_siuben_provincial()
+    mensaje = str(exc.value)
+    assert "ningún tablero pudo leerse" in mensaje
+    assert "ConnectError" in mensaje                       # la causa VIAJA
+    assert "siuben_illiteracy_head_share" in mensaje       # y el tablero concreto
+
+
+def test_catalogo_sin_recursos_se_distingue_de_una_caida_de_red(monkeypatch):
+    """Dos fallas distintas necesitan dos mensajes distintos: 'no llegué a CKAN' se
+    investiga en la red; 'CKAN respondió sin los recursos' se investiga en el emisor."""
+    import httpx
+
+    import shared.data.siuben_client as sc
+
+    class _Empty:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"result": {"results": [{"resources": []}]}}
+
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: _Empty())
+    with pytest.raises(sc.SiubenUnavailable, match="ninguno expuso un recurso CSV"):
+        sc.fetch_siuben_provincial()
+
+
+def test_falla_parcial_no_tumba_a_los_demas(monkeypatch):
+    """Tolerante en lo parcial: cuatro tableros caídos no deben perder al quinto."""
+    import httpx
+
+    import shared.data.siuben_client as sc
+
+    class _Resp:
+        def __init__(self, content=b""):
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"result": {"results": [{"resources": [
+                {"format": "CSV", "name": "Distribución de Jefes/as", "url": "jefes.csv"},
+                {"format": "CSV", "name": "Nivel de Hacinamiento", "url": "hac.csv"}]}]}}
+
+    def _get(url, **kw):
+        if url == sc.CKAN_SEARCH:
+            return _Resp()
+        if url == "jefes.csv":
+            return _Resp(ALFABETISMO.encode("utf-8"))
+        raise httpx.ConnectError("caído")
+
+    monkeypatch.setattr(httpx, "get", _get)
+    rows = sc.fetch_siuben_provincial()
+    assert {t for t, _s, _p, _v in rows} == {"siuben_illiteracy_head_share"}
+    assert len(rows) == 3
+
+
 def test_todo_tablero_declara_unidad_y_universo():
     """El caveat del universo viaja en el descriptor, no en una nota al pie."""
     for spec in DATASETS:
