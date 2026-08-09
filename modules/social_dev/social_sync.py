@@ -11,6 +11,8 @@ from typing import Callable, Dict, Optional
 from sqlalchemy.orm import Session
 
 from modules.social_dev.models.models import SocialIndicator
+from shared.data.siuben_client import DATASETS as SIUBEN_DATASETS
+from shared.data.siuben_client import SOURCE as SIUBEN_SOURCE
 
 logger = logging.getLogger("sdq.social_dev.one_sync")
 
@@ -28,6 +30,10 @@ _LABOR_UNITS = {
 }
 COVERAGE_THEME = "secondary_coverage"  # ONE net secondary-coverage by region + period
 COVERAGE_UNIT = "% (cobertura neta secundaria)"  # ≤40 chars: sd_indicators.unit VARCHAR(40)
+
+# Series PROVINCIALES (SIUBEN, 32 provincias). Se derivan del catálogo del conector
+# para que el resumen de la operación liste lo que realmente sincronizó.
+SIUBEN_THEMES = tuple(s.theme for s in SIUBEN_DATASETS)
 
 # National financial inclusion (World Bank Findex): ATMs per 100k adults — an annual
 # access PROXY (denser than the sparse account-ownership survey). Closes the IDM's
@@ -97,22 +103,83 @@ def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
 
 
 def _sync_one_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Fetch ONE net secondary-coverage by the 10 development regions (2010-2024) →
-    sd_indicators (by region + period, like poverty). Best-effort."""
+    """Fetch ONE net secondary-coverage by development region AND by province
+    (2010-2024) → sd_indicators. Best-effort.
+
+    The two levels share the ``secondary_coverage`` theme and are told apart by
+    ``disaggregation`` — the province slugs never collide with the region slugs (guarded
+    in ``shared/reference/tests/test_provinces.py``). Only the regional rows reach the
+    IDM: :func:`assemble_idm_dataset` iterates the region catalog, so adding provinces
+    cannot move a regional score."""
     from shared.data.one_client import fetch_one_education_coverage
 
-    set_phase("cobertura educativa por región (ONE: secundaria)")
+    set_phase("cobertura educativa por región y provincia (ONE: secundaria)")
     try:
         rows = fetch_one_education_coverage()
     except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
         logger.warning("[social] ONE coverage sync falló: %s", e)
         return 0
     synced = 0
-    for region_slug, year, value in rows:
-        _upsert_indicator(db, theme=COVERAGE_THEME, entity=region_slug, period=str(year),
-                          value=float(value), source="ONE", disagg="region", unit=COVERAGE_UNIT)
+    for level, slug, year, value in rows:
+        _upsert_indicator(db, theme=COVERAGE_THEME, entity=slug, period=str(year),
+                          value=float(value), source="ONE", disagg=level, unit=COVERAGE_UNIT)
         synced += 1
     return synced
+
+
+def _sync_siuben_provincial(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Fetch the five SIUBEN provincial boards (32 provinces, quarterly since 2017) →
+    ``sd_indicators`` with ``disaggregation='provincia'``.
+
+    This is the first SUB-NATIONAL source of the axis. It does NOT feed the IDM: the
+    index is assembled strictly over the 10 development regions
+    (:func:`assemble_idm_dataset` iterates ``region_catalog()``), so these rows are
+    additive and cannot shift a regional score. They exist to be served on their own —
+    a consumer that ranks demarcations needs values that differ BETWEEN demarcations,
+    which a national constant can never provide.
+
+    The universe (the SIUBEN targeting registry, not the general population) travels in
+    the series code and unit; see :mod:`shared.data.siuben_client`. Best-effort."""
+    from shared.data.siuben_client import fetch_siuben_provincial, theme_spec
+
+    set_phase("indicadores provinciales (SIUBEN: 32 provincias)")
+    try:
+        rows = fetch_siuben_provincial()
+    except Exception as e:  # noqa: BLE001 — best-effort; report, don't crash the op
+        logger.warning("[social] SIUBEN sync falló: %s", e)
+        return 0
+    if not rows:
+        return 0
+
+    # Prefetch instead of one SELECT per row: five boards × 32 provinces × ~38 quarters
+    # is a few thousand upserts, and a round-trip each would make a background sync
+    # needlessly slow against a remote Postgres.
+    existing = {
+        # ``str(...)`` en la frontera: estos modelos usan el estilo legacy de SQLAlchemy,
+        # cuyo tipo estático es ``Column[str]`` y no ``str``.
+        (str(r.entity_key), str(r.theme), str(r.period)): r
+        for r in db.query(SocialIndicator).filter(SocialIndicator.source == SIUBEN_SOURCE).all()
+    }
+    synced = 0
+    for theme, slug, period, value in rows:
+        spec = theme_spec(theme)
+        key = (slug, theme, period)
+        row = existing.get(key)
+        if row is None:
+            row = SocialIndicator(theme=theme, entity_key=slug, period=period)
+            db.add(row)
+            existing[key] = row
+        _apply_siuben_fields(row, value=value, unit=spec.unit if spec else None)
+        synced += 1
+    return synced
+
+
+def _apply_siuben_fields(row, *, value: float, unit) -> None:
+    """Asigna los campos de una observación del SIUBEN (frontera con el modelo legacy)."""
+    row.value = float(value)
+    row.unit = unit
+    row.disaggregation = "provincia"
+    row.source = SIUBEN_SOURCE
 
 
 def _sync_wb_findex(db: Session, set_phase: Callable[[str], None]) -> int:
@@ -191,6 +258,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     coverage_synced = _sync_one_coverage(db, set_phase)
     schooling_synced = _sync_one_schooling(db, set_phase)
     findex_synced = _sync_wb_findex(db, set_phase)
+    provincial_synced = _sync_siuben_provincial(db, set_phase)
     db.commit()
     return {
         "synced": synced,
@@ -199,12 +267,14 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,
         "findex_synced": findex_synced,
+        "provincial_synced": provincial_synced,
         "periods": sorted(periods),
         "regions": len({r.dimension for r in records if r.dimension}),
         "themes": (sorted({r.series for r in records})
                    + sorted(set(WDI_HEALTH.values()))
                    + sorted(_LABOR_UNITS.keys())
                    + [COVERAGE_THEME, "schooling_years"]
-                   + sorted(WB_FINDEX.values())),
+                   + sorted(WB_FINDEX.values())
+                   + sorted(SIUBEN_THEMES)),
         "errors": errors,
     }

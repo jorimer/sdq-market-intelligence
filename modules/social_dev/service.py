@@ -202,6 +202,147 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     return {"period": target, "dataset": dataset, "sources": sources, "has_live": bool(snap)}
 
 
+# ── Series SUB-NACIONALES para la Data API ────────────────────────────────
+# Se publican SOLO las series con desagregación geográfica real (región o provincia).
+# Las variables nacionales del IDM —salud, informalidad, ingreso, escolaridad, inclusión
+# financiera— se aplican por igual a las 10 regiones, así que exponerlas "por región"
+# entregaría una CONSTANTE con etiqueta geográfica: no distingue demarcaciones y no
+# puede aportar nada a un consumidor que ordena territorios. Servirlas sería servir
+# ruido con apariencia de granularidad.
+SUBNATIONAL_LEVELS = ("region", "provincia")
+
+_THEME_LABELS = {
+    "poverty_rate": "Pobreza monetaria general",
+    "poverty_extreme": "Pobreza monetaria extrema",
+    "secondary_coverage": "Cobertura neta secundaria",
+    "literacy_rate": "Tasa de alfabetización",
+}
+_SOURCE_LICENSES = {
+    "ONE": "datos oficiales ONE — uso público con cita",
+    "SIUBEN": "datos abiertos del Estado dominicano (datos.gob.do) — uso público con cita",
+}
+
+
+def _series_code(theme: str, entity_key: str) -> str:
+    """``'poverty_rate.enriquillo'`` — el sujeto geográfico vive en el código.
+
+    La Data API sirve una serie por código; una serie temática sin su demarcación sería
+    ambigua entre 42 sujetos. El punto separa tema y sujeto, y deja el sujeto como hoja
+    legible (el guard de nombres del manifiesto lo lee de ahí)."""
+    return f"{theme}.{entity_key}"
+
+
+def split_series_code(code: str) -> tuple:
+    """Inversa de :func:`_series_code` → ``(theme, entity_key)``."""
+    theme, _sep, entity = str(code or "").rpartition(".")
+    return (theme, entity) if theme else (code, "")
+
+
+def subnational_series(db: Session) -> List[Dict[str, Any]]:
+    """Descriptores de cada serie sub-nacional persistida — uno por (tema, demarcación).
+
+    Se derivan del contenido real de ``sd_indicators``: una fuente nueva que empiece a
+    escribir con ``disaggregation`` geográfica aparece sola en el catálogo, sin que nadie
+    edite la capa API (premisa de auto-extensión de la Data API)."""
+    from shared.reference.provinces import NAME_OF as PROVINCE_NAMES
+
+    rows = (
+        db.query(SocialIndicator)
+        .filter(SocialIndicator.disaggregation.in_(SUBNATIONAL_LEVELS))
+        .filter(SocialIndicator.value.isnot(None))
+        .all()
+    )
+    # ``str(...)`` en la frontera: estos modelos usan el estilo legacy de SQLAlchemy,
+    # cuyo tipo estático es ``Column[str]`` y no ``str``.
+    grouped: Dict[tuple, List[SocialIndicator]] = {}
+    for r in rows:
+        grouped.setdefault((str(r.theme), str(r.entity_key)), []).append(r)
+
+    region_names = dict(_region_catalog_safe())
+    out: List[Dict[str, Any]] = []
+    for (theme, entity), obs in sorted(grouped.items()):
+        periods = sorted({str(o.period) for o in obs if o.period}, key=_period_key)
+        level = str(obs[0].disaggregation or "")
+        place = (PROVINCE_NAMES.get(entity) if level == "provincia"
+                 else region_names.get(entity)) or entity
+        source = str(obs[0].source or "")
+        theme_label = _THEME_LABELS.get(theme)
+        if theme_label is None:
+            spec = _siuben_spec(theme)
+            theme_label = spec.note.rstrip(".") if spec else theme
+        out.append({
+            "code": _series_code(theme, entity),
+            "label": f"{theme_label} — {place}",
+            "unit": obs[0].unit,
+            # Trimestral si el período trae Q (padrón SIUBEN); anual si no.
+            "frequency": "quarterly" if any("Q" in (p or "") for p in periods) else "annual",
+            "source": source,
+            "license": _SOURCE_LICENSES.get(source),
+            "period_first": periods[0] if periods else None,
+            "period_latest": periods[-1] if periods else None,
+            "n_obs": len(obs),
+            "nature": "rate",          # todas son porcentajes: su variación va en PUNTOS
+            "geo_level": level,
+            "curated": True,           # tema elegido y nombrado, no volcado de planilla
+            "note": _series_note(theme, level),
+        })
+    return out
+
+
+def _region_catalog_safe() -> List[tuple]:
+    from shared.data.one_client import region_catalog
+
+    return region_catalog()
+
+
+def _siuben_spec(theme: str):
+    from shared.data.siuben_client import theme_spec
+
+    return theme_spec(theme)
+
+
+def _series_note(theme: str, level: str) -> str:
+    """La nota carga el UNIVERSO, que es lo que decide si la cifra se puede leer como
+    tasa poblacional. Sin esto, un consumidor toma una composición del padrón SIUBEN
+    por la tasa de la provincia."""
+    spec = _siuben_spec(theme)
+    if spec is not None:
+        return (f"{spec.note} Universo: padrón de focalización del SIUBEN (hogares "
+                "registrados), NO la población general de la demarcación.")
+    if level == "provincia":
+        return "Desagregación provincial del cuadro oficial de la ONE."
+    return "Desagregación por región de desarrollo (10 regiones, ONE)."
+
+
+def subnational_observations(
+    db: Session, code: str, *, start: Optional[str] = None, end: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Observaciones de UNA serie sub-nacional, ascendentes por período."""
+    theme, entity = split_series_code(code)
+    if not theme or not entity:
+        return []
+    rows = (
+        db.query(SocialIndicator)
+        .filter(SocialIndicator.theme == theme, SocialIndicator.entity_key == entity)
+        .filter(SocialIndicator.disaggregation.in_(SUBNATIONAL_LEVELS))
+        .all()
+    )
+    rows.sort(key=lambda r: _period_key(str(r.period)))
+    if start:
+        rows = [r for r in rows if _period_key(str(r.period)) >= _period_key(start)]
+    if end:
+        rows = [r for r in rows if _period_key(str(r.period)) <= _period_key(end)]
+    if limit:
+        rows = rows[-int(limit):]
+    return [
+        {"period": r.period, "value": r.value, "unit": r.unit, "source": r.source,
+         "published_at": r.published_at.isoformat() if r.published_at else None,
+         "reason": None if r.value is not None else "sin dato publicado para el período"}
+        for r in rows
+    ]
+
+
 def backfill_idm_scores(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
     """Backfill the IDM for every period with real poverty data, then purge any
     score outside that set (the SIB pattern: score_all_periods + prune) — removes

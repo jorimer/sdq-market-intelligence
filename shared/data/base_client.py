@@ -41,6 +41,11 @@ class Record:
     lineage: Lineage
     unit: Optional[str] = None
     dimension: Optional[str] = None  # optional disaggregation (sex, region, …)
+    # POR QUÉ falta el valor, cuando ``value is None``. El nulo honesto ya era la regla;
+    # sin la razón, el consumidor no puede distinguir "la fuente no lo publica" de "lo
+    # medimos y la muestra no alcanza" — dos cosas que se actúan distinto. Mismo campo
+    # que ``shared.products.contract.SeriesObservation.reason``, en la capa de ingesta.
+    reason: Optional[str] = None
 
 
 class SourceClient(ABC):

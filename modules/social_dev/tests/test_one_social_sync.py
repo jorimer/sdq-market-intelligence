@@ -58,6 +58,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_coverage", lambda db, set_phase: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, set_phase: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, set_phase: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_siuben_provincial", lambda db, set_phase: 0)
 
     first = one_social_sync(db)
     assert first["errors"] == []
@@ -167,8 +168,8 @@ def test_discover_labor_links_prefers_latest_revision():
     assert discover_labor_links(html)["informality_rate"].endswith("2004-2024.xlsx")
 
 
-def test_parse_one_coverage_xlsx_secondary_by_region():
-    """Net secondary-coverage parser: 3rd column per year-group, dev regions only."""
+def _coverage_workbook():
+    """Planilla mínima con la forma real del cuadro 'según región y provincia'."""
     import io
     import openpyxl
 
@@ -177,19 +178,43 @@ def test_parse_one_coverage_xlsx_secondary_by_region():
     ws.append(["Cuadro: tasa neta de cobertura, según región y provincia"])
     ws.append([None, "2023-2024", None, None, "2022-2023", None, None])  # year-group labels
     ws.append([None, "Inicial", "Primario", "Secundario", "Inicial", "Primario", "Secundario"])
-    ws.append(["Total país", 30, 90, 70, 29, 89, 69])                    # skipped (not "Región …")
+    ws.append(["Total país", 30, 90, 70, 29, 89, 69])                    # agregado nacional
     ws.append(["Región Metropolitana", 33, 86, 67, 32, 85, 66])         # → ozama
-    ws.append(["Distrito Nacional", 37, 87, 73, 36, 88, 72])            # province → skipped
+    ws.append(["Distrito Nacional", 37, 87, 73, 36, 88, 72])            # provincia de Ozama
+    ws.append(["Santo Domingo", 31, 85, 64, 30, 84, 63])                # provincia de Ozama
     ws.append(["Región Cibao Norte", 34, 94, 71, 33, 93, 70])          # → cibao_norte
+    ws.append(["Ciudad Inexistente", 1, 2, 3, 4, 5, 6])                 # no resuelve → descartada
     buf = io.BytesIO()
     wb.save(buf)
+    return buf.getvalue()
 
+
+def test_parse_one_coverage_xlsx_secondary_by_region():
+    """Columna 'Secundario' por grupo-año, localizada por sub-encabezado (no por offset)."""
     from shared.data.one_client import parse_one_coverage_xlsx
-    rows = parse_one_coverage_xlsx(buf.getvalue())
-    by = {(s, y): v for s, y, v in rows}
-    assert by[("ozama", 2024)] == 67 and by[("ozama", 2023)] == 66       # Metropolitana → ozama
-    assert by[("cibao_norte", 2024)] == 71                               # 3rd col = secondary
-    assert all(s in {"ozama", "cibao_norte"} for s, _, _ in rows)        # país/provincia excluded
+
+    by = {(lvl, s, y): v for lvl, s, y, v in parse_one_coverage_xlsx(_coverage_workbook())}
+    assert by[("region", "ozama", 2024)] == 67       # 'Metropolitana' → ozama
+    assert by[("region", "ozama", 2023)] == 66
+    assert by[("region", "cibao_norte", 2024)] == 71
+
+
+def test_parse_one_coverage_xlsx_conserva_las_provincias():
+    """El cuadro SIEMPRE trajo el desglose provincial y el parser lo tiraba. Ozama sola
+    contiene el Distrito Nacional y Santo Domingo: colapsarlos a un valor borra a la
+    mayor parte de la población del país en un solo número."""
+    from shared.data.one_client import parse_one_coverage_xlsx
+
+    rows = parse_one_coverage_xlsx(_coverage_workbook())
+    by = {(lvl, s, y): v for lvl, s, y, v in rows}
+    assert by[("provincia", "distrito_nacional", 2024)] == 73
+    assert by[("provincia", "santo_domingo", 2024)] == 64
+    # Las dos provincias de Ozama difieren entre sí Y del valor de su región: eso es
+    # exactamente la varianza que un consumidor sub-nacional necesita.
+    assert by[("provincia", "distrito_nacional", 2024)] != by[("region", "ozama", 2024)]
+    # 'Total país' y una etiqueta irreconocible no entran; nada se adivina.
+    assert {s for _l, s, _y, _v in rows} == {
+        "ozama", "cibao_norte", "distrito_nacional", "santo_domingo"}
 
 
 def test_coverage_goes_live_by_region_and_period(db):
@@ -211,11 +236,75 @@ def test_coverage_goes_live_by_region_and_period(db):
 def test_indicator_units_fit_postgres_varchar40():
     """sd_indicators.unit is VARCHAR(40): SQLite ignores it, Postgres truncates →
     every declared unit string must fit (dev↔prod parity guard)."""
+    from shared.data.siuben_client import DATASETS as SIUBEN_DATASETS
     from modules.social_dev.social_sync import COVERAGE_UNIT, FINDEX_UNIT, _LABOR_UNITS
 
-    units = list(_LABOR_UNITS.values()) + [COVERAGE_UNIT, FINDEX_UNIT]
+    units = (list(_LABOR_UNITS.values()) + [COVERAGE_UNIT, FINDEX_UNIT]
+             + [s.unit for s in SIUBEN_DATASETS])
     too_long = [u for u in units if len(u) > 40]
     assert not too_long, f"unit > 40 chars (rompe en Postgres): {too_long}"
+
+
+def test_columnas_de_texto_provinciales_caben_en_postgres():
+    """Los slugs provinciales y los códigos SIUBEN viajan por columnas acotadas:
+    entity_key VARCHAR(60), theme VARCHAR(60), source VARCHAR(40), period VARCHAR(10)."""
+    from shared.data.siuben_client import DATASETS as SIUBEN_DATASETS
+    from shared.data.siuben_client import SOURCE as SIUBEN_SOURCE
+    from shared.reference.provinces import PROVINCES
+
+    assert all(len(slug) <= 60 for slug, _n, _r in PROVINCES)
+    assert all(len(s.theme) <= 60 for s in SIUBEN_DATASETS)
+    assert len(SIUBEN_SOURCE) <= 40
+    assert len("2026-Q4") <= 10          # el período trimestral del SIUBEN
+
+
+def test_sync_siuben_provincial_upserts_por_provincia(db, monkeypatch):
+    """Las series provinciales entran rotuladas y son idempotentes."""
+    import shared.data.siuben_client as siuben
+
+    rows = [("siuben_illiteracy_head_share", "elias_pina", "2024-Q4", 36.3),
+            ("siuben_illiteracy_head_share", "distrito_nacional", "2024-Q4", 7.5),
+            ("siuben_overcrowding_share", "elias_pina", "2024-Q4", 22.1)]
+    monkeypatch.setattr(siuben, "fetch_siuben_provincial", lambda: rows)
+    from modules.social_dev.social_sync import _sync_siuben_provincial
+
+    assert _sync_siuben_provincial(db, lambda _m: None) == 3
+    db.commit()
+    row = (
+        db.query(SocialIndicator)
+        .filter_by(entity_key="elias_pina", theme="siuben_illiteracy_head_share",
+                   period="2024-Q4")
+        .first()
+    )
+    assert row is not None and row.value == 36.3
+    assert row.source == "SIUBEN" and row.disaggregation == "provincia"
+    assert "padrón" in (row.unit or "")        # el universo viaja con el dato
+
+    # Segunda corrida: upsert en el lugar, sin duplicar.
+    assert _sync_siuben_provincial(db, lambda _m: None) == 3
+    db.commit()
+    assert db.query(SocialIndicator).filter_by(source="SIUBEN").count() == 3
+
+
+def test_siuben_no_contamina_el_idm(db, monkeypatch):
+    """Mismo guardia que con la cobertura provincial: el IDM no debe moverse."""
+    import shared.data.siuben_client as siuben
+    from modules.social_dev.service import assemble_idm_dataset
+    from modules.social_dev.social_sync import _sync_siuben_provincial
+
+    _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
+    _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
+    db.commit()
+    before = assemble_idm_dataset(db)
+
+    monkeypatch.setattr(
+        siuben, "fetch_siuben_provincial",
+        lambda: [("siuben_illiteracy_head_share", "elias_pina", "2024-Q4", 36.3)])
+    _sync_siuben_provincial(db, lambda _m: None)
+    db.commit()
+
+    after = assemble_idm_dataset(db)
+    assert after["dataset"] == before["dataset"] and after["sources"] == before["sources"]
 
 
 def test_findex_financial_inclusion_goes_live_latest_available(db):
@@ -278,19 +367,55 @@ def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
 
     monkeypatch.setattr(
         oc_mod, "fetch_one_education_coverage",
-        lambda: [("enriquillo", 2024, 66.8), ("ozama", 2024, 67.7)],
+        lambda: [("region", "enriquillo", 2024, 66.8), ("region", "ozama", 2024, 67.7),
+                 ("provincia", "distrito_nacional", 2024, 73.1)],
     )
     from modules.social_dev.social_sync import _sync_one_coverage
 
     n = _sync_one_coverage(db, lambda _m: None)
     db.commit()
-    assert n == 2
+    assert n == 3
     row = (
         db.query(SocialIndicator)
         .filter_by(entity_key="enriquillo", theme="secondary_coverage", period="2024")
         .first()
     )
     assert row is not None and row.value == 66.8 and row.source == "ONE" and row.disaggregation == "region"
+    # La provincia convive con la región bajo el mismo tema, distinguida por el nivel.
+    prov = (
+        db.query(SocialIndicator)
+        .filter_by(entity_key="distrito_nacional", theme="secondary_coverage", period="2024")
+        .first()
+    )
+    assert prov is not None and prov.value == 73.1 and prov.disaggregation == "provincia"
+
+
+def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
+    """Guardia estructural: el IDM se ensambla sobre las 10 regiones. Agregar filas
+    provinciales bajo el MISMO tema no debe cambiar ni un score ni una procedencia —
+    si algún día el ensamblador empezara a barrer entidades, este test lo detecta."""
+    import shared.data.one_client as oc_mod
+    from modules.social_dev.service import assemble_idm_dataset
+    from modules.social_dev.social_sync import _sync_one_coverage
+
+    _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
+    _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
+    _ind(db, "enriquillo", "secondary_coverage", "2024", 66.8)
+    db.commit()
+    before = assemble_idm_dataset(db)
+
+    monkeypatch.setattr(
+        oc_mod, "fetch_one_education_coverage",
+        lambda: [("provincia", "distrito_nacional", 2024, 73.1),
+                 ("provincia", "elias_pina", 2024, 41.2)],
+    )
+    _sync_one_coverage(db, lambda _m: None)
+    db.commit()
+
+    after = assemble_idm_dataset(db)
+    assert after["dataset"] == before["dataset"]
+    assert after["sources"] == before["sources"]
+    assert len(after["dataset"]) == 10          # sigue siendo el panel de regiones
 
 
 def test_discover_labor_links_matches_by_slug():

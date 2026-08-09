@@ -39,6 +39,26 @@ bands:
   - {name: Medio, lower: 40.0, color: "#F59E0B"}
   - {name: Bajo,  lower: 0.0,  color: "#991B1B"}
 
+# Alcance de la medición por variable (default: per_subject). "national" = dato real de
+# alcance país que se aplica IDÉNTICO a las 10 regiones: sostiene el NIVEL del índice
+# pero no puede mover el orden entre demarcaciones.
+#
+# Declararlo importa y no es una formalidad. Seis de las nueve variables del IDM son
+# nacionales, y sin este bloque el registro las reportaba como si se midieran por
+# región: un consumidor leía "9 variables con dato real, por región" y concluía que el
+# panel discrimina en el territorio cuando en realidad solo lo hacen tres. El generador
+# de procedencia (shared/registry/provenance.py) ahora lo dice al cliente.
+variable_scopes:
+  life_expectancy: national     # WDI, país
+  child_mortality: national     # WDI, país
+  schooling_years: national     # ONE, años promedio de educación (no hay por región)
+  income_per_capita: national   # ONE, ingreso laboral/hora (proxy declarado), país
+  informality_rate: national    # ONE/BCRD ENCFT, país
+  financial_inclusion: national # BM Findex, cajeros/100k adultos, país
+  # Con desagregación real por demarcación: poverty_rate (ONE, 10 regiones),
+  # secondary_coverage (ONE, 10 regiones + 32 provincias) y literacy_rate (ENHOGAR,
+  # 10 regiones) quedan en el default per_subject.
+
 # Rúbrica declarada (Gate C) — defaults NEUTRAL 50 usados solo como respaldo si una
 # variable no tiene dato real para el período (uniforme: no discrimina ni finge; un
 # valor parcial distorsionaría el min-max).
