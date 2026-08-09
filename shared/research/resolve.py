@@ -60,6 +60,17 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
                            "aporte de cada sector", "aporte sectorial",
                            "contribucion sectorial", "contribucion de cada sector",
                            "sectores que mas crecen", "que sector crece mas"),
+    # Eje SUB-NACIONAL: el único cuyo sujeto es la demarcación. Además del vocabulario
+    # temático (pobreza, desarrollo social, IDM), lleva los términos GEOGRÁFICOS —
+    # provincia, región, territorial— porque la pregunta típica no nombra el índice sino
+    # el corte: "¿cómo varía X por provincia?". Sin ellos, la única fuente con dato
+    # dentro del país no se activaba nunca.
+    "social_dev": ("desarrollo social", "idm", "pobreza", "pobreza extrema",
+                   "desigualdad", "alfabetizacion", "analfabetismo", "escolaridad",
+                   "informalidad", "inclusion financiera", "hacinamiento",
+                   "por provincia", "provincial", "provincias", "por region",
+                   "regiones de desarrollo", "territorial", "demarcacion",
+                   "siuben", "brecha territorial", "indice de desarrollo"),
 }
 
 # Términos genéricos que NO distinguen una entidad (evitan matches espurios al resolver

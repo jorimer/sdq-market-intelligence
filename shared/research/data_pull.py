@@ -430,6 +430,38 @@ def _insurance_summary(label: str, payload: Dict[str, Any], period: Optional[str
 
 # Summarizer de evidencia por eje (real, no genérico). Usado por pull_axis (contexto de
 # sistema) Y pull_entity (entidad resuelta); cada uno tolera la forma pulse y la nombrada.
+def _social_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                    source: str) -> List[Evidence]:
+    """Desarrollo social (IDM): score + banda + desglose + posición en el panel.
+
+    Este eje es SUB-NACIONAL: sus sujetos son demarcaciones, no países ni firmas. Por
+    eso la evidencia de distribución pesa tanto como el nivel — en un panel con 40
+    puntos de amplitud, el promedio dice poco y la dispersión lo dice casi todo."""
+    p = payload or {}
+    sc = p.get("score") or {}
+    out: List[Evidence] = []
+    score, band = sc.get("development_score"), sc.get("band")
+    if isinstance(score, (int, float)) or band:
+        s = f" {_fmt(score)}/100" if isinstance(score, (int, float)) else ""
+        b = f" (banda {band})" if band else ""
+        out.append(_ev(f"{label}: IDM{s}{b} · período {sc.get('period') or period or 's/f'}.",
+                       source, 94.0))
+    line = _dims_line(sc.get("breakdown"))
+    if line:
+        out.append(_ev(line, source, 90.0))
+    rank, n = p.get("rank"), p.get("n_entities")
+    if isinstance(rank, (int, float)) and isinstance(n, (int, float)):
+        out.append(_ev(f"Posición en el panel de demarcaciones: {int(rank)} de {int(n)}.",
+                       source, 88.0))
+    dist = p.get("distribution") or {}
+    if isinstance(dist.get("mean"), (int, float)) and isinstance(dist.get("spread"), (int, float)):
+        out.append(_ev(
+            f"Distribución del panel ({int(dist.get('n') or 0)} demarcaciones): media "
+            f"{_fmt(dist['mean'])}, amplitud {_fmt(dist['spread'])} puntos entre la mayor y "
+            "la menor.", source, 86.0))
+    return out or _generic_summary(label, payload, period, source)
+
+
 _AXIS_SUMMARY = {
     "banking": _banking_summary,
     "monetary_policy": _monetary_summary,
@@ -445,6 +477,7 @@ _AXIS_SUMMARY = {
     "pension": _pension_summary,
     "insurance": _insurance_summary,
     "economic_structure": _structure_summary,
+    "social_dev": _social_summary,
 }
 
 

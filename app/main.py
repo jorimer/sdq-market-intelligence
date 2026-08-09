@@ -204,6 +204,7 @@ import modules.energy_intel.products  # noqa: F401 — registers energy SectorPr
 import modules.telecom_intel.products  # noqa: F401 — registers telecom SectorProduct
 import modules.pension_intel.products  # noqa: F401 — registers pension SectorProduct
 import modules.insurance_intel.products  # noqa: F401 — registers insurance SectorProduct
+import modules.social_dev.products  # noqa: F401 — registers social_dev (panel SUB-NACIONAL)
 # Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
 # (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)
 from app import products_macro as _products_macro  # noqa: F401 — registers macro SectorProduct

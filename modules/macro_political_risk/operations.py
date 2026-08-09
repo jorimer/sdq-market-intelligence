@@ -64,6 +64,47 @@ def _run_gdelt_bq_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_gdelt_adm1_volume_test(params, user_id, set_phase) -> Dict:
+    """Prueba de volumen de los eventos GDELT por PROVINCIA (ADM1), sin persistir nada.
+
+    Es el gate previo a publicar la señal sub-nacional. El geocodificado de GDELT se
+    concentra en Santo Domingo y Santiago: si solo dos provincias superan el volumen
+    mínimo, la señal repartiría dos valores y treinta nulos, y eso hay que verlo ANTES
+    de cablearla. Devuelve cuántas provincias son medibles, cuáles quedan delgadas,
+    cuáles no aparecen y qué códigos ADM1 no resolvieron — más el costo del escaneo.
+
+    Deliberadamente NO escribe en la base: informa para que la decisión de publicar la
+    tome una persona con la cifra a la vista."""
+    from shared.data.gdelt_bq_client import (
+        GdeltBQError,
+        adm1_dry_run_bytes,
+        adm1_volume_test,
+    )
+
+    set_phase("midiendo el costo del escaneo (dry run)")
+    try:
+        scanned = adm1_dry_run_bytes()
+    except GdeltBQError as e:
+        return {"error": str(e), "measurable": 0,
+                "errors": [f"BigQuery no configurado: {e}"]}
+    except Exception as e:  # noqa: BLE001 — best-effort; informar, no tumbar la consola
+        return {"error": str(e), "measurable": 0, "errors": [str(e)]}
+
+    set_phase("consultando GDELT por provincia (ADM1)")
+    try:
+        report = adm1_volume_test()
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e), "measurable": 0, "scanned_gb": round(scanned / 1e9, 3),
+                "errors": [str(e)]}
+
+    report["scanned_gb"] = round(scanned / 1e9, 3)
+    report["errors"] = []
+    report["veredicto"] = (
+        "publicable" if report.get("n_provinces_measurable", 0) >= 8 else
+        "insuficiente: la señal repartiría más nulos que valores")
+    return report
+
+
 from shared.data.latam_peers import names as _peer_names
 from shared.data.latam_peers import regions as _peer_regions
 
@@ -191,6 +232,16 @@ def register() -> None:
         "unrest_shocks; ECON_SANCTIONS → sanctions_signal) desde el dataset público "
         "de GDELT en BigQuery. Robusto (sin rate-limit). Requiere GCP_SA_JSON.",
         _run_gdelt_bq_sync, default_interval_hours=168,
+    ))
+    register_operation(Operation(
+        "gdelt-adm1-volume-test", "Prueba de volumen: eventos por PROVINCIA (GDELT ADM1)",
+        "Mide si los eventos de GDELT alcanzan para una señal por provincia. El país "
+        "sale del offset 2 de V2Locations y la provincia del offset 3, así que la "
+        "granularidad ya está en la misma tabla; lo que falta saber es si hay VOLUMEN: "
+        "el geocodificado se concentra en Santo Domingo y Santiago. Informa cuántas de "
+        "las 32 provincias superan el mínimo, cuáles quedan delgadas y el costo del "
+        "escaneo. No persiste nada: es el gate previo a publicar. Requiere GCP_SA_JSON.",
+        _run_gdelt_adm1_volume_test, default_interval_hours=720,  # mensual: es un gate
     ))
     register_operation(Operation(
         "irmp-backtest", "Backtest del IRMP (validación)",

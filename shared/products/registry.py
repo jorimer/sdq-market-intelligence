@@ -56,6 +56,12 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
     # (importancia económica + contribución al crecimiento). Para clientes institucionales.
     CatalogEntry("economic_structure", "SDQ Sectoral Structure · Estructura de la Economía",
                  "sector_intel", "BCRD · PIB por sectores de origen (Valor Agregado)"),
+    # Producto SUB-NACIONAL: el único cuyo sujeto es la DEMARCACIÓN (10 regiones de
+    # desarrollo · 32 provincias) y no el país o una firma. Estaba cableado como eje
+    # desde hace tiempo pero fuera del catálogo, y por eso invisible para la Data API y
+    # para /quality — que recorren esta lista.
+    CatalogEntry("social_dev", "SDQ Desarrollo Social", "social_dev",
+                 "ONE · SIUBEN · WDI/Banco Mundial"),
 ]
 
 CATALOG_BY_KEY: Dict[str, CatalogEntry] = {e.sector_key: e for e in PRODUCT_CATALOG}

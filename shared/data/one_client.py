@@ -320,13 +320,21 @@ _SECONDARY_LEVELS = {"secundario", "medio"}  # "Medio" is the pre-2014 secondary
 
 def parse_one_coverage_xlsx(content: bytes) -> List[tuple]:
     """Parse 'tasa neta de cobertura por nivel, según región y provincia' →
-    ``[(region_slug, year, secondary_coverage)]`` for the 10 development regions.
+    ``[(geo_level, slug, year, secondary_coverage)]``.
+
+    ``geo_level`` is ``"region"`` (the 10 development regions) or ``"provincia"`` (the
+    32 provinces). **Both levels are kept.** The file has always carried the province
+    breakdown — its own title says *según región y provincia* — and this parser used to
+    throw those rows away, which left the axis unable to distinguish demarcations inside
+    a region. Ozama alone holds Distrito Nacional and Santo Domingo; collapsing them to
+    one value erases most of the country's population into a single number.
 
     Columns are grouped by school year (``A-B`` → calendar year ``B``), each split
     into levels (Inicial/Primario/Secundario — older years: Inicial/Básico/Medio).
     The secondary column is located by matching the level sub-header within each
     group's span (NOT a fixed offset), so a layout/level-order change can't silently
-    read the wrong level. Province rows, the header and 'Total país' are skipped."""
+    read the wrong level. The column header and 'Total país' are skipped; a label that
+    resolves to neither a region nor a province is dropped and logged, never guessed."""
     import openpyxl
 
     wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
@@ -371,32 +379,49 @@ def parse_one_coverage_xlsx(content: bytes) -> List[tuple]:
         logger.warning("[ONE] cobertura: no se ubicó la columna 'Secundario/Medio' (layout cambió?)")
         return []
 
-    # 3) region aggregate rows only ('Región …'); provinces/header/'Total país' skip.
+    # 3) filas de agregado: regiones ('Región …') Y provincias. El header y 'Total país'
+    #    quedan fuera; una etiqueta que no resuelve se descarta y se registra.
+    from shared.reference.provinces import province_slug
+
     out: List[tuple] = []
-    mapped = 0
+    regions_mapped = provinces_mapped = 0
+    unknown: set = set()
     for r in rows:
-        if not r or not isinstance(r[0], str) or not _norm(r[0]).startswith("region "):
+        if not r or not isinstance(r[0], str) or not r[0].strip():
             continue
-        if _norm(r[0]) == "region y provincia":   # the column header, not a region
+        label = r[0]
+        key = _norm(label)
+        if key in ("region y provincia", "total pais"):   # encabezado / total nacional
             continue
-        slug = _coverage_region_slug(r[0])
+        if key.startswith("region "):
+            slug, level = _coverage_region_slug(label), "region"
+            if slug:
+                regions_mapped += 1
+        else:
+            slug, level = province_slug(label), "provincia"
+            if slug:
+                provinces_mapped += 1
         if not slug:
-            logger.warning("[ONE] cobertura: etiqueta 'Región …' no reconocida: %r", r[0])
+            unknown.add(label.strip())
             continue
-        mapped += 1
         for sc, yr in groups.items():
             col = sec_col.get(sc)
             v = r[col] if col is not None and col < len(r) else None
             if isinstance(v, (int, float)):
-                out.append((slug, yr, round(float(v), 2)))
-    if not mapped:
+                out.append((level, slug, yr, round(float(v), 2)))
+    if unknown:
+        logger.warning("[ONE] cobertura: etiquetas no reconocidas (descartadas): %s",
+                       sorted(unknown))
+    if not regions_mapped:
         logger.warning("[ONE] cobertura: ninguna fila 'Región …' mapeó (layout cambió?)")
+    if not provinces_mapped:
+        logger.warning("[ONE] cobertura: ninguna fila de provincia mapeó (layout cambió?)")
     return out
 
 
 def fetch_one_education_coverage() -> List[tuple]:  # pragma: no cover - network I/O
     """Live: scrape the Educación landing, download the net-coverage file, parse it →
-    ``[(region_slug, year, secondary_coverage)]``."""
+    ``[(geo_level, slug, year, secondary_coverage)]`` — regiones Y provincias."""
     import urllib.parse
 
     import httpx
