@@ -127,22 +127,28 @@ def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
 
 
 def _sync_one_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Fetch ONE net secondary-coverage by development region AND by province
-    (2010-2024) → sd_indicators. Best-effort.
+    """Cobertura neta de secundaria por región Y por provincia → ``sd_indicators``.
 
-    The two levels share the ``secondary_coverage`` theme and are told apart by
-    ``disaggregation`` — the province slugs never collide with the region slugs (guarded
-    in ``shared/reference/tests/test_provinces.py``). Only the regional rows reach the
-    IDM: :func:`assemble_idm_dataset` iterates the region catalog, so adding provinces
-    cannot move a regional score."""
-    from shared.data.one_client import fetch_one_education_coverage
+    La fuente pasó de la planilla de la ONE al tablero del MINERD, que es quien produce
+    el indicador: la ONE lo republicaba y su portal quedó tras un desafío de Cloudflare.
+    El cambio también trae el desglose PROVINCIAL, que la planilla tenía y el parser
+    anterior descartaba.
 
-    set_phase("cobertura educativa por región y provincia (ONE: secundaria)")
-    rows = fetch_one_education_coverage()   # la excepción sube a _best_effort
+    Los dos niveles comparten el tema ``secondary_coverage`` y se distinguen por
+    ``disaggregation``; los slugs provinciales nunca chocan con los regionales (fijado en
+    ``shared/reference/tests/test_provinces.py``). Solo las filas regionales llegan al
+    IDM: :func:`assemble_idm_dataset` itera el catálogo de regiones, así que agregar
+    provincias no puede mover un score."""
+    from shared.data.minerd_coverage import SOURCE as MINERD_SOURCE
+    from shared.data.minerd_coverage import fetch_minerd_coverage
+
+    set_phase("cobertura educativa por región y provincia (MINERD · SIIE)")
+    rows = fetch_minerd_coverage()   # la excepción sube a _best_effort
     synced = 0
     for level, slug, year, value in rows:
         _upsert_indicator(db, theme=COVERAGE_THEME, entity=slug, period=str(year),
-                          value=float(value), source="ONE", disagg=level, unit=COVERAGE_UNIT)
+                          value=float(value), source=MINERD_SOURCE, disagg=level,
+                          unit=COVERAGE_UNIT)
         synced += 1
     return synced
 

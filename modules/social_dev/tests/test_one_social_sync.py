@@ -408,10 +408,10 @@ def test_sync_one_schooling_upserts_national(db, monkeypatch):
 
 
 def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
-    import shared.data.one_client as oc_mod
+    import shared.data.minerd_coverage as mc_mod
 
     monkeypatch.setattr(
-        oc_mod, "fetch_one_education_coverage",
+        mc_mod, "fetch_minerd_coverage",
         lambda: [("region", "enriquillo", 2024, 66.8), ("region", "ozama", 2024, 67.7),
                  ("provincia", "distrito_nacional", 2024, 73.1)],
     )
@@ -425,7 +425,8 @@ def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
         .filter_by(entity_key="enriquillo", theme="secondary_coverage", period="2024")
         .first()
     )
-    assert row is not None and row.value == 66.8 and row.source == "ONE" and row.disaggregation == "region"
+    assert row is not None and row.value == 66.8 and row.source == "MINERD"
+    assert row.disaggregation == "region"
     # La provincia convive con la región bajo el mismo tema, distinguida por el nivel.
     prov = (
         db.query(SocialIndicator)
@@ -439,7 +440,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     """Guardia estructural: el IDM se ensambla sobre las 10 regiones. Agregar filas
     provinciales bajo el MISMO tema no debe cambiar ni un score ni una procedencia —
     si algún día el ensamblador empezara a barrer entidades, este test lo detecta."""
-    import shared.data.one_client as oc_mod
+    import shared.data.minerd_coverage as mc_mod
     from modules.social_dev.service import assemble_idm_dataset
     from modules.social_dev.social_sync import _sync_one_coverage
 
@@ -450,7 +451,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     before = assemble_idm_dataset(db)
 
     monkeypatch.setattr(
-        oc_mod, "fetch_one_education_coverage",
+        mc_mod, "fetch_minerd_coverage",
         lambda: [("provincia", "distrito_nacional", 2024, 73.1),
                  ("provincia", "elias_pina", 2024, 41.2)],
     )
