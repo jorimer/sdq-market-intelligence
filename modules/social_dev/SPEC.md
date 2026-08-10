@@ -7,9 +7,20 @@
 evidencia**. Es el eje que sostiene la credibilidad de think tank y abre clientes de
 gobierno, multilaterales y ESG. Atención especial a la **informalidad** (rasgo estructural RD).
 
-## 2. Fuentes (vía `shared/data/one_client`)
-ONE: estadísticas demográficas, sociales, género, censos, indicadores ODS; ENHOGAR, ENCFT.
-Complementar con inclusión financiera (Findex, SB).
+## 2. Fuentes
+El eje ya **no cuelga de un solo conector**: cada indicador se toma de quien lo produce.
+
+| Dato | Conector | Emisor |
+|---|---|---|
+| Pobreza general y extrema, por región | `shared/data/one_client` (`ONEClient`) | ONE (CDN de descargas) |
+| Informalidad laboral | `shared/data/bcrd_labor` | BCRD (ENCFT) |
+| Cobertura educativa, por región y provincia | `shared/data/minerd_coverage` | MINERD (tablero SIIE) |
+| Indicadores provinciales del padrón | `shared/data/siuben_client` | SIUBEN |
+| Salud e inclusión financiera | `shared/data/wdi_client` | Banco Mundial (WDI/Findex) |
+| Ingreso laboral y escolaridad | `shared/data/one_client` | ONE — **hoy caído** (portal tras Cloudflare) |
+
+El portal `www.one.gob.do` responde 403 desde producción; lo que depende de él declara la
+falla en `errors` de la operación en vez de devolver cero en silencio.
 
 ## 3. Índices
 Índices de desarrollo/bienestar multidimensional (Sen), pobreza/consumo (Deaton),
@@ -33,4 +44,4 @@ Bienestar multidimensional > PIB; distribución > promedio; conducta/registro > 
 
 ## 9. Límites / dependencias
 Periodicidad de censos (~10 años) limita oportunidad; orienta, no concluye causalidad (no RCT).
-Depende de `shared/data/one_client`.
+Ver la tabla de fuentes en §2: la dependencia es por indicador, no del módulo entero.

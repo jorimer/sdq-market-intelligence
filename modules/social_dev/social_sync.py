@@ -126,7 +126,7 @@ def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
-def _sync_one_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
+def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
     """Cobertura neta de secundaria por región Y por provincia → ``sd_indicators``.
 
     La fuente pasó de la planilla de la ONE al tablero del MINERD, que es quien produce
@@ -303,8 +303,12 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         lambda: _sync_bcrd_informality(db, set_phase), errors)
     labor_synced = _best_effort(
         "ingreso laboral (ONE)", lambda: _sync_one_labor(db, set_phase), errors)
+    # El rótulo nombra al EMISOR, porque es lo que se lee en la consola cuando algo
+    # falla: decir "(ONE)" de un dato que ahora produce el MINERD mandaría a mirar el
+    # portal equivocado.
     coverage_synced = _best_effort(
-        "cobertura educativa (ONE)", lambda: _sync_one_coverage(db, set_phase), errors)
+        "cobertura educativa (MINERD · SIIE)",
+        lambda: _sync_minerd_coverage(db, set_phase), errors)
     schooling_synced = _best_effort(
         "escolaridad nacional (ONE)", lambda: _sync_one_schooling(db, set_phase), errors)
     findex_synced = _best_effort(

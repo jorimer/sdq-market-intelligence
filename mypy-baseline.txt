@@ -1046,7 +1046,6 @@ shared/data/dga_partners_client.py:0: error: No overload variant of "int" matche
 shared/data/enae_activity.py:0: error: Argument 1 to "_year_columns" has incompatible type "list[list[Any]]"; expected "list[tuple[Any, ...]]"  [arg-type]
 shared/data/encft_employment.py:0: error: Argument 1 to "_year_columns" has incompatible type "list[list[Any]]"; expected "list[tuple[Any, ...]]"  [arg-type]
 shared/data/gdelt_bq_client.py:0: error: Argument 1 to "get" of "dict" has incompatible type "Any | None"; expected "str"  [arg-type]
-shared/data/one_client.py:0: error: Incompatible types in assignment (expression has type "int | None", variable has type "int")  [assignment]
 shared/data/owid_disasters_client.py:0: error: Argument 1 to "float" has incompatible type "str | Any | None"; expected "str | Buffer | SupportsFloat | SupportsIndex"  [arg-type]
 shared/data/sib_client.py:0: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
 shared/data/sib_client.py:0: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]

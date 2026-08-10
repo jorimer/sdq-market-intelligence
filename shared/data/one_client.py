@@ -13,9 +13,30 @@ publications-digest path, not here.
 reads ``one.json`` for offline/tests.
 
 A second dataset is wired below as plain module functions (not the ``Record``
-client): the national ONE/BCRD labour series (informality + income proxy) that
-fill two IDM variables, scraped from the Trabajo landing by media-hash (the DGA
-pattern) and parsed from their *Indicador* sheet.
+client): the national labour/education series scraped from the ONE portal by
+media-hash (the DGA pattern) and parsed from their *Indicador* sheet.
+
+QUÉ SIGUE VIVO ACÁ Y QUÉ SE FUE (importante antes de tocar este módulo)
+----------------------------------------------------------------------
+El portal ``www.one.gob.do`` quedó detrás de un desafío de Cloudflare y devuelve
+403 a cualquier cliente que no sea un navegador — también desde producción. Todo
+lo que raspa ese portal está, hoy, **caído**: no falla en silencio, declara el
+motivo en ``errors`` de la operación (ver ``modules/social_dev/social_sync.py``).
+
+* **Vivo y sano** — el CSV de pobreza por regiones (``ONEClient``). Va por
+  ``descargas.one.gob.do``, que es otro host y sigue abierto.
+* **Vivo pero caído** — ``fetch_one_labor`` (ingreso laboral) y
+  ``fetch_one_education_schooling`` (años de escolaridad). Siguen enchufados
+  porque **no tienen sustituto primario conocido**; se quedan acá hasta que
+  aparezca uno o vuelva el portal.
+* **Se fue** — la informalidad, que ahora sale de :mod:`shared.data.bcrd_labor`
+  (ENCFT del BCRD), y la cobertura educativa, que sale de
+  :mod:`shared.data.minerd_coverage` (tablero SIIE del MINERD). En los dos casos
+  la ONE no producía el dato: lo republicaba. El parser de la planilla de
+  cobertura se **eliminó** en vez de guardarse como reserva — una reserva a la
+  que no se puede llegar no es una reserva, y dejar dos parsers para un mismo
+  indicador invita a recablear el muerto. Está en el historial si hiciera falta
+  (``git log -- shared/data/one_client.py``, commit anterior a su borrado).
 """
 import csv
 import io
@@ -202,18 +223,20 @@ one_client = ONEClient()
 
 
 # ── ONE labour statistics (national annual series) ─────────────────────────
-# Real ONE/BCRD (ENFT/ENCFT) labour indicators that fill two IDM variables held
-# as declared rubric: informality_rate (exact match) and income (a declared
-# PROXY: hourly labour income, not household per-capita income). National annual
-# series, applied to every region like the WDI health vars. Files live on the
-# ONE Umbraco CDN under ``/media/<hash>/<slug>.xlsx`` (the DGA media-hash pattern);
-# the hash rotates, so we scrape the landing page for the current links.
+# Ingreso laboral promedio por hora: un PROXY DECLARADO de la variable
+# ``income_per_capita`` del IDM (es ingreso laboral horario, no ingreso per cápita
+# del hogar). Serie anual nacional, aplicada a todas las regiones como las de salud
+# del WDI. Los archivos viven en el CDN Umbraco de la ONE bajo
+# ``/media/<hash>/<slug>.xlsx`` (el patrón media-hash de la DGA); el hash rota, así
+# que se raspa la landing para los enlaces vigentes.
 LABOR_LANDING = (
     "https://www.one.gob.do/datos-y-estadisticas/temas/estadisticas-sociales/trabajo/"
 )
 # IDM theme → filename slug fragment (accent-insensitive) to match on the landing.
+# La INFORMALIDAD salió de acá: la produce el BCRD (ENCFT) y se baja de su CDN en
+# :mod:`shared.data.bcrd_labor`. Dejar su slug haría bajar y descartar un archivo, y
+# —peor— dejaría a este módulo declarando una responsabilidad que ya no tiene.
 _LABOR_SLUGS: Dict[str, str] = {
-    "informality_rate": "tasa-de-informalidad-en-el-empleo-por-sexo",
     "income_per_capita": "ingreso-laboral-promedio-por-hora-trabajada-en-ocupacion-principal",
 }
 _MEDIA_XLSX_RE = re.compile(r"/media/[a-z0-9]+/[^\"'> ]+?\.xlsx", re.IGNORECASE)
@@ -272,7 +295,12 @@ def parse_one_indicator_xlsx(content: bytes) -> List[tuple]:
 
 def fetch_one_labor() -> List[tuple]:  # pragma: no cover - network I/O
     """Live: scrape the Trabajo landing, download the matched files, parse them →
-    ``[(idm_theme, year, value)]`` (national). Best-effort per file."""
+    ``[(idm_theme, year, value)]`` (national). Best-effort per file.
+
+    ATENCIÓN: hoy esto **no llega** — el portal responde 403 (Cloudflare). No se
+    silencia: la excepción sube y ``_best_effort`` la declara en la operación. Sigue
+    enchufado porque el ingreso laboral promedio no tiene sustituto primario conocido
+    (el BCRD publica los deciles como CONTEOS de perceptores, no como montos)."""
     import urllib.parse
 
     import httpx
@@ -293,162 +321,35 @@ def fetch_one_labor() -> List[tuple]:  # pragma: no cover - network I/O
     return out
 
 
-# ── ONE education — regional net-coverage (secondary) by development region ─
-# Real ONE/MINERD net secondary-coverage by the 10 development regions, 2010-2024
-# (the IDM's education dimension otherwise has only the static ENHOGAR-2022 study).
-# Adds real REGIONAL + TEMPORAL differentiation (access, complementing attainment).
+# ── ONE education — national years of schooling ────────────────────────────
+# La COBERTURA educativa ya no sale de acá: la produce el MINERD y se lee de su
+# tablero SIIE (:mod:`shared.data.minerd_coverage`), que además llega al año lectivo
+# 2024-2025 y trae región y provincia en la misma fila.
 EDUCATION_LANDING = (
     "https://www.one.gob.do/datos-y-estadisticas/temas/estadisticas-sociales/educacion/"
 )
-_EDUCATION_SLUGS: Dict[str, str] = {
-    "secondary_coverage": "tasa-neta-de-cobertura-por-nivel-region-provincia",
-}
 # National average years of schooling (15+) — the IDM's schooling_years (ENHOGAR
 # only reports literacy by region, not years of schooling). Simple Año|Total sheet.
 _SCHOOLING_SLUG = "anos-promedio-de-educacion-de-la-poblacion-de-15-anos-y-mas"
-
-
-def _coverage_region_slug(label: str) -> Optional[str]:
-    """Map a 'Región X' row label to a development-region slug (None if not one)."""
-    n = _norm(label).replace("region ", "", 1).strip()
-    return _REGION_BY_NORM.get(n)
 
 
 def region_slug(label: object) -> Optional[str]:
     """Slug de la región de desarrollo para una etiqueta del proveedor, o ``None``.
 
     Público porque el padrón de regiones —con sus alias, ver ``_REGION_ALIASES``— es la
-    misma verdad para cualquier fuente que las nombre, no solo para el cuadro de
-    cobertura de la ONE. Tolera el prefijo "Región " y las variantes de Ozama."""
-    return _coverage_region_slug(str(label or ""))
-
-
-_SCHOOL_YEAR_RE = re.compile(r"^(20\d{2})-(20\d{2})")
-_SECONDARY_LEVELS = {"secundario", "medio"}  # "Medio" is the pre-2014 secondary label
-
-
-def parse_one_coverage_xlsx(content: bytes) -> List[tuple]:
-    """Parse 'tasa neta de cobertura por nivel, según región y provincia' →
-    ``[(geo_level, slug, year, secondary_coverage)]``.
-
-    ``geo_level`` is ``"region"`` (the 10 development regions) or ``"provincia"`` (the
-    32 provinces). **Both levels are kept.** The file has always carried the province
-    breakdown — its own title says *según región y provincia* — and this parser used to
-    throw those rows away, which left the axis unable to distinguish demarcations inside
-    a region. Ozama alone holds Distrito Nacional and Santo Domingo; collapsing them to
-    one value erases most of the country's population into a single number.
-
-    Columns are grouped by school year (``A-B`` → calendar year ``B``), each split
-    into levels (Inicial/Primario/Secundario — older years: Inicial/Básico/Medio).
-    The secondary column is located by matching the level sub-header within each
-    group's span (NOT a fixed offset), so a layout/level-order change can't silently
-    read the wrong level. The column header and 'Total país' are skipped; a label that
-    resolves to neither a region nor a province is dropped and logged, never guessed."""
-    import openpyxl
-
-    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
-    try:
-        ws = wb[wb.sheetnames[0]]
-        rows = [list(r) for r in ws.iter_rows(values_only=True)]
-    finally:
-        wb.close()
-
-    # 1) year-group starts: a row with ``20YY-20YY+1`` tokens (B == A+1).
-    groups: Dict[int, int] = {}   # start_col -> ending calendar year
-    year_row = -1
-    for idx, r in enumerate(rows[:8]):
-        cols: Dict[int, int] = {}
-        for ci, c in enumerate(r):
-            m = _SCHOOL_YEAR_RE.match(c.strip()) if isinstance(c, str) else None
-            if m and int(m.group(2)) == int(m.group(1)) + 1:
-                cols[ci] = int(m.group(2))
-        if cols:
-            groups, year_row = cols, idx
-            break
-    if not groups:
-        logger.warning("[ONE] cobertura: no se encontró la fila de años-lectivos (layout cambió?)")
-        return []
-
-    # 2) secondary column per group: match the level sub-header within the group span.
-    starts = sorted(groups)
-
-    def _span_end(sc: int) -> int:
-        later = [s for s in starts if s > sc]
-        return later[0] if later else sc + 3
-
-    sec_col: Dict[int, int] = {}
-    for r in rows[year_row: year_row + 4]:
-        for sc in starts:
-            for col in range(sc, min(_span_end(sc), len(r))):
-                if isinstance(r[col], str) and _norm(r[col]) in _SECONDARY_LEVELS:
-                    sec_col[sc] = col
-        if len(sec_col) == len(starts):
-            break
-    if not sec_col:
-        logger.warning("[ONE] cobertura: no se ubicó la columna 'Secundario/Medio' (layout cambió?)")
-        return []
-
-    # 3) filas de agregado: regiones ('Región …') Y provincias. El header y 'Total país'
-    #    quedan fuera; una etiqueta que no resuelve se descarta y se registra.
-    from shared.reference.provinces import province_slug
-
-    out: List[tuple] = []
-    regions_mapped = provinces_mapped = 0
-    unknown: set = set()
-    for r in rows:
-        if not r or not isinstance(r[0], str) or not r[0].strip():
-            continue
-        label = r[0]
-        key = _norm(label)
-        if key in ("region y provincia", "total pais"):   # encabezado / total nacional
-            continue
-        if key.startswith("region "):
-            slug, level = _coverage_region_slug(label), "region"
-            if slug:
-                regions_mapped += 1
-        else:
-            slug, level = province_slug(label), "provincia"
-            if slug:
-                provinces_mapped += 1
-        if not slug:
-            unknown.add(label.strip())
-            continue
-        for sc, yr in groups.items():
-            col = sec_col.get(sc)
-            v = r[col] if col is not None and col < len(r) else None
-            if isinstance(v, (int, float)):
-                out.append((level, slug, yr, round(float(v), 2)))
-    if unknown:
-        logger.warning("[ONE] cobertura: etiquetas no reconocidas (descartadas): %s",
-                       sorted(unknown))
-    if not regions_mapped:
-        logger.warning("[ONE] cobertura: ninguna fila 'Región …' mapeó (layout cambió?)")
-    if not provinces_mapped:
-        logger.warning("[ONE] cobertura: ninguna fila de provincia mapeó (layout cambió?)")
-    return out
-
-
-def fetch_one_education_coverage() -> List[tuple]:  # pragma: no cover - network I/O
-    """Live: scrape the Educación landing, download the net-coverage file, parse it →
-    ``[(geo_level, slug, year, secondary_coverage)]`` — regiones Y provincias."""
-    import urllib.parse
-
-    import httpx
-
-    resp = httpx.get(EDUCATION_LANDING, timeout=40, follow_redirects=True, headers=_HEADERS)
-    resp.raise_for_status()
-    path = _match_media_links(resp.text, _EDUCATION_SLUGS).get("secondary_coverage")
-    if not path:
-        return []
-    url = "https://www.one.gob.do" + urllib.parse.quote(path)
-    f = httpx.get(url, timeout=90, follow_redirects=True, headers=_HEADERS)
-    f.raise_for_status()
-    return parse_one_coverage_xlsx(f.content)
+    misma verdad para CUALQUIER fuente que las nombre: hoy lo usa el conector del
+    MINERD, que es de otro emisor. Tolera el prefijo "Región " y las variantes de
+    Ozama."""
+    n = _norm(label).replace("region ", "", 1).strip()
+    return _REGION_BY_NORM.get(n)
 
 
 def fetch_one_education_schooling() -> List[tuple]:  # pragma: no cover - network I/O
     """Live: national average years of schooling (15+) from the Educación landing →
-    ``[(year, value)]`` (the IDM's ``schooling_years``, national)."""
+    ``[(year, value)]`` (the IDM's ``schooling_years``, national).
+
+    Mismo estado que :func:`fetch_one_labor`: el portal responde 403 (Cloudflare) y la
+    falla se DECLARA, no se esconde. Sigue acá por la misma razón — sin sustituto."""
     import urllib.parse
 
     import httpx

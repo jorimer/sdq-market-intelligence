@@ -56,7 +56,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     # porque hacen de sub-syncs que funcionan: un 0 ahora significa "la fuente no trajo
     # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
     for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_one_labor",
-                "_sync_one_coverage", "_sync_one_schooling", "_sync_wb_findex",
+                "_sync_minerd_coverage", "_sync_one_schooling", "_sync_wb_findex",
                 "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase: 1)
 
@@ -96,14 +96,17 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
     def _boom(db, sp):
         raise ConnectionError("403 Forbidden")
 
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_coverage", _boom)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_minerd_coverage", _boom)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_siuben_provincial", _boom)
 
     res = one_social_sync(db)
     errores = " · ".join(res["errors"])
 
     # No se pudo llegar → la causa VIAJA (tipo y mensaje), no se pierde en un log.
-    assert "cobertura educativa (ONE)" in errores and "403 Forbidden" in errores
+    # El rótulo nombra al EMISOR vigente: la cobertura ya no es de la ONE, y mandar a
+    # mirar el portal equivocado es parte de no declarar bien la falla.
+    assert "cobertura educativa (MINERD · SIIE)" in errores and "403 Forbidden" in errores
+    assert "(ONE)" not in errores.split("cobertura educativa")[1][:30]
     assert "indicadores provinciales (SIUBEN)" in errores
     assert "ConnectionError" in errores
     # Cero sin excepción → también consta, con otra redacción.
@@ -118,7 +121,7 @@ def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
     """El contrapeso del test anterior: si todo trajo dato, ``errors`` queda vacío."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
     for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_one_labor",
-               "_sync_one_coverage", "_sync_one_schooling", "_sync_wb_findex",
+               "_sync_minerd_coverage", "_sync_one_schooling", "_sync_wb_findex",
                "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp: 3)
     assert one_social_sync(db)["errors"] == []
@@ -206,60 +209,25 @@ def test_parse_one_indicator_tolerates_sheet_whitespace():
 def test_discover_labor_links_prefers_latest_revision():
     from shared.data.one_client import discover_labor_links
 
+    slug = "ingreso-laboral-promedio-por-hora-trabajada-en-ocupacion-principal"
     html = (
-        '<a href="/media/aaa/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2023.xlsx">old</a>'
-        '<a href="/media/bbb/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx">new</a>'
+        f'<a href="/media/aaa/{slug}-2000-2023.xlsx">old</a>'
+        f'<a href="/media/bbb/{slug}-2000-2024.xlsx">new</a>'
     )
-    assert discover_labor_links(html)["informality_rate"].endswith("2004-2024.xlsx")
+    assert discover_labor_links(html)["income_per_capita"].endswith("2000-2024.xlsx")
 
 
-def _coverage_workbook():
-    """Planilla mínima con la forma real del cuadro 'según región y provincia'."""
-    import io
-    import openpyxl
+def test_region_slug_es_el_padron_de_regiones_para_cualquier_emisor():
+    """``region_slug`` sobrevivió al parser de cobertura de la ONE porque el padrón de
+    regiones —con sus alias— no era de ese cuadro: hoy lo consume el conector del
+    MINERD, que es otro emisor. Se fija acá para que un borrado futuro no se lo lleve."""
+    from shared.data.one_client import region_slug
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.append(["Cuadro: tasa neta de cobertura, según región y provincia"])
-    ws.append([None, "2023-2024", None, None, "2022-2023", None, None])  # year-group labels
-    ws.append([None, "Inicial", "Primario", "Secundario", "Inicial", "Primario", "Secundario"])
-    ws.append(["Total país", 30, 90, 70, 29, 89, 69])                    # agregado nacional
-    ws.append(["Región Metropolitana", 33, 86, 67, 32, 85, 66])         # → ozama
-    ws.append(["Distrito Nacional", 37, 87, 73, 36, 88, 72])            # provincia de Ozama
-    ws.append(["Santo Domingo", 31, 85, 64, 30, 84, 63])                # provincia de Ozama
-    ws.append(["Región Cibao Norte", 34, 94, 71, 33, 93, 70])          # → cibao_norte
-    ws.append(["Ciudad Inexistente", 1, 2, 3, 4, 5, 6])                 # no resuelve → descartada
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
-
-
-def test_parse_one_coverage_xlsx_secondary_by_region():
-    """Columna 'Secundario' por grupo-año, localizada por sub-encabezado (no por offset)."""
-    from shared.data.one_client import parse_one_coverage_xlsx
-
-    by = {(lvl, s, y): v for lvl, s, y, v in parse_one_coverage_xlsx(_coverage_workbook())}
-    assert by[("region", "ozama", 2024)] == 67       # 'Metropolitana' → ozama
-    assert by[("region", "ozama", 2023)] == 66
-    assert by[("region", "cibao_norte", 2024)] == 71
-
-
-def test_parse_one_coverage_xlsx_conserva_las_provincias():
-    """El cuadro SIEMPRE trajo el desglose provincial y el parser lo tiraba. Ozama sola
-    contiene el Distrito Nacional y Santo Domingo: colapsarlos a un valor borra a la
-    mayor parte de la población del país en un solo número."""
-    from shared.data.one_client import parse_one_coverage_xlsx
-
-    rows = parse_one_coverage_xlsx(_coverage_workbook())
-    by = {(lvl, s, y): v for lvl, s, y, v in rows}
-    assert by[("provincia", "distrito_nacional", 2024)] == 73
-    assert by[("provincia", "santo_domingo", 2024)] == 64
-    # Las dos provincias de Ozama difieren entre sí Y del valor de su región: eso es
-    # exactamente la varianza que un consumidor sub-nacional necesita.
-    assert by[("provincia", "distrito_nacional", 2024)] != by[("region", "ozama", 2024)]
-    # 'Total país' y una etiqueta irreconocible no entran; nada se adivina.
-    assert {s for _l, s, _y, _v in rows} == {
-        "ozama", "cibao_norte", "distrito_nacional", "santo_domingo"}
+    assert region_slug("Región Metropolitana") == "ozama"      # alias + prefijo "Región"
+    assert region_slug("Cibao Norte") == "cibao_norte"          # sin prefijo
+    assert region_slug("Gran Santo Domingo") == "ozama"
+    assert region_slug("Total país") is None                    # no se adivina
+    assert region_slug(None) is None
 
 
 def test_coverage_goes_live_by_region_and_period(db):
@@ -407,7 +375,7 @@ def test_sync_one_schooling_upserts_national(db, monkeypatch):
     assert row is not None and row.value == 9.61 and row.source == "ONE" and row.unit == "años"
 
 
-def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
+def test_sync_minerd_coverage_upserts_by_region(db, monkeypatch):
     import shared.data.minerd_coverage as mc_mod
 
     monkeypatch.setattr(
@@ -415,9 +383,9 @@ def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
         lambda: [("region", "enriquillo", 2024, 66.8), ("region", "ozama", 2024, 67.7),
                  ("provincia", "distrito_nacional", 2024, 73.1)],
     )
-    from modules.social_dev.social_sync import _sync_one_coverage
+    from modules.social_dev.social_sync import _sync_minerd_coverage
 
-    n = _sync_one_coverage(db, lambda _m: None)
+    n = _sync_minerd_coverage(db, lambda _m: None)
     db.commit()
     assert n == 3
     row = (
@@ -442,7 +410,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     si algún día el ensamblador empezara a barrer entidades, este test lo detecta."""
     import shared.data.minerd_coverage as mc_mod
     from modules.social_dev.service import assemble_idm_dataset
-    from modules.social_dev.social_sync import _sync_one_coverage
+    from modules.social_dev.social_sync import _sync_minerd_coverage
 
     _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
     _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
@@ -455,7 +423,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
         lambda: [("provincia", "distrito_nacional", 2024, 73.1),
                  ("provincia", "elias_pina", 2024, 41.2)],
     )
-    _sync_one_coverage(db, lambda _m: None)
+    _sync_minerd_coverage(db, lambda _m: None)
     db.commit()
 
     after = assemble_idm_dataset(db)
@@ -464,7 +432,10 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     assert len(after["dataset"]) == 10          # sigue siendo el panel de regiones
 
 
-def test_discover_labor_links_matches_by_slug():
+def test_discover_labor_links_solo_trae_el_ingreso():
+    """La landing de Trabajo también publica la informalidad, y este módulo ya NO la
+    quiere: la produce el BCRD y se baja de su CDN. Traerla sería bajar un archivo para
+    descartarlo y —peor— dejar a la ONE figurando como fuente de un dato que no es suyo."""
     from shared.data.one_client import discover_labor_links
 
     html = (
@@ -473,9 +444,8 @@ def test_discover_labor_links_matches_by_slug():
         '<a href="/media/zzzz/poblaci&#243;n-desocupada-2008-2024.xlsx">z</a>'  # distractor
     )
     links = discover_labor_links(html)
-    assert links["informality_rate"].endswith("tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx")
     assert "ingreso-laboral-promedio-por-hora-trabajada" in links["income_per_capita"]
-    assert set(links) == {"informality_rate", "income_per_capita"}            # distractor excluded
+    assert set(links) == {"income_per_capita"}     # informalidad y distractor, fuera
 
 
 def test_sync_one_labor_upserts_national(db, monkeypatch):
