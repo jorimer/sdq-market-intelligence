@@ -250,31 +250,50 @@ def _fallback_key(name: str) -> str:
     return "_".join(bk.split("_")[:2]) if bk else (slugify_insurer(name) or "sin_nombre")
 
 
-def _official_index():
-    """``{brand_key: (official_name, official_slug)}`` for the authorized-insurer roster."""
+def _official_index() -> Dict[Any, Any]:
+    """``{brand_key: (official_name, official_slug)}`` for the authorized-insurer roster.
+
+    Trae además el índice COMPACTO bajo la clave especial ``("__compacto__",)``: resuelve los
+    nombres donde el rubro es parte de la marca y ``brand_key`` los parte (Auto Seguro vs
+    Autoseguro). Va dentro del mismo dict para no cambiar la firma de todo lo que lo consume.
+    """
     from shared.data.sis_roster_client import official_insurers
-    from shared.data.sis_solvency_client import brand_key
+    from shared.data.sis_solvency_client import brand_key, brand_key_compacta
     from modules.insurance_intel.external.audited_excel_extractor import slugify_insurer
-    idx = {}
+    idx: Dict[Any, Any] = {}
+    compacto: Dict[str, Any] = {}
     for name in official_insurers():
-        idx[brand_key(name)] = (name, slugify_insurer(name))
+        v = (name, slugify_insurer(name))
+        idx[brand_key(name)] = v
+        compacto[brand_key_compacta(name)] = v
+    if compacto:
+        idx[("__compacto__",)] = compacto
     return idx
 
 
-def _match_official(key: str, official: dict):
+def _match_official(key: str, official: dict, nombre: Optional[str] = None):
     """Match an entity's brand key to an official company. exact → prefix (≥5) → unique
-    first-token. Returns ``(official_name, official_slug)`` or None."""
-    if key in official:
-        return official[key]
-    for ok, v in official.items():
+    first-token → clave compacta EXACTA. Returns ``(official_name, official_slug)`` or None.
+
+    El último paso solo corre con *nombre* y solo por igualdad exacta: recupera los casos
+    donde el rubro es parte de la marca, sin poder inventar parentescos.
+    """
+    compacto = official.get(("__compacto__",)) or {}
+    reales = {k: v for k, v in official.items() if isinstance(k, str)}
+    if key in reales:
+        return reales[key]
+    for ok, v in reales.items():
         short, long = sorted((key, ok), key=len)
         if len(short) >= 5 and long.startswith(short):
             return v
     first = key.split("_")[0]
     if len(first) >= 5:
-        hits = [v for ok, v in official.items() if ok.split("_")[0] == first]
+        hits = [v for ok, v in reales.items() if ok.split("_")[0] == first]
         if len(hits) == 1:
             return hits[0]
+    if nombre and compacto:
+        from shared.data.sis_solvency_client import brand_key_compacta
+        return compacto.get(brand_key_compacta(nombre))
     return None
 
 
@@ -297,7 +316,7 @@ def _canon_map(ents, official) -> tuple:
     heuristic = not official
     for e in ents:
         if official:
-            m = _match_official(brand_key(e.name), official)
+            m = _match_official(brand_key(e.name), official, e.name)
             if m:
                 canon[e.slug] = (m[1], m[0], m[1])  # key=slug, official name, official slug
         else:

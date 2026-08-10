@@ -45,6 +45,31 @@ def brand_key(name: str) -> str:
     return "_".join(toks)
 
 
+# Formas societarias. Se descartan siempre; a diferencia de ``drop``, acá NO van las
+# palabras del rubro, porque para la clave compacta son parte del nombre comercial.
+_FORMAS = {"s", "a", "sa", "c", "por", "cxa", "inc", "srl", "ltd", "sas"}
+
+
+def brand_key_compacta(name: str) -> str:
+    """Clave alternativa que CONSERVA las palabras del rubro y las pega sin separador.
+
+    ``brand_key`` descarta "seguro(s)" por genérica, lo cual es correcto en general pero
+    parte los nombres donde el rubro ES la marca: «Auto Seguro, S. A.» queda en ``auto``
+    —cuatro letras— y no parea con «Autoseguro, S.A.» del roster, porque el matcher exige
+    cinco caracteres para arriesgar un prefijo. Pegando los tokens, ambas dan ``autoseguro``.
+
+    Se usa SOLO como coincidencia EXACTA de último recurso: sin prefijos ni primer token, un
+    match compacto no puede inventar parentescos entre compañías distintas.
+
+    >>> brand_key_compacta("Auto Seguro, S. A.") == brand_key_compacta("Autoseguro, S.A.")
+    True
+    """
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode().lower()
+    toks = [t for t in re.split(r"[^a-z0-9]+", s) if t and t not in _FORMAS]
+    return "".join(toks)
+
+
 def _num(v) -> Optional[float]:
     try:
         f = float(v)
