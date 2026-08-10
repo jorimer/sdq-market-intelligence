@@ -82,15 +82,43 @@ def _sync_wdi_health(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_bcrd_informality(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Informalidad laboral desde la FUENTE PRIMARIA (ENCFT del BCRD, CDN público).
+
+    Reemplaza el raspado de la landing de la ONE, que dejó de funcionar cuando el
+    portal quedó tras un desafío de Cloudflare. La ONE no producía este dato: lo
+    republicaba. Verificado contra la serie anterior — 55.47% contra 55.46% en 2024,
+    coinciden en la centésima, así que es el mismo indicador y no uno parecido."""
+    from shared.data.bcrd_labor import LICENSE, SOURCE, fetch_bcrd_informality
+
+    set_phase("informalidad laboral (BCRD · ENCFT)")
+    rows = fetch_bcrd_informality()   # la excepción sube a _best_effort
+    synced = 0
+    for year, value in rows:
+        _upsert_indicator(db, theme="informality_rate", entity=HEALTH_ENTITY,
+                          period=str(year), value=float(value), source=SOURCE,
+                          disagg="nacional", unit=_LABOR_UNITS["informality_rate"])
+        synced += 1
+    logger.info("[social] informalidad BCRD: %d años (%s)", synced, LICENSE[:40])
+    return synced
+
+
 def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Fetch national ONE labour series (informality + income proxy) → sd_indicators
-    (entity ``nacional``, applied to every region in the assembly). Best-effort."""
+    """Ingreso laboral promedio (ONE) → sd_indicators (entity ``nacional``).
+
+    Queda SOLO el ingreso: la informalidad pasó al BCRD, que es quien la produce. El
+    BCRD publica los deciles de ingreso como CONTEOS de perceptores, no como montos, así
+    que el ingreso laboral promedio no tiene sustituto primario y sigue dependiendo de
+    la ONE — hoy inalcanzable. La falla se declara en ``errors`` en vez de esconderse:
+    el dato ya cargado no se pierde (el upsert no borra), pero deja de refrescarse."""
     from shared.data.one_client import fetch_one_labor
 
-    set_phase("trabajo nacional (ONE: informalidad + ingreso)")
+    set_phase("ingreso laboral nacional (ONE)")
     rows = fetch_one_labor()   # la excepción sube a _best_effort, que la DECLARA
     synced = 0
     for theme, year, value in rows:
+        if theme != "income_per_capita":
+            continue          # la informalidad ya vino del BCRD; no se pisa
         _upsert_indicator(db, theme=theme, entity=HEALTH_ENTITY, period=str(year),
                           value=float(value), source="ONE",
                           disagg="nacional", unit=_LABOR_UNITS.get(theme))
@@ -264,8 +292,11 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         synced += 1
     health_synced = _best_effort(
         "salud nacional (WDI)", lambda: _sync_wdi_health(db, set_phase), errors)
+    informality_synced = _best_effort(
+        "informalidad laboral (BCRD · ENCFT)",
+        lambda: _sync_bcrd_informality(db, set_phase), errors)
     labor_synced = _best_effort(
-        "trabajo nacional (ONE)", lambda: _sync_one_labor(db, set_phase), errors)
+        "ingreso laboral (ONE)", lambda: _sync_one_labor(db, set_phase), errors)
     coverage_synced = _best_effort(
         "cobertura educativa (ONE)", lambda: _sync_one_coverage(db, set_phase), errors)
     schooling_synced = _best_effort(
@@ -279,6 +310,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     return {
         "synced": synced,
         "health_synced": health_synced,
+        "informality_synced": informality_synced,
         "labor_synced": labor_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,
