@@ -148,7 +148,8 @@ def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
-def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
+def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None],
+                          provenance: Dict[str, str]) -> int:
     """Cobertura neta de secundaria por región Y por provincia → ``sd_indicators``.
 
     La fuente pasó de la planilla de la ONE al tablero del MINERD, que es quien produce
@@ -163,9 +164,15 @@ def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
     provincias no puede mover un score."""
     from shared.data.minerd_coverage import SOURCE as MINERD_SOURCE
     from shared.data.minerd_coverage import fetch_minerd_coverage
+    from shared.data.snapshots import live_or_snapshot
 
     set_phase("cobertura educativa por región y provincia (MINERD · SIIE)")
-    rows = fetch_minerd_coverage()   # la excepción sube a _best_effort
+    # El tablero Power BI limita por tasa y devuelve 400 sin aviso — le pasó también a
+    # una máquina de trabajo minutos después de funcionar. La instantánea comiteada es el
+    # camino offline que el propio shared/data/powerbi ya prescribe para esta API.
+    rows, prov = live_or_snapshot("minerd_coverage", fetch_minerd_coverage,
+                                  source=MINERD_SOURCE)
+    provenance["secondary_coverage"] = prov
     synced = 0
     for level, slug, year, value in rows:
         _upsert_indicator(db, theme=COVERAGE_THEME, entity=slug, period=str(year),
@@ -175,7 +182,8 @@ def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
-def _sync_siuben_provincial(db: Session, set_phase: Callable[[str], None]) -> int:
+def _sync_siuben_provincial(db: Session, set_phase: Callable[[str], None],
+                            provenance: Dict[str, str]) -> int:
     """Fetch the five SIUBEN provincial boards (32 provinces, quarterly since 2017) →
     ``sd_indicators`` with ``disaggregation='provincia'``.
 
@@ -189,9 +197,15 @@ def _sync_siuben_provincial(db: Session, set_phase: Callable[[str], None]) -> in
     The universe (the SIUBEN targeting registry, not the general population) travels in
     the series code and unit; see :mod:`shared.data.siuben_client`. Best-effort."""
     from shared.data.siuben_client import fetch_siuben_provincial, theme_spec
+    from shared.data.snapshots import live_or_snapshot
 
     set_phase("indicadores provinciales (SIUBEN: 32 provincias)")
-    rows = fetch_siuben_provincial()   # la excepción sube a _best_effort
+    # Producción NO alcanza siuben.gob.do (ConnectTimeout desde Railway) aunque el
+    # descubrimiento por datos.gob.do sí llegue: es ese host, no la red. El respaldo se
+    # captura donde la fuente responde (scripts/refresh_social_snapshots.py).
+    rows, prov = live_or_snapshot("siuben_provincial", fetch_siuben_provincial,
+                                  source=SIUBEN_SOURCE)
+    provenance["siuben_provincial"] = prov
     if not rows:
         return 0
 
@@ -308,7 +322,10 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     set_phase(f"persistiendo {len(records)} valores")
     synced = 0
     periods = set()
-    errors = []
+    errors: List[str] = []
+    # Procedencia por fuente: 'live' o 'snapshot:AAAA-MM-DD'. Viaja SIEMPRE al resultado —
+    # un respaldo usado en silencio es exactamente cómo un fallback se vuelve permanente.
+    provenance: Dict[str, str] = {}
     for r in records:
         region, theme, period = r.dimension, r.series, r.period
         if not region or not period:
@@ -331,14 +348,14 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         lambda: _sync_sisdom_income(db, set_phase), errors)
     coverage_synced = _best_effort(
         "cobertura educativa (MINERD · SIIE)",
-        lambda: _sync_minerd_coverage(db, set_phase), errors)
+        lambda: _sync_minerd_coverage(db, set_phase, provenance), errors)
     schooling_synced = _best_effort(
         "escolaridad nacional (ONE)", lambda: _sync_one_schooling(db, set_phase), errors)
     findex_synced = _best_effort(
         "inclusión financiera (BM Findex)", lambda: _sync_wb_findex(db, set_phase), errors)
     provincial_synced = _best_effort(
         "indicadores provinciales (SIUBEN)",
-        lambda: _sync_siuben_provincial(db, set_phase), errors)
+        lambda: _sync_siuben_provincial(db, set_phase, provenance), errors)
     db.commit()
     return {
         "synced": synced,
@@ -349,6 +366,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "schooling_synced": schooling_synced,
         "findex_synced": findex_synced,
         "provincial_synced": provincial_synced,
+        "provenance": provenance,
         "periods": sorted(periods),
         "regions": len({r.dimension for r in records if r.dimension}),
         "themes": (sorted({r.series for r in records})
