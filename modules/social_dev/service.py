@@ -96,13 +96,32 @@ FINANCIAL_VAR = "financial_inclusion"
 EDUCATION_VARS = ("literacy_rate",)
 HEALTH_VARS = ("life_expectancy", "child_mortality")
 # National annual series applied uniformly to every region; carry a declared rubric
-# default (50) when a period lacks the real value. income_per_capita is a declared
-# PROXY (ONE hourly labour income); schooling_years = ONE national years of schooling.
-NATIONAL_LIVE_VARS = ("income_per_capita", "informality_rate", "schooling_years")
+# default (50) when a period lacks the real value. informality_rate = BCRD ENCFT;
+# schooling_years = ONE national years of schooling (no regional breakdown exists).
+NATIONAL_LIVE_VARS = ("informality_rate",)
 POVERTY_VAR = "poverty_rate"
-# Net secondary-coverage by development region + period (ONE), like poverty: real
+# Net secondary-coverage by development region + period (MINERD), like poverty: real
 # regional + temporal education-access signal in the education dimension.
 COVERAGE_VAR = "secondary_coverage"
+# Escolaridad promedio POR REGIÓN (SISDOM del MEPyD, cuadro 05 3 007). Dejó de ser
+# nacional el 2026-08-10: la serie de la ONE daba la MISMA cifra a las diez regiones y
+# ahora hay 2,3 años de brecha entre Ozama y Enriquillo. Se resuelve como el ingreso —
+# último valor disponible por región y live solo si LAS 10 lo tienen — porque el motor
+# normaliza min-max entre regiones y un llenado parcial no es "menos dato": corre el
+# extremo y cambia el score de las demás.
+SCHOOLING_VAR = "schooling_years"
+# Ingreso per cápita POR REGIÓN (SISDOM del MEPyD). Dejó de ser nacional el 2026-08-09:
+# antes era el proxy horario de la ONE, la MISMA cifra para las 10 regiones. Se resuelve
+# como la educación —último valor disponible por región, y live solo si LAS 10 lo
+# tienen— y no como la pobreza, por dos razones:
+#
+#   * el SISDOM es una publicación anual que puede quedar un año detrás de la serie de
+#     pobreza, que es la que fija el período objetivo; atarlo al período haría que la
+#     variable DESAPAREZCA del panel el día que la pobreza avance primero;
+#   * el motor normaliza min-max ENTRE regiones, así que un llenado parcial no es
+#     "menos dato": corre el mínimo o el máximo y cambia el score de las demás. Con
+#     nueve regiones la décima no falta, contamina.
+INCOME_VAR = "income_per_capita"
 HEALTH_ENTITY = "nacional"
 
 
@@ -161,6 +180,13 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
         var: all(latest.get(slug, {}).get(var) is not None for slug, _ in regions)
         for var in EDUCATION_VARS
     }
+    # Mismo criterio de completitud para el ingreso regional (SISDOM), por la razón
+    # explicada en INCOME_VAR: nueve de diez no es "casi", es un min-max distinto.
+    income_live = all(latest.get(slug, {}).get(INCOME_VAR) is not None
+                      for slug, _ in regions)
+    # Ídem escolaridad: pasó de nacional a regional (SISDOM 05 3 007) el 2026-08-10.
+    schooling_live = all(latest.get(slug, {}).get(SCHOOLING_VAR) is not None
+                         for slug, _ in regions)
 
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
@@ -185,10 +211,22 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
             if v is not None:
                 merged[var] = float(v)
             smap[var] = "live" if v is not None else "rubric"
-        for var in NATIONAL_LIVE_VARS:  # national (ONE labour), rubric default if absent
+        for var in NATIONAL_LIVE_VARS:  # nacional, rubric default if absent
             v = nat.get(var)
             merged[var] = float(v) if v is not None else float(defaults.get(var, 50))
             smap[var] = "live" if v is not None else "rubric"
+        if schooling_live:              # por región (SISDOM), live iff las 10 la tienen
+            merged[SCHOOLING_VAR] = float(latest[slug][SCHOOLING_VAR])
+            smap[SCHOOLING_VAR] = "live"
+        else:
+            merged[SCHOOLING_VAR] = float(defaults.get(SCHOOLING_VAR, 50))
+            smap[SCHOOLING_VAR] = "rubric"
+        if income_live:                 # por región (SISDOM), live iff las 10 la tienen
+            merged[INCOME_VAR] = float(latest[slug][INCOME_VAR])
+            smap[INCOME_VAR] = "live"
+        else:
+            merged[INCOME_VAR] = float(defaults.get(INCOME_VAR, 50))
+            smap[INCOME_VAR] = "rubric"
         pov = snap.get(slug, {}).get(POVERTY_VAR)  # by region (ONE)
         if pov is not None:
             merged[POVERTY_VAR] = float(pov)
@@ -216,10 +254,27 @@ _THEME_LABELS = {
     "poverty_extreme": "Pobreza monetaria extrema",
     "secondary_coverage": "Cobertura neta secundaria",
     "literacy_rate": "Tasa de alfabetización",
+    "income_per_capita": "Ingreso familiar mensual por persona",
+    "schooling_years": "Escolaridad promedio (15+)",
+    "endesa_child_mortality": "Mortalidad infantil (ENDESA)",
 }
+# Series que NO alimentan el IDM y llevan una advertencia propia. Una serie oficial pero
+# vieja es publicable; lo que no es publicable es servirla como si fuera actual.
+_SERIES_CAVEATS = {
+    "endesa_child_mortality": (
+        " Cortes de la encuesta ENDESA, NO una serie anual: el índice de desarrollo usa "
+        "la serie anual del Banco Mundial y esta no lo alimenta. Comparte concepto con "
+        "ella pero no metodología — una es estimación modelada y esta una encuesta de "
+        "hogares; no deben graficarse juntas."),
+}
+# Una serie servida sin licencia es una serie que el cliente no sabe si puede citar. El
+# emisor entra acá el mismo día que empieza a escribir filas sub-nacionales — si no, el
+# descriptor sale con ``license: null`` y nadie se entera.
 _SOURCE_LICENSES = {
     "ONE": "datos oficiales ONE — uso público con cita",
     "SIUBEN": "datos abiertos del Estado dominicano (datos.gob.do) — uso público con cita",
+    "MINERD": "estadísticas públicas del Ministerio de Educación (SIIE) — uso con cita",
+    "MEPyD": "SISDOM (VAES/MEPyD) — indicadores sociales oficiales, uso público con cita",
 }
 
 
@@ -244,6 +299,7 @@ def subnational_series(db: Session) -> List[Dict[str, Any]]:
     Se derivan del contenido real de ``sd_indicators``: una fuente nueva que empiece a
     escribir con ``disaggregation`` geográfica aparece sola en el catálogo, sin que nadie
     edite la capa API (premisa de auto-extensión de la Data API)."""
+    from shared.data.series_nature import infer_nature
     from shared.reference.provinces import NAME_OF as PROVINCE_NAMES
 
     rows = (
@@ -266,14 +322,17 @@ def subnational_series(db: Session) -> List[Dict[str, Any]]:
         place = (PROVINCE_NAMES.get(entity) if level == "provincia"
                  else region_names.get(entity)) or entity
         source = str(obs[0].source or "")
+        unit = str(obs[0].unit) if obs[0].unit is not None else None
         theme_label = _THEME_LABELS.get(theme)
         if theme_label is None:
             spec = _siuben_spec(theme)
             theme_label = spec.note.rstrip(".") if spec else theme
         out.append({
             "code": _series_code(theme, entity),
+            # ``source`` viaja para que la nota nombre al emisor real: el eje ya no tiene
+            # uno solo (ONE, MINERD, MEPyD, SIUBEN escriben filas sub-nacionales).
             "label": f"{theme_label} — {place}",
-            "unit": obs[0].unit,
+            "unit": unit,
             # Trimestral si el período trae Q (padrón SIUBEN); anual si no.
             "frequency": "quarterly" if any("Q" in (p or "") for p in periods) else "annual",
             "source": source,
@@ -281,10 +340,16 @@ def subnational_series(db: Session) -> List[Dict[str, Any]]:
             "period_first": periods[0] if periods else None,
             "period_latest": periods[-1] if periods else None,
             "n_obs": len(obs),
-            "nature": "rate",          # todas son porcentajes: su variación va en PUNTOS
+            # La naturaleza sale de la UNIDAD que declaró el emisor, no de una constante.
+            # Estaba clavada en "rate" porque hasta hoy todas las series del eje eran
+            # porcentajes; el ingreso del SISDOM viene en RD$ y con la constante habría
+            # salido como tasa — un consumidor leería su variación en PUNTOS y publicaría
+            # "el ingreso subió 2.400 puntos". Es el mismo error de categoría que
+            # `series_nature` existe para cerrar.
+            "nature": infer_nature(unit=unit, label=theme_label),
             "geo_level": level,
             "curated": True,           # tema elegido y nombrado, no volcado de planilla
-            "note": _series_note(theme, level),
+            "note": _series_note(theme, level, source),
         })
     return out
 
@@ -301,7 +366,17 @@ def _siuben_spec(theme: str):
     return theme_spec(theme)
 
 
-def _series_note(theme: str, level: str) -> str:
+#: Emisor → cómo nombrarlo en la nota de la serie. La nota decía "ONE" para todo, que era
+#: cierto cuando la ONE era la única fuente sub-nacional del eje y hoy sería atribuirle a
+#: un organismo el dato de otro.
+_SOURCE_NAMES = {
+    "ONE": "la Oficina Nacional de Estadística (ONE)",
+    "MINERD": "el Ministerio de Educación (tablero SIIE del MINERD)",
+    "MEPyD": "el SISDOM del Ministerio de Economía (VAES/MEPyD)",
+}
+
+
+def _series_note(theme: str, level: str, source: str = "") -> str:
     """La nota carga el UNIVERSO, que es lo que decide si la cifra se puede leer como
     tasa poblacional. Sin esto, un consumidor toma una composición del padrón SIUBEN
     por la tasa de la provincia."""
@@ -309,9 +384,11 @@ def _series_note(theme: str, level: str) -> str:
     if spec is not None:
         return (f"{spec.note} Universo: padrón de focalización del SIUBEN (hogares "
                 "registrados), NO la población general de la demarcación.")
-    if level == "provincia":
-        return "Desagregación provincial del cuadro oficial de la ONE."
-    return "Desagregación por región de desarrollo (10 regiones, ONE)."
+    emisor = _SOURCE_NAMES.get(source)
+    quien = f" Publicado por {emisor}." if emisor else ""
+    donde = ("Desagregación por provincia (32)." if level == "provincia"
+             else "Desagregación por región de desarrollo (10 regiones).")
+    return donde + quien + _SERIES_CAVEATS.get(theme, "")
 
 
 def subnational_observations(

@@ -21,13 +21,13 @@ WDI_HEALTH = {"SP.DYN.LE00.IN": "life_expectancy", "SP.DYN.IMRT.IN": "child_mort
 HEALTH_ENTITY = "nacional"
 _WDI_HEALTH_YEARS = 30
 
-# National labour (ONE/BCRD ENCFT) → applied to every region, like WDI health.
-# informality_rate = exact IDM variable; income_per_capita = declared PROXY
-# (hourly labour income, not household per-capita income).
-_LABOR_UNITS = {
-    "informality_rate": "% de la población ocupada",
-    "income_per_capita": "RD$/hora (proxy: ingreso laboral)",
-}
+# Informalidad nacional (ENCFT del BCRD) → aplicada a todas las regiones, como la salud
+# del WDI. Es la variable exacta del IDM, no un proxy.
+INFORMALITY_UNIT = "% de la población ocupada"
+# Ingreso per cápita POR REGIÓN (SISDOM del MEPyD). Dejó de ser nacional: ver
+# :mod:`shared.data.sisdom_income`.
+INCOME_THEME = "income_per_capita"
+SCHOOLING_THEME = "schooling_years"
 COVERAGE_THEME = "secondary_coverage"  # ONE net secondary-coverage by region + period
 COVERAGE_UNIT = "% (cobertura neta secundaria)"  # ≤40 chars: sd_indicators.unit VARCHAR(40)
 
@@ -82,44 +82,167 @@ def _sync_wdi_health(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
-def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Fetch national ONE labour series (informality + income proxy) → sd_indicators
-    (entity ``nacional``, applied to every region in the assembly). Best-effort."""
-    from shared.data.one_client import fetch_one_labor
+def _sync_bcrd_informality(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Informalidad laboral desde la FUENTE PRIMARIA (ENCFT del BCRD, CDN público).
 
-    set_phase("trabajo nacional (ONE: informalidad + ingreso)")
-    rows = fetch_one_labor()   # la excepción sube a _best_effort, que la DECLARA
+    Reemplaza el raspado de la landing de la ONE, que dejó de funcionar cuando el
+    portal quedó tras un desafío de Cloudflare. La ONE no producía este dato: lo
+    republicaba. Verificado contra la serie anterior — 55.47% contra 55.46% en 2024,
+    coinciden en la centésima, así que es el mismo indicador y no uno parecido."""
+    from shared.data.bcrd_labor import LICENSE, SOURCE, fetch_bcrd_informality
+
+    set_phase("informalidad laboral (BCRD · ENCFT)")
+    rows = fetch_bcrd_informality()   # la excepción sube a _best_effort
     synced = 0
-    for theme, year, value in rows:
-        _upsert_indicator(db, theme=theme, entity=HEALTH_ENTITY, period=str(year),
-                          value=float(value), source="ONE",
-                          disagg="nacional", unit=_LABOR_UNITS.get(theme))
+    for year, value in rows:
+        _upsert_indicator(db, theme="informality_rate", entity=HEALTH_ENTITY,
+                          period=str(year), value=float(value), source=SOURCE,
+                          disagg="nacional", unit=INFORMALITY_UNIT)
+        synced += 1
+    logger.info("[social] informalidad BCRD: %d años (%s)", synced, LICENSE[:40])
+    return synced
+
+
+def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Ingreso per cápita POR REGIÓN (SISDOM del MEPyD) → ``sd_indicators``.
+
+    Reemplaza el ingreso laboral por hora de la ONE, que era un PROXY declarado, nacional
+    y —desde Cloudflare— inalcanzable. El cuadro ``03 3 021`` es la variable exacta del
+    IDM (ingreso familiar mensual por persona), anual 2000-2024 y abierta por las 10
+    regiones de desarrollo. La variable deja de ser una constante con etiqueta geográfica.
+
+    **A diferencia de las demás sub-syncs, esta BORRA algo**: las filas nacionales que
+    dejó el proxy de la ONE. No es limpieza cosmética. Conviven bajo el mismo tema una
+    cifra en RD$/hora (~167) y otra en RD$/mes por persona (~18.000): dos órdenes de
+    magnitud y dos unidades. Cualquier lectura futura que caiga en la vieja —un fallback
+    a ``nacional``, un promedio, una serie de la Data API— devolvería un disparate sin
+    que nada avise. El upsert normal no las alcanza porque cambió la entidad, así que
+    quedarían ahí para siempre. Se borra solo lo que este cambio deja obsoleto: tema
+    ingreso + entidad nacional + fuente ONE."""
+    from shared.data.sisdom_income import SOURCE as SISDOM_SOURCE
+    from shared.data.sisdom_income import UNIT, fetch_sisdom_income_per_capita
+
+    set_phase("ingreso per cápita por región (SISDOM · MEPyD)")
+    rows = fetch_sisdom_income_per_capita()   # la excepción sube a _best_effort
+    if not rows:
+        return 0
+
+    synced = 0
+    for slug, year, value in rows:
+        _upsert_indicator(db, theme=INCOME_THEME, entity=slug, period=str(year),
+                          value=float(value), source=SISDOM_SOURCE,
+                          disagg="region", unit=UNIT)
+        synced += 1
+
+    # Solo después de que la fuente nueva TRAJO dato: si fallara, el borrado dejaría la
+    # variable sin nada. El orden importa.
+    stale = (
+        db.query(SocialIndicator)
+        .filter(SocialIndicator.theme == INCOME_THEME,
+                SocialIndicator.entity_key == HEALTH_ENTITY,
+                SocialIndicator.source == "ONE")
+        .delete(synchronize_session=False)
+    )
+    if stale:
+        logger.info("[social] ingreso: %d filas nacionales del proxy ONE dadas de baja "
+                    "(reemplazadas por %d regionales del SISDOM)", stale, synced)
+    return synced
+
+
+def _sync_sisdom_schooling(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Escolaridad promedio POR REGIÓN (SISDOM del MEPyD, cuadro 05 3 007).
+
+    Reemplaza la serie NACIONAL de la ONE, que quedó tras Cloudflare y que —aun cuando
+    llegaba— era la MISMA cifra para las diez regiones. Por región discrimina: en 2024
+    Ozama promedia 10,29 años y Enriquillo 7,98, una brecha de 2,3 años que el número
+    nacional escondía. Segunda constante nacional del IDM en caer, después del ingreso.
+
+    Da de baja la fila nacional del proxy anterior: bajo el mismo tema convivirían el
+    valor país y los diez regionales, y el upsert no la alcanza porque cambió la entidad.
+    Corre DESPUÉS de que la fuente nueva trajo dato, así que una caída del MEPyD no
+    destruye lo que hay."""
+    from shared.data.sisdom_schooling import SOURCE, UNIT, fetch_sisdom_schooling
+
+    set_phase("escolaridad por región (SISDOM · MEPyD)")
+    rows = fetch_sisdom_schooling()   # la excepción sube a _best_effort
+    synced = 0
+    for slug, year, value in rows:
+        _upsert_indicator(db, theme=SCHOOLING_THEME, entity=slug, period=str(year),
+                          value=float(value), source=SOURCE, disagg="region", unit=UNIT)
+        synced += 1
+    if synced:
+        borradas = (db.query(SocialIndicator)
+                    .filter(SocialIndicator.theme == SCHOOLING_THEME,
+                            SocialIndicator.entity_key == HEALTH_ENTITY)
+                    .delete(synchronize_session=False))
+        if borradas:
+            logger.info("[social] escolaridad: %d filas nacionales dadas de baja "
+                        "(ahora es por región)", borradas)
+    return synced
+
+
+def _sync_endesa_child_mortality(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Mortalidad infantil POR PROVINCIA (SISDOM `04 3 035b`, rondas ENDESA 2002 y 2007).
+
+    Serie PUBLICADA, no variable del índice: el IDM sigue usando la serie anual viva de
+    WDI. Entrarla al cálculo ganaría territorio y perdería vigencia — todo período
+    posterior a 2007 quedaría con el mismo número, otra constante con etiqueta
+    provincial. El tema lleva el nombre de la encuesta para que nadie la confunda con la
+    serie del Banco Mundial: comparten concepto, no metodología.
+
+    Que no toque el índice no depende de la buena voluntad: `assemble_idm_dataset` lee
+    `child_mortality` de la entidad `nacional`, y esto escribe otro tema en entidades
+    provinciales."""
+    from shared.data.sisdom_child_mortality import (
+        SOURCE, THEME, UNIT, fetch_endesa_child_mortality,
+    )
+
+    set_phase("mortalidad infantil por provincia (SISDOM · ENDESA)")
+    rows = fetch_endesa_child_mortality()   # la excepción sube a _best_effort
+    synced = 0
+    for slug, year, value in rows:
+        _upsert_indicator(db, theme=THEME, entity=slug, period=str(year),
+                          value=float(value), source=SOURCE, disagg="provincia", unit=UNIT)
         synced += 1
     return synced
 
 
-def _sync_one_coverage(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Fetch ONE net secondary-coverage by development region AND by province
-    (2010-2024) → sd_indicators. Best-effort.
+def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None],
+                          provenance: Dict[str, str]) -> int:
+    """Cobertura neta de secundaria por región Y por provincia → ``sd_indicators``.
 
-    The two levels share the ``secondary_coverage`` theme and are told apart by
-    ``disaggregation`` — the province slugs never collide with the region slugs (guarded
-    in ``shared/reference/tests/test_provinces.py``). Only the regional rows reach the
-    IDM: :func:`assemble_idm_dataset` iterates the region catalog, so adding provinces
-    cannot move a regional score."""
-    from shared.data.one_client import fetch_one_education_coverage
+    La fuente pasó de la planilla de la ONE al tablero del MINERD, que es quien produce
+    el indicador: la ONE lo republicaba y su portal quedó tras un desafío de Cloudflare.
+    El cambio también trae el desglose PROVINCIAL, que la planilla tenía y el parser
+    anterior descartaba.
 
-    set_phase("cobertura educativa por región y provincia (ONE: secundaria)")
-    rows = fetch_one_education_coverage()   # la excepción sube a _best_effort
+    Los dos niveles comparten el tema ``secondary_coverage`` y se distinguen por
+    ``disaggregation``; los slugs provinciales nunca chocan con los regionales (fijado en
+    ``shared/reference/tests/test_provinces.py``). Solo las filas regionales llegan al
+    IDM: :func:`assemble_idm_dataset` itera el catálogo de regiones, así que agregar
+    provincias no puede mover un score."""
+    from shared.data.minerd_coverage import SOURCE as MINERD_SOURCE
+    from shared.data.minerd_coverage import fetch_minerd_coverage
+    from shared.data.snapshots import live_or_snapshot
+
+    set_phase("cobertura educativa por región y provincia (MINERD · SIIE)")
+    # El tablero Power BI limita por tasa y devuelve 400 sin aviso — le pasó también a
+    # una máquina de trabajo minutos después de funcionar. La instantánea comiteada es el
+    # camino offline que el propio shared/data/powerbi ya prescribe para esta API.
+    rows, prov = live_or_snapshot("minerd_coverage", fetch_minerd_coverage,
+                                  source=MINERD_SOURCE)
+    provenance["secondary_coverage"] = prov
     synced = 0
     for level, slug, year, value in rows:
         _upsert_indicator(db, theme=COVERAGE_THEME, entity=slug, period=str(year),
-                          value=float(value), source="ONE", disagg=level, unit=COVERAGE_UNIT)
+                          value=float(value), source=MINERD_SOURCE, disagg=level,
+                          unit=COVERAGE_UNIT)
         synced += 1
     return synced
 
 
-def _sync_siuben_provincial(db: Session, set_phase: Callable[[str], None]) -> int:
+def _sync_siuben_provincial(db: Session, set_phase: Callable[[str], None],
+                            provenance: Dict[str, str]) -> int:
     """Fetch the five SIUBEN provincial boards (32 provinces, quarterly since 2017) →
     ``sd_indicators`` with ``disaggregation='provincia'``.
 
@@ -133,9 +256,15 @@ def _sync_siuben_provincial(db: Session, set_phase: Callable[[str], None]) -> in
     The universe (the SIUBEN targeting registry, not the general population) travels in
     the series code and unit; see :mod:`shared.data.siuben_client`. Best-effort."""
     from shared.data.siuben_client import fetch_siuben_provincial, theme_spec
+    from shared.data.snapshots import live_or_snapshot
 
     set_phase("indicadores provinciales (SIUBEN: 32 provincias)")
-    rows = fetch_siuben_provincial()   # la excepción sube a _best_effort
+    # Producción NO alcanza siuben.gob.do (ConnectTimeout desde Railway) aunque el
+    # descubrimiento por datos.gob.do sí llegue: es ese host, no la red. El respaldo se
+    # captura donde la fuente responde (scripts/refresh_social_snapshots.py).
+    rows, prov = live_or_snapshot("siuben_provincial", fetch_siuben_provincial,
+                                  source=SIUBEN_SOURCE)
+    provenance["siuben_provincial"] = prov
     if not rows:
         return 0
 
@@ -193,22 +322,6 @@ def _sync_wb_findex(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
-def _sync_one_schooling(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Fetch ONE national average years of schooling (15+, 2000-2024) → sd_indicators
-    (entity ``nacional``, period-matched). ENHOGAR only has literacy by region, not
-    years of schooling, so this comes from the national ONE series. Best-effort."""
-    from shared.data.one_client import fetch_one_education_schooling
-
-    set_phase("escolaridad nacional (ONE: años promedio de educación)")
-    rows = fetch_one_education_schooling()   # la excepción sube a _best_effort
-    synced = 0
-    for year, value in rows:
-        _upsert_indicator(db, theme="schooling_years", entity=HEALTH_ENTITY, period=str(year),
-                          value=float(value), source="ONE", disagg="nacional", unit="años")
-        synced += 1
-    return synced
-
-
 def _best_effort(label: str, fn: Callable[[], int], errors: List[str]) -> int:
     """Corre una sub-sincronización y DEJA RASTRO de por qué no trajo nada.
 
@@ -252,7 +365,10 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     set_phase(f"persistiendo {len(records)} valores")
     synced = 0
     periods = set()
-    errors = []
+    errors: List[str] = []
+    # Procedencia por fuente: 'live' o 'snapshot:AAAA-MM-DD'. Viaja SIEMPRE al resultado —
+    # un respaldo usado en silencio es exactamente cómo un fallback se vuelve permanente.
+    provenance: Dict[str, str] = {}
     for r in records:
         region, theme, period = r.dimension, r.series, r.period
         if not region or not period:
@@ -264,31 +380,46 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         synced += 1
     health_synced = _best_effort(
         "salud nacional (WDI)", lambda: _sync_wdi_health(db, set_phase), errors)
-    labor_synced = _best_effort(
-        "trabajo nacional (ONE)", lambda: _sync_one_labor(db, set_phase), errors)
+    informality_synced = _best_effort(
+        "informalidad laboral (BCRD · ENCFT)",
+        lambda: _sync_bcrd_informality(db, set_phase), errors)
+    # El rótulo nombra al EMISOR, porque es lo que se lee en la consola cuando algo
+    # falla: decir "(ONE)" de un dato que ahora produce otro organismo mandaría a mirar
+    # el portal equivocado.
+    income_synced = _best_effort(
+        "ingreso per cápita (SISDOM · MEPyD)",
+        lambda: _sync_sisdom_income(db, set_phase), errors)
     coverage_synced = _best_effort(
-        "cobertura educativa (ONE)", lambda: _sync_one_coverage(db, set_phase), errors)
+        "cobertura educativa (MINERD · SIIE)",
+        lambda: _sync_minerd_coverage(db, set_phase, provenance), errors)
     schooling_synced = _best_effort(
-        "escolaridad nacional (ONE)", lambda: _sync_one_schooling(db, set_phase), errors)
+        "escolaridad por región (SISDOM · MEPyD)",
+        lambda: _sync_sisdom_schooling(db, set_phase), errors)
     findex_synced = _best_effort(
         "inclusión financiera (BM Findex)", lambda: _sync_wb_findex(db, set_phase), errors)
+    mortality_synced = _best_effort(
+        "mortalidad infantil provincial (SISDOM · ENDESA)",
+        lambda: _sync_endesa_child_mortality(db, set_phase), errors)
     provincial_synced = _best_effort(
         "indicadores provinciales (SIUBEN)",
-        lambda: _sync_siuben_provincial(db, set_phase), errors)
+        lambda: _sync_siuben_provincial(db, set_phase, provenance), errors)
     db.commit()
     return {
         "synced": synced,
         "health_synced": health_synced,
-        "labor_synced": labor_synced,
+        "informality_synced": informality_synced,
+        "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,
         "findex_synced": findex_synced,
         "provincial_synced": provincial_synced,
+        "mortality_synced": mortality_synced,
+        "provenance": provenance,
         "periods": sorted(periods),
         "regions": len({r.dimension for r in records if r.dimension}),
         "themes": (sorted({r.series for r in records})
                    + sorted(set(WDI_HEALTH.values()))
-                   + sorted(_LABOR_UNITS.keys())
+                   + ["informality_rate", INCOME_THEME]
                    + [COVERAGE_THEME, "schooling_years"]
                    + sorted(WB_FINDEX.values())
                    + sorted(SIUBEN_THEMES)),

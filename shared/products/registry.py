@@ -61,7 +61,7 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
     # desde hace tiempo pero fuera del catálogo, y por eso invisible para la Data API y
     # para /quality — que recorren esta lista.
     CatalogEntry("social_dev", "SDQ Desarrollo Social", "social_dev",
-                 "ONE · SIUBEN · WDI/Banco Mundial"),
+                 "MEPyD (SISDOM) · MINERD (SIIE) · SIUBEN · ONE · BCRD · Banco Mundial"),
 ]
 
 CATALOG_BY_KEY: Dict[str, CatalogEntry] = {e.sector_key: e for e in PRODUCT_CATALOG}
