@@ -58,7 +58,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
                 "_sync_minerd_coverage", "_sync_one_schooling", "_sync_wb_findex",
                 "_sync_siuben_provincial"):
-        monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase: 1)
+        monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase, *a: 1)
 
     first = one_social_sync(db)
     assert first["errors"] == []
@@ -87,13 +87,13 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
     Las dos causas se distinguen porque se actúan distinto — 'no pudimos llegar' es un
     problema a investigar; 'la fuente no publicó' puede ser legítimo."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, sp: 7)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_sisdom_income", lambda db, sp: 0)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_bcrd_informality", lambda db, sp: 4)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, sp: 0)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, sp: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, sp, *a: 7)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_sisdom_income", lambda db, sp, *a: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_bcrd_informality", lambda db, sp, *a: 4)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, sp, *a: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, sp, *a: 0)
 
-    def _boom(db, sp):
+    def _boom(db, sp, *a):
         raise ConnectionError("403 Forbidden")
 
     monkeypatch.setattr("modules.social_dev.social_sync._sync_minerd_coverage", _boom)
@@ -123,8 +123,59 @@ def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
     for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
                "_sync_minerd_coverage", "_sync_one_schooling", "_sync_wb_findex",
                "_sync_siuben_provincial"):
-        monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp: 3)
+        monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp, *a: 3)
     assert one_social_sync(db)["errors"] == []
+
+
+def test_el_uso_de_una_instantanea_viaja_al_resultado(db, monkeypatch, tmp_path):
+    """El respaldo NO puede usarse en silencio.
+
+    Producción no alcanza siuben.gob.do y el tablero del MINERD limita por tasa, así que
+    la instantánea comiteada es un camino REAL, no teórico. Y un camino real que no se
+    declara es exactamente cómo un fallback se vuelve permanente sin que nadie lo note
+    (ya pasó acá con los 'promedios del sistema'). Por eso la procedencia sale en el
+    resultado de la operación, al lado de los contadores."""
+    from shared.data import snapshots
+
+    monkeypatch.setattr(snapshots, "SNAPSHOT_DIR", tmp_path)
+    snapshots.write_snapshot("siuben_provincial",
+                             [("siuben_illiteracy_head_share", "elias_pina", "2024-Q4", 36.3)],
+                             source="SIUBEN")
+
+    import shared.data.siuben_client as siuben
+
+    def _caido():
+        raise ConnectionError("timed out")
+
+    monkeypatch.setattr(siuben, "fetch_siuben_provincial", _caido)
+    from modules.social_dev.social_sync import _sync_siuben_provincial
+
+    prov = {}
+    assert _sync_siuben_provincial(db, lambda _m: None, prov) == 1
+    db.commit()
+    # La cifra entró…
+    row = (
+        db.query(SocialIndicator)
+        .filter_by(entity_key="elias_pina", theme="siuben_illiteracy_head_share").first()
+    )
+    assert row is not None and row.value == 36.3
+    # …y el resultado DICE que vino de una foto, con su fecha.
+    assert prov["siuben_provincial"].startswith("snapshot:")
+    assert len(prov["siuben_provincial"].split(":", 1)[1]) == 10
+
+
+def test_con_la_fuente_viva_la_procedencia_dice_live(db, monkeypatch):
+    """El contrapeso: si la fuente responde, no se rotula como foto."""
+    import shared.data.siuben_client as siuben
+
+    monkeypatch.setattr(
+        siuben, "fetch_siuben_provincial",
+        lambda: [("siuben_illiteracy_head_share", "azua", "2024-Q4", 20.0)])
+    from modules.social_dev.social_sync import _sync_siuben_provincial
+
+    prov = {}
+    assert _sync_siuben_provincial(db, lambda _m: None, prov) == 1
+    assert prov["siuben_provincial"] == "live"
 
 
 def _ind(db, entity, theme, period, value, source="ONE"):
@@ -343,7 +394,7 @@ def test_sync_siuben_provincial_upserts_por_provincia(db, monkeypatch):
     monkeypatch.setattr(siuben, "fetch_siuben_provincial", lambda: rows)
     from modules.social_dev.social_sync import _sync_siuben_provincial
 
-    assert _sync_siuben_provincial(db, lambda _m: None) == 3
+    assert _sync_siuben_provincial(db, lambda _m: None, {}) == 3
     db.commit()
     row = (
         db.query(SocialIndicator)
@@ -356,7 +407,7 @@ def test_sync_siuben_provincial_upserts_por_provincia(db, monkeypatch):
     assert "padrón" in (row.unit or "")        # el universo viaja con el dato
 
     # Segunda corrida: upsert en el lugar, sin duplicar.
-    assert _sync_siuben_provincial(db, lambda _m: None) == 3
+    assert _sync_siuben_provincial(db, lambda _m: None, {}) == 3
     db.commit()
     assert db.query(SocialIndicator).filter_by(source="SIUBEN").count() == 3
 
@@ -375,7 +426,7 @@ def test_siuben_no_contamina_el_idm(db, monkeypatch):
     monkeypatch.setattr(
         siuben, "fetch_siuben_provincial",
         lambda: [("siuben_illiteracy_head_share", "elias_pina", "2024-Q4", 36.3)])
-    _sync_siuben_provincial(db, lambda _m: None)
+    _sync_siuben_provincial(db, lambda _m: None, {})
     db.commit()
 
     after = assemble_idm_dataset(db)
@@ -447,7 +498,7 @@ def test_sync_minerd_coverage_upserts_by_region(db, monkeypatch):
     )
     from modules.social_dev.social_sync import _sync_minerd_coverage
 
-    n = _sync_minerd_coverage(db, lambda _m: None)
+    n = _sync_minerd_coverage(db, lambda _m: None, {})
     db.commit()
     assert n == 3
     row = (
@@ -485,7 +536,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
         lambda: [("provincia", "distrito_nacional", 2024, 73.1),
                  ("provincia", "elias_pina", 2024, 41.2)],
     )
-    _sync_minerd_coverage(db, lambda _m: None)
+    _sync_minerd_coverage(db, lambda _m: None, {})
     db.commit()
 
     after = assemble_idm_dataset(db)
