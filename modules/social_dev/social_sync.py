@@ -181,6 +181,32 @@ def _sync_sisdom_schooling(db: Session, set_phase: Callable[[str], None]) -> int
     return synced
 
 
+def _sync_endesa_child_mortality(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Mortalidad infantil POR PROVINCIA (SISDOM `04 3 035b`, rondas ENDESA 2002 y 2007).
+
+    Serie PUBLICADA, no variable del índice: el IDM sigue usando la serie anual viva de
+    WDI. Entrarla al cálculo ganaría territorio y perdería vigencia — todo período
+    posterior a 2007 quedaría con el mismo número, otra constante con etiqueta
+    provincial. El tema lleva el nombre de la encuesta para que nadie la confunda con la
+    serie del Banco Mundial: comparten concepto, no metodología.
+
+    Que no toque el índice no depende de la buena voluntad: `assemble_idm_dataset` lee
+    `child_mortality` de la entidad `nacional`, y esto escribe otro tema en entidades
+    provinciales."""
+    from shared.data.sisdom_child_mortality import (
+        SOURCE, THEME, UNIT, fetch_endesa_child_mortality,
+    )
+
+    set_phase("mortalidad infantil por provincia (SISDOM · ENDESA)")
+    rows = fetch_endesa_child_mortality()   # la excepción sube a _best_effort
+    synced = 0
+    for slug, year, value in rows:
+        _upsert_indicator(db, theme=THEME, entity=slug, period=str(year),
+                          value=float(value), source=SOURCE, disagg="provincia", unit=UNIT)
+        synced += 1
+    return synced
+
+
 def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None],
                           provenance: Dict[str, str]) -> int:
     """Cobertura neta de secundaria por región Y por provincia → ``sd_indicators``.
@@ -371,6 +397,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         lambda: _sync_sisdom_schooling(db, set_phase), errors)
     findex_synced = _best_effort(
         "inclusión financiera (BM Findex)", lambda: _sync_wb_findex(db, set_phase), errors)
+    mortality_synced = _best_effort(
+        "mortalidad infantil provincial (SISDOM · ENDESA)",
+        lambda: _sync_endesa_child_mortality(db, set_phase), errors)
     provincial_synced = _best_effort(
         "indicadores provinciales (SIUBEN)",
         lambda: _sync_siuben_provincial(db, set_phase, provenance), errors)
@@ -384,6 +413,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "schooling_synced": schooling_synced,
         "findex_synced": findex_synced,
         "provincial_synced": provincial_synced,
+        "mortality_synced": mortality_synced,
         "provenance": provenance,
         "periods": sorted(periods),
         "regions": len({r.dimension for r in records if r.dimension}),

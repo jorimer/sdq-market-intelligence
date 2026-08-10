@@ -255,6 +255,17 @@ _THEME_LABELS = {
     "secondary_coverage": "Cobertura neta secundaria",
     "literacy_rate": "Tasa de alfabetización",
     "income_per_capita": "Ingreso familiar mensual por persona",
+    "schooling_years": "Escolaridad promedio (15+)",
+    "endesa_child_mortality": "Mortalidad infantil (ENDESA)",
+}
+# Series que NO alimentan el IDM y llevan una advertencia propia. Una serie oficial pero
+# vieja es publicable; lo que no es publicable es servirla como si fuera actual.
+_SERIES_CAVEATS = {
+    "endesa_child_mortality": (
+        " Cortes de la encuesta ENDESA, NO una serie anual: el índice de desarrollo usa "
+        "la serie anual del Banco Mundial y esta no lo alimenta. Comparte concepto con "
+        "ella pero no metodología — una es estimación modelada y esta una encuesta de "
+        "hogares; no deben graficarse juntas."),
 }
 # Una serie servida sin licencia es una serie que el cliente no sabe si puede citar. El
 # emisor entra acá el mismo día que empieza a escribir filas sub-nacionales — si no, el
@@ -377,7 +388,7 @@ def _series_note(theme: str, level: str, source: str = "") -> str:
     quien = f" Publicado por {emisor}." if emisor else ""
     donde = ("Desagregación por provincia (32)." if level == "provincia"
              else "Desagregación por región de desarrollo (10 regiones).")
-    return donde + quien
+    return donde + quien + _SERIES_CAVEATS.get(theme, "")
 
 
 def subnational_observations(

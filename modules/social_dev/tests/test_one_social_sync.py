@@ -57,6 +57,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
     for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
                 "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
+                "_sync_endesa_child_mortality",
                 "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase, *a: 1)
 
@@ -122,6 +123,7 @@ def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
     for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
                "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
+                "_sync_endesa_child_mortality",
                "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp, *a: 3)
     assert one_social_sync(db)["errors"] == []
@@ -607,3 +609,56 @@ def test_una_caida_del_mepyd_no_destruye_la_escolaridad_cargada(db, monkeypatch)
     with pytest.raises(ConnectionError):
         _sync_sisdom_schooling(db, lambda _m: None)
     assert db.query(SocialIndicator).filter_by(theme="schooling_years").count() == 1
+
+
+def test_la_mortalidad_de_ENDESA_no_puede_entrar_al_IDM(db, monkeypatch):
+    """Guard estructural, no de buena voluntad.
+
+    La serie es de 2002/2007: si entrara al índice, todo período posterior quedaría con
+    el mismo número — otra constante nacional, solo que con etiqueta provincial. No entra
+    por dos razones independientes: usa OTRO tema (`endesa_child_mortality`) y escribe en
+    entidades provinciales, mientras el ensamblador lee `child_mortality` de `nacional`."""
+    import shared.data.sisdom_child_mortality as scm
+    from modules.social_dev.service import assemble_idm_dataset
+
+    for slug in ("enriquillo", "valdesia"):
+        _ind(db, slug, "poverty_rate", "2024", 20.0)
+    _ind(db, "nacional", "child_mortality", "2024", 27.7, source="WDI")
+    db.commit()
+    antes = assemble_idm_dataset(db)
+
+    monkeypatch.setattr(scm, "fetch_endesa_child_mortality",
+                        lambda: [("azua", 2007, 35.0), ("espaillat", 2007, 11.0)])
+    from modules.social_dev.social_sync import _sync_endesa_child_mortality
+
+    assert _sync_endesa_child_mortality(db, lambda _m: None) == 2
+    db.commit()
+
+    despues = assemble_idm_dataset(db)
+    assert despues["dataset"] == antes["dataset"]
+    assert despues["sources"] == antes["sources"]
+    # La del índice sigue siendo la de WDI, nacional.
+    assert all(s["child_mortality"] == "live" for s in despues["sources"].values())
+    assert all(d["child_mortality"] == 27.7 for d in despues["dataset"].values())
+
+
+def test_la_serie_de_ENDESA_sale_por_la_API_con_su_advertencia(db, monkeypatch):
+    """Publicarla es legítimo; servirla como si fuera actual, no. La advertencia viaja
+    en la nota del descriptor, que es lo que lee quien la consume."""
+    import shared.data.sisdom_child_mortality as scm
+    from modules.social_dev.service import subnational_series
+
+    monkeypatch.setattr(scm, "fetch_endesa_child_mortality",
+                        lambda: [("azua", 2007, 35.0)])
+    from modules.social_dev.social_sync import _sync_endesa_child_mortality
+
+    _sync_endesa_child_mortality(db, lambda _m: None)
+    db.commit()
+
+    serie = next(x for x in subnational_series(db)
+                 if x["code"] == "endesa_child_mortality.azua")
+    assert serie["period_latest"] == "2007"
+    assert "ENDESA" in serie["label"]
+    assert "no lo alimenta" in serie["note"]        # dice que NO entra al índice
+    assert "no deben graficarse juntas" in serie["note"]
+    assert serie["license"]                          # sin licencia iría a cuarentena

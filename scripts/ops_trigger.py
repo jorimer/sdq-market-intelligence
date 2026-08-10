@@ -41,6 +41,32 @@ def _credentials() -> tuple:
     return E2E_EMAIL, E2E_PASSWORD
 
 
+def _con_reintento(fn, *, intentos: int = 6, espera: int = 15):
+    """Reintenta ante un fallo TRANSITORIO del servicio (5xx, timeout, conexión).
+
+    Existe porque esta herramienta habla con un despliegue que se reinicia: rendirse
+    ante el primer 502 hace fallar una cadena entera por un parpadeo de treinta
+    segundos. Un 4xx NO se reintenta — eso es un problema nuestro (credencial, nombre de
+    operación) y reintentarlo solo lo repite."""
+    import httpx as _httpx
+
+    ultimo: Exception = RuntimeError("sin intentos")
+    for i in range(intentos):
+        try:
+            return fn()
+        except _httpx.HTTPStatusError as e:
+            if e.response.status_code < 500:
+                raise
+            ultimo = e
+        except (_httpx.TransportError, _httpx.HTTPError) as e:
+            ultimo = e
+        if i < intentos - 1:
+            print(f"  … servicio inestable ({type(ultimo).__name__}), reintento "
+                  f"{i + 1}/{intentos - 1}", flush=True)
+            time.sleep(espera)
+    raise ultimo
+
+
 def _login(client, email: str, password: str) -> str:
     r = client.post("/api/v1/auth/login", json={"email": email, "password": password})
     r.raise_for_status()
@@ -58,27 +84,37 @@ def _status(client, headers: Dict[str, str], name: str) -> Optional[Dict[str, An
     return next((o for o in (items or []) if o.get("name") == name), None)
 
 
+def _status_actual(client, headers, name):
+    return lambda: _status(client, headers, name)
+
+
 def trigger(name: str, base_url: str, timeout: int) -> Dict[str, Any]:
     """Dispara *name* y espera a que termine. Devuelve su ``last_result``."""
     import httpx
 
     email, password = _credentials()
     with httpx.Client(base_url=base_url, timeout=60, follow_redirects=True) as client:
-        headers = {"Authorization": f"Bearer {_login(client, email, password)}"}
+        headers = {"Authorization":
+                   f"Bearer {_con_reintento(lambda: _login(client, email, password))}"}
 
-        before = _status(client, headers, name)
+        before = _con_reintento(lambda: _status(client, headers, name))
         if before is None:
             raise SystemExit(f"La operación '{name}' no está registrada en {base_url}.")
         previous_run = (before.get("status") or {}).get("last_run")
 
         print(f"→ disparando '{name}' en {base_url}", flush=True)
-        r = client.post(f"/api/v1/operations/{name}/run", headers=headers, json={})
-        r.raise_for_status()
+        _con_reintento(lambda: client.post(
+            f"/api/v1/operations/{name}/run", headers=headers, json={}
+        ).raise_for_status())
 
         deadline = time.time() + timeout
         while time.time() < deadline:
             time.sleep(POLL_SECONDS)
-            current = _status(client, headers, name) or {}
+            try:
+                current = _con_reintento(_status_actual(client, headers, name)) or {}
+            except Exception as e:  # noqa: BLE001 — el sondeo no debe matar la espera
+                print(f"  … sondeo falló ({type(e).__name__}), sigo esperando", flush=True)
+                continue
             state = current.get("status") or {}
             # Terminó cuando dejó de correr Y su última corrida es posterior a la previa
             # (sin esa segunda condición, un sondeo temprano lee el resultado viejo).
