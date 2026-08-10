@@ -619,3 +619,39 @@ def test_sin_base_devengada_se_declara_la_brecha_y_no_se_cae_a_la_vieja():
                   "gastos_operativos": 25.0}
     assert _raw_metric(solo_vieja, "siniestralidad") is None
     assert _raw_metric(solo_vieja, "resultado_tecnico") is None
+
+
+class TestClaveCompacta:
+    """El rubro a veces ES la marca: «Auto Seguro» vs «Autoseguro»."""
+
+    def test_la_clave_compacta_une_la_variante_con_espacio(self):
+        from shared.data.sis_solvency_client import brand_key, brand_key_compacta
+        # brand_key descarta "seguro" por genérica y deja 4 letras: no alcanza el umbral.
+        assert brand_key("Auto Seguro, S. A.") == "auto"
+        assert brand_key("Autoseguro, S.A.") == "autoseguro"
+        # La compacta conserva el rubro y pega los tokens: ambas coinciden.
+        assert brand_key_compacta("Auto Seguro, S. A.") == brand_key_compacta("Autoseguro, S.A.")
+
+    def test_la_compacta_solo_matchea_EXACTO(self):
+        """Sin prefijos ni primer token: un compacto parecido no debe caer en el vecino.
+
+        (La regla de PREFIJO ≥5 es anterior y sigue vigente; acá se prueba que el paso
+        compacto, que corre después, no agrega parentescos nuevos.)
+        """
+        from modules.insurance_intel.scoring.isf import _match_official
+        off = {"zeta": ("Zeta Seguro, S.A.", "zeta"),
+               ("__compacto__",): {"zetaseguro": ("Zeta Seguro, S.A.", "zeta")}}
+        # "omega_cosa" no parea por exacto, ni por prefijo, ni por primer token, y su
+        # compacto ("omegacosa") tampoco está en el índice.
+        assert _match_official("omega_cosa", off, "Omega Cosa, S.A.") is None
+        # La variante con espacio del MISMO nombre sí, por el paso compacto.
+        assert _match_official("zeta", off, "Zeta Seguro, S. A.") == ("Zeta Seguro, S.A.", "zeta")
+
+    def test_el_indice_oficial_expone_ambas_claves(self):
+        from modules.insurance_intel.scoring.isf import _official_index
+        idx = _official_index()
+        if not idx:
+            pytest.skip("roster oficial no disponible en este entorno")
+        assert ("__compacto__",) in idx
+        # Las claves reales siguen siendo strings: nada que consuma el índice se rompe.
+        assert all(isinstance(k, str) for k in idx if k != ("__compacto__",))
