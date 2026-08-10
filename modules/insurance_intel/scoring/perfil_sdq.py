@@ -26,9 +26,14 @@ from typing import Any, Dict, List, Optional, Sequence
 VENTANA_CICLO = 5
 MIN_EJERCICIOS = 3
 
-# Umbral de tendencia, en puntos de combined ratio por año. JUICIO, no derivado: por debajo
-# de 1 punto anual el movimiento no se separa del ruido de tarificación del panel.
-UMBRAL_TENDENCIA = 1.0
+# La tendencia se etiqueta por SIGNIFICANCIA ESTADÍSTICA, no por un umbral fijo.
+#
+# La primera versión usaba ±1 punto/año, declarado como juicio. Medido contra el panel, el
+# error estándar MEDIANO de la propia pendiente es 2.4 pp/año — más del doble del umbral—, y
+# solo 8 de 32 pendientes se distinguen de cero. O sea que la etiqueta afirmaba una dirección
+# para 24 compañías donde el dato no la sostiene: la misma precisión falsa que el índice
+# evita en el nivel. Con |t| >= 2 se etiqueta solo lo que la medición aguanta.
+T_MINIMO = 2.0
 
 # Salto de escala tolerado DENTRO de la ventana (prima mayor / prima menor). Por encima, los
 # extremos del ciclo describen empresas distintas y el promedio no es interpretable.
@@ -206,7 +211,7 @@ def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict
     # pendiente es +0.26: la trayectoria es información casi independiente del nivel, y es lo
     # que separa una señal temprana de una fotografía. Se expone APARTE, nunca mezclada en el
     # score: fundirla repetiría el error del símbolo único que Perfil SDQ vino a reemplazar.
-    pend = _pendiente(años, combineds, pesos if total > 0 else None)
+    pend, pend_ee = _pendiente(años, combineds, pesos if total > 0 else None)
 
     # Una compañía cuya prima cambió de orden de magnitud dentro de la ventana no tiene un
     # ciclo comparable: los extremos describen empresas distintas. No se corrige el número
@@ -222,45 +227,64 @@ def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict
         "cesion_promedio": cesion,
         "ponderado_por_exposicion": total > 0,
         "pendiente_combined": pend,
+        "pendiente_error_estandar": pend_ee,
         "ciclo_comparable": comparable,
     }
 
 
 def _pendiente(años: Sequence[str], combineds: Sequence[float],
-               pesos: Optional[Sequence[float]]) -> Optional[float]:
-    """Pendiente OLS del combined ratio en **puntos porcentuales por año**.
+               pesos: Optional[Sequence[float]]) -> tuple:
+    """``(pendiente, error_estandar)`` de la regresión del combined ratio, en pp por año.
 
     Ponderada por exposición cuando hay volumen, por el mismo motivo que el promedio.
-    Positiva = deteriora. Devuelve None si los años no tienen dispersión.
+    Positiva = deteriora. El error estándar es lo que permite decidir si la pendiente dice
+    algo: con 3-5 puntos y la volatilidad de este panel, su mediana es 2.4 pp/año.
     """
     xs = [float(int(a)) for a in años]
     ys = [c * 100.0 for c in combineds]
     ws = list(pesos) if pesos else [1.0] * len(xs)
     W = sum(ws)
     if W <= 0 or len(xs) < MIN_EJERCICIOS:
-        return None
+        return None, None
     mx = sum(x * w for x, w in zip(xs, ws)) / W
     my = sum(y * w for y, w in zip(ys, ws)) / W
-    den = sum(w * (x - mx) ** 2 for x, w in zip(xs, ws))
-    if den == 0:
-        return None
-    return round(sum(w * (x - mx) * (y - my) for x, y, w in zip(xs, ys, ws)) / den, 2)
+    sxx = sum(w * (x - mx) ** 2 for x, w in zip(xs, ws))
+    if sxx == 0:
+        return None, None
+    b = sum(w * (x - mx) * (y - my) for x, y, w in zip(xs, ys, ws)) / sxx
+    if len(xs) <= 2:
+        return round(b, 2), None
+    a0 = my - b * mx
+    s2 = sum(w * (y - (a0 + b * x)) ** 2 for x, y, w in zip(xs, ys, ws)) / (len(xs) - 2)
+    return round(b, 2), round(math.sqrt(s2 / sxx), 2)
 
 
-def banda_tendencia(pendiente: Optional[float]) -> Optional[str]:
-    """Etiqueta de trayectoria. El umbral es de JUICIO y se declara como tal.
+def banda_tendencia(pendiente: Optional[float],
+                    error_estandar: Optional[float] = None) -> Optional[str]:
+    """Etiqueta de trayectoria, solo cuando la pendiente se separa de cero.
 
-    ±1 punto de combined ratio por año: por debajo, el movimiento no se distingue del ruido
-    de tarificación anual del panel; por encima, cinco años de ventana acumulan 5 puntos,
-    que sí mueven de banda.
+    Sin *error_estandar* no se puede juzgar y se devuelve ``None``: es preferible no decir
+    nada a afirmar una dirección que la medición no sostiene. Con él, se exige ``|t| >= 2``.
+    Un error estándar de CERO es ajuste perfecto —evidencia máxima—, no falta de evidencia.
+
+    "Sin señal" NO significa "estable": significa que con 3-5 ejercicios y esta volatilidad
+    no se puede distinguir movimiento de ruido. Son afirmaciones distintas y la etiqueta las
+    separa a propósito.
     """
-    if pendiente is None:
+    if pendiente is None or error_estandar is None:
         return None
-    if pendiente > UMBRAL_TENDENCIA:
+    if error_estandar == 0:
+        # Ajuste perfecto: residuo cero. Es la evidencia MÁS fuerte de tendencia, no la
+        # ausencia de evidencia — tratarlo como "no se puede juzgar" invertía el sentido.
+        if pendiente == 0:
+            return "Sin señal"
+        return "Deteriora" if pendiente > 0 else "Mejora"
+    t = pendiente / error_estandar
+    if t >= T_MINIMO:
         return "Deteriora"
-    if pendiente < -UMBRAL_TENDENCIA:
+    if t <= -T_MINIMO:
         return "Mejora"
-    return "Estable"
+    return "Sin señal"
 
 
 def calcular_ejes(ciclo: Optional[Dict[str, Any]],
