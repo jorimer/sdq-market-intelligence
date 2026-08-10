@@ -188,6 +188,56 @@ async def perfil_sdq(
     }
 
 
+@router.get("/entity-series")
+async def entity_series(
+    slug: Optional[str] = Query(None, description="Filtrar una aseguradora; omitir = todas"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Serie anual **por aseguradora** de los agregados auditados (dimension nula).
+
+    ``/series`` solo devuelve la espina de mercado (``entity_slug IS NULL``), así que el
+    detalle por compañía y ejercicio —que ya estaba persistido— no era legible desde afuera.
+    Sin él no se puede computar la TRAYECTORIA: un promedio de cinco años no distingue una
+    compañía que fue de 60% a 80% de otra que fue de 80% a 60%, y esa es justamente la
+    diferencia entre una foto y una señal temprana.
+
+    Devuelve también ``reservas_tecnicas``, que es lo que permite aproximar el siniestro
+    INCURRIDO (pagado + Δreservas) frente al PAGADO que hoy alimenta el combined ratio.
+    """
+    q = (db.query(InsuranceSeries)
+         .filter(InsuranceSeries.entity_slug.isnot(None),
+                 InsuranceSeries.dimension.is_(None)))
+    if slug:
+        q = q.filter(InsuranceSeries.entity_slug == slug)
+
+    por_entidad: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for r in q.all():
+        slug_r, per_r, code_r = str(r.entity_slug), str(r.period), str(r.series_code)
+        por_entidad.setdefault(slug_r, {}).setdefault(per_r, {})
+        por_entidad[slug_r][per_r][code_r] = r.value
+
+    return {
+        "entidades": {s: dict(sorted(p.items())) for s, p in sorted(por_entidad.items())},
+        "count": len(por_entidad),
+        "nota_de_construccion": {
+            "primas_suscritas": "PRIMA SUSCRITA (written), no devengada (earned).",
+            "siniestros_pagados": (
+                "RECLAMACIONES PAGADAS (paid), no incurridas. No incorpora movimiento de "
+                "reservas: para incurrido aproximado, sumar la variación de "
+                "reservas_tecnicas."),
+            "base": (
+                "BRUTA (gross) de reaseguro: la prima cedida no se resta del denominador ni "
+                "los recuperables del numerador. Ambos se exponen aparte y alimentan la "
+                "dimensión de reaseguro de Resiliencia, no Ejecución."),
+            "gastos_operativos": (
+                "Seguro DIRECTO (51xx/53xx): comisiones a intermediarios + gastos generales "
+                "y administrativos + otros gastos de operación. Las comisiones SÍ están "
+                "incluidas. Excluye 5501 (resultado financiero) y reaseguro aceptado."),
+        },
+    }
+
+
 @router.get("/mezcla-ramos")
 async def mezcla_ramos(
     db: Session = Depends(get_db),
