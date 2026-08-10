@@ -286,8 +286,13 @@ def panel_por_aseguradora(db) -> Dict[str, Dict[str, Any]]:
     for slug, fin in ultimos.items():
         ejercicios: Dict[str, Dict[str, float]] = {}
         for periodo, s in (por.get(slug) or {}).items():
-            primas = s.get("primas_suscritas")
-            sin_, gop = s.get("siniestros_pagados"), s.get("gastos_operativos")
+            # Base DEVENGADA/INCURRIDA cuando el ejercicio la trae; si no, no se computa.
+            # Mezclar bases entre compañías produciría un ranking sin sentido, así que un
+            # ejercicio sin la base nueva se OMITE en vez de caer al pagado-sobre-suscrito
+            # (revisión actuarial: numerador y denominador deben estar en la misma base).
+            primas = s.get("primas_devengadas")
+            sin_ = s.get("siniestros_incurridos")
+            gop = s.get("gastos_operativos")
             if not primas or sin_ is None or gop is None:
                 continue  # ejercicio incompleto: se omite, no se rellena
             ejercicios[periodo] = {

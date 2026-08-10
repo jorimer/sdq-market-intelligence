@@ -45,6 +45,15 @@ class InsurerFinancials:
     gastos_operativos: Optional[float]       # comisiones + G&A + otros gastos de operación
     primas_cedidas: Optional[float]          # prima cedida al reasegurador (seguro directo)
     recuperables_reaseguro: Optional[float]  # siniestros a cargo de reaseguradores
+    # ── Base DEVENGADA / INCURRIDA (revisión actuarial 2026-08) ──────────────────
+    # El catálogo tiene la estructura constitución/liberación: la reserva del PRESENTE
+    # ejercicio se carga en la sección 5 y la del ejercicio ANTERIOR se abona en la 4.
+    # Con las dos mitades, prima devengada y siniestro incurrido son computables — y
+    # siempre lo fueron; el extractor solo tomaba el lado pagado.
+    primas_devengadas: Optional[float]     # escrita + reserva riesgos en curso liberada − constituida
+    siniestros_incurridos: Optional[float]  # pagado + otras prestaciones + Δreserva específica − salvamentos
+    otras_prestaciones: Optional[float]     # 5102 — prestación PAGADA que no estaba en el numerador
+    salvamentos: Optional[float]            # 4309 — recupero que reduce el costo de siniestro
     # {ramo: {"primas": x, "siniestros": y}} — y es None cuando el catálogo no lo abre.
     por_ramo: Dict[str, Dict[str, Optional[float]]]
     reconciled: bool
@@ -64,6 +73,10 @@ class InsurerFinancials:
             "gastos_operativos": self.gastos_operativos,
             "primas_cedidas": self.primas_cedidas,
             "recuperables_reaseguro": self.recuperables_reaseguro,
+            "primas_devengadas": self.primas_devengadas,
+            "siniestros_incurridos": self.siniestros_incurridos,
+            "otras_prestaciones": self.otras_prestaciones,
+            "salvamentos": self.salvamentos,
         }
 
 
@@ -148,14 +161,18 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
                     seen = True
         return round(total, 2) if seen else None
 
-    def heads_sum(prefixes: tuple, *desc_kws: str) -> Optional[float]:
+    def heads_sum(prefixes: tuple, *desc_kws: str,
+                  excl: tuple = ()) -> Optional[float]:
         """Σ of 6-digit leaves under 4-digit sub-headers whose code starts with one of
         *prefixes* (the section, e.g. ``51``/``53`` = seguro DIRECTO) and whose description
-        contains ALL of *desc_kws*. Selecting by section keeps numerator and denominator on
-        the same book: the ISF's premiums are direct, so its costs must be direct too."""
+        contains ALL of *desc_kws* and NONE of *excl*. Selecting by section keeps numerator
+        and denominator on the same book: the ISF's premiums are direct, so its costs must
+        be direct too. ``excl`` mantiene la medida BRUTA: las cuentas "A CARGO DE
+        REASEGURADORES" son la contrapartida cedida y no van del lado bruto."""
         heads = [c for c in codes_present
                  if len(c) == 4 and c.isdigit() and c.startswith(prefixes)
-                 and all(k in desc_by_code.get(c, "") for k in desc_kws)]
+                 and all(k in desc_by_code.get(c, "") for k in desc_kws)
+                 and not any(e in desc_by_code.get(c, "") for e in excl)]
         total, seen = 0.0, False
         for h in heads:
             for c, v in cta.items():
@@ -201,6 +218,26 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
     primas_cedidas = heads_sum(("51", "53"), "PRIMAS DE REASEG", "CEDID")
     recuperables = heads_sum(("41", "43"), "RECLAMAC", "A CARGO DE REASEG")
 
+    # ── Base DEVENGADA / INCURRIDA ────────────────────────────────────────────────
+    # La reserva se CONSTITUYE en la sección 5 (present ejercicio) y se LIBERA en la 4
+    # (ejercicio anterior). Sin las dos mitades el ratio quedaba pagado-sobre-suscrito:
+    # numerador y denominador en distinta base. Se excluye lo "A CARGO DE REASEGURADORES"
+    # para que la medida siga siendo BRUTA en ambos lados.
+    _rc_const = heads_sum(("51", "53"), "RIESGOS EN CURSO", "PRESENTE", excl=("REASEG",))
+    _rc_lib = heads_sum(("41", "43"), "RIESGOS EN CURSO", "ANTERIOR", excl=("REASEG",))
+    primas_devengadas = (
+        round(primas + (_rc_lib or 0.0) - (_rc_const or 0.0), 2) if primas is not None else None)
+
+    otras_prestaciones = heads_sum(("51", "53"), "OTRAS PRESTACIONES PAGADAS")
+    _esp_const = heads_sum(("51", "53"), "RESERVAS ESPECIFICAS", "PRESENTE", excl=("REASEG",))
+    _esp_lib = heads_sum(("41", "43"), "RESERVAS ESPECIFICAS", "ANTERIOR", excl=("REASEG",))
+    _catastrof = heads_sum(("51", "53"), "CATASTROFICOS")
+    salvamentos = heads_sum(("41", "43"), "SALVAMENTOS")
+    siniestros_incurridos = (
+        round(siniestros + (otras_prestaciones or 0.0) + (_esp_const or 0.0)
+              + (_catastrof or 0.0) - (_esp_lib or 0.0) - (salvamentos or 0.0), 2)
+        if siniestros is not None else None)
+
     def leaf(code: str) -> Optional[float]:
         return cta.get(code)
 
@@ -234,8 +271,10 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
         reservas_tecnicas=reservas, activos_liquidos=liq,
         primas=primas, siniestros=siniestros, ingresos=ingresos, gastos=gastos,
         gastos_operativos=gastos_operativos, primas_cedidas=primas_cedidas,
-        recuperables_reaseguro=recuperables, por_ramo=por_ramo,
-        reconciled=reconciled)
+        recuperables_reaseguro=recuperables,
+        primas_devengadas=primas_devengadas, siniestros_incurridos=siniestros_incurridos,
+        otras_prestaciones=otras_prestaciones, salvamentos=salvamentos,
+        por_ramo=por_ramo, reconciled=reconciled)
 
 
 def extract_audited_workbook(content: bytes, period: str) -> List[InsurerFinancials]:
