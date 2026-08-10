@@ -48,9 +48,26 @@ bands:
 # región: un consumidor leía "9 variables con dato real, por región" y concluía que el
 # panel discrimina en el territorio cuando en realidad solo lo hacen cinco. El generador
 # de procedencia (shared/registry/provenance.py) ahora lo dice al cliente.
+# BÚSQUEDA HECHA Y AGOTADA (2026-08-10) para las dos de salud — anotada para que no se
+# repita desde cero. NO son nacionales por falta de búsqueda:
+#   * esperanza de vida: NO EXISTE con apertura sub-nacional. Cero hojas en las 108 del
+#     libro de Salud del SISDOM; tampoco en CKAN. El Anuario de Estadísticas Vitales de
+#     la ONE la traería, pero su portal está tras Cloudflare (403, ver one_client).
+#   * mortalidad infantil: SÍ existe por provincia —SISDOM `04 3 035b`, las 32, dato
+#     completo— pero SOLO en las rondas ENDESA de **2002 y 2007**. Dos puntos, el más
+#     reciente de hace ~18 años. Cambiar la serie ANUAL VIVA de WDI por eso ganaría
+#     discriminación territorial y perdería vigencia: todo período posterior a 2007
+#     quedaría con el mismo número congelado — otra constante, con etiqueta provincial y
+#     desactualizada. El intercambio es el INVERSO al del ingreso y la escolaridad, donde
+#     se ganó apertura regional Y serie hasta 2024.
+#     También hay apertura por "Región de salud" (I-VIII), que son OTRA geografía: 9
+#     regiones sanitarias que no calzan con las 10 de desarrollo.
+# Si algún día el Anuario de Estadísticas Vitales queda alcanzable, ahí están las
+# defunciones por provincia y la cuenta se puede hacer con los nacimientos por provincia
+# que la ONE sí publica en CKAN.
 variable_scopes:
-  life_expectancy: national     # WDI, país
-  child_mortality: national     # WDI, país
+  life_expectancy: national     # WDI, país — sin fuente sub-nacional conocida
+  child_mortality: national     # WDI, país — la provincial existe pero congelada en 2007
   informality_rate: national    # BCRD ENCFT, país
   financial_inclusion: national # BM Findex, cajeros/100k adultos, país
   # Con desagregación real por demarcación quedan en el default per_subject:
