@@ -98,11 +98,18 @@ HEALTH_VARS = ("life_expectancy", "child_mortality")
 # National annual series applied uniformly to every region; carry a declared rubric
 # default (50) when a period lacks the real value. informality_rate = BCRD ENCFT;
 # schooling_years = ONE national years of schooling (no regional breakdown exists).
-NATIONAL_LIVE_VARS = ("informality_rate", "schooling_years")
+NATIONAL_LIVE_VARS = ("informality_rate",)
 POVERTY_VAR = "poverty_rate"
 # Net secondary-coverage by development region + period (MINERD), like poverty: real
 # regional + temporal education-access signal in the education dimension.
 COVERAGE_VAR = "secondary_coverage"
+# Escolaridad promedio POR REGIÓN (SISDOM del MEPyD, cuadro 05 3 007). Dejó de ser
+# nacional el 2026-08-10: la serie de la ONE daba la MISMA cifra a las diez regiones y
+# ahora hay 2,3 años de brecha entre Ozama y Enriquillo. Se resuelve como el ingreso —
+# último valor disponible por región y live solo si LAS 10 lo tienen — porque el motor
+# normaliza min-max entre regiones y un llenado parcial no es "menos dato": corre el
+# extremo y cambia el score de las demás.
+SCHOOLING_VAR = "schooling_years"
 # Ingreso per cápita POR REGIÓN (SISDOM del MEPyD). Dejó de ser nacional el 2026-08-09:
 # antes era el proxy horario de la ONE, la MISMA cifra para las 10 regiones. Se resuelve
 # como la educación —último valor disponible por región, y live solo si LAS 10 lo
@@ -177,6 +184,9 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
     # explicada en INCOME_VAR: nueve de diez no es "casi", es un min-max distinto.
     income_live = all(latest.get(slug, {}).get(INCOME_VAR) is not None
                       for slug, _ in regions)
+    # Ídem escolaridad: pasó de nacional a regional (SISDOM 05 3 007) el 2026-08-10.
+    schooling_live = all(latest.get(slug, {}).get(SCHOOLING_VAR) is not None
+                         for slug, _ in regions)
 
     dataset: Dict[str, Dict[str, float]] = {}
     sources: Dict[str, Dict[str, str]] = {}
@@ -205,6 +215,12 @@ def assemble_idm_dataset(db: Session, period: Optional[str] = None) -> Dict[str,
             v = nat.get(var)
             merged[var] = float(v) if v is not None else float(defaults.get(var, 50))
             smap[var] = "live" if v is not None else "rubric"
+        if schooling_live:              # por región (SISDOM), live iff las 10 la tienen
+            merged[SCHOOLING_VAR] = float(latest[slug][SCHOOLING_VAR])
+            smap[SCHOOLING_VAR] = "live"
+        else:
+            merged[SCHOOLING_VAR] = float(defaults.get(SCHOOLING_VAR, 50))
+            smap[SCHOOLING_VAR] = "rubric"
         if income_live:                 # por región (SISDOM), live iff las 10 la tienen
             merged[INCOME_VAR] = float(latest[slug][INCOME_VAR])
             smap[INCOME_VAR] = "live"

@@ -27,6 +27,7 @@ INFORMALITY_UNIT = "% de la población ocupada"
 # Ingreso per cápita POR REGIÓN (SISDOM del MEPyD). Dejó de ser nacional: ver
 # :mod:`shared.data.sisdom_income`.
 INCOME_THEME = "income_per_capita"
+SCHOOLING_THEME = "schooling_years"
 COVERAGE_THEME = "secondary_coverage"  # ONE net secondary-coverage by region + period
 COVERAGE_UNIT = "% (cobertura neta secundaria)"  # ≤40 chars: sd_indicators.unit VARCHAR(40)
 
@@ -148,6 +149,38 @@ def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_sisdom_schooling(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Escolaridad promedio POR REGIÓN (SISDOM del MEPyD, cuadro 05 3 007).
+
+    Reemplaza la serie NACIONAL de la ONE, que quedó tras Cloudflare y que —aun cuando
+    llegaba— era la MISMA cifra para las diez regiones. Por región discrimina: en 2024
+    Ozama promedia 10,29 años y Enriquillo 7,98, una brecha de 2,3 años que el número
+    nacional escondía. Segunda constante nacional del IDM en caer, después del ingreso.
+
+    Da de baja la fila nacional del proxy anterior: bajo el mismo tema convivirían el
+    valor país y los diez regionales, y el upsert no la alcanza porque cambió la entidad.
+    Corre DESPUÉS de que la fuente nueva trajo dato, así que una caída del MEPyD no
+    destruye lo que hay."""
+    from shared.data.sisdom_schooling import SOURCE, UNIT, fetch_sisdom_schooling
+
+    set_phase("escolaridad por región (SISDOM · MEPyD)")
+    rows = fetch_sisdom_schooling()   # la excepción sube a _best_effort
+    synced = 0
+    for slug, year, value in rows:
+        _upsert_indicator(db, theme=SCHOOLING_THEME, entity=slug, period=str(year),
+                          value=float(value), source=SOURCE, disagg="region", unit=UNIT)
+        synced += 1
+    if synced:
+        borradas = (db.query(SocialIndicator)
+                    .filter(SocialIndicator.theme == SCHOOLING_THEME,
+                            SocialIndicator.entity_key == HEALTH_ENTITY)
+                    .delete(synchronize_session=False))
+        if borradas:
+            logger.info("[social] escolaridad: %d filas nacionales dadas de baja "
+                        "(ahora es por región)", borradas)
+    return synced
+
+
 def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None],
                           provenance: Dict[str, str]) -> int:
     """Cobertura neta de secundaria por región Y por provincia → ``sd_indicators``.
@@ -263,22 +296,6 @@ def _sync_wb_findex(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
-def _sync_one_schooling(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Fetch ONE national average years of schooling (15+, 2000-2024) → sd_indicators
-    (entity ``nacional``, period-matched). ENHOGAR only has literacy by region, not
-    years of schooling, so this comes from the national ONE series. Best-effort."""
-    from shared.data.one_client import fetch_one_education_schooling
-
-    set_phase("escolaridad nacional (ONE: años promedio de educación)")
-    rows = fetch_one_education_schooling()   # la excepción sube a _best_effort
-    synced = 0
-    for year, value in rows:
-        _upsert_indicator(db, theme="schooling_years", entity=HEALTH_ENTITY, period=str(year),
-                          value=float(value), source="ONE", disagg="nacional", unit="años")
-        synced += 1
-    return synced
-
-
 def _best_effort(label: str, fn: Callable[[], int], errors: List[str]) -> int:
     """Corre una sub-sincronización y DEJA RASTRO de por qué no trajo nada.
 
@@ -350,7 +367,8 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "cobertura educativa (MINERD · SIIE)",
         lambda: _sync_minerd_coverage(db, set_phase, provenance), errors)
     schooling_synced = _best_effort(
-        "escolaridad nacional (ONE)", lambda: _sync_one_schooling(db, set_phase), errors)
+        "escolaridad por región (SISDOM · MEPyD)",
+        lambda: _sync_sisdom_schooling(db, set_phase), errors)
     findex_synced = _best_effort(
         "inclusión financiera (BM Findex)", lambda: _sync_wb_findex(db, set_phase), errors)
     provincial_synced = _best_effort(

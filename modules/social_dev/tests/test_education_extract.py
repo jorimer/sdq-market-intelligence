@@ -107,17 +107,32 @@ def test_literacy_goes_live_only_when_all_regions_present(db):
 
 
 def test_education_complete_promotes_both_vars(db):
-    # literacy by region (all 10) + schooling national → both live for every region.
+    """Alfabetización Y escolaridad, las dos POR REGIÓN y completas → las dos live.
+
+    La escolaridad dejó de ser nacional el 2026-08-10 (SISDOM `05 3 007`): antes una
+    sola fila `nacional` promovía la variable para las diez regiones."""
     for slug in VALID_SLUGS:
         _ind(db, slug, "poverty_rate", "2024", 20.0)
         _ind(db, slug, "literacy_rate", "2022", 85.0)
-    _ind(db, "nacional", "schooling_years", "2024", 9.6)   # ONE national series
+        _ind(db, slug, "schooling_years", "2024", 9.6)      # SISDOM, por región
     db.commit()
 
     src = assemble_idm_dataset(db)["sources"]
-    assert all(s["literacy_rate"] == "live" for s in src.values())    # regional, complete
-    assert all(s["schooling_years"] == "live" for s in src.values())  # national → every region
+    assert all(s["literacy_rate"] == "live" for s in src.values())
+    assert all(s["schooling_years"] == "live" for s in src.values())
 
+
+def test_una_fila_nacional_de_escolaridad_ya_no_promueve_la_variable(db):
+    """Guard del cambio: si volviera a cargarse el valor país, NO debe pasar por
+    regional. Una constante nacional aporta nivel y nunca orden — es justo lo que este
+    cambio vino a corregir."""
+    for slug in VALID_SLUGS:
+        _ind(db, slug, "poverty_rate", "2024", 20.0)
+    _ind(db, "nacional", "schooling_years", "2024", 9.6)
+    db.commit()
+
+    src = assemble_idm_dataset(db)["sources"]
+    assert all(s["schooling_years"] == "rubric" for s in src.values())
 
 def test_education_default_rubric_when_absent(db):
     _seed_poverty(db)
