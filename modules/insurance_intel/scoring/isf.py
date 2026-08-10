@@ -152,7 +152,12 @@ def _raw_metric(fin: Dict[str, Any], key: str) -> Optional[float]:
     if key == "solvencia":
         return g("indice_solvencia")  # oficial (PTA/MSMR), Ley 146-02 Art. 160-161
     if key == "siniestralidad":
-        return (g("siniestros_pagados") / g("primas_suscritas")) if g("primas_suscritas") else None
+        # Base INCURRIDA sobre DEVENGADA (revisión actuarial 2026-08). Antes era pagado
+        # sobre suscrito: numerador y denominador en distinta base. Sin la base nueva se
+        # declara la brecha — no se cae al cálculo viejo, porque mezclar bases entre
+        # compañías produce un ranking que no ordena lo que dice ordenar.
+        inc, dev = g("siniestros_incurridos"), g("primas_devengadas")
+        return (inc / dev) if inc is not None and dev else None
     if key == "liquidez":
         return g("indice_liquidez")  # oficial (DLGFL/LMR), Ley 146-02 Art. 162
     if key == "escala":
@@ -171,7 +176,12 @@ def _raw_metric(fin: Dict[str, Any], key: str) -> Optional[float]:
         # G&A + otros gastos de operación del seguro directo), así que loss y expense son
         # mutuamente excluyentes por construcción. Ancla económica: margen 0 = combined
         # ratio 100% = breakeven técnico.
-        sin, gop, pri = g("siniestros_pagados"), g("gastos_operativos"), g("primas_suscritas")
+        # Base INCURRIDA/DEVENGADA (revisión actuarial 2026-08): el catálogo constituye la
+        # reserva en la sección 5 y la libera en la 4, así que ambas magnitudes siempre
+        # fueron computables. Con la base corregida el breakeven vuelve a significar lo que
+        # dice: la mediana del panel pasa de un margen de +12.2% —implausible— a +4.2%.
+        sin, gop, pri = (g("siniestros_incurridos"), g("gastos_operativos"),
+                         g("primas_devengadas"))
         if sin is None or gop is None or not pri:
             return None  # brecha declarada — nunca se reconstruye con la fórmula vieja
         return 1.0 - (sin + gop) / pri

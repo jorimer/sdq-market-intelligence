@@ -216,6 +216,15 @@ def dispersion_loss_por_ramo(
     y es más difícil de maquillar que el margen agregado, porque exige mover varios ramos a
     la vez.
 
+    ⚠️ **Esta métrica sigue en base PAGADO sobre SUSCRITO, y no puede corregirse.** El
+    agregado de la compañía pasó a base incurrida/devengada tras la revisión actuarial de
+    2026-08, pero el catálogo regulatorio **no abre el movimiento de reservas por ramo**:
+    las cuentas de reserva (5112/5311, 4109/4310 y sus específicas) son de la compañía, no
+    del ramo. Reconstruir un incurrido por ramo exigiría prorratear la reserva, que es
+    inventar el dato. Se deja en base pagada y se DECLARA: sirve para comparar ramos entre
+    sí dentro de una misma compañía —donde el sesgo es común— y no para comparar el nivel
+    contra el combined ratio agregado, que ya está en otra base.
+
     **Ponderada, no simple.** Sin ponderar, un ramo residual domina el resultado: en Seguros
     Universal, naves aéreas mueve RD$14 millones con un loss ratio de 164% y salud mueve
     RD$6.022 millones con 71.8%. Tratarlos igual describe una anécdota, no la cartera.
