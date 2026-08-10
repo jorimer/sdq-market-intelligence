@@ -153,7 +153,17 @@ def siniestros_incurridos(pagados: Optional[float],
 
 
 def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict[str, Any]]:
-    """Métricas de la ventana a partir de ``{año: {loss, exp, cesion, ...}}``.
+    """Métricas de la ventana a partir de ``{año: {loss, exp, cesion, primas}}``.
+
+    El promedio del ciclo va **PONDERADO POR EXPOSICIÓN** (prima devengada), no simple.
+    Un promedio simple da el mismo peso a un ejercicio de 3 millones de prima que a uno de
+    30, y eso destruye la medición de cualquier compañía que haya cambiado de escala:
+    HYLSEG creció 7× en cinco años y su promedio simple daba 118.9% —arrastrado por dos
+    ejercicios diminutos donde el costo fijo se comía la prima— contra 89.0% ponderado.
+    En UNIT, en pleno arranque, la diferencia era 2.584% contra 343%.
+
+    Ponderar por exposición es además la forma estándar del combined ratio de ciclo: es
+    equivalente a Σ(siniestro incurrido + gasto) / Σ(prima devengada) sobre la ventana.
 
     Devuelve None si no hay ejercicios suficientes: sin ciclo no se fabrica un promedio.
     """
@@ -162,13 +172,28 @@ def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict
         return None
     losses = [ejercicios[a]["loss"] for a in años]
     combineds = [ejercicios[a]["loss"] + ejercicios[a]["exp"] for a in años]
+    # Sin volumen registrado se cae al promedio simple —comportamiento anterior— en vez de
+    # descartar el ejercicio: un peso ausente no debe borrar la observación.
+    pesos = [float(ejercicios[a].get("primas") or 0.0) for a in años]
+    total = sum(pesos)
     n = len(losses)
-    media = sum(losses) / n
+    if total > 0:
+        combined_prom = sum(c * w for c, w in zip(combineds, pesos)) / total
+        media = sum(x * w for x, w in zip(losses, pesos)) / total
+        var = sum(w * (x - media) ** 2 for x, w in zip(losses, pesos)) / total
+        cesion = sum(ejercicios[a].get("cesion", 0.0) * w
+                     for a, w in zip(años, pesos)) / total
+    else:
+        combined_prom = sum(combineds) / n
+        media = sum(losses) / n
+        var = sum((x - media) ** 2 for x in losses) / n
+        cesion = sum(ejercicios[a].get("cesion", 0.0) for a in años) / n
     return {
         "años": años,
-        "combined_promedio": sum(combineds) / len(combineds),
-        "loss_volatilidad": math.sqrt(sum((x - media) ** 2 for x in losses) / n),
-        "cesion_promedio": sum(ejercicios[a].get("cesion", 0.0) for a in años) / n,
+        "combined_promedio": combined_prom,
+        "loss_volatilidad": math.sqrt(var),
+        "cesion_promedio": cesion,
+        "ponderado_por_exposicion": total > 0,
     }
 
 
@@ -305,6 +330,9 @@ def panel_por_aseguradora(db) -> Dict[str, Dict[str, Any]]:
             if not primas or sin_ is None or gop is None:
                 continue  # ejercicio incompleto: se omite, no se rellena
             ejercicios[periodo] = {
+                # ``primas`` es el PESO de exposición del ejercicio, no un ratio: sin él el
+                # promedio del ciclo trata igual un año diminuto que uno grande.
+                "primas": primas,
                 "loss": sin_ / primas, "exp": gop / primas,
                 "cesion": (s.get("primas_cedidas") or 0.0) / primas,
             }

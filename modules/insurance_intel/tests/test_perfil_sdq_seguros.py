@@ -292,3 +292,54 @@ class TestBaseDevengadaIncurrida:
         # así que acá se verifica que con menos de 3 ejercicios NO se emite ciclo.
         assert metricas_del_ciclo({"2023": {"loss": .5, "exp": .3, "cesion": .2},
                                    "2024": {"loss": .5, "exp": .3, "cesion": .2}}) is None
+
+
+# ─── Ciclo ponderado por exposición ───────────────────────────────────────────
+# Un promedio simple da el mismo peso a un ejercicio de 3 MM de prima que a uno de 30, y
+# destruye la medición de cualquier compañía que haya cambiado de escala. Medido en
+# producción: HYLSEG 118.9% simple contra 89.0% ponderado; UNIT 2.584% contra 343%.
+
+class TestCicloPonderadoPorExposicion:
+
+    def _ej(self, *pares):
+        """(año, primas, loss, exp) → el dict que consume metricas_del_ciclo."""
+        return {a: {"primas": p, "loss": lo, "exp": ex, "cesion": 0.2}
+                for a, p, lo, ex in pares}
+
+    def test_un_ejercicio_diminuto_no_pesa_igual_que_uno_grande(self):
+        from modules.insurance_intel.scoring.perfil_sdq import metricas_del_ciclo
+        c = metricas_del_ciclo(self._ej(
+            ("2020", 1_000_000.0, 2.0, 1.0),      # combined 300%, exposición mínima
+            ("2023", 50_000_000.0, 0.5, 0.3),     # combined  80%
+            ("2024", 50_000_000.0, 0.5, 0.3),     # combined  80%
+        ))
+        assert c["ponderado_por_exposicion"] is True
+        # Simple daría (3.0+0.8+0.8)/3 = 1.533; ponderado ≈ 0.822
+        assert c["combined_promedio"] == pytest.approx(0.8218, abs=1e-3)
+
+    def test_equivale_a_sumar_numeradores_sobre_sumar_denominadores(self):
+        """Forma estándar del combined ratio de ciclo: Σcosto / Σprima devengada."""
+        from modules.insurance_intel.scoring.perfil_sdq import metricas_del_ciclo
+        años = self._ej(("2022", 10.0, 0.6, 0.3), ("2023", 20.0, 0.7, 0.2),
+                        ("2024", 70.0, 0.5, 0.4))
+        c = metricas_del_ciclo(años)
+        num = sum(v["primas"] * (v["loss"] + v["exp"]) for v in años.values())
+        den = sum(v["primas"] for v in años.values())
+        assert c["combined_promedio"] == pytest.approx(num / den)
+
+    def test_la_volatilidad_tambien_se_pondera(self):
+        """Los ejercicios de arranque inflaban σ y castigaban Resiliencia sin exposición."""
+        from modules.insurance_intel.scoring.perfil_sdq import metricas_del_ciclo
+        c = metricas_del_ciclo(self._ej(
+            ("2020", 1.0, 3.0, 0.3), ("2023", 100.0, 0.5, 0.3), ("2024", 100.0, 0.5, 0.3)))
+        # Con σ simple el año atípico domina; ponderado queda casi plano.
+        assert c["loss_volatilidad"] < 0.2
+
+    def test_sin_volumen_cae_al_promedio_simple_y_lo_declara(self):
+        """Un peso ausente no debe borrar la observación."""
+        from modules.insurance_intel.scoring.perfil_sdq import metricas_del_ciclo
+        sin_peso = {a: {"loss": lo, "exp": 0.3, "cesion": 0.2}
+                    for a, lo in (("2022", 0.5), ("2023", 0.6), ("2024", 0.7))}
+        c = metricas_del_ciclo(sin_peso)
+        assert c["ponderado_por_exposicion"] is False
+        assert c["combined_promedio"] == pytest.approx((0.8 + 0.9 + 1.0) / 3)
