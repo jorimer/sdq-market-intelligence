@@ -397,3 +397,30 @@ class TestTendenciaYGuards:
         # Con solvencia + liquidez (0.67) sí alcanza.
         e2 = calcular_ejes(None, 2.5, 3.0)
         assert e2["resiliencia"] is not None and e2["cobertura_suficiente"] is True
+
+
+def test_el_panel_resuelve_el_slug_derivado_por_truncacion_de_hoja():
+    """Regresión: el nombre de hoja del Excel se trunca a 31 caracteres, así que el slug
+    bajo el que se guardan las series NO es el canónico. Consultar por el canónico devolvía
+    cero filas y dejaba SIN Ejecución a siete aseguradoras con primas de cientos de millones
+    (Cuna Mutual, One Alliance, Cooperativa Nacional…), como si no tuvieran datos.
+
+    El ISF ya colapsaba las variantes contra el roster; el eje no usaba ese mapa.
+    """
+    from modules.insurance_intel.scoring.isf import _canon_map
+
+    class _E:
+        def __init__(self, slug, name):
+            self.slug, self.name = slug, name
+
+    # Cuatro variantes reales de la misma compañía, tal como están en producción.
+    ents = [_E("cuna", "Cuna Mutual"),
+            _E("cuna_mutual_insurance_trustage", "Cuna Mutual Insurance(TRUSTAGE)"),
+            _E("cuna_mutual_insurance_society_d", "Cuna Mutual Insurance Society D"),
+            _E("otra_cosa", "Seguros Pepín, S. A.")]
+    canon, heuristic = _canon_map(ents, None)   # camino heurístico, sin roster
+    # Las tres variantes de Cuna colapsan a UNA sola identidad.
+    identidades = {canon[e.slug][0] for e in ents[:3] if e.slug in canon}
+    assert len(identidades) == 1, "las variantes de la misma compañía no colapsaron"
+    # Y el mapa cubre el slug DERIVADO, que es la clave para encontrar las series.
+    assert "cuna_mutual_insurance_trustage" in canon

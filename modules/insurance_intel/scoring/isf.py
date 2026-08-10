@@ -278,6 +278,44 @@ def _match_official(key: str, official: dict):
     return None
 
 
+def _canon_map(ents, official) -> tuple:
+    """``{slug del año → (clave, nombre oficial, slug oficial)}`` + si es el camino heurístico.
+
+    El nombre de hoja del Excel auditado se TRUNCA a 31 caracteres, así que el slug derivado
+    deriva entre años y entre fuentes: hay hasta cuatro variantes de la misma compañía
+    (``cuna``, ``cuna_mutual``, ``cuna_mutual_insurance_society_d``,
+    ``cuna_mutual_insurance_trustage``). Este mapa las colapsa contra el roster oficial.
+
+    Vive acá y se exporta porque **cualquier motor que consulte ``insurance_series`` por
+    ``entity_slug`` lo necesita**: consultar por el slug canónico directamente no encuentra
+    las series, que están guardadas bajo el slug derivado. Ese fue el defecto que dejó a
+    siete aseguradoras sin Ejecución teniendo primas de cientos de millones.
+    """
+    from shared.data.sis_solvency_client import brand_key
+
+    canon: Dict[str, tuple] = {}
+    heuristic = not official
+    for e in ents:
+        if official:
+            m = _match_official(brand_key(e.name), official)
+            if m:
+                canon[e.slug] = (m[1], m[0], m[1])  # key=slug, official name, official slug
+        else:
+            k = _fallback_key(e.name)
+            canon[e.slug] = (k, e.name, e.slug)
+    if heuristic and canon:
+        # Sin roster, el nombre más largo es el de presentación por clave.
+        best: Dict[str, tuple] = {}
+        for e in ents:
+            if e.slug not in canon:
+                continue
+            k = canon[e.slug][0]
+            if k not in best or len(e.name or "") > len(best[k][1]):
+                best[k] = (k, e.name, e.slug)
+        canon = {s: best[c[0]] for s, c in canon.items()}
+    return canon, heuristic
+
+
 def _load_financials(db: Session) -> List[Dict[str, Any]]:
     """Assemble each insurer's latest figures from ``insurance_series``, grouped under the
     OFFICIAL roster identity (``companias-aseguradoras-y-reaseguradoras``): fragmented
@@ -294,27 +332,9 @@ def _load_financials(db: Session) -> List[Dict[str, Any]]:
         return []
     official = _official_index()
 
-    # Map each entity slug → canonical (key, name, slug).
-    canon: Dict[str, tuple] = {}
-    heuristic = not official
-    for e in ents:
-        if official:
-            m = _match_official(brand_key(e.name), official)
-            if m:
-                canon[e.slug] = (m[1], m[0], m[1])  # key=slug, official name, official slug
-        else:
-            k = _fallback_key(e.name)
-            canon[e.slug] = (k, e.name, e.slug)
+    canon, heuristic = _canon_map(ents, official)
     if not canon:
         return []
-    # For the heuristic path, the longest name is the display name per key.
-    if heuristic:
-        best: Dict[str, tuple] = {}
-        for e in ents:
-            k = canon[e.slug][0]
-            if k not in best or len(e.name or "") > len(best[k][1]):
-                best[k] = (k, e.name, e.slug)
-        canon = {e.slug: best[canon[e.slug][0]] for e in ents if e.slug in canon}
 
     rows = (db.query(InsuranceSeries)
             .filter(InsuranceSeries.entity_slug.in_(list(canon)),
