@@ -55,8 +55,8 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     # Las demás fuentes pegan a la red — se sustituyen. Devuelven un conteo POSITIVO
     # porque hacen de sub-syncs que funcionan: un 0 ahora significa "la fuente no trajo
     # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
-    for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_one_labor",
-                "_sync_one_coverage", "_sync_one_schooling", "_sync_wb_findex",
+    for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
+                "_sync_minerd_coverage", "_sync_one_schooling", "_sync_wb_findex",
                 "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase: 1)
 
@@ -88,7 +88,7 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
     problema a investigar; 'la fuente no publicó' puede ser legítimo."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, sp: 7)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_labor", lambda db, sp: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_sisdom_income", lambda db, sp: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_bcrd_informality", lambda db, sp: 4)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, sp: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, sp: 0)
@@ -96,14 +96,17 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
     def _boom(db, sp):
         raise ConnectionError("403 Forbidden")
 
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_coverage", _boom)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_minerd_coverage", _boom)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_siuben_provincial", _boom)
 
     res = one_social_sync(db)
     errores = " · ".join(res["errors"])
 
     # No se pudo llegar → la causa VIAJA (tipo y mensaje), no se pierde en un log.
-    assert "cobertura educativa (ONE)" in errores and "403 Forbidden" in errores
+    # El rótulo nombra al EMISOR vigente: la cobertura ya no es de la ONE, y mandar a
+    # mirar el portal equivocado es parte de no declarar bien la falla.
+    assert "cobertura educativa (MINERD · SIIE)" in errores and "403 Forbidden" in errores
+    assert "(ONE)" not in errores.split("cobertura educativa")[1][:30]
     assert "indicadores provinciales (SIUBEN)" in errores
     assert "ConnectionError" in errores
     # Cero sin excepción → también consta, con otra redacción.
@@ -117,8 +120,8 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
 def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
     """El contrapeso del test anterior: si todo trajo dato, ``errors`` queda vacío."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
-    for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_one_labor",
-               "_sync_one_coverage", "_sync_one_schooling", "_sync_wb_findex",
+    for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
+               "_sync_minerd_coverage", "_sync_one_schooling", "_sync_wb_findex",
                "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp: 3)
     assert one_social_sync(db)["errors"] == []
@@ -147,12 +150,11 @@ def test_assemble_idm_real_plus_rubric_with_sources(db):
     assert src["informality_rate"] == "rubric" and enr["informality_rate"] == 50
 
 
-def test_national_labor_goes_live_for_every_region(db):
-    """ONE national informality + income (proxy) apply to every region, live."""
+def test_informalidad_nacional_va_live_a_todas_las_regiones(db):
+    """La informalidad (ENCFT del BCRD) sí es nacional: la MISMA cifra a las 10 regiones."""
     _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
     _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
-    _ind(db, "nacional", "informality_rate", "2024", 55.46)
-    _ind(db, "nacional", "income_per_capita", "2024", 167.46)
+    _ind(db, "nacional", "informality_rate", "2024", 55.46, source="BCRD")
     db.commit()
 
     from modules.social_dev.service import assemble_idm_dataset
@@ -160,9 +162,66 @@ def test_national_labor_goes_live_for_every_region(db):
     for slug in ("enriquillo", "valdesia"):                  # uniform across regions
         row, src = asm["dataset"][slug], asm["sources"][slug]
         assert row["informality_rate"] == 55.46 and src["informality_rate"] == "live"
-        assert row["income_per_capita"] == 167.46 and src["income_per_capita"] == "live"
     # financial_inclusion has no source → stays declared rubric.
     assert asm["sources"]["enriquillo"]["financial_inclusion"] == "rubric"
+
+
+def _all_regions_income(db, period="2024", base=13000.0):
+    from shared.data.one_client import REGIONS
+
+    for i, (slug, _label) in enumerate(REGIONS):
+        _ind(db, slug, "income_per_capita", period, base + i * 500, source="MEPyD")
+
+
+def test_el_ingreso_ahora_DISTINGUE_regiones(db):
+    """El corazón del cambio. El ingreso era el proxy horario de la ONE: una constante
+    nacional, la misma cifra para las 10 regiones, que sostenía el NIVEL del índice pero
+    no podía mover el orden entre demarcaciones. Con el SISDOM cada región trae la suya."""
+    _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
+    _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
+    _all_regions_income(db)
+    db.commit()
+
+    from modules.social_dev.service import assemble_idm_dataset
+    asm = assemble_idm_dataset(db)
+    valores = {slug: row["income_per_capita"] for slug, row in asm["dataset"].items()}
+    assert len(set(valores.values())) == 10, (
+        "el ingreso volvió a ser una constante con etiqueta geográfica: " f"{valores}")
+    assert all(s["income_per_capita"] == "live" for s in asm["sources"].values())
+
+
+def test_el_ingreso_incompleto_NO_entra_a_medias(db):
+    """Nueve de diez regiones no es 'casi': el motor normaliza min-max ENTRE regiones, así
+    que la que falta corre el mínimo o el máximo y cambia el score de las otras nueve.
+    O están las 10 o la variable queda en rúbrica uniforme, que no discrimina ni finge."""
+    from shared.data.one_client import REGIONS
+
+    _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
+    _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
+    for slug, _label in REGIONS[:-1]:                       # falta una
+        _ind(db, slug, "income_per_capita", "2024", 15000.0, source="MEPyD")
+    db.commit()
+
+    from modules.social_dev.service import assemble_idm_dataset
+    asm = assemble_idm_dataset(db)
+    assert all(s["income_per_capita"] == "rubric" for s in asm["sources"].values())
+    assert {row["income_per_capita"] for row in asm["dataset"].values()} == {50.0}
+
+
+def test_el_ingreso_no_se_cae_si_la_pobreza_avanza_primero(db):
+    """El SISDOM es anual y puede quedar un año detrás de la pobreza, que es la serie que
+    fija el período objetivo. Se toma el ÚLTIMO valor disponible por región: si se atara
+    al período, la variable desaparecería del panel el día que la pobreza publique antes."""
+    _ind(db, "enriquillo", "poverty_rate", "2025", 30.0)
+    _ind(db, "valdesia", "poverty_rate", "2025", 10.0)
+    _all_regions_income(db, period="2024")                  # el ingreso va un año atrás
+    db.commit()
+
+    from modules.social_dev.service import assemble_idm_dataset
+    asm = assemble_idm_dataset(db)
+    assert asm["period"] == "2025"
+    assert asm["sources"]["enriquillo"]["income_per_capita"] == "live"
+    assert asm["dataset"]["enriquillo"]["income_per_capita"] == 15500.0
 
 
 def test_parse_one_indicator_xlsx_reads_total_by_year():
@@ -203,63 +262,33 @@ def test_parse_one_indicator_tolerates_sheet_whitespace():
     assert parse_one_indicator_xlsx(buf.getvalue()) == [(2024, 167.46)]
 
 
-def test_discover_labor_links_prefers_latest_revision():
-    from shared.data.one_client import discover_labor_links
+def test_el_descubrimiento_por_media_hash_prefiere_la_revision_mas_nueva():
+    """El hash del CDN de la ONE rota y conviven revisiones del mismo archivo. Gana la de
+    año final más alto (desempate determinista). Hoy el único consumidor es la
+    escolaridad, que es lo último que este módulo saca del portal."""
+    from shared.data.one_client import _SCHOOLING_SLUG, _match_media_links
 
     html = (
-        '<a href="/media/aaa/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2023.xlsx">old</a>'
-        '<a href="/media/bbb/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx">new</a>'
+        f'<a href="/media/aaa/{_SCHOOLING_SLUG}-2000-2023.xlsx">vieja</a>'
+        f'<a href="/media/bbb/{_SCHOOLING_SLUG}-2000-2024.xlsx">nueva</a>'
+        '<a href="/media/zzz/poblacion-desocupada-2008-2024.xlsx">distractor</a>'
     )
-    assert discover_labor_links(html)["informality_rate"].endswith("2004-2024.xlsx")
+    links = _match_media_links(html, {"schooling_years": _SCHOOLING_SLUG})
+    assert links["schooling_years"].endswith("2000-2024.xlsx")
+    assert set(links) == {"schooling_years"}
 
 
-def _coverage_workbook():
-    """Planilla mínima con la forma real del cuadro 'según región y provincia'."""
-    import io
-    import openpyxl
+def test_region_slug_es_el_padron_de_regiones_para_cualquier_emisor():
+    """``region_slug`` sobrevivió al parser de cobertura de la ONE porque el padrón de
+    regiones —con sus alias— no era de ese cuadro: hoy lo consume el conector del
+    MINERD, que es otro emisor. Se fija acá para que un borrado futuro no se lo lleve."""
+    from shared.data.one_client import region_slug
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.append(["Cuadro: tasa neta de cobertura, según región y provincia"])
-    ws.append([None, "2023-2024", None, None, "2022-2023", None, None])  # year-group labels
-    ws.append([None, "Inicial", "Primario", "Secundario", "Inicial", "Primario", "Secundario"])
-    ws.append(["Total país", 30, 90, 70, 29, 89, 69])                    # agregado nacional
-    ws.append(["Región Metropolitana", 33, 86, 67, 32, 85, 66])         # → ozama
-    ws.append(["Distrito Nacional", 37, 87, 73, 36, 88, 72])            # provincia de Ozama
-    ws.append(["Santo Domingo", 31, 85, 64, 30, 84, 63])                # provincia de Ozama
-    ws.append(["Región Cibao Norte", 34, 94, 71, 33, 93, 70])          # → cibao_norte
-    ws.append(["Ciudad Inexistente", 1, 2, 3, 4, 5, 6])                 # no resuelve → descartada
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
-
-
-def test_parse_one_coverage_xlsx_secondary_by_region():
-    """Columna 'Secundario' por grupo-año, localizada por sub-encabezado (no por offset)."""
-    from shared.data.one_client import parse_one_coverage_xlsx
-
-    by = {(lvl, s, y): v for lvl, s, y, v in parse_one_coverage_xlsx(_coverage_workbook())}
-    assert by[("region", "ozama", 2024)] == 67       # 'Metropolitana' → ozama
-    assert by[("region", "ozama", 2023)] == 66
-    assert by[("region", "cibao_norte", 2024)] == 71
-
-
-def test_parse_one_coverage_xlsx_conserva_las_provincias():
-    """El cuadro SIEMPRE trajo el desglose provincial y el parser lo tiraba. Ozama sola
-    contiene el Distrito Nacional y Santo Domingo: colapsarlos a un valor borra a la
-    mayor parte de la población del país en un solo número."""
-    from shared.data.one_client import parse_one_coverage_xlsx
-
-    rows = parse_one_coverage_xlsx(_coverage_workbook())
-    by = {(lvl, s, y): v for lvl, s, y, v in rows}
-    assert by[("provincia", "distrito_nacional", 2024)] == 73
-    assert by[("provincia", "santo_domingo", 2024)] == 64
-    # Las dos provincias de Ozama difieren entre sí Y del valor de su región: eso es
-    # exactamente la varianza que un consumidor sub-nacional necesita.
-    assert by[("provincia", "distrito_nacional", 2024)] != by[("region", "ozama", 2024)]
-    # 'Total país' y una etiqueta irreconocible no entran; nada se adivina.
-    assert {s for _l, s, _y, _v in rows} == {
-        "ozama", "cibao_norte", "distrito_nacional", "santo_domingo"}
+    assert region_slug("Región Metropolitana") == "ozama"      # alias + prefijo "Región"
+    assert region_slug("Cibao Norte") == "cibao_norte"          # sin prefijo
+    assert region_slug("Gran Santo Domingo") == "ozama"
+    assert region_slug("Total país") is None                    # no se adivina
+    assert region_slug(None) is None
 
 
 def test_coverage_goes_live_by_region_and_period(db):
@@ -282,9 +311,10 @@ def test_indicator_units_fit_postgres_varchar40():
     """sd_indicators.unit is VARCHAR(40): SQLite ignores it, Postgres truncates →
     every declared unit string must fit (dev↔prod parity guard)."""
     from shared.data.siuben_client import DATASETS as SIUBEN_DATASETS
-    from modules.social_dev.social_sync import COVERAGE_UNIT, FINDEX_UNIT, _LABOR_UNITS
+    from shared.data.sisdom_income import UNIT as INCOME_UNIT
+    from modules.social_dev.social_sync import COVERAGE_UNIT, FINDEX_UNIT, INFORMALITY_UNIT
 
-    units = (list(_LABOR_UNITS.values()) + [COVERAGE_UNIT, FINDEX_UNIT]
+    units = ([INFORMALITY_UNIT, INCOME_UNIT, COVERAGE_UNIT, FINDEX_UNIT, "años"]
              + [s.unit for s in SIUBEN_DATASETS])
     too_long = [u for u in units if len(u) > 40]
     assert not too_long, f"unit > 40 chars (rompe en Postgres): {too_long}"
@@ -407,7 +437,7 @@ def test_sync_one_schooling_upserts_national(db, monkeypatch):
     assert row is not None and row.value == 9.61 and row.source == "ONE" and row.unit == "años"
 
 
-def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
+def test_sync_minerd_coverage_upserts_by_region(db, monkeypatch):
     import shared.data.minerd_coverage as mc_mod
 
     monkeypatch.setattr(
@@ -415,9 +445,9 @@ def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
         lambda: [("region", "enriquillo", 2024, 66.8), ("region", "ozama", 2024, 67.7),
                  ("provincia", "distrito_nacional", 2024, 73.1)],
     )
-    from modules.social_dev.social_sync import _sync_one_coverage
+    from modules.social_dev.social_sync import _sync_minerd_coverage
 
-    n = _sync_one_coverage(db, lambda _m: None)
+    n = _sync_minerd_coverage(db, lambda _m: None)
     db.commit()
     assert n == 3
     row = (
@@ -442,7 +472,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     si algún día el ensamblador empezara a barrer entidades, este test lo detecta."""
     import shared.data.minerd_coverage as mc_mod
     from modules.social_dev.service import assemble_idm_dataset
-    from modules.social_dev.social_sync import _sync_one_coverage
+    from modules.social_dev.social_sync import _sync_minerd_coverage
 
     _ind(db, "enriquillo", "poverty_rate", "2024", 31.0)
     _ind(db, "valdesia", "poverty_rate", "2024", 11.0)
@@ -455,7 +485,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
         lambda: [("provincia", "distrito_nacional", 2024, 73.1),
                  ("provincia", "elias_pina", 2024, 41.2)],
     )
-    _sync_one_coverage(db, lambda _m: None)
+    _sync_minerd_coverage(db, lambda _m: None)
     db.commit()
 
     after = assemble_idm_dataset(db)
@@ -464,76 +494,94 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     assert len(after["dataset"]) == 10          # sigue siendo el panel de regiones
 
 
-def test_discover_labor_links_matches_by_slug():
-    from shared.data.one_client import discover_labor_links
+def test_sync_sisdom_income_upserts_por_region(db, monkeypatch):
+    """El ingreso entra rotulado por región y es idempotente."""
+    import shared.data.sisdom_income as sisdom
 
-    html = (
-        '<a href="/media/3fxoh4pp/tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx">x</a>'
-        '<a href="/media/dtmlxqpw/ingreso-laboral-promedio-por-hora-trabajada-en-ocupaci&#243;n-principal-2000-2024.xlsx">y</a>'
-        '<a href="/media/zzzz/poblaci&#243;n-desocupada-2008-2024.xlsx">z</a>'  # distractor
-    )
-    links = discover_labor_links(html)
-    assert links["informality_rate"].endswith("tasa-de-informalidad-en-el-empleo-por-sexo-2004-2024.xlsx")
-    assert "ingreso-laboral-promedio-por-hora-trabajada" in links["income_per_capita"]
-    assert set(links) == {"informality_rate", "income_per_capita"}            # distractor excluded
+    rows = [("enriquillo", 2024, 13499.35), ("cibao_norte", 2024, 19607.32),
+            ("enriquillo", 2023, 11118.8)]
+    monkeypatch.setattr(sisdom, "fetch_sisdom_income_per_capita", lambda: rows)
+    from modules.social_dev.social_sync import _sync_sisdom_income
 
-
-def test_sync_one_labor_upserts_national(db, monkeypatch):
-    import shared.data.one_client as oc_mod
-
-    monkeypatch.setattr(
-        oc_mod, "fetch_one_labor",
-        lambda: [("informality_rate", 2024, 55.46), ("income_per_capita", 2024, 167.46)],
-    )
-    from modules.social_dev.social_sync import _sync_one_labor
-
-    n = _sync_one_labor(db, lambda _m: None)
-    db.commit()
-    # Solo el INGRESO: la informalidad pasó al BCRD, que es quien la produce.
-    assert n == 1
-    row = (
-        db.query(SocialIndicator)
-        .filter_by(entity_key="nacional", theme="income_per_capita", period="2024")
-        .first()
-    )
-    assert row is not None and row.value == 167.46 and row.source == "ONE"
-    # Y NO pisa la informalidad aunque la ONE la siga trayendo en el mismo archivo:
-    # dos fuentes escribiendo la misma serie es cómo un dato peor termina ganándole
-    # al bueno según el orden de ejecución.
-    assert db.query(SocialIndicator).filter_by(theme="informality_rate").count() == 0
-
-
-def test_informalidad_viene_del_bcrd_no_de_la_one(db, monkeypatch):
-    """La ONE republicaba este dato; el BCRD lo produce. Verificado contra la serie
-    anterior: 55.47% vs 55.46% en 2024 — el mismo indicador, no uno parecido."""
-    import shared.data.bcrd_labor as bcrd
-
-    monkeypatch.setattr(bcrd, "fetch_bcrd_informality", lambda: [(2024, 55.47), (2025, 54.06)])
-    from modules.social_dev.social_sync import _sync_bcrd_informality
-
-    assert _sync_bcrd_informality(db, lambda _m: None) == 2
+    assert _sync_sisdom_income(db, lambda _m: None) == 3
     db.commit()
     row = (
         db.query(SocialIndicator)
-        .filter_by(entity_key="nacional", theme="informality_rate", period="2025")
+        .filter_by(entity_key="enriquillo", theme="income_per_capita", period="2024")
         .first()
     )
-    assert row is not None and row.value == 54.06
-    assert row.source == "BCRD" and row.disaggregation == "nacional"
+    assert row is not None and row.value == 13499.35
+    assert row.source == "MEPyD" and row.disaggregation == "region"
+    assert "RD$" in (row.unit or ""), "la unidad monetaria viaja con el dato"
+
+    assert _sync_sisdom_income(db, lambda _m: None) == 3     # upsert en el lugar
+    db.commit()
+    assert db.query(SocialIndicator).filter_by(theme="income_per_capita").count() == 3
 
 
-def test_backfill_idm_scores_and_purges_cruft(db):
-    from modules.social_dev.models.models import DevelopmentScore
-    from modules.social_dev.service import backfill_idm_scores, get_latest
+def test_el_proxy_nacional_de_la_ONE_se_da_de_baja(db, monkeypatch):
+    """Bajo el mismo tema convivirían RD$/hora (~167) y RD$/mes por persona (~18.000):
+    dos órdenes de magnitud y dos unidades. El upsert no las alcanza porque cambió la
+    entidad, así que quedarían para siempre esperando a que algo las lea."""
+    import shared.data.sisdom_income as sisdom
 
-    for region, pov in (("enriquillo", 31.0), ("valdesia", 11.0)):
-        _ind(db, region, "poverty_rate", "2023", pov + 1)
-        _ind(db, region, "poverty_rate", "2024", pov)
-    db.add(DevelopmentScore(entity_key="nacional", period="2025", development_score=60.0))  # cruft
+    _ind(db, "nacional", "income_per_capita", "2024", 167.46, source="ONE")
+    _ind(db, "nacional", "schooling_years", "2024", 9.61, source="ONE")   # NO se toca
     db.commit()
 
-    res = backfill_idm_scores(db)
-    assert res["errors"] == [] and set(res["periods"]) == {"2023", "2024"} and res["latest"] == "2024"
-    assert res["purged"] == 1 and "2025" in res["purged_periods"]
-    assert {s.period for s in db.query(DevelopmentScore).all()} == {"2023", "2024"}
-    assert get_latest(db, "enriquillo").period == "2024"
+    monkeypatch.setattr(sisdom, "fetch_sisdom_income_per_capita",
+                        lambda: [("enriquillo", 2024, 13499.35)])
+    from modules.social_dev.social_sync import _sync_sisdom_income
+
+    _sync_sisdom_income(db, lambda _m: None)
+    db.commit()
+
+    assert db.query(SocialIndicator).filter_by(
+        entity_key="nacional", theme="income_per_capita").count() == 0
+    # La baja es QUIRÚRGICA: la escolaridad nacional de la ONE sigue intacta.
+    assert db.query(SocialIndicator).filter_by(
+        entity_key="nacional", theme="schooling_years").first() is not None
+
+
+def test_si_el_SISDOM_falla_NO_se_borra_lo_que_hay(db, monkeypatch):
+    """El orden importa: primero traer, después dar de baja. Si se borrara antes, una
+    caída del MEPyD dejaría la variable sin nada y con la vieja ya destruida."""
+    import shared.data.sisdom_income as sisdom
+
+    _ind(db, "nacional", "income_per_capita", "2024", 167.46, source="ONE")
+    db.commit()
+
+    def _boom():
+        raise sisdom.SisdomUnavailable("el listado no respondió")
+
+    monkeypatch.setattr(sisdom, "fetch_sisdom_income_per_capita", _boom)
+    from modules.social_dev.social_sync import _sync_sisdom_income
+
+    with pytest.raises(sisdom.SisdomUnavailable):     # sube a _best_effort, que la DECLARA
+        _sync_sisdom_income(db, lambda _m: None)
+    assert db.query(SocialIndicator).filter_by(theme="income_per_capita").count() == 1
+
+
+def test_la_serie_de_ingreso_se_sirve_como_MONTO_no_como_tasa(db):
+    """La Data API tenía la naturaleza clavada en 'rate' porque todas las series del eje
+    eran porcentajes. El ingreso viene en RD$: servirlo como tasa haría que un consumidor
+    leyera su variación en PUNTOS y publicara 'el ingreso subió 2.400 puntos'."""
+    from shared.data.sisdom_income import UNIT
+    from modules.social_dev.service import subnational_series
+
+    db.add(SocialIndicator(entity_key="enriquillo", theme="income_per_capita",
+                           period="2024", value=13499.35, source="MEPyD",
+                           disaggregation="region", unit=UNIT))
+    db.add(SocialIndicator(entity_key="enriquillo", theme="poverty_rate",
+                           period="2024", value=31.0, source="ONE",
+                           disaggregation="region", unit="% de la población"))
+    db.commit()
+
+    by = {s["code"]: s for s in subnational_series(db)}
+    ingreso = by["income_per_capita.enriquillo"]
+    assert ingreso["nature"] == "flow", "un monto en RD$ no es una tasa"
+    assert by["poverty_rate.enriquillo"]["nature"] == "rate"   # el resto no se movió
+    # La licencia y el emisor viajan: una serie sin licencia no se sabe si se puede citar.
+    assert ingreso["license"] and "MEPyD" in ingreso["license"]
+    assert "MEPyD" in ingreso["note"]
+    assert "ONE" in by["poverty_rate.enriquillo"]["note"]
