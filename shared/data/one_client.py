@@ -12,31 +12,36 @@ publications-digest path, not here.
 ``None`` — never interpolated. ``live`` mode downloads the CSV; ``fixture`` mode
 reads ``one.json`` for offline/tests.
 
-A second dataset is wired below as plain module functions (not the ``Record``
-client): the national labour/education series scraped from the ONE portal by
-media-hash (the DGA pattern) and parsed from their *Indicador* sheet.
+A second dataset is wired below as a plain module function (not the ``Record``
+client): the national years-of-schooling series, scraped from the ONE portal by
+media-hash (the DGA pattern) and parsed from its *Indicador* sheet.
 
 QUÉ SIGUE VIVO ACÁ Y QUÉ SE FUE (importante antes de tocar este módulo)
 ----------------------------------------------------------------------
 El portal ``www.one.gob.do`` quedó detrás de un desafío de Cloudflare y devuelve
-403 a cualquier cliente que no sea un navegador — también desde producción. Todo
-lo que raspa ese portal está, hoy, **caído**: no falla en silencio, declara el
+403 a cualquier cliente que no sea un navegador — también desde producción. Lo
+que raspa ese portal está, hoy, **caído**: no falla en silencio, declara el
 motivo en ``errors`` de la operación (ver ``modules/social_dev/social_sync.py``).
 
 * **Vivo y sano** — el CSV de pobreza por regiones (``ONEClient``). Va por
-  ``descargas.one.gob.do``, que es otro host y sigue abierto.
-* **Vivo pero caído** — ``fetch_one_labor`` (ingreso laboral) y
-  ``fetch_one_education_schooling`` (años de escolaridad). Siguen enchufados
-  porque **no tienen sustituto primario conocido**; se quedan acá hasta que
-  aparezca uno o vuelva el portal.
-* **Se fue** — la informalidad, que ahora sale de :mod:`shared.data.bcrd_labor`
-  (ENCFT del BCRD), y la cobertura educativa, que sale de
-  :mod:`shared.data.minerd_coverage` (tablero SIIE del MINERD). En los dos casos
-  la ONE no producía el dato: lo republicaba. El parser de la planilla de
-  cobertura se **eliminó** en vez de guardarse como reserva — una reserva a la
-  que no se puede llegar no es una reserva, y dejar dos parsers para un mismo
-  indicador invita a recablear el muerto. Está en el historial si hiciera falta
-  (``git log -- shared/data/one_client.py``, commit anterior a su borrado).
+  ``descargas.one.gob.do``, que es otro host y sigue abierto. Y el padrón de
+  regiones (``REGIONS`` / :func:`region_slug`), que es la misma verdad para
+  cualquier emisor que las nombre: lo consumen conectores de otras fuentes.
+* **Vivo pero caído** — ``fetch_one_education_schooling`` (años promedio de
+  escolaridad). Es lo ÚNICO que queda colgando del portal: el ENHOGAR solo
+  publica alfabetización por región, no años de estudio, así que no tiene
+  sustituto conocido y se queda hasta que aparezca uno o vuelva el portal.
+* **Se fue** — informalidad → :mod:`shared.data.bcrd_labor` (ENCFT del BCRD);
+  cobertura educativa → :mod:`shared.data.minerd_coverage` (tablero SIIE del
+  MINERD); ingreso → :mod:`shared.data.sisdom_income` (SISDOM del MEPyD). En los
+  tres casos la ONE no producía el dato: lo republicaba, y el reemplazo dejó cada
+  serie mejor de lo que estaba (fuente primaria, más cobertura, y en el ingreso
+  además apertura POR REGIÓN donde antes había una constante nacional).
+
+Los caminos muertos se **borraron** en vez de guardarse como reserva: a una
+reserva tras Cloudflare no se puede llegar, y dejar dos lecturas de un mismo
+indicador —una muerta— invita a recablear la equivocada. El historial las
+conserva (``git log -- shared/data/one_client.py``).
 """
 import csv
 import io
@@ -222,23 +227,10 @@ def _filter(records: List[Record], series: Optional[str], period: Optional[str])
 one_client = ONEClient()
 
 
-# ── ONE labour statistics (national annual series) ─────────────────────────
-# Ingreso laboral promedio por hora: un PROXY DECLARADO de la variable
-# ``income_per_capita`` del IDM (es ingreso laboral horario, no ingreso per cápita
-# del hogar). Serie anual nacional, aplicada a todas las regiones como las de salud
-# del WDI. Los archivos viven en el CDN Umbraco de la ONE bajo
-# ``/media/<hash>/<slug>.xlsx`` (el patrón media-hash de la DGA); el hash rota, así
-# que se raspa la landing para los enlaces vigentes.
-LABOR_LANDING = (
-    "https://www.one.gob.do/datos-y-estadisticas/temas/estadisticas-sociales/trabajo/"
-)
-# IDM theme → filename slug fragment (accent-insensitive) to match on the landing.
-# La INFORMALIDAD salió de acá: la produce el BCRD (ENCFT) y se baja de su CDN en
-# :mod:`shared.data.bcrd_labor`. Dejar su slug haría bajar y descartar un archivo, y
-# —peor— dejaría a este módulo declarando una responsabilidad que ya no tiene.
-_LABOR_SLUGS: Dict[str, str] = {
-    "income_per_capita": "ingreso-laboral-promedio-por-hora-trabajada-en-ocupacion-principal",
-}
+# ── Descubrimiento de archivos en el portal de la ONE ──────────────────────
+# Los archivos viven en el CDN Umbraco de la ONE bajo ``/media/<hash>/<slug>.xlsx``
+# (el patrón media-hash de la DGA); el hash rota, así que se raspa la landing del tema
+# para los enlaces vigentes. Hoy queda UN solo consumidor: la escolaridad.
 _MEDIA_XLSX_RE = re.compile(r"/media/[a-z0-9]+/[^\"'> ]+?\.xlsx", re.IGNORECASE)
 _HEADERS = {"User-Agent": "Mozilla/5.0 (SDQ-MIP ONE labour connector)"}
 
@@ -266,11 +258,6 @@ def _match_media_links(html_text: str, slugs: Dict[str, str]) -> Dict[str, str]:
     return {key: url for key, (_ey, url) in best.items()}
 
 
-def discover_labor_links(html_text: str) -> Dict[str, str]:
-    """``{idm_theme: /media/<hash>/<slug>.xlsx}`` for the Trabajo labour files."""
-    return _match_media_links(html_text, _LABOR_SLUGS)
-
-
 def parse_one_indicator_xlsx(content: bytes) -> List[tuple]:
     """Parse an ONE *Indicador* sheet → ``[(year, value)]`` from the Total column.
 
@@ -290,34 +277,6 @@ def parse_one_indicator_xlsx(content: bytes) -> List[tuple]:
         a, total = row[0], (row[1] if len(row) > 1 else None)
         if isinstance(a, (int, float)) and 1990 <= int(a) <= 2100 and isinstance(total, (int, float)):
             out.append((int(a), round(float(total), 4)))
-    return out
-
-
-def fetch_one_labor() -> List[tuple]:  # pragma: no cover - network I/O
-    """Live: scrape the Trabajo landing, download the matched files, parse them →
-    ``[(idm_theme, year, value)]`` (national). Best-effort per file.
-
-    ATENCIÓN: hoy esto **no llega** — el portal responde 403 (Cloudflare). No se
-    silencia: la excepción sube y ``_best_effort`` la declara en la operación. Sigue
-    enchufado porque el ingreso laboral promedio no tiene sustituto primario conocido
-    (el BCRD publica los deciles como CONTEOS de perceptores, no como montos)."""
-    import urllib.parse
-
-    import httpx
-
-    resp = httpx.get(LABOR_LANDING, timeout=40, follow_redirects=True, headers=_HEADERS)
-    resp.raise_for_status()
-    links = discover_labor_links(resp.text)
-    out: List[tuple] = []
-    for theme, path in links.items():
-        url = "https://www.one.gob.do" + urllib.parse.quote(path)
-        try:
-            f = httpx.get(url, timeout=60, follow_redirects=True, headers=_HEADERS)
-            f.raise_for_status()
-            for year, value in parse_one_indicator_xlsx(f.content):
-                out.append((theme, year, value))
-        except (httpx.HTTPError, ValueError, KeyError) as e:
-            logger.warning("[ONE] descarga/parseo de %s (%s) falló: %s", theme, path, e)
     return out
 
 

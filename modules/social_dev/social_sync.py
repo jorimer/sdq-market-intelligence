@@ -21,13 +21,12 @@ WDI_HEALTH = {"SP.DYN.LE00.IN": "life_expectancy", "SP.DYN.IMRT.IN": "child_mort
 HEALTH_ENTITY = "nacional"
 _WDI_HEALTH_YEARS = 30
 
-# National labour (ONE/BCRD ENCFT) → applied to every region, like WDI health.
-# informality_rate = exact IDM variable; income_per_capita = declared PROXY
-# (hourly labour income, not household per-capita income).
-_LABOR_UNITS = {
-    "informality_rate": "% de la población ocupada",
-    "income_per_capita": "RD$/hora (proxy: ingreso laboral)",
-}
+# Informalidad nacional (ENCFT del BCRD) → aplicada a todas las regiones, como la salud
+# del WDI. Es la variable exacta del IDM, no un proxy.
+INFORMALITY_UNIT = "% de la población ocupada"
+# Ingreso per cápita POR REGIÓN (SISDOM del MEPyD). Dejó de ser nacional: ver
+# :mod:`shared.data.sisdom_income`.
+INCOME_THEME = "income_per_capita"
 COVERAGE_THEME = "secondary_coverage"  # ONE net secondary-coverage by region + period
 COVERAGE_UNIT = "% (cobertura neta secundaria)"  # ≤40 chars: sd_indicators.unit VARCHAR(40)
 
@@ -97,32 +96,55 @@ def _sync_bcrd_informality(db: Session, set_phase: Callable[[str], None]) -> int
     for year, value in rows:
         _upsert_indicator(db, theme="informality_rate", entity=HEALTH_ENTITY,
                           period=str(year), value=float(value), source=SOURCE,
-                          disagg="nacional", unit=_LABOR_UNITS["informality_rate"])
+                          disagg="nacional", unit=INFORMALITY_UNIT)
         synced += 1
     logger.info("[social] informalidad BCRD: %d años (%s)", synced, LICENSE[:40])
     return synced
 
 
-def _sync_one_labor(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Ingreso laboral promedio (ONE) → sd_indicators (entity ``nacional``).
+def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Ingreso per cápita POR REGIÓN (SISDOM del MEPyD) → ``sd_indicators``.
 
-    Queda SOLO el ingreso: la informalidad pasó al BCRD, que es quien la produce. El
-    BCRD publica los deciles de ingreso como CONTEOS de perceptores, no como montos, así
-    que el ingreso laboral promedio no tiene sustituto primario y sigue dependiendo de
-    la ONE — hoy inalcanzable. La falla se declara en ``errors`` en vez de esconderse:
-    el dato ya cargado no se pierde (el upsert no borra), pero deja de refrescarse."""
-    from shared.data.one_client import fetch_one_labor
+    Reemplaza el ingreso laboral por hora de la ONE, que era un PROXY declarado, nacional
+    y —desde Cloudflare— inalcanzable. El cuadro ``03 3 021`` es la variable exacta del
+    IDM (ingreso familiar mensual por persona), anual 2000-2024 y abierta por las 10
+    regiones de desarrollo. La variable deja de ser una constante con etiqueta geográfica.
 
-    set_phase("ingreso laboral nacional (ONE)")
-    rows = fetch_one_labor()   # la excepción sube a _best_effort, que la DECLARA
+    **A diferencia de las demás sub-syncs, esta BORRA algo**: las filas nacionales que
+    dejó el proxy de la ONE. No es limpieza cosmética. Conviven bajo el mismo tema una
+    cifra en RD$/hora (~167) y otra en RD$/mes por persona (~18.000): dos órdenes de
+    magnitud y dos unidades. Cualquier lectura futura que caiga en la vieja —un fallback
+    a ``nacional``, un promedio, una serie de la Data API— devolvería un disparate sin
+    que nada avise. El upsert normal no las alcanza porque cambió la entidad, así que
+    quedarían ahí para siempre. Se borra solo lo que este cambio deja obsoleto: tema
+    ingreso + entidad nacional + fuente ONE."""
+    from shared.data.sisdom_income import SOURCE as SISDOM_SOURCE
+    from shared.data.sisdom_income import UNIT, fetch_sisdom_income_per_capita
+
+    set_phase("ingreso per cápita por región (SISDOM · MEPyD)")
+    rows = fetch_sisdom_income_per_capita()   # la excepción sube a _best_effort
+    if not rows:
+        return 0
+
     synced = 0
-    for theme, year, value in rows:
-        if theme != "income_per_capita":
-            continue          # la informalidad ya vino del BCRD; no se pisa
-        _upsert_indicator(db, theme=theme, entity=HEALTH_ENTITY, period=str(year),
-                          value=float(value), source="ONE",
-                          disagg="nacional", unit=_LABOR_UNITS.get(theme))
+    for slug, year, value in rows:
+        _upsert_indicator(db, theme=INCOME_THEME, entity=slug, period=str(year),
+                          value=float(value), source=SISDOM_SOURCE,
+                          disagg="region", unit=UNIT)
         synced += 1
+
+    # Solo después de que la fuente nueva TRAJO dato: si fallara, el borrado dejaría la
+    # variable sin nada. El orden importa.
+    stale = (
+        db.query(SocialIndicator)
+        .filter(SocialIndicator.theme == INCOME_THEME,
+                SocialIndicator.entity_key == HEALTH_ENTITY,
+                SocialIndicator.source == "ONE")
+        .delete(synchronize_session=False)
+    )
+    if stale:
+        logger.info("[social] ingreso: %d filas nacionales del proxy ONE dadas de baja "
+                    "(reemplazadas por %d regionales del SISDOM)", stale, synced)
     return synced
 
 
@@ -301,11 +323,12 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     informality_synced = _best_effort(
         "informalidad laboral (BCRD · ENCFT)",
         lambda: _sync_bcrd_informality(db, set_phase), errors)
-    labor_synced = _best_effort(
-        "ingreso laboral (ONE)", lambda: _sync_one_labor(db, set_phase), errors)
     # El rótulo nombra al EMISOR, porque es lo que se lee en la consola cuando algo
-    # falla: decir "(ONE)" de un dato que ahora produce el MINERD mandaría a mirar el
-    # portal equivocado.
+    # falla: decir "(ONE)" de un dato que ahora produce otro organismo mandaría a mirar
+    # el portal equivocado.
+    income_synced = _best_effort(
+        "ingreso per cápita (SISDOM · MEPyD)",
+        lambda: _sync_sisdom_income(db, set_phase), errors)
     coverage_synced = _best_effort(
         "cobertura educativa (MINERD · SIIE)",
         lambda: _sync_minerd_coverage(db, set_phase), errors)
@@ -321,7 +344,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "synced": synced,
         "health_synced": health_synced,
         "informality_synced": informality_synced,
-        "labor_synced": labor_synced,
+        "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,
         "findex_synced": findex_synced,
@@ -330,7 +353,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "regions": len({r.dimension for r in records if r.dimension}),
         "themes": (sorted({r.series for r in records})
                    + sorted(set(WDI_HEALTH.values()))
-                   + sorted(_LABOR_UNITS.keys())
+                   + ["informality_rate", INCOME_THEME]
                    + [COVERAGE_THEME, "schooling_years"]
                    + sorted(WB_FINDEX.values())
                    + sorted(SIUBEN_THEMES)),
