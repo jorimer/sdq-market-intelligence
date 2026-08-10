@@ -55,8 +55,9 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     # Las demás fuentes pegan a la red — se sustituyen. Devuelven un conteo POSITIVO
     # porque hacen de sub-syncs que funcionan: un 0 ahora significa "la fuente no trajo
     # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
-    for _fn in ("_sync_wdi_health", "_sync_one_labor", "_sync_one_coverage",
-                "_sync_one_schooling", "_sync_wb_findex", "_sync_siuben_provincial"):
+    for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_one_labor",
+                "_sync_one_coverage", "_sync_one_schooling", "_sync_wb_findex",
+                "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase: 1)
 
     first = one_social_sync(db)
@@ -88,6 +89,7 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, sp: 7)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_labor", lambda db, sp: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_bcrd_informality", lambda db, sp: 4)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, sp: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, sp: 0)
 
@@ -115,8 +117,9 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
 def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
     """El contrapeso del test anterior: si todo trajo dato, ``errors`` queda vacío."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
-    for fn in ("_sync_wdi_health", "_sync_one_labor", "_sync_one_coverage",
-               "_sync_one_schooling", "_sync_wb_findex", "_sync_siuben_provincial"):
+    for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_one_labor",
+               "_sync_one_coverage", "_sync_one_schooling", "_sync_wb_findex",
+               "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp: 3)
     assert one_social_sync(db)["errors"] == []
 
@@ -405,10 +408,10 @@ def test_sync_one_schooling_upserts_national(db, monkeypatch):
 
 
 def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
-    import shared.data.one_client as oc_mod
+    import shared.data.minerd_coverage as mc_mod
 
     monkeypatch.setattr(
-        oc_mod, "fetch_one_education_coverage",
+        mc_mod, "fetch_minerd_coverage",
         lambda: [("region", "enriquillo", 2024, 66.8), ("region", "ozama", 2024, 67.7),
                  ("provincia", "distrito_nacional", 2024, 73.1)],
     )
@@ -422,7 +425,8 @@ def test_sync_one_coverage_upserts_by_region(db, monkeypatch):
         .filter_by(entity_key="enriquillo", theme="secondary_coverage", period="2024")
         .first()
     )
-    assert row is not None and row.value == 66.8 and row.source == "ONE" and row.disaggregation == "region"
+    assert row is not None and row.value == 66.8 and row.source == "MINERD"
+    assert row.disaggregation == "region"
     # La provincia convive con la región bajo el mismo tema, distinguida por el nivel.
     prov = (
         db.query(SocialIndicator)
@@ -436,7 +440,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     """Guardia estructural: el IDM se ensambla sobre las 10 regiones. Agregar filas
     provinciales bajo el MISMO tema no debe cambiar ni un score ni una procedencia —
     si algún día el ensamblador empezara a barrer entidades, este test lo detecta."""
-    import shared.data.one_client as oc_mod
+    import shared.data.minerd_coverage as mc_mod
     from modules.social_dev.service import assemble_idm_dataset
     from modules.social_dev.social_sync import _sync_one_coverage
 
@@ -447,7 +451,7 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     before = assemble_idm_dataset(db)
 
     monkeypatch.setattr(
-        oc_mod, "fetch_one_education_coverage",
+        mc_mod, "fetch_minerd_coverage",
         lambda: [("provincia", "distrito_nacional", 2024, 73.1),
                  ("provincia", "elias_pina", 2024, 41.2)],
     )
@@ -485,13 +489,37 @@ def test_sync_one_labor_upserts_national(db, monkeypatch):
 
     n = _sync_one_labor(db, lambda _m: None)
     db.commit()
-    assert n == 2
+    # Solo el INGRESO: la informalidad pasó al BCRD, que es quien la produce.
+    assert n == 1
     row = (
         db.query(SocialIndicator)
-        .filter_by(entity_key="nacional", theme="informality_rate", period="2024")
+        .filter_by(entity_key="nacional", theme="income_per_capita", period="2024")
         .first()
     )
-    assert row is not None and row.value == 55.46 and row.source == "ONE"
+    assert row is not None and row.value == 167.46 and row.source == "ONE"
+    # Y NO pisa la informalidad aunque la ONE la siga trayendo en el mismo archivo:
+    # dos fuentes escribiendo la misma serie es cómo un dato peor termina ganándole
+    # al bueno según el orden de ejecución.
+    assert db.query(SocialIndicator).filter_by(theme="informality_rate").count() == 0
+
+
+def test_informalidad_viene_del_bcrd_no_de_la_one(db, monkeypatch):
+    """La ONE republicaba este dato; el BCRD lo produce. Verificado contra la serie
+    anterior: 55.47% vs 55.46% en 2024 — el mismo indicador, no uno parecido."""
+    import shared.data.bcrd_labor as bcrd
+
+    monkeypatch.setattr(bcrd, "fetch_bcrd_informality", lambda: [(2024, 55.47), (2025, 54.06)])
+    from modules.social_dev.social_sync import _sync_bcrd_informality
+
+    assert _sync_bcrd_informality(db, lambda _m: None) == 2
+    db.commit()
+    row = (
+        db.query(SocialIndicator)
+        .filter_by(entity_key="nacional", theme="informality_rate", period="2025")
+        .first()
+    )
+    assert row is not None and row.value == 54.06
+    assert row.source == "BCRD" and row.disaggregation == "nacional"
 
 
 def test_backfill_idm_scores_and_purges_cruft(db):

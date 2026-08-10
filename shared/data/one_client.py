@@ -314,6 +314,15 @@ def _coverage_region_slug(label: str) -> Optional[str]:
     return _REGION_BY_NORM.get(n)
 
 
+def region_slug(label: object) -> Optional[str]:
+    """Slug de la región de desarrollo para una etiqueta del proveedor, o ``None``.
+
+    Público porque el padrón de regiones —con sus alias, ver ``_REGION_ALIASES``— es la
+    misma verdad para cualquier fuente que las nombre, no solo para el cuadro de
+    cobertura de la ONE. Tolera el prefijo "Región " y las variantes de Ozama."""
+    return _coverage_region_slug(str(label or ""))
+
+
 _SCHOOL_YEAR_RE = re.compile(r"^(20\d{2})-(20\d{2})")
 _SECONDARY_LEVELS = {"secundario", "medio"}  # "Medio" is the pre-2014 secondary label
 
