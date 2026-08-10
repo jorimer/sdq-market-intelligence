@@ -374,20 +374,34 @@ def panel_por_aseguradora(db) -> Dict[str, Dict[str, Any]]:
     plurianual por entidad, que es lo que Ejecución necesita y el ISF no usa (el ISF toma
     solo el último valor de cada serie).
     """
-    from modules.insurance_intel.models.models import InsuranceSeries
-    from modules.insurance_intel.scoring.isf import _load_financials
+    from modules.insurance_intel.models.models import InsuranceEntity, InsuranceSeries
+    from modules.insurance_intel.scoring.isf import (
+        _canon_map, _load_financials, _official_index,
+    )
 
     ultimos = {f["slug"]: f for f in _load_financials(db)}
     if not ultimos:
         return {}
 
+    # Las series NO están guardadas bajo el slug canónico: el nombre de hoja del Excel se
+    # trunca a 31 caracteres y el slug deriva entre años y fuentes. Consultar por el slug
+    # canónico directamente devolvía CERO filas para siete aseguradoras con primas de
+    # cientos de millones —Cuna Mutual, One Alliance, Cooperativa Nacional…— y quedaban sin
+    # Ejecución como si no tuvieran datos. Hay que recorrer el mismo mapa que usa el ISF.
+    ents = (db.query(InsuranceEntity)
+            .filter(InsuranceEntity.entity_type == "aseguradora").all())
+    canon, _ = _canon_map(ents, _official_index())
+
     rows = (db.query(InsuranceSeries)
-            .filter(InsuranceSeries.entity_slug.in_(list(ultimos)),
+            .filter(InsuranceSeries.entity_slug.in_(list(canon) or [""]),
                     InsuranceSeries.dimension.is_(None),
                     InsuranceSeries.value.isnot(None)).all())
     por: Dict[str, Dict[str, Dict[str, float]]] = {}
     for r in rows:
-        por.setdefault(r.entity_slug, {}).setdefault(r.period, {})[r.series_code] = r.value
+        c = canon.get(r.entity_slug)
+        if c is None:
+            continue
+        por.setdefault(c[2], {}).setdefault(r.period, {})[r.series_code] = r.value
 
     salida: Dict[str, Dict[str, Any]] = {}
     for slug, fin in ultimos.items():
