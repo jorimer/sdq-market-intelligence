@@ -56,7 +56,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     # porque hacen de sub-syncs que funcionan: un 0 ahora significa "la fuente no trajo
     # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
     for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
-                "_sync_minerd_coverage", "_sync_one_schooling", "_sync_wb_findex",
+                "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
                 "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{_fn}", lambda db, set_phase, *a: 1)
 
@@ -90,7 +90,7 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wdi_health", lambda db, sp, *a: 7)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_sisdom_income", lambda db, sp, *a: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_bcrd_informality", lambda db, sp, *a: 4)
-    monkeypatch.setattr("modules.social_dev.social_sync._sync_one_schooling", lambda db, sp, *a: 0)
+    monkeypatch.setattr("modules.social_dev.social_sync._sync_sisdom_schooling", lambda db, sp, *a: 0)
     monkeypatch.setattr("modules.social_dev.social_sync._sync_wb_findex", lambda db, sp, *a: 0)
 
     def _boom(db, sp, *a):
@@ -121,7 +121,7 @@ def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
     """El contrapeso del test anterior: si todo trajo dato, ``errors`` queda vacío."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
     for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
-               "_sync_minerd_coverage", "_sync_one_schooling", "_sync_wb_findex",
+               "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
                "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp, *a: 3)
     assert one_social_sync(db)["errors"] == []
@@ -275,60 +275,6 @@ def test_el_ingreso_no_se_cae_si_la_pobreza_avanza_primero(db):
     assert asm["dataset"]["enriquillo"]["income_per_capita"] == 15500.0
 
 
-def test_parse_one_indicator_xlsx_reads_total_by_year():
-    import io
-    import openpyxl
-
-    wb = openpyxl.Workbook()
-    wb.active.title = " Ficha "                              # metadata sheet (ignored)
-    wb.active["A1"] = "Ficha técnica"
-    ws = wb.create_sheet("Indicador")
-    ws.append(["REPÚBLICA DOMINICANA: Tasa de Informalidad…"])  # title row
-    ws.append(["Año", "Total", "Hombres", "Mujeres"])           # header
-    ws.append([2022, 57.56, 61.21, 52.3])
-    ws.append([2023, 56.54, 60.3, 51.27])
-    ws.append(["Fuente: ENCFT (BCRD)"])                         # trailing note (ignored)
-    buf = io.BytesIO()
-    wb.save(buf)
-
-    from shared.data.one_client import parse_one_indicator_xlsx
-    assert parse_one_indicator_xlsx(buf.getvalue()) == [(2022, 57.56), (2023, 56.54)]
-
-
-def test_parse_one_indicator_tolerates_sheet_whitespace():
-    """ONE sheet names often carry trailing spaces — must still be found."""
-    import io
-    import openpyxl
-
-    wb = openpyxl.Workbook()
-    wb.active.title = " Ficha "
-    ws = wb.create_sheet("Indicador ")              # trailing space
-    ws.append(["Año", "Total"])
-    ws.append([2024, 167.46])
-    wb.create_sheet("Notas")                         # later sheet must NOT win
-    buf = io.BytesIO()
-    wb.save(buf)
-
-    from shared.data.one_client import parse_one_indicator_xlsx
-    assert parse_one_indicator_xlsx(buf.getvalue()) == [(2024, 167.46)]
-
-
-def test_el_descubrimiento_por_media_hash_prefiere_la_revision_mas_nueva():
-    """El hash del CDN de la ONE rota y conviven revisiones del mismo archivo. Gana la de
-    año final más alto (desempate determinista). Hoy el único consumidor es la
-    escolaridad, que es lo último que este módulo saca del portal."""
-    from shared.data.one_client import _SCHOOLING_SLUG, _match_media_links
-
-    html = (
-        f'<a href="/media/aaa/{_SCHOOLING_SLUG}-2000-2023.xlsx">vieja</a>'
-        f'<a href="/media/bbb/{_SCHOOLING_SLUG}-2000-2024.xlsx">nueva</a>'
-        '<a href="/media/zzz/poblacion-desocupada-2008-2024.xlsx">distractor</a>'
-    )
-    links = _match_media_links(html, {"schooling_years": _SCHOOLING_SLUG})
-    assert links["schooling_years"].endswith("2000-2024.xlsx")
-    assert set(links) == {"schooling_years"}
-
-
 def test_region_slug_es_el_padron_de_regiones_para_cualquier_emisor():
     """``region_slug`` sobrevivió al parser de cobertura de la ONE porque el padrón de
     regiones —con sus alias— no era de ese cuadro: hoy lo consume el conector del
@@ -468,24 +414,6 @@ def test_sync_wb_findex_upserts_national(db, monkeypatch):
         .first()
     )
     assert row is not None and row.value == 40.06 and row.source == "WB"
-
-
-def test_sync_one_schooling_upserts_national(db, monkeypatch):
-    import shared.data.one_client as oc_mod
-
-    monkeypatch.setattr(oc_mod, "fetch_one_education_schooling",
-                        lambda: [(2023, 9.61), (2024, 9.61)])
-    from modules.social_dev.social_sync import _sync_one_schooling
-
-    n = _sync_one_schooling(db, lambda _m: None)
-    db.commit()
-    assert n == 2
-    row = (
-        db.query(SocialIndicator)
-        .filter_by(entity_key="nacional", theme="schooling_years", period="2024")
-        .first()
-    )
-    assert row is not None and row.value == 9.61 and row.source == "ONE" and row.unit == "años"
 
 
 def test_sync_minerd_coverage_upserts_by_region(db, monkeypatch):
@@ -636,3 +564,46 @@ def test_la_serie_de_ingreso_se_sirve_como_MONTO_no_como_tasa(db):
     assert ingreso["license"] and "MEPyD" in ingreso["license"]
     assert "MEPyD" in ingreso["note"]
     assert "ONE" in by["poverty_rate.enriquillo"]["note"]
+
+
+def test_escolaridad_por_region_da_de_baja_la_fila_nacional(db, monkeypatch):
+    """El cambio es DESTRUCTIVO a propósito y por eso lleva guard.
+
+    Bajo el mismo tema convivirían el valor país (9,18) y los diez regionales; el upsert
+    no alcanza la fila nacional porque cambió la entidad, así que hay que darla de baja.
+    Corre DESPUÉS de que la fuente nueva trajo dato: una caída del MEPyD no puede
+    destruir lo que hay."""
+    import shared.data.sisdom_schooling as sis
+
+    _ind(db, "nacional", "schooling_years", "2024", 9.18)      # el proxy anterior
+    db.commit()
+    monkeypatch.setattr(sis, "fetch_sisdom_schooling",
+                        lambda: [("ozama", 2024, 10.29), ("enriquillo", 2024, 7.98)])
+    from modules.social_dev.social_sync import _sync_sisdom_schooling
+
+    assert _sync_sisdom_schooling(db, lambda _m: None) == 2
+    db.commit()
+    assert db.query(SocialIndicator).filter_by(
+        entity_key="nacional", theme="schooling_years").count() == 0
+    fila = db.query(SocialIndicator).filter_by(
+        entity_key="ozama", theme="schooling_years", period="2024").first()
+    assert fila is not None and fila.value == 10.29
+    assert fila.source == "MEPyD" and fila.disaggregation == "region"
+
+
+def test_una_caida_del_mepyd_no_destruye_la_escolaridad_cargada(db, monkeypatch):
+    """El contrapeso del test anterior: sin dato nuevo, no se borra el viejo."""
+    import shared.data.sisdom_schooling as sis
+
+    _ind(db, "nacional", "schooling_years", "2024", 9.18)
+    db.commit()
+
+    def _caido():
+        raise ConnectionError("MEPyD no responde")
+
+    monkeypatch.setattr(sis, "fetch_sisdom_schooling", _caido)
+    from modules.social_dev.social_sync import _sync_sisdom_schooling
+
+    with pytest.raises(ConnectionError):
+        _sync_sisdom_schooling(db, lambda _m: None)
+    assert db.query(SocialIndicator).filter_by(theme="schooling_years").count() == 1

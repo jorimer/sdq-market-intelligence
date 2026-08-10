@@ -231,65 +231,14 @@ one_client = ONEClient()
 # Los archivos viven en el CDN Umbraco de la ONE bajo ``/media/<hash>/<slug>.xlsx``
 # (el patrón media-hash de la DGA); el hash rota, así que se raspa la landing del tema
 # para los enlaces vigentes. Hoy queda UN solo consumidor: la escolaridad.
-_MEDIA_XLSX_RE = re.compile(r"/media/[a-z0-9]+/[^\"'> ]+?\.xlsx", re.IGNORECASE)
-_HEADERS = {"User-Agent": "Mozilla/5.0 (SDQ-MIP ONE labour connector)"}
-
-
-def _end_year(path: str) -> int:
-    """Highest 4-digit year in a filename (its coverage end), or 0."""
-    return max((int(y) for y in re.findall(r"(?:19|20)\d{2}", path)), default=0)
-
-
-def _match_media_links(html_text: str, slugs: Dict[str, str]) -> Dict[str, str]:
-    """``{key: /media/<hash>/<slug>.xlsx}`` matching each *slugs* fragment in the HTML.
-
-    Accent/case-insensitive (so a rotated media hash is followed automatically);
-    when several revisions match the same slug (e.g. ``…-2004-2023`` and
-    ``…-2004-2024``) the latest end-year wins (deterministic, like the DGA ``-v2``
-    tie-break). A file that isn't found is simply absent (never fabricated)."""
-    best: Dict[str, tuple] = {}  # key -> (end_year, url)
-    for raw in sorted({unescape(m) for m in _MEDIA_XLSX_RE.findall(html_text)}):
-        norm = _norm(raw)
-        for key, slug in slugs.items():
-            if slug in norm:
-                ey = _end_year(raw)
-                if key not in best or ey > best[key][0]:
-                    best[key] = (ey, raw)
-    return {key: url for key, (_ey, url) in best.items()}
-
-
-def parse_one_indicator_xlsx(content: bytes) -> List[tuple]:
-    """Parse an ONE *Indicador* sheet → ``[(year, value)]`` from the Total column.
-
-    The file's first sheet is a *Ficha técnica* (metadata); the series lives in
-    the ``Indicador`` sheet as ``Año | Total | Hombres | Mujeres``. Year rows are
-    found by a 4-digit year in column A; missing/non-numeric stays out."""
-    import openpyxl
-
-    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
-    # Sheet names often carry trailing spaces/case; fall back to the last sheet.
-    sheet = next((n for n in wb.sheetnames if n.strip().casefold() == "indicador"), None)
-    ws = wb[sheet] if sheet else wb[wb.sheetnames[-1]]
-    out: List[tuple] = []
-    for row in ws.iter_rows(values_only=True):
-        if not row:
-            continue
-        a, total = row[0], (row[1] if len(row) > 1 else None)
-        if isinstance(a, (int, float)) and 1990 <= int(a) <= 2100 and isinstance(total, (int, float)):
-            out.append((int(a), round(float(total), 4)))
-    return out
 
 
 # ── ONE education — national years of schooling ────────────────────────────
 # La COBERTURA educativa ya no sale de acá: la produce el MINERD y se lee de su
 # tablero SIIE (:mod:`shared.data.minerd_coverage`), que además llega al año lectivo
 # 2024-2025 y trae región y provincia en la misma fila.
-EDUCATION_LANDING = (
-    "https://www.one.gob.do/datos-y-estadisticas/temas/estadisticas-sociales/educacion/"
-)
 # National average years of schooling (15+) — the IDM's schooling_years (ENHOGAR
 # only reports literacy by region, not years of schooling). Simple Año|Total sheet.
-_SCHOOLING_SLUG = "anos-promedio-de-educacion-de-la-poblacion-de-15-anos-y-mas"
 
 
 def region_slug(label: object) -> Optional[str]:
@@ -303,22 +252,3 @@ def region_slug(label: object) -> Optional[str]:
     return _REGION_BY_NORM.get(n)
 
 
-def fetch_one_education_schooling() -> List[tuple]:  # pragma: no cover - network I/O
-    """Live: national average years of schooling (15+) from the Educación landing →
-    ``[(year, value)]`` (the IDM's ``schooling_years``, national).
-
-    Mismo estado que :func:`fetch_one_labor`: el portal responde 403 (Cloudflare) y la
-    falla se DECLARA, no se esconde. Sigue acá por la misma razón — sin sustituto."""
-    import urllib.parse
-
-    import httpx
-
-    resp = httpx.get(EDUCATION_LANDING, timeout=40, follow_redirects=True, headers=_HEADERS)
-    resp.raise_for_status()
-    path = _match_media_links(resp.text, {"schooling_years": _SCHOOLING_SLUG}).get("schooling_years")
-    if not path:
-        return []
-    f = httpx.get("https://www.one.gob.do" + urllib.parse.quote(path), timeout=60,
-                  follow_redirects=True, headers=_HEADERS)
-    f.raise_for_status()
-    return parse_one_indicator_xlsx(f.content)
