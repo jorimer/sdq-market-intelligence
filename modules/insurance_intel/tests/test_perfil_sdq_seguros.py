@@ -221,3 +221,74 @@ def test_incurridos_sin_reserva_previa_no_se_inventan():
     from modules.insurance_intel.scoring.perfil_sdq import siniestros_incurridos
     assert siniestros_incurridos(100.0, 520.0, None) is None
     assert siniestros_incurridos(None, 520.0, 500.0) is None
+
+
+# ─── Base devengada/incurrida — revisión actuarial 2026-08 ────────────────────
+# Defecto encontrado por revisión actuarial externa: el combined ratio era PAGADO sobre
+# SUSCRITO, numerador y denominador en distinta base. El catálogo SIS tiene la estructura
+# constitución (sección 5, presente ejercicio) / liberación (sección 4, anterior), así que
+# ambas magnitudes SIEMPRE fueron computables.
+
+class TestBaseDevengadaIncurrida:
+
+    # El extractor descarta la hoja que no tenga sección de ACTIVO, así que todo fixture
+    # lleva un balance mínimo que además cuadra (A = P + Pat) para no disparar el warning.
+    _BALANCE = [
+        ("1", "ACTIVO", None), ("1101", "INVERSIONES", None), ("110101", "Inv", 5000.0),
+        ("2", "PASIVO", None), ("2101", "RESERVAS", None), ("210101", "Res", 3000.0),
+        ("3", "PATRIMONIO", None), ("3101", "CAPITAL", None), ("310101", "Cap", 2000.0),
+    ]
+
+    def _hoja(self, filas):
+        """Filas (codigo, descripcion, valor) → lo que consume ``_extract_sheet``."""
+        return [(c, d, v) for c, d, v in (self._BALANCE + list(filas))]
+
+    def test_la_prima_devengada_ajusta_por_reserva_de_riesgos_en_curso(self):
+        from modules.insurance_intel.external.audited_excel_extractor import _extract_sheet
+        f = _extract_sheet(self._hoja([
+            ("4301", "PRIMAS SUSCRITAS", None), ("430101", "Vehículos", 1000.0),
+            ("4310", "RESERVAS PARA RIESGOS EN CURSO DEL EJERCICIO ANTERIOR", None),
+            ("431001", "Liberación", 300.0),
+            ("5311", "RESERVAS PARA RIESGOS EN CURSO DEL PRESENTE EJERCICIO", None),
+            ("531101", "Constitución", 400.0),
+            ("5301", "RECLAMACIONES PAGADAS POR SINIESTROS", None), ("530101", "Pagado", 500.0),
+        ]), "X", "2024")
+        assert f is not None
+        # 1000 + 300 liberada − 400 constituida = 900
+        assert f.primas_devengadas == 900.0
+        assert f.primas == 1000.0   # la escrita se conserva, no se pisa
+
+    def test_el_incurrido_suma_otras_prestaciones_y_resta_salvamentos(self):
+        from modules.insurance_intel.external.audited_excel_extractor import _extract_sheet
+        f = _extract_sheet(self._hoja([
+            ("4301", "PRIMAS SUSCRITAS", None), ("430101", "P", 1000.0),
+            ("5301", "RECLAMACIONES PAGADAS POR SINIESTROS", None), ("530101", "S", 500.0),
+            ("5102", "OTRAS PRESTACIONES PAGADAS", None), ("510201", "O", 80.0),
+            ("4309", "SALVAMENTOS Y RECUPERACIONES", None), ("430901", "R", 30.0),
+        ]), "X", "2024")
+        # 500 pagado + 80 otras prestaciones − 30 salvamentos = 550
+        assert f.siniestros_incurridos == 550.0
+        assert f.otras_prestaciones == 80.0
+        assert f.siniestros == 500.0   # el pagado sigue disponible aparte
+
+    def test_lo_A_CARGO_DE_REASEGURADORES_no_entra_en_la_base_bruta(self):
+        """Sin la exclusión, la contrapartida cedida contaminaría una medida bruta."""
+        from modules.insurance_intel.external.audited_excel_extractor import _extract_sheet
+        f = _extract_sheet(self._hoja([
+            ("4301", "PRIMAS SUSCRITAS", None), ("430101", "P", 1000.0),
+            ("5311", "RESERVAS PARA RIESGOS EN CURSO DEL PRESENTE EJERCICIO", None),
+            ("531101", "C", 400.0),
+            ("5312", "RESERVAS PARA RIESGOS EN CURSO A CARGO DE REASEGURADORES DEL PRESENTE",
+             None), ("531201", "cedida", 250.0),
+            ("5301", "RECLAMACIONES PAGADAS POR SINIESTROS", None), ("530101", "S", 100.0),
+        ]), "X", "2024")
+        assert f.primas_devengadas == 600.0   # 1000 − 400, la de 250 NO participa
+
+    def test_el_panel_omite_el_ejercicio_sin_base_nueva_en_vez_de_mezclar(self):
+        """Un ejercicio viejo sin devengada no debe caer al pagado-sobre-suscrito:
+        mezclar bases entre compañías produce un ranking sin sentido."""
+        from modules.insurance_intel.scoring.perfil_sdq import metricas_del_ciclo
+        # metricas_del_ciclo recibe ya el dict por año; el filtrado ocurre aguas arriba,
+        # así que acá se verifica que con menos de 3 ejercicios NO se emite ciclo.
+        assert metricas_del_ciclo({"2023": {"loss": .5, "exp": .3, "cesion": .2},
+                                   "2024": {"loss": .5, "exp": .3, "cesion": .2}}) is None

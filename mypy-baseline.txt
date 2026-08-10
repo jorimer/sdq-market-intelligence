@@ -519,7 +519,6 @@ modules/insurance_intel/scoring/isf.py:0: error: Invalid index type "object" for
 modules/insurance_intel/scoring/isf.py:0: error: Key expression in dictionary comprehension has incompatible type "Column[str]"; expected type "str"  [misc]
 modules/insurance_intel/scoring/isf.py:0: error: Key expression in dictionary comprehension has incompatible type "object"; expected type "str"  [misc]
 modules/insurance_intel/scoring/isf.py:0: error: No overload variant of "get" of "dict" matches argument type "Column[str]"  [call-overload]
-modules/insurance_intel/scoring/isf.py:0: error: Unsupported left operand type for / ("None")  [operator]
 modules/insurance_intel/scoring/isf.py:0: error: Unsupported operand types for * ("float" and "object")  [operator]
 modules/insurance_intel/scoring/isf.py:0: error: Unsupported operand types for * ("object" and "float")  [operator]
 modules/insurance_intel/scoring/isf.py:0: error: Unsupported operand types for + ("float" and "object")  [operator]

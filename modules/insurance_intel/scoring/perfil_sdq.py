@@ -216,6 +216,15 @@ def dispersion_loss_por_ramo(
     y es más difícil de maquillar que el margen agregado, porque exige mover varios ramos a
     la vez.
 
+    ⚠️ **Esta métrica sigue en base PAGADO sobre SUSCRITO, y no puede corregirse.** El
+    agregado de la compañía pasó a base incurrida/devengada tras la revisión actuarial de
+    2026-08, pero el catálogo regulatorio **no abre el movimiento de reservas por ramo**:
+    las cuentas de reserva (5112/5311, 4109/4310 y sus específicas) son de la compañía, no
+    del ramo. Reconstruir un incurrido por ramo exigiría prorratear la reserva, que es
+    inventar el dato. Se deja en base pagada y se DECLARA: sirve para comparar ramos entre
+    sí dentro de una misma compañía —donde el sesgo es común— y no para comparar el nivel
+    contra el combined ratio agregado, que ya está en otra base.
+
     **Ponderada, no simple.** Sin ponderar, un ramo residual domina el resultado: en Seguros
     Universal, naves aéreas mueve RD$14 millones con un loss ratio de 164% y salud mueve
     RD$6.022 millones con 71.8%. Tratarlos igual describe una anécdota, no la cartera.
@@ -286,8 +295,13 @@ def panel_por_aseguradora(db) -> Dict[str, Dict[str, Any]]:
     for slug, fin in ultimos.items():
         ejercicios: Dict[str, Dict[str, float]] = {}
         for periodo, s in (por.get(slug) or {}).items():
-            primas = s.get("primas_suscritas")
-            sin_, gop = s.get("siniestros_pagados"), s.get("gastos_operativos")
+            # Base DEVENGADA/INCURRIDA cuando el ejercicio la trae; si no, no se computa.
+            # Mezclar bases entre compañías produciría un ranking sin sentido, así que un
+            # ejercicio sin la base nueva se OMITE en vez de caer al pagado-sobre-suscrito
+            # (revisión actuarial: numerador y denominador deben estar en la misma base).
+            primas = s.get("primas_devengadas")
+            sin_ = s.get("siniestros_incurridos")
+            gop = s.get("gastos_operativos")
             if not primas or sin_ is None or gop is None:
                 continue  # ejercicio incompleto: se omite, no se rellena
             ejercicios[periodo] = {
