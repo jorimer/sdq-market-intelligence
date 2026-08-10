@@ -26,6 +26,18 @@ from typing import Any, Dict, List, Optional, Sequence
 VENTANA_CICLO = 5
 MIN_EJERCICIOS = 3
 
+# Umbral de tendencia, en puntos de combined ratio por año. JUICIO, no derivado: por debajo
+# de 1 punto anual el movimiento no se separa del ruido de tarificación del panel.
+UMBRAL_TENDENCIA = 1.0
+
+# Salto de escala tolerado DENTRO de la ventana (prima mayor / prima menor). Por encima, los
+# extremos del ciclo describen empresas distintas y el promedio no es interpretable.
+SALTO_ESCALA_MAX = 10.0
+
+# Cobertura mínima de Resiliencia para publicarla. El ISF ya exigía 0.50; el eje no lo hacía
+# y publicaba 100.0 y 0.0 para entidades sin un solo ejercicio financiero cargado.
+MIN_COBERTURA_RESILIENCIA = 0.50
+
 # Pesos DENTRO de cada eje (ya renormalizados; suman 1.0 por eje). Heredan la proporción
 # del ISF donde existe correspondencia: solvencia sigue siendo la dimensión dominante de
 # Resiliencia, y el peso que tenía Escala pasa a Reaseguro, que es lo que Escala proxeaba.
@@ -188,13 +200,67 @@ def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict
         media = sum(losses) / n
         var = sum((x - media) ** 2 for x in losses) / n
         cesion = sum(ejercicios[a].get("cesion", 0.0) for a in años) / n
+    # ── TENDENCIA ────────────────────────────────────────────────────────────────
+    # Un promedio de ciclo, aun ponderado, NO distingue una compañía que fue de 60 a 80 de
+    # otra que fue de 80 a 60. Medido sobre el panel, la correlación de rangos entre nivel y
+    # pendiente es +0.26: la trayectoria es información casi independiente del nivel, y es lo
+    # que separa una señal temprana de una fotografía. Se expone APARTE, nunca mezclada en el
+    # score: fundirla repetiría el error del símbolo único que Perfil SDQ vino a reemplazar.
+    pend = _pendiente(años, combineds, pesos if total > 0 else None)
+
+    # Una compañía cuya prima cambió de orden de magnitud dentro de la ventana no tiene un
+    # ciclo comparable: los extremos describen empresas distintas. No se corrige el número
+    # —sería fabricarlo— se DECLARA para que el lector lo descuente. Caso testigo: UNIT, con
+    # prima de 106 mil en el primer ejercicio y 132 millones en el último.
+    vivos = [w for w in pesos if w > 0]
+    comparable = bool(vivos) and (max(vivos) / min(vivos)) <= SALTO_ESCALA_MAX
+
     return {
         "años": años,
         "combined_promedio": combined_prom,
         "loss_volatilidad": math.sqrt(var),
         "cesion_promedio": cesion,
         "ponderado_por_exposicion": total > 0,
+        "pendiente_combined": pend,
+        "ciclo_comparable": comparable,
     }
+
+
+def _pendiente(años: Sequence[str], combineds: Sequence[float],
+               pesos: Optional[Sequence[float]]) -> Optional[float]:
+    """Pendiente OLS del combined ratio en **puntos porcentuales por año**.
+
+    Ponderada por exposición cuando hay volumen, por el mismo motivo que el promedio.
+    Positiva = deteriora. Devuelve None si los años no tienen dispersión.
+    """
+    xs = [float(int(a)) for a in años]
+    ys = [c * 100.0 for c in combineds]
+    ws = list(pesos) if pesos else [1.0] * len(xs)
+    W = sum(ws)
+    if W <= 0 or len(xs) < MIN_EJERCICIOS:
+        return None
+    mx = sum(x * w for x, w in zip(xs, ws)) / W
+    my = sum(y * w for y, w in zip(ys, ws)) / W
+    den = sum(w * (x - mx) ** 2 for x, w in zip(xs, ws))
+    if den == 0:
+        return None
+    return round(sum(w * (x - mx) * (y - my) for x, y, w in zip(xs, ys, ws)) / den, 2)
+
+
+def banda_tendencia(pendiente: Optional[float]) -> Optional[str]:
+    """Etiqueta de trayectoria. El umbral es de JUICIO y se declara como tal.
+
+    ±1 punto de combined ratio por año: por debajo, el movimiento no se distingue del ruido
+    de tarificación anual del panel; por encima, cinco años de ventana acumulan 5 puntos,
+    que sí mueven de banda.
+    """
+    if pendiente is None:
+        return None
+    if pendiente > UMBRAL_TENDENCIA:
+        return "Deteriora"
+    if pendiente < -UMBRAL_TENDENCIA:
+        return "Mejora"
+    return "Estable"
 
 
 def calcular_ejes(ciclo: Optional[Dict[str, Any]],
@@ -219,15 +285,22 @@ def calcular_ejes(ciclo: Optional[Dict[str, Any]],
 
     presentes = {k: v for k, v in dims.items() if v is not None and k in PESOS_RESILIENCIA}
     peso = sum(PESOS_RESILIENCIA[k] for k in presentes)
+    # Cobertura insuficiente ⇒ NO se publica el eje. El ISF ya exigía este mínimo; el eje no
+    # lo hacía y llegó a publicar 100.0 y 0.0 para entidades sin un solo ejercicio financiero
+    # cargado — un número armado con una sola dimensión renormalizada al 100%, que es
+    # precisamente rellenar una brecha en vez de declararla.
     resiliencia = (round(sum(presentes[k] * PESOS_RESILIENCIA[k] for k in presentes) / peso, 1)
-                   if peso > 0 else None)
+                   if peso >= MIN_COBERTURA_RESILIENCIA else None)
     return {
         "ejecucion": ejecucion,
         "resiliencia": resiliencia,
         "cobertura_resiliencia": round(peso, 2),
+        "cobertura_suficiente": peso >= MIN_COBERTURA_RESILIENCIA,
         "dimensiones": dims,
         "ejercicios": ciclo["años"] if ciclo else [],
         "combined_promedio": round(ciclo["combined_promedio"], 4) if ciclo else None,
+        "pendiente_combined": ciclo.get("pendiente_combined") if ciclo else None,
+        "ciclo_comparable": ciclo.get("ciclo_comparable") if ciclo else None,
     }
 
 

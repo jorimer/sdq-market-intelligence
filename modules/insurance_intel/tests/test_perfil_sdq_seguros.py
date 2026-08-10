@@ -343,3 +343,57 @@ class TestCicloPonderadoPorExposicion:
         c = metricas_del_ciclo(sin_peso)
         assert c["ponderado_por_exposicion"] is False
         assert c["combined_promedio"] == pytest.approx((0.8 + 0.9 + 1.0) / 3)
+
+
+# ─── Tendencia, cobertura y ciclo comparable ─────────────────────────────────
+
+class TestTendenciaYGuards:
+
+    def _ej(self, *pares):
+        return {a: {"primas": p, "loss": lo, "exp": ex, "cesion": 0.2}
+                for a, p, lo, ex in pares}
+
+    def test_el_nivel_no_distingue_60_a_80_de_80_a_60_pero_la_pendiente_si(self):
+        """El punto central de la revisión actuarial sobre nivel vs tendencia."""
+        from modules.insurance_intel.scoring.perfil_sdq import banda_tendencia, metricas_del_ciclo
+        sube = metricas_del_ciclo(self._ej(("2022", 100.0, 0.3, 0.3), ("2023", 100.0, 0.4, 0.3),
+                                           ("2024", 100.0, 0.5, 0.3)))
+        baja = metricas_del_ciclo(self._ej(("2022", 100.0, 0.5, 0.3), ("2023", 100.0, 0.4, 0.3),
+                                           ("2024", 100.0, 0.3, 0.3)))
+        # Mismo nivel medio, trayectorias opuestas.
+        assert sube["combined_promedio"] == pytest.approx(baja["combined_promedio"])
+        assert sube["pendiente_combined"] == pytest.approx(10.0)
+        assert baja["pendiente_combined"] == pytest.approx(-10.0)
+        assert banda_tendencia(sube["pendiente_combined"]) == "Deteriora"
+        assert banda_tendencia(baja["pendiente_combined"]) == "Mejora"
+
+    def test_un_movimiento_menor_al_umbral_es_estable(self):
+        from modules.insurance_intel.scoring.perfil_sdq import banda_tendencia
+        assert banda_tendencia(0.4) == "Estable"
+        assert banda_tendencia(-0.9) == "Estable"
+        assert banda_tendencia(None) is None
+
+    def test_un_salto_de_escala_marca_el_ciclo_como_NO_comparable(self):
+        """UNIT: prima de 106 mil en el primer ejercicio y 132 millones en el último.
+        No se corrige el número —sería fabricarlo— se declara."""
+        from modules.insurance_intel.scoring.perfil_sdq import metricas_del_ciclo
+        arranque = metricas_del_ciclo(self._ej(
+            ("2022", 100_000.0, 5.0, 3.0), ("2023", 10_000_000.0, 0.6, 0.3),
+            ("2024", 100_000_000.0, 0.5, 0.3)))
+        assert arranque["ciclo_comparable"] is False
+        estable = metricas_del_ciclo(self._ej(
+            ("2022", 90.0, 0.5, 0.3), ("2023", 100.0, 0.5, 0.3), ("2024", 110.0, 0.5, 0.3)))
+        assert estable["ciclo_comparable"] is True
+
+    def test_sin_cobertura_suficiente_NO_se_publica_resiliencia(self):
+        """Regresión: se publicaba 100.0 y 0.0 para entidades sin un solo ejercicio
+        financiero, renormalizando una sola dimensión al 100%."""
+        from modules.insurance_intel.scoring.perfil_sdq import calcular_ejes
+        # Solo solvencia disponible (peso 0.47 < 0.50): insuficiente.
+        e = calcular_ejes(None, 2.5, None)
+        assert e["resiliencia"] is None
+        assert e["cobertura_suficiente"] is False
+        assert e["dimensiones"]["solvencia"] is not None  # la dimensión SÍ se reporta
+        # Con solvencia + liquidez (0.67) sí alcanza.
+        e2 = calcular_ejes(None, 2.5, 3.0)
+        assert e2["resiliencia"] is not None and e2["cobertura_suficiente"] is True

@@ -134,8 +134,8 @@ async def perfil_sdq(
     fabricado con dos años.
     """
     from modules.insurance_intel.scoring.perfil_sdq import (
-        PESOS_RESILIENCIA, band_resiliencia_o_none, banda_ejecucion,
-        calcular_ejes, metricas_del_ciclo, panel_por_aseguradora,
+        PESOS_RESILIENCIA, UMBRAL_TENDENCIA, band_resiliencia_o_none, banda_ejecucion,
+        banda_tendencia, calcular_ejes, metricas_del_ciclo, panel_por_aseguradora,
     )
     from shared.indices.freshness import annotate_freshness
 
@@ -152,9 +152,16 @@ async def perfil_sdq(
             # como una segunda escala visible en paralelo (§5.2).
             "combined_ratio_promedio": ejes["combined_promedio"],
             "ejercicios": ejes["ejercicios"],
+            # TRAYECTORIA — aparte del nivel, nunca mezclada en el score. Con nivel y
+            # pendiente juntos se lee "buena pero deteriorando", que es la única forma de
+            # que el índice sirva como señal temprana y no como fotografía.
+            "pendiente_combined": ejes["pendiente_combined"],
+            "tendencia": banda_tendencia(ejes["pendiente_combined"]),
+            "ciclo_comparable": ejes["ciclo_comparable"],
             "resiliencia": ejes["resiliencia"],
             "banda_resiliencia": band_resiliencia_o_none(ejes["resiliencia"]),
             "cobertura_resiliencia": ejes["cobertura_resiliencia"],
+            "cobertura_suficiente": ejes["cobertura_suficiente"],
             "dimensiones_resiliencia": ejes["dimensiones"],
         })
     filas.sort(key=lambda f: (f["ejecucion"] is not None, f["ejecucion"] or 0), reverse=True)
@@ -168,7 +175,21 @@ async def perfil_sdq(
                           "combined 90% → 75, breakeven 100% → 60, 110% → 45."),
             "resiliencia": ("Solvencia y liquidez regulatorias (Ley 146-02), reaseguro y "
                             "volatilidad del loss ratio."),
+            "tendencia": (
+                f"Pendiente del combined ratio en puntos por año, ponderada por exposición. "
+                f"Se publica APARTE del nivel, nunca mezclada en el score: una compañía "
+                f"puede tener buen nivel y estar deteriorándose. Umbral ±{UMBRAL_TENDENCIA} "
+                f"punto/año para etiquetar Mejora/Estable/Deteriora — es de JUICIO: por "
+                f"debajo el movimiento no se separa del ruido de tarificación anual."),
         },
+        # Las dos superficies de seguros miden VENTANAS DISTINTAS. Sin decirlo, un lector que
+        # compare ambas encuentra contradicciones aparentes — el caso testigo fue HYLSEG, con
+        # 6.8% de siniestralidad en el ISF y 118.8% de combined en el eje, ambos correctos.
+        "relacion_con_el_isf": (
+            "El Índice de Solidez Financiera mide el ÚLTIMO EJERCICIO cerrado; este eje mide "
+            "el CICLO de 3 a 5 ejercicios ponderado por exposición. Una compañía que cambió "
+            "de escala o tuvo un año atípico puede verse distinta en cada superficie sin que "
+            "ninguna esté mal: responden preguntas distintas."),
         # Promesa de transparencia del spec §5.7, en la superficie que ve el cliente y no
         # solo en el código: los pesos NO se derivaron empíricamente.
         "metodologia": {
