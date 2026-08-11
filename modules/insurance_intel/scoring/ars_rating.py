@@ -146,6 +146,8 @@ def _load_ars_financials(db: Session) -> List[Dict[str, Any]]:
             .filter(InsuranceEntity.entity_type == "ars").all()}
     if not ents:
         return []
+    # canon-exento: los slugs de ARS vienen de SISALRIL con códigos estables (ars_001…), no
+    # de nombres de hoja de Excel truncados, así que no hay deriva que colapsar.
     rows = (db.query(InsuranceSeries)
             .filter(InsuranceSeries.entity_slug.in_(list(ents)),
                     InsuranceSeries.series_code.like("ars.%"),

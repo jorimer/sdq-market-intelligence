@@ -269,6 +269,9 @@ async def entity_series(
     Devuelve también ``reservas_tecnicas``, que es lo que permite aproximar el siniestro
     INCURRIDO (pagado + Δreservas) frente al PAGADO que hoy alimenta el combined ratio.
     """
+    # canon-exento: este endpoint expone la serie CRUDA a propósito, tal como está
+    # persistida, para poder auditar el dato antes de cualquier normalización. Quien lo
+    # consuma para analizar debe canonizar por su cuenta — la nota de construcción lo dice.
     q = (db.query(InsuranceSeries)
          .filter(InsuranceSeries.entity_slug.isnot(None),
                  InsuranceSeries.dimension.is_(None)))
