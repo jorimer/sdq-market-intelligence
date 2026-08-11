@@ -145,7 +145,15 @@ async def perfil_sdq(
     # Tipo de compañía DERIVADO de la mezcla real de primas. El catálogo del SIS no lo trae.
     # Va como contexto de lectura: un combined de 105% en una compañía de salud y en una de
     # daños pueden no ser lo mismo, y sin el tipo a la vista el lector no puede ni preguntarlo.
-    _ramos = [{"entity_slug": r.entity_slug, "dimension": r.dimension, "value": r.value}
+    from modules.insurance_intel.models.models import InsuranceEntity
+    from modules.insurance_intel.scoring.isf import _canon_map, _official_index
+
+    _ents = (db.query(InsuranceEntity)
+             .filter(InsuranceEntity.entity_type == "aseguradora").all())
+    _canon, _ = _canon_map(_ents, _official_index())
+    _ramos = [{"entity_slug": (_canon.get(str(r.entity_slug))
+                               or (None, None, str(r.entity_slug)))[2],
+               "dimension": r.dimension, "value": r.value}
               for r in db.query(InsuranceSeries)
               .filter(InsuranceSeries.series_code == "primas_suscritas",
                       InsuranceSeries.entity_slug.isnot(None),
@@ -309,17 +317,26 @@ async def mezcla_ramos(
     económico **para daños**. Salud y personas operan con siniestralidad estructuralmente
     distinta, y sin la mezcla no se puede distinguir "ejecuta mal" de "es otro negocio".
     """
+    from modules.insurance_intel.models.models import InsuranceEntity
+    from modules.insurance_intel.scoring.isf import _canon_map, _official_index
     from modules.insurance_intel.scoring.mezcla_ramos import (
         UMBRAL_MIXTA, UMBRAL_PERSONAS, agrupar_por_entidad, mezcla_de_una,
     )
+
+    # Las series por ramo están bajo el slug DERIVADO (truncación de hoja de Excel), igual
+    # que las de totales. Sin colapsarlas contra el roster, seis aseguradoras —justo las que
+    # se recuperaron al arreglar la identidad— quedaban sin tipo. Mismo mapa que el resto.
+    ents = (db.query(InsuranceEntity)
+            .filter(InsuranceEntity.entity_type == "aseguradora").all())
+    canon, _ = _canon_map(ents, _official_index())
 
     rows = (db.query(InsuranceSeries)
             .filter(InsuranceSeries.series_code == "primas_suscritas",
                     InsuranceSeries.entity_slug.isnot(None),
                     InsuranceSeries.dimension.isnot(None))
             .all())
-    filas = [{"entity_slug": r.entity_slug, "dimension": r.dimension,
-              "value": r.value, "period": r.period} for r in rows]
+    filas = [{"entity_slug": (canon.get(str(r.entity_slug)) or (None, None, str(r.entity_slug)))[2],
+              "dimension": r.dimension, "value": r.value, "period": r.period} for r in rows]
 
     salida: list[Dict[str, Any]] = []
     for slug, fs in sorted(agrupar_por_entidad(filas).items()):
@@ -340,8 +357,10 @@ async def mezcla_ramos(
                 "regulatorio del SIS no trae tipo de compañía."),
             "cortes": (
                 f"personas ≥ {UMBRAL_PERSONAS:.0%} de la prima · mixta ≥ "
-                f"{UMBRAL_MIXTA:.0%} · daños por debajo. Cortes de JUICIO, no derivados "
-                f"empíricamente."),
+                f"{UMBRAL_MIXTA:.0%} · daños por debajo. Dentro de personas se separa SALUD "
+                f"de VIDA con el mismo corte: una ARS y una compañía de vida no comparten "
+                f"ni estructura de siniestralidad ni marco regulatorio. Cortes de JUICIO, "
+                f"no derivados empíricamente."),
             "sin_mezcla": (
                 "Una compañía sin desglose por ramo devuelve tipo null. No se asume daños "
                 "por defecto: sería clasificar por ausencia de dato."),
