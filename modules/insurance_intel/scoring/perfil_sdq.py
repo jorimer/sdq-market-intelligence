@@ -93,19 +93,49 @@ CESION_ALTA = 0.50
 # se verifica por test. Grepear prosa dentro del código fuente es frágil — los literales se
 # parten por ancho de línea y la frase deja de existir en el texto aunque exista en el valor.
 ANCLAJE_POR_TIPO = (
-    "El breakeven de 100% se aplica IGUAL a toda compañía, sea de daños, vida o salud. Se "
-    "evaluó si el segmento exige un ancla distinta y no es estimable con este panel: hay 5 "
-    "compañías de salud y 2 de vida, y la correlación entre peso de salud y combined ratio "
-    "cambia de signo según dónde se corte la muestra. Al abrir «personas» en salud y vida "
-    "—negocios que no comparten ni estructura de siniestralidad ni marco regulatorio— el "
-    "dato apunta en sentidos opuestos: las dos de VIDA son las dos mejores del sector "
-    "(64.3% y 81.3%), mientras las de SALUD van de 92.3% a 124.6%, y esa última tiene "
-    "además un contraejemplo directo — una aseguradora con 88% de su prima en salud opera "
-    "por debajo del breakeven. Resolverlo requiere el dato regulatorio de siniestralidad "
-    "mínima de las ARS, no más análisis del panel. Mientras tanto el tipo se publica en "
-    "cada fila (`tipo_derivado`) para que el lector pondere, y el ancla no se mueve: un "
-    "combined sobre 100% es pérdida de suscripción en cualquier segmento."
+    "El breakeven de 100% se aplica igual a toda compañía cuyo siniestro lo paga la PRIMA "
+    "del ejercicio, sea de daños, vida o salud: ahí un combined sobre 100% es pérdida de "
+    "suscripción en cualquier segmento, y el tipo se publica en cada fila (`tipo_derivado`) "
+    "para que el lector pondere. El ancla NO aplica —y el eje no se publica— cuando el "
+    "siniestro lo paga otra fuente. Se identificaron dos, ambas medidas sobre el estado "
+    "auditado y no inferidas: (1) la compañía que CEDE por encima del 70% de su prima, "
+    "donde el combined bruto describe un riesgo que no está en su balance —Angloamericana "
+    "cede 83% del ciclo y su reserva específica del ejercicio 2023 vale 3.7× su prima "
+    "devengada, la firma de una fronting—; y (2) la compañía cuyo PRODUCTO DE INVERSIONES "
+    "supera el 60% de su prima devengada, donde el siniestro lo paga la reserva y su "
+    "rendimiento y no la prima del año —Seguros Crecer tiene 186% contra 30% del siguiente "
+    "del panel en 2023—. "
+    "Ambos cortes se validan contra el estado de resultados: las tres compañías que superan "
+    "el corte de cesión son exactamente las tres cuyo combined contradice su resultado del "
+    "ejercicio y su trayectoria de patrimonio, mientras que las de combined alto y cesión "
+    "baja —Unit 440% con margen −330%, Multiseguros 194% con patrimonio cayendo 60% anual— "
+    "quedan fuera del corte porque su deterioro es real. La pregunta previa sobre si SALUD "
+    "exige un ancla propia sigue abierta y sin estimar con este panel: requiere el dato "
+    "regulatorio de siniestralidad mínima de las ARS."
 )
+
+# ── Cuándo el combined ratio NO es una medida de desempeño (§5.2) ──────────────
+# Dos condiciones, ambas medidas contra el estado de resultados auditado, bajo las cuales el
+# eje se DECLARA ausente en vez de publicar un número que el propio balance contradice.
+#
+# CESIÓN: se reusa ``CESION_MAX_SANA`` (0.70) a propósito, en vez de calibrar un corte nuevo.
+# Es el MISMO hecho económico que ya mueve la dimensión de reaseguro en Resiliencia —por
+# encima de ese nivel la compañía no retiene el riesgo— y dos constantes para un solo hecho
+# divergen con el tiempo. La cesión de ciclo del panel da 96%, 83% y 77% para las tres
+# afectadas y luego salta a 64%: el corte cae dentro de una brecha de 13 puntos, no sobre
+# un continuo.
+CESION_NO_INTERPRETABLE = CESION_MAX_SANA
+
+# INVERSIÓN: producto de inversiones sobre prima DEVENGADA —la misma base del combined ratio,
+# para que numerador y denominador hablen del mismo ejercicio. El panel 2023 da 186% (Crecer),
+# 30% (La Monumental), 24% (General): el corte cae en una brecha de 6.2× y por eso el
+# resultado no es sensible a dónde exactamente se ponga dentro de ella.
+INVERSION_DOMINANTE = 0.60
+
+MOTIVO_CESION = ("cede {pct:.0f}% de la prima: el combined ratio bruto mide el riesgo que "
+                 "origina, no el que absorbe")
+MOTIVO_INVERSION = ("el producto de inversiones vale {pct:.0f}% de la prima: el siniestro lo "
+                    "paga la reserva y su rendimiento, no la prima del ejercicio")
 
 
 def _lineal(v: float, peor: float, mejor: float) -> float:
@@ -225,11 +255,14 @@ def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict
         var = sum(w * (x - media) ** 2 for x, w in zip(losses, pesos)) / total
         cesion = sum(ejercicios[a].get("cesion", 0.0) * w
                      for a, w in zip(años, pesos)) / total
+        inversion = sum(ejercicios[a].get("inversion", 0.0) * w
+                        for a, w in zip(años, pesos)) / total
     else:
         combined_prom = sum(combineds) / n
         media = sum(losses) / n
         var = sum((x - media) ** 2 for x in losses) / n
         cesion = sum(ejercicios[a].get("cesion", 0.0) for a in años) / n
+        inversion = sum(ejercicios[a].get("inversion", 0.0) for a in años) / n
     # ── TENDENCIA ────────────────────────────────────────────────────────────────
     # Un promedio de ciclo, aun ponderado, NO distingue una compañía que fue de 60 a 80 de
     # otra que fue de 80 a 60. Medido sobre el panel, la correlación de rangos entre nivel y
@@ -250,6 +283,7 @@ def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict
         "combined_promedio": combined_prom,
         "loss_volatilidad": math.sqrt(var),
         "cesion_promedio": cesion,
+        "inversion_sobre_prima": inversion,
         "ponderado_por_exposicion": total > 0,
         "pendiente_combined": pend,
         "pendiente_error_estandar": pend_ee,
@@ -312,6 +346,48 @@ def banda_tendencia(pendiente: Optional[float],
     return "Sin señal"
 
 
+def motivo_combined_no_interpretable(cesion: Optional[float],
+                                     inversion: Optional[float]) -> Optional[str]:
+    """La regla, en un solo lugar. ``None`` = el combined ratio mide lo que dice medir.
+
+    **Vive acá y la llaman los DOS motores** —Perfil SDQ sobre el ciclo, el ISF sobre el
+    último ejercicio— a propósito. Este módulo ya acumuló cinco casos de un guard presente en
+    un motor y ausente en el otro; la cura no es recordar copiarlo, es que no haya qué copiar.
+    El ISF deriva ``siniestralidad`` (peso 0.20) y ``resultado_tecnico`` (0.15) de las mismas
+    cuentas, así que sin esto el 35% de su índice arrastraba la distorsión que Perfil SDQ ya
+    declaraba.
+
+    Una magnitud ausente NO enciende la compuerta: se silencia un eje por lo que se sabe, no
+    por lo que falta.
+
+    >>> motivo_combined_no_interpretable(0.83, 0.10)[:4]
+    'cede'
+    >>> motivo_combined_no_interpretable(None, None) is None
+    True
+    """
+    if cesion is not None and cesion > CESION_NO_INTERPRETABLE:
+        return MOTIVO_CESION.format(pct=cesion * 100.0)
+    if inversion is not None and inversion > INVERSION_DOMINANTE:
+        return MOTIVO_INVERSION.format(pct=inversion * 100.0)
+    return None
+
+
+def motivo_no_publicable(ciclo: Dict[str, Any]) -> Optional[str]:
+    """Razón por la que el combined ratio de este ciclo no es una medida de desempeño.
+
+    ``None`` = publicable. Devuelve la razón EN TEXTO y no un booleano porque el consumidor
+    tiene que poder decir por qué falta el eje: "sin dato" y "el dato existe pero no mide lo
+    que el eje afirma medir" son cosas distintas y la segunda es la interesante.
+
+    >>> motivo_no_publicable({"cesion_promedio": 0.83, "inversion_sobre_prima": 0.1})[:11]
+    'cede 83% de'
+    >>> motivo_no_publicable({"cesion_promedio": 0.2, "inversion_sobre_prima": 0.1}) is None
+    True
+    """
+    return motivo_combined_no_interpretable(ciclo.get("cesion_promedio"),
+                                            ciclo.get("inversion_sobre_prima"))
+
+
 def calcular_ejes(ciclo: Optional[Dict[str, Any]],
                   indice_solvencia: Optional[float],
                   indice_liquidez: Optional[float]) -> Dict[str, Any]:
@@ -319,11 +395,21 @@ def calcular_ejes(ciclo: Optional[Dict[str, Any]],
     from modules.insurance_intel.scoring.isf import DIMENSIONS, _absolute
 
     ejecucion = None
+    motivo_ejecucion: Optional[str] = None
     dims: Dict[str, Optional[float]] = {}
     if ciclo:
-        ejecucion = score_ejecucion_desde_combined(ciclo["combined_promedio"])
+        # La compuerta corre ANTES de puntuar: si el combined ratio no describe el resultado
+        # económico de esta compañía, publicar el score y agregarle una advertencia al lado
+        # sigue publicando el número — y el número es el que se cita, se rankea y se lleva a
+        # un PDF. Se declara la brecha, que es la doctrina del resto del spec.
+        motivo_ejecucion = motivo_no_publicable(ciclo)
+        if motivo_ejecucion is None:
+            ejecucion = score_ejecucion_desde_combined(ciclo["combined_promedio"])
         dims["volatilidad_loss"] = round(
             _lineal(ciclo["loss_volatilidad"], VOL_PEOR, VOL_MEJOR), 1)
+        # Resiliencia SÍ se sigue publicando: la cesión alta es información legítima ahí
+        # —``score_reaseguro`` ya la penaliza como fronting— y es justamente el eje que
+        # separar en dos servía para poder mover uno sin arrastrar el otro.
         dims["reaseguro"] = score_reaseguro(ciclo["cesion_promedio"])
 
     # Solvencia y liquidez reusan los anclajes ya recalibrados del ISF: son la MISMA
@@ -342,6 +428,8 @@ def calcular_ejes(ciclo: Optional[Dict[str, Any]],
                    if peso >= MIN_COBERTURA_RESILIENCIA else None)
     return {
         "ejecucion": ejecucion,
+        # Por qué falta Ejecución cuando hay ciclo cargado. None cuando se publica.
+        "ejecucion_no_publicable": motivo_ejecucion,
         "resiliencia": resiliencia,
         "cobertura_resiliencia": round(peso, 2),
         "cobertura_suficiente": peso >= MIN_COBERTURA_RESILIENCIA,
@@ -480,6 +568,10 @@ def panel_por_aseguradora(db) -> Dict[str, Dict[str, Any]]:
                 "primas": primas,
                 "loss": sin_ / primas, "exp": gop / primas,
                 "cesion": (s.get("primas_cedidas") or 0.0) / primas,
+                # Ausente ⇒ 0.0 y NO dispara la compuerta: un ejercicio anterior al que el
+                # extractor capturara 45xx no debe leerse como "no tiene inversiones". La
+                # compuerta solo puede ENCENDERSE con dato, nunca por su falta.
+                "inversion": (s.get("productos_inversion") or 0.0) / primas,
             }
         salida[slug] = {
             "name": fin.get("name", slug),

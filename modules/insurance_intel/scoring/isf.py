@@ -146,9 +146,38 @@ def _minmax(raw: float, peers: List[float], spec: Dict) -> Optional[float]:
     return max(0.0, min(1.0, frac)) * 100
 
 
+def _combined_no_interpretable(fin: Dict[str, Any]) -> Optional[str]:
+    """Razón por la que el combined ratio de ESTA aseguradora no mide desempeño, o None.
+
+    Delega en ``perfil_sdq.motivo_combined_no_interpretable``: una sola definición para los
+    dos motores. Acá se evalúa sobre el ÚLTIMO ejercicio porque es la base del ISF, mientras
+    que Perfil SDQ la evalúa sobre el ciclo — cambia el insumo, no la regla.
+    """
+    from modules.insurance_intel.scoring.perfil_sdq import motivo_combined_no_interpretable
+
+    dev = fin.get("primas_devengadas")
+    if not dev:
+        return None
+    def _frac(k: str) -> Optional[float]:
+        v = fin.get(k)
+        return (v / dev) if v is not None else None
+    return motivo_combined_no_interpretable(_frac("primas_cedidas"),
+                                            _frac("productos_inversion"))
+
+
 def _raw_metric(fin: Dict[str, Any], key: str) -> Optional[float]:
     """Derive a dimension's raw ratio from an insurer's financials dict."""
     g = fin.get
+    # Las dos dimensiones que salen del combined ratio (35% del índice) se DECLARAN ausentes
+    # cuando el ratio no describe a esta compañía: la fronting cuyo riesgo está reasegurado y
+    # la de anualidades cuyo siniestro lo paga el rendimiento.
+    #
+    # CONSECUENCIA, medida y no supuesta: conservan ``overall_score`` —la cobertura cae a 0.65,
+    # por encima de ``_MIN_COVERAGE``— pero PIERDEN la banda, porque banda exige cobertura
+    # ≥0.99. Es la regla que ya regía para el dato ausente, aplicada al dato presente que no
+    # mide lo que la dimensión afirma medir; afecta a 4 de 34 aseguradoras en el ejercicio 2024.
+    if key in ("siniestralidad", "resultado_tecnico") and _combined_no_interpretable(fin):
+        return None
     if key == "solvencia":
         return g("indice_solvencia")  # oficial (PTA/MSMR), Ley 146-02 Art. 160-161
     if key == "siniestralidad":

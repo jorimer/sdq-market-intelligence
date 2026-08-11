@@ -54,6 +54,10 @@ class InsurerFinancials:
     siniestros_incurridos: Optional[float]  # pagado + otras prestaciones + Δreserva específica − salvamentos
     otras_prestaciones: Optional[float]     # 5102 — prestación PAGADA que no estaba en el numerador
     salvamentos: Optional[float]            # 4309 — recupero que reduce el costo de siniestro
+    # 45xx PRODUCTO DE LAS INVERSIONES Y FONDO DE GARANTÍA. No entra en ningún ratio: es el
+    # insumo que permite DETECTAR a la compañía cuyos siniestros no los paga la prima del
+    # ejercicio sino la reserva y su rendimiento. Ver ``perfil_sdq.INVERSION_DOMINANTE``.
+    productos_inversion: Optional[float]
     # {ramo: {"primas": x, "siniestros": y}} — y es None cuando el catálogo no lo abre.
     por_ramo: Dict[str, Dict[str, Optional[float]]]
     reconciled: bool
@@ -77,6 +81,7 @@ class InsurerFinancials:
             "siniestros_incurridos": self.siniestros_incurridos,
             "otras_prestaciones": self.otras_prestaciones,
             "salvamentos": self.salvamentos,
+            "productos_inversion": self.productos_inversion,
         }
 
 
@@ -233,6 +238,12 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
     _esp_lib = heads_sum(("41", "43"), "RESERVAS ESPECIFICAS", "ANTERIOR", excl=("REASEG",))
     _catastrof = heads_sum(("51", "53"), "CATASTROFICOS")
     salvamentos = heads_sum(("41", "43"), "SALVAMENTOS")
+
+    # Rendimiento de la cartera de inversiones (45xx). Va aparte del resultado técnico a
+    # propósito: en una compañía de anualidades es la fuente que PAGA el siniestro, y sin
+    # capturarla el combined ratio la describe como si perdiera dinero. Medido en 2023,
+    # Seguros Crecer tiene 186% de su prima devengada en esta cuenta contra 30% del siguiente.
+    productos_inversion = heads_sum(("45",), "PRODUCTO DE LAS INVERSIONES")
     siniestros_incurridos = (
         round(siniestros + (otras_prestaciones or 0.0) + (_esp_const or 0.0)
               + (_catastrof or 0.0) - (_esp_lib or 0.0) - (salvamentos or 0.0), 2)
@@ -274,6 +285,7 @@ def _extract_sheet(rows: List[tuple], name: str, period: str) -> Optional[Insure
         recuperables_reaseguro=recuperables,
         primas_devengadas=primas_devengadas, siniestros_incurridos=siniestros_incurridos,
         otras_prestaciones=otras_prestaciones, salvamentos=salvamentos,
+        productos_inversion=productos_inversion,
         por_ramo=por_ramo, reconciled=reconciled)
 
 

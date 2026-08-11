@@ -173,6 +173,9 @@ async def perfil_sdq(
             "slug": slug, "name": info["name"], "period": info.get("period"),
             "ejecucion": ejes["ejecucion"],
             "banda_ejecucion": banda_ejecucion(ejes["ejecucion"]),
+            # Por qué el eje viene vacío teniendo ciclo cargado. Distingue "no hay dato" de
+            # "el dato existe y no mide desempeño en esta compañía" — ver §5.2.
+            "ejecucion_no_publicable": ejes["ejecucion_no_publicable"],
             # El combined ratio queda como la MÉTRICA SUBYACENTE que alimenta el índice, no
             # como una segunda escala visible en paralelo (§5.2).
             "combined_ratio_promedio": ejes["combined_promedio"],
@@ -588,9 +591,16 @@ async def validation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """The persisted ISF backtest report (Gini + CI per signal), or None."""
+    """Backtest del ISF y el cruce del combined ratio contra el estado de resultados.
+
+    El cruce corre EN VIVO sobre el panel, no desde un reporte persistido: es una condición
+    que tiene que poder fallar el día que una extracción nueva rompa la coherencia, y un
+    snapshot guardado envejece sin avisar. `hallazgos` vacío es la afirmación que interesa.
+    """
     import json
 
+    from modules.insurance_intel.scoring.coherencia_resultado import revisar_panel
     from shared.settings.models import AppSetting
     row = db.query(AppSetting).filter(AppSetting.key == "insurance_backtest_report").first()
-    return {"backtest": json.loads(row.value) if row and row.value else None}
+    return {"backtest": json.loads(row.value) if row and row.value else None,
+            "coherencia_resultado": revisar_panel(db)}

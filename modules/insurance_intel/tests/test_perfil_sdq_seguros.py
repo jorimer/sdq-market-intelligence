@@ -487,9 +487,17 @@ def test_la_metodologia_DECLARA_la_decision_sobre_el_ancla_por_tipo():
     from modules.insurance_intel.scoring.perfil_sdq import ANCLAJE_POR_TIPO
 
     texto = ANCLAJE_POR_TIPO.lower()
-    for pieza in ("no es estimable", "contraejemplo", "dato regulatorio", "no se mueve",
-                  "salud y vida", "sentidos opuestos"):
+    # Las DOS excepciones medidas al ancla, cada una con su caso testigo y su magnitud: sin
+    # el número la frase es una opinión, y el lector no puede rehacer el corte.
+    for pieza in ("cede", "70%", "fronting", "angloamericana",
+                  "producto de inversiones", "60%", "crecer", "186%"):
         assert pieza in texto, f"la declaración no menciona «{pieza}»"
+    # Y la validación que las sostiene: el corte se justifica porque DISCRIMINA — las de
+    # combined alto por deterioro real quedan fuera. Sin eso es un umbral de juicio.
+    for pieza in ("resultado del ejercicio", "patrimonio", "unit", "multiseguros"):
+        assert pieza in texto, f"la declaración no cita la validación «{pieza}»"
+    # La pregunta de SALUD sigue abierta y tiene que seguir declarándose como abierta.
+    assert "salud" in texto and "ars" in texto
     # Y tiene que llegar a la superficie junto con el tipo por fila, o no es accionable.
     src = inspect.getsource(api.perfil_sdq)
     assert "ANCLAJE_POR_TIPO" in src and '"tipo_derivado"' in src
