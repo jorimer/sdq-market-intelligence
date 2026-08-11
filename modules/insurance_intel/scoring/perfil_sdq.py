@@ -82,6 +82,12 @@ VOL_PEOR, VOL_MEJOR = 0.130, 0.023
 CESION_MIN_SANA, CESION_MAX_SANA = 0.05, 0.70
 CESION_DESPROTEGIDA, CESION_FRONTING = 0.0, 1.0
 
+# Por encima de esta cesión, el combined ratio BRUTO deja de describir el resultado económico
+# de la compañía: mide la calidad de lo que origina, no la pérdida que absorbe. Medido en el
+# panel, 10 de 29 superan este corte y las tres más extremas ceden 81%, 94% y 78% mientras
+# muestran bandas Deficiente. NO cambia el score — es contexto de lectura, declarado.
+CESION_ALTA = 0.50
+
 
 def _lineal(v: float, peor: float, mejor: float) -> float:
     """0 en *peor*, 100 en *mejor*. Funciona en ambos sentidos (mejor puede ser < peor)."""
@@ -326,6 +332,14 @@ def calcular_ejes(ciclo: Optional[Dict[str, Any]],
         "pendiente_combined": ciclo.get("pendiente_combined") if ciclo else None,
         "pendiente_error_estandar": ciclo.get("pendiente_error_estandar") if ciclo else None,
         "ciclo_comparable": ciclo.get("ciclo_comparable") if ciclo else None,
+        # CESIÓN junto al combined ratio: el ratio es BRUTO, así que mide la calidad de lo
+        # que la compañía ORIGINA, no la pérdida que absorbe. Sin la cesión al lado,
+        # «155% · Deficiente» se lee como si retuviera ese riesgo — y Angloamericana cede
+        # el 81%. La cesión ya se computaba para la dimensión de reaseguro; solo faltaba
+        # publicarla donde se lee el número que condiciona.
+        "cesion_promedio": (round(ciclo["cesion_promedio"], 4)
+                            if ciclo and ciclo.get("cesion_promedio") is not None else None),
+        "cesion_alta": (ciclo.get("cesion_promedio", 0.0) > CESION_ALTA) if ciclo else None,
     }
 
 
