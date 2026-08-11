@@ -89,9 +89,15 @@ def detect_rating_action(
     ov = overlay_outlook(base_outlook.value, "DO")
     outlook = Outlook(ov["outlook"])
 
-    action = RatingAction(
-        bank_id=bank_id,
-        period_end=period_end,
+    # UNA acción por (entidad, período). Antes se insertaba siempre, así que cada rescore
+    # dejaba un juego completo nuevo: 35.621 filas para ~1.870 eventos reales. Los ratings
+    # SÍ se actualizaban (tienen unicidad), de modo que el histórico de acciones quedaba
+    # describiendo transiciones que ya no correspondían a los ratings de al lado.
+    action = (db.query(RatingAction)
+              .filter(RatingAction.bank_id == bank_id,
+                      RatingAction.period_end == period_end)
+              .order_by(RatingAction.created_at.desc()).first())
+    campos = dict(
         action_type=action_type,
         previous_period_end=previous.period_end,
         previous_score=previous.overall_score,
@@ -121,7 +127,13 @@ def detect_rating_action(
         metodologica=metodologica,
         created_by=user_id,
     )
-    db.add(action)
+    if action is None:
+        action = RatingAction(bank_id=bank_id, period_end=period_end, **campos)
+        db.add(action)
+    else:
+        # Ya existía: se ACTUALIZA. Nunca se pisa un comunicado ya emitido.
+        for k, v in campos.items():
+            setattr(action, k, v)
 
     return {
         "action_type": action_type.value,
