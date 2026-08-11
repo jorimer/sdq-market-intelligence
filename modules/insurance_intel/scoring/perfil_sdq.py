@@ -88,6 +88,22 @@ CESION_DESPROTEGIDA, CESION_FRONTING = 0.0, 1.0
 # muestran bandas Deficiente. NO cambia el score — es contexto de lectura, declarado.
 CESION_ALTA = 0.50
 
+# ── Declaración de metodología ─────────────────────────────────────────────────
+# Vive como CONSTANTE y no incrustada en el endpoint: es contenido, se cita en documentos y
+# se verifica por test. Grepear prosa dentro del código fuente es frágil — los literales se
+# parten por ancho de línea y la frase deja de existir en el texto aunque exista en el valor.
+ANCLAJE_POR_TIPO = (
+    "El breakeven de 100% se aplica IGUAL a toda compañía, sea de daños, personas o salud. "
+    "Se evaluó si el segmento exige un ancla distinta y no es estimable con este panel: en "
+    "el grupo de personas hay 6 compañías y la correlación entre peso de salud y combined "
+    "ratio cambia de signo según dónde se corte la muestra. Existe además un contraejemplo "
+    "directo — una aseguradora con 88% de su prima en salud opera por debajo del breakeven. "
+    "Resolverlo requiere el dato regulatorio de siniestralidad mínima de las ARS, no más "
+    "análisis del panel. Mientras tanto el tipo se publica en cada fila (`tipo_derivado`) "
+    "para que el lector pondere, y el ancla no se mueve: un combined sobre 100% es pérdida "
+    "de suscripción en cualquier segmento."
+)
+
 
 def _lineal(v: float, peor: float, mejor: float) -> float:
     """0 en *peor*, 100 en *mejor*. Funciona en ambos sentidos (mejor puede ser < peor)."""

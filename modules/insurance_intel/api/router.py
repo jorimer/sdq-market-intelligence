@@ -134,10 +134,27 @@ async def perfil_sdq(
     fabricado con dos años.
     """
     from modules.insurance_intel.scoring.perfil_sdq import (
-        PESOS_RESILIENCIA, T_MINIMO, band_resiliencia_o_none, banda_ejecucion,
-        banda_tendencia, calcular_ejes, metricas_del_ciclo, panel_por_aseguradora,
+        ANCLAJE_POR_TIPO, PESOS_RESILIENCIA, T_MINIMO, band_resiliencia_o_none,
+        banda_ejecucion, banda_tendencia, calcular_ejes, metricas_del_ciclo, panel_por_aseguradora,
+    )
+    from modules.insurance_intel.scoring.mezcla_ramos import (
+        UMBRAL_MIXTA, UMBRAL_PERSONAS, agrupar_por_entidad, mezcla_de_una,
     )
     from shared.indices.freshness import annotate_freshness
+
+    # Tipo de compañía DERIVADO de la mezcla real de primas. El catálogo del SIS no lo trae.
+    # Va como contexto de lectura: un combined de 105% en una compañía de salud y en una de
+    # daños pueden no ser lo mismo, y sin el tipo a la vista el lector no puede ni preguntarlo.
+    _ramos = [{"entity_slug": r.entity_slug, "dimension": r.dimension, "value": r.value}
+              for r in db.query(InsuranceSeries)
+              .filter(InsuranceSeries.series_code == "primas_suscritas",
+                      InsuranceSeries.entity_slug.isnot(None),
+                      InsuranceSeries.dimension.isnot(None)).all()]
+    _tipos: Dict[str, Any] = {}
+    for _slug, _fs in agrupar_por_entidad(_ramos).items():
+        _m = mezcla_de_una(_fs)
+        if _m:
+            _tipos[_slug] = _m
 
     panel = panel_por_aseguradora(db)
     filas = []
@@ -164,6 +181,11 @@ async def perfil_sdq(
             # la compañía retuviera el riesgo que originó.
             "cesion_promedio": ejes["cesion_promedio"],
             "cesion_alta": ejes["cesion_alta"],
+            # Tipo DERIVADO de la mezcla real de primas; None cuando no hay desglose. Es
+            # contexto de lectura y NO ajusta el score — ver `anclaje_por_tipo`.
+            "tipo_derivado": (_tipos.get(slug) or {}).get("tipo"),
+            "peso_personas": (_tipos.get(slug) or {}).get("peso_personas"),
+            "peso_salud": (_tipos.get(slug) or {}).get("peso_salud"),
             "resiliencia": ejes["resiliencia"],
             "banda_resiliencia": band_resiliencia_o_none(ejes["resiliencia"]),
             "cobertura_resiliencia": ejes["cobertura_resiliencia"],
@@ -214,6 +236,7 @@ async def perfil_sdq(
                 "El tamaño de activos NO participa de Resiliencia: lo que convierte tamaño "
                 "en resiliencia real es cuánto y cómo reasegura la entidad, que se mide "
                 "directamente."),
+            "anclaje_por_tipo": ANCLAJE_POR_TIPO,
             "no_es_calificacion_de_riesgo": (
                 "Perfil SDQ no es una calificación crediticia ni es comparable con la "
                 "notación de una agencia calificadora."),
