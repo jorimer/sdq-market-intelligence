@@ -59,9 +59,11 @@ def assemble_snapshot(db) -> Dict[str, Any]:
                 "detail": {
                     "n_entidades": len(cur),
                     "lider": {"nombre": names.get(top.bank_id, "?"),
-                              "score": _round(top.overall_score), "rating": top.rating_tier},
+                              "score": _round(top.overall_score),
+                              "banda_resiliencia": top.banda_resiliencia},
                     "rezagado": {"nombre": names.get(bot.bank_id, "?"),
-                                 "score": _round(bot.overall_score), "rating": bot.rating_tier},
+                                 "score": _round(bot.overall_score),
+                                 "banda_resiliencia": bot.banda_resiliencia},
                 },
             })
         else:

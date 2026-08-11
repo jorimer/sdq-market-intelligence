@@ -13,7 +13,6 @@ from modules.banking_score.reports.criteria_doc import (
     build_criteria_document,
 )
 from modules.banking_score.scoring.indicator_detail import INDICATOR_META
-from modules.banking_score.scoring.rating_scale import RATING_SCALE
 from modules.banking_score.scoring.weights import SUB_COMPONENT_WEIGHTS, WEIGHT_PROFILES
 
 
@@ -52,12 +51,20 @@ def test_todos_los_perfiles_por_tipo_de_entidad_estan():
         assert abs(sum(perfil.values()) - 1.0) < 1e-9, "un perfil no suma 100%"
 
 
-def test_la_escala_completa_con_sus_cortes():
+def test_la_metodologia_publica_los_DOS_EJES_y_no_la_escala_de_letras():
+    """El documento que ve el cliente era donde más pesaba la notación retirada: publicaba
+    los diez escalones con su glosa."""
+    from modules.banking_score.scoring.perfil_sdq import BANDAS_RESILIENCIA
+
     esc = build_criteria_document()["crit_escala"]
-    for tier, lo, _hi in RATING_SCALE:
-        assert tier in esc
-        assert f"{lo:.0f}" in esc
-    assert f"{len(RATING_SCALE)} escalones" in esc
+    assert "SDQ-" not in esc, "la notación retirada volvió al documento de metodología"
+    assert "dos ejes independientes" in esc
+    for _corte, nombre in BANDAS_RESILIENCIA:
+        assert nombre in esc
+    for banda in ("Sobresaliente", "Competitiva", "Rezagada", "Deficiente"):
+        assert banda in esc
+    # Y explica POR QUÉ una es absoluta y la otra relativa.
+    assert "ABSOLUTAS" in esc and "RELATIVAS" in esc
 
 
 def test_todos_los_indicadores_con_ficha_estan_listados():

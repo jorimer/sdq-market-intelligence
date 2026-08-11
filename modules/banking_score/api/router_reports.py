@@ -510,7 +510,6 @@ async def generate_report(
     logger.info("Reporte creado: %s para %s | %s | ID=%s", report_type, bank.name, period_end, report.id)
 
     # Build scoring result for the PDF
-    from modules.banking_score.scoring.rating_scale import get_tier_color
 
     scoring_result = None
     if rating:

@@ -248,7 +248,11 @@ def _build_section_context(
         return {
             "entity_name": bank_name,
             "period": period,
-            "rating_tier": scoring_result.get("rating_tier", "N/A"),
+            # Los DOS EJES, no el símbolo: lo que entra al contexto es lo que la narrativa
+            # termina escribiendo, así que pasarle el tier reintroduciría por texto la
+            # notación que la superficie retiró.
+            "banda_ejecucion": scoring_result.get("banda_ejecucion"),
+            "banda_resiliencia": scoring_result.get("banda_resiliencia"),
             "entorno_macro": scoring_result.get("entorno_macro", {}),
         }
 
@@ -259,7 +263,11 @@ def _build_section_context(
         return {
             "entity_name": bank_name,
             "period": period,
-            "rating_tier": scoring_result.get("rating_tier", "N/A"),
+            # Los DOS EJES, no el símbolo: lo que entra al contexto es lo que la narrativa
+            # termina escribiendo, así que pasarle el tier reintroduciría por texto la
+            # notación que la superficie retiró.
+            "banda_ejecucion": scoring_result.get("banda_ejecucion"),
+            "banda_resiliencia": scoring_result.get("banda_resiliencia"),
             "overall_score": scoring_result.get("overall_score", 0),
             "soporte_soberano": scoring_result.get("soporte_soberano", {}),
         }
@@ -281,7 +289,11 @@ def _build_section_context(
         ctx: Dict = {
             "entity_name": bank_name,
             "period": period,
-            "rating_tier": scoring_result.get("rating_tier", "N/A"),
+            # Los DOS EJES, no el símbolo: lo que entra al contexto es lo que la narrativa
+            # termina escribiendo, así que pasarle el tier reintroduciría por texto la
+            # notación que la superficie retiró.
+            "banda_ejecucion": scoring_result.get("banda_ejecucion"),
+            "banda_resiliencia": scoring_result.get("banda_resiliencia"),
             "sub_componente": _SUB_LABELS.get(sub_key, sub_key),
             "score_sub_componente": scoring_result.get("sub_components", {}).get(sub_key, 0),
             "indicadores": ind,
@@ -331,7 +343,8 @@ def _build_section_context(
         "entity_name": bank_name,
         "period": period,
         "overall_score": scoring_result.get("overall_score", 0),
-        "rating_tier": scoring_result.get("rating_tier", "N/A"),
+        "banda_ejecucion": scoring_result.get("banda_ejecucion"),
+        "banda_resiliencia": scoring_result.get("banda_resiliencia"),
         "sub_components": scoring_result.get("sub_components", {}),
         "indicators": all_indicators,
         # Encuadre (Fase 3): mantiene la prosa consistente con las Limitaciones —

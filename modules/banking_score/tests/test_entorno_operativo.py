@@ -59,12 +59,16 @@ def test_section_maps_to_operating_env_template():
 
 def test_build_section_context_entorno_operativo():
     scoring = {
-        "rating_tier": "SDQ-AA",
+        "banda_ejecucion": "Competitiva",
+        "banda_resiliencia": "Sólida",
         "entorno_macro": {"period": "2026-06", "factors": _CONTRACT["factors"][:2]},
     }
     ctx = _build_section_context("entorno_operativo", "Banco X", scoring, "2026-03-31")
     assert ctx["entity_name"] == "Banco X"
-    assert ctx["rating_tier"] == "SDQ-AA"
+    # El contexto de la IA lleva los DOS EJES: lo que entra es lo que la narrativa escribe.
+    assert ctx["banda_ejecucion"] == "Competitiva"
+    assert ctx["banda_resiliencia"] == "Sólida"
+    assert "rating_tier" not in ctx
     assert ctx["entorno_macro"]["period"] == "2026-06"
     assert len(ctx["entorno_macro"]["factors"]) == 2
     # No arrastra indicadores de la entidad (es telón sistémico, no perfil del banco).

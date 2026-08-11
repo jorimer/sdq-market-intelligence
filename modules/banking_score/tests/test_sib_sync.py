@@ -151,7 +151,7 @@ def test_backfill_recalculates_ratings(Session, monkeypatch):
     rr = db2.query(RatingResult).filter_by(period_end=date(2024, 12, 31)).first()
     assert rr is not None
     assert 0 <= float(rr.overall_score) <= 100
-    assert rr.rating_tier
+    assert rr.ejecucion_score is not None and rr.resiliencia_score is not None
 
 
 class _FutureQuarterClient(_StubClient):

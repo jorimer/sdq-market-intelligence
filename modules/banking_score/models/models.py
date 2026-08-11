@@ -213,7 +213,10 @@ class RatingResult(UUIDMixin, Base):
 
     # Overall
     overall_score = Column(Numeric(6, 2), nullable=False)
-    rating_tier = Column(String(10), nullable=False)
+    # NULLABLE desde la Fase 4 (§9): el histórico conserva sus letras como LINAJE, las
+    # filas nuevas ya no las llevan. Seguir calculando un símbolo que nadie publica ni
+    # consume sería exactamente la "notación muerta conviviendo dentro del sistema".
+    rating_tier = Column(String(10), nullable=True)
 
     # Sub-component scores
     solidez_score = Column(Numeric(6, 2), nullable=True)
@@ -223,7 +226,7 @@ class RatingResult(UUIDMixin, Base):
     diversificacion_score = Column(Numeric(6, 2), nullable=True)
 
     # Perfil SDQ — dos ejes independientes que reemplazan la lectura del símbolo único.
-    # `rating_tier` convive DEPRECADO mientras la superficie migra: retirarlo en el mismo
+    # `rating_tier` ya NO se publica ni se calcula (Fase 4 §9): retirarlo en el mismo
     # paso que se introduce el reemplazo dejaría sin salida si algo hay que revisar.
     ejecucion_score = Column(Numeric(6, 2), nullable=True)
     resiliencia_score = Column(Numeric(6, 2), nullable=True)
@@ -269,7 +272,7 @@ class RatingAction(UUIDMixin, Base):
 
     # New (current) rating
     new_score = Column(Numeric(6, 2), nullable=False)
-    new_tier = Column(String(10), nullable=False)
+    new_tier = Column(String(10), nullable=True)
 
     # Computed deltas
     score_delta = Column(Numeric(6, 2), nullable=True)

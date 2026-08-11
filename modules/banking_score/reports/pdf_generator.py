@@ -789,7 +789,10 @@ async def generate_pdf_report(
     body: List = []
 
     overall_score = scoring_result.get("overall_score", 0)
-    rating_tier = scoring_result.get("rating_tier", "N/A")
+    # Perfil SDQ: el titular lleva los DOS EJES. Antes llevaba `SDQ-AA+`, o sea que el
+    # documento que se entrega al cliente encabezaba con la notación que el sistema retiró.
+    banda_ejec = scoring_result.get("banda_ejecucion")
+    banda_resil = scoring_result.get("banda_resiliencia")
     sub_scores = scoring_result.get("sub_components", {})
     indicators = scoring_result.get("indicators", {})
 
@@ -882,11 +885,12 @@ async def generate_pdf_report(
     title_label = REPORT_TYPE_LABELS.get(report_type, report_type)
     if tier:
         title_label = f"{title_label} · {TIER_LABELS.get(tier, tier)}"
+    # Los dos ejes juntos o ninguno: un titular con solo uno sería el símbolo único otra vez.
     headline = None
-    if rating_tier and rating_tier not in ("N/A", "Sistema"):
-        headline = rating_tier + (f" · {overall_score:.1f}/100" if overall_score else "")
-    elif rating_tier == "Sistema" and overall_score:
-        headline = f"Sistema · {overall_score:.1f}/100"
+    if banda_ejec and banda_resil:
+        headline = f"Ejecución {banda_ejec} · Resiliencia {banda_resil}"
+    elif overall_score:
+        headline = f"{overall_score:.1f}/100"
 
     from shared.products.render import build_branded_pdf
     build_branded_pdf(

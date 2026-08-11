@@ -1,6 +1,6 @@
 """Capa de soporte/sistémico + techo soberano (Fase 6), estilo Fitch VR/GSR/IDR.
 
-El score SDQ standalone (overall_score, rating_tier, vector 21-dim) es el análogo del
+El score SDQ standalone (overall_score, los dos ejes, vector 21-dim) es el análogo del
 Viability Rating y se mantiene PURO — esta capa NO lo muta. Es un overlay de CONTEXTO,
 calculado en read-time y adjuntado al scoring_result (patrón de la amplitud de Fase 4),
 solo Deep Dive. Provee tres lecturas que el standalone deliberadamente no incorpora:
