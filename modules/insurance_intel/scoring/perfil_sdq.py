@@ -93,15 +93,18 @@ CESION_ALTA = 0.50
 # se verifica por test. Grepear prosa dentro del código fuente es frágil — los literales se
 # parten por ancho de línea y la frase deja de existir en el texto aunque exista en el valor.
 ANCLAJE_POR_TIPO = (
-    "El breakeven de 100% se aplica IGUAL a toda compañía, sea de daños, personas o salud. "
-    "Se evaluó si el segmento exige un ancla distinta y no es estimable con este panel: en "
-    "el grupo de personas hay 6 compañías y la correlación entre peso de salud y combined "
-    "ratio cambia de signo según dónde se corte la muestra. Existe además un contraejemplo "
-    "directo — una aseguradora con 88% de su prima en salud opera por debajo del breakeven. "
-    "Resolverlo requiere el dato regulatorio de siniestralidad mínima de las ARS, no más "
-    "análisis del panel. Mientras tanto el tipo se publica en cada fila (`tipo_derivado`) "
-    "para que el lector pondere, y el ancla no se mueve: un combined sobre 100% es pérdida "
-    "de suscripción en cualquier segmento."
+    "El breakeven de 100% se aplica IGUAL a toda compañía, sea de daños, vida o salud. Se "
+    "evaluó si el segmento exige un ancla distinta y no es estimable con este panel: hay 5 "
+    "compañías de salud y 2 de vida, y la correlación entre peso de salud y combined ratio "
+    "cambia de signo según dónde se corte la muestra. Al abrir «personas» en salud y vida "
+    "—negocios que no comparten ni estructura de siniestralidad ni marco regulatorio— el "
+    "dato apunta en sentidos opuestos: las dos de VIDA son las dos mejores del sector "
+    "(64.3% y 81.3%), mientras las de SALUD van de 92.3% a 124.6%, y esa última tiene "
+    "además un contraejemplo directo — una aseguradora con 88% de su prima en salud opera "
+    "por debajo del breakeven. Resolverlo requiere el dato regulatorio de siniestralidad "
+    "mínima de las ARS, no más análisis del panel. Mientras tanto el tipo se publica en "
+    "cada fila (`tipo_derivado`) para que el lector pondere, y el ancla no se mueve: un "
+    "combined sobre 100% es pérdida de suscripción en cualquier segmento."
 )
 
 

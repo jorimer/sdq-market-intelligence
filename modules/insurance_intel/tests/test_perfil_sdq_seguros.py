@@ -487,7 +487,8 @@ def test_la_metodologia_DECLARA_la_decision_sobre_el_ancla_por_tipo():
     from modules.insurance_intel.scoring.perfil_sdq import ANCLAJE_POR_TIPO
 
     texto = ANCLAJE_POR_TIPO.lower()
-    for pieza in ("no es estimable", "contraejemplo", "dato regulatorio", "no se mueve"):
+    for pieza in ("no es estimable", "contraejemplo", "dato regulatorio", "no se mueve",
+                  "salud y vida", "sentidos opuestos"):
         assert pieza in texto, f"la declaración no menciona «{pieza}»"
     # Y tiene que llegar a la superficie junto con el tipo por fila, o no es accionable.
     src = inspect.getsource(api.perfil_sdq)

@@ -115,14 +115,30 @@ def summarize_signal(obs: List[Obs]) -> Optional[Dict]:
 # ── Loaders (leen InsuranceSeries por entidad) ─────────────────────────────────
 
 def _series_by_insurer(db: Session, code: str) -> Dict[str, Dict[str, float]]:
-    from modules.insurance_intel.models.models import InsuranceSeries
+    """Serie por aseguradora, agrupada por IDENTIDAD CANÓNICA.
+
+    Sin colapsar los slugs, la misma compañía entra al backtest como varias entidades: el
+    nombre de hoja del Excel auditado se trunca a 31 caracteres y el slug deriva entre años,
+    con hasta cuatro variantes de una sola aseguradora. Un backtest que valida el índice
+    contra un panel donde las entidades están partidas mide otra cosa.
+    """
+    from modules.insurance_intel.models.models import InsuranceEntity, InsuranceSeries
+    from modules.insurance_intel.scoring.isf import _canon_map, _official_index
+
+    ents = (db.query(InsuranceEntity)
+            .filter(InsuranceEntity.entity_type == "aseguradora").all())
+    canon, _ = _canon_map(ents, _official_index())
+
     rows = (db.query(InsuranceSeries)
             .filter(InsuranceSeries.series_code == code,
                     InsuranceSeries.entity_slug.isnot(None),
                     InsuranceSeries.value.isnot(None)).all())
     out: Dict[str, Dict[str, float]] = {}
     for r in rows:
-        out.setdefault(r.entity_slug, {})[r.period] = float(r.value)
+        c = canon.get(str(r.entity_slug))
+        if c is None:
+            continue  # fuera del roster autorizado: no entra al backtest
+        out.setdefault(c[2], {})[str(r.period)] = float(r.value)
     return out
 
 

@@ -541,8 +541,6 @@ modules/insurance_intel/solvency_sync.py:0: error: Incompatible types in assignm
 modules/insurance_intel/solvency_sync.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
 modules/insurance_intel/solvency_sync.py:0: error: Invalid index type "str" for "dict[Column[str], InsuranceEntity]"; expected type "Column[str]"  [index]
 modules/insurance_intel/solvency_sync.py:0: error: No overload variant of "get" of "dict" matches argument type "str"  [call-overload]
-modules/insurance_intel/validation/backtest.py:0: error: Argument 1 to "setdefault" of "MutableMapping" has incompatible type "Column[str]"; expected "str"  [arg-type]
-modules/insurance_intel/validation/backtest.py:0: error: Invalid index type "Column[str]" for "dict[str, float]"; expected type "str"  [index]
 modules/macro_monitor/ai_context.py:0: error: Argument 1 to "abs" has incompatible type "Any | None"; expected "SupportsAbs[Any]"  [arg-type]
 modules/macro_monitor/api/router.py:0: error: Dict entry 1 has incompatible type "str": "Column[str]"; expected "str": "str | None"  [dict-item]
 modules/macro_monitor/api/router.py:0: error: Dict entry 2 has incompatible type "str": "Column[str]"; expected "str": "str | None"  [dict-item]
