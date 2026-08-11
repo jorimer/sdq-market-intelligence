@@ -63,3 +63,49 @@ def test_el_modelo_declara_las_columnas_por_eje():
             "ejecucion_delta", "resiliencia_delta"} <= cols
     # La notación vieja SIGUE en la tabla: es linaje del dato, no superficie.
     assert {"previous_tier", "new_tier"} <= cols
+
+
+class TestDedupAcciones:
+    """Los duplicados no son historia: son la misma acción recalculada 19 veces."""
+
+    def test_por_defecto_SIMULA_y_no_borra(self):
+        """Un borrado en producción se mira antes de correrlo."""
+        import inspect
+
+        from modules.banking_score.scoring.dedup_acciones import deduplicar
+        assert inspect.signature(deduplicar).parameters["ejecutar"].default is False
+
+    def test_la_operacion_exige_ejecutar_explicito(self):
+        import inspect
+
+        from modules.banking_score import operations
+        src = inspect.getsource(operations._run_dedup_acciones)
+        assert 'get("ejecutar")' in src, "la operación borra sin exigir confirmación"
+
+    def test_la_firma_del_runner_es_la_del_repo(self):
+        import inspect
+
+        from modules.banking_score.operations import _run_dedup_acciones
+        assert list(inspect.signature(_run_dedup_acciones).parameters) == [
+            "params", "user_id", "set_phase"]
+
+
+def test_detect_rating_action_ACTUALIZA_en_vez_de_insertar_siempre():
+    """La causa raíz de los 35.621 duplicados: se insertaba en cada rescore."""
+    import inspect
+
+    from modules.banking_score.scoring import batch
+    src = inspect.getsource(batch.detect_rating_action)
+    assert "RatingAction.bank_id == bank_id" in src, "no busca la acción existente"
+    assert "if action is None:" in src, "no distingue crear de actualizar"
+
+
+def test_el_serializador_expone_los_dos_ejes():
+    """Regresión: el re-etiquetado quedó en la base y no se veía por la API."""
+    import inspect
+
+    from modules.banking_score.api import router_reports
+    src = inspect.getsource(router_reports._action_to_dict)
+    for campo in ("banda_ejecucion_previa", "banda_resiliencia_nueva",
+                  "transicion_ejecucion", "transicion_resiliencia"):
+        assert f'"{campo}"' in src, f"_action_to_dict no expone {campo}"

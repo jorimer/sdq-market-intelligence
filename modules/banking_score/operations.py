@@ -150,6 +150,23 @@ def _run_reetiquetar_acciones(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_dedup_acciones(params, user_id, set_phase) -> Dict:
+    """Deduplica `rating_actions`. Por defecto SIMULA — hay que pasar `ejecutar: true`.
+
+    Un borrado en producción se mira antes de correrlo, así que el valor por defecto cuenta
+    y no toca nada.
+    """
+    from shared.database.session import SessionLocal
+    from modules.banking_score.scoring.dedup_acciones import deduplicar
+
+    db = SessionLocal()
+    try:
+        return deduplicar(db, set_phase=set_phase,
+                          ejecutar=bool((params or {}).get("ejecutar")))
+    finally:
+        db.close()
+
+
 def register() -> None:
     """Register banking-score operations into the shared console (idempotent)."""
     register_operation(Operation(
@@ -157,6 +174,12 @@ def register() -> None:
         "Calcula Ejecución y Resiliencia para todos los períodos desde los sub-componentes "
         "ya guardados. No re-escorea indicadores ni genera acciones de rating.",
         _run_perfil_sdq, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "dedup-acciones", "Deduplicar acciones de rating",
+        "Deja UNA acción por entidad y período. Por defecto SIMULA: devuelve el conteo sin "
+        "borrar. Para ejecutar hay que pasar params {\"ejecutar\": true}.",
+        _run_dedup_acciones, default_interval_hours=0,
     ))
     register_operation(Operation(
         "reetiquetar-acciones", "Re-etiquetar acciones a Perfil SDQ (histórico)",

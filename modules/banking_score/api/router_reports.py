@@ -663,7 +663,14 @@ async def list_bank_rating_actions(
 
 # ─── Helpers ─────────────────────────────────────────────────────
 
+def _s(v) -> Optional[str]:
+    """Columna → str|None. SQLAlchemy las tipa como Column[str] en el modelo."""
+    return None if v is None else str(v)
+
+
 def _action_to_dict(action: RatingAction) -> dict:
+    from modules.banking_score.scoring.acciones_por_eje import transicion
+
     return {
         "id": action.id,
         "bank_id": action.bank_id,
@@ -680,5 +687,18 @@ def _action_to_dict(action: RatingAction) -> dict:
         # Sin exponerlo, quien lea las acciones no puede distinguir un deterioro real de
         # una recalibración — y el `action_type` por sí solo dice "downgrade" en ambos casos.
         "metodologica": bool(action.metodologica),
+        # Perfil SDQ: la acción POR EJE. `previous_tier`/`new_tier` quedan como LINAJE del
+        # dato hasta que la superficie termine de migrar (§9) — la lectura primaria son
+        # estas dos transiciones, que el símbolo único no podía expresar por separado.
+        "banda_ejecucion_previa": action.banda_ejecucion_previa,
+        "banda_ejecucion_nueva": action.banda_ejecucion_nueva,
+        "banda_resiliencia_previa": action.banda_resiliencia_previa,
+        "banda_resiliencia_nueva": action.banda_resiliencia_nueva,
+        "ejecucion_delta": float(action.ejecucion_delta) if action.ejecucion_delta is not None else None,
+        "resiliencia_delta": float(action.resiliencia_delta) if action.resiliencia_delta is not None else None,
+        "transicion_ejecucion": transicion(_s(action.banda_ejecucion_previa),
+                                           _s(action.banda_ejecucion_nueva)),
+        "transicion_resiliencia": transicion(_s(action.banda_resiliencia_previa),
+                                             _s(action.banda_resiliencia_nueva)),
         "created_at": str(action.created_at) if action.created_at else None,
     }
