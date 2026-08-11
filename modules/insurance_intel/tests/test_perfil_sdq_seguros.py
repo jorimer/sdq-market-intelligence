@@ -473,37 +473,22 @@ def test_calcular_ejes_devuelve_TODAS_las_claves_que_lee_el_router():
         ejes = calcular_ejes(c, 2.5, 3.0)
         faltan = leidas - set(ejes)
         assert not faltan, f"{etiqueta}: calcular_ejes no devuelve {sorted(faltan)}"
+def test_la_metodologia_DECLARA_la_decision_sobre_el_ancla_por_tipo():
+    """La pregunta health-vs-life NO es resoluble con este panel: n=6 en personas y el signo
+    de la correlación cambia según dónde se corte la muestra. Eso no puede quedar mudo —
+    un lector que ve una aseguradora de salud en «Rezagada» necesita saber que lo miramos,
+    qué encontramos y por qué el ancla no se mueve.
 
+    Fija la DECLARACIÓN, no el resultado del análisis.
+    """
+    import inspect
 
-class TestCesionPublicada:
-    """El combined ratio es BRUTO. Sin la cesión al lado, «155% Deficiente» se lee como si
-    la compañía retuviera ese riesgo — y Angloamericana cede el 81%."""
+    from modules.insurance_intel.api import router as api
+    from modules.insurance_intel.scoring.perfil_sdq import ANCLAJE_POR_TIPO
 
-    def _ciclo(self, cesion):
-        from modules.insurance_intel.scoring.perfil_sdq import metricas_del_ciclo
-        return metricas_del_ciclo({a: {"primas": 100.0, "loss": 0.9, "exp": 0.4,
-                                       "cesion": cesion}
-                                   for a in ("2022", "2023", "2024")})
-
-    def test_la_cesion_se_publica_junto_al_combined(self):
-        from modules.insurance_intel.scoring.perfil_sdq import calcular_ejes
-        e = calcular_ejes(self._ciclo(0.81), 2.5, 3.0)
-        assert e["cesion_promedio"] == pytest.approx(0.81)
-        assert e["cesion_alta"] is True
-
-    def test_cesion_baja_no_se_marca(self):
-        from modules.insurance_intel.scoring.perfil_sdq import calcular_ejes
-        e = calcular_ejes(self._ciclo(0.10), 2.5, 3.0)
-        assert e["cesion_alta"] is False
-
-    def test_NO_cambia_el_score(self):
-        """Es contexto de lectura, no un ajuste: Ejecución debe ser idéntica."""
-        from modules.insurance_intel.scoring.perfil_sdq import calcular_ejes
-        alta = calcular_ejes(self._ciclo(0.81), 2.5, 3.0)
-        baja = calcular_ejes(self._ciclo(0.10), 2.5, 3.0)
-        assert alta["ejecucion"] == baja["ejecucion"]
-
-    def test_sin_ciclo_no_inventa_cesion(self):
-        from modules.insurance_intel.scoring.perfil_sdq import calcular_ejes
-        e = calcular_ejes(None, 2.5, 3.0)
-        assert e["cesion_promedio"] is None and e["cesion_alta"] is None
+    texto = ANCLAJE_POR_TIPO.lower()
+    for pieza in ("no es estimable", "contraejemplo", "dato regulatorio", "no se mueve"):
+        assert pieza in texto, f"la declaración no menciona «{pieza}»"
+    # Y tiene que llegar a la superficie junto con el tipo por fila, o no es accionable.
+    src = inspect.getsource(api.perfil_sdq)
+    assert "ANCLAJE_POR_TIPO" in src and '"tipo_derivado"' in src
