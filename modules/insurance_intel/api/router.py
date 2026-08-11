@@ -160,6 +160,10 @@ async def perfil_sdq(
             "tendencia": banda_tendencia(ejes["pendiente_combined"],
                                          ejes["pendiente_error_estandar"]),
             "ciclo_comparable": ejes["ciclo_comparable"],
+            # El combined ratio es BRUTO: la cesión va al lado para que no se lea como si
+            # la compañía retuviera el riesgo que originó.
+            "cesion_promedio": ejes["cesion_promedio"],
+            "cesion_alta": ejes["cesion_alta"],
             "resiliencia": ejes["resiliencia"],
             "banda_resiliencia": band_resiliencia_o_none(ejes["resiliencia"]),
             "cobertura_resiliencia": ejes["cobertura_resiliencia"],
@@ -171,8 +175,12 @@ async def perfil_sdq(
     return {
         "perfil": filas, "count": len(filas), "period_end": corte,
         "ejes": {
-            "ejecucion": ("Índice 0-100 derivado del combined ratio (siniestros + gastos "
-                          "operativos sobre primas) promediado sobre 3-5 ejercicios. Misma "
+            "ejecucion": ("Índice 0-100 derivado del combined ratio BRUTO de reaseguro "
+                          "(siniestros + gastos operativos sobre primas) promediado sobre "
+                          "3-5 ejercicios ponderados por exposición. Al ser bruto mide la "
+                          "calidad de lo que la compañía ORIGINA, no la pérdida que "
+                          "absorbe: con `cesion_alta` la lectura económica cambia y la tasa "
+                          "de cesión va publicada al lado. Misma "
                           "escala y mismas bandas que banca, pensiones y fiduciarias: "
                           "combined 90% → 75, breakeven 100% → 60, 110% → 45."),
             "resiliencia": ("Solvencia y liquidez regulatorias (Ley 146-02), reaseguro y "
