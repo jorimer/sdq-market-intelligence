@@ -36,7 +36,11 @@ export interface ScoringResult {
   bank_name?: string;
   period_end?: string;
   overall_score: number;
-  rating_tier: string;
+  /** Perfil SDQ: los dos ejes reemplazan al símbolo único (§9). */
+  ejecucion: number | null;
+  banda_ejecucion: string | null;
+  resiliencia: number | null;
+  banda_resiliencia: string | null;
   tier_color?: string;
   sub_components: SubComponents;
   indicators?: Record<string, { raw: number; score: number }>;
@@ -172,7 +176,9 @@ export interface EntityInsight {
   bank_id: string;
   bank_name: string;
   entity_type: string | null;
-  latest: { period_end: string; overall_score: number; rating_tier: string; band: string };
+  latest: { period_end: string; overall_score: number; band: string;
+            ejecucion: number | null; banda_ejecucion: string | null;
+            resiliencia: number | null; banda_resiliencia: string | null };
   sub_components: EntitySubComponent[];
   trend: { period_end: string; score: number; tier: string }[];
   peers: {

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { GitCompare, Plus, X } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
-import { RatingBadge } from "../components/RatingBadge";
+import { PerfilCompacto } from "../components/PerfilSDQ";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
@@ -129,7 +129,8 @@ export function ComparePage() {
               <Card key={name} className="flex flex-col items-center text-center">
                 <p className="text-sm text-ink mb-2 truncate w-full">{name}</p>
                 <ScoreGauge score={r.overall_score} size={100} />
-                <div className="mt-2"><RatingBadge tier={r.rating_tier} size="sm" /></div>
+                <div className="mt-2"><PerfilCompacto ejecucion={r.ejecucion} bandaEjecucion={r.banda_ejecucion}
+                    resiliencia={r.resiliencia} bandaResiliencia={r.banda_resiliencia} size="sm" /></div>
               </Card>
             ))}
           </div>

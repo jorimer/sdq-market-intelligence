@@ -4,7 +4,7 @@ import { Sliders, RotateCcw, Zap } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
 import { ScoreGauge } from "../components/ScoreGauge";
-import { RatingBadge } from "../components/RatingBadge";
+import { PerfilCompacto } from "../components/PerfilSDQ";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { PageHead, Card, CardHead, StateBlock, Delta } from "@/shared/ui/primitives";
 import { useEntityPeriodGuard } from "../components/EntityPeriodNotice";
@@ -171,7 +171,8 @@ export function ScenariosPage() {
               <p className="text-xs text-muted mb-2">{t("banking.scenBase")}</p>
               <div className="flex flex-col items-center">
                 <ScoreGauge score={base.overall_score} size={120} />
-                <div className="mt-2"><RatingBadge tier={base.rating_tier} size="md" /></div>
+                <div className="mt-2"><PerfilCompacto ejecucion={base.ejecucion} bandaEjecucion={base.banda_ejecucion}
+                    resiliencia={base.resiliencia} bandaResiliencia={base.banda_resiliencia} /></div>
               </div>
             </div>
             {sim && (
@@ -179,7 +180,8 @@ export function ScenariosPage() {
                 <p className="text-xs text-muted mb-2">{t("banking.scenSimulated")}</p>
                 <div className="flex flex-col items-center">
                   <ScoreGauge score={sim.overall_score} size={120} />
-                  <div className="mt-2"><RatingBadge tier={sim.rating_tier} size="md" /></div>
+                  <div className="mt-2"><PerfilCompacto ejecucion={sim.ejecucion} bandaEjecucion={sim.banda_ejecucion}
+                    resiliencia={sim.resiliencia} bandaResiliencia={sim.banda_resiliencia} /></div>
                 </div>
                 <div className="mt-3">
                   <Delta value={sim.overall_score - base.overall_score} />
@@ -192,7 +194,10 @@ export function ScenariosPage() {
             <div className="lg:col-span-3">
               <AiInsightCard
                 title={t("banking.scenInsightTitle")}
-                subtitle={t("banking.scenInsightSubtitle", { score: sim.overall_score.toFixed(1), tier: sim.rating_tier })}
+                subtitle={t("banking.scenInsightSubtitle", {
+                  ejecucion: sim.ejecucion?.toFixed(1) ?? "—",
+                  resiliencia: sim.resiliencia?.toFixed(1) ?? "—",
+                })}
                 icon={Zap}
                 depsKey={`${JSON.stringify(sim.sub_components)}|${sim.overall_score}`}
                 fetcher={() => getScenarioInsight(

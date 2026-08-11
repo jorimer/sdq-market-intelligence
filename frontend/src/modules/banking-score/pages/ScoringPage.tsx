@@ -4,7 +4,7 @@ import { Calculator, Radar as RadarIcon, ListChecks } from "lucide-react";
 import { BankSelector } from "../components/BankSelector";
 import { RadarChart } from "../components/RadarChart";
 import { ScoreGauge } from "../components/ScoreGauge";
-import { RatingBadge } from "../components/RatingBadge";
+import { PerfilCompacto } from "../components/PerfilSDQ";
 import { IndicatorTable } from "../components/IndicatorTable";
 import { PageHead, Card, CardHead, StateBlock } from "@/shared/ui/primitives";
 import { useEntityPeriodGuard } from "../components/EntityPeriodNotice";
@@ -116,7 +116,8 @@ export function ScoringPage() {
             <div className="text-xs text-muted mb-2 w-full truncate">{bankName}</div>
             <ScoreGauge score={result.overall_score} size={150} />
             <div className="mt-3">
-              <RatingBadge tier={result.rating_tier} size="lg" />
+              <PerfilCompacto ejecucion={result.ejecucion} bandaEjecucion={result.banda_ejecucion}
+                              resiliencia={result.resiliencia} bandaResiliencia={result.banda_resiliencia} />
             </div>
             <div className="mt-2 text-[11px] text-muted">
               {result.model === "ml"

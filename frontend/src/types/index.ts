@@ -15,7 +15,11 @@ export interface IndicatorDetail {
 
 export interface ScoringResult {
   overall_score: number;
-  rating_tier: string;
+  /** Perfil SDQ: los dos ejes reemplazan al símbolo único (§9). */
+  ejecucion: number | null;
+  banda_ejecucion: string | null;
+  resiliencia: number | null;
+  banda_resiliencia: string | null;
   tier_color: string;
   sub_components: SubComponents;
   indicators: Record<string, IndicatorDetail>;
@@ -28,7 +32,11 @@ export interface RatingAction {
   bank_name: string;
   period: string;
   overall_score: number;
-  rating_tier: string;
+  /** Perfil SDQ: los dos ejes reemplazan al símbolo único (§9). */
+  ejecucion: number | null;
+  banda_ejecucion: string | null;
+  resiliencia: number | null;
+  banda_resiliencia: string | null;
   previous_tier: string | null;
   action_type: string;
   outlook: string;
@@ -40,7 +48,11 @@ export interface RankingEntry {
   bank_name: string;
   period: string;
   overall_score: number;
-  rating_tier: string;
+  /** Perfil SDQ: los dos ejes reemplazan al símbolo único (§9). */
+  ejecucion: number | null;
+  banda_ejecucion: string | null;
+  resiliencia: number | null;
+  banda_resiliencia: string | null;
   tier_color: string;
   sub_components: SubComponents;
   rank: number;

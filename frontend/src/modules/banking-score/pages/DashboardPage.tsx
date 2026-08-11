@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trophy, PieChart, ChevronRight } from "lucide-react";
 import client from "@/shared/api/client";
-import { RatingBadge } from "../components/RatingBadge";
+import { PerfilCompacto } from "../components/PerfilSDQ";
 import { EntityInsightDrawer } from "../components/EntityInsightDrawer";
 import { AiInsightCard } from "@/shared/ui/AiInsightCard";
 import { MarketConcentrationCard } from "../components/MarketConcentrationCard";
@@ -32,7 +32,11 @@ interface Rank {
   bank_id: string;
   bank_name: string;
   overall_score: number;
-  rating_tier: string;
+  /** Perfil SDQ: los dos ejes reemplazan al símbolo único (§9). */
+  ejecucion: number | null;
+  banda_ejecucion: string | null;
+  resiliencia: number | null;
+  banda_resiliencia: string | null;
 }
 
 export function DashboardPage() {
@@ -120,13 +124,23 @@ export function DashboardPage() {
     ? rankings.reduce((s, b) => s + b.overall_score, 0) / rankings.length
     : null;
 
-  // Rating-tier distribution from the full ranking.
-  const tierCounts = rankings.reduce<Record<string, number>>((acc, r) => {
-    acc[r.rating_tier] = (acc[r.rating_tier] ?? 0) + 1;
-    return acc;
-  }, {});
-  const tiers = Object.entries(tierCounts).sort((a, b) => b[1] - a[1]);
-  const maxTier = Math.max(...tiers.map(([, c]) => c), 1);
+  // Distribución por BANDA, en los dos ejes. Con un símbolo único había una sola
+  // distribución; con dos ejes hay dos, y mostrar solo una reintroduciría por la puerta de
+  // atrás la lectura que Perfil SDQ evita. El orden es el de las bandas, no por frecuencia:
+  // una distribución ordenada por conteo esconde la forma.
+  const ORDEN_EJEC = ["Sobresaliente", "Competitiva", "Rezagada", "Deficiente"];
+  const ORDEN_RESIL = ["Sólida", "Adecuada", "En vigilancia", "Frágil"];
+  const contar = (campo: "banda_ejecucion" | "banda_resiliencia", orden: string[]) => {
+    const c = rankings.reduce<Record<string, number>>((acc, r) => {
+      const b = r[campo];
+      if (b) acc[b] = (acc[b] ?? 0) + 1;
+      return acc;
+    }, {});
+    return orden.filter((b) => c[b]).map((b) => [b, c[b]] as [string, number]);
+  };
+  const distEjec = contar("banda_ejecucion", ORDEN_EJEC);
+  const distResil = contar("banda_resiliencia", ORDEN_RESIL);
+  const maxTier = Math.max(...[...distEjec, ...distResil].map(([, c]) => c), 1);
 
   return (
     <div>
@@ -165,7 +179,8 @@ export function DashboardPage() {
                     <span className="mono text-sm font-semibold text-ink">
                       {fmtNum(bank.overall_score, 1)}
                     </span>
-                    <RatingBadge tier={bank.rating_tier} size="sm" />
+                    <PerfilCompacto ejecucion={bank.ejecucion} bandaEjecucion={bank.banda_ejecucion}
+                      resiliencia={bank.resiliencia} bandaResiliencia={bank.banda_resiliencia} size="sm" />
                     <ChevronRight className="w-4 h-4 text-faint" />
                   </div>
                 </button>
@@ -176,22 +191,25 @@ export function DashboardPage() {
 
         <Card>
           <CardHead icon={PieChart} title={t("banking.distTitle")} subtitle={t("banking.distSubtitle")} />
-          {tiers.length === 0 ? (
+          {distEjec.length === 0 && distResil.length === 0 ? (
             <p className="text-sm text-muted py-4 text-center">{t("banking.dashNoData")}</p>
           ) : (
-            <div className="space-y-2.5">
-              {tiers.map(([tier, count]) => (
-                <div key={tier} className="flex items-center gap-3">
-                  <div className="w-20 shrink-0">
-                    <RatingBadge tier={tier} size="sm" />
-                  </div>
-                  <div className="flex-1 h-2 rounded-full bg-surface2 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-accent"
-                      style={{ width: `${(count / maxTier) * 100}%` }}
-                    />
-                  </div>
-                  <span className="shrink-0 mono text-sm text-body w-6 text-right">{count}</span>
+            <div className="space-y-4">
+              {([["Ejecución", distEjec], ["Resiliencia", distResil]] as const).map(([eje, dist]) => (
+                <div key={eje} className="space-y-2">
+                  <div className="text-xs uppercase tracking-wide text-muted">{eje}</div>
+                  {dist.map(([banda, count]) => (
+                    <div key={banda} className="flex items-center gap-3">
+                      <div className="w-28 shrink-0 text-xs text-body truncate">{banda}</div>
+                      <div className="flex-1 h-2 rounded-full bg-surface2 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-accent"
+                          style={{ width: `${(count / maxTier) * 100}%` }}
+                        />
+                      </div>
+                      <span className="shrink-0 mono text-sm text-body w-6 text-right">{count}</span>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
