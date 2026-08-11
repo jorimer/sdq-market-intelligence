@@ -442,3 +442,34 @@ def test_el_panel_resuelve_el_slug_derivado_por_truncacion_de_hoja():
     assert len(identidades) == 1, "las variantes de la misma compañía no colapsaron"
     # Y el mapa cubre el slug DERIVADO, que es la clave para encontrar las series.
     assert "cuna_mutual_insurance_trustage" in canon
+
+
+def test_calcular_ejes_devuelve_TODAS_las_claves_que_lee_el_router():
+    """Regresión de un 500 en producción.
+
+    Se agregó `pendiente_error_estandar` al retorno de ``metricas_del_ciclo`` y al router,
+    pero NO al de ``calcular_ejes``, que es el intermediario. Los 3.255 tests unitarios
+    pasaron —cada pieza andaba— y el endpoint devolvía KeyError → 500, porque ninguno
+    ejercitaba el CONTRATO entre motor y router.
+
+    Este test lo fija leyendo las claves directamente del código del endpoint: si mañana el
+    router lee una clave nueva, falla acá antes que en producción.
+    """
+    import inspect
+    import re
+    from modules.insurance_intel.api import router as api
+    from modules.insurance_intel.scoring.perfil_sdq import calcular_ejes
+
+    src = inspect.getsource(api.perfil_sdq)
+    leidas = set(re.findall(r'ejes\["([a-z_]+)"\]', src))
+    assert leidas, "no se detectaron accesos a ejes[...]; ¿cambió la forma del endpoint?"
+
+    # Las dos rutas: con ciclo y sin ciclo. La segunda es la que reventaba.
+    ciclo = {"años": ["2022", "2023", "2024"], "combined_promedio": 0.9,
+             "loss_volatilidad": 0.04, "cesion_promedio": 0.2,
+             "ponderado_por_exposicion": True, "pendiente_combined": 1.0,
+             "pendiente_error_estandar": 0.3, "ciclo_comparable": True}
+    for etiqueta, c in (("con ciclo", ciclo), ("sin ciclo", None)):
+        ejes = calcular_ejes(c, 2.5, 3.0)
+        faltan = leidas - set(ejes)
+        assert not faltan, f"{etiqueta}: calcular_ejes no devuelve {sorted(faltan)}"

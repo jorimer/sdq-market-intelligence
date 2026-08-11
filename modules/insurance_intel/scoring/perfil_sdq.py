@@ -324,6 +324,7 @@ def calcular_ejes(ciclo: Optional[Dict[str, Any]],
         "ejercicios": ciclo["años"] if ciclo else [],
         "combined_promedio": round(ciclo["combined_promedio"], 4) if ciclo else None,
         "pendiente_combined": ciclo.get("pendiente_combined") if ciclo else None,
+        "pendiente_error_estandar": ciclo.get("pendiente_error_estandar") if ciclo else None,
         "ciclo_comparable": ciclo.get("ciclo_comparable") if ciclo else None,
     }
 
