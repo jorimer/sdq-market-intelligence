@@ -32,6 +32,13 @@ from modules.banking_score.scoring.ttm import attach_ttm
 logger = logging.getLogger("sdq.banking.scoring.batch")
 
 
+def _delta_eje(previo, nuevo):
+    """Δ de un eje, o None si falta cualquiera de los dos extremos (brecha declarada)."""
+    if previo is None or nuevo is None:
+        return None
+    return round(float(nuevo) - float(previo), 2)
+
+
 def detect_rating_action(
     db: Session,
     bank_id: str,
@@ -92,6 +99,16 @@ def detect_rating_action(
         new_score=scoring_result["overall_score"],
         new_tier=new_tier,
         score_delta=score_delta,
+        # La acción POR EJE nace junto con la del tier, no se rellena después: sin esto,
+        # cada período nuevo volvería a necesitar el re-etiquetado retroactivo.
+        banda_ejecucion_previa=previous.banda_ejecucion,
+        banda_ejecucion_nueva=scoring_result.get("banda_ejecucion"),
+        banda_resiliencia_previa=previous.banda_resiliencia,
+        banda_resiliencia_nueva=scoring_result.get("banda_resiliencia"),
+        ejecucion_delta=_delta_eje(previous.ejecucion_score,
+                                   scoring_result.get("ejecucion")),
+        resiliencia_delta=_delta_eje(previous.resiliencia_score,
+                                     scoring_result.get("resiliencia")),
         outlook=outlook,
         previous_sub_components={
             "solidez": float(previous.solidez_score or 0),

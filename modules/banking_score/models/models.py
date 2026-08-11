@@ -280,6 +280,22 @@ class RatingAction(UUIDMixin, Base):
     # recalibración se lee en el histórico como deterioro de 44 entidades a la vez.
     metodologica = Column(Boolean, default=False, nullable=False)
 
+    # ── Perfil SDQ: la acción POR EJE (§9) ───────────────────────────────────────
+    # Un símbolo único se reemplaza por dos ejes, así que una "acción de rating" también se
+    # desdobla: no hay traducción de `SDQ-AA+` a una etiqueta nueva, hay dos transiciones
+    # independientes. Una entidad puede mejorar en Ejecución y deteriorarse en Resiliencia
+    # en el mismo período — el tier único no podía expresarlo y por eso lo promediaba.
+    #
+    # Se pueblan RETROACTIVAMENTE (decisión del dueño, 2026-08-11) desde las bandas ya
+    # persistidas en `rating_results`: el backfill dejó los dos ejes en los 22 períodos, así
+    # que las transiciones se derivan del dato existente sin recalcular scores.
+    banda_ejecucion_previa = Column(String(20), nullable=True)
+    banda_ejecucion_nueva = Column(String(20), nullable=True)
+    banda_resiliencia_previa = Column(String(20), nullable=True)
+    banda_resiliencia_nueva = Column(String(20), nullable=True)
+    ejecucion_delta = Column(Numeric(6, 2), nullable=True)
+    resiliencia_delta = Column(Numeric(6, 2), nullable=True)
+
     # Outlook
     outlook = Column(Enum(Outlook), default=Outlook.estable)
 

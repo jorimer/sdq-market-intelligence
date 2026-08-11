@@ -135,6 +135,21 @@ def _run_perfil_sdq(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_reetiquetar_acciones(params, user_id, set_phase) -> Dict:
+    """Re-etiqueta el histórico de acciones a Perfil SDQ (spec §9, decisión del dueño).
+
+    No re-escorea: deriva las transiciones por eje de las bandas ya persistidas. Idempotente.
+    """
+    from shared.database.session import SessionLocal
+    from modules.banking_score.scoring.acciones_por_eje import reetiquetar
+
+    db = SessionLocal()
+    try:
+        return reetiquetar(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def register() -> None:
     """Register banking-score operations into the shared console (idempotent)."""
     register_operation(Operation(
@@ -142,6 +157,12 @@ def register() -> None:
         "Calcula Ejecución y Resiliencia para todos los períodos desde los sub-componentes "
         "ya guardados. No re-escorea indicadores ni genera acciones de rating.",
         _run_perfil_sdq, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "reetiquetar-acciones", "Re-etiquetar acciones a Perfil SDQ (histórico)",
+        "Desdobla cada acción de rating en sus dos transiciones de eje, leyéndolas de las "
+        "bandas ya persistidas. NO re-escorea ni genera acciones nuevas.",
+        _run_reetiquetar_acciones, default_interval_hours=0,
     ))
     register_operation(Operation(
         "rescore", "Recalcular ratings",
