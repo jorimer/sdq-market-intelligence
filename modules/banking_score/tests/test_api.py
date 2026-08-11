@@ -225,8 +225,6 @@ class TestScoringPipeline:
         assert resp.status_code == 200
         data = resp.json()
         assert "overall_score" in data
-        assert "rating_tier" in data
-        assert data["rating_tier"].startswith("SDQ-")
         assert 0 <= data["overall_score"] <= 100
         assert "sub_components" in data
         assert "indicators" in data
@@ -248,7 +246,11 @@ class TestScoringPipeline:
         assert resp.status_code == 200
         data = resp.json()
         assert data["has_rating"] is True
-        assert data["rating_tier"].startswith("SDQ-")
+        # Fase 4 (§9): la superficie ya NO publica la notación de letras. La columna sigue
+        # en la base como linaje, pero el endpoint devuelve los dos ejes.
+        assert "rating_tier" not in data, "la notación retirada volvió a la superficie"
+        assert "ejecucion" in data and "resiliencia" in data
+        assert "banda_ejecucion" in data and "banda_resiliencia" in data
 
     def test_history_after_scoring(self):
         token = register_and_login()

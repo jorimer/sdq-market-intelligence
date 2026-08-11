@@ -36,7 +36,6 @@ modules/banking_score/api/router_reports.py:0: error: Argument "bank_name" to "g
 modules/banking_score/api/router_reports.py:0: error: Argument "bank_name" to "generate_report_narratives" has incompatible type "Column[str] | str"; expected "str"  [arg-type]
 modules/banking_score/api/router_reports.py:0: error: Argument "bank_name" to "generate_report_narratives" has incompatible type "Column[str]"; expected "str"  [arg-type]
 modules/banking_score/api/router_reports.py:0: error: Argument "scope" to "emit_narrative_degraded" has incompatible type "Column[str]"; expected "str | None"  [arg-type]
-modules/banking_score/api/router_reports.py:0: error: Argument 1 to "get_tier_color" has incompatible type "Column[str]"; expected "str"  [arg-type]
 modules/banking_score/api/router_reports.py:0: error: Incompatible types in assignment (expression has type "None", variable has type "Column[datetime]")  [assignment]
 modules/banking_score/api/router_reports.py:0: error: Incompatible types in assignment (expression has type "ReportStatus", variable has type "Column[Any]")  [assignment]
 modules/banking_score/api/router_reports.py:0: error: Incompatible types in assignment (expression has type "ReportStatus", variable has type "Column[Any]")  [assignment]

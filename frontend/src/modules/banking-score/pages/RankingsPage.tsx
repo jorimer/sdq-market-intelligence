@@ -21,8 +21,6 @@ interface Rank {
   banda_ejecucion: string | null;
   resiliencia: number | null;
   banda_resiliencia: string | null;
-  /** DEPRECADO: convive durante la transición a Perfil SDQ. */
-  rating_tier: string;
   period_end: string;
 }
 

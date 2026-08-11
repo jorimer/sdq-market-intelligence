@@ -5,7 +5,7 @@ Extracted from monolith router_banking_scoring.py.
 """
 import logging
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
@@ -107,8 +107,9 @@ async def _generate_system_report(
     db.commit()
     db.refresh(report)
 
-    scoring_result = {
-        "overall_score": 0, "rating_tier": "N/A", "sub_components": {}, "indicators": {},
+    scoring_result: Dict[str, Any] = {
+        "overall_score": 0, "banda_ejecucion": None, "banda_resiliencia": None,
+        "sub_components": {}, "indicators": {},
     }
     # Un boletín NARRADO de sistema sin benchmarks no tiene NADA que analizar: su único
     # insumo son las cifras del sector. `wire` se generó siempre sin ellos —datawatch y
@@ -327,8 +328,13 @@ async def generate_communique(
 
     scoring_result = {
         "overall_score": float(action.new_score),
-        "rating_tier": action.new_tier,
-        "tier_color": "",
+        # El comunicado se redacta sobre los DOS EJES, no sobre el símbolo retirado.
+        "banda_ejecucion": action.banda_ejecucion_nueva,
+        "banda_resiliencia": action.banda_resiliencia_nueva,
+        "transicion_ejecucion": transicion(_s(action.banda_ejecucion_previa),
+                                           _s(action.banda_ejecucion_nueva)),
+        "transicion_resiliencia": transicion(_s(action.banda_resiliencia_previa),
+                                             _s(action.banda_resiliencia_nueva)),
         "sub_components": {},
         "indicators": {},
     }
@@ -510,8 +516,10 @@ async def generate_report(
     if rating:
         scoring_result = {
             "overall_score": float(rating.overall_score),
-            "rating_tier": rating.rating_tier,
-            "tier_color": get_tier_color(rating.rating_tier),
+            "ejecucion": float(rating.ejecucion_score) if rating.ejecucion_score is not None else None,
+            "banda_ejecucion": rating.banda_ejecucion,
+            "resiliencia": float(rating.resiliencia_score) if rating.resiliencia_score is not None else None,
+            "banda_resiliencia": rating.banda_resiliencia,
             "sub_components": {
                 "solidez": float(rating.solidez_score or 0),
                 "calidad": float(rating.calidad_score or 0),
@@ -527,8 +535,8 @@ async def generate_report(
     else:
         scoring_result = {
             "overall_score": 0,
-            "rating_tier": "N/A",
-            "tier_color": "#6B7280",
+            "ejecucion": None, "banda_ejecucion": None,
+            "resiliencia": None, "banda_resiliencia": None,
             "sub_components": {},
             "indicators": {},
         }
@@ -663,14 +671,15 @@ async def list_bank_rating_actions(
 
 # ─── Helpers ─────────────────────────────────────────────────────
 
+from modules.banking_score.scoring.acciones_por_eje import transicion  # noqa: E402
+
+
 def _s(v) -> Optional[str]:
     """Columna → str|None. SQLAlchemy las tipa como Column[str] en el modelo."""
     return None if v is None else str(v)
 
 
 def _action_to_dict(action: RatingAction) -> dict:
-    from modules.banking_score.scoring.acciones_por_eje import transicion
-
     return {
         "id": action.id,
         "bank_id": action.bank_id,

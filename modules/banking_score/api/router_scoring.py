@@ -95,14 +95,26 @@ async def simulate_scenario(
     subs = body.get("sub_components")
     if not isinstance(subs, dict) or not subs:
         raise HTTPException(status_code=400, detail="Se requiere 'sub_components'.")
-    weights = get_sub_component_weights(body.get("entity_type"))
+    from modules.banking_score.scoring.perfil_sdq import banda_resiliencia, calcular_ejes
+
+    tipo = body.get("entity_type")
+    weights = get_sub_component_weights(tipo)
     overall = calculate_deterministic_score(subs, weights)
-    tier = map_rating_tier(overall)
+    # Perfil SDQ sobre la simulación: un escenario también se lee en DOS ejes. La banda de
+    # Ejecución NO se emite acá — es relativa al panel comparable (cuartiles por tipo) y un
+    # escenario hipotético no tiene panel. Se devuelve el score y se declara por qué.
+    ejes = calcular_ejes(subs, tipo)
     return {
         "sub_components": subs,
         "overall_score": overall,
-        "rating_tier": tier,
-        "tier_color": get_tier_color(tier),
+        "ejecucion": ejes["ejecucion"],
+        "resiliencia": ejes["resiliencia"],
+        "banda_resiliencia": banda_resiliencia(ejes["resiliencia"]),
+        "banda_ejecucion": None,
+        "nota_banda_ejecucion": (
+            "La banda de Ejecución es RELATIVA a los cuartiles del panel comparable; un "
+            "escenario hipotético no pertenece a un panel, así que se devuelve el score sin "
+            "banda en vez de compararlo contra cortes que no le aplican."),
     }
 
 
@@ -276,7 +288,12 @@ async def get_latest_rating(
         "bank_name": bank.name if bank else None,
         "period_end": str(result.period_end),
         "overall_score": float(result.overall_score),
-        "rating_tier": result.rating_tier,
+        # Perfil SDQ reemplaza al símbolo único (§9). `rating_tier` sigue en la BASE como
+        # linaje del dato, pero ya no se publica: dos ejes no se resumen en una letra.
+        "ejecucion": float(result.ejecucion_score) if result.ejecucion_score is not None else None,
+        "banda_ejecucion": result.banda_ejecucion,
+        "resiliencia": float(result.resiliencia_score) if result.resiliencia_score is not None else None,
+        "banda_resiliencia": result.banda_resiliencia,
         "solidez_score": float(result.solidez_score or 0),
         "calidad_score": float(result.calidad_score or 0),
         "eficiencia_score": float(result.eficiencia_score or 0),
@@ -550,19 +567,27 @@ async def scenario_insight(
         raise HTTPException(status_code=400, detail="Se requiere 'sub_components'.")
     entity_type = body.get("entity_type")
     weights = get_sub_component_weights(entity_type)
+    from modules.banking_score.scoring.perfil_sdq import banda_resiliencia, calcular_ejes
+
     sim_score = calculate_deterministic_score(subs, weights)
-    sim_tier = map_rating_tier(sim_score)
+    sim_ejes = calcular_ejes(subs, entity_type)
     ctx = {
         "tipo_entidad": entity_type,
         "sub_componentes_simulados": subs,
         "score_simulado": sim_score,
-        "rating_simulado": sim_tier,
+        # El contexto que ve la IA también va en dos ejes: si le pasáramos el símbolo único
+        # escribiría sobre él, y la narrativa volvería a reintroducir la notación que la
+        # superficie acaba de retirar.
+        "ejecucion_simulada": sim_ejes["ejecucion"],
+        "resiliencia_simulada": sim_ejes["resiliencia"],
         "base": body.get("base"),  # optional {sub_components, overall_score}
     }
     ai = (await _ai_insight(ctx, "banking_recommendation", axis="banking", audience="entidad")
           if body.get("with_ai", True) else None)
-    return {"overall_score": sim_score, "rating_tier": sim_tier,
-            "tier_color": get_tier_color(sim_tier), "ai_insight": ai}
+    return {"overall_score": sim_score,
+            "ejecucion": sim_ejes["ejecucion"], "resiliencia": sim_ejes["resiliencia"],
+            "banda_resiliencia": banda_resiliencia(sim_ejes["resiliencia"]),
+            "banda_ejecucion": None, "ai_insight": ai}
 
 
 # ─── Rating History ──────────────────────────────────────────────
@@ -589,7 +614,10 @@ async def get_rating_history(
         {
             "period_end": str(r.period_end),
             "overall_score": float(r.overall_score),
-            "rating_tier": r.rating_tier,
+            "ejecucion": float(r.ejecucion_score) if r.ejecucion_score is not None else None,
+            "banda_ejecucion": r.banda_ejecucion,
+            "resiliencia": float(r.resiliencia_score) if r.resiliencia_score is not None else None,
+            "banda_resiliencia": r.banda_resiliencia,
             "solidez_score": float(r.solidez_score or 0),
             "calidad_score": float(r.calidad_score or 0),
             "eficiencia_score": float(r.eficiencia_score or 0),
@@ -745,11 +773,6 @@ async def get_rankings(
             "banda_ejecucion": rr.banda_ejecucion,
             "resiliencia": float(rr.resiliencia_score) if rr.resiliencia_score is not None else None,
             "banda_resiliencia": rr.banda_resiliencia,
-            # DEPRECADO: convive mientras la superficie migra a Perfil SDQ (§9). Usa la
-            # gramática de una calificadora sin serlo, y `SDQ-D` cubre 45 puntos de rango
-            # aplicándose a entidades que operan con normalidad — el problema que originó
-            # el reemplazo.
-            "rating_tier": rr.rating_tier,
         })
     # La justificación de por qué la banda de Ejecución es relativa se apoya en la brecha
     # de medianas entre tipos de entidad. Esa brecha es un HECHO DEL PANEL: se computa acá
@@ -764,9 +787,11 @@ async def get_rankings(
         "latest_period_end": str(latest_pe) if latest_pe else None,
         "notacion": {
             "primaria": "Perfil SDQ — Ejecución y Resiliencia, dos ejes independientes.",
-            "rating_tier": ("DEPRECADO. Se mantiene durante la transición; no es una "
-                            "calificación crediticia ni es comparable con la notación de "
-                            "una agencia calificadora."),
+            "notacion_retirada": (
+                "La notación de letras (SDQ-AAA…SDQ-D) YA NO SE PUBLICA. Usaba la gramática "
+                "de una calificadora sin serlo, y `SDQ-D` cubría 45 puntos de rango "
+                "aplicándose a entidades que operan con normalidad. La columna se conserva "
+                "en la base como linaje del dato, no como superficie."),
         },
         "metodologia": {
             "banda_resiliencia": (

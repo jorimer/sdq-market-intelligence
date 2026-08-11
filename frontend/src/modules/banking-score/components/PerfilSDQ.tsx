@@ -131,3 +131,44 @@ export function PerfilSDQ({
     </div>
   );
 }
+
+
+export interface PerfilCompactoProps {
+  ejecucion: number | null | undefined;
+  bandaEjecucion: string | null | undefined;
+  resiliencia: number | null | undefined;
+  bandaResiliencia: string | null | undefined;
+  size?: "sm" | "md";
+}
+
+/**
+ * Los dos ejes en una línea, para listas y tarjetas donde no cabe el bloque completo.
+ *
+ * Reemplaza a `RatingBadge`, que mostraba UN símbolo. Mantiene la regla del bloque grande:
+ * los dos ejes con el mismo peso visual, nunca uno solo — un badge que muestre únicamente
+ * Ejecución sería el símbolo único otra vez, con otro nombre.
+ */
+export function PerfilCompacto({
+  ejecucion, bandaEjecucion, resiliencia, bandaResiliencia, size = "md",
+}: PerfilCompactoProps) {
+  const t = size === "sm" ? "text-[10px]" : "text-xs";
+  const n = size === "sm" ? "text-xs" : "text-sm";
+  const par = (
+    etiqueta: string, score: number | null | undefined,
+    banda: string | null | undefined, tone: Tone,
+  ) => (
+    <span className="inline-flex items-baseline gap-1">
+      <span className={`${t} uppercase tracking-wide text-muted`}>{etiqueta}</span>
+      <span className={`${n} font-semibold mono`}>{score == null ? "—" : score.toFixed(0)}</span>
+      <span className={`px-1.5 py-0.5 rounded-full ${t} font-semibold ${toneBadgeClass(tone)}`}>
+        {banda ?? "sin dato"}
+      </span>
+    </span>
+  );
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      {par("Ejec", ejecucion, bandaEjecucion, toneEjecucion(bandaEjecucion))}
+      {par("Resil", resiliencia, bandaResiliencia, toneResiliencia(bandaResiliencia))}
+    </div>
+  );
+}

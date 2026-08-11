@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles, TrendingUp, Users, Layers, ChevronRight } from "lucide-react";
 import { TrendChart } from "./TrendChart";
-import { RatingBadge } from "./RatingBadge";
+import { PerfilCompacto } from "./PerfilSDQ";
 import { IndicatorDetailDrawer } from "./IndicatorDetailDrawer";
 import { entityTypeLabel } from "../entityTypes";
 import { StateBlock, Skeleton } from "@/shared/ui/primitives";
@@ -79,7 +79,8 @@ export function EntityInsightDrawer({ bankId, onClose }: Props) {
                 </div>
                 <div className="text-xs text-muted mt-1">{t("banking.entGlobalScore")}</div>
               </div>
-              <RatingBadge tier={detail.latest.rating_tier} size="lg" />
+              <PerfilCompacto ejecucion={detail.latest.ejecucion} bandaEjecucion={detail.latest.banda_ejecucion}
+                              resiliencia={detail.latest.resiliencia} bandaResiliencia={detail.latest.banda_resiliencia} />
             </div>
 
             {/* sub-components with driver/drag */}

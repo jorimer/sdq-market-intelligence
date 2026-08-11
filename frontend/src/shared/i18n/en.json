@@ -978,7 +978,7 @@
     "scenSimulated": "Simulated",
     "scenBase": "Baseline",
     "scenInsightTitle": "Scenario reading (AI)",
-    "scenInsightSubtitle": "Simulated score {{score}} · {{tier}}",
+    "scenInsightSubtitle": "Simulated scenario — Execution {{ejecucion}} · Resilience {{resiliencia}}",
     "scenPreset": {
       "Optimista": "Optimistic",
       "Base": "Base",
