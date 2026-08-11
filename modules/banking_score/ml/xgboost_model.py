@@ -1,9 +1,21 @@
-"""SDQ XGBoost multi-class rating model.
+"""Modelo XGBoost de Perfil SDQ — DOS REGRESORES, uno por eje.
 
-Training:   feature vectors + deterministic tiers → XGBClassifier (multi:softprob)
-Inference:  feature vector → predict_proba → weighted midpoint → continuous score → tier
+Entrenamiento:  vectores de indicadores + los dos scores deterministas → 2 XGBRegressor
+Inferencia:     vector → (ejecución, resiliencia)
 
-Extracted from financial-analysis-agent/banking_scoring_service.py.
+**Por qué regresión y no clasificación sobre las bandas.** La banda de Ejecución es
+RELATIVA al panel: sale de los cuartiles del tipo de entidad, así que se mueve cuando se
+mueve el panel. Entrenar un clasificador contra una etiqueta que se desplaza enseña un
+blanco móvil — el modelo aprendería la composición del panel de ese día, no el desempeño.
+El score es estable y la banda se deriva de él aguas abajo, donde el corte vigente aplica.
+
+**Por qué dos modelos y no uno multi-salida.** Los ejes son independientes por diseño
+(§2 del spec): una entidad puede ser sólida y poco eficiente. Un modelo conjunto compartiría
+representación entre los dos y volvería a acoplar lo que el índice separa.
+
+La versión anterior era un clasificador de 10 clases sobre `SDQ-AAA…SDQ-D` que después
+convertía probabilidades a un score continuo por punto medio ponderado — un rodeo para
+llegar a un número que ahora se predice directo.
 """
 import base64
 import hashlib
@@ -13,57 +25,47 @@ import logging
 import os
 import tempfile
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 # Lazy imports — XGBoost requires libomp which may not be installed
-XGBClassifier = None
-LabelEncoder = None
+XGBRegressor = None
 
 
 def _ensure_ml_libs():
     """Import heavy ML libs on first use so the server can start without them."""
-    global XGBClassifier, LabelEncoder
-    if XGBClassifier is None:
-        from xgboost import XGBClassifier as _XGB
-        from sklearn.preprocessing import LabelEncoder as _LE
+    global XGBRegressor
+    if XGBRegressor is None:
+        from xgboost import XGBRegressor as _XGB
 
-        XGBClassifier = _XGB
-        LabelEncoder = _LE
+        XGBRegressor = _XGB
 
 
 def _get_ml_metrics():
-    from sklearn.metrics import (
-        accuracy_score,
-        cohen_kappa_score,
-        f1_score,
-        mean_absolute_error,
-    )
+    """Métricas de REGRESIÓN. Accuracy/F1/kappa eran de la etapa de clasificación y no
+    aplican: un error de 2 puntos y uno de 40 no son "ambos incorrectos"."""
+    from sklearn.metrics import mean_absolute_error, r2_score
     from sklearn.model_selection import train_test_split
 
-    return accuracy_score, cohen_kappa_score, f1_score, mean_absolute_error, train_test_split
+    return mean_absolute_error, r2_score, train_test_split
 
 from modules.banking_score.ml.features import extract_feature_vector
-from modules.banking_score.scoring.rating_scale import (
-    RATING_SCALE,
-    map_rating_tier,
-)
 from modules.banking_score.scoring.weights import XGBOOST_PARAMS
 from shared.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Tier midpoints for converting probabilities → continuous score
-TIER_MIDPOINTS: Dict[str, float] = {
-    tier: (lo + hi) / 2 for tier, lo, hi in RATING_SCALE
-}
+EJES = ("ejecucion", "resiliencia")
 
 # Serialization format: JSON envelope { format, payload_b64, hmac } where the
 # payload is { booster_b64 (XGBoost native JSON), classes, version, metrics }.
 # XGBoost's native format cannot execute code on load (unlike pickle), and the
 # HMAC rejects a blob that was altered at rest (DB row or disk file).
-MODEL_FORMAT = "sdq-xgb-v2"
+# v3: dos regresores por eje. Un blob v2 (clasificador de tiers) se RECHAZA en vez de
+# intentar interpretarlo — predice otra cosa, y cargarlo daría números sin significado.
+MODEL_FORMAT = "sdq-xgb-v3"
+MODEL_FORMAT_LEGADO = "sdq-xgb-v2"
 
 
 class ModelIntegrityError(RuntimeError):
@@ -80,11 +82,11 @@ def _sign(payload: bytes) -> str:
 
 
 class SDQXGBoostModel:
-    """Wrapper around XGBClassifier for 10-tier credit-rating prediction."""
+    """Dos XGBRegressor —uno por eje— sobre el mismo vector de indicadores."""
 
     def __init__(self):
-        self.model: Optional[XGBClassifier] = None
-        self.label_encoder: Optional[LabelEncoder] = None
+        # {"ejecucion": regresor, "resiliencia": regresor}. Independientes por diseño.
+        self.modelos: Dict[str, Any] = {}
         self.version: Optional[str] = None
         self.metrics: Optional[Dict] = None
         self._model_path = os.path.join(
@@ -96,113 +98,87 @@ class SDQXGBoostModel:
     def train(
         self,
         features: List[List[float]],
-        tiers: List[str],
+        ejecucion: List[float],
+        resiliencia: List[float],
         test_size: float = 0.25,
     ) -> Dict:
-        """Train XGBoost on feature vectors and tier labels.
+        """Entrena un regresor por eje sobre el mismo vector de indicadores.
 
         Args:
-            features: List of 21-dim feature vectors.
-            tiers:    Corresponding tier labels (e.g. ``"SDQ-AA+"``).
-            test_size: Fraction reserved for evaluation.
-
-        Returns:
-            Dict with accuracy, MAE, F1, kappa, and split sizes.
+            features:    vectores de 21 dimensiones.
+            ejecucion:   score determinista de Ejecución (0-100) de cada observación.
+            resiliencia: ídem para Resiliencia.
+            test_size:   fracción reservada para evaluar.
         """
         _ensure_ml_libs()
-        accuracy_score, cohen_kappa_score, f1_score, mean_absolute_error, train_test_split = _get_ml_metrics()
+        mean_absolute_error, r2_score, train_test_split = _get_ml_metrics()
+
+        if not (len(features) == len(ejecucion) == len(resiliencia)):
+            raise ValueError("features, ejecucion y resiliencia deben tener el mismo largo")
 
         X = np.array(features)
-
-        # LabelEncoder maps sparse tier names → contiguous [0..N-1]
-        self.label_encoder = LabelEncoder()
-        y = self.label_encoder.fit_transform(tiers)
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42,
-        )
-
-        # Build classifier — separate constructor args from hyperparams
         fit_params = {
-            k: v
-            for k, v in XGBOOST_PARAMS.items()
-            if k not in ("num_class", "use_label_encoder")
+            k: v for k, v in XGBOOST_PARAMS.items()
+            if k not in ("num_class", "use_label_encoder", "objective")
         }
 
-        self.model = XGBClassifier(
-            num_class=len(self.label_encoder.classes_),
-            use_label_encoder=False,
-            **fit_params,
-        )
-        self.model.fit(X_train, y_train)
+        met: Dict[str, Any] = {}
+        for eje, y_raw in (("ejecucion", ejecucion), ("resiliencia", resiliencia)):
+            y = np.array(y_raw, dtype=float)
+            # El MISMO random_state en los dos: así ambos ejes se evalúan sobre las mismas
+            # entidades y sus métricas son comparables entre sí.
+            X_tr, X_te, y_tr, y_te = train_test_split(
+                X, y, test_size=test_size, random_state=42)
+            m = XGBRegressor(objective="reg:squarederror", **fit_params)
+            m.fit(X_tr, y_tr)
+            pred = np.clip(m.predict(X_te), 0.0, 100.0)
+            self.modelos[eje] = m
+            met[eje] = {
+                "mae": float(mean_absolute_error(y_te, pred)),
+                "r2": float(r2_score(y_te, pred)),
+                "n_train": int(len(X_tr)),
+                "n_test": int(len(X_te)),
+            }
 
-        # Evaluate
-        y_pred = self.model.predict(X_test)
-        self.metrics = {
-            "accuracy": float(accuracy_score(y_test, y_pred)),
-            "mae": float(mean_absolute_error(y_test, y_pred)),
-            "f1_weighted": float(
-                f1_score(y_test, y_pred, average="weighted", zero_division=0)
-            ),
-            "kappa": float(cohen_kappa_score(y_test, y_pred)),
-            "n_train": int(len(X_train)),
-            "n_test": int(len(X_test)),
-            "n_classes": int(len(self.label_encoder.classes_)),
-        }
-
+        self.metrics = {**met, "n_total": int(len(X))}
         self.version = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         self._save()
         logger.info(
-            "XGBoost trained: v=%s  acc=%.3f  kappa=%.3f",
-            self.version, self.metrics["accuracy"], self.metrics["kappa"],
+            "XGBoost (2 ejes) entrenado: v=%s  MAE ejec=%.2f  MAE resil=%.2f",
+            self.version, met["ejecucion"]["mae"], met["resiliencia"]["mae"],
         )
         return self.metrics
 
     # ── Inference ─────────────────────────────────────────────────
 
-    def predict(
-        self, indicator_scores: Dict[str, float],
-    ) -> Tuple[float, str, Dict[str, float]]:
-        """Predict continuous score and tier from indicator scores.
+    def predict(self, indicator_scores: Dict[str, float]) -> Dict[str, float]:
+        """``{"ejecucion": x, "resiliencia": y}`` desde los scores de indicadores.
 
-        Returns:
-            ``(score, tier, tier_probabilities)``
+        Devuelve los dos scores y NO las bandas: la de Ejecución es relativa al panel y
+        depende de contra quién se compare, así que se deriva aguas arriba con el corte
+        vigente. El modelo predice la magnitud; la etiqueta la pone quien conoce el panel.
         """
         _ensure_ml_libs()
-        if self.model is None:
+        if not self.modelos:
             self._load()
 
-        features = extract_feature_vector(indicator_scores)
-        X = np.array([features])
-
-        probas = self.model.predict_proba(X)[0]
-        class_labels = self.label_encoder.inverse_transform(
-            range(len(probas))
-        )
-
-        # Weighted average of tier midpoints
-        score = sum(
-            probas[i] * TIER_MIDPOINTS.get(class_labels[i], 50.0)
-            for i in range(len(probas))
-        )
-        score = max(0.0, min(100.0, float(score)))
-        tier = map_rating_tier(score)
-
-        tier_probs = {
-            class_labels[i]: float(probas[i]) for i in range(len(probas))
+        X = np.array([extract_feature_vector(indicator_scores)])
+        return {
+            eje: float(np.clip(self.modelos[eje].predict(X)[0], 0.0, 100.0))
+            for eje in EJES
         }
-        return score, tier, tier_probs
 
     # ── Serialization ─────────────────────────────────────────────
     # No pickle anywhere: a compromised blob must not be able to execute code.
 
     def _serialize(self) -> bytes:
-        with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
-            self.model.save_model(tmp.name)
-            booster_bytes = open(tmp.name, "rb").read()
+        boosters = {}
+        for eje in EJES:
+            with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
+                self.modelos[eje].save_model(tmp.name)
+                boosters[eje] = base64.b64encode(open(tmp.name, "rb").read()).decode("ascii")
         payload = json.dumps({
-            "booster_b64": base64.b64encode(booster_bytes).decode("ascii"),
-            "classes": [str(c) for c in self.label_encoder.classes_],
+            "boosters_b64": boosters,
             "version": self.version,
             "metrics": self.metrics,
         }, sort_keys=True).encode("utf-8")
@@ -221,10 +197,15 @@ class SDQXGBoostModel:
                 "Blob de modelo en formato legado (pickle) o corrupto; se ignora "
                 "por seguridad. Re-entrenar con POST /model/train."
             ) from e
-        if not isinstance(envelope, dict) or envelope.get("format") != MODEL_FORMAT:
+        fmt = envelope.get("format") if isinstance(envelope, dict) else None
+        if fmt == MODEL_FORMAT_LEGADO:
+            # Un blob v2 predice TIERS, no ejes. Cargarlo daría números sin significado,
+            # así que se rechaza con instrucción explícita en vez de degradar en silencio.
             raise ModelIntegrityError(
-                f"Formato de modelo desconocido: {envelope.get('format') if isinstance(envelope, dict) else '?'}"
-            )
+                "Modelo entrenado con la notación de letras (formato v2). Perfil SDQ "
+                "predice dos ejes: hay que re-entrenar con POST /model/train.")
+        if not isinstance(envelope, dict) or fmt != MODEL_FORMAT:
+            raise ModelIntegrityError(f"Formato de modelo desconocido: {fmt or '?'}")
         payload = base64.b64decode(envelope.get("payload_b64", ""))
         if not hmac.compare_digest(_sign(payload), str(envelope.get("hmac", ""))):
             raise ModelIntegrityError(
@@ -233,16 +214,16 @@ class SDQXGBoostModel:
         data = json.loads(payload.decode("utf-8"))
 
         _ensure_ml_libs()
-        model = XGBClassifier()
-        with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
-            tmp.write(base64.b64decode(data["booster_b64"]))
-            tmp.flush()
-            model.load_model(tmp.name)
-        encoder = LabelEncoder()
-        encoder.classes_ = np.array(data["classes"])
+        modelos = {}
+        for eje in EJES:
+            m = XGBRegressor()
+            with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
+                tmp.write(base64.b64decode(data["boosters_b64"][eje]))
+                tmp.flush()
+                m.load_model(tmp.name)
+            modelos[eje] = m
 
-        self.model = model
-        self.label_encoder = encoder
+        self.modelos = modelos
         self.version = data.get("version")
         self.metrics = data.get("metrics")
 
@@ -270,7 +251,7 @@ class SDQXGBoostModel:
     def save_to_db(self, db, trained_by: Optional[str] = None) -> None:
         """Persist the in-memory model as a new ml_models row (durable)."""
         from modules.banking_score.models.models import MlModel
-        if self.model is None:
+        if not self.modelos:
             raise RuntimeError("No hay modelo en memoria para guardar.")
         db.add(MlModel(
             module="banking_score",
@@ -312,7 +293,7 @@ class SDQXGBoostModel:
 
     def ensure_loaded(self, db=None) -> bool:
         """Make a usable model available in memory: in-memory → disk → DB."""
-        if self.model is not None:
+        if self.modelos:
             return True
         if os.path.exists(self._model_path):
             try:
@@ -327,7 +308,7 @@ class SDQXGBoostModel:
     # ── Status ────────────────────────────────────────────────────
 
     def get_status(self, db=None) -> Dict:
-        available = self.model is not None or os.path.exists(self._model_path)
+        available = bool(self.modelos) or os.path.exists(self._model_path)
         version = self.version
         metrics = self.metrics
         if db is not None:

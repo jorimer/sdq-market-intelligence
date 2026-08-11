@@ -20,7 +20,7 @@ from modules.banking_score.scoring.engine import (
     calculate_sub_components,
     calculate_deterministic_score,
 )
-from modules.banking_score.scoring.rating_scale import map_rating_tier
+from modules.banking_score.scoring.perfil_sdq import calcular_ejes
 
 logger = logging.getLogger("sdq.api.model")
 
@@ -74,22 +74,24 @@ async def train_model(
                    f"Actualmente hay {total_records}.",
         )
 
-    # Gather all banking data records and compute feature vectors + tiers
+    # Vectores de indicadores + los dos ejes deterministas como etiqueta
     records = db.query(BankingData).all()
-    features = []
-    tiers = []
+    features: list = []
+    y_ejecucion: list = []
+    y_resiliencia: list = []
 
     for record in records:
         try:
             indicators = calculate_all_indicators(record)
             sub_scores = calculate_sub_components(indicators)
-            overall = calculate_deterministic_score(sub_scores)
-            tier = map_rating_tier(overall)
+            # La etiqueta ahora son los DOS EJES deterministas, no el tier: el modelo
+            # aprende a reproducir Perfil SDQ, que es lo que el sistema publica.
+            ejes = calcular_ejes(sub_scores, getattr(record, "entity_type", None))
 
             flat_scores = {k: v["score"] for k, v in indicators.items()}
-            vec = extract_feature_vector(flat_scores)
-            features.append(vec)
-            tiers.append(tier)
+            features.append(extract_feature_vector(flat_scores))
+            y_ejecucion.append(ejes["ejecucion"])
+            y_resiliencia.append(ejes["resiliencia"])
         except Exception as e:
             logger.warning("Skipping record %s: %s", record.id, e)
 
@@ -101,7 +103,7 @@ async def train_model(
         )
 
     try:
-        metrics = xgboost_model.train(features, tiers)
+        metrics = xgboost_model.train(features, y_ejecucion, y_resiliencia)
         # Persist to Postgres (durable) — disk pickle alone vanishes on redeploy.
         xgboost_model.save_to_db(db, trained_by=current_user.id)
     except Exception as e:

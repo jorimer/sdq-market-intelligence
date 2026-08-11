@@ -76,15 +76,14 @@ def isolate_ml_singleton(tmp_path):
     on-disk pickle at MODELS_DIR) would leak across tests. Reset it to a clean,
     isolated state around each test and restore afterward."""
     from modules.banking_score.ml.xgboost_model import xgboost_model
-    snap = (xgboost_model.model, xgboost_model.label_encoder,
+    snap = (dict(xgboost_model.modelos),
             xgboost_model.version, xgboost_model.metrics, xgboost_model._model_path)
-    xgboost_model.model = None
-    xgboost_model.label_encoder = None
+    xgboost_model.modelos = {}
     xgboost_model.version = None
     xgboost_model.metrics = None
-    xgboost_model._model_path = str(tmp_path / "isolated_model.pkl")
+    xgboost_model._model_path = str(tmp_path / "isolated_model.json")
     yield
-    (xgboost_model.model, xgboost_model.label_encoder,
+    (xgboost_model.modelos,
      xgboost_model.version, xgboost_model.metrics, xgboost_model._model_path) = snap
 
 
@@ -880,7 +879,7 @@ class TestMlScoring:
         bid = bank.id
         db.close()
         from modules.banking_score.ml.xgboost_model import xgboost_model
-        xgboost_model.model = None
+        xgboost_model.modelos = {}
         xgboost_model._model_path = "/tmp/sdq_no_such_model.pkl"
         resp = client.post(
             f"/api/v1/banking-score/{bid}/run?period_end=2024-12-31&model=ml",
@@ -901,23 +900,22 @@ class TestMlScoring:
         bank = seed_test_bank(db)
         bid = bank.id
 
-        tiers_pool = ["SDQ-AAA", "SDQ-AA+", "SDQ-AA", "SDQ-AA-", "SDQ-A+",
-                      "SDQ-A", "SDQ-A-", "SDQ-BBB+", "SDQ-BBB", "SDQ-D"]
         rng = np.random.RandomState(0)
-        feats, tiers = [], []
+        feats, ejec, resil = [], [], []
         for _ in range(60):
             v = rng.uniform(20, 95, size=len(FEATURE_ORDER)).tolist()
             feats.append(v)
-            tiers.append(tiers_pool[min(9, max(0, int((100 - np.mean(v)) / 10)))])
-        xgboost_model.model = None
-        xgboost_model._model_path = str(tmp_path / "train.pkl")
-        xgboost_model.train(feats, tiers)
+            ejec.append(float(np.mean(v[:8])))
+            resil.append(float(np.mean(v[8:])))
+        xgboost_model.modelos = {}
+        xgboost_model._model_path = str(tmp_path / "train.json")
+        xgboost_model.train(feats, ejec, resil)
         xgboost_model.save_to_db(db)
         db.commit()
         db.close()
 
         # Force the endpoint to load from DB (cold-start: no memory, no disk).
-        xgboost_model.model = None
+        xgboost_model.modelos = {}
         xgboost_model._model_path = str(tmp_path / "gone.pkl")
 
         resp = client.post(

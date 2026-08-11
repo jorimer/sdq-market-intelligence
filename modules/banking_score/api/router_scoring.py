@@ -37,6 +37,7 @@ from modules.banking_score.ml.xgboost_model import xgboost_model
 from modules.banking_score.scoring.indicator_detail import ai_context, build_indicator_detail
 from modules.banking_score.scoring.entity_insight import ai_context_entity, build_entity_insight
 from shared.publications.service import publication_prompt_context
+from modules.banking_score.scoring.perfil_sdq import banda_resiliencia, calcular_ejes
 from modules.banking_score.scoring.rating_scale import get_tier_color, map_rating_tier
 from modules.banking_score.scoring.weights import (
     WEIGHT_PROFILES,
@@ -95,8 +96,6 @@ async def simulate_scenario(
     subs = body.get("sub_components")
     if not isinstance(subs, dict) or not subs:
         raise HTTPException(status_code=400, detail="Se requiere 'sub_components'.")
-    from modules.banking_score.scoring.perfil_sdq import banda_resiliencia, calcular_ejes
-
     tipo = body.get("entity_type")
     weights = get_sub_component_weights(tipo)
     overall = calculate_deterministic_score(subs, weights)
@@ -171,16 +170,17 @@ async def run_bank_scoring(
             )
         try:
             flat_scores = {k: v.get("score", 0.0) for k, v in (result.get("indicators") or {}).items()}
-            ml_score, ml_tier, ml_probs = xgboost_model.predict(flat_scores)
+            ml_ejes = xgboost_model.predict(flat_scores)
         except Exception as e:
             logger.error(f"Error en predicción ML para {bank_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Error en predicción ML: {e}")
-        # ML overrides the overall score/tier; sub-components & indicators (the
-        # deterministic features) are kept for explainability.
-        result["overall_score"] = ml_score
-        result["rating_tier"] = ml_tier
-        result["tier_color"] = get_tier_color(ml_tier)
-        result["tier_probabilities"] = ml_probs
+        # El ML predice los DOS EJES; sub-componentes e indicadores (sus insumos) se
+        # conservan para explicabilidad. La banda de Ejecución NO se deriva acá: es
+        # relativa al panel comparable y esta ruta puntúa UNA entidad sin panel a la vista.
+        result["ejecucion"] = ml_ejes["ejecucion"]
+        result["resiliencia"] = ml_ejes["resiliencia"]
+        result["banda_resiliencia"] = banda_resiliencia(ml_ejes["resiliencia"])
+        result["banda_ejecucion"] = None
         result["model_version"] = xgboost_model.version or result.get("model_version")
         model_type = ModelType.ml
     result["model"] = model
@@ -567,8 +567,6 @@ async def scenario_insight(
         raise HTTPException(status_code=400, detail="Se requiere 'sub_components'.")
     entity_type = body.get("entity_type")
     weights = get_sub_component_weights(entity_type)
-    from modules.banking_score.scoring.perfil_sdq import banda_resiliencia, calcular_ejes
-
     sim_score = calculate_deterministic_score(subs, weights)
     sim_ejes = calcular_ejes(subs, entity_type)
     ctx = {

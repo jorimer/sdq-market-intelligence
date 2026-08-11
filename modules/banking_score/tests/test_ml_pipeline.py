@@ -34,7 +34,7 @@ from modules.banking_score.ml.features import (
     extract_feature_vector,
     scoring_result_to_features,
 )
-from modules.banking_score.ml.xgboost_model import SDQXGBoostModel, TIER_MIDPOINTS
+from modules.banking_score.ml.xgboost_model import EJES, SDQXGBoostModel
 from modules.banking_score.external.sib_client import (
     SuperintendenciaBancosClient,
 )
@@ -114,52 +114,50 @@ class TestFeatures:
 
 class TestXGBoostModel:
     def _generate_training_data(self, n=60):
-        """Generate synthetic training data."""
+        """Datos sintéticos: vectores + los DOS ejes como etiqueta."""
         features = []
-        tiers = []
-        tier_list = [
-            "SDQ-AAA", "SDQ-AA+", "SDQ-AA", "SDQ-AA-", "SDQ-A+",
-            "SDQ-A", "SDQ-A-", "SDQ-BBB+", "SDQ-BBB", "SDQ-D",
-        ]
         rng = np.random.RandomState(42)
+        ejec, resil = [], []
         for _ in range(n):
             vec = rng.uniform(20, 95, size=21).tolist()
-            avg = np.mean(vec)
-            # Assign tier based on average score
-            tier_idx = min(9, max(0, int((100 - avg) / 10)))
-            tiers.append(tier_list[tier_idx])
+            avg = float(np.mean(vec))
+            # Los dos ejes se construyen de partes DISTINTAS del vector, como en el motor
+            # real: si ambos salieran del mismo promedio, el test no distinguiría un modelo
+            # que aprende dos cosas de uno que aprende una y la copia.
+            ejec.append(max(0.0, min(100.0, float(np.mean(vec[:8])))))
+            resil.append(max(0.0, min(100.0, avg * 0.6 + float(np.mean(vec[8:])) * 0.4)))
             features.append(vec)
-        return features, tiers
+        return features, ejec, resil
 
     @_skip_xgb
     def test_train_and_predict(self, tmp_path):
         model = SDQXGBoostModel()
         model._model_path = str(tmp_path / "test_model.json")
 
-        features, tiers = self._generate_training_data(60)
-        metrics = model.train(features, tiers)
+        features, ejec, resil = self._generate_training_data(60)
+        metrics = model.train(features, ejec, resil)
 
-        assert "accuracy" in metrics
-        assert "kappa" in metrics
-        assert metrics["n_train"] > 0
-        assert metrics["n_test"] > 0
+        # Métricas de REGRESIÓN, una por eje: accuracy/kappa eran de la clasificación.
+        for eje in EJES:
+            assert "mae" in metrics[eje] and "r2" in metrics[eje]
+            assert metrics[eje]["n_train"] > 0 and metrics[eje]["n_test"] > 0
         assert model.version is not None
 
-        # Test prediction
-        test_scores = {feat: 75.0 for feat in FEATURE_ORDER}
-        score, tier, probs = model.predict(test_scores)
-        assert 0 <= score <= 100
-        assert tier.startswith("SDQ-")
-        assert isinstance(probs, dict)
-        assert len(probs) > 0
+        pred = model.predict({feat: 75.0 for feat in FEATURE_ORDER})
+        assert set(pred) == set(EJES)
+        for eje in EJES:
+            assert 0 <= pred[eje] <= 100
+        # El modelo NO devuelve banda de Ejecución: es relativa al panel y una predicción
+        # aislada no tiene panel contra el cual compararse.
+        assert "banda_ejecucion" not in pred
 
     @_skip_xgb
     def test_model_persistence(self, tmp_path):
         model1 = SDQXGBoostModel()
         model1._model_path = str(tmp_path / "persist_model.json")
 
-        features, tiers = self._generate_training_data(60)
-        model1.train(features, tiers)
+        features, ejec, resil = self._generate_training_data(60)
+        model1.train(features, ejec, resil)
 
         # Load in a new instance
         model2 = SDQXGBoostModel()
@@ -171,10 +169,9 @@ class TestXGBoostModel:
 
         # Predictions should match
         test_scores = {feat: 60.0 for feat in FEATURE_ORDER}
-        s1, t1, _ = model1.predict(test_scores)
-        s2, t2, _ = model2.predict(test_scores)
-        assert abs(s1 - s2) < 0.01
-        assert t1 == t2
+        p1, p2 = model1.predict(test_scores), model2.predict(test_scores)
+        for eje in EJES:
+            assert abs(p1[eje] - p2[eje]) < 0.01
 
     def test_model_not_found_raises(self, tmp_path):
         model = SDQXGBoostModel()
@@ -188,10 +185,36 @@ class TestXGBoostModel:
         status = model.get_status()
         assert status["model_available"] is False
 
-    def test_tier_midpoints(self):
-        assert len(TIER_MIDPOINTS) == 10
-        assert TIER_MIDPOINTS["SDQ-AAA"] == 97.5
-        assert TIER_MIDPOINTS["SDQ-D"] == 22.495
+    @_skip_xgb
+    def test_los_dos_ejes_se_predicen_por_SEPARADO(self, tmp_path):
+        """Son independientes por diseño (§2): un modelo que copiara un eje en el otro
+        pasaría cualquier test que solo mire rangos."""
+        model = SDQXGBoostModel()
+        model._model_path = str(tmp_path / "sep.json")
+        features, ejec, resil = self._generate_training_data(80)
+        model.train(features, ejec, resil)
+        assert model.modelos["ejecucion"] is not model.modelos["resiliencia"]
+        # Con vectores distintos las predicciones tienen que separarse entre sí.
+        alto = model.predict({f: 90.0 for f in FEATURE_ORDER})
+        bajo = model.predict({f: 30.0 for f in FEATURE_ORDER})
+        assert alto["ejecucion"] != bajo["ejecucion"]
+
+    def test_un_modelo_de_la_notacion_VIEJA_se_rechaza(self):
+        """Un blob v2 predice tiers. Cargarlo daría números sin significado."""
+        import base64
+        import hashlib
+        import hmac
+        import json as _json
+        from modules.banking_score.ml import xgboost_model as xm
+
+        payload = _json.dumps({"booster_b64": "", "classes": ["SDQ-AAA"]}).encode()
+        firma = hmac.new(xm._hmac_key(), payload, hashlib.sha256).hexdigest()
+        blob = _json.dumps({"format": xm.MODEL_FORMAT_LEGADO,
+                            "payload_b64": base64.b64encode(payload).decode(),
+                            "hmac": firma}).encode()
+        m = SDQXGBoostModel()
+        with pytest.raises(xm.ModelIntegrityError, match="re-entrenar"):
+            m._deserialize(blob)
 
 
 # ── SIB Client tests ────────────────────────────────────────────
@@ -293,9 +316,10 @@ class TestIntegration:
         model = SDQXGBoostModel()
         model._model_path = str(tmp_path / "integration_model.json")
 
+        from modules.banking_score.scoring.perfil_sdq import calcular_ejes
+
         rng = np.random.RandomState(123)
-        features = []
-        tiers = []
+        features, ejec, resil = [], [], []
 
         # Generate 60 synthetic banks
         for _ in range(60):
@@ -307,21 +331,24 @@ class TestIntegration:
                 utilidad_neta=rng.uniform(500, 3000),
             )
             result = run_scoring(data)
-            vec = scoring_result_to_features(result)
-            tier = result["rating_tier"]
-            features.append(vec)
-            tiers.append(tier)
+            ejes = calcular_ejes(result["sub_components"])
+            features.append(scoring_result_to_features(result))
+            ejec.append(ejes["ejecucion"])
+            resil.append(ejes["resiliencia"])
 
-        metrics = model.train(features, tiers)
-        assert metrics["accuracy"] > 0
+        metrics = model.train(features, ejec, resil)
+        # Sobre datos sintéticos con relación real entre insumos y ejes, el error medio
+        # tiene que quedar por debajo de una banda entera (15 puntos).
+        assert metrics["ejecucion"]["mae"] < 15.0
+        assert metrics["resiliencia"]["mae"] < 15.0
 
         # Predict on new data
         new_data = _make_banking_data()
         new_result = run_scoring(new_data)
         flat_scores = {k: v["score"] for k, v in new_result["indicators"].items()}
-        score, tier, probs = model.predict(flat_scores)
-        assert 0 <= score <= 100
-        assert tier.startswith("SDQ-")
+        pred = model.predict(flat_scores)
+        assert set(pred) == set(EJES)
+        assert all(0 <= pred[e] <= 100 for e in EJES)
 
 
 @_skip_xgb
@@ -360,9 +387,8 @@ class TestModelDurability:
 
         # Predictions match the original.
         scores = {feat: 70.0 for feat in FEATURE_ORDER}
-        s1, t1, _ = trainer.predict(scores)
-        s2, t2, _ = revived.predict(scores)
-        assert abs(s1 - s2) < 0.01 and t1 == t2
+        p1, p2 = trainer.predict(scores), revived.predict(scores)
+        assert all(abs(p1[e] - p2[e]) < 0.01 for e in EJES)
 
     def test_status_reports_unavailable_without_disk_or_db(self, tmp_path):
         db = self._db()
@@ -387,7 +413,7 @@ class TestModelIntegrity:
         blob = self._trained(tmp_path)._serialize()
         assert blob.lstrip()[:1] == b"{"
         env = json.loads(blob)
-        assert env["format"] == "sdq-xgb-v2" and "hmac" in env
+        assert env["format"] == "sdq-xgb-v3" and "hmac" in env
 
     def test_tampered_blob_is_rejected(self, tmp_path):
         from modules.banking_score.ml.xgboost_model import ModelIntegrityError
@@ -431,4 +457,4 @@ class TestModelIntegrity:
         revived = SDQXGBoostModel()
         revived._model_path = str(tmp_path / "absent.json")
         assert revived.load_from_db(db) is False
-        assert revived.model is None
+        assert not revived.modelos
