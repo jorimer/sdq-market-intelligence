@@ -35,12 +35,29 @@ UMBRAL_MIXTA = 0.25
 UMBRAL_PERSONAS = 0.60
 
 
-def clasificar(peso_personas: Optional[float]) -> Optional[str]:
-    """Tipo derivado del peso de personas en la prima. ``None`` si no hay mezcla."""
+def clasificar(peso_personas: Optional[float],
+               peso_salud: Optional[float] = None) -> Optional[str]:
+    """Tipo derivado de la mezcla de primas. ``None`` si no hay mezcla.
+
+    **«Personas» agrupa negocios demasiado distintos para una sola etiqueta.** Seguros Ademi
+    tiene 76% de su prima en personas y 0% en salud —es vida y accidentes— y salía junto a
+    Bupa, que es 100% salud. Una ARS y una compañía de vida no comparten ni estructura de
+    siniestralidad ni marco regulatorio, así que la etiqueta se abre:
+
+        salud   el ramo de salud domina la prima de personas
+        vida    personas domina pero salud NO — vida, accidentes, invalidez
+        mixta   ni daños ni personas dominan
+        danos   daños domina
+
+    Sin *peso_salud* se mantiene la etiqueta agregada «personas», que era el comportamiento
+    anterior: se degrada, no se adivina.
+    """
     if peso_personas is None:
         return None
     if peso_personas >= UMBRAL_PERSONAS:
-        return "personas"
+        if peso_salud is None:
+            return "personas"
+        return "salud" if peso_salud >= UMBRAL_PERSONAS else "vida"
     if peso_personas >= UMBRAL_MIXTA:
         return "mixta"
     return "danos"
@@ -83,7 +100,7 @@ def mezcla_de_una(filas: Sequence[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "peso_sin_clasificar": round(max(0.0, sin_clasificar) / total, 4),
         "primas_totales": round(total, 2),
         "ramos": sorted(por_ramo, key=lambda r: -por_ramo[r]),
-        "tipo": clasificar(peso_personas),
+        "tipo": clasificar(peso_personas, salud / total),
     }
 
 

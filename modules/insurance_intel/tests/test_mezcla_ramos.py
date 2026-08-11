@@ -13,7 +13,24 @@ class TestMezcla:
     def test_el_tipo_sale_del_negocio_real_no_de_una_etiqueta(self):
         m = mezcla_de_una([_f("salud", 800.0), _f("vehiculos_motor", 200.0)])
         assert m["peso_personas"] == 0.8 and m["peso_salud"] == 0.8
-        assert m["tipo"] == "personas"
+        assert m["tipo"] == "salud"
+
+    def test_personas_se_separa_en_SALUD_y_VIDA(self):
+        """«Personas» agrupaba negocios distintos: Seguros Ademi tiene 76% en personas y 0%
+        en salud —vida y accidentes— y salía junto a Bupa, que es 100% salud. Una ARS y una
+        compañía de vida no comparten estructura de siniestralidad ni marco regulatorio."""
+        salud = mezcla_de_una([_f("salud", 900.0), _f("vehiculos_motor", 100.0)])
+        vida = mezcla_de_una([_f("vida_individual", 500.0), _f("vida_colectivo", 300.0),
+                              _f("accidentes_personales", 100.0), _f("vehiculos_motor", 100.0)])
+        assert salud["tipo"] == "salud"
+        assert vida["tipo"] == "vida" and vida["peso_personas"] >= 0.6
+        assert vida["peso_salud"] == 0.0
+
+    def test_sin_peso_de_salud_se_degrada_a_personas_y_no_adivina(self):
+        from modules.insurance_intel.scoring.mezcla_ramos import clasificar
+        assert clasificar(0.8) == "personas"
+        assert clasificar(0.8, 0.9) == "salud"
+        assert clasificar(0.8, 0.0) == "vida"
 
     def test_una_aseguradora_de_danos_se_clasifica_como_tal(self):
         m = mezcla_de_una([_f("vehiculos_motor", 700.0), _f("incendio_catastrofico", 200.0),
