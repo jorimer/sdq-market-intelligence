@@ -364,14 +364,32 @@ class TestTendenciaYGuards:
         assert sube["combined_promedio"] == pytest.approx(baja["combined_promedio"])
         assert sube["pendiente_combined"] == pytest.approx(10.0)
         assert baja["pendiente_combined"] == pytest.approx(-10.0)
-        assert banda_tendencia(sube["pendiente_combined"]) == "Deteriora"
-        assert banda_tendencia(baja["pendiente_combined"]) == "Mejora"
+        assert banda_tendencia(sube["pendiente_combined"],
+                               sube["pendiente_error_estandar"]) == "Deteriora"
+        assert banda_tendencia(baja["pendiente_combined"],
+                               baja["pendiente_error_estandar"]) == "Mejora"
 
-    def test_un_movimiento_menor_al_umbral_es_estable(self):
+    def test_una_pendiente_que_no_se_separa_de_cero_NO_afirma_direccion(self):
+        """Medido: el EE mediano de la pendiente es 2.4 pp/año. Un umbral fijo de ±1
+        afirmaba dirección para 24 de 32 compañías donde el dato no la sostiene."""
         from modules.insurance_intel.scoring.perfil_sdq import banda_tendencia
-        assert banda_tendencia(0.4) == "Estable"
-        assert banda_tendencia(-0.9) == "Estable"
-        assert banda_tendencia(None) is None
+        assert banda_tendencia(+1.2, 0.9) == "Sin señal"    # t = 1.33
+        assert banda_tendencia(-17.3, 15.7) == "Sin señal"  # pendiente enorme, ruido mayor
+        assert banda_tendencia(+2.9, 0.7) == "Deteriora"    # t = 4.14
+        assert banda_tendencia(-6.7, 0.7) == "Mejora"       # t = -9.6
+
+    def test_ajuste_perfecto_es_evidencia_MAXIMA_no_ausencia(self):
+        """Residuo cero da EE=0. Tratarlo como «no se puede juzgar» invertía el sentido."""
+        from modules.insurance_intel.scoring.perfil_sdq import banda_tendencia
+        assert banda_tendencia(+10.0, 0.0) == "Deteriora"
+        assert banda_tendencia(-10.0, 0.0) == "Mejora"
+        assert banda_tendencia(0.0, 0.0) == "Sin señal"
+
+    def test_sin_error_estandar_no_se_etiqueta(self):
+        """Preferible callar a afirmar una dirección que no se puede juzgar."""
+        from modules.insurance_intel.scoring.perfil_sdq import banda_tendencia
+        assert banda_tendencia(5.0, None) is None
+        assert banda_tendencia(None, 1.0) is None
 
     def test_un_salto_de_escala_marca_el_ciclo_como_NO_comparable(self):
         """UNIT: prima de 106 mil en el primer ejercicio y 132 millones en el último.

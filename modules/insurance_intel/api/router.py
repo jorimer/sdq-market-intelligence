@@ -134,7 +134,7 @@ async def perfil_sdq(
     fabricado con dos años.
     """
     from modules.insurance_intel.scoring.perfil_sdq import (
-        PESOS_RESILIENCIA, UMBRAL_TENDENCIA, band_resiliencia_o_none, banda_ejecucion,
+        PESOS_RESILIENCIA, T_MINIMO, band_resiliencia_o_none, banda_ejecucion,
         banda_tendencia, calcular_ejes, metricas_del_ciclo, panel_por_aseguradora,
     )
     from shared.indices.freshness import annotate_freshness
@@ -156,7 +156,9 @@ async def perfil_sdq(
             # pendiente juntos se lee "buena pero deteriorando", que es la única forma de
             # que el índice sirva como señal temprana y no como fotografía.
             "pendiente_combined": ejes["pendiente_combined"],
-            "tendencia": banda_tendencia(ejes["pendiente_combined"]),
+            "pendiente_error_estandar": ejes["pendiente_error_estandar"],
+            "tendencia": banda_tendencia(ejes["pendiente_combined"],
+                                         ejes["pendiente_error_estandar"]),
             "ciclo_comparable": ejes["ciclo_comparable"],
             "resiliencia": ejes["resiliencia"],
             "banda_resiliencia": band_resiliencia_o_none(ejes["resiliencia"]),
@@ -178,9 +180,11 @@ async def perfil_sdq(
             "tendencia": (
                 f"Pendiente del combined ratio en puntos por año, ponderada por exposición. "
                 f"Se publica APARTE del nivel, nunca mezclada en el score: una compañía "
-                f"puede tener buen nivel y estar deteriorándose. Umbral ±{UMBRAL_TENDENCIA} "
-                f"punto/año para etiquetar Mejora/Estable/Deteriora — es de JUICIO: por "
-                f"debajo el movimiento no se separa del ruido de tarificación anual."),
+                f"puede tener buen nivel y estar deteriorándose. Se etiqueta Mejora o "
+                f"Deteriora SOLO si la pendiente se separa de cero (|t| >= {T_MINIMO:.0f}); "
+                f"si no, «Sin señal», que NO es lo mismo que estable: con 3-5 ejercicios y "
+                f"esta volatilidad no se puede distinguir movimiento de ruido. El error "
+                f"estándar va publicado al lado para que la afirmación sea auditable."),
         },
         # Las dos superficies de seguros miden VENTANAS DISTINTAS. Sin decirlo, un lector que
         # compare ambas encuentra contradicciones aparentes — el caso testigo fue HYLSEG, con
