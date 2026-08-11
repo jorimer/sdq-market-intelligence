@@ -83,7 +83,7 @@ def entity_trajectories(db: Session, bank: Bank, n: int = 8,
         pe = str(rr.period_end)
         if rr.overall_score is not None:
             overall.append({"period_end": pe, "score": round(float(rr.overall_score), 2),
-                            "tier": rr.rating_tier})
+                            "banda_resiliencia": rr.banda_resiliencia})
         for sk, attr in _SUB_SCORE_ATTR.items():
             val = getattr(rr, attr, None)
             if val is not None:

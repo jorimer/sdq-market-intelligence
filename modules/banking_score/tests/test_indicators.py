@@ -521,14 +521,14 @@ class TestRunScoring:
     def test_full_pipeline_healthy_bank(self, healthy_bank):
         result = run_scoring(healthy_bank)
         assert "overall_score" in result
-        assert "rating_tier" in result
-        assert "tier_color" in result
+        assert "rating_tier" not in result  # Fase 4: el motor ya no calcula el símbolo
+        assert "tier_color" not in result
         assert "sub_components" in result
         assert "indicators" in result
         assert "model_type" in result
         assert result["model_type"] == "deterministic"
         assert 0 <= result["overall_score"] <= 100
-        assert result["rating_tier"].startswith("SDQ-")
+        assert 0 <= result["overall_score"] <= 100
 
     def test_full_pipeline_weak_bank(self, weak_bank):
         result = run_scoring(weak_bank)
@@ -571,7 +571,7 @@ class TestSimulateFromScores:
         }
         result = simulate_from_scores(scores)
         assert result["overall_score"] == 100.0
-        assert result["rating_tier"] == "SDQ-AAA"
+        assert result["overall_score"] >= 95
 
     def test_zero_scores(self):
         scores = {
@@ -586,7 +586,7 @@ class TestSimulateFromScores:
         }
         result = simulate_from_scores(scores)
         assert result["overall_score"] == 0.0
-        assert result["rating_tier"] == "SDQ-D"
+        assert result["overall_score"] <= 45
 
     def test_recalculates_composite_calidad(self):
         scores = {

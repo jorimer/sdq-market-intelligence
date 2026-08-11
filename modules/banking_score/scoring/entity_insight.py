@@ -99,7 +99,8 @@ def build_entity_insight(db: Session, bank: Bank) -> Optional[Dict[str, Any]]:
 
     # Overall-score trend
     trend = [{"period_end": str(r.period_end), "score": float(r.overall_score),
-              "tier": r.rating_tier} for r in ratings]
+              "banda_ejecucion": r.banda_ejecucion,
+              "banda_resiliencia": r.banda_resiliencia} for r in ratings]
 
     # Peers: overall-score distribution at the latest period (sector + same type)
     peer_rows = (
@@ -120,7 +121,8 @@ def build_entity_insight(db: Session, bank: Bank) -> Optional[Dict[str, Any]]:
         "latest": {
             "period_end": str(period_end),
             "overall_score": round(overall, 2),
-            "rating_tier": latest.rating_tier,
+            "banda_ejecucion": latest.banda_ejecucion,
+            "banda_resiliencia": latest.banda_resiliencia,
             "band": _band(overall),
         },
         "sub_components": sub_components,
@@ -141,7 +143,8 @@ def ai_context_entity(detail: Dict[str, Any]) -> Dict[str, Any]:
         "entidad": detail["bank_name"],
         "tipo_entidad": detail["entity_type"],
         "periodo": detail["latest"]["period_end"],
-        "rating": detail["latest"]["rating_tier"],
+        "banda_ejecucion": detail["latest"]["banda_ejecucion"],
+        "banda_resiliencia": detail["latest"]["banda_resiliencia"],
         "score_global": detail["latest"]["overall_score"],
         "sub_componentes": [
             {"componente": s["label"], "score": s["score"], "peso": s["weight"],

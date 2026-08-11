@@ -175,7 +175,7 @@ def _tables_from_payload(payload: Dict[str, Any]) -> List[Tuple[str, List[List[s
 
 def _headline(payload: Dict[str, Any]) -> str:
     sr = (payload or {}).get("scoring_result") or {}
-    tier, score = sr.get("rating_tier"), sr.get("overall_score")
+    tier, score = sr.get("banda_resiliencia"), sr.get("overall_score")
     if tier and isinstance(score, (int, float)):
         return f"{tier} · {score:.1f}/100"
     return ""

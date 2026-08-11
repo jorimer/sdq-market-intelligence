@@ -118,7 +118,7 @@ def derive_observations(db: Session, horizon_q: int = HORIZON_Q) -> List[Backtes
     observations: List[BacktestObservation] = []
     for bank_id, rmap in by_bank_ratings.items():
         periods = sorted(rmap.keys())
-        tiers = {p: rmap[p].rating_tier for p in periods}
+        tiers = {p: rmap[p].banda_resiliencia for p in periods}
         fins = _financials(by_bank_fin.get(bank_id, []))
         for i, p in enumerate(periods):
             horizon = periods[i + 1: i + 1 + horizon_q]

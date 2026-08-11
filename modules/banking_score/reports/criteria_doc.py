@@ -24,7 +24,6 @@ import logging
 from typing import Dict, List, Optional
 
 from modules.banking_score.scoring.indicator_detail import INDICATOR_META
-from modules.banking_score.scoring.rating_scale import RATING_SCALE
 from modules.banking_score.scoring.weights import (
     CALIDAD_INDICATORS,
     DIVERSIFICACION_INDICATORS,
@@ -195,26 +194,48 @@ def _indicadores() -> str:
 
 
 def _escala() -> str:
-    rows = ["| Escalón | Puntaje | Lectura |", "|---|---|---|"]
-    lectura = {
-        "SDQ-AAA": "Fortaleza financiera excepcional",
-        "SDQ-AA+": "Fortaleza muy alta",
-        "SDQ-AA": "Fortaleza muy alta",
-        "SDQ-AA-": "Fortaleza muy alta",
-        "SDQ-A+": "Fortaleza alta",
-        "SDQ-A": "Fortaleza alta",
-        "SDQ-A-": "Fortaleza alta",
-        "SDQ-BBB+": "Fortaleza adecuada",
-        "SDQ-BBB": "Fortaleza adecuada",
-        "SDQ-D": "Fortaleza débil o comprometida",
+    """La sección de metodología que ve el cliente: DOS EJES, no una escala de letras.
+
+    Antes publicaba los diez escalones `SDQ-AAA…SDQ-D` con su glosa. Era el documento donde
+    más pesaba el problema que originó el reemplazo: usaba la gramática de una calificadora
+    sin serlo, y `SDQ-D` cubría 45 puntos de rango aplicándose a entidades que operan con
+    normalidad.
+    """
+    from modules.banking_score.scoring.perfil_sdq import BANDAS_RESILIENCIA
+
+    filas_r = ["| Banda | Puntaje | Lectura |", "|---|---|---|"]
+    lectura_r = {
+        "Sólida": "Colchón amplio frente a un shock",
+        "Adecuada": "Cumple con holgura razonable",
+        "En vigilancia": "Margen estrecho; conviene seguirla",
+        "Frágil": "Exposición material",
     }
-    for tier, lo, hi in RATING_SCALE:
-        rows.append(f"| **{tier}** | {lo:.0f} – {hi:.2f} | {lectura.get(tier, '')} |")
+    previo = 100.0
+    for corte, nombre in BANDAS_RESILIENCIA:
+        filas_r.append(f"| **{nombre}** | {corte:.0f} – {previo:.0f} | {lectura_r[nombre]} |")
+        previo = corte
+    filas_r.append(f"| **Frágil** | 0 – {previo:.0f} | {lectura_r['Frágil']} |")
+
     return (
-        f"El puntaje global (0–100) se mapea a **{len(RATING_SCALE)} escalones**. Los cortes "
-        "son fijos: un mismo puntaje produce siempre el mismo escalón, sin juicio "
-        "discrecional ni comité de override.\n\n"
-        + "\n".join(rows)
+        "El puntaje se lee en **dos ejes independientes**, no en un símbolo único.\n\n"
+        "**Ejecución** mide qué tan bien le va a la entidad; **Resiliencia**, qué tan "
+        "expuesta está. Se publican siempre juntos y con el mismo peso: una entidad puede "
+        "ser sólida y poco eficiente a la vez, y un solo número obliga a promediar dos "
+        "cosas que no son la misma.\n\n"
+        "### Resiliencia — bandas ABSOLUTAS\n\n"
+        "Los cortes son fijos y **los mismos en los cuatro sectores** (banca, seguros, "
+        "pensiones y fiduciarias): un mismo puntaje produce siempre la misma banda, sin "
+        "juicio discrecional ni comité de override.\n\n"
+        + "\n".join(filas_r) +
+        "\n\n### Ejecución — bandas RELATIVAS al tipo de entidad\n\n"
+        "Sobresaliente · Competitiva · Rezagada · Deficiente, por cuartiles del panel "
+        "comparable. En banca no existe un ancla económica de eficiencia —como sí lo son el "
+        "mínimo regulatorio en solvencia o el breakeven de suscripción en seguros— y la "
+        "rentabilidad difiere por MODELO DE NEGOCIO, no solo por desempeño. Con cortes "
+        "fijos, la intermediación cambiaria caería casi entera en «Deficiente» por estar "
+        "sobrecapitalizada, que deprime el ROE de forma mecánica y no por ineficiencia.\n\n"
+        "Por eso «Sobresaliente» significa **«en el cuartil superior de su tipo de "
+        "entidad»**, no un nivel absoluto, y cada fila publica su posición dentro del grupo."
     )
 
 

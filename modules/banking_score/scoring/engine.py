@@ -8,10 +8,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from modules.banking_score.scoring.rating_scale import (
-    map_rating_tier,
-    get_tier_color,
-)
 from modules.banking_score.scoring.weights import (
     CALIDAD_INDICATORS,
     DIVERSIFICACION_INDICATORS,
@@ -667,13 +663,9 @@ def run_scoring(data, entity_type=None) -> Dict[str, Any]:
         indicators = calculate_all_indicators(data)
         sub_scores = calculate_sub_components(indicators)
     overall_score = calculate_deterministic_score(sub_scores, weights)
-    tier = map_rating_tier(overall_score)
-    color = get_tier_color(tier)
 
     return {
         "overall_score": overall_score,
-        "rating_tier": tier,
-        "tier_color": color,
         "sub_components": sub_scores,
         "entity_type": entity_type,
         "weight_profile": weights,
@@ -724,12 +716,8 @@ def simulate_from_scores(modified_scores: Dict[str, float]) -> Dict[str, Any]:
     overall = round(
         sum(sub_components.get(k, 0.0) * w for k, w in SUB_COMPONENT_WEIGHTS.items()), 2
     )
-    tier = map_rating_tier(overall)
-    color = get_tier_color(tier)
 
     return {
         "sub_components": sub_components,
         "overall_score": overall,
-        "rating_tier": tier,
-        "tier_color": color,
     }

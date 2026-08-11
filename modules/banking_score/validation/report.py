@@ -7,7 +7,7 @@ from typing import Dict
 
 from sqlalchemy.orm import Session
 
-from modules.banking_score.scoring.rating_scale import RATING_SCALE
+from modules.banking_score.scoring.perfil_sdq import BANDAS_RESILIENCIA
 from modules.banking_score.validation.metrics import (
     deterioration_rate_by_tier, gini_bootstrap_ci,
 )
@@ -22,7 +22,8 @@ _THIN_EVENTS = 30
 def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
                           n_boot: int = 1000) -> Dict:
     obs = derive_observations(db, horizon_q=horizon_q)
-    tier_order = [t for t, _, _ in RATING_SCALE]
+    # Orden de mejor a peor, igual que antes con los escalones.
+    tier_order = [n for _c, n in BANDAS_RESILIENCIA] + ["Frágil"]
 
     if not obs:
         return {

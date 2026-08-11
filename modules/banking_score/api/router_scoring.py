@@ -38,7 +38,6 @@ from modules.banking_score.scoring.indicator_detail import ai_context, build_ind
 from modules.banking_score.scoring.entity_insight import ai_context_entity, build_entity_insight
 from shared.publications.service import publication_prompt_context
 from modules.banking_score.scoring.perfil_sdq import banda_resiliencia, calcular_ejes
-from modules.banking_score.scoring.rating_scale import get_tier_color, map_rating_tier
 from modules.banking_score.scoring.weights import (
     WEIGHT_PROFILES,
     get_sub_component_weights,
@@ -192,7 +191,6 @@ async def run_bank_scoring(
 
     if existing:
         existing.overall_score = result["overall_score"]
-        existing.rating_tier = result["rating_tier"]
         existing.solidez_score = result["sub_components"]["solidez"]
         existing.calidad_score = result["sub_components"]["calidad"]
         existing.eficiencia_score = result["sub_components"]["eficiencia"]
@@ -205,7 +203,6 @@ async def run_bank_scoring(
             bank_id=bank_id,
             period_end=pe,
             overall_score=result["overall_score"],
-            rating_tier=result["rating_tier"],
             solidez_score=result["sub_components"]["solidez"],
             calidad_score=result["sub_components"]["calidad"],
             eficiencia_score=result["sub_components"]["eficiencia"],
@@ -225,7 +222,8 @@ async def run_bank_scoring(
         rating_action_info = detect_rating_action(db, bank_id, pe, result, current_user.id)
 
     db.commit()
-    logger.info(f"Scoring completado: {bank.name} | {period_end} → {result['rating_tier']}")
+    logger.info("Scoring completado: %s | %s → Ejec %s · Resil %s", bank.name, period_end,
+                result.get("banda_ejecucion"), result.get("banda_resiliencia"))
 
     return {
         "bank_id": bank_id,
@@ -288,8 +286,8 @@ async def get_latest_rating(
         "bank_name": bank.name if bank else None,
         "period_end": str(result.period_end),
         "overall_score": float(result.overall_score),
-        # Perfil SDQ reemplaza al símbolo único (§9). `rating_tier` sigue en la BASE como
-        # linaje del dato, pero ya no se publica: dos ejes no se resumen en una letra.
+        # Perfil SDQ: dos ejes, no un símbolo. La columna `rating_tier` queda en la base
+        # con su histórico como LINAJE; las filas nuevas ya no la llevan.
         "ejecucion": float(result.ejecucion_score) if result.ejecucion_score is not None else None,
         "banda_ejecucion": result.banda_ejecucion,
         "resiliencia": float(result.resiliencia_score) if result.resiliencia_score is not None else None,
@@ -473,7 +471,8 @@ async def compare_insight(
         entidades.append({
             "nombre": bank.name,
             "tipo": bank.bank_type.value if bank.bank_type else None,
-            "rating": rr.rating_tier,
+            "banda_ejecucion": rr.banda_ejecucion,
+            "banda_resiliencia": rr.banda_resiliencia,
             "score": float(rr.overall_score),
             "sub_componentes": {
                 "solidez": float(rr.solidez_score or 0),
@@ -530,7 +529,9 @@ async def sector_insight(
     scores = [float(rr.overall_score) for rr, _ in rows]
     by_tier: Dict[str, int] = {}
     for rr, _ in rows:
-        by_tier[rr.rating_tier] = by_tier.get(rr.rating_tier, 0) + 1
+        b = rr.banda_resiliencia
+        if b:
+            by_tier[b] = by_tier.get(b, 0) + 1
     ranked = sorted(rows, key=lambda x: float(x[0].overall_score), reverse=True)
     avg = round(sum(scores) / len(scores), 2)
     ctx = {
@@ -541,8 +542,12 @@ async def sector_insight(
         "score_min": round(min(scores), 2),
         "score_max": round(max(scores), 2),
         "distribucion_rating": by_tier,
-        "lideres": [{"nombre": b.name, "score": float(rr.overall_score), "rating": rr.rating_tier} for rr, b in ranked[:5]],
-        "rezagadas": [{"nombre": b.name, "score": float(rr.overall_score), "rating": rr.rating_tier} for rr, b in ranked[-3:]],
+        "lideres": [{"nombre": b.name, "score": float(rr.overall_score),
+                     "banda_ejecucion": rr.banda_ejecucion,
+                     "banda_resiliencia": rr.banda_resiliencia} for rr, b in ranked[:5]],
+        "rezagadas": [{"nombre": b.name, "score": float(rr.overall_score),
+                       "banda_ejecucion": rr.banda_ejecucion,
+                       "banda_resiliencia": rr.banda_resiliencia} for rr, b in ranked[-3:]],
     }
     pubs = publication_prompt_context(db, sector="banca")
     if pubs:

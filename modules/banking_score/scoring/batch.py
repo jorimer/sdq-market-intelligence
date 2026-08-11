@@ -32,6 +32,27 @@ from modules.banking_score.scoring.ttm import attach_ttm
 logger = logging.getLogger("sdq.banking.scoring.batch")
 
 
+# Orden de las bandas, de mejor a peor, por eje. Un movimiento se lee dentro de su propio
+# eje: "Sobresaliente" y "Sólida" son de escalas distintas y no se comparan entre sí.
+from modules.banking_score.scoring.acciones_por_eje import transicion  # noqa: E402
+
+_ORDEN_BANDAS = {
+    "ejecucion": ["Sobresaliente", "Competitiva", "Rezagada", "Deficiente"],
+    "resiliencia": ["Sólida", "Adecuada", "En vigilancia", "Frágil"],
+}
+
+
+def _direccion_banda(previa, nueva) -> int:
+    """+1 mejoró · −1 empeoró · 0 sin cambio o sin dato para comparar."""
+    if not previa or not nueva or previa == nueva:
+        return 0
+    for orden in _ORDEN_BANDAS.values():
+        if previa in orden and nueva in orden:
+            # Índice menor = banda mejor.
+            return 1 if orden.index(str(nueva)) < orden.index(str(previa)) else -1
+    return 0
+
+
 def _delta_eje(previo, nuevo):
     """Δ de un eje, o None si falta cualquiera de los dos extremos (brecha declarada)."""
     if previo is None or nuevo is None:
@@ -60,8 +81,6 @@ def detect_rating_action(
         return None
 
     score_delta = round(float(scoring_result["overall_score"]) - float(previous.overall_score), 2)
-    prev_tier = previous.rating_tier
-    new_tier = scoring_result["rating_tier"]
 
     # ¿El cambio viene de la METODOLOGÍA o de la entidad? Si la versión de modelo difiere,
     # el movimiento no es deterioro ni mejora del banco: es que la vara cambió. El
@@ -71,12 +90,20 @@ def detect_rating_action(
                         and scoring_result.get("model_version")
                         and previous.model_version != scoring_result["model_version"])
 
-    if new_tier != prev_tier:
-        action_type = (
-            ActionType.upgrade
-            if scoring_result["overall_score"] > float(previous.overall_score)
-            else ActionType.downgrade
-        )
+    # El tipo de acción sale de los DOS EJES, no de un símbolo. Y aparece un caso que la
+    # notación única no podía expresar: cuando un eje mejora y el otro se deteriora, no hay
+    # ni upgrade ni downgrade — hay un cambio de PERFIL, que se marca como observación para
+    # que alguien lo mire en vez de resumirlo con el signo del score agregado.
+    movs = [_direccion_banda(previous.banda_ejecucion, scoring_result.get("banda_ejecucion")),
+            _direccion_banda(previous.banda_resiliencia, scoring_result.get("banda_resiliencia"))]
+    subio = any(m == 1 for m in movs)
+    bajo = any(m == -1 for m in movs)
+    if subio and bajo:
+        action_type = ActionType.observacion   # ejes en sentidos opuestos
+    elif subio:
+        action_type = ActionType.upgrade
+    elif bajo:
+        action_type = ActionType.downgrade
     elif abs(score_delta) >= 2.0:
         action_type = ActionType.observacion
     else:
@@ -101,9 +128,7 @@ def detect_rating_action(
         action_type=action_type,
         previous_period_end=previous.period_end,
         previous_score=previous.overall_score,
-        previous_tier=prev_tier,
         new_score=scoring_result["overall_score"],
-        new_tier=new_tier,
         score_delta=score_delta,
         # La acción POR EJE nace junto con la del tier, no se rellena después: sin esto,
         # cada período nuevo volvería a necesitar el re-etiquetado retroactivo.
@@ -138,8 +163,12 @@ def detect_rating_action(
     return {
         "action_type": action_type.value,
         "metodologica": metodologica,
-        "previous_tier": prev_tier,
-        "new_tier": new_tier,
+        "transicion_ejecucion": transicion(
+            str(previous.banda_ejecucion) if previous.banda_ejecucion else None,
+            scoring_result.get("banda_ejecucion")),
+        "transicion_resiliencia": transicion(
+            str(previous.banda_resiliencia) if previous.banda_resiliencia else None,
+            scoring_result.get("banda_resiliencia")),
         "score_delta": score_delta,
         "outlook": outlook.value,
         "outlook_irmp_band": ov["irmp_band"],
@@ -196,7 +225,6 @@ def _upsert_rating(
     subs = result["sub_components"]
     if existing:
         existing.overall_score = result["overall_score"]
-        existing.rating_tier = result["rating_tier"]
         existing.solidez_score = subs["solidez"]
         existing.calidad_score = subs["calidad"]
         existing.eficiencia_score = subs["eficiencia"]
@@ -209,7 +237,6 @@ def _upsert_rating(
             bank_id=bank_id,
             period_end=period_end,
             overall_score=result["overall_score"],
-            rating_tier=result["rating_tier"],
             solidez_score=subs["solidez"],
             calidad_score=subs["calidad"],
             eficiencia_score=subs["eficiencia"],
@@ -255,7 +282,8 @@ def score_period(
                 "bank_id": record.bank_id,
                 "bank_name": bank.name if bank else "Desconocido",
                 "overall_score": scoring_result["overall_score"],
-                "rating_tier": scoring_result["rating_tier"],
+                "banda_ejecucion": scoring_result.get("banda_ejecucion"),
+                "banda_resiliencia": scoring_result.get("banda_resiliencia"),
                 "rating_action": action_info,
             })
         except Exception as e:  # noqa: BLE001 — one bad record must not abort the batch

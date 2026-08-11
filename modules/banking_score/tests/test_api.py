@@ -330,7 +330,7 @@ class TestScoringPipeline:
         assert resp.status_code == 200
         data = resp.json()
         assert "overall_score" in data
-        assert "rating_tier" in data
+        assert "rating_tier" not in data
 
 
 class TestDataEndpoints:
@@ -925,7 +925,8 @@ class TestMlScoring:
         assert resp.status_code == 200, resp.text
         data = resp.json()
         assert data["model"] == "ml"
-        assert data["rating_tier"].startswith("SDQ-")
+        assert "rating_tier" not in data
+        assert data["ejecucion"] is not None and data["resiliencia"] is not None
 
         db2 = TestSessionLocal()
         ml_row = db2.query(RatingResult).filter_by(bank_id=bid, model_type=ModelType.ml).first()

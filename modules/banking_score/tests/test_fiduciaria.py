@@ -263,7 +263,9 @@ def test_run_fiduciaria_sync_persists_entities_trusts_and_scores(Session, monkey
     assert float(bd.activos_totales) == 2031
     assert bd.hhi_ingresos_raw is not None  # computed from comisiones/ingresos
     rr = db.query(RatingResult).filter_by(bank_id=bank.id).first()
-    assert rr is not None and rr.rating_tier.startswith("SDQ")
+    # Fase 4: las filas nuevas ya NO llevan la notación de letras; llevan los dos ejes.
+    assert rr is not None and rr.rating_tier is None
+    assert rr.ejecucion_score is not None and rr.resiliencia_score is not None
     # Trust persisted with its own health index (NOT an SDQ tier).
     trust = db.query(Fideicomiso).filter(Fideicomiso.name.like("%RD VIAL%")).first()
     assert trust is not None

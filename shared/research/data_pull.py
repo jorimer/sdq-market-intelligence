@@ -59,7 +59,7 @@ def _banking_summary(label: str, payload: Dict[str, Any], period: Optional[str],
     if not sr:
         return []
     out: List[Evidence] = []
-    tier = sr.get("rating_tier")
+    tier = sr.get("banda_resiliencia")
     score = sr.get("overall_score")
     head = f"{label}: rating {tier}" if tier else f"{label}"
     if isinstance(score, (int, float)):

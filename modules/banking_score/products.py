@@ -53,7 +53,7 @@ SYSTEM_LABEL = "Sistema Bancario Dominicano"
 SAMPLE_NAME = "Banco Demo, S.A."
 SAMPLE_PERIOD = "2024-12-31"
 SAMPLE_SCORING = {
-    "overall_score": 80.3, "rating_tier": "SDQ-AA-",
+    "overall_score": 80.3, "banda_ejecucion": "Competitiva", "banda_resiliencia": "Sólida",
     "sub_components": {"solidez": 85, "calidad": 82, "eficiencia": 72,
                        "liquidez": 78, "diversificacion": 62},
     "indicators": {
@@ -381,7 +381,8 @@ def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str
             # sub-componente de 40%— contradiciendo su propia tabla, donde esa dimensión
             # marca 100/100. Pensiones y seguros ya nombraban el campo así; banca era la
             # excepción. El nombre es la mitad del dato.
-            "overall_score": float(rr.overall_score), "tier": rr.rating_tier,
+            "overall_score": float(rr.overall_score),
+            "banda_ejecucion": rr.banda_ejecucion, "banda_resiliencia": rr.banda_resiliencia,
             "rank": rank, "rank_in_type": type_rank if same_type else None,
             "is_subject": b.id == bank.id,
             "_sub": {  # interno: alimenta las posiciones por dimensión, se descarta abajo
@@ -537,7 +538,8 @@ class BankingProduct:
             raise ValueError(f"No hay calificación para '{bank.name}'.")
         scoring_result = {
             "overall_score": float(rr.overall_score),
-            "rating_tier": rr.rating_tier,
+            "banda_ejecucion": rr.banda_ejecucion,
+            "banda_resiliencia": rr.banda_resiliencia,
             "sub_components": {
                 "solidez": float(rr.solidez_score or 0), "calidad": float(rr.calidad_score or 0),
                 "eficiencia": float(rr.eficiencia_score or 0), "liquidez": float(rr.liquidez_score or 0),
@@ -579,7 +581,7 @@ class BankingProduct:
             # Soporte/sistémico + techo soberano (Fase 6): overlay de CONTEXTO estilo
             # Fitch — NO muta el standalone (score/tier/vector intactos). Solo Deep Dive.
             scoring_result["soporte_soberano"] = support_overlay(
-                db, bank, float(rr.overall_score), rr.rating_tier, rr.period_end)
+                db, bank, float(rr.overall_score), rr.banda_resiliencia, rr.period_end)
             # Alerta temprana (C): banderas de monitoreo de la entidad (precursores 2003).
             # Se computa con DB aquí; narratives() la formatea sin DB. Solo Deep Dive.
             from modules.banking_score.early_warning import bank_alerts
@@ -727,7 +729,8 @@ class BankingProduct:
                 output_dir=output_dir, fmt="docx")
         if tier == ProductTier.pulse:
             scoring_result = {"overall_score": snapshot.payload.get("system_avg_score") or 0,
-                              "rating_tier": "Sistema", "sub_components": {}, "indicators": {}}
+                              "banda_ejecucion": None, "banda_resiliencia": None,
+                              "sub_components": {}, "indicators": {}}
             return await generate_pdf_report(
                 level.base_report_type or "sector_outlook", SYSTEM_LABEL, scoring_result,
                 snapshot.period, narratives=narratives, output_dir=output_dir,
