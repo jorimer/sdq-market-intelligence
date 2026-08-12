@@ -71,6 +71,7 @@ import { StructureDrawer } from "../components/StructureDrawer";
 import { DeleteEngagementDrawer } from "../components/DeleteEngagementDrawer";
 import { ConclusionsPanel } from "../components/ConclusionsPanel";
 import { PlansPanel } from "../components/PlansPanel";
+import { SeriesPanel } from "../components/SeriesPanel";
 
 type Status = "loading" | "error" | "ready";
 
@@ -545,6 +546,8 @@ export function BrandIntelPage() {
   const [showNew, setShowNew] = useState(false);
   const [showStructure, setShowStructure] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  //: Vacío = la última ola con dato, que es lo que el servidor hace por omisión.
+  const [reportWave, setReportWave] = useState("");
   const [showDecision, setShowDecision] = useState(false);
   const [forecastMsg, setForecastMsg] = useState<string | null>(null);
   const [extractions, setExtractions] = useState<ExtractionSummary[]>([]);
@@ -949,10 +952,28 @@ export function BrandIntelPage() {
             />
             {/* El estándar de la casa entrega online · PDF · Word. El PDF encabeza por
                 ser lo que se manda a un cliente; el HTML queda para leerlo en pantalla. */}
+            {/* La ola se ELIGE antes de pedir el informe: sin selección el servidor mide
+                la última con dato, que es el comportamiento que ya existía. El orden es
+                deliberado —primero qué se mide, después en qué formato— porque el corte
+                cambia el contenido y el formato solo el envase. */}
             <div className="flex items-center gap-1">
+              {(detail?.waves.length ?? 0) > 1 && (
+                <select
+                  className="field !w-auto !py-1.5 text-xs shrink-0"
+                  value={reportWave}
+                  onChange={(e) => setReportWave(e.target.value)}
+                  aria-label="Ola que mide el informe"
+                  title="Qué ola mide el informe; se compara contra la anterior y la del año anterior"
+                >
+                  <option value="">Última ola con dato</option>
+                  {[...(detail?.waves ?? [])].reverse().map((w) => (
+                    <option key={w.code} value={w.code}>{w.label}</option>
+                  ))}
+                </select>
+              )}
               <button
                 className="btn btn-primary text-sm"
-                onClick={() => void downloadReport(slug, "pdf")}
+                onClick={() => void downloadReport(slug, "pdf", reportWave || undefined)}
               >
                 <FileText size={15} /> Informe PDF
               </button>
@@ -961,7 +982,7 @@ export function BrandIntelPage() {
                 value=""
                 onChange={(e) => {
                   const f = e.target.value as ReportFormat;
-                  if (f) void downloadReport(slug, f);
+                  if (f) void downloadReport(slug, f, reportWave || undefined);
                   e.target.value = "";
                 }}
                 aria-label="Otros formatos del informe"
@@ -1217,6 +1238,10 @@ export function BrandIntelPage() {
           onLedgerChange={() => void load(slug)}
         />
       )}
+
+      {/* Junto a los planes y no en la fila de acciones de arriba: las tres son entregas
+          del cliente o del proveedor que alimentan el expediente, y se buscan juntas. */}
+      <SeriesPanel slug={slug} onLoaded={() => void load(slug)} />
 
       {category?.available ? (
         <>

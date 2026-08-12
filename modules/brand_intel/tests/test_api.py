@@ -499,3 +499,108 @@ def test_mesa_document_of_another_organization_is_404(db, engagement):
     r = _client(db, role=UserRole.viewer, org="org-2").get(
         "/api/v1/brand-intel/engagements/demo/mesa.pdf")
     assert r.status_code == 404
+
+
+# ── S6 · las dos series que entraban por script ───────────────────────
+#
+# Mientras solo se cargaran con un script, actualizar el expediente dependía de una
+# persona: no era una capacidad del producto. Estos tests cubren además la PRIMERA
+# cobertura del lector del tablero, que hasta ahora solo se había ejercido a mano.
+
+
+def _sales_workbook(*, cutoff_day: int = 3, sheet: str = "Base de Datos") -> bytes:
+    """Un tablero mínimo con la forma real: encabezado, dos locales, tres jornadas."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet
+    ws.append(["Reporte de ventas"])          # el encabezado no está en la fila 1
+    ws.append(["ID Tienda", "Restaurantes", "Ciudad", "Zona", "Fecha",
+               "Ventas 2026", "Venta 2025", "Gcs 2026", "Gcs 2025",
+               "Ventas D.T 2026", "Ventas D.T 2025", "Gcs D.T 2026", "Gcs D.T 2025"])
+    for day in range(1, cutoff_day + 1):
+        for sid, name, city in (("001", "Ágora", "Santo Domingo"),
+                                ("002", "Bella Vista", "Santiago")):
+            ws.append([sid, name, city, "Metro", f"2026-06-{day:02d}, lunes",
+                       10000 + day, 9500 + day, 400 + day, 390 + day,
+                       3000, 2900, 120, 118])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_upload_sales_stores_and_reports_what_it_read(db, engagement):
+    c = _client(db)
+    r = c.post("/api/v1/brand-intel/engagements/demo/sales",
+               files={"file": ("tablero.xlsx", _sales_workbook(),
+                               "application/vnd.openxmlformats-officedocument"
+                               ".spreadsheetml.sheet")})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    lectura = body["lectura"]
+    assert lectura["filas_leidas"] == 6 and lectura["locales"] == 2
+    assert lectura["desde"] == "2026-06-01" and lectura["hasta"] == "2026-06-03"
+    # El informe de ingesta viaja SIEMPRE: una ingesta silenciosa parece completa, y así
+    # entraron cuatro columnas de Automac como NULL sin que nada fallara.
+    assert "columnas_sin_mapear" in lectura and "motivos_descarte" in lectura
+    assert body["guardado"]
+
+    # Idempotente: la misma entrega otra vez actualiza, no duplica.
+    r2 = c.post("/api/v1/brand-intel/engagements/demo/sales",
+                files={"file": ("tablero.xlsx", _sales_workbook(), "application/xlsx")})
+    assert r2.status_code == 201
+    from modules.brand_intel.models.models import BrandSalesDaily
+    assert db.query(BrandSalesDaily).filter(
+        BrandSalesDaily.engagement_id == engagement.id).count() == 6
+
+
+def test_upload_sales_rejects_the_wrong_sheet_with_its_reason(db, engagement):
+    """El fallo es del ARCHIVO: 400 nombrando la hoja que falta y las que hay. Un
+    agregado ya calculado no sirve, y el mensaje tiene que decirlo."""
+    r = _client(db).post(
+        "/api/v1/brand-intel/engagements/demo/sales",
+        files={"file": ("resumen.xlsx", _sales_workbook(sheet="Resumen"),
+                        "application/xlsx")})
+    assert r.status_code == 400
+    assert "Base de Datos" in r.json()["detail"]
+
+
+def test_upload_sales_rejects_a_non_workbook(db, engagement):
+    r = _client(db).post("/api/v1/brand-intel/engagements/demo/sales",
+                         files={"file": ("plan.pdf", b"%PDF-1.4", "application/pdf")})
+    assert r.status_code == 400
+    assert ".xlsx" in r.json()["detail"]
+
+
+def test_upload_sales_needs_analyst(db, engagement):
+    r = _client(db, role=UserRole.viewer).post(
+        "/api/v1/brand-intel/engagements/demo/sales",
+        files={"file": ("t.xlsx", _sales_workbook(), "application/xlsx")})
+    assert r.status_code == 403
+
+
+def test_sales_status_declares_its_own_window_not_the_wave(db, engagement):
+    """La venta NO se recorta por ola: la delimita el tablero del operador. El endpoint no
+    acepta `?wave=` para no insinuar lo contrario, y el estado sale igual sin serie."""
+    c = _client(db)
+    r = c.get("/api/v1/brand-intel/engagements/demo/sales")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["available"] is False and "jornadas de venta" in body["reason"]
+    # Un `?wave=` se ignora en vez de fingir un recorte que no ocurre.
+    assert c.get("/api/v1/brand-intel/engagements/demo/sales?wave=X").status_code == 200
+
+
+def test_upload_tracker_history_rejects_a_matrix_without_its_sheet(db, engagement):
+    r = _client(db).post(
+        "/api/v1/brand-intel/engagements/demo/tracker-history",
+        files={"file": ("matriz.xlsx", _sales_workbook(sheet="Otra"),
+                        "application/xlsx")})
+    assert r.status_code == 400
+    assert "KPIs" in r.json()["detail"]
+
+
+def test_upload_tracker_history_needs_analyst(db, engagement):
+    r = _client(db, role=UserRole.viewer).post(
+        "/api/v1/brand-intel/engagements/demo/tracker-history",
+        files={"file": ("m.xlsx", _sales_workbook(sheet="KPIs"), "application/xlsx")})
+    assert r.status_code == 403

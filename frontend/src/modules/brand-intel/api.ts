@@ -254,6 +254,28 @@ export interface VigilanceAnalysis {
   note?: string;
 }
 
+
+/** Lo que el tablero de ventas dejó entrar — y lo que descartó, que es igual de útil. */
+export interface SalesIngestReport {
+  filas_leidas: number;
+  filas_guardadas: number;
+  filas_descartadas: number;
+  motivos_descarte: Record<string, number>;
+  locales: number;
+  plazas: string[];
+  desde: string | null;
+  hasta: string | null;
+  /** Rótulos que PARECÍAN un dato y quedaron fuera: la única alarma real. */
+  columnas_sin_mapear: string[];
+  /** Rótulos que se ignoran a propósito, con el motivo (derivadas, proyecciones…). */
+  columnas_ignoradas: Record<string, string>;
+}
+
+export interface SeriesUploadResult {
+  lectura: SalesIngestReport | Record<string, unknown>;
+  guardado: Record<string, unknown>;
+}
+
 export interface IngestReport {
   olas: { creadas: number; actualizadas: number };
   marcas: { creadas: number; actualizadas: number };
@@ -806,6 +828,40 @@ export async function uploadWorkbook(slug: string, file: File): Promise<IngestRe
   return data;
 }
 
+
+/**
+ * El tablero de ventas del operador. Idempotente por (encargo, fecha, local): reenviar la
+ * misma entrega corrige las jornadas, no las duplica.
+ */
+export async function uploadSales(
+  slug: string, file: File,
+): Promise<SeriesUploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await client.post(`${base}/engagements/${slug}/sales`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 2 * 60 * 1000,
+  });
+  return data;
+}
+
+/**
+ * La matriz histórica del proveedor. Solo-si-falta: no sustituye una observación que ya
+ * está, porque esa vino con su base muestral y la matriz no las trae.
+ */
+export async function uploadTrackerHistory(
+  slug: string, file: File,
+): Promise<SeriesUploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await client.post(
+    `${base}/engagements/${slug}/tracker-history`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 2 * 60 * 1000,
+    });
+  return data;
+}
+
 /** Template and report are streamed as files: fetch as blobs so auth headers apply. */
 export async function downloadTemplate(slug: string): Promise<void> {
   const { data } = await client.get(`${base}/template.xlsx`, {
@@ -833,16 +889,21 @@ const REPORT_MIME: Record<ReportFormat, string> = {
 };
 
 export async function downloadReport(
-  slug: string, fmt: ReportFormat = "pdf",
+  slug: string, fmt: ReportFormat = "pdf", wave?: string,
 ): Promise<void> {
   const { data } = await client.get(`${base}/engagements/${slug}/report.${fmt}`, {
+    // Sin ola, el servidor mide la última con dato. El nombre del archivo lleva el corte
+    // cuando se elige uno: dos informes del mismo encargo con distinta ola son documentos
+    // distintos y no pueden compartir nombre en la carpeta de descargas.
+    params: wave ? { wave } : undefined,
     responseType: "blob",
     // El PDF y el Word se arman en el servidor con el chrome de marca; un informe con
     // muchas olas y marcas tarda unos segundos.
     timeout: 3 * 60 * 1000,
   });
+  const sufijo = wave ? `_${wave.replace(/[^\w-]/g, "")}` : "";
   triggerDownload(new Blob([data], { type: REPORT_MIME[fmt] }),
-                  `SDQ-MIP_informe_contexto_${slug}.${fmt}`);
+                  `SDQ-MIP_informe_contexto_${slug}${sufijo}.${fmt}`);
 }
 
 function triggerDownload(blob: Blob, filename: string): void {

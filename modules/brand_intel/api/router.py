@@ -1032,6 +1032,103 @@ def _refresh_plan_status(db: Session, plan: BrandPlanDocument) -> None:
     plan.status = "propuesto" if pending else "revisado"  # type: ignore[assignment]
 
 
+# ── S6 · las dos series que el operador y el proveedor entregan aparte ──
+#
+# Ambas entraban por script, y una capacidad que solo yo puedo ejecutar no es una
+# capacidad del producto: cada actualización del expediente quedaba atada a una persona.
+# Las dos van SÍNCRONAS y sin LLM —son lectores deterministas de Excel, no lecturas de
+# modelo—, así que no hace falta el patrón de worker thread de los planes.
+
+
+@router.post("/engagements/{slug}/sales", status_code=201,
+             summary="S6 · Cargar el tablero de ventas del operador")
+async def upload_sales(
+    slug: str,
+    file: UploadFile = File(..., description="Tablero .xlsx con la hoja de detalle"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Carga las jornadas de venta. Idempotente por (encargo, fecha, local).
+
+    El informe de ingesta va SIEMPRE en la respuesta, incluidas las filas descartadas con
+    su motivo y las columnas que no se pudieron mapear: una ingesta silenciosa parece
+    completa, y así se colaron cuatro columnas de Automac como NULL.
+    """
+    from modules.brand_intel.ingest import sales as sales_ingest
+
+    eng = _resolve(db, slug, user)
+    if not (file.filename or "").lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status_code=400, detail="Se espera un archivo .xlsx.")
+    content = await file.read()
+    try:
+        rows, report = sales_ingest.read_sales_workbook(content)
+    except Exception as exc:  # noqa: BLE001 — el fallo es del ARCHIVO: 400 con su motivo
+        db.rollback()
+        logger.exception("No se pudo leer el tablero de ventas de %s", slug)
+        raise HTTPException(status_code=400,
+                            detail=f"No se pudo leer el tablero: {exc}") from exc
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="El tablero no dejó ninguna jornada utilizable. "
+                   f"Detalle de la lectura: {report.as_dict()}")
+    summary = sales_ingest.store_sales(db, str(eng.id), rows,
+                                       source_file=file.filename)
+    db.commit()
+    return {"lectura": report.as_dict(), "guardado": summary}
+
+
+@router.get("/engagements/{slug}/sales", summary="S6 · Estado de la serie de ventas")
+def sales_status(slug: str, db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Qué serie de venta tiene el encargo hoy, con su ventana comparable declarada.
+
+    SIN parámetro de ola, a propósito: la venta la delimita el tablero del operador —su
+    propio período y su ventana comparable— y no la fecha de campo de una ola. Aceptar un
+    `?wave=` acá daría a entender que la serie se recorta al corte, y no lo hace.
+    """
+    eng = _resolve(db, slug, user)
+    return svc.sales_analysis(db, str(eng.id))
+
+
+@router.post("/engagements/{slug}/tracker-history", status_code=201,
+             summary="S6 · Cargar la matriz histórica del proveedor")
+async def upload_tracker_history(
+    slug: str,
+    file: UploadFile = File(..., description="Matriz .xlsx con la hoja de KPIs"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Carga la matriz ancha de olas históricas. **Solo-si-falta**, nunca sustituye.
+
+    Una observación que ya existe vino de la plantilla CON su base muestral, y esta matriz
+    no trae bases: sobrescribirla perdería la banda de confianza, que es lo único que
+    convierte un movimiento en veredicto. Las olas que crea quedan renumeradas por fecha,
+    porque un histórico insertado al final deja 2018 después de 2026.
+    """
+    from modules.brand_intel.ingest import tracker_history as hist
+
+    eng = _resolve(db, slug, user)
+    if not (file.filename or "").lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status_code=400, detail="Se espera un archivo .xlsx.")
+    content = await file.read()
+    try:
+        readings, report = hist.read_history(content)
+    except Exception as exc:  # noqa: BLE001 — fallo del archivo, con su motivo
+        db.rollback()
+        logger.exception("No se pudo leer la matriz histórica de %s", slug)
+        raise HTTPException(status_code=400,
+                            detail=f"No se pudo leer la matriz: {exc}") from exc
+    if not readings:
+        raise HTTPException(
+            status_code=400,
+            detail="La matriz no dejó ninguna lectura resuelta. Detalle: "
+                   f"{report.as_dict()}")
+    summary = hist.store_history(db, str(eng.id), readings, source=file.filename)
+    db.commit()
+    return {"lectura": report.as_dict(), "guardado": summary}
+
+
 @router.post("/engagements/{slug}/plans/{plan_id}/goals/{goal_id}/adopt",
              summary="S5 · Adoptar una meta del plan como decisión del ledger")
 def adopt_goal(slug: str, plan_id: str, goal_id: str, payload: AdoptGoalIn,

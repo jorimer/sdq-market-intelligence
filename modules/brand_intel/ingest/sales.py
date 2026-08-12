@@ -149,6 +149,7 @@ class SalesIngestReport:
     date_from: Optional[date] = None
     date_to: Optional[date] = None
     unmapped_columns: Optional[List[str]] = None
+    ignored_columns: Optional[Dict[str, str]] = None
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -161,7 +162,53 @@ class SalesIngestReport:
             "desde": self.date_from.isoformat() if self.date_from else None,
             "hasta": self.date_to.isoformat() if self.date_to else None,
             "columnas_sin_mapear": self.unmapped_columns or [],
+            "columnas_ignoradas": self.ignored_columns or {},
         }
+
+
+#: Columnas que el tablero trae y esta ingesta NO toma A PROPÓSITO, con el motivo. La
+#: distinción importa: «columna que ignoramos por diseño» y «columna que no reconocimos»
+#: son cosas distintas, y meterlas en la misma lista mata la señal — el tablero real trae
+#: 27 columnas derivadas, así que un aviso indiferenciado sepulta el único caso que
+#: interesa (fue así como cuatro columnas de Automac entraron vacías sin que nada avisara).
+_IGNORED_EXACT: Dict[str, str] = {
+    "pais": "metadato, no una medida",
+    "consultor de operaciones": "metadato, no una medida",
+    "mes": "se deriva de la fecha",
+    "ano": "se deriva de la fecha",
+    "a c 2025": "cheque promedio: se recomputa como ventas÷transacciones",
+    "a c 2026": "cheque promedio: se recomputa como ventas÷transacciones",
+}
+
+#: Fragmentos que delatan una columna YA CALCULADA por el operador. No entran porque la
+#: plataforma las recomputa desde los absolutos: un porcentaje ajeno no se puede auditar.
+_IGNORED_PATTERNS: Tuple[Tuple[str, str], ...] = (
+    ("proyeccion", "proyección del operador, no un dato observado"),
+    ("proy", "proyección del operador, no un dato observado"),
+    ("comparativ", "variación ya calculada: se recomputa desde los absolutos"),
+    ("diferencia", "diferencia ya calculada: se recomputa desde los absolutos"),
+    ("dif", "diferencia ya calculada: se recomputa desde los absolutos"),
+)
+
+
+def classify_unmapped(labels: List[str]) -> Tuple[List[str], Dict[str, str]]:
+    """Parte los rótulos no tomados en (NO RECONOCIDOS, ignorados con su motivo).
+
+    Solo la primera lista es una alarma: es la que dice «esta columna parecía un dato y se
+    quedó afuera».
+    """
+    desconocidas: List[str] = []
+    ignoradas: Dict[str, str] = {}
+    for raw in labels:
+        k = _norm(raw)
+        motivo = _IGNORED_EXACT.get(k)
+        if motivo is None:
+            motivo = next((m for frag, m in _IGNORED_PATTERNS if frag in k), None)
+        if motivo:
+            ignoradas[str(raw).strip()] = motivo
+        else:
+            desconocidas.append(str(raw).strip())
+    return desconocidas, ignoradas
 
 
 def _find_header(ws) -> Tuple[int, Dict[int, str], List[str]]:
@@ -235,6 +282,7 @@ def read_sales_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], SalesInge
                 continue
             rows.append(rec)
 
+        desconocidas, ignoradas = classify_unmapped(unmapped)
         fechas = [r["business_date"] for r in rows if r.get("business_date")]
         rep = SalesIngestReport(
             rows_read=read, rows_stored=len(rows), rows_skipped=read - len(rows),
@@ -243,11 +291,16 @@ def read_sales_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], SalesInge
             cities=sorted({r["city"] for r in rows if r.get("city")}),
             date_from=min(fechas) if fechas else None,
             date_to=max(fechas) if fechas else None,
-            unmapped_columns=unmapped or None,
+            unmapped_columns=desconocidas or None,
+            ignored_columns=ignoradas or None,
         )
-        if unmapped:
-            logger.info("Tablero con %d columna(s) sin mapear (se ignoran): %s",
-                        len(unmapped), unmapped[:8])
+        if desconocidas:
+            # WARNING, no info: una columna que parecía un dato quedó afuera y nadie la
+            # pidió — es exactamente la forma del defecto de «Ventas D.T».
+            logger.warning("Tablero con %d columna(s) NO RECONOCIDA(s): %s",
+                           len(desconocidas), desconocidas[:8])
+        if ignoradas:
+            logger.info("Tablero con %d columna(s) ignoradas por diseño", len(ignoradas))
         return rows, rep
     finally:
         wb.close()
