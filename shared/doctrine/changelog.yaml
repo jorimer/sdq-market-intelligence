@@ -1,0 +1,96 @@
+# REGISTRO DE CAMBIOS DE METODOLOGÍA — control document, no notas de release.
+#
+# Para qué sirve. Cuando la vara cambia, las entidades se mueven sin haber hecho nada. El
+# histórico ya marca esos movimientos con `RatingAction.metodologica`, pero esa marca dice
+# QUE fue metodológico y no CUÁL cambio ni POR QUÉ. Este archivo le da el significado, y es
+# lo que permite responderle a un cliente por qué su cifra cambió entre dos informes.
+#
+# Reglas de escritura (las verifica `shared/doctrine/tests/test_changelog.py`):
+#
+#  1. `que_cambio` describe la REGLA, no el resultado. El resultado se mide.
+#  2. Toda cifra de impacto va bajo `impacto.medido_al_publicar` y se lee como lo que
+#     afirmamos EN ESA FECHA — nunca como el estado actual. Una cifra de panel escrita en
+#     prosa se vuelve mentira en la siguiente recalibración.
+#  3. `pr` es obligatorio: el cambio tiene que ser auditable contra el código.
+#  4. Una entrada NO se edita después de publicada. Si estaba mal, se agrega otra que la
+#     corrija y se enlaza con `corrige`.
+#
+# `sectores` usa las claves de producto (banking, insurance, pension), no nombres de módulo.
+
+version: "1.0"
+
+cambios:
+  - id: 2026-08-05-perfil-sdq
+    fecha_efectiva: "2026-08-05"
+    sectores: [banking, insurance, pension]
+    titulo: "Perfil SDQ reemplaza la notación de letras"
+    que_cambio: >-
+      La calificación deja de expresarse como un símbolo único (SDQ-AAA…SDQ-D) y pasa a dos
+      ejes independientes de 0-100: Ejecución (desempeño) y Resiliencia (exposición). Un
+      símbolo único obligaba a promediar dos cosas que se mueven en sentidos opuestos.
+    por_que: >-
+      Una entidad puede mejorar su desempeño y deteriorar su exposición en el mismo período;
+      la notación anterior no podía expresarlo y el promedio escondía la señal.
+    impacto:
+      medido_al_publicar: >-
+        35.601 acciones de rating re-etiquetadas retroactivamente sobre 22 períodos; la
+        notación se retiró de la API y de cinco pantallas.
+    pr: 687
+
+  - id: 2026-08-10-base-devengada-incurrida
+    fecha_efectiva: "2026-08-10"
+    sectores: [insurance]
+    titulo: "El combined ratio pasa a base devengada/incurrida"
+    que_cambio: >-
+      Prima devengada en el denominador e siniestro incurrido en el numerador, en vez de
+      prima suscrita y siniestro pagado. El catálogo SIS constituye la reserva en la sección
+      5 y la libera en la 4, así que ambas magnitudes siempre fueron computables. Se
+      incorporan además `5102 otras prestaciones` y se netan los `4309 salvamentos`, y el
+      promedio del ciclo pasa a ponderarse por exposición.
+    por_que: >-
+      Revisión actuarial externa: numerador y denominador estaban en bases distintas, y la
+      base pagada es gameable — demorar el reconocimiento mejora el ratio sin que mejore nada.
+    impacto:
+      medido_al_publicar: >-
+        Mediana del panel de 88,4% a 95,9%; cinco compañías cambian de banda; el panel con
+        Ejecución pasa de 25 a 32 aseguradoras.
+    pr: 672
+
+  - id: 2026-08-11-combined-no-interpretable
+    fecha_efectiva: "2026-08-11"
+    sectores: [insurance]
+    titulo: "El combined ratio no se publica donde no mide desempeño"
+    que_cambio: >-
+      Ejecución se declara ausente, con el motivo en texto, cuando la compañía cede más del
+      70% de su prima devengada (el ratio bruto describe un riesgo que no está en su balance)
+      o cuando su producto de inversiones supera el 60% de la prima (el siniestro lo paga la
+      reserva y su rendimiento, no la prima del ejercicio). La misma regla se aplica a las
+      dimensiones de siniestralidad y resultado técnico del ISF.
+    por_que: >-
+      El combined ratio contradecía el estado de resultados y la trayectoria de patrimonio de
+      tres compañías: afirmaba pérdidas de suscripción grandes en entidades con utilidad
+      positiva y patrimonio creciendo. Abriendo el libro auditado resultaron ser una fronting
+      y una compañía de anualidades, negocios donde el ancla de breakeven no aplica.
+    impacto:
+      medido_al_publicar: >-
+        Tres aseguradoras dejan de publicar Ejecución y cuatro pierden la banda del ISF
+        conservando su score, que sube al retirarse las dimensiones distorsionadas.
+    pr: 688
+
+  - id: 2026-08-12-solo-se-ordena-lo-comparable
+    fecha_efectiva: "2026-08-12"
+    sectores: [insurance, pension]
+    titulo: "El ranking solo ordena entidades de cobertura completa"
+    que_cambio: >-
+      La posición relativa se computa entre las entidades con todas las dimensiones medidas.
+      Las de cobertura parcial salen del orden y se publican aparte, con su cobertura y las
+      dimensiones que les faltan. El promedio del panel también pasa a computarse solo sobre
+      las comparables.
+    por_que: >-
+      Un score armado sobre tres de cinco dimensiones no mide lo mismo que uno de cinco, y
+      ordenarlos juntos producía una posición que el lector no podía interpretar.
+    impacto:
+      medido_al_publicar: >-
+        En seguros el universo comparable queda en 27 de 35; las posiciones publicadas se
+        desplazan en consecuencia.
+    pr: 689

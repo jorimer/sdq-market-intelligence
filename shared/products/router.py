@@ -78,6 +78,21 @@ def _require_sector(sector: str) -> str:
     return sector
 
 
+@router.get("/methodology-changelog",
+            summary="Cambios de metodología (qué cambió, por qué y desde cuándo)")
+async def get_methodology_changelog(sector: Optional[str] = None) -> Dict[str, Any]:
+    """Registro versionado de cambios de metodología, del más reciente al más antiguo.
+
+    Es lo que permite responder «¿por qué esta cifra no es la del informe anterior?». Va
+    ABIERTO a propósito —sin gate de tier—: una metodología que no se puede auditar sin pagar
+    no es auditable. Las cifras de impacto son las medidas al publicar cada cambio y viajan
+    etiquetadas como tales.
+    """
+    from shared.doctrine.changelog import resumen_publicable
+
+    return resumen_publicable(sector)
+
+
 @router.get("/readiness", summary="Matriz de readiness sector × nivel + activación")
 async def get_readiness(db: Session = Depends(get_db),
                         current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
