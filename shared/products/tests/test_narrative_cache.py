@@ -127,3 +127,82 @@ def test_data_change_still_invalidates():
     a = asm._narrative_fingerprint({"isf": 66}, "deep_dive", "es")
     b = asm._narrative_fingerprint({"isf": 67}, "deep_dive", "es")
     assert a != b
+
+
+# ── La receta tiene que cubrir también el CONTEXTO que ve el modelo ────────────
+#
+# El 2026-08-11 se corrigió `concentracion_top4_pct` en `insurance_intel/ai_context.py` —la
+# clave que hacía publicar «cuatro compañías concentran el 87,1%» cuando eran cuatro RAMOS—,
+# se desplegó, y el Deep Dive de MAPFRE siguió sirviendo el texto viejo: el fingerprint no
+# miraba el constructor de contexto. Esta caché vive en Postgres y NO tiene TTL, así que el
+# informe habría quedado mal indefinidamente.
+
+_MOD_SEGUROS = "modules.insurance_intel.products"     # type(product).__module__ real
+_MOD_PENSION = "modules.pension_intel.products"
+
+
+def test_el_fingerprint_cambia_si_cambia_el_contexto_del_sector(monkeypatch):
+    """Tocar `modules/<mod>/ai_context.py` tiene que producir MISS en ESE sector."""
+    import shared.products.assembler as asm
+
+    n = {"i": 0}
+
+    def _fake(mod):
+        n["i"] += 1
+        return "huella-nueva" if n["i"] > 1 else "huella-vieja"
+
+    monkeypatch.setattr(asm, "_contexto_ia_version", _fake)
+    payload = {"isf": 71.1}
+    antes = asm._narrative_fingerprint(payload, "deep_dive", "es", modulo_producto=_MOD_SEGUROS)
+    despues = asm._narrative_fingerprint(payload, "deep_dive", "es", modulo_producto=_MOD_SEGUROS)
+    assert antes != despues
+
+
+def test_resuelve_el_MODULO_no_el_sector_key():
+    """El bug que casi se despacha: `sector_key` es "insurance" y la carpeta es
+    `insurance_intel`. Buscando por sector_key el archivo no existe → "" → la huella no
+    invalida NADA, y todo queda en verde. Se deriva de `type(product).__module__`."""
+    import shared.products.assembler as asm
+
+    assert asm._contexto_ia_version(_MOD_SEGUROS) != ""
+    assert asm._contexto_ia_version("insurance") == ""      # sector_key: NO resuelve
+    assert asm._contexto_ia_version("modules.insurance.products") == ""
+
+
+def test_la_huella_se_deriva_del_archivo_real():
+    """Derivada del contenido, no una constante que alguien deba acordarse de subir."""
+    import shared.products.assembler as asm
+
+    h = asm._contexto_ia_version(_MOD_SEGUROS)
+    assert h and len(h) == 12
+    assert h != asm._contexto_ia_version(_MOD_PENSION)
+
+
+def test_un_sector_sin_constructor_no_rompe_la_entrega():
+    """Sin `ai_context.py` no hay nada que versionar; nunca una excepción."""
+    import shared.products.assembler as asm
+
+    assert asm._contexto_ia_version("modules.banking_score.products") == ""
+    assert asm._contexto_ia_version(None) == ""
+    assert asm._contexto_ia_version("cualquier.cosa") == ""
+
+
+def test_la_huella_es_POR_SECTOR_no_global():
+    """Invalidar el panel entero por tocar un módulo obliga a regenerar todo sin motivo."""
+    import shared.products.assembler as asm
+
+    payload = {"isf": 71.1}
+    a = asm._narrative_fingerprint(payload, "deep_dive", "es", modulo_producto=_MOD_SEGUROS)
+    b = asm._narrative_fingerprint(payload, "deep_dive", "es", modulo_producto=_MOD_PENSION)
+    assert a != b
+
+
+def test_el_ensamblador_pasa_el_MODULO_y_no_el_sector_key():
+    """Contrato: si alguien vuelve a pasar `product.sector_key`, la huella queda muerta."""
+    import inspect
+
+    import shared.products.assembler as asm
+
+    src = inspect.getsource(asm._narratives_cached)
+    assert "modulo_producto=type(product).__module__" in src, (
+        "el fingerprint debe recibir el módulo del producto, no su sector_key")
