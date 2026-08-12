@@ -84,8 +84,11 @@ def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
     lines.append(f"**Fuentes de dato:** {sources or '—'}.")
     cadence = (sig.cadence if sig else None) or "—"
     if sig and sig.freshness_days is not None:
+        d = int(sig.freshness_days)
+        # «1 días» en un documento que se vende. El plural se concuerda, no se asume.
         lines.append(f"**Cadencia:** {cadence}. **Frescura:** el dato más reciente tiene "
-                     f"{int(sig.freshness_days)} días.")
+                     + ("menos de un día." if d == 0 else
+                        "un día." if d == 1 else f"{d} días."))
     else:
         lines.append(f"**Cadencia:** {cadence}.")
     if sig and sig.coverage is not None:

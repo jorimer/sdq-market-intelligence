@@ -65,16 +65,34 @@ def _left_accent(paragraph, hex_color: str) -> None:
 
 def _add_runs(paragraph, text: str, *, color: Optional[RGBColor] = None, size: Optional[int] = None,
               bold_all: bool = False) -> None:
-    """Añade *text* a *paragraph* respetando **negritas** markdown."""
+    """Añade *text* a *paragraph* respetando **negritas** y *cursivas* markdown.
+
+    La cursiva faltaba y salía literal, igual que en el PDF: el lector veía los asteriscos.
+    Se parte primero por `**` —los impares son negrita— y dentro de cada trozo restante por
+    `*`, de modo que `**x**` no lo consuma la regla de un asterisco.
+    """
     for i, chunk in enumerate(re.split(r"\*\*([^*]+)\*\*", _clean(text))):
         if not chunk:
             continue
-        run = paragraph.add_run(chunk)
-        run.bold = bold_all or (i % 2 == 1)  # los impares vienen de **...**
-        if color is not None:
-            run.font.color.rgb = color
-        if size is not None:
-            run.font.size = Pt(size)
+        if i % 2 == 1:                       # vino de **...**
+            run = paragraph.add_run(chunk)
+            run.bold = True
+            _estilo(run, color, size)
+            continue
+        for j, trozo in enumerate(re.split(r"\*([^*\n]+)\*", chunk)):
+            if not trozo:
+                continue
+            run = paragraph.add_run(trozo)
+            run.bold = bold_all
+            run.italic = j % 2 == 1          # los impares vienen de *...*
+            _estilo(run, color, size)
+
+
+def _estilo(run, color: Optional[RGBColor], size: Optional[int]) -> None:
+    if color is not None:
+        run.font.color.rgb = color
+    if size is not None:
+        run.font.size = Pt(size)
 
 
 def _page_number_field(paragraph) -> None:

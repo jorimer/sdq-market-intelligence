@@ -81,9 +81,17 @@ def _styles():
 
 
 def _inline(text: str) -> str:
+    """Markdown en línea → marcado de ReportLab. Negrita **y CURSIVA**.
+
+    La cursiva faltaba y salía literal: el cliente leía `*combined ratio*` y `*loss ratio*`
+    con los asteriscos a la vista, y el descargo de una sección entera envuelto en ellos.
+    La negrita se resuelve PRIMERO para que `**x**` no lo consuma la regla de un asterisco.
+    """
     text = _GLYPH_RE.sub("", text)
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text).strip()
+    text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
+    # `[^*\n]` evita cruzar líneas o tragarse un asterisco suelto que no abre énfasis.
+    return re.sub(r"\*([^*\n]+)\*", r"<i>\1</i>", text).strip()
 
 
 def _pull_quote(text: str, styles) -> Table:
