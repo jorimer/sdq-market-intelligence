@@ -52,6 +52,19 @@ pytest modules/ shared/ -v
 pytest --cov=modules --cov=shared --cov-report=html
 ```
 
+### Los TRES gates de CI (los tres, no solo pytest)
+
+```bash
+pytest modules/ shared/ -q
+ruff check modules/ shared/ app/                      # ruff==0.16.0
+mypy shared/ modules/ app/ 2>&1 | mypy-baseline filter # mypy==1.17.1 + baseline
+```
+
+**`mypy-baseline` sale con código NO CERO también cuando RESOLVISTE deuda** ("Great work!").
+Mirá el *exit code*, no el texto: si resolviste, corré `mypy shared/ modules/ app/ |
+mypy-baseline sync` y comiteá el baseline. Y corré mypy sobre `shared/ modules/ app/` —
+sobre un subdirectorio, el resto del baseline aparece como "resuelto" y el veredicto miente.
+
 ## Conventions
 
 - **Python identifiers**: English (variable names, functions, classes)
@@ -60,6 +73,51 @@ pytest --cov=modules --cov=shared --cov-report=html
 - **Tests**: Minimum 80% coverage on business logic before merge
 - **API responses**: Error messages in Spanish
 - **Database**: SQLAlchemy models, Alembic migrations, UUID primary keys
+
+## Doctrina de datos y narrativa
+
+Reglas que **no son estilo**: cada una salió de un defecto que llegó a producción y a un
+documento que se vende. Violarlas vuelve a producir el mismo error.
+
+**Declarar la brecha, nunca rellenarla.** Un dato ausente es `None`, jamás `0.0` ni un
+promedio. Y si una métrica existe pero no mide lo que el eje afirma medir para esa entidad,
+tampoco se publica: se declara el motivo en texto (ej. `ejecucion_no_publicable`). "No hay
+dato" y "el dato existe y no mide esto" son cosas distintas, y la segunda es la interesante.
+
+**Las relaciones se COMPUTAN, no se derivan.** Dirección (por encima/por debajo), superlativos,
+deltas, rankings y posiciones se calculan en código y el modelo los COPIA. El modelo acierta
+las cifras y falla las relaciones.
+
+**El SUJETO viaja con el número.** Toda clave de cuota/participación/concentración debe nombrar
+su población: `concentracion_top4_ramos_pct`, no `concentracion_top4_pct`. El modelo reatribuye
+al sujeto más cercano — así se publicó «cuatro compañías concentran el 87,1%» cuando eran
+cuatro ramos. Si no tenés la cifra que el modelo va a necesitar, pasásela igual con su nombre
+real: dejar el hueco es lo que lo llena mal. Lo vigila
+`shared/narrative/tests/test_regla_sujeto_en_contexto.py`.
+
+**Solo se ordena lo comparable.** Un score armado sobre 3 de 5 dimensiones no rankea contra uno
+de 5. Usá `shared.narrative.derived.universo_comparable`; los parciales no se ocultan (eso los
+hace desaparecer sin aviso), van aparte y marcados. Aplica al contexto de IA **y** a la tabla
+renderizada: son superficies distintas y arreglar una sola deja el documento contradiciéndose.
+
+**Dónde vive el contexto del modelo.** Por defecto `modules/<mod>/ai_context.py`. Si tu módulo
+lo arma en otro lado, declaralo en `AI_CONTEXT_FILES` (ver `banking_score/products.py`) o
+quedará fuera de la regla del sujeto y de la huella de la caché de narrativas.
+
+**Qué invalida la caché de narrativas** (`ProductReportCache`, en Postgres, **sin TTL**): el
+dato, la receta (prompts/doctrina/modelo/guard) y el contexto declarado. Si tu arreglo no toca
+ninguno, los informes ya generados seguirán sirviendo el texto viejo indefinidamente.
+**Al verificar en prod, el tiempo de respuesta es el dato: menos de ~2 s es un HIT y no
+verificaste nada.** Una generación real toma 15-90 s.
+
+**La prosa que el modelo debe respetar vive en CONSTANTES**, no incrustada en un dict: un
+literal se parte por ancho de línea y la frase deja de existir en el fuente aunque el valor sea
+correcto, así que un test que la busque ahí falla sin motivo (o pasa sin protegerte).
+
+**Cuando un defecto se repite entre motores, la cura es un TEST ESTRUCTURAL** que lee el código
+con `ast` y exige la regla o una excepción declarada. La lección escrita ya falló siete veces
+en este repo. Al escribir el glob del test, preguntate **qué queda afuera**. Y antes de escribir
+un guard, buscá si otro módulo ya lo resolvió — suele estar, y suele estar mejor.
 
 ## Tech Stack
 
