@@ -33,6 +33,7 @@ from shared.products import (
 )
 from shared.products.render import render_product_pdf
 from modules.insurance_intel.ai_context import (
+    insurance_early_warning_context,
     insurance_entity_context,
     insurance_peer_context,
     market_pulse_context,
@@ -273,7 +274,8 @@ def _pulse_table(pulse: Dict[str, Any]) -> Optional[tuple]:
         span = f" ({gy[0]}–{gy[1]}, compuesto)" if gy else ""
         rows.append([f"Crecimiento{span}", f"{g:+.1f}%"])
     if pulse.get("active_insurers") is not None:
-        rows.append(["Aseguradoras activas", f"{pulse['active_insurers']}"])
+        # Rótulo fiel a la serie: es el máximo POR RAMO, no el tamaño del mercado.
+        rows.append(["Máx. aseguradoras en un mismo ramo", f"{pulse['active_insurers']}"])
     if pulse.get("top4_concentration_pct") is not None:
         rows.append(["Concentración top-4 ramos", f"{pulse['top4_concentration_pct']:.1f}%"])
     hc = pulse.get("health_coverage") or {}
@@ -529,6 +531,18 @@ class InsuranceProduct:
                 res = await narrative_engine.generate(
                     context=insurance_peer_context(entity, rating, peers),
                     template="insurance_peer_positioning",
+                    mode=section_mode(tier, section, sections),
+                    axis="insurance_intel", audience="inversionista")
+                return section, res.text
+            if section == "early_warning":
+                # Sección propia: TRAYECTORIA + disparadores. Antes caía al mismo template y al
+                # mismo contexto que `insurance_assessment`, así que el Deep Dive publicaba dos
+                # veces el mismo análisis —encabezado incluido— y la pendiente del combined que
+                # Perfil SDQ ya computa no llegaba a la única sección que la necesitaba.
+                res = await narrative_engine.generate(
+                    context=insurance_early_warning_context(
+                        self._require_db(), rating.get("slug") or "", rating, peers),
+                    template="insurance_entity",
                     mode=section_mode(tier, section, sections),
                     axis="insurance_intel", audience="inversionista")
                 return section, res.text
