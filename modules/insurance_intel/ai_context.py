@@ -150,6 +150,19 @@ def insurance_peer_context(name: str, rating: Dict[str, Any],
     }
 
 
+def _n_autorizadas() -> Optional[int]:
+    """Aseguradoras del roster autorizado de la SIS, o None si no está disponible.
+
+    Nunca revienta el contexto: sin roster se declara la ausencia (None) y el modelo se queda
+    sin la cifra, que es preferible a que tome otra que no significa lo mismo.
+    """
+    try:
+        from modules.insurance_intel.scoring.isf import _official_index
+        return len(_official_index()) or None
+    except Exception:  # noqa: BLE001 — el contexto jamás debe caerse por una cifra de apoyo
+        return None
+
+
 def market_pulse_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
     """Context for the national insurance-market Pulse (template ``insurance_pulse``)."""
     mix: List[Dict[str, Any]] = pulse.get("mix") or []
@@ -168,7 +181,17 @@ def market_pulse_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
         "primas_totales_rd": pulse.get("total_premiums_rd"),
         "crecimiento_pct": pulse.get("growth_pct"),
         "crecimiento_ventana": pulse.get("growth_years"),
-        "aseguradoras_activas": pulse.get("active_insurers"),
+        # ⚠️ NO es «cuántas aseguradoras hay en el mercado». La serie de origen
+        # (`sis.aseguradoras.activas_max`) es el MÁXIMO, entre ramos, de cuántas compañías
+        # operan en un ramo: 26 significa que el ramo más concurrido tiene 26 participantes.
+        # Bajo el nombre `aseguradoras_activas` el modelo publicó «un mercado de 26 operadores
+        # activos» —falso, el panel tiene 35 con ISF— y de ahí dedujo «la cola restante, 22
+        # operadores». El nombre ahora dice lo que la serie mide.
+        "max_aseguradoras_en_un_mismo_ramo": pulse.get("active_insurers"),
+        # El tamaño REAL del mercado, con su propio nombre. Sin una cifra correcta disponible,
+        # el modelo toma la que haya: por eso se sirve el roster autorizado de la SIS junto a
+        # la anterior, en vez de dejar el hueco que ya se llenó mal una vez.
+        "aseguradoras_autorizadas_sis": _n_autorizadas(),
         "n_ramos": pulse.get("n_ramos"),
         # ⚠️ EL SUJETO VIAJA CON EL NÚMERO. Esta cifra es la suma de los cuatro RAMOS de mayor
         # peso, no la cuota de las cuatro mayores COMPAÑÍAS. Se llamaba `concentracion_top4_pct`
@@ -191,3 +214,86 @@ def market_pulse_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
             "independientes. " + (pulse.get("data_caveat") or "")
         ).strip(),
     }
+
+
+# Prosa que la narrativa debe respetar, como CONSTANTES y no incrustada en el dict: un
+# literal partido por ancho de línea deja de existir como frase en el código fuente, así que
+# un test que la busque ahí falla aunque el valor sea correcto (pasó al escribir estos tests).
+REGLA_TENDENCIA = (
+    "«Sin señal» NO significa estable: significa que con 3-5 ejercicios y esta volatilidad no "
+    "se distingue movimiento de ruido. Son afirmaciones distintas y no se pueden intercambiar."
+)
+
+# El ISF de las otras secciones mide el ÚLTIMO ejercicio; la trayectoria es el promedio del
+# ciclo ponderado por exposición. Son dos cifras distintas de la misma compañía y, sin decirlo,
+# el documento parece contradecirse: MAPFRE-BHD da 72 % en 2024 y 75,2 % en el ciclo 2020-2024.
+VENTANA_DEL_CICLO = (
+    "promedio del CICLO ponderado por exposición, no el último ejercicio: si citás esta cifra, "
+    "decí el rango de años. El combined ratio y el margen técnico de las otras secciones son "
+    "del último cierre."
+)
+
+
+def insurance_early_warning_context(db, slug: str, rating: Dict[str, Any],
+                                    peers: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Contexto de ALERTA TEMPRANA: la TRAYECTORIA, no la foto.
+
+    **Por qué existe.** La sección caía al mismo template y al mismo contexto que la evaluación
+    de solidez, así que el Deep Dive publicaba dos veces el mismo análisis con distinto título
+    —y el modelo repetía hasta el encabezado de la §1—. No era el modelo repitiéndose: se le
+    pedía dos veces lo mismo.
+
+    Y faltaba lo esencial: Perfil SDQ computa la PENDIENTE del combined ratio con su error
+    estándar y la etiqueta por SIGNIFICANCIA (|t| ≥ 2), que es exactamente material de señal
+    temprana, y nada de eso llegaba a la sección que debía usarlo. Una alerta temprana escrita
+    desde un corte estático solo puede repetir el nivel.
+
+    Todo lo que no se pueda computar se declara ausente; no se rellena.
+    """
+    from modules.insurance_intel.scoring.perfil_sdq import (
+        banda_tendencia, calcular_ejes, metricas_del_ciclo, panel_por_aseguradora,
+    )
+
+    trayectoria: Dict[str, Any] = {"disponible": False}
+    try:
+        info = (panel_por_aseguradora(db) or {}).get(slug)
+        ciclo = metricas_del_ciclo(info["ejercicios"]) if info else None
+        if ciclo:
+            ejes = calcular_ejes(ciclo, (info or {}).get("indice_solvencia"),
+                                 (info or {}).get("indice_liquidez"))
+            trayectoria = {
+                "disponible": True,
+                "ejercicios": ejes["ejercicios"],
+                "combined_promedio_ciclo": ejes["combined_promedio"],
+                "pendiente_pp_por_año": ejes["pendiente_combined"],
+                "pendiente_error_estandar": ejes["pendiente_error_estandar"],
+                # La etiqueta ya resuelve la significancia: el modelo la COPIA, no la deduce.
+                "tendencia": banda_tendencia(ejes["pendiente_combined"],
+                                             ejes["pendiente_error_estandar"]),
+                "ciclo_comparable": ejes["ciclo_comparable"],
+                "cesion_promedio": ejes["cesion_promedio"],
+                "ejecucion": ejes["ejecucion"],
+                "ejecucion_no_publicable": ejes["ejecucion_no_publicable"],
+                "regla_tendencia": REGLA_TENDENCIA,
+                "ventana": VENTANA_DEL_CICLO,
+            }
+    except Exception:  # noqa: BLE001 — sin trayectoria la sección sigue siendo publicable
+        trayectoria = {"disponible": False}
+
+    dims = [d for d in (rating.get("dimensions") or []) if d.get("score") is not None]
+    debil = min(dims, key=lambda d: d["score"]) if dims else None
+    ctx = insurance_entity_context(rating, peers)
+    ctx.update({
+        "trayectoria": trayectoria,
+        "dimension_mas_debil": ({"dimension": debil["label"], "score": debil.get("score"),
+                                 "peso": debil.get("weight")} if debil else None),
+        "enfoque": (
+            "ALERTA TEMPRANA: escribí sobre lo que PUEDE CAMBIAR, no sobre el nivel actual. "
+            "La evaluación de solidez ya cubrió el nivel en otra sección — NO la repitas ni "
+            "reproduzcas su encabezado. Acá van tres cosas y solo tres: (1) la TRAYECTORIA del "
+            "combined ratio con su etiqueta de significancia, copiada tal cual; (2) el umbral "
+            "concreto que, de cruzarse, cambiaría la banda, nombrando la dimensión y el valor; "
+            "(3) qué observar en el próximo corte. Si la trayectoria no está disponible, decilo "
+            "y limitate a los disparadores. No repitas cifras de posición relativa."),
+    })
+    return ctx
