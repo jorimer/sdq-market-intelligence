@@ -344,3 +344,39 @@ def test_history_observations_carry_no_base_so_they_cannot_settle_a_verdict(db, 
            .one())
     assert obs.base_n is None, "sin base declarada: no puntuable, y así debe quedar"
     assert obs.value == 51.2
+
+
+# ── qué columna es una alarma y qué columna no ─────────────────────────
+
+
+def test_unmapped_columns_separate_the_alarm_from_the_noise():
+    """El tablero real trae 27 columnas derivadas. Si el aviso las mezcla con las que de
+    verdad quedaron afuera, el único caso que importa —una columna de datos perdida, como
+    pasó con «Ventas D.T»— queda sepultado y el aviso deja de servir."""
+    from modules.brand_intel.ingest.sales import classify_unmapped
+
+    desconocidas, ignoradas = classify_unmapped([
+        "Ventas D.T 2026",              # ← esta SÍ era un dato: alarma
+        "Pais", "Mes", "Año",
+        "Sales Proyecciones", "GCs Proyecciones",
+        "Ventas Comparativa %", "Gcs Diferencia Proy.%", "$ Dif. Actual +/-",
+        "A/C 2025", "A/C  Comparativo %  ",
+    ])
+    assert desconocidas == ["Ventas D.T 2026"]
+    assert "Pais" in ignoradas and "metadato" in ignoradas["Pais"]
+    # El cheque promedio se ignora porque se RECOMPUTA: tomar el del operador sería
+    # promediar cheques en vez de dividir ventas entre transacciones.
+    assert "recomputa" in ignoradas["A/C 2025"]
+    assert "proyección" in ignoradas["Sales Proyecciones"]
+    assert all(c in ignoradas for c in
+               ("Ventas Comparativa %", "Gcs Diferencia Proy.%", "$ Dif. Actual +/-"))
+
+
+def test_a_column_that_looks_like_data_is_never_silently_ignored():
+    """La regla al revés: un rótulo nuevo que no case con ningún patrón de derivada tiene
+    que salir como desconocido, no colarse a la lista de ignoradas."""
+    from modules.brand_intel.ingest.sales import classify_unmapped
+
+    desconocidas, ignoradas = classify_unmapped(["Ventas Kiosco 2026", "Gcs App 2026"])
+    assert desconocidas == ["Ventas Kiosco 2026", "Gcs App 2026"]
+    assert ignoradas == {}
