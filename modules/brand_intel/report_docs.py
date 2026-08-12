@@ -39,7 +39,9 @@ SECTIONS: List[Tuple[str, str]] = [
     ("sales", "La venta del período"),
     ("priorities", "Qué mover y qué no"),
     ("plan", "El plan bajo el instrumento"),
-    ("proposals", "Planes que SDQ propone"),
+    ("proposals", "Planes derivados de la evidencia"),
+    ("proposals_practice",
+     "Planes con práctica sectorial anclada en la evidencia"),
     ("ticket", "El ticket en pesos constantes"),
     ("attribution", "¿La marca o el mercado?"),
     ("methodology", "Metodología"),
@@ -379,6 +381,12 @@ def narratives_and_tables(
     # y un título sin propuesta debajo sería peor que la ausencia de la sección)
     if ai.get("proposals"):
         n["proposals"] = ai["proposals"]
+    # La segunda incorpora criterio externo al dato del cliente, y por eso va SEPARADA y
+    # después: el lector debe poder distinguir, sin leerlo entre líneas, qué recomendación
+    # sostiene su propia información y cuál añade práctica de la categoría. Nunca aparece
+    # sola — ``ai_narratives`` la condiciona a que la sección anterior exista.
+    if ai.get("proposals_practice"):
+        n["proposals_practice"] = ai["proposals_practice"]
 
     # ── El plan bajo el instrumento ── (solo con planes o decisiones; sin ellos, el
     # estado vive en Límites). PROSA SOLA, sin tabla: el plan es DEL CLIENTE — él ya lo

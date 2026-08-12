@@ -201,6 +201,7 @@ _CEREBRO_TEMPLATES = {
     "sales": "brand_sales_reading",
     "comparison": "brand_wave_comparison",
     "proposals": "brand_sdq_proposals",
+    "proposals_practice": "brand_sdq_proposals_practice",
 }
 
 
@@ -401,9 +402,31 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
             if r.get("gap") != "evaluable"
         ],
     }
+    # Segunda sección de propuestas: la misma evidencia, más un permiso ACOTADO para
+    # incorporar práctica sectorial. Lo que la habilita a no ser opinión es doble: la
+    # práctica solo entra si una cifra del contexto acredita que la situación existe, y
+    # ``practicas_en_el_expediente`` acota qué prácticas concretas puede citar como
+    # acreditadas — las que los propios documentos del cliente ya afirman, con su lámina.
+    # ``propuestas_ya_formuladas`` lo rellena ``ai_narratives`` con el texto de la
+    # sección anterior, porque esta COMPLEMENTA y no puede saber qué se dijo allí.
+    plan_sec = s.get("plan") or {}
+    practice_ctx = {
+        **prop_ctx,
+        "practicas_en_el_expediente": [
+            {"afirmacion": g.get("claim"), "lamina": g.get("page_number"),
+             "medida_declarada": g.get("measure_source")}
+            for g in (plan_sec.get("goals") or [])
+        ] or None,
+        "documentos_del_expediente": [
+            {"titulo": d.get("title"), "origen": d.get("source_org")}
+            for d in (plan_sec.get("documents") or [])
+        ] or None,
+        "propuestas_ya_formuladas": None,
+    }
     return {"executive": ejecutivo, "explanations": lectura,
             "priorities": prioridades, "plan": plan_ctx, "sales": sales_ctx,
-            "comparison": comp_ctx, "proposals": prop_ctx}
+            "comparison": comp_ctx, "proposals": prop_ctx,
+            "proposals_practice": practice_ctx}
 
 
 async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -436,6 +459,11 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
     if not ((payload["sections"].get("sales") or {}).get("available")
             or (payload["sections"].get("comparison") or {}).get("available")):
         ctxs.pop("proposals", None)
+        ctxs.pop("proposals_practice", None)
+    # La sección de práctica sectorial se genera DESPUÉS y solo si la de evidencia pura
+    # salió: es la que la ancla. Sin ella, el documento publicaría criterio externo sin
+    # su contrapartida medida — exactamente lo que la separación en dos secciones evita.
+    practice_ctx = ctxs.pop("proposals_practice", None)
     if not ctxs:
         return {}
 
@@ -449,6 +477,11 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
     for section, text in await asyncio.gather(*(_gen(s, c) for s, c in ctxs.items())):
         if text and not is_static_fallback_text(text):
             out[section] = text
+    if practice_ctx is not None and out.get("proposals"):
+        practice_ctx["propuestas_ya_formuladas"] = out["proposals"]
+        _, text = await _gen("proposals_practice", practice_ctx)
+        if text and not is_static_fallback_text(text):
+            out["proposals_practice"] = text
     return out
 
 
