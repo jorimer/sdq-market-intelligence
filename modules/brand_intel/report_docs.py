@@ -39,9 +39,12 @@ SECTIONS: List[Tuple[str, str]] = [
     ("sales", "La venta del período"),
     ("priorities", "Qué mover y qué no"),
     ("plan", "El plan bajo el instrumento"),
-    ("proposals", "Planes derivados de la evidencia"),
+    # El «(SDQ)» del título no es decorativo: estas dos son las únicas secciones donde
+    # el documento PRESCRIBE, y quién firma la prescripción tiene que leerse en el
+    # encabezado, no inferirse del cuerpo.
+    ("proposals", "Planes derivados de la evidencia (SDQ)"),
     ("proposals_practice",
-     "Planes con práctica sectorial anclada en la evidencia"),
+     "Planes con práctica sectorial anclada en la evidencia (SDQ)"),
     ("ticket", "El ticket en pesos constantes"),
     ("attribution", "¿La marca o el mercado?"),
     ("methodology", "Metodología"),
