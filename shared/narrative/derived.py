@@ -234,3 +234,69 @@ def posiciones_por_dimension(
             "lider_score": round(mejor, 2),
         }
     return out
+
+
+# Cobertura por debajo de la cual un score global NO es comparable con uno completo. El
+# corte es 1.0 a propósito: cualquier dimensión ausente cambia lo que el índice mide, y
+# «casi completo» ya es otra medición. Los motores que emiten BANDA usan este mismo criterio
+# (banda solo con cobertura ~total), así que un score sin banda tampoco debe entrar al rank.
+COBERTURA_COMPARABLE = 0.99
+
+
+def universo_comparable(peers: List[Dict[str, Any]],
+                        clave_score: str = "overall_score") -> Dict[str, Any]:
+    """Separa el panel en COMPARABLES (cobertura completa) y parciales.
+
+    **Por qué existe.** Un score armado sobre 3 de 5 dimensiones no mide lo mismo que uno
+    armado sobre 5, y ordenarlos en una sola lista produce la afirmación «posición 7 de 35»
+    sin que el lector pueda saber de qué 35 se habla. Es el mismo problema que en banca se
+    resolvió agrupando el ranking por tipo de entidad: comparar cosas no comparables.
+
+    Los parciales NO se descartan —omitirlos los haría desaparecer sin aviso, que es peor—:
+    se devuelven aparte y marcados, para que la superficie los muestre diciendo qué les falta.
+
+    Un ítem sin ``coverage`` se trata como COMPLETO: los motores que no exponen cobertura no
+    deben perder su ranking por una clave que nunca escribieron.
+
+    >>> u = universo_comparable([{"overall_score": 70.0, "coverage": 1.0},
+    ...                          {"overall_score": 74.6, "coverage": 0.65}])
+    >>> len(u["comparables"]), len(u["parciales"])
+    (1, 1)
+    >>> u["parciales"][0]["cobertura"]
+    0.65
+    """
+    conscore = [p for p in peers if p.get(clave_score) is not None]
+    comparables: List[Dict[str, Any]] = []
+    parciales: List[Dict[str, Any]] = []
+    for p in conscore:
+        cob = p.get("coverage")
+        (parciales if (cob is not None and cob < COBERTURA_COMPARABLE)
+         else comparables).append(p)
+    comparables.sort(key=lambda p: p[clave_score], reverse=True)
+    parciales.sort(key=lambda p: p[clave_score], reverse=True)
+    return {
+        "comparables": comparables,
+        "parciales": [{**p, "cobertura": p.get("coverage")} for p in parciales],
+        "n_comparables": len(comparables),
+        "n_parciales": len(parciales),
+    }
+
+
+def rank_comparable(slug: Optional[str], universo: Dict[str, Any],
+                    clave_slug: str = "slug") -> Dict[str, Any]:
+    """Posición dentro del universo COMPARABLE, más el contexto para narrarla sin mentir.
+
+    Devuelve ``rank=None`` y ``comparable=False`` cuando el propio ítem tiene cobertura
+    parcial: en ese caso no hay posición que afirmar, y decirlo es la información.
+    """
+    comp = universo["comparables"]
+    rank = next((i + 1 for i, p in enumerate(comp) if p.get(clave_slug) == slug), None)
+    return {
+        "rank": rank,
+        "n_comparables": len(comp),
+        "n_parciales": universo["n_parciales"],
+        "comparable": rank is not None,
+        "criterio": (f"posición entre las {len(comp)} entidades con las cinco dimensiones "
+                     f"medidas; {universo['n_parciales']} quedan fuera del orden por cobertura "
+                     f"parcial y se listan aparte con lo que les falta"),
+    }

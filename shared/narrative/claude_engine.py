@@ -493,7 +493,7 @@ THIN_TEMPLATES = {
         "SIGNIFICAN, no solo cuánto valen. Cierra con la implicación: qué hace frágil o robusto a "
         "este crecimiento y qué lo cambiaría. Usa EXCLUSIVAMENTE las cifras del contexto "
         "(total_va_growth_pct, structure_top_weight, growth_drivers, growth_drags, "
-        "concentration_hhi). HONESTIDAD: lente de IMPORTANCIA y CONTRIBUCIÓN — NO valor exportado "
+        "concentration_hhi_sectors). HONESTIDAD: lente de IMPORTANCIA y CONTRIBUCIÓN — NO valor exportado "
         "(joyería/oro) ni atractividad (IAI); no las mezcles. Dato anual agregado del BCRD; sin "
         "score sintético. Si una cifra no está, dilo; no inventes."
     ),

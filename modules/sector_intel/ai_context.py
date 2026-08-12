@@ -30,6 +30,7 @@ def economic_structure_ai_context(structure: Dict[str, Any]) -> Dict[str, Any]:
     def _slim(r: Dict[str, Any]) -> Dict[str, Any]:
         return {"sector": r.get("sector"), "weight_pct": r.get("weight"),
                 "growth_pct": r.get("growth"), "contribution_pp": r.get("contribution"),
+                # sujeto-ok: fila ya rotulada con `sector`; «of_growth» nombra el total
                 "share_of_growth": r.get("contribution_share")}
 
     sectors = structure.get("sectors") or []
@@ -37,7 +38,9 @@ def economic_structure_ai_context(structure: Dict[str, Any]) -> Dict[str, Any]:
         "period": structure.get("period"),
         "total_va_growth_pct": structure.get("total_va_growth"),
         "coverage": structure.get("coverage"),
-        "concentration_hhi": structure.get("concentration_hhi"),
+        # HHI sobre el peso de los SECTORES en el Valor Agregado. La clave interna conserva
+        # su nombre; la que ve el modelo nombra la población.
+        "concentration_hhi_sectors": structure.get("concentration_hhi"),
         "n_sectors": structure.get("n_sectors"),
         "direction": ("peso = importancia estructural (share del Valor Agregado); "
                       "contribución = peso × crecimiento = aporte real al crecimiento"),

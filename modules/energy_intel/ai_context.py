@@ -44,7 +44,10 @@ def energy_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         "capacity_mw": cap.get("capacity_mw"),
         "capacity_growth_cagr_3y": cap.get("cagr_3y"),
         "service_backlog_months": svc.get("backlog_months"),
-        "renewable_share_pct": tra.get("renewable_share"),
+        # Participación en la MATRIZ DE GENERACIÓN (ONE), no en capacidad instalada. El
+        # nombre lo dice porque justo arriba viaja `capacity_mw`: sin el sujeto, la lectura
+        # natural es «% de la capacidad», que es otra cifra y otra conclusión.
+        "renewable_share_of_generation_pct": tra.get("renewable_share"),
         "renewable_delta_5y_pp": tra.get("delta_5y"),
         "renewable_year": tra.get("year"),
         # canónico (cerebro): el score global; el detector determinista no aplica
