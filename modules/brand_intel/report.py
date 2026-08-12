@@ -51,10 +51,11 @@ def build_report(db: Session, engagement: BrandEngagement,
     backtest = svc.rule_backtest(db, eid, as_of=wave)
     track = svc.forecast_track_record(db, eid)
     signal = svc.signal_filter(db, eid, as_of=wave)
-    decisions = svc.evaluate_decisions(db, eid)
+    decisions = svc.evaluate_decisions(db, eid, as_of=wave)
     scenarios = svc.scenarios_analysis(db, eid, as_of=wave)
     vigilance = svc.vigilance_analysis(db, eid, as_of=wave)
     plan = svc.plan_readiness(db, str(eid))
+    h2h = svc.head_to_head(db, str(eid))
     sales = svc.sales_analysis(db, str(eid))
     comparison = svc.wave_comparison(db, str(eid), as_of=wave)
 
@@ -89,6 +90,7 @@ def build_report(db: Session, engagement: BrandEngagement,
             "plan": plan,
             "sales": sales,
             "comparison": comparison,
+            "head_to_head": h2h,
         },
     }
     payload["frame"] = comparison.get("frame") or svc.wave_frame(db, str(eid), wave)
@@ -198,6 +200,7 @@ _CEREBRO_TEMPLATES = {
     "plan": "brand_plan_readiness",
     "sales": "brand_sales_reading",
     "comparison": "brand_wave_comparison",
+    "proposals": "brand_sdq_proposals",
 }
 
 
@@ -363,12 +366,44 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     comp_ctx = {
         **base,
         "marco": comp.get("frame"),
-        "indicadores": comp.get("rows") or [],
+        "indicadores_comparados": comp.get("rows") or [],
         "nota_motor": comp.get("note"),
+    }
+    # Propuestas de SDQ: el modelo propone SOBRE LA EVIDENCIA YA COMPUTADA de las demás
+    # secciones. No recibe nada que no esté medido, precisamente para que no pueda
+    # proponer sobre una intuición; y lo que propone no compromete a nadie hasta que una
+    # persona lo adopta al ledger con su indicador y su umbral.
+    h2h = s.get("head_to_head") or {}
+    prop_ctx = {
+        **base,
+        "evidencia_de_venta": {
+            "composicion": (sales or {}).get("growth_composition"),
+            "cheque_real": (sales or {}).get("real_check"),
+            "por_plaza": (sales or {}).get("by_city"),
+            "por_canal": (sales or {}).get("by_channel"),
+            "plazas_en_contraccion": (sales or {}).get("contracting_cities"),
+        } if (sales or {}).get("available") else None,
+        "evidencia_de_percepcion": {
+            "indicadores_comparados": (comp or {}).get("rows") or [],
+            "marco": (comp or {}).get("frame"),
+        } if (comp or {}).get("available") else None,
+        "umbrales_de_decision": ({"rows": sf.get("rows"), "nota": sf.get("note")}
+                                 if sf.get("available") else None),
+        "compromisos_ya_registrados": [
+            {"title": r.get("title"), "origen": r.get("origin"),
+             "estado": r.get("status")}
+            for r in ((s.get("decisions") or {}).get("decisions") or [])
+        ],
+        "desempeno_por_origen": h2h.get("by_origin"),
+        "brechas_del_instrumento": [
+            {"titulo": r.get("title"), "brecha": r.get("gap"), "falta": r.get("needs")}
+            for r in ((s.get("plan") or {}).get("rows") or [])
+            if r.get("gap") != "evaluable"
+        ],
     }
     return {"executive": ejecutivo, "explanations": lectura,
             "priorities": prioridades, "plan": plan_ctx, "sales": sales_ctx,
-            "comparison": comp_ctx}
+            "comparison": comp_ctx, "proposals": prop_ctx}
 
 
 async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -396,6 +431,11 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
         ctxs.pop("sales", None)
     if not (payload["sections"].get("comparison") or {}).get("available"):
         ctxs.pop("comparison", None)
+    # Las propuestas exigen evidencia medida: sin venta ni comparación no hay sobre qué
+    # proponer, y proponer sin evidencia es justo lo que la disciplina prohíbe.
+    if not ((payload["sections"].get("sales") or {}).get("available")
+            or (payload["sections"].get("comparison") or {}).get("available")):
+        ctxs.pop("proposals", None)
     if not ctxs:
         return {}
 

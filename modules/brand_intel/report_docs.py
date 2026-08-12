@@ -39,6 +39,7 @@ SECTIONS: List[Tuple[str, str]] = [
     ("sales", "La venta del período"),
     ("priorities", "Qué mover y qué no"),
     ("plan", "El plan bajo el instrumento"),
+    ("proposals", "Planes que SDQ propone"),
     ("ticket", "El ticket en pesos constantes"),
     ("attribution", "¿La marca o el mercado?"),
     ("methodology", "Metodología"),
@@ -373,6 +374,12 @@ def narratives_and_tables(
                              _fmt(c.get("transactions_change_pct")),
                              _fmt(c.get("avg_check_change_pct"))] for c in canales]))
 
+    # ── Planes que SDQ propone ── (solo con narrativa: una propuesta la redacta el
+    # análisis sobre evidencia medida; no hay composición determinista que la sustituya,
+    # y un título sin propuesta debajo sería peor que la ausencia de la sección)
+    if ai.get("proposals"):
+        n["proposals"] = ai["proposals"]
+
     # ── El plan bajo el instrumento ── (solo con planes o decisiones; sin ellos, el
     # estado vive en Límites). PROSA SOLA, sin tabla: el plan es DEL CLIENTE — él ya lo
     # conoce, y devolvérselo fila por fila no aporta. Lo que SDQ agrega es la lectura
@@ -381,6 +388,18 @@ def narratives_and_tables(
     plan = s.get("plan") or {}
     if plan.get("available"):
         n["plan"] = ai.get("plan") or _fallback_plan(plan)
+
+    # ── Desempeño cara a cara ── (tabla; la narrativa de prioridades ya lo lee)
+    h2h = s.get("head_to_head") or {}
+    if h2h.get("comparable"):
+        tables.append(("Desempeño de cada fuente de recomendación",
+                       [["Fuente", "Registrados", "Resueltos", "Logrados",
+                         "Tasa de acierto"]] +
+                       [[{"cliente": "Planes del cliente",
+                          "sdq": "Propuestas de SDQ"}.get(o, o),
+                         str(v["registrados"]), str(v["resueltos"]),
+                         str(v["logrados"]), _fmt(v["tasa_de_acierto_pct"])]
+                        for o, v in (h2h.get("by_origin") or {}).items()]))
 
     # ── Ticket ── (solo con serie; sin serie, el motivo ya está en Límites)
     tic = s.get("ticket") or {}

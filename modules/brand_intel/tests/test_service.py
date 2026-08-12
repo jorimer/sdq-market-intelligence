@@ -260,7 +260,7 @@ def test_report_builds_every_section(db, engagement):
     assert set(p["sections"]) == {
         "explanations", "category", "funnel", "ticket", "attribution",
         "forecast_backtest", "forecast_track_record", "signal_filter", "decisions",
-        "scenarios", "vigilance", "plan", "sales", "comparison",
+        "scenarios", "vigilance", "plan", "sales", "comparison", "head_to_head",
     }
     assert p["engagement"]["focal_brand"] == "Focal"
 

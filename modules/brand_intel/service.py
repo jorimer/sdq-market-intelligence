@@ -1010,9 +1010,22 @@ def signal_filter(
     }
 
 
-def evaluate_decisions(db: Session, engagement_id: str) -> Dict[str, Any]:
-    """Issue verdicts on every open decision whose evaluation wave has landed."""
+def evaluate_decisions(db: Session, engagement_id: str,
+                       as_of: Optional[str] = None) -> Dict[str, Any]:
+    """Issue verdicts on every open decision whose evaluation wave has landed.
+
+    ``as_of`` es la ola contra la que se mide cuando el compromiso **no declaró** ola de
+    evaluación. Sin esto, un plan registrado sin ventana objetivo no se evalúa nunca:
+    los 107 compromisos que el cliente adoptó de sus planes fijaron línea base pero
+    dejaron la ventana abierta, y quedarían en «abierta» para siempre mientras el dato
+    para medirlos ya existe. La ola de evaluación implícita es la del informe, y solo
+    aplica si es POSTERIOR a la línea base — medir contra la propia línea base o contra
+    una ola anterior daría un veredicto sin sentido.
+    """
     ws = {w.id: w for w in waves(db, engagement_id)}
+    serie = data_waves(db, engagement_id, as_of=as_of)
+    implicita = serie[-1] if serie else None
+    orden = {str(w.id): int(w.sort_order or 0) for w in ws.values()}
     rows = (
         db.query(BrandDecision)
         .filter(BrandDecision.engagement_id == engagement_id)
@@ -1034,16 +1047,27 @@ def evaluate_decisions(db: Session, engagement_id: str) -> Dict[str, Any]:
                 "label": f"Fuente externa: {d.external_measure}",
                 "segment": d.segment, "owner": d.owner,
                 "baseline_wave": ws[d.baseline_wave_id].label if d.baseline_wave_id in ws else None,
-                "target_wave": ws[d.target_wave_id].label if d.target_wave_id in ws else None,
+                "target_wave": (ws[d.target_wave_id].label
+                                if d.target_wave_id in ws else None),
+                "target_wave_implicit": False,
                 "baseline_value": None, "target_value": None,
                 "status": v.status, "observed_delta": None,
                 "detectable_threshold": None, "note": v.note,
                 "external_measure": d.external_measure,
+                "origin": d.origin or "cliente",
             })
             continue
 
         base_obs = _decision_obs(db, engagement_id, d, d.baseline_wave_id)
-        targ_obs = _decision_obs(db, engagement_id, d, d.target_wave_id) if d.target_wave_id else None
+        # Ventana objetivo: la declarada, o la ola del informe si el compromiso no
+        # declaró ninguna y esa ola es posterior a su línea base.
+        target_id = d.target_wave_id
+        implicita_usada = False
+        if not target_id and implicita is not None:
+            if orden.get(str(implicita.id), 0) > orden.get(str(d.baseline_wave_id), 0):
+                target_id = implicita.id
+                implicita_usada = True
+        targ_obs = _decision_obs(db, engagement_id, d, target_id) if target_id else None
         m = get_metric(d.metric_code)
 
         v = ldg.evaluate(
@@ -1067,12 +1091,14 @@ def evaluate_decisions(db: Session, engagement_id: str) -> Dict[str, Any]:
             "label": label_for(d.metric_code), "segment": d.segment,
             "owner": d.owner,
             "baseline_wave": ws[d.baseline_wave_id].label if d.baseline_wave_id in ws else None,
-            "target_wave": ws[d.target_wave_id].label if d.target_wave_id in ws else None,
+            "target_wave": ws[target_id].label if target_id in ws else None,
+            "target_wave_implicit": implicita_usada,
             "baseline_value": d.baseline_value,
             "target_value": targ_obs.value if targ_obs else None,
             "status": v.status, "observed_delta": v.observed_delta,
             "detectable_threshold": v.detectable_threshold, "note": v.note,
             "external_measure": None,
+            "origin": d.origin or "cliente",
         })
 
     return {"decisions": results, "summary": ldg.summarize(verdicts)}
@@ -1414,6 +1440,62 @@ def wave_comparison(db: Session, engagement_id: str,
             "sube contra la otra— de deterioro sostenido, que cae contra ambas."
         ),
     }
+
+
+def head_to_head(db: Session, engagement_id: str) -> Dict[str, Any]:
+    """Desempeño de cada fuente de recomendación, con la misma vara.
+
+    Es la promesa comercial hecha explícita: los planes de las agencias del cliente y las
+    propuestas de SDQ se registran en el mismo ledger, se evalúan con el mismo motor de
+    significancia y su resultado se reporta lado a lado. Sin esto, «evaluamos las nuestras
+    igual que las suyas» es una afirmación que nadie puede comprobar.
+
+    Solo cuenta lo COMPARABLE: un compromiso inevaluable —sub-detectable, sin corte
+    cargado, de fuente externa— no entra en el desempeño de nadie, porque su resultado no
+    depende de la calidad de la recomendación sino de la disponibilidad del instrumento.
+    Mezclarlos premiaría a quien propuso metas cómodas de medir.
+    """
+    ev = evaluate_decisions(db, engagement_id)
+    filas = ev.get("decisions") or []
+
+    RESUELTOS = {"achieved", "worsened", "not_detectable"}
+    out: Dict[str, Any] = {"by_origin": {}, "total": len(filas)}
+    for origen in ("cliente", "sdq"):
+        propios = [r for r in filas if (r.get("origin") or "cliente") == origen]
+        resueltos = [r for r in propios if r.get("status") in RESUELTOS]
+        logrados = [r for r in resueltos if r.get("status") == "achieved"]
+        out["by_origin"][origen] = {
+            "registrados": len(propios),
+            "abiertos": sum(1 for r in propios if r.get("status") == "open"),
+            "inevaluables": sum(1 for r in propios if r.get("status") == "unevaluable"),
+            "resueltos": len(resueltos),
+            "logrados": len(logrados),
+            "empeoraron": sum(1 for r in resueltos if r.get("status") == "worsened"),
+            "sin_movimiento_detectable": sum(
+                1 for r in resueltos if r.get("status") == "not_detectable"),
+            # La tasa se publica SOLO sobre compromisos resueltos, y solo si hay
+            # suficientes: un 100% sobre un caso no es un desempeño, es una anécdota.
+            "tasa_de_acierto_pct": (
+                round(len(logrados) / len(resueltos) * 100.0, 1)
+                if len(resueltos) >= 3 else None),
+            "tasa_reservada_por": (
+                None if len(resueltos) >= 3 else
+                f"solo {len(resueltos)} compromiso(s) resuelto(s): una tasa sobre esa "
+                "base no describe un desempeño"),
+        }
+    cmp_ = out["by_origin"]
+    comparable = all(cmp_[o]["tasa_de_acierto_pct"] is not None for o in ("cliente", "sdq"))
+    out["comparable"] = comparable
+    out["note"] = (
+        "Desempeño de cada fuente de recomendación sobre los compromisos que el "
+        "instrumento pudo resolver. Los inevaluables quedan fuera: su resultado depende "
+        "de la disponibilidad del dato y no de la calidad de la recomendación."
+        if comparable else
+        "Aún no hay compromisos resueltos suficientes en ambas fuentes para publicar un "
+        "desempeño comparado. El registro queda abierto y la comparación se emite cuando "
+        "cada fuente acumule al menos tres compromisos con veredicto."
+    )
+    return out
 
 
 def sales_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:

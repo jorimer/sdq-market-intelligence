@@ -262,6 +262,12 @@ class BrandDecision(UUIDMixin, Base):
     engagement_id = Column(String, nullable=False)
     title = Column(String(300), nullable=False)
     rationale = Column(Text, nullable=True)
+    # Quién propuso el compromiso. Sin este campo no existe la evaluación CARA A CARA
+    # que se le prometió al cliente: los planes de sus agencias y las propuestas de SDQ
+    # se evalúan con la misma vara, y para reportar el desempeño de cada fuente hay que
+    # poder distinguirlas. Por defecto `cliente`: todo lo registrado hasta ahora vino
+    # de sus planes.
+    origin = Column(String(20), nullable=False, default="cliente")   # cliente | sdq
     # The measure: tracker metric XOR external source (validated at the API boundary).
     metric_code = Column(String(60), nullable=True)
     external_measure = Column(Text, nullable=True)

@@ -100,6 +100,9 @@ class DecisionIn(BaseModel):
     target_wave_code: Optional[str] = None
     success_threshold: Optional[float] = None
     owner: Optional[str] = None
+    # Quién propone. Habilita la evaluación cara a cara: los planes del cliente y las
+    # propuestas de SDQ se miden con la misma vara y su desempeño se reporta aparte.
+    origin: str = "cliente"
 
 
 class FeasibilityIn(BaseModel):
@@ -837,8 +840,12 @@ def _register_decision(db: Session, eng: BrandEngagement,
     # Postgres —a diferencia del SQLite de dev— lo rechaza con un 500.
     from modules.brand_intel.ingest.plans import _clip
 
+    if payload.origin not in ("cliente", "sdq"):
+        raise HTTPException(status_code=422,
+                            detail="El origen del compromiso debe ser 'cliente' o 'sdq'.")
     row = BrandDecision(
         engagement_id=eng.id, title=payload.title, rationale=payload.rationale,
+        origin=payload.origin,
         metric_code=payload.metric_code, external_measure=payload.external_measure,
         segment=_clip(payload.segment, 60) or "total",
         brand_slug=payload.brand_slug, baseline_wave_id=base.id,

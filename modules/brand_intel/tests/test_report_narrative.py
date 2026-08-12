@@ -79,7 +79,8 @@ def test_generate_routes_through_the_cerebro_not_legacy(monkeypatch):
 def test_sections_list_is_the_new_compact_one():
     keys = [k for k, _ in report_docs.SECTIONS]
     assert keys == ["executive", "explanations", "comparison", "sales", "priorities",
-                    "plan", "ticket", "attribution", "methodology", "sources", "limits"]
+                    "plan", "proposals", "ticket", "attribution", "methodology",
+                    "sources", "limits"]
     # Las secciones que eran títulos con "aún no hay X" ya no existen como sección.
     for gone in ("forecast", "forecast_backtest", "forecast_track_record",
                  "scenarios", "signal_filter", "vigilance", "vigilance_agenda",
@@ -237,7 +238,7 @@ def test_cerebro_contexts_only_repackage_what_was_computed():
     assert grupos["baja"]["lectura"] == "r1"
     assert lectura["sin_capa_n"] == 1
     assert set(ctxs) == {"executive", "explanations", "priorities", "plan",
-                         "sales", "comparison"}
+                         "sales", "comparison", "proposals"}
 
 
 def test_ai_narratives_skip_when_there_is_nothing_to_narrate():
