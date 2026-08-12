@@ -56,6 +56,13 @@ def cambios(sector: Optional[str] = None,
     return sorted(out, key=lambda c: str(c.get("fecha_efectiva")), reverse=True)
 
 
+def _prs(v: Any) -> List[int]:
+    """``pr`` admite un entero o una lista; se publica siempre como lista."""
+    if isinstance(v, list):
+        return [int(x) for x in v]
+    return [int(v)]
+
+
 def _fecha(v: Any) -> Optional[date]:
     if isinstance(v, date):
         return v
@@ -102,7 +109,10 @@ def resumen_publicable(sector: Optional[str] = None) -> Dict[str, Any]:
             "que_cambio": c["que_cambio"],
             "por_que": c["por_que"],
             "impacto_medido_al_publicar": imp,
-            "pr": c["pr"],
+            # Siempre lista: un cambio puede haber entrado repartido en varios PRs (pasó con
+            # 2026-08-12, que llegó mitad por #701 y mitad por #702). Un consumidor no debería
+            # tener que distinguir entre un entero y una lista para citar la fuente.
+            "pr": _prs(c["pr"]),
             "corrige": c.get("corrige"),
         })
     return {

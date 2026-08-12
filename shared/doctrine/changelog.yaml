@@ -11,7 +11,9 @@
 #  2. Toda cifra de impacto va bajo `impacto.medido_al_publicar` y se lee como lo que
 #     afirmamos EN ESA FECHA — nunca como el estado actual. Una cifra de panel escrita en
 #     prosa se vuelve mentira en la siguiente recalibración.
-#  3. `pr` es obligatorio: el cambio tiene que ser auditable contra el código.
+#  3. `pr` es obligatorio: el cambio tiene que ser auditable contra el código. Admite un
+#     entero o una lista — un cambio puede entrar repartido en varios PRs, y el registro
+#     tiene que poder decirlo en vez de elegir uno y perder el rastro del otro.
 #  4. Una entrada NO se edita después de publicada. Si estaba mal, se agrega otra que la
 #     corrija y se enlaza con `corrige`.
 #
@@ -94,3 +96,26 @@ cambios:
         En seguros el universo comparable queda en 27 de 35; las posiciones publicadas se
         desplazan en consecuencia.
     pr: 689
+
+  - id: 2026-08-12-suprimir-no-premia
+    fecha_efectiva: "2026-08-12"
+    sectores: [insurance]
+    titulo: "Suprimir una dimensión deja de mejorar el score"
+    que_cambio: >-
+      Cuando la métrica no es interpretable para una compañía, el ISF tampoco publica su score
+      global: antes retenía la banda pero renormalizaba el score sobre las dimensiones que
+      quedaban. Se publican las dimensiones medibles una por una, con el motivo. Un dato
+      ausente por falta de dato sigue renormalizando: la regla distingue las dos cosas. Se
+      publica además el peso del último ejercicio en el promedio del ciclo, y los dos umbrales
+      se declaran acotados por los datos y no determinados por ellos.
+    por_que: >-
+      Renormalizar equivale a suponer que las dimensiones suprimidas valen el promedio de las
+      demás. Para un dato ausente esa suposición es neutra; para una métrica que no aplica no
+      tiene con qué sostenerse, y producía un incentivo perverso — a una fronting le iba mejor
+      precisamente por no poder medirla. Observación de la revisión actuarial externa.
+    impacto:
+      medido_al_publicar: >-
+        Cuatro de 33 aseguradoras dejan de tener score ISF; las 29 restantes lo conservan. El
+        peso del último ejercicio en el promedio del ciclo va de 27% en la mediana a 58% en el
+        libro de mayor crecimiento.
+    pr: [701, 702]

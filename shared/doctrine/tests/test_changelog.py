@@ -30,9 +30,14 @@ class TestCadaEntrada:
         faltan = [k for k in CAMPOS_REQUERIDOS if not c.get(k)]
         assert not faltan, f"{c.get('id')}: faltan {faltan}"
 
-    def test_el_pr_es_un_numero(self, c):
-        """Sin PR el cambio no se puede contrastar contra el código."""
-        assert isinstance(c["pr"], int) and c["pr"] > 0
+    def test_el_pr_es_uno_o_varios_numeros(self, c):
+        """Sin PR el cambio no se puede contrastar contra el código. Admite lista: un cambio
+        puede entrar repartido —2026-08-12 llegó mitad por #701 y mitad por #702— y elegir uno
+        solo perdería el rastro del otro."""
+        v = c["pr"]
+        nums = v if isinstance(v, list) else [v]
+        assert nums, f"{c['id']}: `pr` vacío"
+        assert all(isinstance(n, int) and n > 0 for n in nums), v
 
     def test_la_fecha_es_iso(self, c):
         f = c["fecha_efectiva"]
@@ -104,6 +109,14 @@ class TestConsulta:
 
 
 class TestPayloadPublicable:
+    def test_el_pr_se_publica_siempre_como_lista(self):
+        """El consumidor cita la fuente sin tener que distinguir entero de lista."""
+        for f in resumen_publicable()["cambios"]:
+            assert isinstance(f["pr"], list) and f["pr"]
+        entrada = next(f for f in resumen_publicable("insurance")["cambios"]
+                       if f["id"] == "2026-08-12-suprimir-no-premia")
+        assert entrada["pr"] == [701, 702]
+
     def test_cada_impacto_viaja_fechado(self):
         r = resumen_publicable("insurance")
         assert r["cambios"]
