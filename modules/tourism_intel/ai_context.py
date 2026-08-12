@@ -35,6 +35,7 @@ def tourism_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
             "contribution": d.get("contribution"),
             "cagr_pct": m.get("cagr"),       # demanda total/extranjera
             "recovery_pct": m.get("ratio"),  # recuperación
+            # sujeto-ok: fila de dimensión, ya rotulada con `dimension`
             "hhi": m.get("hhi"),             # diversificación
             "provenance": d.get("provenance"),
         })

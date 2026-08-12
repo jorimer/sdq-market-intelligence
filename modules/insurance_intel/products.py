@@ -246,8 +246,20 @@ def _pulse_table(pulse: Dict[str, Any]) -> Optional[tuple]:
         rows.append(["Concentración top-4 ramos", f"{pulse['top4_concentration_pct']:.1f}%"])
     hc = pulse.get("health_coverage") or {}
     if hc.get("afiliados_total") is not None:
-        rows.append(["Cobertura de salud SFS (afiliados)", f"{hc['afiliados_total']/1e6:,.2f} MM"])
-    return ("Pulso del mercado asegurador (SIS · SISALRIL)", rows) if len(rows) > 1 else None
+        # El período de la afiliación va PEGADO a la cifra: es del SFS y suele ir por delante
+        # del corte del informe. Sin él, el lector la atribuye al corte de la entidad.
+        per = f" · {hc['period']}" if hc.get("period") else ""
+        rows.append([f"Cobertura de salud SFS (afiliados){per}",
+                     f"{hc['afiliados_total']/1e6:,.2f} MM"])
+    if len(rows) <= 1:
+        return None
+    # El título declara el período de ESTA capa, que no es el corte del informe.
+    año = pulse.get("latest_year")
+    publicado = pulse.get("period")
+    sello = f" · {año}" if año else ""
+    if publicado and año and not str(publicado).startswith(str(año)):
+        sello = f" · año {año} (publicado {publicado})"
+    return (f"Pulso del mercado asegurador{sello} (SIS · SISALRIL)", rows)
 
 
 class InsuranceProduct:

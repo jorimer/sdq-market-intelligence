@@ -72,8 +72,14 @@ def _methodology_md(sig, val, as_of: Optional[str] = None) -> str:
     """
     lines = []
     if as_of:
-        lines.append(f"**Corte del informe:** {as_of}. Todas las cifras, posiciones y capas "
-                     "de contexto de este documento corresponden a esa fecha.")
+        # La frase anterior afirmaba que TODAS las cifras y capas de contexto correspondían al
+        # corte. No es cierto y se publicó así: un Deep Dive de seguros con corte 2024 traía la
+        # capa de mercado en 2025 y afiliación a marzo-2026. El corte manda sobre la entidad
+        # evaluada; las capas agregadas se publican con SU período, que es información, no ruido.
+        lines.append(f"**Corte del informe:** {as_of}. Las cifras y posiciones de la entidad "
+                     "evaluada corresponden a esa fecha. Las capas de contexto agregado —mercado, "
+                     "mezcla, cobertura sectorial— llevan el período de su propia fuente, "
+                     "indicado donde se presentan.")
     sources = ", ".join(s for s in (sig.sources or ()) if s) if sig else ""
     lines.append(f"**Fuentes de dato:** {sources or '—'}.")
     cadence = (sig.cadence if sig else None) or "—"

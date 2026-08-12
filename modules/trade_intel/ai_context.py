@@ -26,6 +26,7 @@ def trade_ai_context(score: Dict[str, Any]) -> Dict[str, Any]:
         "total_imports": score.get("total_imports"),
         "n_chapters_export": score.get("n_products_export"),
         "top_export_chapters": [
+            # sujeto-ok: la fila trae `chapter`; la cuota es de ese capítulo
             {"chapter": p.get("product"), "share": p.get("share")} for p in top[:5]
         ],
         "direction": "mayor resiliencia = más diversificado y menos dependiente",

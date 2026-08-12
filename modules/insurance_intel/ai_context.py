@@ -80,15 +80,19 @@ _ANTI_SUPERLATIVO = (
 
 def insurance_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Context for a named insurer's ISF assessment (template ``insurance_entity``)."""
-    ranked = [p for p in peers if p.get("overall_score") is not None]
-    rank = next((i + 1 for i, p in enumerate(ranked) if p["slug"] == rating["slug"]), None)
+    from shared.narrative.derived import rank_comparable, universo_comparable
+
+    universo = universo_comparable(peers)
+    pos = rank_comparable(rating.get("slug"), universo)
     return {
         "aseguradora": rating.get("name") or rating.get("slug"),
         "isf_score": rating.get("overall_score"),
         "banda": rating.get("band"),
         "coverage": rating.get("coverage"),
-        "rank": rank,
-        "n_aseguradoras_rankeadas": len(ranked),
+        # El rank se computa SOLO entre las de cobertura completa. Un ISF armado sobre 3 de 5
+        # dimensiones no es comparable con uno de 5, y ordenarlos juntos producía «posición 7
+        # de 35» sin decir de qué 35. Las parciales se listan aparte, nunca se ocultan.
+        **pos,
         "periodo": rating.get("period"),
         "dimensiones": _dims(rating),
         "posiciones_dimension": _posiciones(rating, peers),
@@ -105,21 +109,38 @@ def insurance_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]
 def insurance_peer_context(name: str, rating: Dict[str, Any],
                            peers: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Context for peer positioning against the market (template ``insurance_peer_positioning``)."""
-    ranked = sorted((p for p in peers if p.get("overall_score") is not None),
-                    key=lambda p: p["overall_score"], reverse=True)
-    def _cell(p: Dict[str, Any]) -> Dict[str, Any]:
+    from shared.narrative.derived import rank_comparable, universo_comparable
+
+    universo = universo_comparable(peers)
+    comparables = universo["comparables"]
+
+    def _cell(p: Dict[str, Any], parcial: bool = False) -> Dict[str, Any]:
         by = {d["key"]: d.get("score") for d in p.get("dimensions") or []}
-        return {"aseguradora": p.get("name") or p.get("slug"), "isf": p.get("overall_score"),
-                "solvencia": by.get("solvencia"), "siniestralidad": by.get("siniestralidad"),
-                "liquidez": by.get("liquidez"), "escala": by.get("escala"),
-                "resultado_tecnico": by.get("resultado_tecnico")}
-    rank = next((i + 1 for i, p in enumerate(ranked) if p["slug"] == rating["slug"]), None)
-    avg = round(sum(p["overall_score"] for p in ranked) / len(ranked), 1) if ranked else None
+        c = {"aseguradora": p.get("name") or p.get("slug"), "isf": p.get("overall_score"),
+             "solvencia": by.get("solvencia"), "siniestralidad": by.get("siniestralidad"),
+             "liquidez": by.get("liquidez"), "escala": by.get("escala"),
+             "resultado_tecnico": by.get("resultado_tecnico")}
+        if parcial:
+            # Sin esto, una fila con dos celdas vacías se leía como un par más de la lista.
+            c["cobertura"] = p.get("coverage")
+            c["comparable"] = False
+            c["dimensiones_ausentes"] = [d["label"] for d in p.get("dimensions") or []
+                                         if not d.get("present")]
+        return c
+
+    pos = rank_comparable(rating.get("slug"), universo)
+    avg = (round(sum(p["overall_score"] for p in comparables) / len(comparables), 1)
+           if comparables else None)
     return {
         "aseguradora": name, "isf": rating.get("overall_score"), "banda": rating.get("band"),
-        "rank": rank, "n_aseguradoras_rankeadas": len(ranked),
-        "tabla_pares": [_cell(p) for p in ranked[:12]],
-        "lider_isf": ranked[0].get("name") if ranked else None,
+        **pos,
+        # La tabla ordenada son SOLO las comparables; las parciales van en su propia lista con
+        # la cobertura y las dimensiones que les faltan, para que se muestren sin mezclarse.
+        "tabla_pares": [_cell(p) for p in comparables[:12]],
+        "pares_cobertura_parcial": [_cell(p, parcial=True) for p in universo["parciales"]],
+        "lider_isf": comparables[0].get("name") if comparables else None,
+        # El promedio también es de las comparables: promediar scores de distinta cobertura
+        # produce una referencia que no describe a ninguna población.
         "promedio_isf": avg,
         "posiciones_dimension": _posiciones(rating, peers),
         "comparaciones": _comparaciones(rating, peers),
@@ -149,7 +170,14 @@ def market_pulse_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
         "crecimiento_ventana": pulse.get("growth_years"),
         "aseguradoras_activas": pulse.get("active_insurers"),
         "n_ramos": pulse.get("n_ramos"),
-        "concentracion_top4_pct": pulse.get("top4_concentration_pct"),
+        # ⚠️ EL SUJETO VIAJA CON EL NÚMERO. Esta cifra es la suma de los cuatro RAMOS de mayor
+        # peso, no la cuota de las cuatro mayores COMPAÑÍAS. Se llamaba `concentracion_top4_pct`
+        # —sin sujeto— y el modelo, leyéndola junto a `aseguradoras_activas`, publicó «cuatro
+        # compañías concentran el 87,1% de las primas» en un Deep Dive. El número era correcto;
+        # lo que se perdió camino al modelo fue de qué era. La concentración por compañía es
+        # otra cosa y vale ~69%: si alguna vez se necesita, se computa y se pasa aparte.
+        "concentracion_top4_ramos_pct": pulse.get("top4_concentration_pct"),
+        "concentracion_top4_ramos_nombres": [d.get("label") for d in mix[:4]],
         "mezcla_por_ramo": [
             {"ramo": d["label"], "monto_rd": d["amount"], "pct": d.get("pct")}
             for d in mix[:6]

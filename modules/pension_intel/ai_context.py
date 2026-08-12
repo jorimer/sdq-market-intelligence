@@ -79,9 +79,14 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
     the full ranking so the narrative can place the AFP against its peers without
     recomputing. Solvency travels as a named gap, never a fabricated figure.
     """
+    from shared.narrative.derived import rank_comparable, universo_comparable
+
     dims = rating.get("dimensions") or []
-    ranked = [r for r in peers if r.get("overall_score") is not None]
-    rank = next((i + 1 for i, r in enumerate(ranked) if r["slug"] == rating.get("slug")), None)
+    # Mismo criterio que en seguros, misma función: un ISA armado sobre cobertura parcial no
+    # entra al orden global. Hoy el panel de AFP está completo y no cambia nada; el día que una
+    # AFP pierda una dimensión, el deep dive no la va a rankear contra las completas.
+    universo = universo_comparable(peers)
+    pos = rank_comparable(rating.get("slug"), universo)
     posiciones = _dim_positions(rating, peers)
     # Retorno real (Fase 5): la dimensión rentabilidad puede traer raw_real + inflación
     # (deflactada por BCRD). Se expone aparte para que la narrativa lea la magnitud real.
@@ -121,8 +126,7 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
         "afp": rating.get("name"),
         "isa_score_relativo": rating.get("overall_score"),
         "coverage": rating.get("coverage"),
-        "rank": rank,
-        "n_afp_rankeadas": len(ranked),
+        **pos,
         "periodo": rating.get("period"),
         "dimensiones": [
             {
@@ -182,10 +186,14 @@ def pension_peer_context(
             out[k] = {"valor_real": d.get("raw"), "score": d.get("score")}
         return out
 
+    from shared.narrative.derived import rank_comparable, universo_comparable
+
     table = [_row(r) for r in peers]
-    ranked = sorted([r for r in peers if r.get("overall_score") is not None],
-                    key=lambda r: r["overall_score"], reverse=True)
-    rank = next((i + 1 for i, r in enumerate(ranked) if r.get("name") == afp_name), None)
+    universo = universo_comparable(peers)
+    ranked = universo["comparables"]
+    # El rank de esta vista se busca por NOMBRE, no por slug (la tabla de pares se arma con
+    # `name`); el helper lo admite por parámetro en vez de forzar una segunda implementación.
+    pos = rank_comparable(afp_name, universo, clave_slug="name")
     n_band = sum(1 for r in peers if r.get("score_kind") == "absolute" and r.get("band"))
     solv_note = ("La solvencia está incorporada de los estados financieros de las AFP publicados "
                  "por SIPEN; el ISA emite banda absoluta. No la trates como brecha."
@@ -194,8 +202,7 @@ def pension_peer_context(
         "afp": afp_name,
         "isa": rating.get("overall_score"),
         "band": rating.get("band"),
-        "rank": rank,
-        "n_afp_rankeadas": len(ranked),
+        **pos,
         "tabla_pares": table,
         "lider_isa": ranked[0]["name"] if ranked else None,
         "promedio_isa": round(sum(r["overall_score"] for r in ranked) / len(ranked), 2) if ranked else None,
