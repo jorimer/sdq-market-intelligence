@@ -798,3 +798,74 @@ def test_a_job_that_already_finished_is_not_read_again(db, engagement, monkeypat
 
     monkeypatch.setattr("modules.brand_intel.ingest.pdf_pipeline.ingest_pdf", _no_deberia)
     assert jobs.run_extraction(str(row.id))["status"] == "validated"
+
+
+# ── el rótulo abreviado y la marca declarada ──────────────────────────
+
+
+class _B:
+    def __init__(self, name: str, slug: str):
+        self.name, self.slug = name, slug
+
+
+class _W:
+    def __init__(self, label: str, code: str):
+        self.label, self.code = label, code
+
+
+#: El panel REAL del encargo de McDonald's en producción. La prueba usa los nombres de
+#: verdad porque el defecto solo aparece con ellos: la matriz histórica imprime «Domino's»
+#: y el encargo declaró «Domino's Pizza».
+_PANEL = [
+    ("McDonald's", "mcdonalds"), ("KFC", "kfc"), ("Burger King", "burger_king"),
+    ("Wendy's", "wendys"), ("Little Caesars", "little_caesars"),
+    ("Domino's Pizza", "dominos_pizza"), ("Pizza Hut", "pizza_hut"),
+    ("Taco Bell", "taco_bell"), ("Papa John's Pizza", "papa_johns"),
+    ("Pizzarelli", "pizzarelli"), ("Pala Pizza", "pala_pizza"),
+    ("Taco del Sol", "taco_del_sol"), ("Helados Bon", "helados_bon"),
+]
+
+
+def _resolver():
+    return pipe._LabelResolver([_B(n, s) for n, s in _PANEL],
+                               [_W("Nov '25", "2025-11"), _W("Mar '26", "2026-03")])
+
+
+def test_abbreviated_label_resolves_to_the_declared_brand():
+    """«Domino's» tiene que caer en «Domino's Pizza», no crear una marca paralela.
+
+    Sin esto la carga parte los datos del competidor en dos entidades y corrompe el
+    denominador de la categoría — se detectó simulando la carga contra el panel real de
+    producción ANTES de escribir en él.
+    """
+    r = _resolver()
+    assert r.brand("Domino's") == "dominos_pizza"
+    assert r.brand("Papa John's") == "papa_johns"
+    assert r.brand("Helados") == "helados_bon"
+    # Y los que ya casaban siguen casando, incluida la variante con apóstrofo.
+    assert r.brand("Little Caesar's") == "little_caesars"
+    assert r.brand("McDonald's") == "mcdonalds"
+    assert r.brand("Wendy's") == "wendys"
+
+
+def test_the_prefix_rule_refuses_rather_than_guesses():
+    r = _resolver()
+    # Ambiguo: dos marcas empiezan por «Taco» → ninguna.
+    assert r.brand("Taco") is None
+    # Corto: por debajo del piso de seis caracteres no se arriesga.
+    assert r.brand("Pizza") is None
+    # Y un prefijo tiene que cerrar en frontera de PALABRA: «Pizzar» no es «Pizzarelli»
+    # abreviado en el sentido de la regla, ni «Pizza Hut».
+    assert r.brand("Pizzar") is None
+    # Una marca que no está en el panel no se fuerza a la más parecida.
+    assert r.brand("Starbucks Coffee") is None
+
+
+def test_prefix_rule_never_overrides_an_exact_match():
+    """Si el rótulo ES el nombre de una marca, gana esa: la regla de prefijo es el último
+    recurso, no un atajo que reinterprete un nombre completo."""
+    r = pipe._LabelResolver(
+        [_B("Pala", "pala"), _B("Pala Pizza", "pala_pizza")],
+        [_W("Nov '25", "2025-11")])
+    assert r.brand("Pala") == "pala"          # exacto, aunque «Pala» prefije a «Pala Pizza»
+    assert r.brand("Pala Pizza") == "pala_pizza"
