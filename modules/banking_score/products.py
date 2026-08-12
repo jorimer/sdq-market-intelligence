@@ -44,6 +44,12 @@ from modules.banking_score.scoring.system_aggregate import system_pulse_aggregat
 logger = logging.getLogger("sdq.banking.products")
 
 SECTOR_KEY = "banking"
+
+# Dónde vive el contexto que ve el modelo. Lo lee `assembler._contexto_ia_version` para la
+# huella de la caché y el test estructural del sujeto. Banca no tiene `ai_context.py`: sus
+# secciones nombradas se arman en `reports/narrative.py` y el Pulse acá mismo. Sin declararlo,
+# un arreglo de contexto de banca no invalidaba sus narrativas cacheadas ni pasaba por la regla.
+AI_CONTEXT_FILES = ("reports/narrative.py", "products.py")
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
 
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del
@@ -66,6 +72,9 @@ SAMPLE_SCORING = {
 }
 SAMPLE_SYSTEM = {"band_distribution": {"Fuerte": 6, "Adecuado": 8, "Vigilancia": 3, "Crítico": 1},
                  "n_entities": 18, "system_avg_score": 71.8, "period": SAMPLE_PERIOD}
+# sujeto-ok: `metric_label` viaja en el MISMO dict y nombra la población ("Activos"); CR5/CR10
+# son razones de concentración de FIRMAS por convención. A diferencia del caso de seguros, acá
+# el rótulo llega al modelo junto al número, no en una tabla que el modelo no ve.
 SAMPLE_PEER = {"metric_label": "Activos", "cr5": 71.2, "cr10": 87.4, "hhi": 1380}
 
 # Narrativa CURADA tier-1 de la muestra (exemplar, no generada al vuelo). Es la pieza de
@@ -591,6 +600,8 @@ class BankingProduct:
             scoring_result["early_warning"] = bank_alerts(
                 db, bank.id, cast(date, rr.period_end))
         conc = compute_market_concentration(db, rr.period_end, "activos")
+        # sujeto-ok: `metric_label` encabeza el dict y nombra la población sobre la que se
+        # computan CR5/CR10/HHI (activos); el sujeto llega al modelo junto al número.
         peer_block: Dict[str, object] = ({"metric_label": conc["metric_label"], "cr5": conc["cr5"],
                                           "cr10": conc["cr10"], "hhi": conc["hhi"]}
                                          if conc.get("available") else {})

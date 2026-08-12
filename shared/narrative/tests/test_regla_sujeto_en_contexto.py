@@ -18,6 +18,7 @@ CONCENTRACIÓN tiene que nombrar sobre qué población se computa. `top4_ramos_p
 """
 import ast
 import pathlib
+import re
 
 import pytest
 
@@ -39,13 +40,54 @@ _SUJETOS = ("ramo", "ramos", "compania", "companias", "empresa", "empresas", "en
 _EXENCION = "sujeto-ok:"
 
 
+def _exento(lineas, lineno: int) -> bool:
+    """¿Hay `# sujeto-ok:` en esa línea o en el bloque de comentario contiguo de arriba?"""
+    i = lineno - 1
+    if i >= len(lineas):
+        return False
+    if _EXENCION in lineas[i]:
+        return True
+    j = i - 1
+    while j >= 0 and lineas[j].strip().startswith("#"):
+        if _EXENCION in lineas[j]:
+            return True
+        j -= 1
+    return False
+
+
 def _contextos():
-    return sorted(RAIZ.glob("modules/*/ai_context.py"))
+    """Todo archivo que arme contexto para el modelo.
+
+    No alcanza con `modules/*/ai_context.py`: banca —el módulo más grande— no tiene ese
+    archivo y arma su contexto en `reports/narrative.py` y `products.py`, así que quedaba
+    entero fuera de la regla. Cada módulo declara sus fuentes con `AI_CONTEXT_FILES` en
+    `products.py`; el glob es el caso por defecto.
+    """
+    rutas = set(RAIZ.glob("modules/*/ai_context.py"))
+    for prod in RAIZ.glob("modules/*/products.py"):
+        m = re.search(r"^AI_CONTEXT_FILES\s*=\s*\(([^)]*)\)", prod.read_text(encoding="utf-8"),
+                      re.M | re.S)
+        if not m:
+            continue
+        for rel in re.findall(r'"([^"]+)"', m.group(1)):
+            ruta = prod.parent / rel
+            if ruta.exists():
+                rutas.add(ruta)
+    return sorted(rutas)
 
 
 def test_hay_contextos_que_revisar():
     """Si el glob deja de encontrar archivos, el test pasaría vacío y no protegería nada."""
     assert len(_contextos()) >= 10
+
+
+def test_banca_esta_cubierta():
+    """El módulo más grande no tiene `ai_context.py`; sin la declaración quedaba fuera."""
+    nombres = {p.name for p in _contextos()}
+    rutas = {str(p.relative_to(RAIZ)) for p in _contextos()}
+    assert "modules/banking_score/reports/narrative.py" in rutas, (
+        "banca declara AI_CONTEXT_FILES pero la regla no lo está leyendo")
+    assert nombres  # sanity
 
 
 @pytest.mark.parametrize("ruta", _contextos(), ids=lambda p: p.parent.name)
@@ -66,10 +108,14 @@ def test_toda_clave_de_porcion_nombra_su_poblacion(ruta):
                 continue
             if any(s in nombre for s in _SUJETOS):
                 continue
-            # Exención declarada en la línea de la clave o en la anterior.
-            i = clave.lineno - 1
-            ventana = "\n".join(lineas[max(0, i - 1):i + 1])
-            if _EXENCION in ventana:
+            # Exención declarada en la línea de la clave o en el BLOQUE DE COMENTARIO
+            # contiguo de arriba. Mirar solo la línea anterior obligaba a poner el marcador
+            # en el último renglón del comentario, que es donde nadie lo escribe: la razón
+            # va primero y el detalle después.
+            # La exención se declara sobre el DICT, no sobre cada clave: en un literal de
+            # varias líneas las claves de continuación no tienen comentario propio y exigirlo
+            # por clave obliga a repetir la misma razón en cada renglón.
+            if _exento(lineas, clave.lineno) or _exento(lineas, nodo.lineno):
                 continue
             faltantes.append(f"{ruta.relative_to(RAIZ)}:{clave.lineno} → '{clave.value}'")
 

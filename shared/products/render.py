@@ -80,18 +80,33 @@ def _styles():
     return s
 
 
-def _inline(text: str) -> str:
-    """Markdown en línea → marcado de ReportLab. Negrita **y CURSIVA**.
+# Cursiva de UN asterisco, con fronteras cuidadas: el de apertura va a principio o tras un
+# char que no sea palabra ni '*' (descarta '5*8' de multiplicación y los '**' de negrita), el
+# contenido va pegado a los asteriscos (no abre ni cierra contra un espacio) y el de cierre no
+# puede ir seguido de palabra o '*'. El char de frontera previo se captura y se re-emite.
+#
+# Esta expresión NO es nueva: existía en `banking_score/reports/pdf_generator.py`, que ya había
+# resuelto este mismo defecto —su docstring lo dice— mientras el renderer compartido seguía
+# emitiendo el asterisco literal. El guard estaba en un motor y faltaba en el otro; ahora vive
+# acá y banca la consume, para que no haya dos implementaciones que diverjan.
+_ITALIC_RE = re.compile(r"(^|[^\w*])\*([^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])")
 
-    La cursiva faltaba y salía literal: el cliente leía `*combined ratio*` y `*loss ratio*`
-    con los asteriscos a la vista, y el descargo de una sección entera envuelto en ellos.
-    La negrita se resuelve PRIMERO para que `**x**` no lo consuma la regla de un asterisco.
+
+def _italicize(text: str) -> str:
+    return _ITALIC_RE.sub(r"\1<i>\2</i>", text)
+
+
+def _inline(text: str) -> str:
+    """Markdown en línea → marcado de ReportLab. Negrita, CURSIVA y cursiva ANIDADA.
+
+    La cursiva salía literal: el cliente leía `*combined ratio*` y `*loss ratio*` con los
+    asteriscos a la vista. La negrita se procesa primero y se RECURSA en su contenido —sin eso,
+    `**negrita con *cursiva* adentro**` perdía la negrita y dejaba asteriscos sueltos.
     """
     text = _GLYPH_RE.sub("", text)
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
-    # `[^*\n]` evita cruzar líneas o tragarse un asterisco suelto que no abre énfasis.
-    return re.sub(r"\*([^*\n]+)\*", r"<i>\1</i>", text).strip()
+    text = re.sub(r"\*\*(.+?)\*\*", lambda m: "<b>" + _italicize(m.group(1)) + "</b>", text)
+    return _italicize(text).strip()
 
 
 def _pull_quote(text: str, styles) -> Table:

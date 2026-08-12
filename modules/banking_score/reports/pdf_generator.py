@@ -411,27 +411,16 @@ _GLYPH_RE = re.compile(
 )
 
 
-# Cursiva *así*: el asterisco de apertura no puede estar precedido por carácter de palabra
-# o por otro '*' (descarta '5*8' de multiplicación y los '**' de negrita), el contenido va
-# pegado a los asteriscos (no abre/cierra contra un espacio), y el de cierre no puede ir
-# seguido de palabra/'*'. El char de frontera previo se captura y se re-emite.
-_ITALIC_RE = re.compile(r"(^|[^\w*])\*([^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])")
-
-
-def _italicize(text: str) -> str:
-    return _ITALIC_RE.sub(r"\1<i>\2</i>", text)
-
 
 def _md_inline(text: str) -> str:
-    """Escape XML, then convert **bold** → <b> y *cursiva* → <i> para un Paragraph de
-    ReportLab. La negrita se procesa primero y puede contener cursiva ANIDADA (se recursa
-    en su contenido); luego la cursiva en el resto. Antes solo se soportaba negrita, así
-    que la cursiva salía con el asterisco literal."""
-    text = _GLYPH_RE.sub("", text)
-    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    text = re.sub(r"\*\*(.+?)\*\*", lambda m: "<b>" + _italicize(m.group(1)) + "</b>", text)
-    text = _italicize(text)
-    return text.strip()
+    """Escape XML + **negrita** / *cursiva* (anidada) para un Paragraph de ReportLab.
+
+    La implementación vive en `shared.products.render`: nació acá, pero el renderer compartido
+    tenía el mismo defecto sin arreglar y dos copias del mismo criterio divergen. Se delega.
+    """
+    from shared.products.render import _inline
+
+    return _inline(text)
 
 
 def _md_split_row(line: str) -> List[str]:
