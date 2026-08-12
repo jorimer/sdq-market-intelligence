@@ -111,7 +111,14 @@ ANCLAJE_POR_TIPO = (
     "baja —Unit 440% con margen −330%, Multiseguros 194% con patrimonio cayendo 60% anual— "
     "quedan fuera del corte porque su deterioro es real. La pregunta previa sobre si SALUD "
     "exige un ancla propia sigue abierta y sin estimar con este panel: requiere el dato "
-    "regulatorio de siniestralidad mínima de las ARS."
+    "regulatorio de siniestralidad mínima de las ARS. Los dos cortes están ACOTADOS POR LOS "
+    "DATOS y no determinados por ellos: por encima del corte de cesión hay tres observaciones "
+    "y por encima del de inversión, una. La brecha del panel dice dónde PUEDE ponerse el "
+    "umbral, no dónde debe; con más observaciones se re-mira. Y donde la métrica no es "
+    "interpretable no se publica un score renormalizado sobre las dimensiones que quedan: "
+    "renormalizar equivale a suponer que las suprimidas valen el promedio de las demás, y esa "
+    "suposición no tiene con qué sostenerse — la compañía saldría beneficiada justamente por "
+    "no ser medible."
 )
 
 # ── Cuándo el combined ratio NO es una medida de desempeño (§5.2) ──────────────
@@ -124,12 +131,19 @@ ANCLAJE_POR_TIPO = (
 # divergen con el tiempo. La cesión de ciclo del panel da 96%, 83% y 77% para las tres
 # afectadas y luego salta a 64%: el corte cae dentro de una brecha de 13 puntos, no sobre
 # un continuo.
+#
+# ⚠️ ACOTADO POR LOS DATOS, NO DETERMINADO POR ELLOS: la brecha se observa sobre n=3 casos por
+# encima del corte. Que el umbral caiga ahí dice dónde PUEDE estar, no dónde DEBE estar; con
+# más observaciones podría moverse. (Observación de la revisión actuarial externa, 2026-08-12.)
 CESION_NO_INTERPRETABLE = CESION_MAX_SANA
 
 # INVERSIÓN: producto de inversiones sobre prima DEVENGADA —la misma base del combined ratio,
 # para que numerador y denominador hablen del mismo ejercicio. El panel 2023 da 186% (Crecer),
 # 30% (La Monumental), 24% (General): el corte cae en una brecha de 6.2× y por eso el
 # resultado no es sensible a dónde exactamente se ponga dentro de ella.
+#
+# ⚠️ ACOTADO POR LOS DATOS: n=1 por encima del corte. Una sola observación fija una dirección,
+# no un umbral. Si aparece una segunda compañía de anualidades, el corte se re-mira.
 INVERSION_DOMINANTE = 0.60
 
 # Límite conocido de la ponderación por exposición, DECLARADO porque no es evaluable con este
@@ -460,6 +474,12 @@ def calcular_ejes(ciclo: Optional[Dict[str, Any]],
         "pendiente_combined": ciclo.get("pendiente_combined") if ciclo else None,
         "pendiente_error_estandar": ciclo.get("pendiente_error_estandar") if ciclo else None,
         "ciclo_comparable": ciclo.get("ciclo_comparable") if ciclo else None,
+        # Cuánto del "promedio del ciclo" es realmente el último ejercicio (hasta 58% en el
+        # panel). Sin esto, un promedio ponderado se lee como si los años pesaran parejo.
+        # `metricas_del_ciclo` ya lo computaba y `calcular_ejes` no lo exponía: el router lo
+        # leía y daba KeyError — el mismo hueco de contrato motor↔router de siempre.
+        "peso_ultimo_ejercicio": ciclo.get("peso_ultimo_ejercicio") if ciclo else None,
+        "limite_ponderacion": LIMITE_PONDERACION if ciclo else None,
         # CESIÓN junto al combined ratio: el ratio es BRUTO, así que mide la calidad de lo
         # que la compañía ORIGINA, no la pérdida que absorbe. Sin la cesión al lado,
         # «155% · Deficiente» se lee como si retuviera ese riesgo — y Angloamericana cede

@@ -188,6 +188,11 @@ async def perfil_sdq(
             "tendencia": banda_tendencia(ejes["pendiente_combined"],
                                          ejes["pendiente_error_estandar"]),
             "ciclo_comparable": ejes["ciclo_comparable"],
+            # Cuánto del promedio del ciclo es realmente el último ejercicio, y el límite
+            # conocido de ponderar por exposición. Un promedio que en la práctica es casi un
+            # solo año tiene que decirlo.
+            "peso_ultimo_ejercicio": ejes["peso_ultimo_ejercicio"],
+            "limite_ponderacion": ejes["limite_ponderacion"],
             # El combined ratio es BRUTO: la cesión va al lado para que no se lea como si
             # la compañía retuviera el riesgo que originó.
             "cesion_promedio": ejes["cesion_promedio"],
