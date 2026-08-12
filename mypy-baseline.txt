@@ -475,7 +475,6 @@ modules/insurance_intel/financials_sync.py:0: error: Incompatible types in assig
 modules/insurance_intel/financials_sync.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
 modules/insurance_intel/operations.py:0: error: Incompatible types in assignment (expression has type "bool", variable has type "Column[bool]")  [assignment]
 modules/insurance_intel/operations.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
-modules/insurance_intel/products.py:0: error: Argument 1 to "append" of "list" has incompatible type "list[str | Any | None]"; expected "list[str]"  [arg-type]
 modules/insurance_intel/products.py:0: error: Argument 1 to "loads" has incompatible type "Column[str]"; expected "str | bytes | bytearray"  [arg-type]
 modules/insurance_intel/scoring/ars_rating.py:0: error: Argument 1 to "_absolute" has incompatible type "float | None"; expected "float"  [arg-type]
 modules/insurance_intel/scoring/ars_rating.py:0: error: Argument 1 to "_minmax" has incompatible type "float | None"; expected "float"  [arg-type]

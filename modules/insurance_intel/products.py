@@ -212,22 +212,54 @@ def _isf_table(rating: Dict[str, Any]) -> Optional[tuple]:
     return ("Desglose del ISF (banda absoluta + posición relativa)", rows) if len(rows) > 1 else None
 
 
+_PEER_MAX_COMPARABLES = 10
+_PEER_MAX_PARCIALES = 4
+_PEER_DIVISOR = "── Cobertura parcial · fuera del orden ──"
+
+
 def _peer_table(peers: Optional[List[Dict[str, Any]]]) -> Optional[tuple]:
+    """Tabla de pares con las PARCIALES separadas del orden.
+
+    La misma regla que ya rige el rank en `ai_context` tiene que regir acá. Cuando solo se
+    arregló el contexto, el PDF quedó contradiciéndose consigo mismo: el texto hablaba de
+    «27 comparables» y la tabla de al lado seguía listando a Reaseguradora Santo Domingo
+    (74,6, tres dimensiones de cinco) en el segundo puesto, sin marca. Un score sobre 3 de 5
+    dimensiones no ordena contra uno de 5 — las «—» de la fila no alcanzan como aviso.
+
+    Las parciales NO se ocultan: van al final, bajo un divisor que dice por qué están ahí.
+    """
+    from shared.narrative.derived import universo_comparable
+
     if not peers:
         return None
     order = ["solvencia", "siniestralidad", "liquidez", "escala", "resultado_tecnico"]
-    ranked = sorted((p for p in peers if p.get("overall_score") is not None),
-                    key=lambda p: p["overall_score"], reverse=True)
-    rows = [["Aseguradora", "ISF", "Solv.", "Sinie.", "Liq.", "Esc.", "Res."]]
-    for p in ranked[:12]:
+
+    def _fila(p: Dict[str, Any]) -> List[str]:
         by = {d["key"]: d.get("score") for d in p.get("dimensions") or []}
-        cells = [p.get("name") or p.get("slug"), f"{p['overall_score']:.1f}"]
-        for k in order:
-            sc = by.get(k)
-            cells.append("—" if sc is None else f"{sc:.0f}")
-        rows.append(cells)
-    return ("Comparación con las aseguradoras del mercado (score 0-100 por dimensión)", rows) \
-        if len(rows) > 1 else None
+        cells: List[str] = [str(p.get("name") or p.get("slug") or ""),
+                            f"{p['overall_score']:.1f}"]
+        cells += ["—" if by.get(k) is None else f"{by[k]:.0f}" for k in order]
+        return cells
+
+    u = universo_comparable(peers)
+    comparables, parciales = u["comparables"], u["parciales"]
+    rows = [["Aseguradora", "ISF", "Solv.", "Sinie.", "Liq.", "Esc.", "Res."]]
+    rows += [_fila(p) for p in comparables[:_PEER_MAX_COMPARABLES]]
+    if parciales:
+        rows.append([_PEER_DIVISOR] + [""] * 6)
+        rows += [_fila(p) for p in parciales[:_PEER_MAX_PARCIALES]]
+    if len(rows) <= 1:
+        return None
+    # El título dice el criterio Y lo que quedó afuera: un top-N silencioso se lee como si
+    # fuera el panel entero.
+    titulo = (f"Comparación con el mercado (score 0-100 por dimensión) · "
+              f"{len(comparables)} con las cinco dimensiones medidas"
+              + (f", {len(parciales)} de cobertura parcial" if parciales else ""))
+    ocultas = (max(0, len(comparables) - _PEER_MAX_COMPARABLES)
+               + max(0, len(parciales) - _PEER_MAX_PARCIALES))
+    if ocultas:
+        titulo += f" — se muestran las primeras, {ocultas} no listadas"
+    return (titulo, rows)
 
 
 def _pulse_table(pulse: Dict[str, Any]) -> Optional[tuple]:
