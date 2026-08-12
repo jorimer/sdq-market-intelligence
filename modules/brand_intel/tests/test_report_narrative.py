@@ -379,3 +379,54 @@ def test_practice_section_renders_after_the_evidence_one():
     # Y sin narrativa no hay título vacío: no existe composición determinista.
     n2, _ = report_docs.narratives_and_tables(_payload_con_evidencia())
     assert "proposals" not in n2 and "proposals_practice" not in n2
+
+
+# ── la portada declara el corte y sus bases ───────────────────────────
+
+
+def test_cover_period_says_what_is_measured_and_against_what():
+    """La portada no lista las trece olas: dice cuál se mide y contra cuáles compara."""
+    p = _payload()
+    p["frame"] = {
+        "available": True,
+        "target": {"code": "2026-06", "label": "2026-06", "period": "2026-06-01"},
+        "previous": {"code": "2026-03", "label": "Mar '26", "period": "2026-02-08"},
+        "previous_gap_months": 4,
+        "year_ago": {"code": "2025-05", "label": "May '25", "period": "2025-05-07"},
+        "year_ago_gap_months": 13, "year_ago_reason": None,
+    }
+    p["waves"] = [{"code": "2018-09", "label": "2018-09", "period": "2018-09-01",
+                   "base": 300},
+                  {"code": "2026-06", "label": "2026-06", "period": "2026-06-01",
+                   "base": 300}]
+    txt = rpt.cover_period(p)
+    # La etiqueta que era el propio código se homogeneiza a la forma corta.
+    assert txt.startswith("Jun '26 — ola medida")
+    assert "compara contra Mar '26 (ola anterior, 4 meses)" in txt
+    assert "May '25 (interanual, 13 meses)" in txt
+    assert "serie disponible: 2 olas desde Sep '18" in txt
+    # Y NO es el volcado de la serie.
+    assert txt.count("·") == 2
+
+
+def test_cover_period_declares_a_missing_year_ago_base():
+    p = _payload()
+    p["frame"] = {
+        "available": True,
+        "target": {"code": "2025-08", "label": "Ago '25", "period": "2025-08-01"},
+        "previous": {"code": "2025-05", "label": "May '25", "period": "2025-05-07"},
+        "previous_gap_months": 3,
+        "year_ago": None, "year_ago_gap_months": None,
+        "year_ago_reason": "La ola más próxima a doce meses atrás queda fuera de "
+                           "tolerancia.",
+    }
+    txt = rpt.cover_period(p)
+    assert "sin base interanual (La ola más próxima" in txt
+    assert "interanual, " not in txt
+
+
+def test_cover_period_falls_back_to_the_series_without_a_frame():
+    p = _payload()
+    assert rpt.cover_period(p) == "Ola 1"
+    p["frame"] = {"available": False, "reason": "x"}
+    assert rpt.cover_period(p) == "Ola 1"

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from modules.brand_intel.report import _fmt, group_competitivas
+from modules.brand_intel.report import _fmt, cover_period, group_competitivas
 
 #: Orden y título de cada sección del documento del cliente. Menos y más densas que la
 #: vista HTML interna (que conserva el desglose por motor): el cliente lee una síntesis;
@@ -468,7 +468,7 @@ def render(payload: Dict[str, Any], fmt: str = "pdf",
     from shared.products.render import render_product_pdf
 
     eng = payload["engagement"]
-    olas = ", ".join(w["label"] for w in payload.get("waves") or [])
+    olas = cover_period(payload)
     narratives, tables = narratives_and_tables(payload, ai=ai)
 
     return render_product_pdf(
