@@ -1126,20 +1126,42 @@ def dismiss_goal(slug: str, plan_id: str, goal_id: str, payload: DismissGoalIn,
 
 # ── report ────────────────────────────────────────────────────────────
 
+def _validate_wave(db: Session, eng: BrandEngagement, wave: Optional[str]) -> None:
+    """Una ola pedida que no existe es un 400, nunca «la última» en silencio.
+
+    ``data_waves`` ignora un corte desconocido a propósito (un corte que rompe el
+    informe es peor que uno que no aplica), así que la validación ruidosa vive aquí:
+    quien pide una ola concreta debe enterarse de que no hay dato para ella en vez de
+    recibir otra con la etiqueta equivocada.
+    """
+    if not wave:
+        return
+    codes = [str(w.code) for w in svc.data_waves(db, str(eng.id))]
+    if wave not in codes:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"La ola '{wave}' no tiene dato en este encargo. "
+                    f"Olas disponibles: {', '.join(codes) or 'ninguna'}."))
+
 @router.get("/engagements/{slug}/report", summary="Informe completo (JSON)")
-def report_json(slug: str, db: Session = Depends(get_db),
+def report_json(slug: str, wave: Optional[str] = Query(
+                    None, description="Ola a medir; por defecto la última con dato"),
+                db: Session = Depends(get_db),
                 user: User = Depends(get_current_user)) -> Dict[str, Any]:
     eng = _resolve(db, slug, user)
-    payload = rpt.build_report(db, eng)
+    _validate_wave(db, eng, wave)
+    payload = rpt.build_report(db, eng, wave=wave)
     db.commit()
     return payload
 
 
 @router.get("/engagements/{slug}/report.html", summary="Informe completo (HTML imprimible)")
-def report_html(slug: str, db: Session = Depends(get_db),
+def report_html(slug: str, wave: Optional[str] = Query(None),
+                db: Session = Depends(get_db),
                 user: User = Depends(get_current_user)) -> Response:
     eng = _resolve(db, slug, user)
-    payload = rpt.build_report(db, eng)
+    _validate_wave(db, eng, wave)
+    payload = rpt.build_report(db, eng, wave=wave)
     db.commit()
     return Response(content=rpt.render_html(payload), media_type="text/html; charset=utf-8")
 
@@ -1185,7 +1207,10 @@ def mesa_document(
 @router.get("/engagements/{slug}/report.{fmt}",
             summary="Informe completo como documento (pdf | docx)")
 def report_document(
-    slug: str, fmt: str, db: Session = Depends(get_db),
+    slug: str, fmt: str,
+    wave: Optional[str] = Query(
+        None, description="Ola a medir; por defecto la última con dato"),
+    db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
     """El informe en PDF o Word, con el chrome de marca de la plataforma.
@@ -1198,7 +1223,8 @@ def report_document(
     if fmt not in ("pdf", "docx"):
         raise HTTPException(status_code=404, detail="Formato no disponible.")
     eng = _resolve(db, slug, user)
-    payload = rpt.build_report(db, eng)
+    _validate_wave(db, eng, wave)
+    payload = rpt.build_report(db, eng, wave=wave)
     # Las tres secciones narrativas del cliente van por la ruta cerebro (doctrina +
     # guard numérico). La degradación es estructural, no promesa: cualquier fallo de la
     # generación cae a la composición determinista, nunca tumba la descarga.

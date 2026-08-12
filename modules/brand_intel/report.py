@@ -28,27 +28,35 @@ REPORT_TITLE = "Informe de Contexto de Mercado"
 
 # ── payload ───────────────────────────────────────────────────────────
 
-def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
-    """Assemble every section plus the auto-generated methodology, sources and limits."""
+def build_report(db: Session, engagement: BrandEngagement,
+                 wave: Optional[str] = None) -> Dict[str, Any]:
+    """Assemble every section plus the auto-generated methodology, sources and limits.
+
+    ``wave`` fija la ola a medir. El informe se construye AL CORTE de esa ola: cada
+    análisis lee la serie truncada ahí, de modo que pedir una ola pasada devuelve el
+    expediente como estaba entonces y no el dato actual reetiquetado. Por defecto, la
+    última ola con dato.
+    """
     eid = engagement.id
     # Waves WITH data: a projection wave exists only to hold a frozen forecast and is not
     # part of the report's history — counting it would overstate the panel behind every
     # statement the report makes about how much history there is.
-    ws = svc.data_waves(db, eid)
+    ws = svc.data_waves(db, eid, as_of=wave)
 
-    explanations = svc.explanations_analysis(db, str(eid))
-    category = svc.category_analysis(db, eid)
-    funnel = svc.funnel_analysis(db, eid)
-    ticket = svc.ticket_analysis(db, eid)
-    attribution = svc.attribution_analysis(db, eid)
-    backtest = svc.rule_backtest(db, eid)
+    explanations = svc.explanations_analysis(db, str(eid), as_of=wave)
+    category = svc.category_analysis(db, eid, as_of=wave)
+    funnel = svc.funnel_analysis(db, eid, as_of=wave)
+    ticket = svc.ticket_analysis(db, eid, as_of=wave)
+    attribution = svc.attribution_analysis(db, eid, as_of=wave)
+    backtest = svc.rule_backtest(db, eid, as_of=wave)
     track = svc.forecast_track_record(db, eid)
-    signal = svc.signal_filter(db, eid)
+    signal = svc.signal_filter(db, eid, as_of=wave)
     decisions = svc.evaluate_decisions(db, eid)
-    scenarios = svc.scenarios_analysis(db, eid)
-    vigilance = svc.vigilance_analysis(db, eid)
+    scenarios = svc.scenarios_analysis(db, eid, as_of=wave)
+    vigilance = svc.vigilance_analysis(db, eid, as_of=wave)
     plan = svc.plan_readiness(db, str(eid))
     sales = svc.sales_analysis(db, str(eid))
+    comparison = svc.wave_comparison(db, str(eid), as_of=wave)
 
     payload: Dict[str, Any] = {
         "engagement": {
@@ -80,8 +88,10 @@ def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
             "vigilance": vigilance,
             "plan": plan,
             "sales": sales,
+            "comparison": comparison,
         },
     }
+    payload["frame"] = comparison.get("frame") or svc.wave_frame(db, str(eid), wave)
     payload["executive"] = _executive(payload)
     payload["methodology"] = _methodology(payload)
     payload["sources"] = _sources(db, eid, engagement)
@@ -187,6 +197,7 @@ _CEREBRO_TEMPLATES = {
     "priorities": "brand_context_priorities",
     "plan": "brand_plan_readiness",
     "sales": "brand_sales_reading",
+    "comparison": "brand_wave_comparison",
 }
 
 
@@ -346,8 +357,18 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         "consistencia": sales.get("consistency"),
         "nota_motor": sales.get("note"),
     }
+    # La doble comparación: la clasificación combinada (estacional vs deterioro
+    # sostenido) YA viene computada; el modelo la copia, no la deduce.
+    comp = s.get("comparison") or {}
+    comp_ctx = {
+        **base,
+        "marco": comp.get("frame"),
+        "indicadores": comp.get("rows") or [],
+        "nota_motor": comp.get("note"),
+    }
     return {"executive": ejecutivo, "explanations": lectura,
-            "priorities": prioridades, "plan": plan_ctx, "sales": sales_ctx}
+            "priorities": prioridades, "plan": plan_ctx, "sales": sales_ctx,
+            "comparison": comp_ctx}
 
 
 async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -373,6 +394,8 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
         ctxs.pop("plan", None)
     if not sales.get("available"):
         ctxs.pop("sales", None)
+    if not (payload["sections"].get("comparison") or {}).get("available"):
+        ctxs.pop("comparison", None)
     if not ctxs:
         return {}
 

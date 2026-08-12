@@ -35,6 +35,7 @@ from modules.brand_intel.report import _fmt, group_competitivas
 SECTIONS: List[Tuple[str, str]] = [
     ("executive", "Resumen ejecutivo"),
     ("explanations", "Lectura del trimestre"),
+    ("comparison", "La ola contra sus dos referencias"),
     ("sales", "La venta del período"),
     ("priorities", "Qué mover y qué no"),
     ("plan", "El plan bajo el instrumento"),
@@ -154,6 +155,46 @@ def _fallback_priorities(s: Dict[str, Any]) -> str:
                       f"{resumen.get('closed', 0)} de {resumen.get('total', 0)} "
                       "cerradas (el detalle, en la tabla de seguimiento).")
     return "\n\n".join(p for p in partes if p)
+
+
+#: Lectura combinada de las dos referencias, traducida para el lector.
+_COMBINED_LABEL = {
+    "deterioro_sostenido": "Deterioro sostenido",
+    "mejora_sostenida": "Mejora sostenida",
+    "estacional": "Estacional",
+    "solo_interanual": "Solo interanual",
+    "solo_intertrimestral": "Solo intertrimestral",
+    "sin_movimiento_detectable": "Sin movimiento detectable",
+}
+
+
+def _fallback_comparison(cp: Dict[str, Any]) -> str:
+    """La doble comparación, composición determinista."""
+    partes: List[str] = []
+    marco = cp.get("frame") or {}
+    if marco.get("note"):
+        partes.append(str(marco["note"]))
+    filas = cp.get("rows") or []
+    hallazgos = [r for r in filas
+                 if (r.get("previous") or {}).get("is_finding")
+                 or (r.get("year_ago") or {}).get("is_finding")]
+    if hallazgos:
+        partes.append("**Indicadores con movimiento que supera su mínimo detectable:**\n"
+                      + _md_list([
+                          f"**{r['label']}** — {_COMBINED_LABEL.get(r.get('combined'), '')}"
+                          for r in hallazgos]))
+    elif filas:
+        partes.append(
+            f"Ninguno de los {len(filas)} indicadores núcleo supera su movimiento mínimo "
+            "detectable contra ninguna de las dos referencias. La continuidad es, en sí "
+            "misma, la lectura de la ola.")
+    sin_base = [r for r in filas if r.get("base_n") is None]
+    if sin_base:
+        partes.append(
+            f"{len(sin_base)} indicador(es) llega(n) sin base muestral declarada: su "
+            "movimiento se lee como trayectoria y no puede sostener un veredicto.")
+    partes.append(str(cp.get("note") or ""))
+    return "\n\n".join(x for x in partes if x)
 
 
 def _fallback_sales(sa: Dict[str, Any]) -> str:
@@ -293,6 +334,25 @@ def narratives_and_tables(
     # fue el cliente quien envió su plan, y una tabla que se lo repite no es informe.
     # El seguimiento con veredictos vive en la vista interna; cuando una ola emita
     # veredictos, la narrativa de prioridades los lee desde el contexto.
+
+    # ── La ola contra sus dos referencias ──
+    cp = s.get("comparison") or {}
+    if cp.get("available"):
+        n["comparison"] = ai.get("comparison") or _fallback_comparison(cp)
+        filas = cp.get("rows") or []
+        if filas:
+            marco = cp.get("frame") or {}
+            ant = (marco.get("previous") or {}).get("label") or "ola anterior"
+            ano = (marco.get("year_ago") or {}).get("label") or "año atrás"
+            tables.append((f"Indicadores contra {ant} y contra {ano}",
+                           [["Indicador", "Valor", "Base", f"vs {ant}",
+                             f"vs {ano}", "Lectura combinada"]] +
+                           [[r["label"], _fmt(r.get("value")),
+                             str(r.get("base_n") or "—"),
+                             _fmt((r.get("previous") or {}).get("delta"), " pp"),
+                             _fmt((r.get("year_ago") or {}).get("delta"), " pp"),
+                             _COMBINED_LABEL.get(r.get("combined"), "—")]
+                            for r in filas]))
 
     # ── La venta del período ── (solo con jornadas comparables cargadas)
     sa = s.get("sales") or {}
