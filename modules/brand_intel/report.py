@@ -281,6 +281,7 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
                               "cambio está en 'veredictos_de_movimiento'.")}
                          if sf.get("available") else {"nota": sf.get("reason")}),
         "veredictos_de_movimiento": movement_verdicts(s.get("comparison") or {}),
+        "brechas_entre_indicadores": ladder_gaps_ctx(s.get("funnel") or {}),
         # Sin la fuente "decision": el resumen de decisiones ya viaja aparte, y con un
         # plan adoptado entero esas señales repiten cien títulos casi idénticos.
         "senales_vigilancia": (
@@ -406,6 +407,7 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
                 "vive en 'veredictos_de_movimiento'."),
         } if sf.get("available") else None),
         "veredictos_de_movimiento": movement_verdicts(comp),
+        "brechas_entre_indicadores": ladder_gaps_ctx(s.get("funnel") or {}),
         "compromisos_ya_registrados": [
             {"title": r.get("title"), "origen": r.get("origin"),
              "estado": r.get("status")}
@@ -602,6 +604,29 @@ def _gap(months: Optional[Any]) -> str:
 
 
 # ── el veredicto de significancia, COMPUTADO ──────────────────────────
+
+def ladder_gaps_ctx(funnel: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Las ÚNICAS distancias entre indicadores distintos que el eje autoriza a publicar.
+
+    En producción el informe comparó el índice de fidelidad (72%) contra la opinión de
+    marca (65%) y construyó una recomendación sobre esa distancia de 7 puntos. Son dos
+    preguntas distintas del cuestionario: para saber si su diferencia se distingue del
+    azar hace falta la distribución conjunta, que el tracker no entrega, así que esa
+    comparación no tiene cifra que publicar. La escalera del embudo sí: es ANIDADA, el
+    hueco entre dos peldaños es una subpoblación de la misma muestra y por eso lleva su
+    propio margen de error —y su sujeto, escrito en el motor.
+    """
+    rows = (funnel or {}).get("ladder_gaps") or []
+    if not (funnel or {}).get("available") or not rows:
+        return None
+    return {
+        "brechas": rows,
+        "regla": ("Estas son las únicas distancias entre indicadores distintos que pueden "
+                  "publicarse, porque la escalera del embudo es anidada. La diferencia "
+                  "entre dos indicadores que NO son peldaños consecutivos de esta escalera "
+                  "no tiene margen de error estimable con este instrumento: no se compara."),
+    }
+
 
 def movement_verdicts(comp: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Los movimientos de la ola PARTIDOS por veredicto, con la lectura ya redactada.

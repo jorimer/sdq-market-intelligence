@@ -679,10 +679,15 @@ def funnel_analysis(
     names = {b.slug: b.name for b in ents}
 
     rungs_by_brand: Dict[str, Dict[str, Optional[float]]] = {}
+    # Las bases se capturan junto a los valores porque la BRECHA entre dos peldaños solo
+    # es interpretable si ambos comparten muestra; sin la base no hay margen de error y la
+    # distancia se vuelve una cifra que el modelo tiene que calificar solo.
+    bases_by_brand: Dict[str, Dict[str, Optional[int]]] = {}
     for metric in FUNNEL_LADDER:
         for c in _cells(db, engagement_id, metric):
             if c.wave == target.code and c.brand:
                 rungs_by_brand.setdefault(c.brand, {})[metric] = c.value
+                bases_by_brand.setdefault(c.brand, {})[metric] = c.base_n
 
     if not rungs_by_brand:
         return {"available": False,
@@ -710,6 +715,12 @@ def funnel_analysis(
             for f in sorted(funnels, key=lambda x: (x.end_to_end or 0), reverse=True)
         ],
         "weakest_step": weakest,
+        # La distancia entre peldaños de la marca focal, con su margen y su sujeto. Es la
+        # ÚNICA comparación entre indicadores distintos que este eje autoriza: la escalera
+        # es anidada y por eso el hueco es una subpoblación con distribución estimable.
+        "ladder_gaps": (fn.ladder_gaps(rungs_by_brand.get(str(focal)) or {},
+                                       bases_by_brand.get(str(focal)) or {})
+                        if focal and str(focal) in rungs_by_brand else []),
     }
 
 

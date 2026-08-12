@@ -542,3 +542,91 @@ def test_no_context_serves_a_threshold_block_without_its_verdict():
     ]
     assert huerfanos == [], (
         f"contextos con umbrales y sin veredicto de movimiento: {huerfanos}")
+
+
+# ── la brecha ENTRE indicadores ───────────────────────────────────────
+
+
+def test_ladder_gap_is_a_subpopulation_with_its_own_margin():
+    """El hueco entre dos peldaños ANIDADOS es una proporción de la misma muestra: lleva
+    margen de error propio. Reproduce las cifras reales del corte Mar '26."""
+    from modules.brand_intel.engines.funnel import ladder_gaps
+
+    rungs = {"awareness_total": 87.0, "ever_tried": 82.0, "reach_3m": 60.0,
+             "reach_1m": 43.0, "reach_7d": 27.0}
+    bases = dict.fromkeys(rungs, 300)
+    rows = {(r["de"], r["a"]): r for r in ladder_gaps(rungs, bases)}
+
+    g = rows[("reach_1m", "reach_7d")]
+    assert g["brecha"] == 16.0
+    assert g["margen_de_error"] == pytest.approx(4.15, abs=0.02)
+    assert g["verdicto"] == "distinguible_de_cero"
+    # El sujeto viaja con el número, y lo escribe el motor.
+    assert g["sujeto_de_la_brecha"] == (
+        "personas que consumieron en el último mes pero no en los últimos 7 días")
+    assert all(r["verdicto"] == "distinguible_de_cero" for r in rows.values())
+
+
+def test_ladder_gap_declares_instead_of_interpreting():
+    """Las tres formas en que la brecha NO se publica: sin dato, sin base común y con el
+    anidamiento roto. Ninguna se rellena y ninguna se calla."""
+    from modules.brand_intel.engines.funnel import ladder_gaps
+
+    base = {"awareness_total": 87.0, "ever_tried": 82.0, "reach_3m": 60.0,
+            "reach_1m": 43.0, "reach_7d": 27.0}
+    bases = dict.fromkeys(base, 300)
+
+    sin_dato = ladder_gaps({**base, "reach_7d": None}, bases)
+    assert sin_dato[-1]["verdicto"] == "sin_dato" and sin_dato[-1]["brecha"] is None
+
+    otra_base = ladder_gaps(base, {**bases, "reach_7d": 82})
+    assert otra_base[-1]["verdicto"] == "no_computable"
+    assert "no comparten base" in otra_base[-1]["nota"]
+
+    # Anidamiento roto: el peldaño posterior supera al anterior.
+    roto = ladder_gaps({**base, "reach_7d": 55.0}, bases)
+    assert roto[-1]["verdicto"] == "inconsistente"
+    assert roto[-1]["sujeto_de_la_brecha"] is not None   # el sujeto existe…
+    assert "no describe ninguna población" in roto[-1]["nota"]   # …pero no se le aplica
+
+
+def test_a_tiny_gap_is_not_distinguishable_from_zero():
+    from modules.brand_intel.engines.funnel import ladder_gaps
+
+    rows = ladder_gaps({"reach_1m": 43.0, "reach_7d": 42.7}, {"reach_1m": 300,
+                                                              "reach_7d": 300})
+    g = [r for r in rows if r["de"] == "reach_1m"][0]
+    assert g["brecha"] == pytest.approx(0.3)
+    assert g["verdicto"] == "no_distinguible_de_cero"
+
+
+def test_the_authorised_gaps_reach_every_prescribing_context():
+    p = _payload()
+    p["sections"]["funnel"] = {
+        "available": True,
+        "ladder_gaps": [{"de": "reach_1m", "a": "reach_7d", "brecha": 16.0,
+                         "margen_de_error": 4.15, "verdicto": "distinguible_de_cero",
+                         "sujeto_de_la_brecha": "personas que…"}],
+    }
+    p["sections"]["explanations"] = {"available": True, "entorno": {}, "explicadas": [],
+                                     "competitivas": [], "sin_capa": [], "note": "n"}
+    p["sections"]["comparison"] = _comparison([
+        {"metric_code": "a", "label": "A", "value": 1.0,
+         "previous": {"delta": 1.0, "threshold": 9.0, "verdict": "not_detectable"}}])
+    ctxs = rpt.cerebro_contexts(p)
+    for key in ("priorities", "proposals", "proposals_practice"):
+        b = ctxs[key]["brechas_entre_indicadores"]
+        assert b and b["brechas"][0]["brecha"] == 16.0, key
+        # La regla viaja con el dato: el modelo no tiene que recordar el porqué.
+        assert "no se compara" in b["regla"], key
+
+
+def test_templates_forbid_comparing_unrelated_levels():
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+
+    for t in ("brand_sdq_proposals", "brand_sdq_proposals_practice",
+              "brand_context_priorities"):
+        body = THIN_TEMPLATES[t]
+        assert "REGLA DURA DE COMPARABILIDAD" in body, t
+        assert "brechas_entre_indicadores" in body, t
+        assert "sujeto_de_la_brecha" in body, t
