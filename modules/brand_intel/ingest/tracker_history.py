@@ -193,6 +193,20 @@ def read_history(content: bytes) -> Tuple[List[HistoryReading], HistoryReport]:
         wb.close()
 
 
+#: Meses abreviados como los rotula el proveedor en sus mazos («Jun '26»). No es cosmética:
+#: el emparejamiento tolerante de la ruta de mazos reduce «Junio '26» a la clave «jun26», y
+#: una etiqueta igual al código reduce a «202606» — no casan, y CADA celda de esa ola se
+#: rechaza como «ola no reconocida». Pasó en producción: 1.165 celdas del mazo de Ola 5
+#: rechazadas por las 11 olas que esta matriz había creado etiquetadas con su propio código.
+_MESES_ABBR = ("Ene", "Feb", "Mar", "Abr", "May", "Jun",
+               "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+
+
+def human_wave_label(period: date) -> str:
+    """El rótulo con el que una persona —y el mazo del proveedor— nombra la ola."""
+    return f"{_MESES_ABBR[period.month - 1]} '{period.strftime('%y')}"
+
+
 def store_history(db: Any, engagement_id: str, readings: List[HistoryReading],
                   source: Optional[str] = None) -> Dict[str, Any]:
     """Carga las lecturas creando las olas y marcas que falten. **Solo-si-falta.**
@@ -222,6 +236,7 @@ def store_history(db: Any, engagement_id: str, readings: List[HistoryReading],
     }
 
     olas_nuevas = marcas_nuevas = nuevas = omitidas = 0
+    etiquetas_reparadas = 0
     orden = max((int(w.sort_order or 0) for w in olas.values()), default=0)
     for r in sorted(readings, key=lambda x: x.period):
         code = r.period.strftime("%Y-%m")
@@ -229,11 +244,18 @@ def store_history(db: Any, engagement_id: str, readings: List[HistoryReading],
         if wave is None:
             orden += 1
             wave = BrandWave(engagement_id=engagement_id, code=code,
-                             label=code, sort_order=orden, period_date=r.period)
+                             label=human_wave_label(r.period),
+                             sort_order=orden, period_date=r.period)
             db.add(wave)
             db.flush()
             olas[code] = wave
             olas_nuevas += 1
+        elif str(wave.label) == code:
+            # Reparación acotada: una etiqueta IGUAL al código es el marcador que dejó una
+            # carga anterior de esta misma matriz, no una elección de nadie. Se reemplaza
+            # por el rótulo humano; una etiqueta que una persona escribió no se toca jamás.
+            wave.label = human_wave_label(r.period)
+            etiquetas_reparadas += 1
         slug = resolver.brand(r.brand) or r.brand_slug
         if slug not in marcas:
             db.add(BrandEntity(engagement_id=engagement_id, slug=slug,
@@ -262,6 +284,7 @@ def store_history(db: Any, engagement_id: str, readings: List[HistoryReading],
 
     return {
         "olas_creadas": olas_nuevas, "marcas_creadas": marcas_nuevas,
+        "etiquetas_reparadas": etiquetas_reparadas,
         "observaciones_nuevas": nuevas,
         "observaciones_omitidas_por_existir": omitidas,
         "olas_reordenadas": renumeradas,

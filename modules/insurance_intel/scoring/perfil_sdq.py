@@ -132,6 +132,20 @@ CESION_NO_INTERPRETABLE = CESION_MAX_SANA
 # resultado no es sensible a dónde exactamente se ponga dentro de ella.
 INVERSION_DOMINANTE = 0.60
 
+# Límite conocido de la ponderación por exposición, DECLARADO porque no es evaluable con este
+# panel. En un libro que se encoge, el promedio queda anclado en los ejercicios viejos —que
+# pesan más— y un deterioro reciente se diluye, justo en la compañía que se querría detectar.
+# Medido: solo 1 de 35 aseguradoras se encoge en la ventana, y en ese único caso el ponderado
+# da 99% contra 94% del simple, o sea ancla en años PEORES y el efecto va al revés. Con n=1 no
+# se corrige nada — se dice. (Observación de la revisión actuarial externa, 2026-08-12.)
+LIMITE_PONDERACION = (
+    "El promedio del ciclo se pondera por exposición. En un libro en contracción eso puede "
+    "diluir un deterioro reciente, porque los ejercicios grandes son los viejos. No es "
+    "evaluable con este panel: una sola aseguradora se contrae en la ventana y en ese caso el "
+    "efecto va en sentido contrario. Se publica `peso_ultimo_ejercicio` para que el lector "
+    "vea cuánto del promedio es realmente el último año."
+)
+
 MOTIVO_CESION = ("cede {pct:.0f}% de la prima: el combined ratio bruto mide el riesgo que "
                  "origina, no el que absorbe")
 MOTIVO_INVERSION = ("el producto de inversiones vale {pct:.0f}% de la prima: el siniestro lo "
@@ -278,9 +292,16 @@ def metricas_del_ciclo(ejercicios: Dict[str, Dict[str, float]]) -> Optional[Dict
     vivos = [w for w in pesos if w > 0]
     comparable = bool(vivos) and (max(vivos) / min(vivos)) <= SALTO_ESCALA_MAX
 
+    # PESO DEL ÚLTIMO EJERCICIO. Ponderar por exposición corrige el problema de los
+    # ejercicios diminutos (HYLSEG: 118,9% simple contra 89,0% ponderado), pero concentra:
+    # medido en el panel, el último año pesa 27% en la mediana y hasta 58% en un libro que
+    # creció mucho. Un promedio "de ciclo" que en realidad es casi un año tiene que decirlo.
+    peso_ultimo = (pesos[-1] / total) if total > 0 and pesos else None
+
     return {
         "años": años,
         "combined_promedio": combined_prom,
+        "peso_ultimo_ejercicio": round(peso_ultimo, 3) if peso_ultimo is not None else None,
         "loss_volatilidad": math.sqrt(var),
         "cesion_promedio": cesion,
         "inversion_sobre_prima": inversion,

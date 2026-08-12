@@ -251,7 +251,20 @@ def score_insurers(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                          "raw": None if raw is None else round(raw, 4),
                          "score": score, "provenance": "real", "present": present})
         coverage = round(wsum / total_weight, 4) if total_weight else 0.0
-        overall = round(num / wsum, 1) if wsum and coverage >= _MIN_COVERAGE else None
+        # ── SUPRIMIR NO PUEDE PREMIAR ────────────────────────────────────────────
+        # Renormalizar sobre las dimensiones presentes equivale a ASUMIR que las ausentes
+        # valen el promedio de las demás. Para una dimensión que falta por FALTA DE DATO esa
+        # es una suposición neutra y sigue valiendo. Para una que falta porque la MÉTRICA NO
+        # APLICA a esa compañía, no: es rellenar la brecha, justo lo que la doctrina prohíbe.
+        #
+        # El efecto medido era perverso. Angloamericana pasaba de 35,9 a 55,2 al suprimirle
+        # siniestralidad y resultado técnico: le iba MEJOR precisamente por no poder medirla.
+        # Y el combined NETO de una fronting podría estar bien o mal — no lo sabemos, así que
+        # asumir el promedio de sus otras dimensiones no tiene con qué sostenerse.
+        # (Observación de la revisión actuarial externa, 2026-08-12.)
+        motivo_score = _combined_no_interpretable(fin)
+        overall = (round(num / wsum, 1)
+                   if wsum and coverage >= _MIN_COVERAGE and not motivo_score else None)
         # Incumplir el margen de solvencia (Ley 146-02, índice < 1.0) topea la banda.
         solv = raws[slug].get("solvencia")
         incumple = solv is not None and solv < 1.0
@@ -259,6 +272,8 @@ def score_insurers(financials: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         out.append({
             "slug": slug, "name": fin.get("name", slug), "period": fin.get("period"),
             "overall_score": overall, "band": band,
+            # Por qué no hay score teniendo dato. `None` cuando sí se publica.
+            "score_no_publicable": motivo_score,
             # ``band_capped`` distingue "En vigilancia por su score" de "En vigilancia porque
             # incumple": sin esta marca, la etiqueta sola no dice cuál de las dos cosas pasó.
             "band_capped": bool(band and incumple and band != band_for(overall)),

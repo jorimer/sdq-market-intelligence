@@ -20,6 +20,7 @@ machine already knows is inconsistent.
 from __future__ import annotations
 
 import logging
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -104,6 +105,12 @@ def _loose_key(text: str) -> str:
     every cell in a real deck is rejected as an unknown wave, which is the difference
     between the pipeline working on a client's actual file and only on our own fixtures.
     """
+    # El SIGLO se descarta antes de normalizar: el mismo mazo escribe «Junio 2026» en una
+    # lámina y «Jun '26» en otra, y con el año a cuatro dígitos las claves salían «jun2026»
+    # y «jun26». En producción eso rechazó 144 celdas del mazo de Ola 5 por «ola no
+    # reconocida». Se hace sobre el texto CRUDO porque hace falta la frontera de palabra
+    # que la normalización borra.
+    text = re.sub(r"\b(?:19|20)(\d{2})\b", r"\1", text or "")
     folded = _norm(text)
     letters = "".join(c for c in folded if c.isalpha())[:3]
     digits = "".join(c for c in folded if c.isdigit())
