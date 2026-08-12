@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import pathlib
 from dataclasses import dataclass
 from typing import Dict, Optional
 
@@ -30,6 +31,39 @@ logger = logging.getLogger("sdq.products.assembler")
 # "2": doctrina 2026-07-17 (TRADUCE EL TECNICISMO + registro llano de PROCEDENCIA/
 # INCERTIDUMBRE) — sin el bump, los reportes cacheados seguirían sirviendo la voz vieja.
 NARRATIVE_CACHE_VERSION = "2"
+
+
+def _contexto_ia_version(modulo_producto: Optional[str]) -> str:
+    """Huella del CONSTRUCTOR DE CONTEXTO del sector (``modules/<mod>/ai_context.py``).
+
+    La receta cubría prompts, doctrina, modelo y guard — pero NO lo que se le PASA al modelo.
+    Un arreglo de contexto quedaba invisible acá igual que un arreglo de prompt antes de que
+    existiera la receta: el 2026-08-11 se corrigió `concentracion_top4_pct` —la clave que hacía
+    publicar «cuatro compañías concentran el 87,1%» cuando eran cuatro RAMOS—, se desplegó, y
+    el Deep Dive de MAPFRE siguió sirviendo el texto viejo desde Postgres. Esta caché no tiene
+    TTL: habría quedado mal indefinidamente.
+
+    *modulo_producto* es ``type(product).__module__`` —p. ej. ``modules.insurance_intel.products``—
+    y NO el ``sector_key``. Son cosas distintas: el sector es ``"insurance"`` y el módulo es
+    ``insurance_intel``. Derivarlo del objeto evita un mapa sector→carpeta que se desincroniza,
+    y evita el fallo silencioso de buscar ``modules/insurance/ai_context.py``, que no existe:
+    devolvería "" y la huella no invalidaría nada, con todo en verde.
+
+    Se hashea SOLO el sector que se está rindiendo: invalidar el panel entero por tocar un
+    módulo obliga a regenerar ~15-90s por informe sin motivo.
+    """
+    if not modulo_producto:
+        return ""
+    partes = modulo_producto.split(".")
+    if len(partes) < 2 or partes[0] != "modules":
+        return ""
+    ruta = (pathlib.Path(__file__).resolve().parents[2]
+            / "modules" / partes[1] / "ai_context.py")
+    try:
+        return hashlib.sha256(ruta.read_bytes()).hexdigest()[:12]
+    except OSError:
+        # Sector sin constructor propio: no es un error, no hay nada que versionar.
+        return ""
 
 
 def _narrative_logic_version() -> str:
@@ -62,14 +96,19 @@ def _narrative_logic_version() -> str:
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:12]
 
 
-def _narrative_fingerprint(payload: Optional[Dict], tier: str, lang: str) -> str:
-    """Hash del snapshot (dato) + tier + idioma + versión + RECETA → clave de frescura.
-    Si cambia el dato subyacente O la forma de generar el texto, el fingerprint cambia →
-    MISS → se regenera. Sin la receta, un arreglo de prompt no se veía nunca acá."""
+def _narrative_fingerprint(payload: Optional[Dict], tier: str, lang: str,
+                           modulo_producto: Optional[str] = None) -> str:
+    """Hash del snapshot (dato) + tier + idioma + versión + RECETA + CONTEXTO → frescura.
+
+    Si cambia el dato subyacente, la forma de generar el texto O lo que se le pasa al modelo,
+    el fingerprint cambia → MISS → se regenera. Sin la receta, un arreglo de prompt no se veía
+    nunca acá; sin el contexto, tampoco se veía un arreglo de contexto.
+    """
     raw = json.dumps(payload or {}, sort_keys=True, default=str, ensure_ascii=False)
     return hashlib.sha256(
         f"{raw}|{tier}|{lang}|{NARRATIVE_CACHE_VERSION}|"
-        f"{_narrative_logic_version()}".encode("utf-8")).hexdigest()
+        f"{_narrative_logic_version()}|"
+        f"{_contexto_ia_version(modulo_producto)}".encode("utf-8")).hexdigest()
 
 
 async def _narratives_cached(
@@ -91,7 +130,8 @@ async def _narratives_cached(
     if db is None:
         return await product.narratives(tier, snapshot, lang)
 
-    fp = _narrative_fingerprint(snapshot.payload, tier.value, lang)
+    fp = _narrative_fingerprint(snapshot.payload, tier.value, lang,
+                                modulo_producto=type(product).__module__)
     key = dict(sector_key=product.sector_key, tier=tier.value,
                scope=scope or "", period=snapshot.period or "", lang=lang)
     from shared.narrative.claude_engine import is_static_fallback_text
