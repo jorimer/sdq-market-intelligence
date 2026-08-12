@@ -11,6 +11,7 @@ usable statement.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -110,3 +111,75 @@ def step_gap_series(
             "gap": (rc - fc) if fc is not None and rc is not None else None,
         })
     return rows
+
+
+# ── la brecha ENTRE indicadores, computada y con su sujeto ─────────────
+
+#: Qué población vive en el hueco entre dos peldaños consecutivos. La escalera es
+#: ANIDADA: quien consumió en los últimos 7 días consumió también en el último mes, así
+#: que la diferencia entre dos peldaños ES una proporción de la misma muestra —y por eso
+#: puede llevar su propio margen de error—. El sujeto va escrito acá y no lo redacta el
+#: modelo: es la regla de que el sujeto viaja con el número.
+LADDER_GAP_SUBJECT: Dict[Tuple[str, str], str] = {
+    ("awareness_total", "ever_tried"):
+        "personas que conocen la marca pero nunca la han probado",
+    ("ever_tried", "reach_3m"):
+        "personas que probaron la marca alguna vez pero no la consumieron en el trimestre",
+    ("reach_3m", "reach_1m"):
+        "personas que consumieron en el trimestre pero no en el último mes",
+    ("reach_1m", "reach_7d"):
+        "personas que consumieron en el último mes pero no en los últimos 7 días",
+}
+
+
+def ladder_gaps(
+    rungs: Dict[str, Optional[float]],
+    bases: Dict[str, Optional[int]],
+    z: float = 1.96,
+) -> List[Dict[str, Any]]:
+    """La distancia entre peldaños CONSECUTIVOS, con su margen de error y su sujeto.
+
+    Solo se computa entre peldaños de la escalera, y solo cuando comparten base: fuera de
+    esa relación de anidamiento la diferencia entre dos indicadores no tiene una
+    distribución que podamos estimar —haría falta la conjunta, que el tracker no
+    entrega—, y por eso ahí no hay cifra que publicar sino una comparación que no se hace.
+
+    Un hueco negativo NO se convierte en sujeto: rompe el anidamiento y lo que hay es una
+    inconsistencia del dato, que se declara en vez de interpretarse.
+    """
+    out: List[Dict[str, Any]] = []
+    for a, b in zip(FUNNEL_LADDER, FUNNEL_LADDER[1:]):
+        va, vb = rungs.get(a), rungs.get(b)
+        na, nb = bases.get(a), bases.get(b)
+        row: Dict[str, Any] = {
+            "de": a, "a": b,
+            "etiquetas": f"{label_for(a)} → {label_for(b)}",
+            "valor_de": va, "valor_a": vb,
+            "sujeto_de_la_brecha": LADDER_GAP_SUBJECT.get((a, b)),
+        }
+        if va is None or vb is None:
+            row.update(brecha=None, verdicto="sin_dato",
+                       nota="Uno de los dos peldaños no tiene dato en esta ola.")
+        elif not na or not nb or na != nb:
+            row.update(brecha=round(va - vb, 2), verdicto="no_computable",
+                       nota=("Los dos peldaños no comparten base muestral: la diferencia "
+                             "no puede leerse como una subpoblación."))
+        elif va < vb:
+            row.update(brecha=round(va - vb, 2), verdicto="inconsistente",
+                       nota=(f"El peldaño posterior supera al anterior "
+                             f"({vb}% > {va}%): el anidamiento no se cumple y la "
+                             "diferencia no describe ninguna población."))
+        else:
+            d = (va - vb) / 100.0
+            margen = z * math.sqrt(d * (1.0 - d) / na) * 100.0
+            gap = va - vb
+            row.update(
+                brecha=round(gap, 2), base_n=na,
+                margen_de_error=round(margen, 2),
+                verdicto=("distinguible_de_cero" if gap > margen
+                          else "no_distinguible_de_cero"),
+                nota=("La brecha es una proporción de la misma muestra; su margen al 95% "
+                      f"es ±{round(margen, 2)} pp."),
+            )
+        out.append(row)
+    return out
