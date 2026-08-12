@@ -12,6 +12,8 @@ Tables:
   - BrandEntity      — a brand in the engagement's competitive set.
   - BrandObservation — one measurement: wave x brand x metric x segment, WITH its base.
   - BrandDecision    — the ledger: a client decision with metric, baseline, window, verdict.
+  - BrandSalesDaily  — one store-day of sales AND transactions: the only source that
+                       separates traffic from ticket, which no survey can do.
   - BrandPlanDocument— a client plan document (agency strategy, media plan) with its text.
   - BrandPlanGoal    — a goal the reader extracted from a plan, pending human adoption.
   - BrandForecast    — a frozen forecast and, later, its score against the actual.
@@ -260,6 +262,12 @@ class BrandDecision(UUIDMixin, Base):
     engagement_id = Column(String, nullable=False)
     title = Column(String(300), nullable=False)
     rationale = Column(Text, nullable=True)
+    # Quién propuso el compromiso. Sin este campo no existe la evaluación CARA A CARA
+    # que se le prometió al cliente: los planes de sus agencias y las propuestas de SDQ
+    # se evalúan con la misma vara, y para reportar el desempeño de cada fuente hay que
+    # poder distinguirlas. Por defecto `cliente`: todo lo registrado hasta ahora vino
+    # de sus planes.
+    origin = Column(String(20), nullable=False, default="cliente")   # cliente | sdq
     # The measure: tracker metric XOR external source (validated at the API boundary).
     metric_code = Column(String(60), nullable=True)
     external_measure = Column(Text, nullable=True)
@@ -445,6 +453,64 @@ class BrandDiscrepancy(UUIDMixin, Base):
     # abierta | discutida | acordada | retirada
     resolution_note = Column(Text, nullable=True)      # qué se acordó, o por qué se retiró
     updated_by = Column(String(120), nullable=True)
+
+
+class BrandSalesDaily(UUIDMixin, Base):
+    """Una jornada de venta de un local, con su comparativo del ejercicio anterior.
+
+    Es la primera tabla del módulo que **no** es percepción. El estudio de mercado
+    establece qué percibe el consumidor; esto establece qué hizo. La mayor parte del
+    valor analítico del cruce vive en dos columnas: la venta y el CONTEO DE
+    TRANSACCIONES (``gc``, guest count). Con ambas, el movimiento de facturación se
+    descompone entre afluencia y gasto por visita — la lectura que ninguna encuesta
+    puede dar, porque una encuesta no observa transacciones.
+
+    El cheque promedio NO se almacena: se computa como venta ÷ transacciones al leer.
+    Guardar un derivado abre la puerta a que la suma de las partes no cuadre con el
+    total cuando una fila se corrige.
+
+    ``*_prior`` es el valor de LAS MISMAS FECHAS del ejercicio anterior tal como lo
+    entrega el tablero del operador, no una serie propia: el comparativo es del cliente
+    y se conserva como lo publica, lo que permite reproducir sus cifras exactamente.
+    """
+
+    __tablename__ = "brand_sales_daily"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "business_date", "store_id",
+                         name="uq_brand_sales_daily"),
+        Index("ix_brand_sales_lookup", "engagement_id", "business_date"),
+    )
+
+    engagement_id = Column(String, nullable=False)
+    business_date = Column(Date, nullable=False)
+    store_id = Column(String(40), nullable=False)
+    store_name = Column(String(160), nullable=True)
+    city = Column(String(80), nullable=True)             # normalizada en la ingesta
+    zone = Column(String(80), nullable=True)
+
+    # Totales del local en la jornada.
+    sales = Column(Float, nullable=True)
+    sales_prior = Column(Float, nullable=True)
+    transactions = Column(Integer, nullable=True)        # guest count
+    transactions_prior = Column(Integer, nullable=True)
+
+    # Desglose por canal. Un canal ausente en el tablero queda en NULL —jamás en cero—
+    # para que el motor distinga "no vendió" de "no se informó".
+    sales_drive_thru = Column(Float, nullable=True)
+    sales_drive_thru_prior = Column(Float, nullable=True)
+    transactions_drive_thru = Column(Integer, nullable=True)
+    transactions_drive_thru_prior = Column(Integer, nullable=True)
+    sales_delivery = Column(Float, nullable=True)
+    sales_delivery_prior = Column(Float, nullable=True)
+    transactions_delivery = Column(Integer, nullable=True)
+    transactions_delivery_prior = Column(Integer, nullable=True)
+    sales_counter = Column(Float, nullable=True)
+    sales_counter_prior = Column(Float, nullable=True)
+    transactions_counter = Column(Integer, nullable=True)
+    transactions_counter_prior = Column(Integer, nullable=True)
+
+    currency = Column(String(8), nullable=False, default="DOP")
+    source_file = Column(String(300), nullable=True)     # el tablero del que salió
 
 
 class BrandPlanDocument(UUIDMixin, Base):

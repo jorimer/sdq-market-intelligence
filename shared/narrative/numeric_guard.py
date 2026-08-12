@@ -537,6 +537,15 @@ def _direction_refs(context: dict) -> List[tuple]:
             return list(por_indicador.values())
 
     inds = context.get("indicators") or context.get("indicadores") or {}
+    # El chequeo de dirección espera un MAPA indicador→blob. Otro eje puede traer una
+    # LISTA bajo la misma clave (brand_intel sirve sus indicadores comparados así), y
+    # entonces `.items()` lanzaba: el guard quedaba desactivado por excepción, en
+    # silencio, que es el peor de los desenlaces — un guard sin su input no falla,
+    # desaparece. Ante una forma que no reconoce, el chequeo se salta explícitamente.
+    if not isinstance(inds, dict):
+        logger.info("Chequeo de dirección omitido: 'indicadores' no es un mapa "
+                    "indicador→valores (%s).", type(inds).__name__)
+        inds = {}
     bench = context.get("benchmarks") or {}
     sector = bench.get("sector_averages") or {}
     peers = bench.get("peer_groups") or {}

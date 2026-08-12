@@ -51,6 +51,7 @@ from modules.brand_intel.models.models import (
     BrandObservationReading,
     BrandPlanDocument,
     BrandPlanGoal,
+    BrandSalesDaily,
     BrandWave,
 )
 
@@ -101,12 +102,22 @@ def waves(db: Session, engagement_id: str) -> List[BrandWave]:
     )
 
 
-def data_waves(db: Session, engagement_id: str) -> List[BrandWave]:
+def data_waves(db: Session, engagement_id: str,
+               as_of: Optional[str] = None) -> List[BrandWave]:
     """Waves that actually carry observations, chronological.
 
     ``waves()`` returns every wave including future ones created to hold a frozen
     forecast. Analysis must run on the waves that have data: otherwise a projection wave
     silently becomes "the latest wave" and every reading points at an empty column.
+
+    ``as_of`` TRUNCATES the series at that wave, so every analysis downstream reads the
+    engagement as it stood when that wave landed. Es el punto único por el que pasan
+    todos los análisis relativos a ola, y por eso la vista al corte se resuelve aquí:
+    servir el dato ACTUAL con la etiqueta de una ola pasada sería reetiquetar, no
+    consultar el pasado — el defecto que ya se pagó en los selectores de período de los
+    productos por sector. Una ola desconocida no silencia el corte: se ignora y la
+    serie completa se devuelve, porque un corte que falla en silencio es peor que
+    ninguno (el llamador valida el código antes).
     """
     with_data = {
         r[0]
@@ -115,7 +126,15 @@ def data_waves(db: Session, engagement_id: str) -> List[BrandWave]:
         .distinct()
         .all()
     }
-    return [w for w in waves(db, engagement_id) if w.id in with_data]
+    serie = [w for w in waves(db, engagement_id) if w.id in with_data]
+    if not as_of:
+        return serie
+    codes = [str(w.code) for w in serie]
+    if as_of not in codes:
+        logger.warning("Ola de corte '%s' sin dato en el encargo: se lee la serie "
+                       "completa.", as_of)
+        return serie
+    return serie[:codes.index(as_of) + 1]
 
 
 def brands(db: Session, engagement_id: str) -> List[BrandEntity]:
@@ -434,9 +453,10 @@ def _series_for(
 
 # ── S1 · category and competitive position ────────────────────────────
 
-def category_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
+def category_analysis(db: Session, engagement_id: str,
+                      as_of: Optional[str] = None) -> Dict[str, Any]:
     """Category size, share by brand, share shift and the attitude/behaviour divergence."""
-    ws = data_waves(db, engagement_id)
+    ws = data_waves(db, engagement_id, as_of=as_of)
     # Coercionados a `str` en el origen: en tiempo de ejecución ya lo son, y arrastrarlos
     # como `Column[str]` obliga a silenciar el tipado en cada sitio que los usa.
     wave_codes: List[str] = [str(w.code) for w in ws]
@@ -581,14 +601,15 @@ def macro_context(db: Session) -> Dict[str, Any]:
     }
 
 
-def attribution_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
+def attribution_analysis(db: Session, engagement_id: str,
+                         as_of: Optional[str] = None) -> Dict[str, Any]:
     """S3 — every core indicator's movement split between category and brand, in context.
 
     Runs on the last wave transition. Reach-type metrics ride the category and get a real
     decomposition; attitudinal ones do not scale with category size, so attributing part of
     their movement to it would be a category error dressed as arithmetic.
     """
-    ca = category_analysis(db, engagement_id)
+    ca = category_analysis(db, engagement_id, as_of=as_of)
     if not ca.get("available"):
         return {"available": False, "reason": ca.get("reason")}
     focal = ca.get("focal")
@@ -644,10 +665,11 @@ def attribution_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
 # ── S1 · funnel ───────────────────────────────────────────────────────
 
 def funnel_analysis(
-    db: Session, engagement_id: str, wave_code: Optional[str] = None
+    db: Session, engagement_id: str, wave_code: Optional[str] = None,
+    as_of: Optional[str] = None
 ) -> Dict[str, Any]:
     """Step conversion for every brand in the latest (or given) wave with data."""
-    ws = data_waves(db, engagement_id)
+    ws = data_waves(db, engagement_id, as_of=as_of)
     if not ws:
         return {"available": False,
                 "reason": "Ninguna ola del encargo tiene observaciones todavía."}
@@ -693,11 +715,12 @@ def funnel_analysis(
 
 # ── S2 · deflated ticket ──────────────────────────────────────────────
 
-def ticket_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
+def ticket_analysis(db: Session, engagement_id: str,
+                    as_of: Optional[str] = None) -> Dict[str, Any]:
     """The focal brand's average ticket, nominal and in constant pesos."""
     from shared.contracts import load_inflation_series
 
-    ws = data_waves(db, engagement_id)
+    ws = data_waves(db, engagement_id, as_of=as_of)
     ents = brands(db, engagement_id)
     focal = next((b.slug for b in ents if b.is_focal), None)
     if not focal:
@@ -903,7 +926,8 @@ def forecast_track_record(db: Session, engagement_id: str) -> Dict[str, Any]:
     }
 
 
-def rule_backtest(db: Session, engagement_id: str, segment: str = "total") -> Dict[str, Any]:
+def rule_backtest(db: Session, engagement_id: str, segment: str = "total",
+                  as_of: Optional[str] = None) -> Dict[str, Any]:
     """Rank the naive forecast rules on this engagement's own history."""
     ents = brands(db, engagement_id)
     focal = next((b.slug for b in ents if b.is_focal), None)
@@ -946,10 +970,11 @@ def rule_backtest(db: Session, engagement_id: str, segment: str = "total") -> Di
 # ── S5 · signal filter and decision ledger ────────────────────────────
 
 def signal_filter(
-    db: Session, engagement_id: str, wave_code: Optional[str] = None
+    db: Session, engagement_id: str, wave_code: Optional[str] = None,
+    as_of: Optional[str] = None
 ) -> Dict[str, Any]:
     """What each indicator would need to move to carry a decision."""
-    ws = data_waves(db, engagement_id)
+    ws = data_waves(db, engagement_id, as_of=as_of)
     if not ws:
         return {"available": False,
                 "reason": "Ninguna ola del encargo tiene observaciones todavía."}
@@ -985,9 +1010,22 @@ def signal_filter(
     }
 
 
-def evaluate_decisions(db: Session, engagement_id: str) -> Dict[str, Any]:
-    """Issue verdicts on every open decision whose evaluation wave has landed."""
+def evaluate_decisions(db: Session, engagement_id: str,
+                       as_of: Optional[str] = None) -> Dict[str, Any]:
+    """Issue verdicts on every open decision whose evaluation wave has landed.
+
+    ``as_of`` es la ola contra la que se mide cuando el compromiso **no declaró** ola de
+    evaluación. Sin esto, un plan registrado sin ventana objetivo no se evalúa nunca:
+    los 107 compromisos que el cliente adoptó de sus planes fijaron línea base pero
+    dejaron la ventana abierta, y quedarían en «abierta» para siempre mientras el dato
+    para medirlos ya existe. La ola de evaluación implícita es la del informe, y solo
+    aplica si es POSTERIOR a la línea base — medir contra la propia línea base o contra
+    una ola anterior daría un veredicto sin sentido.
+    """
     ws = {w.id: w for w in waves(db, engagement_id)}
+    serie = data_waves(db, engagement_id, as_of=as_of)
+    implicita = serie[-1] if serie else None
+    orden = {str(w.id): int(w.sort_order or 0) for w in ws.values()}
     rows = (
         db.query(BrandDecision)
         .filter(BrandDecision.engagement_id == engagement_id)
@@ -1009,16 +1047,27 @@ def evaluate_decisions(db: Session, engagement_id: str) -> Dict[str, Any]:
                 "label": f"Fuente externa: {d.external_measure}",
                 "segment": d.segment, "owner": d.owner,
                 "baseline_wave": ws[d.baseline_wave_id].label if d.baseline_wave_id in ws else None,
-                "target_wave": ws[d.target_wave_id].label if d.target_wave_id in ws else None,
+                "target_wave": (ws[d.target_wave_id].label
+                                if d.target_wave_id in ws else None),
+                "target_wave_implicit": False,
                 "baseline_value": None, "target_value": None,
                 "status": v.status, "observed_delta": None,
                 "detectable_threshold": None, "note": v.note,
                 "external_measure": d.external_measure,
+                "origin": d.origin or "cliente",
             })
             continue
 
         base_obs = _decision_obs(db, engagement_id, d, d.baseline_wave_id)
-        targ_obs = _decision_obs(db, engagement_id, d, d.target_wave_id) if d.target_wave_id else None
+        # Ventana objetivo: la declarada, o la ola del informe si el compromiso no
+        # declaró ninguna y esa ola es posterior a su línea base.
+        target_id = d.target_wave_id
+        implicita_usada = False
+        if not target_id and implicita is not None:
+            if orden.get(str(implicita.id), 0) > orden.get(str(d.baseline_wave_id), 0):
+                target_id = implicita.id
+                implicita_usada = True
+        targ_obs = _decision_obs(db, engagement_id, d, target_id) if target_id else None
         m = get_metric(d.metric_code)
 
         v = ldg.evaluate(
@@ -1042,12 +1091,14 @@ def evaluate_decisions(db: Session, engagement_id: str) -> Dict[str, Any]:
             "label": label_for(d.metric_code), "segment": d.segment,
             "owner": d.owner,
             "baseline_wave": ws[d.baseline_wave_id].label if d.baseline_wave_id in ws else None,
-            "target_wave": ws[d.target_wave_id].label if d.target_wave_id in ws else None,
+            "target_wave": ws[target_id].label if target_id in ws else None,
+            "target_wave_implicit": implicita_usada,
             "baseline_value": d.baseline_value,
             "target_value": targ_obs.value if targ_obs else None,
             "status": v.status, "observed_delta": v.observed_delta,
             "detectable_threshold": v.detectable_threshold, "note": v.note,
             "external_measure": None,
+            "origin": d.origin or "cliente",
         })
 
     return {"decisions": results, "summary": ldg.summarize(verdicts)}
@@ -1073,7 +1124,8 @@ def _decision_obs(db: Session, engagement_id: str, d: BrandDecision,
 # ── S4 · scenarios and sensitivity ────────────────────────────────────
 
 def scenarios_analysis(
-    db: Session, engagement_id: str, segment: str = "total"
+    db: Session, engagement_id: str, segment: str = "total",
+    as_of: Optional[str] = None
 ) -> Dict[str, Any]:
     """S4 — scenarios, rule dispersion, base sensitivity and the stated risks.
 
@@ -1086,7 +1138,7 @@ def scenarios_analysis(
     if not focal:
         return {"available": False, "reason": "El encargo no declara marca focal."}
 
-    ws = data_waves(db, engagement_id)
+    ws = data_waves(db, engagement_id, as_of=as_of)
     macro = macro_context(db)
     env = macro["_env"]
 
@@ -1167,7 +1219,8 @@ def _core_change_assessments(
     return out
 
 
-def vigilance_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
+def vigilance_analysis(db: Session, engagement_id: str,
+                       as_of: Optional[str] = None) -> Dict[str, Any]:
     """S5 — what moved since the last delivery, and the agenda the quarter justifies."""
     ents = brands(db, engagement_id)
     focal = next((b.slug for b in ents if b.is_focal), None)
@@ -1191,7 +1244,7 @@ def vigilance_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
     ]
 
     decisions = evaluate_decisions(db, engagement_id)
-    category = category_analysis(db, engagement_id)
+    category = category_analysis(db, engagement_id, as_of=as_of)
     funnel = funnel_analysis(db, engagement_id)
 
     m_sigs = vig.macro_signals(macro.get("factors") or [])
@@ -1280,6 +1333,203 @@ def check_decision_feasibility(
         "baseline_value": obs.value if obs else None,
         "baseline_base_n": obs.base_n if obs else None,
     }
+
+
+def wave_frame(db: Session, engagement_id: str,
+               as_of: Optional[str] = None) -> Dict[str, Any]:
+    """El marco de comparación de la ola: ella, la anterior y la de un año atrás."""
+    from modules.brand_intel.engines import frame as frame_engine
+
+    return frame_engine.resolve_frame(data_waves(db, engagement_id), as_of)
+
+
+def wave_comparison(db: Session, engagement_id: str,
+                    as_of: Optional[str] = None) -> Dict[str, Any]:
+    """Cada indicador núcleo contra SUS DOS referencias: ola anterior y año atrás.
+
+    Leer un tracker solo contra la ola anterior confunde el movimiento del trimestre con
+    el del ciclo: una caída de mayo a agosto puede ser estación y no deterioro. Las dos
+    bases juntas separan una cosa de la otra, y cada una pasa por el MISMO motor de
+    significancia — un movimiento que no supera el mínimo detectable de su base no es un
+    hallazgo por venir de la comparación interanual.
+
+    La lectura combinada es lo que aporta: un indicador que cae contra la ola anterior y
+    sube contra el año pasado describe estacionalidad; uno que cae contra ambas describe
+    deterioro. Esa clasificación se computa aquí, no la infiere el modelo.
+    """
+    from modules.brand_intel.engines import significance as sig_engine
+
+    marco = wave_frame(db, engagement_id, as_of)
+    if not marco.get("available"):
+        return {"available": False, "reason": marco.get("reason")}
+
+    focal = next((b for b in brands(db, engagement_id) if b.is_focal), None)
+    if focal is None:
+        return {"available": False, "reason": "El encargo no declara una marca focal."}
+
+    codigos = {marco["target"]["code"]}
+    for k in ("previous", "year_ago"):
+        if marco.get(k):
+            codigos.add(marco[k]["code"])
+    ws = {str(w.code): w for w in data_waves(db, engagement_id) if str(w.code) in codigos}
+
+    def _obs(wave_code: Optional[str], metric: str) -> Any:
+        if not wave_code or wave_code not in ws:
+            return None
+        return (db.query(BrandObservation)
+                .filter(BrandObservation.engagement_id == engagement_id,
+                        BrandObservation.wave_id == ws[wave_code].id,
+                        BrandObservation.brand_slug == focal.slug,
+                        BrandObservation.metric_code == metric,
+                        BrandObservation.segment == "total")
+                .first())
+
+    t_code = marco["target"]["code"]
+    p_code = (marco.get("previous") or {}).get("code")
+    y_code = (marco.get("year_ago") or {}).get("code")
+
+    filas: List[Dict[str, Any]] = []
+    for m in core_metrics():
+        curr = _obs(t_code, m.code)
+        if curr is None:
+            continue
+        fila: Dict[str, Any] = {
+            "metric_code": m.code, "label": label_for(m.code),
+            "value": curr.value, "base_n": curr.base_n,
+        }
+        for etiqueta, code in (("previous", p_code), ("year_ago", y_code)):
+            base = _obs(code, m.code)
+            if base is None:
+                fila[etiqueta] = None
+                continue
+            a = sig_engine.assess_change(m.code, base.value, base.base_n,
+                                         curr.value, curr.base_n)
+            fila[etiqueta] = {
+                "base_value": base.value, "base_n": base.base_n,
+                "delta": a.delta, "threshold": a.threshold,
+                "verdict": a.verdict, "publishable": a.publishable,
+                "is_finding": a.is_finding, "note": a.note,
+            }
+        # La lectura COMBINADA: es lo único que separa estación de deterioro, y se
+        # computa aquí para que el modelo la copie en vez de inferirla.
+        p, y = fila.get("previous"), fila.get("year_ago")
+        if p and y and p.get("delta") is not None and y.get("delta") is not None:
+            pd_, yd = p["delta"], y["delta"]
+            if p.get("is_finding") and y.get("is_finding"):
+                fila["combined"] = ("deterioro_sostenido" if pd_ < 0 and yd < 0 else
+                                    "mejora_sostenida" if pd_ > 0 and yd > 0 else
+                                    "estacional")
+            elif y.get("is_finding"):
+                fila["combined"] = "solo_interanual"
+            elif p.get("is_finding"):
+                fila["combined"] = "solo_intertrimestral"
+            else:
+                fila["combined"] = "sin_movimiento_detectable"
+        filas.append(fila)
+
+    return {
+        "available": bool(filas),
+        "reason": None if filas else "La ola objetivo no trae indicadores núcleo.",
+        "frame": marco,
+        "rows": filas,
+        "note": (
+            "Cada indicador se contrasta contra la ola anterior y contra la ola de "
+            "referencia interanual, y cada contraste pasa por el mínimo detectable de su "
+            "propia base: un movimiento que no lo supera no es hallazgo, venga de donde "
+            "venga. La lectura combinada distingue estacionalidad —cae contra una base y "
+            "sube contra la otra— de deterioro sostenido, que cae contra ambas."
+        ),
+    }
+
+
+def head_to_head(db: Session, engagement_id: str) -> Dict[str, Any]:
+    """Desempeño de cada fuente de recomendación, con la misma vara.
+
+    Es la promesa comercial hecha explícita: los planes de las agencias del cliente y las
+    propuestas de SDQ se registran en el mismo ledger, se evalúan con el mismo motor de
+    significancia y su resultado se reporta lado a lado. Sin esto, «evaluamos las nuestras
+    igual que las suyas» es una afirmación que nadie puede comprobar.
+
+    Solo cuenta lo COMPARABLE: un compromiso inevaluable —sub-detectable, sin corte
+    cargado, de fuente externa— no entra en el desempeño de nadie, porque su resultado no
+    depende de la calidad de la recomendación sino de la disponibilidad del instrumento.
+    Mezclarlos premiaría a quien propuso metas cómodas de medir.
+    """
+    ev = evaluate_decisions(db, engagement_id)
+    filas = ev.get("decisions") or []
+
+    RESUELTOS = {"achieved", "worsened", "not_detectable"}
+    out: Dict[str, Any] = {"by_origin": {}, "total": len(filas)}
+    for origen in ("cliente", "sdq"):
+        propios = [r for r in filas if (r.get("origin") or "cliente") == origen]
+        resueltos = [r for r in propios if r.get("status") in RESUELTOS]
+        logrados = [r for r in resueltos if r.get("status") == "achieved"]
+        out["by_origin"][origen] = {
+            "registrados": len(propios),
+            "abiertos": sum(1 for r in propios if r.get("status") == "open"),
+            "inevaluables": sum(1 for r in propios if r.get("status") == "unevaluable"),
+            "resueltos": len(resueltos),
+            "logrados": len(logrados),
+            "empeoraron": sum(1 for r in resueltos if r.get("status") == "worsened"),
+            "sin_movimiento_detectable": sum(
+                1 for r in resueltos if r.get("status") == "not_detectable"),
+            # La tasa se publica SOLO sobre compromisos resueltos, y solo si hay
+            # suficientes: un 100% sobre un caso no es un desempeño, es una anécdota.
+            "tasa_de_acierto_pct": (
+                round(len(logrados) / len(resueltos) * 100.0, 1)
+                if len(resueltos) >= 3 else None),
+            "tasa_reservada_por": (
+                None if len(resueltos) >= 3 else
+                f"solo {len(resueltos)} compromiso(s) resuelto(s): una tasa sobre esa "
+                "base no describe un desempeño"),
+        }
+    cmp_ = out["by_origin"]
+    comparable = all(cmp_[o]["tasa_de_acierto_pct"] is not None for o in ("cliente", "sdq"))
+    out["comparable"] = comparable
+    out["note"] = (
+        "Desempeño de cada fuente de recomendación sobre los compromisos que el "
+        "instrumento pudo resolver. Los inevaluables quedan fuera: su resultado depende "
+        "de la disponibilidad del dato y no de la calidad de la recomendación."
+        if comparable else
+        "Aún no hay compromisos resueltos suficientes en ambas fuentes para publicar un "
+        "desempeño comparado. El registro queda abierto y la comparación se emite cuando "
+        "cada fuente acumule al menos tres compromisos con veredicto."
+    )
+    return out
+
+
+def sales_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
+    """La lectura de la venta del encargo, con el deflactor del contrato macro.
+
+    El deflactor se resuelve aquí y no en el motor: la inflación es un contrato
+    compartido de la plataforma y el motor debe seguir siendo probable sin base de datos.
+    Cuando el índice no alcanza el tramo de la venta se pasa igual el último dato oficial
+    junto con su cobertura, y el motor declara la brecha en la lectura real.
+    """
+    from modules.brand_intel.engines import sales as sales_engine
+
+    rows = (db.query(BrandSalesDaily)
+            .filter(BrandSalesDaily.engagement_id == engagement_id)
+            .order_by(BrandSalesDaily.business_date)
+            .all())
+
+    infl, cobertura = None, None
+    try:
+        from shared.contracts import load_inflation_series
+        serie = load_inflation_series(db) or {}
+        if serie:
+            puntos = sorted(serie.items())
+            ultimo_mes, infl = puntos[-1][0], float(puntos[-1][1])
+            fechas = [r.business_date for r in rows if r.business_date]
+            if fechas:
+                fin = fechas[-1].strftime("%Y-%m")
+                cobertura = (f"índice hasta {ultimo_mes}" if ultimo_mes < fin
+                             else "índice cubre el tramo")
+    except Exception:  # noqa: BLE001 — sin contrato macro la venta se lee nominal
+        logger.warning("Contrato de inflación no disponible: la venta se lee nominal.")
+
+    return sales_engine.sales_analysis(rows, inflation_pct=infl,
+                                       inflation_coverage=cobertura)
 
 
 #: Categorías MECÁNICAS de brecha de medibilidad — derivadas del motivo de la
@@ -1529,7 +1779,8 @@ def update_discrepancy(
     return d
 
 
-def explanations_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
+def explanations_analysis(db: Session, engagement_id: str,
+                          as_of: Optional[str] = None) -> Dict[str, Any]:
     """La capa explicativa: conclusiones utilizables × contrato macro.
 
     Solo lee ``usable_conclusions`` — nunca la tabla de conclusiones directa. Es la

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -28,26 +29,36 @@ REPORT_TITLE = "Informe de Contexto de Mercado"
 
 # ── payload ───────────────────────────────────────────────────────────
 
-def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
-    """Assemble every section plus the auto-generated methodology, sources and limits."""
+def build_report(db: Session, engagement: BrandEngagement,
+                 wave: Optional[str] = None) -> Dict[str, Any]:
+    """Assemble every section plus the auto-generated methodology, sources and limits.
+
+    ``wave`` fija la ola a medir. El informe se construye AL CORTE de esa ola: cada
+    análisis lee la serie truncada ahí, de modo que pedir una ola pasada devuelve el
+    expediente como estaba entonces y no el dato actual reetiquetado. Por defecto, la
+    última ola con dato.
+    """
     eid = engagement.id
     # Waves WITH data: a projection wave exists only to hold a frozen forecast and is not
     # part of the report's history — counting it would overstate the panel behind every
     # statement the report makes about how much history there is.
-    ws = svc.data_waves(db, eid)
+    ws = svc.data_waves(db, eid, as_of=wave)
 
-    explanations = svc.explanations_analysis(db, str(eid))
-    category = svc.category_analysis(db, eid)
-    funnel = svc.funnel_analysis(db, eid)
-    ticket = svc.ticket_analysis(db, eid)
-    attribution = svc.attribution_analysis(db, eid)
-    backtest = svc.rule_backtest(db, eid)
+    explanations = svc.explanations_analysis(db, str(eid), as_of=wave)
+    category = svc.category_analysis(db, eid, as_of=wave)
+    funnel = svc.funnel_analysis(db, eid, as_of=wave)
+    ticket = svc.ticket_analysis(db, eid, as_of=wave)
+    attribution = svc.attribution_analysis(db, eid, as_of=wave)
+    backtest = svc.rule_backtest(db, eid, as_of=wave)
     track = svc.forecast_track_record(db, eid)
-    signal = svc.signal_filter(db, eid)
-    decisions = svc.evaluate_decisions(db, eid)
-    scenarios = svc.scenarios_analysis(db, eid)
-    vigilance = svc.vigilance_analysis(db, eid)
+    signal = svc.signal_filter(db, eid, as_of=wave)
+    decisions = svc.evaluate_decisions(db, eid, as_of=wave)
+    scenarios = svc.scenarios_analysis(db, eid, as_of=wave)
+    vigilance = svc.vigilance_analysis(db, eid, as_of=wave)
     plan = svc.plan_readiness(db, str(eid))
+    h2h = svc.head_to_head(db, str(eid))
+    sales = svc.sales_analysis(db, str(eid))
+    comparison = svc.wave_comparison(db, str(eid), as_of=wave)
 
     payload: Dict[str, Any] = {
         "engagement": {
@@ -78,8 +89,12 @@ def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
             "scenarios": scenarios,
             "vigilance": vigilance,
             "plan": plan,
+            "sales": sales,
+            "comparison": comparison,
+            "head_to_head": h2h,
         },
     }
+    payload["frame"] = comparison.get("frame") or svc.wave_frame(db, str(eid), wave)
     payload["executive"] = _executive(payload)
     payload["methodology"] = _methodology(payload)
     payload["sources"] = _sources(db, eid, engagement)
@@ -184,6 +199,10 @@ _CEREBRO_TEMPLATES = {
     "explanations": "brand_context_reading",
     "priorities": "brand_context_priorities",
     "plan": "brand_plan_readiness",
+    "sales": "brand_sales_reading",
+    "comparison": "brand_wave_comparison",
+    "proposals": "brand_sdq_proposals",
+    "proposals_practice": "brand_sdq_proposals_practice",
 }
 
 
@@ -325,8 +344,90 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         "agenda": ag.get("items") or [],
         "nota_umbral": sf.get("note"),
     }
+    # La venta: TODO viene computado por engines/sales.py. El modelo narra la
+    # descomposición; no la recalcula (una encuesta no observa transacciones, y este
+    # reparto es lo único que el cruce agrega — servirlo mal sería perder la sección).
+    sales = s.get("sales") or {}
+    sales_ctx = {
+        **base,
+        "periodo_venta": sales.get("period"),
+        "ventana_comparable": sales.get("comparable_window"),
+        "sistema": sales.get("system"),
+        "composicion_del_crecimiento": sales.get("growth_composition"),
+        "cheque_real": sales.get("real_check"),
+        "por_plaza": sales.get("by_city"),
+        "por_canal": sales.get("by_channel"),
+        "plazas_en_contraccion": sales.get("contracting_cities"),
+        "locales": sales.get("stores"),
+        "consistencia": sales.get("consistency"),
+        "nota_motor": sales.get("note"),
+    }
+    # La doble comparación: la clasificación combinada (estacional vs deterioro
+    # sostenido) YA viene computada; el modelo la copia, no la deduce.
+    comp = s.get("comparison") or {}
+    comp_ctx = {
+        **base,
+        "marco": comp.get("frame"),
+        "indicadores_comparados": comp.get("rows") or [],
+        "nota_motor": comp.get("note"),
+    }
+    # Propuestas de SDQ: el modelo propone SOBRE LA EVIDENCIA YA COMPUTADA de las demás
+    # secciones. No recibe nada que no esté medido, precisamente para que no pueda
+    # proponer sobre una intuición; y lo que propone no compromete a nadie hasta que una
+    # persona lo adopta al ledger con su indicador y su umbral.
+    h2h = s.get("head_to_head") or {}
+    prop_ctx = {
+        **base,
+        "evidencia_de_venta": {
+            "composicion": (sales or {}).get("growth_composition"),
+            "cheque_real": (sales or {}).get("real_check"),
+            "por_plaza": (sales or {}).get("by_city"),
+            "por_canal": (sales or {}).get("by_channel"),
+            "plazas_en_contraccion": (sales or {}).get("contracting_cities"),
+        } if (sales or {}).get("available") else None,
+        "evidencia_de_percepcion": {
+            "indicadores_comparados": (comp or {}).get("rows") or [],
+            "marco": (comp or {}).get("frame"),
+        } if (comp or {}).get("available") else None,
+        "umbrales_de_decision": ({"rows": sf.get("rows"), "nota": sf.get("note")}
+                                 if sf.get("available") else None),
+        "compromisos_ya_registrados": [
+            {"title": r.get("title"), "origen": r.get("origin"),
+             "estado": r.get("status")}
+            for r in ((s.get("decisions") or {}).get("decisions") or [])
+        ],
+        "desempeno_por_origen": h2h.get("by_origin"),
+        "brechas_del_instrumento": [
+            {"titulo": r.get("title"), "brecha": r.get("gap"), "falta": r.get("needs")}
+            for r in ((s.get("plan") or {}).get("rows") or [])
+            if r.get("gap") != "evaluable"
+        ],
+    }
+    # Segunda sección de propuestas: la misma evidencia, más un permiso ACOTADO para
+    # incorporar práctica sectorial. Lo que la habilita a no ser opinión es doble: la
+    # práctica solo entra si una cifra del contexto acredita que la situación existe, y
+    # ``practicas_en_el_expediente`` acota qué prácticas concretas puede citar como
+    # acreditadas — las que los propios documentos del cliente ya afirman, con su lámina.
+    # ``propuestas_ya_formuladas`` lo rellena ``ai_narratives`` con el texto de la
+    # sección anterior, porque esta COMPLEMENTA y no puede saber qué se dijo allí.
+    plan_sec = s.get("plan") or {}
+    practice_ctx = {
+        **prop_ctx,
+        "practicas_en_el_expediente": [
+            {"afirmacion": g.get("claim"), "lamina": g.get("page_number"),
+             "medida_declarada": g.get("measure_source")}
+            for g in (plan_sec.get("goals") or [])
+        ] or None,
+        "documentos_del_expediente": [
+            {"titulo": d.get("title"), "origen": d.get("source_org")}
+            for d in (plan_sec.get("documents") or [])
+        ] or None,
+        "propuestas_ya_formuladas": None,
+    }
     return {"executive": ejecutivo, "explanations": lectura,
-            "priorities": prioridades, "plan": plan_ctx}
+            "priorities": prioridades, "plan": plan_ctx, "sales": sales_ctx,
+            "comparison": comp_ctx, "proposals": prop_ctx,
+            "proposals_practice": practice_ctx}
 
 
 async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -342,6 +443,7 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
 
     xp = payload["sections"].get("explanations") or {}
     plan = payload["sections"].get("plan") or {}
+    sales = payload["sections"].get("sales") or {}
     ctxs = cerebro_contexts(payload)
     if not xp.get("available"):
         ctxs.pop("executive", None)
@@ -349,6 +451,20 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
         ctxs.pop("priorities", None)
     if not plan.get("available"):
         ctxs.pop("plan", None)
+    if not sales.get("available"):
+        ctxs.pop("sales", None)
+    if not (payload["sections"].get("comparison") or {}).get("available"):
+        ctxs.pop("comparison", None)
+    # Las propuestas exigen evidencia medida: sin venta ni comparación no hay sobre qué
+    # proponer, y proponer sin evidencia es justo lo que la disciplina prohíbe.
+    if not ((payload["sections"].get("sales") or {}).get("available")
+            or (payload["sections"].get("comparison") or {}).get("available")):
+        ctxs.pop("proposals", None)
+        ctxs.pop("proposals_practice", None)
+    # La sección de práctica sectorial se genera DESPUÉS y solo si la de evidencia pura
+    # salió: es la que la ancla. Sin ella, el documento publicaría criterio externo sin
+    # su contrapartida medida — exactamente lo que la separación en dos secciones evita.
+    practice_ctx = ctxs.pop("proposals_practice", None)
     if not ctxs:
         return {}
 
@@ -362,6 +478,11 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
     for section, text in await asyncio.gather(*(_gen(s, c) for s, c in ctxs.items())):
         if text and not is_static_fallback_text(text):
             out[section] = text
+    if practice_ctx is not None and out.get("proposals"):
+        practice_ctx["propuestas_ya_formuladas"] = out["proposals"]
+        _, text = await _gen("proposals_practice", practice_ctx)
+        if text and not is_static_fallback_text(text):
+            out["proposals_practice"] = text
     return out
 
 
@@ -431,6 +552,75 @@ def _sources(db: Session, eid: str, engagement: BrandEngagement) -> List[Dict[st
             "provider": "Banco Central de la República Dominicana",
         })
     return out
+
+
+# ── portada: qué ola se mide y contra qué se compara ──────────────────
+
+_MESES_ABBR = ("Ene", "Feb", "Mar", "Abr", "May", "Jun",
+               "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+
+
+def _wave_label(w: Optional[Dict[str, Any]]) -> str:
+    """Etiqueta corta y HOMOGÉNEA de una ola.
+
+    Una etiqueta que es el propio código («2026-06») se reescribe desde su fecha. En la
+    portada conviven olas cargadas a mano —con etiqueta redactada— y olas de la serie
+    histórica, cuya etiqueta quedó igual al código; mezclar los dos formatos hace parecer
+    que son series distintas.
+    """
+    if not w:
+        return "—"
+    label = str(w.get("label") or w.get("code") or "")
+    period = str(w.get("period") or "")
+    if re.fullmatch(r"\d{4}-\d{2}", label) and re.match(r"\d{4}-\d{2}", period):
+        return f"{_MESES_ABBR[int(period[5:7]) - 1]} '{period[2:4]}"
+    return label
+
+
+def _gap(months: Optional[Any]) -> str:
+    """La distancia real de una base, siempre declarada: una «ola anterior» a 4 meses y
+    una «interanual» a 13 no se leen igual, y la portada es donde el lector fija eso."""
+    if months is None:
+        return ""
+    n = int(months)
+    return f", {n} mes" if n == 1 else f", {n} meses"
+
+
+def cover_period(p: Dict[str, Any]) -> str:
+    """El «Período» de la portada: la ola MEDIDA y sus DOS bases, no el listado entero.
+
+    Listar las trece olas no dice qué mide el informe. Lo que el lector necesita saber en
+    la portada es cuál es el corte y contra qué se lo compara; la serie completa queda como
+    profundidad disponible, con su extremo inicial.
+    """
+    waves = p.get("waves") or []
+    frame = p.get("frame") or {}
+    if not frame.get("available"):
+        return ", ".join(_wave_label(w) for w in waves) or "—"
+
+    # «Jun '26 — ola medida», no «Ola medida: Jun '26»: la portada ya rotula «Período:»
+    # y un segundo dos-puntos parte la línea en dos etiquetas encadenadas.
+    partes = [f"{_wave_label(frame.get('target'))} — ola medida"]
+    comps: List[str] = []
+    if frame.get("previous"):
+        comps.append(f"{_wave_label(frame['previous'])} (ola anterior"
+                     f"{_gap(frame.get('previous_gap_months'))})")
+    if frame.get("year_ago"):
+        comps.append(f"{_wave_label(frame['year_ago'])} (interanual"
+                     f"{_gap(frame.get('year_ago_gap_months'))})")
+    if comps:
+        partes.append("compara contra " + " y ".join(comps))
+    else:
+        # Una base ausente se DECLARA en la portada: un informe sin comparación no es un
+        # informe con comparación silenciosa.
+        partes.append("sin base de comparación disponible")
+    if not frame.get("year_ago") and frame.get("year_ago_reason"):
+        partes.append(f"sin base interanual ({frame['year_ago_reason']})")
+    # Con una sola ola la frase no informa: la serie ES el corte.
+    if len(waves) > 1:
+        partes.append(f"serie disponible: {len(waves)} olas desde "
+                      f"{_wave_label(waves[0])}")
+    return " · ".join(partes)
 
 
 def _limits(p: Dict[str, Any]) -> List[str]:
@@ -629,7 +819,7 @@ def render_html(p: Dict[str, Any]) -> str:
     """Render the report as a self-contained, printable HTML document."""
     eng = p["engagement"]
     gen = p["generated_at"][:10]
-    waves_lbl = " · ".join(w["label"] for w in p["waves"]) or "sin olas"
+    waves_lbl = cover_period(p)
 
     parts: List[str] = [
         "<!doctype html><html lang='es'><head><meta charset='utf-8'>",
@@ -640,7 +830,7 @@ def render_html(p: Dict[str, Any]) -> str:
         "Market Intelligence Platform</div>",
         f"<h1>{_e(REPORT_TITLE)}</h1>",
         f"<div class='meta'>{_e(eng['focal_brand'])} · {_e(eng.get('category') or '')} · "
-        f"{_e(eng['market'])}<br>Olas: {_e(waves_lbl)} · Generado {_e(gen)}"
+        f"{_e(eng['market'])}<br>{_e(waves_lbl)} · Generado {_e(gen)}"
         + (f" · Tracker: {_e(eng['provider'])}" if eng.get("provider") else "")
         + "</div></header>",
     ]

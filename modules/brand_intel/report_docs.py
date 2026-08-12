@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from modules.brand_intel.report import _fmt, group_competitivas
+from modules.brand_intel.report import _fmt, cover_period, group_competitivas
 
 #: Orden y título de cada sección del documento del cliente. Menos y más densas que la
 #: vista HTML interna (que conserva el desglose por motor): el cliente lee una síntesis;
@@ -35,8 +35,16 @@ from modules.brand_intel.report import _fmt, group_competitivas
 SECTIONS: List[Tuple[str, str]] = [
     ("executive", "Resumen ejecutivo"),
     ("explanations", "Lectura del trimestre"),
+    ("comparison", "La ola contra sus dos referencias"),
+    ("sales", "La venta del período"),
     ("priorities", "Qué mover y qué no"),
     ("plan", "El plan bajo el instrumento"),
+    # El «(SDQ)» del título no es decorativo: estas dos son las únicas secciones donde
+    # el documento PRESCRIBE, y quién firma la prescripción tiene que leerse en el
+    # encabezado, no inferirse del cuerpo.
+    ("proposals", "Planes derivados de la evidencia (SDQ)"),
+    ("proposals_practice",
+     "Planes con práctica sectorial anclada en la evidencia (SDQ)"),
     ("ticket", "El ticket en pesos constantes"),
     ("attribution", "¿La marca o el mercado?"),
     ("methodology", "Metodología"),
@@ -155,6 +163,88 @@ def _fallback_priorities(s: Dict[str, Any]) -> str:
     return "\n\n".join(p for p in partes if p)
 
 
+#: Lectura combinada de las dos referencias, traducida para el lector.
+_COMBINED_LABEL = {
+    "deterioro_sostenido": "Deterioro sostenido",
+    "mejora_sostenida": "Mejora sostenida",
+    "estacional": "Estacional",
+    "solo_interanual": "Solo interanual",
+    "solo_intertrimestral": "Solo intertrimestral",
+    "sin_movimiento_detectable": "Sin movimiento detectable",
+}
+
+
+def _fallback_comparison(cp: Dict[str, Any]) -> str:
+    """La doble comparación, composición determinista."""
+    partes: List[str] = []
+    marco = cp.get("frame") or {}
+    if marco.get("note"):
+        partes.append(str(marco["note"]))
+    filas = cp.get("rows") or []
+    hallazgos = [r for r in filas
+                 if (r.get("previous") or {}).get("is_finding")
+                 or (r.get("year_ago") or {}).get("is_finding")]
+    if hallazgos:
+        partes.append("**Indicadores con movimiento que supera su mínimo detectable:**\n"
+                      + _md_list([
+                          f"**{r['label']}** — {_COMBINED_LABEL.get(r.get('combined'), '')}"
+                          for r in hallazgos]))
+    elif filas:
+        partes.append(
+            f"Ninguno de los {len(filas)} indicadores núcleo supera su movimiento mínimo "
+            "detectable contra ninguna de las dos referencias. La continuidad es, en sí "
+            "misma, la lectura de la ola.")
+    sin_base = [r for r in filas if r.get("base_n") is None]
+    if sin_base:
+        partes.append(
+            f"{len(sin_base)} indicador(es) llega(n) sin base muestral declarada: su "
+            "movimiento se lee como trayectoria y no puede sostener un veredicto.")
+    partes.append(str(cp.get("note") or ""))
+    return "\n\n".join(x for x in partes if x)
+
+
+def _fallback_sales(sa: Dict[str, Any]) -> str:
+    """La venta, composición determinista: el reparto y las dispersiones que importan."""
+    partes: List[str] = []
+    sis, g = sa.get("system") or {}, sa.get("growth_composition") or {}
+    per = sa.get("period") or {}
+    if sis.get("sales_change_pct") is not None:
+        partes.append(
+            f"Entre el {per.get('from')} y el {per.get('to')} ({per.get('days')} jornadas, "
+            f"{sis.get('stores')} locales), la venta varía "
+            f"**{_fmt(sis['sales_change_pct'])}** contra las mismas fechas del ejercicio "
+            f"anterior, las transacciones {_fmt(sis.get('transactions_change_pct'))} y el "
+            f"cheque promedio {_fmt(sis.get('avg_check_change_pct'))}. El movimiento es "
+            f"predominantemente de "
+            f"{'afluencia' if g.get('dominant') == 'trafico' else 'gasto por visita'}.")
+    real = sa.get("real_check") or {}
+    if real.get("available"):
+        partes.append(str(real.get("note")))
+        if real.get("deflator_coverage"):
+            partes.append(f"Cobertura del deflactor: {real['deflator_coverage']}.")
+    canales = sa.get("by_channel") or []
+    if canales:
+        partes.append("**Por canal:**\n" + _md_list([
+            f"**{c['label']}** venta {_fmt(c.get('sales_change_pct'))}, transacciones "
+            f"{_fmt(c.get('transactions_change_pct'))}" for c in canales]))
+    plazas = sa.get("by_city") or []
+    if plazas:
+        partes.append("**Por plaza:**\n" + _md_list([
+            f"**{c['label']}** venta {_fmt(c.get('sales_change_pct'))}, transacciones "
+            f"{_fmt(c.get('transactions_change_pct'))}" for c in plazas]))
+    contr = sa.get("contracting_cities") or []
+    if contr:
+        partes.append("Plaza(s) con contracción simultánea de venta y tráfico: "
+                      + ", ".join(c["label"] for c in contr) + ".")
+    ventana = sa.get("comparable_window") or {}
+    if ventana.get("note"):
+        partes.append(str(ventana["note"]))
+    cons = sa.get("consistency") or {}
+    if cons.get("checked") and not cons.get("reconciles"):
+        partes.append(str(cons.get("note")))
+    return "\n\n".join(x for x in partes if x)
+
+
 def _is_measurable(r: Dict[str, Any]) -> bool:
     """Un compromiso con algo que medir: métrica del tracker o umbral declarado.
 
@@ -251,6 +341,56 @@ def narratives_and_tables(
     # El seguimiento con veredictos vive en la vista interna; cuando una ola emita
     # veredictos, la narrativa de prioridades los lee desde el contexto.
 
+    # ── La ola contra sus dos referencias ──
+    cp = s.get("comparison") or {}
+    if cp.get("available"):
+        n["comparison"] = ai.get("comparison") or _fallback_comparison(cp)
+        filas = cp.get("rows") or []
+        if filas:
+            marco = cp.get("frame") or {}
+            ant = (marco.get("previous") or {}).get("label") or "ola anterior"
+            ano = (marco.get("year_ago") or {}).get("label") or "año atrás"
+            tables.append((f"Indicadores contra {ant} y contra {ano}",
+                           [["Indicador", "Valor", "Base", f"vs {ant}",
+                             f"vs {ano}", "Lectura combinada"]] +
+                           [[r["label"], _fmt(r.get("value")),
+                             str(r.get("base_n") or "—"),
+                             _fmt((r.get("previous") or {}).get("delta"), " pp"),
+                             _fmt((r.get("year_ago") or {}).get("delta"), " pp"),
+                             _COMBINED_LABEL.get(r.get("combined"), "—")]
+                            for r in filas]))
+
+    # ── La venta del período ── (solo con jornadas comparables cargadas)
+    sa = s.get("sales") or {}
+    if sa.get("available"):
+        n["sales"] = ai.get("sales") or _fallback_sales(sa)
+        plazas = sa.get("by_city") or []
+        if plazas:
+            tables.append(("Venta y tráfico por plaza",
+                           [["Plaza", "Venta", "Transacciones", "Cheque promedio"]] +
+                           [[c["label"], _fmt(c.get("sales_change_pct")),
+                             _fmt(c.get("transactions_change_pct")),
+                             _fmt(c.get("avg_check_change_pct"))] for c in plazas]))
+        canales = sa.get("by_channel") or []
+        if canales:
+            tables.append(("Venta y tráfico por canal",
+                           [["Canal", "Venta", "Transacciones", "Cheque promedio"]] +
+                           [[c["label"], _fmt(c.get("sales_change_pct")),
+                             _fmt(c.get("transactions_change_pct")),
+                             _fmt(c.get("avg_check_change_pct"))] for c in canales]))
+
+    # ── Planes que SDQ propone ── (solo con narrativa: una propuesta la redacta el
+    # análisis sobre evidencia medida; no hay composición determinista que la sustituya,
+    # y un título sin propuesta debajo sería peor que la ausencia de la sección)
+    if ai.get("proposals"):
+        n["proposals"] = ai["proposals"]
+    # La segunda incorpora criterio externo al dato del cliente, y por eso va SEPARADA y
+    # después: el lector debe poder distinguir, sin leerlo entre líneas, qué recomendación
+    # sostiene su propia información y cuál añade práctica de la categoría. Nunca aparece
+    # sola — ``ai_narratives`` la condiciona a que la sección anterior exista.
+    if ai.get("proposals_practice"):
+        n["proposals_practice"] = ai["proposals_practice"]
+
     # ── El plan bajo el instrumento ── (solo con planes o decisiones; sin ellos, el
     # estado vive en Límites). PROSA SOLA, sin tabla: el plan es DEL CLIENTE — él ya lo
     # conoce, y devolvérselo fila por fila no aporta. Lo que SDQ agrega es la lectura
@@ -259,6 +399,18 @@ def narratives_and_tables(
     plan = s.get("plan") or {}
     if plan.get("available"):
         n["plan"] = ai.get("plan") or _fallback_plan(plan)
+
+    # ── Desempeño cara a cara ── (tabla; la narrativa de prioridades ya lo lee)
+    h2h = s.get("head_to_head") or {}
+    if h2h.get("comparable"):
+        tables.append(("Desempeño de cada fuente de recomendación",
+                       [["Fuente", "Registrados", "Resueltos", "Logrados",
+                         "Tasa de acierto"]] +
+                       [[{"cliente": "Planes del cliente",
+                          "sdq": "Propuestas de SDQ"}.get(o, o),
+                         str(v["registrados"]), str(v["resueltos"]),
+                         str(v["logrados"]), _fmt(v["tasa_de_acierto_pct"])]
+                        for o, v in (h2h.get("by_origin") or {}).items()]))
 
     # ── Ticket ── (solo con serie; sin serie, el motivo ya está en Límites)
     tic = s.get("ticket") or {}
@@ -319,7 +471,7 @@ def render(payload: Dict[str, Any], fmt: str = "pdf",
     from shared.products.render import render_product_pdf
 
     eng = payload["engagement"]
-    olas = ", ".join(w["label"] for w in payload.get("waves") or [])
+    olas = cover_period(payload)
     narratives, tables = narratives_and_tables(payload, ai=ai)
 
     return render_product_pdf(

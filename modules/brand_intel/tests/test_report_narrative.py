@@ -78,8 +78,10 @@ def test_generate_routes_through_the_cerebro_not_legacy(monkeypatch):
 
 def test_sections_list_is_the_new_compact_one():
     keys = [k for k, _ in report_docs.SECTIONS]
-    assert keys == ["executive", "explanations", "priorities", "plan", "ticket",
-                    "attribution", "methodology", "sources", "limits"]
+    assert keys == ["executive", "explanations", "comparison", "sales", "priorities",
+                    "plan", "proposals", "proposals_practice", "ticket",
+                    "attribution", "methodology",
+                    "sources", "limits"]
     # Las secciones que eran títulos con "aún no hay X" ya no existen como sección.
     for gone in ("forecast", "forecast_backtest", "forecast_track_record",
                  "scenarios", "signal_filter", "vigilance", "vigilance_agenda",
@@ -109,6 +111,9 @@ def _payload(**overrides) -> Dict[str, Any]:
             "plan": {"available": False, "documents": [], "goals": [], "rows": [],
                      "note": "Aún no hay planes del cliente cargados ni decisiones "
                              "registradas para seguimiento."},
+            "sales": {"available": False,
+                      "reason": "No hay jornadas de venta cargadas para el encargo."},
+            "comparison": {"available": False, "reason": "Sin indicadores núcleo."},
         },
         "executive": {"findings": [], "empty_reason": "Sin conclusiones del proveedor "
                       "utilizables ni insumos de entorno."},
@@ -233,7 +238,8 @@ def test_cerebro_contexts_only_repackage_what_was_computed():
     assert grupos["baja"]["n"] == 2 and grupos["sube"]["n"] == 1
     assert grupos["baja"]["lectura"] == "r1"
     assert lectura["sin_capa_n"] == 1
-    assert set(ctxs) == {"executive", "explanations", "priorities", "plan"}
+    assert set(ctxs) == {"executive", "explanations", "priorities", "plan",
+                         "sales", "comparison", "proposals", "proposals_practice"}
 
 
 def test_ai_narratives_skip_when_there_is_nothing_to_narrate():
@@ -271,3 +277,156 @@ def test_render_pdf_works_end_to_end_without_ai(db, engagement, tmp_path):
     assert path.endswith(".pdf")
     import os
     assert os.path.getsize(path) > 0
+
+
+# ── las dos secciones de propuestas ───────────────────────────────────
+
+
+def _payload_con_evidencia() -> Dict[str, Any]:
+    """Payload con venta disponible: el insumo mínimo que habilita proponer."""
+    p = _payload()
+    p["sections"]["sales"] = {
+        "available": True, "growth_composition": {"sales_change_pct": 5.7},
+        "real_check": None, "by_city": [], "by_channel": [],
+        "contracting_cities": [],
+    }
+    p["sections"]["plan"] = {
+        "available": True,
+        "documents": [{"title": "Benchmark competitivo", "source_org": "Agencia",
+                       "filename": "b.pdf", "id": "d1", "status": "leido"}],
+        "goals": [{"claim": "El modelo a seguir es Taco Bell USA en redes.",
+                   "page_number": 12, "measure_source": "externa", "kind": "meta",
+                   "metric_code": None, "segment": "total", "target_from": None,
+                   "target_to": None, "expected_move": None,
+                   "owner_declared": None, "status": "propuesta"}],
+        "rows": [], "note": "n",
+    }
+    return p
+
+
+def test_practice_context_carries_the_expediente_and_awaits_the_first_section():
+    """La práctica sectorial citable son las AFIRMACIONES DE LOS PROPIOS DOCUMENTOS del
+    cliente, con su lámina: es lo que la separa de opinión de categoría."""
+    ctxs = rpt.cerebro_contexts(_payload_con_evidencia())
+    pr = ctxs["proposals_practice"]
+    assert pr["practicas_en_el_expediente"][0]["afirmacion"].startswith("El modelo")
+    assert pr["practicas_en_el_expediente"][0]["lamina"] == 12
+    assert pr["documentos_del_expediente"][0]["titulo"] == "Benchmark competitivo"
+    # Se rellena en la generación, no aquí: esta sección no puede saber sola qué dijo
+    # la anterior.
+    assert pr["propuestas_ya_formuladas"] is None
+    # La evidencia es la MISMA de la sección anterior: cambia el permiso, no el dato.
+    assert pr["evidencia_de_venta"] == ctxs["proposals"]["evidencia_de_venta"]
+
+
+def test_practice_section_is_generated_after_and_receives_the_first(monkeypatch) -> None:
+    from shared.narrative.claude_engine import NarrativeResult
+
+    seen: Dict[str, Any] = {}
+
+    async def _fake_generate(context, template, mode, axis, audience):
+        if template == "brand_sdq_proposals_practice":
+            seen["ya"] = context.get("propuestas_ya_formuladas")
+        return NarrativeResult(text=f"texto de {template}", model_used="claude-x")
+
+    import shared.narrative.claude_engine as ce
+    monkeypatch.setattr(ce.narrative_engine, "generate", _fake_generate)
+
+    out = asyncio.run(rpt.ai_narratives(_payload_con_evidencia()))
+    assert out["proposals"] == "texto de brand_sdq_proposals"
+    assert out["proposals_practice"] == "texto de brand_sdq_proposals_practice"
+    # Recibió el texto de la sección de evidencia para COMPLEMENTARLA, no repetirla.
+    assert seen["ya"] == "texto de brand_sdq_proposals"
+
+
+def test_practice_section_never_appears_without_its_anchor(monkeypatch):
+    """Si la sección de evidencia pura no salió, la de práctica sectorial tampoco:
+    publicar criterio externo sin su contrapartida medida es lo que la separación evita."""
+    from shared.narrative.claude_engine import NarrativeResult
+
+    async def _fake_generate(context, template, mode, axis, audience):
+        if template == "brand_sdq_proposals":
+            return NarrativeResult(text="", model_used="claude-x")
+        return NarrativeResult(text=f"texto de {template}", model_used="claude-x")
+
+    import shared.narrative.claude_engine as ce
+    monkeypatch.setattr(ce.narrative_engine, "generate", _fake_generate)
+
+    out = asyncio.run(rpt.ai_narratives(_payload_con_evidencia()))
+    assert "proposals" not in out
+    assert "proposals_practice" not in out
+
+
+def test_practice_template_bans_invented_impact_and_demands_declaring_the_external():
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+
+    t = THIN_TEMPLATES["brand_sdq_proposals_practice"]
+    assert "REGLA DURA DE CIFRAS" in t
+    assert "IMPACTO NUMÉRICO" in t
+    assert "practicas_en_el_expediente" in t
+    assert "propuestas_ya_formuladas" in t
+    # La sección de evidencia pura conserva la prohibición completa.
+    assert "buenas prácticas de marketing" in THIN_TEMPLATES["brand_sdq_proposals"]
+
+
+def test_practice_section_renders_after_the_evidence_one():
+    keys = [k for k, _ in report_docs.SECTIONS]
+    assert keys.index("proposals_practice") == keys.index("proposals") + 1
+    n, _ = report_docs.narratives_and_tables(
+        _payload_con_evidencia(),
+        ai={"proposals": "A", "proposals_practice": "B"})
+    assert n["proposals"] == "A" and n["proposals_practice"] == "B"
+    # Y sin narrativa no hay título vacío: no existe composición determinista.
+    n2, _ = report_docs.narratives_and_tables(_payload_con_evidencia())
+    assert "proposals" not in n2 and "proposals_practice" not in n2
+
+
+# ── la portada declara el corte y sus bases ───────────────────────────
+
+
+def test_cover_period_says_what_is_measured_and_against_what():
+    """La portada no lista las trece olas: dice cuál se mide y contra cuáles compara."""
+    p = _payload()
+    p["frame"] = {
+        "available": True,
+        "target": {"code": "2026-06", "label": "2026-06", "period": "2026-06-01"},
+        "previous": {"code": "2026-03", "label": "Mar '26", "period": "2026-02-08"},
+        "previous_gap_months": 4,
+        "year_ago": {"code": "2025-05", "label": "May '25", "period": "2025-05-07"},
+        "year_ago_gap_months": 13, "year_ago_reason": None,
+    }
+    p["waves"] = [{"code": "2018-09", "label": "2018-09", "period": "2018-09-01",
+                   "base": 300},
+                  {"code": "2026-06", "label": "2026-06", "period": "2026-06-01",
+                   "base": 300}]
+    txt = rpt.cover_period(p)
+    # La etiqueta que era el propio código se homogeneiza a la forma corta.
+    assert txt.startswith("Jun '26 — ola medida")
+    assert "compara contra Mar '26 (ola anterior, 4 meses)" in txt
+    assert "May '25 (interanual, 13 meses)" in txt
+    assert "serie disponible: 2 olas desde Sep '18" in txt
+    # Y NO es el volcado de la serie.
+    assert txt.count("·") == 2
+
+
+def test_cover_period_declares_a_missing_year_ago_base():
+    p = _payload()
+    p["frame"] = {
+        "available": True,
+        "target": {"code": "2025-08", "label": "Ago '25", "period": "2025-08-01"},
+        "previous": {"code": "2025-05", "label": "May '25", "period": "2025-05-07"},
+        "previous_gap_months": 3,
+        "year_ago": None, "year_ago_gap_months": None,
+        "year_ago_reason": "La ola más próxima a doce meses atrás queda fuera de "
+                           "tolerancia.",
+    }
+    txt = rpt.cover_period(p)
+    assert "sin base interanual (La ola más próxima" in txt
+    assert "interanual, " not in txt
+
+
+def test_cover_period_falls_back_to_the_series_without_a_frame():
+    p = _payload()
+    assert rpt.cover_period(p) == "Ola 1"
+    p["frame"] = {"available": False, "reason": "x"}
+    assert rpt.cover_period(p) == "Ola 1"
