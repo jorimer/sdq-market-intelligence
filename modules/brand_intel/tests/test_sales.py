@@ -380,3 +380,64 @@ def test_a_column_that_looks_like_data_is_never_silently_ignored():
     desconocidas, ignoradas = classify_unmapped(["Ventas Kiosco 2026", "Gcs App 2026"])
     assert desconocidas == ["Ventas Kiosco 2026", "Gcs App 2026"]
     assert ignoradas == {}
+
+
+# ── la etiqueta de la ola es lo que el mazo tiene que reconocer ────────
+
+
+def test_history_creates_waves_with_the_label_a_deck_can_match(db, engagement):
+    """Defecto de producción (2026-08-12): las 11 olas que esta matriz creó quedaron con la
+    etiqueta IGUAL a su código, y el mazo de Ola 5 —que traía las cifras con su base— vio
+    **1.165 celdas rechazadas** como «ola no reconocida». El emparejamiento tolerante
+    reduce «Junio '26» a «jun26» y «2026-06» a «202606»: no casan. La etiqueta no es
+    cosmética, es la llave con la que entra la siguiente entrega del proveedor.
+    """
+    from modules.brand_intel.ingest.pdf_pipeline import _LabelResolver
+    from modules.brand_intel.ingest.tracker_history import (
+        HistoryReading, store_history)
+    from modules.brand_intel.models.models import BrandWave
+
+    store_history(db, engagement.id, [
+        HistoryReading(brand="Focal", brand_slug="focal", period=date(2026, 6, 1),
+                       segment="total", metric_code="awareness_total", value=70.0),
+    ], source="matriz")
+    db.commit()
+
+    w = db.query(BrandWave).filter_by(engagement_id=engagement.id, code="2026-06").one()
+    assert w.label == "Jun '26"
+
+    # La prueba que importa: el resolvedor de la ruta de mazos la encuentra por los
+    # rótulos que un mazo real imprime.
+    r = _LabelResolver([], [w])
+    for impreso in ("Jun '26", "Junio '26", "Junio 2026", "Jun'26", "JUNIO 26"):
+        assert r.wave(impreso) == "2026-06", impreso
+
+
+def test_history_repairs_the_machine_label_but_never_a_human_one(db, engagement):
+    """La reparación es acotada a propósito: una etiqueta igual al código es el marcador
+    que dejó una carga anterior; una que una persona escribió no se toca jamás."""
+    from modules.brand_intel.ingest.tracker_history import (
+        HistoryReading, store_history)
+    from modules.brand_intel.models.models import BrandWave
+
+    db.add(BrandWave(engagement_id=engagement.id, code="2025-05", label="2025-05",
+                     sort_order=90, period_date=date(2025, 5, 1)))
+    db.add(BrandWave(engagement_id=engagement.id, code="2025-08",
+                     label="Ola 2 (entrega julio)", sort_order=91,
+                     period_date=date(2025, 8, 1)))
+    db.commit()
+
+    out = store_history(db, engagement.id, [
+        HistoryReading(brand="Focal", brand_slug="focal", period=date(2025, 5, 1),
+                       segment="total", metric_code="awareness_total", value=70.0),
+        HistoryReading(brand="Focal", brand_slug="focal", period=date(2025, 8, 1),
+                       segment="total", metric_code="awareness_total", value=72.0),
+    ], source="matriz")
+    db.commit()
+
+    assert out["olas_creadas"] == 0
+    assert out["etiquetas_reparadas"] == 1
+    olas = {w.code: w.label for w in db.query(BrandWave).filter_by(
+        engagement_id=engagement.id).all()}
+    assert olas["2025-05"] == "May '25"                    # el marcador, reparado
+    assert olas["2025-08"] == "Ola 2 (entrega julio)"      # la humana, intacta
