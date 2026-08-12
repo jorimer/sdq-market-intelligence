@@ -270,8 +270,17 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         **base,
         "agenda": {"items": ag.get("items") or [],
                    "nota": ag.get("note") or ag.get("empty_reason")},
-        "filtro_senal": ({"rows": sf.get("rows"), "nota": sf.get("note")}
+        # El filtro de señal habla del NIVEL; el veredicto de cada movimiento va al lado y
+        # COMPUTADO, porque servir solo el filtro fue lo que produjo «todas las métricas
+        # superan su umbral mínimo detectable» — una frase sin referente: lo que supera un
+        # umbral es un movimiento entre dos olas, no una métrica.
+        "filtro_senal": ({"rows": sf.get("rows"), "nota": sf.get("note"),
+                          "que_significa_publishable": (
+                              "«publishable» dice que la base sostiene publicar el NIVEL "
+                              "de la métrica; el veredicto de significancia de cada "
+                              "cambio está en 'veredictos_de_movimiento'.")}
                          if sf.get("available") else {"nota": sf.get("reason")}),
+        "veredictos_de_movimiento": movement_verdicts(s.get("comparison") or {}),
         # Sin la fuente "decision": el resumen de decisiones ya viaja aparte, y con un
         # plan adoptado entero esas señales repiten cien títulos casi idénticos.
         "senales_vigilancia": (
@@ -389,8 +398,14 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
             "indicadores_comparados": (comp or {}).get("rows") or [],
             "marco": (comp or {}).get("frame"),
         } if (comp or {}).get("available") else None,
-        "umbrales_de_decision": ({"rows": sf.get("rows"), "nota": sf.get("note")}
-                                 if sf.get("available") else None),
+        "umbrales_de_decision": ({
+            "rows": sf.get("rows"), "nota": sf.get("note"),
+            "que_significa_publishable": (
+                "«publishable» aquí quiere decir que la base sostiene publicar el NIVEL de "
+                "la métrica. NO dice nada sobre si algún movimiento es significativo: eso "
+                "vive en 'veredictos_de_movimiento'."),
+        } if sf.get("available") else None),
+        "veredictos_de_movimiento": movement_verdicts(comp),
         "compromisos_ya_registrados": [
             {"title": r.get("title"), "origen": r.get("origin"),
              "estado": r.get("status")}
@@ -584,6 +599,47 @@ def _gap(months: Optional[Any]) -> str:
         return ""
     n = int(months)
     return f", {n} mes" if n == 1 else f", {n} meses"
+
+
+# ── el veredicto de significancia, COMPUTADO ──────────────────────────
+
+def movement_verdicts(comp: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Los movimientos de la ola PARTIDOS por veredicto, con la lectura ya redactada.
+
+    Sin esto el modelo tiene que fusionar dos bloques que dicen cosas distintas: en
+    ``umbrales_de_decision`` (el filtro de señal) ``publishable`` significa que la base
+    sostiene publicar el NIVEL, mientras el veredicto de significancia vive en el MOVIMIENTO
+    de la comparación. En producción los fusionó: escribió «la única métrica que la muestra
+    puede distinguir del azar es la satisfacción» sobre un delta de 7 pp con umbral de 8,2 —
+    y montó un plan encima, contradiciendo a la sección de comparación del mismo documento.
+    Las cifras eran todas correctas; falló la relación, que es justo lo que se computa acá.
+    """
+    rows = (comp or {}).get("rows") or []
+    if not (comp or {}).get("available") or not rows:
+        return None
+
+    def _mov(r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        prev = r.get("previous") or {}
+        if prev.get("delta") is None:
+            return None
+        return {"indicador": r.get("label"), "metric_code": r.get("metric_code"),
+                "valor": r.get("value"), "delta": prev.get("delta"),
+                "umbral_minimo_detectable": prev.get("threshold"),
+                "veredicto": prev.get("verdict")}
+
+    movs = [m for m in (_mov(r) for r in rows) if m]
+    detectables = [m for m in movs if m["veredicto"] != "not_detectable"]
+    no_detectables = [m for m in movs if m["veredicto"] == "not_detectable"]
+    if detectables:
+        lectura = (f"{len(detectables)} de {len(movs)} movimiento(s) de esta ola supera su "
+                   "mínimo detectable. Solo esos sostienen una decisión.")
+    else:
+        lectura = (f"NINGUNO de los {len(movs)} movimientos de esta ola supera su mínimo "
+                   "detectable: no hay en este corte ningún cambio distinguible del azar. "
+                   "Un movimiento por debajo de su umbral NO puede ser la premisa de un "
+                   "plan; a lo sumo, un motivo de seguimiento declarado como tal.")
+    return {"detectables": detectables, "no_detectables": no_detectables,
+            "n_detectables": len(detectables), "n_total": len(movs), "lectura": lectura}
 
 
 def cover_period(p: Dict[str, Any]) -> str:

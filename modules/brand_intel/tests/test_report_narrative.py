@@ -430,3 +430,115 @@ def test_cover_period_falls_back_to_the_series_without_a_frame():
     assert rpt.cover_period(p) == "Ola 1"
     p["frame"] = {"available": False, "reason": "x"}
     assert rpt.cover_period(p) == "Ola 1"
+
+
+# ── el veredicto de significancia se COMPUTA ──────────────────────────
+
+
+def _comparison(rows):
+    return {"available": True, "rows": rows, "frame": {}, "note": "n"}
+
+
+def test_movement_verdicts_partitions_and_writes_the_reading():
+    """Regresión del defecto de producción (2026-08-12): con la satisfacción moviéndose
+    7 pp contra un umbral de 8,2 el informe publicó «la única métrica que la muestra puede
+    distinguir del azar es la satisfacción» y montó un plan encima, contradiciendo a la
+    sección de comparación del MISMO documento. Las cifras eran correctas; falló la
+    relación. Por eso la relación se computa acá y el modelo la copia."""
+    v = rpt.movement_verdicts(_comparison([
+        {"metric_code": "satisfaction_t2b", "label": "Satisfacción", "value": 94.0,
+         "previous": {"delta": 7.0, "threshold": 8.2, "verdict": "not_detectable"}},
+        {"metric_code": "brand_opinion_t2b", "label": "Opinión", "value": 65.0,
+         "previous": {"delta": -6.0, "threshold": 8.0, "verdict": "not_detectable"}},
+    ]))
+    assert v["n_detectables"] == 0 and v["n_total"] == 2
+    assert v["detectables"] == []
+    assert "NINGUNO" in v["lectura"]
+    # La consecuencia va DECLARADA en el contexto, no confiada al criterio del modelo.
+    assert "NO puede ser la premisa de un plan" in v["lectura"]
+    assert {m["metric_code"] for m in v["no_detectables"]} == {
+        "satisfaction_t2b", "brand_opinion_t2b"}
+
+
+def test_movement_verdicts_counts_the_detectable_ones():
+    v = rpt.movement_verdicts(_comparison([
+        {"metric_code": "a", "label": "A", "value": 30.0,
+         "previous": {"delta": 12.0, "threshold": 7.0, "verdict": "improved"}},
+        {"metric_code": "b", "label": "B", "value": 10.0,
+         "previous": {"delta": 1.0, "threshold": 6.0, "verdict": "not_detectable"}},
+    ]))
+    assert v["n_detectables"] == 1 and v["n_total"] == 2
+    assert v["detectables"][0]["metric_code"] == "a"
+    assert "1 de 2" in v["lectura"]
+
+
+def test_movement_verdicts_absent_without_comparison():
+    assert rpt.movement_verdicts({}) is None
+    assert rpt.movement_verdicts({"available": False, "rows": []}) is None
+    # Un indicador sin ola previa no es un movimiento: no entra al conteo.
+    v = rpt.movement_verdicts(_comparison([
+        {"metric_code": "a", "label": "A", "value": 1.0, "previous": None},
+        {"metric_code": "b", "label": "B", "value": 2.0,
+         "previous": {"delta": 9.0, "threshold": 5.0, "verdict": "improved"}},
+    ]))
+    assert v["n_total"] == 1
+
+
+def test_the_three_sections_that_can_confuse_level_with_movement_get_the_verdict():
+    """Las tres secciones que reciben el filtro de señal o la comparación llevan el
+    veredicto computado Y la aclaración de qué significa «publishable». Servir el filtro
+    solo fue lo que produjo «todas las métricas superan su umbral mínimo detectable»."""
+    p = _payload()
+    p["sections"]["comparison"] = _comparison([
+        {"metric_code": "a", "label": "A", "value": 1.0,
+         "previous": {"delta": 1.0, "threshold": 9.0, "verdict": "not_detectable"}}])
+    p["sections"]["signal_filter"] = {
+        "available": True, "rows": [{"metric_code": "a", "threshold": 9.0,
+                                     "publishable": True}], "note": "nota"}
+    p["sections"]["explanations"] = {"available": True, "entorno": {}, "explicadas": [],
+                                     "competitivas": [], "sin_capa": [], "note": "n"}
+    ctxs = rpt.cerebro_contexts(p)
+    for key, bloque in (("priorities", "filtro_senal"),
+                        ("proposals", "umbrales_de_decision"),
+                        ("proposals_practice", "umbrales_de_decision")):
+        v = ctxs[key]["veredictos_de_movimiento"]
+        assert v is not None and v["n_detectables"] == 0, key
+        assert "publicar el NIVEL" in ctxs[key][bloque]["que_significa_publishable"], key
+
+
+def test_templates_ban_calling_a_metric_significant():
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+
+    for t in ("brand_sdq_proposals", "brand_sdq_proposals_practice",
+              "brand_context_priorities"):
+        body = THIN_TEMPLATES[t]
+        assert "REGLA DURA DE SIGNIFICANCIA" in body, t
+        assert "veredictos_de_movimiento" in body, t
+        assert "publicar el NIVEL" in body or "publicar el nivel" in body, t
+
+
+def test_no_context_serves_a_threshold_block_without_its_verdict():
+    """La regla, no la lista: CUALQUIER contexto que sirva umbrales —hoy o el que se agregue
+    mañana— debe servir también el veredicto computado de los movimientos. Un umbral sin su
+    veredicto al lado es exactamente el insumo que produjo el defecto: el modelo tiene que
+    inferir la significancia y la infiere mal."""
+    p = _payload()
+    p["sections"]["comparison"] = _comparison([
+        {"metric_code": "a", "label": "A", "value": 1.0,
+         "previous": {"delta": 1.0, "threshold": 9.0, "verdict": "not_detectable"}}])
+    p["sections"]["signal_filter"] = {
+        "available": True, "rows": [{"metric_code": "a", "threshold": 9.0,
+                                     "publishable": True}], "note": "nota"}
+    p["sections"]["explanations"] = {"available": True, "entorno": {}, "explicadas": [],
+                                     "competitivas": [], "sin_capa": [], "note": "n"}
+    p["sections"]["sales"] = {"available": True, "growth_composition": {},
+                              "real_check": None, "by_city": [], "by_channel": [],
+                              "contracting_cities": []}
+
+    huerfanos = [
+        key for key, ctx in rpt.cerebro_contexts(p).items()
+        if any(ctx.get(b) for b in ("filtro_senal", "umbrales_de_decision"))
+        and not ctx.get("veredictos_de_movimiento")
+    ]
+    assert huerfanos == [], (
+        f"contextos con umbrales y sin veredicto de movimiento: {huerfanos}")
