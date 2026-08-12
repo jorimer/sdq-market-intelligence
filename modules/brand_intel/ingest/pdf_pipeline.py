@@ -115,9 +115,14 @@ class _LabelResolver:
 
     def __init__(self, brands: Sequence[BrandEntity], waves: Sequence[BrandWave]):
         self._brands: Dict[str, str] = {}
+        #: Nombre CON sus palabras intactas → slug. El otro índice normaliza a una sola
+        #: cadena sin espacios, que sirve para igualdad pero borra las fronteras de
+        #: palabra que la regla de prefijo necesita.
+        self._brands_by_name: Dict[str, str] = {}
         for b in brands:
             self._brands[_norm(b.name)] = b.slug
             self._brands[_norm(b.slug)] = b.slug
+            self._brands_by_name[str(b.name)] = str(b.slug)
         self._waves: Dict[str, str] = {}
         self._waves_loose: Dict[str, str] = {}
         for w in waves:
@@ -157,6 +162,33 @@ class _LabelResolver:
             and _edit_distance(key, known, budget) <= budget
         }
         # Ambiguity is refused, not guessed: two brands within the budget means neither.
+        if len(matches) == 1:
+            return next(iter(matches))
+        return self._by_word_prefix(label)
+
+    def _by_word_prefix(self, label: str) -> Optional[str]:
+        """Un rótulo que es el PRIMER TRAMO DE PALABRAS de una sola marca declarada.
+
+        Los trackers abrevian la razón social: la matriz histórica imprime «Domino's»
+        donde el encargo declaró «Domino's Pizza». La distancia de edición no lo alcanza
+        —sobran seis caracteres— y sin esta regla se crea una marca paralela que PARTE los
+        datos del competidor en dos y corrompe el denominador de la categoría.
+
+        Tres condiciones para que no degenere en adivinanza: el rótulo tiene que cerrar en
+        frontera de palabra (así «Pizza» no captura «Pizzarelli»), tener al menos seis
+        caracteres normalizados, y coincidir con UNA sola marca — «Taco» abriría a «Taco
+        Bell» y «Taco del Sol», y ante dos no se elige ninguna.
+        """
+        key = _norm(label)
+        if len(key) < 6:
+            return None
+        matches = set()
+        for name, slug in self._brands_by_name.items():
+            palabras = name.split()
+            for corte in range(1, len(palabras)):
+                if _norm(" ".join(palabras[:corte])) == key:
+                    matches.add(slug)
+                    break
         return next(iter(matches)) if len(matches) == 1 else None
 
     def wave(self, label: str) -> Optional[str]:
