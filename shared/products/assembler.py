@@ -57,13 +57,30 @@ def _contexto_ia_version(modulo_producto: Optional[str]) -> str:
     partes = modulo_producto.split(".")
     if len(partes) < 2 or partes[0] != "modules":
         return ""
-    ruta = (pathlib.Path(__file__).resolve().parents[2]
-            / "modules" / partes[1] / "ai_context.py")
+    raiz = pathlib.Path(__file__).resolve().parents[2] / "modules" / partes[1]
+
+    # Por defecto `ai_context.py`. Un módulo que arma el contexto en otro lado lo DECLARA con
+    # `AI_CONTEXT_FILES`: banca lo construye en `reports/narrative.py` y en su propio
+    # `products.py`, así que sin la declaración su huella quedaba vacía y un arreglo de
+    # contexto de banca no invalidaba nada — el defecto que esto vino a cerrar, abierto justo
+    # en el módulo más grande.
+    archivos = ("ai_context.py",)
     try:
-        return hashlib.sha256(ruta.read_bytes()).hexdigest()[:12]
-    except OSError:
-        # Sector sin constructor propio: no es un error, no hay nada que versionar.
-        return ""
+        import importlib
+        archivos = tuple(getattr(importlib.import_module(modulo_producto),
+                                 "AI_CONTEXT_FILES", archivos))
+    except Exception:  # noqa: BLE001 — la huella nunca debe tumbar la entrega
+        pass
+
+    h = hashlib.sha256()
+    visto = False
+    for rel in archivos:
+        try:
+            h.update((raiz / rel).read_bytes())
+            visto = True
+        except OSError:
+            continue          # archivo declarado que no existe: se ignora, no se falla
+    return h.hexdigest()[:12] if visto else ""
 
 
 def _narrative_logic_version() -> str:

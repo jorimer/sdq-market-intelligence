@@ -71,21 +71,32 @@ def _add_runs(paragraph, text: str, *, color: Optional[RGBColor] = None, size: O
     Se parte primero por `**` —los impares son negrita— y dentro de cada trozo restante por
     `*`, de modo que `**x**` no lo consuma la regla de un asterisco.
     """
-    for i, chunk in enumerate(re.split(r"\*\*([^*]+)\*\*", _clean(text))):
-        if not chunk:
-            continue
-        if i % 2 == 1:                       # vino de **...**
-            run = paragraph.add_run(chunk)
-            run.bold = True
-            _estilo(run, color, size)
-            continue
-        for j, trozo in enumerate(re.split(r"\*([^*\n]+)\*", chunk)):
-            if not trozo:
-                continue
-            run = paragraph.add_run(trozo)
-            run.bold = bold_all
-            run.italic = j % 2 == 1          # los impares vienen de *...*
-            _estilo(run, color, size)
+    from shared.products.render import _ITALIC_RE
+
+    def _emitir(txt: str, *, negrita: bool) -> None:
+        """Parte por CURSIVA y emite. Un mismo criterio de frontera que el PDF."""
+        pos = 0
+        for m in _ITALIC_RE.finditer(txt):
+            antes = txt[pos:m.start()] + m.group(1)
+            if antes:
+                r = paragraph.add_run(antes)
+                r.bold = negrita or bold_all
+                _estilo(r, color, size)
+            r = paragraph.add_run(m.group(2))
+            r.bold = negrita or bold_all
+            r.italic = True                  # cursiva, anidada dentro de negrita si toca
+            _estilo(r, color, size)
+            pos = m.end()
+        resto = txt[pos:]
+        if resto:
+            r = paragraph.add_run(resto)
+            r.bold = negrita or bold_all
+            _estilo(r, color, size)
+
+    # Los impares del split vienen de **...** — y pueden contener *cursiva* adentro.
+    for i, chunk in enumerate(re.split(r"\*\*(.+?)\*\*", _clean(text))):
+        if chunk:
+            _emitir(chunk, negrita=i % 2 == 1)
 
 
 def _estilo(run, color: Optional[RGBColor], size: Optional[int]) -> None:

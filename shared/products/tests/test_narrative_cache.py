@@ -179,12 +179,23 @@ def test_la_huella_se_deriva_del_archivo_real():
 
 
 def test_un_sector_sin_constructor_no_rompe_la_entrega():
-    """Sin `ai_context.py` no hay nada que versionar; nunca una excepción."""
+    """Sin fuentes de contexto no hay nada que versionar; nunca una excepción."""
     import shared.products.assembler as asm
 
-    assert asm._contexto_ia_version("modules.banking_score.products") == ""
     assert asm._contexto_ia_version(None) == ""
     assert asm._contexto_ia_version("cualquier.cosa") == ""
+    assert asm._contexto_ia_version("modules.sector_que_no_existe.products") == ""
+
+
+def test_banca_tiene_huella_aunque_no_tenga_ai_context():
+    """Banca arma su contexto en `reports/narrative.py` y `products.py`. Sin declararlo, su
+    huella quedaba VACÍA y un arreglo de contexto de banca no invalidaba sus narrativas
+    cacheadas — el defecto que esta huella vino a cerrar, abierto en el módulo más grande."""
+    import shared.products.assembler as asm
+    from modules.banking_score.products import AI_CONTEXT_FILES
+
+    assert "reports/narrative.py" in AI_CONTEXT_FILES
+    assert asm._contexto_ia_version("modules.banking_score.products") != ""
 
 
 def test_la_huella_es_POR_SECTOR_no_global():

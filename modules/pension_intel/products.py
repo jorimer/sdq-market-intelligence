@@ -305,25 +305,46 @@ def _system_cartera(db: Session, as_of: Optional[str] = None) -> Optional[Dict[s
     }
 
 
+_PEER_DIVISOR = "── Cobertura parcial · fuera del orden ──"
+
+
 def _peer_table(peers: Optional[List[Dict[str, Any]]]) -> Optional[tuple]:
     """Tabla comparativa: AFP × (ISA + score relativo por dimensión), ordenada por ISA."""
     if not peers:
         return None
+    from shared.narrative.derived import universo_comparable
+
     order = ["solvencia", "rentabilidad", "escala", "costo"]
     rows = [["AFP", "ISA", "Solvencia", "Rentab.", "Escala", "Costo"]]
-    ranked = sorted(peers, key=lambda r: (r.get("overall_score") is not None,
-                                          r.get("overall_score") or 0), reverse=True)
-    for r in ranked:
+
+    def _fila(r: dict) -> list:
         by = {d["key"]: d for d in r.get("dimensions") or []}
         isa = "—" if r.get("overall_score") is None else f"{r['overall_score']:.1f}"
-        cells = [r.get("name") or r.get("slug"), isa]
-        for k in order:
-            sc = (by.get(k) or {}).get("score")
-            cells.append("—" if sc is None else f"{sc:.0f}")
-        rows.append(cells)
+        cells = [str(r.get("name") or r.get("slug") or ""), isa]
+        cells += ["—" if (by.get(k) or {}).get("score") is None
+                  else f"{by[k]['score']:.0f}" for k in order]
+        return cells
+
+    # Misma regla que en seguros y que el contexto de IA: un ISA armado sobre cobertura parcial
+    # no ordena contra uno completo. Acá no cambia nada hoy —el panel de AFP está completo—
+    # pero el día que una AFP pierda una dimensión, la tabla no la mezcla.
+    u = universo_comparable(peers)
+    rows += [_fila(r) for r in u["comparables"]]
+    if u["parciales"]:
+        rows.append([_PEER_DIVISOR] + [""] * 5)
+        rows += [_fila(r) for r in u["parciales"]]
+    # Sin score no hay orden posible: van al final, declaradas.
+    sin_score = [r for r in peers if r.get("overall_score") is None]
+    if sin_score:
+        rows.append(["── Sin ISA calculado ──"] + [""] * 5)
+        rows += [_fila(r) for r in sin_score]
     if len(rows) <= 1:
         return None
-    return ("Comparación con las AFP del sistema (score relativo 0–100 por dimensión)", rows)
+    titulo = ("Comparación con las AFP del sistema (score relativo 0–100 por dimensión) · "
+              f"{u['n_comparables']} con todas las dimensiones medidas")
+    if u["parciales"]:
+        titulo += f", {u['n_parciales']} de cobertura parcial"
+    return (titulo, rows)
 
 
 def _trend_table(trend: Optional[List[tuple]]) -> Optional[tuple]:

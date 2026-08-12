@@ -81,3 +81,40 @@ def test_la_frescura_concuerda_el_plural():
     assert "5 días." in _methodology_md(_Sig(), None, as_of="2024")
     _Sig.freshness_days = 0
     assert "menos de un día." in _methodology_md(_Sig(), None, as_of="2024")
+
+
+# ── Cursiva ANIDADA dentro de negrita ─────────────────────────────────────────
+#
+# La primera versión del arreglo compartido rompía este caso: `**negrita con *cursiva*
+# adentro**` salía como `*<i>negrita con </i>cursiva<i> adentro</i>*` —negrita perdida y
+# asteriscos a la vista—. Banca YA lo tenía resuelto en su propio generador de PDF (su
+# docstring documentaba el mismo defecto), así que el guard estaba en un motor y faltaba en el
+# compartido. Ahora hay UNA implementación y banca la consume.
+
+_ANIDADO = "**negrita con *cursiva* adentro**"
+
+
+def test_pdf_respeta_la_cursiva_dentro_de_negrita():
+    assert _inline(_ANIDADO) == "<b>negrita con <i>cursiva</i> adentro</b>"
+
+
+def test_no_confunde_una_multiplicacion_con_cursiva():
+    """`5*8` no abre énfasis: la frontera exige que el contenido no arranque con espacio."""
+    assert _inline("5*8 = 40 y 3*4 = 12") == "5*8 = 40 y 3*4 = 12"
+
+
+def test_word_respeta_la_cursiva_dentro_de_negrita():
+    from docx import Document
+
+    from shared.products.render_docx import _add_runs
+    p = Document().add_paragraph()
+    _add_runs(p, _ANIDADO)
+    runs = [(r.text, bool(r.bold), bool(r.italic)) for r in p.runs]
+    assert ("cursiva", True, True) in runs, runs
+    assert all("*" not in tx for tx, _, _ in runs)
+
+
+def test_banca_no_mantiene_una_segunda_implementacion():
+    """Dos copias del mismo criterio divergen; banca delega en la compartida."""
+    from modules.banking_score.reports.pdf_generator import _md_inline
+    assert _md_inline(_ANIDADO) == _inline(_ANIDADO)

@@ -698,7 +698,6 @@ modules/pension_intel/nav_sync.py:0: error: Incompatible types in assignment (ex
 modules/pension_intel/nav_sync.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
 modules/pension_intel/operations.py:0: error: Incompatible types in assignment (expression has type "bool", variable has type "Column[bool]")  [assignment]
 modules/pension_intel/operations.py:0: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
-modules/pension_intel/products.py:0: error: Argument 1 to "append" of "list" has incompatible type "list[str | Any | None]"; expected "list[str]"  [arg-type]
 modules/pension_intel/products.py:0: error: Argument 1 to "loads" has incompatible type "Column[str]"; expected "str | bytes | bytearray"  [arg-type]
 modules/pension_intel/products.py:0: error: Generator has incompatible item type "Column[float]"; expected "bool"  [misc]
 modules/pension_intel/products.py:0: error: Item "None" of "dict[str, Any] | None" has no attribute "get"  [union-attr]
