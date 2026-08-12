@@ -35,6 +35,7 @@ from modules.brand_intel.report import _fmt, group_competitivas
 SECTIONS: List[Tuple[str, str]] = [
     ("executive", "Resumen ejecutivo"),
     ("explanations", "Lectura del trimestre"),
+    ("sales", "La venta del período"),
     ("priorities", "Qué mover y qué no"),
     ("plan", "El plan bajo el instrumento"),
     ("ticket", "El ticket en pesos constantes"),
@@ -155,6 +156,48 @@ def _fallback_priorities(s: Dict[str, Any]) -> str:
     return "\n\n".join(p for p in partes if p)
 
 
+def _fallback_sales(sa: Dict[str, Any]) -> str:
+    """La venta, composición determinista: el reparto y las dispersiones que importan."""
+    partes: List[str] = []
+    sis, g = sa.get("system") or {}, sa.get("growth_composition") or {}
+    per = sa.get("period") or {}
+    if sis.get("sales_change_pct") is not None:
+        partes.append(
+            f"Entre el {per.get('from')} y el {per.get('to')} ({per.get('days')} jornadas, "
+            f"{sis.get('stores')} locales), la venta varía "
+            f"**{_fmt(sis['sales_change_pct'])}** contra las mismas fechas del ejercicio "
+            f"anterior, las transacciones {_fmt(sis.get('transactions_change_pct'))} y el "
+            f"cheque promedio {_fmt(sis.get('avg_check_change_pct'))}. El movimiento es "
+            f"predominantemente de "
+            f"{'afluencia' if g.get('dominant') == 'trafico' else 'gasto por visita'}.")
+    real = sa.get("real_check") or {}
+    if real.get("available"):
+        partes.append(str(real.get("note")))
+        if real.get("deflator_coverage"):
+            partes.append(f"Cobertura del deflactor: {real['deflator_coverage']}.")
+    canales = sa.get("by_channel") or []
+    if canales:
+        partes.append("**Por canal:**\n" + _md_list([
+            f"**{c['label']}** venta {_fmt(c.get('sales_change_pct'))}, transacciones "
+            f"{_fmt(c.get('transactions_change_pct'))}" for c in canales]))
+    plazas = sa.get("by_city") or []
+    if plazas:
+        partes.append("**Por plaza:**\n" + _md_list([
+            f"**{c['label']}** venta {_fmt(c.get('sales_change_pct'))}, transacciones "
+            f"{_fmt(c.get('transactions_change_pct'))}" for c in plazas]))
+    contr = sa.get("contracting_cities") or []
+    if contr:
+        partes.append("Plaza(s) con contracción simultánea de venta y tráfico: "
+                      + ", ".join(c["label"] for c in contr) + ".")
+    ventana = sa.get("comparable_window") or {}
+    if ventana.get("note"):
+        partes.append(str(ventana["note"]))
+    cons = sa.get("consistency") or {}
+    if cons.get("checked") and not cons.get("reconciles"):
+        partes.append(str(cons.get("note")))
+    return "\n\n".join(x for x in partes if x)
+
+
 def _is_measurable(r: Dict[str, Any]) -> bool:
     """Un compromiso con algo que medir: métrica del tracker o umbral declarado.
 
@@ -250,6 +293,25 @@ def narratives_and_tables(
     # fue el cliente quien envió su plan, y una tabla que se lo repite no es informe.
     # El seguimiento con veredictos vive en la vista interna; cuando una ola emita
     # veredictos, la narrativa de prioridades los lee desde el contexto.
+
+    # ── La venta del período ── (solo con jornadas comparables cargadas)
+    sa = s.get("sales") or {}
+    if sa.get("available"):
+        n["sales"] = ai.get("sales") or _fallback_sales(sa)
+        plazas = sa.get("by_city") or []
+        if plazas:
+            tables.append(("Venta y tráfico por plaza",
+                           [["Plaza", "Venta", "Transacciones", "Cheque promedio"]] +
+                           [[c["label"], _fmt(c.get("sales_change_pct")),
+                             _fmt(c.get("transactions_change_pct")),
+                             _fmt(c.get("avg_check_change_pct"))] for c in plazas]))
+        canales = sa.get("by_channel") or []
+        if canales:
+            tables.append(("Venta y tráfico por canal",
+                           [["Canal", "Venta", "Transacciones", "Cheque promedio"]] +
+                           [[c["label"], _fmt(c.get("sales_change_pct")),
+                             _fmt(c.get("transactions_change_pct")),
+                             _fmt(c.get("avg_check_change_pct"))] for c in canales]))
 
     # ── El plan bajo el instrumento ── (solo con planes o decisiones; sin ellos, el
     # estado vive en Límites). PROSA SOLA, sin tabla: el plan es DEL CLIENTE — él ya lo

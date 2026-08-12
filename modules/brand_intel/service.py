@@ -51,6 +51,7 @@ from modules.brand_intel.models.models import (
     BrandObservationReading,
     BrandPlanDocument,
     BrandPlanGoal,
+    BrandSalesDaily,
     BrandWave,
 )
 
@@ -1280,6 +1281,40 @@ def check_decision_feasibility(
         "baseline_value": obs.value if obs else None,
         "baseline_base_n": obs.base_n if obs else None,
     }
+
+
+def sales_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
+    """La lectura de la venta del encargo, con el deflactor del contrato macro.
+
+    El deflactor se resuelve aquí y no en el motor: la inflación es un contrato
+    compartido de la plataforma y el motor debe seguir siendo probable sin base de datos.
+    Cuando el índice no alcanza el tramo de la venta se pasa igual el último dato oficial
+    junto con su cobertura, y el motor declara la brecha en la lectura real.
+    """
+    from modules.brand_intel.engines import sales as sales_engine
+
+    rows = (db.query(BrandSalesDaily)
+            .filter(BrandSalesDaily.engagement_id == engagement_id)
+            .order_by(BrandSalesDaily.business_date)
+            .all())
+
+    infl, cobertura = None, None
+    try:
+        from shared.contracts import load_inflation_series
+        serie = load_inflation_series(db) or {}
+        if serie:
+            puntos = sorted(serie.items())
+            ultimo_mes, infl = puntos[-1][0], float(puntos[-1][1])
+            fechas = [r.business_date for r in rows if r.business_date]
+            if fechas:
+                fin = fechas[-1].strftime("%Y-%m")
+                cobertura = (f"índice hasta {ultimo_mes}" if ultimo_mes < fin
+                             else "índice cubre el tramo")
+    except Exception:  # noqa: BLE001 — sin contrato macro la venta se lee nominal
+        logger.warning("Contrato de inflación no disponible: la venta se lee nominal.")
+
+    return sales_engine.sales_analysis(rows, inflation_pct=infl,
+                                       inflation_coverage=cobertura)
 
 
 #: Categorías MECÁNICAS de brecha de medibilidad — derivadas del motivo de la

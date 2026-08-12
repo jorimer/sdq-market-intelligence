@@ -48,6 +48,7 @@ def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
     scenarios = svc.scenarios_analysis(db, eid)
     vigilance = svc.vigilance_analysis(db, eid)
     plan = svc.plan_readiness(db, str(eid))
+    sales = svc.sales_analysis(db, str(eid))
 
     payload: Dict[str, Any] = {
         "engagement": {
@@ -78,6 +79,7 @@ def build_report(db: Session, engagement: BrandEngagement) -> Dict[str, Any]:
             "scenarios": scenarios,
             "vigilance": vigilance,
             "plan": plan,
+            "sales": sales,
         },
     }
     payload["executive"] = _executive(payload)
@@ -184,6 +186,7 @@ _CEREBRO_TEMPLATES = {
     "explanations": "brand_context_reading",
     "priorities": "brand_context_priorities",
     "plan": "brand_plan_readiness",
+    "sales": "brand_sales_reading",
 }
 
 
@@ -325,8 +328,26 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         "agenda": ag.get("items") or [],
         "nota_umbral": sf.get("note"),
     }
+    # La venta: TODO viene computado por engines/sales.py. El modelo narra la
+    # descomposición; no la recalcula (una encuesta no observa transacciones, y este
+    # reparto es lo único que el cruce agrega — servirlo mal sería perder la sección).
+    sales = s.get("sales") or {}
+    sales_ctx = {
+        **base,
+        "periodo_venta": sales.get("period"),
+        "ventana_comparable": sales.get("comparable_window"),
+        "sistema": sales.get("system"),
+        "composicion_del_crecimiento": sales.get("growth_composition"),
+        "cheque_real": sales.get("real_check"),
+        "por_plaza": sales.get("by_city"),
+        "por_canal": sales.get("by_channel"),
+        "plazas_en_contraccion": sales.get("contracting_cities"),
+        "locales": sales.get("stores"),
+        "consistencia": sales.get("consistency"),
+        "nota_motor": sales.get("note"),
+    }
     return {"executive": ejecutivo, "explanations": lectura,
-            "priorities": prioridades, "plan": plan_ctx}
+            "priorities": prioridades, "plan": plan_ctx, "sales": sales_ctx}
 
 
 async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
@@ -342,6 +363,7 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
 
     xp = payload["sections"].get("explanations") or {}
     plan = payload["sections"].get("plan") or {}
+    sales = payload["sections"].get("sales") or {}
     ctxs = cerebro_contexts(payload)
     if not xp.get("available"):
         ctxs.pop("executive", None)
@@ -349,6 +371,8 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
         ctxs.pop("priorities", None)
     if not plan.get("available"):
         ctxs.pop("plan", None)
+    if not sales.get("available"):
+        ctxs.pop("sales", None)
     if not ctxs:
         return {}
 
