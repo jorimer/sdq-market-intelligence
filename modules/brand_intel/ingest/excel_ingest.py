@@ -300,12 +300,9 @@ def _ingest_observations(db, engagement, ws, report: IngestReport,
         # Las dos dimensiones se resuelven con el MISMO motor que la ruta de mazos: si la
         # plantilla canonizara distinto, el mismo corte entraría con dos formas según por
         # dónde llegó, que es el defecto original visto desde el otro lado.
-        atributo, segmento = seg.normalize_cut(
-            _col(row, headers, "atributo") or _col(row, headers, "segmento"),
+        atributo, segmento = seg.normalize_dimensions(
+            _col(row, headers, "atributo"), _col(row, headers, "segmento"),
             segmentos_conocidos)
-        if _col(row, headers, "atributo"):
-            _, segmento = seg.normalize_cut(_col(row, headers, "segmento"),
-                                            segmentos_conocidos)
         por_entrega.setdefault(entrega, []).append(Reading(
             wave_id=str(wave_id),
             brand_slug=brand or None,
