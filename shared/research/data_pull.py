@@ -275,6 +275,22 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
             flows.append(f"{lbl} {_fmt(v)}")
     if flows:
         out.append(_ev("Flujos (US$MM): " + ", ".join(flows) + ".", source, 86.0))
+    # Socio × capítulo: QUÉ bienes vienen de cada socio. Es la única evidencia que responde
+    # "¿qué le importamos a X, desglosado?" — sin ella el motor sólo tiene el agregado del
+    # país y la cuota del socio, y con eso llegó a INFERIR la composición y presentarla como
+    # "categorías plausibles". El sujeto viaja con el número: se nombra el socio en cada
+    # línea, no se deja al modelo atribuirlo.
+    for socio, d in ((payload or {}).get("socios_por_capitulo") or {}).items():
+        caps = d.get("capitulos_top") or []
+        if not caps:
+            continue
+        detalle = ", ".join(
+            f"cap. {c['capitulo']} {_fmt(c['usd_mm'])} MM ({_fmt(c['pct'])}%)" for c in caps[:8])
+        extra = f" — {d['truncado']} capítulos más no listados" if d.get("truncado") else ""
+        out.append(_ev(
+            f"Importaciones desde {socio} ({d.get('period') or 's/f'}): "
+            f"US${_fmt(d.get('total_usd_mm'))} MM en {d.get('n_capitulos')} capítulos HS. "
+            f"Mayores: {detalle}.{extra}", source, 92.0))
     return out or _generic_summary(label, payload, period, source)
 
 
