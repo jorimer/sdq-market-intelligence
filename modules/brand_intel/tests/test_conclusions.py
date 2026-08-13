@@ -312,3 +312,55 @@ def test_el_diccionario_viaja_en_el_prompt_cuando_se_da(db, engagement):
 
     assert "DICCIONARIO DE MÉTRICAS" in client.systems[0]
     assert "`favourite_place`" in client.systems[0]
+
+
+# ── modo «solo conclusiones» ───────────────────────────────────────────
+
+
+def test_conclusions_only_never_reads_a_slide_as_an_image(db, engagement, monkeypatch):
+    """La propiedad que justifica el modo: con las cifras llegando por la plantilla del
+    proveedor, leer cada lámina como imagen produce celdas que compiten con las suyas por
+    la misma coordenada. El renderizador EXPLOTA si alguien lo llama."""
+    from modules.brand_intel.ingest import jobs
+    from modules.brand_intel.models.models import BrandExtractionCell
+
+    def _explota(*a, **k):
+        raise AssertionError("el modo solo-conclusiones NO puede leer láminas")
+
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_vision.render_pages", _explota)
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_vision.extract_page", _explota)
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_vision.page_count",
+                        lambda content: 65)
+    monkeypatch.setattr("modules.brand_intel.ingest.discovery._page_texts",
+                        lambda content: ["McDonald's lidera en satisfacción."] * 3)
+    monkeypatch.setattr(
+        "modules.brand_intel.ingest.conclusions.read_conclusions",
+        lambda textos, vocab=None: [])
+    monkeypatch.setattr(jobs, "_dispatch", lambda eid: None)
+    monkeypatch.setattr("shared.database.session.SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+
+    row = jobs.queue_extraction(db, engagement, b"%PDF", "mazo.pdf",
+                                conclusions_only=True)
+    assert bool(row.conclusions_only) is True
+
+    out = jobs.run_extraction(str(row.id))
+    assert out["status"] == "validated"
+    db.refresh(row)
+    assert int(row.pages_done) == 0
+    assert "no se leyó ninguna lámina" in str(row.note)
+    # y no dejó celdas compitiendo con las de la plantilla
+    assert db.query(BrandExtractionCell).filter(
+        BrandExtractionCell.extraction_id == row.id).count() == 0
+
+
+def test_the_default_still_reads_the_slides(db, engagement, monkeypatch):
+    """La otra mitad: sin la bandera, nada cambia. Un encargo del que todavía no tenemos
+    plantilla del proveedor sigue necesitando la visión."""
+    from modules.brand_intel.ingest import jobs
+
+    monkeypatch.setattr("modules.brand_intel.ingest.pdf_vision.page_count",
+                        lambda content: 3)
+    monkeypatch.setattr(jobs, "_dispatch", lambda eid: None)
+    row = jobs.queue_extraction(db, engagement, b"%PDF", "mazo.pdf")
+    assert bool(row.conclusions_only) is False
