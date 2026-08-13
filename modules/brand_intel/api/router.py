@@ -302,6 +302,11 @@ async def ingest_pdf(
     file: UploadFile = File(..., description="Presentación .pdf del proveedor"),
     max_pages: Optional[int] = Query(None, ge=1, le=200,
                                      description="Limitar a las primeras N láminas"),
+    conclusions_only: bool = Query(
+        False,
+        description="Leer SOLO las conclusiones, de la capa de texto, sin la pasada de "
+                    "visión. Es el modo que corresponde cuando las cifras llegan por la "
+                    "plantilla del proveedor."),
     db: Session = Depends(get_db),
     user: User = Depends(require_role(UserRole.analyst)),
 ) -> Dict[str, Any]:
@@ -321,7 +326,8 @@ async def ingest_pdf(
 
     try:
         extraction = jobs.queue_extraction(
-            db, eng, content, file.filename or "documento.pdf", max_pages)
+            db, eng, content, file.filename or "documento.pdf", max_pages,
+            conclusions_only=conclusions_only)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

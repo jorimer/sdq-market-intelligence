@@ -337,6 +337,11 @@ class BrandExtraction(UUIDMixin, Base):
     # único que gobierna su acceso — un bucket necesitaría su propio control.
     source_pdf = Column(LargeBinary, nullable=True)
     max_pages = Column(Integer, nullable=True)
+    #: Leer SOLO las conclusiones, de la capa de texto, sin la pasada de visión por lámina.
+    #: Es el modo que corresponde cuando las cifras llegan por la plantilla del proveedor:
+    #: el mazo sigue aportando su lectura y su contexto, que es lo que una planilla no trae,
+    #: y deja de costar sesenta y cinco llamadas de visión para hacerlo.
+    conclusions_only = Column(Boolean, nullable=False, default=False)
     confirmed_by = Column(String(120), nullable=True)
     confirmed_at = Column(DateTime, nullable=True)
 

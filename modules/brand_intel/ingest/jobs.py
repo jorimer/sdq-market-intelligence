@@ -55,6 +55,7 @@ def queue_extraction(
     content: bytes,
     document_name: str,
     max_pages: Optional[int] = None,
+    conclusions_only: bool = False,
 ) -> BrandExtraction:
     """Registra el trabajo y lo despacha. No lee ni una lámina."""
     from modules.brand_intel.ingest.pdf_vision import page_count
@@ -73,6 +74,7 @@ def queue_extraction(
         method="vision",
         source_pdf=content,
         max_pages=max_pages,
+        conclusions_only=conclusions_only,
     )
     db.add(extraction)
     db.commit()
@@ -133,6 +135,22 @@ def run_extraction(extraction_id: str) -> Dict[str, Any]:
 
         content = bytes(extraction.source_pdf)
         _read_conclusions(db, extraction, content)
+
+        if bool(extraction.conclusions_only):
+            # El mazo ya dio lo único que una planilla no puede dar. Saltear la visión no
+            # es una optimización: con las cifras llegando por la plantilla, leer cada
+            # lámina como imagen produce celdas que compiten con las del proveedor por la
+            # misma coordenada, y esa competencia es justo lo que el revisor no debería
+            # tener que arbitrar.
+            extraction.status = "validated"                  # type: ignore[assignment]
+            extraction.note = (                              # type: ignore[assignment]
+                "Solo conclusiones: las cifras llegan por la plantilla del proveedor y no "
+                "se leyó ninguna lámina como imagen.")
+            extraction.pages_done = 0                        # type: ignore[assignment]
+            extraction.finished_at = (                       # type: ignore[assignment]
+                datetime.now(timezone.utc))
+            db.commit()
+            return {"status": "validated", "extraction_id": str(extraction.id)}
 
         def _progress(done: int) -> None:
             # El total ya se conoce desde que se encoló (`page_count`), así que la
@@ -227,9 +245,9 @@ def _read_conclusions(db: Session, extraction: BrandExtraction, content: bytes) 
 def _fail(db: Session, extraction: BrandExtraction, message: str) -> None:
     """Deja el trabajo en error, con el motivo. CONSERVA el PDF: un trabajo que falló es
     justo el que hay que reanudar, y sin el archivo la reanudación es imposible."""
-    extraction.status = ERROR
-    extraction.error = message[:2000]
-    extraction.finished_at = datetime.now(timezone.utc)
+    extraction.status = ERROR                              # type: ignore[assignment]
+    extraction.error = message[:2000]                      # type: ignore[assignment]
+    extraction.finished_at = datetime.now(timezone.utc)    # type: ignore[assignment]
     db.commit()
 
 
