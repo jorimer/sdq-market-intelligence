@@ -54,8 +54,8 @@ SYSTEM_LABEL = "Sistema Bancario Dominicano"
 
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del
 # Anexo del catálogo: CAR ~16.8%, morosidad ~1.9%, ROE ~19.4%, eficiencia ~56%, liquidez
-# ~31%. Banda resultante ≈ SDQ-AA- (Fuerte). Fuente única de la muestra (la usa el
-# producto y el script scripts/generate_tier_samples.py).
+# ~31%. Bandas resultantes: Ejecución Competitiva · Resiliencia Sólida. Fuente única de la
+# muestra (la usa el producto y el script scripts/generate_tier_samples.py).
 SAMPLE_NAME = "Banco Demo, S.A."
 SAMPLE_PERIOD = "2024-12-31"
 SAMPLE_SCORING = {
@@ -70,7 +70,8 @@ SAMPLE_SCORING = {
         "liquidez": {"raw": 31.0, "score": 80, "available": True},
     },
 }
-SAMPLE_SYSTEM = {"band_distribution": {"Fuerte": 6, "Adecuado": 8, "Vigilancia": 3, "Crítico": 1},
+SAMPLE_SYSTEM = {"band_distribution": {"Sólida": 6, "Adecuada": 8, "En vigilancia": 3,
+                                       "Frágil": 1},
                  "n_entities": 18, "system_avg_score": 71.8, "period": SAMPLE_PERIOD}
 # sujeto-ok: `metric_label` viaja en el MISMO dict y nombra la población ("Activos"); CR5/CR10
 # son razones de concentración de FIRMAS por convención. A diferencia del caso de seguros, acá
@@ -82,10 +83,10 @@ SAMPLE_PEER = {"metric_label": "Activos", "cr5": 71.2, "cr10": 87.4, "hhi": 1380
 SAMPLE_NARRATIVES = {
     "system_overview": (
         "El sistema bancario dominicano cierra el período con un **score promedio de "
-        "71.8/100**, situado en la franja alta de la banda Adecuado y próximo al umbral de "
-        "Fuerte. La distribución evidencia una dispersión material: de las **18 entidades** "
-        "evaluadas, **6 califican como Fuerte** (≥80) y **8 como Adecuado**, mientras **3 "
-        "permanecen en Vigilancia** y **1 en estado Crítico**. El sistema presenta una "
+        "71.8/100**, situado en la franja alta de la banda de resiliencia Adecuada y próximo "
+        "al umbral de Sólida. La distribución evidencia una dispersión material: de las **18 "
+        "entidades** evaluadas, **6 califican como Sólida** (≥75) y **8 como Adecuada**, "
+        "mientras **3 quedan En vigilancia** y **1 en banda Frágil**. El sistema presenta una "
         "estructura heterogénea, en la que un núcleo sólido y bien capitalizado coexiste "
         "con un conjunto de entidades cuya solvencia o calidad de activos requiere "
         "monitoreo activo. La concentración refuerza esta lectura: los cinco mayores "
@@ -96,18 +97,18 @@ SAMPLE_NARRATIVES = {
         "que la exposición al sistema en su conjunto."
     ),
     "executive_summary": (
-        "**Banco Demo, S.A. obtiene una calificación SDQ-AA- (score 80.3/100)**, ubicada en "
-        "la banda Fuerte y entre las entidades mejor calificadas del sistema. El rating se "
+        "**Banco Demo, S.A. obtiene Resiliencia Sólida y Ejecución Competitiva (score "
+        "80.3/100)**, entre las entidades mejor calificadas del sistema. El perfil se "
         "sostiene sobre dos pilares de calidad sobresaliente —**solidez financiera (85)** y "
         "**calidad de activos (82)**—, que describen una entidad bien capitalizada y con una "
-        "cartera sana. El perfil presenta, no obstante, áreas de mejora: la "
-        "**diversificación (62)** constituye el componente más rezagado y, por lo tanto, la "
-        "principal vía de fortalecimiento del rating. En síntesis, Banco Demo es una entidad "
-        "de riesgo crediticio bajo, con holgura de capital para absorber choques y una "
-        "morosidad contenida, cuya próxima frontera de valor no reside en reforzar sus "
-        "fortalezas consolidadas, sino en ampliar la base de ingresos y exposiciones. La "
-        "valoración de cierre la posiciona como contraparte de alta calidad, con un techo de "
-        "calificación alcanzable en la medida en que ejecute su agenda de diversificación."
+        "cartera sana. Presenta, no obstante, áreas de mejora: la **diversificación (62)** "
+        "constituye el componente más rezagado y, por lo tanto, la principal vía de "
+        "fortalecimiento. En síntesis, Banco Demo exhibe una fortaleza financiera holgada "
+        "—capital para absorber choques y una morosidad contenida— cuya próxima frontera de "
+        "valor no reside en reforzar sus fortalezas consolidadas, sino en ampliar la base de "
+        "ingresos y exposiciones. La valoración de cierre la posiciona como contraparte de "
+        "alta calidad, con recorrido al alza en la medida en que ejecute su agenda de "
+        "diversificación."
     ),
     "solidez_financiera": (
         "La solidez financiera constituye el principal soporte del perfil de Banco Demo "
@@ -169,7 +170,8 @@ SAMPLE_NARRATIVES = {
     "comparative": (
         "Frente al sistema, Banco Demo se ubica con claridad en el grupo de cabeza: su score "
         "de 80.3 supera el promedio del sistema (71.8) y lo posiciona entre las 6 entidades "
-        "en banda Fuerte de un universo de 18. El contexto competitivo resulta relevante: "
+        "en banda de resiliencia Sólida de un universo de 18. El contexto competitivo resulta "
+        "relevante: "
         "los cinco mayores bancos concentran el **71.2% de los activos** (CR5) y los diez "
         "mayores el **87.4%** (CR10), con un HHI de **1.380** que describe un mercado "
         "moderadamente concentrado. En ese entorno, Banco Demo compite en el segmento "
@@ -221,8 +223,9 @@ SAMPLE_NARRATIVES = {
         "**techo soberano** de la República Dominicana (BB, S&P) ancla cualquier lectura en "
         "clave crediticia "
         "comparable: una calificación de crédito en moneda extranjera difícilmente "
-        "excedería ese techo. La fortaleza **standalone** SDQ-AA- de Banco Demo mide su "
-        "posición **relativa** dentro del sistema dominicano y puede situarse por encima "
+        "excedería ese techo. La fortaleza **standalone** de Banco Demo (Resiliencia Sólida, "
+        "80.3/100) mide su posición **relativa** dentro del sistema dominicano y puede "
+        "situarse por encima "
         "de ese techo precisamente porque **no es** una medida de riesgo de crédito "
         "absoluto. La lectura práctica: para una contraparte local, el perfil standalone "
         "es la referencia; para una comparación internacional, el techo soberano y el "
@@ -245,8 +248,9 @@ SAMPLE_NARRATIVES = {
         "la evolución de su diversificación como indicador adelantado de resiliencia. Para la "
         "propia entidad, la palanca de mayor retorno sobre la calificación es la "
         "**diversificación**: con capital y activos próximos a su techo, constituye la única "
-        "dimensión en la que una agenda deliberada puede elevar el rating desde SDQ-AA- hacia "
-        "la franja superior. La eficiencia operativa representa la palanca secundaria, de "
+        "dimensión en la que una agenda deliberada puede elevar el score hacia la franja "
+        "superior de la banda Sólida. La eficiencia operativa representa la palanca "
+        "secundaria, de "
         "ejecución interna, y concentra el potencial de creación de valor remanente."
     ),
 }
@@ -268,8 +272,12 @@ _DEEP_DIVE_SECTIONS = _INSIGHT_SECTIONS + (
 # Limitaciones: texto estático (sin cifras → guard anti-alucinación trivialmente limpio).
 # Incluye el ENCUADRE del score (Fase 3, portado de pensiones): la calificación SDQ es
 # fortaleza financiera standalone sobre dato público real — NO un rating de crédito, y no
-# incorpora soporte soberano ni techo país. Evita que el lector confunda la escala
-# SDQ-AAA…D (nomenclatura tipo calificadora) con un rating crediticio comparable.
+# incorpora soporte soberano ni techo país.
+#
+# OJO al mantenerlo: esta sección es la COLA del documento y no se re-genera con cada
+# informe, así que sobrevivió al reencuadre de agosto de 2026 nombrando la escala
+# `SDQ-AAA…D` que ya no existe en ninguna otra superficie — y dos auditorías dieron el
+# reencuadre por limpio sin verla. Lo vigila `test_sin_notacion_heredada`.
 _LIMITATIONS_TEXT = (
     "La calificación SDQ es una medida de fortaleza financiera intrínseca (standalone), "
     "construida íntegramente sobre información pública supervisada (SIB/SIMBAD/BCRD) a la "
@@ -279,9 +287,11 @@ _LIMITATIONS_TEXT = (
     "soberano, la importancia sistémica ni el techo soberano del país, por lo que no es "
     "directamente comparable con las escalas de las calificadoras internacionales: la "
     "solvencia efectiva de una entidad estatal o sistémica puede diferir de su perfil "
-    "intrínseco —el soporte la eleva y el techo soberano la acota—. La escala SDQ-AAA…D "
-    "ordena la fortaleza financiera relativa dentro del sistema dominicano, no el riesgo de "
-    "crédito absoluto. El Deep Dive incorpora estos ejes (soporte estatal, importancia "
+    "intrínseco —el soporte la eleva y el techo soberano la acota—. Las bandas de Ejecución "
+    "y de Resiliencia ordenan la fortaleza financiera relativa dentro del sistema "
+    "dominicano, no el riesgo de crédito absoluto: se publican como dos ejes independientes "
+    "y no se resumen en un símbolo único. El Deep Dive incorpora estos ejes (soporte "
+    "estatal, importancia "
     "sistémica, techo soberano) como una capa de contexto separada (sección «Soporte y "
     "Techo Soberano»), sin alterar la calificación intrínseca. Las calificaciones SDQ son "
     "opiniones independientes de SDQ Consulting y no constituyen una recomendación para "
@@ -360,7 +370,7 @@ def _posterior_al_corte(periodo: Optional[str], corte: date) -> bool:
 def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str, object]]:
     """Pares NOMBRADOS de *bank* en *period_end*: su posición (sistema y mismo tipo) + los
     líderes de su MISMO TIPO con score/rating reales. Complementa el percentil (anónimo) con
-    la comparación concreta —"Popular 90.7 SDQ-AA+"— que un percentil no da.
+    la comparación concreta —"Popular 90.7 · Resiliencia Sólida"— que un percentil no da.
 
     El grupo de pares es el MISMO TIPO de entidad (estilo Fitch): comparar una banca múltiple
     contra agentes de cambio (scores altos en un negocio incomparable) es ruido, no señal —

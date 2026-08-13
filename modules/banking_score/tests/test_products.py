@@ -390,8 +390,12 @@ def test_sample_narratives_are_curated_and_clean():
             # El render de Banca solo soporta **negrita**; una cursiva *así* dejaría el
             # asterisco literal en el PDF. El exemplar no debe contener '*' sueltos.
             assert "*" not in text.replace("**", ""), f"{tier.value}/{sec}: cursiva suelta"
-    # Coherente con los datos demo (calificación del exemplar).
-    assert "SDQ-AA-" in prod.sample_narratives(ProductTier.insight)["executive_summary"]
+    # Coherente con los datos demo: el exemplar publica los DOS EJES, no un símbolo de
+    # letras. Antes esta línea exigía "SDQ-AA-" y por eso FIJABA en su lugar la notación
+    # que el reencuadre había retirado de todas las demás superficies — un test puede
+    # sostener el defecto que debería impedir.
+    resumen = prod.sample_narratives(ProductTier.insight)["executive_summary"]
+    assert "Resiliencia Sólida" in resumen and "Ejecución Competitiva" in resumen
 
 
 def test_assemble_sample_uses_curated_narratives(tmp_path):

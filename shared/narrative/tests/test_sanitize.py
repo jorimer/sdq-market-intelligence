@@ -155,3 +155,51 @@ def test_register_lint_prosa_institucional_limpia():
            "condiciona la generación orgánica de capital.")
     assert flag_register_violations(txt) == []
     assert flag_register_violations("") == []
+
+
+# ── Formato numérico: la prosa debe escribir el número como la tabla ──
+#
+# Defecto 2026-08-13 (Grupo Popular). Deep Dive §10, a tres líneas de distancia:
+#   prosa   → «50,9 % de la cartera bruta… umbral de referencia del 30,0 %»
+#   bullet  → «top-10 / cartera bruta %: 50.9 (umbral 30.0)»
+# Mismo dato, dos formatos. Lee como si dos pipelines distintas hubieran escrito el informe.
+
+def test_normaliza_la_frase_real_del_deep_dive():
+    """SENSOR DE REGRESIÓN: el pasaje literal de la §10, contra el bullet templado."""
+    from shared.narrative.sanitize import normalize_number_format
+    prosa = ("Con el 50,9 % de la cartera bruta absorbido por los diez mayores deudores "
+             "—frente a un umbral de referencia del 30,0 %— la entidad opera con riesgo.")
+    salida, cambios = normalize_number_format(prosa)
+    assert "50.9%" in salida and "30.0%" in salida
+    assert "," not in salida.split("umbral")[0].replace("—", "")
+    assert cambios  # la intervención se reporta para que la deriva sea observable
+
+
+def test_millares_no_se_tocan():
+    """La coma de millares lleva SIEMPRE tres dígitos: 1,176 es mil ciento setenta y seis,
+    no uno coma uno-siete-seis. Confundirlos convertiría un HHI en un decimal."""
+    from shared.narrative.sanitize import normalize_number_format
+    txt = ("El índice sectorial de 1,176 puntos y el HHI de ingresos en 5,026 conviven con "
+           "una cuota de 22,15 % en activos y 21,87 % en depósitos.")
+    salida, _ = normalize_number_format(txt)
+    assert "1,176" in salida and "5,026" in salida       # millares intactos
+    assert "22.15%" in salida and "21.87%" in salida     # decimales normalizados
+
+
+def test_corrige_el_tipeo_entregado():
+    """«exceptcionalmente» salió en el Rating Completo BPD §2."""
+    from shared.narrative.sanitize import normalize_number_format
+    salida, cambios = normalize_number_format(
+        "una cobertura de cartera exceptcionalmente robusta")
+    assert "excepcionalmente" in salida and "exceptcional" not in salida
+    assert any("tipeo" in c for c in cambios)
+
+
+def test_prosa_ya_en_formato_de_casa_no_cambia():
+    """Sin falsos positivos: el texto correcto sale idéntico y sin reportar cambios."""
+    from shared.narrative.sanitize import normalize_number_format
+    txt = ("El ICAP de 15.37% queda 2.34 puntos por debajo del promedio del sistema "
+           "(17.71%); la cobertura, en 200.6%, y el HHI sectorial en 1,176 puntos.")
+    salida, cambios = normalize_number_format(txt)
+    assert salida == txt and cambios == []
+    assert normalize_number_format("") == ("", [])
