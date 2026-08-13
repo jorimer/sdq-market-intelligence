@@ -137,6 +137,33 @@ def data_waves(db: Session, engagement_id: str,
     return serie[:codes.index(as_of) + 1]
 
 
+def published_cells(db: Session, engagement_id: str) -> List[Dict[str, Any]]:
+    """Las coordenadas que este proveedor YA publicó, para saber qué pedirle.
+
+    Sale de la ola más reciente con observaciones: un tracker repite su estructura entre
+    entregas, así que lo que reportó la última vez es lo que va a reportar la próxima.
+
+    Existe para no pedir de más. El cruce genérico —todas las marcas × todas las métricas ×
+    todos los cortes— incluye celdas que el estudio no mide: la fidelidad se publica para UNA
+    marca y le pediríamos dieciocho. Una fila vacía frente a alguien con prisa es una
+    invitación a completarla con algo, y ese algo entra al expediente como dato del proveedor.
+    """
+    ultima = (db.query(BrandObservation.wave_id)
+              .filter(BrandObservation.engagement_id == engagement_id)
+              .order_by(BrandObservation.created_at.desc()).first())
+    if not ultima:
+        return []
+    filas = (db.query(BrandObservation.brand_slug, BrandObservation.metric_code,
+                      BrandObservation.segment, BrandObservation.attribute)
+             .filter(BrandObservation.engagement_id == engagement_id,
+                     BrandObservation.wave_id == ultima[0])
+             .distinct().all())
+    return [
+        {"brand_slug": b, "metric_code": m, "segment": s or "total", "attribute": a or ""}
+        for b, m, s, a in filas
+    ]
+
+
 def brands(db: Session, engagement_id: str) -> List[BrandEntity]:
     return (
         db.query(BrandEntity)

@@ -16,7 +16,7 @@ from shared.auth.dependencies import get_current_user
 from shared.auth.models import UserRole
 from shared.database.session import get_db
 from modules.brand_intel.api.router import router
-from modules.brand_intel.models.models import BrandEngagement
+from modules.brand_intel.models.models import BrandEngagement, BrandWave
 
 
 def _client(db, role=UserRole.admin, org=None):
@@ -630,3 +630,54 @@ def test_the_review_detail_exposes_the_attribute_dimension(db, engagement):
     assert {c["attribute"] for c in celdas} == {"hamburguesas deliciosas", "café"}
     # Y las dos son distinguibles: mismo todo salvo el atributo.
     assert len({(c["metric"], c["brand"], c["wave"], c["segment"]) for c in celdas}) == 1
+
+
+# ── la planilla de PEDIDO, por la API ──────────────────────────────────
+
+
+def test_the_template_endpoint_serves_the_request_sheet(db, engagement):
+    """El defecto que esto cierra: la capacidad existía en `build_template` y el endpoint
+    no la usaba, así que producción seguía sirviendo la plantilla genérica de 3 filas. Un
+    feature a medias se ve idéntico a uno completo desde afuera."""
+    import io
+
+    from openpyxl import load_workbook
+
+    c = _client(db)
+    generica = c.get("/api/v1/brand-intel/template.xlsx?engagement=demo")
+    assert generica.status_code == 200
+
+    ola = db.query(BrandWave).filter_by(engagement_id=engagement.id).first()
+    pedido = c.get("/api/v1/brand-intel/template.xlsx"
+                   f"?engagement=demo&request_wave={ola.code}")
+    assert pedido.status_code == 200
+    assert len(pedido.content) > len(generica.content), (
+        "la planilla de pedido no trae más filas que la genérica: no se armó")
+
+    wb = load_workbook(io.BytesIO(pedido.content))
+    ws = wb["Observaciones"]
+    fila = next(ws.iter_rows(min_row=2, max_row=2, values_only=True))
+    # La ola pedida ya está resuelta y las dos columnas del proveedor, vacías.
+    assert fila[1] == ola.code
+    assert fila[6] is None and fila[7] is None, "valor/base_n deberían venir vacíos"
+    # Y las olas reales del encargo, no el ejemplo.
+    assert wb["Olas"].max_row >= 2
+
+
+def test_asking_for_a_wave_that_does_not_exist_says_which_ones_do(db, engagement):
+    r = _client(db).get(
+        "/api/v1/brand-intel/template.xlsx?engagement=demo&request_wave=NO-EXISTE")
+    assert r.status_code == 400
+    assert "no existe en el encargo" in r.json()["detail"]
+
+
+def test_published_cells_asks_only_for_what_the_provider_reports(db, engagement):
+    """La regla que evita inventar: se pide lo que ya publicó, no el cruce completo."""
+    from modules.brand_intel import service as svc
+
+    filas = svc.published_cells(db, str(engagement.id))
+    combos = {(f["brand_slug"], f["metric_code"], f["segment"]) for f in filas}
+    assert len(combos) == len(filas), "hay coordenadas repetidas en el pedido"
+    # Sin observaciones no hay de dónde derivar: devuelve vacío y el generador cae al
+    # cruce genérico, que es lo correcto para un encargo nuevo.
+    assert svc.published_cells(db, "encargo-inexistente") == []
