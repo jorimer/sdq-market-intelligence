@@ -681,3 +681,36 @@ def test_published_cells_asks_only_for_what_the_provider_reports(db, engagement)
     # Sin observaciones no hay de dónde derivar: devuelve vacío y el generador cae al
     # cruce genérico, que es lo correcto para un encargo nuevo.
     assert svc.published_cells(db, "encargo-inexistente") == []
+
+
+def test_the_request_asks_from_the_RICHEST_wave_not_the_newest(db, engagement):
+    """Elegir por fecha de carga parece razonable y no lo es. En producción la última carga
+    fue una matriz histórica —ancha en olas, tres indicadores— y el pedido salió con 60
+    celdas en vez de 541. Nadie lo habría notado hasta que el informe siguiera igual de
+    pobre con la planilla ya llena."""
+    from modules.brand_intel import service as svc
+    from modules.brand_intel.models.models import BrandObservation, BrandWave
+
+    rica = BrandWave(engagement_id=engagement.id, code="2099-01", label="Rica",
+                     sort_order=90)
+    flaca = BrandWave(engagement_id=engagement.id, code="2099-02", label="Flaca",
+                      sort_order=91)
+    db.add_all([rica, flaca])
+    db.flush()
+    for i in range(12):                       # la rica: doce coordenadas
+        db.add(BrandObservation(
+            engagement_id=engagement.id, wave_id=rica.id, brand_slug="focal",
+            metric_code=f"m{i}", segment="total", value=1.0, unit="pct"))
+    db.flush()
+    # la flaca se carga DESPUÉS, así que es la más reciente
+    for i in range(2):
+        db.add(BrandObservation(
+            engagement_id=engagement.id, wave_id=flaca.id, brand_slug="focal",
+            metric_code=f"h{i}", segment="total", value=1.0, unit="pct"))
+    db.commit()
+
+    filas = svc.published_cells(db, str(engagement.id))
+    metricas = {f["metric_code"] for f in filas}
+    assert "m0" in metricas, "tomó la ola flaca: el pedido saldría con una fracción"
+    assert "h0" not in metricas
+    assert len(filas) >= 12
