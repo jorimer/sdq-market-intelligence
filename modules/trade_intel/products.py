@@ -255,6 +255,46 @@ def _partners() -> Optional[Dict[str, Any]]:
 def _pct(share: Optional[float]) -> str:
     return "—" if share is None else f"{share * 100:.1f}%"
 
+def _socios_por_capitulo(max_socios: int = 5, top_capitulos: int = 12) -> Dict[str, Any]:
+    """``{socio: {period, total_usd_mm, capitulos:[{capitulo, usd_mm, pct}]}}``.
+
+    Acotado y DECLARADO: se sirven los primeros capítulos de cada socio, no los ~95, porque
+    el contexto del modelo no debe cargar 500 filas para responder una pregunta. `truncado`
+    dice cuántos quedaron fuera — un top-N silencioso se lee como si fuera todo.
+    """
+    from modules.trade_intel.models.models import TradePartnerChapter
+    from modules.trade_intel.partner_chapters_sync import importaciones_por_capitulo
+    from shared.database.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        socios = [r[0] for r in (db.query(TradePartnerChapter.partner)
+                                 .distinct().limit(max_socios).all())]
+        out: Dict[str, Any] = {}
+        for s in socios:
+            d = importaciones_por_capitulo(db, partner=s)
+            if not d.get("capitulos"):
+                continue
+            caps = d["capitulos"]
+            out[s] = {
+                "period": d["period"], "total_usd_mm": d["total_usd_mm"],
+                "n_capitulos": d["n_capitulos"],
+                "capitulos_top": caps[:top_capitulos],
+                "truncado": max(0, len(caps) - top_capitulos),
+                "fuente": d["fuente"],
+            }
+        return out
+    except Exception:  # noqa: BLE001 — el snapshot nunca se cae por esta lectura
+        return {}
+    finally:
+        db.close()
+
+
+
+    # ── Snapshot por nivel ──
+
+
+
 
 class TradeProduct:
     """``SectorProduct`` de Comercio. ``db`` opcional: las muestras sintéticas usan
@@ -320,7 +360,6 @@ class TradeProduct:
                          + (" (significativo)." if sig else " (inconcluso)."))
         return ValidationState(approved=True, score=score, notes=notes)
 
-    # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
         s = _latest_score(self._require_db(), period or None)
@@ -338,6 +377,12 @@ class TradeProduct:
                                    entity_name=None, entity_roster=())
         if tier == ProductTier.deep_dive:
             payload["partners"] = _partners()  # dimensión geográfica (UN Comtrade)
+            # Cruce socio × capítulo: QUÉ bienes vienen de cada socio. Va en el payload
+            # porque es lo que lee el motor de Research (`shared/research/data_pull`), que
+            # sólo ve el snapshot del producto. Sin esto el dato vive en la base y en su
+            # endpoint, pero el motor sigue respondiendo que no lo tiene — que es justo lo
+            # que hizo con "¿qué le importamos a China, desglosado?".
+            payload["socios_por_capitulo"] = _socios_por_capitulo()
         return ProductSnapshot(tier=tier, period=s.period, payload=payload,
                                entity_name=COUNTRY_NAME)
 
