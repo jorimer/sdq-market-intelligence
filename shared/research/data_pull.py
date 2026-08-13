@@ -280,7 +280,9 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
     # país y la cuota del socio, y con eso llegó a INFERIR la composición y presentarla como
     # "categorías plausibles". El sujeto viaja con el número: se nombra el socio en cada
     # línea, no se deja al modelo atribuirlo.
-    for socio, d in ((payload or {}).get("socios_por_capitulo") or {}).items():
+    _spc = dict((payload or {}).get("socios_por_capitulo") or {})
+    _om = (_spc.pop("_omitidos", {}) or {}).get("socios_no_listados") or 0
+    for socio, d in _spc.items():
         caps = d.get("capitulos_top") or []
         if not caps:
             continue
@@ -291,6 +293,10 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
             f"Importaciones desde {socio} ({d.get('period') or 's/f'}): "
             f"US${_fmt(d.get('total_usd_mm'))} MM en {d.get('n_capitulos')} capítulos HS. "
             f"Mayores: {detalle}.{extra}", source, 92.0))
+    if _om:
+        out.append(_ev(
+            f"El desglose por origen cubre los {len(_spc)} socios de mayor valor; "
+            f"{_om} orígenes más están ingeridos pero no se listan acá.", source, 84.0))
     return out or _generic_summary(label, payload, period, source)
 
 
