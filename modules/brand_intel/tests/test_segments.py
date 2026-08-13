@@ -147,3 +147,63 @@ def test_renormalize_repairs_what_it_can_and_declares_what_it_cannot(db, engagem
     # Las tres de Santo Domingo tenían valores distintos: eso SÍ es un conflicto real y
     # ahora se ve, porque antes estaban repartidas en tres cortes y ninguna se comparaba.
     assert out["validacion"]["conflict"] >= 3
+
+
+# ── el atributo en SU PROPIO campo, que es el camino del esquema nuevo ──
+#
+# La prueba que faltaba y costó una relectura completa del mazo en producción: 247 celdas
+# volvieron sin atributo porque `normalize_cut` recibía el texto suelto del campo dedicado y
+# lo devolvía como CORTE. Los tests cubrían la forma empaquetada y el corte a secas —las dos
+# que yo tenía en la cabeza— y nunca el camino que el esquema nuevo estrenaba.
+
+
+def test_an_attribute_in_its_own_field_survives():
+    a, s = seg.normalize_dimensions("hamburguesas deliciosas", "total", ["total"])
+    assert a == "hamburguesas deliciosas"
+    assert s == "total"
+
+
+def test_the_attribute_field_wins_and_the_cut_is_still_canonised():
+    a, s = seg.normalize_dimensions("café", "SD", ["total", "Santo Domingo"])
+    assert a == "café"
+    assert s == "Santo Domingo"          # el corte se canoniza aparte, no se pisa
+
+
+def test_an_empty_attribute_field_falls_back_to_unpacking_the_cut():
+    """Compatibilidad hacia atrás: lo que llegaba empaquetado sigue funcionando."""
+    for vacio in (None, "", "   "):
+        a, s = seg.normalize_dimensions(vacio, "calidad de la comida | st",
+                                        ["total", "santiago"])
+        assert (a, s) == ("calidad de la comida", "santiago")
+
+
+def test_no_attribute_anywhere_is_none_not_empty_string():
+    a, s = seg.normalize_dimensions(None, "santiago", ["santiago"])
+    assert a is None and s == "santiago"
+
+
+def test_normalize_cut_alone_would_have_lost_it():
+    """Fija el porqué de la función nueva: la vieja, con el texto suelto, lo pierde. Si
+    alguien vuelve a llamar a `normalize_cut` con el campo dedicado, este test explica el
+    defecto que reintrodujo."""
+    a, s = seg.normalize_cut("hamburguesas deliciosas", [])
+    assert a is None                                    # el atributo desaparece…
+    assert s == "hamburguesas deliciosas"               # …y contamina el corte
+
+
+def test_every_ingest_route_keeps_an_attribute_that_arrives_in_its_field():
+    """La REGLA sobre las tres rutas, no sobre una: mazo, plantilla y recanonización usan
+    la misma entrada, así que ninguna puede volver a perderlo por su cuenta."""
+    import inspect
+
+    from modules.brand_intel.ingest import excel_ingest, pdf_pipeline
+
+    fuentes = {
+        "mazo/recanonización": inspect.getsource(pdf_pipeline),
+        "plantilla": inspect.getsource(excel_ingest),
+    }
+    for nombre, fuente in fuentes.items():
+        assert "normalize_dimensions" in fuente, nombre
+        # `normalize_cut` con el campo dedicado es justo el defecto: ninguna ruta lo llama.
+        assert "normalize_cut(" not in fuente, (
+            f"{nombre} volvió a usar normalize_cut: pierde el atributo del campo dedicado")

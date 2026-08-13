@@ -101,6 +101,29 @@ def resolve_segment(raw: Optional[str], known: Iterable[str] = ()) -> str:
 def normalize_cut(
     raw: Optional[str], known: Iterable[str] = ()
 ) -> Tuple[Optional[str], str]:
-    """Las dos dimensiones de un rótulo de corte: ``(atributo, corte canónico)``."""
+    """Las dos dimensiones de UN SOLO rótulo: ``(atributo, corte canónico)``.
+
+    Solo para la forma EMPAQUETADA («calidad de la comida | sd»). Si el atributo llega en
+    su propio campo, usá ``normalize_dimensions``: pasarle el texto suelto a esta función
+    lo devuelve como CORTE y el atributo se pierde. Pasó en producción —una relectura
+    entera del mazo con 247 celdas sin atributo— porque el camino del campo dedicado nunca
+    se probó: los tests cubrían la forma empaquetada y el corte a secas.
+    """
     atributo, corte = split_attribute(raw)
     return (atributo.strip() if atributo else None), resolve_segment(corte, known)
+
+
+def normalize_dimensions(
+    attribute: Optional[str], segment: Optional[str], known: Iterable[str] = ()
+) -> Tuple[Optional[str], str]:
+    """Las dos dimensiones desde sus DOS campos, como las entrega el esquema nuevo.
+
+    Un atributo en su propio campo ES el atributo: no se reinterpreta. Si viene vacío, se
+    intenta desempaquetarlo del rótulo del corte, que es como llegaba antes de que el
+    esquema tuviera dónde ponerlo. Una sola función para las tres rutas de ingesta —mazo,
+    plantilla y recanonización— porque tres copias de esta decisión divergen.
+    """
+    propio = (attribute or "").strip()
+    if propio:
+        return propio, resolve_segment(segment, known)
+    return normalize_cut(segment, known)

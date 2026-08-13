@@ -272,10 +272,8 @@ def _to_validation_cells(
         # sale de su propio campo o del rótulo empaquetado con barra. Guardar el rótulo
         # crudo es lo que produjo tres escrituras de «Santo Domingo» y enunciados de
         # pregunta usados como si fueran poblaciones.
-        attribute, segment = seg.normalize_cut(
-            row.get("attribute") or row.get("segment"), resolver.segments)
-        if row.get("attribute"):
-            _, segment = seg.normalize_cut(row.get("segment"), resolver.segments)
+        attribute, segment = seg.normalize_dimensions(
+            row.get("attribute"), row.get("segment"), resolver.segments)
         cells.append(val.Cell(
             key=f"p{page}-{idx}",
             metric_code=metric,
@@ -470,10 +468,9 @@ def renormalize_staged(
     cortes = 0
     atributos = 0
     for f in filas:
-        crudo = str(f.attribute) if f.attribute is not None else str(f.segment)
-        atributo, corte = seg.normalize_cut(crudo, known_segments)
-        if f.attribute is not None:
-            _, corte = seg.normalize_cut(str(f.segment), known_segments)
+        atributo, corte = seg.normalize_dimensions(
+            str(f.attribute) if f.attribute is not None else None,
+            str(f.segment), known_segments)
         if str(f.segment) != corte:
             f.segment = corte                      # type: ignore[assignment]
             cortes += 1
