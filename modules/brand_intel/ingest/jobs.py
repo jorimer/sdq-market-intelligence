@@ -150,9 +150,11 @@ def run_extraction(extraction_id: str) -> Dict[str, Any]:
             if str(vigente) == CANCELLED:
                 raise JobCancelled(f"Cancelado en la lámina {done}.")
 
+        # Retomar donde quedó: `pages_done` es el número de láminas ya leídas Y guardadas.
+        # Un trabajo nuevo lo tiene en 0, así que el mismo camino sirve para los dos casos.
         report = ingest_pdf(db, engagement, content, str(extraction.document_name),
                             max_pages=extraction.max_pages, on_page=_progress,
-                            into=extraction)
+                            into=extraction, resume_from=int(extraction.pages_done or 0))
 
         # Una sola fila por documento, de `queued` a `validated`. El PDF se suelta aquí:
         # ya cumplió su función y no tiene por qué pesar en la base para siempre.

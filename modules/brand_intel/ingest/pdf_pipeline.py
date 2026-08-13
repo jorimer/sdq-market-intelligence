@@ -298,6 +298,7 @@ def ingest_pdf(
     renderer: Optional[Callable[..., List[bytes]]] = None,
     on_page: Optional[Callable[[int], None]] = None,
     into: Optional[BrandExtraction] = None,
+    resume_from: int = 0,
 ) -> IngestReport:
     """Read a presentation into staging, page by page. Nothing reaches observations here.
 
@@ -306,8 +307,11 @@ def ingest_pdf(
     with nothing to show, after paying for every call it had made.
 
     Each page is committed as it is read, so the work already done survives a crash, and
-    ``pages_done`` is where a re-run picks up. That is also what makes the progress on
-    screen真 rather than a spinner: it is the number of slides actually persisted.
+    ``resume_from`` —``pages_done`` del trabajo— es donde una reanudación RETOMA: las
+    láminas anteriores no se vuelven a leer ni a pagar. Sus celdas ya están guardadas y se
+    cargan de la base para validar contra ellas, porque la corroboración entre láminas es
+    justamente lo que se perdería al leer solo la cola. Y es lo que hace que el avance en
+    pantalla sea real y no un girador: es el número de láminas efectivamente guardadas.
     """
     report = IngestReport()
     render = renderer or pdf_vision.render_pages
@@ -336,7 +340,7 @@ def ingest_pdf(
     # termina. Renderizarlo entero por adelantado tenía además un coste de memoria que
     # crece con el mazo — 59 PNG a 140 ppp viven todos a la vez.
     raw: List[Tuple[int, str, Dict[str, Any]]] = []
-    page_no = 0
+    page_no = max(0, int(resume_from or 0))
     while max_pages is None or page_no < max_pages:
         page_no += 1
         try:
@@ -383,7 +387,26 @@ def ingest_pdf(
     dist_verdicts = val.distribution_verdicts(full_slide)
 
     cells = _to_validation_cells(raw, resolver, report, vocab)
-    result = val.validate(cells, distribution_results=dist_verdicts, vocab=vocab)
+
+    # Al reanudar, las celdas de las láminas ya leídas siguen guardadas: se cargan para
+    # validar CONTRA ellas. Sin esto, la reanudación juzgaría la cola del mazo aislada y
+    # perdería la corroboración entre láminas —una cifra repetida en la 10 y en la 40 es
+    # confirmación gratis, y era la mitad del valor del validador—. Se distinguen por la
+    # clave: «db-…» son las que ya existen y se actualizan en su fila; «p…» son nuevas.
+    previas: List[val.Cell] = []
+    if into is not None and resume_from:
+        for f in (db.query(BrandExtractionCell)
+                  .filter(BrandExtractionCell.extraction_id == into.id).all()):
+            previas.append(val.Cell(
+                key=f"db-{f.id}", metric_code=str(f.metric_code), value=float(f.value),
+                wave_code=str(f.wave_code) if f.wave_code else None,
+                brand_slug=str(f.brand_slug) if f.brand_slug else None,
+                segment=str(f.segment),
+                attribute=str(f.attribute) if f.attribute else None,
+                base_n=int(f.base_n) if f.base_n is not None else None,
+                unit=str(f.unit), source_method=str(f.source_method)))
+
+    result = val.validate(previas + cells, distribution_results=dist_verdicts, vocab=vocab)
     report.cells_extracted = len(cells)
     report.validation = result.as_dict()
     report.coverage_note = val.coverage_note(result)
@@ -402,6 +425,17 @@ def ingest_pdf(
     if into is None:
         db.add(extraction)
     db.flush()
+
+    # El veredicto de las previas pudo cambiar con lo que trajo la cola: se actualiza en su
+    # fila. Reinsertarlas duplicaría el mazo, que es lo que hacía la reanudación anterior.
+    if previas:
+        por_id = {str(c.key)[3:]: c for c in previas}
+        for f in (db.query(BrandExtractionCell)
+                  .filter(BrandExtractionCell.extraction_id == extraction.id).all()):
+            c = por_id.get(str(f.id))
+            if c is not None:
+                f.validation = c.validation                     # type: ignore[assignment]
+                f.validation_note = c.validation_note or None   # type: ignore[assignment]
 
     title_by_page = {p: t for p, t, _ in raw}
     for c in cells:

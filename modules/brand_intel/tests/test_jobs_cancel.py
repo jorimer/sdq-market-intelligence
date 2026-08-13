@@ -129,3 +129,87 @@ def test_a_slow_page_does_not_kill_the_deck():
     fuente = inspect.getsource(pdf_pipeline.ingest_pdf)
     assert "one bad page must not lose the document" in fuente
     assert "report.page_errors.append" in fuente
+
+
+# ── reanudar sin repagar ni duplicar ───────────────────────────────────
+#
+# El docstring prometía «`pages_done` is where a re-run picks up» y el endpoint decía «las
+# láminas ya leídas no se vuelven a pagar». El bucle arrancaba en 1 SIEMPRE, y el escritor
+# solo hacía `db.add`: reanudar releía el mazo entero y duplicaba sus celdas. Una promesa
+# escrita en prosa y desmentida por el código es peor que no prometer nada.
+
+
+def test_resume_starts_after_the_last_page_read(db, engagement) -> None:
+    """La propiedad, no la firma: con 32 láminas hechas, la lectura EMPIEZA en la 33.
+
+    `ingest_pdf` acepta el renderizador y el lector por parámetro justo para poder probar
+    esto sin pagar visión.
+    """
+    from modules.brand_intel.ingest import pdf_pipeline as pipe
+    from modules.brand_intel.ingest.pdf_vision import PageExtraction
+
+    renderizadas: list[int] = []
+
+    def _render(content, first, last):
+        renderizadas.append(first)
+        return [b"png"] if first <= 40 else []        # el mazo termina en la 40
+
+    def _extract(image, page_no, brands, waves):
+        return PageExtraction(chart_title=f"lámina {page_no}", readable=False,
+                              skip_reason="sin cifras", cells=[], model_used="test")
+
+    pipe.ingest_pdf(db, engagement, b"%PDF", "mazo.pdf",
+                    renderer=_render, extractor=_extract, resume_from=32)
+
+    assert renderizadas, "no se renderizó ninguna lámina"
+    assert min(renderizadas) == 33, (
+        f"la reanudación volvió a leer desde la {min(renderizadas)}: repaga lo ya leído")
+    assert max(renderizadas) == 41                     # 41 devuelve vacío y corta
+
+
+def test_a_fresh_job_still_starts_at_page_one(db, engagement) -> None:
+    """La otra mitad: sin punto de retomada, se lee de cero. El mismo camino sirve para
+    los dos casos, así que hay que fijar que no rompí el arranque normal."""
+    from modules.brand_intel.ingest import pdf_pipeline as pipe
+    from modules.brand_intel.ingest.pdf_vision import PageExtraction
+
+    renderizadas: list[int] = []
+
+    def _render(content, first, last):
+        renderizadas.append(first)
+        return [b"png"] if first <= 3 else []
+
+    def _extract(image, page_no, brands, waves):
+        return PageExtraction(chart_title="t", readable=False, skip_reason="",
+                              cells=[], model_used="test")
+
+    pipe.ingest_pdf(db, engagement, b"%PDF", "mazo.pdf",
+                    renderer=_render, extractor=_extract)
+    assert min(renderizadas) == 1
+
+
+def test_the_runner_hands_pages_done_as_the_resume_point():
+    """El cableado: `pages_done` es lo que el runner pasa. Un trabajo nuevo lo tiene en 0,
+    así que el mismo camino sirve para leer de cero y para retomar."""
+    import inspect
+
+    fuente = inspect.getsource(jobs.run_extraction) if hasattr(jobs, "run_extraction") \
+        else inspect.getsource(jobs)
+    assert "resume_from=int(extraction.pages_done or 0)" in fuente
+
+
+def test_resuming_revalidates_against_the_pages_already_read():
+    """Sin cargar las celdas previas, la reanudación juzgaría la cola del mazo aislada y
+    perdería la corroboración entre láminas —una cifra repetida en la 10 y en la 40 es
+    confirmación gratis—. Y las previas se ACTUALIZAN, no se reinsertan: reinsertarlas
+    duplicaría el mazo, que es lo que hacía la reanudación anterior."""
+    import inspect
+
+    from modules.brand_intel.ingest import pdf_pipeline as pipe
+
+    fuente = inspect.getsource(pipe.ingest_pdf)
+    assert "previas" in fuente
+    assert "val.validate(previas + cells" in fuente, (
+        "las celdas ya leídas no entran a la validación: se pierde la corroboración")
+    assert "f.validation = c.validation" in fuente, (
+        "las celdas previas no se actualizan en su fila: se estarían duplicando")

@@ -1106,6 +1106,36 @@ export function BrandIntelPage() {
                 juntas al terminar; el contador de láminas es el avance real. El trabajo
                 corre en el servidor: puedes cerrar esta pantalla y volver, no se pierde.
               </p>
+              {/* El freno. Sin él, notar a mitad de camino que la lectura no era la que
+                  hacía falta no servía de nada: había que pagarla completa. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  className="btn btn-ghost text-xs text-alert shrink-0"
+                  disabled={cancelling}
+                  onClick={() => void onCancel(job.extraction_id)}
+                >
+                  {cancelling ? "Deteniendo…" : "Detener la lectura"}
+                </button>
+                <span className="text-xs text-muted">
+                  Termina la lámina en curso y para ahí. Lo leído queda en revisión y el
+                  mazo se puede reanudar.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {job && job.status === "cancelled" && (
+            <div className="rounded-lg bg-surface2 p-3 mb-3 space-y-2">
+              <p className="text-sm text-body">
+                Lectura detenida en {job.pages_done} de {job.pages_total} lámina(s).
+                {job.note ? ` ${job.note}` : ""}
+              </p>
+              <button
+                className="btn btn-ghost text-xs"
+                onClick={() => void onResume(job.extraction_id)}
+              >
+                Reanudar desde donde iba
+              </button>
             </div>
           )}
 

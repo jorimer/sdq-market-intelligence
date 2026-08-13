@@ -668,7 +668,10 @@ export async function getExtractionStatus(
   return data;
 }
 
-/** Vuelve a despachar un trabajo interrumpido. No repaga las láminas ya leídas. */
+/**
+ * Vuelve a despachar un trabajo interrumpido, RETOMANDO en la lámina siguiente a la última
+ * leída. Las anteriores no se vuelven a pagar y sus celdas no se duplican.
+ */
 export async function resumeExtraction(
   slug: string, extractionId: string,
 ): Promise<ExtractionJob> {
