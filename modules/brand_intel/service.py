@@ -16,6 +16,7 @@ import unicodedata
 from datetime import date
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from modules.brand_intel.engines import attribution as attr
@@ -140,23 +141,32 @@ def data_waves(db: Session, engagement_id: str,
 def published_cells(db: Session, engagement_id: str) -> List[Dict[str, Any]]:
     """Las coordenadas que este proveedor YA publicó, para saber qué pedirle.
 
-    Sale de la ola más reciente con observaciones: un tracker repite su estructura entre
-    entregas, así que lo que reportó la última vez es lo que va a reportar la próxima.
+    Sale de la ola con MÁS observaciones —la entrega más completa que tenemos— porque un
+    tracker repite su estructura entre olas: lo que reportó en una entrega llena es lo que
+    va a reportar en la próxima. La más reciente no sirve: puede ser una carga histórica
+    con tres indicadores.
 
     Existe para no pedir de más. El cruce genérico —todas las marcas × todas las métricas ×
     todos los cortes— incluye celdas que el estudio no mide: la fidelidad se publica para UNA
     marca y le pediríamos dieciocho. Una fila vacía frente a alguien con prisa es una
     invitación a completarla con algo, y ese algo entra al expediente como dato del proveedor.
     """
-    ultima = (db.query(BrandObservation.wave_id)
+    # La ola MÁS RICA, no la más reciente. Elegir por fecha de carga parece razonable y no
+    # lo es: la última carga puede ser una matriz histórica —ancha en olas, flaquísima en
+    # indicadores— y entonces el pedido sale con una fracción de lo que el proveedor
+    # publica. Pasó: 60 celdas en vez de 541, y nadie lo habría notado hasta que el
+    # informe siguiera igual de pobre con la planilla ya llena.
+    conteo = (db.query(BrandObservation.wave_id,
+                       func.count(BrandObservation.id).label("n"))
               .filter(BrandObservation.engagement_id == engagement_id)
-              .order_by(BrandObservation.created_at.desc()).first())
-    if not ultima:
+              .group_by(BrandObservation.wave_id)
+              .order_by(func.count(BrandObservation.id).desc()).first())
+    if not conteo:
         return []
     filas = (db.query(BrandObservation.brand_slug, BrandObservation.metric_code,
                       BrandObservation.segment, BrandObservation.attribute)
              .filter(BrandObservation.engagement_id == engagement_id,
-                     BrandObservation.wave_id == ultima[0])
+                     BrandObservation.wave_id == conteo[0])
              .distinct().all())
     return [
         {"brand_slug": b, "metric_code": m, "segment": s or "total", "attribute": a or ""}
