@@ -176,6 +176,7 @@ class BrandObservation(UUIDMixin, Base):
     __table_args__ = (
         UniqueConstraint(
             "engagement_id", "wave_id", "brand_slug", "metric_code", "segment",
+            "attribute",
             name="uq_brand_observation",
         ),
         Index("ix_brand_obs_lookup", "engagement_id", "metric_code", "segment"),
@@ -186,6 +187,10 @@ class BrandObservation(UUIDMixin, Base):
     brand_slug = Column(String(60), nullable=True)       # NULL = category-level
     metric_code = Column(String(60), nullable=False)     # see engines/metrics.py
     segment = Column(String(60), nullable=False, default="total")
+    #: El atributo que la cifra califica (índice de atributo, evaluación por enunciado).
+    #: Vacío en las métricas que no se miden por atributo. Entra en la clave única: sin él,
+    #: los ocho atributos de una rejilla colisionan en una sola observación.
+    attribute = Column(String(120), nullable=True)
     value = Column(Float, nullable=False)
     base_n = Column(Integer, nullable=True)              # NULL → unscoreable, never assumed
     unit = Column(String(20), nullable=False, default="pct")
@@ -220,6 +225,7 @@ class BrandObservationReading(UUIDMixin, Base):
     __table_args__ = (
         UniqueConstraint(
             "extraction_id", "wave_id", "brand_slug", "metric_code", "segment",
+            "attribute",
             name="uq_brand_reading",
         ),
         Index("ix_brand_reading_key",
@@ -232,6 +238,7 @@ class BrandObservationReading(UUIDMixin, Base):
     brand_slug = Column(String(60), nullable=True)
     metric_code = Column(String(60), nullable=False)
     segment = Column(String(60), nullable=False, default="total")
+    attribute = Column(String(120), nullable=True)     # la dimensión que faltaba
     value = Column(Float, nullable=False)
     base_n = Column(Integer, nullable=True)
     unit = Column(String(20), nullable=False, default="pct")
@@ -356,6 +363,7 @@ class BrandExtractionCell(UUIDMixin, Base):
     brand_slug = Column(String(60), nullable=True)
     metric_code = Column(String(60), nullable=False)
     segment = Column(String(60), nullable=False, default="total")
+    attribute = Column(String(120), nullable=True)     # la dimensión que faltaba
     value = Column(Float, nullable=False)
     base_n = Column(Integer, nullable=True)
     unit = Column(String(20), nullable=False, default="pct")

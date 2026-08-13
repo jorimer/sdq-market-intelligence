@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from modules.brand_intel.engines import segments as seg
 from modules.brand_intel.engines import validation as val
 from modules.brand_intel.engines.metrics import TRACKER_VOCABULARY, Vocabulary
 from modules.brand_intel.ingest import pdf_vision
@@ -120,7 +121,12 @@ def _loose_key(text: str) -> str:
 class _LabelResolver:
     """Maps printed labels onto the engagement's declared brands and waves."""
 
-    def __init__(self, brands: Sequence[BrandEntity], waves: Sequence[BrandWave]):
+    def __init__(self, brands: Sequence[BrandEntity], waves: Sequence[BrandWave],
+                 segments: Sequence[str] = ()):
+        #: Los cortes que el encargo ya escribe. Manda sobre cualquier tabla de alias
+        #: nuestra: si viene escribiendo «santo domingo», un «SD» de la próxima entrega
+        #: tiene que caer ahí en vez de abrir una segunda forma del mismo corte.
+        self.segments: List[str] = [str(x) for x in segments if str(x or "").strip()]
         self._brands: Dict[str, str] = {}
         #: Nombre CON sus palabras intactas → slug. El otro índice normaliza a una sola
         #: cadena sin espacios, que sirve para igualdad pero borra las fronteras de
@@ -262,13 +268,22 @@ def _to_validation_cells(
             except (TypeError, ValueError):
                 base_n = None
 
+        # El corte se canoniza contra los cortes que el encargo YA escribe, y el atributo
+        # sale de su propio campo o del rótulo empaquetado con barra. Guardar el rótulo
+        # crudo es lo que produjo tres escrituras de «Santo Domingo» y enunciados de
+        # pregunta usados como si fueran poblaciones.
+        attribute, segment = seg.normalize_cut(
+            row.get("attribute") or row.get("segment"), resolver.segments)
+        if row.get("attribute"):
+            _, segment = seg.normalize_cut(row.get("segment"), resolver.segments)
         cells.append(val.Cell(
             key=f"p{page}-{idx}",
             metric_code=metric,
             value=value,
             wave_code=wave_code,
             brand_slug=brand_slug,
-            segment=(row.get("segment") or "total").strip().lower() or "total",
+            segment=segment,
+            attribute=attribute,
             base_n=base_n,
             distribution_id=(row.get("distribution_id") or "").strip() or None,
         ))
@@ -313,7 +328,10 @@ def ingest_pdf(
                       "mapear las etiquetas impresas en las láminas.")
         return report
 
-    resolver = _LabelResolver(brands, waves)
+    segmentos = [r[0] for r in db.query(BrandObservation.segment)
+                 .filter(BrandObservation.engagement_id == engagement.id)
+                 .distinct().all()]
+    resolver = _LabelResolver(brands, waves, segmentos)
     model_used = None
 
     # Se avanza lámina a lámina hasta que el render no devuelve nada: el mazo dice dónde
@@ -399,6 +417,7 @@ def ingest_pdf(
             brand_slug=c.brand_slug,
             metric_code=c.metric_code,
             segment=c.segment,
+            attribute=c.attribute,
             value=c.value,
             base_n=c.base_n,
             source_method=c.source_method,
@@ -420,10 +439,78 @@ class Reading:
     brand_slug: Optional[str]
     metric_code: str
     segment: str
+    attribute: Optional[str]
     value: float
     base_n: Optional[int] = None
     unit: str = "pct"
     source: str = ""
+
+
+def renormalize_staged(
+    db: Session, extraction: Any, known_segments: Sequence[str] = ()
+) -> Dict[str, Any]:
+    """Recanoniza los cortes de las celdas YA extraídas y vuelve a juzgarlas.
+
+    Existe para no pagar dos veces la misma lectura. Cuando el defecto está en cómo se
+    GUARDÓ una dimensión —tres escrituras del mismo corte, el enunciado de la pregunta
+    metido en el campo del corte— la información sigue en la celda: releer el mazo cuesta
+    decenas de llamadas de visión y devuelve exactamente lo mismo.
+
+    Lo que NO puede reparar: un atributo que el lector nunca emitió porque no tenía campo
+    donde ponerlo. Esas celdas siguen colisionando y hay que releer el mazo con el esquema
+    nuevo. La diferencia se declara en el resultado en vez de insinuar que quedó todo listo.
+    """
+    filas = (db.query(BrandExtractionCell)
+             .filter(BrandExtractionCell.extraction_id == extraction.id)
+             .all())
+    if not filas:
+        return {"celdas": 0, "cortes_recanonizados": 0, "atributos_recuperados": 0,
+                "sin_atributo_recuperable": 0, "validacion": {}}
+
+    cortes = 0
+    atributos = 0
+    for f in filas:
+        crudo = str(f.attribute) if f.attribute is not None else str(f.segment)
+        atributo, corte = seg.normalize_cut(crudo, known_segments)
+        if f.attribute is not None:
+            _, corte = seg.normalize_cut(str(f.segment), known_segments)
+        if str(f.segment) != corte:
+            f.segment = corte                      # type: ignore[assignment]
+            cortes += 1
+        if atributo and f.attribute is None:
+            f.attribute = atributo[:120]           # type: ignore[assignment]
+            atributos += 1
+
+    cells = [
+        val.Cell(key=str(f.id), metric_code=str(f.metric_code), value=float(f.value),
+                 wave_code=str(f.wave_code) if f.wave_code else None,
+                 brand_slug=str(f.brand_slug) if f.brand_slug else None,
+                 segment=str(f.segment),
+                 attribute=str(f.attribute) if f.attribute else None,
+                 base_n=int(f.base_n) if f.base_n is not None else None,
+                 unit=str(f.unit), source_method=str(f.source_method))
+        for f in filas
+    ]
+    informe = val.validate(cells)
+    por_id = {c.key: c for c in cells}
+    for f in filas:
+        c = por_id[str(f.id)]
+        f.validation = c.validation                # type: ignore[assignment]
+        f.validation_note = c.validation_note or None  # type: ignore[assignment]
+
+    # Una métrica que se mide POR atributo y sigue sin atributo no es reparable acá: el
+    # lector no lo emitió. Se cuenta para que el número diga qué falta, no qué se logró.
+    huerfanas = sum(1 for f in filas
+                    if str(f.metric_code) == "attribute_index" and not f.attribute)
+    db.flush()
+    return {
+        "celdas": len(filas),
+        "cortes_recanonizados": cortes,
+        "atributos_recuperados": atributos,
+        "sin_atributo_recuperable": huerfanas,
+        "validacion": {"passed": informe.passed, "conflict": informe.conflict,
+                       "failed": informe.failed, "unchecked": informe.unchecked},
+    }
 
 
 def promote_readings(
@@ -471,13 +558,14 @@ def promote_readings(
     grouped: Dict[Tuple[Any, ...], List[Reading]] = {}
     for r in readings:
         grouped.setdefault(
-            (r.wave_id, r.brand_slug, r.metric_code, r.segment), []).append(r)
+            (r.wave_id, r.brand_slug, r.metric_code, r.segment, r.attribute),
+            []).append(r)
 
     created = updated = duplicated = superseded = 0
     disagreements: List[Dict[str, Any]] = []
     corrections: List[Dict[str, Any]] = []
 
-    for (wid, slug, metric, segment), group in grouped.items():
+    for (wid, slug, metric, segment, attribute), group in grouped.items():
         values = {round(float(x.value), 6) for x in group}
         if len(values) > 1:
             disagreements.append({
@@ -496,11 +584,13 @@ def promote_readings(
                 BrandObservationReading.brand_slug == slug,
                 BrandObservationReading.metric_code == metric,
                 BrandObservationReading.segment == segment,
+                BrandObservationReading.attribute == attribute,
             )
             .first()
         ) or BrandObservationReading(
             engagement_id=engagement_id, extraction_id=extraction.id,
             wave_id=wid, brand_slug=slug, metric_code=metric, segment=segment,
+            attribute=attribute,
         )
         reading.value = c.value
         reading.base_n = c.base_n
@@ -518,6 +608,7 @@ def promote_readings(
                 BrandObservation.brand_slug == slug,
                 BrandObservation.metric_code == metric,
                 BrandObservation.segment == segment,
+                BrandObservation.attribute == attribute,
             )
             .first()
         )
@@ -544,6 +635,7 @@ def promote_readings(
         target = existing or BrandObservation(
             engagement_id=engagement_id, wave_id=wid,
             brand_slug=slug, metric_code=metric, segment=segment,
+            attribute=attribute,
         )
         target.value = c.value
         target.base_n = c.base_n
@@ -617,7 +709,9 @@ def confirm_extraction(
             wave_id=str(wid),
             brand_slug=str(c.brand_slug) if c.brand_slug is not None else None,
             metric_code=str(c.metric_code),
-            segment=str(c.segment), value=float(c.value),
+            segment=str(c.segment),
+            attribute=str(c.attribute) if c.attribute is not None else None,
+            value=float(c.value),
             base_n=int(c.base_n) if c.base_n is not None else None,
             unit=str(c.unit),
             source=(f"{extraction.document_name} · lámina {c.page_number} · "
