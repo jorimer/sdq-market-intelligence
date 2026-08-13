@@ -604,3 +604,29 @@ def test_upload_tracker_history_needs_analyst(db, engagement):
         "/api/v1/brand-intel/engagements/demo/tracker-history",
         files={"file": ("m.xlsx", _sales_workbook(sheet="KPIs"), "application/xlsx")})
     assert r.status_code == 403
+
+
+def test_the_review_detail_exposes_the_attribute_dimension(db, engagement):
+    """Sin el atributo en la respuesta, revisar 248 celdas de índice de atributo es cruzar
+    el portón a ciegas: dos celdas de la misma marca y ola se ven idénticas en pantalla y
+    solo difieren en la dimensión que no se muestra."""
+    from modules.brand_intel.models.models import BrandExtraction, BrandExtractionCell
+
+    ext = BrandExtraction(engagement_id=engagement.id, document_name="mazo.pdf",
+                          status="validated", n_pages=1, pages_done=1)
+    db.add(ext)
+    db.flush()
+    for attr, valor in (("hamburguesas deliciosas", 87.0), ("café", 181.0)):
+        db.add(BrandExtractionCell(
+            extraction_id=ext.id, engagement_id=engagement.id, page_number=32,
+            wave_code="w1", brand_slug="focal", metric_code="attribute_index",
+            segment="total", attribute=attr, value=valor, unit="index"))
+    db.commit()
+
+    r = _client(db).get(
+        f"/api/v1/brand-intel/engagements/demo/extractions/{ext.id}")
+    assert r.status_code == 200
+    celdas = r.json()["cells"]
+    assert {c["attribute"] for c in celdas} == {"hamburguesas deliciosas", "café"}
+    # Y las dos son distinguibles: mismo todo salvo el atributo.
+    assert len({(c["metric"], c["brand"], c["wave"], c["segment"]) for c in celdas}) == 1
