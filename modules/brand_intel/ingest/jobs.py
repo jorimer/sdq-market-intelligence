@@ -39,6 +39,14 @@ logger = logging.getLogger("sdq.brand_intel.jobs")
 #: Estados por los que pasa el trabajo. `validated`/`rejected` son terminales y ya
 #: existían; los tres primeros son del trabajo, no del resultado.
 QUEUED, READING, ERROR = "queued", "reading", "error"
+#: Pedido por una persona, no por un fallo. Se distingue de `error` a propósito: un trabajo
+#: cancelado no tiene nada que diagnosticar, y confundirlos manda a buscar una causa que no
+#: existe. Conserva el PDF, así que se puede reanudar.
+CANCELLED = "cancelled"
+
+
+class JobCancelled(Exception):
+    """Alguien pidió detener la lectura. Se lanza ENTRE láminas, nunca a mitad de una."""
 
 
 def queue_extraction(
@@ -132,6 +140,15 @@ def run_extraction(extraction_id: str) -> Dict[str, Any]:
             # solo existe al final.
             extraction.pages_done = done
             db.commit()
+            # Y en el mismo punto se atiende la cancelación. El estado lo escribe OTRA
+            # sesión (la petición HTTP), así que hay que releerlo de la base en vez de
+            # confiar en el objeto en memoria. Entre láminas y no a mitad: una llamada de
+            # visión en vuelo no se puede abortar, así que lo que se promete es acotar el
+            # desperdicio a UNA lámina, no cortar al instante.
+            vigente = db.query(BrandExtraction.status).filter(
+                BrandExtraction.id == extraction.id).scalar()
+            if str(vigente) == CANCELLED:
+                raise JobCancelled(f"Cancelado en la lámina {done}.")
 
         report = ingest_pdf(db, engagement, content, str(extraction.document_name),
                             max_pages=extraction.max_pages, on_page=_progress,
@@ -144,6 +161,21 @@ def run_extraction(extraction_id: str) -> Dict[str, Any]:
         extraction.source_pdf = None
         db.commit()
         return {"status": str(extraction.status), "extraction_id": str(extraction.id)}
+
+    except JobCancelled as exc:
+        # Lo leído hasta acá se conserva: son celdas válidas en revisión, y el PDF sigue
+        # guardado para poder reanudar. Cancelar no es descartar.
+        db.rollback()
+        row = (db.query(BrandExtraction)
+               .filter(BrandExtraction.id == extraction_id).first())
+        if row is not None:
+            row.status = CANCELLED                     # type: ignore[assignment]
+            row.error = None                           # type: ignore[assignment]
+            row.note = str(exc)                        # type: ignore[assignment]
+            row.finished_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+            db.commit()
+        logger.info("Lectura del mazo %s cancelada: %s", extraction_id, exc)
+        return {"status": CANCELLED, "extraction_id": str(extraction_id)}
 
     except Exception as exc:  # noqa: BLE001 — el trabajo debe morir diciendo por qué
         logger.exception("Falló la lectura del mazo %s", extraction_id)

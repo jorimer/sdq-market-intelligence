@@ -38,6 +38,7 @@ import {
   getEngagementDetail,
   uploadPdf,
   getExtractionStatus,
+  cancelExtraction,
   resumeExtraction,
   listExtractions,
   issueForecast,
@@ -553,6 +554,7 @@ export function BrandIntelPage() {
   const [extractions, setExtractions] = useState<ExtractionSummary[]>([]);
   const [pdfReport, setPdfReport] = useState<PdfIngestReport | null>(null);
   const [job, setJob] = useState<ExtractionJob | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [reviewing, setReviewing] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
@@ -687,6 +689,27 @@ export function BrandIntelPage() {
     } finally {
       setBusy(false);
       if (pdfRef.current) pdfRef.current.value = "";
+    }
+  };
+
+  /**
+   * El freno. Sin él, notar a mitad de camino que la lectura no era la que hacía falta no
+   * servía de nada: había que pagarla completa.
+   */
+  const onCancel = async (extractionId: string) => {
+    setCancelling(true);
+    try {
+      const out = await cancelExtraction(slug, extractionId);
+      // El estado real lo trae el servidor: la lámina en curso puede seguir corriendo, así
+      // que se refresca en vez de dar por hecho que ya paró.
+      setJob(await getExtractionStatus(slug, extractionId));
+      setForecastMsg(out.nota);
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      setForecastMsg(detail || "No se pudo detener la lectura.");
+    } finally {
+      setCancelling(false);
     }
   };
 
