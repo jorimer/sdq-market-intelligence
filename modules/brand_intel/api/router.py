@@ -255,15 +255,47 @@ def delete_engagement(
 @router.get("/template.xlsx", summary="Descargar la plantilla de carga")
 def download_template(
     engagement: Optional[str] = Query(None, description="Slug para prellenar la plantilla"),
+    request_wave: Optional[str] = Query(
+        None,
+        description="Código de la ola a PEDIR. Con él, la plantilla sale como planilla de "
+                    "pedido: una fila por celda, con todo resuelto salvo «valor» y "
+                    "«base_n». Es la que se le manda al proveedor."),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
+    """La plantilla de carga; con ``request_wave``, la planilla de PEDIDO al proveedor.
+
+    La diferencia decide si se llena. En blanco, quien la recibe tiene que conocer nuestros
+    slugs y nuestros códigos y construir cada fila. Con la ola pedida, solo faltan las dos
+    columnas que únicamente el proveedor puede dar.
+    """
     slug = client = brand = provider = ""
+    olas = marcas = None
+    pedido = None
+    filas = None
     if engagement:
         eng = _resolve(db, engagement, user)
         slug, client = eng.slug, eng.client_name
         brand, provider = eng.focal_brand, eng.research_provider or ""
-    content = build_template(slug, brand, client, provider)
+        ws = svc.waves(db, str(eng.id))
+        olas = [{"code": str(w.code), "label": str(w.label),
+                 "base": int(w.nominal_base) if w.nominal_base else None} for w in ws]
+        marcas = [{"slug": str(b.slug), "name": str(b.name), "is_focal": bool(b.is_focal)}
+                  for b in svc.brands(db, str(eng.id))]
+        if request_wave:
+            elegida = next((w for w in ws if str(w.code) == request_wave), None)
+            if elegida is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"La ola '{request_wave}' no existe en el encargo. "
+                           f"Olas: {', '.join(str(w.code) for w in ws)}.")
+            pedido = {"code": str(elegida.code), "label": str(elegida.label)}
+            # QUÉ pedir sale de lo que este proveedor ya publicó: pedirle celdas que su
+            # estudio no mide es invitar a que las complete con algo.
+            filas = svc.published_cells(db, str(eng.id)) or None
+    content = build_template(slug, brand, client, provider,
+                             waves=olas, brands=marcas, request_wave=pedido,
+                             request_rows=filas)
     return Response(
         content=content,
         media_type=XLSX_MIME,
