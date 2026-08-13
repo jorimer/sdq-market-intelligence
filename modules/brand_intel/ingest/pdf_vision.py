@@ -199,6 +199,12 @@ del subgrupo."""
 #: mazo sigue: una lámina perdida y declarada vale más que un trabajo detenido en silencio.
 PAGE_TIMEOUT_S = 180.0
 
+#: Versión del esquema de extracción. Sube cuando el esquema gana o pierde un campo. Se
+#: guarda junto a cada lectura cruda: re-procesar una respuesta leída con un esquema
+#: anterior daría por vacíos los campos que ese esquema no pedía, y eso se declara en vez
+#: de descubrirse en el informe del cliente.
+EXTRACTION_SCHEMA_VERSION = "2026-08-13-atributo"
+
 
 def extract_page(
     image_png: bytes,

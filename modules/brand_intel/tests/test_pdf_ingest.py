@@ -725,8 +725,14 @@ def test_queueing_reads_nothing_and_keeps_the_pdf(db, engagement, monkeypatch):
         BrandExtractionCell.extraction_id == row.id).count() == 0
 
 
-def test_a_finished_job_lets_go_of_the_pdf(db, engagement, monkeypatch):
-    """Guardarlo de por vida engordaría la base con un mazo por documento."""
+def test_a_finished_job_KEEPS_the_pdf_until_it_is_confirmed(db, engagement, monkeypatch):
+    """El PDF sobrevive a la validación y se suelta al CONFIRMAR.
+
+    Antes se soltaba al validar, «para no pesar en la base». La comparación estaba mal
+    planteada: no era contra nada, era contra decenas de llamadas de visión. Apareció el
+    caso real —una lectura de 32 láminas que había que extender a 65— y no se pudo, porque
+    reanudar necesita el archivo. Unos megas contra un mazo entero de modelo.
+    """
     from modules.brand_intel.ingest import jobs
 
     monkeypatch.setattr(jobs, "_dispatch", lambda eid: "test")
@@ -746,7 +752,7 @@ def test_a_finished_job_lets_go_of_the_pdf(db, engagement, monkeypatch):
     jobs.run_extraction(str(row.id))
     db.refresh(row)
     assert row.status == "validated"
-    assert row.source_pdf is None
+    assert row.source_pdf, "sin el PDF no se puede extender la lectura a más láminas"
     assert row.pages_done == 1
     assert row.finished_at is not None
     # Una sola fila por documento: el trabajo y su resultado son la misma.

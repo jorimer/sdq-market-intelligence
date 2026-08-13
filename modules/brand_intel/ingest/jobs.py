@@ -156,11 +156,13 @@ def run_extraction(extraction_id: str) -> Dict[str, Any]:
                             max_pages=extraction.max_pages, on_page=_progress,
                             into=extraction, resume_from=int(extraction.pages_done or 0))
 
-        # Una sola fila por documento, de `queued` a `validated`. El PDF se suelta aquí:
-        # ya cumplió su función y no tiene por qué pesar en la base para siempre.
+        # Una sola fila por documento, de `queued` a `validated`. El PDF se CONSERVA hasta
+        # que alguien confirme: soltarlo acá ahorraba unos megas y costaba un mazo entero de
+        # visión cada vez que hacía falta leer más láminas —el caso apareció de verdad, con
+        # una lectura de 32 que había que extender a 65 y no se pudo—. La comparación no era
+        # «pesa en la base» contra nada, era contra decenas de llamadas de modelo.
         extraction.report = report.as_dict()
         extraction.finished_at = datetime.now(timezone.utc)
-        extraction.source_pdf = None
         db.commit()
         return {"status": str(extraction.status), "extraction_id": str(extraction.id)}
 
@@ -223,11 +225,11 @@ def _read_conclusions(db: Session, extraction: BrandExtraction, content: bytes) 
 
 
 def _fail(db: Session, extraction: BrandExtraction, message: str) -> None:
-    """Deja el trabajo en error, con el motivo y sin el PDF colgando."""
+    """Deja el trabajo en error, con el motivo. CONSERVA el PDF: un trabajo que falló es
+    justo el que hay que reanudar, y sin el archivo la reanudación es imposible."""
     extraction.status = ERROR
     extraction.error = message[:2000]
     extraction.finished_at = datetime.now(timezone.utc)
-    extraction.source_pdf = None
     db.commit()
 
 
