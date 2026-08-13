@@ -190,6 +190,26 @@ DIRECTION_DISCIPLINE = (
     "bases distintas—; nombra siempre contra CUÁL base comparas."
 )
 
+# Defensa PRIMARIA contra el defecto que SOBREVIVE a corregir la dirección numérica: la
+# cifra y la brecha salen bien y la GLOSA sale invertida. BPD 2026-08-13, §5 Liquidez: con
+# un LTD de 92.45% (score 98.62, por encima del óptimo de 80% y por encima de sus pares) el
+# informe escribió «destina proporcionalmente MENOS de cada peso captado en préstamos» y
+# «preserva margen para atender retiros» —la lectura de un LTD BAJO—, mientras la §7 del
+# mismo documento decía lo contrario y correctamente. El modelo había leído el score alto
+# como «esto es bueno» y le pegó la glosa favorable equivocada.
+INDICATOR_SEMANTICS = (
+    "SIGNIFICADO DEL INDICADOR (regla dura): el SCORE mide qué tan buena es la posición, "
+    "NO en qué dirección se mueve el valor crudo. Si el contexto trae "
+    "'semantica_indicadores', ahí está qué mide el indicador y en qué sentido corre su "
+    "escala: LEELO antes de calificar una cifra de holgada, ajustada, conservadora o "
+    "agresiva. Cuidado con los indicadores de ÓPTIMO INTERMEDIO (el campo lo dice "
+    "explícitamente): su score es alto a AMBOS lados del óptimo, así que un score alto NO "
+    "te dice si el valor está por encima o por debajo — eso viene resuelto en "
+    "'posicion_vs_optimo' y se COPIA. Antes de escribir la glosa, verificá que sea "
+    "coherente con el lado en que cayó el valor: describir un ratio alto con las palabras "
+    "de uno bajo es un error de hecho, aunque todas las cifras de la oración sean correctas."
+)
+
 # Defensa PRIMARIA contra dos errores de ALCANCE que el dato no sostiene, ambos hallados en
 # el Deep Dive de banca (2026-08-06). Van juntos porque son el mismo vicio: afirmar más de
 # lo que la cifra midió.
@@ -988,6 +1008,7 @@ def build_system(axis: str, audience: Optional[str], mode: str) -> str:
         parts.append(AUDIENCE_FRAMES[axis][resolved])
     parts.append(BARRA_DE_INSIGHT)
     parts.append(DIRECTION_DISCIPLINE)
+    parts.append(INDICATOR_SEMANTICS)
     parts.append(SCOPE_DISCIPLINE)
     if mode in ("detailed", "deep"):
         parts.append(DEPTH_DIRECTIVE)

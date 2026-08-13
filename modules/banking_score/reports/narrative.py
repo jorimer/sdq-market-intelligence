@@ -217,6 +217,65 @@ def _comparaciones_resueltas(all_indicators: Dict, benchmarks: Optional[Dict],
     return comparaciones_vs_referencia(valores, referencias)
 
 
+_SENTIDO = {
+    "higher": "un valor MÁS ALTO del indicador es MEJOR",
+    "lower": "un valor MÁS BAJO del indicador es MEJOR",
+}
+
+
+def _semantica_indicadores(keys: list, indicadores: Dict) -> Dict:
+    """Qué MIDE cada indicador y qué implica el valor observado — computado, no inferido.
+
+    El contexto de sub-componente servía ``raw`` y ``score`` y nada más. Con eso, la única
+    pista que el modelo tiene sobre si la cifra es buena o mala es el SCORE, y de ahí deduce
+    la glosa. Para un indicador de ÓPTIMO INTERMEDIO esa deducción es inválida: el score es
+    alto a AMBOS lados del óptimo.
+
+    Fue el segundo defecto del LTD de BPD (2026-08-13), el que sobrevivió a corregir la
+    dirección numérica. Con 92.45% y score 98.62 la §5 escribió «destina proporcionalmente
+    MENOS de cada peso captado en préstamos» y «preserva margen para atender retiros» —la
+    lectura de un LTD BAJO— mientras la §7 del mismo informe decía lo contrario y bien. La
+    cifra y la brecha estaban correctas; lo invertido era el SIGNIFICADO.
+
+    Sirve, por indicador: qué mide, en qué sentido corre la escala y —cuando el óptimo es
+    intermedio— de qué lado del óptimo cayó el valor. Sin esto el modelo lo adivina.
+    """
+    from modules.banking_score.scoring.indicator_detail import INDICATOR_META
+
+    out: Dict = {}
+    for k in keys:
+        meta = INDICATOR_META.get(k)
+        blob = indicadores.get(k)
+        if not meta or not isinstance(blob, dict):
+            continue
+        unidad = meta.get("unit", "")
+        bloque: Dict = {"mide": meta.get("que", ""), "unidad": unidad}
+        direccion = meta.get("direction")
+        optimo = meta.get("optimo")
+        if direccion in _SENTIDO:
+            bloque["sentido_de_la_escala"] = _SENTIDO[direccion]
+        elif direccion == "target" and optimo is not None:
+            bloque["sentido_de_la_escala"] = (
+                f"ÓPTIMO INTERMEDIO en {optimo:g}{unidad}: alejarse en CUALQUIER dirección "
+                "empeora la lectura. Un score alto NO significa que el valor sea alto ni "
+                "bajo — significa que está cerca del óptimo.")
+            raw = blob.get("raw")
+            v: Optional[float] = None
+            if raw is not None:
+                try:
+                    v = float(raw)
+                except (TypeError, ValueError):
+                    v = None
+            if v is not None:
+                lado = "POR ENCIMA" if v > optimo else ("POR DEBAJO" if v < optimo else "EN")
+                brecha_u = "puntos porcentuales" if unidad == "%" else (unidad or "puntos")
+                bloque["posicion_vs_optimo"] = (
+                    f"el valor observado ({v:.2f}{unidad}) está {lado} del óptimo "
+                    f"({optimo:g}{unidad}), a {abs(v - optimo):.2f} {brecha_u}")
+        out[k] = bloque
+    return out
+
+
 # Sub-component key lookup for focused sections
 _SUB_COMPONENT_MAP: Dict[str, str] = {
     "solidez_financiera": "solidez",
@@ -297,6 +356,10 @@ def _build_section_context(
             "sub_componente": _SUB_LABELS.get(sub_key, sub_key),
             "score_sub_componente": scoring_result.get("sub_components", {}).get(sub_key, 0),
             "indicadores": ind,
+            # Qué mide cada uno y qué implica su valor. Sin esto el modelo deduce el
+            # significado del score, y en un indicador de óptimo intermedio esa deducción
+            # es inválida (ver `_semantica_indicadores`).
+            "semantica_indicadores": _semantica_indicadores(keys, ind),
             "impulsor": driver,
             "lastre": drag,
         }
@@ -347,6 +410,11 @@ def _build_section_context(
         "banda_resiliencia": scoring_result.get("banda_resiliencia"),
         "sub_components": scoring_result.get("sub_components", {}),
         "indicators": all_indicators,
+        # La misma semántica que reciben las secciones de dimensión: si solo la tuviera
+        # una de las dos superficies, el informe podría volver a contradecirse entre §5 y
+        # §7 — que es exactamente la forma en que se manifestó el defecto.
+        "semantica_indicadores": _semantica_indicadores(
+            list(all_indicators), all_indicators),
         # Encuadre (Fase 3): mantiene la prosa consistente con las Limitaciones —
         # el score es fortaleza financiera standalone, no un rating de crédito.
         "encuadre": (
