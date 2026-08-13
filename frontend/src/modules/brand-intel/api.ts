@@ -673,10 +673,14 @@ export async function getExtractionStatus(
  * leída. Las anteriores no se vuelven a pagar y sus celdas no se duplican.
  */
 export async function resumeExtraction(
-  slug: string, extractionId: string,
+  slug: string, extractionId: string, maxPages?: number,
 ): Promise<ExtractionJob> {
   const { data } = await client.post(
-    `${base}/engagements/${slug}/extractions/${extractionId}/resume`);
+    `${base}/engagements/${slug}/extractions/${extractionId}/resume`,
+    undefined,
+    // El tope solo se AMPLÍA: una lectura detenida en su propio tope no tiene nada que
+    // retomar sin esto, y el servidor rechaza reducirlo.
+    maxPages ? { params: { max_pages: maxPages } } : undefined);
   return data;
 }
 

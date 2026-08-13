@@ -354,13 +354,23 @@ def extraction_status(
 @router.post("/engagements/{slug}/extractions/{extraction_id}/resume",
              summary="Reanudar una lectura interrumpida")
 def resume_extraction(
-    slug: str, extraction_id: str, db: Session = Depends(get_db),
+    slug: str, extraction_id: str,
+    max_pages: Optional[int] = Query(
+        None, ge=1, le=200,
+        description="Nuevo tope de láminas. Solo sirve para AMPLIAR: una lectura que se "
+                    "detuvo en su propio tope no tiene nada que retomar sin esto."),
+    db: Session = Depends(get_db),
     user: User = Depends(require_role(UserRole.analyst)),
 ) -> Dict[str, Any]:
-    """Vuelve a despachar un trabajo que quedó a medias.
+    """Vuelve a despachar un trabajo que quedó a medias, RETOMANDO en la lámina siguiente.
 
     Solo sirve mientras el trabajo conserve su PDF: al terminar se suelta, y reanudar un
-    trabajo terminado no significa nada. Las láminas ya leídas no se vuelven a pagar.
+    trabajo terminado no significa nada. Las láminas ya leídas no se vuelven a leer ni a
+    pagar, y sus celdas no se duplican.
+
+    ``max_pages`` solo AMPLÍA. Una lectura que se detuvo porque llegó a su propio tope
+    —32 de 32— retoma en la 33 y para en la 32: no leería nada. Reducirlo se rechaza en vez
+    de aceptarse en silencio, porque dejaría fuera láminas ya leídas y pagadas.
     """
     from modules.brand_intel.ingest import jobs
 
@@ -374,6 +384,16 @@ def resume_extraction(
         raise HTTPException(
             status_code=409,
             detail="Este trabajo ya no conserva el PDF: vuelve a subir la presentación.")
+    if max_pages is not None:
+        actual = int(row.max_pages) if row.max_pages is not None else None
+        if actual is not None and max_pages < actual:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El tope solo puede ampliarse: el trabajo ya leyó hasta la lámina "
+                       f"{actual} y reducirlo a {max_pages} dejaría fuera láminas ya "
+                       "pagadas.")
+        row.max_pages = max_pages                              # type: ignore[assignment]
+        db.commit()
     jobs._dispatch(str(row.id))
     return jobs.job_status(db, row)
 
