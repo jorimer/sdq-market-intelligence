@@ -65,8 +65,13 @@ class TestIngesta:
                             lambda *a, **k: {"2025": {"85": 1040.0, "84": 946.0}})
         uno = sync_partner_chapters(db, [2025], socios={"156": "China"})
         dos = sync_partner_chapters(db, [2025], socios={"156": "China"})
-        assert uno["filas_creadas"] == 2 and dos["filas_creadas"] == 0
-        assert dos["filas_actualizadas"] == 2
+        assert uno["filas_creadas"] == 2
+        # La segunda corrida SALTA (reanudable): no re-pide ni duplica.
+        assert dos["filas_creadas"] == 0 and dos["socios_saltados"] == 1
+        assert db.query(TradePartnerChapter).count() == 2
+        # Y con `forzar` sí reescribe en sitio, sin duplicar.
+        tres = sync_partner_chapters(db, [2025], socios={"156": "China"}, forzar=True)
+        assert tres["filas_actualizadas"] == 2 and tres["filas_creadas"] == 0
         assert db.query(TradePartnerChapter).count() == 2
 
     def test_un_socio_caido_no_tumba_a_los_demas(self, db, monkeypatch):
@@ -170,3 +175,62 @@ class TestListaDeSociosDerivada:
         from shared.data import comtrade_client
         assert "out.sort(key=lambda t: -t[2])" in inspect.getsource(
             comtrade_client.socios_con_flujo)
+
+
+class TestReanudable:
+    """Recorrer 192 socios toma ~40 min y la corrida del 2026-08-13 murió en el 118 por un
+    reinicio del contenedor. Sin reanudación, terminar la cola obliga a rehacerlo entero."""
+
+    def _fetch_espia(self, monkeypatch):
+        pedidos = []
+
+        def _f(rep, code, years, **k):
+            pedidos.append(code)
+            return {str(y): {"85": 10.0} for y in years}
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters", _f)
+        return pedidos
+
+    def test_salta_al_que_ya_tiene_todos_los_años(self, db, monkeypatch):
+        pedidos = self._fetch_espia(monkeypatch)
+        socios = {"156": "China", "842": "USA"}
+        sync_partner_chapters(db, [2024, 2025], socios=socios)
+        assert len(pedidos) == 2
+        pedidos.clear()
+        r = sync_partner_chapters(db, [2024, 2025], socios=socios)
+        assert pedidos == [], "volvió a pedir socios que ya estaban"
+        assert r["socios_saltados"] == 2
+
+    def test_NO_salta_si_le_falta_un_año(self, db, monkeypatch):
+        """Por socio × AÑO. Dar por hecho el socio completo dejaría huecos invisibles."""
+        pedidos = self._fetch_espia(monkeypatch)
+        sync_partner_chapters(db, [2025], socios={"156": "China"})
+        pedidos.clear()
+        sync_partner_chapters(db, [2024, 2025], socios={"156": "China"})
+        assert pedidos == ["156"], "saltó un socio al que le faltaba 2024"
+
+    def test_solo_pide_la_cola(self, db, monkeypatch):
+        """El caso real: 118 ya adentro, se piden los que faltan y nada más."""
+        pedidos = self._fetch_espia(monkeypatch)
+        sync_partner_chapters(db, [2025], socios={"156": "China", "842": "USA"})
+        pedidos.clear()
+        r = sync_partner_chapters(db, [2025],
+                                  socios={"156": "China", "842": "USA", "422": "Lebanon"})
+        assert pedidos == ["422"]
+        assert r["socios_saltados"] == 2 and r["socios_ingeridos"] == 3
+
+    def test_forzar_re_pide_todo(self, db, monkeypatch):
+        """La fuente REVISA años ya publicados; tiene que haber forma de re-pedirlos."""
+        pedidos = self._fetch_espia(monkeypatch)
+        sync_partner_chapters(db, [2025], socios={"156": "China"})
+        pedidos.clear()
+        sync_partner_chapters(db, [2025], socios={"156": "China"}, forzar=True)
+        assert pedidos == ["156"]
+
+    def test_el_saltado_cuenta_para_la_cobertura(self, db, monkeypatch):
+        """Saltar no es perder: el dato está, así que la cobertura no debe bajar."""
+        monkeypatch.setattr("shared.data.comtrade_client.socios_con_flujo",
+                            lambda *a, **k: [("156", "China", 60.0), ("842", "USA", 40.0)])
+        self._fetch_espia(monkeypatch)
+        assert sync_partner_chapters(db, [2025])["cobertura_valor_pct"] == 100.0
+        r = sync_partner_chapters(db, [2025])
+        assert r["socios_saltados"] == 2 and r["cobertura_valor_pct"] == 100.0

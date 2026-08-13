@@ -16,7 +16,8 @@ def _run_partner_chapters_sync(params, user_id, set_phase) -> Dict:
     años = params.get("years") or [datetime.now(timezone.utc).year - y for y in (1, 2, 3)]
     db = SessionLocal()
     try:
-        return sync_partner_chapters(db, sorted(int(a) for a in años), set_phase=set_phase)
+        return sync_partner_chapters(db, sorted(int(a) for a in años), set_phase=set_phase,
+                                     forzar=bool(params.get("forzar")))
     finally:
         db.close()
 
