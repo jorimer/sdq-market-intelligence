@@ -629,6 +629,10 @@ def extraction_cells(slug: str, extraction_id: str, db: Session = Depends(get_db
              "brand": brand_names.get(str(c.brand_slug or ""), c.brand_slug),
              "metric": c.metric_code,
              "label": label_for(c.metric_code), "segment": c.segment,
+             # El atributo es una DIMENSIÓN de la celda: sin exponerlo, ni la pantalla ni
+             # nadie por la API puede comprobar que llegó bien, y el portón de confirmación
+             # se estaría cruzando a ciegas sobre las celdas que más lo necesitan.
+             "attribute": c.attribute,
              "value": c.value, "base_n": c.base_n,
              "source_method": c.source_method, "validation": c.validation,
              "validation_note": c.validation_note, "included": c.included}

@@ -220,6 +220,7 @@ export function ExtractionReviewDrawer({ slug, extractionId, onClose, onConfirme
                     <span className="font-semibold">{c.label}</span>
                     {c.brand ? ` · ${c.brand}` : " · categoría"}
                     {c.wave ? ` · ${c.wave}` : ""}
+                    {c.attribute ? ` · «${c.attribute}»` : ""}
                     {c.segment !== "total" ? ` · ${c.segment}` : ""}
                   </div>
                   <div className="text-xs text-muted mt-0.5">

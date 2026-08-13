@@ -312,6 +312,8 @@ export interface ExtractionCell {
   metric: string;
   label: string;
   segment: string;
+  /** El atributo que la cifra califica; null en las métricas que no se miden por atributo. */
+  attribute: string | null;
   value: number;
   base_n: number | null;
   source_method: string;
