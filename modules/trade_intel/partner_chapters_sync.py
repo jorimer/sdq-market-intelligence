@@ -21,11 +21,14 @@ RD_M49 = "214"
 FUENTE = "UN Comtrade"
 LICENCIA = "https://comtrade.un.org/db/help/licenseagreement.aspx"
 
-# Socios a ingerir. Acotado a propósito: cada socio × año es una llamada con rate limit, y
-# traer los ~200 socios no aporta — la pregunta de negocio es por los que concentran la
-# corriente. Se declara cuáles son para que nadie lea el panel como si fuera exhaustivo.
-SOCIOS = {"156": "China", "842": "Estados Unidos", "76": "Brasil",
-          "484": "México", "724": "España"}
+# La lista de socios se DERIVA del dato (`socios_con_flujo`), no se fija a mano. La versión
+# anterior traía cinco elegidos por juicio y cubría el 70,2% del valor importado: dejaba fuera
+# a Italia, Colombia, Alemania y 187 países más — justo la parte que responde "¿y quién más me
+# lo puede vender?" en una pregunta sobre restringir importaciones por origen.
+#
+# Coste real medido: 192 socios × 3 años ≈ 10 min para un sync ANUAL. El argumento de que
+# "traer los ~200 no aporta" no se sostenía.
+SOCIOS_FALLBACK = {"156": "China", "842": "USA"}
 
 
 def _upsert(db: Session, *, period: str, partner: str, partner_code: str,
@@ -54,16 +57,32 @@ def sync_partner_chapters(db: Session, years: List[int],
     Un socio que la fuente no devuelve NO se rellena ni se borra: se cuenta como vacío y se
     reporta. Un fallo de red en un socio no aborta los demás.
     """
-    from shared.data.comtrade_client import fetch_partner_chapters
+    from shared.data.comtrade_client import fetch_partner_chapters, socios_con_flujo
 
     set_phase = set_phase or (lambda _m: None)
-    socios = socios or SOCIOS
+    total_pais = None
+    if socios is None:
+        # Derivados del dato y ORDENADOS POR VALOR: si la ingesta se corta a la mitad, lo que
+        # queda adentro es lo que más pesa, y la cobertura reportada lo dice.
+        set_phase("Resolviendo la lista de socios")
+        try:
+            lista = socios_con_flujo(RD_M49, max(years))
+            socios = {c: n for c, n, _ in lista}
+            total_pais = sum(v for _, _, v in lista)
+            valor_socio = {n: v for _, n, v in lista}
+        except Exception as e:  # noqa: BLE001 — sin lista, no se inventa: se usa el mínimo
+            logger.warning("No se pudo derivar la lista de socios: %s", e)
+            socios, valor_socio = SOCIOS_FALLBACK, {}
+    else:
+        valor_socio = {}
+
     creadas = actualizadas = 0
     vacios: List[str] = []
     fallidos: List[str] = []
+    ingeridos: List[str] = []
 
-    for code, nombre in socios.items():
-        set_phase(f"{nombre} ({len(years)} años)")
+    for i, (code, nombre) in enumerate(socios.items(), 1):
+        set_phase(f"{nombre} ({i}/{len(socios)})")
         try:
             por_año = fetch_partner_chapters(RD_M49, code, years, flow="M")
         except Exception as e:  # noqa: BLE001 — un socio caído no tumba la ingesta
@@ -73,6 +92,7 @@ def sync_partner_chapters(db: Session, years: List[int],
         if not por_año:
             vacios.append(nombre)
             continue
+        ingeridos.append(nombre)
         for period, capitulos in por_año.items():
             for chapter, value in capitulos.items():
                 if _upsert(db, period=period, partner=nombre, partner_code=code,
@@ -82,8 +102,15 @@ def sync_partner_chapters(db: Session, years: List[int],
                     actualizadas += 1
         db.commit()
 
-    return {"socios": list(socios.values()), "años": years,
-            "filas_creadas": creadas, "filas_actualizadas": actualizadas,
+    # COBERTURA: qué fracción del valor importado del país quedó efectivamente ingerida. Es
+    # la cifra que impide leer el panel como exhaustivo cuando no lo es.
+    cobertura = None
+    if total_pais:
+        cubierto = sum(valor_socio.get(n, 0.0) for n in ingeridos)
+        cobertura = round(cubierto / total_pais * 100, 1)
+    return {"socios_intentados": len(socios), "socios_ingeridos": len(ingeridos),
+            "años": years, "filas_creadas": creadas, "filas_actualizadas": actualizadas,
+            "cobertura_valor_pct": cobertura,
             # Brechas declaradas, no silenciadas.
             "socios_sin_dato": vacios, "socios_fallidos": fallidos}
 

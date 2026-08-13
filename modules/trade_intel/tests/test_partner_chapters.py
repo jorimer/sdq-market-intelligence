@@ -61,7 +61,6 @@ class TestLectura:
 
 class TestIngesta:
     def test_es_idempotente(self, db, monkeypatch):
-        import modules.trade_intel.partner_chapters_sync as m
         monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
                             lambda *a, **k: {"2025": {"85": 1040.0, "84": 946.0}})
         uno = sync_partner_chapters(db, [2025], socios={"156": "China"})
@@ -114,3 +113,60 @@ class TestNoContaminaLosAgregados:
         assert PARTNER_PRODUCT in productos, "el sync de capítulos borró las filas de socio"
         assert "Capítulo viejo" not in productos      # sí reemplaza lo suyo
         assert "Capítulo nuevo" in productos
+
+
+class TestListaDeSociosDerivada:
+    """La lista se DERIVA del dato. La versión fija de 5 socios cubría 70,2% del valor
+    importado y dejaba fuera 187 países — justo la parte que responde "¿quién más me lo
+    puede vender?" en una pregunta sobre restringir importaciones por origen."""
+
+    def _fake(self, monkeypatch, socios):
+        monkeypatch.setattr("shared.data.comtrade_client.socios_con_flujo",
+                            lambda *a, **k: socios)
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                            lambda rep, code, years, **k: {"2025": {"85": 10.0}})
+
+    def test_ingiere_todos_los_socios_con_flujo(self, db, monkeypatch):
+        self._fake(monkeypatch, [("842", "USA", 12460.0), ("156", "China", 5988.0),
+                                 ("724", "Spain", 1432.0)])
+        r = sync_partner_chapters(db, [2025])
+        assert r["socios_intentados"] == 3 and r["socios_ingeridos"] == 3
+        assert {x.partner for x in db.query(TradePartnerChapter).all()} == {
+            "USA", "China", "Spain"}
+
+    def test_reporta_la_cobertura_del_valor(self, db, monkeypatch):
+        """Sin esta cifra el panel se lee como exhaustivo aunque no lo sea."""
+        self._fake(monkeypatch, [("842", "USA", 75.0), ("156", "China", 25.0)])
+        assert sync_partner_chapters(db, [2025])["cobertura_valor_pct"] == 100.0
+
+    def test_la_cobertura_baja_si_un_socio_falla(self, db, monkeypatch):
+        monkeypatch.setattr("shared.data.comtrade_client.socios_con_flujo",
+                            lambda *a, **k: [("842", "USA", 75.0), ("156", "China", 25.0)])
+
+        def _fetch(rep, code, years, **k):
+            if code == "156":
+                raise RuntimeError("timeout")
+            return {"2025": {"85": 10.0}}
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters", _fetch)
+        r = sync_partner_chapters(db, [2025])
+        assert r["socios_fallidos"] == ["China"]
+        assert r["cobertura_valor_pct"] == 75.0
+
+    def test_si_no_se_puede_derivar_la_lista_no_se_inventa(self, db, monkeypatch):
+        """Cae al mínimo declarado en vez de a una lista de juicio."""
+        def _boom(*a, **k):
+            raise RuntimeError("comtrade caído")
+        monkeypatch.setattr("shared.data.comtrade_client.socios_con_flujo", _boom)
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                            lambda *a, **k: {"2025": {"85": 1.0}})
+        r = sync_partner_chapters(db, [2025])
+        assert r["socios_intentados"] == 2      # SOCIOS_FALLBACK
+        assert r["cobertura_valor_pct"] is None  # no se afirma cobertura sin saber el total
+
+    def test_se_ordenan_por_valor(self, db, monkeypatch):
+        """Si la ingesta se corta a la mitad, adentro queda lo que más pesa."""
+        from shared.data.comtrade_client import socios_con_flujo  # noqa: F401
+        import inspect
+        from shared.data import comtrade_client
+        assert "out.sort(key=lambda t: -t[2])" in inspect.getsource(
+            comtrade_client.socios_con_flujo)

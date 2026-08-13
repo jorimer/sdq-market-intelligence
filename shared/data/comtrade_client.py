@@ -311,3 +311,32 @@ def fetch_partner_chapters(m49: str, partner_m49: str, years: List[int],
             out[str(year)] = {c: round(v, 4) for c, v in sorted(by_chapter.items())}
         time.sleep(1.0)
     return out
+
+
+def socios_con_flujo(m49: str, year: int, flow: str = "M") -> List[tuple]:
+    """``[(m49_socio, nombre, usd_millones)]`` ordenado de mayor a menor, sólo con flujo > 0.
+
+    Es la lista REAL de contrapartes, derivada del dato en vez de fijada a mano. Se ordena por
+    valor a propósito: una ingesta que se corte a la mitad deja adentro lo que más pesa.
+
+    **No existe atajo para el cruce socio × capítulo.** Pedir todos los socios y todos los
+    capítulos en una sola llamada (omitir ``partnerCode`` con ``cmdCode=AG2``) devuelve como
+    máximo 500 filas SIN ordenar por valor, con filas en cero, y —medido el 2026-08-13—
+    **deja fuera a China y a Estados Unidos**: cubre 42% del total con apariencia de estar
+    completa. Por eso la ingesta itera socio por socio.
+    """
+    names = _partner_names()
+    rows = _comtrade_get({
+        "reporterCode": m49, "period": str(year), "partner2Code": "0", "motCode": "0",
+        "customsCode": "C00", "flowCode": flow, "cmdCode": "TOTAL",
+    })
+    out: List[tuple] = []
+    for r in rows:
+        code, val = r.get("partnerCode"), r.get("primaryValue")
+        if code is None or code in _PARTNER_DROP or val is None or float(val) <= 0:
+            continue
+        nombre = names.get(int(code))
+        if nombre:
+            out.append((str(code), nombre, float(val) / _USD_TO_MILLIONS))
+    out.sort(key=lambda t: -t[2])
+    return out
