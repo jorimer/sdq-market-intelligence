@@ -38,6 +38,7 @@ from modules.brand_intel.models.models import (
     BrandEngagement,
     BrandExtraction,
     BrandExtractionCell,
+    BrandObservation,
     BrandPlanDocument,
     BrandPlanGoal,
 )
@@ -639,6 +640,35 @@ def extraction_cells(slug: str, extraction_id: str, db: Session = Depends(get_db
 class CellDecision(BaseModel):
     cell_id: str
     included: bool
+
+
+@router.post("/engagements/{slug}/extractions/{extraction_id}/renormalize",
+             summary="Recanonizar los cortes de una extracción ya leída")
+def renormalize_extraction(
+    slug: str, extraction_id: str, db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Aplica la canonización de cortes a lo YA extraído y vuelve a validar.
+
+    No relee ni una lámina: cuando el defecto está en cómo se guardó una dimensión, el dato
+    sigue en la celda y releer cuesta decenas de llamadas de visión para devolver lo mismo.
+    Devuelve además cuántas celdas quedan SIN atributo recuperable —esas sí exigen releer
+    con el esquema nuevo—, para que el resultado no insinúe que quedó todo resuelto.
+    """
+    from modules.brand_intel.ingest.pdf_pipeline import renormalize_staged
+
+    eng = _resolve(db, slug, user)
+    row = (db.query(BrandExtraction)
+           .filter(BrandExtraction.id == extraction_id,
+                   BrandExtraction.engagement_id == eng.id).first())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Extracción no encontrada.")
+
+    conocidos = [r[0] for r in db.query(BrandObservation.segment)
+                 .filter(BrandObservation.engagement_id == eng.id).distinct().all()]
+    out = renormalize_staged(db, row, conocidos)
+    db.commit()
+    return out
 
 
 @router.post("/engagements/{slug}/extractions/{extraction_id}/confirm",

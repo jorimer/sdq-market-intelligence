@@ -56,6 +56,11 @@ class Cell:
     wave_code: Optional[str] = None
     brand_slug: Optional[str] = None
     segment: str = "total"
+    #: El atributo que la cifra califica, cuando la métrica se mide por atributo. Es una
+    #: DIMENSIÓN, no un adorno: sin él, ocho atributos de una rejilla caen en la misma
+    #: coordenada y el detector de duplicados los declara contradictorios entre sí —pasó
+    #: con 144 celdas de una sola lámina del mazo de Ola 5.
+    attribute: Optional[str] = None
     base_n: Optional[int] = None
     unit: str = "pct"
     coordinate_value: Optional[float] = None
@@ -214,7 +219,7 @@ def check_internal_duplicates(cells: Sequence[Cell]) -> List[Dict[str, str]]:
     findings: List[Dict[str, str]] = []
     seen: Dict[Tuple, List[Cell]] = defaultdict(list)
     for c in cells:
-        seen[(c.wave_code, c.brand_slug, c.metric_code, c.segment)].append(c)
+        seen[(c.wave_code, c.brand_slug, c.metric_code, c.segment, c.attribute)].append(c)
 
     for key, group in seen.items():
         if len(group) < 2:

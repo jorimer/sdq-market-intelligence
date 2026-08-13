@@ -78,6 +78,17 @@ EXTRACTION_SCHEMA: Dict[str, Any] = {
                                        "la lámina la atribuya a un subgrupo (una ciudad, "
                                        "un NSE, un rango de edad). Usa la etiqueta impresa.",
                     },
+                    "attribute": {
+                        "type": "string",
+                        "description": "El ATRIBUTO o enunciado que la cifra califica, "
+                                       "cuando la métrica se mide por atributo (índice de "
+                                       "atributo, evaluación por enunciado): «hamburguesas "
+                                       "deliciosas», «café», «tiempo de entrega». Es una "
+                                       "dimensión propia, distinta del corte: una rejilla "
+                                       "de atributos × marcas produce una celda por cruce y "
+                                       "cada una lleva SU atributo. Vacío si la métrica no "
+                                       "se mide por atributo.",
+                    },
                     "value": {"type": "number", "description": "La cifra impresa."},
                     "base_n": {
                         "type": "integer",
@@ -93,7 +104,7 @@ EXTRACTION_SCHEMA: Dict[str, Any] = {
                     },
                 },
                 "required": ["metric_code", "brand_label", "wave_label", "segment",
-                             "value", "base_n", "distribution_id"],
+                             "attribute", "value", "base_n", "distribution_id"],
                 "additionalProperties": False,
             },
         },

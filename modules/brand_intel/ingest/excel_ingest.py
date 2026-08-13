@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from openpyxl import load_workbook
 from sqlalchemy.orm import Session
 
+from modules.brand_intel.engines import segments as seg
 from modules.brand_intel.engines.metrics import TRACKER_VOCABULARY, Vocabulary
 from modules.brand_intel.models.models import (
     BrandEngagement,
@@ -243,6 +244,10 @@ def _ingest_observations(db, engagement, ws, report: IngestReport,
     precedencia sea una sola y no dos que acaban divergiendo.
     """
     from modules.brand_intel.ingest.pdf_pipeline import Reading, promote_readings
+
+    segmentos_conocidos = [r[0] for r in db.query(BrandObservation.segment)
+                           .filter(BrandObservation.engagement_id == engagement.id)
+                           .distinct().all()]
     from modules.brand_intel.models.models import BrandExtraction
 
     waves = {
@@ -292,11 +297,21 @@ def _ingest_observations(db, engagement, ws, report: IngestReport,
             report.reject("Observaciones", rownum, "Valor ausente o no numérico.")
             continue
 
+        # Las dos dimensiones se resuelven con el MISMO motor que la ruta de mazos: si la
+        # plantilla canonizara distinto, el mismo corte entraría con dos formas según por
+        # dónde llegó, que es el defecto original visto desde el otro lado.
+        atributo, segmento = seg.normalize_cut(
+            _col(row, headers, "atributo") or _col(row, headers, "segmento"),
+            segmentos_conocidos)
+        if _col(row, headers, "atributo"):
+            _, segmento = seg.normalize_cut(_col(row, headers, "segmento"),
+                                            segmentos_conocidos)
         por_entrega.setdefault(entrega, []).append(Reading(
             wave_id=str(wave_id),
             brand_slug=brand or None,
             metric_code=metric,
-            segment=_norm(_col(row, headers, "segmento")) or "total",
+            segment=segmento,
+            attribute=atributo,
             value=value,
             base_n=_as_int(_col(row, headers, "base_n")),
             unit=_norm(_col(row, headers, "unidad")) or "pct",

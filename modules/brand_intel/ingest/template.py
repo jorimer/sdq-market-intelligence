@@ -98,19 +98,20 @@ def build_template(
     ws = wb.create_sheet("Observaciones")
     _write_header(
         ws,
-        ["entrega", "ola", "marca", "metrica", "segmento", "valor", "base_n",
-         "unidad", "fuente"],
-        [22, 14, 20, 26, 20, 12, 10, 10, 34],
+        ["entrega", "ola", "marca", "metrica", "segmento", "atributo", "valor",
+         "base_n", "unidad", "fuente"],
+        [22, 14, 20, 26, 20, 28, 12, 10, 10, 34],
     )
     ws.cell(row=2, column=1, value="Ola 4 · mar\'26")
     ws.cell(row=2, column=2, value="2025-05")
     ws.cell(row=2, column=3, value="mcdonalds")
     ws.cell(row=2, column=4, value="reach_7d")
     ws.cell(row=2, column=5, value="total")
-    ws.cell(row=2, column=6, value=26)
-    ws.cell(row=2, column=7, value=300)
-    ws.cell(row=2, column=8, value="pct")
-    ws.cell(row=2, column=9, value="Hot Tracker · lámina 18")
+    ws.cell(row=2, column=6, value="")          # atributo: vacío salvo métrica por atributo
+    ws.cell(row=2, column=7, value=26)
+    ws.cell(row=2, column=8, value=300)
+    ws.cell(row=2, column=9, value="pct")
+    ws.cell(row=2, column=10, value="Hot Tracker · lámina 18")
     ws.cell(row=3, column=1,
             value="entrega = de qué informe salió la cifra. Un tracker reexpone sus olas "
                   "anteriores en cada entrega y a veces las corrige: sin esta columna, "
