@@ -108,6 +108,26 @@ async def purge_data(
     return {"scores_deleted": scores, "flows_deleted": flows}
 
 
+@router.get("/partner-chapters",
+            summary="Qué bienes importa RD de un socio, abierto por capítulo HS")
+async def partner_chapters(
+    partner: str = Query(..., description='Nombre del socio, p. ej. "China"'),
+    period: Optional[str] = Query(None, description="Año; por defecto el último ingerido"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """El cruce socio × capítulo, que la DGA no publica (su Excel no trae país de origen).
+
+    Sin dato devuelve ``capitulos: []`` y ``period: None``: la brecha se declara. NO se cae
+    al agregado del mundo, que mediría otra cosa — la canasta total del país no dice qué
+    llega de este socio, y confundirlas fue exactamente el error del informe que originó
+    esta ruta.
+    """
+    from modules.trade_intel.partner_chapters_sync import importaciones_por_capitulo
+
+    return importaciones_por_capitulo(db, partner=partner, period=period)
+
+
 @router.get("/flows", summary="Flujos comerciales persistidos")
 async def flows(
     period: Optional[str] = Query(None),

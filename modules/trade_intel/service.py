@@ -20,8 +20,22 @@ MODEL_VERSION = "1.0"
 
 
 def _persist_flows(db: Session, period: str, flows: List[Dict[str, Any]]) -> None:
-    """Replace persisted flows for *period* with the provided set."""
-    db.query(TradeFlow).filter_by(period=period).delete()
+    """Replace the CHAPTER flows for *period* — nunca las filas de otro tipo.
+
+    ``ti_flows`` guarda dos clases de fila distinguidas por un centinela en ``product``: los
+    capítulos HS (esta función) y el comercio por PAÍS que escribe ``partners_sync``. El
+    borrado era por período a secas, así que un sync de capítulos arrasaba las filas de socio
+    del mismo trimestre. Hoy no se nota sólo porque el sync de socios corrió después; con la
+    cadencia anclada, el de capítulos pasa a correr antes y la pérdida se materializaba.
+
+    Verificado en prod (2026-08-13): 2026-Q2 tenía 60 filas de socio y 0 de capítulo —el
+    trimestre a medio ingerir—, justo las que el próximo sync de capítulos habría borrado.
+    """
+    from modules.trade_intel.partners_sync import PARTNER_PRODUCT
+
+    (db.query(TradeFlow)
+     .filter(TradeFlow.period == period, TradeFlow.product != PARTNER_PRODUCT)
+     .delete(synchronize_session=False))
     for f in flows:
         db.add(TradeFlow(
             product=str(f["product"]),
