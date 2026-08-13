@@ -22,8 +22,11 @@ _THIN_EVENTS = 30
 def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
                           n_boot: int = 1000) -> Dict:
     obs = derive_observations(db, horizon_q=horizon_q)
-    # Orden de mejor a peor, igual que antes con los escalones.
-    tier_order = [n for _c, n in BANDAS_RESILIENCIA] + ["Frágil"]
+    # Orden de mejor a peor. `BANDAS_RESILIENCIA` YA cierra con el corte 0.0 → "Frágil";
+    # agregarlo otra vez duplicaba la fila de Frágil en `by_tier` (fila repetida en el
+    # informe de validación publicado, y una comparación tautológica rate<=rate en la
+    # monotonía). Mismo off-by-one que sacaba la fila "Frágil | 0 – 0" en Criterios §4.
+    tier_order = [n for _c, n in BANDAS_RESILIENCIA]
 
     if not obs:
         return {
@@ -47,9 +50,9 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
         "Desenlace = distress financiero (mora que se duplica / solvencia <10% / ROA<0 "
         "sostenido), NO quiebras: el sistema bancario dominicano no registra defaults en "
         "la ventana, así que la discriminación es direccional.",
-        "Se excluye a propósito el 'downgrade ≥2 escalones' como desenlace: está sesgado "
-        "por el piso/techo de la escala (un SDQ-D no puede caer 2 escalones) y produce un "
-        "Gini negativo artificial; no mide deterioro real.",
+        "Se excluye a propósito el 'downgrade ≥2 bandas' como desenlace: está sesgado por "
+        "el piso/techo de la escala (una entidad ya en la banda más baja no puede caer dos "
+        "bandas) y produce un Gini negativo artificial; no mide deterioro real.",
         "Sin vintages de datos: la línea de tiempo usa period_end (fin de trimestre), "
         "no la fecha de publicación original. Se asume el rezago de publicación del SIB.",
     ]

@@ -17,6 +17,7 @@ guardrail nunca debe empeorar la salida ni romper el endpoint.
 import json
 import logging
 import re
+import unicodedata
 from typing import Dict, List
 
 logger = logging.getLogger("sdq.narrative.numeric_guard")
@@ -26,7 +27,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "2"  # "2": chequeo de dirección de las comparaciones (2026-08-05)
+GUARD_VERSION = "3"  # "3": dirección en la forma BRECHA ("N pp por debajo de X") (2026-08-13)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -582,6 +583,129 @@ def _direction_refs(context: dict) -> List[tuple]:
     return out
 
 
+# ─── Dirección en la forma BRECHA ────────────────────────────────────────────────
+#
+# El chequeo de arriba exige que el VALOR DE LA REFERENCIA esté citado en la oración. Media
+# biblioteca de frases reales no lo cita: enuncia la BRECHA y nombra la base.
+#
+#     «lo que sitúa este indicador 7.31 puntos porcentuales por debajo del promedio de
+#      bancos múltiples»                       (Rating Completo BPD §5 — INVERTIDA)
+#
+# El 85.14 nunca aparece, así que ese pasaje era invisible: el guard existía y no veía nada.
+# Y es la forma que el propio contexto INDUCE, porque ``comparaciones`` sirve ``brecha_pp``
+# — el modelo copia la magnitud y redacta la palabra, que es la mitad que erra.
+#
+# Acá la referencia se reconoce por su ETIQUETA, no por su valor. Es igual de decidible: la
+# etiqueta viene del contexto y el signo de la brecha también.
+
+# Cola DISTINTIVA de la etiqueta: "promedio de bancos múltiples" → "bancos multiples". Sin
+# recortar el prefijo, «9.8 puntos por debajo del GRUPO de bancos múltiples» —la misma base
+# nombrada de otra manera, frase real del informe— no casaría con la etiqueta del contexto.
+_LABEL_PREFIX = re.compile(r"^(?:promedio|mediana|media|grupo|panel)\s+(?:de|del|de\s+la)\s+",
+                           re.I)
+# Unidades en que se enuncia una brecha. Los puntos BÁSICOS son centésimas de punto
+# porcentual: «46 puntos básicos por debajo del promedio del sistema» describe una brecha de
+# 0.46 pp, y compararlo crudo contra brecha_pp no casaría nunca (falso negativo silencioso).
+_GAP_UNIT = r"(?:puntos?\s+porcentuales|puntos?\s+b[áa]sicos|puntos?|pp\.?|p\.\s?p\.)"
+_GAP_CLAIM = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(" + _GAP_UNIT + r")"
+    # Cuña corta entre la magnitud y el marcador: "…puntos porcentuales POR DEBAJO", pero
+    # también "…puntos DE DIFERENCIA por debajo". Acotada para no cruzar de cláusula.
+    r"[^.;:]{0,30}?\b(por\s+debajo|por\s+encima|inferior(?:es)?\s+a|superior(?:es)?\s+a|"
+    r"sobre|encima\s+d|debajo\s+d)\b"
+    # Ventana derecha donde debe aparecer la etiqueta de la referencia.
+    r"([^.;:]{0,90})",
+    re.I,
+)
+_GAP_MENOR = ("por debajo", "inferior", "debajo d")
+
+
+def _norm(s: str) -> str:
+    """Minúsculas sin acentos ni espacio redundante — para casar etiqueta contra prosa."""
+    plano = unicodedata.normalize("NFD", str(s))
+    plano = "".join(c for c in plano if unicodedata.category(c) != "Mn")
+    return re.sub(r"\s+", " ", plano).strip().lower()
+
+
+def _gap_index(context: dict) -> List[tuple]:
+    """``[(indicador, cola_de_etiqueta, direccion, brecha_abs_pp), ...]`` del contexto.
+
+    Solo desde ``comparaciones`` (dirección ya resuelta): es la única fuente que trae la
+    ETIQUETA legible junto al signo, y es agnóstica de eje — banca, seguros, pensiones y
+    brand_intel la inyectan igual. Las comparaciones "en línea" quedan fuera: ahí la brecha
+    es inmaterial por definición y exigir un lado sería el error opuesto.
+    """
+    out: List[tuple] = []
+    comps = context.get("comparaciones")
+    if not isinstance(comps, list):
+        return out
+    for c in comps:
+        if not isinstance(c, dict):
+            continue
+        ind, etiqueta, direccion = c.get("indicador"), c.get("referencia"), c.get("direccion")
+        brecha = c.get("brecha_pp")
+        if not etiqueta or direccion not in ("por encima", "por debajo") or brecha is None:
+            continue
+        try:
+            b = abs(float(brecha))
+        except (TypeError, ValueError):
+            continue
+        cola = _norm(_LABEL_PREFIX.sub("", str(etiqueta)))
+        if len(cola) < 4:  # etiqueta demasiado genérica para parear sin ruido
+            continue
+        out.append((str(ind), cola, direccion, b))
+    return out
+
+
+def deterministic_direction_gap_errors(context: dict, text: str) -> List[str]:
+    """Claims de BRECHA cuyo sentido contradice el signo servido en ``comparaciones``.
+
+    Complementa a ``deterministic_direction_errors``, que solo ve la forma con el valor de
+    referencia citado. Acá el pareo exige TRES coincidencias en la misma cláusula —magnitud
+    igual a ``|brecha_pp|`` a la precisión escrita, unidad de brecha, y la etiqueta de la
+    referencia a la derecha del marcador— y ante empate ambiguo (dos comparaciones con la
+    misma magnitud y etiqueta pero dirección opuesta) NO marca. Best-effort: nunca lanza.
+    """
+    flags: List[str] = []
+    try:
+        idx = _gap_index(context)
+        if not idx:
+            return []
+        plano = re.sub(r"\s+", " ", text)
+        for m in _GAP_CLAIM.finditer(plano):
+            cifra, unidad, marcador, cola_txt = m.groups()
+            escala = 0.01 if "asic" in _norm(unidad) else 1.0  # puntos básicos → pp
+            derecha = _norm(cola_txt)
+            dijo = ("por debajo" if any(k in _norm(marcador) for k in _GAP_MENOR)
+                    else "por encima")
+            candidatos = [
+                (ind, direccion) for ind, cola, direccion, brecha in idx
+                if cola in derecha and _cited_matches(cifra, brecha / escala)
+            ]
+            if not candidatos:
+                continue
+            # Ambigüedad real (misma magnitud y misma base, direcciones opuestas): el guard
+            # no puede decidir cuál se citaba, así que se calla. Gritar en falso lo vuelve
+            # ruido que se aprende a ignorar — la disciplina del detector hermano.
+            if len({d for _i, d in candidatos}) > 1:
+                continue
+            ind, correcta = candidatos[0]
+            if dijo == correcta:
+                continue
+            flags.append(
+                f"{ind}: se afirma una brecha de {cifra} {unidad} '{dijo}' de "
+                f"'{cola_txt.strip()}', pero la dirección servida es '{correcta}'")
+    except Exception as e:  # noqa: BLE001 — best-effort; jamás rompe la generación
+        logger.warning("Chequeo de dirección por brecha no pudo completarse: %s", e)
+        return flags
+    seen, out = set(), []
+    for f in flags:
+        if f not in seen:
+            seen.add(f)
+            out.append(f)
+    return out
+
+
 def deterministic_direction_errors(context: dict, text: str) -> List[str]:
     """Comparaciones del *text* cuyo SENTIDO contradice los datos del contexto.
 
@@ -646,7 +770,10 @@ def deterministic_direction_errors(context: dict, text: str) -> List[str]:
                             f"({ref}), pero es al revés")
     except Exception as e:  # noqa: BLE001 — best-effort; jamás rompe la generación
         logger.warning("Chequeo de dirección no pudo completarse: %s", e)
-        return flags
+    # La forma BRECHA se verifica desde el MISMO punto de entrada, no como chequeo aparte:
+    # un guard que hay que acordarse de llamar es el que termina faltando en la otra ruta —
+    # el modo de falla que ya costó cinco instancias en este repo.
+    flags += deterministic_direction_gap_errors(context, text)
     seen, out = set(), []
     for f in flags:
         if f not in seen:

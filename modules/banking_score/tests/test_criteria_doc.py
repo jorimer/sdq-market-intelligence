@@ -120,3 +120,38 @@ def test_sin_sesion_no_inventa_cifras_de_backtest():
 
 def test_es_determinista():
     assert build_criteria_document() == build_criteria_document()
+
+
+def test_tabla_de_bandas_sin_fila_espuria():
+    """SENSOR DE REGRESIÓN (defecto entregado 2026-08-13, Criterios §4).
+
+    `BANDAS_RESILIENCIA` ya cierra con el corte 0.0 → "Frágil", pero una línea extra
+    después del loop agregaba una segunda fila «Frágil | 0 – 0». En el documento que DEFINE
+    la escala oficial —contra el que el cliente audita todo lo demás— una fila sin sentido
+    no es cosmética.
+    """
+    from modules.banking_score.scoring.perfil_sdq import BANDAS_RESILIENCIA
+
+    filas = [ln for ln in _doc().splitlines()
+             if ln.startswith("| **") and "–" in ln]
+    nombres = [ln.split("**")[1] for ln in filas]
+    assert nombres == [n for _c, n in BANDAS_RESILIENCIA], (
+        f"la tabla de bandas no espeja BANDAS_RESILIENCIA: {nombres}")
+    assert len(nombres) == len(set(nombres)), f"banda repetida en la tabla: {nombres}"
+    assert not any("0 – 0" in ln for ln in filas), "fila de rango vacío (0 – 0)"
+
+
+def test_rangos_de_banda_son_contiguos_y_cubren_la_escala():
+    """Los cortes deben encadenarse 0→100 sin hueco ni solape: un rango mal armado es la
+    otra cara del mismo off-by-one que producía la fila espuria."""
+    import re as _re
+
+    filas = [ln for ln in _doc().splitlines() if ln.startswith("| **") and "–" in ln]
+    rangos = []
+    for ln in filas:
+        lo, hi = _re.search(r"\|\s*(\d+)\s*–\s*(\d+)\s*\|", ln).groups()
+        rangos.append((int(lo), int(hi)))
+    assert rangos[0][1] == 100, "la banda superior no llega a 100"
+    assert rangos[-1][0] == 0, "la banda inferior no arranca en 0"
+    for (lo_alto, _), (_, hi_bajo) in zip(rangos, rangos[1:]):
+        assert lo_alto == hi_bajo, f"hueco o solape entre bandas: {rangos}"

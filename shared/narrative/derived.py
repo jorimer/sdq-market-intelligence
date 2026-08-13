@@ -113,6 +113,25 @@ def derived_figures(
 MATERIALIDAD_PP = 0.1
 
 
+def _lectura(direccion: str, etiqueta: str, brecha: float) -> str:
+    """La comparación como CLÁUSULA ya redactada, lista para copiar.
+
+    Reincidencia 2026-08-13 (Rating Completo BPD §5): el contexto traía
+    ``{"direccion": "por encima", "brecha_pp": 7.31}`` para el LTD y la prosa salió
+    «7.31 puntos porcentuales POR DEBAJO del promedio de bancos múltiples» —
+    contradiciendo a la §7 del mismo documento, que lo dijo bien.
+
+    Lo revelador es CÓMO falló: el modelo copió la magnitud y redactó la palabra. Servir
+    los campos por separado deja media relación en sus manos, y esa mitad es justamente la
+    que erra. El campo ``brecha_pp`` se conserva firmado (el chequeo determinista lo lee),
+    pero la frase se sirve armada para que copiar sea más fácil que redactar.
+    """
+    if direccion == "en línea":
+        return (f"en línea con el {etiqueta} (brecha de {brecha:+.2f} puntos "
+                "porcentuales, materialmente nula)")
+    return f"{direccion} del {etiqueta} en {abs(brecha):.2f} puntos porcentuales"
+
+
 def comparaciones_vs_referencia(
     valores: Dict[str, Optional[float]],
     referencias: Dict[str, Dict[str, Optional[float]]],
@@ -130,9 +149,10 @@ def comparaciones_vs_referencia(
             pares a la vez.
 
     Returns:
-        Lista de ``{indicador, valor, referencia, valor_referencia, direccion, brecha_pp}``
-        con ``direccion`` ∈ {"por encima", "por debajo", "en línea"}. Agnóstica de eje: el
-        llamador arma el mapeo indicador→referencias con el vocabulario de su dominio.
+        Lista de ``{indicador, valor, referencia, valor_referencia, direccion, brecha_pp,
+        lectura}`` con ``direccion`` ∈ {"por encima", "por debajo", "en línea"} y ``lectura``
+        la cláusula ya redactada (ver ``_lectura``). Agnóstica de eje: el llamador arma el
+        mapeo indicador→referencias con el vocabulario de su dominio.
     """
     out: List[Dict[str, Any]] = []
     for indicador, refs in (referencias or {}).items():
@@ -162,6 +182,7 @@ def comparaciones_vs_referencia(
                 "valor_referencia": round(r, 4),
                 "direccion": direccion,
                 "brecha_pp": brecha,
+                "lectura": _lectura(direccion, str(etiqueta), brecha),
             })
     return out
 

@@ -171,9 +171,9 @@ def flag_register_violations(text: str) -> List[str]:
 
 def _tidy(text: str) -> str:
     """Normaliza el espacio/puntuación huérfana que deja una remoción."""
-    # espacio antes de puntuación de cierre. NO se incluye "%": en la tipografía de estos
-    # informes la cifra lleva espacio fino antes del signo ("1.4 %"); tocarlo alteraría el
-    # formato de una cifra, justo lo que el sanitizador promete no hacer.
+    # espacio antes de puntuación de cierre. El "%" NO se toca acá —este `_tidy` solo repara
+    # el empalme de una remoción y no debe alterar cifras—; su formato lo unifica
+    # `normalize_number_format`, que es donde vive la convención de casa.
     text = re.sub(r"\s+([,.;:])", r"\1", text)
     # raya/en-dash huérfana pegada al inicio de clausula tras remover el marcador previo
     text = re.sub(r"(^|[.\n]\s*)[—–]\s*", r"\1", text)
@@ -224,3 +224,64 @@ def strip_meta_commentary(text: str) -> Tuple[str, List[str]]:
     if removed:
         text = _tidy(text)
     return text, removed
+
+
+# ── Formato numérico: la prosa debe leerse como las tablas ───────────────────
+#
+# Defecto 2026-08-13 (Deep Dive §10 + Rating Completo §8, cliente Grupo Popular): el MISMO
+# número con dos formatos a tres líneas de distancia —«50,9 % de la cartera bruta… umbral de
+# referencia del 30,0 %» en la prosa y «top-10 / cartera bruta %: 50.9 (umbral 30.0)» en el
+# bullet de abajo—. No es cosmética: lee como si dos pipelines distintas hubieran escrito el
+# informe sin normalizar la salida.
+#
+# El origen es estructural, no un descuido: las tablas las escribe el motor con f-strings
+# (punto, siempre) y la prosa la escribe el modelo con instrucción de redactar en español
+# (coma, a veces). Ninguna instrucción de prompt cierra eso de forma garantizada — es
+# aritmética de formato, así que se resuelve en código y con garantía.
+#
+# Se adopta el PUNTO decimal, que es la convención dominicana y la que ya usan todas las
+# superficies templadas. Vale para los tres idiomas: lo que importa es que un documento no
+# se contradiga a sí mismo entre dos superficies.
+
+# Coma decimal SOLO con 1-2 dígitos de fracción y sin dígito después: un grupo de millares
+# tiene SIEMPRE exactamente tres ("1,176 puntos", "5,026") y debe quedar intacto. Es la
+# distinción que hace la regla segura sin adivinar.
+_DECIMAL_COMMA = re.compile(r"(?<=\d),(\d{1,2})(?!\d)")
+# Espacio (incluido el fino/duro que el modelo emite) entre la cifra y el signo de por
+# ciento. Las tablas escriben "50.9%"; la prosa alternaba "50,9 %".
+_PCT_SPACE = re.compile(r"(\d)[\s   ]+%")
+
+# Tipeos del modelo vistos en material entregado. Deliberadamente CORTO y anclado a
+# palabra completa: no es un corrector ortográfico —eso mordería terminología legítima—,
+# es una lista de errores observados. "exceptcionalmente" salió en el Rating Completo §2.
+_TYPOS: List[Tuple[re.Pattern, str]] = [
+    # "exceptcional…" → "excepcional…": la "t" de más. Ancla en `except` + `cional` para no
+    # tocar "excepto" ni "excepción", que son palabras legítimas.
+    (re.compile(r"\bexcept(cional\w*)\b", re.I), r"excep\1"),
+]
+
+
+def normalize_number_format(text: str) -> Tuple[str, List[str]]:
+    """Unifica el formato numérico de la prosa con el de las tablas y corrige tipeos.
+
+    Devuelve ``(texto, cambios)``; ``cambios`` vacío ⇒ ya estaba en formato de casa. Las
+    intervenciones se LOGuean en el llamador para que la deriva sea observable.
+    """
+    if not text:
+        return text, []
+    cambios: List[str] = []
+    n_dec = len(_DECIMAL_COMMA.findall(text))
+    if n_dec:
+        text = _DECIMAL_COMMA.sub(r".\1", text)
+        cambios.append(f"{n_dec} coma(s) decimal(es) → punto")
+    n_pct = len(_PCT_SPACE.findall(text))
+    if n_pct:
+        text = _PCT_SPACE.sub(r"\1%", text)
+        cambios.append(f"{n_pct} espacio(s) antes de %")
+    for patron, reemplazo in _TYPOS:
+        vistos = [m.group(0) for m in patron.finditer(text)]
+        nuevo = patron.sub(reemplazo, text)
+        if nuevo != text:
+            cambios.append("tipeo: " + ", ".join(sorted(set(vistos))))
+            text = nuevo
+    return text, cambios

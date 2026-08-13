@@ -10,7 +10,9 @@ from shared.cache import cache_get, cache_set
 from shared.config.settings import settings
 from shared.llm.budget import budget_allows, record_usage
 from shared.narrative.lang_context import get_request_lang
-from shared.narrative.sanitize import flag_register_violations, strip_meta_commentary
+from shared.narrative.sanitize import (
+    flag_register_violations, normalize_number_format, strip_meta_commentary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1544,6 +1546,16 @@ class NarrativeEngine:
                 "Meta-comentario del modelo removido de la narrativa (%d fragmento(s)): %s. "
                 "Revisar el prompt anti-meta si recurre.",
                 len(removed), removed,
+            )
+        # Formato de casa: la prosa del modelo y las tablas del motor deben escribir el
+        # MISMO número igual. Va acá y no en cada render porque este es el punto único por
+        # el que pasan AMBAS rutas — en el render habría que acordarse de llamarlo por
+        # superficie, y la que se olvide vuelve a publicar el documento contradiciéndose.
+        text, formato = normalize_number_format(text)
+        if formato:
+            logger.info(
+                "Formato numérico normalizado en la narrativa (%s). Si recurre mucho, "
+                "reforzar la instrucción de formato en el prompt.", "; ".join(formato),
             )
         # Lint de REGISTRO: marca (no borra) el léxico visceral/coloquial. La corrección va en
         # el prompt (REGISTER_NEUTRO); esto lo hace observable si algo se cuela al informe.
