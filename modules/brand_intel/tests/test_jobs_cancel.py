@@ -155,8 +155,9 @@ def test_resume_starts_after_the_last_page_read(db, engagement) -> None:
         return [b"png"] if first <= 40 else []        # el mazo termina en la 40
 
     def _extract(image, page_no, brands, waves):
-        return PageExtraction(chart_title=f"lámina {page_no}", readable=False,
-                              skip_reason="sin cifras", cells=[], model_used="test")
+        return PageExtraction(page_number=page_no, chart_title=f"lámina {page_no}",
+                              readable=False, skip_reason="sin cifras", cells=[],
+                              model_used="test")
 
     pipe.ingest_pdf(db, engagement, b"%PDF", "mazo.pdf",
                     renderer=_render, extractor=_extract, resume_from=32)
@@ -180,8 +181,8 @@ def test_a_fresh_job_still_starts_at_page_one(db, engagement) -> None:
         return [b"png"] if first <= 3 else []
 
     def _extract(image, page_no, brands, waves):
-        return PageExtraction(chart_title="t", readable=False, skip_reason="",
-                              cells=[], model_used="test")
+        return PageExtraction(page_number=page_no, chart_title="t", readable=False,
+                              skip_reason="", cells=[], model_used="test")
 
     pipe.ingest_pdf(db, engagement, b"%PDF", "mazo.pdf",
                     renderer=_render, extractor=_extract)

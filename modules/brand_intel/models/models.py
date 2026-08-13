@@ -341,6 +341,37 @@ class BrandExtraction(UUIDMixin, Base):
     confirmed_at = Column(DateTime, nullable=True)
 
 
+class BrandExtractionPage(UUIDMixin, Base):
+    """Lo que el MODELO dijo de una lámina, tal cual, antes de interpretarlo.
+
+    Es la pieza que separa lo caro de lo corregible. Preguntarle al modelo qué dice una
+    lámina cuesta una llamada de visión; convertir esa respuesta en celdas —resolver la
+    marca, la ola, el corte, el atributo— es una función pura y gratis. Al no guardar la
+    respuesta, cualquier error en la conversión obligaba a volver a preguntar: dos mazos
+    completos se releyeron por defectos que estaban enteramente aguas abajo, con la lectura
+    del modelo correcta las dos veces.
+
+    Pesa ~360 KB por mazo. Se conserva aunque el PDF se suelte: el PDF hace falta para leer
+    láminas NUEVAS, esto para re-interpretar las ya leídas, y son necesidades distintas.
+    """
+
+    __tablename__ = "brand_extraction_pages"
+    __table_args__ = (
+        UniqueConstraint("extraction_id", "page_number", name="uq_brand_extraction_page"),
+    )
+
+    extraction_id = Column(String, nullable=False)
+    engagement_id = Column(String, nullable=False)
+    page_number = Column(Integer, nullable=False)
+    chart_title = Column(String(300), nullable=True)
+    #: Las filas que devolvió el modelo para esta lámina, sin tocar. El esquema con el que
+    #: se leyeron queda en `schema_version`: una respuesta vieja puede carecer de campos
+    #: que el esquema nuevo pide, y re-procesarla a ciegas los daría por vacíos.
+    payload = Column(JSON, nullable=False, default=list)
+    schema_version = Column(String(40), nullable=True)
+    model_used = Column(String(80), nullable=True)
+
+
 class BrandExtractionCell(UUIDMixin, Base):
     """One proposed observation, with where it came from and whether it survived checks.
 

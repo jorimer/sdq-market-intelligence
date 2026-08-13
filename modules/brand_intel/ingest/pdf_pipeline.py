@@ -37,6 +37,7 @@ from modules.brand_intel.models.models import (
     BrandEntity,
     BrandExtraction,
     BrandExtractionCell,
+    BrandExtractionPage,
     BrandObservation,
     BrandObservationReading,
     BrandWave,
@@ -363,6 +364,25 @@ def ingest_pdf(
             report.pages_read += 1
             for row in read.cells:
                 raw.append((page_no, read.chart_title, row))
+
+        # La respuesta del modelo se guarda ANTES de interpretarla, y por lámina, junto al
+        # resto del progreso que ya se commitea acá. Es lo que separa lo caro —preguntar—
+        # de lo corregible —interpretar—: un error en la conversión se arregla re-procesando
+        # esto, sin volver a pagar la lectura. Dos mazos completos se releyeron por defectos
+        # que estaban enteramente aguas abajo.
+        if into is not None:
+            existente = (db.query(BrandExtractionPage)
+                         .filter(BrandExtractionPage.extraction_id == into.id,
+                                 BrandExtractionPage.page_number == page_no).first())
+            fila = existente or BrandExtractionPage(
+                extraction_id=into.id, engagement_id=engagement.id, page_number=page_no)
+            fila.chart_title = ((read.chart_title or "")[:300] or None)  # type: ignore[assignment]
+            fila.payload = list(read.cells or [])          # type: ignore[assignment]
+            fila.schema_version = (                        # type: ignore[assignment]
+                pdf_vision.EXTRACTION_SCHEMA_VERSION)
+            fila.model_used = read.model_used              # type: ignore[assignment]
+            if existente is None:
+                db.add(fila)
         if on_page:
             on_page(page_no)
 
@@ -476,6 +496,80 @@ class Reading:
     base_n: Optional[int] = None
     unit: str = "pct"
     source: str = ""
+
+
+def reprocess_extraction(db: Session, extraction: Any) -> Dict[str, Any]:
+    """Reconstruye las celdas desde la lectura CRUDA, sin volver a pagarle al modelo.
+
+    Es la respuesta al desperdicio que motivó todo esto: cuando el defecto está aguas abajo
+    de la lectura —el resolvedor de etiquetas, el mapeo de dimensiones, la canonización de
+    cortes— la respuesta del modelo sigue siendo correcta y volver a preguntarle no aporta
+    nada. Acá se re-corre la misma función pura que corre durante la ingesta, con el código
+    de HOY, sobre lo que se guardó entonces.
+
+    Declara la versión de esquema de cada lámina: una respuesta leída con un esquema que no
+    pedía cierto campo no lo tiene, y re-procesarla no lo inventa. Esas láminas se cuentan
+    aparte —son las únicas que sí exigen releer— en vez de dejar creer que quedó todo al día.
+    """
+    from modules.brand_intel.engines.metrics import TRACKER_VOCABULARY
+    from modules.brand_intel.models.models import BrandEngagement, BrandEntity, BrandWave
+
+    paginas = (db.query(BrandExtractionPage)
+               .filter(BrandExtractionPage.extraction_id == extraction.id)
+               .order_by(BrandExtractionPage.page_number).all())
+    if not paginas:
+        return {"laminas": 0, "celdas": 0, "sin_lectura_cruda": True,
+                "nota": ("Esta extracción es anterior a que se guardara la lectura cruda: "
+                         "re-procesarla exigiría volver a leer el mazo.")}
+
+    engagement = (db.query(BrandEngagement)
+                  .filter(BrandEngagement.id == extraction.engagement_id).one())
+    brands = db.query(BrandEntity).filter(
+        BrandEntity.engagement_id == engagement.id).all()
+    waves = db.query(BrandWave).filter(BrandWave.engagement_id == engagement.id).all()
+    segmentos = [r[0] for r in db.query(BrandObservation.segment)
+                 .filter(BrandObservation.engagement_id == engagement.id).distinct().all()]
+    resolver = _LabelResolver(brands, waves, segmentos)
+
+    raw: List[Tuple[int, str, Dict[str, Any]]] = []
+    desactualizadas: List[int] = []
+    for p in paginas:
+        if str(p.schema_version or "") != pdf_vision.EXTRACTION_SCHEMA_VERSION:
+            desactualizadas.append(int(p.page_number))
+        for row in (list(p.payload) if p.payload is not None else []):
+            raw.append((int(p.page_number), str(p.chart_title or ""), row))
+
+    report = IngestReport()
+    cells = _to_validation_cells(raw, resolver, report, TRACKER_VOCABULARY)
+    result = val.validate(cells, vocab=TRACKER_VOCABULARY)
+
+    # Las celdas se REEMPLAZAN: son una interpretación derivada, y conservar la anterior
+    # junto a la nueva dejaría dos verdades para la misma coordenada.
+    db.query(BrandExtractionCell).filter(
+        BrandExtractionCell.extraction_id == extraction.id).delete(
+            synchronize_session=False)
+    title_by_page = {p: t for p, t, _ in raw}
+    for c in cells:
+        page = int(c.key.split("-")[0].lstrip("p"))
+        db.add(BrandExtractionCell(
+            extraction_id=extraction.id, engagement_id=engagement.id, page_number=page,
+            chart_label=title_by_page.get(page), wave_code=c.wave_code,
+            brand_slug=c.brand_slug, metric_code=c.metric_code, segment=c.segment,
+            attribute=c.attribute, value=c.value, base_n=c.base_n,
+            source_method=c.source_method, validation=c.validation,
+            validation_note=c.validation_note, coordinate_value=c.coordinate_value,
+            included=c.validation != val.FAILED))
+    extraction.summary = result.as_dict()
+    db.flush()
+    return {
+        "laminas": len(paginas),
+        "celdas": len(cells),
+        "laminas_con_esquema_viejo": sorted(desactualizadas),
+        "validacion": {"passed": result.passed, "conflict": result.conflict,
+                       "failed": result.failed, "unchecked": result.unchecked},
+        "nota": ("Re-procesado desde la lectura guardada: no se pagó ninguna llamada de "
+                 "visión."),
+    }
 
 
 def renormalize_staged(
@@ -751,9 +845,13 @@ def confirm_extraction(
 
     out = promote_readings(db, str(extraction.engagement_id), extraction, readings)
 
-    extraction.status = "confirmed"
-    extraction.confirmed_by = confirmed_by
+    extraction.status = "confirmed"                        # type: ignore[assignment]
+    extraction.confirmed_by = confirmed_by                 # type: ignore[assignment]
     extraction.confirmed_at = datetime.now(timezone.utc)
+    # Acá SÍ se suelta: confirmada, la extracción ya no puede necesitar más láminas. La
+    # lectura cruda por lámina se conserva igual, que es lo que permite re-procesar sin
+    # volver a pagarle al modelo.
+    extraction.source_pdf = None                           # type: ignore[assignment]
 
     return {
         **out,

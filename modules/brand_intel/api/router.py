@@ -709,6 +709,40 @@ def cancel_extraction(
     }
 
 
+@router.post("/engagements/{slug}/extractions/{extraction_id}/reprocess",
+             summary="Re-interpretar una lectura ya pagada, sin volver a leer")
+def reprocess_extraction_endpoint(
+    slug: str, extraction_id: str, db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Reconstruye las celdas desde la lectura guardada del modelo. Cero visión.
+
+    Para cuando el defecto está aguas abajo de la lectura —el resolvedor de etiquetas, el
+    mapeo de dimensiones, la canonización de cortes—: la respuesta del modelo sigue siendo
+    correcta y volver a preguntarle no aporta nada. Se re-corre la misma conversión con el
+    código de hoy sobre lo que se guardó entonces.
+
+    Declara las láminas leídas con un esquema anterior: una respuesta que no traía cierto
+    campo no lo gana al re-procesarse, y esas son las únicas que sí exigen releer el mazo.
+    """
+    from modules.brand_intel.ingest.pdf_pipeline import reprocess_extraction
+
+    eng = _resolve(db, slug, user)
+    row = (db.query(BrandExtraction)
+           .filter(BrandExtraction.id == extraction_id,
+                   BrandExtraction.engagement_id == eng.id).first())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Extracción no encontrada.")
+    if str(row.status) == "confirmed":
+        raise HTTPException(
+            status_code=409,
+            detail="La extracción ya está confirmada: sus cifras son observaciones del "
+                   "expediente y no se rehacen por acá.")
+    out = reprocess_extraction(db, row)
+    db.commit()
+    return out
+
+
 @router.post("/engagements/{slug}/extractions/{extraction_id}/renormalize",
              summary="Recanonizar los cortes de una extracción ya leída")
 def renormalize_extraction(
