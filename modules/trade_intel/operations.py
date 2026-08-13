@@ -9,6 +9,29 @@ from shared.operations import Operation, register_operation
 BACKTEST_KEY = "trade_backtest_report"
 
 
+def _run_partner_chapters_sync(params, user_id, set_phase) -> Dict:
+    """Ingiere socio × capítulo desde Comtrade (anual)."""
+    from modules.trade_intel.partner_chapters_sync import sync_partner_chapters
+
+    años = params.get("years") or [datetime.now(timezone.utc).year - y for y in (1, 2, 3)]
+    db = SessionLocal()
+    try:
+        return sync_partner_chapters(db, sorted(int(a) for a in años), set_phase=set_phase)
+    finally:
+        db.close()
+
+
+def _periodo_chapters(db) -> Optional[str]:
+    """Último año de socio × capítulo ingerido, para que la agenda sepa si va atrasada."""
+    from modules.trade_intel.models.models import TradePartnerChapter
+    try:
+        r = (db.query(TradePartnerChapter.period)
+             .order_by(TradePartnerChapter.period.desc()).first())
+        return r[0] if r else None
+    except Exception:  # noqa: BLE001 — jamás romper la agenda por esta lectura
+        return None
+
+
 def _periodo_cargado(db) -> Optional[str]:
     """El último período de comercio INGERIDO ("2026-Q1"), o None.
 
@@ -106,3 +129,16 @@ def register() -> None:
 
 
 register()
+
+register_operation(
+    Operation(
+        "comtrade-partner-chapters-sync",
+        "Sincronizar comercio bilateral por capítulo (Comtrade)",
+        "Qué bienes importa RD de cada socio, abierto por capítulo HS. Es el cruce que la "
+        "DGA no publica —su Excel no trae país de origen— y que el motor de Research "
+        "declaraba fuera de alcance.",
+        _run_partner_chapters_sync,
+        default_interval_hours=8760, anclaje="anual",
+        periodo_actual=_periodo_chapters,
+    )
+)
