@@ -18,8 +18,16 @@ from modules.banking_score.models.models import Bank, ModelType, RatingResult
 
 # ── Indicator metadata ───────────────────────────────────────────
 # label: human (ES) name · sub: sub-component · unit: raw unit ·
-# direction: how to read the raw value (higher/lower/target/bell) · que: what it measures.
-INDICATOR_META: Dict[str, Dict[str, str]] = {
+# direction: how to read the raw value (higher/lower/target/bell) · que: what it measures ·
+# optimo: for `target` indicators, the peak of the curve as a NUMBER.
+#
+# `optimo` existía solo dentro del texto de `que` ("óptimo ~80%"), que es prosa y no se puede
+# computar. Sin él, la narrativa no puede decir de qué lado del óptimo cayó el valor y el
+# modelo lo deduce del SCORE — que en un indicador de óptimo intermedio es alto a ambos lados.
+# Así salió el LTD de BPD: 92.45% con score 98.62 se narró como «destina proporcionalmente
+# MENOS de cada peso captado» y «preserva margen para atender retiros», la glosa de un LTD
+# BAJO, contradiciendo a la §7 del mismo informe. Espeja las curvas de `engine.py`.
+INDICATOR_META: Dict[str, Dict[str, Any]] = {
     # Solidez
     "solvencia": {"label": "Índice de solvencia", "sub": "solidez", "unit": "%", "direction": "higher",
                   "que": "Patrimonio técnico / activos ponderados por riesgo. Suficiencia de capital."},
@@ -43,8 +51,10 @@ INDICATOR_META: Dict[str, Dict[str, str]] = {
     "castigos_pct": {"label": "Castigos", "sub": "calidad", "unit": "%", "direction": "lower",
                      "que": "Castigos / cartera total. Pérdidas dadas de baja (menor es mejor)."},
     "exposicion_re": {"label": "Exposición inmobiliaria", "sub": "calidad", "unit": "%", "direction": "target",
+                      "optimo": 40.0,
                       "que": "Cartera hipotecaria / cartera total (óptimo ~40%)."},
     "migracion": {"label": "Migración de cartera A", "sub": "calidad", "unit": "%", "direction": "target",
+                  "optimo": 0.0,
                   "que": "Cambio de la cartera categoría A vs el período previo (estabilidad es mejor)."},
     # Eficiencia
     "roa": {"label": "ROA (anualizado)", "sub": "eficiencia", "unit": "%", "direction": "higher",
@@ -61,6 +71,7 @@ INDICATOR_META: Dict[str, Dict[str, str]] = {
     "liquidez_inmediata": {"label": "Liquidez inmediata", "sub": "liquidez", "unit": "%", "direction": "higher",
                            "que": "Caja y valores / pasivos de corto plazo."},
     "ltd": {"label": "Cartera / depósitos (LtD)", "sub": "liquidez", "unit": "%", "direction": "target",
+            "optimo": 80.0,
             "que": "Cartera neta / depósitos (óptimo ~80%)."},
     "liquidez_ajustada": {"label": "Liquidez ajustada", "sub": "liquidez", "unit": "%", "direction": "higher",
                           "que": "Activos líquidos / pasivos exigibles."},

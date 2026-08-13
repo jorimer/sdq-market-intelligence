@@ -13,16 +13,19 @@ from shared.narrative.cerebro import (
     DIRECTION_DISCIPLINE,
     SCOPE_DISCIPLINE,
     EPISTEMIC_STANDARD,
+    INDICATOR_SEMANTICS,
     NO_META_COMMENTARY,
     REGISTER_NEUTRO,
 )
 from shared.narrative.numeric_guard import _parse_unsupported
 
 # El system de la ruta legacy: registro de voz + disciplina epistémica + dirección de las
-# comparaciones + regla de salida final (anti meta-comentario). Ver claude_engine.generate.
+# comparaciones + significado del indicador + regla de salida final (anti meta-comentario).
+# Ver claude_engine.generate. `INDICATOR_SEMANTICS` va en AMBAS rutas a propósito: la lección
+# más cara de este repo es la del guard que vive en un motor y falta en el otro.
 _LEGACY_SYSTEM = (REGISTER_NEUTRO + "\n\n" + EPISTEMIC_STANDARD + "\n\n"
-                  + DIRECTION_DISCIPLINE + "\n\n" + SCOPE_DISCIPLINE
-                  + "\n\n" + NO_META_COMMENTARY)
+                  + DIRECTION_DISCIPLINE + "\n\n" + INDICATOR_SEMANTICS
+                  + "\n\n" + SCOPE_DISCIPLINE + "\n\n" + NO_META_COMMENTARY)
 
 
 class _FakeMsg:
