@@ -60,3 +60,21 @@ def test_un_socio_sin_capitulos_no_emite_linea_vacia():
     p = {"score": _PAYLOAD["score"],
          "socios_por_capitulo": {"Vietnam": {"period": "2025", "capitulos_top": []}}}
     assert "Vietnam" not in _textos(p)
+
+
+def test_declara_cuantos_origenes_no_se_listan():
+    """La ingesta trae los 192 socios; el contexto sirve los de mayor valor. Sin decir
+    cuántos quedan fuera, el informe se lee como si cubriera todo el comercio."""
+    p = {**_PAYLOAD, "socios_por_capitulo": {
+        **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 177}}}
+    t = _textos(p)
+    assert "177 orígenes más" in t
+    assert "China" in t                      # y los listados siguen saliendo
+
+
+def test_el_marcador_de_omitidos_no_se_narra_como_un_socio():
+    """`_omitidos` es metadato: si se colara como socio, el informe hablaría de un país
+    llamado '_omitidos' con cifras inventadas."""
+    p = {**_PAYLOAD, "socios_por_capitulo": {
+        **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 3}}}
+    assert "_omitidos" not in _textos(p)

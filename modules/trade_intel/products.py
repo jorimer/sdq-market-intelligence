@@ -255,12 +255,14 @@ def _partners() -> Optional[Dict[str, Any]]:
 def _pct(share: Optional[float]) -> str:
     return "—" if share is None else f"{share * 100:.1f}%"
 
-def _socios_por_capitulo(max_socios: int = 5, top_capitulos: int = 12) -> Dict[str, Any]:
+def _socios_por_capitulo(max_socios: int = 15, top_capitulos: int = 12) -> Dict[str, Any]:
     """``{socio: {period, total_usd_mm, capitulos:[{capitulo, usd_mm, pct}]}}``.
 
-    Acotado y DECLARADO: se sirven los primeros capítulos de cada socio, no los ~95, porque
-    el contexto del modelo no debe cargar 500 filas para responder una pregunta. `truncado`
-    dice cuántos quedaron fuera — un top-N silencioso se lee como si fuera todo.
+    Acotado y DECLARADO en las DOS dimensiones, porque el contexto del modelo no puede cargar
+    192 socios × 95 capítulos: se sirven los socios de mayor valor y, dentro de cada uno, sus
+    primeros capítulos. `truncado` dice cuántos capítulos quedaron fuera y `socios_omitidos`
+    cuántos socios — un top-N silencioso se lee como si fuera todo. La INGESTA sí trae todos:
+    el recorte es de presentación, no de dato.
     """
     from modules.trade_intel.models.models import TradePartnerChapter
     from modules.trade_intel.partner_chapters_sync import importaciones_por_capitulo
@@ -268,8 +270,13 @@ def _socios_por_capitulo(max_socios: int = 5, top_capitulos: int = 12) -> Dict[s
 
     db = SessionLocal()
     try:
-        socios = [r[0] for r in (db.query(TradePartnerChapter.partner)
-                                 .distinct().limit(max_socios).all())]
+        # Por VALOR, no por orden de inserción: los que pesan son los que deben llegar.
+        from sqlalchemy import func
+        rank = (db.query(TradePartnerChapter.partner,
+                         func.sum(TradePartnerChapter.value).label("v"))
+                .group_by(TradePartnerChapter.partner)
+                .order_by(func.sum(TradePartnerChapter.value).desc()).all())
+        socios = [r[0] for r in rank[:max_socios]]
         out: Dict[str, Any] = {}
         for s in socios:
             d = importaciones_por_capitulo(db, partner=s)
@@ -283,6 +290,8 @@ def _socios_por_capitulo(max_socios: int = 5, top_capitulos: int = 12) -> Dict[s
                 "truncado": max(0, len(caps) - top_capitulos),
                 "fuente": d["fuente"],
             }
+        if out:
+            out["_omitidos"] = {"socios_no_listados": max(0, len(rank) - max_socios)}
         return out
     except Exception:  # noqa: BLE001 — el snapshot nunca se cae por esta lectura
         return {}
