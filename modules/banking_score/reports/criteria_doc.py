@@ -210,11 +210,15 @@ def _escala() -> str:
         "En vigilancia": "Margen estrecho; conviene seguirla",
         "Frágil": "Exposición material",
     }
+    # `BANDAS_RESILIENCIA` ya cierra con el corte 0.0 → "Frágil": el loop emite las cuatro
+    # filas completas. Una línea extra después del loop —que asumía que la lista terminaba
+    # en el corte más bajo NO nulo— publicaba una segunda fila "Frágil | 0 – 0" en el
+    # documento que DEFINE la escala oficial. Una fila de más en esta tabla no es cosmética:
+    # es el documento contra el que el cliente audita todo lo demás.
     previo = 100.0
     for corte, nombre in BANDAS_RESILIENCIA:
         filas_r.append(f"| **{nombre}** | {corte:.0f} – {previo:.0f} | {lectura_r[nombre]} |")
         previo = corte
-    filas_r.append(f"| **Frágil** | 0 – {previo:.0f} | {lectura_r['Frágil']} |")
 
     return (
         "El puntaje se lee en **dos ejes independientes**, no en un símbolo único.\n\n"

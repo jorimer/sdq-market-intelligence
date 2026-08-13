@@ -176,8 +176,11 @@ NO_META_COMMENTARY = (
 # (numeric_guard.deterministic_direction_errors) es la red; la regla nace acá.
 DIRECTION_DISCIPLINE = (
     "DIRECCIÓN DE LAS COMPARACIONES (regla dura): si el contexto trae 'comparaciones', la "
-    "dirección YA ESTÁ RESUELTA ahí — COPIA el campo 'direccion' ('por encima' / 'por debajo' "
-    "/ 'en línea') y la etiqueta de 'referencia'. NO la deduzcas ni la recalcules: no es tu "
+    "dirección YA ESTÁ RESUELTA ahí — cada entrada trae el campo 'lectura' con la cláusula "
+    "COMPLETA ya redactada ('por encima del promedio de bancos múltiples en 7.31 puntos "
+    "porcentuales'): USA ESA CLÁUSULA. No tomes solo la magnitud de 'brecha_pp' y redactes "
+    "la palabra por tu cuenta —es exactamente ahí donde se invierte el sentido: la cifra "
+    "sale bien y la relación sale al revés—. NO la deduzcas ni la recalcules: no es tu "
     "trabajo, es un dato. 'en línea' significa que la brecha no es material: dilo así, no "
     "fuerces un lado. Si una comparación NO está en 'comparaciones', resta los dos valores y "
     "mira el signo antes de escribir. Una comparación con el sentido invertido es un error de "

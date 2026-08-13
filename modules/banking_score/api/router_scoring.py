@@ -790,6 +790,8 @@ async def get_rankings(
         "latest_period_end": str(latest_pe) if latest_pe else None,
         "notacion": {
             "primaria": "Perfil SDQ — Ejecución y Resiliencia, dos ejes independientes.",
+            # notacion-heredada-ok: el literal DECLARA la retirada de la notación; nombrarla
+            # es su función. Sin esto el consumidor de la API no sabe qué pasó con la columna.
             "notacion_retirada": (
                 "La notación de letras (SDQ-AAA…SDQ-D) YA NO SE PUBLICA. Usaba la gramática "
                 "de una calificadora sin serlo, y `SDQ-D` cubría 45 puntos de rango "
