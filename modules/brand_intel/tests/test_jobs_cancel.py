@@ -213,3 +213,67 @@ def test_resuming_revalidates_against_the_pages_already_read():
         "las celdas ya leídas no entran a la validación: se pierde la corroboración")
     assert "f.validation = c.validation" in fuente, (
         "las celdas previas no se actualizan en su fila: se estarían duplicando")
+
+
+# ── ampliar el tope al reanudar ────────────────────────────────────────
+
+
+def _cliente(db):
+    from modules.brand_intel.tests.test_api import _client
+    return _client(db)
+
+
+def test_resuming_a_job_that_hit_its_own_cap_needs_a_wider_one(
+    db, engagement, monkeypatch,
+) -> None:
+    """El caso real: una lectura de 32 de 32 retoma en la 33 y para en la 32 — no leería
+    nada. Ampliar el tope es lo que la vuelve ejecutable, y sin decirlo el usuario pediría
+    una reanudación que no reanuda."""
+    from modules.brand_intel.ingest import jobs as jobs_mod
+
+    despachos: list[str] = []
+    monkeypatch.setattr(jobs_mod, "_dispatch", lambda i: despachos.append(i))
+
+    row = _trabajo(db, engagement, status=jobs.READING, done=32)
+    row.max_pages = 32
+    db.commit()
+
+    r = _cliente(db).post(
+        f"/api/v1/brand-intel/engagements/demo/extractions/{row.id}/resume?max_pages=65")
+    assert r.status_code == 200
+    db.refresh(row)
+    assert int(row.max_pages) == 65
+    assert despachos == [str(row.id)]
+
+
+def test_the_cap_can_only_be_widened(db, engagement, monkeypatch):
+    """Reducirlo se RECHAZA en vez de aceptarse en silencio: dejaría fuera láminas que ya
+    se leyeron y se pagaron."""
+    from modules.brand_intel.ingest import jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "_dispatch", lambda i: None)
+    row = _trabajo(db, engagement, done=32)
+    row.max_pages = 32
+    db.commit()
+
+    r = _cliente(db).post(
+        f"/api/v1/brand-intel/engagements/demo/extractions/{row.id}/resume?max_pages=10")
+    assert r.status_code == 400
+    assert "solo puede ampliarse" in r.json()["detail"]
+    db.refresh(row)
+    assert int(row.max_pages) == 32          # sin tocar
+
+
+def test_resume_without_a_cap_keeps_the_one_it_had(db, engagement, monkeypatch):
+    from modules.brand_intel.ingest import jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "_dispatch", lambda i: None)
+    row = _trabajo(db, engagement, done=10)
+    row.max_pages = 32
+    db.commit()
+
+    assert _cliente(db).post(
+        f"/api/v1/brand-intel/engagements/demo/extractions/{row.id}/resume"
+    ).status_code == 200
+    db.refresh(row)
+    assert int(row.max_pages) == 32
