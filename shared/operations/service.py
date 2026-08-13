@@ -20,7 +20,7 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, cast, Any
 
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -65,12 +65,23 @@ def _spawn(target: Callable[[], None]) -> None:
 class Operation:
     def __init__(self, name: str, label: str, description: str, runner: Callable,
                  default_interval_hours: int, needs_params: Optional[List[str]] = None,
-                 triggers: Optional[List[str]] = None):
+                 triggers: Optional[List[str]] = None, anclaje: Optional[str] = None,
+                 periodo_actual: Optional[Callable] = None):
         self.name = name
         self.label = label
         self.description = description
         self.runner = runner
         self.default_interval_hours = default_interval_hours
+        # Cadencia anclada al CALENDARIO de la fuente ("trimestral"/"anual") en vez de al
+        # reloj. Un intervalo relativo se desfasa solo: `dga-trade-sync` corrió tres días
+        # antes de que cerrara 2026-Q2 y su próxima quedó en septiembre, así que el sistema
+        # sirvió Q1 en informes de agosto. Ver `shared.operations.calendario`.
+        self.anclaje = anclaje
+        # Qué período tenemos INGERIDO (``fn(db) -> "2026-Q1"``). Con esto el scheduler
+        # distingue "estamos al día" de "nos falta un período y hay que reintentar pronto".
+        # Sin esta pieza el ancla igual corrige el desfase, pero si una corrida no encuentra
+        # el dato hay que esperar al período siguiente — que es como se perdió 2026-Q2.
+        self.periodo_actual = periodo_actual
         self.needs_params = needs_params or []
         # Operaciones a DISPARAR cuando esta termina con éxito (cascada por dependencia):
         # el dato nuevo fluye solo aguas abajo (re-score → re-valida) sin intervención
@@ -349,7 +360,11 @@ def set_schedule(db: Session, op_name: str, enabled: bool,
             r.interval_hours = max(1, int(interval_hours))
         if params is not None:
             r.params = params
-        r.next_run_at = (_dt() + timedelta(hours=r.interval_hours)) if r.enabled else None
+        from shared.operations.calendario import proximo_disparo
+        # cast: SQLAlchemy tipa las columnas como Column[...]; los valores son int/datetime.
+        r.next_run_at = cast(Any, proximo_disparo(
+            getattr(OPERATIONS.get(op_name), "anclaje", None), _dt(),
+            int(cast(Any, r.interval_hours))) if r.enabled else None)
         db.commit()
         return get_schedules(db)[op_name]
     except Exception:  # noqa: BLE001 — rastro para diagnóstico + sesión limpia; el error
@@ -465,11 +480,22 @@ def run_due_schedules(db: Optional[Session] = None) -> int:
             op_name = sched.operation
             interval = sched.interval_hours
             params = sched.params or {}
+            from shared.operations.calendario import proximo_disparo
+            _op = OPERATIONS.get(str(op_name))
+            visto = None
+            _leer = getattr(_op, "periodo_actual", None)
+            if callable(_leer):
+                try:
+                    visto = _leer(db)
+                except Exception:  # noqa: BLE001 — la agenda nunca depende de esta lectura
+                    visto = None
+            proximo = proximo_disparo(getattr(_op, "anclaje", None), now,
+                                      int(cast(Any, interval)), visto)
             claimed = db.execute(
                 update(OperationSchedule)
                 .where(OperationSchedule.operation == op_name)
                 .where(OperationSchedule.next_run_at <= now)
-                .values(next_run_at=now + timedelta(hours=interval), last_run_at=now)
+                .values(next_run_at=proximo, last_run_at=now)
             ).rowcount
             db.commit()
             if claimed != 1:

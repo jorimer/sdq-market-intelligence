@@ -270,3 +270,44 @@ def build_panel_dataset(peers: Dict[str, Dict[str, str]], years: List[int],
         "trade": trade,
         "wdi": wdi,
     }
+
+
+def fetch_partner_chapters(m49: str, partner_m49: str, years: List[int],
+                           flow: str = "M",
+                           progress=None) -> Dict[str, Dict[str, float]]:
+    """Comercio bilateral ABIERTO POR CAPÍTULO HS: ``{year: {chapter: usd_millions}}``.
+
+    **El cruce que faltaba.** El sistema tenía dos mitades que nunca se pedían juntas:
+    producto × mundo (``cmdCode=AG2``, ``partnerCode=0``) y socio × total
+    (``cmdCode=TOTAL``, sin ``partnerCode``). La intersección —qué bienes vienen de QUÉ
+    socio— quedaba fuera, y el motor de research la declaraba como límite del sistema
+    cuando era un límite de la consulta: la misma API la responde en una llamada.
+
+    El Excel de la DGA no puede suplirlo: publica capítulo × valor SIN país de origen (por
+    eso el socio se resolvió vía Comtrade desde el principio). Así que esta es la única vía
+    para la pregunta "¿qué le compramos a China, desglosado?".
+
+    Verificado 2026-08-13: RD←China devuelve 93-94 capítulos por año y el total reconcilia
+    con la cifra bilateral que el sistema ya publicaba (USD 5.153 MM en 2023).
+    """
+    out: Dict[str, Dict[str, float]] = {}
+    for year in years:
+        if progress:
+            progress(f"{partner_m49}×capítulos {year}")
+        rows = _comtrade_get({
+            "reporterCode": m49, "period": str(year), "partnerCode": partner_m49,
+            "partner2Code": "0", "motCode": "0", "customsCode": "C00",
+            "flowCode": flow, "cmdCode": "AG2",
+        })
+        by_chapter: Dict[str, float] = {}
+        for r in rows:
+            code, val = r.get("cmdCode"), r.get("primaryValue")
+            # Solo capítulos de 2 dígitos: la respuesta puede traer agregados (TOTAL, AG…)
+            # que sumarían dos veces si se dejaran entrar.
+            if val is None or not (isinstance(code, str) and code.isdigit() and len(code) == 2):
+                continue
+            by_chapter[code] = by_chapter.get(code, 0.0) + float(val) / _USD_TO_MILLIONS
+        if by_chapter:
+            out[str(year)] = {c: round(v, 4) for c, v in sorted(by_chapter.items())}
+        time.sleep(1.0)
+    return out

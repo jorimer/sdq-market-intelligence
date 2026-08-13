@@ -1,12 +1,27 @@
 """Trade-intel console operations — DGA customs trade sync + Gate-E backtest."""
 import json
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, Optional
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
 
 BACKTEST_KEY = "trade_backtest_report"
+
+
+def _periodo_cargado(db) -> Optional[str]:
+    """El último período de comercio INGERIDO ("2026-Q1"), o None.
+
+    Es lo que permite al scheduler saber que vamos atrasados: si la DGA ya publicó 2026-Q2 y
+    acá sigue diciendo 2026-Q1, la próxima corrida se agenda en días y no en el trimestre
+    siguiente.
+    """
+    from modules.trade_intel.models.models import TradeScore
+    try:
+        r = db.query(TradeScore).order_by(TradeScore.period.desc()).first()
+        return r.period if r else None
+    except Exception:  # noqa: BLE001 — jamás romper la agenda por esta lectura
+        return None
 
 
 def _run_dga_trade_sync(params, user_id, set_phase) -> Dict:
@@ -67,7 +82,8 @@ def register() -> None:
         "la DGA (Data Cruda, exportaciones + importaciones, trimestral) y persiste un "
         "snapshot de resiliencia comercial por trimestre. Dato público real. Usa "
         "{\"only_latest\": true} para refrescar solo el último trimestre.",
-        _run_dga_trade_sync, default_interval_hours=2160,  # trimestral → cadencia larga
+        _run_dga_trade_sync, default_interval_hours=2160, anclaje="trimestral",
+        periodo_actual=_periodo_cargado,  # trimestral → cadencia larga
     ))
     register_operation(Operation(
         "dga-partners-sync", "Sincronizar comercio por país socio (Aduanas/DGA)",
@@ -75,7 +91,8 @@ def register() -> None:
         "FOB USD, trimestral) desde el Power BI de la DGA y persiste el top de socios "
         "por flujo y trimestre. Complementa el corte por capítulo arancelario con la "
         "dimensión geográfica. Dato público real; idempotente por país×flujo×trimestre.",
-        _run_dga_partners_sync, default_interval_hours=2160,  # trimestral → cadencia larga
+        _run_dga_partners_sync, default_interval_hours=2160, anclaje="trimestral",
+        periodo_actual=_periodo_cargado,  # trimestral → cadencia larga
     ))
     register_operation(Operation(
         "trade-backtest", "Backtest de resiliencia comercial (validación)",
