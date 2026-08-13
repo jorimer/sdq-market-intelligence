@@ -583,7 +583,8 @@ export async function checkDecision(
 export interface ExtractionJob {
   extraction_id: string;
   document: string;
-  status: "queued" | "reading" | "validated" | "rejected" | "confirmed" | "error";
+  status: "queued" | "reading" | "validated" | "rejected" | "confirmed" | "error"
+        | "cancelled";
   running: boolean;
   pages_done: number;
   pages_total: number;
@@ -667,12 +668,37 @@ export async function getExtractionStatus(
   return data;
 }
 
-/** Vuelve a despachar un trabajo interrumpido. No repaga las láminas ya leídas. */
+/**
+ * Vuelve a despachar un trabajo interrumpido, RETOMANDO en la lámina siguiente a la última
+ * leída. Las anteriores no se vuelven a pagar y sus celdas no se duplican.
+ */
 export async function resumeExtraction(
   slug: string, extractionId: string,
 ): Promise<ExtractionJob> {
   const { data } = await client.post(
     `${base}/engagements/${slug}/extractions/${extractionId}/resume`);
+  return data;
+}
+
+export interface CancelResult {
+  extraction_id: string;
+  status: "cancelled";
+  nota: string;
+  laminas_leidas: number;
+}
+
+/**
+ * Detiene la lectura en el siguiente corte de lámina.
+ *
+ * NO corta al instante: una llamada de visión en vuelo no se puede abortar, así que la
+ * lámina en curso termina. Lo que se acota es el desperdicio —una lámina en vez de las que
+ * falten—. Lo leído se conserva y el mazo se puede reanudar: cancelar no es descartar.
+ */
+export async function cancelExtraction(
+  slug: string, extractionId: string,
+): Promise<CancelResult> {
+  const { data } = await client.post(
+    `${base}/engagements/${slug}/extractions/${extractionId}/cancel`);
   return data;
 }
 

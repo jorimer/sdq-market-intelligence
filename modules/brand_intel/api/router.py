@@ -646,6 +646,49 @@ class CellDecision(BaseModel):
     included: bool
 
 
+@router.post("/engagements/{slug}/extractions/{extraction_id}/cancel",
+             summary="Detener una lectura en curso")
+def cancel_extraction(
+    slug: str, extraction_id: str, db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.analyst)),
+) -> Dict[str, Any]:
+    """Detiene la lectura en el siguiente corte de lámina.
+
+    NO corta al instante y el mensaje lo dice: una llamada de visión en vuelo no se puede
+    abortar, así que la lámina en curso termina y el trabajo para ahí. Lo que se acota es el
+    desperdicio —una lámina en vez de las que falten—, que es la diferencia entre poder
+    frenar un error de criterio y pagarlo completo.
+
+    Lo leído se CONSERVA: las celdas quedan en revisión y el PDF sigue guardado, así que el
+    trabajo se puede reanudar. Cancelar no es descartar.
+    """
+    from modules.brand_intel.ingest.jobs import CANCELLED, QUEUED, READING
+
+    eng = _resolve(db, slug, user)
+    row = (db.query(BrandExtraction)
+           .filter(BrandExtraction.id == extraction_id,
+                   BrandExtraction.engagement_id == eng.id).first())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Extracción no encontrada.")
+    if str(row.status) not in (QUEUED, READING):
+        # Un trabajo terminado no se «cancela»: decirlo evita que alguien crea que
+        # deshizo algo. 409 y no 400 — la petición es válida, el estado no la admite.
+        raise HTTPException(
+            status_code=409,
+            detail=f"La lectura ya terminó (estado «{row.status}»): no hay nada que "
+                   "detener. Lo leído sigue en revisión.")
+    row.status = CANCELLED                                 # type: ignore[assignment]
+    db.commit()
+    logger.info("Cancelación pedida para la extracción %s por %s",
+                extraction_id, getattr(user, "email", "?"))
+    return {
+        "extraction_id": str(row.id), "status": CANCELLED,
+        "nota": ("La lámina en curso termina y la lectura para ahí. Lo leído queda en "
+                 "revisión y el mazo se puede reanudar."),
+        "laminas_leidas": int(row.pages_done or 0),
+    }
+
+
 @router.post("/engagements/{slug}/extractions/{extraction_id}/renormalize",
              summary="Recanonizar los cortes de una extracción ya leída")
 def renormalize_extraction(

@@ -191,6 +191,15 @@ ciudad, un nivel socioeconómico, un rango de edad). En ese caso usa la etiqueta
 del subgrupo."""
 
 
+#: Tiempo máximo de UNA lámina, y el motivo de que exista. Sin timeout explícito, el SDK
+#: usa su propio límite generoso Y reintenta: una lámina lenta puede tardar media hora sin
+#: que nada lo registre. Pasó en producción —la 63 de un mazo de 65 estuvo más de una hora—
+#: y un cuelgue así es indistinguible de una lectura lenta, así que la única conducta posible
+#: era esperar. Con el límite puesto, la lámina falla, el `except` por página la anota y el
+#: mazo sigue: una lámina perdida y declarada vale más que un trabajo detenido en silencio.
+PAGE_TIMEOUT_S = 180.0
+
+
 def extract_page(
     image_png: bytes,
     page_number: int,
@@ -224,6 +233,7 @@ def extract_page(
     response = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
+        timeout=PAGE_TIMEOUT_S,
         system=_system_prompt(brands, waves),
         output_config={
             "format": {"type": "json_schema", "schema": EXTRACTION_SCHEMA},
