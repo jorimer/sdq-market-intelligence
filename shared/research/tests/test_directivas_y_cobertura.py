@@ -75,3 +75,31 @@ class TestLineaDeCobertura:
             import re
             nums = [int(x) for x in re.findall(r"(\d+)%", linea)]
             assert sum(nums[-2:]) == 100 or nums[-1] == round((1 - anc) * 100)
+
+
+class TestPortada:
+    """La portada del PDF tenía el MISMO defecto que la línea de limitaciones: "67% dato real ·
+    67% con ancla" son anidados y se leen como aditivos. Tercera superficie con la misma
+    ambigüedad — arreglar una no arregla las otras."""
+
+    def _headline(self, real, anc):
+        from types import SimpleNamespace
+        import shared.research.deliverable as d
+        import inspect
+        # Se evalúa la expresión real del módulo con una respuesta simulada.
+        ans = SimpleNamespace(coverage_real=real, anchored_fraction=anc)
+        src = inspect.getsource(d)
+        ini = src.index("_rub = answer.anchored_fraction")
+        fin = src.index("\n", src.index('rúbrica)"', ini))
+        ns = {"answer": ans}
+        exec(src[ini:fin].replace("        ", "").replace("headline = (", "headline = ("), ns)
+        return ns["headline"]
+
+    def test_no_repite_dos_porcentajes_sueltos(self):
+        h = self._headline(0.67, 0.67)
+        assert "67% dato real · 67% con ancla" not in h
+        assert "todo dato real" in h
+
+    def test_desglosa_solo_cuando_hay_rubrica(self):
+        h = self._headline(0.40, 0.60)
+        assert "40% dato real" in h and "20% rúbrica" in h
