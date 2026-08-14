@@ -291,7 +291,20 @@ def _socios_por_capitulo(max_socios: int = 15, top_capitulos: int = 12) -> Dict[
                 "fuente": d["fuente"],
             }
         if out:
-            out["_omitidos"] = {"socios_no_listados": max(0, len(rank) - max_socios)}
+            # RECONCILIACIÓN EXPLÍCITA con el bloque `partners`, que publica
+            # `import.n_partners` (193). Sin esto el modelo ve 193 allá y 12 acá, hace la
+            # resta y publica "181 socios no tienen desglose por capítulo" — que es falso y
+            # además le resta confianza al dato. No es que ignore una frase: es que el payload
+            # se contradecía y resolvió la contradicción con aritmética. Los tres conteos van
+            # SERVIDOS para que no haya nada que derivar.
+            out["_cobertura"] = {
+                "socios_con_desglose_computado": len(rank),
+                "socios_listados_en_este_payload": len(socios),
+                "nota": ("`partners.import.n_partners` cuenta el panel de socios con flujo; "
+                         "este bloque cubre TODOS los que tienen desglose computado. La "
+                         "diferencia entre ambos conteos NO es una brecha de dato: los que no "
+                         "aparecen listados acá están en el sistema y se consultan por socio."),
+            }
         return out
     except Exception:  # noqa: BLE001 — el snapshot nunca se cae por esta lectura
         return {}
