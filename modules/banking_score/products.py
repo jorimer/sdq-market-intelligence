@@ -49,7 +49,12 @@ SECTOR_KEY = "banking"
 # huella de la caché y el test estructural del sujeto. Banca no tiene `ai_context.py`: sus
 # secciones nombradas se arman en `reports/narrative.py` y el Pulse acá mismo. Sin declararlo,
 # un arreglo de contexto de banca no invalidaba sus narrativas cacheadas ni pasaba por la regla.
-AI_CONTEXT_FILES = ("reports/narrative.py", "products.py")
+# `early_warning.py` entra aunque su sección sea DETERMINISTA (no pasa por el motor IA): el
+# texto que produce igual se guarda en `ProductReportCache`, que vive en Postgres y no tiene
+# TTL. Sin declararlo acá, arreglar el índice del conjunto dejaba los informes ya emitidos
+# sirviendo el "0.0/100 (banda baja)" viejo para siempre — el arreglo pasaba los tests y no
+# llegaba a ningún PDF. La huella es POR SECTOR: esto solo invalida narrativas de banca.
+AI_CONTEXT_FILES = ("reports/narrative.py", "products.py", "early_warning.py")
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
 
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del

@@ -35,7 +35,11 @@ _SUJETOS = ("ramo", "ramos", "compania", "companias", "empresa", "empresas", "en
             "provincia", "province", "typology", "tipologia", "export", "chapter", "sector",
             "origin", "origen", "region", "generation", "generacion",
             "producto", "product", "geography", "personas", "danos", "salud",
-            "sin_clasificar", "broadband", "sqm", "metric", "market", "mercado")
+            "sin_clasificar", "broadband", "sqm", "metric", "market", "mercado",
+            # La concentración de cartera se computa sobre DEUDORES — la población que la
+            # regla no conocía y que es justo la que el modelo reatribuía: publicó la
+            # concentración de los diez mayores deudores como si fuera de entidades.
+            "deudor", "deudores")
 
 _EXENCION = "sujeto-ok:"
 

@@ -32,7 +32,7 @@ SOLV_WARN = 12.0           # solvencia % — cerca del piso regulatorio de 10%
 SOLV_HIGH = 10.5
 LIQ_FLOOR = 15.0           # (activos_líquidos/pasivos_exigibles)×100
 DEPOSIT_DROP = -0.10       # caída trimestral de depósitos ≥ 10% (proxy de corrida)
-CONCENTRATION = 30.0       # top-10 / cartera bruta %  (proxy de vinculados)
+CONCENTRATION = 30.0       # top-10 / cartera total %  (proxy de vinculados)
 
 # ── Calibración del CONJUNTO ponderado ─────────────────────────────────────────
 # ⚠ PROCEDENCIA EN REVISIÓN — estos siete pesos NO tienen artefacto que los respalde.
@@ -67,6 +67,27 @@ ALERT_WEIGHTS: Dict[str, float] = {
     # concentracion / fondeo_caro: contexto de monitoreo; sin peso predictivo confiable en el
     # histórico contable (top-10 y fondeo YTD no son reconstruibles pre-2004).
 }
+
+# La prosa que se PUBLICA vive en constantes, no incrustada en un f-string: un literal
+# partido por ancho de línea deja de existir en el fuente aunque el valor salga bien, y un
+# test que lo busque ahí falla sin motivo (o pasa sin protegerte).
+ENSEMBLE_NO_PONDERABLE_REASON = (
+    "señales activas sin peso calibrado en el histórico SIB"
+)
+ENSEMBLE_NO_PONDERABLE_TEXTO = (
+    "Índice de presión de deterioro del conjunto: **no puntuable**. Las señales activas de "
+    "esta entidad son de contexto de monitoreo y no tienen peso calibrado: la concentración "
+    "top-10 y el costo de fondeo no son reconstruibles del histórico contable, así que no "
+    "entran al conjunto ponderado. **La bandera sigue vigente** — lo que no se puede es "
+    "ponderarla dentro del índice. No es una lectura de presión baja: es la ausencia de una "
+    "medición.\n\nPor qué la concentración no pesa: el índice se "
+    "calibró contra entidades que salieron del sistema, y la concentración en los diez "
+    "mayores deudores no existe en el registro contable de esa época — es una divulgación de "
+    "supervisión, no una línea del balance. Ponderarla exige medirla contra un desenlace "
+    "distinto —si anticipa el deterioro de la cartera en la ventana donde el dato sí "
+    "existe—, y mientras esa medición no respalde un peso, la señal se publica sin él antes "
+    "que con uno inventado."
+)
 
 # Umbral de morosidad RELATIVO al tipo de entidad: lo "normal" difiere por modelo de negocio
 # (una corporación de crédito opera con mora de dos dígitos; un banco múltiple no). Un umbral
@@ -206,9 +227,19 @@ def rule_concentration(concentration_pct: Optional[float],
              "es la CALIDAD de esa cartera dirigida, no un patrón de préstamos vinculados"
              if is_state_owned else
              "Los préstamos vinculados fueron el mecanismo central del fraude (proxy visible)")
-    return Alert("concentracion", "Concentración elevada (top-10)", "media",
+    # Escalón de severidad: era la ÚNICA de las nueve reglas sin tramo "alta", así que un
+    # 50.9% —un 70% por encima del umbral— pesaba igual que un 30.1%. Y como esta bandera no
+    # tiene peso en el conjunto, la severidad es su único canal de ordenamiento: sin escalón,
+    # una concentración extrema queda indistinguible de una apenas sobre el umbral. Se usa
+    # 2× el umbral, el mismo idioma que `rule_morosidad_nivel` (2× el piso de su tipo).
+    sev = "alta" if concentration_pct >= 2 * CONCENTRATION else "media"
+    return Alert("concentracion", "Concentración elevada (top-10)", sev,
                  round(concentration_pct, 1), CONCENTRATION, basis,
-                 "top-10 / cartera bruta %")
+                 # El denominador es `cartera_total` (ver `concentracion_top10_pct`). La glosa
+                 # decía "cartera bruta": es la etiqueta VIEJA, sobreviviente del fix que
+                 # unificó el cálculo. El informe publicaba un denominador que no era el que
+                 # se dividía — la misma familia que el sujeto que viaja con el número.
+                 "top-10 / cartera total %")
 
 
 def rule_morosidad_nivel(mora_pct: Optional[float],
@@ -251,10 +282,26 @@ def rule_capital_erosion(capital_now: Optional[float],
 def ensemble_score(alerts: List[Alert]) -> Dict:
     """Puntaje del CONJUNTO ponderado (0..100): la alerta temprana como suma de señales con
     sus pesos calibrados, no como banderas sueltas. Una 'alta' cuenta 1.5× su peso base.
-    Devuelve el score, su banda y las señales que contribuyen ordenadas por peso."""
+
+    Distingue DOS situaciones que antes colapsaban en el mismo 0.0, y no son lo mismo:
+
+      • no se encendió ninguna señal → presión cero. Es un cero VERDADERO.
+      • se encendieron señales pero NINGUNA tiene peso calibrado → el conjunto no es
+        puntuable. Eso es una BRECHA, y devuelve ``score``/``band`` en None.
+
+    El segundo caso no es de borde: `concentracion` y `fondeo_caro` no tienen peso (no son
+    reconstruibles del histórico contable) y una entidad cuya única bandera sea la
+    concentración cae exactamente ahí. Publicarlo como "0.0/100 (banda baja)" ponía un
+    all-clear encima de una bandera activa —y el mismo informe la llamaba, tres renglones
+    más abajo, vulnerabilidad estructural—. Un dato ausente es None, jamás 0.0.
+    """
     max_possible = sum(ALERT_WEIGHTS.values()) * 1.5
     weighted = sum(ALERT_WEIGHTS.get(a.code, 0.0) * (1.5 if a.severity == "alta" else 1.0)
                    for a in alerts)
+    ponderables = [a for a in alerts if a.code in ALERT_WEIGHTS]
+    if alerts and not ponderables:
+        return {"score": None, "band": None, "contributors": [],
+                "scorable": False, "reason": ENSEMBLE_NO_PONDERABLE_REASON}
     score = round(min(100.0, weighted / max_possible * 100.0), 1) if max_possible else 0.0
     band = "alta" if score >= 55 else "media" if score >= 25 else "baja"
     # Ordena los Alert (tipados) por su peso calibrado antes de proyectarlos al dict de salida
@@ -263,7 +310,8 @@ def ensemble_score(alerts: List[Alert]) -> Dict:
                     key=lambda a: (-ALERT_WEIGHTS[a.code], a.code))
     contributors = [{"code": a.code, "label": a.label, "weight": ALERT_WEIGHTS[a.code],
                      "severity": a.severity} for a in ranked]
-    return {"score": score, "band": band, "contributors": contributors}
+    return {"score": score, "band": band, "contributors": contributors, "scorable": True,
+            "reason": None}
 
 
 def classify_profile(m: Dict, alerts: List[Alert]) -> Optional[str]:
@@ -296,7 +344,7 @@ def evaluate(m: Dict, peers: Dict) -> List[Alert]:
         rule_capital_erosion(m.get("capital_now"), m.get("capital_prior")),
         rule_solvency(m.get("solvencia_pct")),
         rule_liquidity(m.get("liq_ratio"), m.get("deposit_qoq")),
-        rule_concentration(m.get("concentration_pct"), m.get("is_state_owned", False)),
+        rule_concentration(m.get("concentracion_top10_deudores_pct"), m.get("is_state_owned", False)),
     ]
     order = {"alta": 0, "media": 1}
     return sorted((a for a in candidates if a is not None), key=lambda a: order.get(a.severity, 9))
@@ -335,7 +383,7 @@ def _bank_metrics(rows_by_period: Dict[date, "object"], period: date) -> Dict:
         # `cartera_bruta` mientras el indicador usaba `cartera_total`: el MISMO informe
         # mostraba 50,90% en Calidad de Activos y 51,5% en Alerta Temprana para el mismo
         # corte. No eran dos criterios: era el mismo cálculo escrito dos veces.
-        "concentration_pct": (concentracion_top10_pct(cur) if cur is not None else None),
+        "concentracion_top10_deudores_pct": (concentracion_top10_pct(cur) if cur is not None else None),
     }
 
 
@@ -395,9 +443,18 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
             "alerts": [asdict(a) for a in alerts],
         })
     # Orden por presión del conjunto (score), luego severidad — el conjunto ponderado manda.
-    banks.sort(key=lambda b: (-float(b["score"]), b["max_severity"] != "alta", b["name"]))
+    # Las entidades NO puntuables van en un tramo aparte, ordenadas por severidad, y no
+    # mapeadas a 0: tratarlas como score 0 las hundiría por debajo de cualquier entidad con
+    # presión mínima, que es el mismo defecto del cero fabricado mudado al ranking (una
+    # concentración del 50.9% quedaría debajo de un score 5).
+    puntuables = [b for b in banks if b["score"] is not None]
+    sin_puntuar = [b for b in banks if b["score"] is None]
+    puntuables.sort(key=lambda b: (-float(b["score"]), b["max_severity"] != "alta", b["name"]))
+    sin_puntuar.sort(key=lambda b: (b["max_severity"] != "alta", b["name"]))
+    banks = puntuables + sin_puntuar
     return {"period": target.isoformat(), "banks": banks, "summary": summary,
-            "profiles": profiles, "n_alerts": sum(len(b["alerts"]) for b in banks)}
+            "profiles": profiles, "n_alerts": sum(len(b["alerts"]) for b in banks),
+            "n_no_puntuables": len(sin_puntuar)}
 
 
 def bank_alerts(db: Session, bank_id: str, period: Optional[date] = None) -> Dict:
@@ -442,6 +499,10 @@ def format_alerts_text(block: Optional[Dict]) -> str:
         if etiqueta:
             cab += f" — perfil: {etiqueta}"
         lines = [cab + ".", ""] + lines
+    else:
+        # Sin score no se imprime un cero: se declara la brecha. Con banderas activas, un
+        # "0.0/100 (banda baja)" se lee como all-clear justo encima de la bandera.
+        lines = [ENSEMBLE_NO_PONDERABLE_TEXTO, ""] + lines
     for a in alerts:
         lines.append(f"- **{a['label']}** ({a['severity']}) — {a['metric']}: {a['value']} "
                      f"(umbral {a['threshold']}). {a['basis']}.")

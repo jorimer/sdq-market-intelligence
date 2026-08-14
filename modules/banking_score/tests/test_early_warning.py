@@ -116,9 +116,59 @@ def test_ensemble_score_pondera_y_ordena():
     assert 0 < res["score"] <= 100
     # morosidad_nivel (0.38) domina sobre estres_liquidez (0.02)
     assert res["contributors"][0]["code"] == "morosidad_nivel"
-    # una alerta sin peso en el conjunto no aparece como contribuidor
+
+
+def test_sin_señales_encendidas_el_cero_es_verdadero():
+    """Ninguna bandera activa ⇒ presión cero. Acá el 0.0 SÍ es una medición."""
+    vacio = ensemble_score([])
+    assert vacio["score"] == 0.0 and vacio["band"] == "baja"
+    assert vacio["contributors"] == [] and vacio["scorable"] is True
+
+
+def test_solo_señales_sin_peso_NO_es_cero_es_no_puntuable():
+    """El cero fabricado. Una entidad cuya única bandera activa no tiene peso calibrado
+    —concentración top-10, que no es reconstruible del histórico contable— NO tiene presión
+    cero: no tiene medición. Publicarlo como '0.0/100 (banda baja)' ponía un all-clear encima
+    de una bandera activa, y el mismo informe la llamaba tres renglones abajo vulnerabilidad
+    estructural. Un dato ausente es None, jamás 0.0."""
     solo_contexto = ensemble_score([Alert("concentracion", "x", "media", 40.0, 30.0, "", "%")])
-    assert solo_contexto["contributors"] == [] and solo_contexto["score"] == 0.0
+    assert solo_contexto["score"] is None, "no puntuable no es cero"
+    assert solo_contexto["band"] is None
+    assert solo_contexto["contributors"] == []
+    assert solo_contexto["scorable"] is False
+    assert solo_contexto["reason"]
+
+
+def test_el_texto_declara_la_brecha_y_no_imprime_indice():
+    """La superficie que lee el comité: sin score, el bloque declara el motivo y afirma que
+    la bandera sigue vigente — nunca un número."""
+    from dataclasses import asdict
+
+    from modules.banking_score.early_warning import format_alerts_text
+    alerta = Alert("concentracion", "Concentración elevada (top-10)", "media", 50.9, 30.0,
+                   "base", "top-10 / cartera total %")
+    txt = format_alerts_text({"alerts": [asdict(alerta)], "score": None, "band": None,
+                              "perfil": None})
+    assert "no puntuable" in txt
+    assert "0.0/100" not in txt and "banda baja" not in txt
+    assert "sigue vigente" in txt, "debe decir que la bandera no se cae, solo no se pondera"
+    assert "50.9" in txt, "la bandera y su cifra se siguen publicando"
+
+
+def test_concentracion_extrema_escala_a_alta():
+    """Era la única de las nueve reglas sin tramo 'alta': un 50.9% pesaba igual que un 30.1%.
+    Como esta bandera no tiene peso en el conjunto, la severidad es su único ordenamiento."""
+    from modules.banking_score.early_warning import CONCENTRATION, rule_concentration
+    assert rule_concentration(CONCENTRATION + 0.1).severity == "media"
+    assert rule_concentration(2 * CONCENTRATION + 0.1).severity == "alta"
+
+
+def test_la_glosa_nombra_el_denominador_que_realmente_se_divide():
+    """`concentracion_top10_pct` divide por `cartera_total`; la glosa decía 'cartera bruta'
+    —la etiqueta vieja, sobreviviente del fix que unificó el cálculo—. El informe publicaba
+    un denominador que no era el que se dividía."""
+    from modules.banking_score.early_warning import rule_concentration
+    assert rule_concentration(50.9).metric == "top-10 / cartera total %"
 
 
 def test_classify_profile_agudo_vs_cronico():
@@ -147,7 +197,7 @@ def test_format_incluye_indice_y_perfil():
 
 
 def test_evaluate_ordena_alta_primero():
-    m = {"solvencia_pct": 10.2, "cobertura_pct": 80, "concentration_pct": 40}
+    m = {"solvencia_pct": 10.2, "cobertura_pct": 80, "concentracion_top10_deudores_pct": 40}
     peers = {"growth_p90": None, "funding_p90": None}
     alerts = evaluate(m, peers)
     codes = [a.code for a in alerts]
