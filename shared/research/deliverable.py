@@ -76,8 +76,15 @@ def render_deliverable(answer: ResearchAnswer, *, fmt: str = "pdf",
     if deep is not None and getattr(deep, "headline", ""):
         headline = f"{deep.entity_label} · {deep.headline}"
     else:
-        headline = (f"{answer.coverage_real:.0%} dato real · "
-                    f"{answer.anchored_fraction:.0%} con ancla")
+        # ANIDADOS, no aditivos: el de dato real está DENTRO del anclado. "67% dato real ·
+        # 67% con ancla" se lee como 67+67 y deja al lector buscando el resto. Se muestra el
+        # total anclado y su composición sólo cuando hay rúbrica; si coinciden, se dice que
+        # todo es dato real, que es la lectura fuerte y la que se estaba perdiendo.
+        _rub = answer.anchored_fraction - answer.coverage_real
+        headline = (f"{answer.anchored_fraction:.0%} con ancla · todo dato real"
+                    if _rub < 0.005 else
+                    f"{answer.anchored_fraction:.0%} con ancla "
+                    f"({answer.coverage_real:.0%} dato real + {_rub:.0%} rúbrica)")
     period = ((deep.period if deep is not None and getattr(deep, "period", None) else None)
               or (answer.generated_at[:10] if answer.generated_at
                   else datetime.now(timezone.utc).strftime("%Y-%m-%d")))
