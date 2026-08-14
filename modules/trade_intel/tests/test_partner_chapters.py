@@ -298,3 +298,47 @@ def test_la_lectura_por_nombre_devuelve_el_pais_COMPLETO(db, monkeypatch):
     sync_partner_chapters(db, [2025], socios={"842": "USA"}, forzar=True)
     r = importaciones_por_capitulo(db, "USA")
     assert r["n_capitulos"] == 2 and r["total_usd_mm"] == 30.0
+
+
+class TestEtiquetaAutoReparable:
+    """Tras deduplicar por código quedaron etiquetas mezcladas en prod —"Estados Unidos" y
+    "España" junto a "Brazil" e "Italy"—. Esperar a la ingesta anual las habría dejado así
+    hasta 2027, y consultar por el nombre equivocado devuelve cero."""
+
+    def _fake(self, monkeypatch):
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                            lambda *a, **k: {"2025": {"85": 10.0}})
+
+    def test_la_etiqueta_se_alinea_AUNQUE_se_salte_el_socio(self, db, monkeypatch):
+        self._fake(monkeypatch)
+        sync_partner_chapters(db, [2025], socios={"842": "Estados Unidos"})
+        r = sync_partner_chapters(db, [2025], socios={"842": "USA"})   # sin forzar → salta
+        assert r["socios_saltados"] == 1, "debía saltar: el dato ya estaba"
+        assert r["etiquetas_alineadas"] == 1
+        assert db.query(TradePartnerChapter).first().partner == "USA"
+
+    def test_saltar_no_re_ingiere_nada(self, db, monkeypatch):
+        """Alinear el nombre no puede costar una re-ingesta: es un UPDATE, no una llamada."""
+        pedidos = []
+
+        def _f(rep, code, years, **k):
+            pedidos.append(code)
+            return {"2025": {"85": 10.0}}
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters", _f)
+        sync_partner_chapters(db, [2025], socios={"842": "Estados Unidos"})
+        pedidos.clear()
+        sync_partner_chapters(db, [2025], socios={"842": "USA"})
+        assert pedidos == []
+
+    def test_el_salto_se_decide_por_CODIGO_no_por_nombre(self, db, monkeypatch):
+        """Con la comprobación por nombre, renombrar parecía un socio nuevo y disparaba una
+        re-ingesta completa de los 192."""
+        self._fake(monkeypatch)
+        sync_partner_chapters(db, [2025], socios={"842": "Estados Unidos"})
+        r = sync_partner_chapters(db, [2025], socios={"842": "USA"})
+        assert r["socios_saltados"] == 1
+
+    def test_un_socio_ya_alineado_no_reporta_cambios(self, db, monkeypatch):
+        self._fake(monkeypatch)
+        sync_partner_chapters(db, [2025], socios={"842": "USA"})
+        assert sync_partner_chapters(db, [2025], socios={"842": "USA"})["etiquetas_alineadas"] == 0
