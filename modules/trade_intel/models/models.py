@@ -62,12 +62,16 @@ class TradePartnerChapter(UUIDMixin, Base):
     __tablename__ = "ti_partner_chapters"
     __table_args__ = (
         Index("ix_ti_pc_period_partner", "period", "partner", "direction"),
-        Index("ix_ti_pc_unico", "period", "partner", "direction", "chapter", unique=True),
+        # La identidad del socio es su CÓDIGO M49, no su etiqueta. Con el índice por nombre,
+        # la misma corriente entró dos veces —"USA"/"Estados Unidos", "Brazil"/"Brasil"…—
+        # cuando la lista fija en español se reemplazó por la derivada de Comtrade en inglés:
+        # 196 socios donde hay 192, y el ranking gastando dos cupos en el mismo país.
+        Index("ix_ti_pc_unico", "period", "partner_code", "direction", "chapter", unique=True),
     )
 
     period = Column(String(10), nullable=False)         # "2025" (Comtrade es anual)
     partner = Column(String(80), nullable=False)        # nombre del socio, p. ej. "China"
-    partner_code = Column(String(8), nullable=True)     # M49, para re-consultar sin ambigüedad
+    partner_code = Column(String(8), nullable=False)    # M49 — la IDENTIDAD del socio
     direction: Any = Column(Enum(TradeDirection), nullable=False)
     chapter = Column(String(2), nullable=False)         # capítulo HS de 2 dígitos
     value = Column(Float, nullable=True)                # USD millones; NULL = ausente

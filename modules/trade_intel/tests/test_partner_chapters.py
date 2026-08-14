@@ -234,3 +234,44 @@ class TestReanudable:
         assert sync_partner_chapters(db, [2025])["cobertura_valor_pct"] == 100.0
         r = sync_partner_chapters(db, [2025])
         assert r["socios_saltados"] == 2 and r["cobertura_valor_pct"] == 100.0
+
+
+class TestIdentidadPorCodigo:
+    """La identidad del socio es su CÓDIGO M49, no su etiqueta.
+
+    Con el índice único por NOMBRE, la misma corriente entró dos veces al cambiar la lista fija
+    en español ("Estados Unidos", "Brasil", "México", "España") por la derivada de Comtrade en
+    inglés ("USA", "Brazil", "Mexico", "Spain"): el panel reportaba 196 socios donde hay 192 y
+    el ranking por valor gastaba dos cupos en el mismo país.
+    """
+
+    def test_el_mismo_codigo_con_otra_etiqueta_NO_duplica(self, db, monkeypatch):
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                            lambda *a, **k: {"2025": {"85": 10.0}})
+        sync_partner_chapters(db, [2025], socios={"842": "Estados Unidos"})
+        sync_partner_chapters(db, [2025], socios={"842": "USA"}, forzar=True)
+        filas = db.query(TradePartnerChapter).all()
+        assert len(filas) == 1, "la misma corriente entró dos veces bajo otro nombre"
+
+    def test_la_etiqueta_se_refresca_a_la_de_la_fuente(self, db, monkeypatch):
+        """El nombre es etiqueta: la ingesta nueva manda."""
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                            lambda *a, **k: {"2025": {"85": 10.0}})
+        sync_partner_chapters(db, [2025], socios={"842": "Estados Unidos"})
+        sync_partner_chapters(db, [2025], socios={"842": "USA"}, forzar=True)
+        assert db.query(TradePartnerChapter).first().partner == "USA"
+
+    def test_dos_socios_distintos_siguen_siendo_dos(self, db, monkeypatch):
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                            lambda *a, **k: {"2025": {"85": 10.0}})
+        sync_partner_chapters(db, [2025], socios={"842": "USA", "156": "China"})
+        assert db.query(TradePartnerChapter).count() == 2
+
+    def test_el_conteo_del_panel_no_infla(self, db, monkeypatch):
+        """196 socios donde había 192: el ranking contaba países dos veces."""
+        monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                            lambda *a, **k: {"2025": {"85": 10.0}})
+        sync_partner_chapters(db, [2025], socios={"842": "Estados Unidos", "156": "China"})
+        sync_partner_chapters(db, [2025], socios={"842": "USA", "156": "China"}, forzar=True)
+        distintos = {r.partner_code for r in db.query(TradePartnerChapter).all()}
+        assert len(distintos) == 2
