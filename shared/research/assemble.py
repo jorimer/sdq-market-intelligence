@@ -61,8 +61,21 @@ def _evidence_lines(sq: SubQuestion, limit: int = 3) -> str:
 
 
 def _coverage_line(coverage_real: float, anchored_fraction: float) -> str:
-    return (f"Cobertura de la respuesta: **{coverage_real:.0%}** anclada a dato real, "
-            f"**{anchored_fraction:.0%}** con ancla declarada (dato real o rúbrica). "
+    """Los dos porcentajes son ANIDADOS, no aditivos: el de dato real está DENTRO del anclado.
+
+    La redacción anterior —"40% anclada a dato real, 40% con ancla declarada"— se leía como
+    40+40 y el lector buscaba el 20% que faltaba para 100. Ahora se dice la parte no anclada,
+    que es el complemento real, y la rúbrica se nombra sólo cuando existe.
+    """
+    sin_ancla = max(0.0, 1.0 - anchored_fraction)
+    rubrica = max(0.0, anchored_fraction - coverage_real)
+    detalle = (f"**{anchored_fraction:.0%}** con ancla declarada — de ese total, "
+               f"{coverage_real:.0%} con dato real y {rubrica:.0%} con rúbrica"
+               if rubrica >= 0.005 else
+               f"**{anchored_fraction:.0%}** con ancla declarada, toda con DATO REAL "
+               f"(nada se apoya en rúbrica)")
+    return (f"Cobertura de la respuesta: {detalle}; el {sin_ancla:.0%} restante queda sin "
+            f"ancla y se declara como brecha. "
             f"El resto se declara como brecha explícita.")
 
 
