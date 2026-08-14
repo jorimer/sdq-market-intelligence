@@ -275,3 +275,26 @@ class TestIdentidadPorCodigo:
         sync_partner_chapters(db, [2025], socios={"842": "USA", "156": "China"}, forzar=True)
         distintos = {r.partner_code for r in db.query(TradePartnerChapter).all()}
         assert len(distintos) == 2
+
+
+def test_un_codigo_tiene_UNA_sola_etiqueta(db, monkeypatch):
+    """Deduplicar por código sin normalizar la etiqueta partió los capítulos de un país entre
+    sus dos nombres: en prod quedaron 52 bajo "USA" y 44 bajo "Estados Unidos", y como la
+    lectura es por nombre, consultar "USA" devolvía la mitad de su comercio. El arreglo había
+    empeorado la lectura, que es peor que el defecto original."""
+    monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                        lambda *a, **k: {"2025": {"85": 10.0, "84": 20.0}})
+    sync_partner_chapters(db, [2025], socios={"842": "Estados Unidos"})
+    sync_partner_chapters(db, [2025], socios={"842": "USA"}, forzar=True)
+    etiquetas = {r.partner for r in db.query(TradePartnerChapter)
+                 .filter_by(partner_code="842").all()}
+    assert etiquetas == {"USA"}, f"un código con dos etiquetas parte su comercio: {etiquetas}"
+
+
+def test_la_lectura_por_nombre_devuelve_el_pais_COMPLETO(db, monkeypatch):
+    monkeypatch.setattr("shared.data.comtrade_client.fetch_partner_chapters",
+                        lambda *a, **k: {"2025": {"85": 10.0, "84": 20.0}})
+    sync_partner_chapters(db, [2025], socios={"842": "Estados Unidos"})
+    sync_partner_chapters(db, [2025], socios={"842": "USA"}, forzar=True)
+    r = importaciones_por_capitulo(db, "USA")
+    assert r["n_capitulos"] == 2 and r["total_usd_mm"] == 30.0
