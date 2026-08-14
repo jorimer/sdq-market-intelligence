@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
   ScanSearch,
   FileText,
@@ -9,6 +9,7 @@ import {
   CircleDashed,
 } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock } from "@/shared/ui/primitives";
+import { Markdown } from "@/shared/ui/Markdown";
 import type { Tone } from "@/shared/lib/bands";
 import {
   runResearch,
@@ -78,76 +79,6 @@ const EXAMPLES = [
 
 function pct(x: number): string {
   return `${Math.round(x * 100)}%`;
-}
-
-/** Renderer de markdown MÍNIMO (encabezados, viñetas, negrita, cursiva). Suficiente
- * para las secciones que produce el motor; evita una dependencia nueva. */
-function inline(text: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  const re = /(\*\*[^*]+\*\*|_[^_]+_)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let k = 0;
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const tok = m[0];
-    if (tok.startsWith("**")) out.push(<strong key={k++}>{tok.slice(2, -2)}</strong>);
-    else out.push(<em key={k++}>{tok.slice(1, -1)}</em>);
-    last = m.index + tok.length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
-}
-
-function Markdownish({ md }: { md: string }) {
-  const lines = md.split("\n");
-  const blocks: ReactNode[] = [];
-  let bullets: string[] = [];
-  const flush = () => {
-    if (bullets.length) {
-      blocks.push(
-        <ul key={`ul${blocks.length}`} className="list-disc pl-5 space-y-1 my-2">
-          {bullets.map((b, i) => (
-            <li key={i} className="text-sm">
-              {inline(b)}
-            </li>
-          ))}
-        </ul>,
-      );
-      bullets = [];
-    }
-  };
-  lines.forEach((raw) => {
-    const line = raw.trimEnd();
-    if (/^###\s+/.test(line)) {
-      flush();
-      blocks.push(
-        <h4 key={blocks.length} className="font-semibold text-sm mt-3 mb-1">
-          {inline(line.replace(/^###\s+/, ""))}
-        </h4>,
-      );
-    } else if (/^##\s+/.test(line)) {
-      flush();
-      blocks.push(
-        <h3 key={blocks.length} className="font-semibold mt-3 mb-1">
-          {inline(line.replace(/^##\s+/, ""))}
-        </h3>,
-      );
-    } else if (/^[-*]\s+/.test(line)) {
-      bullets.push(line.replace(/^[-*]\s+/, ""));
-    } else if (line.trim() === "") {
-      flush();
-    } else {
-      flush();
-      blocks.push(
-        <p key={blocks.length} className="text-sm my-1.5 leading-relaxed">
-          {inline(line)}
-        </p>,
-      );
-    }
-  });
-  flush();
-  return <div>{blocks}</div>;
 }
 
 function SubQuestionRow({ sq }: { sq: ResearchSubQuestion }) {
@@ -328,7 +259,7 @@ export function ResearchPage() {
             .map((k) => (
               <Card key={k}>
                 <CardHead icon={FileText} title={titleFor(k)} />
-                <Markdownish md={answer.sections[k]} />
+                <Markdown text={answer.sections[k]} />
               </Card>
             ))}
         </>
