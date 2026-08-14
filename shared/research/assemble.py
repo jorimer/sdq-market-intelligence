@@ -36,6 +36,13 @@ def _evidence_lines(sq: SubQuestion, limit: int = 3) -> str:
         groups.setdefault(e.source, []).append(e)
     if not groups:
         return ""
+    # DENTRO de cada fuente, primero lo de mayor score. El round-robin respetaba el orden de
+    # INSERCIÓN, así que un eje que agrega su línea más específica al final la perdía en el
+    # corte: el informe de comercio del 2026-08-14 citaba "resiliencia 67.0" mientras el cuerpo
+    # analizaba el desglose por socio y capítulo que nunca llegó a la pantalla. El campo
+    # `score` existe para ordenar relevancia; no usarlo era desperdiciarlo.
+    for evs in groups.values():
+        evs.sort(key=lambda e: -(getattr(e, "score", 0) or 0))
     budget = max(limit, len(groups))  # ≥1 por fuente: el presupuesto nunca es menor a n_fuentes
     picked: List = []
     round_idx = 0

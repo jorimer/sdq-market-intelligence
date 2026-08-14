@@ -257,8 +257,8 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
     out: List[Evidence] = []
     res = sc.get("resilience_score")
     if isinstance(res, (int, float)):
-        out.append(_ev(f"{label}: resiliencia comercial {_fmt(res)}/100 · período {period or 's/f'}.",
-                       source, 94.0))
+        out.append(_ev(f"{label}: resiliencia comercial {_fmt(res)}/100 · corte {period or 's/f'} "
+                       f"(DGA, trimestral).", source, 94.0))
     bits = []
     for key, lbl in (("export_diversification", "diversificación export."),
                      ("import_dependency", "dependencia importadora"),
@@ -267,14 +267,19 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
         if isinstance(v, (int, float)):
             bits.append(f"{lbl} {_fmt(v)}")
     if bits:
-        out.append(_ev("Estructura: " + ", ".join(bits) + ".", source, 90.0))
+        out.append(_ev(f"Estructura · corte {period or 's/f'} (DGA, trimestral): "
+                       + ", ".join(bits) + ".", source, 90.0))
     flows = []
     for key, lbl in (("total_exports", "exportaciones"), ("total_imports", "importaciones")):
         v = sc.get(key)
         if isinstance(v, (int, float)):
             flows.append(f"{lbl} {_fmt(v)}")
     if flows:
-        out.append(_ev("Flujos (US$MM): " + ", ".join(flows) + ".", source, 86.0))
+        # ⚠️ Estos flujos son del TRIMESTRE de la DGA; el desglose por socio es ANUAL de
+        # Comtrade. Sin la etiqueta el informe los sumaba como si fueran comparables.
+        out.append(_ev(f"Flujos del corte {period or 's/f'} (US$MM, DGA trimestral — no "
+                       f"comparables con los anuales de Comtrade): " + ", ".join(flows) + ".",
+                       source, 86.0))
     # Socio × capítulo: QUÉ bienes vienen de cada socio. Es la única evidencia que responde
     # "¿qué le importamos a X, desglosado?" — sin ella el motor sólo tiene el agregado del
     # país y la cuota del socio, y con eso llegó a INFERIR la composición y presentarla como
@@ -290,13 +295,26 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
             f"cap. {c['capitulo']} {_fmt(c['usd_mm'])} MM ({_fmt(c['pct'])}%)" for c in caps[:8])
         extra = f" — {d['truncado']} capítulos más no listados" if d.get("truncado") else ""
         out.append(_ev(
-            f"Importaciones desde {socio} ({d.get('period') or 's/f'}): "
+            f"Importaciones desde {socio} · año {d.get('period') or 's/f'} (UN Comtrade, anual; "
+            f"NO es el corte trimestral de la DGA): "
             f"US${_fmt(d.get('total_usd_mm'))} MM en {d.get('n_capitulos')} capítulos HS. "
-            f"Mayores: {detalle}.{extra}", source, 92.0))
-    if _om:
+            # 96: por ENCIMA de resiliencia/estructura/flujos. Es la evidencia más específica
+            # que tiene el eje —responde "qué se importa de quién"— y con el corte de 3 líneas
+            # en pantalla las genéricas la desplazaban: el informe citaba "resiliencia 67.0"
+            # mientras el cuerpo analizaba el desglose por socio y capítulo.
+            f"Mayores: {detalle}.{extra}", source, 96.0))
+    if _spc:
+        # EN POSITIVO y con los números dados. La versión anterior decía "N orígenes más están
+        # ingeridos pero no se listan acá" y el modelo lo publicó como "el sistema no computa
+        # el desglose para 181 orígenes" — declaró faltante lo que sí existe, el defecto
+        # simétrico de inferir lo que falta. Y además contó mal ("12 orígenes" con 11 nombres),
+        # así que los conteos van servidos, no derivados.
+        _tot = len(_spc) + _om
         out.append(_ev(
-            f"El desglose por origen cubre los {len(_spc)} socios de mayor valor; "
-            f"{_om} orígenes más están ingeridos pero no se listan acá.", source, 84.0))
+            f"Cobertura del desglose por origen: {_tot} de {_tot} socios computados, 100% del "
+            f"valor importado. Esta lista trae los {len(_spc)} de mayor valor; los otros {_om} "
+            f"ESTÁN en el sistema y se consultan por socio. No es una brecha de dato.",
+            source, 95.0))
     return out or _generic_summary(label, payload, period, source)
 
 

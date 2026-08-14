@@ -9,7 +9,8 @@ llamada de Comtrade; después se ingirió y se expuso, y el motor SEGUÍA sin ve
 from shared.research.data_pull import _trade_summary
 
 _PAYLOAD = {
-    "score": {"resilience_score": 67.3, "import_dependency": 0.7},
+    "score": {"resilience_score": 67.3, "import_dependency": 0.7,
+              "total_exports": 4184.7, "total_imports": 8547.5},
     "socios_por_capitulo": {
         "China": {
             "period": "2025", "total_usd_mm": 5988.0, "n_capitulos": 94,
@@ -62,14 +63,28 @@ def test_un_socio_sin_capitulos_no_emite_linea_vacia():
     assert "Vietnam" not in _textos(p)
 
 
-def test_declara_cuantos_origenes_no_se_listan():
-    """La ingesta trae los 192 socios; el contexto sirve los de mayor valor. Sin decir
-    cuántos quedan fuera, el informe se lee como si cubriera todo el comercio."""
+def test_la_cobertura_se_declara_en_POSITIVO():
+    """La versión anterior decía "177 orígenes más no se listan acá" y el modelo lo publicó
+    como «el sistema no computa el desglose para 181 orígenes» — declaró faltante lo que sí
+    existe. La cobertura va afirmada, con los conteos servidos para que no los derive."""
     p = {**_PAYLOAD, "socios_por_capitulo": {
         **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 177}}}
     t = _textos(p)
-    assert "177 orígenes más" in t
+    assert "178 de 178 socios computados" in t and "100% del valor" in t
+    assert "ESTÁN en el sistema" in t and "No es una brecha de dato" in t
     assert "China" in t                      # y los listados siguen saliendo
+
+
+def test_la_evidencia_de_cobertura_pesa_mas_que_la_generica():
+    """Debe sobrevivir al corte de 3 líneas en pantalla: si no, el informe vuelve a citar
+    «resiliencia 67.0» mientras el cuerpo analiza el desglose."""
+    from shared.research.data_pull import _trade_summary
+    p = {**_PAYLOAD, "socios_por_capitulo": {
+        **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 177}}}
+    evs = _trade_summary("RD", p, "2026-Q2", "trade")
+    cob = next(e for e in evs if "Cobertura del desglose" in e.text)
+    gen = next(e for e in evs if "resiliencia comercial" in e.text)
+    assert cob.score > gen.score
 
 
 def test_el_marcador_de_omitidos_no_se_narra_como_un_socio():
@@ -78,3 +93,53 @@ def test_el_marcador_de_omitidos_no_se_narra_como_un_socio():
     p = {**_PAYLOAD, "socios_por_capitulo": {
         **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 3}}}
     assert "_omitidos" not in _textos(p)
+
+
+class TestLoQueSeVeEnPantalla:
+    """El bloque de Evidencia corta en 3 líneas. El informe del 2026-08-14 citaba
+    «resiliencia comercial 67.0» mientras el cuerpo analizaba el desglose por socio y capítulo:
+    el round-robin respetaba el orden de INSERCIÓN y las líneas específicas iban al final."""
+
+    def _pantalla(self):
+        from shared.research.assemble import _evidence_lines
+        from shared.research.data_pull import _trade_summary
+        p = {**_PAYLOAD, "socios_por_capitulo": {
+            **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 177}}}
+
+        class SQ:
+            evidence = _trade_summary("RD", p, "2026-Q2", "DGA · BCRD")
+        return _evidence_lines(SQ())
+
+    def test_el_desglose_sobrevive_al_corte(self):
+        """Y va PRIMERO: es lo que responde la pregunta. Lo genérico puede aparecer después
+        si sobra cupo, pero nunca desplazándolo."""
+        t = self._pantalla()
+        assert "Importaciones desde China" in t
+        if "resiliencia comercial" in t:
+            assert t.index("Importaciones desde China") < t.index("resiliencia comercial")
+
+    def test_la_cobertura_tambien_sobrevive(self):
+        """Es lo que impide que el informe declare faltante lo que sí tiene."""
+        assert "No es una brecha de dato" in self._pantalla()
+
+
+class TestPeriodosEtiquetados:
+    """El informe mezcló capítulos 2025 (Comtrade anual), cuotas 2023 y flujos 2026-Q2 (DGA
+    trimestral) sin distinguirlos. Cada línea declara su ventana y su fuente."""
+
+    def _evs(self):
+        from shared.research.data_pull import _trade_summary
+        return _trade_summary("RD", _PAYLOAD, "2026-Q2", "trade")
+
+    def test_el_desglose_dice_que_es_anual_y_de_comtrade(self):
+        e = next(x for x in self._evs() if "China" in x.text)
+        assert "año 2025" in e.text and "UN Comtrade, anual" in e.text
+        assert "NO es el corte trimestral" in e.text
+
+    def test_los_flujos_dicen_que_no_son_comparables(self):
+        e = next(x for x in self._evs() if "Flujos" in x.text)
+        assert "2026-Q2" in e.text and "no" in e.text.lower() and "comparables" in e.text
+
+    def test_la_resiliencia_declara_su_corte(self):
+        e = next(x for x in self._evs() if "resiliencia comercial" in x.text)
+        assert "corte 2026-Q2" in e.text and "trimestral" in e.text
