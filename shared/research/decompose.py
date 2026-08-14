@@ -100,12 +100,46 @@ DEFAULT_MIN_ANCHOR_SCORE_SOFT = 9.0
 DEFAULT_MIN_ANCHOR_SCORE_OFFTOPIC = 14.0
 
 
-def split_question(text: str) -> List[str]:
-    """Parte la pregunta en cláusulas sustantivas, deduplicando y preservando orden.
+# Cláusulas que son DIRECTIVAS al motor (cómo responder), no preguntas del usuario (qué
+# responder). Sin este filtro, pedirle rigor al sistema BAJABA su cobertura: las condiciones
+# "no infieras la composición" y "no quiero categorías plausibles" se contaron como
+# sub-preguntas, no se pudieron anclar a ningún dato —una instrucción no tiene dato— y
+# arrastraron el informe del 2026-08-14 a 40% de cobertura y a modo "alcance limitado".
+# Cuanto más preciso el encargo, peor la nota. Eso es exactamente al revés.
+#
+# El filtro es ESTRECHO a propósito: exige un marcador imperativo explícito. Una pregunta
+# legítima que pida "dime qué cubre el sistema" NO debe caer acá, así que se piden verbos de
+# instrucción en negativo o el encabezado de una lista de condiciones.
+_DIRECTIVA_RE = re.compile(
+    r"^\s*(no\s+(quiero|acepto)\b"
+    r"|dos\s+condiciones\b|condici(on|ón)es\s*:)"
+    r"|\bno\s+(infieras?|inventes?|estimes?|rellenes?|asumas?|extrapoles?)\b",
+    re.IGNORECASE,
+)
 
-    Dos niveles: (1) conectores duros (. ? ; salto de línea, "y además"…); (2) coma+"y"/"e"
-    SOLO si la parte posterior encabeza con un interrogativo — una segunda pregunta, no una
-    enumeración (``_split_compound_and``)."""
+
+def es_directiva(clause: str) -> bool:
+    """¿La cláusula instruye CÓMO responder, en vez de preguntar QUÉ?
+
+    >>> es_directiva('no infieras la composición: si un cruce no está computado, decláralo')
+    True
+    >>> es_directiva('No quiero "categorías plausibles"')
+    True
+    >>> es_directiva('Necesito la composición de las importaciones por país de origen')
+    False
+    >>> es_directiva('Agrega la dependencia importadora y la concentración por socio')
+    False
+    """
+    return bool(_DIRECTIVA_RE.search(clause or ""))
+
+
+def directivas(text: str) -> List[str]:
+    """Las cláusulas de instrucción, para que se registren en vez de desaparecer sin más."""
+    return [c for c in _split_bruto(text) if es_directiva(c)]
+
+
+def _split_bruto(text: str) -> List[str]:
+    """Las cláusulas tal cual salen del corte, SIN filtrar directivas."""
     parts = _CONNECTORS.split(text or "")
     out: List[str] = []
     seen = set()
@@ -123,6 +157,23 @@ def split_question(text: str) -> List[str]:
     if not out and (text or "").strip():
         out.append(text.strip())
     return out
+
+
+def split_question(text: str) -> List[str]:
+    """Parte la pregunta en cláusulas SUSTANTIVAS, deduplicando y preservando orden.
+
+    Dos niveles: (1) conectores duros (. ? ; salto de línea, "y además"…); (2) coma+"y"/"e"
+    SOLO si la parte posterior encabeza con un interrogativo — una segunda pregunta, no una
+    enumeración (``_split_compound_and``).
+
+    Las DIRECTIVAS al motor se excluyen: instruyen cómo responder, no qué. Contarlas como
+    sub-preguntas penalizaba la cobertura por pedir rigor (ver ``es_directiva``). Siguen
+    guiando al modelo porque la pregunta original viaja completa al contexto.
+    """
+    sustantivas = [c for c in _split_bruto(text) if not es_directiva(c)]
+    # Si TODO era directiva, no se devuelve vacío: la pregunta entera vuelve a ser la
+    # sub-pregunta, para no dejar el informe sin nada que contestar.
+    return sustantivas or ([text.strip()] if (text or "").strip() else [])
 
 
 # Detección de peticiones forward-looking (proyección/escenario a futuro) — que ningún
