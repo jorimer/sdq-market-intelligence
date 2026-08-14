@@ -187,6 +187,78 @@ def comparaciones_vs_referencia(
     return out
 
 
+# ── Resumen de trayectoria (anclas computadas, no elegidas) ──────────────────
+#
+# Defecto 2026-08-13 (Deep Dive BPD): la §1 resumió la trayectoria desde el PICO ("de 74.81
+# en junio 2024… tres puntos en seis trimestres") y la §9 desde el INICIO DE VENTANA ("ocho
+# cortes consecutivos —de 74.30 a 71.76—"). Las dos eran correctas y las dos citaban puntos
+# reales de la misma serie, pero el documento nunca dijo que eran anclas distintas, así que
+# leído de corrido se contradice consigo mismo en el indicador principal.
+#
+# El modelo elegía el ancla porque el contexto le daba la serie cruda y nada más. Acá se
+# COMPUTAN las tres lecturas posibles con su nombre, para que la sección cite una y diga
+# cuál es. Mismo principio que la dirección de las comparaciones: la relación se sirve.
+
+
+def resumen_de_trayectoria(serie: List[Dict[str, Any]], *,
+                           clave_periodo: str = "period_end",
+                           clave_score: str = "score") -> Optional[Dict[str, Any]]:
+    """Anclas de una serie cronológica ascendente, cada una con su nombre.
+
+    Args:
+        serie: puntos ``[{periodo, score}, ...]`` en orden ascendente.
+
+    Returns:
+        ``{n_cortes, n_trimestres, primer_corte, ultimo_corte, pico, valle,
+        delta_desde_el_inicio, delta_desde_el_pico, lectura}`` o ``None`` con menos de dos
+        puntos. ``lectura`` es la frase ya redactada, que nombra AMBAS anclas — es lo que
+        impide que dos secciones citen magnitudes distintas sin decir de dónde salen.
+    """
+    puntos = []
+    for p in serie or []:
+        if not isinstance(p, dict):
+            continue
+        per, sc = p.get(clave_periodo), p.get(clave_score)
+        if per is None or sc is None:
+            continue
+        try:
+            puntos.append((str(per), float(sc)))
+        except (TypeError, ValueError):
+            continue
+    if len(puntos) < 2:
+        return None
+
+    primero, ultimo = puntos[0], puntos[-1]
+    pico = max(puntos, key=lambda x: x[1])
+    valle = min(puntos, key=lambda x: x[1])
+    d_inicio = round(ultimo[1] - primero[1], 2)
+    d_pico = round(ultimo[1] - pico[1], 2)
+
+    def _p(par):
+        return {"periodo": par[0], "score": round(par[1], 2)}
+
+    verbo = "cede" if d_inicio < 0 else ("gana" if d_inicio > 0 else "se mantiene en")
+    lectura = (
+        f"la ventana tiene {len(puntos)} cortes ({len(puntos) - 1} trimestres). "
+        f"Desde el PRIMER corte de la ventana ({primero[1]:.2f} en {primero[0][:7]}) "
+        f"{verbo} {abs(d_inicio):.2f} puntos; desde el PICO "
+        f"({pico[1]:.2f} en {pico[0][:7]}) cede {abs(d_pico):.2f}. "
+        "Si citás una de las dos magnitudes, decí cuál ancla usás — son distintas y "
+        "ambas son correctas."
+    )
+    return {
+        "n_cortes": len(puntos),
+        "n_trimestres": len(puntos) - 1,
+        "primer_corte": _p(primero),
+        "ultimo_corte": _p(ultimo),
+        "pico": _p(pico),
+        "valle": _p(valle),
+        "delta_desde_el_inicio": d_inicio,
+        "delta_desde_el_pico": d_pico,
+        "lectura": lectura,
+    }
+
+
 # ── Posición por dimensión (anti-superlativo transversal) ────────────────────
 #
 # Sin esto la narrativa solo conoce sus scores propios y su rank GLOBAL, así que infiere
