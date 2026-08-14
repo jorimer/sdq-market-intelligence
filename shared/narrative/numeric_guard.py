@@ -18,7 +18,7 @@ import json
 import logging
 import re
 import unicodedata
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("sdq.narrative.numeric_guard")
 
@@ -27,7 +27,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "3"  # "3": dirección en la forma BRECHA ("N pp por debajo de X") (2026-08-13)
+GUARD_VERSION = "4"  # "4": forma de contexto de reportes + cifras en palabras + ventana (2026-08-13)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -127,6 +127,23 @@ def _close(a: float, b: float, tol: float = _TOL) -> bool:
     return abs(a - b) <= tol
 
 
+def _as_number(token: str) -> Optional[float]:
+    """Un dígito o un numeral escrito en palabras ("ocho" → 8.0). ``None`` si no es ninguno.
+
+    Existe porque el detector buscaba SOLO dígitos: «una caída de ocho puntos en doce meses»
+    —dos cifras, cero dígitos— era literalmente invisible, y así llegó a la Recomendación de
+    un informe de cliente.
+    """
+    t = (token or "").strip().lower().replace(",", ".")
+    if not t:
+        return None
+    try:
+        return float(t)
+    except ValueError:
+        v = _NUM_WORDS.get(t)
+        return float(v) if v is not None else None
+
+
 def _nums(s: str) -> List[float]:
     return [float(m) for m in _DECIMAL.findall(s)]
 
@@ -151,6 +168,117 @@ def _trend_by_month(trend: list, mm: str) -> List[float]:
     return out
 
 
+# ── Adaptador de FORMA del contexto ───────────────────────────────────────────
+#
+# El detector nació leyendo `ai_context_entity` (score_global / sub_componentes /
+# tendencia_score[periodo]). La ruta de REPORTES arma su contexto con otros nombres
+# (overall_score / sub_components / trayectoria_score[period_end]), así que los seis
+# patrones no encontraban su insumo y devolvían [] — no por haber verificado, sino por no
+# tener qué mirar. Con eso, la única capa viva en los informes de cliente era el juez LLM.
+#
+# Se resuelve acá, en el punto de lectura, y no pidiéndole a cada eje que renombre sus
+# claves: la lección de este repo es que el guard atado a UNA forma reaparece muerto en el
+# siguiente motor. `guard_coverage` publica qué insumos encontró para que "0 hallazgos" se
+# pueda distinguir de "no miré nada".
+
+_ALIAS_SCORE = ("score_global", "overall_score")
+_ALIAS_SUBS = ("sub_componentes", "sub_components")
+_ALIAS_TREND = ("tendencia_score", "trayectoria_score", "trayectoria", "tendencia")
+_ALIAS_PERIODO = ("periodo", "period_end", "period")
+_ALIAS_PESOS = ("pesos_sub_componentes", "pesos", "weights")
+
+
+def _first(context: dict, names) -> Any:
+    for n in names:
+        v = context.get(n)
+        if v not in (None, {}, []):
+            return v
+    return None
+
+
+def _norm_trend(context: dict) -> List[Dict[str, Any]]:
+    """La serie como ``[{"periodo": "YYYY-MM-DD", "score": float}, ...]``, venga como venga."""
+    serie = _first(context, _ALIAS_TREND) or []
+    if isinstance(serie, dict):  # {periodo: score}
+        serie = [{"periodo": k, "score": v} for k, v in serie.items()]
+    out: List[Dict[str, Any]] = []
+    for p in serie:
+        if not isinstance(p, dict):
+            continue
+        periodo = next((p[k] for k in _ALIAS_PERIODO if p.get(k) is not None), None)
+        if periodo is None or p.get("score") is None:
+            continue
+        out.append({"periodo": str(periodo), "score": p["score"]})
+    return out
+
+
+def _norm_subs(context: dict) -> List[Dict[str, Any]]:
+    """Sub-componentes como ``[{"score": float, "peso": float}, ...]``.
+
+    La forma de reportes es un dict ``{nombre: score}`` sin pesos; sin ellos el patrón de
+    aportes (score×peso) no puede computar nada, así que se buscan los pesos declarados en
+    el propio contexto y, si no están, se devuelve vacío en vez de inventarlos.
+    """
+    subs = _first(context, _ALIAS_SUBS)
+    if isinstance(subs, list):
+        return [s for s in subs if isinstance(s, dict)]
+    if isinstance(subs, dict):
+        pesos = _first(context, _ALIAS_PESOS) or {}
+        if not isinstance(pesos, dict):
+            return []
+        return [{"score": v, "peso": pesos[k]}
+                for k, v in subs.items() if pesos.get(k) is not None and v is not None]
+    return []
+
+
+_ALIAS_TREND_SUB = ("trayectoria_sub", "tendencia_sub", "trayectorias_sub",
+                    "trayectoria_sub_componente")
+
+
+def _norm_series_map(context: dict) -> Dict[str, List[Dict[str, Any]]]:
+    """TODAS las series del contexto: la global y la de cada sub-componente.
+
+    Necesario para no gritar en falso. Un informe de entidad discute seis series a la vez
+    (el score global y sus cinco dimensiones), y los patrones que atan un valor a un período
+    o una caída a una ventana asumían que toda cifra era del score GLOBAL. Conectados a la
+    ruta de reportes, eso marcaba prosa correcta: «desde 73.39 en junio 2024… en el
+    sub-componente de solidez» se leía como un error del score global (74.81).
+
+    La regla honesta es: un claim está sin respaldo si no lo sostiene NINGUNA serie conocida.
+    """
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    g = _norm_trend(context)
+    if g:
+        out["global"] = g
+    subs = _first(context, _ALIAS_TREND_SUB)
+    if isinstance(subs, dict):
+        for k, v in subs.items():
+            s = _norm_trend({"tendencia_score": v})
+            if s:
+                out[str(k)] = s
+    elif isinstance(subs, list):  # contexto de UNA dimensión (sección de sub-componente)
+        s = _norm_trend({"tendencia_score": subs})
+        if s:
+            out["sub_componente"] = s
+    return out
+
+
+def guard_coverage(context: dict) -> Dict[str, bool]:
+    """Qué insumos del chequeo determinista EXISTEN en este contexto.
+
+    Sirve para la prueba negativa: ``[]`` hallazgos con cobertura vacía significa «el guard
+    no miró nada», que es un modo de falla silencioso y distinto de «está limpio».
+    """
+    return {
+        "score": _first(context, _ALIAS_SCORE) is not None,
+        "serie": bool(_norm_trend(context)),
+        "sub_componentes": bool(_norm_subs(context)),
+        "pares": bool(context.get("pares")),
+        "posiciones_dimension": bool(context.get("posiciones_dimension")),
+        "comparaciones": bool(context.get("comparaciones")),
+    }
+
+
 def deterministic_unsupported(context: dict, text: str) -> List[str]:
     """Cifras del *text* que CONTRADICEN el contexto por cómputo mecánico. Verifica:
     (1) delta vs mediana ligado a la base citada (pares/tipo vs sector),
@@ -160,11 +288,11 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
     Best-effort: nunca lanza; ante un campo ausente, salta el patrón."""
     flags: List[str] = []
     try:
-        score = context.get("score_global")
+        score = _first(context, _ALIAS_SCORE)
         score = float(score) if score is not None else None
-        subs = context.get("sub_componentes") or []
+        subs = _norm_subs(context)
         pares = context.get("pares") or {}
-        trend = context.get("tendencia_score") or []
+        trend = _norm_trend(context)
 
         med_type = ((pares.get("entity_type") or {}).get("median_score"))
         med_sector = ((pares.get("sector") or {}).get("median_score"))
@@ -229,25 +357,40 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
         #     donde períodos y valores se alternan en secuencia.
         series = {str(t.get("periodo") or "")[:7]: t.get("score") for t in trend}
         _MONTHS = "|".join(_MONTH_TO_MM)
+        # Todas las series del informe (global + cada dimensión). Un valor atado a un
+        # período solo está SIN RESPALDO si no coincide con NINGUNA de ellas: el informe
+        # discute seis series a la vez y atribuirlas todas al score global marcaba prosa
+        # correcta («73.39 en junio 2024 … en el sub-componente de solidez»).
+        _mapa = _norm_series_map(context)
+
+        def _algun_valor(period: str, val: float) -> bool:
+            for s in _mapa.values():
+                for t in s:
+                    if str(t["periodo"])[:7] == period and _close(val, float(t["score"])):
+                        return True
+            return False
 
         #     forma A: 'VALUE (mes-AAAA)' / 'VALUE en mes AAAA' (valor → período inmediato)
         for m in re.finditer(
-            r"(\d{2,3}\.\d+)\s*\(?(?:en\s+|de\s+)?(" + _MONTHS + r")[ \-]?(\d{4})",
+            # `mes DE año` es la forma natural en español y la que usan estos informes
+            # ("74.30 en marzo de 2024"). El separador sólo aceptaba espacio o guion, así
+            # que la preposición dejaba el patrón ciego — con una cifra INVENTADA delante.
+            r"(\d{2,3}\.\d+)\s*\(?(?:en\s+|de\s+)?(" + _MONTHS + r")(?:\s+de\s+|[ \-])?(\d{4})",
             text, re.I):
             val, month, year = float(m.group(1)), m.group(2).lower(), m.group(3)
             period = f"{year}-{_MONTH_TO_MM[month]}"
             if period in series and series[period] is not None \
-                    and not _close(val, float(series[period])):
+                    and not _algun_valor(period, val):
                 flags.append(
                     f"{m.group(1)} en {month}-{year}: real {series[period]} en ese período")
         #     forma C: 'mes AAAA (VALUE)' (período → valor PARENTÉTICO inmediato; estricta
         #     para no cruzar fronteras de cláusula)
         for m in re.finditer(
-            r"(" + _MONTHS + r")[ \-]?(\d{4})\s*\((\d{2,3}\.\d+)\)", text, re.I):
+            r"(" + _MONTHS + r")(?:\s+de\s+|[ \-])?(\d{4})\s*\((\d{2,3}\.\d+)\)", text, re.I):
             month, year, val = m.group(1).lower(), m.group(2), float(m.group(3))
             period = f"{year}-{_MONTH_TO_MM[month]}"
             if period in series and series[period] is not None \
-                    and not _close(val, float(series[period])):
+                    and not _algun_valor(period, val):
                 flags.append(
                     f"{m.group(3)} atribuido a {month}-{year}: real {series[period]} "
                     f"en ese período")
@@ -345,6 +488,100 @@ def deterministic_unsupported(context: dict, text: str) -> List[str]:
                     flags.append(
                         f"'{n} trimestres {side} de {m.group('thr')}': la serie reciente "
                         f"({', '.join(str(round(v, 2)) for v in last)}) no cumple")
+
+        # (9) MAGNITUD DE LA CAÍDA sobre una ventana declarada: "una caída de N puntos en M
+        #     meses/trimestres/cortes". Es el claim que resume la trayectoria en una sola
+        #     cifra, así que es el que un comité cita — y el que salió mal:
+        #
+        #       §11 Recomendación, BPD 2025-12-31: «una caída sostenida de fortaleza
+        #       financiera —OCHO PUNTOS en doce meses—», cuando el score global cedió 2.39
+        #       en doce meses y ningún sub-componente cae más de 6.8. Sin referente.
+        #
+        #     Se escapaba por DOS razones a la vez: la cifra iba en PALABRAS (el detector
+        #     busca dígitos) y la ventana también. `_NUM_WORDS` ya existía en el módulo,
+        #     usado en un solo patrón.
+        if len(scores) >= 2:
+            _CNT = r"\d+(?:\.\d+)?|" + "|".join(_NUM_WORDS)
+            for m in re.finditer(
+                r"(?P<hedge>aproximadamente\s+|cerca\s+de\s+|casi\s+|unos?\s+|~\s*)?"
+                r"(?P<n>" + _CNT + r")\s*puntos?\b"
+                r"[^.;\n]{0,40}?\ben\s+(?P<m>" + _CNT + r")\s*"
+                r"(?P<u>meses|trimestres?|cortes?|per[íi]odos?)",
+                text, re.I):
+                cantidad = _as_number(m.group("n"))
+                ventana = _as_number(m.group("m"))
+                if cantidad is None or ventana is None or ventana <= 0:
+                    continue
+                # meses → trimestres. La ventana se cuenta en INTERVALOS, no en puntos:
+                # "seis trimestres" son 6 saltos, o sea 7 cortes.
+                base = int(round(ventana / 3)) if m.group("u").lower().startswith("mes") \
+                    else int(round(ventana))
+                # "corte" y "trimestre" se usan como sinónimos en esta prosa ("6.79 puntos
+                # en cuatro cortes" para un tramo de cuatro trimestres), así que la unidad
+                # NO decide si el número cuenta puntos o saltos. Se aceptan las dos
+                # lecturas y solo se marca si NINGUNA cuadra: un guard que discute el
+                # off-by-one de un sinónimo es ruido que se aprende a ignorar.
+                candidatos = {base, base - 1} if not m.group("u").lower().startswith("mes") \
+                    else {base}
+                candidatos = {s for s in candidatos if 1 <= s < len(scores)}
+                if not candidatos:
+                    continue
+                # Un claim redondeado ("tres puntos") o con matizador admite más holgura que
+                # uno con decimales; sin esa distinción el detector marcaría prosa correcta.
+                tol = 1.0 if m.group("hedge") else (_TOL if "." in m.group("n") else 0.6)
+                # (las locales llevan nombre propio: `n`/`s` ya están tomados por otros
+                # patrones de esta misma función y mypy infiere el tipo del primer uso)
+                # Contra TODAS las series: el informe habla del score global y de sus cinco
+                # dimensiones. "6.79 puntos en doce meses" es correcto para calidad de
+                # activos y falso para el global — atribuirlo al global marcaba prosa buena.
+                deltas = []
+                for nombre, serie in (_norm_series_map(context)
+                                      or {"global": trend}).items():
+                    vals = [float(t["score"]) for t in serie]
+                    for saltos in candidatos:
+                        if len(vals) > saltos:
+                            deltas.append((nombre, abs(vals[-1] - vals[-(saltos + 1)]),
+                                           vals[-(saltos + 1)], vals[-1]))
+                if not deltas or any(_close(cantidad, d, tol) for _n, d, _a, _b in deltas):
+                    continue
+                nom, real, ini, fin = min(deltas, key=lambda x: abs(x[1] - cantidad))
+                flags.append(
+                    f"'{m.group('n')} puntos en {m.group('m')} {m.group('u')}': ninguna "
+                    f"serie cede eso en esa ventana (la más cercana, {nom}, cede "
+                    f"{round(real, 2)}: {round(ini, 2)} → {round(fin, 2)})")
+
+        # (10) VENTANA de un tramo citado por sus extremos: "a lo largo de N cortes —de X a
+        #      Y—". Verifica que el CONTEO case con la distancia real entre X e Y en la
+        #      serie. Nace de que dos secciones del mismo informe anclaron la trayectoria en
+        #      puntos distintos (el pico y el inicio de ventana) sin reconciliarlo: las dos
+        #      eran correctas, pero nada garantizaba que lo fueran.
+        if len(scores) >= 2:
+            _CNT2 = r"\d+|" + "|".join(_NUM_WORDS)
+            for m in re.finditer(
+                r"(?P<n>" + _CNT2 + r")\s+(?P<u>cortes?|trimestres?|per[íi]odos?)"
+                r"[^.;\n]{0,60}?\bde\s+(?P<a>\d{2,3}\.\d+)\s*(?:a|hasta|→|-)\s*"
+                r"(?P<b>\d{2,3}\.\d+)",
+                text, re.I):
+                cuenta = _as_number(m.group("n"))
+                if cuenta is None:
+                    continue
+                ia = next((i for i, s in enumerate(scores) if _close(s, float(m.group("a")))),
+                          None)
+                ib = next((i for i, s in enumerate(scores) if _close(s, float(m.group("b")))),
+                          None)
+                if ia is None or ib is None:
+                    continue  # los extremos no son de esta serie: no es nuestro claim
+                puntos = abs(ib - ia) + 1
+                # Misma ambigüedad corte↔trimestre que en (9): se aceptan las dos lecturas
+                # del conteo y solo se marca cuando ninguna cuadra. Así "ocho cortes de
+                # 74.30 a 71.76" (real: 8 puntos) pasa y "seis cortes" para ese mismo tramo
+                # se marca, que es la distinción que importa.
+                if puntos not in (int(cuenta), int(cuenta) + 1):
+                    unidad = m.group("u").lower()
+                    flags.append(
+                        f"'{m.group('n')} {unidad} de {m.group('a')} a {m.group('b')}': "
+                        f"entre esos dos valores la serie tiene {puntos} cortes "
+                        f"({puntos - 1} trimestres)")
 
         # (8) SUPERLATIVO TRANSVERSAL ('el mayor/más alto/líder … del sistema/panel') en una
         #     dimensión donde la entidad NO lidera. Lee ``posiciones_dimension`` {label:

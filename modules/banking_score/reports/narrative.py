@@ -7,6 +7,7 @@ import asyncio
 from typing import Dict, Optional
 
 from shared.narrative.claude_engine import NarrativeResult, narrative_engine
+from shared.narrative.derived import resumen_de_trayectoria
 from modules.banking_score.scoring.weights import (
     SOLIDEZ_INDICATORS,
     CALIDAD_INDICATORS,
@@ -370,6 +371,9 @@ def _build_section_context(
         traj_sub = (traj.get("sub") or {}).get(sub_key)
         if traj_sub:
             ctx["trayectoria_sub_componente"] = traj_sub
+            resumen = resumen_de_trayectoria(traj_sub)
+            if resumen:
+                ctx["resumen_trayectoria_sub_componente"] = resumen
         pct_sub = (pct.get("sub") or {}).get(sub_key)
         if pct_sub:
             ctx["percentil_sub_componente"] = pct_sub
@@ -430,8 +434,24 @@ def _build_section_context(
     # el corte actual.
     if traj.get("overall"):
         ctx["trayectoria_score"] = traj["overall"]
+        # Anclas COMPUTADAS de la trayectoria. Sin esto cada sección elegía la suya —la §1
+        # el pico, la §9 el inicio de ventana— y el informe citaba dos magnitudes distintas
+        # del mismo deterioro sin decir que eran anclas distintas. Ambas eran correctas;
+        # el documento se leía contradiciéndose.
+        resumen = resumen_de_trayectoria(traj["overall"])
+        if resumen:
+            ctx["resumen_trayectoria"] = resumen
     if traj.get("sub"):
         ctx["trayectoria_sub"] = traj["sub"]
+    # Pesos del sub-componente: el chequeo determinista de "aporta N puntos" necesita
+    # score×peso, y sin los pesos ese patrón quedaba muerto en la ruta de reportes. Al
+    # modelo también le sirven — explican por qué una dimensión mueve más que otra.
+    try:
+        from modules.banking_score.scoring.weights import get_sub_component_weights
+        ctx["pesos_sub_componentes"] = get_sub_component_weights(
+            scoring_result.get("entity_type"))
+    except Exception:  # noqa: BLE001 — el contexto nunca depende de esto
+        pass
     if pct.get("overall"):
         ctx["percentil_score"] = pct["overall"]
     if pct.get("sub"):
