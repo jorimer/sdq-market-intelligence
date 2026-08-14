@@ -34,17 +34,28 @@ LIQ_FLOOR = 15.0           # (activos_líquidos/pasivos_exigibles)×100
 DEPOSIT_DROP = -0.10       # caída trimestral de depósitos ≥ 10% (proxy de corrida)
 CONCENTRATION = 30.0       # top-10 / cartera bruta %  (proxy de vinculados)
 
-# ── Calibración del CONJUNTO ponderado (derivada del histórico SIB) ─────────────
-# La alerta temprana no es una señal suelta: es un CONJUNTO con pesos. Estos se calibraron
-# sobre la cohorte de 35 terminaciones AGUDAS del histórico SIB (entidades que venían sanas,
-# se deterioraron y salieron del sistema — la etiqueta económica correcta en un régimen que
-# absorbía/renombraba en vez de quebrar formalmente), con regresión logística estandarizada
-# validada leave-one-entity-out. Reproducen el peso con que cada señal separó quiebras de
-# sobrevivientes; no son ad-hoc. Hallazgos que codifican:
-#   • la morosidad (nivel 0.38 + salto 0.11) domina, pero NO es sola;
-#   • cobertura (0.20) y erosión de capital (0.14) suman ~1/3 del conjunto;
-#   • el boom de crédito (0.08) es la señal MÁS temprana (la burbuja precede al estallido);
-#   • la fuga de depósitos (0.02) pesa poco: CONFIRMA tarde (dispara en 14/35 casos), no anticipa.
+# ── Calibración del CONJUNTO ponderado ─────────────────────────────────────────
+# ⚠ PROCEDENCIA EN REVISIÓN — estos siete pesos NO tienen artefacto que los respalde.
+# Se documentaron como "calibrados sobre la cohorte de 35 terminaciones agudas del histórico
+# SIB, regresión logística estandarizada validada leave-one-entity-out (AUC 0.88, detección
+# 34/35, falsos positivos 1/45)". Esa calibración nunca existió como código: ni cohorte
+# definida, ni matriz, ni script. Solo la prosa.
+#
+# `validation/ew_calibration.py` es ahora ESE artefacto, y al reconstruirlo encontró que los
+# pesos no están identificados por el dato: la receta de cohorte los mueve tanto como el dato
+# (morosidad_nivel entre 0.00 y 0.42; brecha_provisiones entre 0.00 y 0.55). Dos discrepancias
+# son robustas a las seis recetas probadas:
+#   • crecimiento_anomalo (0.08 acá) recibe peso CERO en todas — el histórico no sostiene que
+#     el boom de crédito sea "la señal más temprana";
+#   • estres_liquidez (0.02 acá) sale siempre material, entre 0.19 y 0.69 — un orden de
+#     magnitud, y en dirección contraria a la glosa de que "confirma tarde, no anticipa".
+# El AUC leave-one-entity-out no llega a 0.88 en ninguna receta: el techo medido es 0.800.
+#
+# Los valores se dejan INTACTOS a propósito: cambiarlos mueve el índice de informes ya
+# vendidos, y elegir la receta canónica es una decisión de metodología del dueño, no de
+# implementación. Corré `sensitivity_table()` antes de tocarlos.
+# Límite: solvencia_piso (0.06) no es verificable con esta fuente — Basilea es regulatoria y
+# no existe pre-2004.
 ALERT_WEIGHTS: Dict[str, float] = {
     "morosidad_nivel": 0.38,
     "brecha_provisiones": 0.20,
