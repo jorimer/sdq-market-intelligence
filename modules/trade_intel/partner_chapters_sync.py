@@ -33,16 +33,18 @@ SOCIOS_FALLBACK = {"156": "China", "842": "USA"}
 
 def _upsert(db: Session, *, period: str, partner: str, partner_code: str,
             direction: TradeDirection, chapter: str, value: Optional[float]) -> bool:
+    # Por CÓDIGO: el nombre es etiqueta y cambia con la fuente que lo resuelva.
     row = (db.query(TradePartnerChapter)
-           .filter_by(period=period, partner=partner, direction=direction, chapter=chapter)
+           .filter_by(period=period, partner_code=partner_code, direction=direction,
+                      chapter=chapter)
            .first())
     creada = row is None
     if row is None:
-        row = TradePartnerChapter(period=period, partner=partner, direction=direction,
-                                  chapter=chapter)
+        row = TradePartnerChapter(period=period, partner_code=partner_code,
+                                  direction=direction, chapter=chapter)
         db.add(row)
     # cast: SQLAlchemy tipa las columnas como Column[...]; el driver convierte el valor.
-    row.partner_code = cast(Any, partner_code)
+    row.partner = cast(Any, partner)      # etiqueta: se refresca con la fuente actual
     row.value = cast(Any, value)
     row.source = cast(Any, FUENTE)
     row.license = cast(Any, LICENCIA)
