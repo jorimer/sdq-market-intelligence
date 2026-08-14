@@ -15,6 +15,10 @@ from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
 from shared.narrative.claude_engine import NarrativeDegradedError, degraded_sections
+from shared.products.filenames import (
+    SUJETO_SISTEMA, content_disposition, report_filename,
+)
+from modules.banking_score.products import SECTOR_KEY
 from modules.banking_score.scoring.benchmarks import panel_benchmarks
 from modules.banking_score.models.models import (
     Bank,
@@ -188,21 +192,30 @@ async def download_report(
             detail=f"Reporte no completado (estado: {report.status.value})",
         )
 
-    # Un informe de sistema no tiene banco ni, en el caso de `criteria`, período: el
-    # nombre se arma con las partes que existen para no emitir "..._None.pdf".
+    # El nombre dice QUÉ es el documento, no su clave interna: `full_rating` no le informa
+    # nada a quien recibe el PDF, y `REPORT_TYPE_LABELS` ya trae el título que el propio
+    # informe imprime en la portada ("Informe de Calificación Completa"). Un informe de
+    # sistema no tiene banco, y `criteria` tampoco tiene período —ahí va la fecha de
+    # generación: un documento de criterios sin fecha en el nombre es indistinguible de su
+    # versión anterior, que es justamente lo que hay que poder distinguir.
+    from modules.banking_score.reports.pdf_generator import REPORT_TYPE_LABELS
+
     bank = db.query(Bank).filter_by(id=report.bank_id).first() if report.bank_id else None
-    scope = (bank.name if bank else "Sistema").replace(" ", "_")
-    parts = [f"SDQ_{report.report_type.value}", scope]
-    if report.period_end:
-        parts.append(str(report.period_end))
-    filename = "_".join(parts) + ".pdf"
+    rt = report.report_type.value
+    fecha = report.period_end or (report.created_at.date() if report.created_at else None)
+    filename = report_filename(
+        sector_key=SECTOR_KEY,
+        naturaleza=REPORT_TYPE_LABELS.get(rt, rt),
+        sujeto=(str(bank.name) if bank else SUJETO_SISTEMA),
+        periodo=str(fecha) if fecha else None,
+    )
 
     # Primary: serve the PDF bytes from the DB (durable, survives redeploys).
     if report.file_blob:
         return Response(
             content=report.file_blob,
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": content_disposition(filename)},
         )
 
     # Fallback: legacy reports with only a disk path (pre-blob). These vanish on
