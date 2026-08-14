@@ -49,10 +49,28 @@ def _upsert(db: Session, *, period: str, partner: str, partner_code: str,
     return creada
 
 
+def _años_presentes(db: Session, partner: str) -> set:
+    """Años que ese socio YA tiene ingeridos."""
+    return {r[0] for r in (db.query(TradePartnerChapter.period)
+                           .filter(TradePartnerChapter.partner == partner)
+                           .distinct().all())}
+
+
 def sync_partner_chapters(db: Session, years: List[int],
                           socios: Optional[Dict[str, str]] = None,
-                          set_phase=None) -> Dict[str, Any]:
+                          set_phase=None, forzar: bool = False) -> Dict[str, Any]:
     """Ingiere ``{socio × capítulo}`` para *years*. Idempotente por (período, socio, capítulo).
+
+    **REANUDABLE.** Recorrer los 192 socios toma ~40 minutos y la corrida del 2026-08-13 murió
+    en el socio 118 por un reinicio del contenedor. Sin reanudación, terminar la cola obliga a
+    rehacerlo entero —otros 40 minutos con el mismo riesgo—, así que un socio que ya tiene
+    TODOS los años pedidos se salta.
+
+    El salto es por socio × AÑO, no por socio: uno que entró con 2025 pero no con 2024 se
+    vuelve a pedir. Dar por hecho el socio completo habría dejado huecos invisibles.
+
+    ``forzar=True`` re-pide todo — necesario cuando la fuente REVISA años ya publicados, que
+    es lo normal en estadística de comercio.
 
     Un socio que la fuente no devuelve NO se rellena ni se borra: se cuenta como vacío y se
     reporta. Un fallo de red en un socio no aborta los demás.
@@ -80,8 +98,14 @@ def sync_partner_chapters(db: Session, years: List[int],
     vacios: List[str] = []
     fallidos: List[str] = []
     ingeridos: List[str] = []
+    saltados: List[str] = []
+    pedidos = {str(a) for a in years}
 
     for i, (code, nombre) in enumerate(socios.items(), 1):
+        if not forzar and pedidos <= _años_presentes(db, nombre):
+            saltados.append(nombre)
+            ingeridos.append(nombre)      # cuenta para la cobertura: el dato está
+            continue
         set_phase(f"{nombre} ({i}/{len(socios)})")
         try:
             por_año = fetch_partner_chapters(RD_M49, code, years, flow="M")
@@ -109,6 +133,7 @@ def sync_partner_chapters(db: Session, years: List[int],
         cubierto = sum(valor_socio.get(n, 0.0) for n in ingeridos)
         cobertura = round(cubierto / total_pais * 100, 1)
     return {"socios_intentados": len(socios), "socios_ingeridos": len(ingeridos),
+            "socios_saltados": len(saltados),
             "años": years, "filas_creadas": creadas, "filas_actualizadas": actualizadas,
             "cobertura_valor_pct": cobertura,
             # Brechas declaradas, no silenciadas.
