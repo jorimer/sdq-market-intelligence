@@ -51,11 +51,26 @@ def _upsert(db: Session, *, period: str, partner: str, partner_code: str,
     return creada
 
 
-def _años_presentes(db: Session, partner: str) -> set:
-    """Años que ese socio YA tiene ingeridos."""
+def _años_presentes(db: Session, partner_code: str) -> set:
+    """Años que ese socio YA tiene ingeridos, por CÓDIGO.
+
+    Por código y no por nombre: consultarlo por la etiqueta hacía que un cambio de rótulo
+    —"Estados Unidos" → "USA"— pareciera un socio nuevo y disparara una re-ingesta completa.
+    """
     return {r[0] for r in (db.query(TradePartnerChapter.period)
-                           .filter(TradePartnerChapter.partner == partner)
+                           .filter(TradePartnerChapter.partner_code == partner_code)
                            .distinct().all())}
+
+
+def _renombrar(db: Session, partner_code: str, nombre: str) -> int:
+    """Alinea la etiqueta de un socio con la de la fuente. Devuelve filas tocadas."""
+    n = (db.query(TradePartnerChapter)
+         .filter(TradePartnerChapter.partner_code == partner_code,
+                 TradePartnerChapter.partner != nombre)
+         .update({"partner": nombre}, synchronize_session=False))
+    if n:
+        db.commit()
+    return int(n or 0)
 
 
 def sync_partner_chapters(db: Session, years: List[int],
@@ -101,10 +116,16 @@ def sync_partner_chapters(db: Session, years: List[int],
     fallidos: List[str] = []
     ingeridos: List[str] = []
     saltados: List[str] = []
+    renombradas = 0
     pedidos = {str(a) for a in years}
 
     for i, (code, nombre) in enumerate(socios.items(), 1):
-        if not forzar and pedidos <= _años_presentes(db, nombre):
+        # La ETIQUETA se refresca SIEMPRE, incluso al saltar. Saltar el socio no debe saltar
+        # su nombre: tras deduplicar por código quedaron etiquetas mezcladas —"Estados Unidos"
+        # y "España" junto a "Brazil" e "Italy"— y esperar a la próxima ingesta anual las
+        # habría dejado así hasta 2027. Cuesta un UPDATE y hace el desorden auto-reparable.
+        renombradas += _renombrar(db, code, nombre)
+        if not forzar and pedidos <= _años_presentes(db, code):
             saltados.append(nombre)
             ingeridos.append(nombre)      # cuenta para la cobertura: el dato está
             continue
@@ -137,7 +158,7 @@ def sync_partner_chapters(db: Session, years: List[int],
     return {"socios_intentados": len(socios), "socios_ingeridos": len(ingeridos),
             "socios_saltados": len(saltados),
             "años": years, "filas_creadas": creadas, "filas_actualizadas": actualizadas,
-            "cobertura_valor_pct": cobertura,
+            "cobertura_valor_pct": cobertura, "etiquetas_alineadas": renombradas,
             # Brechas declaradas, no silenciadas.
             "socios_sin_dato": vacios, "socios_fallidos": fallidos}
 
