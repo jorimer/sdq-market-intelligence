@@ -30,6 +30,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from modules.banking_score.scoring.amplitude import TRAJECTORY_WINDOW as TRAJECTORY_COLUMNS
 from modules.banking_score.scoring.weights import SUB_COMPONENT_WEIGHTS
 from shared.config.settings import settings
 
@@ -360,15 +361,23 @@ def _build_indicators_table(indicators: Dict[str, Dict], styles,
 def _build_trajectory_table(trajectories: Dict, styles) -> List:
     """Trayectoria multi-período del score global + sub-componentes (Fase 4).
 
-    Muestra hasta los últimos ~6 trimestres como columnas. Opt-in: vacío si el
-    snapshot no trajo trayectoria (muestras sintéticas, entidad de un solo período).
+    Muestra la VENTANA COMPLETA que recibe la narrativa (``entity_trajectories(n=8)``).
+    Antes recortaba a los últimos 6 cortes mientras el contexto del modelo llevaba 8, y las
+    dos secciones que anclan la trayectoria citaban puntos que NO estaban en la página: la
+    §1 el pico (74.81 de junio-24) y la §9 el inicio de ventana (74.30 de marzo-24). Ambas
+    cifras eran correctas y ninguna verificable por el lector — el defecto que reportó el
+    cliente el 2026-08-13. Si la narrativa razona sobre ocho cortes, se imprimen ocho.
+
+    Dos decimales por el mismo hallazgo: a un decimal el 74.32 de septiembre-24 y el 74.30
+    de marzo-24 se imprimen ambos "74.3", así que quien intenta casar la prosa con la tabla
+    concluye que la sección se equivocó de período. El redondeo fabricaba la contradicción.
     """
     overall = trajectories.get("overall") or []
     sub = trajectories.get("sub") or {}
     if len(overall) < 2:
         return []
 
-    periods = [p["period_end"] for p in overall][-6:]
+    periods = [p["period_end"] for p in overall][-TRAJECTORY_COLUMNS:]
     # Encabezado: períodos abreviados a YYYY-MM.
     short = [pe[:7] for pe in periods]
     elements: List = [Paragraph("Trayectoria del Score (multi-período)", styles["SDQHeading"])]
@@ -381,7 +390,7 @@ def _build_trajectory_table(trajectories: Dict, styles) -> List:
         cells: List = [head]
         for pe in periods:
             v = by_period.get(pe)
-            cells.append(f"{v:.1f}" if isinstance(v, (int, float)) else "—")
+            cells.append(f"{v:.2f}" if isinstance(v, (int, float)) else "—")
         return cells
 
     rows = [["Eje"] + short]
@@ -390,8 +399,15 @@ def _build_trajectory_table(trajectories: Dict, styles) -> List:
         if sub.get(sk):
             rows.append(_series_row(SUB_COMPONENT_LABELS.get(sk, sk), sub[sk]))
 
+    # Con la ventana completa (8 cortes × 2 decimales) la tabla necesita más ancho útil y
+    # menos cuerpo: se estrecha la columna de etiquetas y baja el tipo. Sin esto las celdas
+    # envuelven y la tabla —que existe para que el lector VERIFIQUE— se vuelve ilegible.
+    ancha = len(periods) > 6
     table = _branded_table(
-        rows, [1.9 * inch] + [(4.6 * inch) / len(periods)] * len(periods), styles)
+        rows,
+        [(1.55 if ancha else 1.9) * inch]
+        + [((4.95 if ancha else 4.6) * inch) / len(periods)] * len(periods),
+        styles, font_size=7.0 if ancha else 8.5, padding=3 if ancha else 4)
     elements.append(table)
     elements.append(Spacer(1, 0.08 * inch))
     elements.append(Paragraph(

@@ -33,7 +33,14 @@ _SUB_SCORE_ATTR: Dict[str, str] = {
 }
 
 
-def entity_trajectories(db: Session, bank: Bank, n: int = 8,
+# Ventana de la trayectoria: cuántos cortes ve la narrativa Y cuántos imprime la tabla.
+# Es UNA constante a propósito. Cuando eran dos números independientes (contexto 8, tabla 6)
+# el informe citó en prosa dos anclas —el pico de junio-24 y el inicio de ventana de
+# marzo-24— que no estaban impresas: ambas correctas y ninguna verificable por el lector.
+TRAJECTORY_WINDOW = 8
+
+
+def entity_trajectories(db: Session, bank: Bank, n: int = TRAJECTORY_WINDOW,
                         as_of: Optional[date] = None) -> Dict[str, Any]:
     """Serie cronológica (ascendente, últimos *n* trimestres) del score global, de
     cada sub-componente y de cada indicador para *bank*.
