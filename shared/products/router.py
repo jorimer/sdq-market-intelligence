@@ -5,7 +5,6 @@ Transversal (vive en ``shared/``). Dos planos:
 - **Entrega comercial** (``/{sector}/{tier}/report`` y ``/download``): gateada por
   ``require_product_access`` (activación + tier, sin bypass de rol). Errores en español.
 """
-import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -29,6 +28,7 @@ from shared.products.access import (
 )
 from shared.products.activation import ActivationError, activate, deactivate
 from shared.products.anonymization import AnonymizationError
+from shared.products.filenames import SUJETO_SISTEMA, TIER_NATURALEZA, report_filename
 from shared.products.entitlements import (
     EntitlementError,
     grant_entitlement,
@@ -324,12 +324,14 @@ async def get_product_pdf(
     # El path lo genera el ensamblador (nunca input del usuario). El filename nombra el
     # período REAL del reporte (``snapshot.period`` vía ``out``), no el pedido: el Deep Dive
     # resuelve al último dato disponible, así que pedir "2025" produce un corte "2026-05" —
-    # el nombre del archivo debe coincidir con la portada, no con el query. Fallback al
-    # pedido si el ensamblador no reportó período. Saneado a [A-Za-z0-9_-] por higiene del
-    # header (un "—" o espacios no van en un filename).
+    # el nombre del archivo debe coincidir con la portada, no con el query.
+    #
+    # El SUJETO también sale de ``out``: sin él el nombre era (sector, nivel, período) y dos
+    # entidades del mismo corte colisionaban en el mismo archivo.
     eff_period = meta.get("period") or period or "latest"
-    safe_period = re.sub(r"[^A-Za-z0-9_-]", "", eff_period) or "latest"
-    filename = f"SDQ_{sector}_{access.tier.value}_{safe_period}.{fmt}"
+    filename = report_filename(
+        sector_key=sector, naturaleza=TIER_NATURALEZA.get(access.tier.value, access.tier.value),
+        sujeto=meta.get("scope") or scope or SUJETO_SISTEMA, periodo=eff_period, fmt=fmt)
     return FileResponse(path=path, media_type=_DOC_FORMATS[fmt], filename=filename)
 
 
@@ -376,7 +378,14 @@ async def get_product_sample(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Ya descargaste la muestra de este producto.")
-    filename = f"SDQ_muestra_{sector}_{pt.value}.pdf"
+    # La muestra corre sobre datos demo SINTÉTICOS: el sujeto y el período salen del propio
+    # exemplar (entidad demo, corte demo), nunca de datos reales. El snapshot es sintético y
+    # sin DB, así que volver a pedirlo para nombrar el archivo no cuesta nada.
+    demo = getattr(product, "sample_snapshot", lambda _t: None)(pt)
+    filename = report_filename(
+        sector_key=sector, naturaleza=TIER_NATURALEZA.get(pt.value, pt.value),
+        sujeto=getattr(demo, "entity_name", None) or SUJETO_SISTEMA,
+        periodo=getattr(demo, "period", None), muestra=True)
     return FileResponse(path=path, media_type="application/pdf", filename=filename)
 
 

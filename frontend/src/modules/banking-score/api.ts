@@ -329,10 +329,18 @@ export async function downloadReport(reportId: string): Promise<void> {
   const r = await client.get(`/banking-score/reports/download/${reportId}`, {
     responseType: "blob",
   });
+  // El nombre lo decide el BACKEND (`shared/products/filenames.py`) y viaja en el
+  // Content-Disposition: dice qué es el documento, de quién y de qué corte. Esta función
+  // lo descartaba y bajaba `reporte_<uuid>.pdf` —un UUID no identifica nada—, así que el
+  // cliente terminaba renombrando los archivos a mano. El resto de las descargas de la
+  // plataforma ya leían la cabecera; banca era la excepción.
+  const cd = (r.headers["content-disposition"] as string) || "";
+  const filename =
+    /filename="?([^"]+)"?/.exec(cd)?.[1] ?? `SDQ_Banca_Informe_${reportId}.pdf`;
   const url = URL.createObjectURL(r.data);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `reporte_${reportId}.pdf`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }

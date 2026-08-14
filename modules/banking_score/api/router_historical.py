@@ -6,6 +6,7 @@ Alimenta la página analítica del front. Solo lectura, gateada por sesión (cua
 autenticado). El dato es real y de fuente pública; no es un producto del catálogo comercial.
 """
 import logging
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
@@ -13,7 +14,9 @@ from sqlalchemy.orm import Session
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 from shared.database.session import get_db
+from shared.products.filenames import content_disposition, report_filename
 from modules.banking_score import historical_service as svc
+from modules.banking_score.products import SECTOR_KEY
 
 logger = logging.getLogger("sdq.api.banking.historical")
 
@@ -82,7 +85,13 @@ async def historical_forensic_report(
     narr = await svc.forensic_narrative(db, nombre)
     narrative = (narr or {}).get("narrative", "")
     degraded = bool((narr or {}).get("degraded"))
-    safe = "".join(c if c.isalnum() else "_" for c in nombre)[:60]
+    # Mismo esquema que el resto de las descargas. El forense no tiene un corte único (es una
+    # serie histórica), así que el período del nombre es la FECHA DE GENERACIÓN: sin ella,
+    # dos corridas de la misma entidad producen el mismo archivo y la segunda pisa a la primera.
+    def _nombre(ext: str) -> str:
+        return report_filename(
+            sector_key=SECTOR_KEY, naturaleza="Forense", sujeto=nombre,
+            periodo=date.today().isoformat(), fmt=ext)
 
     if fmt == "docx":
         from modules.banking_score.reports.forensic_docx import render_forensic_docx
@@ -90,9 +99,9 @@ async def historical_forensic_report(
         return Response(
             content=data,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f'attachment; filename="Informe_Forense_{safe}.docx"'})
+            headers={"Content-Disposition": content_disposition(_nombre("docx"))})
 
     from modules.banking_score.reports.forensic_pdf import render_forensic_pdf
     pdf = render_forensic_pdf(pkg, narrative, degraded=degraded)
     return Response(content=pdf, media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="Informe_Forense_{safe}.pdf"'})
+                    headers={"Content-Disposition": content_disposition(_nombre("pdf"))})
