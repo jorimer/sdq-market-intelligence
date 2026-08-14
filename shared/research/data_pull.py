@@ -286,7 +286,9 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
     # "categorías plausibles". El sujeto viaja con el número: se nombra el socio en cada
     # línea, no se deja al modelo atribuirlo.
     _spc = dict((payload or {}).get("socios_por_capitulo") or {})
-    _om = (_spc.pop("_omitidos", {}) or {}).get("socios_no_listados") or 0
+    _cob = _spc.pop("_cobertura", {}) or {}
+    _spc.pop("_omitidos", None)          # forma anterior: se ignora si sobrevive en caché
+    _om = max(0, (_cob.get("socios_con_desglose_computado") or 0) - len(_spc))
     for socio, d in _spc.items():
         caps = d.get("capitulos_top") or []
         if not caps:
@@ -303,18 +305,21 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
             # en pantalla las genéricas la desplazaban: el informe citaba "resiliencia 67.0"
             # mientras el cuerpo analizaba el desglose por socio y capítulo.
             f"Mayores: {detalle}.{extra}", source, 96.0))
-    if _spc:
+    if _spc and _cob:
         # EN POSITIVO y con los números dados. La versión anterior decía "N orígenes más están
         # ingeridos pero no se listan acá" y el modelo lo publicó como "el sistema no computa
         # el desglose para 181 orígenes" — declaró faltante lo que sí existe, el defecto
         # simétrico de inferir lo que falta. Y además contó mal ("12 orígenes" con 11 nombres),
         # así que los conteos van servidos, no derivados.
-        _tot = len(_spc) + _om
+        _n = _cob.get("socios_con_desglose_computado")
+        # Score 97: por ENCIMA del desglose por socio. Si el lector se queda con una sola
+        # línea, tiene que ser la que impide restar dos conteos y publicar una brecha falsa.
         out.append(_ev(
-            f"Cobertura del desglose por origen: {_tot} de {_tot} socios computados, 100% del "
-            f"valor importado. Esta lista trae los {len(_spc)} de mayor valor; los otros {_om} "
-            f"ESTÁN en el sistema y se consultan por socio. No es una brecha de dato.",
-            source, 95.0))
+            f"Cobertura del desglose por origen: {_n} socios con desglose por capítulo "
+            f"computado, 100% del valor importado. Este bloque lista los {len(_spc)} de mayor "
+            f"valor; el resto está en el sistema y se consulta por socio. NO restes este "
+            f"conteo del panel de socios (`n_partners`): la diferencia no es una brecha de "
+            f"dato y no debe narrarse como tal.", source, 97.0))
     return out or _generic_summary(label, payload, period, source)
 
 

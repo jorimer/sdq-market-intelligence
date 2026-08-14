@@ -68,10 +68,12 @@ def test_la_cobertura_se_declara_en_POSITIVO():
     como «el sistema no computa el desglose para 181 orígenes» — declaró faltante lo que sí
     existe. La cobertura va afirmada, con los conteos servidos para que no los derive."""
     p = {**_PAYLOAD, "socios_por_capitulo": {
-        **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 177}}}
+        **_PAYLOAD["socios_por_capitulo"],
+        "_cobertura": {"socios_con_desglose_computado": 192,
+                       "socios_listados_en_este_payload": 1, "nota": "x"}}}
     t = _textos(p)
-    assert "178 de 178 socios computados" in t and "100% del valor" in t
-    assert "ESTÁN en el sistema" in t and "No es una brecha de dato" in t
+    assert "192 socios con desglose por capítulo computado" in t
+    assert "100% del valor" in t and "no es una brecha de dato" in t.lower()
     assert "China" in t                      # y los listados siguen saliendo
 
 
@@ -80,7 +82,9 @@ def test_la_evidencia_de_cobertura_pesa_mas_que_la_generica():
     «resiliencia 67.0» mientras el cuerpo analiza el desglose."""
     from shared.research.data_pull import _trade_summary
     p = {**_PAYLOAD, "socios_por_capitulo": {
-        **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 177}}}
+        **_PAYLOAD["socios_por_capitulo"],
+        "_cobertura": {"socios_con_desglose_computado": 192,
+                       "socios_listados_en_este_payload": 1, "nota": "x"}}}
     evs = _trade_summary("RD", p, "2026-Q2", "trade")
     cob = next(e for e in evs if "Cobertura del desglose" in e.text)
     gen = next(e for e in evs if "resiliencia comercial" in e.text)
@@ -104,7 +108,9 @@ class TestLoQueSeVeEnPantalla:
         from shared.research.assemble import _evidence_lines
         from shared.research.data_pull import _trade_summary
         p = {**_PAYLOAD, "socios_por_capitulo": {
-            **_PAYLOAD["socios_por_capitulo"], "_omitidos": {"socios_no_listados": 177}}}
+            **_PAYLOAD["socios_por_capitulo"],
+        "_cobertura": {"socios_con_desglose_computado": 192,
+                       "socios_listados_en_este_payload": 1, "nota": "x"}}}
 
         class SQ:
             evidence = _trade_summary("RD", p, "2026-Q2", "DGA · BCRD")
@@ -118,9 +124,12 @@ class TestLoQueSeVeEnPantalla:
         if "resiliencia comercial" in t:
             assert t.index("Importaciones desde China") < t.index("resiliencia comercial")
 
-    def test_la_cobertura_tambien_sobrevive(self):
-        """Es lo que impide que el informe declare faltante lo que sí tiene."""
-        assert "No es una brecha de dato" in self._pantalla()
+    def test_la_cobertura_va_PRIMERA(self):
+        """Si el lector se queda con una sola línea, tiene que ser la que impide restar dos
+        conteos y publicar una brecha falsa."""
+        t = self._pantalla()
+        assert "Cobertura del desglose" in t
+        assert t.index("Cobertura del desglose") < t.index("Importaciones desde")
 
 
 class TestPeriodosEtiquetados:
@@ -143,3 +152,22 @@ class TestPeriodosEtiquetados:
     def test_la_resiliencia_declara_su_corte(self):
         e = next(x for x in self._evs() if "resiliencia comercial" in x.text)
         assert "corte 2026-Q2" in e.text and "trimestral" in e.text
+
+
+def test_prohibe_EXPLICITAMENTE_restar_los_dos_conteos():
+    """El payload publica `partners.import.n_partners` (193) y este bloque lista 12. El modelo
+    restó y publicó «181 socios no tienen desglose», que es falso. La contradicción se
+    reconcilia en el DATO y la instrucción viaja con la cifra."""
+    p = {**_PAYLOAD, "socios_por_capitulo": {
+        **_PAYLOAD["socios_por_capitulo"],
+        "_cobertura": {"socios_con_desglose_computado": 192,
+                       "socios_listados_en_este_payload": 1, "nota": "x"}}}
+    t = _textos(p)
+    assert "NO restes" in t and "n_partners" in t
+
+
+def test_sin_bloque_de_cobertura_no_se_afirma_cobertura():
+    """Sin el conteo servido no se inventa: la línea no se emite."""
+    p = {**_PAYLOAD, "socios_por_capitulo": {k: v for k, v in
+                                             _PAYLOAD["socios_por_capitulo"].items()}}
+    assert "Cobertura del desglose" not in _textos(p)
