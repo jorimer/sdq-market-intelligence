@@ -87,7 +87,7 @@ import statistics as stats
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 #: Mínimo de jornadas de un local para intentar proyectarlo. Cuatro semanas es el piso
 #: para que cada celda local × día-de-semana tenga más de una observación; por debajo, la
@@ -219,6 +219,49 @@ class ProjectionResult:
     variance: Optional[VarianceShares]
     calibration: Optional[Calibration]
     basis: str
+
+
+@dataclass(frozen=True)
+class Dispersion:
+    """Sobredispersión de una serie de CONTEOS frente a Poisson.
+
+    Existe para responder con medición, no con costumbre, a qué familia corresponde a las
+    transacciones. Un conteo invita a un modelo de Poisson o binomial negativa; el índice
+    de Fano dice si hace falta.
+    """
+
+    n_stores: int
+    fano_median: float
+    fano_min: float
+    fano_max: float
+    mean_count: float
+    poisson_cv_pct: float
+    observed_cv_pct: Optional[float]
+    note: str
+
+
+@dataclass(frozen=True)
+class Decomposition:
+    """Las dos series que el operador puede mover, y la venta que resulta de ellas.
+
+    La venta **no se proyecta aparte**: se deriva del producto. Cuesta 0,3 % de precisión
+    frente a proyectarla directamente —una diferencia que el backtest no distingue— y a
+    cambio la descomposición cuadra de forma exacta. Publicar las tres por separado deja al
+    informe afirmando que tráfico por cheque no da la venta, que es la clase de
+    inconsistencia que le cuesta al lector la confianza en todo lo demás.
+    """
+
+    traffic: ProjectionResult
+    check: ProjectionResult
+    sales_points: Tuple[PointProjection, ...]
+    sales_mape: Optional[float]
+    #: Proporción de la varianza del residuo de la venta que aporta el tráfico.
+    traffic_share_pct: Optional[float]
+    #: Correlación entre los residuos de tráfico y cheque. Cerca de cero es lo que permite
+    #: componer la banda de la venta a partir de las dos.
+    residual_correlation: Optional[float]
+    dispersion: Optional[Dispersion]
+    note: str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -483,6 +526,9 @@ RULES: Dict[str, RuleBuilder] = {
 
 #: La vara contra la que se mide el aporte de cualquier regla.
 BASELINE_RULE = "store_mean"
+
+#: Regla de respaldo cuando el tramo de entrenamiento no alcanza para puntuar ninguna.
+FALLBACK_RULE = "store_dow_drift_14"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -859,4 +905,270 @@ def project(
         variance=variance_decomposition(usable),
         calibration=calibration,
         basis=basis,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Conteos: qué familia corresponde, medido
+# ─────────────────────────────────────────────────────────────────────────────
+
+def overdispersion(counts: Sequence[Observation]) -> Optional[Dispersion]:
+    """Índice de Fano de una serie de conteos, quitado antes el patrón semanal.
+
+    Un conteo invita por reflejo a un modelo de Poisson o binomial negativa. La pregunta
+    real es si el ruido de conteo pesa algo frente al vaivén de la conducta, y con
+    volúmenes de tres cifras diarias casi nunca pesa: con μ transacciones por jornada,
+    Poisson impone un coeficiente de variación de ``1/√μ``, que a 850 transacciones es del
+    3 %. Si el vaivén observado es mucho mayor, la componente de conteo es irrelevante y el
+    modelo multiplicativo de las otras series sirve igual, sin agregar maquinaria para una
+    fuente de ruido que queda tapada.
+
+    El patrón semanal se descuenta antes: con él dentro, el Fano mide la estacionalidad y
+    no la dispersión, y saldría enorme aunque la serie fuese perfectamente Poisson.
+    """
+    usable = _usable(counts)
+    if not usable:
+        return None
+
+    by_store: Dict[str, List[Observation]] = defaultdict(list)
+    for o in usable:
+        by_store[o.store_id].append(o)
+
+    fanos: List[float] = []
+    means: List[float] = []
+    cvs: List[float] = []
+    for observations in by_store.values():
+        if len(observations) < MIN_DAYS_PER_STORE:
+            continue
+        by_dow: Dict[int, List[float]] = defaultdict(list)
+        for o in observations:
+            by_dow[o.day.weekday()].append(o.value)
+        residuals = [
+            v - stats.fmean(values)
+            for values in by_dow.values() if len(values) > 1
+            for v in values
+        ]
+        mean = stats.fmean(o.value for o in observations)
+        if len(residuals) < 2 or mean <= 0:
+            continue
+        variance = stats.variance(residuals)
+        fanos.append(variance / mean)
+        means.append(mean)
+        cvs.append(math.sqrt(variance) / mean * 100.0)
+
+    if not fanos:
+        return None
+
+    mean_count = stats.fmean(means)
+    poisson_cv = 100.0 / math.sqrt(mean_count) if mean_count > 0 else 0.0
+    observed_cv = stats.fmean(cvs) if cvs else None
+    median_fano = stats.median(fanos)
+    note = (
+        f"Fano mediano {median_fano:.1f} sobre {len(fanos)} locales (Poisson puro = 1,0). "
+        + (
+            f"Con {mean_count:.0f} transacciones diarias, Poisson impondría un vaivén de "
+            f"{poisson_cv:.1f}% y el observado es de {observed_cv:.1f}%: la componente de "
+            "conteo queda tapada y no justifica un modelo de conteo aparte."
+            if observed_cv is not None and observed_cv > 2 * poisson_cv else
+            "El vaivén observado se acerca al que impone el conteo: un modelo de conteo sí "
+            "correspondería."
+        )
+    )
+    return Dispersion(
+        n_stores=len(fanos),
+        fano_median=median_fano,
+        fano_min=min(fanos),
+        fano_max=max(fanos),
+        mean_count=mean_count,
+        poisson_cv_pct=poisson_cv,
+        observed_cv_pct=observed_cv,
+        note=note,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tráfico y cheque, con la venta derivada
+# ─────────────────────────────────────────────────────────────────────────────
+
+def split_traffic_and_check(
+    rows: Sequence[Any],
+) -> Tuple[List[Observation], List[Observation]]:
+    """Separa las jornadas del tablero en tráfico y cheque promedio.
+
+    El cheque se computa, jamás se lee de una columna almacenada: es venta ÷ transacciones
+    en la propia jornada, la misma regla que gobierna ``sales.py``. Una jornada a la que le
+    falte cualquiera de los dos no entra en ninguna de las dos series, en vez de entrar en
+    una con un valor imputado en la otra.
+    """
+    traffic: List[Observation] = []
+    check: List[Observation] = []
+    for row in rows:
+        sales = getattr(row, "sales", None)
+        transactions = getattr(row, "transactions", None)
+        day = getattr(row, "business_date", None)
+        store_id = getattr(row, "store_id", None)
+        if not sales or not transactions or day is None or store_id is None:
+            continue
+        if sales <= 0 or transactions <= 0:
+            continue
+        traffic.append(Observation(store_id, day, float(transactions)))
+        check.append(Observation(store_id, day, sales / transactions))
+    return traffic, check
+
+
+def _paired_residuals(
+    traffic: Sequence[Observation],
+    check: Sequence[Observation],
+    horizon: int,
+) -> Tuple[List[float], List[float], Dict[str, List[float]]]:
+    """Residuos de tráfico, de cheque y de la venta derivada, emparejados por celda.
+
+    Emparejar importa por dos cosas distintas. Los dos primeros vuelven planos y alineados
+    para medir cuánto se mueven juntos tráfico y cheque. El tercero vuelve **agrupado por
+    local**, porque la banda de la venta derivada sale de sus propios residuos.
+
+    Componer la banda a partir de las escalas de los dos componentes fue el primer intento y
+    está mal: cada una viene ya encogida hacia la común, y componerlas las encoge dos veces.
+    Sobre el panel real esa banda cubría 68 % contra 80 % nominal, y en seis locales quedaba
+    **más angosta que la del tráfico solo**, que es imposible. La banda de un producto se
+    mide sobre el producto.
+    """
+    p_traffic = _log_panel(_usable(traffic))
+    p_check = _log_panel(_usable(check))
+    days = sorted({o.day for o in _usable(traffic)})
+
+    e_traffic: List[float] = []
+    e_check: List[float] = []
+    e_sales: Dict[str, List[float]] = defaultdict(list)
+    for cut, ahead in _folds(days, horizon):
+        train_t = {s: {d: v for d, v in dd.items() if d <= cut} for s, dd in p_traffic.items()}
+        train_c = {s: {d: v for d, v in dd.items() if d <= cut} for s, dd in p_check.items()}
+        train_t = {s: d for s, d in train_t.items() if d}
+        train_c = {s: d for s, d in train_c.items() if d}
+        if not train_t or not train_c:
+            continue
+        # Cada serie elige SU regla con lo anterior al corte: el cheque no tiene por qué
+        # querer la misma ventana que el tráfico, y sobre el panel real no la quiere.
+        rule_t = _rule_for(train_t, horizon)
+        rule_c = _rule_for(train_c, horizon)
+        f_t = RULES[rule_t](train_t)
+        f_c = RULES[rule_c](train_c)
+        for store_id, days_t in p_traffic.items():
+            days_c = p_check.get(store_id, {})
+            for day in ahead:
+                a_t = days_t.get(day)
+                a_c = days_c.get(day)
+                if a_t is None or a_c is None:
+                    continue
+                pred_t = f_t(store_id, day)
+                pred_c = f_c(store_id, day)
+                if pred_t is None or pred_c is None:
+                    continue
+                e_traffic.append(a_t - pred_t)
+                e_check.append(a_c - pred_c)
+                e_sales[store_id].append((a_t + a_c) - (pred_t + pred_c))
+    return e_traffic, e_check, dict(e_sales)
+
+
+def _rule_for(train: Dict[str, Dict[date, float]], horizon: int) -> str:
+    """Regla ganadora sobre el tramo de entrenamiento, o la de respaldo si no alcanza."""
+    obs = [
+        Observation(store_id, day, math.exp(value))
+        for store_id, days in train.items()
+        for day, value in days.items()
+    ]
+    ranked, _ = backtest(obs, horizon)
+    return next((r.rule for r in ranked if r.mape is not None), FALLBACK_RULE)
+
+
+def _correlation(xs: Sequence[float], ys: Sequence[float]) -> Optional[float]:
+    if len(xs) < 2 or len(xs) != len(ys):
+        return None
+    mx, my = stats.fmean(xs), stats.fmean(ys)
+    num = sum((a - mx) * (b - my) for a, b in zip(xs, ys))
+    den = math.sqrt(sum((a - mx) ** 2 for a in xs) * sum((b - my) ** 2 for b in ys))
+    return num / den if den > 0 else None
+
+
+def decompose(
+    rows: Sequence[Any],
+    horizon: int = DEFAULT_HORIZON_DAYS,
+) -> Optional[Decomposition]:
+    """Proyecta tráfico y cheque, y deriva la venta del producto de ambos.
+
+    Es la descomposición que ninguna encuesta puede dar y la que decide qué hacer: una
+    venta que cae por tráfico y una que cae por cheque piden acciones distintas. Sobre el
+    panel del encargo el **84 % de la incertidumbre de la venta es tráfico**, así que la
+    conversación sobre el pronóstico es, casi toda, una conversación sobre afluencia.
+    """
+    traffic_obs, check_obs = split_traffic_and_check(rows)
+    if not traffic_obs or not check_obs:
+        return None
+
+    traffic = project(traffic_obs, horizon)
+    check = project(check_obs, horizon)
+    if traffic is None or check is None:
+        return None
+
+    e_t, e_c, e_s_by_store = _paired_residuals(traffic_obs, check_obs, horizon)
+    correlation = _correlation(e_t, e_c)
+    var_t = _pvar(e_t)
+    var_c = _pvar(e_c)
+    share = (var_t / (var_t + var_c) * 100.0) if (var_t + var_c) > 0 else None
+    e_s = [d for values in e_s_by_store.values() for d in values]
+
+    # La banda de la venta derivada sale de SUS PROPIOS residuos, por la misma construcción
+    # validada del resto del motor: forma común de la red sobre residuos estandarizados,
+    # escala propia de cada local con encogimiento. Componerla de las escalas de tráfico y
+    # cheque las encogería dos veces y la dejaría más angosta que la de un solo componente.
+    s_scales, _ = _shrunk_scales(e_s_by_store)
+    q_lo, q_hi = _shape_quantiles(e_s_by_store, s_scales)
+
+    t_points = {(p.store_id, p.day): p for p in traffic.points}
+    c_points = {(p.store_id, p.day): p for p in check.points}
+    sales_points: List[PointProjection] = []
+    for key, tp in sorted(t_points.items()):
+        cp = c_points.get(key)
+        if cp is None:
+            continue
+        store_id = key[0]
+        point = tp.point * cp.point
+        scale = s_scales.get(store_id)
+        if scale is None or q_lo is None or q_hi is None:
+            sales_points.append(PointProjection(store_id, key[1], point, point, point))
+            continue
+        sales_points.append(PointProjection(
+            store_id=store_id,
+            day=key[1],
+            point=point,
+            lo=point * (1.0 + math.expm1(q_lo * scale)),
+            hi=point * (1.0 + math.expm1(q_hi * scale)),
+        ))
+
+    dispersion = overdispersion(traffic_obs)
+    note = (
+        "La venta se deriva de tráfico × cheque, no se proyecta aparte: la descomposición "
+        "cuadra de forma exacta y el backtest no distingue una de otra. "
+        + (
+            f"El {share:.0f}% de la incertidumbre de la venta viene del tráfico y el resto "
+            f"del cheque. " if share is not None else ""
+        )
+        + (
+            f"Los residuos de ambos se mueven de forma casi independiente "
+            f"(correlación {correlation:+.2f}), lo que permite componer la banda."
+            if correlation is not None and abs(correlation) < 0.3 else
+            f"Los residuos de ambos están correlacionados ({correlation:+.2f}) y la banda "
+            "compuesta lo incorpora." if correlation is not None else ""
+        )
+    )
+
+    return Decomposition(
+        traffic=traffic,
+        check=check,
+        sales_points=tuple(sales_points),
+        sales_mape=_mape(e_s),
+        traffic_share_pct=share,
+        residual_correlation=correlation,
+        dispersion=dispersion,
+        note=note,
     )

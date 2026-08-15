@@ -324,6 +324,138 @@ def test_la_varianza_declina_con_historia_corta():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Tráfico, cheque y la venta derivada
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _Row:
+    def __init__(self, store_id, business_date, sales, transactions):
+        self.store_id = store_id
+        self.business_date = business_date
+        self.sales = sales
+        self.transactions = transactions
+
+
+def _rows(stores, days=70, seed=5):
+    import random
+    rng = random.Random(seed)
+    out = []
+    for store, (tx_base, check_base, sigma) in stores.items():
+        for i in range(days):
+            day = START + timedelta(days=i)
+            fin_de_semana = 1.4 if day.weekday() >= 5 else 1.0
+            tx = tx_base * fin_de_semana * math.exp(rng.gauss(0.0, sigma))
+            check = check_base * math.exp(rng.gauss(0.0, sigma / 3.0))
+            out.append(_Row(store, day, tx * check, int(round(tx))))
+    return out
+
+
+def test_el_cheque_se_computa_no_se_lee():
+    rows = [_Row("A", START, 1000.0, 50)]
+    traffic, check = P.split_traffic_and_check(rows)
+    assert traffic[0].value == 50.0
+    assert math.isclose(check[0].value, 20.0)
+
+
+def test_una_jornada_sin_transacciones_no_entra_en_ninguna_serie():
+    """No entra a tráfico con cero ni a cheque con un valor imputado: no entra."""
+    rows = [
+        _Row("A", START, 1000.0, 50),
+        _Row("A", START + timedelta(days=1), 1000.0, None),
+        _Row("A", START + timedelta(days=2), None, 50),
+        _Row("A", START + timedelta(days=3), 1000.0, 0),
+    ]
+    traffic, check = P.split_traffic_and_check(rows)
+    assert len(traffic) == 1 and len(check) == 1
+
+
+def test_la_sobredispersion_se_mide_y_distingue_poisson():
+    """Un conteo invita por reflejo a Poisson. El Fano dice si hace falta."""
+    import random
+    rng = random.Random(2)
+
+    poisson = [
+        P.Observation("A", START + timedelta(days=i), float(_poisson(rng, 400.0)))
+        for i in range(70)
+    ] + [
+        P.Observation("B", START + timedelta(days=i), float(_poisson(rng, 400.0)))
+        for i in range(70)
+    ]
+    disperso = [
+        P.Observation(s, o.day, o.value * math.exp(rng.gauss(0.0, 0.12)))
+        for s in ("A", "B")
+        for o in poisson if o.store_id == s
+    ]
+
+    d_poisson = P.overdispersion(poisson)
+    d_disperso = P.overdispersion(disperso)
+    assert d_poisson is not None and d_disperso is not None
+    assert d_poisson.fano_median < 3.0
+    assert d_disperso.fano_median > 3.0 * d_poisson.fano_median
+    assert "no justifica un modelo de conteo aparte" in d_disperso.note
+    assert "no justifica un modelo de conteo aparte" not in d_poisson.note
+
+
+def _poisson(rng, mean):
+    """Poisson por el método de Knuth. Evita traer una dependencia al test."""
+    limit = math.exp(-mean) if mean < 700 else 0.0
+    if limit == 0.0:  # media alta: aproximación normal, suficiente para el Fano
+        return max(0, int(round(rng.gauss(mean, math.sqrt(mean)))))
+    k, p = 0, 1.0
+    while p > limit:
+        k += 1
+        p *= rng.random()
+    return k - 1
+
+
+def test_la_venta_derivada_cuadra_exacto_con_sus_componentes():
+    """Publicar las tres por separado deja al informe afirmando que tráfico por cheque no
+    da la venta. Derivarla lo vuelve imposible."""
+    result = P.decompose(_rows({"A": (900, 300.0, 0.10), "B": (500, 260.0, 0.18)}), horizon=7)
+    assert result is not None
+    traffic = {(p.store_id, p.day): p.point for p in result.traffic.points}
+    check = {(p.store_id, p.day): p.point for p in result.check.points}
+    assert result.sales_points
+    for point in result.sales_points:
+        key = (point.store_id, point.day)
+        assert math.isclose(point.point, traffic[key] * check[key], rel_tol=1e-12)
+
+
+def test_la_banda_de_la_venta_supera_a_la_de_cada_componente():
+    """Componer la banda de las escalas ya encogidas las encoge dos veces y sobre el panel
+    real dejaba seis locales con la venta más angosta que su propio tráfico, que es
+    imposible. La banda de un producto se mide sobre el producto."""
+    result = P.decompose(_rows({"A": (900, 300.0, 0.10), "B": (500, 260.0, 0.22)}), horizon=7)
+    assert result is not None
+    def ancho(v):
+        return v.band_hi_pct - v.band_lo_pct
+
+    traffic = {v.store_id: ancho(v) for v in result.traffic.verdicts if v.band_lo_pct is not None}
+    check = {v.store_id: ancho(v) for v in result.check.verdicts if v.band_lo_pct is not None}
+    sales = {
+        p.store_id: (p.hi / p.point - p.lo / p.point) * 100.0
+        for p in result.sales_points if p.point > 0
+    }
+    assert sales
+    for store_id, width in sales.items():
+        assert width >= traffic.get(store_id, 0.0) - 1e-6
+        assert width >= check.get(store_id, 0.0) - 1e-6
+
+
+def test_la_incertidumbre_de_la_venta_se_reparte_entre_trafico_y_cheque():
+    """Con el cheque tres veces más estable que el tráfico, el tráfico manda."""
+    result = P.decompose(_rows({"A": (900, 300.0, 0.12), "B": (500, 260.0, 0.12)}), horizon=7)
+    assert result is not None
+    assert result.traffic_share_pct is not None
+    assert result.traffic_share_pct > 60.0
+    assert result.residual_correlation is not None
+
+
+def test_la_descomposicion_declina_sin_transacciones():
+    rows = [_Row("A", START + timedelta(days=i), 1000.0, None) for i in range(70)]
+    assert P.decompose(rows, horizon=7) is None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # La vara existe y compite
 # ─────────────────────────────────────────────────────────────────────────────
 
