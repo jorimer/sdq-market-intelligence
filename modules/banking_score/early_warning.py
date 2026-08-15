@@ -347,18 +347,23 @@ def _expresar(valor: Optional[float], forma: str) -> str:
     """La cifra como la leería un comité, con su unidad. Nunca el número pelado."""
     if valor is None:
         return "sin dato"
+    # Separador decimal: PUNTO. Es la convención de RD ("RD$1,234.56") y la del resto del
+    # informe — medido sobre un Deep Dive generado en producción, 133 cifras con punto contra
+    # 8 con coma. Una primera versión de esta función usó coma y quedó como la única sección
+    # fuera de convención: dentro del MISMO párrafo convivían "2,3 veces" y el "2.3 veces" del
+    # modelo, que se lee como un error de datos.
     if forma == "veces":
         v = valor / 100
         if abs(v - 1.0) < 0.05:
-            return "1 vez"           # "1,0 veces" es la frontera; se dice en singular
-        return f"{v:.1f} veces".replace(".", ",")
+            return "1 vez"           # "1.0 veces" es la frontera; se dice en singular
+        return f"{v:.1f} veces"
     if forma == "pp_var":
         n = f"{abs(valor):.1f}".rstrip("0").rstrip(".")
-        return f"{n} punto{'s' if abs(valor) != 1 else ''}".replace(".", ",")
-    # Dos decimales solo si aportan: "50,90%" finge una precisión que el dato no tiene.
-    txt = f"{valor:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+        return f"{n} punto{'s' if abs(valor) != 1 else ''}"
+    # Dos decimales solo si aportan: "50.90%" finge una precisión que el dato no tiene.
+    txt = f"{valor:,.2f}"
     if txt.endswith("0"):
-        txt = txt[:-1].rstrip(",")
+        txt = txt[:-1].rstrip(".")
     return txt + "%"
 
 
@@ -370,7 +375,7 @@ def _horizonte(trimestres: Optional[float]) -> Optional[str]:
     if trimestres < 6:
         return f"unos {trimestres:.0f} trimestres"
     anios = trimestres / 4.0
-    return f"alrededor de {anios:.1f} años".replace(".", ",")
+    return f"alrededor de {anios:.1f} años"
 
 
 def signal_panel(m: Dict, peers: Dict) -> List[Dict]:

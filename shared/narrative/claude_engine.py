@@ -363,8 +363,8 @@ THIN_TEMPLATES = {
         "FORMATO DE LAS CIFRAS: cada señal trae sus campos ya redactados —'valor_expresado', "
         "'umbral_expresado', 'hace_12m_expresado', 'horizonte'—. Copiá ESAS cadenas TAL CUAL "
         "('2,0 veces', '50,9%', 'alrededor de 3,5 años'); NO uses los campos numéricos crudos "
-        "('value', 'threshold') ni reformatees el separador decimal. El informe usa coma "
-        "decimal y mezclar '2.3' con '2,3' en el mismo párrafo se lee como un error de datos."
+        "('value', 'threshold') ni reformatees el separador decimal — el informe usa PUNTO "
+        "decimal, y mezclar '2.3' con '2,3' en el mismo párrafo se lee como un error de datos."
     ),
     "banking_forensic": (
         "Escribe una LECTURA RETROSPECTIVA de una entidad financiera que SALIÓ del sistema, "
