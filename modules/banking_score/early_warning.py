@@ -73,9 +73,9 @@ ALERT_WEIGHTS: Dict[str, float] = {
 # test que lo busque ahí falla sin motivo (o pasa sin protegerte).
 # El rótulo dice QUÉ mide el índice. Decir "del conjunto" prometía cubrir las nueve reglas
 # cuando solo pondera siete, y con eso un 0.0 legítimo se leía como all-clear global.
-ENSEMBLE_ENCABEZADO = "Salud frente a los precursores calibrados"
-ENSEMBLE_COBERTURA = "{evaluables} de {calibradas} evaluables"
-ENSEMBLE_NINGUNO_ACTIVO = "ninguno activo"
+ENSEMBLE_ENCABEZADO = "Índice de salud frente a las señales de deterioro temprano"
+ENSEMBLE_COBERTURA = "{evaluables} de {calibradas} señales con dato al corte"
+ENSEMBLE_NINGUNO_ACTIVO = "ninguna encendida"
 # La bandera que quedó fuera del índice se NOMBRA, no se explica. El porqué metodológico va
 # a Limitaciones; acá el comité necesita el hecho, no nuestra epistemología.
 ENSEMBLE_FUERA_DEL_INDICE = "fuera del índice"
@@ -274,6 +274,105 @@ def rule_capital_erosion(capital_now: Optional[float],
                  "Δ patrimonio/activos pp (12m)")
 
 
+# ── Cómo se NOMBRA y se EXPRESA cada precursor en el informe ───────────────────
+# Los `code`/`label` de las reglas son nombres internos —"brecha de provisiones",
+# "morosidad sobre el umbral de su tipo", "solvencia cerca del piso"— y se estaban filtrando
+# al PDF como si fueran categorías que el lector conoce. Acá viven el concepto en lenguaje de
+# riesgo, la unidad en que la cifra se entiende, y QUÉ SIGNIFICA cruzar el umbral. Sin eso el
+# informe publicaba "pasó de 229.67 a 200.6" y "alcanzaría el umbral de 100.0", que no dicen
+# de qué son esos números ni qué pasa al cruzarlos.
+#   forma: "pct"      → 15.37  ⇒ "15,4%"
+#          "veces"    → 200.6  ⇒ "2,0 veces"   (un ratio publicado en base 100)
+#          "pp_var"   → -1.0   ⇒ "1,0 punto"   (una variación en puntos)
+SIGNAL_META: Dict[str, Dict[str, str]] = {
+    "morosidad_nivel": {
+        "concepto": "la morosidad de la cartera",
+        "forma": "pct",
+        "umbral_significa": "la mora supera lo habitual para una entidad de su tipo",
+    },
+    "brecha_provisiones": {
+        "concepto": "la cobertura de provisiones",
+        "forma": "veces",
+        "umbral_significa": "las reservas dejan de cubrir la cartera vencida",
+    },
+    "erosion_capital": {
+        "concepto": "la erosión del capital",
+        "forma": "pp_var",
+        "umbral_significa": "el capital sobre activos cede más de un punto en doce meses",
+    },
+    "salto_morosidad": {
+        "concepto": "el salto de la morosidad",
+        "forma": "pct",
+        "umbral_significa": "la mora crece la mitad o más respecto de un año atrás",
+    },
+    "crecimiento_anomalo": {
+        "concepto": "la expansión del balance",
+        "forma": "pct",
+        "umbral_significa": "los activos crecen más rápido que el 90% del sistema",
+    },
+    "solvencia_piso": {
+        "concepto": "la solvencia",
+        "forma": "pct",
+        "umbral_significa": "el capital regulatorio se aproxima al mínimo legal de 10%",
+    },
+    "estres_liquidez": {
+        "concepto": "la salida de depósitos",
+        "forma": "pct",
+        "umbral_significa": "los depósitos caen 10% o más en un trimestre",
+    },
+    # Las dos que quedan fuera del índice ponderado se publican igual, y con el mismo
+    # cuidado: son las que el lector ve en la lista de señales activas.
+    # sujeto-ok: la clave es el CODE de la regla, no una cifra; su población la nombra
+    # `concepto` ("los diez mayores deudores") y viaja con el número al informe.
+    "concentracion": {
+        "concepto": "la concentración en los diez mayores deudores",
+        "forma": "pct",
+        "umbral_significa": "los diez mayores deudores superan el 30% de la cartera",
+    },
+    "fondeo_caro": {
+        "concepto": "el costo de fondeo",
+        "forma": "pct",
+        "umbral_significa": "la entidad paga por sus depósitos más que el 90% del sistema",
+    },
+}
+
+# Más allá de este horizonte una convergencia no se distingue del ruido, y tampoco es
+# accionable: reportar que un indicador "se mueve hacia su umbral" a doce o quince años es
+# disfrazar ruido de señal. Cinco años es el borde: cubre el horizonte de una decisión de
+# crédito (la cobertura de BPD, a 3,5 años, SÍ importa) y descarta los plazos de una década.
+HORIZONTE_MATERIAL_Q = 20
+
+
+def _expresar(valor: Optional[float], forma: str) -> str:
+    """La cifra como la leería un comité, con su unidad. Nunca el número pelado."""
+    if valor is None:
+        return "sin dato"
+    if forma == "veces":
+        v = valor / 100
+        if abs(v - 1.0) < 0.05:
+            return "1 vez"           # "1,0 veces" es la frontera; se dice en singular
+        return f"{v:.1f} veces".replace(".", ",")
+    if forma == "pp_var":
+        n = f"{abs(valor):.1f}".rstrip("0").rstrip(".")
+        return f"{n} punto{'s' if abs(valor) != 1 else ''}".replace(".", ",")
+    # Dos decimales solo si aportan: "50,90%" finge una precisión que el dato no tiene.
+    txt = f"{valor:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+    if txt.endswith("0"):
+        txt = txt[:-1].rstrip(",")
+    return txt + "%"
+
+
+def _horizonte(trimestres: Optional[float]) -> Optional[str]:
+    """Trimestres → la unidad en que un comité razona. Bajo un año y medio, trimestres;
+    más allá, años — «59 trimestres» obliga al lector a dividir."""
+    if trimestres is None:
+        return None
+    if trimestres < 6:
+        return f"unos {trimestres:.0f} trimestres"
+    anios = trimestres / 4.0
+    return f"alrededor de {anios:.1f} años".replace(".", ",")
+
+
 def signal_panel(m: Dict, peers: Dict) -> List[Dict]:
     """Dónde está la entidad en CADA precursor calibrado, se haya encendido o no.
 
@@ -331,9 +430,12 @@ def signal_panel(m: Dict, peers: Dict) -> List[Dict]:
     out: List[Dict] = []
     for code, label, metric, valor, umbral, peor_mayor, prev4 in specs:
         if valor is None or umbral is None:
-            out.append({"code": code, "label": label, "metric": metric, "value": None,
-                        "threshold": umbral, "estado": "sin_dato", "margen": None,
-                        "velocidad_4t": None, "direccion": None, "trimestres_al_umbral": None})
+            out.append({"code": code, "label": label, "metric": metric,
+                        "concepto": SIGNAL_META.get(code, {}).get("concepto", label.lower()),
+                        "value": None, "threshold": umbral, "estado": "sin_dato",
+                        "margen": None, "velocidad_4t": None, "direccion": None,
+                        "trimestres_al_umbral": None, "horizonte": None,
+                        "convergencia_material": False})
             continue
         activa = valor >= umbral if peor_mayor else valor <= umbral
         # Margen SIEMPRE positivo cuando la entidad está del lado sano, sin importar la
@@ -351,12 +453,25 @@ def signal_panel(m: Dict, peers: Dict) -> List[Dict]:
                 # Trimestres al umbral SI el ritmo de los últimos 4T se sostiene. La condición
                 # viaja en la redacción («de sostenerse el ritmo»), no en un rótulo de salvedad.
                 trimestres = round(margen / (avance / 4.0), 1)
+        meta = SIGNAL_META.get(code, {})
+        forma = meta.get("forma", "pct")
+        # Materialidad: una convergencia a doce o quince años no es una convergencia. Se
+        # conserva la dirección (el hecho) y se descarta el plazo (el ruido).
+        material = trimestres is not None and trimestres <= HORIZONTE_MATERIAL_Q
         out.append({"code": code, "label": label, "metric": metric,
+                    "concepto": meta.get("concepto", label.lower()),
                     "value": round(valor, 2), "threshold": round(umbral, 2),
+                    "valor_expresado": _expresar(valor, forma),
+                    "umbral_expresado": _expresar(umbral, forma),
+                    "umbral_significa": meta.get("umbral_significa", ""),
+                    "hace_12m_expresado": (_expresar(valor - vel, forma)
+                                           if vel is not None else None),
                     "estado": "activa" if activa else "sin_activar",
                     "margen": round(margen, 2),
                     "velocidad_4t": None if vel is None else round(vel, 2),
-                    "direccion": direccion, "trimestres_al_umbral": trimestres})
+                    "direccion": direccion, "trimestres_al_umbral": trimestres,
+                    "horizonte": _horizonte(trimestres) if material else None,
+                    "convergencia_material": material})
     return out
 
 
@@ -376,7 +491,7 @@ def panel_relations(panel: List[Dict]) -> Dict:
     medibles = [s for s in panel if s["estado"] != "sin_dato"]
     activos = [s for s in medibles if s["estado"] == "activa"]
     convergen = sorted((s for s in medibles if s["estado"] == "sin_activar"
-                        and s.get("trimestres_al_umbral") is not None),
+                        and s.get("convergencia_material")),
                        key=lambda s: s["trimestres_al_umbral"])
     se_alejan = [s for s in medibles
                  if s["estado"] == "sin_activar" and s.get("direccion") in ("se_aleja", "estable")]
@@ -384,9 +499,13 @@ def panel_relations(panel: List[Dict]) -> Dict:
     def _ref(s):
         # sujeto-ok: cada cifra viaja con el precursor que la produce en `label`; no es una
         # cuota sobre una población.
-        return {"label": s["label"], "metric": s["metric"], "value": s["value"],
-                "threshold": s["threshold"], "margen": s["margen"],
-                "velocidad_4t": s.get("velocidad_4t"),
+        return {"label": s["label"], "concepto": s.get("concepto"), "metric": s["metric"],
+                "value": s["value"], "threshold": s["threshold"], "margen": s["margen"],
+                "valor_expresado": s.get("valor_expresado"),
+                "umbral_expresado": s.get("umbral_expresado"),
+                "umbral_significa": s.get("umbral_significa"),
+                "hace_12m_expresado": s.get("hace_12m_expresado"),
+                "velocidad_4t": s.get("velocidad_4t"), "horizonte": s.get("horizonte"),
                 "trimestres_al_umbral": s.get("trimestres_al_umbral")}
 
     return {
@@ -396,6 +515,7 @@ def panel_relations(panel: List[Dict]) -> Dict:
         "n_convergen": len(convergen),
         "n_se_alejan": len(se_alejan),
         "sin_dato": [s["label"] for s in panel if s["estado"] == "sin_dato"],
+        "sin_dato_codes": [s["code"] for s in panel if s["estado"] == "sin_dato"],
         # El único superlativo legítimo: el que llega antes, entre los que van hacia el umbral.
         "converge_primero": _ref(convergen[0]) if convergen else None,
         "convergen": [_ref(s) for s in convergen],
@@ -623,52 +743,60 @@ def bank_alerts(db: Session, bank_id: str, period: Optional[date] = None) -> Dic
 
 
 def _prosa_margenes(panel: List[Dict]) -> str:
-    """Los márgenes en PROSA. El Deep Dive narra; siete viñetas son el registro del Insight.
+    """Los márgenes en PROSA, para un comité — no todos son técnicos en riesgo.
 
-    La salvedad va en la GRAMÁTICA, no en un rótulo: «de sostenerse el ritmo» es condicional
-    y cualquiera en una sala de comité lo entiende, mientras que un «lectura mecánica, no
-    proyección» entre paréntesis le avisa al lector que desconfíe de la frase que acaba de
-    leer. El hecho medido se afirma sin adornos; lo que depende de que algo continúe se
-    escribe como lo que es: una condición.
+    Tres cosas que la versión anterior no hacía y volvían el párrafo ilegible: la cifra sale
+    con su UNIDAD ("2,0 veces", no "200,6"), el precursor se nombra por su CONCEPTO y no por
+    el nombre interno de la regla ("la cobertura de provisiones", no "brecha de
+    provisiones"), y el umbral se explica por lo que SIGNIFICA cruzarlo ("las reservas dejan
+    de cubrir la cartera vencida", no "el umbral de 100,0").
+
+    La salvedad va en la gramática —«de sostenerse el ritmo»— y no en un rótulo entre
+    paréntesis, que le avisaría al lector que desconfíe de la frase que acaba de leer.
     """
     if not panel:
         return ""
     r = panel_relations(panel)
     partes: List[str] = []
     if r["activos"]:
-        act = ", ".join(f"{a['label'].lower()} ({a['metric']} en {a['value']}, umbral "
-                        f"{a['threshold']})" for a in r["activos"])
-        partes.append(f"De los {r['n_evaluables']} precursores evaluables, {r['n_activos']} "
-                      f"están activos: {act}.")
+        # Con muchas encendidas, el párrafo NOMBRA y las viñetas explican. Repetir "cuando la
+        # señal se activa si…" siete veces vuelve el texto ilegible y duplica la lista.
+        if r["n_activos"] > 3:
+            act = "; ".join(f"{a['concepto']} en {a['valor_expresado']}" for a in r["activos"])
+            partes.append(f"Las {r['n_activos']} señales de deterioro temprano evaluables "
+                          f"están encendidas: {act}. El detalle de cada umbral va abajo.")
+        else:
+            act = "; ".join(f"{a['concepto']} en {a['valor_expresado']}, cuando la señal se "
+                            f"activa si {a['umbral_significa']}" for a in r["activos"])
+            partes.append(f"De las {r['n_evaluables']} señales de deterioro temprano "
+                          f"evaluables, {r['n_activos']} están encendidas: {act}.")
     else:
-        partes.append(f"Ninguno de los {r['n_evaluables']} precursores evaluables está activo "
-                      f"al corte.")
+        partes.append(f"Ninguna de las {r['n_evaluables']} señales de deterioro temprano está "
+                      f"encendida.")
     cp = r["converge_primero"]
     if cp:
-        plazo = (f" De sostenerse el ritmo de los últimos cuatro trimestres, alcanzaría el "
-                 f"umbral de {cp['threshold']} en unos {cp['trimestres_al_umbral']:.0f} "
-                 f"trimestres." if cp["trimestres_al_umbral"] else "")
-        desde = round(cp["value"] - (cp["velocidad_4t"] or 0), 2)
-        cabeza = ("El que se acerca es" if r["n_convergen"] == 1 else "El que llega antes es")
-        partes.append(f"{cabeza} {cp['label'].lower()}: pasó de {desde} a {cp['value']} en "
-                      f"doce meses.{plazo}")
-        if r["n_convergen"] == 1:
-            partes.append("Es el único que se mueve hacia su umbral; los demás se mantienen "
-                          "estables o se alejan.")
+        movimiento = (f" pasó de {cp['hace_12m_expresado']} a {cp['valor_expresado']} en doce "
+                      f"meses" if cp["hace_12m_expresado"] else
+                      f" está en {cp['valor_expresado']}")
+        plazo = (f" De sostenerse el ritmo del último año, eso tomaría {cp['horizonte']}."
+                 if cp["horizonte"] else "")
+        partes.append(f"La que más se movió es {cp['concepto']}:{movimiento}. La señal se "
+                      f"activa cuando {cp['umbral_significa']}, es decir "
+                      f"{cp['umbral_expresado']}.{plazo}")
+        if r["n_convergen"] > 1:
+            resto = "; ".join(f"{c['concepto']}, {c['horizonte']}" for c in r["convergen"][1:])
+            partes.append(f"También se acercan {resto}.")
         else:
-            # Se NOMBRAN con su horizonte: "otros N convergen" esconde justo lo que el comité
-            # necesita vigilar. El orden ya viene computado, en trimestres — la única unidad
-            # comparable entre precursores de escalas distintas.
-            resto = "; ".join(f"{c['label'].lower()}, en unos {c['trimestres_al_umbral']:.0f}"
-                              for c in r["convergen"][1:])
-            partes.append(f"También se mueven hacia su umbral {resto} trimestres.")
+            partes.append("Ninguna otra se aproxima a su umbral en un horizonte relevante "
+                          "para esta decisión.")
     elif not r["activos"]:
-        partes.append("Ninguno converge hacia su umbral: en los últimos doce meses todos se "
-                      "mantuvieron estables o se alejaron.")
+        partes.append("Ninguna se aproxima a su umbral en un horizonte relevante para esta "
+                      "decisión.")
     if r["sin_dato"]:
         # Una regla sin su input no falla, DESAPARECE. Se nombra o el lector la cuenta como sana.
-        partes.append(f"Sin dato para evaluar al corte: "
-                      f"{', '.join(x.lower() for x in r['sin_dato'])}.")
+        faltan = ", ".join(SIGNAL_META.get(c, {}).get("concepto", c)
+                           for c in r["sin_dato_codes"])
+        partes.append(f"Sin dato para evaluar al corte: {faltan}.")
     return " ".join(partes)
 
 
@@ -715,7 +843,19 @@ def format_alerts_text(block: Optional[Dict]) -> str:
     for a in alerts:
         # Una bandera sin peso se marca en su propia línea: es la que el índice no cubre, y
         # sin la marca el lector la cuenta como parte del número de arriba.
-        fuera = "" if a.get("code", "") in ALERT_WEIGHTS else f" · {ENSEMBLE_FUERA_DEL_INDICE}"
-        lines.append(f"- **{a['label']}** ({a['severity']}{fuera}) — {a['metric']}: "
-                     f"{a['value']} (umbral {a['threshold']}). {a['basis']}.")
+        code = a.get("code") or ""
+        # Sin `code` no se puede saber si está dentro del índice; marcar "fuera" sería
+        # afirmar de más. El default calla, no acusa.
+        fuera = (f", {ENSEMBLE_FUERA_DEL_INDICE}"
+                 if code and code not in ALERT_WEIGHTS else "")
+        meta = SIGNAL_META.get(a.get("code", ""), {})
+        forma = meta.get("forma", "pct")
+        # Prosa, no notación de fórmula: "top-10 / cartera total %: 50.9 (umbral 30.0)" es
+        # una expresión de motor, no una frase que alguien lea en un comité.
+        concepto = meta.get("concepto", a["label"].lower())
+        signif = meta.get("umbral_significa")
+        cuando = f" La señal se activa cuando {signif}." if signif else ""
+        lines.append(f"- **{a['label']}** (severidad {a['severity']}{fuera}) — {concepto} está "
+                     f"en {_expresar(a['value'], forma)}, frente a "
+                     f"{_expresar(a['threshold'], forma)} de referencia.{cuando} {a['basis']}.")
     return "\n".join(lines)

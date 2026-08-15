@@ -148,12 +148,12 @@ def test_el_encabezado_declara_QUE_mide_el_indice():
     txt = format_alerts_text({"alerts": [asdict(alerta)],
                               "ensemble": ensemble_score([alerta]),
                               "score": 0.0, "band": "baja", "perfil": None})
-    assert "precursores calibrados" in txt, "el encabezado debe decir QUÉ mide"
+    assert "señales de deterioro temprano" in txt, "el encabezado debe decir QUÉ mide"
     assert "del conjunto" not in txt, "no puede prometer cobertura que no tiene"
-    assert "ninguno activo" in txt, "el 0 se afirma como resultado, no como banda"
+    assert "ninguna encendida" in txt, "el resultado se afirma, no se deja como banda"
     assert "banda baja" not in txt
     assert "fuera del índice" in txt, "la bandera no cubierta se marca en su línea"
-    assert "50.9" in txt
+    assert "50,9%" in txt, "la cifra sale con su unidad, no pelada"
 
 
 def test_el_texto_no_explica_la_metodologia_en_medio_del_analisis():
@@ -211,7 +211,7 @@ def test_format_incluye_indice_y_perfil():
                          "value": 12.0, "threshold": 5.0, "basis": "x", "metric": "morosidad %"}],
              "score": 61.0, "band": "alta", "perfil": "agudo"}
     txt = format_alerts_text(block)
-    assert "Salud frente a los precursores" in txt and "61.0/100" in txt
+    assert "señales de deterioro temprano" in txt and "61.0/100" in txt
     assert "presión de deterioro" not in txt, (
         "polaridad invertida: en este documento cada otro 0-100 es «más es mejor», y este era "
         "el único al revés — el original decía «0.0/100 (banda baja)», con el número gritando "
@@ -235,7 +235,10 @@ def test_format_alerts_text_vacio_y_con_alertas():
         {"label": "Salto de morosidad", "severity": "alta", "value": 4.83,
          "threshold": 3.0, "basis": "Deterioro diferido", "metric": "morosidad %"},
     ]})
-    assert "**Salto de morosidad**" in txt and "4.83" in txt and "umbral 3.0" in txt
+    # La cifra sale con su UNIDAD y el umbral con su SIGNIFICADO: "value: 4.83 (umbral 3.0)"
+    # era notación de motor, no una frase que alguien lea en un comité.
+    assert "**Salto de morosidad**" in txt and "4,83%" in txt and "3%" in txt
+    assert "4.83" not in txt, "el número pelado, sin unidad, no se publica"
 
 
 # ── Panel de márgenes: la lectura temprana cuando NADA se enciende ──
@@ -332,7 +335,7 @@ def test_sin_banderas_el_texto_igual_muestra_los_margenes():
          "bank_type": "banca_multiple"}
     txt = format_alerts_text({"alerts": [], "panel": signal_panel(m, {})})
     assert "Sin banderas" in txt
-    assert "precursores evaluables" in txt
+    assert "señales de deterioro temprano" in txt or "Sin dato para evaluar" in txt
 
 
 def test_el_panel_llega_al_contexto_del_modelo():
