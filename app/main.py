@@ -66,6 +66,7 @@ from modules.banking_score.api.router_model import router as model_router
 from modules.banking_score.api.router_historical import router as banking_historical_router
 from modules.macro_political_risk.api.router_scoring import router as mpr_scoring_router
 from modules.macro_monitor.api.router import router as macro_monitor_router
+from modules.law_intel.api.router import router as law_intel_router
 from modules.trade_intel.api.router import router as trade_intel_router
 from modules.sector_intel.api.router import router as sector_intel_router
 from modules.sector_intel.events import register_subscribers as register_sector_subscribers
@@ -91,6 +92,8 @@ app.include_router(banking_historical_router, prefix="/api/v1/banking-score/hist
 app.include_router(mpr_scoring_router, prefix="/api/v1/macro-political-risk", tags=["Macro-Political Risk"])
 app.include_router(macro_monitor_router, prefix="/api/v1/macro-monitor", tags=["Macro Monitor"])
 app.include_router(trade_intel_router, prefix="/api/v1/trade-intel", tags=["Trade Intel"])
+app.include_router(law_intel_router, prefix="/api/v1/law-intel",
+                   tags=["Law Intel"])
 app.include_router(sector_intel_router, prefix="/api/v1/sector-intel", tags=["Sector Intel"])
 
 app.include_router(social_dev_router, prefix="/api/v1/social-dev", tags=["Social Dev"])
