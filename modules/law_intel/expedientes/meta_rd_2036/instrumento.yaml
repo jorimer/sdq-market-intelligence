@@ -1,0 +1,39 @@
+# EXPEDIENTE — Meta RD 2036 (Decreto 337-24)
+#
+# Segundo expediente, elegido para PROBAR EL SEAM: es lo más distinto posible de la END.
+# Un decreto en vez de una ley orgánica, un indicador en vez de noventa, sin ejes temáticos y
+# con una meta relativa («duplicar») en vez de un valor. Si el motor lo sirve sin cambios, el
+# seam funciona; lo que haya que tocar es el hallazgo de la fase.
+#
+# Es además el instrumento que ocupa hoy el espacio político del post-2030 con MENOR jerarquía
+# normativa que la END: decreto contra ley orgánica, sin paso por el CES ni por el Congreso.
+
+id: meta-rd-2036
+titulo: Meta RD 2036
+norma: Decreto 337-24
+promulgada: "2024-06-20"
+vigencia_hasta: "2036-12-31"
+
+articulos_indicadores: []        # un decreto sin articulado de indicadores
+
+# El decreto no organiza por ejes temáticos. Se declara un único grupo para que el registro
+# tenga denominador; el rótulo dice explícitamente que no es una división del instrumento.
+ejes:
+  1: (sin ejes — el decreto no los define)
+indicadores_por_eje: {1: 1}
+
+registro:
+  archivo: indicadores.csv
+  extraido_por: lectura directa del decreto
+  metas_verificadas_a_mano: 1
+  nota: >-
+    El objetivo declarado es duplicar el PIB real a 2036. El decreto NO fija un valor de
+    línea base ni metas intermedias, así que la meta se registra como redactada: es
+    aritmética sobre una base que el instrumento no declara, y suponerla sería inventar el
+    punto de partida contra el que se juzga todo lo demás.
+
+fuentes_admitidas:
+  - id: bcrd
+    nombre: Banco Central de la República Dominicana
+  - id: mhe
+    nombre: Ministerio de Hacienda y Economía

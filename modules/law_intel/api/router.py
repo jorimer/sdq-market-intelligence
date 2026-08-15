@@ -9,11 +9,14 @@ Ley 1-12 vuelve interesante al dejar que el propio evaluado mueva las metas por 
 administrativa.
 """
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from modules.law_intel.bindings import cargar_bindings, cobertura
+from modules.law_intel.verificacion import informe
+from modules.macro_monitor.models.models import MacroSeries
 from modules.law_intel.obligaciones import ESTADOS as ESTADOS_OBLIGACION
 from modules.law_intel.obligaciones import cargar_obligaciones
 from modules.law_intel.obligaciones import resumen as resumen_obligaciones
@@ -27,8 +30,9 @@ from modules.law_intel.scoring.coherencia_proceso import revisar
 from modules.law_intel.scoring.brecha import resumen as resumen_brecha
 from modules.law_intel.scoring.semaforo import VEREDICTOS, panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
-from shared.auth.dependencies import get_current_user
-from shared.auth.models import User
+from shared.auth.dependencies import get_current_user, require_role
+from shared.auth.models import User, UserRole
+from shared.database.session import get_db
 
 logger = logging.getLogger("sdq.law_intel.api")
 router = APIRouter()
@@ -58,7 +62,7 @@ def listar_instrumentos(_: User = Depends(get_current_user)) -> Dict[str, Any]:
 
 @router.get("/{expediente_id}/indicadores")
 def indicadores(expediente_id: str,
-                eje: Optional[int] = Query(None, ge=1, le=4),
+                eje: Optional[int] = Query(None, ge=1),
                 incluir_subfilas: bool = Query(True),
                 _: User = Depends(get_current_user)) -> Dict[str, Any]:
     """El registro que fija la ley: línea base y metas por período.
@@ -70,6 +74,16 @@ def indicadores(expediente_id: str,
     e = _expediente(expediente_id)
     filas: List[Any] = e.indicadores if incluir_subfilas else e.numerados
     if eje is not None:
+        # El eje válido lo declara el EXPEDIENTE, no una constante. La primera versión
+        # validaba `le=4` — los cuatro ejes de la END— y un instrumento con cinco habría
+        # recibido un 422 por una consulta legítima. Fue el único supuesto de la END que se
+        # había filtrado fuera del expediente.
+        declarados = set((e.meta.get("ejes") or {}))
+        if declarados and eje not in declarados:
+            raise HTTPException(
+                status_code=404,
+                detail=(f"El instrumento {e.id} no tiene eje {eje}; declara "
+                        f"{sorted(declarados)}"))
         filas = [i for i in filas if i.eje == eje]
     return {
         "instrumento": {"id": e.id, "titulo": e.titulo, "norma": e.norma},
@@ -262,3 +276,35 @@ def coherencia_(expediente_id: str,
             "Instantáneas de documentos oficiales publicados y fechados, no series vivas. "
             "Cuando el binding del indicador esté verificado, el oráculo debe preferir la serie."),
     }
+
+
+def _proveedor_mm_series(db: Session) -> Callable[[str], List[tuple]]:
+    """Lee `mm_series` — el catálogo real de series de la plataforma.
+
+    Vive acá y no en `verificacion.py` para que el motor no dependa de una tabla concreta:
+    la comprobación recibe un proveedor y no sabe de dónde salen los datos, así que atar un
+    expediente a otra fuente no obliga a tocarla.
+    """
+    def leer(codigo: str) -> List[tuple]:
+        filas = (db.query(MacroSeries.period, MacroSeries.value)
+                 .filter(MacroSeries.series_code == codigo,
+                         MacroSeries.value.isnot(None))
+                 .order_by(MacroSeries.period).all())
+        return [(str(p), float(v)) for p, v in filas]
+    return leer
+
+
+@router.get("/{expediente_id}/bindings/verificacion")
+def verificacion_(expediente_id: str,
+                  corte: str = Query("2025", pattern=r"^\d{4}$"),
+                  db: Session = Depends(get_db),
+                  _: User = Depends(require_role(UserRole.analyst))) -> Dict[str, Any]:
+    """Comprueba cada binding contra las series reales, en el entorno que las tiene.
+
+    Devuelve qué bindings pueden pasar a `verificado` y cuánta cobertura gana el expediente
+    si se promueven. **No muta nada**: el estado de un binding es un hecho comiteado y el YAML
+    se actualiza por PR. Si la cobertura pudiera subir en caliente, la cifra de portada
+    dejaría de ser verificable contra el repositorio.
+    """
+    _expediente(expediente_id)
+    return informe(expediente_id, _proveedor_mm_series(db), corte)
