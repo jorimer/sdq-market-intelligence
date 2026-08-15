@@ -155,3 +155,14 @@ terminaciones:
     fuente: >-
       Verificado en el panel: el código `PEQ EMPRESA - PYME BHD` continúa sin interrupción
       con el nombre nuevo desde 2004-07.
+
+  - nombre: Banco de Ahorro y Crédito Pyme BHD
+    fecha_salida: 2012-12-01
+    causa: fusion
+    episodio: Absorbido por la matriz; el negocio Pyme queda como segmento del Banco BHD
+    fuente: >-
+      Confirmado por el dueño: hoy NO existe una entidad legal independiente con ese nombre —
+      la Banca Pyme opera como segmento dentro del Banco BHD, bajo su licencia de Banco
+      Múltiple. La entidad que reportó hasta 2012-12 sí era una licencia separada de ahorro y
+      crédito (por eso figura en el ledger de la SB, que solo lista licenciadas), y salió sana:
+      morosidad 2.9%. Es una absorción por la matriz, no una caída.
