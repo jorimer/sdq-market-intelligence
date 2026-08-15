@@ -13,7 +13,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from modules.law_intel.bindings import cargar_bindings, cobertura
 from modules.law_intel.registro import ESCALAS, Expediente, cargar, expedientes
+from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo
+from modules.law_intel.scoring.brecha import resumen as resumen_brecha
+from modules.law_intel.scoring.semaforo import VEREDICTOS, panel
+from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 from shared.auth.dependencies import get_current_user
 from shared.auth.models import User
 
@@ -98,4 +103,71 @@ def procedencia(expediente_id: str, _: User = Depends(get_current_user)) -> Dict
         },
         "fuentes_admitidas": e.meta.get("fuentes_admitidas"),
         "escalas": ESCALAS,
+    }
+
+
+@router.get("/{expediente_id}/cobertura")
+def cobertura_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """La cifra de portada: cuántos indicadores de la ley el informe realmente mide.
+
+    Cuenta solo bindings VERIFICADOS. Un binding propuesto es una hipótesis sobre qué serie
+    mide qué indicador; sumarlo a la cobertura sería afirmar haber medido lo que nadie
+    comprobó, y esta cifra es la que el cliente usa para decidir si el informe le sirve.
+    """
+    _expediente(expediente_id)
+    return cobertura(expediente_id)
+
+
+@router.get("/{expediente_id}/semaforo")
+def semaforo_(expediente_id: str,
+              corte: str = Query(..., pattern=r"^\d{4}$"),
+              _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Meta contra dato real al corte dado, sin eufemismo.
+
+    Con cero bindings verificados el panel entero responde `sin_medicion`, y ese es el estado
+    verdadero — no una falla del endpoint. Las observaciones entran cuando un binding pasa a
+    verificado; hasta entonces el informe no puede afirmar cumplimiento de nada.
+    """
+    e = _expediente(expediente_id)
+    bs = cargar_bindings(expediente_id)
+    veredictos = panel(e.numerados, bs, {}, corte)
+    return {
+        "instrumento": {"id": e.id, "norma": e.norma}, "corte": corte,
+        "cobertura": cobertura(expediente_id),
+        "resumen": resumen_semaforo(veredictos),
+        "veredictos": [{
+            "indicador": v.indicador, "veredicto": v.veredicto, "cumple": v.cumple,
+            "meta_periodo": v.meta_periodo, "meta": v.meta, "observado": v.observado,
+            "periodo_observado": v.periodo_observado, "distancia": v.distancia,
+            "trayectoria": v.trayectoria, "motivo": v.motivo,
+        } for v in veredictos],
+        "vocabulario": VEREDICTOS,
+    }
+
+
+@router.get("/{expediente_id}/brechas")
+def brechas_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Lo que el informe no puede medir, de quién es cada hueco y qué desbloquea cerrarlo.
+
+    `desbloqueo` es el mismo cómputo que la sugerencia interna de fuentes con otro
+    destinatario: hacia adentro dice «conectar esto sube la cobertura»; hacia el cliente,
+    «exigir que se publique esto sube la cobertura». En los dos casos la cifra es el delta.
+    """
+    e = _expediente(expediente_id)
+    br = brechas(e.numerados, cargar_bindings(expediente_id))
+    return {
+        "instrumento": {"id": e.id, "norma": e.norma},
+        "resumen": resumen_brecha(br, len(e.numerados)),
+        "brechas": [{
+            "indicador": b.indicador, "nombre": b.nombre, "eje": b.eje, "tipo": b.tipo,
+            "responsable": b.responsable, "detalle": b.detalle,
+            "serie_candidata": b.serie_candidata,
+        } for b in br],
+        "desbloqueo": desbloqueo(br),
+        "tipos": TIPOS,
+        # La frontera que mantiene vendible el producto como independiente.
+        "alcance_de_la_recomendacion": (
+            "Se recomienda la PUBLICACIÓN del dato, nunca la política. El informe señala qué "
+            "falta y a quién la ley se lo asigna; no opina sobre qué debería hacer el Estado "
+            "con el indicador."),
     }
