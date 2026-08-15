@@ -100,8 +100,18 @@ def test_la_etiqueta_declara_procedencia_rango_y_veto_de_comparacion():
 def test_la_reconstruccion_no_esta_cableada_al_motor_de_alerta_temprana():
     """Guard estructural: si alguien importa esto desde ``early_warning``, la serie pasó a
     alimentar reglas de umbral y el error medido dejó de estar declarado en el camino."""
+    import ast
     import pathlib
     ew = pathlib.Path(br.__file__).with_name("early_warning.py").read_text(encoding="utf-8")
-    assert "sib_basel_reconstruction" not in ew, (
+    # Se veta el IMPORT, no la mención: el motor puede —y debe— explicar en un comentario por
+    # qué la reconstrucción NO lo alimenta. Un guard que prohíbe nombrar la cosa impide
+    # documentar la decisión, que es lo contrario de lo que se busca.
+    importa = False
+    for nodo in ast.walk(ast.parse(ew)):
+        if isinstance(nodo, ast.ImportFrom) and "sib_basel_reconstruction" in (nodo.module or ""):
+            importa = True
+        if isinstance(nodo, ast.Import):
+            importa = importa or any("sib_basel_reconstruction" in a.name for a in nodo.names)
+    assert not importa, (
         "la solvencia reconstruida no puede alimentar rule_solvency: su p90 (4.6 pp en el "
         "mejor tipo) es más ancho que la banda 10.5–12% que la regla discrimina")

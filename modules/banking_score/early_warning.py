@@ -35,37 +35,45 @@ DEPOSIT_DROP = -0.10       # caída trimestral de depósitos ≥ 10% (proxy de c
 CONCENTRATION = 30.0       # top-10 / cartera total %  (proxy de vinculados)
 
 # ── Calibración del CONJUNTO ponderado ─────────────────────────────────────────
-# ⚠ PROCEDENCIA EN REVISIÓN — estos siete pesos NO tienen artefacto que los respalde.
-# Se documentaron como "calibrados sobre la cohorte de 35 terminaciones agudas del histórico
-# SIB, regresión logística estandarizada validada leave-one-entity-out (AUC 0.88, detección
-# 34/35, falsos positivos 1/45)". Esa calibración nunca existió como código: ni cohorte
-# definida, ni matriz, ni script. Solo la prosa.
+# Pesos DERIVADOS DE LA EVIDENCIA, promediando sobre diez especificaciones — `ew_calibration`
+# con sus seis recetas de cohorte, la cohorte canónica de `terminaciones` a 6/12/24 meses, y
+# el modelo de riesgo de `hazard`. Se promedia en vez de elegir una porque la receta es un
+# parámetro libre: fijar la que más guste sería elegir el resultado. Integrar sobre ella es
+# más defendible, y el RANGO observado va anotado al lado de cada peso para que nadie lea
+# estos números como más precisos de lo que son.
 #
-# `validation/ew_calibration.py` es ahora ESE artefacto, y al reconstruirlo encontró que los
-# pesos no están identificados por el dato: la receta de cohorte los mueve tanto como el dato
-# (morosidad_nivel entre 0.00 y 0.42; brecha_provisiones entre 0.00 y 0.55). Dos discrepancias
-# son robustas a las seis recetas probadas:
-#   • crecimiento_anomalo (0.08 acá) recibe peso CERO en todas — el histórico no sostiene que
-#     el boom de crédito sea "la señal más temprana";
-#   • estres_liquidez (0.02 acá) sale siempre material, entre 0.19 y 0.69 — un orden de
-#     magnitud, y en dirección contraria a la glosa de que "confirma tarde, no anticipa".
-# El AUC leave-one-entity-out no llega a 0.88 en ninguna receta: el techo medido es 0.800.
+# Lo que reemplazaron: una calibración que se documentaba como "35 terminaciones agudas, AUC
+# 0.88" y que no existía como código. Ver el encabezado de `validation/ew_calibration.py`.
 #
-# Los valores se dejan INTACTOS a propósito: cambiarlos mueve el índice de informes ya
-# vendidos, y elegir la receta canónica es una decisión de metodología del dueño, no de
-# implementación. Corré `sensitivity_table()` antes de tocarlos.
-# Límite: solvencia_piso (0.06) no es verificable con esta fuente — Basilea es regulatoria y
-# no existe pre-2004.
+# Los dos cambios grandes, y por qué se sostienen:
+#   • estres_liquidez pasa de 0.02 a 0.36. Sale material en las DIEZ especificaciones y es la
+#     más pesada en el modelo de riesgo. La glosa anterior decía "pesa poco: CONFIRMA tarde,
+#     dispara en 14/35 casos, no anticipa" — el histórico dice lo contrario.
+#   • crecimiento_anomalo queda en CERO. Da cero en las diez, sin una sola excepción. Se
+#     documentaba como "la señal MÁS temprana (la burbuja precede al estallido)". Se deja en
+#     el dict con peso 0 en vez de borrarlo: "se midió y no predice" es una afirmación más
+#     fuerte y más útil que "no se pudo medir", y son cosas distintas.
+#
+# solvencia_piso conserva su 0.06 y NO viene de esta evidencia: Basilea es regulatoria y no
+# existe pre-2004, así que no entra en ninguna matriz (ver `sib_basel_reconstruction`, donde
+# la reconstrucción quedó con ±4.6 pp de error, demasiado ancho para una regla de umbral). Se
+# mantiene por su base normativa, declarado como no verificable con esta fuente.
+#
+# ANTES DE TOCARLOS: corré `ew_calibration.sensitivity_table()` y `hazard.ajustar()`. Y tené
+# presente que el ajuste sobre etiquetas CURADAS todavía no gradúa —8 eventos, mínimo 10—, así
+# que estos pesos salen de etiquetas mayormente inferidas: son la mejor evidencia disponible,
+# no una validación cerrada.
 ALERT_WEIGHTS: Dict[str, float] = {
-    "morosidad_nivel": 0.38,
-    "brecha_provisiones": 0.20,
-    "erosion_capital": 0.14,
-    "salto_morosidad": 0.11,
-    "crecimiento_anomalo": 0.08,
-    "solvencia_piso": 0.06,
-    "estres_liquidez": 0.02,
-    # concentracion / fondeo_caro: contexto de monitoreo; sin peso predictivo confiable en el
-    # histórico contable (top-10 y fondeo YTD no son reconstruibles pre-2004).
+    "estres_liquidez": 0.364,      # rango entre recetas 0.00–0.75 · antes 0.02
+    "morosidad_nivel": 0.312,      # 0.00–1.00 · antes 0.38
+    "salto_morosidad": 0.117,      # 0.00–0.40 · antes 0.11
+    "brecha_provisiones": 0.096,   # 0.00–0.54 · antes 0.20
+    "solvencia_piso": 0.060,       # NO verificable con esta fuente; se conserva por norma
+    "erosion_capital": 0.051,      # 0.00–0.15 · antes 0.14
+    "crecimiento_anomalo": 0.000,  # 0.00–0.00 en las diez · antes 0.08
+    # concentracion / fondeo_caro: sin peso. La concentración además se MIDIÓ contra deterioro
+    # de cartera en la ventana donde el top-10 existe (2021-2026) y no anticipa: AUC 0.48,
+    # IC que cruza cero en cuatro umbrales. Ver `validation/concentracion_calibration.py`.
 }
 
 # La prosa que se PUBLICA vive en constantes, no incrustada en un f-string: un literal
