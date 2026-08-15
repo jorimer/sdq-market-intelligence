@@ -516,6 +516,29 @@ def test_la_seccion_declara_los_locales_excluidos():
     assert report_docs._PROJECTION_REASON[P.REASON_SHORT_HISTORY] in texto
 
 
+def test_ninguna_cadena_servida_afirma_la_forma_del_residuo():
+    """La forma la describe SOLO `Calibration.note`, computada de la curtosis medida.
+
+    El defecto: `basis` decía «porque el residuo tiene cola pesada» y viajaba al modelo
+    junto a una nota que —tras estandarizar por local— dice que se aproxima a una normal.
+    Dos cadenas contradiciéndose en el mismo contexto. Ya lo había cerrado `_shape_note`
+    en su cadena; arreglarlo en un solo lugar no es arreglarlo.
+    """
+    import random
+    rng = random.Random(4)
+
+    def value(store, day):
+        base = 1000.0 * (1.5 if day.weekday() >= 5 else 1.0)
+        return base * math.exp(rng.gauss(0.0, 0.10))
+
+    result = P.project(_panel(["A", "B", "C"], 70, value), horizon=14)
+    assert result is not None and result.calibration is not None
+    assert "cola pesada" not in result.basis
+    assert "normal" not in result.basis
+    # Y la nota de forma sí la describe, siguiendo a la cifra.
+    assert str(round(result.calibration.excess_kurtosis, 1)) in result.calibration.note
+
+
 def test_todo_motivo_del_motor_tiene_traduccion():
     """Un motivo nuevo en el motor sin su traducción sale al PDF como «motivo no
     declarado», que es peor que el término técnico: borra la información."""

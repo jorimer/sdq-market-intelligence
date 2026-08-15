@@ -885,8 +885,12 @@ def project(
         f"Regla '{chosen}' elegida por backtest de origen móvil sobre {n_scored} "
         f"predicciones a {horizon} días ({lift}). Banda de los percentiles "
         f"{BAND_LO_PCT:.0f}–{BAND_HI_PCT:.0f} del error fuera de muestra, no de muestreo: "
-        f"la venta es censo, y tampoco es paramétrica porque el residuo tiene cola pesada. "
-        f"{len(projectable)} de {len(verdicts)} locales proyectables."
+        # La forma del residuo NO se afirma acá. La describe `Calibration.note`, que la
+        # computa de la curtosis medida. Esta cadena decía «porque el residuo tiene cola
+        # pesada» y contradecía a esa nota en el mismo contexto servido al modelo: el
+        # mismo defecto de prosa incrustada que `_shape_note` ya venía a cerrar, dejado
+        # vivo en la otra cadena. Un arreglo en un solo lugar no es un arreglo.
+        f"la venta es censo. {len(projectable)} de {len(verdicts)} locales proyectables."
         + spread + calib
     )
 
