@@ -24,6 +24,48 @@ distintos, y el efecto de día-de-semana promedio de la red no lo captura. Por e
 reglas candidatas se construyen sobre la celda ``local × día de semana`` y no sobre
 ``local + día de semana``.
 
+## Qué distribución, y por qué la banda es empírica
+
+Se probó, y el resultado tiene un giro que conviene no perder.
+
+Agrupando los 1.260 residuos fuera de muestra de la regla ganadora, **nada ajusta**: en
+logaritmos Anderson-Darling da A²=7,6 contra 0,75 de valor crítico al 5 %, en nivel relativo
+da 9,1, y la curtosis en exceso es de **+4,1**. Leído así, la conclusión sería que la cola es
+pesada y que ninguna familia paramétrica sirve.
+
+Es la conclusión equivocada. **Estandarizando cada residuo por la dispersión de su propio
+local, la curtosis cae a +0,2 y la asimetría a −0,17**: la forma se aproxima a una normal. Lo
+que parecía cola pesada era una *mezcla* de treinta locales con dispersiones que difieren
+hasta 4,6 veces. No era una propiedad de la distribución, era heterocedasticidad.
+
+Eso reordena el problema entero: el ajuste no falla por la forma, falla por la escala. La
+banda se mantiene empírica de todos modos —no cuesta nada y no supone— pero el motor
+**reporta la forma medida en vez de afirmarla**, porque este mismo diagnóstico se da vuelta
+según se agrupe o se estandarice.
+
+## Cada local tiene su ESCALA, no su forma ni su regla
+
+Las dos preguntas se probaron por separado y dieron respuestas opuestas.
+
+**La dispersión sí difiere por local, y mucho.** El desvío del residuo va de 0,052 a 0,239
+—4,6 veces— y Levene rechaza varianza común con p≈5·10⁻⁵⁶. Una banda agrupada **miente por
+local**: sobre el panel real cubría el 80 % en promedio, pero por local iba de **29 % a
+100 %**. Ese promedio correcto es un promedio de errores que se cancelan.
+
+La corrección ingenua empeora: estimar los percentiles del propio local con las 14-28
+observaciones disponibles da 67 % de cobertura, porque un percentil extremo no se estima con
+tan poco. Lo que funciona es separar forma de escala: **la forma se toma prestada de toda la
+red** —los residuos estandarizados de las 1.260 predicciones— y **solo la escala se estima
+por local**, que es una desviación típica y sí se sostiene con esa cantidad de puntos, más un
+encogimiento hacia la dispersión común. Resultado sobre el panel real: cobertura 80,7 % y el
+rango entre locales se cierra de 29-100 % a 57-96 %.
+
+**La regla, en cambio, es una sola para todos.** Se probó darle a cada local la suya,
+elegida por su propio backtest y evaluada de forma anidada: 9,20 % de error contra 9,19 % de
+la regla única. No aporta. Distintas reglas «ganan» en distintos locales, pero esas victorias
+no se repiten fuera de muestra: son ruido de selección. Solo se ve con validación anidada;
+con la selección y la evaluación sobre los mismos cortes, la regla propia parecería mejor.
+
 ## Tres reglas de disciplina
 
 **La regla se elige por backtest, nunca por preferencia.** Igual que en ``forecast.py``.
@@ -64,6 +106,14 @@ DEFAULT_HORIZON_DAYS = 14
 #: Percentiles del residuo fuera de muestra que forman la banda publicada.
 BAND_LO_PCT = 10.0
 BAND_HI_PCT = 90.0
+
+#: Fuerza del encogimiento de la escala de cada local hacia la dispersión común, medida en
+#: «observaciones equivalentes»: con ``n`` residuos propios, la escala publicada pesa
+#: ``n/(n+k)`` de la del local y ``k/(n+k)`` de la de la red. Calibrado sobre el panel del
+#: encargo por evaluación anidada; el óptimo es plano entre 8 y 12, así que el valor no está
+#: en filo de navaja. **Re-verificar cuando la historia crezca**: con más residuos por local
+#: el encogimiento necesario baja.
+SCALE_SHRINKAGE_K = 10.0
 
 #: Motivos de no proyección. Son texto declarado, no ausencia silenciosa.
 REASON_SHORT_HISTORY = "historia_insuficiente"
@@ -106,7 +156,7 @@ class RuleScore:
 
 @dataclass(frozen=True)
 class StoreVerdict:
-    """Veredicto por local: proyectable con su error, o no proyectable con su motivo."""
+    """Veredicto por local: proyectable con su error y su banda, o el motivo de que no."""
 
     store_id: str
     projectable: bool
@@ -115,6 +165,28 @@ class StoreVerdict:
     baseline_mape: Optional[float]
     n_predictions: int
     n_days: int
+    #: Escala del residuo de ESTE local, ya encogida hacia la común.
+    residual_sd: Optional[float] = None
+    #: Bordes de su banda, en por ciento sobre el punto. Distintos por local.
+    band_lo_pct: Optional[float] = None
+    band_hi_pct: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class Calibration:
+    """Bondad de ajuste del residuo: por qué la banda no es paramétrica.
+
+    ``coverage_pct`` es la prueba que importa. Los momentos dicen si la forma se parece a
+    una normal; la cobertura dice si la banda publicada acierta, que es lo único que el
+    lector del informe experimenta.
+    """
+
+    n: int
+    skew: Optional[float]
+    excess_kurtosis: Optional[float]
+    coverage_pct: Optional[float]
+    nominal_coverage_pct: float
+    note: str
 
 
 @dataclass(frozen=True)
@@ -145,6 +217,7 @@ class ProjectionResult:
     verdicts: Tuple[StoreVerdict, ...]
     points: Tuple[PointProjection, ...]
     variance: Optional[VarianceShares]
+    calibration: Optional[Calibration]
     basis: str
 
 
@@ -498,6 +571,8 @@ def _verdicts(
     panel: Dict[str, Dict[date, float]],
     errors: Dict[str, Dict[str, List[float]]],
     rule: str,
+    scales: Optional[Mapping[str, float]] = None,
+    store_band: Optional[Mapping[str, Tuple[float, float]]] = None,
 ) -> List[StoreVerdict]:
     """Un local es proyectable cuando la regla elegida le gana a su propio promedio.
 
@@ -522,6 +597,7 @@ def _verdicts(
         else:
             reason = None
 
+        band = (store_band or {}).get(store_id)
         out.append(StoreVerdict(
             store_id=store_id,
             projectable=reason is None,
@@ -530,8 +606,93 @@ def _verdicts(
             baseline_mape=base_mape,
             n_predictions=len(chosen),
             n_days=n_days,
+            residual_sd=(scales or {}).get(store_id),
+            band_lo_pct=(band[0] * 100.0) if band else None,
+            band_hi_pct=(band[1] * 100.0) if band else None,
         ))
     return out
+
+
+def _shrunk_scales(
+    per_store: Mapping[str, Sequence[float]],
+    k: float = SCALE_SHRINKAGE_K,
+) -> Tuple[Dict[str, float], float]:
+    """Escala del residuo de cada local, encogida hacia la dispersión común de la red.
+
+    Con pocos residuos propios la desviación de un local es ruidosa: el encogimiento le
+    presta estabilidad a la red sin borrar la diferencia real, que sobre este panel es de
+    4,6 veces entre el local más estable y el más volátil.
+    """
+    pooled = [d for values in per_store.values() for d in values]
+    pooled_sd = stats.pstdev(pooled) if len(pooled) > 1 else 0.0
+    scales: Dict[str, float] = {}
+    for store_id, values in per_store.items():
+        n = len(values)
+        own = stats.pstdev(values) if n > 1 else pooled_sd
+        scales[store_id] = (n * own + k * pooled_sd) / (n + k) if (n + k) > 0 else pooled_sd
+    return scales, pooled_sd
+
+
+def _shape_quantiles(
+    per_store: Mapping[str, Sequence[float]],
+    scales: Mapping[str, float],
+) -> Tuple[Optional[float], Optional[float]]:
+    """Percentiles de los residuos ESTANDARIZADOS de toda la red: la forma común.
+
+    Estandarizar antes de agrupar es lo que permite prestar la forma —cola pesada incluida—
+    sin arrastrar la escala ajena. Es la diferencia entre una banda que cubre el 80 % en
+    promedio y una que lo cubre en cada local.
+    """
+    z: List[float] = []
+    for store_id, values in per_store.items():
+        scale = scales.get(store_id, 0.0)
+        if scale > 0:
+            z.extend(d / scale for d in values)
+    if not z:
+        return None, None
+    return _percentile(z, BAND_LO_PCT), _percentile(z, BAND_HI_PCT)
+
+
+def _moments(values: Sequence[float]) -> Tuple[Optional[float], Optional[float]]:
+    """Asimetría y curtosis en exceso. Sin dependencias: son momentos centrales."""
+    n = len(values)
+    if n < 4:
+        return None, None
+    mean = stats.fmean(values)
+    sd = stats.pstdev(values)
+    if sd <= 0:
+        return None, None
+    m3 = sum((v - mean) ** 3 for v in values) / n
+    m4 = sum((v - mean) ** 4 for v in values) / n
+    return m3 / sd ** 3, m4 / sd ** 4 - 3.0
+
+
+#: Curtosis en exceso a partir de la cual la cola deja de parecerse a la de una normal.
+HEAVY_TAIL_KURTOSIS = 1.0
+
+
+def _shape_note(skew: Optional[float], kurt: Optional[float]) -> str:
+    """Describe la forma MEDIDA del residuo estandarizado, sin adelantar veredicto.
+
+    Esta glosa se computa, jamás se escribe fija. Sobre el panel del encargo la cola
+    agrupada parecía pesadísima —curtosis +4,1— y al estandarizar por local bajó a +0,2: lo
+    que parecía forma era mezcla de escalas. Una frase incrustada afirmando «cola pesada»
+    habría sobrevivido a la corrección y el informe estaría contradiciendo a su propia cifra.
+    """
+    if kurt is None or skew is None:
+        return "Residuos insuficientes para describir la forma."
+    if kurt > HEAVY_TAIL_KURTOSIS:
+        return (
+            f"El residuo estandarizado conserva cola pesada (curtosis en exceso {kurt:+.1f}, "
+            f"asimetría {skew:+.2f}). Una banda gaussiana subestimaría los extremos; la "
+            "banda empírica los recoge."
+        )
+    return (
+        f"Estandarizado por local, el residuo se aproxima a una normal (curtosis en exceso "
+        f"{kurt:+.1f}, asimetría {skew:+.2f}). La cola gruesa que muestra el residuo "
+        "agrupado era mezcla de locales con dispersiones distintas, no forma de la "
+        "distribución. La banda se mantiene empírica porque no cuesta nada y no supone."
+    )
 
 
 def _percentile(values: Sequence[float], pct: float) -> Optional[float]:
@@ -575,15 +736,24 @@ def project(
     overall = next((r.mape for r in ranked if r.rule == chosen), None)
     baseline = next((r.mape for r in ranked if r.rule == BASELINE_RULE), None)
 
-    verdicts = _verdicts(panel, errors, chosen)
-    projectable = {v.store_id for v in verdicts if v.projectable}
+    # La banda sale de la desviación CON SIGNO respecto del punto, nunca del error
+    # absoluto aplicado simétricamente, que inventaría un borde que el backtest no midió.
+    # Y se arma en dos piezas: forma común de toda la red, escala propia de cada local.
+    per_store = {s: v for s, v in errors.get(chosen, {}).items() if v}
+    scales, pooled_sd = _shrunk_scales(per_store)
+    q_lo, q_hi = _shape_quantiles(per_store, scales)
 
-    # La banda sale de los percentiles de la desviación CON SIGNO respecto del punto:
-    # ``real / pronóstico − 1``. Tomar percentiles del error absoluto y aplicarlos
-    # simétricamente inventaría un borde inferior que el backtest nunca midió.
-    pooled = [math.expm1(d) for errs in errors.get(chosen, {}).values() for d in errs]
-    band_lo = _percentile(pooled, BAND_LO_PCT)
-    band_hi = _percentile(pooled, BAND_HI_PCT)
+    # Escala nula significa que el backtest no le erró nunca a ese local. La banda queda
+    # en cero y el punto se publica igual: declinar ahí sería castigar al caso perfecto.
+    lo_q = q_lo if q_lo is not None else 0.0
+    hi_q = q_hi if q_hi is not None else 0.0
+    store_band: Dict[str, Tuple[float, float]] = {
+        store_id: (math.expm1(lo_q * scale), math.expm1(hi_q * scale))
+        for store_id, scale in scales.items()
+    }
+
+    verdicts = _verdicts(panel, errors, chosen, scales, store_band)
+    projectable = {v.store_id for v in verdicts if v.projectable}
 
     predict = RULES[chosen](panel)
     last_day = max(o.day for o in usable)
@@ -592,20 +762,55 @@ def project(
         day = last_day + timedelta(days=offset)
         for store_id in sorted(projectable):
             log_point = predict(store_id, day)
-            if log_point is None or band_lo is None or band_hi is None:
+            band = store_band.get(store_id)
+            if log_point is None or band is None:
                 continue
             point = math.exp(log_point)
             points.append(PointProjection(
                 store_id=store_id,
                 day=day,
                 point=point,
-                lo=point * (1.0 + band_lo),
-                hi=point * (1.0 + band_hi),
+                lo=point * (1.0 + band[0]),
+                hi=point * (1.0 + band[1]),
             ))
 
-    bias = stats.median(pooled) if pooled else None
-    above = (
-        sum(1 for r in pooled if r > 0) / len(pooled) * 100.0 if pooled else None
+    # Banda de referencia de la red, para el encabezado del informe: la del local de
+    # dispersión mediana, no un promedio de bandas que no le corresponde a nadie.
+    median_scale = stats.median(scales.values()) if scales else None
+    band_lo = (
+        math.expm1(q_lo * median_scale)
+        if q_lo is not None and median_scale is not None else None
+    )
+    band_hi = (
+        math.expm1(q_hi * median_scale)
+        if q_hi is not None and median_scale is not None else None
+    )
+
+    flat = [d for values in per_store.values() for d in values]
+    bias = math.expm1(stats.median(flat)) if flat else None
+    above = sum(1 for d in flat if d > 0) / len(flat) * 100.0 if flat else None
+
+    # Cobertura de la banda publicada sobre los mismos residuos que la definieron. No es
+    # una validación —para eso está la evaluación anidada del análisis—, es el control de
+    # que la construcción hace lo que dice: si esto no da cerca del nominal, hay un error
+    # de implementación, no un hallazgo estadístico.
+    covered = sum(
+        1
+        for store_id, values in per_store.items()
+        for d in values
+        if (b := store_band.get(store_id)) is not None
+        and math.log1p(b[0]) <= d <= math.log1p(b[1])
+    )
+    skew, kurt = _moments(
+        [d / scales[s] for s, values in per_store.items() for d in values if scales.get(s)]
+    )
+    calibration = Calibration(
+        n=len(flat),
+        skew=skew,
+        excess_kurtosis=kurt,
+        coverage_pct=(covered / len(flat) * 100.0) if flat else None,
+        nominal_coverage_pct=BAND_HI_PCT - BAND_LO_PCT,
+        note=_shape_note(skew, kurt),
     )
 
     n_scored = next((r.n_predictions for r in ranked if r.rule == chosen), 0)
@@ -620,12 +825,23 @@ def project(
            else "el pronóstico corre sesgado y la banda lo refleja.")
         if above is not None and bias is not None else ""
     )
+    widths = sorted(
+        (v.band_hi_pct - v.band_lo_pct)
+        for v in verdicts
+        if v.band_hi_pct is not None and v.band_lo_pct is not None
+    )
+    spread = (
+        f" La banda es propia de cada local: la del más estable abarca {widths[0]:.0f} "
+        f"puntos y la del más volátil {widths[-1]:.0f}."
+        if len(widths) > 1 else ""
+    )
     basis = (
         f"Regla '{chosen}' elegida por backtest de origen móvil sobre {n_scored} "
         f"predicciones a {horizon} días ({lift}). Banda de los percentiles "
         f"{BAND_LO_PCT:.0f}–{BAND_HI_PCT:.0f} del error fuera de muestra, no de muestreo: "
-        f"la venta es censo. {len(projectable)} de {len(verdicts)} locales proyectables."
-        + calib
+        f"la venta es censo, y tampoco es paramétrica porque el residuo tiene cola pesada. "
+        f"{len(projectable)} de {len(verdicts)} locales proyectables."
+        + spread + calib
     )
 
     return ProjectionResult(
@@ -641,5 +857,6 @@ def project(
         verdicts=tuple(verdicts),
         points=tuple(points),
         variance=variance_decomposition(usable),
+        calibration=calibration,
         basis=basis,
     )

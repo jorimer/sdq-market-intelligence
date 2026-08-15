@@ -138,6 +138,81 @@ def test_el_sesgo_se_declara():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Forma común, escala por local
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _con_dispersiones(sigmas, days=70, seed=3):
+    import random
+    rng = random.Random(seed)
+    obs = []
+    for store, sigma in sigmas.items():
+        for i in range(days):
+            day = START + timedelta(days=i)
+            base = 1000.0 * (1.5 if day.weekday() >= 5 else 1.0)
+            obs.append(P.Observation(store, day, base * math.exp(rng.gauss(0.0, sigma))))
+    return obs
+
+
+def test_cada_local_recibe_su_propia_banda():
+    """Una banda única para toda la red miente por local: sobra en el estable y falta en
+    el volátil. Sobre el panel real cubría 80% en promedio y entre 29% y 100% por local."""
+    result = P.project(_con_dispersiones({"QUIETO": 0.04, "MEDIO": 0.12, "RUIDOSO": 0.30}),
+                       horizon=7)
+    assert result is not None
+    ancho = {
+        v.store_id: v.band_hi_pct - v.band_lo_pct
+        for v in result.verdicts
+        if v.band_hi_pct is not None and v.band_lo_pct is not None
+    }
+    assert ancho["QUIETO"] < ancho["MEDIO"] < ancho["RUIDOSO"]
+    # Y la diferencia es material, no decorativa.
+    assert ancho["RUIDOSO"] > 2.0 * ancho["QUIETO"]
+
+
+def test_la_escala_se_encoge_hacia_la_comun():
+    """El encogimiento acerca la escala propia a la de la red sin borrar la diferencia."""
+    per_store = {"A": [0.01] * 5 + [-0.01] * 5, "B": [0.5] * 5 + [-0.5] * 5}
+    sin_encoger, pooled = P._shrunk_scales(per_store, k=0.0)
+    encogidas, _ = P._shrunk_scales(per_store, k=100.0)
+    assert sin_encoger["A"] < encogidas["A"] < pooled or math.isclose(encogidas["A"], pooled,
+                                                                     rel_tol=0.2)
+    assert encogidas["B"] < sin_encoger["B"]      # el volátil se modera
+    assert encogidas["A"] > sin_encoger["A"]      # el quieto se ensancha
+    assert encogidas["A"] < encogidas["B"]        # pero el orden se conserva
+
+
+def test_la_forma_se_toma_de_la_red_estandarizada():
+    """Los cuantiles de forma salen de residuos estandarizados: no arrastran escala ajena."""
+    per_store = {"A": [-2.0, -1.0, 0.0, 1.0, 2.0], "B": [-20.0, -10.0, 0.0, 10.0, 20.0]}
+    scales = {"A": 1.0, "B": 10.0}
+    q_lo, q_hi = P._shape_quantiles(per_store, scales)
+    assert q_lo is not None and q_hi is not None
+    # Estandarizados, ambos locales aportan la MISMA forma: los cuantiles son simétricos.
+    assert math.isclose(q_lo, -q_hi, rel_tol=1e-9)
+
+
+def test_la_banda_publicada_cubre_lo_que_promete():
+    """Control de construcción: si la cobertura sobre sus propios residuos no da cerca del
+    nominal, hay un error de implementación, no un hallazgo."""
+    result = P.project(_con_dispersiones({"A": 0.05, "B": 0.15, "C": 0.25}), horizon=7)
+    assert result is not None and result.calibration is not None
+    cov = result.calibration.coverage_pct
+    assert cov is not None
+    assert abs(cov - result.calibration.nominal_coverage_pct) < 6.0
+
+
+def test_la_glosa_de_forma_se_computa_y_no_se_afirma():
+    """La frase debe seguir a la cifra medida. Incrustarla es lo que deja al informe
+    contradiciendo su propio número cuando el diagnóstico cambia."""
+    pesada = P._shape_note(0.0, 4.1)
+    liviana = P._shape_note(-0.17, 0.23)
+    assert "cola pesada" in pesada
+    assert "cola pesada" not in liviana
+    assert "normal" in liviana
+    assert P._shape_note(None, None) != pesada
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # El error se mide contra el REAL
 # ─────────────────────────────────────────────────────────────────────────────
 
