@@ -478,3 +478,95 @@ def test_con_patron_semanal_la_regla_ganadora_le_gana_a_la_vara():
     assert result.overall_mape is not None and result.baseline_mape is not None
     assert result.overall_mape < result.baseline_mape
     assert result.rule != P.BASELINE_RULE
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# La sección del informe
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_la_seccion_declara_los_locales_excluidos():
+    """El defecto que esto ataca no falla: publica una sección impecable sobre la parte
+    buena del panel. Un local sin pronóstico que no se nombra desaparece sin aviso, y el
+    documento afirma una cobertura que no tiene."""
+    from modules.brand_intel import report_docs
+
+    pr = {
+        "available": True,
+        "horizonte_dias": 14,
+        "pct_incertidumbre_venta_que_aporta_el_trafico": 84,
+        "error_medio_trafico_pct": 7.41,
+        "error_de_la_vara_trafico_pct": 12.94,
+        "error_medio_cheque_pct": 3.62,
+        "locales_proyectables": 28,
+        "locales_en_el_panel": 30,
+        "locales_no_proyectables": [
+            {"label": "Santiago Center", "motivo": P.REASON_NO_LIFT, "jornadas": 70},
+            {"label": "Recién Abierto", "motivo": P.REASON_SHORT_HISTORY, "jornadas": 9},
+        ],
+        "pct_jornadas_en_que_el_real_supero_al_pronostico": 62.0,
+        "nota_motor": "nota del motor",
+    }
+    texto = report_docs._fallback_projection(pr)
+    assert "28 de 30" in texto
+    assert "Santiago Center" in texto and "Recién Abierto" in texto
+    # El motivo se traduce: el término del motor es vocabulario interno y en un documento
+    # de cliente no dice lo que significa.
+    assert P.REASON_NO_LIFT not in texto and P.REASON_SHORT_HISTORY not in texto
+    assert report_docs._PROJECTION_REASON[P.REASON_NO_LIFT] in texto
+    assert report_docs._PROJECTION_REASON[P.REASON_SHORT_HISTORY] in texto
+
+
+def test_todo_motivo_del_motor_tiene_traduccion():
+    """Un motivo nuevo en el motor sin su traducción sale al PDF como «motivo no
+    declarado», que es peor que el término técnico: borra la información."""
+    from modules.brand_intel import report_docs
+
+    del_motor = {P.REASON_NO_LIFT, P.REASON_SHORT_HISTORY, P.REASON_NO_SCORED}
+    assert del_motor <= set(report_docs._PROJECTION_REASON)
+
+
+def test_la_seccion_declara_el_sesgo_cuando_lo_hay():
+    from modules.brand_intel import report_docs
+
+    base = {"available": True, "horizonte_dias": 14, "locales_proyectables": 30,
+            "locales_en_el_panel": 30}
+    sesgado = report_docs._fallback_projection(
+        {**base, "pct_jornadas_en_que_el_real_supero_al_pronostico": 62.0})
+    calibrado = report_docs._fallback_projection(
+        {**base, "pct_jornadas_en_que_el_real_supero_al_pronostico": 50.4})
+    assert "sesgado" in sesgado
+    assert "sesgado" not in calibrado
+
+
+def test_la_plantilla_exige_banda_por_local_y_cobertura():
+    """La prosa que el modelo debe respetar vive en la CONSTANTE, no en un dict armado al
+    vuelo: un literal partido por ancho de línea deja de existir en el fuente."""
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+
+    tpl = THIN_TEMPLATES["brand_sales_projection"]
+    assert "locales_no_proyectables_con_motivo" in tpl
+    assert "REGLA DURA DE BANDA" in tpl
+    assert "REGLA DURA DE COBERTURA" in tpl
+    assert "REGLA DURA DE SESGO" in tpl
+    # Y el pronóstico jamás se presenta como lo que va a pasar.
+    assert "PROHIBIDO" in tpl
+
+
+def test_el_contexto_de_ia_sirve_los_excluidos_no_solo_los_buenos():
+    from modules.brand_intel import report as rpt
+
+    payload = {
+        "engagement": {"focal_brand": "M", "market": "RD", "category": "QSR",
+                       "provider": "Prov", "client": "C", "slug": "s"},
+        "waves": [], "frame": {},
+        "sections": {
+            "projection": {
+                "available": True, "horizonte_dias": 14,
+                "locales": [{"label": "A", "error_medio_pct": 4.3}],
+                "locales_no_proyectables": [{"label": "B", "motivo": P.REASON_NO_LIFT}],
+            },
+        },
+    }
+    ctx = rpt.cerebro_contexts(payload)["projection"]
+    assert ctx["locales_no_proyectables_con_motivo"][0]["label"] == "B"
+    assert ctx["locales_con_su_error_y_banda"][0]["label"] == "A"
