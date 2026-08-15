@@ -95,3 +95,37 @@ def test_el_umbral_de_graduacion_es_el_de_la_casa():
     from modules.deal_scoring.validation.learning_curve import GRADUATION_AUC_FLOOR as piso
     assert hz.GRADUATION_AUC_FLOOR == piso, (
         "un segundo umbral de graduación en el repo es un segundo estándar")
+
+
+def test_la_trayectoria_se_auto_referencia_a_la_historia_del_banco():
+    """`z_propio` pregunta "¿está alto PARA ESTE BANCO?" en vez de "¿supera el piso de su
+    tipo?". Con eso los pisos por tipo —constantes puestas a mano— dejan de ser parámetros
+    libres."""
+    fin = date(2026, 3, 1)
+    serie = _serie("B", 16, fin=fin)
+    trim = sorted(d for d in serie if d.month in hz.MES_TRIMESTRAL)
+    # una entidad plana no tiene desviación de su propia historia
+    fx = hz._trayectoria(serie, trim[-1], trim)
+    assert abs(fx["morosidad_pct__z_propio"]) < 1e-6
+    # la misma mora, ahora anómala para ESE banco
+    serie[trim[-1]] = {**serie[trim[-1]], "morosidad_pct": 9.0}
+    fx2 = hz._trayectoria(serie, trim[-1], trim)
+    assert fx2["morosidad_pct__z_propio"] > 1.0
+
+
+def test_sin_historia_propia_no_hay_trayectoria():
+    """Se excluye la observación en vez de rellenar la historia que no existe."""
+    fin = date(2026, 3, 1)
+    serie = _serie("B", 3, fin=fin)
+    trim = sorted(d for d in serie if d.month in hz.MES_TRIMESTRAL)
+    assert hz._trayectoria(serie, trim[-1], trim) is None
+
+
+def test_la_persistencia_cuenta_trimestres_consecutivos_empeorando():
+    fin = date(2026, 3, 1)
+    serie = _serie("B", 16, fin=fin)
+    trim = sorted(d for d in serie if d.month in hz.MES_TRIMESTRAL)
+    for i, d in enumerate(trim):
+        serie[d] = {**serie[d], "morosidad_pct": 2.0 + 0.3 * i}   # empeora siempre
+    fx = hz._trayectoria(serie, trim[-1], trim)
+    assert fx["morosidad_pct__persistencia"] >= 4

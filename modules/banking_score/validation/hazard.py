@@ -34,6 +34,24 @@ ex-ante de los retrospectivos. El contaminado sirve para desarrollar; no para gr
 GRADUACIÓN. El modelo no se comunica como predictivo hasta que su validación lo gane: el
 límite inferior del IC del AUC debe superar `GRADUATION_AUC_FLOOR`, el mismo criterio y el
 mismo umbral que usa `deal_scoring.validation.learning_curve`. No se gradúa por N.
+
+TRAYECTORIA — medida, y por ahora NO se gana su lugar. `con_trayectoria=True` agrega, por cada
+indicador, su nivel contra la propia historia del banco, su velocidad y su persistencia. La
+idea es correcta —una quiebra es un proceso, no una foto— pero sobre este dato:
+
+    nivel                 6 features · 78 eventos · AUC 0.886 · Brier 0.130
+    trayectoria sola     12 features · 88 eventos · AUC 0.782 · Brier 0.176
+    nivel + trayectoria  18 features · 75 eventos · AUC 0.850 · Brier 0.125
+
+La trayectoria sola pierde porque auto-referenciar BORRA el nivel absoluto: un banco que
+siempre estuvo al 30% de morosidad tiene z_propio ≈ 0 y se está muriendo igual — el zombi
+crónico es invisible para una lectura puramente relativa a sí mismo. Y combinada mejora la
+calibración pero empeora la discriminación: 75 eventos no sostienen 18 parámetros.
+
+Se deja implementada y medida, no borrada, para que nadie la re-agregue como mejora obvia sin
+mirar el número. El cuello de botella no es el modelo: son los EVENTOS CURADOS. Con más casos
+confirmados de 2000 en adelante, esta comparación hay que volver a correrla — puede darse
+vuelta, y el módulo está listo para eso.
 """
 from __future__ import annotations
 
@@ -60,6 +78,77 @@ MIN_ENTIDADES_CON_EVENTO = 5
 # Cadencia del panel de riesgo. Trimestral: es la del dato moderno y la de la decisión.
 MES_TRIMESTRAL = (3, 6, 9, 12)
 
+# Indicadores sobre los que se construye la TRAYECTORIA. El signo dice hacia dónde es peor:
+# +1 = subir es deteriorarse (morosidad), -1 = bajar lo es (cobertura, capital, depósitos).
+INDICADORES_TRAYECTORIA: Tuple[Tuple[str, int], ...] = (
+    ("morosidad_pct", +1),
+    ("cobertura_pct", -1),
+    ("apalancamiento_pct", -1),
+    ("depositos_totales", -1),
+)
+# Ventana de historia propia sobre la que se mide "alto PARA ESTE BANCO".
+VENTANA_PROPIA_Q = 12
+# Tope de la persistencia: más allá, un run largo deja de aportar y solo mete escala.
+PERSISTENCIA_MAX = 8
+
+FEATURES_TRAYECTORIA: Tuple[str, ...] = tuple(
+    f"{ind}__{f}" for ind, _ in INDICADORES_TRAYECTORIA
+    for f in ("z_propio", "velocidad", "persistencia")
+)
+
+
+def _trayectoria(series: Dict[date, Dict], ref: date,
+                 trimestrales: Sequence[date]) -> Optional[Dict[str, float]]:
+    """La historia del indicador EN ESTA ENTIDAD, no su nivel contra un umbral externo.
+
+    Tres lecturas por indicador, todas auto-referenciadas:
+
+    ``z_propio``   dónde está el valor de hoy contra la propia historia del banco, en unidades
+                   de su propia dispersión. Reemplaza la pregunta "¿supera el piso de su
+                   tipo?" por "¿está alto PARA ESTE BANCO?" — y con eso los pisos por tipo de
+                   entidad, que hoy son constantes puestas a mano y que nadie puede justificar
+                   del dato, dejan de ser parámetros libres.
+    ``velocidad``  variación en cuatro trimestres, en unidades de su propia dispersión: un
+                   movimiento de un punto significa cosas distintas en un banco estable que en
+                   uno volátil.
+    ``persistencia`` trimestres consecutivos empeorando. Ocho trimestres de deterioro leve no
+                   son un mal trimestre, y el nivel solo no los distingue.
+    """
+    import statistics as st
+
+    idx = list(trimestrales).index(ref)
+    ventana = list(trimestrales)[max(0, idx - VENTANA_PROPIA_Q):idx + 1]
+    if len(ventana) < 5:
+        return None
+    out: Dict[str, float] = {}
+    for campo, signo in INDICADORES_TRAYECTORIA:
+        vals = []
+        for d in ventana:
+            v = series.get(d, {}).get(campo)
+            try:
+                vals.append(float(v)) if v is not None else None
+            except (TypeError, ValueError):
+                pass
+        if len(vals) < 5:
+            return None      # sin historia propia no hay trayectoria: se excluye, no se rellena
+        actual = vals[-1]
+        med = st.median(vals)
+        disp = st.pstdev(vals) or abs(med) * 0.01 or 1.0
+        out[f"{campo}__z_propio"] = signo * (actual - med) / disp
+        prev4 = vals[-5] if len(vals) >= 5 else vals[0]
+        out[f"{campo}__velocidad"] = signo * (actual - prev4) / disp
+        # Persistencia: trimestres consecutivos moviéndose en la dirección mala.
+        run = 0
+        for a, b in zip(reversed(vals[:-1]), reversed(vals[1:])):
+            if signo * (b - a) > 0:
+                run += 1
+                if run >= PERSISTENCIA_MAX:
+                    break
+            else:
+                break
+        out[f"{campo}__persistencia"] = float(run)
+    return out
+
 
 @dataclass(frozen=True)
 class HazardResult:
@@ -83,7 +172,8 @@ class HazardResult:
 
 
 def construir_panel_riesgo(panel: Dict[str, Dict[date, Dict]], terminaciones,
-                           panel_end: date, solo_curadas: bool = False
+                           panel_end: date, solo_curadas: bool = False,
+                           con_trayectoria: bool = False
                            ) -> Tuple[List[List[float]], List[int], List[str]]:
     """Dataset entidad-período: una fila por trimestre en que la institución estuvo en riesgo.
 
@@ -125,20 +215,33 @@ def construir_panel_riesgo(panel: Dict[str, Dict[date, Dict]], terminaciones,
             # quiebras curadas. La fecha de salida rara vez respeta la cadencia del panel.
             ultimo = trimestrales[-1]
             for d in trimestrales:
-                fx = build_features(series, d, floor)
+                nivel = build_features(series, d, floor)
+                if con_trayectoria:
+                    tray = _trayectoria(series, d, trimestrales)
+                    if not tray:
+                        continue
+                    # AMBOS: la trayectoria COMPLEMENTA al nivel, no lo reemplaza. Sola sale
+                    # peor (AUC 0.78 vs 0.89) y el motivo no es solo sobreajuste: auto-
+                    # referenciar borra el nivel absoluto, y un banco que SIEMPRE estuvo al
+                    # 30% de mora tiene z_propio ≈ 0 y se está muriendo igual. El zombi
+                    # crónico es invisible para una lectura puramente relativa a sí mismo.
+                    fx = {**(nivel or {}), **tray} if nivel else None
+                else:
+                    fx = nivel
                 if not fx:
                     continue
                 # El resto de sus períodos son "estuvo en riesgo y no quebró todavía" — que
                 # es exactamente la información que el clasificador de horizonte fijo tiraba.
                 evento = 1 if (es_quiebra and d == ultimo) else 0
-                X.append([fx[k] for k in FEATURES])
+                claves = (FEATURES + FEATURES_TRAYECTORIA) if con_trayectoria else FEATURES
+                X.append([fx[k] for k in claves])
                 y.append(evento)
                 groups.append(nombre)
     return X, y, groups
 
 
 def ajustar(panel: Dict[str, Dict[date, Dict]], terminaciones, panel_end: date,
-            solo_curadas: bool = False) -> HazardResult:
+            solo_curadas: bool = False, con_trayectoria: bool = False) -> HazardResult:
     """Ajusta el hazard y decide si GRADÚA.
 
     Devuelve `gradua=False` con su motivo cuando el dato no sostiene la afirmación. Ese es el
@@ -150,8 +253,11 @@ def ajustar(panel: Dict[str, Dict[date, Dict]], terminaciones, panel_end: date,
     from sklearn.metrics import brier_score_loss, roc_auc_score
     from sklearn.preprocessing import StandardScaler
 
-    etiqueta = "curada" if solo_curadas else "inferida"
-    X, y, g = construir_panel_riesgo(panel, terminaciones, panel_end, solo_curadas)
+    etiqueta = ("curada" if solo_curadas else "inferida") + (
+        " · nivel+trayect" if con_trayectoria else " · nivel")
+    claves = (FEATURES + FEATURES_TRAYECTORIA) if con_trayectoria else FEATURES
+    X, y, g = construir_panel_riesgo(panel, terminaciones, panel_end, solo_curadas,
+                                     con_trayectoria)
     Xa, ya, ga = np.asarray(X, float), np.asarray(y), np.asarray(g)
     n_ev = int(ya.sum()) if ya.size else 0
     ents = set(ga.tolist()) if ga.size else set()
@@ -169,7 +275,7 @@ def ajustar(panel: Dict[str, Dict[date, Dict]], terminaciones, panel_end: date,
 
     Xs = StandardScaler().fit_transform(Xa)
     clf = LogisticRegression(max_iter=3000, class_weight="balanced").fit(Xs, ya)
-    coef = {k: round(float(c), 4) for k, c in zip(FEATURES, clf.coef_[0])}
+    coef = {k: round(float(c), 4) for k, c in zip(claves, clf.coef_[0])}
 
     # Validación leave-one-ENTITY-out: dos trimestres del mismo banco no son independientes.
     preds = np.zeros(len(ya))
