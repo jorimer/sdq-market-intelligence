@@ -56,6 +56,8 @@ EJE_LABELS = {
     "esg": "ESG",
     "economic_structure": "Estructura-Economica",
     "social_dev": "Desarrollo-Social",
+    # El sujeto de este eje es un INSTRUMENTO NORMATIVO, no un país ni una firma.
+    "law": "Evaluacion-de-Leyes",
 }
 
 # Nivel comercial → naturaleza del documento. Espeja `TIER_LABELS` del generador de banca,
