@@ -105,12 +105,18 @@ terminaciones:
   - nombre: Banco Profesional
     fecha_salida: 2005-02-01
     causa: renombre
-    episodio: Se convierte en Banco León
+    episodio: Se convierte en Banco León (2003) al adquirir Bancrédito
     fuente: >-
-      Confirmado por el dueño. ⚠ REVISAR: el código `PROFESIONAL` cierra con 36.7% de
-      morosidad, que no es la firma de un renombre limpio — puede ser un vehículo residual de
-      cartera que quedó atrás en la conversión. La etiqueta sigue al relato del dueño; la
-      anomalía queda anotada para no darla por conciliada.
+      Confirmado por el dueño: el Banco Profesional (nacido en 1999 de la transformación de
+      la Financiera Profesional, por la Familia León) pasó a llamarse Banco León en 2003 tras
+      integrar operaciones y activos de Bancrédito; en 2014 se fusionó con Banco BHD.
+      RESUELVE la anomalía que este archivo tenía anotada: el código `PROFESIONAL` cierra con
+      36.7% de morosidad, casi el espejo del 33.3% con que Bancrédito cierra tres meses
+      antes. El banco continuó como Banco León en el slot de Bancrédito desde 2004-01 con
+      ratios limpios (mora 3.8%); lo que siguió reportando bajo el código viejo hasta 2005-02
+      fue el residuo de la cartera absorbida, no la insolvencia de Banco Profesional. Es el
+      mismo fenómeno de Bancrédito visto desde el otro lado: el código sigue a la CARTERA, no
+      a la institución.
 
   - nombre: Banco Comercial BHD
     fecha_salida: 1992-12-01
