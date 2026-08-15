@@ -881,7 +881,11 @@ def project(
         note=_shape_note(skew, kurt),
     )
 
-    n_scored = next((r.n_predictions for r in ranked if r.rule == chosen), 0)
+    # Servido YA con la notación del documento. Sin separador, el modelo lo agrega él y lo
+    # agrega en inglés: el informe de producción salió con «1,260 predicciones». Un número
+    # que el contexto entrega sin formato es un número que el modelo va a formatear.
+    n_scored_raw = next((r.n_predictions for r in ranked if r.rule == chosen), 0)
+    n_scored = f"{n_scored_raw:,}".replace(",", ".")
     lift = (
         f"{(baseline - overall) / baseline * 100:.0f}% menos error que el promedio del local"
         if baseline and overall and baseline > 0 else "sin contraste contra la vara"

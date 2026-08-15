@@ -553,6 +553,22 @@ def test_ninguna_cadena_servida_cita_el_identificador_de_la_regla():
     assert P.rule_label(result.rule) in result.basis
 
 
+def test_las_cifras_servidas_llevan_la_notacion_del_documento():
+    """El informe de producción salió con «1,260 predicciones», en notación inglesa.
+
+    El motor servía `1260` sin separador y el modelo lo formateó por su cuenta. Un número
+    entregado sin formato es un número que el modelo va a formatear.
+    """
+    # Hace falta pasar del millar para que el separador exista: 30 locales × 70 jornadas.
+    sigmas = {f"L{i:02d}": 0.06 + 0.005 * i for i in range(30)}
+    result = P.project(_con_dispersiones(sigmas), horizon=7)
+    assert result is not None
+    n = next(r.n_predictions for r in result.ranked_rules if r.rule == result.rule)
+    assert n >= 1000, "el panel del test tiene que superar el millar para probar esto"
+    assert f"{n:,}" not in result.basis          # notación inglesa: fuera
+    assert f"{n:,}".replace(",", ".") in result.basis
+
+
 def test_toda_regla_del_motor_tiene_nombre_legible():
     """Una regla nueva sin etiqueta vuelve a filtrar su identificador al documento."""
     assert set(P.RULES) <= set(P.RULE_LABELS)
