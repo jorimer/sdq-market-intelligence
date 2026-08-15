@@ -56,6 +56,11 @@ INSOLVENCIA_MULT = 3.0
 
 NATURALEZAS = ("insolvencia", "deterioro", "sana_al_salir", "no_evaluable")
 
+# Causas del registro CURADO (`data/terminaciones_curadas.yaml`). Mandan sobre la inferida.
+CAUSAS_QUIEBRA = ("quiebra",)
+CAUSAS_NO_QUIEBRA = ("fusion", "salida_voluntaria", "renombre")
+RUTA_CURADAS = "data/terminaciones_curadas.yaml"
+
 
 @dataclass(frozen=True)
 class Terminacion:
@@ -69,12 +74,31 @@ class Terminacion:
     n_meses_serie: int
     morosidad_salida: Optional[float]
     apalancamiento_salida: Optional[float]
+    # Etiqueta CURADA, cuando existe. Manda sobre `naturaleza`, que se infiere de los ratios.
+    causa_curada: Optional[str] = None
+    fuente_curada: Optional[str] = None
+
+    @property
+    def origen_etiqueta(self) -> str:
+        """`curada` = viene de afuera de los ratios; `inferida` = del estado al salir.
+
+        La distinción no es cosmética: un modelo calibrado sobre etiquetas inferidas tiene el
+        predictor adentro de la etiqueta y su AUC está inflado. Es el mismo estándar con que
+        `deal_scoring` separa sus labels ex-ante de los retrospectivos.
+        """
+        return "curada" if self.causa_curada else "inferida"
 
     @property
     def es_quiebra(self) -> bool:
-        """La cohorte de quiebras: insolvencia + deterioro. `sana_al_salir` queda fuera —es
-        una fusión o una venta— y `no_evaluable` también: no se cuenta como quiebra lo que no
-        se pudo mirar."""
+        """La cohorte de quiebras. La causa curada MANDA: si el registro dice que fue una
+        fusión, no importa en qué estado contable haya salido.
+
+        Sin curaduría cae a la inferencia: insolvencia + deterioro. `sana_al_salir` queda
+        fuera —es fusión o venta— y `no_evaluable` también: no se cuenta como quiebra lo que
+        no se pudo mirar.
+        """
+        if self.causa_curada:
+            return self.causa_curada in CAUSAS_QUIEBRA
         return self.naturaleza in ("insolvencia", "deterioro")
 
 
@@ -170,6 +194,56 @@ def detectar(panel: Dict[str, Dict[date, Dict]],
     return sorted(out, key=lambda t: t.fecha_salida)
 
 
+def cargar_curadas(ruta: Optional[str] = None) -> Dict[str, Dict[str, str]]:
+    """El registro curado, indexado por nombre normalizado de institución.
+
+    Devuelve ``{}`` si el archivo no está o no se puede leer: la ausencia del registro degrada
+    a etiquetas inferidas —que es peor pero honesto— y nunca tumba la calibración.
+    """
+    import pathlib as _pl
+
+    import yaml  # type: ignore[import-untyped]
+
+    destino = _pl.Path(ruta) if ruta else _pl.Path(__file__).resolve().parents[1] / RUTA_CURADAS
+    try:
+        doc = yaml.safe_load(destino.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as e:  # noqa: BLE001
+        logger.warning("Registro curado ilegible (%s): se usan etiquetas inferidas.", e)
+        return {}
+    out: Dict[str, Dict[str, str]] = {}
+    for fila in doc.get("terminaciones") or []:
+        nombre, causa = fila.get("nombre"), fila.get("causa")
+        if not nombre or not causa or causa == "desconocida":
+            continue
+        # Una etiqueta sin procedencia es exactamente el problema que el registro vino a
+        # resolver: se ignora en vez de aceptarse.
+        if not fila.get("fuente"):
+            logger.warning("Terminación curada sin fuente, ignorada: %s", nombre)
+            continue
+        out[_norm_nombre(str(nombre))] = {"causa": str(causa), "fuente": str(fila["fuente"])}
+    return out
+
+
+def _norm_nombre(s: str) -> str:
+    import unicodedata
+    s = unicodedata.normalize("NFKD", s or "")
+    return " ".join("".join(c for c in s if not unicodedata.combining(c)).lower().split())
+
+
+def aplicar_curaduria(terminaciones: Sequence[Terminacion],
+                      curadas: Optional[Dict[str, Dict[str, str]]] = None
+                      ) -> List[Terminacion]:
+    """Pega la etiqueta curada sobre la inferida donde exista."""
+    from dataclasses import replace
+
+    reg = cargar_curadas() if curadas is None else curadas
+    out: List[Terminacion] = []
+    for t in terminaciones:
+        c = reg.get(_norm_nombre(t.entidad_nombre))
+        out.append(replace(t, causa_curada=c["causa"], fuente_curada=c["fuente"]) if c else t)
+    return out
+
+
 def cohorte_canonica(terminaciones: Sequence[Terminacion], *,
                      solo_linaje_limpio: bool = False) -> List[Terminacion]:
     """Las quiebras utilizables para calibrar: insolvencia + deterioro.
@@ -186,6 +260,37 @@ def cohorte_canonica(terminaciones: Sequence[Terminacion], *,
     """
     return [t for t in terminaciones
             if t.es_quiebra and (not solo_linaje_limpio or not t.revisar_linaje)]
+
+
+def validar_contra_curadas(terminaciones: Sequence[Terminacion]) -> Dict[str, Any]:
+    """¿La clasificación automática acierta las salidas cuya causa SÍ conocemos?
+
+    Es la prueba de aceptación que importa y que un AUC no da: un conjunto nombrado y
+    verificable —¿marca como quiebra a Baninter, a Bancrédito, a Mercantil?, ¿deja afuera a
+    las que se fusionaron estando sanas?—. Un modelo que ordena bien pero se come Baninter
+    no sirve para lo que se vende.
+
+    Mide la inferencia CONTRA la curaduría, así que solo corre sobre las filas curadas. Los
+    desacuerdos son la lista de trabajo: o la regla automática está mal, o el registro lo está.
+    """
+    aciertos: List[str] = []
+    fallos: List[Dict[str, str]] = []
+    for t in terminaciones:
+        if not t.causa_curada:
+            continue
+        esperado = t.causa_curada in CAUSAS_QUIEBRA
+        # `es_quiebra` ya usa la curada; acá se pregunta qué habría dicho la INFERENCIA sola.
+        inferido = t.naturaleza in ("insolvencia", "deterioro")
+        if inferido == esperado:
+            aciertos.append(t.entidad_nombre)
+        else:
+            fallos.append({"entidad": t.entidad_nombre,
+                           "fecha": t.fecha_salida.isoformat(),
+                           "curada": t.causa_curada, "inferida": t.naturaleza})
+    n = len(aciertos) + len(fallos)
+    return {"n_curadas": n, "n_aciertos": len(aciertos), "n_fallos": len(fallos),
+            "tasa": round(len(aciertos) / n, 3) if n else None,
+            "aciertos": aciertos, "fallos": fallos}
 
 
 def resumen(terminaciones: Sequence[Terminacion]) -> Dict[str, Any]:

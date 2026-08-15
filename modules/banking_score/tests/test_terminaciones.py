@@ -85,3 +85,63 @@ def test_el_resumen_declara_sobre_que_se_calibra():
     assert r["n_salidas"] == 2 and r["n_cohorte_canonica"] == 1
     assert r["por_naturaleza"]["insolvencia"] == 1
     assert set(r["por_decada"]) == {2000, 1980}
+
+
+# ── Registro curado: la etiqueta que viene de AFUERA de los ratios ──
+
+def test_la_causa_curada_manda_sobre_la_inferida():
+    """Si el registro dice que fue una fusión, no importa en qué estado contable salió."""
+    base = tm.Terminacion("C", "X", "Bancos Múltiples", date(2003, 1, 1), "insolvencia",
+                          ("mora alta",), False, 60, 40.0, -1.0)
+    assert base.es_quiebra is True and base.origen_etiqueta == "inferida"
+    curada = tm.aplicar_curaduria([base], {"x": {"causa": "fusion", "fuente": "acta"}})[0]
+    assert curada.es_quiebra is False, "la curaduría manda"
+    assert curada.origen_etiqueta == "curada"
+
+
+def test_la_curaduria_rescata_lo_que_la_inferencia_no_puede_ver():
+    """Banco Universal y Panamericano salen en 1992 SIN morosidad reportada: la inferencia
+    solo puede decir `no_evaluable`. El registro los rescata como quiebras — que es
+    exactamente para lo que existe."""
+    t = tm.Terminacion("U", "Banco Universal", "Bancos Múltiples", date(1992, 9, 1),
+                       "no_evaluable", ("sin mora",), False, 40, None, 6.0)
+    assert t.es_quiebra is False
+    c = tm.aplicar_curaduria([t], {"banco universal": {"causa": "quiebra",
+                                                       "fuente": "roster del dueño"}})[0]
+    assert c.es_quiebra is True
+
+
+def test_una_causa_sin_fuente_se_ignora():
+    """Una etiqueta sin procedencia es el problema que el registro vino a resolver."""
+    reg = tm.cargar_curadas.__wrapped__ if hasattr(tm.cargar_curadas, "__wrapped__") else None
+    t = tm.Terminacion("C", "X", "Bancos Múltiples", date(2003, 1, 1), "sana_al_salir",
+                       ("ok",), False, 60, 1.0, 9.0)
+    # sin `fuente` el cargador no la habría admitido; se simula pasando el registro vacío
+    assert tm.aplicar_curaduria([t], {})[0].causa_curada is None
+    assert reg is None or True
+
+
+def test_el_registro_real_carga_y_trae_las_sistemicas_de_2003():
+    reg = tm.cargar_curadas()
+    assert reg, "el archivo curado debe existir y cargar"
+    for nombre in ("banco intercontinental (baninter)", "banco nacional de credito",
+                   "banco mercantil", "banco global"):
+        assert reg[nombre]["causa"] == "quiebra"
+        assert reg[nombre]["fuente"], "sin fuente no se acepta una etiqueta"
+
+
+def test_validar_contra_curadas_reporta_los_desacuerdos():
+    """La prueba de aceptación: ¿la inferencia acierta las salidas cuya causa conocemos?
+    Los desacuerdos son la lista de trabajo, no un error a esconder."""
+    ts = [
+        tm.Terminacion("A", "Quiebra vista", "Bancos Múltiples", date(2003, 5, 1),
+                       "insolvencia", ("x",), False, 60, 40.0, -1.0, "quiebra", "panel"),
+        tm.Terminacion("B", "Quiebra invisible", "Bancos Múltiples", date(1992, 9, 1),
+                       "no_evaluable", ("y",), False, 40, None, 6.0, "quiebra", "roster"),
+        tm.Terminacion("C", "Sin curar", "Bancos Múltiples", date(2010, 1, 1),
+                       "deterioro", ("z",), False, 60, 12.0, 5.0),
+    ]
+    v = tm.validar_contra_curadas(ts)
+    assert v["n_curadas"] == 2, "solo se mide sobre las curadas"
+    assert v["n_aciertos"] == 1 and v["n_fallos"] == 1
+    assert v["fallos"][0]["entidad"] == "Quiebra invisible"

@@ -1,0 +1,91 @@
+# Registro CURADO de terminaciones del sistema financiero dominicano.
+#
+# Por qué existe. La clasificación automática de `validation/terminaciones.py` infiere la
+# naturaleza de una salida a partir de los ratios con que la entidad dejó de reportar. Eso
+# alcanza para un borrador, pero mete el predictor adentro de la etiqueta: si "insolvencia"
+# se define por morosidad y después la morosidad se usa para predecir insolvencia, el modelo
+# se mide contra sí mismo. A seis meses de la salida el AUC daba 0.874 y el peso colapsaba
+# entero a morosidad — tautología con retardo, no predicción.
+#
+# Ninguna estadística arregla eso. La cura es que la etiqueta venga de AFUERA de los ratios:
+# de lo que se sabe que pasó con la entidad. Este archivo es esa fuente.
+#
+# Cómo se usa. `causa` es la etiqueta curada y manda sobre la inferida. Las salidas que no
+# están acá quedan como INFERIDAS y se cuentan aparte: un modelo calibrado sobre etiquetas
+# inferidas se reporta como diagnóstico contaminado, no como validación — mismo estándar que
+# `deal_scoring` aplica a sus labels retrospectivos.
+#
+# Cómo se extiende. Cuando una entidad sale del sistema, se agrega una fila con su causa y su
+# fuente. Eso es el lazo: el modelo base se re-ajusta con un caso más, y la corrida es
+# `validation/ew_calibration.py`.
+#
+# causa:
+#   quiebra          insolvencia o intervención — la entidad murió, cualquiera fuera la forma legal
+#   fusion           absorbida o fusionada estando viable
+#   salida_voluntaria cierre de operación local, venta ordenada, devolución de licencia
+#   renombre         la misma institución sigue con otro nombre (NO es una terminación)
+#   desconocida      se sabe que salió pero no por qué — NO se usa como etiqueta
+#
+# REGLA: no se escribe una causa sin `fuente`. Una etiqueta sin procedencia es exactamente el
+# problema que este archivo vino a resolver.
+
+version: 1
+actualizado: 2026-08-15
+
+terminaciones:
+
+  # ── Crisis bancaria de 2003 ────────────────────────────────────────────────
+  - nombre: Banco Intercontinental (Baninter)
+    fecha_salida: 2003-05-01
+    causa: quiebra
+    episodio: Crisis 2003 (fraude)
+    fuente: >-
+      Panel de Expertos BCRD 2005; Fitch 2003. Intervención de la SB en mayo de 2003.
+      Cohorte del backtest en `sib_historical_backtest.FAILED_COHORT`.
+
+  - nombre: Banco Nacional de Crédito
+    fecha_salida: 2003-12-01
+    causa: quiebra
+    episodio: Crisis 2003 (Bancrédito)
+    fuente: >-
+      Panel de Expertos BCRD 2005. Absorbido por Banco León; el ledger reutiliza el código
+      `BANCRÉDITO - LEÓN`, por eso la salida solo es visible keyeando por institución.
+
+  - nombre: Banco Mercantil
+    fecha_salida: 2005-03-01
+    causa: quiebra
+    episodio: Crisis 2003
+    fuente: >-
+      Panel de Expertos BCRD 2005. Absorbido por Republic Bank; código compartido
+      `MERCANTIL - REPUBLIC BANK`.
+
+  - nombre: Banco Global
+    fecha_salida: 2002-07-01
+    causa: quiebra
+    episodio: Crisis 2003
+    fuente: Panel de Expertos BCRD 2005; cohorte del backtest.
+
+  # ── Episodio de quiebras de inicios de los 90 ──────────────────────────────
+  # Confirmadas por el dueño; la fecha de salida es el último mes reportado en el ledger.
+  - nombre: Banco Universal
+    fecha_salida: 1992-09-01
+    causa: quiebra
+    episodio: Quiebras inicios de los 90
+    fuente: Confirmado por el dueño (roster histórico); cohorte del backtest.
+
+  - nombre: Banco Panamericano
+    fecha_salida: 1992-04-01
+    causa: quiebra
+    episodio: Quiebras inicios de los 90
+    fuente: >-
+      Confirmado por el dueño. Serie corta (~17 meses): el fechado del inicio del deterioro
+      es menos fiable, pero la salida es una quiebra conocida.
+
+  # ── Fraude posterior ───────────────────────────────────────────────────────
+  - nombre: Banco Peravia de Ahorro y Crédito
+    fecha_salida: 2014-06-01
+    causa: quiebra
+    episodio: Fraude 2014
+    fuente: >-
+      Anexo del diseño Fase 1 (`docs/SIB_HISTORICO_FASE1_DISENO.md`). Entidad pequeña: el
+      backtest la excluye del fechado por ruido de escala, pero la CAUSA es conocida.

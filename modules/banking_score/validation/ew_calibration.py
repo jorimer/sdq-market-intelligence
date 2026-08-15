@@ -202,6 +202,59 @@ def build_design(panel: Dict[str, Dict[date, Dict]], spec: CohortSpec,
     return X, y, groups
 
 
+def build_design_cohorte(panel: Dict[str, Dict[date, Dict]], terminaciones,
+                         spec: CohortSpec, panel_end: date
+                         ) -> Tuple[List[List[float]], List[int], List[str]]:
+    """Matriz de diseño sobre la COHORTE CANÓNICA, no sobre una etiqueta propia.
+
+    Antes esta calibración definía sus quiebras al vuelo —última fila del panel, con una regla
+    de "estado sano 24m antes"— y el resultado dependía tanto de esa receta como del dato.
+    `validation.terminaciones` clasifica las 224 salidas del histórico por el estado en que la
+    entidad dejó de reportar, y aísla la institución del código (sin eso Bancrédito y Mercantil
+    no existen como quiebras). Esta función usa ESE conjunto.
+
+    Los `no_evaluable` quedan fuera de las DOS clases: no se sabe qué fueron, y meterlos como
+    negativos afirmaría que sobrevivieron. Las salidas `sana_al_salir` sí son negativos
+    legítimos: fusiones y ventas de entidades que no estaban deteriorándose.
+    """
+    from modules.banking_score.validation.terminaciones import cohorte_canonica
+
+    quiebras = {t.entidad_nombre: t for t in cohorte_canonica(terminaciones)}
+    no_evaluables = {t.entidad_nombre for t in terminaciones
+                     if t.naturaleza == "no_evaluable"}
+    X: List[List[float]] = []
+    y: List[int] = []
+    groups: List[str] = []
+    for code, series in panel.items():
+        dates = sorted(series)
+        if not dates:
+            continue
+        nombre = str(series[dates[-1]].get("entidad_nombre") or code)
+        if nombre in no_evaluables:
+            continue
+        floor = morosidad_floor(series[dates[-1]].get("tipo_entidad"))
+        t = quiebras.get(nombre)
+        if t is not None:
+            fx = build_features(series, _shift(t.fecha_salida, spec.horizon_m), floor)
+            if fx:
+                X.append([fx[k] for k in FEATURES])
+                y.append(1)
+                groups.append(nombre)
+            continue      # una quiebra no aporta también controles de su propio pasado
+        ref_end = dates[-1] if _months_between(dates[-1], panel_end) > EXIT_LAG_M else panel_end
+        for d in dates:
+            if d.month != CONTROL_MONTH:
+                continue
+            if _months_between(d, ref_end) < SAFE_GAP_M + spec.horizon_m:
+                continue
+            fx = build_features(series, d, floor)
+            if fx:
+                X.append([fx[k] for k in FEATURES])
+                y.append(0)
+                groups.append(nombre)
+    return X, y, groups
+
+
 def fit_weights(X: Sequence[Sequence[float]], y: Sequence[int], groups: Sequence[str],
                 spec: CohortSpec) -> Optional[FitResult]:
     """Regresión logística estandarizada + validación leave-one-entity-out.
