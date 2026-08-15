@@ -172,15 +172,34 @@ terminaciones:
       Mantiene RBC Caribbean en otras islas, sin presencia en territorio dominicano.
       Verificado en el panel: 375 meses de serie continua, 1947-10 a 1985-07.
 
+  # ⚠ CORREGIDO. Una primera versión lo registró como `salida_voluntaria` —la retirada de la
+  # banca española del país—. Era otra institución. El código del ledger lo dice solo:
+  # `CRÉDITO Y AHORROS - CONDAL - SANTANDER - ESPAÑOL`, con Santander hasta 1985-12 y Banco
+  # Español desde 1986-01. Es el banco que nació comprando los activos locales de Santander,
+  # no una sucursal de banca española.
   - nombre: Banco Español
     fecha_salida: 1990-11-01
-    causa: salida_voluntaria
-    episodio: Retiro tras la reestructuración del sistema financiero dominicano
+    causa: quiebra
+    episodio: Quiebra conjunta con Banco Universal (intervención del holding, dic-1992)
     fuente: >-
-      Confirmado por el dueño: operó varias décadas junto a otras entidades extranjeras
-      tradicionales y se retiró formalmente tras la reestructuración del sistema financiero.
-      Hoy no hay banca comercial española con sucursales minoristas en RD. Verificado en el
-      panel: 370 meses de serie continua, 1949-12 a 1990-11.
+      Confirmado por el dueño: Banco Español Dominicano nace en 1986 comprando los activos
+      locales que el Banco de Santander vendió al no poder expandirse en RD. En 1987 lo
+      compra el Banco Universal y pasa a operar dentro del Grupo Financiero Banco Español,
+      bajo las directrices de Universal (productos compartidos, Visa Banco Español / Visa
+      Universal). En diciembre de 1992 la SB interviene el holding completo y la resolución
+      de quiebra alcanza de forma solidaria a todas las filiales, hundiendo a la vez a
+      Universal y al grupo. Sus ahorrantes entraron unificados a la tercera fase de "Dinero
+      Busca Dueño" (2023). La fecha de este registro es la del último reporte separado en el
+      ledger (1990-11); la intervención formal es de dic-1992, cuando ya operaba integrado.
+
+  - nombre: Banco de Santander Dominicano
+    fecha_salida: 1985-12-01
+    causa: salida_voluntaria
+    episodio: Vende sus activos locales y se retira del mercado dominicano
+    fuente: >-
+      Confirmado por el dueño: Santander vendió sus activos locales al no poder expandirse en
+      el mercado dominicano; el comprador constituyó el Banco Español Dominicano en 1986.
+      Verificado en el panel: el código continúa sin interrupción con el nombre nuevo.
 
   - nombre: Bank of America
     fecha_salida: 1984-12-01
@@ -213,3 +232,85 @@ terminaciones:
       Múltiple. La entidad que reportó hasta 2012-12 sí era una licencia separada de ahorro y
       crédito (por eso figura en el ledger de la SB, que solo lista licenciadas), y salió sana:
       morosidad 2.9%. Es una absorción por la matriz, no una caída.
+
+  # ── Del registro histórico de quiebras y liquidaciones de la SB ────────────
+  # Aportadas por el dueño. Las cuatro primeras salen SIN morosidad reportada: ninguna regla
+  # automática podía verlas, y sin curaduría quedaban fuera de la cohorte para siempre.
+
+  - nombre: Banco de Crédito y Ahorros
+    fecha_salida: 1973-09-01
+    causa: quiebra
+    episodio: Uno de los primeros colapsos del sistema post-1947
+    fuente: >-
+      Registro histórico aportado por el dueño: presentó graves dificultades financieras y sus
+      activos pasaron al Banco Condal Dominicano. Verificado en el panel: el código
+      `CRÉDITO Y AHORROS - CONDAL - SANTANDER - ESPAÑOL` cambia a "Banco Condal Dominicano"
+      en 1973-10, el mes siguiente.
+
+  - nombre: Banco de Santo Domingo
+    fecha_salida: 1979-03-01
+    causa: quiebra
+    episodio: Liquidación formal por insolvencia
+    fuente: >-
+      Registro histórico aportado por el dueño: liquidado formalmente por insolvencia y
+      problemas de liquidez.
+
+  - nombre: Banco de los Trabajadores
+    fecha_salida: 1992-12-01
+    causa: quiebra
+    episodio: Insolvencia estructural
+    fuente: >-
+      Registro histórico aportado por el dueño: entró en insolvencia estructural y cesó
+      operaciones durante la crisis de los años 90.
+
+  - nombre: Banco Corporativo Internacional
+    fecha_salida: 1992-12-01
+    causa: quiebra
+    episodio: Liquidación forzosa (crisis de los 90)
+    fuente: >-
+      Registro histórico aportado por el dueño: sometido a liquidación forzosa. Coincide con
+      la inferencia del panel, que ya lo marcaba insolvente (patrimonio -29.1%).
+
+  - nombre: Banco Continental de Desarrollo
+    fecha_salida: 2002-08-01
+    causa: quiebra
+    episodio: Liquidado junto a un grupo de financieras
+    fuente: >-
+      Registro histórico aportado por el dueño. Coincide con la inferencia del panel
+      (patrimonio -25.1%, morosidad 16.1%).
+
+  - nombre: Banco de Desarrollo y Capital
+    fecha_salida: 1993-12-01
+    causa: quiebra
+    episodio: DEFISA — colapso de su cartera crediticia
+    fuente: >-
+      Registro histórico aportado por el dueño: liquidado tras el colapso de su cartera.
+      Coincide con la inferencia del panel.
+
+  - nombre: Banco de Ahorro y Crédito Ochoa
+    fecha_salida: 2006-11-01
+    causa: quiebra
+    episodio: Disuelto por resolución de la Junta Monetaria (2007)
+    fuente: >-
+      Registro histórico aportado por el dueño. El último reporte del ledger es 2006-11; la
+      resolución de disolución es de 2007. Coincide con la inferencia del panel.
+
+  - nombre: Banco de Ahorro y Crédito Federal
+    fecha_salida: 2018-11-01
+    causa: quiebra
+    episodio: Cese de operaciones y disolución
+    fuente: >-
+      Registro histórico aportado por el dueño. Coincide con la inferencia del panel.
+
+  # LA MÁS VALIOSA para el modelo: es una quiebra de la ERA MODERNA, con la serie completa de
+  # indicadores. Las de los años 90 no aportan features —el ledger de esa época no publica los
+  # ratios— así que no mueven la validación por más que se curen.
+  - nombre: Banco Múltiple de las Américas
+    fecha_salida: 2021-11-01
+    causa: quiebra
+    episodio: Bancamérica — intervenido y disuelto por la SB (2022)
+    fuente: >-
+      Registro histórico aportado por el dueño: intervenido y disuelto por la Superintendencia
+      de Bancos tras incumplir de forma prolongada los requerimientos de su plan de
+      regularización. El último reporte del ledger es 2021-11; la disolución es de 2022.
+
