@@ -475,6 +475,42 @@ def signal_panel(m: Dict, peers: Dict) -> List[Dict]:
     return out
 
 
+def panel_para_modelo(panel: List[Dict]) -> List[Dict]:
+    """El panel SIN los números crudos: solo las cadenas ya redactadas.
+
+    Instruirle al modelo "no uses `value`, usá `valor_expresado`" es frágil —al verificar en
+    producción escribió "2.3 veces" y "50.9%" junto a "2,3" del bloque determinista, dos
+    notaciones decimales en el mismo párrafo—. La cura no es una regla más en el prompt: es
+    no darle el número crudo. Si la forma también se computa, tampoco puede reformatearla.
+    """
+    return [{"concepto": s.get("concepto"), "estado": s["estado"],
+             "direccion": s.get("direccion"),
+             "valor": s.get("valor_expresado"), "umbral": s.get("umbral_expresado"),
+             "hace_12m": s.get("hace_12m_expresado"),
+             "umbral_significa": s.get("umbral_significa"),
+             "horizonte_al_umbral": s.get("horizonte")}
+            for s in panel]
+
+
+def relaciones_para_modelo(panel: List[Dict]) -> Dict:
+    """Las relaciones sin los números crudos — misma razón que `panel_para_modelo`: si el
+    valor pelado no está, no se puede reformatear ni recalcular."""
+    r = panel_relations(panel)
+    def _slim(x):
+        if not x:
+            return None
+        return {"concepto": x.get("concepto"), "valor": x.get("valor_expresado"),
+                "umbral": x.get("umbral_expresado"), "hace_12m": x.get("hace_12m_expresado"),
+                "umbral_significa": x.get("umbral_significa"),
+                "horizonte_al_umbral": x.get("horizonte")}
+    return {"n_calibradas": r["n_calibradas"], "n_evaluables": r["n_evaluables"],
+            "n_activos": r["n_activos"], "n_convergen": r["n_convergen"],
+            "n_se_alejan": r["n_se_alejan"], "sin_dato": r["sin_dato"],
+            "converge_primero": _slim(r["converge_primero"]),
+            "convergen": [_slim(x) for x in r["convergen"]],
+            "activos": [_slim(x) for x in r["activos"]]}
+
+
 def panel_relations(panel: List[Dict]) -> Dict:
     """Las RELACIONES del panel, computadas — el modelo las COPIA, no las deriva.
 
@@ -801,9 +837,17 @@ def _prosa_margenes(panel: List[Dict]) -> str:
 
 
 def format_alerts_text(block: Optional[Dict]) -> str:
-    """Bloque de alertas → texto markdown para la sección del reporte (determinista, sin IA)."""
+    """Bloque de alertas → markdown de la sección (determinista, sin IA).
+
+    ``con_narrativa=True`` en el bloque omite la prosa de márgenes: cuando el modelo YA la
+    narró arriba, imprimirla otra vez hace que la sección diga lo mismo dos veces —el defecto
+    que apareció al verificar en producción—. El encabezado con el índice y las viñetas se
+    quedan siempre: son los hechos estructurados, no una repetición del párrafo.
+    """
     alerts = (block or {}).get("alerts") or []
     panel = (block or {}).get("panel") or []
+    if (block or {}).get("con_narrativa"):
+        panel = []
     if not alerts:
         cab = ("Sin banderas de alerta temprana activas al período de corte. Las señales de "
                "monitoreo —precursores detectables de la crisis bancaria de 2003— no se activaron "

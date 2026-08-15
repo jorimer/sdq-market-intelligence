@@ -724,7 +724,7 @@ class BankingProduct:
         if "early_warning" in manifest.sections:
             from modules.banking_score.early_warning import format_alerts_text
             ew = scoring_result.get("early_warning") or {}
-            bullets = format_alerts_text(ew)
+            bullets = format_alerts_text(ew)   # sin narrativa: lleva la prosa de márgenes
             flags = ew.get("alerts") or []
             interp = ""
             panel = ew.get("panel") or []
@@ -732,7 +732,8 @@ class BankingProduct:
                 # HÍBRIDO: párrafo IA que LEE EL PATRÓN del conjunto de banderas (alimentado
                 # SOLO por las banderas ya computadas → numeric_guard impide inventar cifras).
                 # Solo si hay motor real; sin API key quedan los bullets deterministas.
-                from modules.banking_score.early_warning import panel_relations
+                from modules.banking_score.early_warning import (
+                    panel_para_modelo, relaciones_para_modelo)
                 try:
                     res = await narrative_engine.generate(
                         context={"entity": snapshot.entity_name or "Entidad",
@@ -741,17 +742,22 @@ class BankingProduct:
                                  # El panel entra para que el párrafo narre la DISTANCIA a cada
                                  # umbral: sin él, un informe sin banderas activas no decía si
                                  # la entidad está holgada o a un pelo del disparo.
-                                 "panel_precursores": panel,
+                                 "panel_precursores": panel_para_modelo(panel),
                                  # Y las relaciones vienen COMPUTADAS —cuál converge, cuál
                                  # llega antes, en cuántos trimestres—. El modelo las copia; si
                                  # las derivara, acertaría las cifras y fallaría el orden.
-                                 "relaciones_computadas": panel_relations(panel) if panel else {}},
+                                 "relaciones_computadas": (relaciones_para_modelo(panel)
+                                                          if panel else {})},
                         template="early_warning_reading", mode="standard",
                         axis="banking", audience="inversionista")
                     if res.model_used != "static_fallback":
                         interp = (res.text or "").strip()
                 except Exception:  # noqa: BLE001 — la sección nunca depende del motor IA
                     interp = ""
+            if interp:
+                # El modelo narró los márgenes: el bloque determinista se reduce a los hechos
+                # estructurados para que la sección no los cuente dos veces.
+                bullets = format_alerts_text({**ew, "con_narrativa": True})
             out["early_warning"] = (interp + "\n\n" + bullets) if interp else bullets
         if "limitations" in manifest.sections:
             out["limitations"] = _LIMITATIONS_TEXT

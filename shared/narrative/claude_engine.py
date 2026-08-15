@@ -359,7 +359,12 @@ THIN_TEMPLATES = {
         "número. Los plazos al umbral son CONDICIONALES: escríbelos como 'de sostenerse el "
         "ritmo…', nunca como un pronóstico, y NO agregues rótulos de salvedad entre paréntesis "
         "(el condicional ya lo dice; una advertencia extra solo genera desconfianza). NO "
-        "afirmes fraude ni causas ocultas: son un COMPLEMENTO del rating, no un veredicto."
+        "afirmes fraude ni causas ocultas: son un COMPLEMENTO del rating, no un veredicto.\n"
+        "FORMATO DE LAS CIFRAS: cada señal trae sus campos ya redactados —'valor_expresado', "
+        "'umbral_expresado', 'hace_12m_expresado', 'horizonte'—. Copiá ESAS cadenas TAL CUAL "
+        "('2,0 veces', '50,9%', 'alrededor de 3,5 años'); NO uses los campos numéricos crudos "
+        "('value', 'threshold') ni reformatees el separador decimal. El informe usa coma "
+        "decimal y mezclar '2.3' con '2,3' en el mismo párrafo se lee como un error de datos."
     ),
     "banking_forensic": (
         "Escribe una LECTURA RETROSPECTIVA de una entidad financiera que SALIÓ del sistema, "

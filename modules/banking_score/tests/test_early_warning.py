@@ -357,3 +357,33 @@ def test_la_explicacion_metodologica_vive_en_limitaciones():
     assert "diez mayores deudores" in _LIMITATIONS_TEXT
     assert "siete precursores calibrados" in _LIMITATIONS_TEXT
     assert "no se les asigna un peso que el dato no respalde" in _LIMITATIONS_TEXT
+
+
+def test_el_modelo_no_recibe_numeros_crudos():
+    """Al verificar en prod, el modelo escribió "2.3 veces" y "50.9%" junto al "2,3" del
+    bloque determinista: dos notaciones decimales en el mismo párrafo. La cura no es una regla
+    más en el prompt —es no darle el número crudo—."""
+    from modules.banking_score.early_warning import (
+        panel_para_modelo, relaciones_para_modelo, signal_panel)
+    m = {"bank_type": "banca_multiple", "morosidad_pct": 1.53, "morosidad_prev4": 1.24,
+         "cobertura_pct": 200.6, "cobertura_prev4": 229.67}
+    panel = signal_panel(m, {})
+    crudos = {"value", "threshold", "margen", "velocidad_4t", "trimestres_al_umbral"}
+    for fila in panel_para_modelo(panel):
+        assert not (crudos & set(fila)), f"campo crudo servido al modelo: {crudos & set(fila)}"
+    rel = relaciones_para_modelo(panel)
+    assert not (crudos & set(rel["converge_primero"] or {}))
+    assert rel["converge_primero"]["valor"] == "2,0 veces"
+    assert rel["converge_primero"]["horizonte_al_umbral"].startswith("alrededor de")
+
+
+def test_con_narrativa_el_bloque_no_repite_los_margenes():
+    """La sección decía lo mismo dos veces: el párrafo del modelo y el determinista narraban
+    ambos la cobertura. Con narrativa, el determinista se queda solo con los hechos."""
+    from modules.banking_score.early_warning import format_alerts_text, signal_panel
+    m = {"bank_type": "banca_multiple", "morosidad_pct": 1.53, "morosidad_prev4": 1.24,
+         "cobertura_pct": 200.6, "cobertura_prev4": 229.67}
+    panel = signal_panel(m, {})
+    base = {"alerts": [], "panel": panel}
+    assert "La que más se movió" in format_alerts_text(base)
+    assert "La que más se movió" not in format_alerts_text({**base, "con_narrativa": True})
