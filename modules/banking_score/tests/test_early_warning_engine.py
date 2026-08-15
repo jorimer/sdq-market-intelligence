@@ -60,7 +60,9 @@ def test_perfil_agudo_score_y_banderas(db):
 
     entry = bank_alerts(db, b.id)
     assert entry["perfil"] == "agudo"
-    assert entry["band"] == "alta" and entry["score"] > 55
+    # Polaridad INVERTIDA (100 = ningún precursor activo): un banco en deterioro agudo tiene
+    # salud BAJA. Antes este mismo caso afirmaba band "alta" con score > 55.
+    assert entry["band"] == "baja" and entry["score"] < 45
     codes = {a["code"] for a in entry["alerts"]}
     assert {"morosidad_nivel", "salto_morosidad", "brecha_provisiones", "erosion_capital"} <= codes
 

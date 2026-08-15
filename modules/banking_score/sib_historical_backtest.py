@@ -83,7 +83,7 @@ def _monthly_metrics(dates: List[date], rows: Dict[date, object], i: int,
         "bank_type": bank_type,
         "liq_ratio": ew._pct(_g(cur, "activos_liquidos"), _g(cur, "pasivos_totales")),  # proxy
         "deposit_qoq": ew._yoy(_g(cur, "depositos_totales"), _g(p3, "depositos_totales")),
-        "concentration_pct": None,     # top-10 no disponible
+        "concentracion_top10_deudores_pct": None,     # top-10 no disponible
     }
 
 
@@ -149,10 +149,12 @@ def backtest_entity(series: Dict[date, object], *, all_series: Optional[Dict] = 
                 first_high = d
         if len(altas) >= min_cluster and any(a.code in credit_codes for a in altas):
             det_months.append(d)
-            det_scores[d] = ew.ensemble_score(alerts)["score"]
+            # `ensemble_score` devuelve SALUD (100 = ningún precursor activo). El backtest
+            # quiere lo contrario —magnitud de deterioro—, así que invierte explícitamente.
+            det_scores[d] = 100.0 - ew.ensemble_score(alerts)["salud_precursores"]
         if alerts:
             timeline.append({"period": d.isoformat(),
-                             "score": ew.ensemble_score(alerts)["score"],
+                             "score": 100.0 - ew.ensemble_score(alerts)["salud_precursores"],
                              "alerts": [{"code": a.code, "severity": a.severity, "value": a.value}
                                         for a in alerts]})
 
