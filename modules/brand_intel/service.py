@@ -1629,8 +1629,13 @@ def sales_projection(db: Session, engagement_id: str,
     return {
         "available": True,
         "horizonte_dias": horizon,
-        "regla_trafico": traffic.rule,
-        "regla_cheque": check.rule,
+        # El identificador de la regla queda disponible para superficies internas, pero
+        # lo que viaja al modelo —y de ahí al PDF del cliente— es el nombre legible: sin
+        # esto, el informe salió citando «regla store_dow_drift_14» a la Dirección.
+        "regla_trafico": proj.rule_label(traffic.rule),
+        "regla_cheque": proj.rule_label(check.rule),
+        "regla_trafico_id": traffic.rule,
+        "regla_cheque_id": check.rule,
         "error_medio_trafico_pct": (round(traffic.overall_mape * 100, 2)
                                     if traffic.overall_mape is not None else None),
         "error_medio_cheque_pct": (round(check.overall_mape * 100, 2)
