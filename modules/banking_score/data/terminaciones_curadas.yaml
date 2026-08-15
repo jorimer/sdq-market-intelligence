@@ -314,3 +314,37 @@ terminaciones:
       de Bancos tras incumplir de forma prolongada los requerimientos de su plan de
       regularización. El último reporte del ledger es 2021-11; la disolución es de 2022.
 
+  # ── Confisa: el caso que prueba el registro en la dirección CONTRARIA ──────
+  # El registro histórico lo listaba como liquidado, y los indicadores lo desmienten. La serie
+  # no tiene discontinuidad: los activos crecen a través de la transición (656 M → 708 M →
+  # 744 M) y siguen hasta 5.087 M en 2025-12, con la morosidad en 0.59% y la cobertura en
+  # 270%. Una quiebra se ve al revés — los activos se desploman o se transfieren.
+  #
+  # Sí hubo un episodio de estrés real: entre 2002-06 y 2002-12 la morosidad salta de 2.40% a
+  # 12.23% y la cobertura cae de 131.7% a 23.0%, que es la crisis de 2003 golpeando. Pero se
+  # recupera: cobertura 125% en 2005-12. La liquidación "de divisiones no absorbibles" que
+  # menciona el registro fue de LÍNEAS DE NEGOCIO; la institución licenciada continuó, y el
+  # ledger solo ve instituciones.
+  #
+  # Registrarlo como quiebra habría metido en la cohorte a una entidad que hoy reporta 5 mil
+  # millones en activos. Que la curaduría también pueda QUITAR quiebras —y no solo agregarlas—
+  # es lo que la hace una fuente y no una lista de deseos.
+
+  - nombre: Financiera Confisa
+    fecha_salida: 2000-03-01
+    causa: renombre
+    episodio: Pasa a operar como Banco Confisa de Desarrollo y Crédito
+    fuente: >-
+      Verificado en el panel: el código `CONFISA` continúa sin interrupción con el nombre
+      nuevo desde 2000-04.
+
+  - nombre: Banco Confisa de Desarrollo y Crédito
+    fecha_salida: 2005-05-01
+    causa: renombre
+    episodio: Conversión de licencia a Banco de Ahorro y Crédito Confisa
+    fuente: >-
+      Confirmado por el dueño tras revisar los indicadores. Verificado en el panel: la serie
+      no tiene discontinuidad —activos 656 M (2004-12) → 708 M (2005-06) → 744 M (2005-12)—
+      y la entidad sigue reportando hasta 2026-04 con 5.087 M en activos, morosidad 0.59% y
+      cobertura 270%. El episodio de estrés de 2002-2004 fue real y superado, no terminal.
+
