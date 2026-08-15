@@ -46,10 +46,11 @@ terminaciones:
   - nombre: Banco Nacional de Crédito
     fecha_salida: 2003-12-01
     causa: quiebra
-    episodio: Crisis 2003 (Bancrédito)
+    episodio: Crisis 2003 (Bancrédito — quiebra con fraude)
     fuente: >-
-      Panel de Expertos BCRD 2005. Absorbido por Banco León; el ledger reutiliza el código
-      `BANCRÉDITO - LEÓN`, por eso la salida solo es visible keyeando por institución.
+      Confirmado por el dueño: cierre por quiebra y fraude. Panel de Expertos BCRD 2005.
+      Absorbido por Banco León; el ledger reutiliza el código `BANCRÉDITO - LEÓN`, por eso la
+      salida solo es visible keyeando por institución y no por código.
 
   - nombre: Banco Mercantil
     fecha_salida: 2005-03-01
@@ -89,3 +90,62 @@ terminaciones:
     fuente: >-
       Anexo del diseño Fase 1 (`docs/SIB_HISTORICO_FASE1_DISENO.md`). Entidad pequeña: el
       backtest la excluye del fechado por ruido de escala, pero la CAUSA es conocida.
+
+  # ── Salidas que NO son quiebras ────────────────────────────────────────────
+  # Tan necesarias como las quiebras: sin casos del lado negativo no hay contra qué medir si
+  # el clasificador sabe DESCARTAR.
+  #
+  # El linaje BHD, confirmado por el dueño y verificado contra el panel:
+  #   Banco Profesional → Banco León → (fusión con Banco BHD) → BHD León → Banco BHD (vivo)
+  # De los cuatro nombres que el clasificador reporta como "cerrados" bajo este linaje, TRES
+  # son la misma institución cambiando de nombre. Contarlos como salidas metía casos falsos
+  # en la cohorte — el reverso exacto del problema de Bancrédito, donde un código escondía una
+  # quiebra real. El código miente en las dos direcciones.
+
+  - nombre: Banco Profesional
+    fecha_salida: 2005-02-01
+    causa: renombre
+    episodio: Se convierte en Banco León
+    fuente: >-
+      Confirmado por el dueño. ⚠ REVISAR: el código `PROFESIONAL` cierra con 36.7% de
+      morosidad, que no es la firma de un renombre limpio — puede ser un vehículo residual de
+      cartera que quedó atrás en la conversión. La etiqueta sigue al relato del dueño; la
+      anomalía queda anotada para no darla por conciliada.
+
+  - nombre: Banco Comercial BHD
+    fecha_salida: 1992-12-01
+    causa: renombre
+    episodio: Pasa a operar como Banco BHD
+    fuente: >-
+      Verificado en el panel: el código `BHD` continúa sin interrupción como "Banco BHD"
+      desde 1993-12. Misma institución.
+
+  - nombre: Banco León
+    fecha_salida: 2014-08-01
+    causa: fusion
+    episodio: Fusión BHD-León (2014)
+    fuente: >-
+      Confirmado por el dueño. Sale sana —morosidad 3.8%— el mismo mes que Banco BHD, que es
+      la firma de una fusión entre entidades viables y no de un rescate.
+
+  - nombre: Banco BHD
+    fecha_salida: 2014-08-01
+    causa: fusion
+    episodio: Fusión BHD-León (2014)
+    fuente: Confirmado por el dueño. Sale sana (morosidad 3.2%) el mismo mes que Banco León.
+
+  - nombre: Banco BHD León
+    fecha_salida: 2022-02-01
+    causa: renombre
+    episodio: Vuelve a operar como Banco BHD
+    fuente: >-
+      Verificado en el panel: "Banco BHD" reporta sin interrupción desde 2022-03 hasta el
+      final de la serie. La institución está viva; no hay terminación que registrar.
+
+  - nombre: Banco de la Pequeña Empresa
+    fecha_salida: 2004-06-01
+    causa: renombre
+    episodio: Pasa a operar como Banco de Ahorro y Crédito Pyme BHD
+    fuente: >-
+      Verificado en el panel: el código `PEQ EMPRESA - PYME BHD` continúa sin interrupción
+      con el nombre nuevo desde 2004-07.
