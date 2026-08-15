@@ -539,6 +539,26 @@ def test_ninguna_cadena_servida_afirma_la_forma_del_residuo():
     assert str(round(result.calibration.excess_kurtosis, 1)) in result.calibration.note
 
 
+def test_ninguna_cadena_servida_cita_el_identificador_de_la_regla():
+    """El informe de producción salió citando «regla store_dow_drift_14» a la Dirección.
+
+    Nombrar la regla ganadora es disciplina de la casa y está bien; nombrarla es decir qué
+    hace, no citar la variable del motor. Mismo defecto que los motivos sin traducir.
+    """
+    result = P.project(
+        _con_dispersiones({"A": 0.08, "B": 0.14, "C": 0.20}), horizon=14)
+    assert result is not None
+    for rule_id in P.RULES:
+        assert rule_id not in result.basis
+    assert P.rule_label(result.rule) in result.basis
+
+
+def test_toda_regla_del_motor_tiene_nombre_legible():
+    """Una regla nueva sin etiqueta vuelve a filtrar su identificador al documento."""
+    assert set(P.RULES) <= set(P.RULE_LABELS)
+    assert all(v and not v.startswith("store_") for v in P.RULE_LABELS.values())
+
+
 def test_todo_motivo_del_motor_tiene_traduccion():
     """Un motivo nuevo en el motor sin su traducción sale al PDF como «motivo no
     declarado», que es peor que el término técnico: borra la información."""

@@ -524,6 +524,28 @@ RULES: Dict[str, RuleBuilder] = {
     "last_same_dow": _build_last_same_dow,
 }
 
+#: Nombre legible de cada regla. El identificador (`store_dow_drift_14`) es del motor y en
+#: un documento de cliente se lee como una fuga de código: el modelo lo copia tal cual
+#: porque el contexto se lo sirve así. La disciplina de ``forecast.py`` pide NOMBRAR la
+#: regla ganadora —esa parte está bien— pero nombrarla es decir qué hace, no citar su
+#: variable. Misma regla que los motivos de no pronóstico y los veredictos de atribución.
+RULE_LABELS: Dict[str, str] = {
+    "store_mean": "el promedio del propio local",
+    "store_dow": "el patrón por día de semana del local",
+    "store_dow_recent": "el patrón por día de semana reciente del local",
+    "store_dow_drift_7": "el patrón por día de semana del local, ajustado por su última semana",
+    "store_dow_drift_14":
+        "el patrón por día de semana del local, ajustado por sus últimas dos semanas",
+    "store_dow_drift_28": "el patrón por día de semana del local, ajustado por su último mes",
+    "last_same_dow": "el mismo día de la semana anterior",
+}
+
+
+def rule_label(rule: str) -> str:
+    """Nombre legible de una regla, o el identificador si alguna quedó sin traducir."""
+    return RULE_LABELS.get(rule, rule)
+
+
 #: La vara contra la que se mide el aporte de cualquier regla.
 BASELINE_RULE = "store_mean"
 
@@ -882,8 +904,8 @@ def project(
         if len(widths) > 1 else ""
     )
     basis = (
-        f"Regla '{chosen}' elegida por backtest de origen móvil sobre {n_scored} "
-        f"predicciones a {horizon} días ({lift}). Banda de los percentiles "
+        f"El pronóstico usa {rule_label(chosen)}, elegido por backtest de origen móvil "
+        f"sobre {n_scored} predicciones a {horizon} días ({lift}). Banda de los percentiles "
         f"{BAND_LO_PCT:.0f}–{BAND_HI_PCT:.0f} del error fuera de muestra, no de muestreo: "
         # La forma del residuo NO se afirma acá. La describe `Calibration.note`, que la
         # computa de la curtosis medida. Esta cadena decía «porque el residuo tiene cola
