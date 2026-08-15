@@ -21,6 +21,9 @@ from modules.law_intel.scoring.accionabilidad import CLASES, recomendaciones
 from modules.law_intel.scoring.accionabilidad import resumen as resumen_accion
 from modules.law_intel.registro import ESCALAS, Expediente, cargar, expedientes
 from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo
+from modules.law_intel.scoring.coherencia_proceso import VEREDICTOS as VEREDICTOS_COHERENCIA
+from modules.law_intel.scoring.coherencia_proceso import resumen as resumen_coherencia
+from modules.law_intel.scoring.coherencia_proceso import revisar
 from modules.law_intel.scoring.brecha import resumen as resumen_brecha
 from modules.law_intel.scoring.semaforo import VEREDICTOS, panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
@@ -228,4 +231,34 @@ def recomendaciones_(expediente_id: str, _: User = Depends(get_current_user)) ->
             "verificacion_pendiente": r.verificacion_pendiente,
         } for r in recs],
         "clases": CLASES,
+    }
+
+
+@router.get("/{expediente_id}/coherencia")
+def coherencia_(expediente_id: str,
+                corte: str = Query("2025", pattern=r"^\d{4}$"),
+                _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """¿El proceso que se reporta cumplido movió el resultado?
+
+    Cruza el cumplimiento formal de cada pacto contra los indicadores que existía para mover.
+    Discrimina a propósito: un instrumento con bajo cumplimiento y mal resultado NO es una
+    incoherencia — es algo que no se ejecutó, que es un hallazgo distinto. Y cero compromisos
+    no es cumplimiento bajo: es ausencia de instrumento.
+    """
+    e = _expediente(expediente_id)
+    hs = revisar(expediente_id, {i.id: i for i in e.indicadores}, corte)
+    return {
+        "instrumento": {"id": e.id, "norma": e.norma}, "corte": corte,
+        "resumen": resumen_coherencia(hs),
+        "hallazgos": [{
+            "instrumento_de_proceso": h.instrumento, "indicador": h.indicador,
+            "veredicto": h.veredicto, "lectura": h.frase(),
+            "cumplimiento_proceso": h.cumplimiento_proceso,
+            "base": h.base, "meta": h.meta, "observado": h.observado,
+            "brecha_cerrada": h.brecha_cerrada,
+        } for h in hs],
+        "vocabulario": VEREDICTOS_COHERENCIA,
+        "procedencia_de_las_observaciones": (
+            "Instantáneas de documentos oficiales publicados y fechados, no series vivas. "
+            "Cuando el binding del indicador esté verificado, el oráculo debe preferir la serie."),
     }
