@@ -71,23 +71,18 @@ ALERT_WEIGHTS: Dict[str, float] = {
 # La prosa que se PUBLICA vive en constantes, no incrustada en un f-string: un literal
 # partido por ancho de línea deja de existir en el fuente aunque el valor salga bien, y un
 # test que lo busque ahí falla sin motivo (o pasa sin protegerte).
-ENSEMBLE_NO_PONDERABLE_REASON = (
-    "señales activas sin peso calibrado en el histórico SIB"
-)
-ENSEMBLE_NO_PONDERABLE_TEXTO = (
-    "Índice de presión de deterioro del conjunto: **no puntuable**. Las señales activas de "
-    "esta entidad son de contexto de monitoreo y no tienen peso calibrado: la concentración "
-    "top-10 y el costo de fondeo no son reconstruibles del histórico contable, así que no "
-    "entran al conjunto ponderado. **La bandera sigue vigente** — lo que no se puede es "
-    "ponderarla dentro del índice. No es una lectura de presión baja: es la ausencia de una "
-    "medición.\n\nPor qué la concentración no pesa: el índice se "
-    "calibró contra entidades que salieron del sistema, y la concentración en los diez "
-    "mayores deudores no existe en el registro contable de esa época — es una divulgación de "
-    "supervisión, no una línea del balance. Ponderarla exige medirla contra un desenlace "
-    "distinto —si anticipa el deterioro de la cartera en la ventana donde el dato sí "
-    "existe—, y mientras esa medición no respalde un peso, la señal se publica sin él antes "
-    "que con uno inventado."
-)
+# El rótulo dice QUÉ mide el índice. Decir "del conjunto" prometía cubrir las nueve reglas
+# cuando solo pondera siete, y con eso un 0.0 legítimo se leía como all-clear global.
+ENSEMBLE_ENCABEZADO = "Salud frente a los precursores calibrados"
+ENSEMBLE_COBERTURA = "{evaluables} de {calibradas} evaluables"
+ENSEMBLE_NINGUNO_ACTIVO = "ninguno activo"
+# La bandera que quedó fuera del índice se NOMBRA, no se explica. El porqué metodológico va
+# a Limitaciones; acá el comité necesita el hecho, no nuestra epistemología.
+ENSEMBLE_FUERA_DEL_INDICE = "fuera del índice"
+# El margen a cada umbral ES la lectura temprana. Sin él, "ninguna señal activa" no
+# distingue a un banco holgado de uno a un pelo del disparo — y los dos se veían igual.
+PANEL_ENCABEZADO = "Distancia a cada umbral al corte — dónde está la entidad en cada precursor"
+PANEL_SIN_DATO = "sin dato para evaluar"
 
 # Umbral de morosidad RELATIVO al tipo de entidad: lo "normal" difiere por modelo de negocio
 # (una corporación de crédito opera con mora de dos dígitos; un banco múltiple no). Un umbral
@@ -279,39 +274,173 @@ def rule_capital_erosion(capital_now: Optional[float],
                  "Δ patrimonio/activos pp (12m)")
 
 
+def signal_panel(m: Dict, peers: Dict) -> List[Dict]:
+    """Dónde está la entidad en CADA precursor calibrado, se haya encendido o no.
+
+    Una sección de alerta temprana cuyo resultado es "ninguna señal activa" no informa nada
+    si no dice a qué distancia está la entidad de cada umbral. Ese margen ES la lectura
+    temprana: un banco a 0.3 pp del piso de solvencia y otro a 8 pp no están en la misma
+    situación, y hoy los dos se veían igual —sin bandera—.
+
+    Además separa dos cosas que ``rule_*`` colapsa en el mismo ``None``: la entidad SANA
+    (valor conocido, lejos del umbral) y la NO EVALUABLE (falta el input). La segunda es la
+    interesante: una regla sin su dato no falla, desaparece.
+
+    Solo los siete con peso calibrado — es el dominio del índice. Las otras dos se reportan
+    aparte, marcadas como fuera de él.
+    """
+    floor = MOROSIDAD_FLOOR_BY_TYPE.get(m.get("bank_type") or "", DEFAULT_MOROSIDAD_FLOOR)
+    mora, mora4 = m.get("morosidad_pct"), m.get("morosidad_prev4")
+    salto_umbral = (max(MOROSIDAD_MULT * mora4, mora4 + MOROSIDAD_PP)
+                    if mora4 is not None else None)
+    cap_now, cap_prior = m.get("capital_now"), m.get("capital_prior")
+    delta_cap = (cap_now - cap_prior) if (cap_now is not None and cap_prior is not None) else None
+    yoy, p90 = m.get("assets_yoy"), peers.get("growth_p90")
+    dep_qoq, liq = m.get("deposit_qoq"), m.get("liq_ratio")
+
+    # (code, etiqueta, métrica, valor, umbral, peor_es_mayor, valor_4T_atrás)
+    # El último campo separa dos naturalezas: los indicadores de NIVEL tienen un rezago y por
+    # tanto velocidad y plazo al umbral; los que YA SON UNA TASA (una variación de 12m, un
+    # crecimiento interanual) no —extrapolar una tasa linealmente no significa nada— y se
+    # reportan con dirección pero sin plazo. Declararlo evita inventar un ETA donde no lo hay.
+    specs = [
+        ("morosidad_nivel", "Morosidad sobre el umbral de su tipo", "morosidad %",
+         mora, floor, True, m.get("morosidad_prev4")),
+        ("brecha_provisiones", "Brecha de provisiones", "cobertura de provisiones %",
+         m.get("cobertura_pct"), COVERAGE_WARN, False, m.get("cobertura_prev4")),
+        ("erosion_capital", "Erosión de capital", "Δ patrimonio/activos pp (12m)",
+         delta_cap, CAPITAL_EROSION_WARN, False, None),
+        ("salto_morosidad", "Salto de morosidad", "morosidad % vs. 4T atrás",
+         mora, salto_umbral, True, None),
+        ("crecimiento_anomalo", "Crecimiento anómalo de activos", "activos interanual %",
+         None if yoy is None else yoy * 100,
+         None if p90 is None else max(p90, GROWTH_ABS) * 100, True, None),
+        ("solvencia_piso", "Solvencia cerca del piso", "solvencia %",
+         m.get("solvencia_pct"), SOLV_WARN, False, m.get("solvencia_prev4")),
+        ("estres_liquidez", "Estrés de liquidez / fuga de depósitos",
+         "caída trimestral de depósitos %" if dep_qoq is not None
+         else "activos líquidos/pasivos exigibles %",
+         None if dep_qoq is None else dep_qoq * 100,
+         DEPOSIT_DROP * 100 if dep_qoq is not None else LIQ_FLOOR, False, None),
+    ]
+    if dep_qoq is None:
+        specs[-1] = ("estres_liquidez", "Estrés de liquidez / fuga de depósitos",
+                     "activos líquidos/pasivos exigibles %", liq, LIQ_FLOOR, False,
+                     m.get("liq_ratio_prev4"))
+
+    out: List[Dict] = []
+    for code, label, metric, valor, umbral, peor_mayor, prev4 in specs:
+        if valor is None or umbral is None:
+            out.append({"code": code, "label": label, "metric": metric, "value": None,
+                        "threshold": umbral, "estado": "sin_dato", "margen": None,
+                        "velocidad_4t": None, "direccion": None, "trimestres_al_umbral": None})
+            continue
+        activa = valor >= umbral if peor_mayor else valor <= umbral
+        # Margen SIEMPRE positivo cuando la entidad está del lado sano, sin importar la
+        # dirección del indicador: el lector compara márgenes entre señales, no signos.
+        margen = (umbral - valor) if peor_mayor else (valor - umbral)
+        # Velocidad = variación en 12m del NIVEL. `avance` es cuánto de esa variación va
+        # HACIA el umbral (positivo = converge), lo que normaliza el signo igual que el margen.
+        vel = (valor - prev4) if prev4 is not None else None
+        avance = None if vel is None else (vel if peor_mayor else -vel)
+        direccion = None
+        trimestres = None
+        if avance is not None:
+            direccion = "converge" if avance > 0 else "se_aleja" if avance < 0 else "estable"
+            if direccion == "converge" and margen > 0:
+                # Trimestres al umbral SI el ritmo de los últimos 4T se sostiene. La condición
+                # viaja en la redacción («de sostenerse el ritmo»), no en un rótulo de salvedad.
+                trimestres = round(margen / (avance / 4.0), 1)
+        out.append({"code": code, "label": label, "metric": metric,
+                    "value": round(valor, 2), "threshold": round(umbral, 2),
+                    "estado": "activa" if activa else "sin_activar",
+                    "margen": round(margen, 2),
+                    "velocidad_4t": None if vel is None else round(vel, 2),
+                    "direccion": direccion, "trimestres_al_umbral": trimestres})
+    return out
+
+
+def panel_relations(panel: List[Dict]) -> Dict:
+    """Las RELACIONES del panel, computadas — el modelo las COPIA, no las deriva.
+
+    El superlativo se toma SOLO entre los precursores que convergen, y en TRIMESTRES. Ordenar
+    los márgenes crudos entre sí era ilegítimo: 1,47 puntos de variación del apalancamiento y
+    100,6 puntos de cobertura no están en la misma escala, y declarar cuál es "el más
+    ajustado" afirmaba una comparabilidad inexistente. El tiempo al umbral sí es común a
+    todos, y además es la pregunta que importa: ¿alguno se está acercando, y a qué ritmo?
+
+    ``n_evaluables`` impide que el silencio se lea como salud: con el índice invertido,
+    100/100 sin decir sobre cuántas señales se midió sería una afirmación de salud construida
+    sobre datos que faltan.
+    """
+    medibles = [s for s in panel if s["estado"] != "sin_dato"]
+    activos = [s for s in medibles if s["estado"] == "activa"]
+    convergen = sorted((s for s in medibles if s["estado"] == "sin_activar"
+                        and s.get("trimestres_al_umbral") is not None),
+                       key=lambda s: s["trimestres_al_umbral"])
+    se_alejan = [s for s in medibles
+                 if s["estado"] == "sin_activar" and s.get("direccion") in ("se_aleja", "estable")]
+
+    def _ref(s):
+        # sujeto-ok: cada cifra viaja con el precursor que la produce en `label`; no es una
+        # cuota sobre una población.
+        return {"label": s["label"], "metric": s["metric"], "value": s["value"],
+                "threshold": s["threshold"], "margen": s["margen"],
+                "velocidad_4t": s.get("velocidad_4t"),
+                "trimestres_al_umbral": s.get("trimestres_al_umbral")}
+
+    return {
+        "n_calibradas": len(panel),
+        "n_evaluables": len(medibles),
+        "n_activos": len(activos),
+        "n_convergen": len(convergen),
+        "n_se_alejan": len(se_alejan),
+        "sin_dato": [s["label"] for s in panel if s["estado"] == "sin_dato"],
+        # El único superlativo legítimo: el que llega antes, entre los que van hacia el umbral.
+        "converge_primero": _ref(convergen[0]) if convergen else None,
+        "convergen": [_ref(s) for s in convergen],
+        "activos": [_ref(s) for s in activos],
+    }
+
+
 def ensemble_score(alerts: List[Alert]) -> Dict:
     """Puntaje del CONJUNTO ponderado (0..100): la alerta temprana como suma de señales con
     sus pesos calibrados, no como banderas sueltas. Una 'alta' cuenta 1.5× su peso base.
 
-    Distingue DOS situaciones que antes colapsaban en el mismo 0.0, y no son lo mismo:
+    El índice mide UN DOMINIO ACOTADO: los siete precursores con peso calibrado. No es el
+    conjunto de las nueve reglas. Cuando solo se encienden señales sin peso —`concentracion`,
+    `fondeo_caro`, que no son reconstruibles del histórico contable— el 0.0 NO es un dato
+    ausente: es la afirmación verdadera y útil de que ninguno de los siete precursores está
+    presente. Lo que faltaba era decir QUÉ cubre el índice y avisar que hay una bandera
+    encendida fuera de él; publicarlo como "presión del conjunto: 0.0/100 (banda baja)"
+    prometía una cobertura que el número no tenía, y callaba la señal activa.
 
-      • no se encendió ninguna señal → presión cero. Es un cero VERDADERO.
-      • se encendieron señales pero NINGUNA tiene peso calibrado → el conjunto no es
-        puntuable. Eso es una BRECHA, y devuelve ``score``/``band`` en None.
-
-    El segundo caso no es de borde: `concentracion` y `fondeo_caro` no tienen peso (no son
-    reconstruibles del histórico contable) y una entidad cuya única bandera sea la
-    concentración cae exactamente ahí. Publicarlo como "0.0/100 (banda baja)" ponía un
-    all-clear encima de una bandera activa —y el mismo informe la llamaba, tres renglones
-    más abajo, vulnerabilidad estructural—. Un dato ausente es None, jamás 0.0.
+    Por eso ``uncalibrated`` viaja con el score: el consumidor no puede renderizar el índice
+    sin ver lo que quedó afuera.
     """
     max_possible = sum(ALERT_WEIGHTS.values()) * 1.5
     weighted = sum(ALERT_WEIGHTS.get(a.code, 0.0) * (1.5 if a.severity == "alta" else 1.0)
                    for a in alerts)
-    ponderables = [a for a in alerts if a.code in ALERT_WEIGHTS]
-    if alerts and not ponderables:
-        return {"score": None, "band": None, "contributors": [],
-                "scorable": False, "reason": ENSEMBLE_NO_PONDERABLE_REASON}
-    score = round(min(100.0, weighted / max_possible * 100.0), 1) if max_possible else 0.0
-    band = "alta" if score >= 55 else "media" if score >= 25 else "baja"
+    presion = round(min(100.0, weighted / max_possible * 100.0), 1) if max_possible else 0.0
+    # INVERTIDA: 100 = ningún precursor activo, 0 = todos encendidos. En este documento cada
+    # otro 0-100 es "más es mejor" —score global, sub-componentes, indicadores, percentiles—
+    # y este era el único al revés: el original decía "0.0/100 (banda baja)", donde el número
+    # gritaba lo peor y el paréntesis decía lo contrario. La polaridad va en el NOMBRE del
+    # campo para que no se pueda leer al revés.
+    score = round(100.0 - presion, 1)
+    band = "baja" if score <= 45 else "media" if score <= 75 else "alta"
     # Ordena los Alert (tipados) por su peso calibrado antes de proyectarlos al dict de salida
     # — evita ordenar sobre el dict heterogéneo (weight quedaría como ``object``).
     ranked = sorted((a for a in alerts if a.code in ALERT_WEIGHTS),
                     key=lambda a: (-ALERT_WEIGHTS[a.code], a.code))
     contributors = [{"code": a.code, "label": a.label, "weight": ALERT_WEIGHTS[a.code],
                      "severity": a.severity} for a in ranked]
-    return {"score": score, "band": band, "contributors": contributors, "scorable": True,
-            "reason": None}
+    return {"salud_precursores": score, "score": score, "band": band,
+            "contributors": contributors, "n_calibradas": len(ALERT_WEIGHTS),
+            # Las banderas activas que el índice NO cubre. Van con el score para que ninguna
+            # superficie pueda mostrar el número sin mostrar lo que quedó afuera.
+            "uncalibrated": [{"code": a.code, "label": a.label, "severity": a.severity}
+                             for a in alerts if a.code not in ALERT_WEIGHTS]}
 
 
 def classify_profile(m: Dict, alerts: List[Alert]) -> Optional[str]:
@@ -369,6 +498,10 @@ def _bank_metrics(rows_by_period: Dict[date, "object"], period: date) -> Dict:
         "assets_yoy": _yoy(f(cur, "activos_totales"), f(prev_4, "activos_totales")),
         "funding_cost": _pct(f(cur, "gastos_financieros"), f(cur, "depositos_totales")),
         "cobertura_pct": f(cur, "cobertura_pct"),
+        # Rezagos de 4T de los indicadores de NIVEL: sin ellos no hay velocidad, y sin
+        # velocidad "ninguna alerta activa" no distingue estar lejos de estar yendo.
+        "cobertura_prev4": f(prev_4, "cobertura_pct"),
+        "solvencia_prev4": f(prev_4, "solvencia_pct"),
         "morosidad_pct": f(cur, "morosidad_pct"),
         "morosidad_prev4": f(prev_4, "morosidad_pct"),
         "morosidad_chronic": f(prev_chr, "morosidad_pct"),   # ~2 años atrás → distingue zombi de deterioro
@@ -378,6 +511,8 @@ def _bank_metrics(rows_by_period: Dict[date, "object"], period: date) -> Dict:
         "capital_now": f(cur, "solvencia_pct"),
         "capital_prior": f(prev_4, "solvencia_pct"),
         "liq_ratio": _pct(f(cur, "activos_liquidos"), f(cur, "pasivos_exigibles")),
+        "liq_ratio_prev4": _pct(f(prev_4, "activos_liquidos"),
+                                f(prev_4, "pasivos_exigibles")),
         "deposit_qoq": _yoy(f(cur, "depositos_totales"), f(prev_q, "depositos_totales")),
         # DEFINICIÓN ÚNICA compartida con el motor de rating. Antes se recalculaba acá con
         # `cartera_bruta` mientras el indicador usaba `cartera_total`: el MISMO informe
@@ -420,12 +555,17 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
     banks: List[Dict] = []
     summary: Dict[str, int] = {}
     profiles: Dict[str, int] = {}
+    panels: Dict[str, List[Dict]] = {}
     for bid, m in metrics.items():
         # Naturaleza de la entidad → la bandera de concentración se encuadra distinto en
         # banca estatal (concentración estructural por mandato, no proxy de vinculados); y el
         # umbral de morosidad de nivel es relativo al tipo.
         m["is_state_owned"] = bid in state_ids
         m["bank_type"] = types.get(str(bid), None)
+        # El panel se computa para TODA entidad monitoreada, tenga o no banderas: su valor
+        # está justo cuando no hay ninguna activa (a qué distancia quedó de cada umbral), y
+        # esas entidades salen del loop en la línea siguiente.
+        panels[bid] = signal_panel(m, peers)
         alerts = evaluate(m, peers)
         if not alerts:
             continue
@@ -439,7 +579,7 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
             "bank_id": bid, "name": names.get(bid, bid),
             "max_severity": alerts[0].severity,
             "score": ens["score"], "band": ens["band"], "perfil": perfil,
-            "ensemble": ens,
+            "ensemble": ens, "panel": panels.get(bid, []),
             "alerts": [asdict(a) for a in alerts],
         })
     # Orden por presión del conjunto (score), luego severidad — el conjunto ponderado manda.
@@ -447,14 +587,16 @@ def compute_alerts(db: Session, period: Optional[date] = None) -> Dict:
     # mapeadas a 0: tratarlas como score 0 las hundiría por debajo de cualquier entidad con
     # presión mínima, que es el mismo defecto del cero fabricado mudado al ranking (una
     # concentración del 50.9% quedaría debajo de un score 5).
-    puntuables = [b for b in banks if b["score"] is not None]
-    sin_puntuar = [b for b in banks if b["score"] is None]
-    puntuables.sort(key=lambda b: (-float(b["score"]), b["max_severity"] != "alta", b["name"]))
-    sin_puntuar.sort(key=lambda b: (b["max_severity"] != "alta", b["name"]))
-    banks = puntuables + sin_puntuar
+    banks.sort(key=lambda b: (-float(b["score"]), b["max_severity"] != "alta", b["name"]))
+    # Entidades cuyas banderas activas quedan TODAS fuera del índice: su score es un 0
+    # legítimo sobre el dominio calibrado, así que ordenan al final — pero el panel necesita
+    # saber que existen, o una concentración del 50,9% desaparece al fondo de la lista sin
+    # que nadie note que hay una señal encendida.
+    solo_fuera = sum(1 for b in banks if not (b["ensemble"].get("contributors") or []))
     return {"period": target.isoformat(), "banks": banks, "summary": summary,
+            "panels": panels,
             "profiles": profiles, "n_alerts": sum(len(b["alerts"]) for b in banks),
-            "n_no_puntuables": len(sin_puntuar)}
+            "n_solo_señales_fuera_del_indice": solo_fuera}
 
 
 def bank_alerts(db: Session, bank_id: str, period: Optional[date] = None) -> Dict:
@@ -473,19 +615,77 @@ def bank_alerts(db: Session, bank_id: str, period: Optional[date] = None) -> Dic
             "max_severity": entry["max_severity"] if entry else None,
             "score": entry["score"] if entry else None,
             "band": entry["band"] if entry else None,
-            "perfil": entry["perfil"] if entry else None}
+            "perfil": entry["perfil"] if entry else None,
+            # El panel viaja SIEMPRE, aunque la entidad no tenga banderas: sin él, un
+            # "sin alertas" no dice si el banco está holgado o a un pelo del umbral.
+            "panel": (entry or {}).get("panel") or block.get("panels", {}).get(bank_id, []),
+            "ensemble": (entry or {}).get("ensemble")}
+
+
+def _prosa_margenes(panel: List[Dict]) -> str:
+    """Los márgenes en PROSA. El Deep Dive narra; siete viñetas son el registro del Insight.
+
+    La salvedad va en la GRAMÁTICA, no en un rótulo: «de sostenerse el ritmo» es condicional
+    y cualquiera en una sala de comité lo entiende, mientras que un «lectura mecánica, no
+    proyección» entre paréntesis le avisa al lector que desconfíe de la frase que acaba de
+    leer. El hecho medido se afirma sin adornos; lo que depende de que algo continúe se
+    escribe como lo que es: una condición.
+    """
+    if not panel:
+        return ""
+    r = panel_relations(panel)
+    partes: List[str] = []
+    if r["activos"]:
+        act = ", ".join(f"{a['label'].lower()} ({a['metric']} en {a['value']}, umbral "
+                        f"{a['threshold']})" for a in r["activos"])
+        partes.append(f"De los {r['n_evaluables']} precursores evaluables, {r['n_activos']} "
+                      f"están activos: {act}.")
+    else:
+        partes.append(f"Ninguno de los {r['n_evaluables']} precursores evaluables está activo "
+                      f"al corte.")
+    cp = r["converge_primero"]
+    if cp:
+        plazo = (f" De sostenerse el ritmo de los últimos cuatro trimestres, alcanzaría el "
+                 f"umbral de {cp['threshold']} en unos {cp['trimestres_al_umbral']:.0f} "
+                 f"trimestres." if cp["trimestres_al_umbral"] else "")
+        desde = round(cp["value"] - (cp["velocidad_4t"] or 0), 2)
+        cabeza = ("El que se acerca es" if r["n_convergen"] == 1 else "El que llega antes es")
+        partes.append(f"{cabeza} {cp['label'].lower()}: pasó de {desde} a {cp['value']} en "
+                      f"doce meses.{plazo}")
+        if r["n_convergen"] == 1:
+            partes.append("Es el único que se mueve hacia su umbral; los demás se mantienen "
+                          "estables o se alejan.")
+        else:
+            # Se NOMBRAN con su horizonte: "otros N convergen" esconde justo lo que el comité
+            # necesita vigilar. El orden ya viene computado, en trimestres — la única unidad
+            # comparable entre precursores de escalas distintas.
+            resto = "; ".join(f"{c['label'].lower()}, en unos {c['trimestres_al_umbral']:.0f}"
+                              for c in r["convergen"][1:])
+            partes.append(f"También se mueven hacia su umbral {resto} trimestres.")
+    elif not r["activos"]:
+        partes.append("Ninguno converge hacia su umbral: en los últimos doce meses todos se "
+                      "mantuvieron estables o se alejaron.")
+    if r["sin_dato"]:
+        # Una regla sin su input no falla, DESAPARECE. Se nombra o el lector la cuenta como sana.
+        partes.append(f"Sin dato para evaluar al corte: "
+                      f"{', '.join(x.lower() for x in r['sin_dato'])}.")
+    return " ".join(partes)
 
 
 def format_alerts_text(block: Optional[Dict]) -> str:
     """Bloque de alertas → texto markdown para la sección del reporte (determinista, sin IA)."""
     alerts = (block or {}).get("alerts") or []
+    panel = (block or {}).get("panel") or []
     if not alerts:
-        return ("Sin banderas de alerta temprana activas al período de corte. Las señales de "
-                "monitoreo —precursores detectables de la crisis bancaria de 2003— no se activaron "
-                "para esta entidad. Es un complemento del rating, no un veredicto, y no detecta "
-                "fraude ni contabilidad paralela.")
+        cab = ("Sin banderas de alerta temprana activas al período de corte. Las señales de "
+               "monitoreo —precursores detectables de la crisis bancaria de 2003— no se activaron "
+               "para esta entidad. Es un complemento del rating, no un veredicto, y no detecta "
+               "fraude ni contabilidad paralela.")
+        # Con el panel, "sin banderas" deja de ser un no-dato: se ve el colchón de cada señal.
+        prosa = _prosa_margenes(panel)
+        return "\n\n".join([cab] + ([prosa] if prosa else []))
     lines = ["Señales de monitoreo activas —precursores detectables de la crisis bancaria de 2003 "
-             "(complemento del rating, no un veredicto; no detectan fraude):", ""]
+        "(complemento del rating, no un veredicto; no detectan fraude):", ""]
     ens = (block or {}).get("ensemble")
     score = (block or {}).get("score")
     band = (block or {}).get("band")
@@ -495,15 +695,27 @@ def format_alerts_text(block: Optional[Dict]) -> str:
     if score is not None:
         etiqueta = {"agudo": "deterioro agudo (alerta temprana con anticipación real)",
                     "cronico": "insolvencia crónica (zombi tolerado; no es un deterioro nuevo)"}.get(perfil or "")
-        cab = f"Índice de presión de deterioro del conjunto: **{score}/100** (banda {band})"
+        # El encabezado declara el DOMINIO del índice. Cuando ninguna calibrada está activa,
+        # el 0/100 se afirma como lo que es —un resultado— en vez de dejarlo leer como
+        # all-clear del conjunto entero.
+        n_cal = (ens or {}).get("n_calibradas") or len(ALERT_WEIGHTS)
+        contribuyen = (ens or {}).get("contributors") or []
+        rel = panel_relations(panel) if panel else {}
+        cobertura = (ENSEMBLE_COBERTURA.format(evaluables=rel["n_evaluables"],
+                                               calibradas=rel["n_calibradas"])
+                     if rel else "")
+        cab = f"{ENSEMBLE_ENCABEZADO}: **{score}/100**"
+        if cobertura:
+            cab += f" · {cobertura}"
+        cab += (f" — {ENSEMBLE_NINGUNO_ACTIVO}" if not contribuyen else f" (banda {band})")
         if etiqueta:
             cab += f" — perfil: {etiqueta}"
-        lines = [cab + ".", ""] + lines
-    else:
-        # Sin score no se imprime un cero: se declara la brecha. Con banderas activas, un
-        # "0.0/100 (banda baja)" se lee como all-clear justo encima de la bandera.
-        lines = [ENSEMBLE_NO_PONDERABLE_TEXTO, ""] + lines
+        prosa = _prosa_margenes(panel)
+        lines = [cab + ".", ""] + ([prosa, ""] if prosa else []) + lines
     for a in alerts:
-        lines.append(f"- **{a['label']}** ({a['severity']}) — {a['metric']}: {a['value']} "
-                     f"(umbral {a['threshold']}). {a['basis']}.")
+        # Una bandera sin peso se marca en su propia línea: es la que el índice no cubre, y
+        # sin la marca el lector la cuenta como parte del número de arriba.
+        fuera = "" if a.get("code", "") in ALERT_WEIGHTS else f" · {ENSEMBLE_FUERA_DEL_INDICE}"
+        lines.append(f"- **{a['label']}** ({a['severity']}{fuera}) — {a['metric']}: "
+                     f"{a['value']} (umbral {a['threshold']}). {a['basis']}.")
     return "\n".join(lines)

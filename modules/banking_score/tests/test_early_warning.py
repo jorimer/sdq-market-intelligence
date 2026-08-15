@@ -105,54 +105,73 @@ def test_capital_erosion_es_cambio_no_nivel():
 
 
 def test_ensemble_score_pondera_y_ordena():
-    """El puntaje del conjunto suma pesos calibrados; una 'alta' pesa más; ordena por peso."""
+    """El puntaje del conjunto suma pesos calibrados; una 'alta' pesa más; ordena por peso.
+    Polaridad INVERTIDA: 100 = ningún precursor activo, igual que todo otro 0-100 del informe."""
     vacio = ensemble_score([])
-    assert vacio["score"] == 0.0 and vacio["band"] == "baja" and vacio["contributors"] == []
+    assert vacio["salud_precursores"] == 100.0 and vacio["contributors"] == []
     alerts = [
         Alert("morosidad_nivel", "Morosidad sobre el umbral de su tipo", "alta", 12.0, 5.0, "", "%"),
         Alert("estres_liquidez", "Estrés de liquidez", "media", -12.0, -10.0, "", "%"),
     ]
     res = ensemble_score(alerts)
-    assert 0 < res["score"] <= 100
+    assert 0 <= res["salud_precursores"] < 100, "con precursores activos la salud BAJA"
     # morosidad_nivel (0.38) domina sobre estres_liquidez (0.02)
     assert res["contributors"][0]["code"] == "morosidad_nivel"
 
 
-def test_sin_señales_encendidas_el_cero_es_verdadero():
-    """Ninguna bandera activa ⇒ presión cero. Acá el 0.0 SÍ es una medición."""
-    vacio = ensemble_score([])
-    assert vacio["score"] == 0.0 and vacio["band"] == "baja"
-    assert vacio["contributors"] == [] and vacio["scorable"] is True
-
-
-def test_solo_señales_sin_peso_NO_es_cero_es_no_puntuable():
-    """El cero fabricado. Una entidad cuya única bandera activa no tiene peso calibrado
-    —concentración top-10, que no es reconstruible del histórico contable— NO tiene presión
-    cero: no tiene medición. Publicarlo como '0.0/100 (banda baja)' ponía un all-clear encima
-    de una bandera activa, y el mismo informe la llamaba tres renglones abajo vulnerabilidad
-    estructural. Un dato ausente es None, jamás 0.0."""
+def test_el_indice_reporta_las_banderas_que_NO_cubre():
+    """El índice pondera siete de las nueve reglas. Las activas que quedan afuera viajan con
+    el score para que ninguna superficie pueda mostrar el número sin mostrar lo que no cubre."""
     solo_contexto = ensemble_score([Alert("concentracion", "x", "media", 40.0, 30.0, "", "%")])
-    assert solo_contexto["score"] is None, "no puntuable no es cero"
-    assert solo_contexto["band"] is None
+    assert solo_contexto["salud_precursores"] == 100.0, (
+        "sobre el dominio calibrado el resultado es VERDADERO: ninguno de los siete "
+        "precursores está activo. Suprimirlo tiraba una medición cierta")
     assert solo_contexto["contributors"] == []
-    assert solo_contexto["scorable"] is False
-    assert solo_contexto["reason"]
+    assert [u["code"] for u in solo_contexto["uncalibrated"]] == ["concentracion"]
+    assert solo_contexto["n_calibradas"] == 7
 
 
-def test_el_texto_declara_la_brecha_y_no_imprime_indice():
-    """La superficie que lee el comité: sin score, el bloque declara el motivo y afirma que
-    la bandera sigue vigente — nunca un número."""
+def test_una_bandera_con_peso_no_aparece_como_fuera_del_indice():
+    res = ensemble_score([Alert("morosidad_nivel", "x", "alta", 12.0, 5.0, "", "%")])
+    assert res["uncalibrated"] == [] and res["salud_precursores"] < 100
+
+
+def test_el_encabezado_declara_QUE_mide_el_indice():
+    """El defecto no era el número: era el rótulo. 'presión del conjunto: 0.0/100 (banda
+    baja)' prometía cubrir las nueve reglas y se leía como all-clear encima de una bandera
+    activa. Ahora nombra su dominio y afirma el cero como resultado."""
     from dataclasses import asdict
 
     from modules.banking_score.early_warning import format_alerts_text
     alerta = Alert("concentracion", "Concentración elevada (top-10)", "media", 50.9, 30.0,
                    "base", "top-10 / cartera total %")
-    txt = format_alerts_text({"alerts": [asdict(alerta)], "score": None, "band": None,
-                              "perfil": None})
-    assert "no puntuable" in txt
-    assert "0.0/100" not in txt and "banda baja" not in txt
-    assert "sigue vigente" in txt, "debe decir que la bandera no se cae, solo no se pondera"
-    assert "50.9" in txt, "la bandera y su cifra se siguen publicando"
+    txt = format_alerts_text({"alerts": [asdict(alerta)],
+                              "ensemble": ensemble_score([alerta]),
+                              "score": 0.0, "band": "baja", "perfil": None})
+    assert "precursores calibrados" in txt, "el encabezado debe decir QUÉ mide"
+    assert "del conjunto" not in txt, "no puede prometer cobertura que no tiene"
+    assert "ninguno activo" in txt, "el 0 se afirma como resultado, no como banda"
+    assert "banda baja" not in txt
+    assert "fuera del índice" in txt, "la bandera no cubierta se marca en su línea"
+    assert "50.9" in txt
+
+
+def test_el_texto_no_explica_la_metodologia_en_medio_del_analisis():
+    """La sección informa riesgo; el porqué metodológico vive en Limitaciones. Una versión
+    previa de este arreglo puso dos párrafos sobre nuestros propios límites acá, y convirtió
+    la sección en una excusa: más palabras y ninguna señal nueva para el comité."""
+    from dataclasses import asdict
+
+    from modules.banking_score.early_warning import format_alerts_text
+    alerta = Alert("concentracion", "Concentración elevada (top-10)", "media", 50.9, 30.0,
+                   "base", "top-10 / cartera total %")
+    txt = format_alerts_text({"alerts": [asdict(alerta)],
+                              "ensemble": ensemble_score([alerta]),
+                              "score": 0.0, "band": "baja", "perfil": None})
+    for excusa in ("no es reconstruible", "divulgación de supervisión", "registro contable",
+                   "está en curso", "ausencia de una medición"):
+        assert excusa not in txt, f"«{excusa}» es metodología: va a Limitaciones, no acá"
+    assert len(txt.split("\n\n")) <= 3, "encabezado + intro + banderas; sin ensayo"
 
 
 def test_concentracion_extrema_escala_a_alta():
@@ -192,7 +211,11 @@ def test_format_incluye_indice_y_perfil():
                          "value": 12.0, "threshold": 5.0, "basis": "x", "metric": "morosidad %"}],
              "score": 61.0, "band": "alta", "perfil": "agudo"}
     txt = format_alerts_text(block)
-    assert "Índice de presión de deterioro" in txt and "61.0/100" in txt
+    assert "Salud frente a los precursores" in txt and "61.0/100" in txt
+    assert "presión de deterioro" not in txt, (
+        "polaridad invertida: en este documento cada otro 0-100 es «más es mejor», y este era "
+        "el único al revés — el original decía «0.0/100 (banda baja)», con el número gritando "
+        "lo peor y el paréntesis diciendo lo contrario")
     assert "deterioro agudo" in txt
 
 
@@ -213,3 +236,121 @@ def test_format_alerts_text_vacio_y_con_alertas():
          "threshold": 3.0, "basis": "Deterioro diferido", "metric": "morosidad %"},
     ]})
     assert "**Salto de morosidad**" in txt and "4.83" in txt and "umbral 3.0" in txt
+
+
+# ── Panel de márgenes: la lectura temprana cuando NADA se enciende ──
+
+def test_el_panel_cubre_las_siete_calibradas_y_solo_esas():
+    from modules.banking_score.early_warning import ALERT_WEIGHTS, signal_panel
+    p = signal_panel({}, {})
+    assert {s["code"] for s in p} == set(ALERT_WEIGHTS), (
+        "el panel es el DOMINIO del índice: ni una señal calibrada de menos, ni una de fuera")
+
+
+def test_el_panel_distingue_sana_de_no_evaluable():
+    """`rule_*` devuelve None tanto si la entidad está sana como si falta el input, y las dos
+    quedaban invisibles. Una regla sin su dato no falla: DESAPARECE."""
+    from modules.banking_score.early_warning import signal_panel
+    sana = {"morosidad_pct": 1.5, "bank_type": "banca_multiple"}
+    p = {s["code"]: s for s in signal_panel(sana, {})}
+    assert p["morosidad_nivel"]["estado"] == "sin_activar"
+    assert p["morosidad_nivel"]["margen"] == 3.5          # 5.0 − 1.5
+    assert p["solvencia_piso"]["estado"] == "sin_dato", "sin solvencia no se inventa un margen"
+    assert p["solvencia_piso"]["value"] is None
+
+
+def test_el_margen_es_positivo_del_lado_sano_en_ambas_direcciones():
+    """El lector compara márgenes entre señales; que unas se disparen por arriba y otras por
+    abajo no puede cambiarle el signo."""
+    from modules.banking_score.early_warning import signal_panel
+    m = {"morosidad_pct": 1.5, "cobertura_pct": 200.6, "solvencia_pct": 15.37,
+         "bank_type": "banca_multiple"}
+    p = {s["code"]: s for s in signal_panel(m, {})}
+    assert p["morosidad_nivel"]["margen"] > 0       # peor es MAYOR
+    assert p["brecha_provisiones"]["margen"] > 0    # peor es MENOR
+    assert p["solvencia_piso"]["margen"] > 0        # peor es MENOR
+
+
+def test_el_panel_marca_activa_lo_que_la_regla_enciende():
+    """Anti-deriva: el panel y las reglas leen los mismos umbrales. Si alguien mueve uno solo,
+    esto falla."""
+    from modules.banking_score.early_warning import evaluate, signal_panel
+    m = {"morosidad_pct": 12.0, "cobertura_pct": 50.0, "solvencia_pct": 9.0,
+         "bank_type": "banca_multiple"}
+    activas_panel = {s["code"] for s in signal_panel(m, {}) if s["estado"] == "activa"}
+    activas_regla = {a.code for a in evaluate(m, {})}
+    assert {"morosidad_nivel", "brecha_provisiones", "solvencia_piso"} <= activas_panel
+    assert activas_panel <= activas_regla, (
+        "el panel no puede marcar ACTIVA una señal que la regla no enciende")
+
+
+def test_solo_se_rankea_lo_comparable_convergentes_en_trimestres():
+    """Ordenar márgenes crudos entre sí era ilegítimo: 1,47 puntos de variación del
+    apalancamiento y 100,6 de cobertura no están en la misma escala. El único superlativo es
+    entre los que CONVERGEN, y en trimestres — unidad común a todos."""
+    from modules.banking_score.early_warning import panel_relations, signal_panel
+    m = {"bank_type": "banca_multiple", "morosidad_pct": 1.53, "morosidad_prev4": 1.62,
+         "cobertura_pct": 200.6, "cobertura_prev4": 286.0,
+         "solvencia_pct": 15.37, "solvencia_prev4": 14.9}
+    r = panel_relations(signal_panel(m, {}))
+    assert r["n_activos"] == 0
+    assert r["converge_primero"]["label"] == "Brecha de provisiones", (
+        "la cobertura es la única que va hacia su umbral")
+    assert r["n_convergen"] == 1
+    assert r["converge_primero"]["trimestres_al_umbral"] > 0
+    assert "margen_mas_ajustado" not in r, "el superlativo por margen crudo no debe existir"
+
+
+def test_una_tasa_no_recibe_plazo_al_umbral():
+    """`erosion_capital`, `salto_morosidad` y `crecimiento_anomalo` YA son variaciones.
+    Extrapolar una tasa linealmente no significa nada, así que no llevan ETA."""
+    from modules.banking_score.early_warning import signal_panel
+    m = {"bank_type": "banca_multiple", "capital_now": 15.37, "capital_prior": 14.9,
+         "morosidad_pct": 1.53, "morosidad_prev4": 1.62, "assets_yoy": 0.08}
+    p = {s["code"]: s for s in signal_panel(m, {"growth_p90": 0.19})}
+    for code in ("erosion_capital", "salto_morosidad", "crecimiento_anomalo"):
+        assert p[code]["trimestres_al_umbral"] is None
+
+
+def test_el_plazo_se_escribe_condicional_sin_rotulo_de_salvedad():
+    """La salvedad va en la gramática. Un «lectura mecánica, no proyección» entre paréntesis
+    le avisa al lector que desconfíe de la frase que acaba de leer."""
+    from modules.banking_score.early_warning import _prosa_margenes, signal_panel
+    m = {"bank_type": "banca_multiple", "morosidad_pct": 1.53, "morosidad_prev4": 1.62,
+         "cobertura_pct": 200.6, "cobertura_prev4": 286.0}
+    txt = _prosa_margenes(signal_panel(m, {}))
+    assert "De sostenerse el ritmo" in txt
+    for rotulo in ("no proyección", "lectura mecánica", "extrapolación", "meramente"):
+        assert rotulo not in txt.lower()
+
+
+def test_sin_banderas_el_texto_igual_muestra_los_margenes():
+    """El caso que motivó todo: 'ninguna señal activa' no informa nada sin el colchón de cada
+    una. Un banco a 0.3 pp del piso y otro a 8 pp no están en la misma situación."""
+    from modules.banking_score.early_warning import format_alerts_text, signal_panel
+    m = {"morosidad_pct": 1.53, "cobertura_pct": 200.6, "solvencia_pct": 15.37,
+         "bank_type": "banca_multiple"}
+    txt = format_alerts_text({"alerts": [], "panel": signal_panel(m, {})})
+    assert "Sin banderas" in txt
+    assert "precursores evaluables" in txt
+
+
+def test_el_panel_llega_al_contexto_del_modelo():
+    """Un cableado sin test DESAPARECE: si alguien saca el panel del contexto, el párrafo
+    vuelve a hablar solo de las banderas encendidas y un informe sin alertas deja de decir a
+    qué distancia está la entidad de cada umbral — sin que falle nada."""
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parents[1] / "products.py").read_text(encoding="utf-8")
+    assert '"panel_precursores"' in src, "el panel debe viajar al contexto de la narrativa"
+    assert '"relaciones_computadas"' in src, (
+        "los superlativos y el orden se COMPUTAN y el modelo los copia; sin ellos los deduce "
+        "del panel y falla las relaciones")
+
+
+def test_la_explicacion_metodologica_vive_en_limitaciones():
+    """El porqué de que la concentración quede fuera del índice va en Limitaciones, no en el
+    medio del análisis de riesgo."""
+    from modules.banking_score.products import _LIMITATIONS_TEXT
+    assert "diez mayores deudores" in _LIMITATIONS_TEXT
+    assert "siete precursores calibrados" in _LIMITATIONS_TEXT
+    assert "no se les asigna un peso que el dato no respalde" in _LIMITATIONS_TEXT

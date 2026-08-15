@@ -300,7 +300,17 @@ _LIMITATIONS_TEXT = (
     "sistémica, techo soberano) como una capa de contexto separada (sección «Soporte y "
     "Techo Soberano»), sin alterar la calificación intrínseca. Las calificaciones SDQ son "
     "opiniones independientes de SDQ Consulting y no constituyen una recomendación para "
-    "comprar, vender o mantener instrumentos."
+    "comprar, vender o mantener instrumentos. "
+    # El porqué metodológico de la §Alerta Temprana vive ACÁ, no en el medio del análisis de
+    # riesgo: puesto allá convertía la sección en una excusa —más palabras y ninguna señal
+    # nueva para el comité—.
+    "El índice de alerta temprana pondera siete precursores calibrados contra entidades que "
+    "salieron del sistema financiero dominicano. Dos señales que el motor sí evalúa quedan "
+    "fuera de esa ponderación y se reportan por separado: la concentración en los diez "
+    "mayores deudores y el costo de fondeo. Ambas son divulgaciones de supervisión que no "
+    "existen en el registro contable histórico sobre el que se calibraron los pesos, de modo "
+    "que no hay desenlace conocido contra el cual medir su poder de anticipación. Se "
+    "publican con su valor y su umbral, y no se les asigna un peso que el dato no respalde."
 )
 
 
@@ -717,15 +727,25 @@ class BankingProduct:
             bullets = format_alerts_text(ew)
             flags = ew.get("alerts") or []
             interp = ""
-            if flags:
+            panel = ew.get("panel") or []
+            if flags or panel:
                 # HÍBRIDO: párrafo IA que LEE EL PATRÓN del conjunto de banderas (alimentado
                 # SOLO por las banderas ya computadas → numeric_guard impide inventar cifras).
                 # Solo si hay motor real; sin API key quedan los bullets deterministas.
+                from modules.banking_score.early_warning import panel_relations
                 try:
                     res = await narrative_engine.generate(
                         context={"entity": snapshot.entity_name or "Entidad",
                                  "dominio": "banca — precursores detectables de la crisis 2003",
-                                 "flags": flags},
+                                 "flags": flags,
+                                 # El panel entra para que el párrafo narre la DISTANCIA a cada
+                                 # umbral: sin él, un informe sin banderas activas no decía si
+                                 # la entidad está holgada o a un pelo del disparo.
+                                 "panel_precursores": panel,
+                                 # Y las relaciones vienen COMPUTADAS —cuál converge, cuál
+                                 # llega antes, en cuántos trimestres—. El modelo las copia; si
+                                 # las derivara, acertaría las cifras y fallaría el orden.
+                                 "relaciones_computadas": panel_relations(panel) if panel else {}},
                         template="early_warning_reading", mode="standard",
                         axis="banking", audience="inversionista")
                     if res.model_used != "static_fallback":
