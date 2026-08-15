@@ -156,6 +156,53 @@ terminaciones:
       Verificado en el panel: el código `PEQ EMPRESA - PYME BHD` continúa sin interrupción
       con el nombre nuevo desde 2004-07.
 
+  # ── Banca extranjera que se retiró del mercado local ───────────────────────
+  # Las tres salen SIN morosidad reportada —la era temprana del ledger apenas la publica—, así
+  # que la inferencia solo puede decir `no_evaluable` y las deja en el limbo. Son casos
+  # valiosos justamente por eso: entidades longevas y sanas que se fueron por estrategia, no
+  # por deterioro. Sin ellas, el clasificador no tiene contra qué demostrar que sabe DESCARTAR.
+  - nombre: The Royal Bank of Canada
+    fecha_salida: 1985-07-01
+    causa: salida_voluntaria
+    episodio: Retiro del mercado dominicano
+    fuente: >-
+      Confirmado por el dueño: una de las primeras instituciones internacionales en formalizar
+      la banca en RD (operaciones desde ~1908); vendió y liquidó sus carteras locales por
+      cambio de estrategia internacional y por la consolidación de la banca dominicana.
+      Mantiene RBC Caribbean en otras islas, sin presencia en territorio dominicano.
+      Verificado en el panel: 375 meses de serie continua, 1947-10 a 1985-07.
+
+  - nombre: Banco Español
+    fecha_salida: 1990-11-01
+    causa: salida_voluntaria
+    episodio: Retiro tras la reestructuración del sistema financiero dominicano
+    fuente: >-
+      Confirmado por el dueño: operó varias décadas junto a otras entidades extranjeras
+      tradicionales y se retiró formalmente tras la reestructuración del sistema financiero.
+      Hoy no hay banca comercial española con sucursales minoristas en RD. Verificado en el
+      panel: 370 meses de serie continua, 1949-12 a 1990-11.
+
+  - nombre: Bank of America
+    fecha_salida: 1984-12-01
+    causa: salida_voluntaria
+    episodio: Cierre de la operación local
+    fuente: >-
+      Confirmado por el dueño: no tiene sucursales ni oficinas comerciales en el país; el
+      único banco corporativo de origen estadounidense con licencia vigente es Citibank. Su
+      vínculo actual con RD es de corresponsalía y análisis macro, no de banca local.
+      Verificado en el panel: 172 meses de serie continua, 1968-03 a 1984-12.
+
+  # Mismo patrón que el linaje BHD: el clasificador lee un cierre donde hubo un cambio de
+  # nombre. La institución reporta sin interrupción desde 1947 hasta el final del panel.
+  - nombre: The Bank of Nova Scotia
+    fecha_salida: 2020-05-01
+    causa: renombre
+    episodio: Pasa a operar como Scotiabank República Dominicana
+    fuente: >-
+      Confirmado por el dueño: Scotiabank es el banco canadiense con presencia comercial
+      vigente en RD. Verificado en el panel: el código `SCOTIABANK` continúa sin interrupción
+      como "Scotiabank República Dominicana" desde 2020-06 hasta el cierre de la serie.
+
   - nombre: Banco de Ahorro y Crédito Pyme BHD
     fecha_salida: 2012-12-01
     causa: fusion
