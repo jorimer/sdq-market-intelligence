@@ -22,6 +22,10 @@ from modules.law_intel.obligaciones import cargar_obligaciones
 from modules.law_intel.obligaciones import resumen as resumen_obligaciones
 from modules.law_intel.scoring.accionabilidad import CLASES, recomendaciones
 from modules.law_intel.scoring.accionabilidad import resumen as resumen_accion
+from modules.law_intel.ratificacion import (ESTADOS as ESTADOS_RATIFICACION,
+                                            DerivaNoAutorizada, exigir_servible)
+from modules.law_intel.ratificacion import estado as estado_ratificacion
+from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import ESCALAS, Expediente, cargar, expedientes
 from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo
 from modules.law_intel.scoring.coherencia_proceso import VEREDICTOS as VEREDICTOS_COHERENCIA
@@ -40,10 +44,19 @@ router = APIRouter()
 
 def _expediente(expediente_id: str) -> Expediente:
     try:
-        return cargar(expediente_id)
+        exp = cargar(expediente_id)
     except Exception as exc:                       # noqa: BLE001 — se traduce a 404/500
         logger.warning("expediente no cargable: %s (%s)", expediente_id, exc)
         raise HTTPException(status_code=404, detail=f"Expediente no encontrado: {expediente_id}")
+    # Puerta de ratificación: si las metas se movieron sin norma que lo autorice, el
+    # expediente NO se sirve. Avisar y publicar igual sería tener el mismo defecto que el
+    # informe denuncia — un registro que solo avisa de la deriva es un registro que deriva.
+    try:
+        exigir_servible(expediente_id)
+    except DerivaNoAutorizada as exc:
+        logger.error("deriva no autorizada en %s: %s", expediente_id, exc)
+        raise HTTPException(status_code=409, detail=str(exc))
+    return exp
 
 
 @router.get("/instrumentos")
@@ -308,3 +321,31 @@ def verificacion_(expediente_id: str,
     """
     _expediente(expediente_id)
     return informe(expediente_id, _proveedor_mm_series(db), corte)
+
+
+@router.get("/{expediente_id}/ratificacion")
+def ratificacion_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Estado del sello de las metas: aprobadas una vez, inmóviles sin norma que lo autorice.
+
+    Un expediente en `deriva_no_autorizada` devuelve 409 en el resto de las rutas. Esta ruta
+    lo sirve igual a propósito: es la que dice QUÉ se movió y contra qué sello, y bloquearla
+    dejaría el diagnóstico fuera de alcance justo cuando hace falta.
+    """
+    if expediente_id not in expedientes():
+        raise HTTPException(status_code=404, detail=f"Expediente no encontrado: {expediente_id}")
+    st = estado_ratificacion(expediente_id)
+    return {
+        "expediente": st.expediente, "estado": st.estado, "servible": st.servible,
+        "hash_metas_actual": st.hash_actual, "hash_metas_sellado": st.hash_sellado,
+        "sellado_el": st.sellado_el, "sellado_por": st.sellado_por,
+        "enmienda_vigente": (
+            {"norma": st.enmienda_vigente.norma, "fecha": st.enmienda_vigente.fecha,
+             "origen": st.enmienda_vigente.origen, "detalle": st.enmienda_vigente.detalle,
+             "indicadores": st.enmienda_vigente.indicadores}
+            if st.enmienda_vigente else None),
+        "lectura_publicable": ratificacion_publicable(expediente_id),
+        "estados": ESTADOS_RATIFICACION,
+        "regla": ("Las metas se aprueban UNA VEZ. Cambiarlas exige una norma que lo autorice, "
+                  "registrada como enmienda con su hash resultante: una norma real no puede "
+                  "servir de paraguas a un cambio distinto del que autorizó."),
+    }

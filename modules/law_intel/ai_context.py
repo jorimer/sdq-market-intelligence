@@ -23,6 +23,7 @@ from typing import Any, Dict, List
 from modules.law_intel.bindings import cargar_bindings, cobertura
 from modules.law_intel.obligaciones import cargar_obligaciones
 from modules.law_intel.obligaciones import resumen as resumen_obligaciones
+from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import cargar
 from modules.law_intel.scoring.accionabilidad import recomendaciones
 from modules.law_intel.scoring.brecha import brechas
@@ -49,6 +50,15 @@ def law_ai_context(expediente_id: str, corte: str) -> Dict[str, Any]:
             "vigencia_hasta": exp.meta.get("vigencia_hasta"),
             "corte_evaluado": corte,
         },
+        # ── Estado del sello de las metas ──
+        # Si una norma movió la vara, el informe tiene que decirlo ANTES de juzgar
+        # cumplimiento: un veredicto contra metas enmendadas y otro contra las originales son
+        # lecturas distintas, y el lector tiene derecho a saber cuál está leyendo.
+        "ratificacion_de_las_metas": ratificacion_publicable(expediente_id),
+        "regla_de_la_vara": (
+            "Si `ratificacion_de_las_metas` trae una enmienda de origen 'administrativa', "
+            "decilo: significa que la vara la movió el propio evaluado bajo una potestad "
+            "delegada, no el Congreso. No lo presentes como un cambio normativo cualquiera."),
         # ── Cobertura: la cifra de portada, con su denominador en la propia clave ──
         "cobertura_indicadores_medidos_sobre_total_de_la_ley": {
             "medidos": cob["medidos"], "total_indicadores_numerados": cob["total"],

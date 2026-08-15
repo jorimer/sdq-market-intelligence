@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from modules.law_intel.ai_context import law_ai_context, secciones_sin_dato
+from modules.law_intel.ratificacion import exigir_servible
+from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import RAIZ, cargar, expedientes
 from shared.products import (DataHealth, Granularity, ProductSnapshot, ProductTier,
                              SectorProductManifest, TierLevelSpec, ValidationState,
@@ -175,6 +177,9 @@ class LawProduct:
         eid = scope or disponibles[0]
         if eid not in disponibles:
             raise ValueError(f"No existe el expediente '{eid}'. Disponibles: {disponibles}.")
+        # Un expediente cuyas metas derivaron del sello no produce informe. Levanta
+        # `DerivaNoAutorizada`, que el ensamblador traduce igual que cualquier ValueError.
+        exigir_servible(eid)
         corte = (period or "")[:4] or "2025"
         ctx = law_ai_context(eid, corte)
         exp = cargar(eid)
@@ -190,6 +195,10 @@ class LawProduct:
                 # note un arreglo del registro. Fuera de acá, el fingerprint no la ve.
                 "expediente_fingerprint": expediente_fingerprint(eid),
                 "instrumento": {"titulo": exp.titulo, "norma": exp.norma},
+                # El estado del sello viaja en el payload: si una enmienda cambió las metas,
+                # el informe tiene que decir qué norma lo hizo — y la huella de la caché
+                # tiene que notarlo para no servir el texto anterior.
+                "ratificacion": ratificacion_publicable(eid),
                 "contexto": ctx,
                 "sin_dato": secciones_sin_dato(ctx),
             })

@@ -1,0 +1,34 @@
+# SELLO DE RATIFICACIÓN — las metas se aprueban UNA VEZ y después no se mueven.
+#
+# `hash_metas` cubre id, escala, línea base y metas de las 135 filas. Si el registro deja de
+# coincidir con este hash y ninguna enmienda de abajo lo autoriza, el expediente NO SE SIRVE:
+# el motor levanta `DerivaNoAutorizada`.
+#
+# Por qué es tan duro: el hallazgo central de este mismo expediente es el artículo 20, que
+# deja al órgano rector —el evaluado— cambiar las metas por vía administrativa. Un evaluador
+# cuyo propio registro se puede editar sin rastro tiene el mismo defecto que denuncia, y con
+# menos excusa, porque nosotros elegimos el diseño.
+#
+# Para cambiar una meta hay que agregar una enmienda con la norma que la autoriza y su hash
+# resultante. No alcanza con citar una norma real: el hash tiene que coincidir exactamente con
+# el registro resultante, para que una norma verdadera no sirva de paraguas a un cambio
+# distinto del que autorizó.
+
+sello:
+  hash_metas: e696148532394149e05eea851de9a04825a4b00542eaa2c8a08ab0dc3e500943
+  fecha: "2026-08-15"
+  aprobado_por: SDQ Consulting Group
+  base: >-
+    Metas leídas del articulado de la Ley 1-12 (arts. 22, 24, 26 y 28). 21 de ellas
+    contrastadas una por una contra el texto legal; el resto por lectura de celdas del PDF
+    oficial.
+
+# Cambios autorizados posteriores al sello. Vacío: las metas vigentes son las originales
+# de la ley.
+#
+# ⚠️ Verificación pendiente y relevante para esta lista: el 13.er Informe de Avance trabaja
+# con 93 indicadores frente a los 90 legales, amparándose en el artículo 20. Si esa migración
+# se hizo por acto formal del órgano rector, corresponde una enmienda de origen
+# `administrativa` que la registre — con su acta y su fecha. Hasta comprobarlo, NO se agrega:
+# una enmienda inventada sería peor que la ausencia, porque legitimaría el cambio.
+enmiendas: []
