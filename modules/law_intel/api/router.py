@@ -14,6 +14,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from modules.law_intel.bindings import cargar_bindings, cobertura
+from modules.law_intel.obligaciones import ESTADOS as ESTADOS_OBLIGACION
+from modules.law_intel.obligaciones import cargar_obligaciones
+from modules.law_intel.obligaciones import resumen as resumen_obligaciones
+from modules.law_intel.scoring.accionabilidad import CLASES, recomendaciones
+from modules.law_intel.scoring.accionabilidad import resumen as resumen_accion
 from modules.law_intel.registro import ESCALAS, Expediente, cargar, expedientes
 from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo
 from modules.law_intel.scoring.brecha import resumen as resumen_brecha
@@ -170,4 +175,57 @@ def brechas_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[st
             "Se recomienda la PUBLICACIÓN del dato, nunca la política. El informe señala qué "
             "falta y a quién la ley se lo asigna; no opina sobre qué debería hacer el Estado "
             "con el indicador."),
+    }
+
+
+@router.get("/{expediente_id}/obligaciones")
+def obligaciones_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Qué manda la ley hacer, a quién, con qué plazo — y qué pasa si no.
+
+    `frase_publicable` es la única forma en que cada estado puede decirse en un informe. La
+    distinción que gobierna el módulo: `incumplida` afirma que algo no se hizo y exige
+    evidencia; `sin_registro_publico` dice que no se encontró rastro y NO afirma
+    incumplimiento. El destinatario del informe suele ser el órgano obligado, y una afirmación
+    negativa sin comprobar es refutable con un solo documento.
+    """
+    e = _expediente(expediente_id)
+    obs = cargar_obligaciones(expediente_id)
+    return {
+        "instrumento": {"id": e.id, "norma": e.norma},
+        "resumen": resumen_obligaciones(expediente_id),
+        "obligaciones": [{
+            "id": o.id, "articulo": o.articulo, "deber": o.deber, "deudor": o.deudor,
+            "estado": o.estado, "consecuencia": o.consecuencia, "plazo": o.plazo,
+            "periodicidad": o.periodicidad, "evidencia": o.evidencia,
+            "exigible": o.exigible, "produce": o.produce,
+            "habilita_exigir": o.habilita_exigir,
+            "verificacion_pendiente": o.requiere_verificacion_antes_de_publicar,
+            "frase_publicable": o.frase_publicable(),
+        } for o in obs],
+        "estados": ESTADOS_OBLIGACION,
+    }
+
+
+@router.get("/{expediente_id}/recomendaciones")
+def recomendaciones_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """La sección con la que cierra el informe: qué se puede accionar y qué rinde cada acción.
+
+    Cada frase se ARMA de artículo, deber, deudor e instrumento tomados del registro: no hay
+    campo de texto libre donde pudiera alojarse una opinión de política. Es lo que sostiene
+    que el producto se venda a una parte interesada sin dejar de ser independiente.
+    """
+    e = _expediente(expediente_id)
+    br = brechas(e.numerados, cargar_bindings(expediente_id))
+    recs = recomendaciones(br, cargar_obligaciones(expediente_id))
+    return {
+        "instrumento": {"id": e.id, "norma": e.norma},
+        "resumen": resumen_accion(recs),
+        "recomendaciones": [{
+            "clase": r.clase, "recomendacion": r.frase(), "base_legal": r.base_legal,
+            "deudor": r.deudor, "instrumentos": r.instrumentos,
+            "desbloquea_indicadores": r.desbloquea, "indicadores": r.indicadores,
+            "estado_obligacion": r.estado_obligacion,
+            "verificacion_pendiente": r.verificacion_pendiente,
+        } for r in recs],
+        "clases": CLASES,
     }
