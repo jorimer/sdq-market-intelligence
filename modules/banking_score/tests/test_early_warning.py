@@ -153,7 +153,7 @@ def test_el_encabezado_declara_QUE_mide_el_indice():
     assert "ninguna encendida" in txt, "el resultado se afirma, no se deja como banda"
     assert "banda baja" not in txt
     assert "fuera del índice" in txt, "la bandera no cubierta se marca en su línea"
-    assert "50,9%" in txt, "la cifra sale con su unidad, no pelada"
+    assert "50.9%" in txt, "la cifra sale con su unidad, no pelada"
 
 
 def test_el_texto_no_explica_la_metodologia_en_medio_del_analisis():
@@ -237,8 +237,8 @@ def test_format_alerts_text_vacio_y_con_alertas():
     ]})
     # La cifra sale con su UNIDAD y el umbral con su SIGNIFICADO: "value: 4.83 (umbral 3.0)"
     # era notación de motor, no una frase que alguien lea en un comité.
-    assert "**Salto de morosidad**" in txt and "4,83%" in txt and "3%" in txt
-    assert "4.83" not in txt, "el número pelado, sin unidad, no se publica"
+    assert "**Salto de morosidad**" in txt and "4.83%" in txt and "3%" in txt
+    assert "4.83 " not in txt, "el número pelado, sin unidad, no se publica"
 
 
 # ── Panel de márgenes: la lectura temprana cuando NADA se enciende ──
@@ -373,7 +373,7 @@ def test_el_modelo_no_recibe_numeros_crudos():
         assert not (crudos & set(fila)), f"campo crudo servido al modelo: {crudos & set(fila)}"
     rel = relaciones_para_modelo(panel)
     assert not (crudos & set(rel["converge_primero"] or {}))
-    assert rel["converge_primero"]["valor"] == "2,0 veces"
+    assert rel["converge_primero"]["valor"] == "2.0 veces"
     assert rel["converge_primero"]["horizonte_al_umbral"].startswith("alrededor de")
 
 
@@ -387,3 +387,15 @@ def test_con_narrativa_el_bloque_no_repite_los_margenes():
     base = {"alerts": [], "panel": panel}
     assert "La que más se movió" in format_alerts_text(base)
     assert "La que más se movió" not in format_alerts_text({**base, "con_narrativa": True})
+
+
+def test_el_separador_decimal_es_el_del_informe():
+    """RD usa PUNTO decimal, y el resto del Deep Dive también —medido en producción: 133
+    cifras con punto contra 8 con coma—. Una versión previa usó coma acá y dejó la §Alerta
+    Temprana como la única sección fuera de convención, con "2,3 veces" del bloque
+    determinista y "2.3 veces" del modelo en el mismo párrafo."""
+    from modules.banking_score.early_warning import _expresar, _horizonte
+    assert _expresar(200.6, "veces") == "2.0 veces"
+    assert _expresar(15.37, "pct") == "15.37%"
+    assert _expresar(50.8989, "pct") == "50.9%"
+    assert "," not in _horizonte(13.8)
