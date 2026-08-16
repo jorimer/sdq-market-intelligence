@@ -55,9 +55,12 @@ def test_generate_routes_through_the_cerebro_not_legacy(monkeypatch):
     calls = {}
 
     def _fake_guarded(client, system, user, max_tokens, context_str, cache_key,
-                      template, context=None):
+                      template, context=None, axis=None):
         calls["template"] = template
         calls["system"] = system
+        # El eje viaja hasta acá para que el registro de gasto sepa a qué módulo
+        # atribuirle la llamada; sin él toda la narrativa quedaría sin módulo.
+        calls["axis"] = axis
         return NarrativeResult(text="narrativa real", model_used="test")
 
     monkeypatch.setattr(engine, "_generate_guarded", _fake_guarded)
@@ -70,6 +73,7 @@ def test_generate_routes_through_the_cerebro_not_legacy(monkeypatch):
 
     assert res.text == "narrativa real"
     assert calls["template"] == "brand_context_reading"
+    assert calls["axis"] == "brand_intel"
     assert "DOCTRINA DE CASA — Eje de inteligencia de marca" in calls["system"]
 
 
