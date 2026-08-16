@@ -4,7 +4,7 @@ import pytest
 from modules.law_intel.bindings import (Binding, ExpedienteInvalido, _validar, cargar_bindings,
                                         cobertura)
 from modules.law_intel.registro import Indicador, cargar
-from modules.law_intel.scoring.brecha import brechas, desbloqueo, resumen
+from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo, resumen
 
 EXPEDIENTE = "end_2030"
 
@@ -92,7 +92,11 @@ class TestBrecha:
         bs = cargar_bindings(EXPEDIENTE)
         br = brechas(exp.numerados, bs)
         tipos = {b.tipo for b in br}
-        assert {"sin_binding", "binding_sin_verificar", "escala_no_medible"} <= tipos
+        # `binding_sin_verificar` NO se exige: depende de que haya bindings `propuesto` en
+        # ese momento, y hoy no queda ninguno. Exigirlo era codificar la foto del expediente
+        # y no la regla — el test se rompía al AVANZAR, que es cuando menos debe romperse.
+        assert {"sin_binding", "escala_no_medible"} <= tipos
+        assert tipos <= set(TIPOS), "un tipo de brecha fuera del vocabulario declarado"
         # Lo que no medimos por no haber conectado la fuente es NUESTRO, no del Estado.
         r = resumen(br, len(exp.numerados))
         assert r["por_responsable"]["sdq"] > 0
@@ -155,12 +159,19 @@ class TestLasCuatroDudasResueltas:
         assert bs["2.4"].serie == "social_dev:poverty_rate"
         assert not (bs["2.4"].nota_comparabilidad or "").strip(), "la duda quedó resuelta"
 
-    def test_el_indicador_de_pobreza_extrema_declara_su_brecha_real(self):
-        """El dato EXISTE en la plataforma y no está expuesto donde la verificación lo
-        alcanza. Es una brecha nuestra de superficie, no una duda sobre qué mide."""
+    def test_la_pobreza_extrema_quedo_medida_y_declara_su_salvedad(self):
+        """La brecha era NUESTRA —el tema estaba ingerido y no se exponía como señal— y se
+        cerró exponiéndolo (PR #748). Verificado en prod: 2,0% en 2024.
+
+        Lo que el test protege ahora no es el estado sino la salvedad: este indicador alcanza
+        la meta de 2030 seis años antes, y publicarlo sin declarar que la línea base legal es
+        ENFT-2010 y la medición es ENCFT/ENGIH con metodología cambiada en 2022 sería el
+        mismo defecto que el instrumento denuncia."""
         b = cargar_bindings(EXPEDIENTE)["2.1"]
         assert b.serie == "social_dev:poverty_extreme"
-        assert "no se expone" in (b.nota_comparabilidad or "").lower()
+        assert b.cuenta, "la brecha de superficie está cerrada; el binding debe contar"
+        assert not (b.nota_comparabilidad or "").strip()
+        assert "2022" in (b.nota or ""), "el corte metodológico no puede quedar sin declarar"
 
     def test_analfabetismo_lleva_su_transformacion(self):
         b = cargar_bindings(EXPEDIENTE)["2.19"]

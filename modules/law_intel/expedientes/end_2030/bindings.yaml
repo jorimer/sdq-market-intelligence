@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "4.0"
+version: "5.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -24,11 +24,17 @@ version: "4.0"
 #   2.19  social_dev:literacy_rate      6,3    (2024) tras `complemento_100`
 #   2.21  social_dev:life_expectancy   73,868  (2024)
 #
+# ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
+#   2.1   social_dev:poverty_extreme    2,0    (2024) · «Pobreza monetaria extrema»
+#
+# Este no esperaba dato del Estado: esperaba que NOSOTROS expusiéramos como señal un tema que
+# ya estaba ingerido (PR #748). La brecha era de superficie y estaba de nuestro lado.
+#
 # La promoción se escribe acá y no la hace la verificación: el estado de un binding es un
 # hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
 # caliente, la cifra de portada dejaría de ser verificable.
 #
-# Cobertura del expediente: 4 de 90 indicadores numerados.
+# Cobertura del expediente: 5 de 90 indicadores numerados.
 
 bindings:
   # ══ RESUELTO ══ `poverty_rate` es «Pobreza monetaria GENERAL» (15,0 en 2024), no extrema.
@@ -95,17 +101,23 @@ bindings:
       no es fuente oficial del Estado dominicano. Sin fuente admisible, el indicador queda
       declarado sin medición: es una brecha del instrumento, no del sistema.
 
-  # ══ BRECHA NUESTRA, IDENTIFICADA CON PRECISIÓN ══
-  # El dato existe en la plataforma y no está expuesto donde la verificación lo alcanza.
+  # ══ BRECHA NUESTRA, CERRADA (PR #748) ══
+  # El tema `poverty_extreme` existía en el panel social y no se exponía como señal del Data
+  # Registry por no alimentar el índice de desarrollo: la verificación no lo alcanzaba. No era
+  # una brecha del Estado ni una duda sobre qué mide — era de superficie, nuestra, y se cerró
+  # exponiendo el tema. Verificado en prod el 2026-08-16: 2,0% en 2024.
   - indicador: "2.1"
     serie: "social_dev:poverty_extreme"
     fuente: one
     mejor: menor
-    estado: propuesto
-    nota_comparabilidad: >-
-      ⚠️ El tema `poverty_extreme` («Pobreza monetaria extrema») EXISTE en el panel social,
-      pero NO se expone como señal del Data Registry porque no alimenta el índice de
-      desarrollo. La verificación no lo alcanza y por eso el binding no promueve.
-      No es una brecha del Estado ni una duda sobre qué mide: es una brecha NUESTRA, de
-      superficie, y la acción es exponer ese tema como señal. Cerrarla habilita el indicador
-      más importante del Eje 2 — el único de la END que superó su meta de 2025.
+    estado: verificado
+    nota_comparabilidad: null
+    nota: >-
+      2,0% en 2024 contra una meta de 3,5% para 2025 y de 2,0% para 2030: el indicador alcanzó
+      la meta del horizonte completo seis años antes. Es el hallazgo más fuerte del expediente
+      y por eso mismo el que más exige declarar su salvedad: la línea base legal de 2010
+      (10,1%) viene de la ENFT y la medición actual de la ENCFT/ENGIH, con la metodología de
+      pobreza monetaria actualizada en 2022 y las metas nunca re-expresadas tras el cambio.
+      La magnitud de la mejora no se explica solo por el cambio de metodología, pero atribuirla
+      entera a la política sin declarar el corte sería exactamente el defecto que este
+      instrumento denuncia.
