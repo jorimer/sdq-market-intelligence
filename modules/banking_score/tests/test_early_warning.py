@@ -115,8 +115,10 @@ def test_ensemble_score_pondera_y_ordena():
     ]
     res = ensemble_score(alerts)
     assert 0 <= res["salud_precursores"] < 100, "con precursores activos la salud BAJA"
-    # morosidad_nivel (0.38) domina sobre estres_liquidez (0.02)
-    assert res["contributors"][0]["code"] == "morosidad_nivel"
+    # El orden se DIO VUELTA al derivar los pesos de la evidencia: estres_liquidez (0.364)
+    # pasa a pesar más que morosidad_nivel (0.312). Antes valía 0.02 con la glosa "confirma
+    # tarde, no anticipa"; sale material en las diez especificaciones medidas.
+    assert res["contributors"][0]["code"] == "estres_liquidez"
 
 
 def test_el_indice_reporta_las_banderas_que_NO_cubre():
@@ -399,3 +401,25 @@ def test_el_separador_decimal_es_el_del_informe():
     assert _expresar(15.37, "pct") == "15.37%"
     assert _expresar(50.8989, "pct") == "50.9%"
     assert "," not in _horizonte(13.8)
+
+
+def test_los_pesos_suman_uno_y_crecimiento_esta_en_cero():
+    """El peso de crecimiento_anomalo NO es un olvido: da cero en las diez especificaciones
+    medidas. Se deja en el dict —en vez de borrarlo— porque "se midió y no predice" es una
+    afirmación distinta, y más fuerte, que "no se pudo medir"."""
+    from modules.banking_score.early_warning import ALERT_WEIGHTS
+    assert abs(sum(ALERT_WEIGHTS.values()) - 1.0) < 1e-6
+    assert ALERT_WEIGHTS["crecimiento_anomalo"] == 0.0
+    assert ALERT_WEIGHTS["estres_liquidez"] > ALERT_WEIGHTS["morosidad_nivel"], (
+        "la evidencia invierte el orden que tenía la calibración sin artefacto")
+
+
+def test_un_precursor_medido_en_cero_NO_es_lo_mismo_que_uno_sin_medir():
+    """Distinción que el índice debe preservar: crecimiento está EN el dominio calibrado con
+    peso cero; concentración y fondeo están FUERA porque no se pudieron medir contra quiebras."""
+    from modules.banking_score.early_warning import ALERT_WEIGHTS
+    assert "crecimiento_anomalo" in ALERT_WEIGHTS
+    assert "concentracion" not in ALERT_WEIGHTS and "fondeo_caro" not in ALERT_WEIGHTS
+    res = ensemble_score([Alert("crecimiento_anomalo", "x", "media", 40.0, 25.0, "", "%")])
+    assert res["uncalibrated"] == [], "crecimiento SÍ es calibrado; su peso medido es 0"
+    assert res["salud_precursores"] == 100.0, "peso 0 ⇒ no mueve el índice"
