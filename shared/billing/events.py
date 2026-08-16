@@ -21,6 +21,9 @@ from shared.notifications.service import notification_service
 logger = logging.getLogger("sdq.billing.events")
 
 TARIFF_PUBLISHED = "tariff.published"
+# La secuencia fiscal está por agotarse (o ya se agotó) al emitir un comprobante. Se avisa
+# ANTES de que un cobro se quede sin número, que es cuando todavía se puede pedir el rango.
+FISCAL_SEQUENCE_LOW = "fiscal.sequence.low"
 
 
 def _format_effective(iso: str) -> str:
@@ -59,7 +62,59 @@ def _on_tariff_published(payload: Dict[str, Any]) -> None:
         db.close()
 
 
+def _fiscal_admins(db) -> list:
+    """A quién se le avisa que la numeración fiscal se está acabando: a quien puede pedir el
+    rango a la DGII y cargarlo — los administradores activos."""
+    from shared.auth.models import ROLE_RANK, User, UserRole
+
+    minimum = ROLE_RANK[UserRole.admin]
+    return [u for u in db.query(User).filter(User.is_active.is_(True)).all()
+            if ROLE_RANK.get(u.role, 0) >= minimum]
+
+
+def _on_fiscal_sequence_low(payload: Dict[str, Any]) -> None:
+    """Avisa a los admins que un rango de comprobantes está por agotarse o ya se agotó.
+
+    El caso AGOTADO es el grave y se nombra como tal: el cobro se registró **sin número
+    fiscal**, así que hay una venta esperando su comprobante. No se rellena con nada — se
+    declara y se asigna retroactivamente al cargar el rango."""
+    from shared.billing.fiscal.types import doc_label
+
+    db = SessionLocal()
+    try:
+        regime = payload.get("regime", "")
+        doc_type = payload.get("doc_type", "")
+        try:
+            label = doc_label(regime, doc_type)
+        except ValueError:
+            label = "Comprobante fiscal"
+        exhausted = bool(payload.get("exhausted"))
+        remaining = payload.get("remaining")
+        if exhausted:
+            title = "Sin comprobantes fiscales disponibles"
+            body = (f"Se registró un cobro SIN número fiscal: no queda rango de «{label}» "
+                    f"({doc_type}). Cargá el rango autorizado por la DGII y asigná los "
+                    "comprobantes pendientes.")
+            kind = "error"
+        else:
+            title = "La secuencia fiscal se está agotando"
+            body = (f"Quedan {remaining} comprobantes de «{label}» ({doc_type}). Solicitá el "
+                    "próximo rango a la DGII antes de que se acabe.")
+            kind = "warning"
+        for user in _fiscal_admins(db):
+            notification_service.create(db, user_id=user.id, type=kind, title=title,
+                                        body=body, action_url="/admin/ncf")
+        logger.info("Aviso de secuencia fiscal %s/%s (agotada=%s, quedan=%s)",
+                    regime, doc_type, exhausted, remaining)
+    except Exception:  # noqa: BLE001 — avisar no debe romper la facturación
+        logger.exception("Fallo al avisar el estado de la secuencia fiscal")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def subscribe_billing_events() -> None:
-    """Suscribe la alerta de tarifa al event_bus. Idempotente a nivel de arranque."""
+    """Suscribe las alertas de billing al event_bus. Idempotente a nivel de arranque."""
     event_bus.subscribe(TARIFF_PUBLISHED, _on_tariff_published)
-    logger.info("billing suscrito a %s", TARIFF_PUBLISHED)
+    event_bus.subscribe(FISCAL_SEQUENCE_LOW, _on_fiscal_sequence_low)
+    logger.info("billing suscrito a %s, %s", TARIFF_PUBLISHED, FISCAL_SEQUENCE_LOW)

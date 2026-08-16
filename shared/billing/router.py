@@ -353,9 +353,10 @@ async def put_issuer(body: _IssuerBody, db: Session = Depends(get_db),
                               email=body.email)
 
 
-# ─── Secuencias e-NCF (e-CF, DGII) — rangos autorizados por tipo (admin) ───
-class _EncfSequenceBody(BaseModel):
-    ecf_type: str = Field(..., description="31 | 32 | 46")
+# ─── Comprobantes fiscales (DGII) — rangos, emitidos y Formato 607 (admin) ───
+class _FiscalSequenceBody(BaseModel):
+    regime: str = Field("ncf", description="ncf (impreso) | ecf (electrónico)")
+    doc_type: str = Field(..., description="ncf: 01|02|04|16 · ecf: 31|32|34|46")
     range_from: int
     range_to: int
     current: Optional[int] = None
@@ -364,23 +365,111 @@ class _EncfSequenceBody(BaseModel):
     note: Optional[str] = None
 
 
-@router.get("/encf/sequences", summary="Secuencias e-NCF configuradas (admin)")
-async def get_encf_sequences(db: Session = Depends(get_db),
-                             current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
-    from shared.billing.encf.sequences import list_sequences
-    return {"sequences": list_sequences(db)}
+class _FiscalRegimeBody(BaseModel):
+    regime: str = Field(..., description="ncf | ecf")
 
 
-@router.put("/encf/sequences", summary="Cargar/actualizar un rango de e-NCF (admin)")
-async def put_encf_sequence(body: _EncfSequenceBody, db: Session = Depends(get_db),
+@router.get("/fiscal/overview", summary="Estado de la numeración fiscal (admin)")
+async def get_fiscal_overview(db: Session = Depends(get_db),
+                              current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    """Todo lo que la pantalla de NCF necesita de una: régimen activo, datos del emisor,
+    rangos cargados con su consumo, y cuántos cobros están esperando número."""
+    from shared.billing.fiscal.sequences import list_sequences, sequences_needing_attention
+    from shared.billing.fiscal.types import SPECS
+    from shared.billing.fiscal.documents import pending_count
+    from shared.settings.service import get_fiscal_regime, get_invoice_issuer
+
+    issuer = get_invoice_issuer(db)
+    return {
+        "regime": get_fiscal_regime(db),
+        "regimes": [{"regime": s.regime, "label": s.label,
+                     "types": [{"doc_type": t, "label": lbl} for t, lbl in s.labels.items()]}
+                    for s in SPECS.values()],
+        "issuer": issuer,
+        "issuer_ready": bool((issuer.get("rnc") or "").strip()),
+        "sequences": list_sequences(db),
+        "attention": sequences_needing_attention(db),
+        "pending_documents": pending_count(db),
+    }
+
+
+@router.put("/fiscal/regime", summary="Cambiar el régimen fiscal activo (admin)")
+async def put_fiscal_regime(body: _FiscalRegimeBody, db: Session = Depends(get_db),
                             current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
-    from shared.billing.encf.sequences import EncfSequenceError, upsert_sequence
+    """Cambia con qué régimen se numeran los comprobantes NUEVOS. Es una llave, no dos
+    caminos: emitir por los dos numeraría dos veces la misma venta."""
+    from shared.billing.fiscal.types import FiscalTypeError
+    from shared.settings.service import set_fiscal_regime
     try:
-        return upsert_sequence(db, ecf_type=body.ecf_type, range_from=body.range_from,
-                               range_to=body.range_to, current=body.current,
-                               expires_at=body.expires_at, active=body.active, note=body.note)
-    except EncfSequenceError as e:
+        return {"regime": set_fiscal_regime(db, body.regime)}
+    except FiscalTypeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/fiscal/sequences", summary="Rangos de comprobante cargados (admin)")
+async def get_fiscal_sequences(regime: Optional[str] = None, db: Session = Depends(get_db),
+                               current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    from shared.billing.fiscal.sequences import list_sequences
+    return {"sequences": list_sequences(db, regime=regime)}
+
+
+@router.put("/fiscal/sequences", summary="Cargar/actualizar un rango autorizado (admin)")
+async def put_fiscal_sequence(body: _FiscalSequenceBody, db: Session = Depends(get_db),
+                              current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    """Carga el rango que autorizó la DGII para un (régimen, tipo). Valida que el rango entre
+    en el formato del régimen (8 dígitos en NCF, 10 en e-NCF)."""
+    from shared.billing.fiscal.sequences import FiscalSequenceError, upsert_sequence
+    from shared.billing.fiscal.types import FiscalTypeError
+    try:
+        return upsert_sequence(db, regime=body.regime, doc_type=body.doc_type,
+                               range_from=body.range_from, range_to=body.range_to,
+                               current=body.current, expires_at=body.expires_at,
+                               active=body.active, note=body.note)
+    except (FiscalSequenceError, FiscalTypeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/fiscal/documents", summary="Comprobantes emitidos (admin)")
+async def get_fiscal_documents(period: Optional[str] = None, regime: Optional[str] = None,
+                               doc_type: Optional[str] = None, pending_only: bool = False,
+                               db: Session = Depends(get_db),
+                               current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    """Todos los comprobantes emitidos (y los cobros que quedaron sin número). ``period`` en
+    formato AAAA-MM."""
+    from shared.billing.fiscal.documents import list_documents, pending_count
+    try:
+        docs = list_documents(db, period=period, regime=regime, doc_type=doc_type,
+                              pending_only=pending_only)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"documents": docs, "pending_documents": pending_count(db)}
+
+
+@router.post("/fiscal/documents/assign-pending",
+             summary="Numerar los cobros que quedaron sin comprobante (admin)")
+async def post_assign_pending(db: Session = Depends(get_db),
+                              current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    """Asigna comprobante, en orden de emisión, a los cobros registrados mientras no había
+    secuencia cargada. Se detiene limpio si el rango se agota: a nadie se le inventa número."""
+    from shared.billing.fiscal.documents import assign_pending_numbers
+    return assign_pending_numbers(db)
+
+
+@router.get("/fiscal/607", summary="Formato 607 de ventas del período (admin)")
+async def get_formato_607(period: str, db: Session = Depends(get_db),
+                          current_user: User = Depends(require_role(UserRole.admin))):
+    """Descarga el Formato 607 (Ventas de Bienes y Servicios) del período AAAA-MM, generado
+    del registro de cobros. Solo entran comprobantes realmente emitidos."""
+    from fastapi.responses import Response
+
+    from shared.billing.fiscal.documents import build_607_csv
+    try:
+        csv_text = build_607_csv(db, period)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    filename = f"SDQ_607_{period.replace('-', '')}.csv"
+    return Response(content=csv_text, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.post("/webhook/paypal", summary="Webhook de PayPal (verificado + idempotente)")

@@ -724,7 +724,10 @@ _INV_ISSUER_ADDRESS = "invoice_issuer_address"
 _INV_ISSUER_EMAIL = "invoice_issuer_email"
 
 INVOICE_ISSUER_DEFAULTS = {
-    "name": "SDQ Consulting Group, SRL",
+    # Razón social EXACTA como está registrada ante la DGII bajo el RNC 132945271 (confirmada
+    # por el dueño 2026-08-16). El default anterior decía "SDQ Consulting Group, SRL" — con
+    # 'Group' — y en un comprobante fiscal el nombre tiene que coincidir con el registro.
+    "name": "SDQ Consulting, SRL",
     "rnc": "",  # el dueño lo carga (brecha de servicio hasta entonces)
     "address": "Santo Domingo, República Dominicana",
     "email": "facturacion@sdqconsulting.com.do",
@@ -744,6 +747,32 @@ def get_invoice_issuer(db: Session) -> Dict[str, str]:
         "address": _val(_INV_ISSUER_ADDRESS, INVOICE_ISSUER_DEFAULTS["address"]),
         "email": _val(_INV_ISSUER_EMAIL, INVOICE_ISSUER_DEFAULTS["email"]),
     }
+
+
+# ── Régimen fiscal activo (NCF impreso vs e-CF electrónico) ────────────
+# SDQ está en la transición de la Ley 32-23: hoy emite NCF tradicional contra rangos
+# autorizados; al habilitarse como Emisor Electrónico pasa a e-CF. Es UNA LLAVE, no dos
+# caminos simultáneos: emitir por los dos regímenes numeraría dos veces la misma venta.
+_FISCAL_REGIME = "fiscal_regime"
+
+
+def get_fiscal_regime(db: Session) -> str:
+    """Régimen con el que se numeran los comprobantes hoy: ``ncf`` (default) o ``ecf``."""
+    from shared.billing.fiscal.types import REGIME_ECF, REGIME_NCF
+
+    row = _get_app_setting(db, _FISCAL_REGIME)
+    value = (row.value if (row and row.value) else "").strip().lower()
+    return REGIME_ECF if value == REGIME_ECF else REGIME_NCF
+
+
+def set_fiscal_regime(db: Session, regime: str) -> str:
+    """Cambia el régimen activo (admin). Valida contra los regímenes conocidos."""
+    from shared.billing.fiscal.types import spec_for
+
+    spec = spec_for(regime)
+    _set_app_setting(db, _FISCAL_REGIME, spec.regime, is_secret=False)
+    db.commit()
+    return spec.regime
 
 
 def set_invoice_issuer(db: Session, *, name: Optional[str] = None, rnc: Optional[str] = None,

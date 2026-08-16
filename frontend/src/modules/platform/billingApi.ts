@@ -248,31 +248,113 @@ export async function setInvoiceIssuer(input: Partial<InvoiceIssuer>): Promise<I
   return data as InvoiceIssuer;
 }
 
-/* ── Secuencias e-NCF (e-CF DGII) — rangos autorizados por tipo (admin) ── */
-export interface EncfSequence {
+/* ── Comprobantes fiscales (DGII): rangos, emitidos y Formato 607 (admin) ──
+   Dos regímenes: 'ncf' (impreso, serie B + 8 dígitos) y 'ecf' (electrónico, E + 10). */
+export interface FiscalSequence {
   id: string;
-  ecf_type: string;            // 31 | 32 | 46
+  regime: string;              // ncf | ecf
+  doc_type: string;            // ncf: 01|02|04|16 · ecf: 31|32|34|46
+  doc_label: string;
   range_from: string;
   range_to: string;
   current: string;
+  issued: number;
+  total: number;
   remaining: number;
   expires_at: string | null;
   active: boolean;
   expired: boolean;
   exhausted: boolean;
-  next_encf: string | null;
+  usable: boolean;
+  low: boolean;
+  expiring_soon: boolean;
+  next_number: string | null;
   note: string | null;
 }
 
-export async function listEncfSequences(): Promise<EncfSequence[]> {
-  const { data } = await client.get<{ sequences: EncfSequence[] }>("/billing/encf/sequences");
-  return Array.isArray(data?.sequences) ? data.sequences : [];
+export interface FiscalDocType { doc_type: string; label: string }
+export interface FiscalRegimeInfo { regime: string; label: string; types: FiscalDocType[] }
+
+export interface FiscalOverview {
+  regime: string;
+  regimes: FiscalRegimeInfo[];
+  issuer: InvoiceIssuer;
+  issuer_ready: boolean;
+  sequences: FiscalSequence[];
+  attention: FiscalSequence[];
+  pending_documents: number;
 }
 
-export async function upsertEncfSequence(input: {
-  ecf_type: string; range_from: number; range_to: number;
+export interface FiscalDocument {
+  id: string;
+  invoice_number: string | null;
+  fiscal_regime: string | null;
+  fiscal_number: string | null;
+  fiscal_doc_type: string | null;
+  fiscal_doc_label: string | null;
+  fiscal_status: string | null;
+  valid_until: string | null;
+  created_at: string | null;
+  sku: string;
+  kind: string;
+  currency: string;
+  subtotal: string | null;
+  tax_amount: string | null;
+  total: string | null;
+  tax_exempt: boolean;
+  country: string | null;
+  status: string;
+  client_email: string | null;
+  client_name: string | null;
+  client_tax_id: string | null;
+}
+
+export async function getFiscalOverview(): Promise<FiscalOverview> {
+  const { data } = await client.get<FiscalOverview>("/billing/fiscal/overview");
+  return data;
+}
+
+export async function setFiscalRegime(regime: string): Promise<{ regime: string }> {
+  const { data } = await client.put("/billing/fiscal/regime", { regime });
+  return data as { regime: string };
+}
+
+export async function upsertFiscalSequence(input: {
+  regime: string; doc_type: string; range_from: number; range_to: number;
   current?: number; expires_at?: string | null; active?: boolean; note?: string;
-}): Promise<EncfSequence> {
-  const { data } = await client.put("/billing/encf/sequences", input);
-  return data as EncfSequence;
+}): Promise<FiscalSequence> {
+  const { data } = await client.put("/billing/fiscal/sequences", input);
+  return data as FiscalSequence;
+}
+
+export async function listFiscalDocuments(params: {
+  period?: string; regime?: string; doc_type?: string; pending_only?: boolean;
+} = {}): Promise<{ documents: FiscalDocument[]; pending: number }> {
+  const { data } = await client.get<{ documents: FiscalDocument[]; pending_documents: number }>(
+    "/billing/fiscal/documents", { params });
+  return {
+    documents: Array.isArray(data?.documents) ? data.documents : [],
+    pending: data?.pending_documents ?? 0,
+  };
+}
+
+export async function assignPendingFiscalNumbers(): Promise<{
+  assigned_count: number; still_pending: number; blocked: Record<string, string>;
+}> {
+  const { data } = await client.post("/billing/fiscal/documents/assign-pending");
+  return data as { assigned_count: number; still_pending: number; blocked: Record<string, string> };
+}
+
+export async function download607(period: string): Promise<void> {
+  const res = await client.get(`/billing/fiscal/607`, {
+    params: { period }, responseType: "blob",
+  });
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `SDQ_607_${period.replace("-", "")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

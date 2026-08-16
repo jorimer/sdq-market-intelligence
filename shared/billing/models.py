@@ -99,10 +99,27 @@ class BillingTransaction(UUIDMixin, Base):
     status = Column(String(20), nullable=False, server_default="paid")  # paid | refunded
     note = Column(String(255), nullable=True)
 
+    # ── NCF tradicional (DGII, régimen impreso) — lo que SDQ emite HOY ──
+    # Número realmente asignado de la secuencia autorizada (``B`` + tipo + 8 díg.). Los campos
+    # viven APARTE de los ``encf_*`` a propósito: guardar un "02" en ``encf_type`` lo volvería
+    # indistinguible de un tipo de e-CF para cualquier lectura que no traiga también el
+    # régimen — el modo de falla de "el sujeto viaja con el número". Cada régimen declara lo
+    # suyo y el otro queda en None, legítimamente.
+    ncf_type = Column(String(2), nullable=True)            # 01 | 02 | 04 | 16
+    ncf_number = Column(String(19), nullable=True)         # p.ej. B0200000001
+    ncf_status = Column(String(20), nullable=True)         # emitido | sin_secuencia | anulado
+    ncf_issued_at = Column(DateTime, nullable=True)        # cuándo se consumió el correlativo
+    # Vencimiento de la autorización, COPIADO al emitir: la factura es un registro histórico y
+    # debe poder imprimir su "válido hasta" aunque el rango se reemplace después.
+    ncf_valid_until = Column(DateTime, nullable=True)
+
     # ── e-CF / e-NCF (DGII) — listo para la integración de factura electrónica ──
     # Tipo de e-CF previsto (RD con RNC=31 crédito fiscal · RD consumo=32 · exterior=46
     # exportación). El resto se llena cuando se emite el e-CF contra los web services de la
     # DGII (certificado digital + secuencia e-NCF autorizada). Nullable = aún no emitido.
+    # Bajo régimen NCF, ``encf_trackid`` / ``encf_security_code`` / ``encf_signed_at`` quedan
+    # en None de forma LEGÍTIMA: no hay acuse, ni QR, ni firma que declarar (brecha declarada,
+    # no rellenada). Ver ``shared/billing/fiscal/types.py``.
     encf_type = Column(String(2), nullable=True)           # 31 | 32 | 46 …
     encf_number = Column(String(19), nullable=True)        # e-NCF asignado por la DGII
     encf_status = Column(String(20), nullable=True)        # pending | issued | accepted | rejected
@@ -115,21 +132,31 @@ class BillingTransaction(UUIDMixin, Base):
         # Un evento del proveedor produce a lo sumo una transacción (idempotencia dura).
         Index("uq_billing_transaction_event", "provider", "event_id", unique=True),
         Index("uq_billing_transaction_invoice", "invoice_number", unique=True),
+        # La propiedad que IMPORTA no es "el contador subió" sino "no hay dos comprobantes con
+        # el mismo número". El compare-and-swap del asignador lo evita; esto lo GARANTIZA.
+        Index("uq_billing_transaction_ncf", "ncf_type", "ncf_number", unique=True),
+        Index("uq_billing_transaction_encf", "encf_type", "encf_number", unique=True),
     )
 
 
-class EncfSequence(UUIDMixin, Base):
-    """Rango de secuencia e-NCF autorizado por la DGII para un tipo de e-CF (Fase e-CF).
+class FiscalSequence(UUIDMixin, Base):
+    """Rango de comprobante fiscal autorizado por la DGII, para CUALQUIERA de los dos
+    regímenes (NCF impreso o e-NCF electrónico — ver ``shared/billing/fiscal/types.py``).
 
-    El e-NCF tiene el formato ``E`` + tipo (2 díg.) + secuencia (10 díg.) = 13 caracteres
-    (p.ej. ``E310000000001``). La DGII autoriza un RANGO por tipo (``range_from``..``range_to``)
-    con una fecha de vencimiento; el emisor asigna correlativos consecutivos desde ``current``.
-    ``allocate_next`` toma el próximo, controla vencimiento y agotamiento. Un tipo puede tener
-    varias filas históricas; se asigna desde la activa, no vencida y con cupo."""
+    La DGII autoriza un RANGO por (régimen, tipo) con fecha de vencimiento; el emisor asigna
+    correlativos consecutivos desde ``current``. ``allocate_next`` toma el próximo, controla
+    vencimiento y agotamiento, y avanza el contador con un compare-and-swap (correcto en
+    Postgres y en SQLite). Un (régimen, tipo) puede tener varias filas históricas; se asigna
+    desde la activa, no vencida y con cupo.
 
-    __tablename__ = "encf_sequence"
+    Una sola tabla para los dos regímenes A PROPÓSITO: duplicar el asignador es como un fix de
+    concurrencia/vencimiento cae en un motor y falta en el otro. Lo único que ramifica por
+    régimen es el FORMATO del número y los tipos válidos."""
 
-    ecf_type = Column(String(2), nullable=False)      # 31 | 32 | 46 …
+    __tablename__ = "fiscal_sequence"
+
+    regime = Column(String(4), nullable=False, server_default="ecf")  # ncf | ecf
+    doc_type = Column(String(2), nullable=False)         # ncf: 01|02|04|16 · ecf: 31|32|34|46
     range_from = Column(Numeric(12, 0), nullable=False)  # inicio del rango autorizado
     range_to = Column(Numeric(12, 0), nullable=False)    # fin del rango (inclusive)
     current = Column(Numeric(12, 0), nullable=False)     # próximo correlativo a asignar
@@ -138,7 +165,7 @@ class EncfSequence(UUIDMixin, Base):
     note = Column(String(255), nullable=True)
 
     __table_args__ = (
-        Index("ix_encf_sequence_type", "ecf_type"),
+        Index("ix_fiscal_sequence_type", "regime", "doc_type"),
     )
 
 

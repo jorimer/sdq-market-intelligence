@@ -62,6 +62,7 @@ const UsersAdminPage = lazyPage(() => import("@/modules/platform/pages/UsersAdmi
 const TarifarioPage = lazyPage(() => import("@/modules/platform/pages/TarifarioPage"), "TarifarioPage");
 const MiPlanPage = lazyPage(() => import("@/modules/platform/pages/MiPlanPage"), "MiPlanPage");
 const PagosPage = lazyPage(() => import("@/modules/platform/pages/PagosPage"), "PagosPage");
+const ComprobantesPage = lazyPage(() => import("@/modules/platform/pages/ComprobantesPage"), "ComprobantesPage");
 const CheckoutReturnPage = lazyPage(() => import("@/modules/platform/pages/CheckoutReturnPage"), "CheckoutReturnPage");
 const ProductMonitorPage = lazyPage(() => import("@/modules/platform/pages/ProductMonitorPage"), "ProductMonitorPage");
 const ProductCatalogPage = lazyPage(() => import("@/modules/platform/pages/ProductCatalogPage"), "ProductCatalogPage");
@@ -174,6 +175,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <PagosPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/comprobantes"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <ComprobantesPage />
                 </ProtectedRoute>
               }
             />

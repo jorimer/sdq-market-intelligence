@@ -60,7 +60,7 @@ def _record_invoice_best_effort(db: Session, *, provider: str, kind: str, provid
                                 currency: Optional[str]) -> None:
     """Registra la factura del cobro. Best-effort: **facturar nunca tumba el acceso ya
     concedido**. Idempotente por ``event_id`` determinista (webhook y retorno convergen)."""
-    from shared.billing.transactions import intended_encf_type, record_transaction_once
+    from shared.billing.transactions import record_transaction_once
 
     try:
         country, tax_id = _client_fiscal(db, user_id)
@@ -69,11 +69,13 @@ def _record_invoice_best_effort(db: Session, *, provider: str, kind: str, provid
         if bd is None:
             logger.warning("[billing] sin precio ni bruto para facturar %s (%s)", sku, provider_ref)
             return
-        # Tipo de e-CF: exento→46; RD con RNC/cédula→31 (crédito fiscal); RD sin→32 (consumo).
-        encf_type = intended_encf_type(bd, client_has_rnc=bool((tax_id or "").strip()))
+        # El tipo de comprobante sale de la matriz fiscal: exento→exportación; RD con
+        # RNC/cédula→crédito fiscal; RD sin→consumo. Lo resuelve ``record_transaction_once``
+        # en los códigos del régimen ACTIVO, y ahí mismo consume el correlativo autorizado.
         record_transaction_once(db, user_id=user_id, sku=sku, kind=kind, provider=provider,
                                 provider_ref=provider_ref, event_id=f"settle:{kind}:{provider_ref}",
-                                breakdown=bd, note="PayPal", encf_type=encf_type)
+                                breakdown=bd, note="PayPal",
+                                client_has_rnc=bool((tax_id or "").strip()))
     except Exception:  # noqa: BLE001 — facturar no debe revertir la concesión de acceso
         db.rollback()
         logger.exception("[billing] no se pudo registrar la factura de %s", sku)
