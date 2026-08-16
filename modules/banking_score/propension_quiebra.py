@@ -571,15 +571,21 @@ def prosa(modelo: ModeloPropension, nombre_entidad: str,
     encuadre = ("por encima del promedio del sistema" if veces > 1.15 else
                 "por debajo del promedio del sistema" if veces < 0.85 else
                 "en línea con el promedio del sistema")
+    # «Tasa base» es el término de la regresión, no el del negocio, y solo asomaba cuando la
+    # entidad se apartaba del promedio —justo el caso que más se lee—. El encuadre ya nombró
+    # la referencia una línea antes, así que la cifra se cuelga de ahí y no de la jerga.
     partes.append(f"En conjunto, el modelo lo ubica {encuadre}"
-                  + (f" ({veces:.1f} veces la tasa base)." if abs(veces - 1) > 0.15 else "."))
+                  + (f" ({veces:.1f} veces esa referencia)." if abs(veces - 1) > 0.15
+                     else "."))
     if not rasgos:
         partes.append("Sin un rasgo que lo distinga, la lectura es de perfil promedio, no de "
                       "solidez comprobada: el modelo mide distancia al patrón de quiebra, no "
                       "calidad crediticia.")
-    if e["controles_no_narrables"]:
-        partes.append(f"({len(e['controles_no_narrables'])} variables entran al cálculo como "
-                      "control estadístico y no admiten lectura causal.)")
+    # Los controles NO se anuncian al lector. Su aporte ya viaja dentro de «veces la tasa
+    # base», así que nada desaparece; lo que desaparecía era la confianza, porque una coletilla
+    # sobre el método le avisa a una sala no técnica que desconfíe de lo que acaba de leer.
+    # La lista sigue viva y sale por `controles_no_narrables` → `controles_sin_lectura_causal`,
+    # que es donde hace su trabajo: impedir que el MODELO narre un control como causa.
     return " ".join(partes)
 
 

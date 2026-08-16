@@ -54,7 +54,12 @@ SECTOR_KEY = "banking"
 # TTL. Sin declararlo acá, arreglar el índice del conjunto dejaba los informes ya emitidos
 # sirviendo el "0.0/100 (banda baja)" viejo para siempre — el arreglo pasaba los tests y no
 # llegaba a ningún PDF. La huella es POR SECTOR: esto solo invalida narrativas de banca.
-AI_CONTEXT_FILES = ("reports/narrative.py", "products.py", "early_warning.py")
+# `propension_quiebra.py` entra porque redacta contexto que LLEGA al modelo
+# (`lectura_de_referencia`) y que se imprime tal cual cuando el motor no responde. Fuera de
+# esta tupla, cambiarle la prosa no mueve la huella y la caché —sin TTL— sigue sirviendo el
+# texto viejo para siempre: el arreglo existe en el código y no en el informe.
+AI_CONTEXT_FILES = ("reports/narrative.py", "products.py", "early_warning.py",
+                    "propension_quiebra.py")
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
 
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del
