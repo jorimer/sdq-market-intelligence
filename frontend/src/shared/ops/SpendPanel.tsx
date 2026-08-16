@@ -77,8 +77,11 @@ function Reparto({
           <tbody>
             {seguras.map((f, i) => (
               <tr key={f.clave ?? i} className="border-b border-line/60 last:border-0">
-                <td className="py-2 px-2 text-ink break-all" title={f.clave ?? ""}>
-                  {f.clave ?? "—"}
+                {/* Se muestra el PRODUCTO; la clave técnica queda en el título emergente
+                    porque es lo que hace falta para depurar, y una etiqueta que la
+                    reemplace del todo convierte dos minutos de investigación en veinte. */}
+                <td className="py-2 px-2 text-ink" title={f.clave ?? ""}>
+                  {f.etiqueta ?? f.clave ?? "—"}
                 </td>
                 <td className="py-2 px-2 mono text-body tabular-nums text-right">
                   {usd(f.costo_usd)}

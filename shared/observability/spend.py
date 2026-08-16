@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
+from shared.observability import etiquetas
 from shared.observability.models import LLMCall
 
 #: Rango por defecto cuando no se pide uno: los últimos treinta días.
@@ -32,11 +33,16 @@ def _rango(desde: Optional[date], hasta: Optional[date]) -> Tuple[datetime, date
             datetime.combine(fin_dia, time.max))
 
 
-def _fila(r) -> Dict[str, Any]:
+def _fila(r, etiquetar) -> Dict[str, Any]:
     llamadas = int(r.llamadas or 0)
     hits = int(r.hits or 0)
+    clave = r.clave or "desconocido"
     return {
-        "clave": r.clave or "desconocido",
+        "clave": clave,
+        # El nombre que ve quien lee. La clave técnica se conserva al lado porque, cuando
+        # algo hay que depurar, la ruta es lo que se necesita: una etiqueta que la
+        # reemplace convierte una investigación de dos minutos en una de veinte.
+        "etiqueta": etiquetar(clave),
         "costo_usd": round(float(r.costo or 0.0), 4),
         "llamadas": llamadas,
         "hits_de_cache": hits,
@@ -46,7 +52,8 @@ def _fila(r) -> Dict[str, Any]:
     }
 
 
-def _agrupado(db: Session, columna, ini: datetime, fin: datetime) -> List[Dict[str, Any]]:
+def _agrupado(db: Session, columna, ini: datetime, fin: datetime,
+              etiquetar) -> List[Dict[str, Any]]:
     rows = (
         db.query(
             columna.label("clave"),
@@ -58,7 +65,7 @@ def _agrupado(db: Session, columna, ini: datetime, fin: datetime) -> List[Dict[s
         .group_by(columna)
         .all()
     )
-    return sorted((_fila(r) for r in rows), key=lambda d: -d["costo_usd"])
+    return sorted((_fila(r, etiquetar) for r in rows), key=lambda d: -d["costo_usd"])
 
 
 def spend_summary(db: Session, desde: Optional[date] = None,
@@ -81,11 +88,14 @@ def spend_summary(db: Session, desde: Optional[date] = None,
         "hasta": fin.date().isoformat(),
         "costo_total_usd": round(float(total[0] or 0.0), 4),
         "llamadas_totales": int(total[1] or 0),
-        "por_disparador": _agrupado(db, LLMCall.trigger_detail, ini, fin)[:top],
-        "por_modulo": _agrupado(db, LLMCall.module, ini, fin)[:top],
+        "por_disparador": _agrupado(db, LLMCall.trigger_detail, ini, fin,
+                                    etiquetas.etiqueta_disparador)[:top],
+        "por_modulo": _agrupado(db, LLMCall.module, ini, fin,
+                                etiquetas.etiqueta_modulo)[:top],
         # Separa PRODUCIR de VERIFICAR. El juez numérico corre sobre toda sección de toda
         # generación: sumado al mismo total que la narrativa, su peso era invisible.
-        "por_motivo": _agrupado(db, LLMCall.purpose, ini, fin),
+        "por_motivo": _agrupado(db, LLMCall.purpose, ini, fin,
+                                etiquetas.etiqueta_motivo),
     }
 
 
@@ -103,6 +113,7 @@ def spend_detail(db: Session, desde: Optional[date] = None,
         {
             "cuando": c.created_at.isoformat() if c.created_at else None,
             "disparador": c.trigger_detail,
+            "etiqueta": etiquetas.etiqueta_disparador(str(c.trigger_detail)),
             "tipo": c.trigger_kind,
             "modulo": c.module,
             "plantilla": c.template,
