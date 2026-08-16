@@ -1639,14 +1639,26 @@ class NarrativeEngine:
             truncated=truncated,
         )
 
-    def _result_from_response(self, response, cache_key: str, template: str) -> NarrativeResult:
-        """Build, cache and return a NarrativeResult (legacy route)."""
+    def _result_from_response(self, response, cache_key: str, template: str,
+                              axis: Optional[str] = None) -> NarrativeResult:
+        """Build, cache and return a NarrativeResult (legacy route).
+
+        Registra igual que la ruta cerebro. Sin esta línea el gasto de la ruta legacy sí
+        contaba contra el techo diario —``_build_result`` llama a ``record_usage``— pero
+        NO aparecía atribuido en el panel: el total se veía menor de lo real y el
+        disparador quedaba sin dueño. El test estructural no lo cazaba porque valida por
+        ARCHIVO, y este archivo nombra la contabilidad en su otra ruta.
+        """
         result = self._build_result(response)
         self._set_cache(cache_key, result)
         logger.info(
             "Narrative generated: template=%s, tokens=%d, cost=$%.4f",
             template, result.tokens_used, result.cost_estimate,
         )
+        record_call(purpose=PURPOSE_NARRATIVE, model=result.model_used or "",
+                    cost_usd=result.cost_estimate, tokens_out=result.tokens_used,
+                    module=axis, template=template, cache_hit=False,
+                    detail={"ruta": "legacy"})
         return result
 
     def _generate_guarded(self, client, system: str, user: str, max_tokens: int,
@@ -1874,7 +1886,7 @@ class NarrativeEngine:
                     ),
                     label=f"legacy:{template}",
                 )
-            return self._result_from_response(response, cache_key, template)
+            return self._result_from_response(response, cache_key, template, axis)
 
         except Exception as e:
             logger.error("Claude API error: %s. Falling back to static template.", e)

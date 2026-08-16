@@ -102,6 +102,6 @@ export async function getLlmSpend(desde?: string, hasta?: string): Promise<Spend
   const params: Record<string, string> = {};
   if (desde) params.desde = desde;
   if (hasta) params.hasta = hasta;
-  const { data } = await client.get<SpendSummary>("/api/v1/operations/llm-spend", { params });
+  const { data } = await client.get<SpendSummary>("/operations/llm-spend", { params });
   return data;
 }
