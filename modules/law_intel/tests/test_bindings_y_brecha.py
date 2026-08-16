@@ -21,11 +21,22 @@ def test_el_expediente_real_carga_sus_bindings(exp):
 
 
 def test_la_cobertura_no_cuenta_propuestos():
+    """El invariante, no la foto: `medidos` cuenta verificados y NADA más.
+
+    La primera versión afirmaba `medidos == 0`, cierto solo mientras no hubiera ninguno
+    promovido. Un test así se rompe cuando el producto avanza y empuja a actualizar el número
+    sin mirar la regla.
+    """
+    bs = cargar_bindings(EXPEDIENTE)
     c = cobertura(EXPEDIENTE)
+    verificados = {i for i, b in bs.items() if b.estado == "verificado"}
+    numerados = {i.id for i in cargar(EXPEDIENTE).numerados}
     assert c["total"] == 90
-    assert c["medidos"] == 0, "hoy no hay ninguno verificado y la portada debe decirlo"
-    assert c["propuestos_sin_verificar"] > 0
-    assert c["pct"] == 0.0
+    assert c["medidos"] == len(verificados & numerados)
+    assert c["propuestos_sin_verificar"] == len(
+        {i for i, b in bs.items() if b.estado == "propuesto"} & numerados)
+    # Un descartado nunca suma, aunque su serie exista.
+    assert not ({i for i, b in bs.items() if b.estado == "descartado"} & verificados)
 
 
 class TestValidacionDeBindings:

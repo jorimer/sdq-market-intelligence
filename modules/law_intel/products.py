@@ -21,6 +21,7 @@ from modules.law_intel.ai_context import law_ai_context, secciones_sin_dato
 from modules.law_intel.ratificacion import exigir_servible
 from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import RAIZ, cargar, expedientes
+from modules.law_intel.series import proveedor_registro, series_de
 from shared.products import (DataHealth, Granularity, ProductSnapshot, ProductTier,
                              SectorProductManifest, TierLevelSpec, ValidationState,
                              register_product)
@@ -181,7 +182,10 @@ class LawProduct:
         # `DerivaNoAutorizada`, que el ensamblador traduce igual que cualquier ValueError.
         exigir_servible(eid)
         corte = (period or "")[:4] or "2025"
-        ctx = law_ai_context(eid, corte)
+        # Sin esto el informe diría «mide 4 de 90» y después «sin dato» en los cuatro.
+        from modules.law_intel.bindings import cargar_bindings
+        series = series_de(cargar_bindings(eid), proveedor_registro(self._db))
+        ctx = law_ai_context(eid, corte, series)
         exp = cargar(eid)
         # `entity_name` solo en los niveles nombrados: el Pulse es agregado y el sensor de
         # anonimización del ensamblador verifica que no se filtre un identificador.

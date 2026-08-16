@@ -13,7 +13,22 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "3.0"
+version: "4.0"
+
+# ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
+# Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
+# series reales de producción los dio verificables Y sin duda de comparabilidad abierta:
+#
+#   2.4   social_dev:poverty_rate      15,0    (2024) · «Pobreza monetaria general»
+#   2.18  social_dev:schooling_years    9,63   (2024)
+#   2.19  social_dev:literacy_rate      6,3    (2024) tras `complemento_100`
+#   2.21  social_dev:life_expectancy   73,868  (2024)
+#
+# La promoción se escribe acá y no la hace la verificación: el estado de un binding es un
+# hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
+# caliente, la cifra de portada dejaría de ser verificable.
+#
+# Cobertura del expediente: 4 de 90 indicadores numerados.
 
 bindings:
   # ══ RESUELTO ══ `poverty_rate` es «Pobreza monetaria GENERAL» (15,0 en 2024), no extrema.
@@ -22,7 +37,7 @@ bindings:
     serie: "social_dev:poverty_rate"
     fuente: one
     mejor: menor
-    estado: propuesto
+    estado: verificado
     nota_comparabilidad: null
     nota: >-
       Comprobado contra `_THEME_LABELS` del panel social: «Pobreza monetaria general». La
@@ -37,7 +52,7 @@ bindings:
     fuente: one
     mejor: menor
     transformacion: complemento_100
-    estado: propuesto
+    estado: verificado
     nota_comparabilidad: null
     nota: >-
       «Tasa de alfabetización» = 93,7% en 2024 → analfabetismo 6,3%. La meta legal es un
@@ -48,13 +63,13 @@ bindings:
     serie: "social_dev:schooling_years"
     fuente: one
     mejor: mayor
-    estado: propuesto
+    estado: verificado
 
   - indicador: "2.21"
     serie: "social_dev:life_expectancy"
     fuente: one
     mejor: mayor
-    estado: propuesto
+    estado: verificado
 
   # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
   # transformación declarable: son conceptos distintos.
