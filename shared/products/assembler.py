@@ -98,6 +98,7 @@ def _narrative_logic_version() -> str:
     """
     from shared.config.settings import settings
     from shared.narrative import cerebro
+    from shared.narrative.claude_engine import TEMPLATES, THIN_TEMPLATES
     from shared.narrative.numeric_guard import GUARD_VERSION
 
     parts = [
@@ -111,6 +112,20 @@ def _narrative_logic_version() -> str:
         cerebro.CEREBRO_IDENTITY,
     ]
     parts += [v for _, v in sorted(cerebro.AXIS_DOCTRINE.items())]
+    # Y las PLANTILLAS POR SECCIÓN, que faltaban. Esta función derivaba la receta de la
+    # doctrina compartida y dejaba fuera el prompt concreto de cada sección, que es donde se
+    # arregla el 90% de los defectos de redacción. Verificado en producción: se corrigió
+    # `early_warning_reading` para que ubicara bien el horizonte —salía «el margen
+    # desaparecería alrededor de 3.5 años ANTES DE QUE las reservas dejen de cubrir»—, se
+    # desplegó, y el informe siguió sirviendo la frase rota porque ni el dato ni la doctrina
+    # habían cambiado. La caché es de Postgres y NO tiene TTL: habría durado para siempre.
+    #
+    # Se hashean TODAS y no solo las del producto que se rinde: el ensamblador no sabe qué
+    # plantillas usa cada sección, y equivocarse hacia el lado de invalidar de más cuesta una
+    # regeneración; hacia el otro lado, publica texto viejo sin avisar. Los cambios de
+    # plantilla son raros, así que el sobrecosto es acotado.
+    parts += [f"{k}={v}" for k, v in sorted(THIN_TEMPLATES.items())]
+    parts += [f"{k}={v}" for k, v in sorted(TEMPLATES.items())]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:12]
 
 
