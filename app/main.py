@@ -1,3 +1,5 @@
+import re
+
 import logging
 import os
 
@@ -36,6 +38,33 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Lang"],
 )
+
+
+_ID_EN_RUTA = re.compile(
+    r"/(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|\d+)(?=/|$)"
+)
+
+
+@app.middleware("http")
+async def _atribuir_gasto_del_modelo(request, call_next):
+    """Toda llamada al modelo hecha durante una petición queda a nombre de su ruta.
+
+    Sin esto, el gasto que pide una persona aparece como «desconocido» y se vuelve
+    indistinguible del que genera una tarea agendada — la distinción por la que existe el
+    registro. Pasó: el primer informe medido en producción registró sus veinte llamadas
+    sin dueño, porque la atribución estaba cableada en las operaciones y no acá.
+
+    Se usa el path CRUDO, no la ruta con plantilla: ``request.scope["route"]`` todavía no
+    existe antes de enrutar —se comprobó— y esperar a tenerla obligaría a fijar el
+    contexto después de la llamada, que es tarde. Solo se normalizan los identificadores
+    opacos (UUID y numéricos) para que no exploten la cardinalidad. El slug SÍ se conserva:
+    saber qué encargo consume cuánto es información, no ruido.
+    """
+    from shared.observability.llm_ledger import attributed_to
+
+    ruta = _ID_EN_RUTA.sub("/{id}", request.url.path)
+    with attributed_to("endpoint", f"{request.method} {ruta}"[:160]):
+        return await call_next(request)
 
 
 @app.get("/api/v1/health")
