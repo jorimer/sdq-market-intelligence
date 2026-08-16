@@ -33,7 +33,12 @@ _CONTABILIZA = ("account", "record_usage")
 #: alguien agrega uno, tiene que escribir por qué.
 EXENTOS: dict = {}
 
-_EXCLUIR = ("/tests/", "/.venv/", "/node_modules/")
+# `/.claude/` guarda los worktrees de las sesiones concurrentes: COPIAS del árbol, con los
+# mismos archivos bajo otro prefijo. Sin excluirlas, este test denuncia nueve incumplimientos
+# que son los mismos archivos ya conformes, y —peor— el veredicto pasa a depender de qué tenga
+# checkouteado otra sesión en el disco de quien lo corre. Un gate estructural que falla por el
+# estado local de otro deja de ser una señal y empieza a enseñar a ignorarlo.
+_EXCLUIR = ("/tests/", "/.venv/", "/node_modules/", "/.claude/")
 
 
 def _fuentes():
