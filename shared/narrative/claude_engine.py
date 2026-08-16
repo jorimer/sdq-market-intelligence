@@ -1651,7 +1651,8 @@ class NarrativeEngine:
         blanks the insight."""
         from shared.narrative.numeric_guard import (
             CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE,
-            deterministic_direction_errors, deterministic_unsupported, verify_figures)
+            deterministic_direction_errors, deterministic_uncited_figures,
+            deterministic_unsupported, verify_figures)
 
         def _gen(user_msg):
             resp = _call_with_transient_retry(
@@ -1670,8 +1671,13 @@ class NarrativeEngine:
             SEPARADO porque piden correcciones distintas: una cifra sin respaldo se corrige
             no inventando; una dirección invertida se corrige cambiándole el signo SIN tocar
             los números (y sin borrar la comparación)."""
-            # determinista primero (gratis, garantía mecánica) + juez LLM (semántico)
-            det = deterministic_unsupported(context or {}, text)
+            # determinista primero (gratis, garantía mecánica) + juez LLM (semántico).
+            # `deterministic_unsupported` lee la forma del contexto de banca; en un módulo
+            # con otra forma devuelve `[]` sin haber mirado nada. `deterministic_uncited`
+            # no conoce ninguna forma y cubre ese hueco: toda cifra citada tiene que estar
+            # entre los números del contexto, sea cual sea su estructura.
+            det = (deterministic_unsupported(context or {}, text)
+                   + deterministic_uncited_figures(context or {}, text))
             llm = verify_figures(client, guard_model, context_str, text)
             seen, merged = set(), []
             for f in det + llm:
