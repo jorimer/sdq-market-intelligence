@@ -189,3 +189,35 @@ class TestLasCuatroDudasResueltas:
         bs = cargar_bindings(EXPEDIENTE)
         for i in ("2.4", "2.19", "2.18", "2.21"):
             assert not (bs[i].nota_comparabilidad or "").strip(), i
+
+
+class TestLasSenalesQueYaEstabanExpuestas:
+    """Tres indicadores que no exigían conectar nada: la señal ya estaba en el Data Registry
+    sirviendo al índice de desarrollo y ningún binding la había cruzado contra la ley.
+
+    Los tres muestran la misma trampa en tres grados distintos, y por eso van juntos: el
+    nombre de la variable se parece al del indicador en los tres casos, y solo en uno miden
+    lo mismo."""
+
+    def test_la_cobertura_secundaria_calza_directo(self):
+        b = cargar_bindings(EXPEDIENTE)["2.10"]
+        assert b.serie == "social_dev:secondary_coverage"
+        assert b.transformacion is None, "misma magnitud: no hay nada que transformar"
+
+    def test_el_sector_formal_es_el_COMPLEMENTO_de_la_informalidad(self):
+        """El indicador legal cuenta el sector FORMAL; la variable mide la INFORMALIDAD.
+        Sin la transformación declarada el binding publicaría el complemento y la dirección
+        quedaría invertida — el mismo defecto que ya se coló una vez con el 2.19."""
+        b = cargar_bindings(EXPEDIENTE)["2.39"]
+        assert b.transformacion == "complemento_100"
+        assert b.mejor == "mayor", "más formalidad es mejor; la variable cruda diría lo opuesto"
+
+    def test_la_mortalidad_infantil_NO_es_la_de_menores_de_cinco(self):
+        """`child_mortality` es `SP.DYN.IMRT.IN` (menores de 1 año) y el indicador legal es
+        menores de 5. Ninguna transformación las convierte, y el valor es plausible para las
+        dos — que es justamente lo que vuelve peligrosa la confusión."""
+        b = cargar_bindings(EXPEDIENTE)["2.22"]
+        assert b.estado == "descartado" and not b.cuenta
+        m = b.motivo_descarte or ""
+        assert "SP.DYN.IMRT.IN" in m, "el motivo debe nombrar el código que lo prueba"
+        assert "1 año" in m and "5" in m, "el motivo nombra los dos tramos de edad"
