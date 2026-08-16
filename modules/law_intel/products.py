@@ -169,6 +169,51 @@ class LawProduct:
             notes=("Registro contrastado contra el articulado. Sin bindings verificados el "
                    "informe no mide cumplimiento: corré /bindings/verificacion."))
 
+    def variable_signals(self) -> Dict[str, Any]:
+        """Procedencia POR INDICADOR para el Data Registry.
+
+        Sin esto, el readiness del eje resume 90 indicadores en «Cobertura 4%: faltan
+        dimensiones con dato real ()» — con el paréntesis vacío. El agente de descubrimiento
+        de fuentes se alimenta de ese texto, así que recibía un prompt que no nombraba ni un
+        indicador y sólo podía proponer fuentes genéricas del país.
+
+        Cada indicador de la ley es una variable: REAL si un binding verificado lo mide, GAP
+        si no. El peso es uniforme porque la ley no jerarquiza sus metas — ninguna dice valer
+        más que otra, y repartir pesos por criterio propio sería inventar una prioridad que
+        el legislador no fijó.
+        """
+        from shared.registry.signals import GAP, REAL, VariableSignal
+
+        from modules.law_intel.bindings import cargar_bindings
+
+        eids = expedientes()
+        if not eids:
+            return {"period": None, "signals": []}
+        eid = eids[0]
+        exp = cargar(eid)
+        bs = cargar_bindings(eid)
+        numerados = exp.numerados
+        peso = 1.0 / len(numerados) if numerados else 0.0
+        señales = []
+        for ind in numerados:
+            b = bs.get(ind.id)
+            medido = bool(b and b.cuenta)
+            señales.append(VariableSignal(
+                key=ind.id,
+                # La etiqueta lleva el nombre del indicador: es lo que el agente lee para
+                # saber QUÉ hay que buscar.
+                label=f"{ind.id} {ind.nombre}"[:120],
+                state=REAL if medido else GAP,
+                dimension=f"eje_{ind.eje}", weight=peso,
+                source=(b.serie if (medido and b) else ""),
+                cadence="annual", value=None,
+                real_fraction=1.0 if medido else 0.0,
+                note=("" if medido else
+                      ("descartado: " + (b.motivo_descarte or "")[:80]) if b and b.estado == "descartado"
+                      else "sin fuente verificada"))
+            )
+        return {"period": None, "signals": señales}
+
     # ── Snapshot ──
     def snapshot(self, tier: ProductTier, period: str,
                  scope: Optional[str] = None) -> ProductSnapshot:
