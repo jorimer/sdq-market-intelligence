@@ -36,6 +36,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.registry.builders import axis_variable_scopes
+from shared.registry.signals import PER_SUBJECT
 from shared.products import (
     CanonicalScore,
     CanonicalSeries,
@@ -319,6 +321,11 @@ class SocialDevProduct:
     # computa sobre el peso, así que un peso 0 no mueve ni el numerador ni el denominador.
     # Sin esta lista, un dato que el Estado publica y nosotros ingerimos queda invisible para
     # todo el que no sea el IDM.
+    #: clave → (etiqueta, dimensión, nota). El ALCANCE se declara en la doctrina del eje
+    #: (`variable_scopes`), no acá. No es decorativo: sin él
+    #: todas caían al default `per_subject` y un consumidor que lee `value` recibía el
+    #: valor de UNA región creyendo que era el del país. Pasó: el eje de evaluación de
+    #: leyes publicó la pobreza extrema de cibao_norte como cifra nacional.
     _FUERA_DEL_INDICE = {
         "poverty_extreme": ("Pobreza monetaria extrema",
                             "living_standards",
@@ -357,7 +364,12 @@ class SocialDevProduct:
 
         from modules.social_dev.models.models import SocialIndicator
         out: List[Any] = []
+        # El ALCANCE sale de la doctrina, que es donde se declara el de todas las
+        # variables del eje. Repetirlo acá sería una segunda verdad, y el día que
+        # divergieran ganaría la que el consumidor mire primero.
+        alcances = axis_variable_scopes(DOCTRINE_AXIS)
         for tema, (label, dimension, nota) in self._FUERA_DEL_INDICE.items():
+            alcance = alcances.get(tema, PER_SUBJECT)
             fila = _safe(self._db, lambda t=tema: (
                 self._require_db().query(SocialIndicator.value, SocialIndicator.period)
                 .filter(SocialIndicator.theme == t, SocialIndicator.value.isnot(None))
@@ -369,7 +381,7 @@ class SocialDevProduct:
                 key=tema, label=label, state=REAL, dimension=dimension,
                 weight=0.0,                      # fuera del índice: no pondera
                 source=", ".join(dh.sources), cadence=dh.cadence,
-                value=float(valor), real_fraction=1.0,
+                value=float(valor), real_fraction=1.0, scope=alcance,
                 # El período va en la SEÑAL y no solo en la nota: un consumidor no puede
                 # parsear prosa para saber a qué año corresponde la cifra que le sirven.
                 period=str(periodo_tema),

@@ -11,9 +11,15 @@ claves no son únicas entre ejes.
 """
 from __future__ import annotations
 
+import logging
+
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
+
+from shared.registry.signals import NATIONAL
+
+logger = logging.getLogger("sdq.law_intel.series")
 
 Observacion = Tuple[str, float]
 Proveedor = Callable[[str], Sequence[Observacion]]
@@ -31,6 +37,7 @@ def proveedor_registro(db: Optional[Session]) -> Proveedor:
 
     reg = build_data_registry(db)
     por_clave: Dict[str, List[Observacion]] = {}
+    omitidas: List[str] = []
     for eje in getattr(reg, "axes", ()) or ():
         periodo_eje = getattr(eje, "period", None)
         for sig in getattr(eje, "signals", ()) or ():
@@ -41,10 +48,27 @@ def proveedor_registro(db: Optional[Session]) -> Proveedor:
             # 2025 mientras el eje social iba por 2024, y estampar el del eje servía el
             # valor de un año con el rótulo de otro. En un informe que juzga contra la meta
             # de un año concreto eso no es metadato: es la cifra equivocada.
+            # ⛔ Solo señales de alcance NACIONAL. TODO indicador de una ley nacional fija
+            # una meta para el país; una variable medida por sujeto publica el valor de UN
+            # sujeto —el registro sirve el de la primera región del panel— y compararlo
+            # contra la meta del país es comparar cosas distintas. Pasó de verdad: la
+            # pobreza extrema de cibao_norte (2,0%) se publicó como cifra nacional y con
+            # ella «la meta de 2030, alcanzada seis años antes».
+            #
+            # Se rechaza en vez de promediar: el promedio simple de diez regiones no es la
+            # cifra del país (habría que ponderar por población) y fabricarlo sería
+            # inventar el dato que falta en lugar de declararlo.
+            if getattr(sig, "scope", NATIONAL) != NATIONAL:
+                omitidas.append(f"{eje.sector_key}:{sig.key}")
+                continue
             periodo = getattr(sig, "period", None) or periodo_eje
             if not periodo:
                 continue
             por_clave[f"{eje.sector_key}:{sig.key}"] = [(str(periodo), float(sig.value))]
+
+    if omitidas:
+        logger.info("law: %d señales omitidas por no ser nacionales (%s)",
+                    len(omitidas), ", ".join(sorted(omitidas)[:8]))
 
     def leer(codigo: str) -> List[Observacion]:
         return por_clave.get(codigo, [])

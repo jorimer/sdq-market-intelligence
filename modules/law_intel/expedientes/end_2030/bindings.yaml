@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "7.0"
+version: "8.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -34,8 +34,20 @@ version: "7.0"
 # hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
 # caliente, la cifra de portada dejaría de ser verificable.
 #
-# Cobertura del expediente: 7 de 90 indicadores numerados (2.37, 2.41 y 2.42
-# entran como `propuesto` hasta comprobarse contra producción).
+# Cobertura del expediente: 4 de 90 indicadores numerados.
+#   2.21  esperanza de vida (WDI, país)
+#   2.39  ocupados en sector formal (BCRD/ENCFT, país)
+#   2.41  razón de ocupación F/M (BCRD/ENCFT, país) — verificado 2026-08-16
+#   2.42  razón de desocupación F/M (BCRD/ENCFT, país) — verificado 2026-08-16
+#
+# ── DEMOCIÓN 2026-08-16 ─────────────────────────────────────────────────────────
+# 2.1, 2.4, 2.10, 2.18 y 2.19 bajan de `verificado` a `propuesto`. Sus variables se
+# miden POR REGIÓN y el registro publica el valor de la primera del panel, no el
+# del país: se estuvo contrastando la cifra de `cibao_norte` contra una meta
+# nacional. Lo destapó revisar `pattern_a_signals`, cuyo campo se llama
+# `sample_value` por dentro y `value` por fuera.
+#
+# Sobreviven las que miden el país de verdad: 2.21 (WDI), 2.39, 2.41 y 2.42 (BCRD).
 
 bindings:
   # ══ RESUELTO ══ `poverty_rate` es «Pobreza monetaria GENERAL» (15,0 en 2024), no extrema.
@@ -45,8 +57,14 @@ bindings:
     fuente: one
     mejor: menor
     periodo_verificado: "2024"
-    estado: verificado
-    nota_comparabilidad: null
+    estado: propuesto
+    nota_comparabilidad: >-
+      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
+      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
+      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
+      nada — y el número que se publicó era el de una demarcación. No se arregla
+      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
+      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
     nota: >-
       Comprobado contra `_THEME_LABELS` del panel social: «Pobreza monetaria general». La
       línea base legal de 2010 (33,8%) viene de la ENFT y la medición actual de la
@@ -61,8 +79,14 @@ bindings:
     mejor: menor
     transformacion: complemento_100
     periodo_verificado: "2024"
-    estado: verificado
-    nota_comparabilidad: null
+    estado: propuesto
+    nota_comparabilidad: >-
+      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
+      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
+      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
+      nada — y el número que se publicó era el de una demarcación. No se arregla
+      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
+      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
     nota: >-
       «Tasa de alfabetización» = 93,7% en 2024 → analfabetismo 6,3%. La meta legal es un
       UMBRAL («< 4%»), así que el indicador no admite delta: se cumple o no se cumple, y con
@@ -73,7 +97,14 @@ bindings:
     fuente: one
     mejor: mayor
     periodo_verificado: "2024"
-    estado: verificado
+    estado: propuesto
+    nota_comparabilidad: >-
+      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
+      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
+      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
+      nada — y el número que se publicó era el de una demarcación. No se arregla
+      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
+      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
 
   - indicador: "2.21"
     serie: "social_dev:life_expectancy"
@@ -90,7 +121,14 @@ bindings:
     fuente: minerd
     mejor: mayor
     periodo_verificado: "2024"
-    estado: verificado
+    estado: propuesto
+    nota_comparabilidad: >-
+      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
+      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
+      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
+      nada — y el número que se publicó era el de una demarcación. No se arregla
+      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
+      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
     nota: >-
       «Cobertura neta secundaria» contra «Tasa neta de cobertura educación nivel secundaria»:
       misma magnitud, misma unidad, mismo productor (MINERD). Verificado en prod 2026-08-16:
@@ -145,7 +183,8 @@ bindings:
     serie: "social_dev:employment_gender_ratio"
     fuente: bcrd
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2025"
+    estado: verificado
     nota: >-
       Razón entre la tasa de ocupación femenina y la masculina (1,0 = paridad). Computada
       sobre el promedio anual de cada sexo: el BCRD publica los trimestres, no el promedio,
@@ -157,7 +196,8 @@ bindings:
     serie: "social_dev:unemployment_gender_ratio"
     fuente: bcrd
     mejor: menor
-    estado: propuesto
+    periodo_verificado: "2025"
+    estado: verificado
     nota: >-
       Razón entre la desocupación femenina y la masculina; la ley manda cerrarla hacia 1,0.
       Va en el sentido contrario: 2,18 en 2010 (base legal), 2,01 en 2015 y 2,70 en 2025,
@@ -214,8 +254,14 @@ bindings:
     fuente: one
     mejor: menor
     periodo_verificado: "2024"
-    estado: verificado
-    nota_comparabilidad: null
+    estado: propuesto
+    nota_comparabilidad: >-
+      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
+      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
+      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
+      nada — y el número que se publicó era el de una demarcación. No se arregla
+      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
+      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
     nota: >-
       2,0% en 2024 contra una meta de 3,5% para 2025 y de 2,0% para 2030: el indicador alcanzó
       la meta del horizonte completo seis años antes. Es el hallazgo más fuerte del expediente
