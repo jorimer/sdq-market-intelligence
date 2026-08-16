@@ -147,8 +147,12 @@ def test_la_prosa_lleva_el_SENTIDO_no_solo_las_cifras():
     coef["crecimiento_anomalo"] = -0.72
     m = _mod_con_perfil(perfil, coef)
     txt = pq.prosa(m, "Banco X", {**{f: 0.0 for f in FEATURES}, "crecimiento_anomalo": -0.30})
-    assert "Lo que hay detrás" in txt
+    assert "Eso importa porque" in txt, "la cifra sola no deja concluir nada"
     assert "se encoge mientras muere" in txt
+    # y la frase arranca por la SITUACIÓN del banco, no por el estadístico
+    assert txt.startswith("En Banco X, sus activos"), (
+        "el párrafo empieza por lo que le pasa al banco; la propensión es el encuadre final")
+    assert "factor de" not in txt, "sin jerga de modelo en la prosa de negocio"
 
 
 def test_la_lectura_declara_cuando_CONTRADICE_a_la_literatura():
@@ -164,7 +168,7 @@ def test_el_sentido_se_da_una_sola_vez():
     coef = {f: 0.5 for f in FEATURES} | {f"{a}×{b}": 0.0 for a, b, _ in pq.INTERACCIONES}
     m = _mod_con_perfil(perfil, coef)
     txt = pq.prosa(m, "Banco X", {f: 2.0 for f in FEATURES})
-    assert txt.count("Lo que hay detrás") <= 1
+    assert txt.count("Eso importa porque") <= 1
 
 
 def test_toda_variable_narrable_tiene_su_lectura_de_negocio():

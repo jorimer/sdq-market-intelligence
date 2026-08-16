@@ -451,74 +451,118 @@ def explicar(modelo: ModeloPropension, indicadores: Dict[str, float]) -> Dict[st
     }
 
 
+# Cómo se describe la SITUACIÓN del banco en cada variable, en términos de negocio. La
+# diferencia con `CONCEPTOS` es el punto de vista: ahí se nombra el indicador, acá se dice qué
+# le está pasando a la entidad. "{v}" es el valor ya expresado y "{ref}" el del sistema.
+SITUACION: Dict[str, str] = {
+    "crecimiento_anomalo": "sus activos {v} en el último año, cuando las entidades que "
+                           "salieron del sistema se contraían {ref}",
+    "morosidad_nivel": "su morosidad corre {v} del piso de su tipo, cuando las que "
+                       "salieron lo superaban por {ref}",
+    "salto_morosidad": "su morosidad {v} en doce meses, contra {ref} en las que salieron",
+    "erosion_capital": "su capital sobre activos {v} en el año, cuando las que salieron "
+                       "cedían {ref}",
+    "estres_liquidez": "sus depósitos {v} en el trimestre, contra {ref} en las que salieron",
+}
+
+# Redacción de cada valor DENTRO de la frase de situación: en prosa "sus activos crecieron
+# 18.5%" se lee, y "sus activos variaron +18.5% de variación interanual de activos" no. El
+# verbo y el signo se resuelven acá porque dependen de la variable, no del formato.
+def _cifra(nombre: str, v: float) -> str:
+    """La cifra PELADA, para las referencias — la plantilla ya trae el verbo. Antes producía
+    "las que salieron se contraían se contrajeron 6.5%"."""
+    if nombre in ("crecimiento_anomalo", "estres_liquidez"):
+        return f"{abs(v)*100:.1f}%"
+    return f"{abs(v):.1f} puntos"
+
+
+def _frase_valor(nombre: str, v: float) -> str:
+    if nombre == "crecimiento_anomalo":
+        return (f"crecieron {v*100:.1f}%" if v > 0.005 else
+                f"se contrajeron {abs(v)*100:.1f}%" if v < -0.005 else "quedaron planos")
+    if nombre == "morosidad_nivel":
+        return (f"{abs(v):.1f} puntos por debajo" if v < 0 else f"{v:.1f} puntos por encima")
+    if nombre == "salto_morosidad":
+        return (f"subió {v:.2f} puntos" if v > 0 else f"cedió {abs(v):.2f} puntos")
+    if nombre == "erosion_capital":
+        return (f"cedió {v:.2f} puntos" if v > 0 else f"ganó {abs(v):.2f} puntos")
+    if nombre == "estres_liquidez":
+        return (f"cayeron {v*100:.1f}%" if v > 0.005 else
+                f"crecieron {abs(v)*100:.1f}%" if v < -0.005 else "quedaron estables")
+    return f"{v:.2f}"
+
+
 def prosa(modelo: ModeloPropension, nombre_entidad: str,
           indicadores: Dict[str, float]) -> str:
-    """La explicación en prosa de negocio, anclada al MECANISMO y no al signo del coeficiente.
+    """La explicación en prosa de NEGOCIO — respaldo determinista del párrafo del informe.
 
-    La versión anterior narraba el coeficiente y decía cosas como "lo que más la eleva es la
-    cobertura de provisiones" —que, leído por un analista, significa que tener provisiones
-    completas te acerca a la quiebra—. Dos reglas lo evitan:
+    Qué la distingue de una versión anterior que no servía: aquella empezaba por el
+    estadístico y estaba escrita desde el punto de vista del modelo —"lo que la empuja al
+    alza", "un factor de 1.27"—, con un párrafo de significado genérico que salía idéntico
+    para cualquier entidad. A un comité no le importa qué mueve la salida de una regresión;
+    le importa qué le está pasando al banco.
 
-      • Solo se narran los IMPULSORES. Los controles estadísticos se nombran como tales.
-      • Cada factor se explica contra lo que HICIERON las entidades que salieron del sistema,
-        no contra el signo del ajuste. Así el crecimiento se cuenta bien: los bancos
-        dominicanos que quebraron se estaban CONTRAYENDO (−6.5% interanual promedio, contra
-        +18.5% de los que sobrevivieron), y un balance que se achica es la señal, no el que
-        crece. La literatura de 2003 dice lo contrario y el dato manda.
+    Acá el orden es: qué distingue a ESTA entidad, contra qué se compara, qué consecuencia
+    tiene y qué vigilar. La propensión se menciona al final, como encuadre, porque es el
+    resumen del cuadro y no el cuadro.
     """
     e = explicar(modelo, indicadores)
     if not e.get("disponible"):
         return f"No hay modelo de propensión disponible: {e.get('motivo')}."
-    veces = e["veces_la_base"]
-    comp = ("por encima de" if veces > 1.15 else
-            "por debajo de" if veces < 0.85 else "en línea con")
-    partes = [
-        f"{nombre_entidad} presenta una propensión estimada de {e['propension']*100:.2f}% por "
-        f"trimestre, {comp} la tasa base del sistema ({e['tasa_base']*100:.2f}%)."
-    ]
 
-    def _frase(t: Dict[str, Any], sube: bool) -> str:
-        mq, mr = t.get("media_en_quiebras"), t.get("media_en_el_resto")
-        ref = ""
-        if mq is not None and mr is not None and not t["es_interaccion"]:
-            ref = (f" —las que salieron del sistema promediaban "
-                   f"{_expresar(t['nombre'], mq, False)} y las que sobrevivieron "
-                   f"{_expresar(t['nombre'], mr, False)}—")
-        verbo = "eleva" if sube else "reduce"
-        valor = (_expresar(t["nombre"], t["valor"]) if not t["es_interaccion"]
-                 else f"{t['valor']:.2f}")
-        return (f"{t['concepto']} en {valor}{ref}, que {verbo} la propensión por un factor "
-                f"de {t['factor']:.2f}")
+    def _situacion(t: Dict[str, Any]) -> str:
+        plantilla = SITUACION.get(t["nombre"])
+        if not plantilla:
+            return f"{t['concepto']} está en {_expresar(t['nombre'], t['valor'])}"
+        # La referencia es SIEMPRE la cohorte de quiebras: es la clase contra la que el modelo
+        # mide y la que le da sentido al número. Elegir la cohorte "más contrastante" según el
+        # caso producía comparaciones raras —un banco creciendo 70% contrastado contra el
+        # −6.5% de las que murieron— y cambiaba el ancla de un informe a otro.
+        mq = t.get("media_en_quiebras") or 0.0
+        return plantilla.format(v=_frase_valor(t["nombre"], t["valor"]),
+                                ref=_cifra(t["nombre"], mq))
 
-    def _sentido(t: Dict[str, Any]) -> str:
-        lect = LECTURA_DE_NEGOCIO.get(t["nombre"])
-        return f" Lo que hay detrás: {lect}." if lect else ""
-
+    rasgos = (e["empujan_al_alza"] or []) + (e["empujan_a_la_baja"] or [])
+    partes: List[str] = []
     if e["empujan_al_alza"]:
-        partes.append("Lo que la empuja al alza: "
-                      + "; ".join(_frase(t, True) for t in e["empujan_al_alza"][:2]) + ".")
-        # El sentido se da del factor DOMINANTE, no de todos: repetir la lectura de negocio
-        # por cada variable convierte el párrafo en un glosario.
-        partes.append(_sentido(e["empujan_al_alza"][0]).strip())
-    if e["empujan_a_la_baja"]:
-        partes.append("En sentido contrario: "
-                      + "; ".join(_frase(t, False) for t in e["empujan_a_la_baja"][:2]) + ".")
-        if not e["empujan_al_alza"]:
-            partes.append(_sentido(e["empujan_a_la_baja"][0]).strip())
-    if not e["empujan_al_alza"] and not e["empujan_a_la_baja"]:
-        partes.append("Ningún factor se aparta materialmente del promedio del sistema: el "
-                      "resultado refleja un perfil sin rasgos distintivos en ninguna dirección.")
+        dom = e["empujan_al_alza"][0]
+        partes.append(f"En {nombre_entidad}, {_situacion(dom)}.")
+        lect = LECTURA_DE_NEGOCIO.get(dom["nombre"])
+        if lect:
+            partes.append(f"Eso importa porque {lect}.")
+        otros = e["empujan_al_alza"][1:2]
+        if otros:
+            partes.append(f"En la misma dirección, {_situacion(otros[0])}.")
+        if e["empujan_a_la_baja"]:
+            partes.append(f"Del otro lado, {_situacion(e['empujan_a_la_baja'][0])}, "
+                          f"lo que compensa parte del cuadro.")
+    elif e["empujan_a_la_baja"]:
+        d = e["empujan_a_la_baja"][0]
+        partes.append(f"{nombre_entidad} no presenta rasgos que lo acerquen al perfil de "
+                      f"las entidades que salieron del sistema. {_situacion(d).capitalize()}.")
+    else:
+        partes.append(f"{nombre_entidad} no se aparta del promedio del sistema en ninguna de "
+                      f"las variables que el modelo mide.")
+
     if e["interacciones_activas"]:
         i = max(e["interacciones_activas"], key=lambda x: abs(x["factor"] - 1))
-        signo = "agrava" if i["factor"] > 1 else "atenúa"
-        partes.append(f"La combinación pesa aparte de las señales sueltas: {i['concepto']} "
-                      f"{signo} el cuadro por un factor de {i['factor']:.2f}.")
+        partes.append(f"La combinación también pesa: {i['concepto']} "
+                      f"{'agrava' if i['factor'] > 1 else 'atenúa'} el cuadro por encima de "
+                      f"lo que aportan esas señales por separado.")
+
+    veces = e["veces_la_base"]
+    encuadre = ("por encima del promedio del sistema" if veces > 1.15 else
+                "por debajo del promedio del sistema" if veces < 0.85 else
+                "en línea con el promedio del sistema")
+    partes.append(f"En conjunto, el modelo lo ubica {encuadre}"
+                  + (f" ({veces:.1f} veces la tasa base)." if abs(veces - 1) > 0.15 else "."))
+    if not rasgos:
+        partes.append("Sin un rasgo que lo distinga, la lectura es de perfil promedio, no de "
+                      "solidez comprobada: el modelo mide distancia al patrón de quiebra, no "
+                      "calidad crediticia.")
     if e["controles_no_narrables"]:
-        partes.append(
-            f"El modelo incorpora además {len(e['controles_no_narrables'])} variables como "
-            "control estadístico; mejoran el ajuste pero su coeficiente no describe un "
-            "mecanismo y no se interpretan como causa.")
-    partes.append(f"Uso admitido: {e['uso_admitido'].split('—')[0].strip()}.")
+        partes.append(f"({len(e['controles_no_narrables'])} variables entran al cálculo como "
+                      "control estadístico y no admiten lectura causal.)")
     return " ".join(partes)
 
 
