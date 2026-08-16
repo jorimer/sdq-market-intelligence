@@ -43,6 +43,7 @@ bindings:
     serie: "social_dev:poverty_rate"
     fuente: one
     mejor: menor
+    periodo_verificado: "2024"
     estado: verificado
     nota_comparabilidad: null
     nota: >-
@@ -58,6 +59,7 @@ bindings:
     fuente: one
     mejor: menor
     transformacion: complemento_100
+    periodo_verificado: "2024"
     estado: verificado
     nota_comparabilidad: null
     nota: >-
@@ -69,12 +71,14 @@ bindings:
     serie: "social_dev:schooling_years"
     fuente: one
     mejor: mayor
+    periodo_verificado: "2024"
     estado: verificado
 
   - indicador: "2.21"
     serie: "social_dev:life_expectancy"
     fuente: one
     mejor: mayor
+    periodo_verificado: "2024"
     estado: verificado
 
   # ══ SEÑAL YA EXPUESTA QUE NINGÚN BINDING RECLAMABA ══
@@ -84,6 +88,7 @@ bindings:
     serie: "social_dev:secondary_coverage"
     fuente: minerd
     mejor: mayor
+    periodo_verificado: "2024"
     estado: verificado
     nota: >-
       «Cobertura neta secundaria» contra «Tasa neta de cobertura educación nivel secundaria»:
@@ -99,6 +104,7 @@ bindings:
     fuente: bcrd
     mejor: mayor
     transformacion: complemento_100
+    periodo_verificado: "2024"
     estado: verificado
     nota: >-
       `informality_rate` es «% de población ocupada en el sector informal» (BCRD/ENCFT). El
@@ -157,6 +163,7 @@ bindings:
     serie: "social_dev:poverty_extreme"
     fuente: one
     mejor: menor
+    periodo_verificado: "2024"
     estado: verificado
     nota_comparabilidad: null
     nota: >-

@@ -67,6 +67,12 @@ class Binding:
     # Cuando la variable mide la magnitud complementaria o en otra unidad. Declarada, con
     # nombre de un conjunto cerrado: una transformación sin declarar es una cifra inventada.
     transformacion: Optional[str] = None
+    # Período del dato con el que se verificó. Obligatorio al promover, y por una razón que
+    # no es burocrática: sin él el producto no puede declarar su frescura y el readiness la
+    # penaliza a la mitad — un «no aplica» honesto puntuaba igual que un dato medio rancio.
+    # Va como CAMPO y no en la prosa de `nota` porque un dato que hay que parsear de un texto
+    # deja de ser un dato.
+    periodo_verificado: Optional[str] = None
 
     @property
     def cuenta(self) -> bool:
@@ -111,12 +117,17 @@ def cargar_bindings(expediente_id: str) -> Dict[str, Binding]:
 
 def _validar(exp: Expediente, bindings: List[Binding]) -> None:
     por_id = {i.id: i for i in exp.indicadores}
+
+    # El duplicado es una propiedad del CONJUNTO, no de un binding suelto, y por eso va en
+    # una pasada aparte: dentro del bucle, cualquier regla que falle en la primera copia lo
+    # tapaba y el mensaje culpaba a otra cosa.
     vistos = set()
     for b in bindings:
         if b.indicador in vistos:
             raise ExpedienteInvalido(f"binding duplicado para {b.indicador}")
         vistos.add(b.indicador)
 
+    for b in bindings:
         if b.indicador not in por_id:
             raise ExpedienteInvalido(f"binding a un indicador inexistente: {b.indicador}")
         if b.estado not in ESTADOS:
@@ -145,6 +156,14 @@ def _validar(exp: Expediente, bindings: List[Binding]) -> None:
                 f"{b.indicador}: el binding dice que mejor es '{b.mejor}' pero las metas de la "
                 f"ley van hacia '{computada}'. Una de las dos está mal y el veredicto saldría "
                 f"invertido.")
+
+        # Promover sin declarar el período del dato deja al producto sin frescura, y sin
+        # frescura el readiness lo penaliza a la mitad. Se exige acá y no se deduce del
+        # registro: la promoción es un hecho comiteado y su período también.
+        if b.cuenta and not (b.periodo_verificado or "").strip():
+            raise ExpedienteInvalido(
+                f"{b.indicador}: verificado sin `periodo_verificado`. Poné el período del "
+                f"dato con el que se comprobó (lo devuelve /bindings/verificacion).")
 
 
 def cobertura(expediente_id: str) -> Dict[str, object]:
