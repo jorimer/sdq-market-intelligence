@@ -309,7 +309,50 @@ class SocialDevProduct:
         signals = pattern_a_signals(
             axis=DOCTRINE_AXIS, dataset=asm.get("dataset") or {}, sources=asm["sources"],
             source_label=", ".join(dh.sources), cadence=dh.cadence)
+        signals = list(signals) + self._senales_fuera_del_indice(period, dh)
         return {"period": str(period), "signals": signals}
+
+    # Temas que el panel INGIERE y que el índice de desarrollo no usa. Se publican en el
+    # registro porque son dato real del Estado y hay consumidores fuera del IDM —el eje de
+    # evaluación de leyes mide la meta de pobreza extrema de la END contra este tema—, pero
+    # NO forman parte del índice y por eso van con peso 0: la cobertura ponderada del eje se
+    # computa sobre el peso, así que un peso 0 no mueve ni el numerador ni el denominador.
+    # Sin esta lista, un dato que el Estado publica y nosotros ingerimos queda invisible para
+    # todo el que no sea el IDM.
+    _FUERA_DEL_INDICE = {
+        "poverty_extreme": ("Pobreza monetaria extrema",
+                            "living_standards",
+                            "No alimenta el índice de desarrollo (el IDM usa la pobreza "
+                            "general). Se publica porque es dato real y tiene consumidores "
+                            "propios."),
+    }
+
+    def _senales_fuera_del_indice(self, period: str, dh) -> List[Any]:
+        """Señales de temas ingeridos que el índice no usa. Solo si HAY dato.
+
+        Se comprueba contra la base en vez de declararlas siempre: publicar una señal de un
+        tema sin filas afirmaría que el eje mide algo que no mide, que es exactamente lo que
+        el registro existe para impedir.
+        """
+        from shared.registry.signals import REAL, VariableSignal
+
+        from modules.social_dev.models.models import SocialIndicator
+        out: List[Any] = []
+        for tema, (label, dimension, nota) in self._FUERA_DEL_INDICE.items():
+            fila = _safe(self._db, lambda t=tema: (
+                self._require_db().query(SocialIndicator.value, SocialIndicator.period)
+                .filter(SocialIndicator.theme == t, SocialIndicator.value.isnot(None))
+                .order_by(SocialIndicator.period.desc()).first()), None)
+            if not fila:
+                continue
+            valor, periodo_tema = fila
+            out.append(VariableSignal(
+                key=tema, label=label, state=REAL, dimension=dimension,
+                weight=0.0,                      # fuera del índice: no pondera
+                source=", ".join(dh.sources), cadence=dh.cadence,
+                value=float(valor), real_fraction=1.0,
+                note=f"{nota} Último período con dato: {periodo_tema}."))
+        return out
 
     def available_periods(self) -> List[str]:
         return distinct_periods(self._require_db(), DevelopmentScore.period)

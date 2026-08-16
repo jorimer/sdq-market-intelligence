@@ -155,12 +155,18 @@ class TestLasCuatroDudasResueltas:
         assert bs["2.4"].serie == "social_dev:poverty_rate"
         assert not (bs["2.4"].nota_comparabilidad or "").strip(), "la duda quedó resuelta"
 
-    def test_el_indicador_de_pobreza_extrema_declara_su_brecha_real(self):
-        """El dato EXISTE en la plataforma y no está expuesto donde la verificación lo
-        alcanza. Es una brecha nuestra de superficie, no una duda sobre qué mide."""
+    def test_la_pobreza_extrema_ya_no_tiene_duda_pero_sigue_sin_promover(self):
+        """La brecha era de superficie —el tema se ingiere y no se exponía— y se cerró
+        exponiéndolo como señal fuera del índice.
+
+        Queda `propuesto`, no promovido: la ONE está tras Cloudflare y desde fuera no se
+        puede afirmar que el sync esté trayendo filas. Lo dice la verificación contra
+        producción, no una edición a mano.
+        """
         b = cargar_bindings(EXPEDIENTE)["2.1"]
         assert b.serie == "social_dev:poverty_extreme"
-        assert "no se expone" in (b.nota_comparabilidad or "").lower()
+        assert not (b.nota_comparabilidad or "").strip(), "la duda de comparabilidad se cerró"
+        assert b.estado == "propuesto", "la promoción la decide la verificación, no el YAML"
 
     def test_analfabetismo_lleva_su_transformacion(self):
         b = cargar_bindings(EXPEDIENTE)["2.19"]
