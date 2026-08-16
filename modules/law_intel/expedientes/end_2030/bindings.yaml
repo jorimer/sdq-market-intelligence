@@ -77,8 +77,55 @@ bindings:
     mejor: mayor
     estado: verificado
 
+  # ══ SEÑAL YA EXPUESTA QUE NINGÚN BINDING RECLAMABA ══
+  # No hizo falta conectar nada: `secondary_coverage` (MINERD) estaba en el Data Registry
+  # desde antes, sirviendo al índice de desarrollo, y nadie la había cruzado contra la ley.
+  - indicador: "2.10"
+    serie: "social_dev:secondary_coverage"
+    fuente: minerd
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      «Cobertura neta secundaria» contra «Tasa neta de cobertura educación nivel secundaria»:
+      misma magnitud, misma unidad, mismo productor (MINERD). Queda `propuesto` hasta
+      comprobar contra producción que la serie devuelve dato; el estado lo decide la
+      verificación, no esta edición.
+
+  # ══ SEÑAL YA EXPUESTA, PERO EL INDICADOR MIDE LO CONTRARIO ══
+  # El indicador legal cuenta el sector FORMAL y la variable mide la INFORMALIDAD. Es el
+  # mismo caso del 2.19 (analfabetismo vs alfabetización): sin declarar la transformación,
+  # el binding publicaría el complemento y la dirección quedaría invertida.
+  - indicador: "2.39"
+    serie: "social_dev:informality_rate"
+    fuente: bcrd
+    mejor: mayor
+    transformacion: complemento_100
+    estado: propuesto
+    nota: >-
+      `informality_rate` es «% de población ocupada en el sector informal» (BCRD/ENCFT). El
+      indicador legal es su complemento: «% de población ocupada en el sector FORMAL (15 años
+      y más)», con línea base 43,7% en 2010 y metas crecientes hasta 60% en 2030. Con la
+      transformación aplicada la lectura queda en torno a 44-45%, es decir prácticamente en
+      la línea base catorce años después. Si la verificación lo confirma, es uno de los
+      hallazgos más duros del expediente y hay que sostenerlo con la definición exacta de
+      informalidad que usa la ENCFT, que no tiene por qué ser la que tenía la ENFT en 2010.
+
   # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
   # transformación declarable: son conceptos distintos.
+  - indicador: "2.22"
+    serie: "social_dev:child_mortality"
+    fuente: one
+    mejor: menor
+    estado: descartado
+    motivo_descarte: >-
+      La variable del panel viene del código `SP.DYN.IMRT.IN` del Banco Mundial, que es
+      mortalidad INFANTIL (menores de 1 año), y el indicador legal es mortalidad de menores
+      de 5 AÑOS. Son dos magnitudes distintas y ninguna transformación las convierte: la de
+      menores de 5 incluye a la infantil más las muertes entre 1 y 4 años. El nombre de la
+      variable (`child_mortality`) invita al error y el valor (27,7) es plausible para las
+      dos, que es exactamente lo que vuelve peligrosa la confusión.
+
+
   - indicador: "3.26"
     serie: "social_dev:income_per_capita"
     fuente: one
