@@ -230,3 +230,74 @@ def test_la_declaracion_de_alcance_NO_esta_vetada():
     lo que este test protege—."""
     for veto in COLETILLAS_VETADAS:
         assert veto not in "concentración elevada (top-10) (severidad media, fuera del índice)"
+
+
+# ── La TERCERA superficie: la plantilla ──
+
+# Vocabulario del instrumento que el lector no debe ver en §Alerta Temprana. Cada uno salió
+# publicado alguna vez. `_lista_mecanismos` y las CONSECUENCIA/ANCLA_2003 son la contraparte:
+# lo que sí se dice.
+JERGA_DE_ALERTA_TEMPRANA: Tuple[str, ...] = (
+    "precursor", "calibrad", "vector de convergencia", "índice de salud", "fuera del índice",
+    "severidad", "proxy visible", "señal se activa", "complemento del rating",
+    "banda baja", "banda media", "banda alta",
+)
+
+
+def test_la_plantilla_le_prohibe_al_modelo_el_vocabulario_de_instrumento():
+    """La fuente que estuvo dos días sin revisar. El párrafo de §10 lo escribe el MODELO, y la
+    plantilla le decía «interpretá la posición frente a los PRECURSORES» y que
+    'relaciones_computadas' trae «cuántos CONVERGEN hacia su umbral». De ahí salieron, literal,
+    «los siete indicadores calibrados» y «el único vector de convergencia».
+
+    Tres superficies alimentan esa sección —plantilla, nombres de clave y bloque
+    determinista— y arreglar dos deja la tercera publicando. Este test cubre la plantilla."""
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+    t = THIN_TEMPLATES["early_warning_reading"]
+    bajo = t.lower()
+    # La plantilla PUEDE nombrar la jerga para PROHIBIRLA; lo que no puede es usarla como su
+    # propio vocabulario. Se exige que aparezca dentro de la instrucción de prohibición.
+    assert "no escribas" in bajo, "la plantilla debe vetar explícitamente el vocabulario"
+    veto = bajo.split("no escribas", 1)[1][:400]
+    for jerga in ("precursor", "indicador calibrado", "vector de convergencia", "índice"):
+        assert jerga in veto, f"la plantilla no le prohíbe «{jerga}» al modelo"
+    assert "no reportes conteos" in bajo, (
+        "sin esto el modelo narra «de siete señales, una converge» — el instrumento, no el "
+        "banco; los conteos están para que ELIJA el sujeto, no para publicarlos")
+
+
+def test_la_plantilla_exige_el_razonamiento_de_la_propension_no_solo_el_veredicto():
+    """«Ubica al banco en línea con el promedio sistémico» es la conclusión sin el argumento.
+    El comité necesita contra qué se comparó y QUÉ COMBINACIONES se buscaron —incluido que no
+    apareciera ninguna, que es un hallazgo y no una omisión—."""
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+    t = THIN_TEMPLATES["early_warning_reading"]
+    assert "COMBINACIONES" in t, "el chequeo cruzado tiene que salir al informe"
+    assert "NO se omite" in t, "que ninguna combinación aparezca ES el hallazgo"
+    assert "NO alcanza" in t, "la plantilla debe rechazar el veredicto sin razonamiento"
+
+
+def test_el_bloque_determinista_de_alerta_temprana_no_lleva_jerga():
+    """La superficie que sí estaba cubierta, ahora con el vocabulario completo del caso."""
+    from modules.banking_score.early_warning import format_alerts_text
+    alerta = {"code": "concentracion", "label": "Concentración elevada (top-10)",
+              "severity": "media", "value": 50.9, "threshold": 30.0,
+              "basis": "Los préstamos vinculados fueron el mecanismo central del fraude "
+                       "(proxy visible)", "metric": "top-10 / cartera total %"}
+    for bloque in (format_alerts_text({"alerts": [alerta], "score": 100.0, "band": "alta"}),
+                   format_alerts_text({"alerts": [alerta], "score": 100.0, "band": "alta",
+                                       "con_narrativa": True})):
+        bajo = bloque.lower()
+        for jerga in JERGA_DE_ALERTA_TEMPRANA:
+            assert jerga not in bajo, f"«{jerga}» llegó al informe: {bloque[:120]!r}"
+
+
+def test_toda_senal_tiene_su_consecuencia_de_negocio():
+    """Una señal sin consecuencia se publica como comparación de números: la regla sabe que
+    50,9 > 30,0 y el comité necesita saber que eso significa depender de diez contrapartes.
+    Una señal nueva sin su lectura rompe acá en vez de salir muda al informe."""
+    from modules.banking_score.early_warning import ANCLA_2003, CONSECUENCIA, SIGNAL_META
+    faltan = [c for c in SIGNAL_META if not CONSECUENCIA.get(c)]
+    assert not faltan, f"{faltan}: sin consecuencia de negocio, la viñeta no dice nada"
+    sin_ancla = [c for c in SIGNAL_META if c not in ANCLA_2003]
+    assert not sin_ancla, f"{sin_ancla}: declarala aunque sea vacía, para que sea una decisión"

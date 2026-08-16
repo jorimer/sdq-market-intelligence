@@ -309,13 +309,16 @@ _LIMITATIONS_TEXT = (
     # El porqué metodológico de la §Alerta Temprana vive ACÁ, no en el medio del análisis de
     # riesgo: puesto allá convertía la sección en una excusa —más palabras y ninguna señal
     # nueva para el comité—.
-    "El índice de alerta temprana pondera siete precursores calibrados contra entidades que "
-    "salieron del sistema financiero dominicano. Dos señales que el motor sí evalúa quedan "
-    "fuera de esa ponderación y se reportan por separado: la concentración en los diez "
-    "mayores deudores y el costo de fondeo. Ambas son divulgaciones de supervisión que no "
-    "existen en el registro contable histórico sobre el que se calibraron los pesos, de modo "
-    "que no hay desenlace conocido contra el cual medir su poder de anticipación. Se "
-    "publican con su valor y su umbral, y no se les asigna un peso que el dato no respalde."
+    "La sección de Alerta Temprana es un complemento del rating y no un veredicto: señala "
+    "condiciones que en el sistema dominicano precedieron a salidas del mercado, y no detecta "
+    "fraude ni contabilidad paralela. Su lectura se apoya en un modelo entrenado sobre las "
+    "quiebras reales del sistema, que ordena a las entidades por su parecido con las que "
+    "salieron; ese ordenamiento se publica como banda y no como probabilidad de una entidad "
+    "en particular. Las señales se reportan una por una, con su valor y su umbral de "
+    "referencia. Dos de ellas —la concentración en los diez mayores deudores y el costo de "
+    "fondeo— son divulgaciones de supervisión que no existen en el registro contable "
+    "histórico, de modo que no hay desenlace conocido contra el cual medir cuánto anticipan: "
+    "se publican por su valor informativo, sin ponderarse."
 )
 
 

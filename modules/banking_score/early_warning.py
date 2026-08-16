@@ -340,6 +340,83 @@ SIGNAL_META: Dict[str, Dict[str, str]] = {
     },
 }
 
+# QUÉ SIGNIFICA PARA LA EXPOSICIÓN que una señal esté por encima de su umbral. Es la parte
+# que el comité necesita y la que el motor no tiene: la regla sabe que 50,9% > 30,0% y no
+# sabe que eso quiere decir que el portafolio depende de diez contrapartes.
+#
+# Vive acá y no en `SIGNAL_META` porque `umbral_significa` dice cuándo se cruza la línea
+# —mecánica de la regla— y esto dice qué pasa cuando se cruza. Publicar lo primero en vez de
+# lo segundo es lo que volvía la sección un texto de motor.
+CONSECUENCIA: Dict[str, str] = {
+    "morosidad_nivel": (
+        "es deterioro ya ocurrido y ya reconocido en el balance: el costo está tomado, y lo "
+        "que se decide es cuánto más se tolera"),
+    "brecha_provisiones": (
+        "cuando las reservas dejan de cubrir la cartera vencida, la siguiente pérdida golpea "
+        "el capital en vez de absorberse en provisiones"),
+    "erosion_capital": (
+        "el colchón que absorbe las pérdidas se está consumiendo, y lo que precede a una "
+        "salida no es un capital bajo sino uno que cede de forma sostenida"),
+    "salto_morosidad": (
+        "la velocidad avisa antes que el nivel: una cartera que se deteriora rápido cambia el "
+        "cuadro en trimestres, no en años"),
+    "crecimiento_anomalo": (
+        "crecer por encima del sistema exige que la originación sostenga su calidad, y el "
+        "deterioro de una cartera nueva aparece con rezago"),
+    "solvencia_piso": (
+        "el margen sobre el mínimo legal es lo que separa una pérdida de un requerimiento de "
+        "capital"),
+    "estres_liquidez": (
+        "es el canal por el que un problema de cartera se vuelve un problema de caja, y lo "
+        "que fuerza una intervención antes de que los ratios terminen de reflejar el daño"),
+    # sujeto-ok: la clave es el CODE de la regla, no una cifra; la población la nombra
+    # `SIGNAL_META[...]["concepto"]` y viaja con el número al informe.
+    "concentracion": (
+        "el portafolio depende de un puñado de contrapartes: el deterioro de una o dos se "
+        "traduce de inmediato en provisiones y en presión sobre el capital"),
+    "fondeo_caro": (
+        "pagar por los depósitos por encima del sistema comprime el margen, y sostenido en el "
+        "tiempo señala dificultad para retener fondeo"),
+}
+
+# El ancla histórica, en prosa. El campo `basis` de cada regla es una nota de auditoría
+# —«Fitch/Panel §31», «(proxy visible)»— y sirve para rastrear de dónde salió el umbral, no
+# para que la lea un comité. Se conserva en el dato; al informe va esta versión.
+ANCLA_2003: Dict[str, str] = {
+    "morosidad_nivel": "",
+    "brecha_provisiones": (
+        "En 2003 una cobertura por debajo del 100% sirvió para ocultar pérdidas: Baninter "
+        "difería la constitución de provisiones."),
+    "erosion_capital": (
+        "El margen de capital se erosiona antes de la quiebra, y esa caída discrimina mejor "
+        "que el nivel."),
+    "salto_morosidad": (
+        "El deterioro de cartera diferido u ocultado fue uno de los mecanismos del caso de "
+        "2003."),
+    "crecimiento_anomalo": (
+        "La literatura de 2003 asocia la expansión acelerada al colapso posterior; en la "
+        "cohorte dominicana medida, en cambio, las entidades que salieron se contraían."),
+    "solvencia_piso": (
+        "La erosión patrimonial hacia el mínimo regulatorio precedió a las intervenciones de "
+        "2003."),
+    "estres_liquidez": (
+        "Las corridas de depósitos y la dependencia del redescuento marcaron la fase final "
+        "de 2003."),
+    # sujeto-ok: la clave es el CODE de la regla, no una cifra; la población la nombra
+    # `SIGNAL_META[...]["concepto"]` y viaja con el número al informe.
+    "concentracion": (
+        "Los préstamos vinculados fueron el mecanismo central del fraude de 2003."),
+    "fondeo_caro": (
+        "Baninter pagaba por sus depósitos por encima del sistema desde 1999."),
+}
+
+# Encabezados de la sección, en el idioma del lector. El anterior —«Señales de monitoreo
+# activas —precursores detectables de la crisis bancaria de 2003 (complemento del rating, no
+# un veredicto; no detectan fraude)»— metía tres descargos metodológicos en el título de una
+# lista. Esos descargos viven en Limitaciones, que es la sección que existe para eso.
+HECHOS_ENCABEZADO = "**Lo que está por encima de su umbral de referencia**"
+HECHOS_SIN_DATO = "Sin dato para evaluar al corte: {faltan}."
+
 # Más allá de este horizonte una convergencia no se distingue del ruido, y tampoco es
 # accionable: reportar que un indicador "se mueve hacia su umbral" a doce o quince años es
 # disfrazar ruido de señal. Cinco años es el borde: cubre el horizonte de una decisión de
@@ -517,12 +594,19 @@ def relaciones_para_modelo(panel: List[Dict]) -> Dict:
                 "umbral": x.get("umbral_expresado"), "hace_12m": x.get("hace_12m_expresado"),
                 "umbral_significa": x.get("umbral_significa"),
                 "horizonte_al_umbral": x.get("horizonte")}
-    return {"n_calibradas": r["n_calibradas"], "n_evaluables": r["n_evaluables"],
-            "n_activos": r["n_activos"], "n_convergen": r["n_convergen"],
-            "n_se_alejan": r["n_se_alejan"], "sin_dato": r["sin_dato"],
-            "converge_primero": _slim(r["converge_primero"]),
-            "convergen": [_slim(x) for x in r["convergen"]],
-            "activos": [_slim(x) for x in r["activos"]]}
+    # Los NOMBRES son texto que el modelo lee y copia al informe. `n_calibradas` le enseñó
+    # «los siete indicadores calibrados» y `n_convergen`/`convergen` le enseñaron «el único
+    # vector de convergencia» — dos frases de instrumento en un párrafo para un comité. Se
+    # nombran por lo que significan para quien decide, no por lo que son para el motor.
+    return {"n_senales_evaluadas": r["n_calibradas"],
+            "n_con_dato_al_corte": r["n_evaluables"],
+            "n_por_encima_de_su_umbral": r["n_activos"],
+            "n_acercandose_a_su_umbral": r["n_convergen"],
+            "n_alejandose_de_su_umbral": r["n_se_alejan"],
+            "sin_dato_al_corte": r["sin_dato"],
+            "la_que_llegaria_antes": _slim(r["converge_primero"]),
+            "acercandose": [_slim(x) for x in r["convergen"]],
+            "por_encima_de_su_umbral": [_slim(x) for x in r["activos"]]}
 
 
 def panel_relations(panel: List[Dict]) -> Dict:
@@ -792,7 +876,7 @@ def bank_alerts(db: Session, bank_id: str, period: Optional[date] = None) -> Dic
             "ensemble": (entry or {}).get("ensemble")}
 
 
-def _prosa_margenes(panel: List[Dict]) -> str:
+def _prosa_margenes(panel: List[Dict], hay_otras_por_encima: bool = False) -> str:
     """Los márgenes en PROSA, para un comité — no todos son técnicos en riesgo.
 
     Tres cosas que la versión anterior no hacía y volvían el párrafo ilegible: la cifra sale
@@ -809,22 +893,24 @@ def _prosa_margenes(panel: List[Dict]) -> str:
     r = panel_relations(panel)
     partes: List[str] = []
     if r["activos"]:
-        # Con muchas encendidas, el párrafo NOMBRA y las viñetas explican. Repetir "cuando la
-        # señal se activa si…" siete veces vuelve el texto ilegible y duplica la lista.
+        # Con muchas por encima, el párrafo NOMBRA y las viñetas explican. Repetir la mecánica
+        # del umbral siete veces vuelve el texto ilegible y duplica la lista.
         if r["n_activos"] > 3:
             act = "; ".join(f"{a['concepto']} en {a['valor_expresado']}" for a in r["activos"])
-            partes.append(f"Las {r['n_activos']} señales de deterioro temprano evaluables "
-                          f"están encendidas: {act}. El detalle de cada umbral va abajo.")
+            partes.append(f"Hay {r['n_activos']} magnitudes por encima de su umbral de "
+                          f"referencia: {act}. El detalle de cada una va abajo.")
         else:
-            act = "; ".join(f"{a['concepto']} en {a['valor_expresado']}, cuando la señal se "
-                            f"activa si {a['umbral_significa']}" for a in r["activos"])
+            act = "; ".join(f"{a['concepto']} en {a['valor_expresado']}, cuando el umbral está "
+                            f"en {a['umbral_expresado']}" for a in r["activos"])
             plural = r["n_activos"] != 1
-            partes.append(f"De las {r['n_evaluables']} señales de deterioro temprano "
-                          f"evaluables, {r['n_activos']} "
-                          f"{'están encendidas' if plural else 'está encendida'}: {act}.")
-    else:
-        partes.append(f"Ninguna de las {r['n_evaluables']} señales de deterioro temprano está "
-                      f"encendida.")
+            partes.append(f"{'Están' if plural else 'Está'} por encima de su umbral de "
+                          f"referencia: {act}.")
+    elif not hay_otras_por_encima:
+        # Solo se afirma "ninguna" cuando de verdad no hay NINGUNA en el documento. El panel
+        # cubre siete magnitudes y la concentración no es una de ellas: afirmar "ninguna
+        # supera su umbral" con la lista de abajo encabezada "lo que está por encima" es la
+        # contradicción que el lector ve —cada frase cierta en su alcance, juntas absurdas—.
+        partes.append("Ninguna de las magnitudes evaluadas supera su umbral de referencia.")
     cp = r["converge_primero"]
     if cp:
         movimiento = (f" pasó de {cp['hace_12m_expresado']} a {cp['valor_expresado']} en doce "
@@ -832,17 +918,17 @@ def _prosa_margenes(panel: List[Dict]) -> str:
                       f" está en {cp['valor_expresado']}")
         plazo = (f" De sostenerse el ritmo del último año, eso tomaría {cp['horizonte']}."
                  if cp["horizonte"] else "")
-        partes.append(f"La que más se movió es {cp['concepto']}:{movimiento}. La señal se "
-                      f"activa cuando {cp['umbral_significa']}, es decir "
-                      f"{cp['umbral_expresado']}.{plazo}")
+        partes.append(f"Lo único que se está moviendo hacia su límite es {cp['concepto']}:"
+                      f"{movimiento}. El umbral está en {cp['umbral_expresado']} —el punto en "
+                      f"que {cp['umbral_significa']}.{plazo}")
         if r["n_convergen"] > 1:
             resto = "; ".join(f"{c['concepto']}, {c['horizonte']}" for c in r["convergen"][1:])
             partes.append(f"También se acercan {resto}.")
         else:
-            partes.append("Ninguna otra se aproxima a su umbral en un horizonte relevante "
+            partes.append("Ninguna otra se aproxima a su límite en un horizonte relevante "
                           "para esta decisión.")
     elif not r["activos"]:
-        partes.append("Ninguna se aproxima a su umbral en un horizonte relevante para esta "
+        partes.append("Ninguna se aproxima a su límite en un horizonte relevante para esta "
                       "decisión.")
     if r["sin_dato"]:
         # Una regla sin su input no falla, DESAPARECE. Se nombra o el lector la cuenta como sana.
@@ -862,60 +948,53 @@ def format_alerts_text(block: Optional[Dict]) -> str:
     """
     alerts = (block or {}).get("alerts") or []
     panel = (block or {}).get("panel") or []
-    if (block or {}).get("con_narrativa"):
-        panel = []
-    if not alerts:
-        cab = ("Sin banderas de alerta temprana activas al período de corte. Las señales de "
-               "monitoreo —precursores detectables de la crisis bancaria de 2003— no se activaron "
-               "para esta entidad. Es un complemento del rating, no un veredicto, y no detecta "
-               "fraude ni contabilidad paralela.")
-        # Con el panel, "sin banderas" deja de ser un no-dato: se ve el colchón de cada señal.
-        prosa = _prosa_margenes(panel)
-        return "\n\n".join([cab] + ([prosa] if prosa else []))
-    lines = ["Señales de monitoreo activas —precursores detectables de la crisis bancaria de 2003 "
-        "(complemento del rating, no un veredicto; no detectan fraude):", ""]
-    ens = (block or {}).get("ensemble")
-    score = (block or {}).get("score")
-    band = (block or {}).get("band")
-    if score is None and ens:
-        score, band = ens.get("score"), ens.get("band")
-    perfil = (block or {}).get("perfil")
-    if score is not None:
-        etiqueta = {"agudo": "deterioro agudo (alerta temprana con anticipación real)",
-                    "cronico": "insolvencia crónica (zombi tolerado; no es un deterioro nuevo)"}.get(perfil or "")
-        # El encabezado declara el DOMINIO del índice. Cuando ninguna calibrada está activa,
-        # el 0/100 se afirma como lo que es —un resultado— en vez de dejarlo leer como
-        # all-clear del conjunto entero.
-        n_cal = (ens or {}).get("n_calibradas") or len(ALERT_WEIGHTS)
-        contribuyen = (ens or {}).get("contributors") or []
-        rel = panel_relations(panel) if panel else {}
-        cobertura = (ENSEMBLE_COBERTURA.format(evaluables=rel["n_evaluables"],
-                                               calibradas=rel["n_calibradas"])
-                     if rel else "")
-        cab = f"{ENSEMBLE_ENCABEZADO}: **{score}/100**"
-        if cobertura:
-            cab += f" · {cobertura}"
-        cab += (f" — {ENSEMBLE_NINGUNO_ACTIVO}" if not contribuyen else f" (banda {band})")
-        if etiqueta:
-            cab += f" — perfil: {etiqueta}"
-        prosa = _prosa_margenes(panel)
-        lines = [cab + ".", ""] + ([prosa, ""] if prosa else []) + lines
-    for a in alerts:
-        # Una bandera sin peso se marca en su propia línea: es la que el índice no cubre, y
-        # sin la marca el lector la cuenta como parte del número de arriba.
-        code = a.get("code") or ""
-        # Sin `code` no se puede saber si está dentro del índice; marcar "fuera" sería
-        # afirmar de más. El default calla, no acusa.
-        fuera = (f", {ENSEMBLE_FUERA_DEL_INDICE}"
-                 if code and code not in ALERT_WEIGHTS else "")
-        meta = SIGNAL_META.get(a.get("code", ""), {})
-        forma = meta.get("forma", "pct")
-        # Prosa, no notación de fórmula: "top-10 / cartera total %: 50.9 (umbral 30.0)" es
-        # una expresión de motor, no una frase que alguien lea en un comité.
-        concepto = meta.get("concepto", a["label"].lower())
-        signif = meta.get("umbral_significa")
-        cuando = f" La señal se activa cuando {signif}." if signif else ""
-        lines.append(f"- **{a['label']}** (severidad {a['severity']}{fuera}) — {concepto} está "
-                     f"en {_expresar(a['value'], forma)}, frente a "
-                     f"{_expresar(a['threshold'], forma)} de referencia.{cuando} {a['basis']}.")
-    return "\n".join(lines)
+    con_narrativa = bool((block or {}).get("con_narrativa"))
+    partes: List[str] = []
+
+    # El párrafo del modelo ya narró los márgenes; repetirlos acá hace que la sección diga lo
+    # mismo dos veces. Pero el panel NO se descarta: la declaración de brecha sale de él, y
+    # una señal sin dato que nadie nombra se cuenta como sana.
+    if not con_narrativa:
+        prosa = _prosa_margenes(panel, hay_otras_por_encima=bool(alerts))
+        if prosa:
+            partes.append(prosa)
+
+    if alerts:
+        lineas = [HECHOS_ENCABEZADO, ""]
+        for a in alerts:
+            code = a.get("code") or ""
+            meta = SIGNAL_META.get(code, {})
+            forma = meta.get("forma", "pct")
+            # Prosa, no notación de fórmula: "top-10 / cartera total %: 50.9 (umbral 30.0)" es
+            # una expresión de motor, no una frase que alguien lea en un comité.
+            concepto = meta.get("concepto", a["label"].lower())
+            # Lo que se publica es la CONSECUENCIA, no la mecánica de la regla. El
+            # "se activa cuando…" describe el instrumento; el comité necesita el "y por tanto".
+            consec = CONSECUENCIA.get(code)
+            ancla = ANCLA_2003.get(code)
+            frase = (f"- {concepto.capitalize()} está en "
+                     f"**{_expresar(a['value'], forma)}**, frente a un umbral de referencia de "
+                     f"{_expresar(a['threshold'], forma)}.")
+            if consec:
+                frase += f" {consec.capitalize()}."
+            # El ancla histórica solo va cuando NO hay párrafo del modelo. Con narrativa, el
+            # párrafo ya explica por qué la magnitud importa, y repetir "fue el mecanismo
+            # central del fraude de 2003" a cuatro líneas de distancia es la sección diciendo
+            # lo mismo dos veces —el defecto que ya apareció una vez en producción—.
+            if ancla and not con_narrativa:
+                frase += f" {ancla}"
+            lineas.append(frase)
+        partes.append("\n".join(lineas))
+
+    # La brecha se declara SIEMPRE, con o sin narrativa: es el único lugar donde el lector se
+    # entera de que una señal no pudo evaluarse.
+    rel = panel_relations(panel) if panel else {}
+    if rel.get("sin_dato"):
+        faltan = ", ".join(SIGNAL_META.get(c, {}).get("concepto", c)
+                           for c in rel["sin_dato_codes"])
+        linea = HECHOS_SIN_DATO.format(faltan=faltan)
+        if con_narrativa or not partes:
+            partes.append(linea)
+        else:  # sin narrativa la prosa de márgenes ya la trae; no se repite
+            pass
+    return "\n\n".join(p for p in partes if p)
