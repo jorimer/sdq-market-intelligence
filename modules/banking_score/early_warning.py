@@ -414,7 +414,12 @@ ANCLA_2003: Dict[str, str] = {
 # activas —precursores detectables de la crisis bancaria de 2003 (complemento del rating, no
 # un veredicto; no detectan fraude)»— metía tres descargos metodológicos en el título de una
 # lista. Esos descargos viven en Limitaciones, que es la sección que existe para eso.
-HECHOS_ENCABEZADO = "**Lo que está por encima de su umbral de referencia**"
+# Va como encabezado markdown de nivel 2, no como negrita en línea. En negrita salía al mismo
+# cuerpo que el párrafo y no se despegaba de él; como `##` toma el estilo de subtítulo —navy,
+# cuerpo mayor, aire arriba— igual que «Indicadores Adelantados» en la sección de riesgo.
+# El nivel importa: los tres renderers aceptan `#{1,3}`, pero el PDF de banca manda `###` a
+# negrita de cuerpo (que es de donde venimos) y solo `#`/`##` al estilo de subtítulo.
+HECHOS_ENCABEZADO = "## Lo que está por encima de su umbral de referencia"
 HECHOS_SIN_DATO = "Sin dato para evaluar al corte: {faltan}."
 
 # Más allá de este horizonte una convergencia no se distingue del ruido, y tampoco es
