@@ -210,3 +210,47 @@ def test_el_prompt_prohibe_narrar_los_controles_como_causa():
     t = THIN_TEMPLATES["early_warning_reading"]
     assert "controles_sin_lectura_causal" in t and "NO se narran como causa" in t
     assert "uso_admitido" in t
+
+
+# ── Simetría de las dos ramas de la prosa ──
+
+def test_toda_variable_narrable_se_explica_en_LAS_DOS_direcciones():
+    """El defecto que esto veta: un banco LIMPIO recibía prosa más corta que uno con una
+    señal, porque el «Eso importa porque…» solo colgaba del rasgo dominante al alza. La
+    comparación quedaba sin consecuencia y la sección se leía como si al modelo no le quedara
+    nada que decir del banco sano.
+
+    La asimetría era invisible —cada rama funcionaba— y por eso hace falta el test: una
+    variable narrable nueva tiene que traer sus DOS lecturas o falla acá."""
+    solo_alza = set(pq.LECTURA_DE_NEGOCIO) - set(pq.LECTURA_EN_AUSENCIA)
+    solo_baja = set(pq.LECTURA_EN_AUSENCIA) - set(pq.LECTURA_DE_NEGOCIO)
+    assert not solo_alza, f"{sorted(solo_alza)}: se explican presentes y no ausentes"
+    assert not solo_baja, f"{sorted(solo_baja)}: se explican ausentes y no presentes"
+    # y ninguna lectura puede existir para un CONTROL: un control no se narra en ninguna
+    # dirección, y darle prosa sería reintroducir "tener provisiones eleva la propensión"
+    controles = {f for f, m in pq.MECANISMO_ESPERADO.items() if m == 0}
+    assert not (controles & set(pq.LECTURA_EN_AUSENCIA)), (
+        f"{sorted(controles & set(pq.LECTURA_EN_AUSENCIA))}: es control, no se narra")
+
+
+def test_el_banco_limpio_recibe_la_consecuencia_no_solo_la_comparacion():
+    """Caso BPD: sin rasgos al alza, con la morosidad lejos del piso. Antes cerraba en la
+    cifra; ahora dice qué compra esa distancia."""
+    perfil = {f: (1.0, 0.0, 0.70) for f in FEATURES}
+    coef = {f: 0.3 for f in FEATURES} | {f"{a}×{b}": 0.0 for a, b, _ in pq.INTERACCIONES}
+    m = _mod_con_perfil(perfil, coef)
+    txt = pq.prosa(m, "Banco Limpio", {f: -1.0 for f in FEATURES})
+    assert "no presenta rasgos que lo acerquen" in txt
+    assert "Eso importa porque" in txt, "la comparación se quedó sin consecuencia"
+
+
+def test_la_ausencia_nunca_se_vende_como_solidez_comprobada():
+    """El modelo mide DISTANCIA al patrón de quiebra, no calidad crediticia. Una lectura de
+    ausencia que prometa solidez convierte 'no se parece a los que murieron' en 'está sano',
+    que es la inferencia que la sección existe para no hacer."""
+    prohibido = ("garantiza", "asegura", "sólido", "solidez comprobada", "sin riesgo",
+                 "descarta")
+    for nombre, texto in pq.LECTURA_EN_AUSENCIA.items():
+        bajo = texto.lower()
+        for p in prohibido:
+            assert p not in bajo, f"{nombre}: «{p}» promete más de lo que el modelo mide"
