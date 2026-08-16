@@ -333,6 +333,20 @@ def sensitivity_table(panel: Dict[str, Dict[date, Dict]],
     return out
 
 
+# Todo lo que los consumidores del panel leen. `load_panel` DEBE poblar cada una: un campo
+# que falte no rompe nada visible, simplemente devuelve None y el consumidor se apaga en
+# silencio. Pasó con `entidad_nombre`: sin él, `terminaciones.detectar` veía todas las
+# entidades sin nombre, la curaduría no emparejaba con ninguna, el modelo se entrenaba con
+# CERO quiebras curadas y `modelo_vigente` devolvía None — o sea que la propensión nunca se
+# computó en producción, y el informe simplemente omitía la sección. Lo cazó regenerar contra
+# prod, no los 4.000 tests: yo verificaba sobre un panel derivado del CSV, que sí trae el
+# nombre. Probar el camino viejo no prueba el nuevo.
+CAMPOS_DEL_PANEL: Tuple[str, ...] = (
+    "entidad_code", "entidad_nombre", "tipo_entidad", "morosidad_pct", "cobertura_pct",
+    "apalancamiento_pct", "activos_totales", "depositos_totales",
+)
+
+
 def load_panel(db) -> Dict[str, Dict[date, Dict]]:
     """Panel mensual desde ``SibHistoricalFinancials`` (la tabla derivada por el crosswalk
     de producción — la calibración corre sobre la MISMA derivación que el motor)."""
@@ -341,6 +355,10 @@ def load_panel(db) -> Dict[str, Dict[date, Dict]]:
     panel: Dict[str, Dict[date, Dict]] = {}
     for r in db.query(F).all():
         panel.setdefault(str(r.entidad_code), {})[r.fecha] = {
+            # La institución, no el slot: `terminaciones` recorre runs de NOMBRE porque el
+            # código de la SB aloja varias entidades a lo largo del tiempo.
+            "entidad_nombre": r.entidad_nombre,
+            "entidad_code": r.entidad_code,
             "tipo_entidad": r.tipo_entidad,
             "morosidad_pct": r.morosidad_pct,
             "cobertura_pct": r.cobertura_pct,
