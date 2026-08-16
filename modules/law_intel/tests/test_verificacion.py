@@ -47,3 +47,39 @@ def test_el_informe_dice_cuanta_cobertura_se_gana(monkeypatch):
     assert r["promovibles_a_verificado"] == ["1.8"]
     assert r["ganancia_de_cobertura"] == 1
     assert "NO muta el expediente" in r["nota"]
+
+
+class TestExistirNoEsMedir:
+    """La distinción que sostiene el módulo, y que la primera versión perdió justo en la
+    función que decide qué se publica.
+
+    El caso real: el indicador 2.19 es ANALFABETISMO y la variable del panel es
+    alfabetización. La serie existe, devuelve dato de 2024, y la comprobación la daba por
+    promovible. Promoverla habría publicado el complemento — el valor invertido.
+    """
+
+    CON_DUDA = {"2.19": Binding("2.19", "s.viva", "one", "menor", "propuesto",
+                                nota_comparabilidad="es alfabetización, no analfabetismo")}
+    LIMPIO = {"2.18": Binding("2.18", "s.viva", "one", "mayor", "propuesto")}
+
+    def test_una_duda_declarada_frena_la_promocion(self):
+        c = comprobar(self.CON_DUDA, proveedor, "2025")[0]
+        assert c.existe, "la serie sí existe"
+        assert c.comparabilidad_sin_resolver
+        assert not c.promueve, "existir no es medir"
+
+    def test_sin_duda_promueve(self):
+        c = comprobar(self.LIMPIO, proveedor, "2025")[0]
+        assert c.existe and c.promueve
+
+    def test_el_informe_los_separa(self, monkeypatch):
+        todos = {**self.CON_DUDA, **self.LIMPIO}
+        monkeypatch.setattr("modules.law_intel.verificacion.cargar_bindings", lambda _: todos)
+        r = informe("x", proveedor, "2025")
+        assert r["promovibles_a_verificado"] == ["2.18"]
+        assert r["existen_pero_con_comparabilidad_sin_resolver"] == ["2.19"]
+        assert r["ganancia_de_cobertura"] == 1, "la duda no suma cobertura"
+
+    def test_una_nota_en_blanco_no_cuenta_como_duda(self):
+        bs = {"x": Binding("x", "s.viva", "one", "mayor", "propuesto", nota_comparabilidad="  ")}
+        assert comprobar(bs, proveedor, "2025")[0].promueve

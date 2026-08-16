@@ -28,6 +28,26 @@ CUENTA_COBERTURA = frozenset({"verificado"})
 
 DIRECCIONES = frozenset({"menor", "mayor"})
 
+# Transformaciones admitidas entre la variable de la plataforma y el indicador de la ley.
+# Es un conjunto CERRADO y con nombre, no una expresión libre: una fórmula arbitraria en un
+# archivo de datos es código sin revisar, y acá decide qué cifra se publica.
+#
+# El caso que la motiva: el indicador 2.19 es ANALFABETISMO y la variable del panel es
+# alfabetización. Sin declarar la transformación, el binding publicaría el complemento — el
+# valor invertido.
+TRANSFORMACIONES = {
+    "complemento_100": (lambda v: 100.0 - v,
+                        "el indicador es el complemento porcentual de la variable"),
+}
+
+
+def aplicar_transformacion(b: "Binding", valor: float) -> float:
+    """Lleva el valor de la variable a la magnitud del indicador."""
+    if not b.transformacion:
+        return valor
+    fn, _ = TRANSFORMACIONES[b.transformacion]
+    return float(fn(valor))
+
 
 @dataclass(frozen=True)
 class Binding:
@@ -36,8 +56,17 @@ class Binding:
     fuente: str
     mejor: str
     estado: str
+    # Duda ABIERTA sobre si la variable mide el indicador. Mientras esté, no promueve.
     nota_comparabilidad: Optional[str] = None
+    # Hallazgo RESUELTO: cómo se comprobó qué mide la variable, o qué salvedad hay que
+    # declarar en el informe. No bloquea — documenta. Separarlas importa porque si la única
+    # forma de dejar constancia fuera la nota que frena, la gente borraría la constancia
+    # para poder promover.
+    nota: Optional[str] = None
     motivo_descarte: Optional[str] = None
+    # Cuando la variable mide la magnitud complementaria o en otra unidad. Declarada, con
+    # nombre de un conjunto cerrado: una transformación sin declarar es una cifra inventada.
+    transformacion: Optional[str] = None
 
     @property
     def cuenta(self) -> bool:
@@ -94,6 +123,10 @@ def _validar(exp: Expediente, bindings: List[Binding]) -> None:
             raise ExpedienteInvalido(f"{b.indicador}: estado desconocido '{b.estado}'")
         if b.mejor not in DIRECCIONES:
             raise ExpedienteInvalido(f"{b.indicador}: 'mejor' debe ser menor|mayor")
+        if b.transformacion and b.transformacion not in TRANSFORMACIONES:
+            raise ExpedienteInvalido(
+                f"{b.indicador}: transformación '{b.transformacion}' no está en el conjunto "
+                f"admitido {sorted(TRANSFORMACIONES)}. No se aceptan fórmulas libres.")
 
         # La fuente tiene que estar en la lista blanca del expediente. Es la restricción que
         # sostiene la independencia, y por eso se hace cumplir al cargar y no al redactar.
