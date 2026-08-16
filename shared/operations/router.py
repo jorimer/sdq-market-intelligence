@@ -5,7 +5,7 @@ Serves every operation any module registered via ``register_operation``.
 """
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -61,3 +61,29 @@ async def set_operation_schedule(
         return ops.set_schedule(db, name, body.enabled, body.interval_hours, body.params)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/llm-spend", summary="Gasto del modelo por disparador, módulo y motivo")
+async def llm_spend(
+    days: int = Query(30, ge=1, le=365, description="Ventana en días"),
+    trigger: Optional[str] = Query(
+        None, description="Detalle de un disparador; sin él, el resumen agregado"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El gasto del modelo, consultable en vez de investigable.
+
+    El costo de cada llamada ya se calculaba y se tiraba: los logs de Railway solo
+    conservan el despliegue vigente, así que la única forma de saber en qué se iba el
+    dinero era mirar la consola de Anthropic antes y después de cada corrida. Se agrupa
+    por DISPARADOR porque esa es la columna que responde: el módulo dice qué producto
+    consumió, el disparador dice si lo pidió alguien o si una tarea agendada lo generó
+    sola.
+    """
+    from shared.observability import spend
+
+    _require_admin(current_user)
+    if trigger:
+        return {"disparador": trigger,
+                "llamadas": spend.spend_detail(db, days=days, trigger=trigger)}
+    return spend.spend_summary(db, days=days)

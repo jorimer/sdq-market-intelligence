@@ -7,6 +7,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from shared.cache import cache_get, cache_set
+from shared.observability.llm_ledger import (
+    PURPOSE_GUARD, PURPOSE_NARRATIVE, record_call,
+)
 from shared.config.settings import settings
 from shared.llm.budget import budget_allows, record_usage
 from shared.narrative.lang_context import get_request_lang
@@ -1641,7 +1644,8 @@ class NarrativeEngine:
 
     def _generate_guarded(self, client, system: str, user: str, max_tokens: int,
                           context_str: str, cache_key: str, template: str,
-                          context: Optional[dict] = None) -> NarrativeResult:
+                          context: Optional[dict] = None,
+                          axis: Optional[str] = None) -> NarrativeResult:
         """Cerebro generation + numeric guardrail: generate, verify every figure traces
         to the context, and regenerate ONCE if any is unsupported. Two layers feed the
         check: a DETERMINISTIC computation (deltas vs median, range bounds, value↔period,
@@ -1679,6 +1683,12 @@ class NarrativeEngine:
             det = (deterministic_unsupported(context or {}, text)
                    + deterministic_uncited_figures(context or {}, text))
             llm = verify_figures(client, guard_model, context_str, text)
+            # El juez se registra APARTE de la narrativa. Corre sobre toda sección de
+            # toda generación, así que es un 2× permanente sobre el gasto de narrativa —
+            # invisible mientras se sumara al mismo total que lo que produce.
+            record_call(purpose=PURPOSE_GUARD, model=guard_model,
+                        module=axis, template=template,
+                        detail={"hallazgos": len(llm)})
             seen, merged = set(), []
             for f in det + llm:
                 if f not in seen:
@@ -1713,6 +1723,14 @@ class NarrativeEngine:
         self._set_cache(cache_key, result)
         logger.info("Narrative (cerebro) template=%s tokens=%d guard_flags=%d",
                     template, result.tokens_used, len(result.guard_unsupported))
+        # El costo acumulado ya incluye la regeneración cuando el guard la disparó: se
+        # registra una sola fila por sección con el total real, no el de la primera
+        # llamada. Contar solo la primera escondería justo el costo del guard.
+        record_call(purpose=PURPOSE_NARRATIVE, model=result.model_used or "",
+                    cost_usd=result.cost_estimate, tokens_out=result.tokens_used,
+                    module=axis, template=template, cache_hit=False,
+                    detail={"guard_flags": len(result.guard_unsupported),
+                            "truncada": result.truncated})
         return result
 
     def _generate_fallback(self, context: dict, template: str) -> NarrativeResult:
@@ -1766,6 +1784,12 @@ class NarrativeEngine:
         cached = self._get_cached(cache_key)
         if cached:
             logger.info("Narrative cache hit for template=%s lang=%s axis=%s", template, lang, axis)
+            # El HIT también se registra, con costo cero. Sin él no se distingue «nadie
+            # pidió esto» de «lo pidieron cien veces y la caché lo absorbió», que es la
+            # diferencia que decide si la caché vale lo que ocupa.
+            record_call(purpose=PURPOSE_NARRATIVE, model=cached.model_used or "",
+                        cost_usd=0.0, module=axis, template=template, cache_hit=True,
+                        detail={"lang": lang, "mode": mode})
             return cached
 
         # Try Claude API
@@ -1813,7 +1837,7 @@ class NarrativeEngine:
                         return await asyncio.to_thread(
                             self._generate_guarded,
                             client, system, user, max_tokens, context_str, cache_key,
-                            template, context)
+                            template, context, axis)
                 except Exception as e:  # noqa: BLE001
                     logger.error("Claude API error (cerebro): %s. Fallback estático.", e)
                     result = self._generate_fallback(context, template)

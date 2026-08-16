@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from shared.database.session import SessionLocal
 from shared.settings.models import AppSetting
 from shared.operations.models import OperationRun, OperationSchedule
+from shared.observability.llm_ledger import attributed_to
 
 logger = logging.getLogger("sdq.operations")
 
@@ -278,7 +279,13 @@ def trigger(op_name: str, origin: str = "manual", user_id: Optional[str] = None,
         try:
             def set_phase(msg: str) -> None:
                 write_status(db2, op_name, is_running=True, phase=msg)
-            result = op.runner(params, user_id, set_phase)
+            # Atribución del gasto: toda llamada al modelo que ocurra dentro de este
+            # runner queda registrada a nombre de ESTA operación. Es lo que convierte el
+            # registro en respuesta — el total sin disparador no dice a quién cobrárselo,
+            # y descubrir que una tarea diaria generaba 203 informes costó leer código y
+            # logs porque esta línea no existía.
+            with attributed_to("operacion", op_name, user_id=user_id):
+                result = op.runner(params, user_id, set_phase)
             if isinstance(result, dict) and result.get("error"):
                 write_status(db2, op_name, is_running=False, phase="error",
                              last_result=result, error=result["error"])
