@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "5.0"
+version: "6.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -34,7 +34,7 @@ version: "5.0"
 # hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
 # caliente, la cifra de portada dejaría de ser verificable.
 #
-# Cobertura del expediente: 5 de 90 indicadores numerados.
+# Cobertura del expediente: 7 de 90 indicadores numerados.
 
 bindings:
   # ══ RESUELTO ══ `poverty_rate` es «Pobreza monetaria GENERAL» (15,0 en 2024), no extrema.
@@ -84,12 +84,11 @@ bindings:
     serie: "social_dev:secondary_coverage"
     fuente: minerd
     mejor: mayor
-    estado: propuesto
+    estado: verificado
     nota: >-
       «Cobertura neta secundaria» contra «Tasa neta de cobertura educación nivel secundaria»:
-      misma magnitud, misma unidad, mismo productor (MINERD). Queda `propuesto` hasta
-      comprobar contra producción que la serie devuelve dato; el estado lo decide la
-      verificación, no esta edición.
+      misma magnitud, misma unidad, mismo productor (MINERD). Verificado en prod 2026-08-16:
+      71,3% en 2024, contra una meta de 86% para 2025 y 95% para 2030. No alcanzada.
 
   # ══ SEÑAL YA EXPUESTA, PERO EL INDICADOR MIDE LO CONTRARIO ══
   # El indicador legal cuenta el sector FORMAL y la variable mide la INFORMALIDAD. Es el
@@ -100,15 +99,16 @@ bindings:
     fuente: bcrd
     mejor: mayor
     transformacion: complemento_100
-    estado: propuesto
+    estado: verificado
     nota: >-
       `informality_rate` es «% de población ocupada en el sector informal» (BCRD/ENCFT). El
       indicador legal es su complemento: «% de población ocupada en el sector FORMAL (15 años
-      y más)», con línea base 43,7% en 2010 y metas crecientes hasta 60% en 2030. Con la
-      transformación aplicada la lectura queda en torno a 44-45%, es decir prácticamente en
-      la línea base catorce años después. Si la verificación lo confirma, es uno de los
-      hallazgos más duros del expediente y hay que sostenerlo con la definición exacta de
-      informalidad que usa la ENCFT, que no tiene por qué ser la que tenía la ENFT en 2010.
+      y más)», con línea base 43,7% en 2010 y metas crecientes hasta 60% en 2030.
+      Verificado en prod 2026-08-16: **44,53% en 2024** contra 43,7% en 2010 — ocho décimas
+      en catorce años, con una meta de 55% que venció en 2025. Es el hallazgo más duro del
+      expediente hasta ahora, y por eso lleva su salvedad pegada: la definición de
+      informalidad de la ENCFT no tiene por qué ser la que usaba la ENFT cuando se fijó la
+      línea base, y el informe debe decirlo antes de atribuir el estancamiento a la política.
 
   # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
   # transformación declarable: son conceptos distintos.
