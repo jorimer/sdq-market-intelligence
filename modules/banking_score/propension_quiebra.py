@@ -86,6 +86,9 @@ class ModeloPropension:
     brier: Optional[float]
     brier_constante: Optional[float]
     curva_calibracion: Tuple[Tuple[float, float, int], ...] = field(default=())
+    # Dirección EMPÍRICA por variable: (media en quiebras, media en el resto, AUC univariado).
+    # Es lo que permite distinguir un IMPULSOR de un CONTROL estadístico — ver `_rol`.
+    perfil_univariado: Dict[str, Tuple[float, float, float]] = field(default_factory=dict)
     ordena: bool = False
     nivel_confiable: bool = False
     motivo: Optional[str] = None
@@ -137,6 +140,18 @@ def entrenar(panel: Dict[str, Dict[date, Dict]], terminaciones, panel_end: date,
         brier=None, brier_constante=None)
     if n_ev < MIN_EVENTOS or len(ents_ev) < MIN_ENTIDADES_CON_EVENTO:
         return ModeloPropension(**vacio, motivo=f"eventos insuficientes ({n_ev})")
+
+    # Perfil univariado ANTES de ajustar: qué hace cada variable por su cuenta. Sin esto no
+    # se puede saber si un coeficiente narra un mecanismo o solo controla varianza ajena.
+    perfil: Dict[str, Tuple[float, float, float]] = {}
+    for i, nom in enumerate(nombres):
+        col = Xa[:, i]
+        try:
+            auc_u = float(roc_auc_score(ya, col))
+        except ValueError:
+            auc_u = 0.5
+        perfil[nom] = (round(float(col[ya == 1].mean()), 4),
+                       round(float(col[ya == 0].mean()), 4), round(auc_u, 3))
 
     sc = StandardScaler().fit(Xa)
     Xs = sc.transform(Xa)
@@ -204,7 +219,8 @@ def entrenar(panel: Dict[str, Dict[date, Dict]], terminaciones, panel_end: date,
         auc=None if auc is None else round(auc, 4),
         auc_ic95=None if ic is None else (round(ic[0], 4), round(ic[1], 4)),
         brier=round(brier, 5), brier_constante=round(brier_cte, 5),
-        curva_calibracion=tuple(curva), ordena=ordena, nivel_confiable=nivel, motivo=motivo)
+        curva_calibracion=tuple(curva), perfil_univariado=perfil,
+        ordena=ordena, nivel_confiable=nivel, motivo=motivo)
 
 
 def evaluar(modelo: ModeloPropension, indicadores: Dict[str, float]) -> Dict[str, Any]:
@@ -232,6 +248,239 @@ def evaluar(modelo: ModeloPropension, indicadores: Dict[str, float]) -> Dict[str
         "uso_admitido": modelo.uso_admitido,
         "publicable_como_probabilidad": modelo.nivel_confiable,
     }
+
+
+# Cómo se NOMBRA cada variable cuando se explica a un comité. Los `code` internos
+# —"brecha_provisiones", "estres_liquidez"— son etiquetas de motor, no conceptos de riesgo.
+# Cómo se EXPRESA el valor de cada variable. Las features vienen transformadas —
+# `morosidad_nivel` es "mora menos el piso de su tipo", así que un banco sano da −4.0— y
+# publicar el número transformado no dice nada. Es el mismo defecto que ya apareció en la
+# §Alerta Temprana: la cifra sale con su unidad o no sale.
+#   (formato, sufijo, factor)  ·  el valor se multiplica por `factor` antes de formatear
+EXPRESION: Dict[str, Tuple[str, str, float]] = {
+    "morosidad_nivel": ("{:+.2f}", " puntos respecto del piso de su tipo", 1.0),
+    "salto_morosidad": ("{:+.2f}", " puntos de mora en doce meses", 1.0),
+    "brecha_provisiones": ("{:.1f}", " puntos de cobertura faltante", 1.0),
+    "erosion_capital": ("{:+.2f}", " puntos de capital sobre activos en doce meses", 1.0),
+    "crecimiento_anomalo": ("{:+.1f}", "% de variación interanual de activos", 100.0),
+    "estres_liquidez": ("{:+.1f}", "% de variación trimestral de depósitos (signo invertido)",
+                        100.0),
+}
+
+
+def _expresar(nombre: str, valor: float, con_unidad: bool = True) -> str:
+    """La cifra con su unidad. `con_unidad=False` para las referencias que van después de la
+    primera mención: repetir "puntos respecto del piso de su tipo" tres veces en una frase la
+    vuelve ilegible — el mismo problema que ya apareció en la §Alerta Temprana."""
+    fmt, sufijo, factor = EXPRESION.get(nombre, ("{:.2f}", "", 1.0))
+    return fmt.format(valor * factor) + (sufijo if con_unidad else "")
+
+
+CONCEPTOS: Dict[str, str] = {
+    "morosidad_nivel": "el nivel de morosidad",
+    "salto_morosidad": "el salto reciente de la morosidad",
+    "brecha_provisiones": "la cobertura de provisiones",
+    "erosion_capital": "la erosión del capital",
+    "crecimiento_anomalo": "el ritmo de expansión del balance",
+    "estres_liquidez": "la salida de depósitos",
+}
+# Y las interacciones se nombran por su MECANISMO, no por el producto de dos variables:
+# "morosidad_nivel×brecha_provisiones" no le dice nada a nadie.
+CONCEPTOS_INTERACCION: Dict[str, str] = {
+    f"{a}×{b}": razon for a, b, razon in INTERACCIONES
+}
+# Debajo de este factor multiplicativo, la contribución no cambia la conclusión y solo
+# alarga el texto. Se acumula en "el resto" en vez de enumerarse.
+FACTOR_MATERIAL = 1.10
+
+
+# Una variable cuyo AUC univariado no se aparta de 0.5 no separa por su cuenta.
+AUC_UNIVARIADO_MINIMO = 0.03      # |AUC − 0.5|
+
+# El MECANISMO esperado de cada variable, declarado. `build_features` deja las seis en
+# convención "positivo = peor", así que el mecanismo dice +1 en todas… salvo donde la
+# evidencia de ESTE sistema lo contradice y hay una razón para creerle al dato.
+MECANISMO_ESPERADO: Dict[str, int] = {
+    "morosidad_nivel": +1,
+    "salto_morosidad": +1,
+    "erosion_capital": +1,
+    "estres_liquidez": +1,
+    # La cobertura reportada NO se comporta como protección en esta cohorte: las entidades que
+    # salieron promediaban MENOS brecha (mejor cobertura) que las que sobrevivieron. La lectura
+    # plausible es que mide honestidad de provisionamiento y no resguardo —un banco que difiere
+    # el reconocimiento de pérdidas exhibe cobertura sana hasta el final, que es el patrón
+    # Baninter—. Como no se puede sostener esa causa desde este dato, la variable se queda en
+    # el modelo (quitarla baja el AUC de 0.750 a 0.713) pero NO se narra: 0 = sin mecanismo.
+    "brecha_provisiones": 0,
+    # El crecimiento sí tiene mecanismo, y es el CONTRARIO al de la literatura de 2003: los
+    # bancos dominicanos que quebraron se contraían (−6.5% interanual promedio contra +18.5%).
+    # Un balance que se achica es la señal. El dato es consistente y el mecanismo es claro.
+    "crecimiento_anomalo": -1,
+}
+
+
+def _rol(modelo: ModeloPropension, nombre: str) -> str:
+    """¿Este término narra un MECANISMO o solo controla varianza?
+
+    Un IMPULSOR separa por su cuenta y su coeficiente apunta en la misma dirección que esa
+    separación: se puede contar como causa.
+
+    Un CONTROL no separa solo, o su coeficiente contradice lo que hace solo. Es un supresor
+    —absorbe varianza que confunde a otro predictor— y su coeficiente NO es interpretable.
+    Pasó de verdad con la cobertura de provisiones: AUC univariado 0.497, o sea nada, pero
+    quitarla baja el modelo de 0.750 a 0.713 y lo saca de graduación. Es útil y no explica.
+    Narrarla como causa producía la frase indefendible "tener las provisiones completas eleva
+    la propensión a quebrar".
+    """
+    perfil = modelo.perfil_univariado.get(nombre)
+    if not perfil:
+        return "control"
+    _, _, auc_u = perfil
+    if abs(auc_u - 0.5) < AUC_UNIVARIADO_MINIMO:
+        return "control"          # no separa por su cuenta
+    esperado = MECANISMO_ESPERADO.get(nombre)
+    if not esperado:
+        return "control"          # sin mecanismo declarado (o declarado como no narrable)
+    coef = modelo.coef.get(nombre, 0.0)
+    # El coeficiente tiene que apuntar donde el mecanismo dice. Si no, el término está
+    # absorbiendo varianza ajena y contarlo como causa inventa la historia que no tiene.
+    return "impulsor" if (coef > 0) == (esperado > 0) else "control"
+
+
+def explicar(modelo: ModeloPropension, indicadores: Dict[str, float]) -> Dict[str, Any]:
+    """POR QUÉ este banco tiene esta propensión — descomposición EXACTA, no una heurística.
+
+    En una regresión logística la contribución de cada término al log-odds es
+    ``coeficiente × valor estandarizado``, y la suma más el intercepto reconstruye la
+    propensión sin residuo. Eso permite atribuir el resultado con precisión en vez de
+    razonar sobre los coeficientes en abstracto.
+
+    Se expresa como FACTOR multiplicativo (``exp`` de la contribución), que es lo que un
+    comité entiende: "la cobertura divide su propensión a la mitad" dice algo; "aporta −0.69
+    al log-odds" no.
+
+    Las relaciones —qué empuja hacia arriba, qué hacia abajo, cuál pesa más— se computan acá
+    y el modelo narrativo las COPIA. Es la misma doctrina de siempre: el modelo acierta las
+    cifras y falla las relaciones.
+    """
+    import math
+
+    if not modelo.coef:
+        return {"disponible": False, "motivo": modelo.motivo}
+    idx = {f: i for i, f in enumerate(FEATURES)}
+    base = [float(indicadores.get(f, 0.0)) for f in FEATURES]
+    fila = base + [base[idx[a]] * base[idx[b]] for a, b, _ in INTERACCIONES]
+
+    terminos: List[Dict[str, Any]] = []
+    z_total = modelo.intercepto
+    for v, media, escala, nombre in zip(fila, modelo.media, modelo.escala, modelo.features):
+        z = (v - media) / (escala or 1.0)
+        aporte = modelo.coef[nombre] * z
+        z_total += aporte
+        es_inter = "×" in nombre
+        terminos.append({
+            "nombre": nombre,
+            "concepto": (CONCEPTOS_INTERACCION.get(nombre) if es_inter
+                         else CONCEPTOS.get(nombre, nombre)),
+            "es_interaccion": es_inter,
+            "valor": round(v, 4),
+            "desvios_del_promedio": round(z, 2),
+            "aporte_logodds": round(aporte, 4),
+            "factor": round(math.exp(aporte), 3),
+        })
+    p = 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z_total))))
+
+    for t in terminos:
+        t["rol"] = _rol(modelo, t["nombre"])
+        perfil = modelo.perfil_univariado.get(t["nombre"])
+        if perfil:
+            t["media_en_quiebras"], t["media_en_el_resto"], t["auc_univariado"] = perfil
+    # Solo los IMPULSORES se narran. Un control mejora el ajuste y no cuenta una historia:
+    # atribuirle una causa es inventar el mecanismo que justamente no tiene.
+    impulsores = [t for t in terminos if t["rol"] == "impulsor"]
+    suben = sorted([t for t in impulsores if t["factor"] >= FACTOR_MATERIAL],
+                   key=lambda t: -t["factor"])
+    bajan = sorted([t for t in impulsores if t["factor"] <= 1 / FACTOR_MATERIAL],
+                   key=lambda t: t["factor"])
+    inters = [t for t in terminos if t["es_interaccion"]
+              and abs(math.log(t["factor"] or 1)) > 0.02]
+    return {
+        "disponible": True,
+        "propension": round(p, 5),
+        "veces_la_base": round(p / modelo.tasa_base, 2) if modelo.tasa_base else None,
+        "tasa_base": modelo.tasa_base,
+        # sujeto-ok: cada término nombra su indicador en `concepto`; no es una cuota sobre
+        # una población, es el aporte de una variable a la propensión de ESTA entidad.
+        "empujan_al_alza": suben,
+        "empujan_a_la_baja": bajan,
+        "interacciones_activas": [t for t in inters if t.get("rol") == "impulsor"],
+        "controles_no_narrables": [t["concepto"] for t in terminos if t["rol"] == "control"],
+        "factor_dominante": (max(terminos, key=lambda t: abs(math.log(t["factor"] or 1)))
+                             if terminos else None),
+        "uso_admitido": modelo.uso_admitido,
+    }
+
+
+def prosa(modelo: ModeloPropension, nombre_entidad: str,
+          indicadores: Dict[str, float]) -> str:
+    """La explicación en prosa de negocio, anclada al MECANISMO y no al signo del coeficiente.
+
+    La versión anterior narraba el coeficiente y decía cosas como "lo que más la eleva es la
+    cobertura de provisiones" —que, leído por un analista, significa que tener provisiones
+    completas te acerca a la quiebra—. Dos reglas lo evitan:
+
+      • Solo se narran los IMPULSORES. Los controles estadísticos se nombran como tales.
+      • Cada factor se explica contra lo que HICIERON las entidades que salieron del sistema,
+        no contra el signo del ajuste. Así el crecimiento se cuenta bien: los bancos
+        dominicanos que quebraron se estaban CONTRAYENDO (−6.5% interanual promedio, contra
+        +18.5% de los que sobrevivieron), y un balance que se achica es la señal, no el que
+        crece. La literatura de 2003 dice lo contrario y el dato manda.
+    """
+    e = explicar(modelo, indicadores)
+    if not e.get("disponible"):
+        return f"No hay modelo de propensión disponible: {e.get('motivo')}."
+    veces = e["veces_la_base"]
+    comp = ("por encima de" if veces > 1.15 else
+            "por debajo de" if veces < 0.85 else "en línea con")
+    partes = [
+        f"{nombre_entidad} presenta una propensión estimada de {e['propension']*100:.2f}% por "
+        f"trimestre, {comp} la tasa base del sistema ({e['tasa_base']*100:.2f}%)."
+    ]
+
+    def _frase(t: Dict[str, Any], sube: bool) -> str:
+        mq, mr = t.get("media_en_quiebras"), t.get("media_en_el_resto")
+        ref = ""
+        if mq is not None and mr is not None and not t["es_interaccion"]:
+            ref = (f" —las que salieron del sistema promediaban "
+                   f"{_expresar(t['nombre'], mq, False)} y las que sobrevivieron "
+                   f"{_expresar(t['nombre'], mr, False)}—")
+        verbo = "eleva" if sube else "reduce"
+        valor = (_expresar(t["nombre"], t["valor"]) if not t["es_interaccion"]
+                 else f"{t['valor']:.2f}")
+        return (f"{t['concepto']} en {valor}{ref}, que {verbo} la propensión por un factor "
+                f"de {t['factor']:.2f}")
+
+    if e["empujan_al_alza"]:
+        partes.append("Lo que la empuja al alza: "
+                      + "; ".join(_frase(t, True) for t in e["empujan_al_alza"][:2]) + ".")
+    if e["empujan_a_la_baja"]:
+        partes.append("En sentido contrario: "
+                      + "; ".join(_frase(t, False) for t in e["empujan_a_la_baja"][:2]) + ".")
+    if not e["empujan_al_alza"] and not e["empujan_a_la_baja"]:
+        partes.append("Ningún factor se aparta materialmente del promedio del sistema: el "
+                      "resultado refleja un perfil sin rasgos distintivos en ninguna dirección.")
+    if e["interacciones_activas"]:
+        i = max(e["interacciones_activas"], key=lambda x: abs(x["factor"] - 1))
+        signo = "agrava" if i["factor"] > 1 else "atenúa"
+        partes.append(f"La combinación pesa aparte de las señales sueltas: {i['concepto']} "
+                      f"{signo} el cuadro por un factor de {i['factor']:.2f}.")
+    if e["controles_no_narrables"]:
+        partes.append(
+            f"El modelo incorpora además {len(e['controles_no_narrables'])} variables como "
+            "control estadístico; mejoran el ajuste pero su coeficiente no describe un "
+            "mecanismo y no se interpretan como causa.")
+    partes.append(f"Uso admitido: {e['uso_admitido'].split('—')[0].strip()}.")
+    return " ".join(partes)
 
 
 def formato(m: ModeloPropension) -> str:
