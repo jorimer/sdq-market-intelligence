@@ -177,3 +177,31 @@ def test_solvencia_no_esta_en_las_features():
     """Límite declarado: Basilea es regulatoria y no existe pre-2004. Su peso vigente (0.06)
     NO es verificable con esta fuente, y la matriz no debe fingir que lo verifica."""
     assert not any("solvencia" in f for f in cal.FEATURES)
+
+
+def test_el_cargador_de_produccion_pobla_TODO_lo_que_se_lee():
+    """Un campo que falte en `load_panel` no rompe nada visible: devuelve None y el consumidor
+    se apaga en silencio. Pasó con `entidad_nombre` —sin él la curaduría no emparejaba con
+    ninguna entidad y el modelo se entrenaba con cero quiebras— y ningún test lo vio porque
+    todos corrían sobre un panel derivado del CSV, que sí lo trae.
+
+    Este test lee el CÓDIGO del cargador y exige que asigne cada campo declarado.
+    """
+    import inspect
+    src = inspect.getsource(cal.load_panel)
+    faltan = [c for c in cal.CAMPOS_DEL_PANEL if f'"{c}"' not in src]
+    assert not faltan, f"load_panel no pobla: {faltan}"
+
+
+def test_los_consumidores_no_leen_campos_fuera_del_contrato():
+    """La otra mitad: si alguien lee una clave que el cargador no pobla, falla acá y no en
+    silencio contra producción."""
+    import inspect
+    import re
+    from modules.banking_score.validation import terminaciones as tm
+    leidos = set()
+    for fn in (cal.build_features, tm.detectar, tm.clasificar):
+        for m in re.finditer(r'\.get\("([a-z_]+)"', inspect.getsource(fn)):
+            leidos.add(m.group(1))
+    fuera = leidos - set(cal.CAMPOS_DEL_PANEL)
+    assert not fuera, f"se leen claves que `load_panel` no pobla: {sorted(fuera)}"
