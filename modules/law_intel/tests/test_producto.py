@@ -176,3 +176,34 @@ class TestSeñalesPorIndicador:
         ax = AxisRegistry(sector_key="law", display_name="x", source="y", implemented=True,
                           signals=tuple(LawProduct().variable_signals()["signals"]))
         assert ax.coverage_real == pytest.approx(cobertura(E)["pct"] / 100.0, abs=0.001)
+
+
+class TestElDetalleDeLaBrechaNombraIndicadores:
+    """`detail` no es decorativo: el readiness lo inserta LITERALMENTE en el texto de la
+    brecha, y de ahí lo lee el agente de descubrimiento de fuentes.
+
+    Vacío, el agente recibía «faltan dimensiones con dato real ()» y sólo podía proponer
+    fuentes genéricas del país — gastar en ruido.
+    """
+
+    def test_nombra_indicadores_concretos(self):
+        d = LawProduct().data_signals().detail
+        assert "1.1" in d and "Confianza" in d
+        assert "()" not in d
+
+    def test_dice_el_conteo_con_su_denominador(self):
+        from modules.law_intel.bindings import cobertura
+        c = cobertura(E)
+        d = LawProduct().data_signals().detail
+        assert f"{c['total'] - c['medidos']} de {c['total']}" in d
+
+    def test_acota_cuantos_nombra(self):
+        """Con 86 nombres el texto sería ilegible y el prompt se llenaría de ruido."""
+        d = LawProduct().data_signals().detail
+        assert "y " in d and "más" in d, "declara cuántos quedaron fuera de la muestra"
+        assert len(d) < 1200
+
+    def test_declara_la_cadencia_anual(self):
+        """Sin declararla, el monitor penalizaría como obsoleta una fuente que por
+        naturaleza publica una vez al año."""
+        assert LawProduct().data_signals().cadence == "annual"
