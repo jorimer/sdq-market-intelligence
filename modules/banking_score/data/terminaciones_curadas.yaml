@@ -526,3 +526,37 @@ terminaciones:
     episodio: Finamóvil — disuelta por resolución de la Junta Monetaria (19-abr-2007)
     fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
 
+  # ── Hemeroteca de Cronología SB, categoría "Crisis Bancarias" ──────────────
+  # 116 publicaciones desde 1966. Es fuente PRIMARIA —recortes de prensa fechados— y llega
+  # donde no llegan las recopilaciones: avisos de pago a ahorrantes, acuerdos de liquidación y
+  # notas de intervención que nombran la entidad y el día.
+
+  - nombre: Banco Cibao
+    fecha_salida: 1989-09-01
+    causa: quiebra
+    episodio: Acuerdo de liquidación (1989-1990)
+    fuente: >-
+      Hemeroteca Cronología SB, categoría Crisis Bancarias: "Buscan aún un acuerdo liquidación
+      del Bancibao" (20-dic-1989), "Detallan acuerdo de liquidación de Banco Cibao"
+      (25-ene-1990) y "JM aprueba acuerdo Bancomercio/Bancibao". El panel lo daba como
+      `no_evaluable` —sale sin morosidad reportada—; la prensa lo fecha y lo nombra.
+
+  - nombre: Banco de Ahorro y Crédito Altas Cumbres
+    fecha_salida: 2008-07-01
+    causa: quiebra
+    episodio: Liquidación con aviso a clientes y ahorrantes
+    fuente: >-
+      Hemeroteca Cronología SB: "Aviso a los clientes y ahorrantes del Banco de Ahorro y
+      Crédito Altas Cumbres", Listín Diario, 30-may-2008 — el formato estándar del aviso de
+      liquidación. El panel lo daba como `no_evaluable`.
+
+  - nombre: Banco Activo Dominicana
+    fecha_salida: 2023-07-01
+    causa: quiebra
+    episodio: Sale del sistema financiero acumulando pérdidas (2023)
+    fuente: >-
+      Hemeroteca Cronología SB: "Banco Múltiple Activo saldrá del sistema; acumula pérdidas"
+      (31-jul-2023) y "Banco Activo Dominicana saldrá del sistema financiero nacional"
+      (29-jul-2023). Es el caso más RECIENTE del registro y de la era moderna: serie completa
+      de indicadores. Coincide con la inferencia del panel (insolvencia).
+
