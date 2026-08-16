@@ -74,7 +74,11 @@ export async function setOperationSchedule(
 // iba el dinero era mirar la consola del proveedor antes y después de cada corrida.
 
 export interface SpendRow {
+  /** Clave técnica: la ruta o el nombre de la operación. Se conserva para depurar. */
   clave: string;
+  /** Nombre del producto que consumió, resuelto por el backend. Puede faltar si la
+   *  respuesta viene de una versión anterior; el panel cae a `clave`. */
+  etiqueta?: string;
   costo_usd: number;
   llamadas: number;
   hits_de_cache: number;
@@ -102,6 +106,6 @@ export async function getLlmSpend(desde?: string, hasta?: string): Promise<Spend
   const params: Record<string, string> = {};
   if (desde) params.desde = desde;
   if (hasta) params.hasta = hasta;
-  const { data } = await client.get<SpendSummary>("/api/v1/operations/llm-spend", { params });
+  const { data } = await client.get<SpendSummary>("/operations/llm-spend", { params });
   return data;
 }

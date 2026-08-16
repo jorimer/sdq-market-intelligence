@@ -261,3 +261,94 @@ def test_account_suma_al_techo_diario_y_registra_a_la_vez(db, monkeypatch):
 
 def test_account_nunca_lanza_con_una_respuesta_rara(db):
     assert L.account(object(), model="m", purpose=L.PURPOSE_OTHER) == 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Las DOS rutas del motor registran, no solo la que se probó
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_las_dos_rutas_del_motor_registran(db, monkeypatch):
+    """La ruta legacy contaba contra el techo diario pero NO aparecía en el panel.
+
+    El test estructural no lo caza porque valida por ARCHIVO: `claude_engine.py` nombra la
+    contabilidad en su ruta cerebro, así que pasa aunque un camino interno no registre. La
+    cobertura por archivo no implica cobertura por camino, y esta es la diferencia.
+    """
+    import ast
+    import inspect
+
+    from shared.narrative import claude_engine as CE
+
+    fuente = inspect.getsource(CE.NarrativeEngine)
+    arbol = ast.parse("class X:\n" + "\n".join(
+        "    " + ln for ln in fuente.splitlines()[1:]))
+
+    def registra(nombre_metodo: str) -> bool:
+        for n in ast.walk(arbol):
+            if isinstance(n, ast.FunctionDef) and n.name == nombre_metodo:
+                return any(
+                    isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                    and c.func.id == "record_call"
+                    for c in ast.walk(n)
+                )
+        raise AssertionError(f"no se encontró {nombre_metodo}")
+
+    assert registra("_generate_guarded"), "la ruta cerebro dejó de registrar"
+    assert registra("_result_from_response"), "la ruta legacy dejó de registrar"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Las etiquetas: el producto, no el endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_la_etiqueta_reusa_el_nombre_que_el_operador_ya_ve(monkeypatch):
+    """Las operaciones NO tienen tabla propia: se lee su `label` del registro de la
+    consola. Duplicarlo garantizaría que un día el panel y el interruptor de al lado
+    llamen distinto a la misma tarea."""
+    from shared.observability import etiquetas
+    from shared.operations.service import OPERATIONS
+
+    falsa = type("Op", (), {"label": "Pre-calentar caché de reportes"})()
+    monkeypatch.setitem(OPERATIONS, "prewarm-report-cache", falsa)
+    assert etiquetas.etiqueta_disparador("prewarm-report-cache") == \
+        "Pre-calentar caché de reportes"
+
+
+def test_la_etiqueta_de_una_ruta_nombra_el_producto():
+    from shared.observability import etiquetas
+
+    e = etiquetas.etiqueta_disparador("GET /api/v1/products/banking/deep_dive/report")
+    assert "Deep Dive" in e and "/api/" not in e
+
+
+def test_lo_no_reconocido_se_devuelve_TAL_CUAL(sin_inventar=None):
+    """Una ruta nueva sale fea pero cierta. Un «Otro» la escondería entre las demás y un
+    nombre inventado afirmaría algo que nadie declaró."""
+    from shared.observability import etiquetas
+
+    cruda = "GET /api/v1/modulo-que-no-existe/algo"
+    assert etiquetas.etiqueta_disparador(cruda) == cruda
+
+
+def test_desconocido_se_explica_en_vez_de_parecer_un_origen():
+    from shared.observability import etiquetas
+
+    assert "anterior al registro" in etiquetas.etiqueta_disparador("desconocido")
+
+
+def test_el_resumen_trae_la_etiqueta_junto_a_la_clave(db):
+    """La clave técnica NO se pierde: es lo que hace falta para depurar."""
+    with L.attributed_to("endpoint", "GET /api/v1/products/banking/deep_dive/report"):
+        L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=1.0,
+                      module="banking")
+    fila = spend.spend_summary(db)["por_disparador"][0]
+    assert fila["clave"] == "GET /api/v1/products/banking/deep_dive/report"
+    assert fila["etiqueta"] != fila["clave"]
+    assert "Deep Dive" in fila["etiqueta"]
+
+
+def test_el_motivo_se_traduce_a_lo_que_significa(db):
+    from shared.observability import etiquetas
+
+    assert etiquetas.etiqueta_motivo("guard_numerico") == "Verificación de cifras"
+    assert etiquetas.etiqueta_motivo("narrativa") == "Redacción del análisis"
