@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from modules.law_intel.bindings import Binding, direccion_de_metas
+from modules.law_intel.bindings import Binding, aplicar_transformacion, direccion_de_metas
 from modules.law_intel.registro import Indicador
 
 # Un veredicto por indicador. `no_evaluable` no es una falla: es la respuesta correcta cuando
@@ -126,10 +126,20 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
 
 def panel(indicadores: Sequence[Indicador], bindings: Dict[str, Binding],
           series: Dict[str, Sequence[Observacion]], corte: str) -> List[Veredicto]:
-    return [evaluar(i, bindings.get(i.id),
-                    series.get(bindings[i.id].serie, ()) if i.id in bindings else (),
-                    corte)
-            for i in indicadores]
+    """La transformación se aplica POR BINDING, no por serie.
+
+    Dos indicadores pueden compartir la misma variable con transformaciones distintas —
+    alfabetización cruda para uno y su complemento para otro—, así que un diccionario
+    indexado por serie no puede llevarla. Pertenece al binding porque es una propiedad de la
+    relación entre la variable y ESE indicador.
+    """
+    out: List[Veredicto] = []
+    for i in indicadores:
+        b = bindings.get(i.id)
+        crudas = series.get(b.serie, ()) if b else ()
+        obs = [(p, aplicar_transformacion(b, v)) for p, v in crudas] if b else []
+        out.append(evaluar(i, b, obs, corte))
+    return out
 
 
 def resumen(veredictos: Sequence[Veredicto]) -> Dict[str, object]:

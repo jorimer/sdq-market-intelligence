@@ -72,19 +72,36 @@ class TestContratoDeProducto:
 
 
 class TestHonestidadDelProducto:
-    def test_sin_bindings_verificados_no_se_declara_aprobado(self):
-        """Declararse validado con cobertura cero sería exactamente lo que el módulo denuncia."""
+    """Estos tests afirman el INVARIANTE, no el estado del día.
+
+    La primera versión decía `approved is False` y `coverage == 0.0` — cierto cuando no había
+    ningún binding verificado, y falso en cuanto se promovió el primero. Un test que codifica
+    la foto de hoy se rompe cuando el producto AVANZA, que es justo cuando uno no quiere
+    ruido: la tentación es actualizar el número y seguir, y ahí se pierde la regla.
+    """
+
+    def test_aprobado_si_y_solo_si_mide_algo(self):
+        """Declararse validado con cobertura cero sería lo que el módulo denuncia; declararse
+        no-validado midiendo cuatro indicadores sería igual de falso."""
+        from modules.law_intel.bindings import cobertura
         v = LawProduct().validation_state()
-        assert v.approved is False and v.score == 0.0
+        mide = cobertura("end_2030")["medidos"] > 0
+        assert v.approved is mide
+        assert (v.score > 0) is mide
         assert "verificacion" in v.notes
 
-    def test_la_seccion_de_cumplimiento_se_declara_vacia(self):
-        """Un Deep Dive relleno es peor que uno más corto."""
+    def test_la_seccion_sin_insumo_se_declara_vacia(self):
+        """Un Deep Dive relleno es peor que uno más corto. Se prueba con la sección que HOY
+        no tiene insumo, sea cual sea — no con una fija."""
         ctx = law_ai_context(E, "2025")
-        assert "cumplimiento" in secciones_sin_dato(ctx)
+        faltan = secciones_sin_dato(ctx)
+        sin_contradicciones = not ctx["contradicciones_proceso_vs_resultado_computadas"]
+        assert ("coherencia_proceso" in faltan) is sin_contradicciones
 
-    def test_la_cobertura_reportada_es_la_real(self):
-        assert LawProduct().data_signals().coverage == 0.0
+    def test_la_cobertura_reportada_coincide_con_la_del_expediente(self):
+        from modules.law_intel.bindings import cobertura
+        assert LawProduct().data_signals().coverage == pytest.approx(
+            cobertura("end_2030")["pct"] / 100.0)
 
 
 class TestContextoDeIA:

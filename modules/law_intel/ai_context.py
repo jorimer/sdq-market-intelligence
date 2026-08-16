@@ -18,7 +18,7 @@ sale redactada de memoria.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from modules.law_intel.bindings import cargar_bindings, cobertura
 from modules.law_intel.obligaciones import cargar_obligaciones
@@ -33,11 +33,12 @@ from modules.law_intel.scoring.semaforo import panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 
 
-def law_ai_context(expediente_id: str, corte: str) -> Dict[str, Any]:
+def law_ai_context(expediente_id: str, corte: str,
+                   series: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     exp = cargar(expediente_id)
     bs = cargar_bindings(expediente_id)
     numerados = exp.numerados
-    veredictos = panel(numerados, bs, {}, corte)
+    veredictos = panel(numerados, bs, series or {}, corte)
     br = brechas(numerados, bs)
     obs = cargar_obligaciones(expediente_id)
     recs = recomendaciones(br, obs)
