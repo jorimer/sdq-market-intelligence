@@ -121,3 +121,7 @@ bindings:
       La magnitud de la mejora no se explica solo por el cambio de metodología, pero atribuirla
       entera a la política sin declarar el corte sería exactamente el defecto que este
       instrumento denuncia.
+
+      La duda que quedaba abierta era si el sync trae filas —la ONE está tras Cloudflare y
+      desde fuera no se podía afirmar—. Se respondió contra producción, no a mano:
+      `/bindings/verificacion` devolvió `promueve: true` con período 2024.
