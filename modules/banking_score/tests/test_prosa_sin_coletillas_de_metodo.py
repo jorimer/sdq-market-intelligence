@@ -146,6 +146,52 @@ def test_ningun_productor_de_prosa_deja_jerga_del_modelo_sin_traducir():
         "negocio:\n  " + "\n  ".join(ofensas))
 
 
+def test_las_claves_del_contexto_no_le_ensenan_jerga_al_modelo():
+    """El agujero por el que se escapó la jerga después de limpiar la prosa determinista.
+
+    El párrafo del informe lo escribe el MODELO, y el nombre de cada clave del contexto es
+    texto que el modelo lee y copia. `veces_la_tasa_base` le enseñó el término: el Deep Dive
+    de BPD (2025-12-31) publicó «(0.97 veces la tasa base)» aunque `prosa()` no emite ese
+    paréntesis en ese rango —solo aparece si la entidad se aparta más de 0.15 de la
+    referencia—. La prosa estaba limpia y el informe no.
+
+    Es el mismo patrón de siempre: el guard cubría un motor (el determinista) y faltaba en el
+    otro (el del modelo). Al escribir el glob hay que preguntarse qué queda afuera, y lo que
+    quedaba afuera era el canal por donde sale el texto que el cliente lee.
+    """
+    from modules.banking_score import products
+    constructores = ("_propension_para_modelo",)
+    ofensas = []
+    for nombre in constructores:
+        nodo = _funciones(products)[nombre]
+        for n in ast.walk(nodo):
+            if not isinstance(n, ast.Dict):
+                continue
+            for k in n.keys:
+                if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
+                    continue
+                legible = k.value.replace("_", " ").lower()
+                for jerga in JERGA_DEL_MODELO:
+                    if jerga in legible:
+                        ofensas.append(f"products.{nombre}: clave «{k.value}» dice «{jerga}»")
+    # `early_warning` sirve el panel y las relaciones por el mismo canal
+    for nombre in ("panel_para_modelo", "relaciones_para_modelo"):
+        nodo = _funciones(early_warning)[nombre]
+        for n in ast.walk(nodo):
+            if not isinstance(n, ast.Dict):
+                continue
+            for k in n.keys:
+                if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                    legible = k.value.replace("_", " ").lower()
+                    for jerga in JERGA_DEL_MODELO:
+                        if jerga in legible:
+                            ofensas.append(
+                                f"early_warning.{nombre}: clave «{k.value}» dice «{jerga}»")
+    assert not ofensas, (
+        "el nombre de la clave es texto que el modelo copia al informe:\n  "
+        + "\n  ".join(ofensas))
+
+
 def test_todo_productor_de_prosa_esta_declarado_en_alguna_lista():
     """El glob del guard anterior dejaba módulos afuera y por eso el defecto volvió. Acá, una
     función nueva que huela a prosa rompe el test hasta que alguien decida si va al informe."""

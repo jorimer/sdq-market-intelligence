@@ -138,6 +138,14 @@ class Corrida(NamedTuple):
     """
     propuestas: List[Dict[str, Any]]
     consultados: int
+    #: Indicadores cuya llamada NO llegó a responder, con el motivo. Van aparte de los que
+    #: respondieron vacío: «ninguna fuente publica esto» y «no pudimos preguntar» son cosas
+    #: distintas, y confundirlas convierte una caída del proveedor en un hallazgo sobre el
+    #: Estado dominicano. Es el mismo error que el módulo entero existe para no cometer.
+    fallidos: Dict[str, str] = {}
+    #: Todo lo consultado en la corrida, con propuesta o sin ella. Es lo que permite al
+    #: llamador avanzar entre tandas.
+    consultados_ids: List[str] = []
 
 
 def proponer(expediente_id: str, preguntar: Callable[[str, str], str],
@@ -152,18 +160,23 @@ def proponer(expediente_id: str, preguntar: Callable[[str, str], str],
     exp = cargar(expediente_id)
     vistos = set(ya_propuestos or ())
     salida: List[Dict[str, Any]] = []
-    consultados = 0
+    fallidos: Dict[str, str] = {}
+    consultados_ids: List[str] = []
     for ind in sin_fuente(expediente_id):
-        if consultados >= max_indicadores:
+        if len(consultados_ids) >= max_indicadores:
             break
         if ind.id in vistos:
             continue
-        consultados += 1
+        consultados_ids.append(ind.id)
         try:
             crudo = preguntar(_SISTEMA, _pregunta(ind, exp.norma))
         except Exception as e:  # noqa: BLE001 — un indicador que falla no aborta el barrido
             logger.warning("propuesta para %s falló: %s", ind.id, e)
-            continue  # ya contó como consultado: no se reintenta dentro de la misma corrida
+            # Ya contó como consultado: no se reintenta dentro de la misma corrida. Pero se
+            # REGISTRA con su motivo, para que la corrida siguiente sepa que este indicador
+            # quedó sin preguntar y no dé por respondido lo que nunca se preguntó.
+            fallidos[ind.id] = f"{type(e).__name__}: {e}"[:200]
+            continue
         for p in _parsear(crudo)[:1]:
             salida.append({
                 "indicador": ind.id,
@@ -173,7 +186,7 @@ def proponer(expediente_id: str, preguntar: Callable[[str, str], str],
                 "description": (marca(exp.norma, ind)
                                 + (p.get("description") or "").strip())[:1000],
             })
-    return Corrida(salida, consultados)
+    return Corrida(salida, len(consultados_ids), fallidos, consultados_ids)
 
 
 # ── Cableado al tablero ───────────────────────────────────────────────────────────────────
@@ -219,12 +232,25 @@ def ya_propuestos(db: Any) -> Set[str]:
 
 def barrer(db: Any, expediente_id: str = "end_2030",
            max_indicadores: int = MAX_POR_CORRIDA,
-           preguntar: Optional[Callable[[str, str], str]] = None) -> Dict[str, Any]:
-    """Pregunta por los indicadores sin fuente y deja cada propuesta EVALUADA en el tablero."""
+           preguntar: Optional[Callable[[str, str], str]] = None,
+           omitir: Optional[Set[str]] = None) -> Dict[str, Any]:
+    """Pregunta por los indicadores sin fuente y deja cada propuesta EVALUADA en el tablero.
+
+    **Por qué existe `omitir`.** La idempotencia por tablero solo cubre lo que DEJÓ RASTRO: un
+    indicador que respondió vacío no crea fila, así que la corrida siguiente vuelve a
+    preguntarle. Con 83 indicadores y un techo de proxy de cinco minutos el barrido hay que
+    partirlo en tandas — y sin `omitir` cada tanda re-consulta desde el principio los mismos
+    vacíos y no avanza nunca. El llamador acumula `consultados_ids` y los devuelve acá.
+
+    Se resuelve así, y no guardando el vacío en el tablero, porque una fila de sugerencia
+    AFIRMA que hay una fuente propuesta. Registrar «no hay fuente» como sugerencia sería
+    rellenar la brecha en vez de declararla; el lugar donde eso se declara es el expediente,
+    que es un hecho comiteado y auditable.
+    """
     from shared.source_intel.models import KIND_SOURCE, ORIGIN_AGENT
     from shared.source_intel.service import create_suggestion, evaluate
 
-    vistos = ya_propuestos(db)
+    vistos = ya_propuestos(db) | set(omitir or ())
     corrida = proponer(expediente_id, preguntar or _preguntar_al_modelo,
                        max_indicadores=max_indicadores, ya_propuestos=vistos)
     creados: List[str] = []
@@ -243,6 +269,9 @@ def barrer(db: Any, expediente_id: str = "end_2030",
     pendientes = [i.id for i in sin_fuente(expediente_id) if i.id not in vistos]
     return {
         **resumen(corrida),
+        # Lo consultado en ESTA tanda, para que el llamador lo acumule y lo devuelva en
+        # `omitir`: sin esto las tandas siguientes re-preguntan los vacíos y no se avanza.
+        "consultados_ids": corrida.consultados_ids,
         "indicadores_sin_fuente": len(pendientes),
         "creadas": len(creados),
         "ya_propuestos": len(vistos),
@@ -253,16 +282,34 @@ def barrer(db: Any, expediente_id: str = "end_2030",
     }
 
 
+# La prosa que distingue las dos cosas vive en constantes: incrustada en el dict se parte por
+# ancho de línea y deja de existir en el fuente aunque el valor sea correcto.
+NOTA_SIN_PROPUESTA = (
+    "Un indicador sin propuesta significa que se preguntó y no se identificó fuente oficial "
+    "con la MISMA definición. Es un resultado, no una falla."
+)
+NOTA_FALLIDOS = (
+    "Un indicador FALLIDO no se preguntó: la llamada no llegó a responder. No dice nada "
+    "sobre si existe la fuente. Volvé a correr el barrido para cubrirlos."
+)
+
+
 def resumen(corrida: Corrida) -> Dict[str, Any]:
     # `consultados` es lo REALMENTE consultado, no `min(total, tope)`: esa cuenta era una
     # predicción disfrazada de medición y se equivocaba en cuanto una llamada fallaba.
+    respondieron = corrida.consultados - len(corrida.fallidos)
     return {
         "consultados": corrida.consultados,
+        "respondieron": respondieron,
         "con_propuesta": len(corrida.propuestas),
         # Que el modelo devuelva vacío para un indicador NO es un fallo: es la respuesta
         # correcta cuando ninguna fuente publica esa magnitud con esa definición. Contarlo
         # como error empujaría a aflojar el prompt y a aceptar aproximaciones.
-        "sin_propuesta": corrida.consultados - len(corrida.propuestas),
-        "nota": ("Un indicador sin propuesta significa que no se identificó fuente oficial "
-                 "con la MISMA definición. Es un resultado, no una falla."),
+        # Sobre los que RESPONDIERON, no sobre los consultados: sumarle los fallidos haría
+        # pasar una caída del proveedor por «el Estado no publica esto».
+        "sin_propuesta": respondieron - len(corrida.propuestas),
+        "fallidos": len(corrida.fallidos),
+        "motivos_de_falla": corrida.fallidos,
+        "nota": NOTA_SIN_PROPUESTA,
+        "nota_fallidos": NOTA_FALLIDOS,
     }

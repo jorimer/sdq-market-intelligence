@@ -335,8 +335,13 @@ def _propension_para_modelo(prop: Optional[Dict[str, Any]]) -> Optional[Dict[str
                 "media_en_supervivientes": t.get("media_en_el_resto")}
     return {
         "propension_trimestral_pct": round((prop.get("propension") or 0) * 100, 2),
-        "veces_la_tasa_base": prop.get("veces_la_base"),
-        "tasa_base_del_sistema_pct": round((prop.get("tasa_base") or 0) * 100, 2),
+        # El NOMBRE de la clave es texto que el modelo lee y copia. «veces_la_tasa_base»
+        # le enseñó el término y publicó «(0.97 veces la tasa base)» en el informe de BPD,
+        # aunque la prosa determinista no emite ese paréntesis en ese rango. Además la clave
+        # vieja no decía tasa base DE QUÉ — la regla del sujeto aplica también acá.
+        "veces_la_frecuencia_de_salida_del_sistema": prop.get("veces_la_base"),
+        "frecuencia_trimestral_de_salida_del_sistema_pct": round(
+            (prop.get("tasa_base") or 0) * 100, 2),
         "empujan_al_alza": [_slim(t) for t in (prop.get("empujan_al_alza") or [])],
         "empujan_a_la_baja": [_slim(t) for t in (prop.get("empujan_a_la_baja") or [])],
         "controles_sin_lectura_causal": prop.get("controles_no_narrables") or [],
