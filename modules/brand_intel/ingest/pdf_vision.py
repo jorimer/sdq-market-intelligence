@@ -29,6 +29,9 @@ from typing import Any, Dict, List, Optional, Sequence
 from shared.config.settings import settings
 
 from modules.brand_intel.engines.metrics import METRICS
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_VISION, account,
+)
 
 logger = logging.getLogger("sdq.brand_intel.pdf_vision")
 
@@ -255,6 +258,7 @@ def extract_page(
             ],
         }],
     )
+    account(response, model=MODEL, purpose=PURPOSE_VISION, module="brand_intel", template="pdf_vision")
 
     if response.stop_reason == "refusal":
         raise RuntimeError(f"La lectura de la página {page_number} fue rechazada por "
@@ -364,6 +368,7 @@ def discover_metrics_on_page(
             ],
         }],
     )
+    account(response, model=MODEL, purpose=PURPOSE_VISION, module="brand_intel", template="pdf_vision")
     if response.stop_reason == "refusal":
         raise RuntimeError(f"La lectura de la página {page_number} fue rechazada.")
     text = next((b.text for b in response.content if b.type == "text"), "")
@@ -453,6 +458,7 @@ def discover_brands_on_page(
             ],
         }],
     )
+    account(response, model=MODEL, purpose=PURPOSE_VISION, module="brand_intel", template="pdf_vision")
     if response.stop_reason == "refusal":
         raise RuntimeError(f"La lectura de la página {page_number} fue rechazada.")
     text = next((b.text for b in response.content if b.type == "text"), "")

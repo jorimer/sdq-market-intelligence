@@ -19,6 +19,9 @@ import re
 from typing import Any, Dict, List, Optional
 
 from shared.config.settings import settings
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_DIGEST, account,
+)
 
 logger = logging.getLogger("sdq.publications.digest")
 
@@ -153,6 +156,7 @@ def build_digest(
         system=_DIGEST_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
+    account(resp, model=model or settings.ANTHROPIC_MODEL, purpose=PURPOSE_DIGEST, module=None, template="digest")
     raw = resp.content[0].text if resp.content else ""
     try:
         return normalize_digest(_extract_json(raw))

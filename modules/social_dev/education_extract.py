@@ -19,6 +19,9 @@ from typing import Callable, Dict, Optional
 from sqlalchemy.orm import Session
 
 from modules.social_dev.models.models import SocialIndicator
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_EXTRACTION, account,
+)
 
 logger = logging.getLogger("sdq.social_dev.education_extract")
 
@@ -74,6 +77,7 @@ def extract_education(text: str, regions: list, *, api_key: Optional[str] = None
         model=model or settings.ANTHROPIC_MODEL, max_tokens=_MAX_TOKENS,
         messages=[{"role": "user", "content": _prompt(text, regions)}],
     )
+    account(resp, model=model or settings.ANTHROPIC_MODEL, purpose=PURPOSE_EXTRACTION, module="social_dev", template="educacion")
     raw = resp.content[0].text if resp.content else ""
     data = _extract_json(raw)
     return validate_education(data, {slug for slug, _ in regions})
