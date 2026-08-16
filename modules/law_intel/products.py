@@ -154,8 +154,38 @@ class LawProduct:
         # el expediente no es una serie — se versiona por PR.
         from modules.law_intel.bindings import cobertura
         eids = expedientes()
-        pct = float(cobertura(eids[0])["pct"]) if eids else 0.0   # type: ignore[arg-type]
-        return DataHealth(coverage=pct / 100.0, freshness_days=None)
+        if not eids:
+            return DataHealth(coverage=0.0, freshness_days=None)
+        eid = eids[0]
+        pct = float(cobertura(eid)["pct"])   # type: ignore[arg-type]
+        return DataHealth(
+            coverage=pct / 100.0, freshness_days=None, cadence="annual",
+            sources=(cargar(eid).norma,),
+            # `detail` NO es decorativo: el readiness lo inserta literalmente en el texto de
+            # la brecha, y de ahí lo lee el agente de descubrimiento de fuentes. Vacío, el
+            # agente recibía «faltan dimensiones con dato real ()» y sólo podía proponer
+            # fuentes genéricas del país. Nombrar los indicadores es lo que convierte esa
+            # brecha en una búsqueda.
+            detail=self._detalle_de_brecha(eid))
+
+    # Cuántos indicadores se nombran en el detalle. Con 86 el texto sería ilegible y el
+    # prompt del agente se llenaría de ruido; con demasiado pocos, la búsqueda no cubre.
+    _MAX_NOMBRADOS = 12
+
+    def _detalle_de_brecha(self, eid: str) -> str:
+        """Los indicadores sin fuente, nombrados, agrupados por eje."""
+        from modules.law_intel.bindings import cargar_bindings
+
+        exp = cargar(eid)
+        bs = cargar_bindings(eid)
+        sin = [i for i in exp.numerados if not (bs.get(i.id) and bs[i.id].cuenta)]
+        if not sin:
+            return "todos los indicadores de la ley tienen fuente verificada"
+        muestra = "; ".join(f"{i.id} {i.nombre[:44]}" for i in sin[:self._MAX_NOMBRADOS])
+        resto = len(sin) - min(len(sin), self._MAX_NOMBRADOS)
+        cola = f"; y {resto} más" if resto > 0 else ""
+        return (f"{len(sin)} de {len(exp.numerados)} indicadores de {exp.norma} sin fuente "
+                f"verificada: {muestra}{cola}")
 
     def validation_state(self) -> ValidationState:
         # El registro está contrastado contra el texto legal (21 metas leídas a mano), pero
