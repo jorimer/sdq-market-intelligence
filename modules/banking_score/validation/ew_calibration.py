@@ -1,5 +1,22 @@
 """Calibración de los pesos de *Alerta Temprana* sobre el histórico SIB — el ARTEFACTO.
 
+MAPA DE MÓDULOS — cuál es el vivo. Hay cuatro piezas que se parecen y sirven a fines distintos;
+confundirlas es como se producen las regresiones de dirección:
+
+  propension_quiebra.py .............. EL MODELO VIVO. Evalúa a cualquier banco y devuelve su
+                                       propensión + la explicación en prosa de negocio.
+  validation/terminaciones.py ........ la cohorte y el registro curado que lo alimentan.
+  validation/hazard.py ............... la infraestructura del panel de riesgo (censura, riesgos
+                                       en competencia) que `propension_quiebra` REUSA. Su
+                                       `ajustar()` es el diagnóstico curada-vs-inferida, no el
+                                       modelo de producto.
+  validation/ew_calibration.py ....... calibra los pesos del ÍNDICE LEGACY de `early_warning`,
+                                       que es un contador de umbrales heredado del rating. NO
+                                       es el modelo de propensión y no se usa para predecir.
+
+Regla: si el trabajo es "predecir quiebras", el archivo es `propension_quiebra.py`. Si te
+encontrás ajustando `ALERT_WEIGHTS`, estás en el módulo equivocado.
+
 Por qué existe este módulo. Los pesos de ``early_warning.ALERT_WEIGHTS`` se describían como
 "calibrados sobre la cohorte de 35 terminaciones agudas del histórico SIB, con regresión
 logística estandarizada validada leave-one-entity-out (AUC 0.88, detección 34/35, falsos

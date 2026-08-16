@@ -1,5 +1,22 @@
 """Propensión a quebrar — modelo de riesgo en tiempo discreto.
 
+MAPA DE MÓDULOS — cuál es el vivo. Hay cuatro piezas que se parecen y sirven a fines distintos;
+confundirlas es como se producen las regresiones de dirección:
+
+  propension_quiebra.py .............. EL MODELO VIVO. Evalúa a cualquier banco y devuelve su
+                                       propensión + la explicación en prosa de negocio.
+  validation/terminaciones.py ........ la cohorte y el registro curado que lo alimentan.
+  validation/hazard.py ............... la infraestructura del panel de riesgo (censura, riesgos
+                                       en competencia) que `propension_quiebra` REUSA. Su
+                                       `ajustar()` es el diagnóstico curada-vs-inferida, no el
+                                       modelo de producto.
+  validation/ew_calibration.py ....... calibra los pesos del ÍNDICE LEGACY de `early_warning`,
+                                       que es un contador de umbrales heredado del rating. NO
+                                       es el modelo de propensión y no se usa para predecir.
+
+Regla: si el trabajo es "predecir quiebras", el archivo es `propension_quiebra.py`. Si te
+encontrás ajustando `ALERT_WEIGHTS`, estás en el módulo equivocado.
+
 Qué cambia respecto de `ew_calibration`. Ese módulo entrena un CLASIFICADOR DE HORIZONTE
 FIJO: toma una observación por entidad, H meses antes de su salida, y pregunta "¿sale en H
 meses?". Eso tiene cuatro problemas para lo que el producto necesita:
@@ -242,7 +259,12 @@ def construir_panel_riesgo(panel: Dict[str, Dict[date, Dict]], terminaciones,
 
 def ajustar(panel: Dict[str, Dict[date, Dict]], terminaciones, panel_end: date,
             solo_curadas: bool = False, con_trayectoria: bool = False) -> HazardResult:
-    """Ajusta el hazard y decide si GRADÚA.
+    """Ajusta el hazard y decide si GRADÚA — DIAGNÓSTICO, no el modelo de producto.
+
+    Sirve para una cosa: comparar el ajuste sobre etiquetas CURADAS contra el de las
+    INFERIDAS y exhibir cuánto infla la contaminación. El modelo que se publica es
+    `propension_quiebra.entrenar`, que usa este mismo panel de riesgo pero agrega las
+    interacciones, entrena sin reequilibrar y decide qué puede afirmar.
 
     Devuelve `gradua=False` con su motivo cuando el dato no sostiene la afirmación. Ese es el
     resultado esperado hoy —siete quiebras curadas no gradúan nada— y reportarlo bien vale

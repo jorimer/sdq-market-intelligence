@@ -1,5 +1,22 @@
 """Propensión a la quiebra — el modelo que evalúa a CUALQUIER banco vivo.
 
+MAPA DE MÓDULOS — cuál es el vivo. Hay cuatro piezas que se parecen y sirven a fines distintos;
+confundirlas es como se producen las regresiones de dirección:
+
+  propension_quiebra.py .............. EL MODELO VIVO. Evalúa a cualquier banco y devuelve su
+                                       propensión + la explicación en prosa de negocio.
+  validation/terminaciones.py ........ la cohorte y el registro curado que lo alimentan.
+  validation/hazard.py ............... la infraestructura del panel de riesgo (censura, riesgos
+                                       en competencia) que `propension_quiebra` REUSA. Su
+                                       `ajustar()` es el diagnóstico curada-vs-inferida, no el
+                                       modelo de producto.
+  validation/ew_calibration.py ....... calibra los pesos del ÍNDICE LEGACY de `early_warning`,
+                                       que es un contador de umbrales heredado del rating. NO
+                                       es el modelo de propensión y no se usa para predecir.
+
+Regla: si el trabajo es "predecir quiebras", el archivo es `propension_quiebra.py`. Si te
+encontrás ajustando `ALERT_WEIGHTS`, estás en el módulo equivocado.
+
 Qué es y en qué se diferencia de lo que ya había. `early_warning` cuenta umbrales cruzados y
 los pondera: es un tablero de monitoreo derivado de la literatura de la crisis de 2003, y sus
 indicadores se diseñaron para el rating, no para predecir. Cruzar un umbral tira toda la
@@ -582,3 +599,90 @@ def formato(m: ModeloPropension) -> str:
             marca = "  ← interacción" if "×" in n else ""
             lineas.append(f"   {n:44} {c:+.3f}{marca}")
     return "\n".join(lineas)
+
+
+# ── Puente al producto: entrenar una vez y evaluar una entidad ─────────────────
+
+_CACHE: Dict[str, Any] = {}
+
+
+def modelo_vigente(db, panel_end: Optional[date] = None) -> Optional[ModeloPropension]:
+    """El modelo entrenado sobre el histórico, cacheado por proceso.
+
+    Entrena y evalúa desde `SibHistoricalFinancials` —la misma fuente para las dos cosas—
+    porque `banking_data` no trae `apalancamiento_pct` y mezclar derivaciones metería un
+    desajuste silencioso entre lo que el modelo aprendió y lo que se le pregunta. El ledger
+    cubre 1947→2026, así que los bancos vivos también están ahí.
+
+    Devuelve ``None`` si la tabla histórica no está poblada: la sección se omite antes que
+    publicar una propensión que no se pudo calcular.
+    """
+    from modules.banking_score.validation.ew_calibration import load_panel
+    from modules.banking_score.validation.terminaciones import aplicar_curaduria, detectar
+
+    clave = str(panel_end or "ultimo")
+    if clave in _CACHE:
+        return _CACHE[clave]
+    try:
+        panel = load_panel(db)
+    except Exception as e:  # noqa: BLE001 — el producto nunca cae por el modelo
+        logger.warning("No se pudo cargar el panel histórico: %s", e)
+        return None
+    if not panel:
+        logger.info("Histórico SIB vacío: la propensión no se computa.")
+        _CACHE[clave] = None
+        return None
+    fin = panel_end or max(d for s in panel.values() for d in s)
+    modelo = entrenar(panel, aplicar_curaduria(detectar(panel, fin)), fin)
+    _CACHE[clave] = modelo if modelo.ordena else None
+    if not modelo.ordena:
+        logger.info("El modelo de propensión no gradúa (%s): no se publica.", modelo.motivo)
+    return _CACHE[clave]
+
+
+def evaluar_entidad(db, entidad_nombre: str,
+                    corte: Optional[date] = None) -> Optional[Dict[str, Any]]:
+    """Propensión + explicación de UNA entidad al corte del informe.
+
+    ``None`` cuando el modelo no gradúa, la entidad no está en el histórico, o le faltan
+    indicadores. En los tres casos la sección se omite: una propensión a medias es peor que
+    ninguna.
+    """
+    import unicodedata
+
+    from modules.banking_score.validation.ew_calibration import (
+        build_features, load_panel, morosidad_floor,
+    )
+
+    modelo = modelo_vigente(db, corte)
+    if modelo is None:
+        return None
+
+    def _nz(x: str) -> str:
+        x = unicodedata.normalize("NFKD", x or "")
+        return " ".join("".join(c for c in x if not unicodedata.combining(c)).lower().split())
+
+    panel = load_panel(db)
+    objetivo = _nz(entidad_nombre)
+    for serie in panel.values():
+        fechas = sorted(serie)
+        if not fechas:
+            continue
+        # El corte del informe MANDA, igual que en las alertas: un Deep Dive de diciembre no
+        # puede mostrar la propensión de marzo.
+        validas = [d for d in fechas if corte is None or d <= corte]
+        if not validas or _nz(str(serie[validas[-1]].get("entidad_nombre") or "")) != objetivo:
+            continue
+        ref = validas[-1]
+        fx = build_features(serie, ref, morosidad_floor(serie[ref].get("tipo_entidad")))
+        if not fx:
+            return None
+        e = explicar(modelo, fx)
+        if not e.get("disponible"):
+            return None
+        return {**e, "prosa": prosa(modelo, entidad_nombre, fx),
+                "periodo": ref.isoformat(),
+                "n_quiebras_entrenamiento": modelo.n_eventos,
+                "auc": modelo.auc, "auc_ic95": modelo.auc_ic95}
+    return None
+

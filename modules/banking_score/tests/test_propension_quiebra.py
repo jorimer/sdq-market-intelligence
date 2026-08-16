@@ -177,3 +177,36 @@ def test_toda_variable_narrable_tiene_su_lectura_de_negocio():
     narrables = [f for f, m in pq.MECANISMO_ESPERADO.items() if m != 0]
     faltan = [f for f in narrables if f not in pq.LECTURA_DE_NEGOCIO]
     assert not faltan, f"sin lectura de negocio: {faltan}"
+
+
+# ── Cableado al Deep Dive ──
+
+def test_el_modelo_recibe_la_propension_SIN_jerga_de_regresion():
+    """Mismo criterio que el panel de precursores: se sirven cadenas y relaciones resueltas.
+    Si el modelo viera coeficientes o factores, los narraría — y un control se volvería causa."""
+    from modules.banking_score.products import _propension_para_modelo
+    prop = {"propension": 0.0208, "veces_la_base": 1.14, "tasa_base": 0.0182,
+            "empujan_al_alza": [{"concepto": "el ritmo de expansión del balance",
+                                 "valor": -0.005, "factor": 1.27, "aporte_logodds": 0.24,
+                                 "media_en_quiebras": -0.065, "media_en_el_resto": 0.185}],
+            "empujan_a_la_baja": [], "controles_no_narrables": ["la cobertura de provisiones"],
+            "uso_admitido": "PROPENSIÓN por BANDA — …", "prosa": "En X, …"}
+    ctx = _propension_para_modelo(prop)
+    crudo = str(ctx)
+    for jerga in ("factor", "logodds", "coef"):
+        assert jerga not in crudo, f"«{jerga}» no debe llegar al modelo"
+    assert ctx["controles_sin_lectura_causal"] == ["la cobertura de provisiones"]
+    assert "uso_admitido" in ctx and ctx["lectura_de_referencia"]
+
+
+def test_sin_propension_el_contexto_no_la_inventa():
+    from modules.banking_score.products import _propension_para_modelo
+    assert _propension_para_modelo(None) is None
+    assert _propension_para_modelo({}) is None
+
+
+def test_el_prompt_prohibe_narrar_los_controles_como_causa():
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+    t = THIN_TEMPLATES["early_warning_reading"]
+    assert "controles_sin_lectura_causal" in t and "NO se narran como causa" in t
+    assert "uso_admitido" in t

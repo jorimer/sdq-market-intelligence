@@ -87,10 +87,6 @@ ENSEMBLE_NINGUNO_ACTIVO = "ninguna encendida"
 # La bandera que quedó fuera del índice se NOMBRA, no se explica. El porqué metodológico va
 # a Limitaciones; acá el comité necesita el hecho, no nuestra epistemología.
 ENSEMBLE_FUERA_DEL_INDICE = "fuera del índice"
-# El margen a cada umbral ES la lectura temprana. Sin él, "ninguna señal activa" no
-# distingue a un banco holgado de uno a un pelo del disparo — y los dos se veían igual.
-PANEL_ENCABEZADO = "Distancia a cada umbral al corte — dónde está la entidad en cada precursor"
-PANEL_SIN_DATO = "sin dato para evaluar"
 
 # Umbral de morosidad RELATIVO al tipo de entidad: lo "normal" difiere por modelo de negocio
 # (una corporación de crédito opera con mora de dos dígitos; un banco múltiple no). Un umbral
