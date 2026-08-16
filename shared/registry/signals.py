@@ -81,6 +81,13 @@ class VariableSignal:
     source: str = ""                 # lineage: fuente que respalda el dato real
     cadence: str = "unknown"         # monthly | quarterly | annual | unknown
     value: Optional[float] = None    # valor indicativo (None en paneles multi-sujeto)
+    # Período AL QUE PERTENECE ``value``, cuando no es el del eje. Un eje publica UN
+    # período, pero no todas sus variables se actualizan a la vez: la razón de ocupación
+    # femenina/masculina traía 2025 y el eje social iba por 2024, así que el registro
+    # servía un valor de 2025 rotulado 2024. Para un informe que juzga contra la meta de
+    # un año concreto, eso no es un detalle de metadatos: es la cifra equivocada.
+    # ``None`` = el del eje, que es el caso de la mayoría y no obliga a nadie a declararlo.
+    period: Optional[str] = None
     real_fraction: float = field(default=1.0)  # fracción de sujetos con dato real [0,1]
     note: str = ""                   # nota de trazabilidad (parcialidad, caveat)
     # ALCANCE de la medición — distingue dos cosas que "dato real" confunde:

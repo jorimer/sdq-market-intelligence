@@ -26,7 +26,7 @@ def _signal_dict(s: VariableSignal) -> Dict[str, Any]:
     return {
         "key": s.key, "label": s.label, "state": s.state, "dimension": s.dimension,
         "weight": s.weight, "source": s.source, "cadence": s.cadence,
-        "value": s.value, "real_fraction": s.real_fraction, "note": s.note,
+        "value": s.value, "period": s.period, "real_fraction": s.real_fraction, "note": s.note,
     }
 
 

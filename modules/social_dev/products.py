@@ -370,6 +370,9 @@ class SocialDevProduct:
                 weight=0.0,                      # fuera del índice: no pondera
                 source=", ".join(dh.sources), cadence=dh.cadence,
                 value=float(valor), real_fraction=1.0,
+                # El período va en la SEÑAL y no solo en la nota: un consumidor no puede
+                # parsear prosa para saber a qué año corresponde la cifra que le sirven.
+                period=str(periodo_tema),
                 note=f"{nota} Último período con dato: {periodo_tema}."))
         return out
 
