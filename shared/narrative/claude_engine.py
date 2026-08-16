@@ -7,9 +7,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from shared.cache import cache_get, cache_set
-from shared.observability.llm_ledger import (
-    PURPOSE_GUARD, PURPOSE_NARRATIVE, record_call,
-)
+from shared.observability.llm_ledger import PURPOSE_NARRATIVE, record_call
 from shared.config.settings import settings
 from shared.llm.budget import budget_allows, record_usage
 from shared.narrative.lang_context import get_request_lang
@@ -1691,13 +1689,12 @@ class NarrativeEngine:
             # entre los números del contexto, sea cual sea su estructura.
             det = (deterministic_unsupported(context or {}, text)
                    + deterministic_uncited_figures(context or {}, text))
-            llm = verify_figures(client, guard_model, context_str, text)
-            # El juez se registra APARTE de la narrativa. Corre sobre toda sección de
-            # toda generación, así que es un 2× permanente sobre el gasto de narrativa —
-            # invisible mientras se sumara al mismo total que lo que produce.
-            record_call(purpose=PURPOSE_GUARD, model=guard_model,
-                        module=axis, template=template,
-                        detail={"hallazgos": len(llm)})
+            # El juez contabiliza su PROPIA llamada (ver `verify_figures`): registrarla
+            # desde acá la anotaba sin dólares, y el juez es la mitad de las llamadas de
+            # un informe. Se le pasan eje y plantilla para que su fila quede atribuida
+            # igual que la de la narrativa que verifica.
+            llm = verify_figures(client, guard_model, context_str, text,
+                                 module=axis, template=template)
             seen, merged = set(), []
             for f in det + llm:
                 if f not in seen:
