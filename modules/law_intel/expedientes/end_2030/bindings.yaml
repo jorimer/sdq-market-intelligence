@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "6.0"
+version: "7.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -34,7 +34,8 @@ version: "6.0"
 # hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
 # caliente, la cifra de portada dejaría de ser verificable.
 #
-# Cobertura del expediente: 7 de 90 indicadores numerados.
+# Cobertura del expediente: 7 de 90 indicadores numerados (2.37, 2.41 y 2.42
+# entran como `propuesto` hasta comprobarse contra producción).
 
 bindings:
   # ══ RESUELTO ══ `poverty_rate` es «Pobreza monetaria GENERAL» (15,0 en 2024), no extrema.
@@ -115,6 +116,55 @@ bindings:
       expediente hasta ahora, y por eso lleva su salvedad pegada: la definición de
       informalidad de la ENCFT no tiene por qué ser la que usaba la ENFT cuando se fijó la
       línea base, y el informe debe decirlo antes de atribuir el estancamiento a la política.
+
+  # ══ MERCADO LABORAL (BCRD · ENCFT) ══
+  # Los tres salen del mismo libro del BCRD, y NO tienen la misma calidad de evidencia.
+  # La diferencia entre ellos es el hallazgo, no un detalle: un NIVEL no sobrevive al
+  # cambio de encuesta y una RAZÓN sí.
+
+  # ⚠️ El nivel NO es comparable con la meta. Queda `propuesto` a propósito.
+  - indicador: "2.37"
+    serie: "social_dev:unemployment_rate"
+    fuente: bcrd
+    mejor: menor
+    estado: propuesto
+    nota_comparabilidad: >-
+      La serie mide bien la desocupación, pero NO la misma que la ley usó para fijar sus
+      metas. La línea base legal (14,3% en 2010) viene de la ENFT; la ENCFT, que la
+      sustituyó, arranca en 7,33% en su primer año completo. El nivel se parte casi al
+      medio en el momento exacto del cambio de encuesta, no de la política. Contrastar el
+      5,14% de 2024 contra la meta de 7,0% para 2025 diría «meta superada con holgura»
+      cuando lo que cambió fue la forma de medir. El Estado nunca re-expresó las metas
+      sobre la encuesta nueva, y hasta que lo haga —o hasta que exista una serie
+      retropolada— este indicador no es evaluable contra su meta. Es una brecha del
+      INSTRUMENTO y de las más publicables: la recomendación es pedir la re-expresión.
+
+  # La razón SÍ es comparable: el cambio de encuesta se cancela entre numerador y
+  # denominador, porque las dos poblaciones se miden con la misma metodología.
+  - indicador: "2.41"
+    serie: "social_dev:employment_gender_ratio"
+    fuente: bcrd
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      Razón entre la tasa de ocupación femenina y la masculina (1,0 = paridad). Computada
+      sobre el promedio anual de cada sexo: el BCRD publica los trimestres, no el promedio,
+      así que la media anual es cuenta nuestra y va declarada. Mejora sostenida —0,596 en
+      2015 a 0,675 en 2025— contra una meta de 0,85 para 2025 desde una base de 0,55 en
+      2010: avanzó un tercio de lo que la ley pedía.
+
+  - indicador: "2.42"
+    serie: "social_dev:unemployment_gender_ratio"
+    fuente: bcrd
+    mejor: menor
+    estado: propuesto
+    nota: >-
+      Razón entre la desocupación femenina y la masculina; la ley manda cerrarla hacia 1,0.
+      Va en el sentido contrario: 2,18 en 2010 (base legal), 2,01 en 2015 y 2,70 en 2025,
+      contra una meta de 1,25 para 2025. La brecha es HOY más ancha que cuando se fijó la
+      meta. Es el único indicador del expediente que retrocede contra su línea base, y a
+      diferencia del 2.37 la lectura no se explica por el cambio de encuesta: una razón
+      entre dos poblaciones medidas con la misma metodología es robusta a ese cambio.
 
   # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
   # transformación declarable: son conceptos distintos.

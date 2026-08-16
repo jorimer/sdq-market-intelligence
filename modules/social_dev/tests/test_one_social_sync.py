@@ -55,7 +55,8 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     # Las demás fuentes pegan a la red — se sustituyen. Devuelven un conteo POSITIVO
     # porque hacen de sub-syncs que funcionan: un 0 ahora significa "la fuente no trajo
     # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
-    for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
+    for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_bcrd_mercado_laboral",
+                "_sync_sisdom_income",
                 "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
                 "_sync_endesa_child_mortality",
                 "_sync_siuben_provincial"):
@@ -662,3 +663,33 @@ def test_la_serie_de_ENDESA_sale_por_la_API_con_su_advertencia(db, monkeypatch):
     assert "no lo alimenta" in serie["note"]        # dice que NO entra al índice
     assert "no deben graficarse juntas" in serie["note"]
     assert serie["license"]                          # sin licencia iría a cuarentena
+
+
+def test_todo_sub_sync_de_red_esta_sustituido_en_el_test_de_idempotencia():
+    """Un sub-sync nuevo que nadie agregue a la lista de sustituidos sale a la RED en CI.
+
+    Pasó al agregar el mercado laboral: el test no lo conocía, bajó el libro del BCRD de
+    verdad e insertó 33 filas reales, y falló por un conteo que no tenía nada que ver con
+    lo que el test mide. Peor que el falso rojo es el caso silencioso — un sub-sync que
+    devuelva pocas filas no rompe ningún conteo y deja al CI dependiendo de que el CDN de
+    un tercero esté en pie.
+
+    Se lee el código con `ast` en vez de mantener la lista a mano: una lista a mano tiene
+    exactamente el mismo problema que este test viene a resolver.
+    """
+    import ast
+    import inspect
+
+    from modules.social_dev import social_sync
+
+    arbol = ast.parse(inspect.getsource(social_sync))
+    definidos = {n.name for n in ast.walk(arbol)
+                 if isinstance(n, ast.FunctionDef) and n.name.startswith("_sync_")}
+    # Los que este test SÍ deja correr: leen del fixture comiteado, no de la red.
+    locales = {"_sync_one_regional"}
+    fuente = inspect.getsource(test_sync_persists_and_is_idempotent)
+    sin_sustituir = sorted(n for n in definidos - locales if f'"{n}"' not in fuente)
+    assert not sin_sustituir, (
+        "estos sub-syncs no están sustituidos en el test de idempotencia y saldrán a la "
+        f"red en CI: {sin_sustituir}"
+    )
