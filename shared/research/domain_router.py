@@ -57,6 +57,13 @@ _ENGINE_BRIEF: Dict[str, str] = {
     "pension": "Pensiones (SIPEN/AFP): rentabilidad, cotizantes, fondos, solvencia previsional.",
     "insurance": "Seguros (SIS): primas, siniestralidad, solvencia de aseguradoras.",
     "economic_structure": "Estructura de la economía: peso y aporte de cada sector al PIB.",
+    # Sin este brief el eje caía al texto genérico del catálogo, y una pregunta regulatoria
+    # de cualquier sector podía aterrizar acá. La segunda frase es la que importa: este eje
+    # NO es el dominio jurídico de la plataforma, es el seguimiento de metas de un
+    # instrumento concreto. Decir qué no responde ahorra más ruteos malos que decir qué sí.
+    "law": ("Cumplimiento de las metas que una LEY se fijó a sí misma (END 2030 · Ley 1-12, "
+            "Meta RD 2036): meta vs dato real, obligaciones y plazos del instrumento. NO "
+            "responde preguntas de normativa o regulación sectorial — esas van a su eje."),
 }
 
 _SYSTEM = (

@@ -75,11 +75,22 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
     # términos genéricos de política pública ("meta", "indicador", "cumplimiento") que
     # activarían el eje ante cualquier pregunta sectorial: acá se enruta cuando la pregunta
     # es POR LA NORMA, no por el tema que la norma regula.
-    "law": ("ley", "leyes", "decreto", "articulado", "articulo", "norma", "normativa",
-            "estrategia nacional de desarrollo", "end 2030", "ley 1-12",
-            "meta rd 2036", "cumplimiento de la ley", "metas de la ley",
-            "evaluacion de la ley", "obligacion legal", "pacto electrico",
-            "pacto fiscal", "pacto educativo", "instrumento normativo"),
+    # ⚠️ SOLO frases inequívocas. La primera versión traía «ley», «norma», «normativa»,
+    # «articulo» y «decreto», y con eso se robaba preguntas de los productos que YA se
+    # venden: «¿qué dice la normativa sobre solvencia de la banca?» activaba `law` y le
+    # metía el panel de la END como evidencia a una respuesta de banca. Seis de nueve
+    # preguntas de prueba de otros ejes lo activaban.
+    #
+    # Los pactos (eléctrico, fiscal, educativo) TAMBIÉN salieron: son instrumentos que este
+    # eje evalúa, pero «pacto electrico» es vocabulario natural de una pregunta de energía,
+    # que es un producto en producción. Un eje nuevo no puede quitarle preguntas a uno
+    # probado; para llegar acá hay que nombrar la EVALUACIÓN, no el tema.
+    #
+    # Lo vigila `test_el_eje_de_leyes_no_le_roba_preguntas_a_los_productos_en_produccion`.
+    "law": ("estrategia nacional de desarrollo", "end 2030", "ley 1-12", "meta rd 2036",
+            "cumplimiento de la ley", "metas de la ley", "evaluacion de la ley",
+            "evaluacion independiente de la ley", "obligacion legal", "instrumento normativo",
+            "cumplimiento del pacto", "compromisos del pacto", "seguimiento de la ley"),
 }
 
 # Términos genéricos que NO distinguen una entidad (evitan matches espurios al resolver
