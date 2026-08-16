@@ -32,11 +32,17 @@ def proveedor_registro(db: Optional[Session]) -> Proveedor:
     reg = build_data_registry(db)
     por_clave: Dict[str, List[Observacion]] = {}
     for eje in getattr(reg, "axes", ()) or ():
-        periodo = getattr(eje, "period", None)
-        if not periodo:
-            continue
+        periodo_eje = getattr(eje, "period", None)
         for sig in getattr(eje, "signals", ()) or ():
             if sig.value is None:
+                continue
+            # El período de la SEÑAL manda sobre el del eje. No todas las variables de un
+            # eje se actualizan a la vez: la razón de ocupación femenina/masculina traía
+            # 2025 mientras el eje social iba por 2024, y estampar el del eje servía el
+            # valor de un año con el rótulo de otro. En un informe que juzga contra la meta
+            # de un año concreto eso no es metadato: es la cifra equivocada.
+            periodo = getattr(sig, "period", None) or periodo_eje
+            if not periodo:
                 continue
             por_clave[f"{eje.sector_key}:{sig.key}"] = [(str(periodo), float(sig.value))]
 
