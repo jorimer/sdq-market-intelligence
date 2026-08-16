@@ -17,6 +17,9 @@ from typing import Any, Dict
 from sqlalchemy.orm import Session
 
 from shared.config.settings import settings
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_OTHER, account,
+)
 
 logger = logging.getLogger("sdq.source_intel.scaffolder")
 
@@ -97,6 +100,7 @@ def scaffold_plan(db: Session, suggestion: Dict[str, Any]) -> Dict[str, Any]:
         resp = client.messages.create(
             model=settings.ANTHROPIC_MODEL, max_tokens=2500,
             system=_SYSTEM, messages=[{"role": "user", "content": user}])
+        account(resp, model=settings.ANTHROPIC_MODEL, purpose=PURPOSE_OTHER, module="source_intel", template="andamiaje")
         text = resp.content[0].text.strip()
         if text.startswith("```"):
             text = text.strip("`")

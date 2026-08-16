@@ -1,3 +1,5 @@
+import re
+
 import logging
 import os
 
@@ -38,6 +40,33 @@ app.add_middleware(
 )
 
 
+_ID_EN_RUTA = re.compile(
+    r"/(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|\d+)(?=/|$)"
+)
+
+
+@app.middleware("http")
+async def _atribuir_gasto_del_modelo(request, call_next):
+    """Toda llamada al modelo hecha durante una petición queda a nombre de su ruta.
+
+    Sin esto, el gasto que pide una persona aparece como «desconocido» y se vuelve
+    indistinguible del que genera una tarea agendada — la distinción por la que existe el
+    registro. Pasó: el primer informe medido en producción registró sus veinte llamadas
+    sin dueño, porque la atribución estaba cableada en las operaciones y no acá.
+
+    Se usa el path CRUDO, no la ruta con plantilla: ``request.scope["route"]`` todavía no
+    existe antes de enrutar —se comprobó— y esperar a tenerla obligaría a fijar el
+    contexto después de la llamada, que es tarde. Solo se normalizan los identificadores
+    opacos (UUID y numéricos) para que no exploten la cardinalidad. El slug SÍ se conserva:
+    saber qué encargo consume cuánto es información, no ruido.
+    """
+    from shared.observability.llm_ledger import attributed_to
+
+    ruta = _ID_EN_RUTA.sub("/{id}", request.url.path)
+    with attributed_to("endpoint", f"{request.method} {ruta}"[:160]):
+        return await call_next(request)
+
+
 @app.get("/api/v1/health")
 async def health():
     """Readiness: toca DB (y Redis si está configurado). 503 si una dependencia
@@ -66,6 +95,7 @@ from modules.banking_score.api.router_model import router as model_router
 from modules.banking_score.api.router_historical import router as banking_historical_router
 from modules.macro_political_risk.api.router_scoring import router as mpr_scoring_router
 from modules.macro_monitor.api.router import router as macro_monitor_router
+from modules.law_intel.api.router import router as law_intel_router
 from modules.trade_intel.api.router import router as trade_intel_router
 from modules.sector_intel.api.router import router as sector_intel_router
 from modules.sector_intel.events import register_subscribers as register_sector_subscribers
@@ -91,6 +121,8 @@ app.include_router(banking_historical_router, prefix="/api/v1/banking-score/hist
 app.include_router(mpr_scoring_router, prefix="/api/v1/macro-political-risk", tags=["Macro-Political Risk"])
 app.include_router(macro_monitor_router, prefix="/api/v1/macro-monitor", tags=["Macro Monitor"])
 app.include_router(trade_intel_router, prefix="/api/v1/trade-intel", tags=["Trade Intel"])
+app.include_router(law_intel_router, prefix="/api/v1/law-intel",
+                   tags=["Law Intel"])
 app.include_router(sector_intel_router, prefix="/api/v1/sector-intel", tags=["Sector Intel"])
 
 app.include_router(social_dev_router, prefix="/api/v1/social-dev", tags=["Social Dev"])
@@ -205,6 +237,7 @@ import modules.telecom_intel.products  # noqa: F401 — registers telecom Sector
 import modules.pension_intel.products  # noqa: F401 — registers pension SectorProduct
 import modules.insurance_intel.products  # noqa: F401 — registers insurance SectorProduct
 import modules.social_dev.products  # noqa: F401 — registers social_dev (panel SUB-NACIONAL)
+import modules.law_intel.products  # noqa: F401 — registers law (sujeto = instrumento normativo)
 # Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
 # (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)
 from app import products_macro as _products_macro  # noqa: F401 — registers macro SectorProduct

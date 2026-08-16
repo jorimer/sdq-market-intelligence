@@ -62,7 +62,7 @@ def test_alerta_temprana_usa_la_misma_definicion(db):
     esperado = calc_concentracion_top10(rows[date(2025, 12, 31)])["raw"]
 
     m = _bank_metrics(rows, date(2025, 12, 31))
-    assert m["concentration_pct"] == pytest.approx(esperado, abs=0.01)
+    assert m["concentracion_top10_deudores_pct"] == pytest.approx(esperado, abs=0.01)
 
 
 def test_sin_cartera_total_cae_a_cartera_bruta():

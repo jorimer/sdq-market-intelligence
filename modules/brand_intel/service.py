@@ -1580,6 +1580,101 @@ def sales_analysis(db: Session, engagement_id: str) -> Dict[str, Any]:
                                        inflation_coverage=cobertura)
 
 
+def sales_projection(db: Session, engagement_id: str,
+                     horizon: int = 14) -> Dict[str, Any]:
+    """La proyección de tráfico y cheque, con la venta derivada del producto de ambos.
+
+    Devuelve el veredicto POR LOCAL, no solo el agregado. Un error medio de red esconde
+    que sobre el panel del encargo el mejor local se pronostica con 4,3% de error y el peor
+    con 20,4%: publicar solo el promedio afirmaría una precisión que cuatro de cada cinco
+    locales no tienen. Los no proyectables van aparte y con su motivo, jamás omitidos —
+    omitirlos los haría desaparecer sin aviso y el informe declararía una cobertura falsa.
+    """
+    from modules.brand_intel.engines import projection as proj
+
+    rows = (db.query(BrandSalesDaily)
+            .filter(BrandSalesDaily.engagement_id == engagement_id)
+            .order_by(BrandSalesDaily.business_date)
+            .all())
+    if not rows:
+        return {"available": False, "reason": "Sin serie de venta cargada."}
+
+    result = proj.decompose(rows, horizon=horizon)
+    if result is None:
+        return {"available": False,
+                "reason": "La serie no alcanza para puntuar ninguna regla de pronóstico."}
+
+    nombres = {r.store_id: r.store_name for r in rows if r.store_name}
+
+    def _verdict(v: Any) -> Dict[str, Any]:
+        return {
+            "store_id": v.store_id,
+            "label": nombres.get(v.store_id) or v.store_id,
+            "error_medio_pct": round(v.mape * 100, 1) if v.mape is not None else None,
+            "error_de_la_vara_pct": (round(v.baseline_mape * 100, 1)
+                                     if v.baseline_mape is not None else None),
+            "banda_lo_pct": (round(v.band_lo_pct, 1)
+                             if v.band_lo_pct is not None else None),
+            "banda_hi_pct": (round(v.band_hi_pct, 1)
+                             if v.band_hi_pct is not None else None),
+            "jornadas": v.n_days,
+            "motivo": v.reason,
+        }
+
+    traffic, check = result.traffic, result.check
+    proyectables = [v for v in traffic.verdicts if v.projectable]
+    excluidos = [v for v in traffic.verdicts if not v.projectable]
+    var = traffic.variance
+
+    return {
+        "available": True,
+        "horizonte_dias": horizon,
+        # El identificador de la regla queda disponible para superficies internas, pero
+        # lo que viaja al modelo —y de ahí al PDF del cliente— es el nombre legible: sin
+        # esto, el informe salió citando «regla store_dow_drift_14» a la Dirección.
+        "regla_trafico": proj.rule_label(traffic.rule),
+        "regla_cheque": proj.rule_label(check.rule),
+        "regla_trafico_id": traffic.rule,
+        "regla_cheque_id": check.rule,
+        "error_medio_trafico_pct": (round(traffic.overall_mape * 100, 2)
+                                    if traffic.overall_mape is not None else None),
+        "error_medio_cheque_pct": (round(check.overall_mape * 100, 2)
+                                   if check.overall_mape is not None else None),
+        "error_medio_venta_derivada_pct": (round(result.sales_mape * 100, 2)
+                                           if result.sales_mape is not None else None),
+        "error_de_la_vara_trafico_pct": (round(traffic.baseline_mape * 100, 2)
+                                         if traffic.baseline_mape is not None else None),
+        "pct_incertidumbre_venta_que_aporta_el_trafico": (
+            round(result.traffic_share_pct) if result.traffic_share_pct is not None else None),
+        "locales_proyectables": len(proyectables),
+        "locales_en_el_panel": len(traffic.verdicts),
+        "locales": [_verdict(v) for v in sorted(
+            proyectables, key=lambda v: (v.mape if v.mape is not None else 1.0))],
+        "locales_no_proyectables": [_verdict(v) for v in excluidos],
+        "sobredispersion_transacciones": (
+            {"fano_mediano": round(result.dispersion.fano_median, 1),
+             "nota": result.dispersion.note}
+            if result.dispersion else None),
+        "varianza_de_la_venta": (
+            {"pct_escala_entre_locales": round(var.store_pct, 1),
+             "pct_dia_comun_a_la_red": round(var.national_day_pct, 1),
+             "autocorrelacion_residuo_7_dias": (round(var.acf_lag7, 2)
+                                                if var.acf_lag7 is not None else None),
+             "nota": var.note}
+            if var else None),
+        "calibracion": (
+            {"cobertura_real_pct": (round(traffic.calibration.coverage_pct, 1)
+                                    if traffic.calibration.coverage_pct is not None else None),
+             "cobertura_nominal_pct": traffic.calibration.nominal_coverage_pct,
+             "nota": traffic.calibration.note}
+            if traffic.calibration else None),
+        "sesgo_del_pronostico_pct": traffic.bias_pct,
+        "pct_jornadas_en_que_el_real_supero_al_pronostico": traffic.share_above_pct,
+        "nota_motor": result.note,
+        "base_del_pronostico": traffic.basis,
+    }
+
+
 #: Categorías MECÁNICAS de brecha de medibilidad — derivadas del motivo de la
 #: factibilidad, nunca del juicio del modelo. El LLM las narra y prescribe sobre ellas.
 GAP_EVALUABLE = "evaluable"

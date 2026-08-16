@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from shared.cache import cache_get, cache_set
+from shared.observability.llm_ledger import PURPOSE_NARRATIVE, record_call
 from shared.config.settings import settings
 from shared.llm.budget import budget_allows, record_usage
 from shared.narrative.lang_context import get_request_lang
@@ -342,17 +343,38 @@ THIN_TEMPLATES = {
         "DECILO como límite; no lo estimes. Extensión: hasta ~700 palabras, denso, sin relleno."
     ),
     "early_warning_reading": (
-        "Interpreta el CONJUNTO de señales de alerta temprana YA detectadas para esta entidad "
+        "Interpreta la posición de esta entidad frente a los precursores de alerta temprana "
         "(no es un reporte de estado ni una relista). Contexto:\n{context}\n\n"
-        "Máximo 130 palabras, UN SOLO párrafo. Las banderas y sus cifras ya vienen dadas en "
-        "'flags'; tu trabajo es LEER EL PATRÓN: qué COMBINACIÓN de banderas es la que más pesa "
-        "(una combinación puede importar más que la suma de sus partes), qué la matiza para "
-        "esta entidad, y el 'y por tanto' de qué conviene vigilar. Si una sola bandera domina, "
-        "dilo. REGLA DURA: usa EXCLUSIVAMENTE las cifras servidas en 'flags' (valor/umbral); NO "
-        "inventes números, umbrales ni comparaciones que no estén en el contexto; si una "
-        "relación no está dada, exprésala en palabras SIN número. NO afirmes fraude ni causas "
-        "ocultas: estas señales son un COMPLEMENTO del rating/índice, no un veredicto, y no "
-        "detectan contabilidad fraudulenta. No repitas la lista textual; sintetiza."
+        "Máximo 150 palabras, UN SOLO párrafo, registro de informe para comité —prosa, nunca "
+        "viñetas—. El material ya viene computado: 'panel_precursores' trae cada precursor con "
+        "su valor, su umbral, su variación en doce meses y su dirección; 'flags' las banderas "
+        "encendidas; 'relaciones_computadas' dice cuántos están activos, cuántos convergen "
+        "hacia su umbral y cuál llegaría antes.\n"
+        "Tu trabajo es la LECTURA, no el cálculo: si no hay banderas activas, lo relevante es "
+        "el MARGEN y hacia dónde se mueve —un banco lejos y alejándose no es lo mismo que uno "
+        "lejos pero convergiendo—; si las hay, qué combinación pesa y qué la matiza. Cierra "
+        "con el 'y por tanto' de qué vigilar antes del próximo corte.\n"
+        "REGLA DURA: usa EXCLUSIVAMENTE las cifras del contexto. Los superlativos y el orden "
+        "(cuál converge antes, cuántos lo hacen) están en 'relaciones_computadas' — COPIALOS, "
+        "no los deduzcas del panel. Si una relación no está dada, exprésala en palabras SIN "
+        "número. Los plazos al umbral son CONDICIONALES: escríbelos como 'de sostenerse el "
+        "ritmo…', nunca como un pronóstico, y NO agregues rótulos de salvedad entre paréntesis "
+        "(el condicional ya lo dice; una advertencia extra solo genera desconfianza). NO "
+        "afirmes fraude ni causas ocultas: son un COMPLEMENTO del rating, no un veredicto.\n"
+        "PROPENSIÓN: si el contexto trae 'propension', integrala en el párrafo — es el "
+        "modelo entrenado sobre las quiebras REALES del sistema dominicano y responde la "
+        "misma pregunta desde el desenlace en vez de desde umbrales. Escribí desde el BANCO, "
+        "no desde el modelo: qué le está pasando a la entidad, contra qué se compara, qué "
+        "consecuencia tiene. Nada de 'factor', 'coeficiente' ni 'log-odds'. Las variables "
+        "listadas en 'controles_sin_lectura_causal' NO se narran como causa —son control "
+        "estadístico— y la cifra se presenta según 'uso_admitido': si dice BANDA, no la "
+        "publiques como probabilidad puntual de la entidad. 'lectura_de_referencia' es la "
+        "versión determinista: podés mejorar la redacción, no cambiar lo que afirma.\n"
+        "FORMATO DE LAS CIFRAS: cada señal trae sus campos ya redactados —'valor_expresado', "
+        "'umbral_expresado', 'hace_12m_expresado', 'horizonte'—. Copiá ESAS cadenas TAL CUAL "
+        "('2,0 veces', '50,9%', 'alrededor de 3,5 años'); NO uses los campos numéricos crudos "
+        "('value', 'threshold') ni reformatees el separador decimal — el informe usa PUNTO "
+        "decimal, y mezclar '2.3' con '2,3' en el mismo párrafo se lee como un error de datos."
     ),
     "banking_forensic": (
         "Escribe una LECTURA RETROSPECTIVA de una entidad financiera que SALIÓ del sistema, "
@@ -1200,6 +1222,40 @@ THIN_TEMPLATES = {
         "cubre el tramo, dilo en la misma frase en que uses la cifra real; si "
         "'consistencia' no reconcilia, publica el desglose por canal con esa reserva."
     ),
+    "brand_sales_projection": (
+        "Redacta la sección LA VENTA QUE VIENE del Informe de Contexto de Mercado: el "
+        "pronóstico de tráfico y cheque por local, con lo que el propio modelo declara "
+        "sobre su precisión.\nContexto:\n{context}\n\n"
+        "Máximo 300 palabras, 3 párrafos de prosa corrida, SIN encabezados ni listas. "
+        "ABRE con el reparto de la incertidumbre: usa "
+        "'pct_incertidumbre_venta_que_aporta_el_trafico' para decir cuál de los dos "
+        "componentes gobierna el pronóstico. Si el tráfico domina, la lectura es que "
+        "discutir el pronóstico de venta es discutir afluencia, y el cheque es la parte "
+        "predecible. Sigue con la precisión medida: el error del tráfico y el del cheque "
+        "contra 'error_de_la_vara_trafico_pct', que es lo que se obtendría sin modelo. "
+        "Cierra con la dispersión entre locales, priorizando los 2-3 casos que más se "
+        "juegan — NO recorras los treinta.\n"
+        "REGLA DURA DE COBERTURA: el informe NO puede hablar de la red entera con la "
+        "precisión del agregado. Menciona SIEMPRE cuántos locales de "
+        "'locales_en_el_panel' son proyectables, y nombra los de "
+        "'locales_no_proyectables_con_motivo' con su motivo. Un local excluido que no se "
+        "nombra desaparece sin aviso y el documento afirma una cobertura que no tiene.\n"
+        "REGLA DURA DE BANDA: cada local trae SU banda en 'banda_lo_pct' y 'banda_hi_pct', "
+        "y son distintas entre locales porque su dispersión difiere. NUNCA presentes una "
+        "banda única como si valiera para todos, y NUNCA cites un punto proyectado sin su "
+        "banda: un pronóstico sin banda se lee como una promesa.\n"
+        "REGLA DURA DE SESGO: si 'pct_jornadas_en_que_el_real_supero_al_pronostico' se "
+        "aparta de 50, dilo explícitamente con esa cifra. Un pronóstico que corre corto y "
+        "no lo declara induce a leer cada superación como un logro.\n"
+        "REGLA DURA DE CIFRAS: usa SOLO los números servidos. El reparto de la "
+        "incertidumbre, los errores, las bandas y la calibración YA vienen calculados por "
+        "el motor determinista — nárralos, NUNCA los recalcules ni derives cifras nuevas, "
+        "y no proyectes tú ningún valor que el contexto no traiga.\n"
+        "PROHIBIDO: presentar el pronóstico como lo que va a pasar. Es lo que ocurriría de "
+        "sostenerse el patrón reciente, y el horizonte es el de 'horizonte_dias'. Si "
+        "'varianza_de_la_venta' está, puedes apoyarte en ella para explicar POR QUÉ el "
+        "modelo funciona, pero sin convertir la explicación en el centro de la sección."
+    ),
     "brand_plan_readiness": (
         "Redacta la sección EL PLAN BAJO EL INSTRUMENTO del Informe de Contexto de "
         "Mercado: la lectura ESTRATÉGICA del plan que el cliente compartió, cruzada con "
@@ -1595,7 +1651,8 @@ class NarrativeEngine:
 
     def _generate_guarded(self, client, system: str, user: str, max_tokens: int,
                           context_str: str, cache_key: str, template: str,
-                          context: Optional[dict] = None) -> NarrativeResult:
+                          context: Optional[dict] = None,
+                          axis: Optional[str] = None) -> NarrativeResult:
         """Cerebro generation + numeric guardrail: generate, verify every figure traces
         to the context, and regenerate ONCE if any is unsupported. Two layers feed the
         check: a DETERMINISTIC computation (deltas vs median, range bounds, value↔period,
@@ -1605,7 +1662,8 @@ class NarrativeEngine:
         blanks the insight."""
         from shared.narrative.numeric_guard import (
             CORRECTION_NOTICE, DIRECTION_CORRECTION_NOTICE,
-            deterministic_direction_errors, deterministic_unsupported, verify_figures)
+            deterministic_direction_errors, deterministic_uncited_figures,
+            deterministic_unsupported, verify_figures)
 
         def _gen(user_msg):
             resp = _call_with_transient_retry(
@@ -1624,9 +1682,19 @@ class NarrativeEngine:
             SEPARADO porque piden correcciones distintas: una cifra sin respaldo se corrige
             no inventando; una dirección invertida se corrige cambiándole el signo SIN tocar
             los números (y sin borrar la comparación)."""
-            # determinista primero (gratis, garantía mecánica) + juez LLM (semántico)
-            det = deterministic_unsupported(context or {}, text)
-            llm = verify_figures(client, guard_model, context_str, text)
+            # determinista primero (gratis, garantía mecánica) + juez LLM (semántico).
+            # `deterministic_unsupported` lee la forma del contexto de banca; en un módulo
+            # con otra forma devuelve `[]` sin haber mirado nada. `deterministic_uncited`
+            # no conoce ninguna forma y cubre ese hueco: toda cifra citada tiene que estar
+            # entre los números del contexto, sea cual sea su estructura.
+            det = (deterministic_unsupported(context or {}, text)
+                   + deterministic_uncited_figures(context or {}, text))
+            # El juez contabiliza su PROPIA llamada (ver `verify_figures`): registrarla
+            # desde acá la anotaba sin dólares, y el juez es la mitad de las llamadas de
+            # un informe. Se le pasan eje y plantilla para que su fila quede atribuida
+            # igual que la de la narrativa que verifica.
+            llm = verify_figures(client, guard_model, context_str, text,
+                                 module=axis, template=template)
             seen, merged = set(), []
             for f in det + llm:
                 if f not in seen:
@@ -1661,6 +1729,14 @@ class NarrativeEngine:
         self._set_cache(cache_key, result)
         logger.info("Narrative (cerebro) template=%s tokens=%d guard_flags=%d",
                     template, result.tokens_used, len(result.guard_unsupported))
+        # El costo acumulado ya incluye la regeneración cuando el guard la disparó: se
+        # registra una sola fila por sección con el total real, no el de la primera
+        # llamada. Contar solo la primera escondería justo el costo del guard.
+        record_call(purpose=PURPOSE_NARRATIVE, model=result.model_used or "",
+                    cost_usd=result.cost_estimate, tokens_out=result.tokens_used,
+                    module=axis, template=template, cache_hit=False,
+                    detail={"guard_flags": len(result.guard_unsupported),
+                            "truncada": result.truncated})
         return result
 
     def _generate_fallback(self, context: dict, template: str) -> NarrativeResult:
@@ -1714,6 +1790,12 @@ class NarrativeEngine:
         cached = self._get_cached(cache_key)
         if cached:
             logger.info("Narrative cache hit for template=%s lang=%s axis=%s", template, lang, axis)
+            # El HIT también se registra, con costo cero. Sin él no se distingue «nadie
+            # pidió esto» de «lo pidieron cien veces y la caché lo absorbió», que es la
+            # diferencia que decide si la caché vale lo que ocupa.
+            record_call(purpose=PURPOSE_NARRATIVE, model=cached.model_used or "",
+                        cost_usd=0.0, module=axis, template=template, cache_hit=True,
+                        detail={"lang": lang, "mode": mode})
             return cached
 
         # Try Claude API
@@ -1761,7 +1843,7 @@ class NarrativeEngine:
                         return await asyncio.to_thread(
                             self._generate_guarded,
                             client, system, user, max_tokens, context_str, cache_key,
-                            template, context)
+                            template, context, axis)
                 except Exception as e:  # noqa: BLE001
                     logger.error("Claude API error (cerebro): %s. Fallback estático.", e)
                     result = self._generate_fallback(context, template)

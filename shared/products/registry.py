@@ -62,6 +62,12 @@ PRODUCT_CATALOG: List[CatalogEntry] = [
     # para /quality — que recorren esta lista.
     CatalogEntry("social_dev", "SDQ Desarrollo Social", "social_dev",
                  "MEPyD (SISDOM) · MINERD (SIIE) · SIUBEN · ONE · BCRD · Banco Mundial"),
+    # Producto cuyo sujeto es un INSTRUMENTO NORMATIVO, no un país ni una firma: evalúa el
+    # cumplimiento de las metas que una ley se fijó a sí misma. Cada ley es un expediente
+    # (datos) y el motor no conoce ninguna, así que el catálogo lista un solo sector aunque
+    # sirva N instrumentos — el selector de alcance los expone.
+    CatalogEntry("law", "SDQ Evaluación de Leyes", "law_intel",
+                 "Articulado de la norma · fuentes oficiales del propio Estado evaluado"),
 ]
 
 CATALOG_BY_KEY: Dict[str, CatalogEntry] = {e.sector_key: e for e in PRODUCT_CATALOG}

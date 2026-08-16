@@ -20,6 +20,9 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from shared.config.settings import settings
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_EXTRACTION, account,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -297,6 +300,7 @@ class AuditedPdfExtractor:
                 system=AUDITED_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": blocks}],
             )
+            account(response, model=self.model, purpose=PURPOSE_EXTRACTION, module=None, template="pdf_auditado")
         except self._anthropic.APIError as e:
             raise RuntimeError(f"Error de la API de Claude (visión): {e}") from e
         text = response.content[0].text
@@ -355,6 +359,7 @@ class AuditedPdfExtractor:
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
             )
+            account(response, model=self.model, purpose=PURPOSE_EXTRACTION, module=None, template="pdf_auditado")
             text = response.content[0].text
             return text, response.stop_reason
         except self._anthropic.APIError as e:

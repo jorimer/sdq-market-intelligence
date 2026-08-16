@@ -669,7 +669,7 @@ def _build_sensitivity_table(sens: Dict, styles) -> List:
     elements.append(Paragraph(
         "Umbral = valor crudo del indicador que lleva su score a la frontera de banda "
         "indicada; Δ Score = cambio resultante en el score global (recomputado con la "
-        "metodología, pesos por tipo de entidad). Lectura de sensibilidad, no proyección.",
+        "metodología, pesos por tipo de entidad).",
         styles["SDQSmall"]))
     return elements
 

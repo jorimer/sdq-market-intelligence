@@ -16,6 +16,7 @@ guardrail nunca debe empeorar la salida ni romper el endpoint.
 """
 import json
 import logging
+import math
 import re
 import unicodedata
 from typing import Any, Dict, List, Optional
@@ -27,7 +28,7 @@ logger = logging.getLogger("sdq.narrative.numeric_guard")
 # el CÓDIGO de este módulo —una regla nueva, un umbral distinto— no cambia ningún prompt y
 # pasaría inadvertido: la caché seguiría sirviendo texto que el guard nuevo habría marcado.
 # Es el único bump manual irreducible; por eso vive acá, junto a lo que describe.
-GUARD_VERSION = "4"  # "4": forma de contexto de reportes + cifras en palabras + ventana (2026-08-13)
+GUARD_VERSION = "5"  # "5": cifra citada que no está en el contexto, sin forma fija (2026-08-15)
 
 _JUDGE_SYSTEM = (
     "Sos un verificador numérico estricto y preciso. Tu ÚNICA tarea es detectar cifras "
@@ -263,6 +264,122 @@ def _norm_series_map(context: dict) -> Dict[str, List[Dict[str, Any]]]:
     return out
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Cifra citada que no está en el contexto — sin forma fija
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Todo lo que sigue en este módulo lee la forma del contexto de banca: `score`, `pares`,
+# `entity_type`, `median_score`. En un módulo con otra forma no encuentra nada y devuelve
+# `[]` — que no es «está limpio», es «no miré». La prueba negativa sobre el informe de
+# marca en producción: un texto con el 61 % donde el dato dice 84 %, un error de 2,3 %
+# donde dice 7,4 % y un local inexistente pasaba con CERO banderas.
+#
+# Esta regla no conoce ninguna forma. Extrae los números del contexto, sea cual sea su
+# estructura, y exige que toda cifra citada esté entre ellos.
+#
+# **La tolerancia tuvo que cambiar, y esa es la decisión de diseño.** El `_TOL = 0.3` del
+# resto del módulo sirve con los pocos números de un contexto de banca; con los 156 de una
+# sección de marca cubre el 57 % del rango 0-100 y el chequeo se vuelve decorativo. Acá la
+# coincidencia es exacta a un decimal: medido, una cifra inventada en 0-100 escapa el
+# 11,6 % de las veces en vez del 57 %.
+#
+# Se acepta el redondeo Y la truncación a un decimal. El informe real escribió «5,4 puntos»
+# de un 5,47 del contexto: no es una cifra inventada, es otra convención de redondeo, y
+# marcarla costaría una regeneración por un decimal. Medido: aceptarla baja el escape de
+# 11,3 % a 11,6 % y elimina el único falso positivo de 73 cifras citadas en nueve secciones
+# reales de producción.
+#
+# **Lo que NO hace, dicho para que no se le suponga alcance.** Dos cosas, las dos por
+# medición y no por olvido:
+#
+# 1. No verifica NOMBRES PROPIOS. Un local inventado sigue pasando. Se probó —«toda entidad
+#    citada existe en el contexto»— y midió 44 % de ruido sobre esas mismas nueve secciones:
+#    títulos de informe, saltos de línea dentro de un nombre y capturas entre oraciones. Un
+#    guard que marca casi todo se desactiva, y desactivado es peor que ausente.
+# 2. No mira cifras en «puntos». Ver la nota de ``_CLAIM_UNIT``.
+#
+# Y el poder que sí tiene está medido, no supuesto: sobre el contexto más denso del repo
+# (156 números), una cifra inventada en 0-100 escapa el 11,6 % de las veces. No es una
+# garantía, es una red — la que hoy no existe en ningún módulo que no sea banca.
+
+#: SOLO porcentajes, y la exclusión de «puntos» es el resultado de una medición, no una
+#: omisión. Con «puntos» dentro, esta regla marcaba el 30 % de los casos limpios del corpus
+#: de banca: «3,77 puntos por encima de la mediana» es score − mediana y «40 puntos» es
+#: score × peso. Banca DERIVA sus relaciones en la narrativa —y la aritmética de esas
+#: derivaciones ya la verifican los chequeos de arriba, que sí conocen su forma—; marca las
+#: sirve precomputadas. El punto es la unidad de la relación derivada; el porcentaje, la de
+#: la cifra citada.
+#:
+#: Medido sobre los dos corpus: con «puntos», 7 falsos positivos de 23 casos limpios de
+#: banca; sin «puntos», CERO en banca y cero en las nueve secciones reales de marca, a
+#: cambio de perder una de seis detecciones sobre un texto inventado.
+_CLAIM_UNIT = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:%|por\s+ciento)", re.I)
+
+
+def context_figures(context: Any) -> set:
+    """Todos los números del contexto, en valor absoluto y a un decimal.
+
+    Recorre la estructura completa sin conocerla: dicts, listas y también los números
+    incrustados en las glosas de texto, que el motor sirve y el modelo puede citar con
+    todo derecho. Guarda el redondeo y la truncación de cada valor.
+    """
+    out: set = set()
+
+    def _add(x: float) -> None:
+        a = abs(float(x))
+        out.add(round(a, 1))
+        out.add(math.floor(a * 10) / 10)
+
+    def _walk(o: Any) -> None:
+        if isinstance(o, bool) or o is None:
+            return
+        if isinstance(o, (int, float)):
+            _add(o)
+        elif isinstance(o, str):
+            for tok in re.findall(r"-?\d+(?:[.,]\d+)?", o):
+                try:
+                    _add(float(tok.replace(",", ".")))
+                except ValueError:
+                    continue
+        elif isinstance(o, dict):
+            for v in o.values():
+                _walk(v)
+        elif isinstance(o, (list, tuple, set)):
+            for v in o:
+                _walk(v)
+
+    _walk(context)
+    return out
+
+
+def deterministic_uncited_figures(context: dict, text: str) -> List[str]:
+    """Porcentajes y puntos del *text* que no aparecen en el contexto.
+
+    Best-effort y conservador: solo mira cifras con unidad de dato, y ante un contexto sin
+    números no marca nada (sin insumo no hay verificación, y fingirla sería el mismo modo
+    de falla que esta regla vino a cerrar).
+    """
+    flags: List[str] = []
+    try:
+        known = context_figures(context)
+        if not known:
+            return []
+        seen: set = set()
+        for m in _CLAIM_UNIT.finditer(text or ""):
+            raw = m.group(1)
+            try:
+                value = round(abs(float(raw.replace(",", "."))), 1)
+            except ValueError:
+                continue
+            if value in known or m.group(0).strip() in seen:
+                continue
+            seen.add(m.group(0).strip())
+            flags.append(f"{m.group(0).strip()}: no aparece en el contexto servido")
+    except Exception:  # noqa: BLE001 — el guard nunca tumba la entrega
+        logger.exception("deterministic_uncited_figures falló; se sigue sin esa capa")
+    return flags
+
+
 def guard_coverage(context: dict) -> Dict[str, bool]:
     """Qué insumos del chequeo determinista EXISTEN en este contexto.
 
@@ -276,6 +393,9 @@ def guard_coverage(context: dict) -> Dict[str, bool]:
         "pares": bool(context.get("pares")),
         "posiciones_dimension": bool(context.get("posiciones_dimension")),
         "comparaciones": bool(context.get("comparaciones")),
+        # La única que no depende de la forma del contexto: si hay números, hay
+        # verificación. Es la que hace que `[]` signifique «limpio» y no «no miré».
+        "cifras_del_contexto": bool(context_figures(context)),
     }
 
 
@@ -1019,12 +1139,21 @@ def deterministic_direction_errors(context: dict, text: str) -> List[str]:
     return out
 
 
-def verify_figures(client, model: str, context_str: str, text: str) -> List[str]:
+def verify_figures(client, model: str, context_str: str, text: str,
+                   module: Optional[str] = None,
+                   template: Optional[str] = None) -> List[str]:
     """Return the figures in *text* not supported by *context_str* (``[]`` if all OK
-    or if the check can't run). Best-effort: never raises."""
+    or if the check can't run). Best-effort: never raises.
+
+    Contabiliza su propia llamada. Antes solo sumaba al techo diario y el registro de
+    gasto la anotaba desde el caller SIN dólares: el juez aparecía con costo cero justo
+    cuando es la mitad de las llamadas de un informe —once de veinte en el primer informe
+    medido— y por tanto el total publicado era la mitad del real. Se contabiliza acá, que
+    es donde está la respuesta, y por la MISMA vía que los otros catorce sitios."""
     if not text.strip():
         return []
-    from shared.llm.budget import budget_allows, record_usage
+    from shared.llm.budget import budget_allows
+    from shared.observability.llm_ledger import PURPOSE_GUARD, account
     if not budget_allows():
         # Corte suave: sin presupuesto se omite el juez LLM; la capa DETERMINISTA
         # (deterministic_unsupported) sigue corriendo en el caller — el modo de
@@ -1039,11 +1168,8 @@ def verify_figures(client, model: str, context_str: str, text: str) -> List[str]
             messages=[{"role": "user", "content": _JUDGE_USER.format(
                 context=context_str, text=text)}],
         )
-        usage = getattr(resp, "usage", None)
-        if usage is not None:
-            record_usage(model,
-                         getattr(usage, "input_tokens", 0) or 0,
-                         getattr(usage, "output_tokens", 0) or 0)
+        account(resp, model=model, purpose=PURPOSE_GUARD,
+                module=module, template=template)
         return _parse_unsupported(resp.content[0].text)
     except Exception as e:  # noqa: BLE001 — best-effort; the guardrail must not break generation
         logger.warning("Guardrail numérico no pudo verificar (se sirve sin verificar): %s", e)

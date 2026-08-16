@@ -49,7 +49,12 @@ SECTOR_KEY = "banking"
 # huella de la caché y el test estructural del sujeto. Banca no tiene `ai_context.py`: sus
 # secciones nombradas se arman en `reports/narrative.py` y el Pulse acá mismo. Sin declararlo,
 # un arreglo de contexto de banca no invalidaba sus narrativas cacheadas ni pasaba por la regla.
-AI_CONTEXT_FILES = ("reports/narrative.py", "products.py")
+# `early_warning.py` entra aunque su sección sea DETERMINISTA (no pasa por el motor IA): el
+# texto que produce igual se guarda en `ProductReportCache`, que vive en Postgres y no tiene
+# TTL. Sin declararlo acá, arreglar el índice del conjunto dejaba los informes ya emitidos
+# sirviendo el "0.0/100 (banda baja)" viejo para siempre — el arreglo pasaba los tests y no
+# llegaba a ningún PDF. La huella es POR SECTOR: esto solo invalida narrativas de banca.
+AI_CONTEXT_FILES = ("reports/narrative.py", "products.py", "early_warning.py")
 SYSTEM_LABEL = "Sistema Bancario Dominicano"
 
 # Datos demo SINTÉTICOS de la muestra de conversión (sin DB, sin entidad real). KPIs del
@@ -295,8 +300,47 @@ _LIMITATIONS_TEXT = (
     "sistémica, techo soberano) como una capa de contexto separada (sección «Soporte y "
     "Techo Soberano»), sin alterar la calificación intrínseca. Las calificaciones SDQ son "
     "opiniones independientes de SDQ Consulting y no constituyen una recomendación para "
-    "comprar, vender o mantener instrumentos."
+    "comprar, vender o mantener instrumentos. "
+    # El porqué metodológico de la §Alerta Temprana vive ACÁ, no en el medio del análisis de
+    # riesgo: puesto allá convertía la sección en una excusa —más palabras y ninguna señal
+    # nueva para el comité—.
+    "El índice de alerta temprana pondera siete precursores calibrados contra entidades que "
+    "salieron del sistema financiero dominicano. Dos señales que el motor sí evalúa quedan "
+    "fuera de esa ponderación y se reportan por separado: la concentración en los diez "
+    "mayores deudores y el costo de fondeo. Ambas son divulgaciones de supervisión que no "
+    "existen en el registro contable histórico sobre el que se calibraron los pesos, de modo "
+    "que no hay desenlace conocido contra el cual medir su poder de anticipación. Se "
+    "publican con su valor y su umbral, y no se les asigna un peso que el dato no respalde."
 )
+
+
+def _propension_para_modelo(prop: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """La propensión servida al modelo SIN los números crudos ni la jerga de la regresión.
+
+    Mismo criterio que el panel de precursores: se sirven las cadenas ya redactadas y las
+    relaciones ya clasificadas. El modelo no ve coeficientes, log-odds ni factores — no puede
+    narrar un control como causa porque los controles llegan nombrados como tales, y no puede
+    inventar una probabilidad porque el uso admitido viaja con la cifra.
+    """
+    if not prop:
+        return None
+    def _slim(t: Dict[str, Any]) -> Dict[str, Any]:
+        return {"concepto": t.get("concepto"), "valor": t.get("valor"),
+                "media_en_quiebras": t.get("media_en_quiebras"),
+                "media_en_supervivientes": t.get("media_en_el_resto")}
+    return {
+        "propension_trimestral_pct": round((prop.get("propension") or 0) * 100, 2),
+        "veces_la_tasa_base": prop.get("veces_la_base"),
+        "tasa_base_del_sistema_pct": round((prop.get("tasa_base") or 0) * 100, 2),
+        "empujan_al_alza": [_slim(t) for t in (prop.get("empujan_al_alza") or [])],
+        "empujan_a_la_baja": [_slim(t) for t in (prop.get("empujan_a_la_baja") or [])],
+        "controles_sin_lectura_causal": prop.get("controles_no_narrables") or [],
+        "uso_admitido": prop.get("uso_admitido"),
+        "entrenado_sobre_n_quiebras": prop.get("n_quiebras_entrenamiento"),
+        # La prosa determinista viaja como REFERENCIA de registro y de contenido: el modelo
+        # puede mejorar la redacción, no cambiar lo que afirma.
+        "lectura_de_referencia": prop.get("prosa"),
+    }
 
 
 def banking_manifest() -> SectorProductManifest:
@@ -609,6 +653,15 @@ class BankingProduct:
             # propias del documento.
             scoring_result["early_warning"] = bank_alerts(
                 db, bank.id, cast(date, rr.period_end))
+            # Propensión a la quiebra: el modelo entrenado sobre las quiebras REALES del
+            # sistema (ver `propension_quiebra`). Va junto a la alerta temprana porque
+            # responde la misma pregunta del comité —qué tan cerca está esta entidad de tener
+            # problemas— pero desde el desenlace y no desde umbrales. Si el modelo no gradúa
+            # o falta el histórico, devuelve None y la sección simplemente no lo menciona.
+            from modules.banking_score.propension_quiebra import evaluar_entidad
+            prop = evaluar_entidad(db, str(bank.name), cast(date, rr.period_end))
+            if prop:
+                scoring_result["propension_quiebra"] = prop
         conc = compute_market_concentration(db, rr.period_end, "activos")
         # sujeto-ok: `metric_label` encabeza el dict y nombra la población sobre la que se
         # computan CR5/CR10/HHI (activos); el sujeto llega al modelo junto al número.
@@ -709,24 +762,52 @@ class BankingProduct:
         if "early_warning" in manifest.sections:
             from modules.banking_score.early_warning import format_alerts_text
             ew = scoring_result.get("early_warning") or {}
-            bullets = format_alerts_text(ew)
+            bullets = format_alerts_text(ew)   # sin narrativa: lleva la prosa de márgenes
             flags = ew.get("alerts") or []
             interp = ""
-            if flags:
+            panel = ew.get("panel") or []
+            if flags or panel:
                 # HÍBRIDO: párrafo IA que LEE EL PATRÓN del conjunto de banderas (alimentado
                 # SOLO por las banderas ya computadas → numeric_guard impide inventar cifras).
                 # Solo si hay motor real; sin API key quedan los bullets deterministas.
+                from modules.banking_score.early_warning import (
+                    panel_para_modelo, relaciones_para_modelo)
                 try:
                     res = await narrative_engine.generate(
                         context={"entity": snapshot.entity_name or "Entidad",
                                  "dominio": "banca — precursores detectables de la crisis 2003",
-                                 "flags": flags},
+                                 "flags": flags,
+                                 # El panel entra para que el párrafo narre la DISTANCIA a cada
+                                 # umbral: sin él, un informe sin banderas activas no decía si
+                                 # la entidad está holgada o a un pelo del disparo.
+                                 "panel_precursores": panel_para_modelo(panel),
+                                 # La propensión y su descomposición YA RESUELTA: qué empuja
+                                 # al alza, qué a la baja, y qué variables son control
+                                 # estadístico y no admiten lectura causal. El modelo copia
+                                 # esa clasificación; si la dedujera, contaría un control
+                                 # como si fuera una causa.
+                                 "propension": _propension_para_modelo(
+                                     scoring_result.get("propension_quiebra")),
+                                 # Y las relaciones vienen COMPUTADAS —cuál converge, cuál
+                                 # llega antes, en cuántos trimestres—. El modelo las copia; si
+                                 # las derivara, acertaría las cifras y fallaría el orden.
+                                 "relaciones_computadas": (relaciones_para_modelo(panel)
+                                                          if panel else {})},
                         template="early_warning_reading", mode="standard",
                         axis="banking", audience="inversionista")
                     if res.model_used != "static_fallback":
                         interp = (res.text or "").strip()
                 except Exception:  # noqa: BLE001 — la sección nunca depende del motor IA
                     interp = ""
+            if interp:
+                # El modelo narró los márgenes: el bloque determinista se reduce a los hechos
+                # estructurados para que la sección no los cuente dos veces.
+                bullets = format_alerts_text({**ew, "con_narrativa": True})
+            elif scoring_result.get("propension_quiebra", {}).get("prosa"):
+                # Sin motor de IA, la lectura de propensión entra como respaldo — es la única
+                # vía por la que el comité se entera de dónde cae la entidad frente a las
+                # quiebras reales del sistema.
+                bullets = (scoring_result["propension_quiebra"]["prosa"] + "\n\n" + bullets)
             out["early_warning"] = (interp + "\n\n" + bullets) if interp else bullets
         if "limitations" in manifest.sections:
             out["limitations"] = _LIMITATIONS_TEXT
