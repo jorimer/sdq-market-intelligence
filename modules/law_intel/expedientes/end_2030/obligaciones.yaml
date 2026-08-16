@@ -1,0 +1,128 @@
+# OBLIGACIONES — qué manda la ley hacer, a quién, con qué plazo y qué pasa si no.
+#
+# **La distinción que más importa acá.** `incumplida` y `sin_registro_publico` NO son lo
+# mismo, y confundirlas es el peor error que este producto puede cometer:
+#
+#   incumplida            hay evidencia de que no se hizo. Exige `evidencia`.
+#   sin_registro_publico  no se encontró registro. NO es una afirmación de incumplimiento.
+#
+# El cliente del informe es, muchas veces, el órgano al que la obligación le corresponde. Una
+# afirmación negativa sin verificar dirigida al propio Congreso —«la Comisión Bicameral nunca
+# se constituyó»— es refutable en una audiencia con un solo documento, y se lleva puesto el
+# informe entero. El motor no deja publicar la primera con la evidencia de la segunda.
+#
+# `consecuencia: null` es el hallazgo central del expediente, no un campo sin llenar: ninguno
+# de los mecanismos de control que la ley previó tiene efecto jurídico asignado a su no
+# activación. Se declara explícitamente para que se pueda contar.
+
+version: "1.0"
+
+obligaciones:
+  - id: art-41-informe-anual
+    articulo: 41
+    deber: >-
+      Convocar la Reunión Anual de Seguimiento y publicar el Informe Anual de Avance antes
+      del 5 de abril.
+    deudor: {tipo: organo, nombre: Órgano rector (hoy MHE, art. 41 lo asignaba al MEPyD)}
+    periodicidad: anual
+    plazo: {tipo: fecha_anual, vence: "04-05"}
+    consecuencia: null
+    estado: cumplida
+    evidencia: "13 informes anuales publicados; el 13.º en abril de 2026 con datos al cierre de 2024."
+    produce: [informe_anual_de_avance]
+
+  - id: art-42-informe-mediano-plazo
+    articulo: 42
+    deber: >-
+      Elaborar el Informe de Mediano Plazo en julio del último año de cada período de
+      gobierno, SOBRE LA BASE DE ESTUDIOS INDEPENDIENTES coordinados con el CES.
+    deudor: {tipo: organo, nombre: Órgano rector con el CES}
+    periodicidad: cuatrienal
+    plazo: {tipo: fechas, vence: ["2016-07-31", "2020-07-31", "2024-07-31", "2028-07-31"]}
+    consecuencia: null
+    estado: incumplida
+    evidencia: >-
+      Ningún Informe de Mediano Plazo publicado en catorce años de vigencia. El contraste con
+      los 13 informes anuales del art. 41 es el hallazgo: trece cumplimientos de la obligación
+      de REPORTAR, cero de la obligación de REVISAR. Reportar se hace con personal propio;
+      revisar exige contratar evaluación externa.
+    produce: [estudios_independientes, informe_mediano_plazo]
+    habilita_exigir: [requerimiento_al_organo_rector, amparo_de_cumplimiento]
+
+  - id: art-44-revision-de-termino
+    articulo: 44
+    deber: >-
+      Convocar la Revisión de Término un año antes del vencimiento, sobre estudios
+      independientes, para acordar el curso de acción hacia una nueva Estrategia.
+    deudor: {tipo: organo, nombre: Órgano rector con el CES}
+    plazo: {tipo: fecha_cierta, vence: "2029-12-31"}
+    consecuencia: null
+    estado: pendiente_no_vencida
+    evidencia: >-
+      Vence en 2029 y no consta preparación pública. Es la disposición más relevante del
+      expediente: la sucesión de la END no hay que inventarla, está mandada por la propia ley
+      con fecha — y nadie la está preparando.
+    produce: [estudios_independientes, revision_de_termino]
+    habilita_exigir: [calendarizacion_formal]
+
+  - id: art-50-informe-de-vinculacion
+    articulo: 50
+    deber: >-
+      Remitir, con cada Proyecto de Presupuesto, un informe que sustente su vinculación con
+      las metas de la END.
+    deudor: {tipo: organo, nombre: Poder Ejecutivo}
+    periodicidad: anual
+    consecuencia: null
+    estado: sin_registro_publico
+    evidencia: >-
+      No se localizó registro público de escrutinio de estos informes. NO se afirma que no se
+      hayan remitido: la verificación exige el expediente presupuestario de cada año.
+    habilita_exigir: [requerimiento_de_la_comision_bicameral]
+
+  - id: art-51-comision-bicameral
+    articulo: 51
+    deber: >-
+      Constituir la Comisión Bicameral de Planificación y Presupuesto para verificar y
+      efectuar seguimiento sistemático de la vinculación entre las metas de la END y el
+      Presupuesto, con facultad de citar ministros.
+    deudor: {tipo: organo, nombre: Congreso Nacional}
+    consecuencia: null
+    estado: sin_registro_publico
+    evidencia: >-
+      No se localizó registro público de actividad de fiscalización. ⚠️ Verificación
+      BLOQUEANTE antes de publicar: el destinatario del informe es el propio Congreso y una
+      afirmación negativa sin comprobar es refutable con un solo documento. Hay que consultar
+      los sistemas de expedientes de Cámara y Senado.
+    habilita_exigir: [citacion_de_funcionarios, requerimiento_del_informe_art_50]
+
+  - id: art-54-reglamento
+    articulo: 54
+    deber: Dictar el Reglamento de aplicación dentro de los 180 días de la promulgación.
+    deudor: {tipo: organo, nombre: Poder Ejecutivo}
+    plazo: {tipo: fecha_cierta, vence: "2012-07-23", base: 180 días desde el 2012-01-25}
+    consecuencia: null
+    estado: cumplida_tarde
+    evidencia: >-
+      Decreto 134-14 del 9 de abril de 2014: 21 meses después del vencimiento. Es el
+      incumplimiento más limpio del expediente — plazo expreso, fecha cierta, incumplidor
+      identificado, cero interpretación requerida.
+
+  - id: art-36-pacto-fiscal
+    articulo: 36
+    deber: >-
+      Concertar un Pacto Fiscal. El artículo consigna la NECESIDAD de que las fuerzas
+      políticas, económicas y sociales arriben al pacto.
+    deudor: {tipo: indeterminado, nombre: "las fuerzas políticas, económicas y sociales"}
+    consecuencia: null
+    estado: no_exigible
+    evidencia: >-
+      Catorce años y medio sin convocatoria, sin decreto y con un repositorio oficial en el
+      CES que contiene un solo archivo en toda su historia. Pero el artículo NO fija plazo
+      para firmar: su párrafo da tres años para el proceso que el pacto debía iniciar, lo que
+      es una condición suspensiva sin término. Es incorrecto hablar de «retraso» o de que «el
+      plazo venció en 2015».
+    nota_de_diseño: >-
+      Una obligación cuyo sujeto pasivo es «las fuerzas políticas, económicas y sociales» es
+      inexigible POR CONSTRUCCIÓN: no hay a quién requerir, quién incurre en mora, ni qué
+      efecto produce el vencimiento. Es falla de diseño de la ley, es textual, y se sostiene
+      sin analogías.

@@ -1,0 +1,85 @@
+# INSTRUMENTOS DE PROCESO — pactos y planes que la ley previó para mover un resultado.
+#
+# Un instrumento de proceso mide ACTIVIDAD: compromisos concluidos, reuniones celebradas,
+# documentos firmados. El indicador mide RESULTADO. Cruzarlos es lo que permite decir «esto
+# se ejecutó y no sirvió», que ninguna de las dos lecturas dice por separado — y es la razón
+# por la que un sistema que mide actividad puede reportar éxito indefinidamente mientras el
+# indicador se deteriora.
+#
+# **Las observaciones declaradas son INSTANTÁNEAS con procedencia, no series vivas.** Se usan
+# porque provienen de documentos oficiales publicados y fechados; cada una dice de dónde sale.
+# No sustituyen un binding: cuando la serie esté verificada, el oráculo debe preferirla.
+
+version: "1.0"
+
+instrumentos:
+  - id: pacto-electrico
+    nombre: Pacto Nacional para la Reforma del Sector Eléctrico
+    base_legal: {articulo: 35, norma: Ley 1-12}
+    firmado: "2021-02-25"
+    plazo_legal_para_concertar: "2013-01-25"     # un año desde la promulgación
+    cumplimiento_de_proceso:
+      concluidos_o_en_ejecucion: 148
+      total_compromisos: 167
+      fuente: 1.er Informe de veeduría del Pacto Eléctrico, julio de 2025
+      procedencia: snapshot:2025-07
+    # Los indicadores de la END que este pacto existía para mover.
+    resultados_esperados: ["3.27", "3.28", "3.29", "3.30"]
+    observaciones_declaradas:
+      - indicador: "3.28"
+        valor: 38.8
+        periodo: "2025"
+        fuente: Informe de Desempeño de las Empresas Eléctricas Estatales (MEM), cierre 2025
+        procedencia: snapshot:2025-12
+        nota: >-
+          «Pérdidas de energía» (no facturada). La línea base legal es 38,9% en 2008 y la meta
+          2025 es 8,5%: diecisiete años sin movimiento neto. EdeEste cerró en 56,1%.
+      - indicador: "3.30"
+        valor: 1659.3
+        periodo: "2025"
+        fuente: Informe de Desempeño de las Empresas Eléctricas Estatales (MEM), cierre 2025
+        procedencia: snapshot:2025-12
+        nota: Meta 2025 de US$62,5 MM. El subsidio real es veintiséis veces la meta.
+
+  - id: pacto-educativo
+    nombre: Pacto Nacional para la Reforma Educativa 2014-2030
+    base_legal: {articulo: 34, norma: Ley 1-12}
+    firmado: "2014-04-01"
+    plazo_legal_para_concertar: "2013-01-25"
+    cumplimiento_de_proceso:
+      concluidos_o_en_ejecucion: null
+      total_compromisos: null
+      fuente: null
+      procedencia: null
+      nota: >-
+        El seguimiento está congelado desde 2019 y no hay conteo público de compromisos
+        cumplidos. Sin la mitad de proceso, el cruce NO se puede hacer: el oráculo declara
+        `no_evaluable` en vez de suponer un cumplimiento.
+    resultados_esperados: ["2.12", "2.13", "2.14", "2.15", "2.16", "2.20"]
+    observaciones_declaradas: []
+
+  - id: pacto-fiscal
+    nombre: Pacto Fiscal
+    base_legal: {articulo: 36, norma: Ley 1-12}
+    firmado: null
+    plazo_legal_para_concertar: null            # el art. 36 no fija plazo para firmar
+    cumplimiento_de_proceso:
+      concluidos_o_en_ejecucion: 0
+      total_compromisos: 0
+      fuente: Repositorio del Pacto Fiscal, Consejo Económico y Social
+      procedencia: snapshot:2026-08
+      nota: >-
+        Nunca convocado. El repositorio oficial contiene un solo archivo en toda su historia
+        —un discurso presidencial de octubre de 2020— frente a la treintena del Pacto
+        Eléctrico. Con cero compromisos no hay proceso que contradiga un resultado: el hallazgo
+        es la ausencia del instrumento, no una incoherencia.
+    resultados_esperados: ["3.25"]
+    observaciones_declaradas:
+      - indicador: "3.25"
+        valor: 14.4
+        periodo: "2025"
+        fuente: Marco Fiscal de Mediano Plazo 2026-2030, Hacienda
+        procedencia: snapshot:2026-01
+        nota: >-
+          Presión TRIBUTARIA. Meta 2025 de 21,5%: brecha de 7,1 puntos del PIB. Catorce años
+          produjeron 1,4 puntos sobre la línea base y nunca se alcanzó ni la meta de 2015.

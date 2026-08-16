@@ -1,0 +1,9 @@
+# SELLO DE RATIFICACIÓN — ver `end_2030/sello.yaml` para la doctrina completa.
+sello:
+  hash_metas: 686ff26393e51454b37c419cd0c64e12179c50561de5837996d09e8aff429674
+  fecha: "2026-08-15"
+  aprobado_por: SDQ Consulting Group
+  base: >-
+    Objetivo declarado por el Decreto 337-24: duplicar el PIB real a 2036. El decreto no fija
+    línea base ni metas intermedias, así que la meta se ratifica como redactada.
+enmiendas: []

@@ -323,6 +323,40 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
     return out or _generic_summary(label, payload, period, source)
 
 
+def _law_summary(label: str, payload: Dict[str, Any], period: Optional[str],
+                 source: str) -> List[Evidence]:
+    """Evidencia REAL del eje de evaluación de leyes.
+
+    Lo primero que se sirve es la COBERTURA, y con su denominador pegado al número: sin eso,
+    el motor de research leería «2 contradicciones» sin saber que el informe mide 0 de 90
+    indicadores, y presentaría un hallazgo parcial como si fuera un veredicto del instrumento.
+    """
+    ctx = (payload or {}).get("contexto") or {}
+    inst = (payload or {}).get("instrumento") or {}
+    cob = ctx.get("cobertura_indicadores_medidos_sobre_total_de_la_ley") or {}
+    out: List[Evidence] = []
+    if cob:
+        out.append(_ev(
+            f"{inst.get('titulo') or label} ({inst.get('norma') or 's/n'}): el informe mide "
+            f"{cob.get('medidos')} de {cob.get('total_indicadores_numerados')} indicadores que "
+            f"la ley fija · corte {period or 's/f'}. "
+            f"{cob.get('propuestos_sin_verificar')} series propuestas SIN verificar, que NO "
+            f"cuentan como medición.", source, 96.0))
+    for c in (ctx.get("contradicciones_proceso_vs_resultado_computadas") or [])[:4]:
+        out.append(_ev(f"Contradicción proceso-resultado ({c['instrumento_de_proceso']}, "
+                       f"indicador {c['indicador']}): {c['lectura_ya_redactada']}",
+                       source, 95.0))
+    br = ctx.get("brechas_de_medicion") or {}
+    if br:
+        out.append(_ev(
+            f"Brechas de medición del instrumento: {br.get('con_brecha')} de "
+            f"{br.get('total_indicadores_ley')} indicadores, repartidas por responsable "
+            f"{br.get('por_responsable')}. Las de responsable 'instrumento' son metas que la "
+            f"ley fija en una escala que no admite diferencia; no las atribuyas a una falla "
+            f"de medición.", source, 94.0))
+    return out
+
+
 def _esg_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                  source: str) -> List[Evidence]:
     """ESG/clima (IRC): ``score.esg_score/band`` + breakdown + posición en el panel Caribe."""
@@ -519,6 +553,7 @@ _AXIS_SUMMARY = {
     "construction": _make_index_summary("ICC"),
     "agribusiness": _agribusiness_summary,
     "esg": _esg_summary,
+    "law": _law_summary,
     "pension": _pension_summary,
     "insurance": _insurance_summary,
     "economic_structure": _structure_summary,

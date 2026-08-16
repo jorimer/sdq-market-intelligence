@@ -1,0 +1,94 @@
+# BINDINGS — qué serie viva mide cada indicador de la ley.
+#
+# **Un binding se declara, nunca se infiere.** El nombre de un indicador parecido al de una
+# serie no es evidencia de que midan lo mismo: `presión tributaria` (solo ingresos
+# tributarios) y `presión fiscal` (incluye no tributarios y donaciones) difieren en más de un
+# punto del PIB, y confundirlas invierte la lectura del cumplimiento.
+#
+# **`estado` es lo que hace honesta la cobertura de portada:**
+#
+#   verificado  la serie existe, devuelve dato y se contrastó contra la fuente. CUENTA.
+#   propuesto   la serie es plausible y todavía no se comprobó. NO cuenta.
+#   descartado  se evaluó y NO mide lo que el eje afirma medir. NO cuenta, y dice por qué.
+#
+# Un informe que cuente propuestos como cobertura está afirmando que mide algo que no midió.
+# La verificación la hace `operations.verificar_bindings` contra las series reales; ningún
+# binding pasa a `verificado` por edición a mano.
+#
+# **`mejor` debe coincidir con la dirección que se computa de las propias metas de la ley.**
+# Si no coinciden, el expediente no carga. Es el guard contra el defecto más repetido de esta
+# plataforma: la cifra correcta con el sentido invertido.
+
+version: "1.0"
+
+bindings:
+  - indicador: "1.2"
+    serie: "ti.ipc.republica_dominicana"
+    fuente: pefa            # vía Participación Ciudadana; el índice es de Transparencia Int.
+    mejor: mayor            # el indicador mide AUSENCIA de corrupción: más alto es mejor
+    estado: propuesto
+    nota_comparabilidad: >-
+      El IPC cambió de escala 0-10 a 0-100 en 2012 y Transparencia Internacional declara la
+      serie NO comparable a través de esa ruptura. La meta de la ley está en la escala vieja:
+      cualquier conversión es una aproximación y debe declararse como tal, no publicarse como
+      dato duro.
+
+  - indicador: "1.8"
+    serie: "one.homicidios.tasa_por_cien_mil"
+    fuente: one
+    mejor: menor
+    estado: propuesto
+
+  - indicador: "2.1"
+    serie: "one.pobreza.extrema_nacional_pct"
+    fuente: one
+    mejor: menor
+    estado: propuesto
+    nota_comparabilidad: >-
+      La línea base de 2010 proviene de la ENFT y las mediciones actuales de la ENCFT/ENGIH,
+      con metodología actualizada en 2022. Las metas nunca se re-expresaron tras el cambio.
+
+  - indicador: "2.20"
+    serie: "minerd.gasto_publico_educacion.pct_pib"
+    fuente: minerd
+    mejor: mayor
+    estado: propuesto
+    nota_comparabilidad: >-
+      La meta 2025 vigente es 6,5% del PIB. El 4% que domina el debate público es el piso
+      TRANSITORIO que el Párrafo del artículo 24 fijó para 2013, no la meta del indicador.
+
+  - indicador: "3.9"
+    serie: "wef.indice_global_competitividad.rd"
+    fuente: pefa            # se declara acá para que la validación de fuente lo rechace
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      El WEF discontinuó el Índice Global de Competitividad en su forma comparable tras 2019 y
+      no es fuente oficial del Estado dominicano. Sin fuente admisible, el indicador queda
+      declarado sin medición: es una brecha del instrumento, no una del sistema.
+
+  - indicador: "3.25"
+    serie: "hacienda.presion_tributaria.pct_pib"
+    fuente: mhe
+    mejor: mayor
+    estado: propuesto
+    nota_comparabilidad: >-
+      Presión TRIBUTARIA (solo ingresos tributarios), no presión fiscal. Las cifras de 15,6% o
+      16,4% que circulan usan la segunda definición y no son comparables con la meta legal.
+      Las series de Hacienda tampoco son homogéneas entre marcos fiscales por revisión de
+      cuentas nacionales del BCRD: usar un solo marco y declararlo.
+
+  - indicador: "3.28"
+    serie: "mem.perdidas_electricas.pct"
+    fuente: mem
+    mejor: menor
+    estado: propuesto
+    nota_comparabilidad: >-
+      «Pérdidas de energía» (no facturada) y «pérdidas totales» (incluye facturada no cobrada)
+      dan cifras distintas. La meta legal de 8,5% corresponde a la primera.
+
+  - indicador: "3.30"
+    serie: "mem.subsidio_electrico.mm_usd"
+    fuente: mem
+    mejor: menor
+    estado: propuesto

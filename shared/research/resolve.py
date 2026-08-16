@@ -71,6 +71,15 @@ AXIS_KEYWORDS: Dict[str, Tuple[str, ...]] = {
                    "por provincia", "provincial", "provincias", "por region",
                    "regiones de desarrollo", "territorial", "demarcacion",
                    "siuben", "brecha territorial", "indice de desarrollo"),
+    # El sujeto de este eje es un INSTRUMENTO NORMATIVO. Las palabras evitan a propósito los
+    # términos genéricos de política pública ("meta", "indicador", "cumplimiento") que
+    # activarían el eje ante cualquier pregunta sectorial: acá se enruta cuando la pregunta
+    # es POR LA NORMA, no por el tema que la norma regula.
+    "law": ("ley", "leyes", "decreto", "articulado", "articulo", "norma", "normativa",
+            "estrategia nacional de desarrollo", "end 2030", "ley 1-12",
+            "meta rd 2036", "cumplimiento de la ley", "metas de la ley",
+            "evaluacion de la ley", "obligacion legal", "pacto electrico",
+            "pacto fiscal", "pacto educativo", "instrumento normativo"),
 }
 
 # Términos genéricos que NO distinguen una entidad (evitan matches espurios al resolver
