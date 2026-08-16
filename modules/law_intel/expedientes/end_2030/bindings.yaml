@@ -102,10 +102,10 @@ bindings:
     fuente: one
     mejor: menor
     estado: propuesto
-    nota_comparabilidad: >-
-      ⚠️ El tema `poverty_extreme` («Pobreza monetaria extrema») EXISTE en el panel social,
-      pero NO se expone como señal del Data Registry porque no alimenta el índice de
-      desarrollo. La verificación no lo alcanza y por eso el binding no promueve.
-      No es una brecha del Estado ni una duda sobre qué mide: es una brecha NUESTRA, de
-      superficie, y la acción es exponer ese tema como señal. Cerrarla habilita el indicador
-      más importante del Eje 2 — el único de la END que superó su meta de 2025.
+    nota_comparabilidad: null
+    nota: >-
+      «Pobreza monetaria extrema» — el mismo concepto que el indicador legal. El tema se
+      ingiere desde la ONE y NO alimenta el índice de desarrollo, así que se expone como
+      señal fuera del índice (peso 0). Queda `propuesto` hasta que la verificación confirme
+      que hay filas en producción: la ONE está tras Cloudflare y el sync puede no estar
+      trayendo dato, cosa que no se puede afirmar desde fuera.
