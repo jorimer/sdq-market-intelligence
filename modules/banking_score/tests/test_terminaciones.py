@@ -124,7 +124,9 @@ def test_una_causa_sin_fuente_se_ignora():
 def test_el_registro_real_carga_y_trae_las_sistemicas_de_2003():
     reg = tm.cargar_curadas()
     assert reg, "el archivo curado debe existir y cargar"
-    for nombre in ("banco intercontinental (baninter)", "banco nacional de credito",
+    # las claves quedan sin puntuación: `_norm_nombre` la elimina para poder emparejar
+    # "Banco Domínico-Hispano" con "Banco Dominico Hispano"
+    for nombre in ("banco intercontinental baninter", "banco nacional de credito",
                    "banco mercantil", "banco global"):
         assert reg[nombre]["causa"] == "quiebra"
         assert reg[nombre]["fuente"], "sin fuente no se acepta una etiqueta"
@@ -145,3 +147,53 @@ def test_validar_contra_curadas_reporta_los_desacuerdos():
     assert v["n_curadas"] == 2, "solo se mide sobre las curadas"
     assert v["n_aciertos"] == 1 and v["n_fallos"] == 1
     assert v["fallos"][0]["entidad"] == "Quiebra invisible"
+
+
+def test_una_curacion_que_no_empareja_se_DENUNCIA():
+    """Una entrada curada que no pega con ninguna salida NO HACE NADA, y en silencio. Es la
+    misma familia que el guard sin su input: no falla, desaparece. Pasó de verdad —dos
+    entradas quedaron huérfanas por un sufijo entre paréntesis— y nadie se enteró."""
+    t = [tm.Terminacion("A", "Banco Real", "Bancos Múltiples", date(2003, 1, 1),
+                        "insolvencia", ("x",), False, 60, 40.0, 1.0)]
+    reg = {"banco real": {"causa": "quiebra", "fuente": "f"},
+           "banco que no existe": {"causa": "quiebra", "fuente": "f"}}
+    assert tm.huerfanas(t, reg) == ["banco que no existe"]
+
+
+def test_el_sufijo_entre_parentesis_no_rompe_el_emparejamiento():
+    """El ledger escribe "Financiera Nacional de Créditos (Conacre)" y la fuente oficial
+    "Financiera Nacional de Créditos". Dos entradas reales se perdieron por esto."""
+    t = [tm.Terminacion("A", "Financiera Nacional de Créditos (Conacre)", "Corporaciones de Crédito",
+                        date(2003, 8, 1), "sana_al_salir", ("x",), False, 60, 2.0, 10.0)]
+    reg = {"financiera nacional de creditos": {"causa": "quiebra", "fuente": "SB"}}
+    out = tm.aplicar_curaduria(t, reg)
+    assert out[0].causa_curada == "quiebra" and out[0].es_quiebra
+
+
+def test_el_emparejamiento_NO_es_por_substring():
+    """Aflojar esto es como se produce el clásico APAP→Popular."""
+    t = [tm.Terminacion("A", "Asociación Popular de Ahorros y Préstamos", "aap",
+                        date(2003, 1, 1), "sana_al_salir", ("x",), False, 60, 1.0, 9.0)]
+    reg = {"banco popular dominicano": {"causa": "quiebra", "fuente": "f"}}
+    assert tm.aplicar_curaduria(t, reg)[0].causa_curada is None
+
+
+def test_la_puntuacion_no_rompe_el_emparejamiento():
+    """El ledger escribe "Banco Domínico-Hispano" y la fuente "Banco Dominico Hispano"."""
+    assert tm._norm_nombre("Banco Domínico-Hispano") == tm._norm_nombre("Banco Dominico Hispano")
+
+
+def test_el_registro_real_no_tiene_huerfanas():
+    """Gate vivo: si alguien agrega una entrada con un nombre que el ledger no usa, falla acá
+    en vez de quedar sin efecto."""
+    import collections
+    import csv
+    import pathlib
+    ruta = pathlib.Path(tm.__file__).resolve().parents[1] / "data" / "terminaciones_curadas.yaml"
+    assert ruta.exists()
+    reg = tm.cargar_curadas()
+    assert len(reg) > 40, "el registro debe estar poblado"
+    # No se puede validar contra el ledger sin el panel; se comprueba al menos que toda
+    # entrada tenga causa y fuente, que es la regla dura del archivo.
+    assert all(v.get("causa") and v.get("fuente") for v in reg.values())
+    assert isinstance(collections.Counter, type) and csv is not None

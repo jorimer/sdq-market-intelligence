@@ -225,9 +225,29 @@ def cargar_curadas(ruta: Optional[str] = None) -> Dict[str, Dict[str, str]]:
 
 
 def _norm_nombre(s: str) -> str:
+    """Nombre normalizado para emparejar el registro con el panel.
+
+    Quita acentos y puntuación —el ledger escribe "Banco Domínico-Hispano" y la fuente
+    "Banco Dominico Hispano"— pero NO hace match por substring: aflojar eso es como se
+    produce el clásico APAP→Popular. La tolerancia al sufijo entre paréntesis se maneja
+    aparte, en :func:`_claves_de`, generando claves alternativas explícitas.
+    """
+    import re
     import unicodedata
     s = unicodedata.normalize("NFKD", s or "")
-    return " ".join("".join(c for c in s if not unicodedata.combining(c)).lower().split())
+    s = "".join(c for c in s if not unicodedata.combining(c)).lower()
+    s = re.sub(r"[^a-z0-9áéíóúñü ]+", " ", s)
+    return " ".join(s.split())
+
+
+def _claves_de(nombre: str) -> Tuple[str, ...]:
+    """Claves con que una entidad puede aparecer: el nombre completo y, si trae un sufijo
+    entre paréntesis, también el nombre sin él. El ledger escribe "Financiera Nacional de
+    Créditos (Conacre)" y la fuente oficial "Financiera Nacional de Créditos"."""
+    import re
+    base = _norm_nombre(nombre)
+    sin_parentesis = _norm_nombre(re.sub(r"\([^)]*\)", " ", nombre))
+    return (base,) if sin_parentesis == base else (base, sin_parentesis)
 
 
 def aplicar_curaduria(terminaciones: Sequence[Terminacion],
@@ -238,10 +258,34 @@ def aplicar_curaduria(terminaciones: Sequence[Terminacion],
 
     reg = cargar_curadas() if curadas is None else curadas
     out: List[Terminacion] = []
+    usadas: set = set()
     for t in terminaciones:
-        c = reg.get(_norm_nombre(t.entidad_nombre))
+        c = None
+        for clave in _claves_de(t.entidad_nombre):
+            if clave in reg:
+                c = reg[clave]
+                usadas.add(clave)
+                break
         out.append(replace(t, causa_curada=c["causa"], fuente_curada=c["fuente"]) if c else t)
+    # Una entrada curada que no empareja con ninguna salida NO HACE NADA, y en silencio. Es
+    # la misma familia que el guard sin su input: no falla, desaparece. Se avisa siempre.
+    for huerfana in sorted(set(reg) - usadas):
+        logger.warning("Terminación curada que no empareja con ninguna salida del panel: %r "
+                       "— revisá el nombre contra el ledger.", huerfana)
     return out
+
+
+def huerfanas(terminaciones: Sequence[Terminacion],
+              curadas: Optional[Dict[str, Dict[str, str]]] = None) -> List[str]:
+    """Entradas del registro que no emparejan con ninguna salida. Debe ser vacío."""
+    reg = cargar_curadas() if curadas is None else curadas
+    usadas = set()
+    for t in terminaciones:
+        for clave in _claves_de(t.entidad_nombre):
+            if clave in reg:
+                usadas.add(clave)
+                break
+    return sorted(set(reg) - usadas)
 
 
 def cohorte_canonica(terminaciones: Sequence[Terminacion], *,
