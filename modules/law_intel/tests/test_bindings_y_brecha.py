@@ -104,3 +104,66 @@ class TestBrecha:
         bs = dict(cargar_bindings(EXPEDIENTE))
         bs["1.8"] = Binding("1.8", "s", "one", "menor", "verificado")
         assert "1.8" not in {b.indicador for b in brechas(exp.numerados, bs)}
+
+
+class TestTransformacionDeclarada:
+    """El indicador 2.19 es ANALFABETISMO y la variable es alfabetización.
+
+    Sin declarar la transformación el binding publicaría el complemento — el valor invertido.
+    Y la transformación es un nombre de un conjunto CERRADO, no una fórmula: una expresión
+    libre en un archivo de datos es código sin revisar, y acá decide qué cifra se publica.
+    """
+
+    def test_aplica_el_complemento(self):
+        from modules.law_intel.bindings import aplicar_transformacion
+        b = Binding("2.19", "s", "one", "menor", "propuesto", transformacion="complemento_100")
+        assert aplicar_transformacion(b, 93.7) == pytest.approx(6.3)
+
+    def test_sin_transformacion_el_valor_pasa_intacto(self):
+        from modules.law_intel.bindings import aplicar_transformacion
+        assert aplicar_transformacion(Binding("x", "s", "one", "mayor", "propuesto"), 9.6) == 9.6
+
+    def test_una_formula_libre_no_carga(self):
+        from modules.law_intel.registro import Expediente
+        e = Expediente(id="t", titulo="t", norma="t",
+                       meta={"fuentes_admitidas": [{"id": "one", "nombre": "ONE"}]},
+                       indicadores=[Indicador(id="1.8", eje=1, nombre="x", escala="numerica",
+                                              base_valor=24.8, metas={"2030": 4.0})])
+        with pytest.raises(ExpedienteInvalido, match="fórmulas libres"):
+            _validar(e, [Binding("1.8", "s", "one", "menor", "propuesto",
+                                 transformacion="100 - x")])
+
+
+class TestLasCuatroDudasResueltas:
+    """Cada resolución se comprobó contra lo que el panel declara medir, no contra el nombre."""
+
+    def test_poverty_rate_va_al_indicador_general_no_al_extremo(self):
+        """`_THEME_LABELS` del panel dice «Pobreza monetaria general» y el valor es 15,0.
+        El 2.1 es pobreza EXTREMA (meta 3,5% en 2025); el 2.4 es la moderada."""
+        bs = cargar_bindings(EXPEDIENTE)
+        assert bs["2.4"].serie == "social_dev:poverty_rate"
+        assert not (bs["2.4"].nota_comparabilidad or "").strip(), "la duda quedó resuelta"
+
+    def test_el_indicador_de_pobreza_extrema_declara_su_brecha_real(self):
+        """El dato EXISTE en la plataforma y no está expuesto donde la verificación lo
+        alcanza. Es una brecha nuestra de superficie, no una duda sobre qué mide."""
+        b = cargar_bindings(EXPEDIENTE)["2.1"]
+        assert b.serie == "social_dev:poverty_extreme"
+        assert "no se expone" in (b.nota_comparabilidad or "").lower()
+
+    def test_analfabetismo_lleva_su_transformacion(self):
+        b = cargar_bindings(EXPEDIENTE)["2.19"]
+        assert b.transformacion == "complemento_100"
+        assert not (b.nota_comparabilidad or "").strip()
+
+    def test_el_ingreso_queda_descartado_con_su_motivo(self):
+        b = cargar_bindings(EXPEDIENTE)["3.26"]
+        assert b.estado == "descartado"
+        m = b.motivo_descarte or ""
+        assert "MENSUAL" in m and "Atlas" in m, "el motivo nombra las dos magnitudes"
+
+    def test_las_resueltas_ya_no_bloquean(self):
+        """Ninguna de las tres resueltas conserva una duda abierta."""
+        bs = cargar_bindings(EXPEDIENTE)
+        for i in ("2.4", "2.19", "2.18", "2.21"):
+            assert not (bs[i].nota_comparabilidad or "").strip(), i

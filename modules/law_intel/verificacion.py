@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from modules.law_intel.bindings import Binding, cargar_bindings
+from modules.law_intel.bindings import Binding, aplicar_transformacion, cargar_bindings
 
 # Antigüedad máxima tolerada para considerar viva una serie, en años respecto del corte. Una
 # serie que existe pero se congeló no mide el presente — y publicarla como medición vigente
@@ -39,6 +39,10 @@ class Comprobacion:
     ultimo_periodo: Optional[str] = None
     n_observaciones: int = 0
     comparabilidad_sin_resolver: bool = False
+    # El valor ya llevado a la magnitud del indicador. Reportar el crudo dejaría al operador
+    # comparando la variable contra la meta y concluyendo cualquier cosa.
+    ultimo_valor: Optional[float] = None
+    transformacion: Optional[str] = None
 
     @property
     def existe(self) -> bool:
@@ -86,12 +90,15 @@ def comprobar(bindings: Dict[str, Binding], proveedor: Proveedor,
             out.append(Comprobacion(b.indicador, b.serie, b.estado, "vacia",
                                     comparabilidad_sin_resolver=duda))
             continue
+        obs = [(p, aplicar_transformacion(b, v)) for p, v in obs]
         ultimo = max(p for p, _ in obs)
         viva = int(ultimo[:4]) >= int(corte) - ANTIGUEDAD_MAXIMA_ANIOS
         out.append(Comprobacion(b.indicador, b.serie, b.estado,
                                 "verificable" if viva else "congelada",
                                 ultimo_periodo=ultimo, n_observaciones=len(obs),
-                                comparabilidad_sin_resolver=duda))
+                                comparabilidad_sin_resolver=duda,
+                                ultimo_valor=dict(obs)[ultimo],
+                                transformacion=b.transformacion))
     return out
 
 
@@ -117,6 +124,7 @@ def informe(expediente_id: str, proveedor: Proveedor, corte: str) -> Dict[str, A
             "resultado": c.resultado, "ultimo_periodo": c.ultimo_periodo,
             "n_observaciones": c.n_observaciones, "promueve": c.promueve,
             "comparabilidad_sin_resolver": c.comparabilidad_sin_resolver,
+            "ultimo_valor": c.ultimo_valor, "transformacion": c.transformacion,
         } for c in cs],
         "resultados": RESULTADOS,
         "nota": ("Esta comprobación NO muta el expediente. El estado de un binding es un hecho "
