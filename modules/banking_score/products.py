@@ -659,7 +659,7 @@ class BankingProduct:
             # problemas— pero desde el desenlace y no desde umbrales. Si el modelo no gradúa
             # o falta el histórico, devuelve None y la sección simplemente no lo menciona.
             from modules.banking_score.propension_quiebra import evaluar_entidad
-            prop = evaluar_entidad(db, bank.name, cast(date, rr.period_end))
+            prop = evaluar_entidad(db, str(bank.name), cast(date, rr.period_end))
             if prop:
                 scoring_result["propension_quiebra"] = prop
         conc = compute_market_concentration(db, rr.period_end, "activos")
