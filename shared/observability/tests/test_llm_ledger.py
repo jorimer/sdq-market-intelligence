@@ -261,3 +261,37 @@ def test_account_suma_al_techo_diario_y_registra_a_la_vez(db, monkeypatch):
 
 def test_account_nunca_lanza_con_una_respuesta_rara(db):
     assert L.account(object(), model="m", purpose=L.PURPOSE_OTHER) == 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Las DOS rutas del motor registran, no solo la que se probó
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_las_dos_rutas_del_motor_registran(db, monkeypatch):
+    """La ruta legacy contaba contra el techo diario pero NO aparecía en el panel.
+
+    El test estructural no lo caza porque valida por ARCHIVO: `claude_engine.py` nombra la
+    contabilidad en su ruta cerebro, así que pasa aunque un camino interno no registre. La
+    cobertura por archivo no implica cobertura por camino, y esta es la diferencia.
+    """
+    import ast
+    import inspect
+
+    from shared.narrative import claude_engine as CE
+
+    fuente = inspect.getsource(CE.NarrativeEngine)
+    arbol = ast.parse("class X:\n" + "\n".join(
+        "    " + ln for ln in fuente.splitlines()[1:]))
+
+    def registra(nombre_metodo: str) -> bool:
+        for n in ast.walk(arbol):
+            if isinstance(n, ast.FunctionDef) and n.name == nombre_metodo:
+                return any(
+                    isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                    and c.func.id == "record_call"
+                    for c in ast.walk(n)
+                )
+        raise AssertionError(f"no se encontró {nombre_metodo}")
+
+    assert registra("_generate_guarded"), "la ruta cerebro dejó de registrar"
+    assert registra("_result_from_response"), "la ruta legacy dejó de registrar"
