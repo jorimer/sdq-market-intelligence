@@ -301,3 +301,15 @@ def test_toda_senal_tiene_su_consecuencia_de_negocio():
     assert not faltan, f"{faltan}: sin consecuencia de negocio, la viñeta no dice nada"
     sin_ancla = [c for c in SIGNAL_META if c not in ANCLA_2003]
     assert not sin_ancla, f"{sin_ancla}: declarala aunque sea vacía, para que sea una decisión"
+
+
+def test_la_plantilla_dice_como_insertar_el_horizonte():
+    """Salió publicado «el margen desaparecería alrededor de 3.5 años antes de que las
+    reservas dejen de cubrir», que no significa nada. El campo llega como cadena ya redactada
+    —'alrededor de 3.5 años'— y sin decirle DÓNDE va, el modelo la encaja en cualquier hueco
+    gramatical. Servir la cadena hecha evita que reformatee el número; no evita que la ubique
+    mal."""
+    from shared.narrative.claude_engine import THIN_TEMPLATES
+    t = THIN_TEMPLATES["early_warning_reading"]
+    assert "EL HORIZONTE es CUÁNTO FALTA" in t
+    assert "tomaría" in t and "NUNCA como" in t
