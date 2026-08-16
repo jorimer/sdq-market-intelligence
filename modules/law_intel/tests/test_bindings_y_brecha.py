@@ -56,12 +56,12 @@ class TestValidacionDeBindings:
         24,8 a 4,0 —menos es mejor— y el binding afirma lo contrario."""
         with pytest.raises(ExpedienteInvalido, match="invertido"):
             _validar(self._exp_falso(),
-                     [Binding("1.8", "s", "one", "mayor", "verificado")])
+                     [Binding("1.8", "s", "one", "mayor", "verificado", periodo_verificado="2024")])
 
     def test_fuente_fuera_de_la_lista_blanca(self):
         with pytest.raises(ExpedienteInvalido, match="lista blanca"):
             _validar(self._exp_falso(),
-                     [Binding("1.8", "s", "banco-mundial", "menor", "verificado")])
+                     [Binding("1.8", "s", "banco-mundial", "menor", "verificado", periodo_verificado="2024")])
 
     def test_descartado_exige_motivo(self):
         with pytest.raises(ExpedienteInvalido, match="sin motivo"):
@@ -75,7 +75,7 @@ class TestValidacionDeBindings:
 
     def test_binding_a_indicador_inexistente(self):
         with pytest.raises(ExpedienteInvalido, match="inexistente"):
-            _validar(self._exp_falso(), [Binding("9.9", "s", "one", "menor", "verificado")])
+            _validar(self._exp_falso(), [Binding("9.9", "s", "one", "menor", "verificado", periodo_verificado="2024")])
 
     def test_binding_duplicado(self):
         with pytest.raises(ExpedienteInvalido, match="duplicado"):
@@ -84,7 +84,7 @@ class TestValidacionDeBindings:
     def test_direccion_plana_no_bloquea(self):
         """Con metas planas la dirección no es deducible; el binding decide y no se contradice."""
         e = self._exp_falso(base_valor=24.4, metas={"2015": 24.4, "2030": 24.4})
-        _validar(e, [Binding("1.8", "s", "one", "mayor", "verificado")])
+        _validar(e, [Binding("1.8", "s", "one", "mayor", "verificado", periodo_verificado="2024")])
 
 
 class TestBrecha:
@@ -221,3 +221,49 @@ class TestLasSenalesQueYaEstabanExpuestas:
         m = b.motivo_descarte or ""
         assert "SP.DYN.IMRT.IN" in m, "el motivo debe nombrar el código que lo prueba"
         assert "1 año" in m and "5" in m, "el motivo nombra los dos tramos de edad"
+
+
+class TestLaFrescuraDeclarada:
+    """Sin período declarado el producto no tiene frescura, y el readiness castiga eso con
+    un factor 0,5 — un «no aplica» honesto puntuaba igual que un dato medio rancio. El
+    período se declara al promover, que es cuando se conoce."""
+
+    def test_no_se_puede_promover_un_binding_sin_declarar_su_periodo(self):
+        with pytest.raises(ExpedienteInvalido) as e:
+            _validar(cargar(EXPEDIENTE),
+                     [Binding(indicador="2.1", serie="social_dev:poverty_extreme",
+                              fuente="one", mejor="menor", estado="verificado")])
+        assert "periodo_verificado" in str(e.value)
+
+    def test_los_verificados_del_expediente_declaran_su_periodo(self):
+        for b in cargar_bindings(EXPEDIENTE).values():
+            if b.cuenta:
+                assert (b.periodo_verificado or "").strip(), b.indicador
+
+    def test_la_antiguedad_es_la_del_dato_MAS_VIEJO(self):
+        """Tomar el más nuevo diría «datos de 2024» aunque medio panel fuera de 2019. Un
+        informe es tan actual como su componente más rancio."""
+        import datetime as dt
+
+        from modules.law_intel.products import _antiguedad_del_dato
+        dias = _antiguedad_del_dato(EXPEDIENTE)
+        anios = sorted(int((b.periodo_verificado or "0")[:4])
+                       for b in cargar_bindings(EXPEDIENTE).values() if b.cuenta)
+        esperado = (dt.date.today() - dt.date(anios[0], 12, 31)).days
+        assert dias == max(0, esperado)
+
+    def test_un_expediente_sin_verificados_no_inventa_frescura(self):
+        """`None` y no 0: un 0 se leería como «dato de hoy», que es lo contrario de la
+        verdad cuando no hay ningún dato."""
+        from modules.law_intel.products import _antiguedad_del_dato
+        # `meta_rd_2036` está cargado como segundo expediente y no tiene bindings.
+        assert _antiguedad_del_dato("meta_rd_2036") is None
+
+    def test_la_frescura_declarada_le_devuelve_al_producto_el_factor_entero(self):
+        """El punto de todo esto: sin período el readiness multiplicaba la cobertura por
+        0,5, así que cada indicador medido rendía la mitad. Con 2024 declarado y cadencia
+        anual (pleno hasta dos años), el factor es 1,0 y `pulse` pasa a exigir 15 de 90 en
+        vez de 30."""
+        from shared.products.readiness import _freshness_factor
+        from modules.law_intel.products import _antiguedad_del_dato
+        assert _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual") == 1.0

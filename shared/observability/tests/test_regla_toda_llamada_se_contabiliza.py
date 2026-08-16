@@ -72,7 +72,15 @@ _SDKS = {"anthropic", "openai", "google.generativeai", "google.genai", "litellm"
 #: agrega uno, tiene que escribir por qué.
 EXENTOS: dict = {}
 
-_EXCLUIR = ("/tests/", "/.venv/", "/node_modules/")
+# `/.claude/` guarda los worktrees de las sesiones concurrentes: COPIAS del árbol, con los
+# mismos archivos bajo otro prefijo. Sin excluirlas, este test denuncia una decena de
+# incumplimientos que son los mismos archivos ya conformes, y —peor— el veredicto pasa a
+# depender de qué tenga checkouteado otra sesión en el disco de quien lo corre. Un gate
+# estructural que falla por el estado local de un tercero enseña a ignorarlo.
+#
+# (Segunda vez que se agrega: la reescritura de este test se lo llevó por delante. Si lo
+# volvés a tocar, la exclusión tiene que sobrevivir — lo vigila el test de abajo.)
+_EXCLUIR = ("/tests/", "/.venv/", "/node_modules/", "/.claude/")
 
 
 def _fuentes():
@@ -239,3 +247,15 @@ def test_un_sitio_que_llama_y_no_contabiliza_se_detecta():
         "account(resp, model=m, purpose='x')"
     )
     assert contabiliza(bueno)
+
+
+def test_el_barrido_no_lee_los_worktrees_de_otras_sesiones():
+    """El glob arranca en la raíz del repo, y las sesiones concurrentes dejan copias
+    completas del árbol en `.claude/worktrees/`. Sin excluirlas, este gate denuncia los
+    mismos archivos ya conformes vistos bajo otro prefijo — y su veredicto pasa a depender
+    de qué tenga checkouteado otra sesión en el disco.
+
+    Ya se perdió una vez en una reescritura del test. Por eso ahora hay un test del test.
+    """
+    assert "/.claude/" in _EXCLUIR
+    assert not [rel for rel, _ in _fuentes() if rel.startswith(".claude/")]

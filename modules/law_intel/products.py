@@ -11,6 +11,7 @@ los clientes que ya descargaron su informe.
 """
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import logging
 from typing import Any, Dict, List, Optional
@@ -28,6 +29,39 @@ from shared.products import (DataHealth, Granularity, ProductSnapshot, ProductTi
 from shared.products.render import render_product_pdf
 
 logger = logging.getLogger("sdq.law_intel.products")
+
+
+def _antiguedad_del_dato(eid: str) -> Optional[int]:
+    """Días desde que cerró el período del dato MÁS VIEJO entre los bindings verificados.
+
+    **Por qué el más viejo y no el más nuevo.** Un informe es tan actual como su componente
+    más rancio: tomar el máximo diría «datos de 2024» aunque la mitad del panel fuera de
+    2019. El readiness castiga la frescura y tiene que castigar la real.
+
+    **Por qué se lee del expediente y no del Data Registry.** `data_signals()` la llama el
+    cálculo de readiness, y construir el registro desde acá haría que un producto arme el
+    registro que lo contiene — caro y a un paso de la recursión. El período se declara en el
+    binding al promoverlo, que es cuando se conoce, y queda comiteado y auditable.
+
+    Devuelve None si no hay ningún binding verificado: sin dato no hay frescura que declarar,
+    y ahí el 0,5 del factor da igual porque la cobertura es cero.
+    """
+    from modules.law_intel.bindings import cargar_bindings
+
+    anios = []
+    for b in cargar_bindings(eid).values():
+        if not b.cuenta:
+            continue
+        crudo = (b.periodo_verificado or "")[:4]
+        if crudo.isdigit():
+            anios.append(int(crudo))
+    if not anios:
+        return None
+    # El período cierra el 31 de diciembre de su año: un dato anual de 2024 no está completo
+    # antes de eso, y fecharlo al 1 de enero lo haría parecer un año más viejo de lo que es.
+    cierre = _dt.date(min(anios), 12, 31)
+    return max(0, (_dt.date.today() - cierre).days)
+
 
 SECTOR_KEY = "law"
 DISPLAY = "SDQ Evaluación de Leyes"
@@ -159,7 +193,7 @@ class LawProduct:
         eid = eids[0]
         pct = float(cobertura(eid)["pct"])   # type: ignore[arg-type]
         return DataHealth(
-            coverage=pct / 100.0, freshness_days=None, cadence="annual",
+            coverage=pct / 100.0, freshness_days=_antiguedad_del_dato(eid), cadence="annual",
             sources=(cargar(eid).norma,),
             # `detail` NO es decorativo: el readiness lo inserta literalmente en el texto de
             # la brecha, y de ahí lo lee el agente de descubrimiento de fuentes. Vacío, el
