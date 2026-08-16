@@ -6,21 +6,30 @@ consumió, el disparador dice si lo pidió alguien o si una tarea agendada lo ge
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
 from shared.observability.models import LLMCall
 
-#: Ventana por defecto. Treinta días cubre el ciclo de facturación y las cadencias
-#: mensuales de las operaciones sin traer historia que nadie mira.
+#: Rango por defecto cuando no se pide uno: los últimos treinta días.
 DEFAULT_DAYS = 30
 
 
-def _desde(days: int) -> datetime:
-    return (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
+def _rango(desde: Optional[date], hasta: Optional[date]) -> Tuple[datetime, datetime]:
+    """Convierte un rango de FECHAS en el intervalo de instantes que se consulta.
+
+    ``hasta`` es **inclusivo del día completo**: quien pide «hasta el 16» quiere lo del 16,
+    no lo anterior a su medianoche. Tomar la fecha tal cual dejaría fuera todo el último día
+    —el que más se mira— y el error sería invisible porque el total seguiría siendo un
+    número plausible.
+    """
+    fin_dia = hasta or datetime.now(timezone.utc).date()
+    ini_dia = desde or (fin_dia - timedelta(days=DEFAULT_DAYS))
+    return (datetime.combine(ini_dia, time.min),
+            datetime.combine(fin_dia, time.max))
 
 
 def _fila(r) -> Dict[str, Any]:
@@ -37,7 +46,7 @@ def _fila(r) -> Dict[str, Any]:
     }
 
 
-def _agrupado(db: Session, columna, days: int) -> List[Dict[str, Any]]:
+def _agrupado(db: Session, columna, ini: datetime, fin: datetime) -> List[Dict[str, Any]]:
     rows = (
         db.query(
             columna.label("clave"),
@@ -45,42 +54,48 @@ def _agrupado(db: Session, columna, days: int) -> List[Dict[str, Any]]:
             func.count(LLMCall.id).label("llamadas"),
             func.sum(func.cast(LLMCall.cache_hit, Integer)).label("hits"),
         )
-        .filter(LLMCall.created_at >= _desde(days))
+        .filter(LLMCall.created_at >= ini, LLMCall.created_at <= fin)
         .group_by(columna)
         .all()
     )
     return sorted((_fila(r) for r in rows), key=lambda d: -d["costo_usd"])
 
 
-def spend_summary(db: Session, days: int = DEFAULT_DAYS,
-                  top: int = 15) -> Dict[str, Any]:
-    """Gasto de los últimos ``days`` días, repartido por disparador, módulo y motivo.
+def spend_summary(db: Session, desde: Optional[date] = None,
+                  hasta: Optional[date] = None, top: int = 15) -> Dict[str, Any]:
+    """Gasto de un rango de FECHAS, repartido por disparador, módulo y motivo.
+
+    El rango es explícito y no una ventana de N días porque la pregunta que motiva esta
+    consulta es «¿cuadra con lo que me facturaron?», y la facturación va por ciclo
+    calendario. Una ventana móvil obliga a hacer la cuenta de cabeza cada vez.
 
     Devuelve también el total y el conteo, para que el panel no tenga que sumar la lista
     —una lista truncada a ``top`` sumaría mal y el total es justo la cifra que se mira
     primero—.
     """
-    desde = _desde(days)
+    ini, fin = _rango(desde, hasta)
     total = (db.query(func.sum(LLMCall.cost_usd), func.count(LLMCall.id))
-             .filter(LLMCall.created_at >= desde).one())
+             .filter(LLMCall.created_at >= ini, LLMCall.created_at <= fin).one())
     return {
-        "desde": desde.isoformat(),
-        "dias": days,
+        "desde": ini.date().isoformat(),
+        "hasta": fin.date().isoformat(),
         "costo_total_usd": round(float(total[0] or 0.0), 4),
         "llamadas_totales": int(total[1] or 0),
-        "por_disparador": _agrupado(db, LLMCall.trigger_detail, days)[:top],
-        "por_modulo": _agrupado(db, LLMCall.module, days)[:top],
+        "por_disparador": _agrupado(db, LLMCall.trigger_detail, ini, fin)[:top],
+        "por_modulo": _agrupado(db, LLMCall.module, ini, fin)[:top],
         # Separa PRODUCIR de VERIFICAR. El juez numérico corre sobre toda sección de toda
         # generación: sumado al mismo total que la narrativa, su peso era invisible.
-        "por_motivo": _agrupado(db, LLMCall.purpose, days),
+        "por_motivo": _agrupado(db, LLMCall.purpose, ini, fin),
     }
 
 
-def spend_detail(db: Session, days: int = DEFAULT_DAYS,
+def spend_detail(db: Session, desde: Optional[date] = None,
+                 hasta: Optional[date] = None,
                  trigger: Optional[str] = None,
                  limit: int = 200) -> List[Dict[str, Any]]:
-    """Las llamadas de un disparador, de la más cara a la más barata."""
-    q = db.query(LLMCall).filter(LLMCall.created_at >= _desde(days))
+    """Las llamadas de un disparador en el rango, de la más cara a la más barata."""
+    ini, fin = _rango(desde, hasta)
+    q = db.query(LLMCall).filter(LLMCall.created_at >= ini, LLMCall.created_at <= fin)
     if trigger:
         q = q.filter(LLMCall.trigger_detail == trigger)
     filas = q.order_by(LLMCall.cost_usd.desc()).limit(limit).all()

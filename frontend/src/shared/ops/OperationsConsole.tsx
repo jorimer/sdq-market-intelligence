@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Wrench, RefreshCw, Play, Clock, History } from "lucide-react";
 import { PageHead, Card, CardHead, StateBlock, Chip } from "@/shared/ui/primitives";
+import { SpendPanel } from "@/shared/ops/SpendPanel";
 import {
   getOperationsStatus,
   triggerOperation,
@@ -288,6 +289,12 @@ export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, o
       <PageHead eyebrow={eyebrow} title={title} sub={sub} />
 
       {overview && <div className="mb-5">{overview}</div>}
+
+      {/* El gasto va ARRIBA de las operaciones: la decisión que informa —apagar una tarea
+          que gasta— se toma con los interruptores que están justo debajo. */}
+      <div className="mb-5">
+        <SpendPanel />
+      </div>
 
       {status === "loading" && <StateBlock kind="loading" message={t("ops.loading")} />}
       {status === "forbidden" && (
