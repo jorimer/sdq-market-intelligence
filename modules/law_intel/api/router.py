@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from modules.law_intel.agente_fuentes import MAX_POR_CORRIDA, barrer
 from modules.law_intel.bindings import cargar_bindings, cobertura
 from modules.law_intel.verificacion import informe
 from shared.registry.service import build_data_registry
@@ -363,3 +364,30 @@ def ratificacion_(expediente_id: str, _: User = Depends(get_current_user)) -> Di
                   "registrada como enmienda con su hash resultante: una norma real no puede "
                   "servir de paraguas a un cambio distinto del que autorizó."),
     }
+
+
+@router.post("/{expediente_id}/fuentes/barrido")
+def barrido_de_fuentes(
+    expediente_id: str,
+    max_indicadores: int = Query(MAX_POR_CORRIDA, ge=1, le=120),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role(UserRole.admin)),
+) -> Dict[str, Any]:
+    """Pregunta al modelo, por indicador SIN medición, quién publica ese dato en RD.
+
+    Deja cada propuesta EVALUADA en el tablero de `source_intel` con `target_axis="law"`; no
+    integra ni decide nada — el sistema propone, el dueño dispone.
+
+    Es la única ruta del módulo que GASTA: una llamada al modelo por indicador. Por eso pide
+    rol admin y trae tope, y por eso el gasto se contabiliza contra el techo diario.
+
+    Que un indicador vuelva sin propuesta NO es un fallo: es la respuesta correcta cuando
+    ninguna fuente oficial publica esa magnitud con esa definición. Es, además, el insumo de
+    la recomendación de publicación — el vacío señalado es el producto.
+    """
+    _expediente(expediente_id)          # 404 si no existe, 409 si las metas derivaron
+    try:
+        return barrer(db, expediente_id, max_indicadores=max_indicadores)
+    except Exception as exc:            # noqa: BLE001 — se traduce a 502
+        logger.error("barrido de fuentes falló en %s: %s", expediente_id, exc)
+        raise HTTPException(status_code=502, detail=f"El barrido no pudo completarse: {exc}")
