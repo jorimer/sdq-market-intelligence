@@ -1,94 +1,109 @@
-# BINDINGS — qué serie viva mide cada indicador de la ley.
+# BINDINGS — qué variable viva mide cada indicador de la ley.
 #
 # **Un binding se declara, nunca se infiere.** El nombre de un indicador parecido al de una
-# serie no es evidencia de que midan lo mismo: `presión tributaria` (solo ingresos
+# variable no es evidencia de que midan lo mismo: `presión tributaria` (solo ingresos
 # tributarios) y `presión fiscal` (incluye no tributarios y donaciones) difieren en más de un
 # punto del PIB, y confundirlas invierte la lectura del cumplimiento.
 #
 # **`estado` es lo que hace honesta la cobertura de portada:**
 #
-#   verificado  la serie existe, devuelve dato y se contrastó contra la fuente. CUENTA.
-#   propuesto   la serie es plausible y todavía no se comprobó. NO cuenta.
+#   verificado  la variable existe, devuelve dato y se contrastó contra la fuente. CUENTA.
+#   propuesto   la variable es plausible y todavía no se comprobó. NO cuenta.
 #   descartado  se evaluó y NO mide lo que el eje afirma medir. NO cuenta, y dice por qué.
 #
-# Un informe que cuente propuestos como cobertura está afirmando que mide algo que no midió.
-# La verificación la hace `operations.verificar_bindings` contra las series reales; ningún
-# binding pasa a `verificado` por edición a mano.
+# **El código es `<eje>:<variable>` del Data Registry**, no un código de tabla. La primera
+# versión inventó códigos por dominio (`one.pobreza.extrema_nacional_pct`) sin mirar el
+# catálogo: los siete dieron `vacia` al verificarlos en producción. El eje va adelante porque
+# las claves no son únicas entre ejes.
 #
 # **`mejor` debe coincidir con la dirección que se computa de las propias metas de la ley.**
-# Si no coinciden, el expediente no carga. Es el guard contra el defecto más repetido de esta
-# plataforma: la cifra correcta con el sentido invertido.
+# Si no coinciden, el expediente no carga.
 
-version: "1.0"
+version: "2.0"
 
 bindings:
-  - indicador: "1.2"
-    serie: "ti.ipc.republica_dominicana"
-    fuente: pefa            # vía Participación Ciudadana; el índice es de Transparencia Int.
-    mejor: mayor            # el indicador mide AUSENCIA de corrupción: más alto es mejor
-    estado: propuesto
-    nota_comparabilidad: >-
-      El IPC cambió de escala 0-10 a 0-100 en 2012 y Transparencia Internacional declara la
-      serie NO comparable a través de esa ruptura. La meta de la ley está en la escala vieja:
-      cualquier conversión es una aproximación y debe declararse como tal, no publicarse como
-      dato duro.
-
-  - indicador: "1.8"
-    serie: "one.homicidios.tasa_por_cien_mil"
-    fuente: one
-    mejor: menor
-    estado: propuesto
-
+  # ── Pobreza: la variable del panel social mide la incidencia NACIONAL ──
   - indicador: "2.1"
-    serie: "one.pobreza.extrema_nacional_pct"
+    serie: "social_dev:poverty_rate"
     fuente: one
     mejor: menor
     estado: propuesto
     nota_comparabilidad: >-
-      La línea base de 2010 proviene de la ENFT y las mediciones actuales de la ENCFT/ENGIH,
-      con metodología actualizada en 2022. Las metas nunca se re-expresaron tras el cambio.
+      ⚠️ Verificar ANTES de promover: el indicador 2.1 es pobreza EXTREMA y `poverty_rate` del
+      panel social puede ser pobreza monetaria general — son dos líneas distintas y la meta
+      legal (3,5% en 2025) corresponde a la primera. Si la variable resulta ser la general, el
+      binding correcto es el del indicador 2.4 y este queda sin fuente.
+      Además, la línea base de 2010 viene de la ENFT y la medición actual de la ENCFT/ENGIH,
+      con metodología actualizada en 2022: las metas nunca se re-expresaron tras el cambio.
 
-  - indicador: "2.20"
-    serie: "minerd.gasto_publico_educacion.pct_pib"
-    fuente: minerd
+  - indicador: "2.4"
+    serie: "social_dev:poverty_rate"
+    fuente: one
+    mejor: menor
+    estado: propuesto
+    nota_comparabilidad: >-
+      Pobreza monetaria general. Ver la advertencia de 2.1: las dos no pueden apuntar a la
+      misma variable, y cuál corresponde se decide comprobando qué mide `poverty_rate`.
+
+  - indicador: "2.19"
+    serie: "social_dev:literacy_rate"
+    fuente: one
+    mejor: menor            # el indicador mide ANALFABETISMO: menos es mejor
+    estado: propuesto
+    nota_comparabilidad: >-
+      ⚠️ La variable del panel es tasa de ALFABETIZACIÓN y el indicador legal es su
+      complemento (analfabetismo). Requiere la transformación 100 − x, que hoy el binding NO
+      declara: promoverlo sin resolverlo publicaría el valor invertido. Y la meta de la ley es
+      un UMBRAL («< 4%»), así que el indicador no admite delta de todos modos.
+
+  - indicador: "2.18"
+    serie: "social_dev:schooling_years"
+    fuente: one
+    mejor: mayor
+    estado: propuesto
+
+  - indicador: "2.21"
+    serie: "social_dev:life_expectancy"
+    fuente: one
+    mejor: mayor
+    estado: propuesto
+
+  - indicador: "3.13"
+    serie: "telecom:internet_penetration"
+    fuente: one
     mejor: mayor
     estado: propuesto
     nota_comparabilidad: >-
-      La meta 2025 vigente es 6,5% del PIB. El 4% que domina el debate público es el piso
-      TRANSITORIO que el Párrafo del artículo 24 fijó para 2013, no la meta del indicador.
+      El indicador legal se expresa como usuarios por cada 100 habitantes; verificar que la
+      variable del panel de telecom use la misma base y no hogares.
 
+  - indicador: "3.26"
+    serie: "social_dev:income_per_capita"
+    fuente: one
+    mejor: mayor
+    estado: propuesto
+    nota_comparabilidad: >-
+      ⚠️ El indicador legal es Ingreso Nacional Bruto per cápita en dólares internacionales
+      corrientes por método Atlas (línea base 4.460 en 2008). La variable del panel social es
+      ingreso per cápita por región y probablemente esté en pesos y por otra metodología. Si
+      no coinciden, esto se descarta: no es la misma magnitud.
+
+  - indicador: "4.1"
+    serie: "esg:carbon_intensity"
+    fuente: one
+    mejor: menor
+    estado: propuesto
+    nota_comparabilidad: >-
+      El indicador legal son toneladas métricas de CO₂ per cápita (3,6 en 2010). Verificar que
+      `carbon_intensity` no sea intensidad por unidad de PIB, que es otra magnitud.
+
+  # ── Descartado con su motivo, para que quede el rastro de lo evaluado ──
   - indicador: "3.9"
     serie: "wef.indice_global_competitividad.rd"
-    fuente: pefa            # se declara acá para que la validación de fuente lo rechace
+    fuente: pefa
     mejor: mayor
     estado: descartado
     motivo_descarte: >-
       El WEF discontinuó el Índice Global de Competitividad en su forma comparable tras 2019 y
       no es fuente oficial del Estado dominicano. Sin fuente admisible, el indicador queda
-      declarado sin medición: es una brecha del instrumento, no una del sistema.
-
-  - indicador: "3.25"
-    serie: "hacienda.presion_tributaria.pct_pib"
-    fuente: mhe
-    mejor: mayor
-    estado: propuesto
-    nota_comparabilidad: >-
-      Presión TRIBUTARIA (solo ingresos tributarios), no presión fiscal. Las cifras de 15,6% o
-      16,4% que circulan usan la segunda definición y no son comparables con la meta legal.
-      Las series de Hacienda tampoco son homogéneas entre marcos fiscales por revisión de
-      cuentas nacionales del BCRD: usar un solo marco y declararlo.
-
-  - indicador: "3.28"
-    serie: "mem.perdidas_electricas.pct"
-    fuente: mem
-    mejor: menor
-    estado: propuesto
-    nota_comparabilidad: >-
-      «Pérdidas de energía» (no facturada) y «pérdidas totales» (incluye facturada no cobrada)
-      dan cifras distintas. La meta legal de 8,5% corresponde a la primera.
-
-  - indicador: "3.30"
-    serie: "mem.subsidio_electrico.mm_usd"
-    fuente: mem
-    mejor: menor
-    estado: propuesto
+      declarado sin medición: es una brecha del instrumento, no del sistema.

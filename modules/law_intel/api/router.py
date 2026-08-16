@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from modules.law_intel.bindings import cargar_bindings, cobertura
 from modules.law_intel.verificacion import informe
-from modules.macro_monitor.models.models import MacroSeries
+from shared.registry.service import build_data_registry
 from modules.law_intel.obligaciones import ESTADOS as ESTADOS_OBLIGACION
 from modules.law_intel.obligaciones import cargar_obligaciones
 from modules.law_intel.obligaciones import resumen as resumen_obligaciones
@@ -291,19 +291,33 @@ def coherencia_(expediente_id: str,
     }
 
 
-def _proveedor_mm_series(db: Session) -> Callable[[str], List[tuple]]:
-    """Lee `mm_series` — el catálogo real de series de la plataforma.
+def _proveedor_registro(db: Session) -> Callable[[str], List[tuple]]:
+    """Lee el DATA REGISTRY — no una tabla concreta.
 
-    Vive acá y no en `verificacion.py` para que el motor no dependa de una tabla concreta:
-    la comprobación recibe un proveedor y no sabe de dónde salen los datos, así que atar un
-    expediente a otra fuente no obliga a tocarla.
+    La primera versión consultaba `mm_series`, y esa fue una decisión equivocada tomada sin
+    mirar: el dato de la plataforma no vive en una tabla única, vive repartido por módulo y
+    se expone por el registro. Con el proveedor viejo la verificación devolvía `vacia` para
+    los siete bindings aunque los códigos hubieran sido correctos.
+
+    El código de serie de un binding es `<eje>:<variable>` — p. ej. `social_dev:poverty_rate`.
+    El eje va adelante porque las claves no son únicas entre ejes y una colisión silenciosa
+    ataría un indicador a la variable de otro dominio.
+
+    El registro sirve UN punto por variable (su valor vigente y el período del eje), no una
+    serie. Alcanza para verificar existencia y frescura; no alcanza para trayectoria, y el
+    semáforo ya se niega a emitir un veredicto de tendencia con una sola observación.
     """
+    reg = build_data_registry(db)
+    por_clave: Dict[str, List[tuple]] = {}
+    for eje in (reg.axes if hasattr(reg, "axes") else []):
+        periodo = getattr(eje, "period", None)
+        for sig in (getattr(eje, "signals", None) or []):
+            if sig.value is None or not periodo:
+                continue
+            por_clave[f"{eje.sector_key}:{sig.key}"] = [(str(periodo), float(sig.value))]
+
     def leer(codigo: str) -> List[tuple]:
-        filas = (db.query(MacroSeries.period, MacroSeries.value)
-                 .filter(MacroSeries.series_code == codigo,
-                         MacroSeries.value.isnot(None))
-                 .order_by(MacroSeries.period).all())
-        return [(str(p), float(v)) for p, v in filas]
+        return por_clave.get(codigo, [])
     return leer
 
 
@@ -320,7 +334,7 @@ def verificacion_(expediente_id: str,
     dejaría de ser verificable contra el repositorio.
     """
     _expediente(expediente_id)
-    return informe(expediente_id, _proveedor_mm_series(db), corte)
+    return informe(expediente_id, _proveedor_registro(db), corte)
 
 
 @router.get("/{expediente_id}/ratificacion")
