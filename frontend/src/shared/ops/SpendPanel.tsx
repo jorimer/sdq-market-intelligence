@@ -22,8 +22,22 @@ const haceDias = (n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-function usd(v: number): string {
+/** Formatea un costo, y tolera que NO venga.
+ *
+ * Reventó producción con «Cannot read properties of undefined (reading 'toFixed')» y se
+ * llevó puesta la consola de Operaciones entera —incluidos los interruptores para apagar
+ * la tarea que estaba gastando—. Un panel de observabilidad que tumba la pantalla que
+ * observa es peor que no tenerlo: llega justo cuando hace falta mirar.
+ *
+ * Un guion declara la ausencia; un cero la rellenaría con una cifra falsa. */
+function usd(v: number | null | undefined): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return v >= 0.01 || v === 0 ? `$${v.toFixed(2)}` : `$${v.toFixed(4)}`;
+}
+
+/** Igual para los conteos: ausente es «—», no cero. */
+function num(v: number | null | undefined): string {
+  return typeof v === "number" && Number.isFinite(v) ? String(v) : "—";
 }
 
 /** Una tabla del reparto. `vacio` se muestra cuando no hay filas: un bloque en blanco
@@ -38,7 +52,8 @@ function Reparto({
   vacio: string;
 }) {
   const { t } = useTranslation();
-  if (!filas.length) {
+  const seguras = Array.isArray(filas) ? filas : [];
+  if (!seguras.length) {
     return (
       <div className="mt-4">
         <div className="text-xs text-muted uppercase tracking-wide">{titulo}</div>
@@ -60,21 +75,21 @@ function Reparto({
             </tr>
           </thead>
           <tbody>
-            {filas.map((f) => (
-              <tr key={f.clave} className="border-b border-line/60 last:border-0">
-                <td className="py-2 px-2 text-ink break-all" title={f.clave}>
-                  {f.clave}
+            {seguras.map((f, i) => (
+              <tr key={f.clave ?? i} className="border-b border-line/60 last:border-0">
+                <td className="py-2 px-2 text-ink break-all" title={f.clave ?? ""}>
+                  {f.clave ?? "—"}
                 </td>
                 <td className="py-2 px-2 mono text-body tabular-nums text-right">
                   {usd(f.costo_usd)}
                 </td>
                 <td className="py-2 px-2 mono text-body tabular-nums text-right">
-                  {f.generaciones_reales}
+                  {num(f.generaciones_reales)}
                 </td>
                 {/* Los HIT se muestran aparte: sin ellos no se distingue «nadie lo pidió»
                     de «lo pidieron y la caché lo absorbió», que es lo que justifica la caché. */}
                 <td className="py-2 px-2 mono text-muted tabular-nums text-right">
-                  {f.hits_de_cache}
+                  {num(f.hits_de_cache)}
                 </td>
               </tr>
             ))}
@@ -165,7 +180,7 @@ export function SpendPanel() {
               </div>
             </div>
             <div className="text-sm text-muted">
-              {t("ops.spend.calls", { count: data.llamadas_totales })}
+              {t("ops.spend.calls", { count: data.llamadas_totales ?? 0 })}
             </div>
           </div>
 

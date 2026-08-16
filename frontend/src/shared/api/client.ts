@@ -1,4 +1,4 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 
 const API_BASE = "/api/v1";
 
@@ -47,8 +47,39 @@ function redirectToLogin() {
   }
 }
 
+/**
+ * Una ruta de API que NO existe devuelve **HTTP 200 con el HTML del SPA**, porque el
+ * mismo servicio sirve la aplicación y la API: el catch-all del frontend atiende antes
+ * que el 404. Axios lo resuelve como éxito, el componente lee un campo de una cadena de
+ * HTML y obtiene `undefined` — y revienta en el primer `.toFixed()`, `.map()` o `.length`.
+ *
+ * Pasó de verdad: la consola de Operaciones entera cayó con «Cannot read properties of
+ * undefined» porque la réplica que atendió todavía no tenía el endpoint recién desplegado.
+ * Le puede ocurrir a cualquier módulo durante cualquier despliegue.
+ *
+ * Convertirlo en un rechazo hace que el error aparezca donde el componente YA sabe
+ * manejarlo —su estado de error— en vez de tumbar la pantalla.
+ */
+function esHtmlDeSpa(response: AxiosResponse): boolean {
+  const tipo = String(response.headers?.["content-type"] ?? "");
+  // ``config.url`` llega SIN la ``baseURL``, así que la ruta completa se arma con ambas:
+  // mirar solo ``url`` dejaría fuera a todas las llamadas del cliente, que es el 100 %.
+  const ruta = `${response.config?.baseURL ?? ""}${response.config?.url ?? ""}`;
+  return tipo.includes("text/html") && ruta.includes("/api/");
+}
+
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (esHtmlDeSpa(response)) {
+      return Promise.reject(
+        new Error(
+          `La ruta ${response.config?.url} devolvió el HTML de la aplicación en vez de ` +
+            "datos: el endpoint no existe en esta versión desplegada.",
+        ),
+      );
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
