@@ -29,6 +29,22 @@ GAP = "gap"         # brecha declarada
 PER_SUBJECT = "per_subject"   # se mide por sujeto → diferencia entre ellos
 NATIONAL = "national"         # dato real de alcance país → igual para todos los sujetos
 
+# ─── Qué MIDE la cobertura de un eje (ver ``AxisRegistry.coverage_kind``) ────────────
+#
+# Hasta que entró el eje de evaluación de leyes, todos los ejes respondían la misma
+# pregunta: «¿qué fracción del PESO de mi índice está anclada a dato real?». El eje de
+# leyes responde otra: «¿cuántos de los indicadores que la LEY se fijó estamos midiendo?».
+# Las dos son fracciones entre 0 y 1 y ninguna es más honesta que la otra — pero
+# promediarlas produce un número que no significa nada, y ese número alimentaba el
+# resumen del registro.
+#
+# Es la doctrina de «solo se ordena lo comparable» aplicada a los ejes en vez de a un
+# panel de pares: el promedio se computa sobre los comparables, y los de otra semántica
+# NO se ocultan (eso los haría desaparecer sin aviso) — van aparte y marcados.
+COVERAGE_INDEX = "fraccion_real_del_indice"
+COVERAGE_INSTRUMENT = "indicadores_medidos_del_instrumento"
+COVERAGE_KINDS = (COVERAGE_INDEX, COVERAGE_INSTRUMENT)
+
 _STATE_ALIASES = {
     "live": REAL, "real": REAL,
     "rubric": RUBRIC, "rúbrica": RUBRIC,
@@ -90,6 +106,9 @@ class AxisRegistry:
     period: Optional[str] = None
     signals: Tuple[VariableSignal, ...] = ()
     note: str = ""
+    #: Qué responde ``coverage_real`` en ESTE eje. Por defecto la pregunta de siempre, así
+    #: que ningún eje existente cambia de significado al agregarse el campo.
+    coverage_kind: str = COVERAGE_INDEX
 
     # ── Métricas derivadas (no se guardan crudas: se calculan de las señales) ──
     @property
@@ -136,7 +155,20 @@ class DataRegistry:
         for a in self.axes:
             for k, v in a.state_counts.items():
                 by_state[k] = by_state.get(k, 0) + v
-        cov = [a.coverage_real for a in implemented if a.signals]
+        # El promedio se computa SOLO sobre los ejes cuya cobertura mide lo mismo. Mezclar
+        # «fracción real del índice» con «indicadores medidos de una ley» daba un número sin
+        # significado: al entrar el eje de leyes con 5 de 90, el promedio de la plataforma
+        # caía sin que ningún índice hubiera perdido un solo dato real.
+        con_senales = [a for a in implemented if a.signals]
+        comparables = [a for a in con_senales if a.coverage_kind == COVERAGE_INDEX]
+        cov = [a.coverage_real for a in comparables]
+        # Los de otra semántica van APARTE y marcados, nunca omitidos: omitirlos los haría
+        # desaparecer del resumen sin aviso, que es peor que promediarlos mal.
+        otros = [
+            {"sector_key": a.sector_key, "coverage_kind": a.coverage_kind,
+             "coverage": a.coverage_real}
+            for a in con_senales if a.coverage_kind != COVERAGE_INDEX
+        ]
         return {
             "axes_total": len(self.axes),
             "axes_implemented": len(implemented),
@@ -144,4 +176,7 @@ class DataRegistry:
             "variables_total": total_signals,
             "by_state": by_state,
             "coverage_real_mean": round(sum(cov) / len(cov), 4) if cov else 0.0,
+            # Sin este denominador, «cobertura media 62%» no dice sobre cuántos ejes.
+            "coverage_real_mean_sobre_ejes": len(cov),
+            "coverage_no_comparable": otros,
         }

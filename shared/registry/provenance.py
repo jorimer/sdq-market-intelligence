@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Iterable, List, Optional, Sequence
 
 from shared.registry.signals import (
+    COVERAGE_INSTRUMENT,
     GAP,
     NATIONAL,
     REAL,
@@ -52,12 +53,34 @@ def _labels(signals: Iterable[VariableSignal]) -> List[str]:
     return [(s.label or s.key) for s in signals]
 
 
+#: Titular de procedencia POR SEMÁNTICA de cobertura. La frase de índice afirmaba «del peso
+#: de este índice» para todos los ejes, y en el de evaluación de leyes eso es sencillamente
+#: falso: ese eje no arma un índice, mide cuántas de las metas de una ley tienen dato. La
+#: frase salía en la Metodología del informe y en el payload de calidad de la API paga.
+#: Vive en constantes y no incrustada en la función porque un literal partido por ancho de
+#: línea deja de existir en el fuente aunque el valor sea correcto.
+FRASE_COBERTURA_INDICE = (
+    "{pct} del peso de este índice se sostiene en dato real con fuente citable; el resto se "
+    "declara como supuesto de casa o como brecha, y nunca se completa con un valor fabricado."
+)
+FRASE_COBERTURA_INSTRUMENTO = (
+    "{pct} de los indicadores que el propio instrumento se fijó tienen hoy una fuente "
+    "verificada que los mide; el resto se declara como brecha con su motivo, y ninguno se "
+    "completa con una serie parecida. Esta cobertura no es comparable con la de un índice "
+    "de la plataforma: mide metas del instrumento, no peso anclado a dato real."
+)
+
+
 def coverage_sentence(axis: AxisRegistry) -> str:
-    """Una frase con la cobertura real ponderada del eje. Es el titular de procedencia."""
-    cov = axis.coverage_real
-    return (f"{_pct(cov)} del peso de este índice se sostiene en dato real con fuente "
-            f"citable; el resto se declara como supuesto de casa o como brecha, y nunca "
-            f"se completa con un valor fabricado.")
+    """Una frase con la cobertura del eje, en los términos de LO QUE ESE EJE MIDE.
+
+    Es el titular de procedencia, y por eso no puede ser genérico: decirle a un cliente que
+    «el 5,6% del peso de este índice se sostiene en dato real» cuando el producto evalúa el
+    cumplimiento de una ley describe mal el producto que está comprando.
+    """
+    plantilla = (FRASE_COBERTURA_INSTRUMENTO
+                 if axis.coverage_kind == COVERAGE_INSTRUMENT else FRASE_COBERTURA_INDICE)
+    return plantilla.format(pct=_pct(axis.coverage_real))
 
 
 def scope_sentence(axis: AxisRegistry) -> str:

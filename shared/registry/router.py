@@ -34,7 +34,8 @@ def _axis_dict(a: AxisRegistry) -> Dict[str, Any]:
     return {
         "sector_key": a.sector_key, "display_name": a.display_name, "source": a.source,
         "implemented": a.implemented, "degraded": a.degraded, "period": a.period,
-        "coverage_real": a.coverage_real, "state_counts": a.state_counts,
+        "coverage_real": a.coverage_real, "coverage_kind": a.coverage_kind,
+        "state_counts": a.state_counts,
         "note": a.note, "signals": [_signal_dict(s) for s in a.signals],
     }
 

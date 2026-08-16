@@ -168,3 +168,78 @@ def test_registry_summary():
     assert summ["axes_total"] == 2
     assert summ["axes_implemented"] == 1
     assert summ["by_state"][REAL] == 1
+
+
+# ── Solo se promedia lo comparable ────────────────────────────────────────────────────────
+
+def _eje(key, kind, real_fraction, n=2):
+    """Eje sintético con *n* señales reales de la fracción dada."""
+    from shared.registry.signals import REAL, AxisRegistry, VariableSignal
+    sig = tuple(VariableSignal(key=f"v{i}", label=f"v{i}", state=REAL, dimension="d",
+                               weight=1.0, source="s", cadence="annual", value=None,
+                               real_fraction=real_fraction) for i in range(n))
+    return AxisRegistry(sector_key=key, display_name=key, source="s", implemented=True,
+                        signals=sig, coverage_kind=kind)
+
+
+def test_un_eje_con_otra_semantica_no_entra_al_promedio():
+    """`coverage_real` responde una pregunta distinta según el eje: en un índice es «qué
+    fracción del peso está anclada a dato real»; en el eje de leyes es «cuántos indicadores
+    de la LEY medimos». Promediarlas da un número que no significa nada — el eje de leyes,
+    con 5 de 90, hundía el promedio de la plataforma sin que ningún índice hubiera perdido
+    un solo dato real.
+    """
+    from shared.registry.signals import (COVERAGE_INDEX, COVERAGE_INSTRUMENT, DataRegistry)
+
+    solo_indices = DataRegistry(generated_at="t", axes=(
+        _eje("a", COVERAGE_INDEX, 1.0), _eje("b", COVERAGE_INDEX, 0.5)))
+    con_instrumento = DataRegistry(generated_at="t", axes=(
+        _eje("a", COVERAGE_INDEX, 1.0), _eje("b", COVERAGE_INDEX, 0.5),
+        _eje("law", COVERAGE_INSTRUMENT, 0.056)))
+
+    assert (con_instrumento.summary["coverage_real_mean"]
+            == solo_indices.summary["coverage_real_mean"]), \
+        "agregar un eje de otra semántica movió el promedio de los índices"
+    assert con_instrumento.summary["coverage_real_mean_sobre_ejes"] == 2
+
+
+def test_pero_el_eje_de_otra_semantica_NO_desaparece_del_resumen():
+    """Omitirlo sería peor que promediarlo mal: se iría del resumen sin aviso. Va aparte,
+    marcado y con su cobertura — que es exactamente lo que la doctrina manda hacer con lo
+    que no es comparable."""
+    from shared.registry.signals import (COVERAGE_INDEX, COVERAGE_INSTRUMENT, DataRegistry)
+
+    reg = DataRegistry(generated_at="t", axes=(
+        _eje("a", COVERAGE_INDEX, 1.0), _eje("law", COVERAGE_INSTRUMENT, 0.056)))
+    otros = reg.summary["coverage_no_comparable"]
+    assert [o["sector_key"] for o in otros] == ["law"]
+    assert otros[0]["coverage_kind"] == COVERAGE_INSTRUMENT
+    assert otros[0]["coverage"] == 0.056
+
+
+def test_por_defecto_un_eje_es_comparable_y_nada_cambia_para_los_existentes():
+    """El campo se agregó con default: ningún eje ya escrito cambia de significado."""
+    from shared.registry.signals import COVERAGE_INDEX, AxisRegistry
+    assert AxisRegistry(sector_key="x", display_name="x", source="s",
+                        implemented=True).coverage_kind == COVERAGE_INDEX
+
+
+def test_un_coverage_kind_desconocido_no_saca_al_eje_del_promedio_en_silencio(monkeypatch):
+    """Un typo en la declaración volvería incomparable a un eje sin que nadie se entere.
+    Se ignora el valor y se avisa: el default es el comportamiento de siempre."""
+    from shared.products.registry import CatalogEntry
+    from shared.registry.service import _axis_registry
+    from shared.registry.signals import COVERAGE_INDEX, REAL, VariableSignal
+
+    class _Falso:
+        def variable_signals(self):
+            return {"period": None, "coverage_kind": "typo_de_alguien",
+                    "signals": [VariableSignal(key="v", label="v", state=REAL, dimension="d",
+                                               weight=1.0, source="s", cadence="annual",
+                                               value=None, real_fraction=1.0)]}
+
+    import shared.registry.service as svc
+    monkeypatch.setattr(svc, "is_implemented", lambda k: True)
+    monkeypatch.setattr(svc, "get_product", lambda k, db: _Falso())
+    entry = CatalogEntry("falso", "Falso", "falso_mod", "s")
+    assert _axis_registry(None, entry).coverage_kind == COVERAGE_INDEX
