@@ -216,7 +216,7 @@ def test_la_segunda_corrida_no_vuelve_a_preguntar_por_lo_ya_propuesto(tablero):
     mismo. Y no vive en el código sino en el tablero: la marca es lo único que persiste."""
     from modules.law_intel.agente_fuentes import barrer
 
-    preguntados: list = []
+    preguntados = []
 
     def espia(s, u):
         preguntados.append(u)
