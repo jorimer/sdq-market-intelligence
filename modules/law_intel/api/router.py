@@ -370,6 +370,7 @@ def ratificacion_(expediente_id: str, _: User = Depends(get_current_user)) -> Di
 def barrido_de_fuentes(
     expediente_id: str,
     max_indicadores: int = Query(MAX_POR_CORRIDA, ge=1, le=120),
+    omitir: str = Query("", description="ids de indicador ya consultados, separados por coma"),
     db: Session = Depends(get_db),
     _: User = Depends(require_role(UserRole.admin)),
 ) -> Dict[str, Any]:
@@ -383,11 +384,19 @@ def barrido_de_fuentes(
 
     Que un indicador vuelva sin propuesta NO es un fallo: es la respuesta correcta cuando
     ninguna fuente oficial publica esa magnitud con esa definición. Es, además, el insumo de
-    la recomendación de publicación — el vacío señalado es el producto.
+    la recomendación de publicación — el vacío señalado es el producto. Distinto es un
+    indicador FALLIDO, que ni se preguntó: va contado aparte, porque tratarlo como «no hay
+    fuente» convertiría una caída del proveedor en un hallazgo sobre el Estado.
+
+    **El barrido completo va en tandas.** El proxy corta a los ~5 minutos y los 83 no entran.
+    El llamador acumula `consultados_ids` de cada respuesta y los devuelve en `omitir`: sin
+    eso, cada tanda vuelve a preguntar por los que respondieron vacío —que no dejan fila en el
+    tablero— y el barrido no avanza nunca.
     """
     _expediente(expediente_id)          # 404 si no existe, 409 si las metas derivaron
     try:
-        return barrer(db, expediente_id, max_indicadores=max_indicadores)
+        return barrer(db, expediente_id, max_indicadores=max_indicadores,
+                      omitir={x.strip() for x in omitir.split(",") if x.strip()})
     except Exception as exc:            # noqa: BLE001 — se traduce a 502
         logger.error("barrido de fuentes falló en %s: %s", expediente_id, exc)
         raise HTTPException(status_code=502, detail=f"El barrido no pudo completarse: {exc}")
