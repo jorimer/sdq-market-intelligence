@@ -399,7 +399,12 @@ def signal_panel(m: Dict, peers: Dict) -> List[Dict]:
     """
     floor = MOROSIDAD_FLOOR_BY_TYPE.get(m.get("bank_type") or "", DEFAULT_MOROSIDAD_FLOOR)
     mora, mora4 = m.get("morosidad_pct"), m.get("morosidad_prev4")
-    salto_umbral = (max(MOROSIDAD_MULT * mora4, mora4 + MOROSIDAD_PP)
+    # MIN, no max: `rule_morosidad` dispara con CUALQUIERA de las dos condiciones (×1.5 O
+    # +2 puntos), así que el umbral efectivo es el menor de los dos. Con `max` el panel exigía
+    # las dos a la vez y decía "sin activar" mientras la regla ya había encendido la bandera —
+    # y el informe salió contradiciéndose: el párrafo afirmaba "no presenta precursores
+    # activos" y tres renglones abajo listaba "Salto de morosidad (severidad alta)".
+    salto_umbral = (min(MOROSIDAD_MULT * mora4, mora4 + MOROSIDAD_PP)
                     if mora4 is not None else None)
     cap_now, cap_prior = m.get("capital_now"), m.get("capital_prior")
     delta_cap = (cap_now - cap_prior) if (cap_now is not None and cap_prior is not None) else None
@@ -813,8 +818,10 @@ def _prosa_margenes(panel: List[Dict]) -> str:
         else:
             act = "; ".join(f"{a['concepto']} en {a['valor_expresado']}, cuando la señal se "
                             f"activa si {a['umbral_significa']}" for a in r["activos"])
+            plural = r["n_activos"] != 1
             partes.append(f"De las {r['n_evaluables']} señales de deterioro temprano "
-                          f"evaluables, {r['n_activos']} están encendidas: {act}.")
+                          f"evaluables, {r['n_activos']} "
+                          f"{'están encendidas' if plural else 'está encendida'}: {act}.")
     else:
         partes.append(f"Ninguna de las {r['n_evaluables']} señales de deterioro temprano está "
                       f"encendida.")
