@@ -59,6 +59,7 @@ def _register_all():
     import modules.pension_intel.products  # noqa: F401
     import modules.insurance_intel.products  # noqa: F401 — insurance (dedicado, SIS)
     import modules.social_dev.products  # noqa: F401 — social_dev (panel SUB-NACIONAL)
+    import modules.law_intel.products  # noqa: F401 — law (sujeto = instrumento normativo)
 
 
 def test_all_ten_sectors_have_demo_data():

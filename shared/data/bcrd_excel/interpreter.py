@@ -18,6 +18,9 @@ from typing import Any, Dict, List, Optional
 
 from .spec import ExtractionSpec
 from .workbook import Grid, Workbook
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_EXTRACTION, account,
+)
 
 logger = logging.getLogger("sdq.data.bcrd_excel.interpreter")
 
@@ -141,6 +144,7 @@ def interpret_spec(
         tools=[_SPEC_TOOL], tool_choice={"type": "tool", "name": "emit_extraction_spec"},
         messages=[{"role": "user", "content": prompt}],
     )
+    account(response, model=model, purpose=PURPOSE_EXTRACTION, module="macro", template="bcrd_excel")
     block = next((b for b in response.content if getattr(b, "type", None) == "tool_use"), None)
     if block is None:
         raise RuntimeError("El intérprete Claude no devolvió un spec.")
@@ -251,6 +255,7 @@ def name_ambiguous_rows(
         tools=[_NAME_TOOL], tool_choice={"type": "tool", "name": "emit_series_names"},
         messages=[{"role": "user", "content": prompt}],
     )
+    account(response, model=model, purpose=PURPOSE_EXTRACTION, module="macro", template="bcrd_excel")
     block = next((b for b in response.content if getattr(b, "type", None) == "tool_use"), None)
     if block is None:
         return {}

@@ -33,6 +33,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from shared.config.settings import settings
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_EXTRACTION, account,
+)
 
 logger = logging.getLogger("sdq.brand_intel.conclusions")
 
@@ -273,6 +276,7 @@ def _read_range(
                          "text": f"{body}\n\n¿Qué afirmaciones sostiene este estudio?"}],
         }],
     )
+    account(response, model=MODEL, purpose=PURPOSE_EXTRACTION, module="brand_intel", template="conclusiones")
     if response.stop_reason == "refusal":
         raise RuntimeError("La lectura de conclusiones fue rechazada.")
 

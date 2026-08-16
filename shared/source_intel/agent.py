@@ -30,6 +30,9 @@ from shared.source_intel.models import (
     SourceSuggestion,
 )
 from shared.source_intel.service import create_suggestion, evaluate
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_OTHER, account,
+)
 
 logger = logging.getLogger("sdq.source_intel.agent")
 
@@ -71,6 +74,7 @@ def _propose_sources(axis: str, display: str, gap: Dict[str, Any]) -> List[Dict[
     resp = client.messages.create(
         model=settings.ANTHROPIC_MODEL, max_tokens=900,
         system=_SYSTEM, messages=[{"role": "user", "content": user}])
+    account(resp, model=settings.ANTHROPIC_MODEL, purpose=PURPOSE_OTHER, module="source_intel", template="agente")
     text = resp.content[0].text.strip()
     if text.startswith("```"):
         text = text.strip("`")

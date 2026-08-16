@@ -1,0 +1,70 @@
+# EXPEDIENTE — Estrategia Nacional de Desarrollo 2030 (Ley 1-12)
+#
+# Un expediente es una ley expresada como DATO. El motor de `law_intel` no conoce ninguna ley
+# en particular: evaluar una segunda es agregar una carpeta acá, no tocar `scoring/`. Si
+# construir la ley N+1 obliga a editar el motor, el defecto está en el motor.
+#
+# El registro de indicadores se EXTRAE del articulado (ver `corpus/extractor.py`), nunca del
+# informe de avance del propio evaluado ni de un anexo transcrito: la meta que obliga es la
+# del texto legal. El informe del órgano rector trabaja con un universo distinto —93
+# indicadores frente a los 90 de la ley, amparado en el artículo 20— y esa diferencia es un
+# hallazgo del expediente, no un detalle de carga.
+
+id: end-2030
+titulo: Estrategia Nacional de Desarrollo 2030
+norma: Ley 1-12
+promulgada: "2012-01-25"
+vigencia_hasta: "2030-12-31"
+
+# Los indicadores viven en cuatro artículos. Fuera de ellos el articulado numera objetivos y
+# líneas de acción con la misma forma (`2.1`, `2.1.1.1`): una lectura corrida se los come.
+articulos_indicadores: [22, 24, 26, 28]
+
+ejes:
+  1: Institucionalidad
+  2: Desarrollo social
+  3: Desarrollo económico
+  4: Sostenibilidad ambiental
+
+# Cuántos indicadores NUMERADOS fija la ley por eje. El cargador lo verifica contra el CSV:
+# un registro que no cuadre con lo declarado no se sirve.
+indicadores_por_eje: {1: 8, 2: 48, 3: 30, 4: 4}
+
+registro:
+  archivo: indicadores.csv
+  extraido_por: modules.law_intel.corpus.extractor
+  # Metas contrastadas UNA POR UNA contra el texto legal. No es la cobertura del registro:
+  # es cuántas filas tienen una segunda lectura humana encima.
+  metas_verificadas_a_mano: 21
+  nota: >-
+    La primera extracción leyó `pdftotext -layout`, que aplana el PDF a una grilla de
+    caracteres y descarta los límites de celda. Reconstruirlos a mano produjo doce filas con
+    cifras falsas —entre ellas el indicador 3.26 con línea base 4,46 dólares en vez de 4.460,
+    porque la coma de miles se leyó como decimal—. La versión vigente lee celdas con
+    `pdfplumber`: la columna es un índice, no una distancia.
+
+# La independencia no es una promesa comercial: es una lista blanca que el motor hace cumplir.
+# Una fuente fuera de esta lista levanta excepción. Solo fuentes oficiales del propio Estado
+# evaluado — es lo único que sostiene que el producto se venda a una parte interesada.
+fuentes_admitidas:
+  - id: mhe
+    nombre: Ministerio de Hacienda y Economía
+    nota: absorbió al MEPyD por la Ley 45-25 (2025-07-23)
+  - id: one
+    nombre: Oficina Nacional de Estadística
+  - id: bcrd
+    nombre: Banco Central de la República Dominicana
+  - id: minerd
+    nombre: Ministerio de Educación
+  - id: mem
+    nombre: Ministerio de Energía y Minas
+  - id: ces
+    nombre: Consejo Económico y Social
+  - id: tc
+    nombre: Tribunal Constitucional
+  - id: pefa
+    nombre: Evaluación PEFA
+    nota: >-
+      Externa pero ADMISIBLE porque la propia ley la incorpora: los indicadores 3.1 a 3.8 son
+      puntajes PEFA con metas en letras fijadas en el articulado. Es evidencia interna al
+      instrumento, no contraste de tercero.

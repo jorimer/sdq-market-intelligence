@@ -1,0 +1,170 @@
+"""Qué serie viva mide cada indicador de la ley, y en qué estado está esa afirmación.
+
+**El estado es lo que hace honesta la cobertura.** Un binding `propuesto` es una hipótesis:
+la serie parece medir el indicador y nadie lo comprobó. Contarlo como cobertura afirma haber
+medido algo que no se midió — y la cobertura de portada es justamente la cifra que el cliente
+usa para decidir si el informe le sirve.
+
+**La dirección se COMPUTA de las metas de la ley y el binding la confirma.** Si no coinciden,
+el expediente no carga. Es el guard contra el defecto más repetido de esta plataforma: la
+cifra correcta con el sentido invertido — que en este dominio significa publicar que un
+indicador mejoró cuando empeoró.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from functools import lru_cache
+from typing import Dict, List, Optional
+
+from modules.law_intel.registro import RAIZ, Expediente, ExpedienteInvalido, Indicador, cargar
+
+# Solo los verificados cuentan para la cobertura publicada.
+ESTADOS = {
+    "verificado": "la serie existe, devuelve dato y se contrastó contra la fuente",
+    "propuesto": "plausible, sin comprobar — NO cuenta como cobertura",
+    "descartado": "se evaluó y no mide lo que el eje afirma medir",
+}
+CUENTA_COBERTURA = frozenset({"verificado"})
+
+DIRECCIONES = frozenset({"menor", "mayor"})
+
+# Transformaciones admitidas entre la variable de la plataforma y el indicador de la ley.
+# Es un conjunto CERRADO y con nombre, no una expresión libre: una fórmula arbitraria en un
+# archivo de datos es código sin revisar, y acá decide qué cifra se publica.
+#
+# El caso que la motiva: el indicador 2.19 es ANALFABETISMO y la variable del panel es
+# alfabetización. Sin declarar la transformación, el binding publicaría el complemento — el
+# valor invertido.
+TRANSFORMACIONES = {
+    "complemento_100": (lambda v: 100.0 - v,
+                        "el indicador es el complemento porcentual de la variable"),
+}
+
+
+def aplicar_transformacion(b: "Binding", valor: float) -> float:
+    """Lleva el valor de la variable a la magnitud del indicador."""
+    if not b.transformacion:
+        return valor
+    fn, _ = TRANSFORMACIONES[b.transformacion]
+    return float(fn(valor))
+
+
+@dataclass(frozen=True)
+class Binding:
+    indicador: str
+    serie: str
+    fuente: str
+    mejor: str
+    estado: str
+    # Duda ABIERTA sobre si la variable mide el indicador. Mientras esté, no promueve.
+    nota_comparabilidad: Optional[str] = None
+    # Hallazgo RESUELTO: cómo se comprobó qué mide la variable, o qué salvedad hay que
+    # declarar en el informe. No bloquea — documenta. Separarlas importa porque si la única
+    # forma de dejar constancia fuera la nota que frena, la gente borraría la constancia
+    # para poder promover.
+    nota: Optional[str] = None
+    motivo_descarte: Optional[str] = None
+    # Cuando la variable mide la magnitud complementaria o en otra unidad. Declarada, con
+    # nombre de un conjunto cerrado: una transformación sin declarar es una cifra inventada.
+    transformacion: Optional[str] = None
+
+    @property
+    def cuenta(self) -> bool:
+        return self.estado in CUENTA_COBERTURA
+
+
+def direccion_de_metas(ind: Indicador) -> str:
+    """Hacia dónde manda mejorar la ley, leído de la propia trayectoria de metas.
+
+    Se computa en vez de creerle a un campo escrito a mano: la serie 24,8 → 20 → 15 → 10 → 4
+    dice sola que menos es mejor. Devuelve ``plana`` cuando la ley pide sostener (áreas
+    protegidas: 24,4 en los cuatro cortes) y ``ambigua`` cuando la trayectoria no es monótona,
+    caso en el que ningún veredicto automático es defendible.
+    """
+    vals = [v for v in ([ind.base_valor] + list(ind.metas.values()))
+            if isinstance(v, (int, float))]
+    if len(vals) < 2:
+        return "ambigua"
+    subes = sum(b > a for a, b in zip(vals, vals[1:]))
+    bajas = sum(b < a for a, b in zip(vals, vals[1:]))
+    if subes and bajas:
+        return "ambigua"
+    if subes:
+        return "mayor"
+    if bajas:
+        return "menor"
+    return "plana"
+
+
+@lru_cache(maxsize=8)
+def cargar_bindings(expediente_id: str) -> Dict[str, Binding]:
+    import yaml  # type: ignore[import-untyped]
+
+    ruta = RAIZ / expediente_id.replace("/", "") / "bindings.yaml"
+    if not ruta.exists():
+        return {}
+    doc = yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}
+    bs = [Binding(**b) for b in (doc.get("bindings") or [])]
+    _validar(cargar(expediente_id), bs)
+    return {b.indicador: b for b in bs}
+
+
+def _validar(exp: Expediente, bindings: List[Binding]) -> None:
+    por_id = {i.id: i for i in exp.indicadores}
+    vistos = set()
+    for b in bindings:
+        if b.indicador in vistos:
+            raise ExpedienteInvalido(f"binding duplicado para {b.indicador}")
+        vistos.add(b.indicador)
+
+        if b.indicador not in por_id:
+            raise ExpedienteInvalido(f"binding a un indicador inexistente: {b.indicador}")
+        if b.estado not in ESTADOS:
+            raise ExpedienteInvalido(f"{b.indicador}: estado desconocido '{b.estado}'")
+        if b.mejor not in DIRECCIONES:
+            raise ExpedienteInvalido(f"{b.indicador}: 'mejor' debe ser menor|mayor")
+        if b.transformacion and b.transformacion not in TRANSFORMACIONES:
+            raise ExpedienteInvalido(
+                f"{b.indicador}: transformación '{b.transformacion}' no está en el conjunto "
+                f"admitido {sorted(TRANSFORMACIONES)}. No se aceptan fórmulas libres.")
+
+        # La fuente tiene que estar en la lista blanca del expediente. Es la restricción que
+        # sostiene la independencia, y por eso se hace cumplir al cargar y no al redactar.
+        # Un binding DESCARTADO se exceptúa: su razón de ser es dejar registrada la fuente
+        # que se evaluó y por qué no sirve.
+        if b.estado != "descartado" and not exp.fuente_admitida(b.fuente):
+            raise ExpedienteInvalido(
+                f"{b.indicador}: fuente '{b.fuente}' fuera de la lista blanca del expediente")
+        if b.estado == "descartado" and not b.motivo_descarte:
+            raise ExpedienteInvalido(f"{b.indicador}: descartado sin motivo declarado")
+
+        ind = por_id[b.indicador]
+        computada = direccion_de_metas(ind)
+        if computada in DIRECCIONES and b.mejor != computada:
+            raise ExpedienteInvalido(
+                f"{b.indicador}: el binding dice que mejor es '{b.mejor}' pero las metas de la "
+                f"ley van hacia '{computada}'. Una de las dos está mal y el veredicto saldría "
+                f"invertido.")
+
+
+def cobertura(expediente_id: str) -> Dict[str, object]:
+    """La cifra de portada, con su denominador explícito.
+
+    Se publica sobre los indicadores NUMERADOS de la ley, no sobre las filas medibles: son
+    denominadores distintos (90 contra 135) y elegir en silencio infla o desinfla el
+    porcentaje según convenga.
+    """
+    exp = cargar(expediente_id)
+    bs = cargar_bindings(expediente_id)
+    numerados = exp.numerados
+    verificados = [i for i in numerados if (b := bs.get(i.id)) and b.cuenta]
+    propuestos = [i for i in numerados if (b := bs.get(i.id)) and b.estado == "propuesto"]
+    return {
+        "denominador": "indicadores numerados de la ley",
+        "total": len(numerados),
+        "medidos": len(verificados),
+        "pct": round(100.0 * len(verificados) / len(numerados), 1) if numerados else 0.0,
+        "propuestos_sin_verificar": len(propuestos),
+        "nota": ("Los bindings propuestos NO cuentan como cobertura: la serie parece medir el "
+                 "indicador y todavía nadie lo comprobó contra la fuente."),
+    }
