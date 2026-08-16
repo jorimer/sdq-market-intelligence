@@ -3,6 +3,7 @@
 prefix: /api/v1/operations
 Serves every operation any module registered via ``register_operation``.
 """
+from datetime import date
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -65,7 +66,10 @@ async def set_operation_schedule(
 
 @router.get("/llm-spend", summary="Gasto del modelo por disparador, módulo y motivo")
 async def llm_spend(
-    days: int = Query(30, ge=1, le=365, description="Ventana en días"),
+    desde: Optional[date] = Query(
+        None, description="Fecha inicial inclusive (AAAA-MM-DD). Por defecto, 30 días atrás"),
+    hasta: Optional[date] = Query(
+        None, description="Fecha final INCLUSIVE del día completo. Por defecto, hoy"),
     trigger: Optional[str] = Query(
         None, description="Detalle de un disparador; sin él, el resumen agregado"),
     db: Session = Depends(get_db),
@@ -73,17 +77,26 @@ async def llm_spend(
 ):
     """El gasto del modelo, consultable en vez de investigable.
 
-    El costo de cada llamada ya se calculaba y se tiraba: los logs de Railway solo
-    conservan el despliegue vigente, así que la única forma de saber en qué se iba el
-    dinero era mirar la consola de Anthropic antes y después de cada corrida. Se agrupa
-    por DISPARADOR porque esa es la columna que responde: el módulo dice qué producto
-    consumió, el disparador dice si lo pidió alguien o si una tarea agendada lo generó
-    sola.
+    El costo de cada llamada ya se calculaba y se tiraba: los logs del proveedor de
+    despliegue solo conservan la versión vigente, así que la única forma de saber en qué se
+    iba el dinero era mirar la consola de Anthropic antes y después de cada corrida.
+
+    El rango va por FECHAS y no por una ventana de N días porque la pregunta real es «¿esto
+    cuadra con lo que me facturaron?», y la facturación va por ciclo calendario. ``hasta``
+    incluye el día completo.
+
+    Se agrupa por DISPARADOR porque esa es la columna que responde: el módulo dice qué
+    producto consumió, el disparador dice si lo pidió alguien o si una tarea agendada lo
+    generó sola.
     """
     from shared.observability import spend
 
     _require_admin(current_user)
+    if desde and hasta and desde > hasta:
+        raise HTTPException(status_code=400,
+                            detail="El rango está invertido: 'desde' es posterior a 'hasta'.")
     if trigger:
         return {"disparador": trigger,
-                "llamadas": spend.spend_detail(db, days=days, trigger=trigger)}
-    return spend.spend_summary(db, days=days)
+                "llamadas": spend.spend_detail(db, desde=desde, hasta=hasta,
+                                               trigger=trigger)}
+    return spend.spend_summary(db, desde=desde, hasta=hasta)

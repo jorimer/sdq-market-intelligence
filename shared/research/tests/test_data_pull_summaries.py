@@ -157,3 +157,41 @@ def test_generic_summary_ignores_booleans():
     evs = dp._generic_summary("X", {"has_data": True, "flag": False}, "2025", "src")
     t = " ".join(e.text for e in evs)
     assert "has_data" not in t and "flag" not in t
+
+
+class TestAcumuladosComputados:
+    """La suma de los primeros capítulos se sirve HECHA, no se deja derivar.
+
+    El informe del 14-08 publicó «estos tres capítulos suman el 42.2%» sobre China cuando el
+    dato es 42,3%. No fue redondeo: 42,2 no es ni la suma real ni la de los porcentajes ya
+    redondeados (42,4). El modelo hizo la cuenta a mano y sacó un tercer número.
+    """
+
+    CAPS = [{"capitulo": "85", "usd_mm": 1039.52, "pct": 17.36},
+            {"capitulo": "84", "usd_mm": 945.87, "pct": 15.80},
+            {"capitulo": "87", "usd_mm": 548.53, "pct": 9.16},
+            {"capitulo": "39", "usd_mm": 461.60, "pct": 7.71},
+            {"capitulo": "72", "usd_mm": 424.10, "pct": 7.08},
+            {"capitulo": "73", "usd_mm": 277.40, "pct": 4.63}]
+
+    def test_sirve_el_valor_correcto_y_no_el_que_el_modelo_derivo(self):
+        txt = dp._acumulados(self.CAPS, "China")
+        assert "los 3 mayores concentran 42.3%" in txt
+        assert "42.2%" not in txt, "la cifra que el modelo inventó"
+        assert "42.4%" not in txt, "sumar los porcentajes ya redondeados"
+
+    def test_el_sujeto_viaja_con_el_numero(self):
+        assert "China" in dp._acumulados(self.CAPS, "China")
+
+    def test_no_afirma_un_tramo_que_no_existe(self):
+        """Con 4 capítulos, «los 5 mayores» sería el total disfrazado de concentración."""
+        assert "los 5 mayores" not in dp._acumulados(self.CAPS[:4], "Italia")
+        assert dp._acumulados(self.CAPS[:2], "Aruba") == ""
+
+    def test_llega_a_la_evidencia_del_socio(self):
+        """Un helper correcto que nadie llama no arregla nada."""
+        payload = {"socios_por_capitulo": {
+            "China": {"period": "2025", "total_usd_mm": 5987.9, "n_capitulos": 94,
+                      "capitulos_top": self.CAPS}}}
+        txt = " ".join(e.text for e in dp._trade_summary("t", payload, "2026-Q2", "Comtrade"))
+        assert "los 3 mayores concentran 42.3%" in txt

@@ -87,7 +87,7 @@ def test_el_hit_de_cache_se_registra_y_se_distingue(db):
             L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m",
                           cost_usd=0.0, cache_hit=True)
         L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=0.5)
-    res = spend.spend_summary(db, days=1)
+    res = spend.spend_summary(db)
     fila = next(f for f in res["por_disparador"] if f["clave"] == "/report")
     assert fila["llamadas"] == 10
     assert fila["hits_de_cache"] == 9
@@ -109,7 +109,7 @@ def test_el_resumen_ordena_por_costo_y_separa_producir_de_verificar(db):
         L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=1.0,
                       module="brand_intel")
 
-    res = spend.spend_summary(db, days=1)
+    res = spend.spend_summary(db)
     assert res["costo_total_usd"] == 13.0
     assert res["llamadas_totales"] == 3
     # El disparador más caro va primero: es la pregunta que se hace primero.
@@ -127,7 +127,7 @@ def test_el_total_no_depende_de_la_lista_truncada(db):
     for i in range(20):
         with L.attributed_to("operacion", f"op-{i}"):
             L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=1.0)
-    res = spend.spend_summary(db, days=1, top=3)
+    res = spend.spend_summary(db, top=3)
     assert len(res["por_disparador"]) == 3
     assert res["costo_total_usd"] == 20.0
 
@@ -136,18 +136,69 @@ def test_el_detalle_por_disparador_ordena_por_costo(db):
     with L.attributed_to("operacion", "x"):
         L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=0.1)
         L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=0.9)
-    filas = spend.spend_detail(db, days=1, trigger="x")
+    filas = spend.spend_detail(db, trigger="x")
     assert [f["costo_usd"] for f in filas] == [0.9, 0.1]
 
 
-def test_la_ventana_excluye_lo_viejo(db):
-    from datetime import datetime, timedelta, timezone
-    viejo = (datetime.now(timezone.utc) - timedelta(days=90)).replace(tzinfo=None)
-    db.add(LLMCall(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=99.0,
-                   trigger_kind="operacion", trigger_detail="antigua",
-                   created_at=viejo))
+# ─────────────────────────────────────────────────────────────────────────────
+# El rango va por FECHAS: la pregunta es si cuadra con la factura
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _fila(db, cuando, costo=1.0):
+    db.add(LLMCall(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=costo,
+                   trigger_kind="operacion", trigger_detail="op",
+                   created_at=cuando))
     db.commit()
-    assert spend.spend_summary(db, days=30)["costo_total_usd"] == 0.0
+
+
+def test_el_dia_final_entra_completo(db):
+    """La trampa: quien pide «hasta el 16» quiere lo del 16, no lo anterior a su
+    medianoche. Tomar la fecha tal cual dejaría fuera todo el último día —el que más se
+    mira— y el error sería invisible porque el total seguiría siendo plausible."""
+    from datetime import date, datetime
+
+    _fila(db, datetime(2026, 8, 16, 23, 59, 58), costo=5.0)
+    res = spend.spend_summary(db, desde=date(2026, 8, 1), hasta=date(2026, 8, 16))
+    assert res["costo_total_usd"] == 5.0
+    assert res["hasta"] == "2026-08-16"
+
+
+def test_el_dia_inicial_entra_desde_su_medianoche(db):
+    from datetime import date, datetime
+
+    _fila(db, datetime(2026, 8, 1, 0, 0, 1), costo=3.0)
+    assert spend.spend_summary(db, desde=date(2026, 8, 1),
+                               hasta=date(2026, 8, 31))["costo_total_usd"] == 3.0
+
+
+def test_lo_de_fuera_del_rango_no_entra(db):
+    from datetime import date, datetime
+
+    _fila(db, datetime(2026, 7, 31, 23, 59, 59), costo=9.0)   # un segundo antes
+    _fila(db, datetime(2026, 9, 1, 0, 0, 0), costo=9.0)       # un segundo después
+    _fila(db, datetime(2026, 8, 15, 12, 0, 0), costo=1.0)     # dentro
+    res = spend.spend_summary(db, desde=date(2026, 8, 1), hasta=date(2026, 8, 31))
+    assert res["costo_total_usd"] == 1.0
+    assert res["llamadas_totales"] == 1
+
+
+def test_sin_rango_toma_los_ultimos_treinta_dias(db):
+    from datetime import datetime, timedelta, timezone
+
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    _fila(db, ahora - timedelta(days=5), costo=2.0)
+    _fila(db, ahora - timedelta(days=90), costo=99.0)
+    assert spend.spend_summary(db)["costo_total_usd"] == 2.0
+
+
+def test_el_detalle_respeta_el_mismo_rango(db):
+    from datetime import date, datetime
+
+    _fila(db, datetime(2026, 8, 16, 20, 0, 0), costo=4.0)
+    _fila(db, datetime(2026, 6, 1, 20, 0, 0), costo=4.0)
+    filas = spend.spend_detail(db, desde=date(2026, 8, 1), hasta=date(2026, 8, 16),
+                               trigger="op")
+    assert len(filas) == 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
