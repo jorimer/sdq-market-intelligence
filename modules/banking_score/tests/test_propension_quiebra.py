@@ -135,3 +135,41 @@ def test_la_cifra_sale_con_su_unidad_no_transformada():
     assert "%" in pq._expresar("crecimiento_anomalo", 0.707)
     # y la unidad NO se repite en las referencias
     assert "puntos" not in pq._expresar("morosidad_nivel", 15.6, con_unidad=False)
+
+
+def test_la_prosa_lleva_el_SENTIDO_no_solo_las_cifras():
+    """La descomposición da valor, contraste y factor —todo verificable— pero no el sentido:
+    por qué ese patrón mata a un banco. Sin la lectura de negocio el párrafo recita números
+    con etiquetas y el lector no concluye nada."""
+    perfil = {f: (1.0, 0.0, 0.70) for f in FEATURES}
+    perfil["crecimiento_anomalo"] = (-0.065, 0.185, 0.304)
+    coef = {f: 0.0 for f in FEATURES} | {f"{a}×{b}": 0.0 for a, b, _ in pq.INTERACCIONES}
+    coef["crecimiento_anomalo"] = -0.72
+    m = _mod_con_perfil(perfil, coef)
+    txt = pq.prosa(m, "Banco X", {**{f: 0.0 for f in FEATURES}, "crecimiento_anomalo": -0.30})
+    assert "Lo que hay detrás" in txt
+    assert "se encoge mientras muere" in txt
+
+
+def test_la_lectura_declara_cuando_CONTRADICE_a_la_literatura():
+    """Esconder que el dato dice lo contrario que el manual dejaría al informe contradiciendo
+    a la literatura sin avisar — peor que contradecirla de frente."""
+    assert "2003" in pq.LECTURA_DE_NEGOCIO["crecimiento_anomalo"]
+    assert "no aparece" in pq.LECTURA_DE_NEGOCIO["crecimiento_anomalo"]
+
+
+def test_el_sentido_se_da_una_sola_vez():
+    """Repetir la lectura de negocio por cada variable convierte el párrafo en un glosario."""
+    perfil = {f: (1.0, 0.0, 0.70) for f in FEATURES}
+    coef = {f: 0.5 for f in FEATURES} | {f"{a}×{b}": 0.0 for a, b, _ in pq.INTERACCIONES}
+    m = _mod_con_perfil(perfil, coef)
+    txt = pq.prosa(m, "Banco X", {f: 2.0 for f in FEATURES})
+    assert txt.count("Lo que hay detrás") <= 1
+
+
+def test_toda_variable_narrable_tiene_su_lectura_de_negocio():
+    """Un impulsor sin lectura sale como cifra pelada. Gate: si se agrega una variable al
+    modelo hay que escribir qué significa, o no se puede narrar."""
+    narrables = [f for f, m in pq.MECANISMO_ESPERADO.items() if m != 0]
+    faltan = [f for f in narrables if f not in pq.LECTURA_DE_NEGOCIO]
+    assert not faltan, f"sin lectura de negocio: {faltan}"

@@ -289,6 +289,36 @@ CONCEPTOS: Dict[str, str] = {
 CONCEPTOS_INTERACCION: Dict[str, str] = {
     f"{a}×{b}": razon for a, b, razon in INTERACCIONES
 }
+# QUÉ SIGNIFICA estar del lado riesgoso de cada variable. La descomposición da el valor, el
+# contraste con la cohorte y el factor —todo verificable— pero no el SENTIDO: por qué ese
+# patrón mata a un banco. Eso es conocimiento de dominio y se declara acá, una vez, en vez de
+# dejar que cada informe lo improvise (o que el modelo narrativo lo invente).
+#
+# Cada lectura se escribió mirando lo que la cohorte MUESTRA, no lo que el manual dice. Donde
+# las dos difieren, se nombra la diferencia: esconderla dejaría al informe contradiciendo a la
+# literatura sin avisar, que es peor que contradecirla explícitamente.
+LECTURA_DE_NEGOCIO: Dict[str, str] = {
+    "crecimiento_anomalo": (
+        "un balance que se achica es la señal, no el que crece: los depósitos se van, la "
+        "cartera se liquida y la entidad se encoge mientras muere. Conviene decirlo porque "
+        "es lo contrario de lo que postula la literatura de la crisis de 2003 —la burbuja de "
+        "crédito que precede al estallido—; en la cohorte dominicana ese patrón no aparece"),
+    "morosidad_nivel": (
+        "la mora por encima de lo habitual para su tipo de entidad es deterioro ya ocurrido y "
+        "ya reconocido en el balance: no anticipa nada, confirma"),
+    "salto_morosidad": (
+        "lo que anticipa no es el nivel sino la velocidad: una cartera que se deteriora rápido "
+        "avisa antes que una que está mal hace años"),
+    "erosion_capital": (
+        "el colchón que absorbe las pérdidas se está consumiendo, y a diferencia del nivel de "
+        "capital —que un banco grande puede tener estructuralmente bajo y estable— la caída "
+        "sostenida sí precede a la salida"),
+    "estres_liquidez": (
+        "la salida de depósitos es el mecanismo por el que un problema de solvencia se vuelve "
+        "un problema de caja, y es lo que fuerza la intervención antes de que los ratios "
+        "terminen de reflejar el daño"),
+}
+
 # Debajo de este factor multiplicativo, la contribución no cambia la conclusión y solo
 # alarga el texto. Se acumula en "el resto" en vez de enumerarse.
 FACTOR_MATERIAL = 1.10
@@ -460,12 +490,21 @@ def prosa(modelo: ModeloPropension, nombre_entidad: str,
         return (f"{t['concepto']} en {valor}{ref}, que {verbo} la propensión por un factor "
                 f"de {t['factor']:.2f}")
 
+    def _sentido(t: Dict[str, Any]) -> str:
+        lect = LECTURA_DE_NEGOCIO.get(t["nombre"])
+        return f" Lo que hay detrás: {lect}." if lect else ""
+
     if e["empujan_al_alza"]:
         partes.append("Lo que la empuja al alza: "
                       + "; ".join(_frase(t, True) for t in e["empujan_al_alza"][:2]) + ".")
+        # El sentido se da del factor DOMINANTE, no de todos: repetir la lectura de negocio
+        # por cada variable convierte el párrafo en un glosario.
+        partes.append(_sentido(e["empujan_al_alza"][0]).strip())
     if e["empujan_a_la_baja"]:
         partes.append("En sentido contrario: "
                       + "; ".join(_frase(t, False) for t in e["empujan_a_la_baja"][:2]) + ".")
+        if not e["empujan_al_alza"]:
+            partes.append(_sentido(e["empujan_a_la_baja"][0]).strip())
     if not e["empujan_al_alza"] and not e["empujan_a_la_baja"]:
         partes.append("Ningún factor se aparta materialmente del promedio del sistema: el "
                       "resultado refleja un perfil sin rasgos distintivos en ninguna dirección.")
