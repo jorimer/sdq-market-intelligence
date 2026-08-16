@@ -138,10 +138,12 @@ def test_una_bandera_con_peso_no_aparece_como_fuera_del_indice():
     assert res["uncalibrated"] == [] and res["salud_precursores"] < 100
 
 
-def test_el_encabezado_declara_QUE_mide_el_indice():
-    """El defecto no era el número: era el rótulo. 'presión del conjunto: 0.0/100 (banda
-    baja)' prometía cubrir las nueve reglas y se leía como all-clear encima de una bandera
-    activa. Ahora nombra su dominio y afirma el cero como resultado."""
+def test_el_indice_heredado_no_sale_en_el_informe():
+    """El titular de §10 era `Índice de salud: 100.0/100`, que ES el contador de umbrales
+    heredado del rating — el mecanismo que quedó explícitamente descartado como detección
+    temprana. Se pulieron frases a su alrededor durante dos días mientras el elemento más
+    visible de la sección seguía siendo el descartado. El índice sigue vivo en el payload de
+    la API y en `sib_historical_backtest`; en el documento que lee un cliente, no."""
     from dataclasses import asdict
 
     from modules.banking_score.early_warning import format_alerts_text
@@ -149,13 +151,15 @@ def test_el_encabezado_declara_QUE_mide_el_indice():
                    "base", "top-10 / cartera total %")
     txt = format_alerts_text({"alerts": [asdict(alerta)],
                               "ensemble": ensemble_score([alerta]),
-                              "score": 0.0, "band": "baja", "perfil": None})
-    assert "señales de deterioro temprano" in txt, "el encabezado debe decir QUÉ mide"
-    assert "del conjunto" not in txt, "no puede prometer cobertura que no tiene"
-    assert "ninguna encendida" in txt, "el resultado se afirma, no se deja como banda"
-    assert "banda baja" not in txt
-    assert "fuera del índice" in txt, "la bandera no cubierta se marca en su línea"
-    assert "50.9%" in txt, "la cifra sale con su unidad, no pelada"
+                              "score": 100.0, "band": "alta", "perfil": None})
+    for jerga in ("/100", "Índice de salud", "fuera del índice", "severidad",
+                  "ninguna encendida", "precursores detectables", "complemento del rating",
+                  "proxy visible", "La señal se activa cuando"):
+        assert jerga not in txt, f"«{jerga}» es vocabulario de motor y no va al informe"
+    assert "50.9%" in txt and "30.0%" in txt, "el hecho y su referencia sí van"
+    assert "depende de un puñado de contrapartes" in txt, (
+        "sin la CONSECUENCIA la viñeta es una comparación de números: la regla sabe que "
+        "50,9 > 30,0 y el comité necesita saber qué implica")
 
 
 def test_el_texto_no_explica_la_metodologia_en_medio_del_analisis():
@@ -208,17 +212,19 @@ def test_classify_profile_agudo_vs_cronico():
     assert classify_profile(sano, []) is None
 
 
-def test_format_incluye_indice_y_perfil():
-    block = {"alerts": [{"label": "Morosidad sobre el umbral de su tipo", "severity": "alta",
-                         "value": 12.0, "threshold": 5.0, "basis": "x", "metric": "morosidad %"}],
+def test_ni_el_puntaje_ni_el_perfil_del_indice_llegan_al_informe():
+    """`61.0/100`, `banda alta` y `perfil: deterioro agudo` son salidas del índice. La
+    entidad se describe por lo que le pasa, no por dónde cae en una escala interna."""
+    block = {"alerts": [{"code": "morosidad_nivel",
+                         "label": "Morosidad sobre el umbral de su tipo", "severity": "alta",
+                         "value": 12.0, "threshold": 5.0, "basis": "x",
+                         "metric": "morosidad %"}],
              "score": 61.0, "band": "alta", "perfil": "agudo"}
     txt = format_alerts_text(block)
-    assert "señales de deterioro temprano" in txt and "61.0/100" in txt
-    assert "presión de deterioro" not in txt, (
-        "polaridad invertida: en este documento cada otro 0-100 es «más es mejor», y este era "
-        "el único al revés — el original decía «0.0/100 (banda baja)», con el número gritando "
-        "lo peor y el paréntesis diciendo lo contrario")
-    assert "deterioro agudo" in txt
+    for salida in ("61.0/100", "deterioro agudo", "banda alta", "insolvencia crónica"):
+        assert salida not in txt
+    assert "12.0%" in txt and "5.0%" in txt
+    assert "deterioro ya ocurrido" in txt, "el hecho viaja con su consecuencia de negocio"
 
 
 def test_evaluate_ordena_alta_primero():
@@ -230,20 +236,22 @@ def test_evaluate_ordena_alta_primero():
     assert alerts[0].severity == "alta"                    # la 'alta' va primero
 
 
-def test_format_alerts_text_vacio_y_con_alertas():
-    empty = format_alerts_text({"alerts": []})
-    assert "Sin banderas" in empty and "no detecta fraude" in empty
-    txt = format_alerts_text({"alerts": [
-        {"label": "Salto de morosidad", "severity": "alta", "value": 4.83,
-         "threshold": 3.0, "basis": "Deterioro diferido", "metric": "morosidad %"},
-    ]})
-    # La cifra sale con su UNIDAD y el umbral con su SIGNIFICADO: "value: 4.83 (umbral 3.0)"
-    # era notación de motor, no una frase que alguien lea en un comité.
-    assert "**Salto de morosidad**" in txt and "4.83%" in txt and "3%" in txt
-    assert "4.83 " not in txt, "el número pelado, sin unidad, no se publica"
+def test_sin_nada_por_encima_no_se_imprime_un_descargo():
+    """Un banco sin nada activo recibía «Sin banderas de alerta temprana activas… Es un
+    complemento del rating, no un veredicto, y no detecta fraude ni contabilidad paralela»:
+    tres descargos metodológicos y cero información. Eso vive en Limitaciones."""
+    txt = format_alerts_text({"alerts": []})
+    for descargo in ("Sin banderas", "complemento del rating", "no detecta fraude",
+                     "precursores detectables"):
+        assert descargo not in txt
+    con = format_alerts_text({"alerts": [
+        {"code": "salto_morosidad", "label": "Salto de morosidad", "severity": "alta",
+         "value": 4.83, "threshold": 3.0, "basis": "Deterioro diferido",
+         "metric": "morosidad %"}]})
+    assert "4.83%" in con and "3%" in con
+    assert "4.83 " not in con, "el número pelado, sin unidad, no se publica"
+    assert "velocidad avisa antes que el nivel" in con.lower()
 
-
-# ── Panel de márgenes: la lectura temprana cuando NADA se enciende ──
 
 def test_el_panel_cubre_las_siete_calibradas_y_solo_esas():
     from modules.banking_score.early_warning import ALERT_WEIGHTS, signal_panel
@@ -347,8 +355,9 @@ def test_sin_banderas_el_texto_igual_muestra_los_margenes():
     m = {"morosidad_pct": 1.53, "cobertura_pct": 200.6, "solvencia_pct": 15.37,
          "bank_type": "banca_multiple"}
     txt = format_alerts_text({"alerts": [], "panel": signal_panel(m, {})})
-    assert "Sin banderas" in txt
-    assert "señales de deterioro temprano" in txt or "Sin dato para evaluar" in txt
+    assert "supera su umbral de referencia" in txt or "Sin dato para evaluar" in txt
+    for jerga in ("encendida", "precursor", "bandera"):
+        assert jerga not in txt.lower()
 
 
 def test_el_panel_llega_al_contexto_del_modelo():
@@ -364,12 +373,13 @@ def test_el_panel_llega_al_contexto_del_modelo():
 
 
 def test_la_explicacion_metodologica_vive_en_limitaciones():
-    """El porqué de que la concentración quede fuera del índice va en Limitaciones, no en el
-    medio del análisis de riesgo."""
+    """Los descargos —complemento del rating, no detecta fraude, por qué la concentración no
+    se pondera— van acá y no en el encabezado de una lista en el medio del análisis."""
     from modules.banking_score.products import _LIMITATIONS_TEXT
     assert "diez mayores deudores" in _LIMITATIONS_TEXT
-    assert "siete precursores calibrados" in _LIMITATIONS_TEXT
-    assert "no se les asigna un peso que el dato no respalde" in _LIMITATIONS_TEXT
+    assert "complemento del rating" in _LIMITATIONS_TEXT
+    assert "no detecta fraude" in _LIMITATIONS_TEXT
+    assert "sin ponderarse" in _LIMITATIONS_TEXT
 
 
 def test_el_modelo_no_recibe_numeros_crudos():
@@ -385,9 +395,9 @@ def test_el_modelo_no_recibe_numeros_crudos():
     for fila in panel_para_modelo(panel):
         assert not (crudos & set(fila)), f"campo crudo servido al modelo: {crudos & set(fila)}"
     rel = relaciones_para_modelo(panel)
-    assert not (crudos & set(rel["converge_primero"] or {}))
-    assert rel["converge_primero"]["valor"] == "2.0 veces"
-    assert rel["converge_primero"]["horizonte_al_umbral"].startswith("alrededor de")
+    assert not (crudos & set(rel["la_que_llegaria_antes"] or {}))
+    assert rel["la_que_llegaria_antes"]["valor"] == "2.0 veces"
+    assert rel["la_que_llegaria_antes"]["horizonte_al_umbral"].startswith("alrededor de")
 
 
 def test_con_narrativa_el_bloque_no_repite_los_margenes():
@@ -398,8 +408,9 @@ def test_con_narrativa_el_bloque_no_repite_los_margenes():
          "cobertura_pct": 200.6, "cobertura_prev4": 229.67}
     panel = signal_panel(m, {})
     base = {"alerts": [], "panel": panel}
-    assert "La que más se movió" in format_alerts_text(base)
-    assert "La que más se movió" not in format_alerts_text({**base, "con_narrativa": True})
+    assert "Lo único que se está moviendo" in format_alerts_text(base)
+    assert "Lo único que se está moviendo" not in format_alerts_text(
+        {**base, "con_narrativa": True})
 
 
 def test_el_separador_decimal_es_el_del_informe():

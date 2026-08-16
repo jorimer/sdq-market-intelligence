@@ -544,6 +544,14 @@ def _frase_valor(nombre: str, v: float) -> str:
     return f"{v:.2f}"
 
 
+def _lista_mecanismos() -> str:
+    """Los mecanismos de `INTERACCIONES` nombrados en prosa, para poder decir cuáles se
+    buscaron. Se arma del propio tuple: agregar una interacción la mete en la frase sola,
+    en vez de dejar el texto prometiendo tres cuando el modelo ya evalúa cuatro."""
+    nombres = [razon for _, _, razon in INTERACCIONES]
+    return ", ".join(nombres[:-1]) + f" y {nombres[-1]}" if len(nombres) > 1 else nombres[0]
+
+
 def prosa(modelo: ModeloPropension, nombre_entidad: str,
           indicadores: Dict[str, float]) -> str:
     """La explicación en prosa de NEGOCIO — respaldo determinista del párrafo del informe.
@@ -605,11 +613,21 @@ def prosa(modelo: ModeloPropension, nombre_entidad: str,
         partes.append(f"{nombre_entidad} no se aparta del promedio del sistema en ninguna de "
                       f"las variables que el modelo mide.")
 
+    # Las combinaciones se narran SIEMPRE, estén activas o no. Que las tres den negativo no
+    # es silencio: es el chequeo corrido y limpio, y es lo que un comité quiere oír. Narrarlas
+    # solo cuando disparan dejaba fuera del informe justamente la interrelación de variables
+    # —el mecanismo, no la suma de señales sueltas— que es lo que distingue a este modelo de
+    # un contador de umbrales.
     if e["interacciones_activas"]:
         i = max(e["interacciones_activas"], key=lambda x: abs(x["factor"] - 1))
         partes.append(f"La combinación también pesa: {i['concepto']} "
                       f"{'agrava' if i['factor'] > 1 else 'atenúa'} el cuadro por encima de "
                       f"lo que aportan esas señales por separado.")
+    else:
+        partes.append(f"El modelo además busca las {len(INTERACCIONES)} combinaciones que "
+                      f"hundieron bancos en este sistema —{_lista_mecanismos()}— y en esta "
+                      f"entidad no encuentra ninguna: el riesgo no es la suma de señales "
+                      f"sueltas, y ninguna se está reforzando con otra.")
 
     veces = e["veces_la_base"]
     encuadre = ("por encima del promedio del sistema" if veces > 1.15 else
