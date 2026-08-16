@@ -269,3 +269,34 @@ def test_un_indicador_sin_propuesta_no_crea_fila_ni_bloquea_el_resto(tablero):
     r = barrer(tablero, "end_2030", max_indicadores=4, preguntar=a_veces)
     assert r["creadas"] == 2 and r["sin_propuesta"] == 2
     assert llamadas["n"] == 4, "un vacío cortó el barrido en vez de seguir"
+
+
+def test_una_llamada_que_FALLA_no_se_cuenta_como_falta_de_fuente():
+    """«Ninguna fuente publica esto» y «no pudimos preguntar» son cosas distintas. El módulo
+    entero existe para no confundirlas; confundirlas acá convertiría una caída del proveedor
+    en un hallazgo sobre el Estado dominicano."""
+    from modules.law_intel.agente_fuentes import proponer, resumen
+
+    def rompe(_s, _u):
+        raise RuntimeError("overloaded_error")
+
+    r = resumen(proponer("end_2030", rompe, max_indicadores=3))
+    assert r["fallidos"] == 3
+    assert r["respondieron"] == 0
+    assert r["sin_propuesta"] == 0, "un fallo se estaba contando como ausencia de fuente"
+    assert all("overloaded" in m for m in r["motivos_de_falla"].values())
+
+
+def test_las_tandas_avanzan_aunque_el_modelo_responda_vacio(tablero):
+    """La idempotencia por tablero solo cubre lo que dejó rastro. Un vacío no crea fila, así
+    que sin `omitir` cada tanda re-consulta los mismos vacíos desde el principio y el barrido
+    de 83 indicadores no termina nunca."""
+    from modules.law_intel.agente_fuentes import barrer
+
+    r1 = barrer(tablero, "end_2030", max_indicadores=3, preguntar=lambda s, u: "[]")
+    assert r1["creadas"] == 0 and len(r1["consultados_ids"]) == 3
+
+    r2 = barrer(tablero, "end_2030", max_indicadores=3, preguntar=lambda s, u: "[]",
+                omitir=set(r1["consultados_ids"]))
+    assert not set(r2["consultados_ids"]) & set(r1["consultados_ids"]), \
+        "la segunda tanda repitió indicadores: el barrido no avanza"
