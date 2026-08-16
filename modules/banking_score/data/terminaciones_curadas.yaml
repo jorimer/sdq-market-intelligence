@@ -348,3 +348,86 @@ terminaciones:
       y la entidad sigue reportando hasta 2026-04 con 5.087 M en activos, morosidad 0.59% y
       cobertura 270%. El episodio de estrés de 2002-2004 fue real y superado, no terminal.
 
+  # ── Cronología de quiebras de eldinero.do / Diario Libre / SB ──────────────
+  # Fuente aportada por el dueño. NOTA sobre las fechas: la resolución formal de disolución de
+  # la Junta Monetaria suele llegar AÑOS después de que la entidad deja de reportar. Acá se
+  # registra la fecha del ledger —cuando la institución efectivamente sale del panel, que es
+  # la que el modelo puede usar— y la fecha oficial queda en la fuente.
+
+  - nombre: Banco Metropolitano
+    fecha_salida: 2000-12-01
+    causa: quiebra
+    episodio: Intervenido y disuelto en la crisis de 2003
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre (23 entidades disueltas desde 2003). El ledger
+      lo pierde en 2000-12, tres años antes de la resolución — la entidad deja de reportar y
+      la formalización llega después.
+
+  - nombre: Banco de Desarrollo Unificado
+    fecha_salida: 2007-03-01
+    causa: quiebra
+    episodio: Entra en disolución el 8 de julio de 2004
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. Coincide con la inferencia del panel
+      (insolvencia). El ledger reporta hasta 2007-03, después de iniciada la disolución.
+
+  - nombre: Crédito Solidario Dominicano
+    fecha_salida: 2006-08-01
+    causa: quiebra
+    episodio: Disuelto en agosto de 2006
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. Fecha exacta coincidente con el último reporte
+      del ledger. Coincide con la inferencia del panel (insolvencia).
+
+  # Las cinco siguientes el clasificador NO las ve: salen con ratios normales o sin morosidad
+  # reportada. Son la mejor demostración de por qué el registro curado existe.
+  - nombre: Financiera Nacional de Créditos
+    fecha_salida: 2003-08-01
+    causa: quiebra
+    episodio: CONACRE — disuelta el 9 de junio de 2005
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. El panel la leía como salida sana: deja de
+      reportar en 2003-08 con ratios normales y la resolución llega dos años después.
+
+  - nombre: Financiera Royal Dominicana
+    fecha_salida: 2003-11-01
+    causa: quiebra
+    episodio: Disuelta el 7 de julio de 2005
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. El panel la leía como salida sana (morosidad
+      9.8% bajo el piso de su tipo).
+
+  - nombre: Corporación de Crédito Rona
+    fecha_salida: 2016-08-01
+    causa: quiebra
+    episodio: Disuelta en 2015
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. El panel la leía como salida sana. La fecha de
+      disolución es anterior al último reporte del ledger, lo que sugiere que siguió
+      reportando durante el proceso.
+
+  - nombre: Banco Antillano
+    fecha_salida: 1990-08-01
+    causa: quiebra
+    episodio: Declarado en quiebra a principios de los años 90
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. Sin morosidad reportada al salir: invisible
+      para cualquier criterio automático.
+
+  - nombre: Banco Regional Dominicano
+    fecha_salida: 1992-12-01
+    causa: quiebra
+    episodio: Entró en liquidación (crisis de los 90)
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. Sin morosidad reportada al salir.
+
+  - nombre: Banco Girod Dominicano
+    fecha_salida: 1984-09-01
+    causa: quiebra
+    episodio: Liquidado y absorbido tras insolvencia
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre, que lo ubica en la década de 1990; el ledger
+      lo pierde en 1984-09. ⚠ Seis años de diferencia: puede ser que la liquidación formal
+      llegara mucho después, o que la fuente sea imprecisa en la década. Se registra con la
+      fecha del ledger y la discrepancia queda anotada.
+
