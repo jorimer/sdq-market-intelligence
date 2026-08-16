@@ -138,3 +138,72 @@ def test_declara_sus_fuentes_de_contexto():
     de la caché de narrativas. Sin declararlo, la mitad del contexto queda fuera de las dos."""
     assert "ai_context.py" in AI_CONTEXT_FILES
     assert any("accionabilidad" in f for f in AI_CONTEXT_FILES)
+
+
+class TestSeñalesPorIndicador:
+    """Sin ellas, el readiness resume 90 indicadores en «faltan dimensiones con dato real ()»
+    —con el paréntesis vacío— y el agente de descubrimiento recibe un prompt que no nombra
+    ni un indicador."""
+
+    def test_una_señal_por_indicador_numerado(self):
+        from modules.law_intel.registro import cargar
+        vs = LawProduct().variable_signals()["signals"]
+        assert len(vs) == len(cargar(E).numerados) == 90
+
+    def test_la_etiqueta_lleva_el_nombre_del_indicador(self):
+        """Es lo que el agente lee para saber QUÉ buscar."""
+        vs = {s.key: s for s in LawProduct().variable_signals()["signals"]}
+        assert "corrupción" in vs["1.2"].label.lower()
+        assert vs["1.2"].label.startswith("1.2 ")
+
+    def test_real_si_y_solo_si_hay_binding_verificado(self):
+        from shared.registry.signals import REAL
+        from modules.law_intel.bindings import cargar_bindings
+        bs = cargar_bindings(E)
+        for s in LawProduct().variable_signals()["signals"]:
+            b = bs.get(s.key)
+            assert (s.state == REAL) is bool(b and b.cuenta), s.key
+
+    def test_el_peso_es_uniforme(self):
+        """La ley no jerarquiza sus metas: repartir pesos por criterio propio inventaría una
+        prioridad que el legislador no fijó."""
+        pesos = {s.weight for s in LawProduct().variable_signals()["signals"]}
+        assert len(pesos) == 1
+
+    def test_la_cobertura_del_eje_coincide_con_la_del_expediente(self):
+        from shared.registry.signals import AxisRegistry
+        from modules.law_intel.bindings import cobertura
+        ax = AxisRegistry(sector_key="law", display_name="x", source="y", implemented=True,
+                          signals=tuple(LawProduct().variable_signals()["signals"]))
+        assert ax.coverage_real == pytest.approx(cobertura(E)["pct"] / 100.0, abs=0.001)
+
+
+class TestElDetalleDeLaBrechaNombraIndicadores:
+    """`detail` no es decorativo: el readiness lo inserta LITERALMENTE en el texto de la
+    brecha, y de ahí lo lee el agente de descubrimiento de fuentes.
+
+    Vacío, el agente recibía «faltan dimensiones con dato real ()» y sólo podía proponer
+    fuentes genéricas del país — gastar en ruido.
+    """
+
+    def test_nombra_indicadores_concretos(self):
+        d = LawProduct().data_signals().detail
+        assert "1.1" in d and "Confianza" in d
+        assert "()" not in d
+
+    def test_dice_el_conteo_con_su_denominador(self):
+        from modules.law_intel.bindings import cobertura
+        c = cobertura(E)
+        d = LawProduct().data_signals().detail
+        assert f"{c['total'] - c['medidos']} de {c['total']}" in d
+
+    def test_acota_cuantos_nombra(self):
+        """Con 86 nombres el texto sería ilegible y el prompt se llenaría de ruido."""
+        d = LawProduct().data_signals().detail
+        assert "y " in d and "más" in d, "declara cuántos quedaron fuera de la muestra"
+        assert len(d) < 1200
+
+    def test_declara_la_cadencia_anual(self):
+        """Sin declararla, el monitor penalizaría como obsoleta una fuente que por
+        naturaleza publica una vez al año."""
+        assert LawProduct().data_signals().cadence == "annual"

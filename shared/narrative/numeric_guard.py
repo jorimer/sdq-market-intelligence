@@ -1139,12 +1139,21 @@ def deterministic_direction_errors(context: dict, text: str) -> List[str]:
     return out
 
 
-def verify_figures(client, model: str, context_str: str, text: str) -> List[str]:
+def verify_figures(client, model: str, context_str: str, text: str,
+                   module: Optional[str] = None,
+                   template: Optional[str] = None) -> List[str]:
     """Return the figures in *text* not supported by *context_str* (``[]`` if all OK
-    or if the check can't run). Best-effort: never raises."""
+    or if the check can't run). Best-effort: never raises.
+
+    Contabiliza su propia llamada. Antes solo sumaba al techo diario y el registro de
+    gasto la anotaba desde el caller SIN dólares: el juez aparecía con costo cero justo
+    cuando es la mitad de las llamadas de un informe —once de veinte en el primer informe
+    medido— y por tanto el total publicado era la mitad del real. Se contabiliza acá, que
+    es donde está la respuesta, y por la MISMA vía que los otros catorce sitios."""
     if not text.strip():
         return []
-    from shared.llm.budget import budget_allows, record_usage
+    from shared.llm.budget import budget_allows
+    from shared.observability.llm_ledger import PURPOSE_GUARD, account
     if not budget_allows():
         # Corte suave: sin presupuesto se omite el juez LLM; la capa DETERMINISTA
         # (deterministic_unsupported) sigue corriendo en el caller — el modo de
@@ -1159,11 +1168,8 @@ def verify_figures(client, model: str, context_str: str, text: str) -> List[str]
             messages=[{"role": "user", "content": _JUDGE_USER.format(
                 context=context_str, text=text)}],
         )
-        usage = getattr(resp, "usage", None)
-        if usage is not None:
-            record_usage(model,
-                         getattr(usage, "input_tokens", 0) or 0,
-                         getattr(usage, "output_tokens", 0) or 0)
+        account(resp, model=model, purpose=PURPOSE_GUARD,
+                module=module, template=template)
         return _parse_unsupported(resp.content[0].text)
     except Exception as e:  # noqa: BLE001 — best-effort; the guardrail must not break generation
         logger.warning("Guardrail numérico no pudo verificar (se sirve sin verificar): %s", e)

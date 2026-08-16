@@ -115,8 +115,10 @@ def test_ensemble_score_pondera_y_ordena():
     ]
     res = ensemble_score(alerts)
     assert 0 <= res["salud_precursores"] < 100, "con precursores activos la salud BAJA"
-    # morosidad_nivel (0.38) domina sobre estres_liquidez (0.02)
-    assert res["contributors"][0]["code"] == "morosidad_nivel"
+    # El orden se DIO VUELTA al derivar los pesos de la evidencia: estres_liquidez (0.364)
+    # pasa a pesar más que morosidad_nivel (0.312). Antes valía 0.02 con la glosa "confirma
+    # tarde, no anticipa"; sale material en las diez especificaciones medidas.
+    assert res["contributors"][0]["code"] == "estres_liquidez"
 
 
 def test_el_indice_reporta_las_banderas_que_NO_cubre():
@@ -274,17 +276,28 @@ def test_el_margen_es_positivo_del_lado_sano_en_ambas_direcciones():
     assert p["solvencia_piso"]["margen"] > 0        # peor es MENOR
 
 
-def test_el_panel_marca_activa_lo_que_la_regla_enciende():
-    """Anti-deriva: el panel y las reglas leen los mismos umbrales. Si alguien mueve uno solo,
-    esto falla."""
-    from modules.banking_score.early_warning import evaluate, signal_panel
-    m = {"morosidad_pct": 12.0, "cobertura_pct": 50.0, "solvencia_pct": 9.0,
-         "bank_type": "banca_multiple"}
-    activas_panel = {s["code"] for s in signal_panel(m, {}) if s["estado"] == "activa"}
-    activas_regla = {a.code for a in evaluate(m, {})}
-    assert {"morosidad_nivel", "brecha_provisiones", "solvencia_piso"} <= activas_panel
-    assert activas_panel <= activas_regla, (
-        "el panel no puede marcar ACTIVA una señal que la regla no enciende")
+def test_el_panel_y_las_reglas_coinciden_EN_LAS_DOS_DIRECCIONES():
+    """Anti-deriva. La versión anterior solo comprobaba que el panel no marcara de más, y el
+    fallo real fue el contrario: la regla encendía `salto_morosidad` y el panel decía "sin
+    activar" —usaba `max` de las dos condiciones cuando la regla dispara con cualquiera—.
+    El informe salió contradiciéndose: "no presenta precursores activos" con la bandera
+    listada tres renglones abajo. Un guard que mira un solo lado deja pasar la mitad."""
+    from modules.banking_score.early_warning import ALERT_WEIGHTS, evaluate, signal_panel
+    casos = [
+        {"morosidad_pct": 12.0, "cobertura_pct": 50.0, "solvencia_pct": 9.0,
+         "bank_type": "banca_multiple"},
+        # el caso real de producción: mora 0.93 → 1.56 dispara por ×1.5 y no por +2 puntos
+        {"morosidad_pct": 1.56, "morosidad_prev4": 0.93, "cobertura_pct": 200.0,
+         "solvencia_pct": 17.0, "capital_now": 17.0, "capital_prior": 16.0,
+         "bank_type": "banca_multiple"},
+        {"morosidad_pct": 3.0, "morosidad_prev4": 1.0, "cobertura_pct": 90.0,
+         "solvencia_pct": 11.0, "bank_type": "banca_multiple"},
+    ]
+    for m in casos:
+        panel = {s["code"] for s in signal_panel(m, {}) if s["estado"] == "activa"}
+        regla = {a.code for a in evaluate(m, {})} & set(ALERT_WEIGHTS)
+        assert panel == regla, (
+            f"panel y reglas discrepan para {m}: panel={sorted(panel)} regla={sorted(regla)}")
 
 
 def test_solo_se_rankea_lo_comparable_convergentes_en_trimestres():
@@ -399,3 +412,25 @@ def test_el_separador_decimal_es_el_del_informe():
     assert _expresar(15.37, "pct") == "15.37%"
     assert _expresar(50.8989, "pct") == "50.9%"
     assert "," not in _horizonte(13.8)
+
+
+def test_los_pesos_suman_uno_y_crecimiento_esta_en_cero():
+    """El peso de crecimiento_anomalo NO es un olvido: da cero en las diez especificaciones
+    medidas. Se deja en el dict —en vez de borrarlo— porque "se midió y no predice" es una
+    afirmación distinta, y más fuerte, que "no se pudo medir"."""
+    from modules.banking_score.early_warning import ALERT_WEIGHTS
+    assert abs(sum(ALERT_WEIGHTS.values()) - 1.0) < 1e-6
+    assert ALERT_WEIGHTS["crecimiento_anomalo"] == 0.0
+    assert ALERT_WEIGHTS["estres_liquidez"] > ALERT_WEIGHTS["morosidad_nivel"], (
+        "la evidencia invierte el orden que tenía la calibración sin artefacto")
+
+
+def test_un_precursor_medido_en_cero_NO_es_lo_mismo_que_uno_sin_medir():
+    """Distinción que el índice debe preservar: crecimiento está EN el dominio calibrado con
+    peso cero; concentración y fondeo están FUERA porque no se pudieron medir contra quiebras."""
+    from modules.banking_score.early_warning import ALERT_WEIGHTS
+    assert "crecimiento_anomalo" in ALERT_WEIGHTS
+    assert "concentracion" not in ALERT_WEIGHTS and "fondeo_caro" not in ALERT_WEIGHTS
+    res = ensemble_score([Alert("crecimiento_anomalo", "x", "media", 40.0, 25.0, "", "%")])
+    assert res["uncalibrated"] == [], "crecimiento SÍ es calibrado; su peso medido es 0"
+    assert res["salud_precursores"] == 100.0, "peso 0 ⇒ no mueve el índice"

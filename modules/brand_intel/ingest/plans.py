@@ -33,6 +33,9 @@ from html import unescape
 from typing import Any, Dict, List, Optional, Sequence
 
 from shared.config.settings import settings
+from shared.observability.llm_ledger import (  # noqa: E402
+    PURPOSE_EXTRACTION, account,
+)
 
 logger = logging.getLogger("sdq.brand_intel.plans")
 
@@ -299,6 +302,7 @@ def _read_range(
                          "text": f"{body}\n\n¿Qué metas y acciones compromete este plan?"}],
         }],
     )
+    account(response, model=MODEL, purpose=PURPOSE_EXTRACTION, module="brand_intel", template="planes")
     if response.stop_reason == "refusal":
         raise RuntimeError("La lectura del plan fue rechazada.")
 

@@ -148,3 +148,65 @@ def test_la_ventana_excluye_lo_viejo(db):
                    created_at=viejo))
     db.commit()
     assert spend.spend_summary(db, days=30)["costo_total_usd"] == 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Los dos defectos que el propio registro destapó en producción
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _Usage:
+    input_tokens = 1000
+    output_tokens = 500
+
+
+class _Resp:
+    usage = _Usage()
+
+
+def test_el_juez_registra_su_costo_y_no_cero(db, monkeypatch):
+    """El primer informe medido en producción mostró once llamadas del juez a $0,00.
+
+    El juez es la mitad de las llamadas de un informe: registrado sin dólares, el total
+    publicado era la mitad del real — justo la cifra que se mira para decidir.
+    """
+    from shared.narrative import numeric_guard as G
+
+    class _Cliente:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                r = _Resp()
+                r.content = [type("C", (), {"text": '{"unsupported": []}'})()]
+                return r
+
+    monkeypatch.setattr("shared.llm.budget.budget_allows", lambda: True)
+    with L.attributed_to("endpoint", "GET /informe"):
+        G.verify_figures(_Cliente(), "claude-sonnet-4-6", "{}", "un texto",
+                         module="brand_intel", template="t")
+
+    fila = db.query(LLMCall).filter(LLMCall.purpose == L.PURPOSE_GUARD).one()
+    assert fila.cost_usd > 0, "el juez no puede quedar registrado en cero"
+    assert fila.module == "brand_intel"
+    assert fila.trigger_detail == "GET /informe"
+
+
+def test_account_suma_al_techo_diario_y_registra_a_la_vez(db, monkeypatch):
+    """Tenerlas separadas es lo que permitió que nueve sitios pusieran una y olvidaran
+    la otra; el techo diario no podía cortarlos porque para el contador no existían."""
+    visto = {}
+
+    def _falso_record_usage(model, tin, tout):
+        visto["techo"] = (model, tin, tout)
+        return 0.05
+
+    monkeypatch.setattr("shared.llm.budget.record_usage", _falso_record_usage)
+    L.account(_Resp(), model="claude-sonnet-4-6", purpose=L.PURPOSE_VISION,
+              module="brand_intel", template="pdf_vision")
+    assert visto["techo"] == ("claude-sonnet-4-6", 1000, 500)
+    fila = db.query(LLMCall).one()
+    assert fila.cost_usd == 0.05
+    assert fila.tokens_in == 1000 and fila.tokens_out == 500
+
+
+def test_account_nunca_lanza_con_una_respuesta_rara(db):
+    assert L.account(object(), model="m", purpose=L.PURPOSE_OTHER) == 0.0

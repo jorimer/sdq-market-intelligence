@@ -1,5 +1,22 @@
 """Calibración de los pesos de *Alerta Temprana* sobre el histórico SIB — el ARTEFACTO.
 
+MAPA DE MÓDULOS — cuál es el vivo. Hay cuatro piezas que se parecen y sirven a fines distintos;
+confundirlas es como se producen las regresiones de dirección:
+
+  propension_quiebra.py .............. EL MODELO VIVO. Evalúa a cualquier banco y devuelve su
+                                       propensión + la explicación en prosa de negocio.
+  validation/terminaciones.py ........ la cohorte y el registro curado que lo alimentan.
+  validation/hazard.py ............... la infraestructura del panel de riesgo (censura, riesgos
+                                       en competencia) que `propension_quiebra` REUSA. Su
+                                       `ajustar()` es el diagnóstico curada-vs-inferida, no el
+                                       modelo de producto.
+  validation/ew_calibration.py ....... calibra los pesos del ÍNDICE LEGACY de `early_warning`,
+                                       que es un contador de umbrales heredado del rating. NO
+                                       es el modelo de propensión y no se usa para predecir.
+
+Regla: si el trabajo es "predecir quiebras", el archivo es `propension_quiebra.py`. Si te
+encontrás ajustando `ALERT_WEIGHTS`, estás en el módulo equivocado.
+
 Por qué existe este módulo. Los pesos de ``early_warning.ALERT_WEIGHTS`` se describían como
 "calibrados sobre la cohorte de 35 terminaciones agudas del histórico SIB, con regresión
 logística estandarizada validada leave-one-entity-out (AUC 0.88, detección 34/35, falsos
@@ -202,6 +219,59 @@ def build_design(panel: Dict[str, Dict[date, Dict]], spec: CohortSpec,
     return X, y, groups
 
 
+def build_design_cohorte(panel: Dict[str, Dict[date, Dict]], terminaciones,
+                         spec: CohortSpec, panel_end: date
+                         ) -> Tuple[List[List[float]], List[int], List[str]]:
+    """Matriz de diseño sobre la COHORTE CANÓNICA, no sobre una etiqueta propia.
+
+    Antes esta calibración definía sus quiebras al vuelo —última fila del panel, con una regla
+    de "estado sano 24m antes"— y el resultado dependía tanto de esa receta como del dato.
+    `validation.terminaciones` clasifica las 224 salidas del histórico por el estado en que la
+    entidad dejó de reportar, y aísla la institución del código (sin eso Bancrédito y Mercantil
+    no existen como quiebras). Esta función usa ESE conjunto.
+
+    Los `no_evaluable` quedan fuera de las DOS clases: no se sabe qué fueron, y meterlos como
+    negativos afirmaría que sobrevivieron. Las salidas `sana_al_salir` sí son negativos
+    legítimos: fusiones y ventas de entidades que no estaban deteriorándose.
+    """
+    from modules.banking_score.validation.terminaciones import cohorte_canonica
+
+    quiebras = {t.entidad_nombre: t for t in cohorte_canonica(terminaciones)}
+    no_evaluables = {t.entidad_nombre for t in terminaciones
+                     if t.naturaleza == "no_evaluable"}
+    X: List[List[float]] = []
+    y: List[int] = []
+    groups: List[str] = []
+    for code, series in panel.items():
+        dates = sorted(series)
+        if not dates:
+            continue
+        nombre = str(series[dates[-1]].get("entidad_nombre") or code)
+        if nombre in no_evaluables:
+            continue
+        floor = morosidad_floor(series[dates[-1]].get("tipo_entidad"))
+        t = quiebras.get(nombre)
+        if t is not None:
+            fx = build_features(series, _shift(t.fecha_salida, spec.horizon_m), floor)
+            if fx:
+                X.append([fx[k] for k in FEATURES])
+                y.append(1)
+                groups.append(nombre)
+            continue      # una quiebra no aporta también controles de su propio pasado
+        ref_end = dates[-1] if _months_between(dates[-1], panel_end) > EXIT_LAG_M else panel_end
+        for d in dates:
+            if d.month != CONTROL_MONTH:
+                continue
+            if _months_between(d, ref_end) < SAFE_GAP_M + spec.horizon_m:
+                continue
+            fx = build_features(series, d, floor)
+            if fx:
+                X.append([fx[k] for k in FEATURES])
+                y.append(0)
+                groups.append(nombre)
+    return X, y, groups
+
+
 def fit_weights(X: Sequence[Sequence[float]], y: Sequence[int], groups: Sequence[str],
                 spec: CohortSpec) -> Optional[FitResult]:
     """Regresión logística estandarizada + validación leave-one-entity-out.
@@ -263,6 +333,20 @@ def sensitivity_table(panel: Dict[str, Dict[date, Dict]],
     return out
 
 
+# Todo lo que los consumidores del panel leen. `load_panel` DEBE poblar cada una: un campo
+# que falte no rompe nada visible, simplemente devuelve None y el consumidor se apaga en
+# silencio. Pasó con `entidad_nombre`: sin él, `terminaciones.detectar` veía todas las
+# entidades sin nombre, la curaduría no emparejaba con ninguna, el modelo se entrenaba con
+# CERO quiebras curadas y `modelo_vigente` devolvía None — o sea que la propensión nunca se
+# computó en producción, y el informe simplemente omitía la sección. Lo cazó regenerar contra
+# prod, no los 4.000 tests: yo verificaba sobre un panel derivado del CSV, que sí trae el
+# nombre. Probar el camino viejo no prueba el nuevo.
+CAMPOS_DEL_PANEL: Tuple[str, ...] = (
+    "entidad_code", "entidad_nombre", "tipo_entidad", "morosidad_pct", "cobertura_pct",
+    "apalancamiento_pct", "activos_totales", "depositos_totales",
+)
+
+
 def load_panel(db) -> Dict[str, Dict[date, Dict]]:
     """Panel mensual desde ``SibHistoricalFinancials`` (la tabla derivada por el crosswalk
     de producción — la calibración corre sobre la MISMA derivación que el motor)."""
@@ -271,6 +355,10 @@ def load_panel(db) -> Dict[str, Dict[date, Dict]]:
     panel: Dict[str, Dict[date, Dict]] = {}
     for r in db.query(F).all():
         panel.setdefault(str(r.entidad_code), {})[r.fecha] = {
+            # La institución, no el slot: `terminaciones` recorre runs de NOMBRE porque el
+            # código de la SB aloja varias entidades a lo largo del tiempo.
+            "entidad_nombre": r.entidad_nombre,
+            "entidad_code": r.entidad_code,
             "tipo_entidad": r.tipo_entidad,
             "morosidad_pct": r.morosidad_pct,
             "cobertura_pct": r.cobertura_pct,

@@ -7,9 +7,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from shared.cache import cache_get, cache_set
-from shared.observability.llm_ledger import (
-    PURPOSE_GUARD, PURPOSE_NARRATIVE, record_call,
-)
+from shared.observability.llm_ledger import PURPOSE_NARRATIVE, record_call
 from shared.config.settings import settings
 from shared.llm.budget import budget_allows, record_usage
 from shared.narrative.lang_context import get_request_lang
@@ -363,6 +361,15 @@ THIN_TEMPLATES = {
         "ritmo…', nunca como un pronóstico, y NO agregues rótulos de salvedad entre paréntesis "
         "(el condicional ya lo dice; una advertencia extra solo genera desconfianza). NO "
         "afirmes fraude ni causas ocultas: son un COMPLEMENTO del rating, no un veredicto.\n"
+        "PROPENSIÓN: si el contexto trae 'propension', integrala en el párrafo — es el "
+        "modelo entrenado sobre las quiebras REALES del sistema dominicano y responde la "
+        "misma pregunta desde el desenlace en vez de desde umbrales. Escribí desde el BANCO, "
+        "no desde el modelo: qué le está pasando a la entidad, contra qué se compara, qué "
+        "consecuencia tiene. Nada de 'factor', 'coeficiente' ni 'log-odds'. Las variables "
+        "listadas en 'controles_sin_lectura_causal' NO se narran como causa —son control "
+        "estadístico— y la cifra se presenta según 'uso_admitido': si dice BANDA, no la "
+        "publiques como probabilidad puntual de la entidad. 'lectura_de_referencia' es la "
+        "versión determinista: podés mejorar la redacción, no cambiar lo que afirma.\n"
         "FORMATO DE LAS CIFRAS: cada señal trae sus campos ya redactados —'valor_expresado', "
         "'umbral_expresado', 'hace_12m_expresado', 'horizonte'—. Copiá ESAS cadenas TAL CUAL "
         "('2,0 veces', '50,9%', 'alrededor de 3,5 años'); NO uses los campos numéricos crudos "
@@ -1682,13 +1689,12 @@ class NarrativeEngine:
             # entre los números del contexto, sea cual sea su estructura.
             det = (deterministic_unsupported(context or {}, text)
                    + deterministic_uncited_figures(context or {}, text))
-            llm = verify_figures(client, guard_model, context_str, text)
-            # El juez se registra APARTE de la narrativa. Corre sobre toda sección de
-            # toda generación, así que es un 2× permanente sobre el gasto de narrativa —
-            # invisible mientras se sumara al mismo total que lo que produce.
-            record_call(purpose=PURPOSE_GUARD, model=guard_model,
-                        module=axis, template=template,
-                        detail={"hallazgos": len(llm)})
+            # El juez contabiliza su PROPIA llamada (ver `verify_figures`): registrarla
+            # desde acá la anotaba sin dólares, y el juez es la mitad de las llamadas de
+            # un informe. Se le pasan eje y plantilla para que su fila quede atribuida
+            # igual que la de la narrativa que verifica.
+            llm = verify_figures(client, guard_model, context_str, text,
+                                 module=axis, template=template)
             seen, merged = set(), []
             for f in det + llm:
                 if f not in seen:
