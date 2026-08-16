@@ -276,17 +276,28 @@ def test_el_margen_es_positivo_del_lado_sano_en_ambas_direcciones():
     assert p["solvencia_piso"]["margen"] > 0        # peor es MENOR
 
 
-def test_el_panel_marca_activa_lo_que_la_regla_enciende():
-    """Anti-deriva: el panel y las reglas leen los mismos umbrales. Si alguien mueve uno solo,
-    esto falla."""
-    from modules.banking_score.early_warning import evaluate, signal_panel
-    m = {"morosidad_pct": 12.0, "cobertura_pct": 50.0, "solvencia_pct": 9.0,
-         "bank_type": "banca_multiple"}
-    activas_panel = {s["code"] for s in signal_panel(m, {}) if s["estado"] == "activa"}
-    activas_regla = {a.code for a in evaluate(m, {})}
-    assert {"morosidad_nivel", "brecha_provisiones", "solvencia_piso"} <= activas_panel
-    assert activas_panel <= activas_regla, (
-        "el panel no puede marcar ACTIVA una señal que la regla no enciende")
+def test_el_panel_y_las_reglas_coinciden_EN_LAS_DOS_DIRECCIONES():
+    """Anti-deriva. La versión anterior solo comprobaba que el panel no marcara de más, y el
+    fallo real fue el contrario: la regla encendía `salto_morosidad` y el panel decía "sin
+    activar" —usaba `max` de las dos condiciones cuando la regla dispara con cualquiera—.
+    El informe salió contradiciéndose: "no presenta precursores activos" con la bandera
+    listada tres renglones abajo. Un guard que mira un solo lado deja pasar la mitad."""
+    from modules.banking_score.early_warning import ALERT_WEIGHTS, evaluate, signal_panel
+    casos = [
+        {"morosidad_pct": 12.0, "cobertura_pct": 50.0, "solvencia_pct": 9.0,
+         "bank_type": "banca_multiple"},
+        # el caso real de producción: mora 0.93 → 1.56 dispara por ×1.5 y no por +2 puntos
+        {"morosidad_pct": 1.56, "morosidad_prev4": 0.93, "cobertura_pct": 200.0,
+         "solvencia_pct": 17.0, "capital_now": 17.0, "capital_prior": 16.0,
+         "bank_type": "banca_multiple"},
+        {"morosidad_pct": 3.0, "morosidad_prev4": 1.0, "cobertura_pct": 90.0,
+         "solvencia_pct": 11.0, "bank_type": "banca_multiple"},
+    ]
+    for m in casos:
+        panel = {s["code"] for s in signal_panel(m, {}) if s["estado"] == "activa"}
+        regla = {a.code for a in evaluate(m, {})} & set(ALERT_WEIGHTS)
+        assert panel == regla, (
+            f"panel y reglas discrepan para {m}: panel={sorted(panel)} regla={sorted(regla)}")
 
 
 def test_solo_se_rankea_lo_comparable_convergentes_en_trimestres():
