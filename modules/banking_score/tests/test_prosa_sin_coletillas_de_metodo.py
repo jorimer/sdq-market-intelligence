@@ -313,3 +313,44 @@ def test_la_plantilla_dice_como_insertar_el_horizonte():
     t = THIN_TEMPLATES["early_warning_reading"]
     assert "EL HORIZONTE es CUÁNTO FALTA" in t
     assert "tomaría" in t and "NUNCA como" in t
+
+
+def test_el_rotulo_de_los_hechos_es_ENCABEZADO_y_no_negrita_en_linea():
+    """En `**negrita**` salía al mismo cuerpo que el párrafo y no se despegaba: el lector lo
+    leía como una oración más. Como `##` toma el estilo de subtítulo en los TRES renderers.
+
+    El nivel no es indiferente: el PDF de banca manda `###` a negrita de cuerpo —exactamente
+    de donde veníamos— y solo `#`/`##` al estilo de subtítulo. Un `###` acá pasaría el test de
+    'es un encabezado' y no cambiaría nada en el papel."""
+    import re
+
+    from modules.banking_score.early_warning import HECHOS_ENCABEZADO, format_alerts_text
+    m = re.match(r"^(#{1,3})\s+\S", HECHOS_ENCABEZADO)
+    assert m, f"{HECHOS_ENCABEZADO!r}: tiene que ser un encabezado markdown"
+    assert len(m.group(1)) <= 2, "### cae en negrita de cuerpo en el PDF de banca"
+    assert "**" not in HECHOS_ENCABEZADO
+    # y tiene que salir en su PROPIA línea, o el renderer no lo reconoce como encabezado
+    txt = format_alerts_text({"alerts": [
+        {"code": "concentracion", "label": "Concentración elevada (top-10)",
+         "severity": "media", "value": 50.9, "threshold": 30.0, "basis": "x",
+         "metric": "top-10 / cartera total %"}]})
+    assert any(ln.strip() == HECHOS_ENCABEZADO for ln in txt.split("\n")), (
+        "el encabezado quedó pegado a otro texto en la misma línea")
+
+
+def test_los_tres_renderers_tratan_ese_nivel_como_subtitulo():
+    """Guard contra el defecto de siempre: arreglar una superficie y dejar las otras. El
+    informe sale en PDF de banca, PDF compartido y DOCX, y los tres parsean el encabezado
+    con su propia expresión regular."""
+    import inspect
+    import re
+
+    from modules.banking_score.early_warning import HECHOS_ENCABEZADO
+    from modules.banking_score.reports import pdf_generator
+    from shared.products import render, render_docx
+    for modulo in (pdf_generator, render, render_docx):
+        fuente = inspect.getsource(modulo)
+        assert r"^(#{1,3})\s+(.*)$" in fuente, (
+            f"{modulo.__name__} ya no parsea encabezados como los otros dos: revisá que "
+            f"{HECHOS_ENCABEZADO!r} siga saliendo como subtítulo ahí")
+    assert re.match(r"^#{1,3}\s", HECHOS_ENCABEZADO)
