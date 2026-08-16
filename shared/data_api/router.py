@@ -515,6 +515,11 @@ async def quality(
         "data": {
             "period": axis.period,
             "coverage_real": axis.coverage_real,
+            # QUÉ mide ese número. No todos los ejes responden la misma pregunta: en un
+            # índice es la fracción del peso anclada a dato real; en el de evaluación de
+            # leyes, cuántas metas del instrumento tienen fuente verificada. Sin la clave,
+            # un cliente pone las dos cifras en la misma columna y compara lo incomparable.
+            "coverage_kind": axis.coverage_kind,
             "state_counts": axis.state_counts,
             "degraded": axis.degraded,
             # La MISMA prosa de procedencia que llevan los reportes — generada del

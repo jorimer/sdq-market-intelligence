@@ -131,3 +131,29 @@ def test_generated_prose_uses_the_vocabulary_the_gate_forbids_in_curated_prose()
     axis = _axis(_sig("a", REAL, 0.6), _sig("b", RUBRIC, 0.4))
     text = provenance_paragraph(axis)
     assert "dato real" in text
+
+
+def test_el_titular_de_procedencia_habla_en_los_terminos_del_eje():
+    """«El X% del peso de este índice se sostiene en dato real» es falso en el eje de
+    evaluación de leyes: ese eje no arma un índice, mide cuántas metas de una ley tienen
+    dato. La frase sale en la Metodología del informe y en el payload de calidad de la API
+    paga, así que describía mal el producto que el cliente compra."""
+    from shared.registry.provenance import coverage_sentence
+    from shared.registry.signals import (COVERAGE_INDEX, COVERAGE_INSTRUMENT, REAL,
+                                         AxisRegistry, VariableSignal)
+
+    sig = (VariableSignal(key="v", label="v", state=REAL, dimension="d", weight=1.0,
+                          source="s", cadence="annual", value=None, real_fraction=1.0),)
+
+    def _eje(kind):
+        return AxisRegistry(sector_key="x", display_name="x", source="s", implemented=True,
+                            signals=sig, coverage_kind=kind)
+
+    indice = coverage_sentence(_eje(COVERAGE_INDEX))
+    instrumento = coverage_sentence(_eje(COVERAGE_INSTRUMENT))
+    assert "peso de este índice" in indice
+    assert "peso de este índice" not in instrumento
+    assert "el propio instrumento se fijó" in instrumento
+    # Y avisa que no se compara con la de un índice: sin eso, un cliente pone las dos
+    # cifras en la misma tabla.
+    assert "no es comparable" in instrumento

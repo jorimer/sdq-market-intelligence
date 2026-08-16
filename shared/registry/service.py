@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 
 from shared.products.registry import PRODUCT_CATALOG, get_product, is_implemented
 from shared.registry.signals import (
+    COVERAGE_INDEX,
+    COVERAGE_KINDS,
     GAP,
     REAL,
     AxisRegistry,
@@ -70,10 +72,19 @@ def _axis_registry(db: Optional[Session], entry) -> AxisRegistry:
     if not callable(fn):
         return _product_level_fallback(entry, product.data_signals())
 
-    result = fn()  # -> {"period": str|None, "signals": [VariableSignal, ...]} | [VariableSignal]
+    result = fn()  # -> {"period": str|None, "signals": [...], "coverage_kind": str} | [...]
+    kind = COVERAGE_INDEX
     if isinstance(result, dict):
         period = result.get("period")
         signals = tuple(result.get("signals", ()))
+        # Un eje declara otra semántica de cobertura SOLO si es de las conocidas: una cadena
+        # libre acá volvería incomparable a un eje por un typo, y silenciosamente.
+        declarado = result.get("coverage_kind")
+        if declarado in COVERAGE_KINDS:
+            kind = declarado
+        elif declarado is not None:
+            logger.warning("eje %s declaró coverage_kind desconocido: %r — se usa %s",
+                           entry.sector_key, declarado, COVERAGE_INDEX)
     else:
         period, signals = None, tuple(result or ())
 
@@ -83,7 +94,7 @@ def _axis_registry(db: Optional[Session], entry) -> AxisRegistry:
     return AxisRegistry(
         sector_key=entry.sector_key, display_name=entry.display_name,
         source=entry.source, implemented=True, degraded=False,
-        period=period, signals=signals,
+        period=period, signals=signals, coverage_kind=kind,
     )
 
 

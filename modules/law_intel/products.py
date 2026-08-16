@@ -212,13 +212,14 @@ class LawProduct:
         más que otra, y repartir pesos por criterio propio sería inventar una prioridad que
         el legislador no fijó.
         """
-        from shared.registry.signals import GAP, REAL, VariableSignal
+        from shared.registry.signals import (COVERAGE_INSTRUMENT, GAP, REAL,
+                                              VariableSignal)
 
         from modules.law_intel.bindings import cargar_bindings
 
         eids = expedientes()
         if not eids:
-            return {"period": None, "signals": []}
+            return {"period": None, "signals": [], "coverage_kind": COVERAGE_INSTRUMENT}
         eid = eids[0]
         exp = cargar(eid)
         bs = cargar_bindings(eid)
@@ -242,7 +243,13 @@ class LawProduct:
                       ("descartado: " + (b.motivo_descarte or "")[:80]) if b and b.estado == "descartado"
                       else "sin fuente verificada"))
             )
-        return {"period": None, "signals": señales}
+        # La cobertura de este eje NO responde la pregunta que responden los demás. En un
+        # índice, `coverage_real` es «qué fracción del peso está anclada a dato real»; acá es
+        # «cuántos de los indicadores que la LEY se fijó estamos midiendo». Declararlo es lo
+        # que impide que el resumen del registro las promedie: mezcladas dan un número que no
+        # significa nada, y este eje —5 de 90— hundía el promedio de la plataforma sin que
+        # ningún índice hubiera perdido un solo dato real.
+        return {"period": None, "signals": señales, "coverage_kind": COVERAGE_INSTRUMENT}
 
     # ── Snapshot ──
     def snapshot(self, tier: ProductTier, period: str,
