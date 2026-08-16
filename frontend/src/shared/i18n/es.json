@@ -1930,6 +1930,27 @@
       "error": "Error",
       "status": "Estado",
       "message": "Mensaje"
+    },
+    "spend": {
+      "title": "Gasto del modelo",
+      "sub": "Qué llamó al modelo en el período, quién lo disparó y cuánto costó",
+      "from": "Desde",
+      "to": "Hasta (incluido)",
+      "refresh": "Actualizar",
+      "total": "Costo del período",
+      "calls": "{{count}} llamada registrada",
+      "calls_plural": "{{count}} llamadas registradas",
+      "byTrigger": "Por disparador",
+      "byPurpose": "Por motivo",
+      "byModule": "Por módulo",
+      "key": "Clave",
+      "cost": "Costo",
+      "generated": "Generadas",
+      "cached": "De caché",
+      "empty": "Sin gasto registrado en el rango.",
+      "error": "No se pudo consultar el gasto.",
+      "invertedRange": "El rango está invertido: la fecha inicial es posterior a la final.",
+      "note": "El registro no reconstruye el pasado: cubre desde que se activó. Las llamadas servidas de caché aparecen con costo cero, para distinguir la demanda que la caché absorbió de la que nadie pidió."
     }
   },
   "pension": {

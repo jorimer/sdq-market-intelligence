@@ -1930,6 +1930,27 @@
       "error": "Error",
       "status": "Status",
       "message": "Message"
+    },
+    "spend": {
+      "title": "Model spend",
+      "sub": "What called the model in the period, who triggered it and what it cost",
+      "from": "From",
+      "to": "To (inclusive)",
+      "refresh": "Refresh",
+      "total": "Period cost",
+      "calls": "{{count}} recorded call",
+      "calls_plural": "{{count}} recorded calls",
+      "byTrigger": "By trigger",
+      "byPurpose": "By purpose",
+      "byModule": "By module",
+      "key": "Key",
+      "cost": "Cost",
+      "generated": "Generated",
+      "cached": "Cached",
+      "empty": "No spend recorded in this range.",
+      "error": "Could not load spend.",
+      "invertedRange": "The range is inverted: the start date is after the end date.",
+      "note": "The ledger does not reconstruct the past: it covers from when it was enabled. Cache-served calls appear at zero cost, to tell demand the cache absorbed apart from demand nobody made."
     }
   },
   "pension": {

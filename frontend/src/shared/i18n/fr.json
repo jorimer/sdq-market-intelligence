@@ -1930,6 +1930,27 @@
       "error": "Erreur",
       "status": "État",
       "message": "Message"
+    },
+    "spend": {
+      "title": "Dépense du modèle",
+      "sub": "Ce qui a appelé le modèle sur la période, qui l'a déclenché et ce que cela a coûté",
+      "from": "Du",
+      "to": "Au (inclus)",
+      "refresh": "Actualiser",
+      "total": "Coût de la période",
+      "calls": "{{count}} appel enregistré",
+      "calls_plural": "{{count}} appels enregistrés",
+      "byTrigger": "Par déclencheur",
+      "byPurpose": "Par motif",
+      "byModule": "Par module",
+      "key": "Clé",
+      "cost": "Coût",
+      "generated": "Générés",
+      "cached": "En cache",
+      "empty": "Aucune dépense enregistrée sur la période.",
+      "error": "Impossible de charger la dépense.",
+      "invertedRange": "La plage est inversée : la date de début est postérieure à la date de fin.",
+      "note": "Le registre ne reconstruit pas le passé : il couvre depuis son activation. Les appels servis par le cache apparaissent à coût nul, pour distinguer la demande absorbée par le cache de celle que personne n'a faite."
     }
   },
   "pension": {

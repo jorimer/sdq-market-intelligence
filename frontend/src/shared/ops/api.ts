@@ -68,3 +68,40 @@ export async function setOperationSchedule(
   const { data } = await client.put<OperationSchedule>(`/operations/${name}/schedule`, body);
   return data;
 }
+
+// ── Gasto del modelo ────────────────────────────────────────────────────
+// El costo de cada llamada se calculaba y se tiraba: la única forma de saber en qué se
+// iba el dinero era mirar la consola del proveedor antes y después de cada corrida.
+
+export interface SpendRow {
+  clave: string;
+  costo_usd: number;
+  llamadas: number;
+  hits_de_cache: number;
+  /** Llamadas que SÍ se pagaron. Un disparador con 900 llamadas y 890 HIT no es
+   *  comparable con uno de 900 generaciones, y el conteo solo no lo distingue. */
+  generaciones_reales: number;
+}
+
+export interface SpendSummary {
+  desde: string;
+  hasta: string;
+  costo_total_usd: number;
+  llamadas_totales: number;
+  por_disparador: SpendRow[];
+  por_modulo: SpendRow[];
+  /** Separa PRODUCIR de VERIFICAR: el juez numérico corre sobre toda sección de toda
+   *  generación, y sumado al mismo total su peso es invisible. */
+  por_motivo: SpendRow[];
+}
+
+/** Gasto del modelo en un rango de FECHAS. `hasta` incluye el día completo.
+ *  Va por fechas y no por ventana de N días porque la pregunta es si cuadra con la
+ *  factura, y la facturación va por ciclo calendario. */
+export async function getLlmSpend(desde?: string, hasta?: string): Promise<SpendSummary> {
+  const params: Record<string, string> = {};
+  if (desde) params.desde = desde;
+  if (hasta) params.hasta = hasta;
+  const { data } = await client.get<SpendSummary>("/api/v1/operations/llm-spend", { params });
+  return data;
+}
