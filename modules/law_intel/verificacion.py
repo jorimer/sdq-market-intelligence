@@ -23,7 +23,7 @@ from modules.law_intel.bindings import Binding, cargar_bindings
 ANTIGUEDAD_MAXIMA_ANIOS = 3
 
 RESULTADOS = {
-    "verificable": "la serie existe y devuelve dato reciente: puede pasar a 'verificado'",
+    "verificable": "la serie existe y devuelve dato reciente",
     "congelada": "la serie existe y su último dato es demasiado viejo para medir el corte",
     "vacia": "la serie existe y no devuelve observaciones",
     "inexistente": "no hay ninguna serie con ese código",
@@ -38,11 +38,28 @@ class Comprobacion:
     resultado: str
     ultimo_periodo: Optional[str] = None
     n_observaciones: int = 0
+    comparabilidad_sin_resolver: bool = False
+
+    @property
+    def existe(self) -> bool:
+        """La serie existe y devuelve dato reciente. NO dice que mida el indicador."""
+        return self.resultado == "verificable"
 
     @property
     def promueve(self) -> bool:
-        """¿Este binding puede pasar a `verificado` en el próximo PR?"""
-        return self.resultado == "verificable" and self.estado_actual == "propuesto"
+        """¿Este binding puede pasar a `verificado` en el próximo PR?
+
+        Exige DOS cosas, y la primera versión solo comprobaba una. Que la serie exista no
+        dice que mida lo que el indicador afirma medir — es la distinción que sostiene todo
+        este módulo, y la había perdido justo en la función que decide qué se publica.
+
+        El caso que lo destapó: el indicador 2.19 es ANALFABETISMO y la variable del panel es
+        alfabetización. La serie existe, devuelve dato de 2024 y la comprobación la daba por
+        promovible; promoverla habría publicado el complemento — el valor invertido, que es
+        el defecto más repetido de esta plataforma.
+        """
+        return (self.existe and self.estado_actual == "propuesto"
+                and not self.comparabilidad_sin_resolver)
 
 
 # Firma del proveedor de series: dado un código, devuelve [(período, valor)] ordenado.
@@ -59,17 +76,22 @@ def comprobar(bindings: Dict[str, Binding], proveedor: Proveedor,
             obs = list(proveedor(b.serie))
         except Exception:                 # noqa: BLE001 — una serie ausente no rompe el barrido
             obs = []
+        # Una nota de comparabilidad declarada es una duda ABIERTA sobre si la serie mide el
+        # indicador. Mientras esté, el binding no promueve por más que la serie exista.
+        duda = bool((b.nota_comparabilidad or "").strip())
         if not obs:
             # No se distingue «no existe» de «existe vacía» sin consultar el catálogo; se
             # reporta como vacía y el catálogo lo desambigua. Afirmar inexistencia sin
             # comprobarla sería el mismo error que el registro de obligaciones prohíbe.
-            out.append(Comprobacion(b.indicador, b.serie, b.estado, "vacia"))
+            out.append(Comprobacion(b.indicador, b.serie, b.estado, "vacia",
+                                    comparabilidad_sin_resolver=duda))
             continue
         ultimo = max(p for p, _ in obs)
         viva = int(ultimo[:4]) >= int(corte) - ANTIGUEDAD_MAXIMA_ANIOS
         out.append(Comprobacion(b.indicador, b.serie, b.estado,
                                 "verificable" if viva else "congelada",
-                                ultimo_periodo=ultimo, n_observaciones=len(obs)))
+                                ultimo_periodo=ultimo, n_observaciones=len(obs),
+                                comparabilidad_sin_resolver=duda))
     return out
 
 
@@ -79,6 +101,7 @@ def informe(expediente_id: str, proveedor: Proveedor, corte: str) -> Dict[str, A
     for c in cs:
         por_resultado[c.resultado] = por_resultado.get(c.resultado, 0) + 1
     promovibles = [c.indicador for c in cs if c.promueve]
+    frenados = [c.indicador for c in cs if c.existe and c.comparabilidad_sin_resolver]
     return {
         "corte": corte,
         "comprobados": len(cs),
@@ -86,13 +109,21 @@ def informe(expediente_id: str, proveedor: Proveedor, corte: str) -> Dict[str, A
         # Lo accionable: qué escribir en el próximo PR del expediente.
         "promovibles_a_verificado": sorted(promovibles),
         "ganancia_de_cobertura": len(promovibles),
+        # La serie existe pero hay una duda declarada sobre si mide el indicador. NO suma
+        # cobertura: resolver la duda es trabajo de análisis, no de conexión.
+        "existen_pero_con_comparabilidad_sin_resolver": sorted(frenados),
         "comprobaciones": [{
             "indicador": c.indicador, "serie": c.serie, "estado_actual": c.estado_actual,
             "resultado": c.resultado, "ultimo_periodo": c.ultimo_periodo,
             "n_observaciones": c.n_observaciones, "promueve": c.promueve,
+            "comparabilidad_sin_resolver": c.comparabilidad_sin_resolver,
         } for c in cs],
         "resultados": RESULTADOS,
         "nota": ("Esta comprobación NO muta el expediente. El estado de un binding es un hecho "
                  "comiteado: si la cobertura pudiera subir en caliente, la cifra de portada "
                  "dejaría de ser verificable contra el repositorio."),
+        "que_significa_verificable": (
+            "Que la serie EXISTE y devuelve dato reciente. No dice que mida lo que el "
+            "indicador afirma medir: eso lo decide resolver la nota de comparabilidad, y "
+            "hasta entonces el binding no promueve."),
     }
