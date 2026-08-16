@@ -224,6 +224,29 @@ def _ev(text: str, source: str, score: float) -> Evidence:
     return Evidence(text=text, source=source, kind="engine", state=REAL, score=score)
 
 
+def _acumulados(caps: List[Dict[str, Any]], socio: str) -> str:
+    """Suma de los primeros capítulos, COMPUTADA acá y nombrando su población.
+
+    El modelo la derivó y publicó «los tres capítulos suman el 42.2%» donde el dato es 42,3%
+    — ni la suma real ni la de los porcentajes redondeados (42,4%). Un tercer número, salido
+    de hacer la cuenta a mano. Es exactamente la clase de relación que la doctrina manda
+    computar: el modelo acierta las cifras y falla las relaciones entre ellas.
+
+    Los cortes son los que un análisis de concentración pide naturalmente; sirviendo los tres,
+    cualquiera que el texto elija está copiado y no calculado. El sujeto viaja con el número:
+    se dice de qué socio es la porción, porque `top3 42,3%` sin dueño se reatribuye solo.
+    """
+    tramos = []
+    for n in (3, 5):
+        if len(caps) > n:
+            pct = sum(float(c.get("pct") or 0.0) for c in caps[:n])
+            tramos.append(f"los {n} mayores concentran {pct:.1f}%")
+    if not tramos:
+        return ""
+    return (f"Acumulados sobre lo importado desde {socio} (ya sumados — no recalcular): "
+            + "; ".join(tramos) + ". ")
+
+
 def _make_index_summary(index_name: str):
     """Familia 'index' (tourism/free_zones/energy/telecom/construction): ``payload['index']``
     con ``<x>_score`` + banda + ``dimensions`` (dict) + niveles absolutos."""
@@ -281,6 +304,7 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
                        f"comparables con los anuales de Comtrade): " + ", ".join(flows) + ".",
                        source, 86.0))
     # Socio × capítulo: QUÉ bienes vienen de cada socio. Es la única evidencia que responde
+    # (ver `_acumulados`: la suma de los primeros capítulos se sirve computada)
     # "¿qué le importamos a X, desglosado?" — sin ella el motor sólo tiene el agregado del
     # país y la cuota del socio, y con eso llegó a INFERIR la composición y presentarla como
     # "categorías plausibles". El sujeto viaja con el número: se nombra el socio en cada
@@ -300,6 +324,7 @@ def _trade_summary(label: str, payload: Dict[str, Any], period: Optional[str],
             f"Importaciones desde {socio} · año {d.get('period') or 's/f'} (UN Comtrade, anual; "
             f"NO es el corte trimestral de la DGA): "
             f"US${_fmt(d.get('total_usd_mm'))} MM en {d.get('n_capitulos')} capítulos HS. "
+            f"{_acumulados(caps, socio)}"
             # 96: por ENCIMA de resiliencia/estructura/flujos. Es la evidencia más específica
             # que tiene el eje —responde "qué se importa de quién"— y con el corte de 3 líneas
             # en pantalla las genéricas la desplazaban: el informe citaba "resiliencia 67.0"
