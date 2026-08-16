@@ -336,6 +336,41 @@ LECTURA_DE_NEGOCIO: Dict[str, str] = {
         "terminen de reflejar el daño"),
 }
 
+# La contraparte: qué significa estar del lado SANO de cada variable.
+#
+# Hace falta un diccionario aparte y no basta con reusar el de arriba porque las lecturas de
+# `LECTURA_DE_NEGOCIO` están escritas para cuando el rasgo ESTÁ. Aplicadas a una entidad que
+# no lo tiene producen un no-sequitur: «eso importa porque la mora por encima de lo habitual
+# es deterioro ya ocurrido» dicho de un banco cuya mora corre por debajo del piso.
+#
+# Sin esto, un banco limpio recibía prosa más corta que uno con una señal —comparación sin
+# consecuencia, y la sección se leía como si al modelo no le quedara nada que decir—.
+#
+# Regla de redacción: la ausencia de un rasgo NO es una garantía, y cada lectura lo dice. El
+# modelo mide distancia al patrón de quiebra; leer esa distancia como solidez comprobada es
+# justamente el error que la sección debe evitar.
+LECTURA_EN_AUSENCIA: Dict[str, str] = {
+    "crecimiento_anomalo": (
+        "las entidades que salieron se contraían —los depósitos se iban y la cartera se "
+        "liquidaba—, de modo que un balance que crece no está recorriendo ese camino; el "
+        "reverso no se sostiene como fortaleza, porque crecer no protege de nada por sí solo"),
+    "morosidad_nivel": (
+        "la mora confirma daño ya ocurrido en vez de anticiparlo: la distancia mide lo que "
+        "todavía no se materializó, no lo que no vaya a ocurrir"),
+    "salto_morosidad": (
+        "de todo lo que el modelo mide, la velocidad de deterioro es lo que se mueve primero; "
+        "que la cartera no se esté deteriorando rápido es la señal más útil del conjunto, y "
+        "también la que puede darse vuelta en un solo trimestre"),
+    "erosion_capital": (
+        "lo que precede a una salida no es un capital bajo —un banco grande puede tenerlo "
+        "estructuralmente ajustado y estable— sino uno que cede de forma sostenida; acá el "
+        "colchón se mantiene"),
+    "estres_liquidez": (
+        "el fondeo es el canal por el que un problema de cartera se vuelve una crisis de caja; "
+        "mientras los depósitos no se muevan, un deterioro tiene tiempo de gestionarse antes "
+        "de forzar una intervención"),
+}
+
 # Debajo de este factor multiplicativo, la contribución no cambia la conclusión y solo
 # alarga el texto. Se acumula en "el resto" en vez de enumerarse.
 FACTOR_MATERIAL = 1.10
@@ -557,6 +592,15 @@ def prosa(modelo: ModeloPropension, nombre_entidad: str,
         d = e["empujan_a_la_baja"][0]
         partes.append(f"{nombre_entidad} no presenta rasgos que lo acerquen al perfil de "
                       f"las entidades que salieron del sistema. {_situacion(d).capitalize()}.")
+        # Simétrico con la rama de arriba: la comparación sin su consecuencia deja al comité
+        # con una cifra y sin lectura. Acá la consecuencia es qué compra esa distancia —y qué
+        # no compra—, que es la parte que un banco limpio necesita oír.
+        aus = LECTURA_EN_AUSENCIA.get(d["nombre"])
+        if aus:
+            partes.append(f"Eso importa porque {aus}.")
+        otros_baja = e["empujan_a_la_baja"][1:2]
+        if otros_baja:
+            partes.append(f"En la misma dirección, {_situacion(otros_baja[0])}.")
     else:
         partes.append(f"{nombre_entidad} no se aparta del promedio del sistema en ninguna de "
                       f"las variables que el modelo mide.")
