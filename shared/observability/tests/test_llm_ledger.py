@@ -295,3 +295,60 @@ def test_las_dos_rutas_del_motor_registran(db, monkeypatch):
 
     assert registra("_generate_guarded"), "la ruta cerebro dejó de registrar"
     assert registra("_result_from_response"), "la ruta legacy dejó de registrar"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Las etiquetas: el producto, no el endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_la_etiqueta_reusa_el_nombre_que_el_operador_ya_ve(monkeypatch):
+    """Las operaciones NO tienen tabla propia: se lee su `label` del registro de la
+    consola. Duplicarlo garantizaría que un día el panel y el interruptor de al lado
+    llamen distinto a la misma tarea."""
+    from shared.observability import etiquetas
+    from shared.operations.service import OPERATIONS
+
+    falsa = type("Op", (), {"label": "Pre-calentar caché de reportes"})()
+    monkeypatch.setitem(OPERATIONS, "prewarm-report-cache", falsa)
+    assert etiquetas.etiqueta_disparador("prewarm-report-cache") == \
+        "Pre-calentar caché de reportes"
+
+
+def test_la_etiqueta_de_una_ruta_nombra_el_producto():
+    from shared.observability import etiquetas
+
+    e = etiquetas.etiqueta_disparador("GET /api/v1/products/banking/deep_dive/report")
+    assert "Deep Dive" in e and "/api/" not in e
+
+
+def test_lo_no_reconocido_se_devuelve_TAL_CUAL(sin_inventar=None):
+    """Una ruta nueva sale fea pero cierta. Un «Otro» la escondería entre las demás y un
+    nombre inventado afirmaría algo que nadie declaró."""
+    from shared.observability import etiquetas
+
+    cruda = "GET /api/v1/modulo-que-no-existe/algo"
+    assert etiquetas.etiqueta_disparador(cruda) == cruda
+
+
+def test_desconocido_se_explica_en_vez_de_parecer_un_origen():
+    from shared.observability import etiquetas
+
+    assert "anterior al registro" in etiquetas.etiqueta_disparador("desconocido")
+
+
+def test_el_resumen_trae_la_etiqueta_junto_a_la_clave(db):
+    """La clave técnica NO se pierde: es lo que hace falta para depurar."""
+    with L.attributed_to("endpoint", "GET /api/v1/products/banking/deep_dive/report"):
+        L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=1.0,
+                      module="banking")
+    fila = spend.spend_summary(db)["por_disparador"][0]
+    assert fila["clave"] == "GET /api/v1/products/banking/deep_dive/report"
+    assert fila["etiqueta"] != fila["clave"]
+    assert "Deep Dive" in fila["etiqueta"]
+
+
+def test_el_motivo_se_traduce_a_lo_que_significa(db):
+    from shared.observability import etiquetas
+
+    assert etiquetas.etiqueta_motivo("guard_numerico") == "Verificación de cifras"
+    assert etiquetas.etiqueta_motivo("narrativa") == "Redacción del análisis"
