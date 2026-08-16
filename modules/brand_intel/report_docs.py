@@ -37,6 +37,9 @@ SECTIONS: List[Tuple[str, str]] = [
     ("explanations", "Lectura del trimestre"),
     ("comparison", "La ola contra sus dos referencias"),
     ("sales", "La venta del período"),
+    # Va inmediatamente después de la venta y antes de las prescripciones: lo que el
+    # pronóstico dice sobre cada local es insumo de qué mover, no una curiosidad al final.
+    ("projection", "La venta que viene"),
     ("priorities", "Qué mover y qué no"),
     ("plan", "El plan bajo el instrumento"),
     # El «(SDQ)» del título no es decorativo: estas dos son las únicas secciones donde
@@ -201,6 +204,60 @@ def _fallback_comparison(cp: Dict[str, Any]) -> str:
             "movimiento se lee como trayectoria y no puede sostener un veredicto.")
     partes.append(str(cp.get("note") or ""))
     return "\n\n".join(x for x in partes if x)
+
+
+#: Motivos de no pronóstico traducidos. El término del motor (`no_supera_al_promedio_del_
+#: local`) es vocabulario interno y en un documento de cliente se lee como un error de
+#: edición; peor, no dice lo que significa. Misma regla que los veredictos de atribución.
+_PROJECTION_REASON: Dict[str, str] = {
+    "no_supera_al_promedio_del_local":
+        "su comportamiento diario no es más previsible que su propio promedio",
+    "historia_insuficiente": "no acumula jornadas suficientes para estimar su patrón semanal",
+    "sin_predicciones_puntuables": "no hay tramo con el que puntuar un pronóstico",
+}
+
+
+def _fallback_projection(pr: Dict[str, Any]) -> str:
+    """La proyección, composición determinista: precisión medida y cobertura declarada.
+
+    Incluye los locales excluidos aunque no haya narrativa. La sección sin ellos afirmaría
+    que el pronóstico cubre la red, y el motivo por el que un local no se pronostica es
+    tanto o más accionable que el pronóstico de los que sí.
+    """
+    partes: List[str] = []
+    trafico = pr.get("pct_incertidumbre_venta_que_aporta_el_trafico")
+    if trafico is not None:
+        partes.append(
+            f"El **{trafico}%** de la incertidumbre de la venta proviene del tráfico y el "
+            f"resto del cheque promedio: el pronóstico de facturación es, casi todo, un "
+            f"pronóstico de afluencia.")
+    err_t = pr.get("error_medio_trafico_pct")
+    vara = pr.get("error_de_la_vara_trafico_pct")
+    if err_t is not None:
+        frase = (f"A {pr.get('horizonte_dias')} días, el tráfico se pronostica con "
+                 f"**{_fmt(err_t)}** de error medio")
+        if vara is not None:
+            frase += f", contra {_fmt(vara)} de no usar modelo"
+        if pr.get("error_medio_cheque_pct") is not None:
+            frase += f"; el cheque promedio, con {_fmt(pr['error_medio_cheque_pct'])}"
+        partes.append(frase + ".")
+    n_ok, n_tot = pr.get("locales_proyectables"), pr.get("locales_en_el_panel")
+    if n_ok is not None and n_tot is not None:
+        partes.append(f"**{n_ok} de {n_tot} locales** admiten pronóstico.")
+    excluidos = pr.get("locales_no_proyectables") or []
+    if excluidos:
+        partes.append("**Sin pronóstico:**\n" + _md_list([
+            f"**{v['label']}** — "
+            + _PROJECTION_REASON.get(str(v.get("motivo")), "motivo no declarado")
+            for v in excluidos]))
+    supero = pr.get("pct_jornadas_en_que_el_real_supero_al_pronostico")
+    if supero is not None and abs(supero - 50.0) > 5.0:
+        partes.append(
+            f"El resultado real superó al pronóstico en {_fmt(supero)} de las jornadas "
+            f"puntuadas: el modelo corre sesgado y su banda lo incorpora.")
+    if pr.get("nota_motor"):
+        partes.append(str(pr["nota_motor"]))
+    return "\n\n".join(partes)
 
 
 def _fallback_sales(sa: Dict[str, Any]) -> str:
@@ -378,6 +435,31 @@ def narratives_and_tables(
                            [[c["label"], _fmt(c.get("sales_change_pct")),
                              _fmt(c.get("transactions_change_pct")),
                              _fmt(c.get("avg_check_change_pct"))] for c in canales]))
+
+    # ── La venta que viene ── La tabla lleva la banda DE CADA LOCAL en su fila: una
+    # banda única en el encabezado se leería como si valiera para todos, y sobre el panel
+    # real la del local más volátil abarca tres veces la del más estable.
+    pr = s.get("projection") or {}
+    if pr.get("available"):
+        n["projection"] = ai.get("projection") or _fallback_projection(pr)
+        locales = pr.get("locales") or []
+        if locales:
+            tables.append((
+                f"Pronóstico por local a {pr.get('horizonte_dias')} días",
+                [["Local", "Error medio", "Sin modelo", "Banda inferior", "Banda superior"]]
+                + [[v["label"], _fmt(v.get("error_medio_pct")),
+                    _fmt(v.get("error_de_la_vara_pct")),
+                    _fmt(v.get("banda_lo_pct")), _fmt(v.get("banda_hi_pct"))]
+                   for v in locales]))
+        excluidos = pr.get("locales_no_proyectables") or []
+        if excluidos:
+            tables.append((
+                "Locales sin pronóstico, con su motivo",
+                [["Local", "Motivo", "Jornadas"]]
+                + [[v["label"],
+                    _PROJECTION_REASON.get(str(v.get("motivo")), "motivo no declarado"),
+                    str(v.get("jornadas") or "—")]
+                   for v in excluidos]))
 
     # ── Planes que SDQ propone ── (solo con narrativa: una propuesta la redacta el
     # análisis sobre evidencia medida; no hay composición determinista que la sustituya,

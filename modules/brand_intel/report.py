@@ -58,6 +58,7 @@ def build_report(db: Session, engagement: BrandEngagement,
     plan = svc.plan_readiness(db, str(eid))
     h2h = svc.head_to_head(db, str(eid))
     sales = svc.sales_analysis(db, str(eid))
+    projection = svc.sales_projection(db, str(eid))
     comparison = svc.wave_comparison(db, str(eid), as_of=wave)
 
     payload: Dict[str, Any] = {
@@ -90,6 +91,7 @@ def build_report(db: Session, engagement: BrandEngagement,
             "vigilance": vigilance,
             "plan": plan,
             "sales": sales,
+            "projection": projection,
             "comparison": comparison,
             "head_to_head": h2h,
         },
@@ -200,6 +202,7 @@ _CEREBRO_TEMPLATES = {
     "priorities": "brand_context_priorities",
     "plan": "brand_plan_readiness",
     "sales": "brand_sales_reading",
+    "projection": "brand_sales_projection",
     "comparison": "brand_wave_comparison",
     "proposals": "brand_sdq_proposals",
     "proposals_practice": "brand_sdq_proposals_practice",
@@ -372,6 +375,36 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         "consistencia": sales.get("consistency"),
         "nota_motor": sales.get("note"),
     }
+    # La proyección: el reparto de la incertidumbre, el veredicto por local y la
+    # calibración YA vienen del motor determinista. Al modelo se le sirven también los
+    # locales EXCLUIDOS con su motivo: si solo viera los proyectables, escribiría sobre la
+    # red entera con la precisión de la parte buena, que es la falsa cobertura que la
+    # doctrina de comparabilidad prohíbe.
+    proj = s.get("projection") or {}
+    projection_ctx = {
+        **base,
+        "horizonte_dias": proj.get("horizonte_dias"),
+        "regla_trafico": proj.get("regla_trafico"),
+        "regla_cheque": proj.get("regla_cheque"),
+        "error_medio_trafico_pct": proj.get("error_medio_trafico_pct"),
+        "error_medio_cheque_pct": proj.get("error_medio_cheque_pct"),
+        "error_medio_venta_derivada_pct": proj.get("error_medio_venta_derivada_pct"),
+        "error_de_la_vara_trafico_pct": proj.get("error_de_la_vara_trafico_pct"),
+        "pct_incertidumbre_venta_que_aporta_el_trafico": proj.get(
+            "pct_incertidumbre_venta_que_aporta_el_trafico"),
+        "locales_proyectables": proj.get("locales_proyectables"),
+        "locales_en_el_panel": proj.get("locales_en_el_panel"),
+        "locales_con_su_error_y_banda": proj.get("locales"),
+        "locales_no_proyectables_con_motivo": proj.get("locales_no_proyectables"),
+        "varianza_de_la_venta": proj.get("varianza_de_la_venta"),
+        "sobredispersion_transacciones": proj.get("sobredispersion_transacciones"),
+        "calibracion": proj.get("calibracion"),
+        "sesgo_del_pronostico_pct": proj.get("sesgo_del_pronostico_pct"),
+        "pct_jornadas_en_que_el_real_supero_al_pronostico": proj.get(
+            "pct_jornadas_en_que_el_real_supero_al_pronostico"),
+        "nota_motor": proj.get("nota_motor"),
+        "base_del_pronostico": proj.get("base_del_pronostico"),
+    }
     # La doble comparación: la clasificación combinada (estacional vs deterioro
     # sostenido) YA viene computada; el modelo la copia, no la deduce.
     comp = s.get("comparison") or {}
@@ -443,6 +476,7 @@ def cerebro_contexts(p: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     }
     return {"executive": ejecutivo, "explanations": lectura,
             "priorities": prioridades, "plan": plan_ctx, "sales": sales_ctx,
+            "projection": projection_ctx,
             "comparison": comp_ctx, "proposals": prop_ctx,
             "proposals_practice": practice_ctx}
 
@@ -470,6 +504,8 @@ async def ai_narratives(payload: Dict[str, Any]) -> Dict[str, str]:
         ctxs.pop("plan", None)
     if not sales.get("available"):
         ctxs.pop("sales", None)
+    if not (payload["sections"].get("projection") or {}).get("available"):
+        ctxs.pop("projection", None)
     if not (payload["sections"].get("comparison") or {}).get("available"):
         ctxs.pop("comparison", None)
     # Las propuestas exigen evidencia medida: sin venta ni comparación no hay sobre qué
