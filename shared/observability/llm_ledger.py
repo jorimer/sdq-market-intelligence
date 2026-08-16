@@ -126,3 +126,41 @@ def record_call(
             db.close()
     except Exception:  # noqa: BLE001 — observabilidad jamás tumba la entrega
         logger.debug("No se pudo registrar la llamada al modelo", exc_info=True)
+
+
+def account(
+    response: Any,
+    *,
+    model: str,
+    purpose: str,
+    module: Optional[str] = None,
+    template: Optional[str] = None,
+    detail: Optional[Dict[str, Any]] = None,
+) -> float:
+    """Contabiliza UNA respuesta del modelo: presupuesto diario + registro atribuido.
+
+    **Existe porque separarlas ya falló.** De los quince sitios que llaman al modelo, solo
+    seis contaban su gasto contra el techo diario: la visión —la llamada más cara de la
+    plataforma— la extracción de PDF y las tres rutas del agente de investigación no
+    entraban al contador. El techo de ``LLM_DAILY_BUDGET_USD`` no podía cortarlas nunca,
+    gastaran lo que gastaran, porque para el contador no existían.
+
+    Dos llamadas separadas en cada sitio es una invitación a que alguien ponga una y olvide
+    la otra, que es exactamente lo que pasó. Acá van juntas o no van.
+
+    Devuelve el costo estimado. Best-effort de punta a punta: jamás lanza.
+    """
+    try:
+        from shared.llm.budget import record_usage
+
+        usage = getattr(response, "usage", None)
+        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
+        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
+        cost = record_usage(model, tokens_in, tokens_out)
+        record_call(purpose=purpose, model=model, cost_usd=cost,
+                    tokens_in=tokens_in, tokens_out=tokens_out,
+                    module=module, template=template, detail=detail)
+        return cost
+    except Exception:  # noqa: BLE001 — la contabilidad jamás rompe la llamada
+        logger.debug("No se pudo contabilizar la llamada al modelo", exc_info=True)
+        return 0.0
