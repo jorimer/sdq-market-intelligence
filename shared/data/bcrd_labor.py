@@ -131,3 +131,144 @@ def fetch_bcrd_informality() -> List[Tuple[int, float]]:  # pragma: no cover - n
             f"no se pudo descargar {INDICATORS_FILE} del CDN del BCRD "
             f"({type(e).__name__}: {e})")
     return parse_informality(r.content)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Desocupación y brechas de género
+#
+# El mismo libro trae, además de la informalidad, la tasa de desocupación y —en hojas
+# aparte— el corte por sexo. Los tres indicadores que la END 1-12 fija sobre este mercado
+# salen de acá, pero NO con la misma calidad de evidencia, y la diferencia hay que
+# declararla porque decide qué se puede publicar:
+#
+#   · La tasa de desocupación TOTAL viene publicada por el emisor como promedio de cuatro
+#     trimestres de año calendario. Es el dato del BCRD, sin cuenta nuestra.
+#   · Las hojas por sexo son TRIMESTRALES: el emisor no publica su promedio anual. El
+#     promedio lo calculamos acá, y por eso va declarado en el nombre de la función y en
+#     la procedencia — no se puede servir como «cifra del BCRD» algo que el BCRD no
+#     publicó.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Fila de la tasa de desocupación. Es "SU1" y no "Tasa de Desocupación (abiertos con
+#: iniciadores)", que corre unas décimas más arriba y mide otra población. La etiqueta se
+#: exige explícita por la misma razón que la informalidad: dos filas parecidas que miden
+#: cosas distintas.
+UNEMPLOYMENT_LABEL = "SU1: Tasa de Desocupación"
+EMPLOYMENT_RATE_LABEL = "Tasa de Ocupación"
+
+SHEET_MALE = "Masculino"
+SHEET_FEMALE = "Femenino"
+
+#: Trimestres que tiene que traer un año para que su promedio sea comparable con los
+#: demás. El libro arranca en III-2014 (dos trimestres) y el año en curso viene incompleto:
+#: promediarlos igual produciría un punto que no es un año y que nadie podría reproducir.
+_TRIMESTRES_POR_ANIO = 4
+
+
+def _anual_por_sexo(rows: List[list], label: str) -> dict:
+    """`{año: promedio de sus cuatro trimestres}` de una hoja por sexo.
+
+    Las columnas se atribuyen por el año del encabezado, que aparece UNA vez y se
+    propaga a los trimestres que le siguen (celdas combinadas). Los años incompletos se
+    descartan en vez de promediarse con lo que haya.
+    """
+    encabezado = None
+    for r in rows[:40]:
+        if r and _norm(r[0]) in ("indicador", "condicion"):
+            if any(isinstance(c, (int, float)) and 2000 < c < 2100 for c in r[1:]):
+                encabezado = r
+                break
+    if encabezado is None:
+        raise BcrdLaborUnavailable(
+            "no se encontró el encabezado de años en la hoja por sexo "
+            "(¿cambió el layout del BCRD?)")
+
+    anio_por_col: dict = {}
+    actual: Optional[int] = None
+    for ci, c in enumerate(encabezado):
+        if isinstance(c, (int, float)) and 2000 < c < 2100:
+            actual = int(c)
+        if ci and actual is not None:
+            anio_por_col[ci] = actual
+
+    objetivo = _norm(label)
+    fila = next((r for r in rows if r and _norm(r[0]).startswith(objetivo)), None)
+    if fila is None:
+        raise BcrdLaborUnavailable(f"no se encontró la fila '{label}' en la hoja por sexo")
+
+    por_anio: dict = {}
+    for ci, anio in anio_por_col.items():
+        v = fila[ci] if ci < len(fila) else None
+        if isinstance(v, (int, float)) and 0 < float(v) <= 100:
+            por_anio.setdefault(anio, []).append(float(v))
+    return {a: sum(vs) / len(vs) for a, vs in por_anio.items()
+            if len(vs) == _TRIMESTRES_POR_ANIO}
+
+
+def parse_gender_ratio(content: bytes, label: str) -> List[Tuple[int, float]]:
+    """`[(año, tasa femenina / tasa masculina)]` para una fila del libro.
+
+    **Es una razón, no una diferencia**: así la define la END —«tasa femenina/tasa
+    masculina»— y por eso el indicador de ocupación mejora subiendo hacia 1 y el de
+    desocupación mejora bajando hacia 1.
+
+    **Se divide el promedio anual de cada sexo, no se promedian las razones
+    trimestrales.** Las dos cuentas dan distinto y ninguna es «la» correcta: se elige
+    ésta porque es la que reproduce cualquiera que tome las tasas anuales publicadas de
+    cada sexo, que es la forma en que un tercero verificaría la cifra.
+
+    **Por qué una razón sobrevive al cambio de encuesta y un nivel no.** La ENFT y la
+    ENCFT dan niveles de desocupación que diferen casi al doble, así que comparar el
+    nivel de 2024 contra una meta fijada sobre ENFT no significa nada. En una razón entre
+    dos poblaciones medidas por la MISMA encuesta, el cambio de metodología se cancela en
+    buena parte del numerador y del denominador. Es lo que vuelve evaluables a las
+    brechas de género cuando el nivel no lo es.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    try:
+        faltan = [h for h in (SHEET_FEMALE, SHEET_MALE) if h not in wb.sheetnames]
+        if faltan:
+            raise BcrdLaborUnavailable(
+                f"el libro no trae {faltan} (hojas: {wb.sheetnames})")
+        fem = _anual_por_sexo([list(r) for r in wb[SHEET_FEMALE].iter_rows(values_only=True)],
+                              label)
+        mas = _anual_por_sexo([list(r) for r in wb[SHEET_MALE].iter_rows(values_only=True)],
+                              label)
+    finally:
+        wb.close()
+
+    out: List[Tuple[int, float]] = []
+    for anio in sorted(set(fem) & set(mas)):
+        divisor = mas[anio]
+        if divisor <= 0:          # una tasa masculina nula haría explotar la razón
+            continue
+        out.append((anio, round(fem[anio] / divisor, 3)))
+    if not out:
+        raise BcrdLaborUnavailable(
+            f"no hay ningún año con los cuatro trimestres en ambos sexos para '{label}'")
+    return out
+
+
+def fetch_bcrd_labor_market() -> dict:  # pragma: no cover - network I/O
+    """Live: baja el libro UNA vez y devuelve las tres series que la END necesita.
+
+    Una sola descarga para los tres: el libro pesa ~400 KB y bajarlo tres veces sería
+    pagar tres veces por el mismo archivo.
+    """
+    import httpx
+
+    try:
+        r = httpx.get(INDICATORS_URL, timeout=120, follow_redirects=True)
+        r.raise_for_status()
+    except httpx.HTTPError as e:
+        raise BcrdLaborUnavailable(
+            f"no se pudo descargar {INDICATORS_FILE} del CDN del BCRD "
+            f"({type(e).__name__}: {e})")
+    return {
+        "informality_rate": parse_informality(r.content),
+        "unemployment_rate": parse_informality(r.content, label=UNEMPLOYMENT_LABEL),
+        "employment_gender_ratio": parse_gender_ratio(r.content, EMPLOYMENT_RATE_LABEL),
+        "unemployment_gender_ratio": parse_gender_ratio(r.content, UNEMPLOYMENT_LABEL),
+    }

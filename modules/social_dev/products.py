@@ -325,6 +325,25 @@ class SocialDevProduct:
                             "No alimenta el índice de desarrollo (el IDM usa la pobreza "
                             "general). Se publica porque es dato real y tiene consumidores "
                             "propios."),
+        "unemployment_rate": ("Tasa de desocupación (SU1)",
+                              "inclusion",
+                              "ENCFT del BCRD, promedio de cuatro trimestres publicado por "
+                              "el emisor. No alimenta el índice de desarrollo. ATENCIÓN al "
+                              "comparar con series anteriores a 2015: la ENFT y la ENCFT dan "
+                              "niveles que difieren casi al doble."),
+        # Las dos brechas son RAZONES, no porcentajes. La etiqueta lo dice porque la
+        # cifra sola (2,7) se lee como un porcentaje y significa «2,7 VECES».
+        "employment_gender_ratio": (
+            "Razón de ocupación femenina/masculina", "inclusion",
+            "Tasa de ocupación de mujeres dividida por la de hombres (1,0 = paridad). "
+            "Computada sobre el promedio anual de cada sexo de la ENCFT; el BCRD publica "
+            "los trimestres, no el promedio. No alimenta el índice de desarrollo."),
+        "unemployment_gender_ratio": (
+            "Razón de desocupación femenina/masculina", "inclusion",
+            "Desocupación de mujeres dividida por la de hombres (1,0 = paridad; más alto "
+            "es peor). Computada sobre el promedio anual de cada sexo de la ENCFT. Una "
+            "RAZÓN sobrevive al cambio de encuesta que vuelve incomparable al nivel: el "
+            "cambio de metodología se cancela en numerador y denominador."),
     }
 
     def _senales_fuera_del_indice(self, period: str, dh) -> List[Any]:

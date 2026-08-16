@@ -103,6 +103,46 @@ def _sync_bcrd_informality(db: Session, set_phase: Callable[[str], None]) -> int
     return synced
 
 
+#: Las tres series del mercado laboral que la END 1-12 fija y que NO alimentan el índice
+#: de desarrollo. Se ingieren igual porque son dato real del emisor primario y tienen un
+#: consumidor propio —el eje de evaluación de leyes—, y se exponen con peso 0.
+#:
+#: `unit` distingue lo que el nombre esconde: las brechas son RAZONES (adimensionales), no
+#: porcentajes. Servir 2,7 con unidad «%» invitaría a leer «2,7% de brecha» cuando dice que
+#: la desocupación femenina es 2,7 VECES la masculina.
+_MERCADO_LABORAL = {
+    "unemployment_rate": ("tasa de desocupación (BCRD · ENCFT)", "%"),
+    "employment_gender_ratio": ("razón de ocupación femenina/masculina", "razón"),
+    "unemployment_gender_ratio": ("razón de desocupación femenina/masculina", "razón"),
+}
+
+
+def _sync_bcrd_mercado_laboral(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Desocupación y brechas de género de la ENCFT, del CDN del BCRD.
+
+    Baja el libro UNA vez para las tres series —y para la informalidad, que ya se ingería
+    aparte— en vez de pagar cuatro descargas del mismo archivo.
+
+    Las dos brechas son RAZONES femenina/masculina, computadas en el conector a partir del
+    promedio anual de cada sexo. La cuenta se hace en código y no la deriva nadie después:
+    es exactamente la clase de relación que esta plataforma computa y el modelo copia.
+    """
+    from shared.data.bcrd_labor import LICENSE, SOURCE, fetch_bcrd_labor_market
+
+    set_phase("mercado laboral (BCRD · ENCFT)")
+    series = fetch_bcrd_labor_market()   # la excepción sube a _best_effort
+    synced = 0
+    for tema, (_etiqueta, unidad) in _MERCADO_LABORAL.items():
+        for year, value in series.get(tema, ()):
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(year),
+                              value=float(value), source=SOURCE, disagg="nacional",
+                              unit=unidad)
+            synced += 1
+    logger.info("[social] mercado laboral BCRD: %d puntos en %d series (%s)",
+                synced, len(_MERCADO_LABORAL), LICENSE[:40])
+    return synced
+
+
 def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
     """Ingreso per cápita POR REGIÓN (SISDOM del MEPyD) → ``sd_indicators``.
 
@@ -386,6 +426,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     # El rótulo nombra al EMISOR, porque es lo que se lee en la consola cuando algo
     # falla: decir "(ONE)" de un dato que ahora produce otro organismo mandaría a mirar
     # el portal equivocado.
+    mercado_laboral_synced = _best_effort(
+        "mercado laboral (BCRD · ENCFT)",
+        lambda: _sync_bcrd_mercado_laboral(db, set_phase), errors)
     income_synced = _best_effort(
         "ingreso per cápita (SISDOM · MEPyD)",
         lambda: _sync_sisdom_income(db, set_phase), errors)
@@ -408,6 +451,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "synced": synced,
         "health_synced": health_synced,
         "informality_synced": informality_synced,
+        "mercado_laboral_synced": mercado_laboral_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,

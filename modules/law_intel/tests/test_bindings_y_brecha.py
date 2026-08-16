@@ -267,3 +267,34 @@ class TestLaFrescuraDeclarada:
         from shared.products.readiness import _freshness_factor
         from modules.law_intel.products import _antiguedad_del_dato
         assert _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual") == 1.0
+
+
+class TestMercadoLaboral:
+    """Los tres indicadores salen del MISMO libro del BCRD y no tienen la misma calidad de
+    evidencia. La diferencia es el hallazgo, no un detalle de implementación."""
+
+    def test_el_NIVEL_de_desocupacion_no_es_evaluable_contra_su_meta(self):
+        """La base legal es ENFT-2010 (14,3%) y la medición es ENCFT, que arranca en 7,33%.
+        El nivel se parte casi al medio en el momento del cambio de encuesta, no de la
+        política. Publicar «meta superada» sería exactamente la mentira que este módulo
+        existe para no cometer."""
+        b = cargar_bindings(EXPEDIENTE)["2.37"]
+        assert not b.cuenta, "un nivel no comparable no puede contar como cobertura"
+        nota = (b.nota_comparabilidad or "").upper()
+        assert "ENFT" in nota and "ENCFT" in nota, "la nota nombra las dos encuestas"
+
+    def test_pero_las_RAZONES_si_son_evaluables(self):
+        """Una razón entre dos poblaciones medidas con la misma encuesta es robusta al
+        cambio de metodología: se cancela en numerador y denominador. Por eso las brechas
+        de género sobreviven donde el nivel no."""
+        for ind in ("2.41", "2.42"):
+            b = cargar_bindings(EXPEDIENTE)[ind]
+            assert not b.nota_comparabilidad, f"{ind} no debería estar bloqueado"
+
+    def test_las_dos_brechas_apuntan_en_sentidos_OPUESTOS(self):
+        """La de ocupación mejora subiendo hacia la paridad y la de desocupación mejora
+        bajando. Copiarle la dirección a la otra invertiría el veredicto — y acá el
+        validador lo atajaría contra las metas de la ley, que es el punto."""
+        bs = cargar_bindings(EXPEDIENTE)
+        assert bs["2.41"].mejor == "mayor"
+        assert bs["2.42"].mejor == "menor"
