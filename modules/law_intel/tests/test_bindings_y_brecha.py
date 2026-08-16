@@ -157,9 +157,13 @@ class TestLasCuatroDudasResueltas:
         El 2.1 es pobreza EXTREMA (meta 3,5% en 2025); el 2.4 es la moderada."""
         bs = cargar_bindings(EXPEDIENTE)
         assert bs["2.4"].serie == "social_dev:poverty_rate"
-        assert not (bs["2.4"].nota_comparabilidad or "").strip(), "la duda quedó resuelta"
+        # 2.4 volvió a tener nota ABIERTA, pero por OTRA razón: la duda original (¿general
+        # o extrema?) sí quedó resuelta, y lo que la frena hoy es que la variable se mide
+        # por región. Se comprueba el motivo, no la ausencia — si no, el test pasaría
+        # también si alguien reabriera la duda vieja.
+        assert "REGIÓN" in (bs["2.4"].nota_comparabilidad or "").upper()
 
-    def test_la_pobreza_extrema_quedo_medida_y_declara_su_salvedad(self):
+    def test_la_pobreza_extrema_NO_puede_medirse_con_una_cifra_regional(self):
         """La brecha era NUESTRA —el tema estaba ingerido y no se exponía como señal— y se
         cerró exponiéndolo (PR #748). Verificado en prod: 2,0% en 2024.
 
@@ -169,14 +173,19 @@ class TestLasCuatroDudasResueltas:
         mismo defecto que el instrumento denuncia."""
         b = cargar_bindings(EXPEDIENTE)["2.1"]
         assert b.serie == "social_dev:poverty_extreme"
-        assert b.cuenta, "la brecha de superficie está cerrada; el binding debe contar"
-        assert not (b.nota_comparabilidad or "").strip()
+        # Se expuso el tema (PR #748) y aun así NO puede contar: `poverty_extreme` se mide
+        # por región y el registro publica el valor de la primera. El 2,0% que se llegó a
+        # publicar como «meta de 2030 alcanzada seis años antes» era de `cibao_norte`.
+        assert not b.cuenta
+        assert "REGIÓN" in (b.nota_comparabilidad or "").upper()
         assert "2022" in (b.nota or ""), "el corte metodológico no puede quedar sin declarar"
 
     def test_analfabetismo_lleva_su_transformacion(self):
         b = cargar_bindings(EXPEDIENTE)["2.19"]
         assert b.transformacion == "complemento_100"
-        assert not (b.nota_comparabilidad or "").strip()
+        # Su nota abierta es la del alcance regional, no la de la transformación: la
+        # dirección quedó resuelta y declarada.
+        assert "REGIÓN" in (b.nota_comparabilidad or "").upper()
 
     def test_el_ingreso_queda_descartado_con_su_motivo(self):
         b = cargar_bindings(EXPEDIENTE)["3.26"]
@@ -184,11 +193,19 @@ class TestLasCuatroDudasResueltas:
         m = b.motivo_descarte or ""
         assert "MENSUAL" in m and "Atlas" in m, "el motivo nombra las dos magnitudes"
 
-    def test_las_resueltas_ya_no_bloquean(self):
-        """Ninguna de las tres resueltas conserva una duda abierta."""
+    def test_las_dudas_de_COMPARABILIDAD_originales_quedaron_resueltas(self):
+        """Las cuatro dudas de 2026-08-16 eran sobre QUÉ MIDE cada variable, y esas se
+        cerraron. Las que hoy bloquean a 2.4, 2.18 y 2.19 son de ALCANCE —la variable mide
+        una región, no el país— y son otra cosa.
+
+        El test comprueba el MOTIVO y no la ausencia: exigir que no haya nota lo hacía
+        fallar cuando apareció un impedimento distinto y legítimo, que es romperse por
+        avanzar."""
         bs = cargar_bindings(EXPEDIENTE)
-        for i in ("2.4", "2.19", "2.18", "2.21"):
-            assert not (bs[i].nota_comparabilidad or "").strip(), i
+        assert not (bs["2.21"].nota_comparabilidad or "").strip()
+        for i in ("2.4", "2.18", "2.19"):
+            nota = (bs[i].nota_comparabilidad or "").upper()
+            assert "REGIÓN" in nota, f"{i} bloquea por un motivo que no es el de alcance"
 
 
 class TestLasSenalesQueYaEstabanExpuestas:
@@ -298,3 +315,30 @@ class TestMercadoLaboral:
         bs = cargar_bindings(EXPEDIENTE)
         assert bs["2.41"].mejor == "mayor"
         assert bs["2.42"].mejor == "menor"
+
+
+def test_ningun_binding_que_CUENTA_se_apoya_en_una_variable_por_region():
+    """La regla que faltaba, escrita como invariante del expediente y no como lista.
+
+    Cinco bindings llegaron a producción contrastando el valor de `cibao_norte` contra una
+    meta nacional. El guard vive en el proveedor —rechaza lo que no es nacional— y esto
+    comprueba la otra mitad: que el expediente no declare como medido algo que el proveedor
+    va a negarse a servir, porque eso dejaría la cobertura publicada por encima de lo que
+    el informe puede sostener.
+    """
+    from shared.registry.builders import axis_variable_scopes
+
+    bs = cargar_bindings(EXPEDIENTE)
+    scopes = axis_variable_scopes("social")
+    assert scopes, "sin la doctrina de alcances el test no probaría nada"
+    por_region = []
+    for b in bs.values():
+        if not b.cuenta or not b.serie.startswith("social_dev:"):
+            continue
+        var = b.serie.split(":", 1)[1]
+        if scopes.get(var, "per_subject") != "national":
+            por_region.append(f"{b.indicador} → {var}")
+    assert not por_region, (
+        "estos bindings CUENTAN pero su variable se mide por región, así que publican el "
+        f"valor de una demarcación contra una meta nacional: {por_region}"
+    )

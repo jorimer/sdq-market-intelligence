@@ -63,8 +63,12 @@ class TestBarrido:
         return json.dumps([{"title": "ONE — Boletín", "description": "publica la serie"}])
 
     def test_no_pregunta_por_lo_que_ya_se_mide(self):
-        ids = {i.id for i in sin_fuente(E)}
-        assert not ({"2.4", "2.18", "2.19", "2.21"} & ids)
+        """Se computa de los bindings: la lista escrita a mano quedó falsa en cuanto tres
+        de esos indicadores se demotaron por medir una región en vez del país."""
+        from modules.law_intel.bindings import cargar_bindings
+        medidos = {k for k, b in cargar_bindings(E).items() if b.cuenta}
+        assert medidos, "sin verificados el test no probaría nada"
+        assert not (medidos & {i.id for i in sin_fuente(E)})
 
     def test_no_reabre_un_descartado(self):
         ids = {i.id for i in sin_fuente(E)}

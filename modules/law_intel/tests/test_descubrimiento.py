@@ -42,8 +42,14 @@ class TestTerminos:
 
 class TestQueSeConsulta:
     def test_no_se_descubre_lo_que_ya_se_mide(self):
+        """Se computa de los bindings en vez de listar ids: la lista escrita a mano decía
+        «2.4, 2.18, 2.19, 2.21» y quedó falsa en cuanto tres de esos se demotaron por medir
+        una región en vez del país. Un test que enumera la foto se rompe al corregirla."""
+        from modules.law_intel.bindings import cargar_bindings
+        medidos = {k for k, b in cargar_bindings("end_2030").items() if b.cuenta}
+        assert medidos, "sin bindings verificados el test no probaría nada"
         ids = {c.indicador for c in consultas("end_2030")}
-        assert not ({"2.4", "2.18", "2.19", "2.21"} & ids), "ya tienen binding verificado"
+        assert not (medidos & ids), "ya tienen binding verificado"
 
     def test_no_se_reabre_una_fuente_ya_descartada(self):
         """Su problema no es falta de fuente: es que la evaluada no mide lo que el eje
