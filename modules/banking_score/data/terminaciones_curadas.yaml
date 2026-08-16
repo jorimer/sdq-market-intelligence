@@ -1,0 +1,562 @@
+# Registro CURADO de terminaciones del sistema financiero dominicano.
+#
+# Por qué existe. La clasificación automática de `validation/terminaciones.py` infiere la
+# naturaleza de una salida a partir de los ratios con que la entidad dejó de reportar. Eso
+# alcanza para un borrador, pero mete el predictor adentro de la etiqueta: si "insolvencia"
+# se define por morosidad y después la morosidad se usa para predecir insolvencia, el modelo
+# se mide contra sí mismo. A seis meses de la salida el AUC daba 0.874 y el peso colapsaba
+# entero a morosidad — tautología con retardo, no predicción.
+#
+# Ninguna estadística arregla eso. La cura es que la etiqueta venga de AFUERA de los ratios:
+# de lo que se sabe que pasó con la entidad. Este archivo es esa fuente.
+#
+# Cómo se usa. `causa` es la etiqueta curada y manda sobre la inferida. Las salidas que no
+# están acá quedan como INFERIDAS y se cuentan aparte: un modelo calibrado sobre etiquetas
+# inferidas se reporta como diagnóstico contaminado, no como validación — mismo estándar que
+# `deal_scoring` aplica a sus labels retrospectivos.
+#
+# Cómo se extiende. Cuando una entidad sale del sistema, se agrega una fila con su causa y su
+# fuente. Eso es el lazo: el modelo base se re-ajusta con un caso más, y la corrida es
+# `validation/ew_calibration.py`.
+#
+# causa:
+#   quiebra          insolvencia o intervención — la entidad murió, cualquiera fuera la forma legal
+#   fusion           absorbida o fusionada estando viable
+#   salida_voluntaria cierre de operación local, venta ordenada, devolución de licencia
+#   renombre         la misma institución sigue con otro nombre (NO es una terminación)
+#   desconocida      se sabe que salió pero no por qué — NO se usa como etiqueta
+#
+# REGLA: no se escribe una causa sin `fuente`. Una etiqueta sin procedencia es exactamente el
+# problema que este archivo vino a resolver.
+
+version: 1
+actualizado: 2026-08-15
+
+terminaciones:
+
+  # ── Crisis bancaria de 2003 ────────────────────────────────────────────────
+  - nombre: Banco Intercontinental (Baninter)
+    fecha_salida: 2003-05-01
+    causa: quiebra
+    episodio: Crisis 2003 (fraude)
+    fuente: >-
+      Panel de Expertos BCRD 2005; Fitch 2003. Intervención de la SB en mayo de 2003.
+      Cohorte del backtest en `sib_historical_backtest.FAILED_COHORT`.
+
+  - nombre: Banco Nacional de Crédito
+    fecha_salida: 2003-12-01
+    causa: quiebra
+    episodio: Crisis 2003 (Bancrédito — quiebra con fraude)
+    fuente: >-
+      Confirmado por el dueño: cierre por quiebra y fraude. Panel de Expertos BCRD 2005.
+      Absorbido por Banco León; el ledger reutiliza el código `BANCRÉDITO - LEÓN`, por eso la
+      salida solo es visible keyeando por institución y no por código.
+
+  - nombre: Banco Mercantil
+    fecha_salida: 2005-03-01
+    causa: quiebra
+    episodio: Crisis 2003
+    fuente: >-
+      Panel de Expertos BCRD 2005. Absorbido por Republic Bank; código compartido
+      `MERCANTIL - REPUBLIC BANK`.
+
+  - nombre: Banco Global
+    fecha_salida: 2002-07-01
+    causa: quiebra
+    episodio: Crisis 2003
+    fuente: Panel de Expertos BCRD 2005; cohorte del backtest.
+
+  # ── Episodio de quiebras de inicios de los 90 ──────────────────────────────
+  # Confirmadas por el dueño; la fecha de salida es el último mes reportado en el ledger.
+  - nombre: Banco Universal
+    fecha_salida: 1992-09-01
+    causa: quiebra
+    episodio: Quiebras inicios de los 90
+    fuente: Confirmado por el dueño (roster histórico); cohorte del backtest.
+
+  - nombre: Banco Panamericano
+    fecha_salida: 1992-04-01
+    causa: quiebra
+    episodio: Quiebras inicios de los 90
+    fuente: >-
+      Confirmado por el dueño. Serie corta (~17 meses): el fechado del inicio del deterioro
+      es menos fiable, pero la salida es una quiebra conocida.
+
+  # ── Fraude posterior ───────────────────────────────────────────────────────
+  - nombre: Banco Peravia de Ahorro y Crédito
+    fecha_salida: 2014-06-01
+    causa: quiebra
+    episodio: Fraude 2014
+    fuente: >-
+      Anexo del diseño Fase 1 (`docs/SIB_HISTORICO_FASE1_DISENO.md`). Entidad pequeña: el
+      backtest la excluye del fechado por ruido de escala, pero la CAUSA es conocida.
+
+  # ── Salidas que NO son quiebras ────────────────────────────────────────────
+  # Tan necesarias como las quiebras: sin casos del lado negativo no hay contra qué medir si
+  # el clasificador sabe DESCARTAR.
+  #
+  # El linaje BHD, confirmado por el dueño y verificado contra el panel:
+  #   Banco Profesional → Banco León → (fusión con Banco BHD) → BHD León → Banco BHD (vivo)
+  # De los cuatro nombres que el clasificador reporta como "cerrados" bajo este linaje, TRES
+  # son la misma institución cambiando de nombre. Contarlos como salidas metía casos falsos
+  # en la cohorte — el reverso exacto del problema de Bancrédito, donde un código escondía una
+  # quiebra real. El código miente en las dos direcciones.
+
+  - nombre: Banco Profesional
+    fecha_salida: 2005-02-01
+    causa: renombre
+    episodio: Se convierte en Banco León (2003) al adquirir Bancrédito
+    fuente: >-
+      Confirmado por el dueño: el Banco Profesional (nacido en 1999 de la transformación de
+      la Financiera Profesional, por la Familia León) pasó a llamarse Banco León en 2003 tras
+      integrar operaciones y activos de Bancrédito; en 2014 se fusionó con Banco BHD.
+      RESUELVE la anomalía que este archivo tenía anotada: el código `PROFESIONAL` cierra con
+      36.7% de morosidad, casi el espejo del 33.3% con que Bancrédito cierra tres meses
+      antes. El banco continuó como Banco León en el slot de Bancrédito desde 2004-01 con
+      ratios limpios (mora 3.8%); lo que siguió reportando bajo el código viejo hasta 2005-02
+      fue el residuo de la cartera absorbida, no la insolvencia de Banco Profesional. Es el
+      mismo fenómeno de Bancrédito visto desde el otro lado: el código sigue a la CARTERA, no
+      a la institución.
+
+  - nombre: Banco Comercial BHD
+    fecha_salida: 1992-12-01
+    causa: renombre
+    episodio: Pasa a operar como Banco BHD
+    fuente: >-
+      Verificado en el panel: el código `BHD` continúa sin interrupción como "Banco BHD"
+      desde 1993-12. Misma institución.
+
+  - nombre: Banco León
+    fecha_salida: 2014-08-01
+    causa: fusion
+    episodio: Fusión BHD-León (2014)
+    fuente: >-
+      Confirmado por el dueño. Sale sana —morosidad 3.8%— el mismo mes que Banco BHD, que es
+      la firma de una fusión entre entidades viables y no de un rescate.
+
+  - nombre: Banco BHD
+    fecha_salida: 2014-08-01
+    causa: fusion
+    episodio: Fusión BHD-León (2014)
+    fuente: Confirmado por el dueño. Sale sana (morosidad 3.2%) el mismo mes que Banco León.
+
+  - nombre: Banco BHD León
+    fecha_salida: 2022-02-01
+    causa: renombre
+    episodio: Vuelve a operar como Banco BHD
+    fuente: >-
+      Verificado en el panel: "Banco BHD" reporta sin interrupción desde 2022-03 hasta el
+      final de la serie. La institución está viva; no hay terminación que registrar.
+
+  - nombre: Banco de la Pequeña Empresa
+    fecha_salida: 2004-06-01
+    causa: renombre
+    episodio: Pasa a operar como Banco de Ahorro y Crédito Pyme BHD
+    fuente: >-
+      Verificado en el panel: el código `PEQ EMPRESA - PYME BHD` continúa sin interrupción
+      con el nombre nuevo desde 2004-07.
+
+  # ── Banca extranjera que se retiró del mercado local ───────────────────────
+  # Las tres salen SIN morosidad reportada —la era temprana del ledger apenas la publica—, así
+  # que la inferencia solo puede decir `no_evaluable` y las deja en el limbo. Son casos
+  # valiosos justamente por eso: entidades longevas y sanas que se fueron por estrategia, no
+  # por deterioro. Sin ellas, el clasificador no tiene contra qué demostrar que sabe DESCARTAR.
+  - nombre: The Royal Bank of Canada
+    fecha_salida: 1985-07-01
+    causa: salida_voluntaria
+    episodio: Retiro del mercado dominicano
+    fuente: >-
+      Confirmado por el dueño: una de las primeras instituciones internacionales en formalizar
+      la banca en RD (operaciones desde ~1908); vendió y liquidó sus carteras locales por
+      cambio de estrategia internacional y por la consolidación de la banca dominicana.
+      Mantiene RBC Caribbean en otras islas, sin presencia en territorio dominicano.
+      Verificado en el panel: 375 meses de serie continua, 1947-10 a 1985-07.
+
+  # ⚠ CORREGIDO. Una primera versión lo registró como `salida_voluntaria` —la retirada de la
+  # banca española del país—. Era otra institución. El código del ledger lo dice solo:
+  # `CRÉDITO Y AHORROS - CONDAL - SANTANDER - ESPAÑOL`, con Santander hasta 1985-12 y Banco
+  # Español desde 1986-01. Es el banco que nació comprando los activos locales de Santander,
+  # no una sucursal de banca española.
+  - nombre: Banco Español
+    fecha_salida: 1990-11-01
+    causa: quiebra
+    episodio: Quiebra conjunta con Banco Universal (intervención del holding, dic-1992)
+    fuente: >-
+      Confirmado por el dueño: Banco Español Dominicano nace en 1986 comprando los activos
+      locales que el Banco de Santander vendió al no poder expandirse en RD. En 1987 lo
+      compra el Banco Universal y pasa a operar dentro del Grupo Financiero Banco Español,
+      bajo las directrices de Universal (productos compartidos, Visa Banco Español / Visa
+      Universal). En diciembre de 1992 la SB interviene el holding completo y la resolución
+      de quiebra alcanza de forma solidaria a todas las filiales, hundiendo a la vez a
+      Universal y al grupo. Sus ahorrantes entraron unificados a la tercera fase de "Dinero
+      Busca Dueño" (2023). La fecha de este registro es la del último reporte separado en el
+      ledger (1990-11); la intervención formal es de dic-1992, cuando ya operaba integrado.
+
+  - nombre: Banco de Santander Dominicano
+    fecha_salida: 1985-12-01
+    causa: salida_voluntaria
+    episodio: Vende sus activos locales y se retira del mercado dominicano
+    fuente: >-
+      Confirmado por el dueño: Santander vendió sus activos locales al no poder expandirse en
+      el mercado dominicano; el comprador constituyó el Banco Español Dominicano en 1986.
+      Verificado en el panel: el código continúa sin interrupción con el nombre nuevo.
+
+  - nombre: Bank of America
+    fecha_salida: 1984-12-01
+    causa: salida_voluntaria
+    episodio: Cierre de la operación local
+    fuente: >-
+      Confirmado por el dueño: no tiene sucursales ni oficinas comerciales en el país; el
+      único banco corporativo de origen estadounidense con licencia vigente es Citibank. Su
+      vínculo actual con RD es de corresponsalía y análisis macro, no de banca local.
+      Verificado en el panel: 172 meses de serie continua, 1968-03 a 1984-12.
+
+  # Mismo patrón que el linaje BHD: el clasificador lee un cierre donde hubo un cambio de
+  # nombre. La institución reporta sin interrupción desde 1947 hasta el final del panel.
+  - nombre: The Bank of Nova Scotia
+    fecha_salida: 2020-05-01
+    causa: renombre
+    episodio: Pasa a operar como Scotiabank República Dominicana
+    fuente: >-
+      Confirmado por el dueño: Scotiabank es el banco canadiense con presencia comercial
+      vigente en RD. Verificado en el panel: el código `SCOTIABANK` continúa sin interrupción
+      como "Scotiabank República Dominicana" desde 2020-06 hasta el cierre de la serie.
+
+  - nombre: Banco de Ahorro y Crédito Pyme BHD
+    fecha_salida: 2012-12-01
+    causa: fusion
+    episodio: Absorbido por la matriz; el negocio Pyme queda como segmento del Banco BHD
+    fuente: >-
+      Confirmado por el dueño: hoy NO existe una entidad legal independiente con ese nombre —
+      la Banca Pyme opera como segmento dentro del Banco BHD, bajo su licencia de Banco
+      Múltiple. La entidad que reportó hasta 2012-12 sí era una licencia separada de ahorro y
+      crédito (por eso figura en el ledger de la SB, que solo lista licenciadas), y salió sana:
+      morosidad 2.9%. Es una absorción por la matriz, no una caída.
+
+  # ── Del registro histórico de quiebras y liquidaciones de la SB ────────────
+  # Aportadas por el dueño. Las cuatro primeras salen SIN morosidad reportada: ninguna regla
+  # automática podía verlas, y sin curaduría quedaban fuera de la cohorte para siempre.
+
+  - nombre: Banco de Crédito y Ahorros
+    fecha_salida: 1973-09-01
+    causa: quiebra
+    episodio: Uno de los primeros colapsos del sistema post-1947
+    fuente: >-
+      Registro histórico aportado por el dueño: presentó graves dificultades financieras y sus
+      activos pasaron al Banco Condal Dominicano. Verificado en el panel: el código
+      `CRÉDITO Y AHORROS - CONDAL - SANTANDER - ESPAÑOL` cambia a "Banco Condal Dominicano"
+      en 1973-10, el mes siguiente.
+
+  - nombre: Banco de Santo Domingo
+    fecha_salida: 1979-03-01
+    causa: quiebra
+    episodio: Liquidación formal por insolvencia
+    fuente: >-
+      Registro histórico aportado por el dueño: liquidado formalmente por insolvencia y
+      problemas de liquidez.
+
+  - nombre: Banco de los Trabajadores
+    fecha_salida: 1992-12-01
+    causa: quiebra
+    episodio: Insolvencia estructural
+    fuente: >-
+      Registro histórico aportado por el dueño: entró en insolvencia estructural y cesó
+      operaciones durante la crisis de los años 90.
+
+  - nombre: Banco Corporativo Internacional
+    fecha_salida: 1992-12-01
+    causa: quiebra
+    episodio: Liquidación forzosa (crisis de los 90)
+    fuente: >-
+      Registro histórico aportado por el dueño: sometido a liquidación forzosa. Coincide con
+      la inferencia del panel, que ya lo marcaba insolvente (patrimonio -29.1%).
+
+  - nombre: Banco Continental de Desarrollo
+    fecha_salida: 2002-08-01
+    causa: quiebra
+    episodio: Liquidado junto a un grupo de financieras
+    fuente: >-
+      Registro histórico aportado por el dueño. Coincide con la inferencia del panel
+      (patrimonio -25.1%, morosidad 16.1%).
+
+  - nombre: Banco de Desarrollo y Capitalización-Defisa
+    fecha_salida: 1993-12-01
+    causa: quiebra
+    episodio: DEFISA — colapso de su cartera crediticia
+    fuente: >-
+      Registro histórico aportado por el dueño: liquidado tras el colapso de su cartera.
+      Coincide con la inferencia del panel.
+
+  - nombre: Banco de Ahorro y Crédito Ochoa
+    fecha_salida: 2006-11-01
+    causa: quiebra
+    episodio: Disuelto por resolución de la Junta Monetaria (2007)
+    fuente: >-
+      Registro histórico aportado por el dueño. El último reporte del ledger es 2006-11; la
+      resolución de disolución es de 2007. Coincide con la inferencia del panel.
+
+  - nombre: Banco de Ahorro y Crédito Federal
+    fecha_salida: 2018-11-01
+    causa: quiebra
+    episodio: Cese de operaciones y disolución
+    fuente: >-
+      Registro histórico aportado por el dueño. Coincide con la inferencia del panel.
+
+  # LA MÁS VALIOSA para el modelo: es una quiebra de la ERA MODERNA, con la serie completa de
+  # indicadores. Las de los años 90 no aportan features —el ledger de esa época no publica los
+  # ratios— así que no mueven la validación por más que se curen.
+  - nombre: Banco Múltiple de las Américas
+    fecha_salida: 2021-11-01
+    causa: quiebra
+    episodio: Bancamérica — intervenido y disuelto por la SB (2022)
+    fuente: >-
+      Registro histórico aportado por el dueño: intervenido y disuelto por la Superintendencia
+      de Bancos tras incumplir de forma prolongada los requerimientos de su plan de
+      regularización. El último reporte del ledger es 2021-11; la disolución es de 2022.
+
+  # ── Confisa: el caso que prueba el registro en la dirección CONTRARIA ──────
+  # El registro histórico lo listaba como liquidado, y los indicadores lo desmienten. La serie
+  # no tiene discontinuidad: los activos crecen a través de la transición (656 M → 708 M →
+  # 744 M) y siguen hasta 5.087 M en 2025-12, con la morosidad en 0.59% y la cobertura en
+  # 270%. Una quiebra se ve al revés — los activos se desploman o se transfieren.
+  #
+  # Sí hubo un episodio de estrés real: entre 2002-06 y 2002-12 la morosidad salta de 2.40% a
+  # 12.23% y la cobertura cae de 131.7% a 23.0%, que es la crisis de 2003 golpeando. Pero se
+  # recupera: cobertura 125% en 2005-12. La liquidación "de divisiones no absorbibles" que
+  # menciona el registro fue de LÍNEAS DE NEGOCIO; la institución licenciada continuó, y el
+  # ledger solo ve instituciones.
+  #
+  # Registrarlo como quiebra habría metido en la cohorte a una entidad que hoy reporta 5 mil
+  # millones en activos. Que la curaduría también pueda QUITAR quiebras —y no solo agregarlas—
+  # es lo que la hace una fuente y no una lista de deseos.
+
+  - nombre: Financiera Confisa
+    fecha_salida: 2000-03-01
+    causa: renombre
+    episodio: Pasa a operar como Banco Confisa de Desarrollo y Crédito
+    fuente: >-
+      Verificado en el panel: el código `CONFISA` continúa sin interrupción con el nombre
+      nuevo desde 2000-04.
+
+  - nombre: Banco Confisa de Desarrollo y Crédito
+    fecha_salida: 2005-05-01
+    causa: renombre
+    episodio: Conversión de licencia a Banco de Ahorro y Crédito Confisa
+    fuente: >-
+      Confirmado por el dueño tras revisar los indicadores. Verificado en el panel: la serie
+      no tiene discontinuidad —activos 656 M (2004-12) → 708 M (2005-06) → 744 M (2005-12)—
+      y la entidad sigue reportando hasta 2026-04 con 5.087 M en activos, morosidad 0.59% y
+      cobertura 270%. El episodio de estrés de 2002-2004 fue real y superado, no terminal.
+
+  # ── Cronología de quiebras de eldinero.do / Diario Libre / SB ──────────────
+  # Fuente aportada por el dueño. NOTA sobre las fechas: la resolución formal de disolución de
+  # la Junta Monetaria suele llegar AÑOS después de que la entidad deja de reportar. Acá se
+  # registra la fecha del ledger —cuando la institución efectivamente sale del panel, que es
+  # la que el modelo puede usar— y la fecha oficial queda en la fuente.
+
+  - nombre: Banco Metropolitano
+    fecha_salida: 2000-12-01
+    causa: quiebra
+    episodio: Intervenido y disuelto en la crisis de 2003
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre (23 entidades disueltas desde 2003). El ledger
+      lo pierde en 2000-12, tres años antes de la resolución — la entidad deja de reportar y
+      la formalización llega después.
+
+  - nombre: Banco de Desarrollo Unificado
+    fecha_salida: 2007-03-01
+    causa: quiebra
+    episodio: Entra en disolución el 8 de julio de 2004
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. Coincide con la inferencia del panel
+      (insolvencia). El ledger reporta hasta 2007-03, después de iniciada la disolución.
+
+  - nombre: Crédito Solidario Dominicano
+    fecha_salida: 2006-08-01
+    causa: quiebra
+    episodio: Disuelto en agosto de 2006
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. Fecha exacta coincidente con el último reporte
+      del ledger. Coincide con la inferencia del panel (insolvencia).
+
+  # Las cinco siguientes el clasificador NO las ve: salen con ratios normales o sin morosidad
+  # reportada. Son la mejor demostración de por qué el registro curado existe.
+  - nombre: Financiera Nacional de Créditos
+    fecha_salida: 2003-08-01
+    causa: quiebra
+    episodio: CONACRE — disuelta el 9 de junio de 2005
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. El panel la leía como salida sana: deja de
+      reportar en 2003-08 con ratios normales y la resolución llega dos años después.
+
+  - nombre: Financiera Royal Dominicana
+    fecha_salida: 2003-11-01
+    causa: quiebra
+    episodio: Disuelta el 7 de julio de 2005
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. El panel la leía como salida sana (morosidad
+      9.8% bajo el piso de su tipo).
+
+  - nombre: Corporación de Crédito Rona
+    fecha_salida: 2016-08-01
+    causa: quiebra
+    episodio: Disuelta en 2015
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. El panel la leía como salida sana. La fecha de
+      disolución es anterior al último reporte del ledger, lo que sugiere que siguió
+      reportando durante el proceso.
+
+  - nombre: Banco Antillano
+    fecha_salida: 1990-08-01
+    causa: quiebra
+    episodio: Declarado en quiebra a principios de los años 90
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. Sin morosidad reportada al salir: invisible
+      para cualquier criterio automático.
+
+  - nombre: Banco Regional Dominicano
+    fecha_salida: 1992-12-01
+    causa: quiebra
+    episodio: Entró en liquidación (crisis de los 90)
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre. Sin morosidad reportada al salir.
+
+  - nombre: Banco Girod Dominicano
+    fecha_salida: 1984-09-01
+    causa: quiebra
+    episodio: Liquidado y absorbido tras insolvencia
+    fuente: >-
+      Cronología de eldinero.do / Diario Libre, que lo ubica en la década de 1990; el ledger
+      lo pierde en 1984-09. ⚠ Seis años de diferencia: puede ser que la liquidación formal
+      llegara mucho después, o que la fuente sea imprecisa en la década. Se registra con la
+      fecha del ledger y la discrepancia queda anotada.
+
+  # ── Las 23 disoluciones por RESOLUCIÓN DE LA JUNTA MONETARIA (2003-2022) ───
+  # Fuente: Diario Libre, 04-feb-2022, sobre reportes de la Superintendencia de Bancos. Es la
+  # lista oficial del período, con fecha de resolución exacta. Todas son de la ERA MODERNA, o
+  # sea que tienen serie completa de indicadores — son las que efectivamente mueven la
+  # validación del modelo, a diferencia de las quiebras de los 70-90.
+  #
+  # La fecha registrada es la del LEDGER (último reporte), no la de la resolución: es la que
+  # el modelo puede usar. La oficial va en la fuente. Que la resolución llegue después —a
+  # veces años— es lo normal: primero la entidad deja de operar, después se formaliza.
+
+  - nombre: Corporación de Crédito Finanzar
+    fecha_salida: 2018-12-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (25-mar-2019)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB — 23 entidades disueltas desde 2003.
+
+  - nombre: Corporación de Crédito El Efectivo
+    fecha_salida: 2018-04-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (21-feb-2019)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
+
+  - nombre: Corporación de Crédito Oriental
+    fecha_salida: 2018-07-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (24-ene-2019)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
+
+  - nombre: Corporación de Crédito La Americana
+    fecha_salida: 2016-06-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (19-jul-2018)
+    fuente: >-
+      Diario Libre 04-feb-2022 sobre reportes de la SB. El panel la leía como salida SANA
+      (morosidad 0.0%): sin la resolución oficial era indetectable.
+
+  - nombre: Banco de Ahorro y Crédito Providencial
+    fecha_salida: 2016-05-01
+    causa: quiebra
+    episodio: Disuelto por resolución de la Junta Monetaria (02-jun-2016)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
+
+  - nombre: Banco de Ahorro y Crédito Micro
+    fecha_salida: 2013-01-01
+    causa: quiebra
+    episodio: Disuelto por resolución de la Junta Monetaria (07-feb-2013)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
+
+  - nombre: Compañía Financiera de Crédito y Turismo
+    fecha_salida: 2011-12-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (12-jul-2012)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
+
+  - nombre: Financiera Credicorp
+    fecha_salida: 2006-04-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (18-ago-2011)
+    fuente: >-
+      Diario Libre 04-feb-2022 sobre reportes de la SB. Cinco años entre el último reporte y
+      la resolución.
+
+  - nombre: Inver-Car
+    fecha_salida: 2010-02-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (17-jun-2010)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
+
+  - nombre: Financiera Inversiones M & R
+    fecha_salida: 2006-12-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (18-nov-2010)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
+
+  - nombre: Financiera de Negocios e Industrias Santa Clara
+    fecha_salida: 2009-03-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (16-dic-2008)
+    fuente: >-
+      Diario Libre 04-feb-2022 sobre reportes de la SB. Siguió reportando tres meses después
+      de la resolución.
+
+  - nombre: Asociación Central de Ahorros y Préstamos
+    fecha_salida: 2006-10-01
+    causa: quiebra
+    episodio: Disuelta por resolución de la Junta Monetaria (18-ene-2007)
+    fuente: >-
+      Diario Libre 04-feb-2022 sobre reportes de la SB. El panel la leía como salida SANA.
+
+  - nombre: Financiadora Automotriz
+    fecha_salida: 2007-05-01
+    causa: quiebra
+    episodio: Finamóvil — disuelta por resolución de la Junta Monetaria (19-abr-2007)
+    fuente: Diario Libre 04-feb-2022 sobre reportes de la SB.
+
+  # ── Hemeroteca de Cronología SB, categoría "Crisis Bancarias" ──────────────
+  # 116 publicaciones desde 1966. Es fuente PRIMARIA —recortes de prensa fechados— y llega
+  # donde no llegan las recopilaciones: avisos de pago a ahorrantes, acuerdos de liquidación y
+  # notas de intervención que nombran la entidad y el día.
+
+  - nombre: Banco Cibao
+    fecha_salida: 1989-09-01
+    causa: quiebra
+    episodio: Acuerdo de liquidación (1989-1990)
+    fuente: >-
+      Hemeroteca Cronología SB, categoría Crisis Bancarias: "Buscan aún un acuerdo liquidación
+      del Bancibao" (20-dic-1989), "Detallan acuerdo de liquidación de Banco Cibao"
+      (25-ene-1990) y "JM aprueba acuerdo Bancomercio/Bancibao". El panel lo daba como
+      `no_evaluable` —sale sin morosidad reportada—; la prensa lo fecha y lo nombra.
+
+  - nombre: Banco de Ahorro y Crédito Altas Cumbres
+    fecha_salida: 2008-07-01
+    causa: quiebra
+    episodio: Liquidación con aviso a clientes y ahorrantes
+    fuente: >-
+      Hemeroteca Cronología SB: "Aviso a los clientes y ahorrantes del Banco de Ahorro y
+      Crédito Altas Cumbres", Listín Diario, 30-may-2008 — el formato estándar del aviso de
+      liquidación. El panel lo daba como `no_evaluable`.
+
+  - nombre: Banco Activo Dominicana
+    fecha_salida: 2023-07-01
+    causa: quiebra
+    episodio: Sale del sistema financiero acumulando pérdidas (2023)
+    fuente: >-
+      Hemeroteca Cronología SB: "Banco Múltiple Activo saldrá del sistema; acumula pérdidas"
+      (31-jul-2023) y "Banco Activo Dominicana saldrá del sistema financiero nacional"
+      (29-jul-2023). Es el caso más RECIENTE del registro y de la era moderna: serie completa
+      de indicadores. Coincide con la inferencia del panel (insolvencia).
+
