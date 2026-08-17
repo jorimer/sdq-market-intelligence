@@ -203,9 +203,11 @@ class TestLasCuatroDudasResueltas:
         avanzar."""
         bs = cargar_bindings(EXPEDIENTE)
         assert not (bs["2.21"].nota_comparabilidad or "").strip()
-        for i in ("2.4", "2.18", "2.19"):
+        # 2.18 salió de la lista: se recuperó apuntando a la cifra nacional del SISDOM.
+        for i in ("2.4", "2.19"):
             nota = (bs[i].nota_comparabilidad or "").upper()
             assert "REGIÓN" in nota, f"{i} bloquea por un motivo que no es el de alcance"
+        assert bs["2.18"].cuenta, "2.18 se recuperó con la serie nacional"
 
 
 class TestLasSenalesQueYaEstabanExpuestas:
@@ -216,10 +218,15 @@ class TestLasSenalesQueYaEstabanExpuestas:
     nombre de la variable se parece al del indicador en los tres casos, y solo en uno miden
     lo mismo."""
 
-    def test_la_cobertura_secundaria_calza_directo(self):
-        b = cargar_bindings(EXPEDIENTE)["2.10"]
-        assert b.serie == "social_dev:secondary_coverage"
-        assert b.transformacion is None, "misma magnitud: no hay nada que transformar"
+    def test_las_coberturas_educativas_apuntan_a_la_cifra_del_PAIS(self):
+        """Empezaron atadas a la serie por región —que servía cibao_norte— y se repuntaron
+        a la fila `TOTAL PAIS` del tablero. El sufijo `_pais` es lo que distingue una de
+        otra, así que el test lo exige explícitamente."""
+        bs = cargar_bindings(EXPEDIENTE)
+        for ind, esperada in (("2.9", "social_dev:primary_coverage_pais"),
+                              ("2.10", "social_dev:secondary_coverage_pais")):
+            assert bs[ind].serie == esperada
+            assert bs[ind].transformacion is None, "misma magnitud: nada que transformar"
 
     def test_el_sector_formal_es_el_COMPLEMENTO_de_la_informalidad(self):
         """El indicador legal cuenta el sector FORMAL; la variable mide la INFORMALIDAD.
