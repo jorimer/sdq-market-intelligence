@@ -256,26 +256,32 @@ def _sync_minerd_coverage(db: Session, set_phase: Callable[[str], None],
     El cambio también trae el desglose PROVINCIAL, que la planilla tenía y el parser
     anterior descartaba.
 
-    Los dos niveles comparten el tema ``secondary_coverage`` y se distinguen por
-    ``disaggregation``; los slugs provinciales nunca chocan con los regionales (fijado en
+    Trae los DOS niveles educativos —básica (indicador 2.9 de la END) y secundaria
+    (2.10)— y las TRES resoluciones geográficas, incluido el **total de país**, que el
+    parser descartaba: sin él, un consumidor que compare contra una meta nacional termina
+    usando la cifra de una región.
+
+    Cada nivel educativo va a su propio tema; las resoluciones geográficas comparten tema
+    y se distinguen por ``disaggregation``; los slugs provinciales nunca chocan con los regionales (fijado en
     ``shared/reference/tests/test_provinces.py``). Solo las filas regionales llegan al
     IDM: :func:`assemble_idm_dataset` itera el catálogo de regiones, así que agregar
     provincias no puede mover un score."""
     from shared.data.minerd_coverage import SOURCE as MINERD_SOURCE
-    from shared.data.minerd_coverage import fetch_minerd_coverage
+    from shared.data.minerd_coverage import TEMA_POR_NIVEL, fetch_minerd_coverage_levels
     from shared.data.snapshots import live_or_snapshot
 
-    set_phase("cobertura educativa por región y provincia (MINERD · SIIE)")
+    set_phase("cobertura educativa básica y secundaria (MINERD · SIIE)")
     # El tablero Power BI limita por tasa y devuelve 400 sin aviso — le pasó también a
     # una máquina de trabajo minutos después de funcionar. La instantánea comiteada es el
     # camino offline que el propio shared/data/powerbi ya prescribe para esta API.
-    rows, prov = live_or_snapshot("minerd_coverage", fetch_minerd_coverage,
+    rows, prov = live_or_snapshot("minerd_coverage_levels", fetch_minerd_coverage_levels,
                                   source=MINERD_SOURCE)
-    provenance["secondary_coverage"] = prov
+    for tema in TEMA_POR_NIVEL.values():
+        provenance[tema] = prov
     synced = 0
-    for level, slug, year, value in rows:
-        _upsert_indicator(db, theme=COVERAGE_THEME, entity=slug, period=str(year),
-                          value=float(value), source=MINERD_SOURCE, disagg=level,
+    for nivel, geo, slug, year, value in rows:
+        _upsert_indicator(db, theme=TEMA_POR_NIVEL[nivel], entity=slug, period=str(year),
+                          value=float(value), source=MINERD_SOURCE, disagg=geo,
                           unit=COVERAGE_UNIT)
         synced += 1
     return synced

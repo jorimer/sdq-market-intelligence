@@ -51,6 +51,20 @@ _WINDOW = 30000          # filas máximas por consulta (el tablero tiene ~1.2k)
 # Niveles que cuentan como secundaria. "Medio" es la etiqueta previa a 2014 y se acepta
 # por continuidad con la serie que traía la ONE.
 SECONDARY_LEVELS = ("secundario", "medio")
+# Nivel básico/primario. La END lo llama «básica» (indicador 2.9) y el tablero lo rotula
+# «Primario»; se aceptan las dos porque el rótulo del MINERD cambió con la reforma.
+PRIMARY_LEVELS = ("primario", "basico", "básico")
+
+# Etiqueta del agregado NACIONAL en el tablero. Viene en las dos columnas geográficas.
+#
+# Se capturaba y se tiraba: el parser la dejaba caer en `unknown` con un log. Y es
+# justamente la cifra que necesita cualquier consumidor que compare contra una meta de
+# PAÍS — el eje de evaluación de leyes publicó la cobertura de una región como nacional
+# porque esta fila no llegaba a la base. El total lo publica el MINERD; reconstruirlo
+# promediando las provincias habría sido inventarlo (sin ponderar por matrícula, ese
+# promedio no es la cobertura del país).
+COUNTRY_TOTAL = "total pais"
+COUNTRY_SLUG = "pais"
 
 _SCHOOL_YEAR = re.compile(r"^\s*((?:19|20)\d{2})\s*-\s*((?:19|20)\d{2})\s*$")
 
@@ -68,6 +82,13 @@ def school_year_to_calendar(label: object) -> Optional[int]:
         return None
     a, b = int(m.group(1)), int(m.group(2))
     return b if b == a + 1 else None
+
+
+def _norm_label(v: object) -> str:
+    """Etiqueta normalizada para comparar sin depender de acentos ni mayúsculas."""
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(v or ""))
+    return " ".join("".join(c for c in t if not unicodedata.combining(c)).casefold().split())
 
 
 def _is_region_total(label: object) -> bool:
@@ -159,11 +180,17 @@ def parse_coverage_rows(rows: List[List[object]],
         if year is None or value is None:
             dropped += 1
             continue
+        # El total de país va PRIMERO: su etiqueta empieza con "TOTAL" igual que la del
+        # agregado regional, y `_is_region_total` la aceptaría para después no resolver
+        # ninguna región y perderla en silencio.
+        if _norm_label(province) == COUNTRY_TOTAL:
+            out.append(("pais", COUNTRY_SLUG, year, round(value, 2)))
+            continue
         slug = province_slug(province)
         if slug is not None:
             out.append(("provincia", slug, year, round(value, 2)))
             continue
-        # No es provincia: puede ser el agregado de su región (o el total de país).
+        # No es provincia ni país: puede ser el agregado de su región.
         if _is_region_total(province):
             rslug = region_slug(region)
             if rslug is not None:
@@ -172,8 +199,8 @@ def parse_coverage_rows(rows: List[List[object]],
         if str(province or "").strip():
             unknown.add(str(province).strip())
     if unknown:
-        # Acá cae "TOTAL PAIS". Se registra igual, porque una provincia nueva que dejara
-        # de reconocerse aparecería en la MISMA lista y en silencio se perdería.
+        # Ya NO cae "TOTAL PAIS" acá — se captura arriba. Lo que quede en esta lista es una
+        # etiqueta que el padrón dejó de reconocer, que es exactamente lo que hay que ver.
         logger.info("[MINERD] etiquetas no geográficas descartadas: %s", sorted(unknown))
     if dropped:
         logger.info("[MINERD] %d filas descartadas (año, nivel o valor inválido)", dropped)
@@ -183,8 +210,30 @@ def parse_coverage_rows(rows: List[List[object]],
     return out
 
 
-def fetch_minerd_coverage() -> List[Tuple[str, str, int, float]]:  # pragma: no cover - network I/O
-    """Live: resuelve el tablero, consulta y proyecta → filas de cobertura provincial."""
+#: Nombre del tema de cada nivel educativo, tal como se persiste.
+TEMA_POR_NIVEL = {"secundaria": "secondary_coverage", "basica": "primary_coverage"}
+
+
+def fetch_minerd_coverage_levels() -> List[Tuple[str, str, str, int, float]]:  # pragma: no cover
+    """Live: UNA consulta al tablero → ``[(nivel_educativo, nivel_geo, slug, año, valor)]``.
+
+    Una sola descarga para los dos niveles educativos: el tablero limita por tasa y
+    devuelve 400 sin aviso, así que pedirle dos veces lo mismo es la forma más rápida de
+    quedarse sin ninguno.
+
+    Devuelve una LISTA plana y no un dict por nivel para que la instantánea de respaldo
+    (`live_or_snapshot`) pueda guardarla con la misma forma que el resto de las fuentes.
+    """
+    rows = _fetch_rows()
+    out: List[Tuple[str, str, str, int, float]] = []
+    for nivel, etiquetas in (("secundaria", SECONDARY_LEVELS), ("basica", PRIMARY_LEVELS)):
+        for geo, slug, anio, valor in parse_coverage_rows(rows, etiquetas):
+            out.append((nivel, geo, slug, anio, valor))
+    return out
+
+
+def _fetch_rows() -> List[List[object]]:  # pragma: no cover - network I/O
+    """Resuelve el tablero y devuelve las filas CRUDAS del DSR, una sola vez."""
     import httpx
 
     from shared.data import powerbi
@@ -205,4 +254,10 @@ def fetch_minerd_coverage() -> List[Tuple[str, str, int, float]]:  # pragma: no 
     except httpx.HTTPError as e:
         raise MinerdCoverageError(
             f"no se pudo consultar el tablero del SIIE ({type(e).__name__}: {e})")
-    return parse_coverage_rows(rows)
+    return rows
+
+
+def fetch_minerd_coverage() -> List[Tuple[str, str, int, float]]:  # pragma: no cover - network I/O
+    """Live: cobertura de SECUNDARIA. Se conserva por compatibilidad con la instantánea
+    comiteada, que guarda esta forma."""
+    return parse_coverage_rows(_fetch_rows())

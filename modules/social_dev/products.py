@@ -36,6 +36,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from modules.social_dev.social_sync import HEALTH_ENTITY
+from shared.data.minerd_coverage import COUNTRY_SLUG as MINERD_COUNTRY
 from shared.registry.builders import axis_variable_scopes
 from shared.registry.signals import PER_SUBJECT
 from shared.products import (
@@ -327,13 +329,16 @@ class SocialDevProduct:
     #: valor de UNA región creyendo que era el del país. Pasó: el eje de evaluación de
     #: leyes publicó la pobreza extrema de cibao_norte como cifra nacional.
     _FUERA_DEL_INDICE = {
-        "poverty_extreme": ("Pobreza monetaria extrema",
+        # entidad None = «la que haya»: sólo es legítimo cuando el tema tiene UNA sola
+        # fila por período (las nacionales del BCRD). Para un tema con diez regiones hay
+        # que nombrar la entidad o la señal miente.
+        "poverty_extreme": ("poverty_extreme", None, "Pobreza monetaria extrema",
                             "living_standards",
                             "No alimenta el índice de desarrollo (el IDM usa la pobreza "
                             "general). Se publica porque es dato real y tiene consumidores "
                             "propios."),
-        "unemployment_rate": ("Tasa de desocupación (SU1)",
-                              "inclusion",
+        "unemployment_rate": ("unemployment_rate", HEALTH_ENTITY,
+                              "Tasa de desocupación (SU1)", "inclusion",
                               "ENCFT del BCRD, promedio de cuatro trimestres publicado por "
                               "el emisor. No alimenta el índice de desarrollo. ATENCIÓN al "
                               "comparar con series anteriores a 2015: la ENFT y la ENCFT dan "
@@ -341,16 +346,31 @@ class SocialDevProduct:
         # Las dos brechas son RAZONES, no porcentajes. La etiqueta lo dice porque la
         # cifra sola (2,7) se lee como un porcentaje y significa «2,7 VECES».
         "employment_gender_ratio": (
+            "employment_gender_ratio", HEALTH_ENTITY,
             "Razón de ocupación femenina/masculina", "inclusion",
             "Tasa de ocupación de mujeres dividida por la de hombres (1,0 = paridad). "
             "Computada sobre el promedio anual de cada sexo de la ENCFT; el BCRD publica "
             "los trimestres, no el promedio. No alimenta el índice de desarrollo."),
         "unemployment_gender_ratio": (
+            "unemployment_gender_ratio", HEALTH_ENTITY,
             "Razón de desocupación femenina/masculina", "inclusion",
             "Desocupación de mujeres dividida por la de hombres (1,0 = paridad; más alto "
             "es peor). Computada sobre el promedio anual de cada sexo de la ENCFT. Una "
             "RAZÓN sobrevive al cambio de encuesta que vuelve incomparable al nivel: el "
             "cambio de metodología se cancela en numerador y denominador."),
+        # El TOTAL PAÍS del tablero del SIIE, que el parser descartaba. Son las únicas
+        # cifras nacionales de cobertura educativa que existen en el panel: el IDM usa la
+        # serie por región, y promediar diez regiones sin ponderar por matrícula no da la
+        # cobertura del país. Habilitan los indicadores 2.9 y 2.10 de la END.
+        "secondary_coverage_pais": (
+            "secondary_coverage", MINERD_COUNTRY,
+            "Cobertura neta secundaria — total país", "education",
+            "Total nacional publicado por el MINERD (SIIE). Distinto de la serie por "
+            "región que alimenta el índice de desarrollo."),
+        "primary_coverage_pais": (
+            "primary_coverage", MINERD_COUNTRY,
+            "Cobertura neta básica — total país", "education",
+            "Total nacional publicado por el MINERD (SIIE)."),
     }
 
     def _senales_fuera_del_indice(self, period: str, dh) -> List[Any]:
@@ -368,17 +388,27 @@ class SocialDevProduct:
         # variables del eje. Repetirlo acá sería una segunda verdad, y el día que
         # divergieran ganaría la que el consumidor mire primero.
         alcances = axis_variable_scopes(DOCTRINE_AXIS)
-        for tema, (label, dimension, nota) in self._FUERA_DEL_INDICE.items():
-            alcance = alcances.get(tema, PER_SUBJECT)
-            fila = _safe(self._db, lambda t=tema: (
-                self._require_db().query(SocialIndicator.value, SocialIndicator.period)
-                .filter(SocialIndicator.theme == t, SocialIndicator.value.isnot(None))
-                .order_by(SocialIndicator.period.desc()).first()), None)
+        for clave, (tema, entidad, label, dimension, nota) in self._FUERA_DEL_INDICE.items():
+            alcance = alcances.get(clave, PER_SUBJECT)
+
+            def _leer(t=tema, e=entidad):
+                q = (self._require_db().query(SocialIndicator.value, SocialIndicator.period)
+                     .filter(SocialIndicator.theme == t, SocialIndicator.value.isnot(None)))
+                # Filtrar por ENTIDAD cuando la señal afirma una: sin esto la consulta
+                # devolvía una fila cualquiera del período más reciente, y en un tema con
+                # diez regiones eso es el valor de una demarcación al azar servido como si
+                # fuera del eje. Es el mismo defecto que hizo publicar la pobreza extrema
+                # de cibao_norte como cifra nacional.
+                if e is not None:
+                    q = q.filter(SocialIndicator.entity_key == e)
+                return q.order_by(SocialIndicator.period.desc()).first()
+
+            fila = _safe(self._db, _leer, None)
             if not fila:
                 continue
             valor, periodo_tema = fila
             out.append(VariableSignal(
-                key=tema, label=label, state=REAL, dimension=dimension,
+                key=clave, label=label, state=REAL, dimension=dimension,
                 weight=0.0,                      # fuera del índice: no pondera
                 source=", ".join(dh.sources), cadence=dh.cadence,
                 value=float(valor), real_fraction=1.0, scope=alcance,

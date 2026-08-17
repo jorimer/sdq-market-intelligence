@@ -36,15 +36,28 @@ def test_extrae_provincia_y_region_del_mismo_tablero():
     assert ("provincia", "azua", 2025, 74.5) in filas
     assert ("provincia", "pedernales", 2025, 55.5) in filas
     assert ("region", "valdesia", 2025, 74.4) in filas
-    assert len(filas) == 3          # el total de país y el nivel primario quedan fuera
+    assert ("pais", "pais", 2025, 71.0) in filas
+    assert len(filas) == 4          # el nivel primario queda fuera; el país YA no
 
 
-def test_el_total_de_pais_no_se_confunde_con_un_agregado_regional():
-    """Los dos empiezan con 'TOTAL' y significan cosas distintas: uno es un nivel
-    geográfico del panel y el otro no lo es."""
+def test_el_total_de_pais_se_captura_y_no_se_confunde_con_el_regional():
+    """Los dos empiezan con 'TOTAL' y significan cosas distintas.
+
+    El de país se descartaba, y ese descarte tuvo consecuencias: sin la cifra nacional,
+    quien comparaba contra una meta de país terminaba usando la de una región. Ahora se
+    captura con su propio nivel geográfico — y el orden importa, porque
+    `_is_region_total` aceptaría su etiqueta para después no resolver ninguna región y
+    perderla en silencio."""
     solo_pais = [_fila("2024-2025", "Secundario", "TOTAL PAIS", "TOTAL PAIS", "71.0")]
-    with pytest.raises(MinerdCoverageError):
-        parse_coverage_rows(solo_pais)
+    assert parse_coverage_rows(solo_pais) == [("pais", "pais", 2025, 71.0)]
+
+
+def test_el_nivel_BASICO_sale_del_mismo_tablero():
+    """Indicador 2.9 de la END. El tablero lo rotula «Primario» y la ley «básica»."""
+    from shared.data.minerd_coverage import PRIMARY_LEVELS
+    filas = parse_coverage_rows(BASE, PRIMARY_LEVELS)
+    assert ("provincia", "azua", 2025, 95.0) in filas
+    assert not any(f[3] == 74.5 for f in filas), "se coló una fila de secundaria"
 
 
 @pytest.mark.parametrize("etiqueta,esperado", [
