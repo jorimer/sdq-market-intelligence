@@ -43,6 +43,19 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("sdq.data.sisdom")
 
+# El cuadro trae una columna ``Nacional`` —el propio docstring lo dice— y el parser la deja
+# fuera porque no resuelve contra el padrón de regiones. Se declara en vez de capturarla:
+# el único indicador de la END que la usaría es el 3.26, y ese está DESCARTADO por otra
+# razón (el ingreso familiar mensual del hogar no es el INB per cápita anual por método
+# Atlas). Capturar una serie que ningún consumidor pide sería trabajo muerto; perderla sin
+# decirlo es lo que ya costó dos veces.
+SIN_TOTAL_NACIONAL = (
+    "la columna `Nacional` existe y se descarta a propósito: el indicador 3.26 de la END, "
+    "único consumidor posible, está descartado porque mide otra magnitud (INB per cápita "
+    "anual por método Atlas, no ingreso familiar mensual del hogar)."
+)
+
+
 LISTING_URL = "https://mepyd.gob.do/sisdom/areas-tematicas"
 DOWNLOAD_URL = "https://mepyd.gob.do/wp-admin/admin-ajax.php"
 

@@ -36,6 +36,18 @@ from shared.data.sisdom_common import (
 
 logger = logging.getLogger("sdq.data.sisdom_child_mortality")
 
+# El cuadro trae una fila ``Nacional`` (79,2 en 1975 …) y el parser la deja fuera al filtrar
+# por provincia. Se declara en vez de capturarla por dos motivos que se suman: la serie del
+# ENDESA termina en 2013 —no sirve para juzgar una meta de 2025— y el único indicador de la
+# END sobre mortalidad de menores es el 2.22, que mide menores de 5 AÑOS mientras esta es
+# INFANTIL (menores de 1). Ninguna transformación las convierte.
+SIN_TOTAL_NACIONAL = (
+    "la fila `Nacional` existe y se descarta a propósito: la serie ENDESA termina en 2013 "
+    "y mide mortalidad INFANTIL (menores de 1 año), no la de menores de 5 del indicador "
+    "2.22 de la END."
+)
+
+
 __all__ = ["LICENSE", "SOURCE", "THEME", "UNIT", "SisdomUnavailable",
            "fetch_endesa_child_mortality", "parse_child_mortality"]
 
