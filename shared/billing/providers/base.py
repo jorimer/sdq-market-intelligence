@@ -35,8 +35,10 @@ class NormalizedEvent:
 
     ``kind``:
       - ``subscription_active``   → conceder/renovar la suscripción (tier).
+      - ``subscription_renewed``  → COBRO recurrente: extiende el período y factura aparte.
       - ``subscription_cancelled``/``subscription_expired`` → cortar la suscripción.
       - ``order_paid``            → conceder el entitlement por-producto (Deep Dive).
+      - ``payment_refunded``      → revertir el cobro (nota de crédito + corte de acceso).
     ``sku`` (order) o ``tier`` (subscription) + ``user_id`` vienen del ``custom_id`` que el
     checkout embebió. ``provider_ref`` es el id de la suscripción/orden en el proveedor.
     """
@@ -55,6 +57,10 @@ class NormalizedEvent:
     interval: Optional[str] = None
     amount_gross: Optional[str] = None
     amount_currency: Optional[str] = None
+    # Id del COBRO puntual dentro de una suscripción (el "sale" de PayPal). Distingue el
+    # cobro del mes 2 del cobro del mes 1: sin esto los dos comparten el id de la suscripción
+    # y la idempotencia de la factura descartaría la renovación como si fuera un duplicado.
+    charge_ref: Optional[str] = None
 
 
 class BillingProvider(Protocol):

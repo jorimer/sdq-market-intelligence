@@ -625,6 +625,10 @@ def paypal_config_masked(db: Session) -> Dict[str, object]:
         "enabled": _get_app_setting(db, _PP_ENABLED) is not None
                    and (_get_app_setting(db, _PP_ENABLED).value == "1"),
         "configured": bool(cfg["enabled"]),
+        # Cobrar y RECIBIR EVENTOS son dos capacidades distintas: con client_id+secret se
+        # cobra, pero sin webhook_id no se puede verificar un solo evento entrante — y ahí se
+        # pierden renovaciones, bajas por impago y reembolsos, en silencio.
+        "webhookReady": bool(str(cfg["webhook_id"] or "").strip()),
     }
 
 
@@ -643,7 +647,23 @@ def set_paypal_config(db: Session, *, client_id: Optional[str], secret: Optional
     if webhook_id is not None:
         _set_app_setting(db, _PP_WEBHOOK_ID, webhook_id.strip(), is_secret=False)
     if env is not None:
-        _set_app_setting(db, _PP_ENV, "live" if env == "live" else "sandbox", is_secret=False)
+        nuevo_env = "live" if env == "live" else "sandbox"
+        env_row = _get_app_setting(db, _PP_ENV)
+        # Solo hay MUDANZA de entorno si ya había uno guardado. Sin fila previa esto es la
+        # primera configuración: no hay planes de otro entorno que invalidar, y borrarlos
+        # tiraría los que el admin está cargando justo ahora.
+        env_previo = env_row.value if (env_row and env_row.value) else None
+        _set_app_setting(db, _PP_ENV, nuevo_env, is_secret=False)
+        if env_previo is not None and nuevo_env != env_previo and plans is None:
+            # Los billing plans y products son POR ENTORNO: un plan de sandbox no existe en
+            # live. Dejarlos mapeados al mudarse hacía que el checkout intentara cobrar contra
+            # un plan inexistente. Se limpian para que `sync-plans` los recree en el entorno
+            # nuevo. Si el admin manda un mapa en el MISMO request, ese mapa manda: es su
+            # intención explícita para el entorno al que se muda.
+            _set_app_setting(db, _PP_PLANS, json.dumps({}), is_secret=False)
+            _set_app_setting(db, _PP_PRODUCTS, json.dumps({}), is_secret=False)
+            logger.warning("PayPal cambió de entorno %s → %s: mapa de planes y products "
+                           "limpiado (correr sync-plans).", env_previo, nuevo_env)
     if enabled is not None:
         _set_app_setting(db, _PP_ENABLED, "1" if enabled else "0", is_secret=False)
     if plans is not None:

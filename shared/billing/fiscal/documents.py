@@ -21,7 +21,13 @@ from typing import Any, cast, Dict, List, Optional, Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from shared.billing.fiscal.types import REGIME_ECF, REGIME_NCF, doc_label
+from shared.billing.fiscal.types import (
+    ECF_NOTA_CREDITO,
+    NCF_NOTA_CREDITO,
+    REGIME_ECF,
+    REGIME_NCF,
+    doc_label,
+)
 from shared.billing.models import BillingTransaction
 
 logger = logging.getLogger("sdq.billing.fiscal.documents")
@@ -212,25 +218,50 @@ def build_607_rows(db: Session, period: str) -> List[List[str]]:
     """Filas del Formato 607 del período, en el orden oficial de columnas.
 
     Solo entran comprobantes REALMENTE emitidos: un cobro sin número no se reporta (no
-    existe fiscalmente todavía) y aparece en el listado de pendientes, que es donde se ve."""
-    docs = [d for d in list_documents(db, period=period, limit=10000)
-            if d["fiscal_number"] and d["status"] != "refunded"]
+    existe fiscalmente todavía) y aparece en el listado de pendientes, que es donde se ve.
+
+    Una factura **reembolsada SÍ se declara**: el comprobante se emitió y existe. Lo que la
+    revierte es su NOTA DE CRÉDITO, que va como fila aparte llevando en la columna «Número
+    Comprobante Fiscal Modificado» el número de la factura que corrige. Excluir la original
+    dejaría la nota de crédito modificando un comprobante que la declaración nunca mencionó."""
+    docs = [d for d in list_documents(db, period=period, limit=10000) if d["fiscal_number"]]
     docs.sort(key=lambda d: (d["created_at"] or "", d["fiscal_number"]))
+    modificados = _modified_numbers(db, docs)
 
     rows: List[List[str]] = []
     for d in docs:
         ident_kind = identification_kind(d["client_tax_id"])
         ident = "".join(ch for ch in (d["client_tax_id"] or "") if ch.isdigit()) if ident_kind else ""
         fecha = (d["created_at"] or "")[:10].replace("-", "")
-        total = d["total"]
         rows.append([
-            ident, ident_kind or "", d["fiscal_number"] or "", "",
+            ident, ident_kind or "", d["fiscal_number"] or "", modificados.get(d["id"], ""),
             TIPO_INGRESO_OPERACIONES, fecha, "",
             _money(d["subtotal"]), _money(d["tax_amount"]),
             "0.00", "0.00", "0.00", "0.00", "0.00", "0.00", "0.00",
-            "0.00", "0.00", _money(total), "0.00", "0.00", "0.00", "0.00",
+            "0.00", "0.00", _money(d["total"]), "0.00", "0.00", "0.00", "0.00",
         ])
     return rows
+
+
+def _modified_numbers(db: Session, docs: List[Dict[str, Any]]) -> Dict[str, str]:
+    """``{id de la nota de crédito: número fiscal de la factura que modifica}``.
+
+    La factura modificada puede ser de un período ANTERIOR (se reembolsa en agosto algo
+    vendido en julio), así que se busca por id en la base y no entre las filas del período."""
+    ids = [d["id"] for d in docs if d["fiscal_doc_type"] in (NCF_NOTA_CREDITO, ECF_NOTA_CREDITO)]
+    if not ids:
+        return {}
+    notas = (db.query(BillingTransaction)
+             .filter(BillingTransaction.id.in_(ids))
+             .all())
+    originales = {n.credits_transaction_id for n in notas if n.credits_transaction_id}
+    if not originales:
+        return {}
+    por_id: Dict[str, str] = {
+        str(t.id): str(t.ncf_number or t.encf_number or "")
+        for t in db.query(BillingTransaction)
+        .filter(BillingTransaction.id.in_(originales)).all()}
+    return {str(n.id): por_id.get(str(n.credits_transaction_id or ""), "") for n in notas}
 
 
 def build_607_csv(db: Session, period: str) -> str:

@@ -309,6 +309,26 @@ export interface FiscalDocument {
   client_tax_id: string | null;
 }
 
+/* ── Alistamiento del cobro en vivo (admin) ── */
+export interface ReadinessCheck {
+  key: string;
+  ok: boolean;
+  label: string;
+  impact: string;
+}
+
+export interface PaypalDiagnostics {
+  ready: boolean;
+  env: string;
+  fiscal_regime: string;
+  checks: ReadinessCheck[];
+}
+
+export async function getPaypalDiagnostics(): Promise<PaypalDiagnostics> {
+  const { data } = await client.get<PaypalDiagnostics>("/billing/paypal/diagnostics");
+  return data;
+}
+
 export async function getFiscalOverview(): Promise<FiscalOverview> {
   const { data } = await client.get<FiscalOverview>("/billing/fiscal/overview");
   return data;

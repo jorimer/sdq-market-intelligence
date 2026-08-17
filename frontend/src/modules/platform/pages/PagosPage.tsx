@@ -5,9 +5,9 @@ import { CreditCard, CheckCircle2, AlertCircle, Plus, X, Percent, FileText, Hash
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import { useAuth } from "@/shared/auth/AuthContext";
 import {
-  getPaypalConfig, setPaypalConfig, listSkus, syncPaypalPlans,
+  getPaypalConfig, setPaypalConfig, listSkus, syncPaypalPlans, getPaypalDiagnostics,
   getTaxConfig, setTaxConfig, getInvoiceIssuer, setInvoiceIssuer,
-  type PaypalConfig, type CatalogSku, type TaxConfig, type InvoiceIssuer,
+  type PaypalConfig, type CatalogSku, type TaxConfig, type InvoiceIssuer, type PaypalDiagnostics,
   type PlanSyncResult,
 } from "../billingApi";
 
@@ -43,6 +43,9 @@ export function PagosPage() {
   const [syncReport, setSyncReport] = useState<PlanSyncResult[] | null>(null);
   const [syncErr, setSyncErr] = useState<string | null>(null);
 
+  // Alistamiento para cobrar en vivo (qué falta y qué se rompe si falta).
+  const [diag, setDiag] = useState<PaypalDiagnostics | null>(null);
+
   // Impuesto (ITBIS) + emisor de la factura.
   const [tax, setTax] = useState<TaxConfig | null>(null);
   const [issuer, setIssuer] = useState<InvoiceIssuer | null>(null);
@@ -51,8 +54,10 @@ export function PagosPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    Promise.all([getPaypalConfig(), listSkus(), getTaxConfig(), getInvoiceIssuer()])
-      .then(([c, skus, tc, iss]) => {
+    Promise.all([getPaypalConfig(), listSkus(), getTaxConfig(), getInvoiceIssuer(),
+                 getPaypalDiagnostics().catch(() => null)])
+      .then(([c, skus, tc, iss, dg]) => {
+        setDiag(dg);
         setCfg(c); setEnv(c.env || "sandbox"); setEnabled(c.enabled);
         setClientId(c.clientId || ""); setSecret(c.secret || ""); setWebhookId(c.webhookId || "");
         setPlans(c.plans || {});
@@ -143,6 +148,26 @@ export function PagosPage() {
 
       {status === "ready" && (
         <div className="grid gap-4 max-w-2xl">
+          {diag && (
+            <Card>
+              <CardHead icon={diag.ready ? CheckCircle2 : AlertCircle}
+                title={tr("pagos.ready.title", "Alistamiento para cobrar en vivo")}
+                subtitle={tr("pagos.ready.help", "Qué falta y qué deja de funcionar mientras falte. Se verifica contra la configuración real, no contra una lista escrita a mano.")} />
+              <ul className="space-y-2">
+                {diag.checks.map((c) => (
+                  <li key={c.key} className="flex items-start gap-2 text-xs">
+                    {c.ok
+                      ? <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-ok" />
+                      : <AlertCircle size={14} className="mt-0.5 shrink-0 text-alert" />}
+                    <span className="min-w-0">
+                      <span className={c.ok ? "text-muted" : "text-ink"}>{c.label}</span>
+                      {!c.ok && <span className="block text-faint">{c.impact}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           <Card>
             <CardHead icon={CreditCard} title={tr("pagos.card.creds", "Credenciales")} />
             <div className="grid gap-3">

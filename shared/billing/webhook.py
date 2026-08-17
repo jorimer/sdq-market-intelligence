@@ -37,7 +37,12 @@ def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
     liquidación que el retorno/captura (``shared/billing/settlement.py``): concede el acceso +
     factura de forma idempotente, así el webhook (en vivo) reconcilia sin duplicar lo que el
     retorno ya concedió (en sandbox, donde puede no haber webhook)."""
-    from shared.billing.settlement import settle_order, settle_subscription
+    from shared.billing.settlement import (
+        settle_order,
+        settle_refund,
+        settle_renewal,
+        settle_subscription,
+    )
     from shared.products.subscriptions import apply_subscription, expire_subscription
 
     if ev.kind == "order_paid":
@@ -48,7 +53,20 @@ def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
         return settle_subscription(db, provider, subscription_id=ev.provider_ref,
                                    user_id=ev.user_id, sku=ev.sku, interval=ev.interval,
                                    period_end=ev.period_end, gross=ev.amount_gross,
-                                   currency=ev.amount_currency)
+                                   currency=ev.amount_currency, charge_ref=ev.charge_ref)
+
+    # Cobro recurrente: extiende el período (si no, el acceso se corta al mes 2 mientras
+    # PayPal sigue cobrando) y factura ESE cobro con su propio comprobante.
+    if ev.kind == "subscription_renewed":
+        return settle_renewal(db, provider, subscription_id=ev.provider_ref,
+                              charge_ref=ev.charge_ref or ev.event_id,
+                              gross=ev.amount_gross, currency=ev.amount_currency,
+                              user_id=ev.user_id, sku=ev.sku)
+
+    if ev.kind == "payment_refunded":
+        return settle_refund(db, provider, charge_ref=ev.provider_ref,
+                             refund_ref=ev.charge_ref or ev.event_id,
+                             gross=ev.amount_gross, currency=ev.amount_currency)
 
     if ev.kind in ("subscription_cancelled", "subscription_expired"):
         status = "cancelled" if ev.kind == "subscription_cancelled" else "expired"
@@ -66,10 +84,19 @@ def _apply(db: Session, provider: str, ev: NormalizedEvent) -> str:
 
 def handle_webhook(db: Session, provider_name: str, headers: Dict[str, str], body: bytes) -> Dict[str, Any]:
     """Procesa un webhook: verifica firma, deduplica y aplica. Idempotente."""
+    from shared.billing.providers.base import ProviderNotConfigured
+
     provider = get_provider(db, provider_name)
     if not provider.is_configured():
         return {"status": "ignored", "reason": "provider_not_configured"}
-    if not provider.verify_webhook(headers=headers, body=body):
+    try:
+        verified = provider.verify_webhook(headers=headers, body=body)
+    except ProviderNotConfigured as e:
+        # Falta el webhook_id. Se distingue de "firma inválida" a propósito: el síntoma es el
+        # mismo (el evento no se aplica) pero la causa y el arreglo no.
+        logger.error("[billing] webhook %s NO verificable: %s", provider_name, e)
+        return {"status": "ignored", "reason": "webhook_not_configured", "detail": str(e)}
+    if not verified:
         raise WebhookError("Firma de webhook inválida.")
     try:
         payload = json.loads(body.decode() or "{}")

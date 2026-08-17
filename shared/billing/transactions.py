@@ -67,14 +67,18 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _next_invoice_number(db: Session, *, year: int) -> str:
+def next_invoice_number(db: Session, *, year: int) -> str:
     """Correlativo ``SDQ-{año}-{NNNNN}`` global por año. El unique index del número actúa de
-    red de seguridad ante carreras (el caller reintenta ante IntegrityError)."""
+    red de seguridad ante carreras (el caller reintenta ante IntegrityError). Público porque
+    la nota de crédito también es un documento numerado (``fiscal/credit_notes.py``)."""
     prefix = f"{_INVOICE_PREFIX}-{year}-"
     count = (db.query(func.count(BillingTransaction.id))
              .filter(BillingTransaction.invoice_number.like(f"{prefix}%"))
              .scalar()) or 0
     return f"{prefix}{count + 1:05d}"
+
+
+_next_invoice_number = next_invoice_number  # alias interno (uso histórico)
 
 
 def _assign_fiscal_number(db: Session, *, breakdown: TaxBreakdown,
