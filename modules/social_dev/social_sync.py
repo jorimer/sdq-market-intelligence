@@ -190,7 +190,7 @@ def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
 
 
 def _sync_sisdom_schooling(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Escolaridad promedio POR REGIÓN (SISDOM del MEPyD, cuadro 05 3 007).
+    """Escolaridad promedio por región Y TOTAL PAÍS (SISDOM del MEPyD, cuadro 05 3 007).
 
     Reemplaza la serie NACIONAL de la ONE, que quedó tras Cloudflare y que —aun cuando
     llegaba— era la MISMA cifra para las diez regiones. Por región discrimina: en 2024
@@ -201,14 +201,24 @@ def _sync_sisdom_schooling(db: Session, set_phase: Callable[[str], None]) -> int
     valor país y los diez regionales, y el upsert no la alcanza porque cambió la entidad.
     Corre DESPUÉS de que la fuente nueva trajo dato, así que una caída del MEPyD no
     destruye lo que hay."""
-    from shared.data.sisdom_schooling import SOURCE, UNIT, fetch_sisdom_schooling
+    from shared.data.sisdom_schooling import (COUNTRY_SLUG, SOURCE, UNIT,
+                                              fetch_sisdom_schooling)
 
-    set_phase("escolaridad por región (SISDOM · MEPyD)")
+    set_phase("escolaridad por región y total país (SISDOM · MEPyD)")
     rows = fetch_sisdom_schooling()   # la excepción sube a _best_effort
     synced = 0
     for slug, year, value in rows:
+        # El slug `pais` es la fila «Total» del cuadro y NO es una región. Va con su
+        # propio `disaggregation` para que nada lo cuente como una demarcación más.
+        #
+        # Y va bajo la entidad `pais`, no `nacional`: esta última es la del proxy viejo
+        # que este mismo sync da de baja unas líneas más abajo, y escribir ahí sería
+        # borrar en el mismo paso lo que se acaba de traer. La distinción además dice
+        # algo real — `nacional` marca series que sólo existen a nivel país (BCRD, WDI) y
+        # `pais` la fila de total extraída de un cuadro sub-nacional.
+        geo = "pais" if slug == COUNTRY_SLUG else "region"
         _upsert_indicator(db, theme=SCHOOLING_THEME, entity=slug, period=str(year),
-                          value=float(value), source=SOURCE, disagg="region", unit=UNIT)
+                          value=float(value), source=SOURCE, disagg=geo, unit=UNIT)
         synced += 1
     if synced:
         borradas = (db.query(SocialIndicator)
