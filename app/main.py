@@ -216,6 +216,7 @@ import modules.construction_intel.operations  # noqa: F401 — registers mivhed-
 import modules.pension_intel.operations  # noqa: F401 — registers sipen-sync
 import modules.insurance_intel.operations  # noqa: F401 — registers insurance-sync
 import app.market_brief as _market_brief_ops  # noqa: F401 — registers market-brief (app-level)
+import shared.billing.operations  # noqa: F401 — registers fiscal-sequence-watch (NCF/e-NCF)
 import shared.products.operations  # noqa: F401 — registers products-readiness-recompute
 import shared.source_intel.operations  # noqa: F401 — registers source-research-agent (Capa 3)
 import shared.reference.operations  # noqa: F401 — registers dgii-contribuyentes-sync

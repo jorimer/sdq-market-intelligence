@@ -7,15 +7,16 @@ cobra el total, la factura al cliente **desglosa** ambos renglones.
 Reusa la paleta y el logo 'Arco' del renderer de reportes (``shared/products/render.py``) para
 mantener la marca 1:1. Devuelve ``bytes`` (PDF) para servir sin tocar disco.
 
-Nota fiscal: el ``invoice_number`` es un correlativo interno. Sin un RNC del emisor y una
-secuencia NCF de la DGII cargados, la factura sale rotulada como **comprobante interno** (no
-válido como crédito fiscal) — es una brecha legal/de servicio que el dueño cierra en /admin.
+Nota fiscal: el ``invoice_number`` es un correlativo interno. La validez fiscal la da el
+**comprobante** — el NCF (régimen impreso) o el e-NCF (electrónico). Sin ninguno de los dos,
+la factura sale rotulada como **comprobante interno**, no como factura: es una brecha que se
+declara en el documento, no se disimula.
 """
 from __future__ import annotations
 
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from reportlab.lib.colors import HexColor, white
 from reportlab.lib.pagesizes import A4
@@ -38,12 +39,16 @@ _LIGHT = HexColor("#F1F5F9")
 _LINE = HexColor("#CBD5E1")
 _INK = HexColor("#0F172A")
 
-# Etiquetas de los tipos de e-CF de la DGII relevantes para SDQ.
-_ENCF_LABELS = {
-    "31": "Factura de Crédito Fiscal Electrónica",
-    "32": "Factura de Consumo Electrónica",
-    "46": "Comprobante de Exportaciones Electrónico",
-}
+# Prosa que el documento fiscal debe respetar → constantes con nombre. Un literal incrustado
+# en el layout se parte por ancho de línea y deja de existir como frase en el fuente.
+LEYENDA_COMPROBANTE_INTERNO = (
+    "Comprobante interno. No válido como crédito fiscal: este cobro aún no tiene un "
+    "comprobante fiscal asignado (NCF o e-NCF)."
+)
+LEYENDA_EXENTO_EXPORTACION = (
+    "Operación exenta de ITBIS — exportación de servicios (cliente del exterior)."
+)
+LEYENDA_CIERRE = "Gracias por su compra. El acceso al producto se refleja en «Mi plan»."
 
 
 def _styles() -> Dict[str, ParagraphStyle]:
@@ -101,6 +106,28 @@ def _furniture(canvas, doc):
     canvas.restoreState()
 
 
+def _fiscal_identity(tx) -> Optional[Dict[str, Any]]:
+    """Identidad fiscal del documento: ``{regime, number, doc_type, label, valid_until}`` o
+    ``None`` si el cobro todavía no tiene comprobante asignado.
+
+    El número **nunca sale solo**: viaja con el tipo y su etiqueta. Sin eso, un '02' impreso
+    junto a un número no dice si es Consumo (NCF) o nada (e-CF), y el lector lo reatribuye."""
+    from shared.billing.fiscal.types import REGIME_ECF, REGIME_NCF, doc_label
+
+    ncf = (getattr(tx, "ncf_number", None) or "").strip()
+    if ncf:
+        doc_type = (getattr(tx, "ncf_type", None) or "").strip()
+        return {"regime": REGIME_NCF, "number": ncf, "doc_type": doc_type,
+                "label": doc_label(REGIME_NCF, doc_type),
+                "valid_until": getattr(tx, "ncf_valid_until", None)}
+    encf = (getattr(tx, "encf_number", None) or "").strip()
+    if encf:
+        doc_type = (getattr(tx, "encf_type", None) or "").strip()
+        return {"regime": REGIME_ECF, "number": encf, "doc_type": doc_type,
+                "label": doc_label(REGIME_ECF, doc_type), "valid_until": None}
+    return None
+
+
 def render_invoice_pdf(db: Session, tx, user) -> bytes:
     """Renderiza la factura (PDF) de una transacción para su dueño. ``tx`` es una
     ``BillingTransaction``; ``user`` el cliente."""
@@ -109,10 +136,10 @@ def render_invoice_pdf(db: Session, tx, user) -> bytes:
     issuer = get_invoice_issuer(db)
     st = _styles()
     ccy = tx.currency or "USD"
-    encf = (getattr(tx, "encf_number", None) or "").strip()
-    # Es factura electrónica válida solo cuando la DGII asignó el e-NCF; si no, comprobante
-    # interno (aunque el emisor tenga RNC, sin e-NCF no hay crédito fiscal).
-    is_internal = not encf
+    # El documento es una FACTURA solo si lleva comprobante fiscal — NCF impreso o e-NCF
+    # electrónico. Si no lleva ninguno, es un comprobante interno y lo dice.
+    fiscal = _fiscal_identity(tx)
+    is_internal = fiscal is None
 
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=_MARGIN, rightMargin=_MARGIN,
@@ -131,13 +158,18 @@ def render_invoice_pdf(db: Session, tx, user) -> bytes:
     issuer_lines.append(Paragraph(issuer.get("email", ""), st["issuerMeta"]))
 
     created = tx.created_at.strftime("%d/%m/%Y") if tx.created_at else datetime.now().strftime("%d/%m/%Y")
-    doc_title = "FACTURA ELECTRÓNICA" if not is_internal else "COMPROBANTE"
+    doc_title = "COMPROBANTE" if is_internal else "FACTURA"
     right = [Paragraph(doc_title, st["docTitle"])]
-    if encf:
-        right.append(Paragraph(f"e-NCF: {encf}", st["docMeta"]))
-        etype = (getattr(tx, "encf_type", None) or "")
-        if etype in _ENCF_LABELS:
-            right.append(Paragraph(_ENCF_LABELS[etype], st["docMeta"]))
+    if fiscal is not None:
+        # Rótulo del número según su régimen: bajo NCF impreso se rotula "NCF"; bajo e-CF,
+        # "e-NCF". Y la etiqueta del tipo va SIEMPRE al lado del número.
+        tag = "NCF" if fiscal["regime"] == "ncf" else "e-NCF"
+        right.append(Paragraph(f"{tag}: {fiscal['number']}", st["docMeta"]))
+        if fiscal["label"]:
+            right.append(Paragraph(fiscal["label"], st["docMeta"]))
+        if fiscal["valid_until"]:
+            right.append(Paragraph(
+                f"Válido hasta: {fiscal['valid_until'].strftime('%d/%m/%Y')}", st["docMeta"]))
     right += [Paragraph(f"Nº interno {tx.invoice_number or '—'}", st["docMeta"]),
               Paragraph(f"Fecha: {created}", st["docMeta"])]
     head = Table([[issuer_lines, right]], colWidths=[doc.width * 0.58, doc.width * 0.42])
@@ -149,6 +181,11 @@ def render_invoice_pdf(db: Session, tx, user) -> bytes:
     bill_to = [Paragraph("FACTURAR A", st["label"]),
                Paragraph(client_name, st["body"]),
                Paragraph(getattr(user, "email", ""), st["small"])]
+    # En una factura de crédito fiscal el RNC del COMPRADOR es obligatorio: sin él, el
+    # cliente no puede usarla como crédito fiscal y el comprobante pierde su razón de ser.
+    client_tax_id = (getattr(user, "tax_id", None) or "").strip()
+    if client_tax_id:
+        bill_to.append(Paragraph(f"RNC/Cédula: {client_tax_id}", st["small"]))
     if tx.country:
         bill_to.append(Paragraph(f"País de facturación: {tx.country}", st["small"]))
     meta = [Paragraph("DETALLES DEL PAGO", st["label"]),
@@ -208,19 +245,12 @@ def render_invoice_pdf(db: Session, tx, user) -> bytes:
     el += [table, Spacer(1, 0.12 * inch), totals]
 
     if tx.tax_exempt:
-        el += [Spacer(1, 0.16 * inch),
-               Paragraph("Operación exenta de ITBIS — exportación de servicios (cliente del "
-                         "exterior).", st["exempt"])]
+        el += [Spacer(1, 0.16 * inch), Paragraph(LEYENDA_EXENTO_EXPORTACION, st["exempt"])]
 
     # Nota de comprobante interno cuando falta el dato fiscal (brecha legal/servicio).
     if is_internal:
-        el += [Spacer(1, 0.22 * inch),
-               Paragraph("Comprobante interno. No válido como crédito fiscal hasta cargar el "
-                         "RNC del emisor y la secuencia de NCF autorizada por la DGII.",
-                         st["small"])]
-    el += [Spacer(1, 0.22 * inch),
-           Paragraph("Gracias por su compra. El acceso al producto se refleja en «Mi plan».",
-                     st["small"])]
+        el += [Spacer(1, 0.22 * inch), Paragraph(LEYENDA_COMPROBANTE_INTERNO, st["small"])]
+    el += [Spacer(1, 0.22 * inch), Paragraph(LEYENDA_CIERRE, st["small"])]
 
     doc.build(el, onFirstPage=_furniture, onLaterPages=_furniture)
     return buf.getvalue()

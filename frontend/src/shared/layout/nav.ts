@@ -23,6 +23,7 @@ import {
   CreditCard,
   ScanSearch,
   type LucideIcon,
+  Hash,
 } from "lucide-react";
 
 export interface NavItem {
@@ -99,6 +100,7 @@ export const NAV: NavGroup[] = [
       { to: "/admin/users", label: "Usuarios", icon: ShieldCheck, ready: true, minRole: "admin" },
       { to: "/admin/tarifario", label: "Tarifario", icon: CircleDollarSign, ready: true, minRole: "admin" },
       { to: "/admin/pagos", label: "Pagos · PayPal", icon: CreditCard, ready: true, minRole: "admin" },
+      { to: "/admin/comprobantes", label: "Comprobantes · NCF", icon: Hash, ready: true, minRole: "admin" },
     ],
   },
 ];
