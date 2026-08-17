@@ -26,9 +26,22 @@ def test_una_señal_sin_peso_no_mueve_la_cobertura_del_eje():
 
 
 def test_el_tema_esta_declarado_con_su_nota():
-    label, dim, nota = SocialDevProduct._FUERA_DEL_INDICE["poverty_extreme"]
+    tema, entidad, label, dim, nota = SocialDevProduct._FUERA_DEL_INDICE["poverty_extreme"]
+    assert tema == "poverty_extreme"
     assert "extrema" in label.lower()
     assert "No alimenta el índice" in nota, "el consumidor tiene que saber que no pondera"
+
+
+def test_toda_senal_de_alcance_NACIONAL_nombra_su_entidad():
+    """Sin entidad, la consulta devuelve una fila cualquiera del período más reciente. En
+    un tema con diez regiones eso es el valor de una demarcación al azar servido como si
+    fuera del eje — el defecto que hizo publicar la pobreza extrema de cibao_norte como
+    cifra nacional."""
+    from shared.registry.builders import axis_variable_scopes
+    alcances = axis_variable_scopes("social")
+    sin_entidad = [c for c, v in SocialDevProduct._FUERA_DEL_INDICE.items()
+                   if alcances.get(c) == "national" and v[1] is None]
+    assert not sin_entidad, f"declaran alcance nacional y no fijan entidad: {sin_entidad}"
 
 
 def test_sin_dato_no_se_publica_la_señal():

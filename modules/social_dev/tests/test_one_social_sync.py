@@ -423,21 +423,32 @@ def test_sync_minerd_coverage_upserts_by_region(db, monkeypatch):
     import shared.data.minerd_coverage as mc_mod
 
     monkeypatch.setattr(
-        mc_mod, "fetch_minerd_coverage",
-        lambda: [("region", "enriquillo", 2024, 66.8), ("region", "ozama", 2024, 67.7),
-                 ("provincia", "distrito_nacional", 2024, 73.1)],
+        mc_mod, "fetch_minerd_coverage_levels",
+        lambda: [("secundaria", "region", "enriquillo", 2024, 66.8),
+                 ("secundaria", "region", "ozama", 2024, 67.7),
+                 ("secundaria", "provincia", "distrito_nacional", 2024, 73.1),
+                 ("secundaria", "pais", "pais", 2024, 71.0),
+                 ("basica", "pais", "pais", 2024, 93.2)],
     )
     from modules.social_dev.social_sync import _sync_minerd_coverage
 
     n = _sync_minerd_coverage(db, lambda _m: None, {})
     db.commit()
-    assert n == 3
+    assert n == 5
     row = (
         db.query(SocialIndicator)
         .filter_by(entity_key="enriquillo", theme="secondary_coverage", period="2024")
         .first()
     )
     assert row is not None and row.value == 66.8 and row.source == "MINERD"
+    # El TOTAL PAÍS llega a la base con su propia entidad: es la única cifra de cobertura
+    # comparable contra una meta nacional, y antes se descartaba en el parser.
+    pais = (db.query(SocialIndicator)
+            .filter_by(entity_key="pais", theme="secondary_coverage", period="2024").first())
+    assert pais is not None and pais.value == 71.0
+    basica = (db.query(SocialIndicator)
+              .filter_by(entity_key="pais", theme="primary_coverage", period="2024").first())
+    assert basica is not None and basica.value == 93.2, "el nivel básico va a su propio tema"
     assert row.disaggregation == "region"
     # La provincia convive con la región bajo el mismo tema, distinguida por el nivel.
     prov = (
@@ -450,8 +461,10 @@ def test_sync_minerd_coverage_upserts_by_region(db, monkeypatch):
 
 def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     """Guardia estructural: el IDM se ensambla sobre las 10 regiones. Agregar filas
-    provinciales bajo el MISMO tema no debe cambiar ni un score ni una procedencia —
-    si algún día el ensamblador empezara a barrer entidades, este test lo detecta."""
+    provinciales —o la del TOTAL PAÍS— bajo el MISMO tema no debe cambiar ni un score ni
+    una procedencia. Si algún día el ensamblador empezara a barrer entidades, este test lo
+    detecta: la fila de país entraría al índice como si fuera una región más y movería
+    todos los scores a la vez, que es la forma más difícil de notar el error."""
     import shared.data.minerd_coverage as mc_mod
     from modules.social_dev.service import assemble_idm_dataset
     from modules.social_dev.social_sync import _sync_minerd_coverage
@@ -463,9 +476,11 @@ def test_cobertura_provincial_no_mueve_el_idm(db, monkeypatch):
     before = assemble_idm_dataset(db)
 
     monkeypatch.setattr(
-        mc_mod, "fetch_minerd_coverage",
-        lambda: [("provincia", "distrito_nacional", 2024, 73.1),
-                 ("provincia", "elias_pina", 2024, 41.2)],
+        mc_mod, "fetch_minerd_coverage_levels",
+        lambda: [("secundaria", "provincia", "distrito_nacional", 2024, 73.1),
+                 ("secundaria", "provincia", "elias_pina", 2024, 41.2),
+                 ("secundaria", "pais", "pais", 2024, 71.0),
+                 ("basica", "pais", "pais", 2024, 93.2)],
     )
     _sync_minerd_coverage(db, lambda _m: None, {})
     db.commit()
