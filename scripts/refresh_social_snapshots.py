@@ -37,19 +37,28 @@ def _siuben() -> Tuple[List, str, str]:
 
 
 def _minerd() -> Tuple[List, str, str]:
-    from shared.data.minerd_coverage import SOURCE, fetch_minerd_coverage
+    # Los DOS niveles educativos y las TRES resoluciones geográficas —incluido el total
+    # país—, que es la forma que la sync consume desde 2026-08-17. Capturar la forma vieja
+    # dejaría un fichero que producción no sabe leer: el respaldo existiría y no serviría,
+    # que es peor que no tenerlo porque nadie lo notaría hasta necesitarlo.
+    from shared.data.minerd_coverage import SOURCE, fetch_minerd_coverage_levels
 
-    rows = fetch_minerd_coverage()
-    return rows, SOURCE, ("Cobertura neta de secundaria por región y provincia "
-                          "(tablero Power BI del SIIE). La API anónima de Power BI "
-                          "limita por tasa y devuelve 400 sin aviso.")
+    rows = fetch_minerd_coverage_levels()
+    return rows, SOURCE, ("Cobertura neta básica y secundaria por región, provincia y "
+                          "TOTAL PAÍS (tablero Power BI del SIIE). La API anónima de "
+                          "Power BI limita por tasa y devuelve 400 sin aviso, también "
+                          "desde producción: sin esta instantánea, la sync trae 0 filas "
+                          "cada vez que el tablero está limitando.")
 
 
 FUENTES: Dict[str, Callable[[], Tuple[List, str, str]]] = {
     "siuben": _siuben,
     "minerd": _minerd,
 }
-SNAPSHOT_NAMES = {"siuben": "siuben_provincial", "minerd": "minerd_coverage"}
+# El nombre tiene que ser el MISMO que pide `live_or_snapshot` en la sync. Se comprueba
+# en `shared/data/tests/test_snapshots.py`: un nombre que no coincide produce un respaldo
+# huérfano — escrito, comiteado y jamás leído.
+SNAPSHOT_NAMES = {"siuben": "siuben_provincial", "minerd": "minerd_coverage_levels"}
 
 
 def main(argv: List[str]) -> int:

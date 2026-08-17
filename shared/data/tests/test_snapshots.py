@@ -81,3 +81,42 @@ def test_las_tuplas_sobreviven_al_viaje_por_json(dir_tmp):
     filas, _ = snapshots.live_or_snapshot(
         "x", lambda: (_ for _ in ()).throw(ConnectionError("x")), source="S")
     assert filas == [("provincia", "azua", 2025, 74.5)]
+
+
+def test_los_nombres_del_script_de_captura_son_los_que_la_sync_pide():
+    """Un nombre que no coincide produce un respaldo HUÉRFANO: escrito, comiteado y jamás
+    leído. No falla nada — simplemente el vivo sigue siendo el único camino, y el día que
+    la fuente no responda la sync trae cero filas como si no hubiera respaldo.
+
+    Pasó al partir la captura del MINERD en dos niveles educativos: la clave de la sync
+    cambió a `minerd_coverage_levels` y el script seguía escribiendo `minerd_coverage`.
+    """
+    import ast
+    import pathlib
+
+    raiz = pathlib.Path(__file__).resolve().parents[3]
+    script = ast.parse((raiz / "scripts" / "refresh_social_snapshots.py")
+                       .read_text(encoding="utf-8"))
+    nombres = set()
+    for n in ast.walk(script):
+        if isinstance(n, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "SNAPSHOT_NAMES" for t in n.targets):
+            nombres = {c.value for c in n.value.values                      # type: ignore[attr-defined]
+                       if isinstance(c, ast.Constant)}
+    assert nombres, "no se pudo leer SNAPSHOT_NAMES del script de captura"
+
+    sync = (raiz / "modules" / "social_dev" / "social_sync.py").read_text(encoding="utf-8")
+    pedidos = set()
+    for n in ast.walk(ast.parse(sync)):
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "live_or_snapshot" and n.args
+                and isinstance(n.args[0], ast.Constant)):
+            pedidos.add(n.args[0].value)
+    assert pedidos, "la sync dejó de usar live_or_snapshot; este test se volvió decorativo"
+
+    huerfanos = sorted(nombres - pedidos)
+    sin_respaldo = sorted(pedidos - nombres)
+    assert not huerfanos, f"el script captura respaldos que nadie lee: {huerfanos}"
+    assert not sin_respaldo, (
+        f"la sync pide respaldos que el script no captura: {sin_respaldo}. Cuando la "
+        "fuente no responda, esas filas serán cero.")
