@@ -91,3 +91,25 @@ def test_sin_bloque_regional_o_sin_hoja_levanta_con_el_motivo():
     with pytest.raises(SisdomUnavailable, match="no trae la hoja"):
         parse_schooling(_libro([_bloque("Regiones de desarrollo (Decreto 710-04)")],
                                hoja="99 9 999"))
+
+
+def test_la_fila_TOTAL_es_la_cifra_nacional_y_no_una_region():
+    """Encabeza «Desagregaciones», por encima de las tres regionalizaciones, y el parser la
+    salteaba porque no resuelve a ninguna región. Es la misma historia que el `TOTAL PAIS`
+    del tablero del MINERD: la cifra del país estaba en el archivo que ya bajábamos.
+
+    Sin ella, quien compare contra una meta NACIONAL usa la de una región — con la
+    escolaridad del indicador 2.18 de la END, 9,63 (cibao_norte) en vez de 9,59.
+    """
+    from shared.data.sisdom_schooling import COUNTRY_SLUG, parse_schooling
+
+    # La fila «Total» va ANTES del bloque regional, tal como en el cuadro real.
+    filas = parse_schooling(_libro(
+        [("", [("Total", [9.5, 9.55, 9.57, 9.59])]),
+         _bloque("Regiones de desarrollo (Decreto 710-04)")]))
+    pais = sorted(f for f in filas if f[0] == COUNTRY_SLUG)
+    assert pais == [(COUNTRY_SLUG, 2000, 9.5), (COUNTRY_SLUG, 2016, 9.55),
+                    (COUNTRY_SLUG, 2017, 9.57), (COUNTRY_SLUG, 2024, 9.59)]
+    # Y no se cuenta como una región más: el panel sigue teniendo las diez.
+    regiones = {f[0] for f in filas if f[0] != COUNTRY_SLUG}
+    assert len(regiones) == len(REGIONES)

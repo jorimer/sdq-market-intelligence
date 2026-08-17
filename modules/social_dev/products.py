@@ -38,6 +38,7 @@ from sqlalchemy.orm import Session
 
 from modules.social_dev.social_sync import HEALTH_ENTITY
 from shared.data.minerd_coverage import COUNTRY_SLUG as MINERD_COUNTRY
+from shared.data.sisdom_schooling import COUNTRY_SLUG as SISDOM_COUNTRY
 from shared.registry.builders import axis_variable_scopes
 from shared.registry.signals import PER_SUBJECT
 from shared.products import (
@@ -371,6 +372,13 @@ class SocialDevProduct:
             "primary_coverage", MINERD_COUNTRY,
             "Cobertura neta básica — total país", "education",
             "Total nacional publicado por el MINERD (SIIE)."),
+        # La fila «Total» del cuadro 05 3 007 del SISDOM, que el parser salteaba por no
+        # resolver a ninguna región. Habilita el indicador 2.18 de la END.
+        "schooling_years_pais": (
+            "schooling_years", SISDOM_COUNTRY,
+            "Escolaridad promedio (15+) — total país", "education",
+            "Fila «Total» del cuadro 05 3 007 del SISDOM (MEPyD). Distinta de la serie "
+            "por región que alimenta el índice de desarrollo."),
     }
 
     def _senales_fuera_del_indice(self, period: str, dh) -> List[Any]:

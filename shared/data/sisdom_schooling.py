@@ -1,4 +1,4 @@
-"""SISDOM (MEPyD) — escolaridad promedio POR REGIÓN, anual 2000-2024.
+"""SISDOM (MEPyD) — escolaridad promedio por región Y TOTAL PAÍS, anual 2000-2024.
 
 Cuadro ``05 3 007`` del libro *Indicadores de educación*. Reemplaza la serie NACIONAL de
 la ONE (``años promedio de educación``), que quedó tras el desafío de Cloudflare y que,
@@ -56,6 +56,16 @@ _HEADER_SCAN_ROWS = 15
 # Escolaridad promedio: un país no supera ~15 años de estudio medios. Fuera de rango es
 # un artefacto de celda, no un dato.
 _MAX_YEARS = 25.0
+
+#: Etiqueta de la fila NACIONAL. Encabeza el bloque «Desagregaciones», por encima de las
+#: tres regionalizaciones, y el parser la salteaba porque no resuelve a ninguna región.
+#:
+#: Es la misma historia que el `TOTAL PAIS` del tablero del MINERD: la cifra del país
+#: estaba en el archivo que ya bajábamos y se perdía en el filtro. Sin ella, un consumidor
+#: que compare contra una meta NACIONAL termina usando la de una región — que es lo que
+#: pasó con la escolaridad del indicador 2.18 de la END.
+TOTAL_LABEL = "total"
+COUNTRY_SLUG = "pais"
 
 
 def _year_columns(rows: List[list]) -> Dict[int, int]:
@@ -127,7 +137,10 @@ def _select_block(rows: List[list], col_year: Dict[int, int]) -> Tuple[int, int]
 
 
 def parse_schooling(content: bytes) -> List[Tuple[str, int, float]]:
-    """Libro de Educación → ``[(region_slug, año, años_de_estudio)]`` ordenado.
+    """Libro de Educación → ``[(slug, año, años_de_estudio)]`` ordenado.
+
+    Incluye el slug ``pais`` con la fila «Total» del cuadro, que es la cifra nacional y
+    NO pertenece a ninguna de las tres regionalizaciones.
 
     Pura (sin red) para poder fijarla en tests."""
     from shared.data.one_client import REGIONS, region_slug
@@ -140,6 +153,20 @@ def parse_schooling(content: bytes) -> List[Tuple[str, int, float]]:
 
     start, end = _select_block(rows, col_year)
     out: List[Tuple[str, int, float]] = []
+
+    # La fila nacional va ANTES de elegir bloque: vive por encima de las tres
+    # regionalizaciones y no pertenece a ninguna. Se busca por etiqueta exacta para no
+    # confundirla con «Total urbano» o cualquier otro subtotal que el emisor agregue.
+    for r in rows[:start]:
+        etiqueta = r[0] if r else None
+        if not isinstance(etiqueta, str) or etiqueta.strip().casefold() != TOTAL_LABEL:
+            continue
+        for ci, year in col_year.items():
+            v = r[ci] if ci < len(r) else None
+            if isinstance(v, (int, float)) and 0 < float(v) <= _MAX_YEARS:
+                out.append((COUNTRY_SLUG, year, round(float(v), 2)))
+        break
+
     seen: set = set()
     for r in rows[start + 1:end]:
         label = r[0] if r else None
