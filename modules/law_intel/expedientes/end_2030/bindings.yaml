@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "8.0"
+version: "9.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -34,11 +34,20 @@ version: "8.0"
 # hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
 # caliente, la cifra de portada dejaría de ser verificable.
 #
-# Cobertura del expediente: 4 de 90 indicadores numerados.
+# Cobertura del expediente: 5 de 90 indicadores numerados, todos contra cifra de PAÍS:
+#   2.18  escolaridad promedio (SISDOM, fila «Total») — recuperado 2026-08-17
 #   2.21  esperanza de vida (WDI, país)
 #   2.39  ocupados en sector formal (BCRD/ENCFT, país)
-#   2.41  razón de ocupación F/M (BCRD/ENCFT, país) — verificado 2026-08-16
-#   2.42  razón de desocupación F/M (BCRD/ENCFT, país) — verificado 2026-08-16
+#   2.41  razón de ocupación F/M (BCRD/ENCFT, país)
+#   2.42  razón de desocupación F/M (BCRD/ENCFT, país)
+#
+# ── RECUPERACIÓN 2026-08-17 ───────────────────────────────────────────────────────────────
+# 2.18 vuelve a `verificado` apuntando a la cifra NACIONAL: la fila «Total» del cuadro
+# 05 3 007 del SISDOM, que el parser salteaba por no resolver a ninguna región. 9,59 años en
+# 2024 — la de cibao_norte, que se venía publicando, era 9,63.
+#
+# 2.9 (nuevo) y 2.10 apuntan al `TOTAL PAIS` del tablero del SIIE y esperan a que la fuente
+# responda: da 400 por límite de tasa, también desde producción.
 #
 # ── DEMOCIÓN 2026-08-16 ─────────────────────────────────────────────────────────
 # 2.1, 2.4, 2.10, 2.18 y 2.19 bajan de `verificado` a `propuesto`. Sus variables se
@@ -92,19 +101,20 @@ bindings:
       UMBRAL («< 4%»), así que el indicador no admite delta: se cumple o no se cumple, y con
       6,3% no se cumple.
 
+  # ══ RECUPERADO ══ La cifra nacional estaba en el mismo cuadro que ya bajábamos.
   - indicador: "2.18"
-    serie: "social_dev:schooling_years"
+    serie: "social_dev:schooling_years_pais"
     fuente: one
     mejor: mayor
     periodo_verificado: "2024"
-    estado: propuesto
-    nota_comparabilidad: >-
-      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
-      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
-      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
-      nada — y el número que se publicó era el de una demarcación. No se arregla
-      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
-      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
+    estado: verificado
+    nota: >-
+      Repuntado de `social_dev:schooling_years` —que se mide POR REGIÓN y servía el valor
+      de cibao_norte (9,63)— a `schooling_years_pais`, la fila «Total» del cuadro 05 3 007
+      del SISDOM, que el parser salteaba por no resolver a ninguna región.
+      Verificado en prod 2026-08-17: **9,59 años en 2024**, contra una línea base de 9,4 en
+      2010 y una meta de 11,3 para 2025. Casi dos años por debajo de una meta ya vencida,
+      con un avance de 0,19 años en catorce.
 
   - indicador: "2.21"
     serie: "social_dev:life_expectancy"
@@ -116,23 +126,31 @@ bindings:
   # ══ SEÑAL YA EXPUESTA QUE NINGÚN BINDING RECLAMABA ══
   # No hizo falta conectar nada: `secondary_coverage` (MINERD) estaba en el Data Registry
   # desde antes, sirviendo al índice de desarrollo, y nadie la había cruzado contra la ley.
-  - indicador: "2.10"
-    serie: "social_dev:secondary_coverage"
+  # Nivel BÁSICO del mismo tablero: el parser solo pedía secundaria.
+  - indicador: "2.9"
+    serie: "social_dev:primary_coverage_pais"
     fuente: minerd
     mejor: mayor
-    periodo_verificado: "2024"
     estado: propuesto
-    nota_comparabilidad: >-
-      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
-      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
-      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
-      nada — y el número que se publicó era el de una demarcación. No se arregla
-      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
-      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
     nota: >-
-      «Cobertura neta secundaria» contra «Tasa neta de cobertura educación nivel secundaria»:
-      misma magnitud, misma unidad, mismo productor (MINERD). Verificado en prod 2026-08-16:
-      71,3% en 2024, contra una meta de 86% para 2025 y 95% para 2030. No alcanzada.
+      Cobertura neta del nivel básico, fila `TOTAL PAIS` del tablero del SIIE. La meta es
+      100% para 2025 desde una base de 94,7% en 2010, así que el margen es estrecho y el
+      veredicto va a depender de décimas — razón de más para medirlo contra la cifra del
+      país y no contra la de una región.
+
+  # ══ REPUNTADO a la serie nacional; espera a que la fuente responda ══
+  - indicador: "2.10"
+    serie: "social_dev:secondary_coverage_pais"
+    fuente: minerd
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      Repuntado de `social_dev:secondary_coverage` —que se mide POR REGIÓN y servía el
+      valor de cibao_norte (71,3)— a la fila `TOTAL PAIS` del tablero del SIIE.
+      Queda `propuesto` por un motivo distinto al del resto: el tablero Power BI responde
+      400 por límite de tasa, también desde producción, así que la señal nacional todavía
+      no tiene dato. No es una duda sobre qué mide —eso está resuelto— sino que la fuente
+      no contesta. La cura que el propio conector prescribe es una instantánea comiteada.
 
   # ══ SEÑAL YA EXPUESTA, PERO EL INDICADOR MIDE LO CONTRARIO ══
   # El indicador legal cuenta el sector FORMAL y la variable mide la INFORMALIDAD. Es el
