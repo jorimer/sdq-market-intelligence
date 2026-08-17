@@ -25,6 +25,16 @@ from shared.data.lineage import Lineage
 
 logger = logging.getLogger("sdq.data.gdelt_bq")
 
+# Este conector es PAÍS por construcción: la consulta agrupa por código de país para el
+# panel de pares del IRMP. No hay total nacional que se pierda en un filtro sub-nacional
+# porque no hay filtro sub-nacional — el resolutor geográfico se usa para el desglose ADM1,
+# que es lo accesorio.
+SIN_TOTAL_NACIONAL = (
+    "el conector ya es a nivel país: agrupa por código de país para el panel del IRMP y el "
+    "desglose ADM1 es lo accesorio, no al revés."
+)
+
+
 GKG_TABLE = "gdelt-bq.gdeltv2.gkg_partitioned"
 WINDOW_DAYS = 30
 

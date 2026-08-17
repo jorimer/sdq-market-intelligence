@@ -57,6 +57,17 @@ from shared.data.lineage import Lineage
 
 logger = logging.getLogger("sdq.data.one")
 
+# El CSV de pobreza NO trae fila nacional, y no es una omisión nuestra: son 500 filas =
+# 2 tipos × 10 regiones × 25 años, verificado al armar la API de datos y documentado en
+# docs/RESPUESTA_VOTOSIGNAL_GRANULARIDAD_SUBNACIONAL.md. La muestra de la ENCFT está
+# diseñada para estimar por región de desarrollo. Se declara igual para que la próxima
+# persona no vuelva a buscarla.
+SIN_TOTAL_NACIONAL = (
+    "la fuente no publica el total: el CSV son 500 filas = 2 tipos × 10 regiones × 25 "
+    "años. Verificado al armar la API de datos; ver docs/RESPUESTA_VOTOSIGNAL_*.md."
+)
+
+
 # Poverty dataset (datos.gob.do org ONE) — public CSV on the ONE download CDN.
 POVERTY_URL = (
     "https://descargas.one.gob.do/download/OGTIC/"

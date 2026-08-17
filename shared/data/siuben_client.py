@@ -39,6 +39,17 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger("sdq.data.siuben")
 
+# Acá el descarte no es una pérdida: es lo correcto. El universo del SIUBEN es el padrón de
+# hogares focalizados, no la población general, así que un total de ese padrón NO es una
+# tasa nacional de nada — sería la cifra más fácil de citar mal de toda la plataforma.
+# Capturarla invitaría exactamente al error que el prefijo `siuben_` y el sufijo `_share`
+# existen para prevenir.
+SIN_TOTAL_NACIONAL = (
+    "el universo es el padrón de focalización, no la población: un total de ahí no es una "
+    "tasa nacional y publicarlo invitaría a citarlo como si lo fuera."
+)
+
+
 CKAN_SEARCH = "https://datos.gob.do/api/3/action/package_search"
 SIUBEN_ORG = "sistema-unico-de-beneficiarios-siuben"
 SOURCE = "SIUBEN"
