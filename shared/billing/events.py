@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict
 
+from shared.auth.models import User
 from shared.billing.skus import sku_label
 from shared.billing.subscribers import affected_subscribers
 from shared.database.session import SessionLocal
@@ -24,6 +25,9 @@ TARIFF_PUBLISHED = "tariff.published"
 # La secuencia fiscal está por agotarse (o ya se agotó) al emitir un comprobante. Se avisa
 # ANTES de que un cobro se quede sin número, que es cuando todavía se puede pedir el rango.
 FISCAL_SEQUENCE_LOW = "fiscal.sequence.low"
+# Se cobró algo que la plataforma NO entrega sola (``special:{slug}``: un informe a medida).
+# Sin este aviso el cliente paga y nadie se entera de que hay que producirlo.
+ORDER_NEEDS_FULFILMENT = "order.needs_fulfilment"
 
 
 def _format_effective(iso: str) -> str:
@@ -113,8 +117,37 @@ def _on_fiscal_sequence_low(payload: Dict[str, Any]) -> None:
         db.close()
 
 
+def _on_order_needs_fulfilment(payload: Dict[str, Any]) -> None:
+    """Avisa a los admins que hay una compra cobrada que hay que ENTREGAR A MANO.
+
+    Aplica a los ``special:{slug}`` (informes cotizados a medida): la plataforma cobra y
+    factura, pero no tiene qué conceder — el trabajo lo hace una persona."""
+    db = SessionLocal()
+    try:
+        sku = payload.get("sku", "")
+        cliente = db.query(User).filter_by(id=payload.get("user_id")).one_or_none() \
+            if payload.get("user_id") else None
+        quien = getattr(cliente, "email", None) or "un cliente"
+        for user in _fiscal_admins(db):
+            notification_service.create(
+                db, user_id=user.id, type="warning",
+                title="Compra que requiere entrega manual",
+                body=(f"{quien} pagó «{sku_label(sku)}». La plataforma cobró y facturó, pero "
+                      "este producto no se entrega solo: hay que producirlo y enviarlo. "
+                      f"Referencia de PayPal: {payload.get('order_id', '—')}."),
+                action_url="/admin/comprobantes")
+        logger.info("Aviso de entrega manual para '%s'", sku)
+    except Exception:  # noqa: BLE001 — avisar no debe romper la liquidación
+        logger.exception("Fallo al avisar la entrega manual")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def subscribe_billing_events() -> None:
     """Suscribe las alertas de billing al event_bus. Idempotente a nivel de arranque."""
     event_bus.subscribe(TARIFF_PUBLISHED, _on_tariff_published)
     event_bus.subscribe(FISCAL_SEQUENCE_LOW, _on_fiscal_sequence_low)
-    logger.info("billing suscrito a %s, %s", TARIFF_PUBLISHED, FISCAL_SEQUENCE_LOW)
+    event_bus.subscribe(ORDER_NEEDS_FULFILMENT, _on_order_needs_fulfilment)
+    logger.info("billing suscrito a %s, %s, %s", TARIFF_PUBLISHED, FISCAL_SEQUENCE_LOW,
+                ORDER_NEEDS_FULFILMENT)

@@ -49,6 +49,25 @@ def decode_custom_id(custom_id: str) -> Optional[tuple]:
     return (parts[0], parts[1], parts[2]) if len(parts) == 3 else None
 
 
+def _refunded_charge_ref(resource: dict) -> Optional[str]:
+    """Id del cobro ORIGINAL que un reembolso revierte.
+
+    PayPal lo expone distinto según la API: v1 (sale) lo trae en ``sale_id``; v2 (captura) solo
+    lo deja en el link ``rel='up'``, que apunta a ``…/payments/captures/{id}``. Se prueban las
+    dos formas y, si ninguna aparece, se devuelve None — adivinar sobre qué factura se emite
+    una nota de crédito es peor que no emitirla."""
+    for key in ("sale_id", "capture_id", "parent_payment"):
+        value = resource.get(key)
+        if value:
+            return str(value)
+    for link in resource.get("links") or []:
+        if link.get("rel") == "up":
+            href = (link.get("href") or "").rstrip("/")
+            if href:
+                return href.rsplit("/", 1)[-1]
+    return None
+
+
 class PayPalProvider:
     name = "paypal"
 
@@ -280,8 +299,22 @@ class PayPalProvider:
                 "gross": last.get("value"), "currency": last.get("currency_code")}
 
     # ── Webhook ──
+    def webhook_ready(self) -> bool:
+        """¿Se puede VERIFICAR un webhook? Necesita el ``webhook_id`` de la app de PayPal,
+        que es distinto de las credenciales de cobro: con client_id+secret se cobra, pero sin
+        webhook_id no se puede validar ni un solo evento entrante."""
+        return bool(str(self._cfg.get("webhook_id") or "").strip())
+
     def verify_webhook(self, *, headers: dict, body: bytes) -> bool:
         self._require()
+        if not self.webhook_ready():
+            # No es que la firma sea inválida: es que NO HAY con qué verificarla. Devolver
+            # "inválida" mandaba a mirar la firma cuando lo que falta es configuración, y en
+            # prod dejó todos los eventos rebotando en silencio.
+            raise ProviderNotConfigured(
+                "Falta el Webhook ID de PayPal: sin él no se puede verificar ningún evento "
+                "entrante (renovaciones, bajas y reembolsos se pierden). Cárgalo en "
+                "Pagos · PayPal.")
         h = {k.lower(): v for k, v in (headers or {}).items()}
         needed = ["paypal-transmission-id", "paypal-transmission-time", "paypal-cert-url",
                   "paypal-auth-algo", "paypal-transmission-sig"]
@@ -332,6 +365,36 @@ class PayPalProvider:
             return NormalizedEvent(event_id=event_id, kind="order_paid",
                                    provider_ref=resource.get("id", ""), user_id=user_id, sku=ref,
                                    interval="once", amount_gross=gross, amount_currency=ccy)
+
+        # COBRO RECURRENTE de una suscripción. PayPal NO reemite BILLING.SUBSCRIPTION.ACTIVATED
+        # en cada renovación: manda un sale (v1) atado a la suscripción por
+        # ``billing_agreement_id``. Sin este evento el período nunca avanza — el acceso se corta
+        # al mes 2 mientras PayPal sigue cobrando — y la renovación queda sin factura ni NCF.
+        if etype == "PAYMENT.SALE.COMPLETED":
+            agreement = resource.get("billing_agreement_id")
+            if not agreement:
+                return None  # venta puntual: la cubre PAYMENT.CAPTURE.COMPLETED
+            amt = resource.get("amount") or {}
+            return NormalizedEvent(
+                event_id=event_id, kind="subscription_renewed", provider_ref=agreement,
+                charge_ref=resource.get("id") or event_id, user_id=user_id, sku=ref,
+                amount_gross=amt.get("total") or amt.get("value"),
+                amount_currency=amt.get("currency") or amt.get("currency_code"))
+
+        # REEMBOLSO (v2 captura / v1 sale). El id del cobro original define qué factura se
+        # revierte; sin él no se puede saber qué acceso cortar ni sobre qué emitir la nota
+        # de crédito, así que el evento se ignora en vez de adivinar.
+        if etype in ("PAYMENT.CAPTURE.REFUNDED", "PAYMENT.SALE.REFUNDED"):
+            original = _refunded_charge_ref(resource)
+            if not original:
+                logger.warning("[billing] reembolso sin referencia al cobro original: %s", event_id)
+                return None
+            amt = resource.get("amount") or {}
+            return NormalizedEvent(
+                event_id=event_id, kind="payment_refunded", provider_ref=original,
+                charge_ref=resource.get("id") or event_id, user_id=user_id, sku=ref,
+                amount_gross=amt.get("value") or amt.get("total"),
+                amount_currency=amt.get("currency_code") or amt.get("currency"))
         # En v2 el custom_id de una suscripción embebe el SKU (insight:{sector}/all_access/
         # enterprise), no el tier: define el alcance del acceso.
         if etype == "BILLING.SUBSCRIPTION.ACTIVATED":

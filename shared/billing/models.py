@@ -80,7 +80,7 @@ class BillingTransaction(UUIDMixin, Base):
 
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     sku = Column(String(80), nullable=False)
-    kind = Column(String(20), nullable=False)              # order | subscription
+    kind = Column(String(20), nullable=False)              # order | subscription | credit_note
     provider = Column(String(20), nullable=False)          # paypal | azul
     provider_ref = Column(String(128), nullable=True)      # order id / subscription id
     # Evento del proveedor que originó el cobro (idempotencia + traza al BillingEvent).
@@ -96,8 +96,16 @@ class BillingTransaction(UUIDMixin, Base):
     country = Column(String(2), nullable=True)             # país de facturación del cliente
 
     invoice_number = Column(String(40), nullable=True)     # correlativo interno (no NCF)
-    status = Column(String(20), nullable=False, server_default="paid")  # paid | refunded
+    status = Column(String(20), nullable=False, server_default="paid")  # paid | refunded | issued
     note = Column(String(255), nullable=True)
+
+    # ── Reembolso y nota de crédito ──
+    # Un reembolso NO borra ni edita la factura: el comprobante emitido existe y ya se
+    # reportó. Se marca la original (``status='refunded'`` + ``refunded_at``) y se emite una
+    # fila NUEVA de tipo ``credit_note`` que apunta acá con ``credits_transaction_id``. Las
+    # dos se declaran en el 607; la nota lleva a la original en «Comprobante Modificado».
+    refunded_at = Column(DateTime, nullable=True)
+    credits_transaction_id = Column(String, nullable=True)  # solo en filas ``credit_note``
 
     # ── NCF tradicional (DGII, régimen impreso) — lo que SDQ emite HOY ──
     # Número realmente asignado de la secuencia autorizada (``B`` + tipo + 8 díg.). Los campos
@@ -136,6 +144,9 @@ class BillingTransaction(UUIDMixin, Base):
         # el mismo número". El compare-and-swap del asignador lo evita; esto lo GARANTIZA.
         Index("uq_billing_transaction_ncf", "ncf_type", "ncf_number", unique=True),
         Index("uq_billing_transaction_encf", "encf_type", "encf_number", unique=True),
+        # Una factura tiene a lo sumo UNA nota de crédito: un reembolso reentregado no puede
+        # emitir un segundo comprobante sobre el mismo cobro.
+        Index("uq_billing_transaction_credits", "credits_transaction_id", unique=True),
     )
 
 

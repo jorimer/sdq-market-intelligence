@@ -83,6 +83,19 @@ def revoke_entitlement(db: Session, entitlement_id: str) -> bool:
     return True
 
 
+def revoke_order_entitlement(db: Session, *, user_id: str, sector_key: str, tier: str,
+                             note: str) -> int:
+    """Revoca el/los entitlement(s) que concedió UNA compra (identificada por ``note`` = la
+    referencia de la orden). Es el inverso exacto de ``order_entitlement_exists``: se usa al
+    reembolsar, para que el acceso no sobreviva al dinero devuelto. Devuelve cuántos revocó."""
+    n = (db.query(ProductEntitlement)
+         .filter_by(user_id=user_id, sector_key=sector_key, tier=tier,
+                    source="order", note=note, active=True)
+         .update({ProductEntitlement.active: False}, synchronize_session=False))
+    db.commit()
+    return int(n)
+
+
 def list_user_entitlements(db: Session, user_id: str) -> List[Dict[str, Any]]:
     """Todos los entitlements de un usuario (activos e históricos), más recientes primero."""
     rows = (db.query(ProductEntitlement)

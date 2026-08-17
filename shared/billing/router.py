@@ -505,6 +505,46 @@ async def put_paypal(body: _PayPalConfigBody, db: Session = Depends(get_db),
         env=body.env, enabled=body.enabled, plans=body.plans)
 
 
+@router.get("/paypal/diagnostics", summary="Qué falta para cobrar en vivo (admin)")
+async def get_paypal_diagnostics(db: Session = Depends(get_db),
+                                 current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
+    """Chequeo de alistamiento del cobro self-serve. Enumera lo que falta con su consecuencia,
+    en vez de dejar que se descubra cuando un cliente ya pagó."""
+    from shared.billing.fiscal.sequences import list_sequences
+    from shared.settings.service import (
+        get_fiscal_regime, get_invoice_issuer, paypal_config_masked,
+    )
+
+    cfg = paypal_config_masked(db)
+    issuer = get_invoice_issuer(db)
+    regime = get_fiscal_regime(db)
+    usables = [s for s in list_sequences(db, regime=regime) if s["usable"]]
+
+    checks = [
+        {"key": "credentials", "ok": bool(cfg["configured"]),
+         "label": "Credenciales de PayPal cargadas y habilitadas",
+         "impact": "Sin esto los botones de compra no cobran."},
+        {"key": "webhook", "ok": bool(cfg["webhookReady"]),
+         "label": "Webhook ID cargado",
+         "impact": "Sin esto se pierden las renovaciones, las bajas por impago y los "
+                   "reembolsos: los eventos entran y se descartan sin aplicarse."},
+        {"key": "live", "ok": cfg["env"] == "live",
+         "label": "Entorno en vivo (no sandbox)",
+         "impact": "En sandbox no se mueve dinero real."},
+        {"key": "plans", "ok": bool(cfg["plans"]),
+         "label": "Billing plans mapeados para las suscripciones",
+         "impact": "Sin plan del (SKU, periodicidad) la suscripción no se puede crear."},
+        {"key": "issuer_rnc", "ok": bool((issuer.get("rnc") or "").strip()),
+         "label": "RNC del emisor cargado",
+         "impact": "Sin RNC la factura sale como comprobante interno."},
+        {"key": "fiscal_sequences", "ok": bool(usables),
+         "label": "Al menos un rango de comprobante utilizable",
+         "impact": "Los cobros se registran sin número fiscal y quedan pendientes de numerar."},
+    ]
+    return {"ready": all(c["ok"] for c in checks), "env": cfg["env"],
+            "fiscal_regime": regime, "checks": checks}
+
+
 @router.post("/paypal/sync-plans", summary="Sincronizar billing plans de PayPal con el tarifario (admin)")
 async def post_sync_paypal_plans(db: Session = Depends(get_db),
                                  current_user: User = Depends(require_role(UserRole.admin))) -> Dict[str, Any]:
