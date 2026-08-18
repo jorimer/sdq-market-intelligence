@@ -77,12 +77,14 @@ KNOWN_PROVIDERS = [
         "apiName": "API de verificación normativa",
         "country": "DO",
         "sector": "law",
-        "baseUrl": "",
+        "baseUrl": "https://jurisai-production.up.railway.app/api/v1",
         "requires_key": True,
         "needs_proxy": False,
         "notes": ("Base normativa dominicana: existencia, fecha de promulgación, Gaceta y "
-                  "vigencia de una norma. Colocar la URL base y la clave que entregue el "
-                  "equipo de JurisAI."),
+                  "vigencia. La clave tiene forma `jrs_<prefijo>_<secreto>` y viaja como "
+                  "`Authorization: Bearer`. ⚠️ La URL la generó Railway y NO es un dominio "
+                  "propio de JurisAI: si el servicio se muda hay que actualizarla acá — por "
+                  "eso es editable y no está incrustada en el conector."),
     },
     {
         "provider": "comtrade",
@@ -318,35 +320,51 @@ def _provider(db: Session, provider: str) -> Optional[SectorApiConfig]:
     return db.query(SectorApiConfig).filter(SectorApiConfig.provider == provider).first()
 
 
-def _test_jurisai_connection(db: Session, cfg, base: str, api_key: str) -> TestConnectionOut:
-    """Prueba GENÉRICA contra la base de JurisAI: GET a la URL base con Bearer.
+def _test_jurisai_connection(db, cfg, base: str, api_key: str) -> TestConnectionOut:
+    """Prueba contra el endpoint REAL de JurisAI, con el contrato que declaró el emisor.
 
-    Es deliberadamente genérica y así se declara en el mensaje: no conocemos todavía el
-    contrato del API —ni la ruta de salud ni si la clave viaja como Bearer o en una
-    cabecera propia—. Una prueba que fingiera conocerlo devolvería «error» ante un contrato
-    distinto y mandaría a revisar la clave, que estaría bien.
+    Se consulta `/normas` **con rango explícito** y no la raíz: sin `desde` y `hasta` el
+    emisor calcula el alcance desde 1900 y `vacio_es_concluyente` sale siempre false, así
+    que una prueba sin rango pasaría aunque la respuesta no sirva para nada de lo que este
+    eje necesita — y lo que el eje necesita es poder afirmar que una norma NO se dictó.
 
-    Cualquier respuesta HTTP prueba lo único que esta pantalla necesita saber: que la URL
-    responde y que la clave llegó. Un 404 con la clave aceptada es un éxito para este
-    propósito; un 401 es el fallo que importa.
+    El 401 se reporta sin adivinar cuál de las tres causas fue —clave inválida, revocada o
+    sin permiso—: el emisor no las distingue a propósito, y fingir precisión mandaría a
+    revisar lo que no es.
     """
     import httpx
 
+    target = (f"{base.rstrip('/')}/normas?cita_a=ley:1-12&tipo=decreto"
+              f"&desde=2012-01-25&hasta=2026-12-31&limite=1")
     try:
-        resp = httpx.get(base, headers={"Authorization": f"Bearer {api_key}",
-                                        "Accept": "application/json"},
-                         timeout=20, follow_redirects=True)
+        resp = httpx.get(target, headers={"Authorization": f"Bearer {api_key}",
+                                          "Accept": "application/json"},
+                         timeout=25, follow_redirects=True)
     except httpx.HTTPError as e:
         return _persist_test(db, cfg, "error",
                              f"No se pudo alcanzar {base} ({type(e).__name__}).", None)
-    if resp.status_code in (401, 403):
+    if resp.status_code == 401:
         return _persist_test(db, cfg, "error",
-                             f"El servidor respondió {resp.status_code}: la clave fue "
-                             "rechazada.", resp.status_code)
-    return _persist_test(db, cfg, "success",
-                         f"La base respondió {resp.status_code} y aceptó la clave. Prueba "
-                         "genérica: confirma alcance y credencial, no el contrato de datos.",
-                         resp.status_code)
+                             "JurisAI rechazó la credencial (401). El emisor no distingue "
+                             "entre clave inválida, revocada o sin permiso.", 401)
+    if resp.status_code >= 400:
+        return _persist_test(db, cfg, "error",
+                             f"JurisAI respondió {resp.status_code} en /normas.",
+                             resp.status_code)
+    try:
+        alcance = (resp.json().get("alcance") or {})
+    except Exception:  # noqa: BLE001
+        return _persist_test(db, cfg, "error",
+                             "La respuesta no trae el bloque `alcance` en JSON.",
+                             resp.status_code)
+    concluyente = bool(alcance.get("vacio_es_concluyente"))
+    return _persist_test(
+        db, cfg, "success",
+        "Conectado. Con rango explícito el alcance es "
+        + ("concluyente: un resultado vacío SÍ autoriza a afirmar que la norma no se dictó."
+           if concluyente else
+           "NO concluyente: un resultado vacío no autorizaría a afirmar incumplimiento."),
+        resp.status_code)
 
 
 def get_sector_api_key(db: Session, provider: str) -> str:
