@@ -55,6 +55,14 @@ class Obligacion:
     produce: List[str] = field(default_factory=list)
     habilita_exigir: List[str] = field(default_factory=list)
     nota_de_diseño: Optional[str] = None
+    #: Qué buscar en la base normativa para comprobar esta obligación, cuando su
+    #: cumplimiento ES dictar una norma. Se declara en el expediente y no se infiere del
+    #: texto del deber: una consulta adivinada que no encuentra nada produce un
+    #: `incumplida` sobre una búsqueda mal formulada.
+    #:
+    #: `desde` y `hasta` son obligatorios para el emisor —sin rango, su alcance nunca es
+    #: concluyente y un vacío no autoriza a acusar—, así que van en la declaración.
+    verificacion_normativa: Optional[Dict[str, Any]] = None
 
     @property
     def exigible(self) -> bool:
