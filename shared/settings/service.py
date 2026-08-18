@@ -66,6 +66,25 @@ KNOWN_PROVIDERS = [
         "notes": "Pública (ODbL). Sin clave.",
     },
     {
+        # El eje de evaluación de leyes necesita saber si una norma se dictó y cuándo, para
+        # convertir obligaciones declaradas a mano en hechos con fecha. JurisAI expone su
+        # base normativa; la clave la coloca el dueño desde Configuración.
+        #
+        # `baseUrl` va VACÍA a propósito: no hay una URL conocida que adivinar, y una
+        # incorrecta por defecto haría fallar la prueba de conexión culpando a la clave.
+        "provider": "jurisai",
+        "providerName": "JurisAI",
+        "apiName": "API de verificación normativa",
+        "country": "DO",
+        "sector": "law",
+        "baseUrl": "",
+        "requires_key": True,
+        "needs_proxy": False,
+        "notes": ("Base normativa dominicana: existencia, fecha de promulgación, Gaceta y "
+                  "vigencia de una norma. Colocar la URL base y la clave que entregue el "
+                  "equipo de JurisAI."),
+    },
+    {
         "provider": "comtrade",
         "providerName": "UN Comtrade",
         "apiName": "API pública de comercio exterior",
@@ -299,6 +318,37 @@ def _provider(db: Session, provider: str) -> Optional[SectorApiConfig]:
     return db.query(SectorApiConfig).filter(SectorApiConfig.provider == provider).first()
 
 
+def _test_jurisai_connection(db: Session, cfg, base: str, api_key: str) -> TestConnectionOut:
+    """Prueba GENÉRICA contra la base de JurisAI: GET a la URL base con Bearer.
+
+    Es deliberadamente genérica y así se declara en el mensaje: no conocemos todavía el
+    contrato del API —ni la ruta de salud ni si la clave viaja como Bearer o en una
+    cabecera propia—. Una prueba que fingiera conocerlo devolvería «error» ante un contrato
+    distinto y mandaría a revisar la clave, que estaría bien.
+
+    Cualquier respuesta HTTP prueba lo único que esta pantalla necesita saber: que la URL
+    responde y que la clave llegó. Un 404 con la clave aceptada es un éxito para este
+    propósito; un 401 es el fallo que importa.
+    """
+    import httpx
+
+    try:
+        resp = httpx.get(base, headers={"Authorization": f"Bearer {api_key}",
+                                        "Accept": "application/json"},
+                         timeout=20, follow_redirects=True)
+    except httpx.HTTPError as e:
+        return _persist_test(db, cfg, "error",
+                             f"No se pudo alcanzar {base} ({type(e).__name__}).", None)
+    if resp.status_code in (401, 403):
+        return _persist_test(db, cfg, "error",
+                             f"El servidor respondió {resp.status_code}: la clave fue "
+                             "rechazada.", resp.status_code)
+    return _persist_test(db, cfg, "success",
+                         f"La base respondió {resp.status_code} y aceptó la clave. Prueba "
+                         "genérica: confirma alcance y credencial, no el contrato de datos.",
+                         resp.status_code)
+
+
 def get_sector_api_key(db: Session, provider: str) -> str:
     cfg = _provider(db, provider)
     if cfg and cfg.enabled:
@@ -455,6 +505,8 @@ def test_connection(db: Session, payload: TestConnectionIn) -> TestConnectionOut
     # gets its own probe instead of the SIB Azure-APIM path below.
     if payload.provider == "bcrd":
         return _test_bcrd_connection(db, cfg, base, api_key)
+    if payload.provider == "jurisai":
+        return _test_jurisai_connection(db, cfg, base, api_key)
 
     # SIB lives behind Azure APIM (subscription-key header) + a Sucuri WAF that
     # blocks datacenter IPs, so a Mozilla UA is required and prod must use a proxy.
