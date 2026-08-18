@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "11.0"
+version: "12.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -298,7 +298,8 @@ bindings:
     serie: "social_dev:women_senate"
     fuente: uip
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       Composición del Senado (Unión Interparlamentaria, entidad DO-UC01). Es el único de los
       cuatro cargos electivos que ninguna otra fuente cubre: el WDI da la cámara BAJA —20,77
@@ -311,6 +312,9 @@ bindings:
       cuatro.
       SALVEDAD de fuente: Parline ofrece exportación CSV pero está tras un desafío de
       Cloudflare, así que se lee la página pública. Es más frágil y se declara.
+      Verificado en prod 2026-08-18: **12,5% en 2024**, contra una meta de 41,5% para 2025.
+      Con los cuatro cargos electivos medidos, el 2.43 es el PISO de los cuatro y el único
+      que lleva cuatro años sin moverse.
 
   # ══ DOS DE LOS TRES CARGOS ELECTIVOS QUE FALTABAN ══
   # Los produce la JCE, que no publica API ni dataset abierto —verificado contra

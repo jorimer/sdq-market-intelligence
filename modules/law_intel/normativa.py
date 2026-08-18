@@ -99,8 +99,14 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
     fecha = _fecha(norma)
     cita = f"{norma.get('tipo', '')} {norma.get('numero', '')}".strip() or norma.get("id", "")
     gaceta = norma.get("gaceta") or {}
-    respaldo = (f" Publicada en la Gaceta {gaceta.get('numero')} del {gaceta.get('fecha')}."
-                if gaceta.get("numero") else "")
+    # El número de Gaceta y su fecha viajan POR SEPARADO en el corpus, y la fecha falta a
+    # menudo —el propio Decreto 134-14 la trae vacía—. Interpolarla sin comprobar imprime
+    # «del None» dentro de la evidencia que sostiene el veredicto, y esa frase se cita en el
+    # informe tal cual. Se declara lo que hay: el número solo ya es respaldo suficiente.
+    respaldo = ""
+    if gaceta.get("numero"):
+        respaldo = f" Publicada en la Gaceta {gaceta['numero']}"
+        respaldo += f" del {gaceta['fecha']}." if gaceta.get("fecha") else "."
 
     if not vence or not fecha:
         return Comprobacion(oid, "cumplida",
