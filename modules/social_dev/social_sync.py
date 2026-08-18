@@ -32,6 +32,13 @@ WDI_HEALTH = {"SP.DYN.LE00.IN": "life_expectancy", "SP.DYN.IMRT.IN": "child_mort
 #: 100 habitantes: son magnitudes distintas y la segunda puede pasar de 100.
 WDI_NACIONALES_FUERA_DEL_INDICE = {
     "IT.NET.USER.ZS": ("internet_users", "% de la población"),
+    # «Proportion of seats held by women in national parliaments» — el indicador 2.44 de la
+    # END (Cámara de Diputados). Para sistemas bicamerales la UIP reporta la cámara BAJA, y
+    # eso es exactamente lo que pide el 2.44; el Senado es otro indicador (2.43) y esta
+    # serie NO lo cubre. La comprobación no es de nombre sino de valor: la ley fija la línea
+    # base de Diputados en 20,8% para 2010 y la serie da 20,77 ese año, mientras la del
+    # Senado era 9,4 — no hay ambigüedad posible entre las dos.
+    "SG.GEN.PARL.ZS": ("women_lower_house", "% de los escaños"),
 }
 HEALTH_ENTITY = "nacional"
 _WDI_HEALTH_YEARS = 30
