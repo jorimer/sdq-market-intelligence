@@ -82,6 +82,12 @@ fuentes_admitidas:
       evaluado. Además NO produce el dato sino que lo recoge del organismo electoral de
       cada país — para RD, de la propia JCE. Es la vía abierta a una fuente nacional que no
       publica API ni dataset (verificado contra datos.gob.do).
+  - id: uip
+    nombre: Unión Interparlamentaria (Parline)
+    nota: >-
+      Externa y admisible por la misma lógica que la PEFA, el WDI y la CEPAL: no es el
+      órgano evaluado. Publica la composición de cada cámara por separado, que es lo que
+      ninguna fuente nacional abierta ofrece para el Senado.
   - id: pefa
     nombre: Evaluación PEFA
     nota: >-
