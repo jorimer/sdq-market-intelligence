@@ -383,6 +383,13 @@ class SocialDevProduct:
             "toma de ahí porque el API de ITU DataHub dejó de ser alcanzable de forma "
             "anónima. No confundir con la penetración de banda ancha móvil del eje "
             "telecom, que es otra magnitud."),
+        # Senado — indicador 2.43. Es el cuarto cargo electivo y el único que ninguna
+        # otra fuente cubre: el WDI da la cámara BAJA y la CEPAL solo trae oradores.
+        "women_senate": (
+            "women_senate", HEALTH_ENTITY,
+            "Mujeres en el Senado (% de los escaños)", "inclusion",
+            "Unión Interparlamentaria (Parline), entidad DO-UC01. Cámara ALTA: no "
+            "confundir con `women_lower_house`, que es la Cámara de Diputados."),
         # Síndicas y regidoras — indicadores 2.45 y 2.46. Las etiquetas llevan los DOS
         # nombres porque la fuente regional usa «alcaldesas» y «concejalas», y sin eso
         # nadie relaciona la señal con lo que la ley pide.

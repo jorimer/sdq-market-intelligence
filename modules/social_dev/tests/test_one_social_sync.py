@@ -57,6 +57,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     # nada" y queda declarado en ``errors``, que es justo lo que este test NO mide.
     for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_bcrd_mercado_laboral",
                 "_sync_cepal_politica",
+                "_sync_ipu_senado",
                 "_sync_sisdom_income",
                 "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
                 "_sync_endesa_child_mortality",
