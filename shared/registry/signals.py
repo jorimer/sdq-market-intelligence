@@ -88,6 +88,18 @@ class VariableSignal:
     # un año concreto, eso no es un detalle de metadatos: es la cifra equivocada.
     # ``None`` = el del eje, que es el caso de la mayoría y no obliga a nadie a declararlo.
     period: Optional[str] = None
+    # SERIE COMPLETA `[(período, valor)]` ascendente, cuando el eje puede servirla.
+    # Vacía = el eje publica un punto y nada más; NO significa que la serie no exista.
+    #
+    # ⛔ Solo para señales de alcance NATIONAL. La historia de una variable por-sujeto sería
+    # la de UN sujeto, y eso es el defecto de `sample_value` repetido sobre el eje del
+    # tiempo — peor, porque un punto suelto se compara contra una meta y ya, mientras que
+    # una trayectoria falsa afirma una DIRECCIÓN: «mejora», «retrocede». El consumidor que
+    # lee «retrocede» no tiene forma de sospechar que es una región y no el país.
+    #
+    # El último par tiene que coincidir con ``value``/``period``: son la misma verdad
+    # expresada dos veces, y el día que difieran gana la que el consumidor mire primero.
+    history: Tuple[Tuple[str, float], ...] = ()
     real_fraction: float = field(default=1.0)  # fracción de sujetos con dato real [0,1]
     note: str = ""                   # nota de trazabilidad (parcialidad, caveat)
     # ALCANCE de la medición — distingue dos cosas que "dato real" confunde:

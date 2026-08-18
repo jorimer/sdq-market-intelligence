@@ -40,7 +40,7 @@ from modules.social_dev.social_sync import HEALTH_ENTITY
 from shared.data.minerd_coverage import COUNTRY_SLUG as MINERD_COUNTRY
 from shared.data.sisdom_schooling import COUNTRY_SLUG as SISDOM_COUNTRY
 from shared.registry.builders import axis_variable_scopes
-from shared.registry.signals import PER_SUBJECT
+from shared.registry.signals import NATIONAL, PER_SUBJECT
 from shared.products import (
     CanonicalScore,
     CanonicalSeries,
@@ -458,17 +458,26 @@ class SocialDevProduct:
                 # de cibao_norte como cifra nacional.
                 if e is not None:
                     q = q.filter(SocialIndicator.entity_key == e)
-                return q.order_by(SocialIndicator.period.desc()).first()
+                # La serie ENTERA, ascendente. Servir solo el último punto costaba el
+                # veredicto más valioso del eje de leyes: con una sola observación el
+                # semáforo se niega —bien— a emitir tendencia, así que «retrocede» y «no
+                # alcanzará» eran inalcanzables para el producto aunque el dato estuviera
+                # en esta misma tabla. La ley pide juzgar AVANCE y solo sabíamos decir nivel.
+                return q.order_by(SocialIndicator.period.asc()).all()
 
-            fila = _safe(self._db, _leer, None)
-            if not fila:
+            filas = _safe(self._db, _leer, []) or []
+            if not filas:
                 continue
-            valor, periodo_tema = fila
+            # Solo las nacionales llevan historia: la de una variable por-sujeto sería la de
+            # UN sujeto, y una trayectoria falsa afirma una DIRECCIÓN, no solo un nivel.
+            historia = tuple((str(p), float(v)) for v, p in filas)
+            valor, periodo_tema = filas[-1][0], filas[-1][1]
             out.append(VariableSignal(
                 key=clave, label=label, state=REAL, dimension=dimension,
                 weight=0.0,                      # fuera del índice: no pondera
                 source=", ".join(dh.sources), cadence=dh.cadence,
                 value=float(valor), real_fraction=1.0, scope=alcance,
+                history=historia if alcance == NATIONAL else (),
                 # El período va en la SEÑAL y no solo en la nota: un consumidor no puede
                 # parsear prosa para saber a qué año corresponde la cifra que le sirven.
                 period=str(periodo_tema),

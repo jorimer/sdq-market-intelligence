@@ -27,6 +27,14 @@ def _signal_dict(s: VariableSignal) -> Dict[str, Any]:
         "key": s.key, "label": s.label, "state": s.state, "dimension": s.dimension,
         "weight": s.weight, "source": s.source, "cadence": s.cadence,
         "value": s.value, "period": s.period, "real_fraction": s.real_fraction, "note": s.note,
+        # El ALCANCE viaja con el valor. Sin él, un consumidor lee `value` y no puede saber
+        # si le sirven la cifra del país o la de un sujeto del panel: es exactamente el
+        # defecto que publicó la pobreza extrema de cibao_norte como nacional, y hasta acá
+        # la API externa seguía sin exponer la distinción.
+        "scope": s.scope,
+        # La serie completa cuando el eje la sirve. Vacía NO significa que no exista: el eje
+        # publica un punto y nada más (ver `VariableSignal.history`).
+        "history": [{"period": p, "value": v} for p, v in s.history],
     }
 
 

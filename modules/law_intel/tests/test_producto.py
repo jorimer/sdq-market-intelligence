@@ -207,3 +207,14 @@ class TestElDetalleDeLaBrechaNombraIndicadores:
         """Sin declararla, el monitor penalizaría como obsoleta una fuente que por
         naturaleza publica una vez al año."""
         assert LawProduct().data_signals().cadence == "annual"
+
+
+def test_el_vocabulario_obligatorio_distingue_estancada_de_retrocede():
+    """Las dos suenan igual de mal y significan cosas distintas. Sin la glosa, el modelo
+    redacta «retrocede» sobre una serie plana y el informe queda refutable con la fila de
+    al lado — que es el defecto que este vocabulario existe para impedir."""
+    from modules.law_intel.ai_context import GLOSA_ESTANCADA, law_ai_context
+
+    voc = law_ai_context(E, "2025")["vocabulario_obligatorio"]
+    assert voc["estancada"] == GLOSA_ESTANCADA
+    assert "no escribas «retrocede»" in GLOSA_ESTANCADA.lower()

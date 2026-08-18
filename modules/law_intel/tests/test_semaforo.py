@@ -113,3 +113,42 @@ def test_el_resumen_separa_no_cumple_de_no_medido():
     r = resumen(vs)
     assert r["total"] == 3 and r["evaluados"] == 1
     assert r["pct_sobre_evaluados"] == 100.0, "no se diluye con lo que no se midió"
+
+
+def test_el_valor_observado_no_arrastra_precision_espuria():
+    """El 2.44 se publicó como `37.3684210526316`: trece decimales que son el residuo de
+    dividir 71 escaños entre 190, no una medición. Esa cifra viaja al informe tal cual, y
+    junto a metas de un decimal desacredita al resto de la tabla."""
+    v = evaluar(ind(metas={"2025": 41.5}), Binding(indicador="1.8", mejor="mayor", **VERIF),
+                [("2025", 71 / 190 * 100)], corte="2025")
+    assert v.observado == 37.3684
+
+
+class TestEstancarseNoEsRetroceder:
+    """Con una sola observación los dos casos eran indistinguibles. Al servir la serie
+    completa el motor empezó a llamar «retrocede» a una serie plana, con el motivo «el
+    indicador se mueve en contra de la meta» — una falsedad que el lector puede comprobar
+    en la misma tabla, y que le hace perder la fe en el resto."""
+
+    def test_una_serie_plana_no_se_mueve_en_contra(self):
+        v = evaluar(ind(metas={"2025": 41.5}), Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2020", 12.5), ("2024", 12.5)], corte="2025")
+        assert v.veredicto == "estancada" and v.trayectoria == "plana"
+        assert "en contra" not in (v.motivo or "")
+
+    def test_pero_tampoco_es_inocuo(self):
+        """La meta avanza con los años: quedarse quieto ensancha la brecha."""
+        v = evaluar(ind(metas={"2025": 41.5}), Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2020", 12.5), ("2024", 12.5)], corte="2025")
+        assert v.cumple is False
+
+    def test_retroceder_de_verdad_sigue_llamandose_retroceder(self):
+        v = evaluar(ind(metas={"2025": 41.5}), Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2020", 30.2), ("2024", 25.8)], corte="2025")
+        assert v.veredicto == "retrocede" and v.trayectoria == "se aleja"
+
+    def test_cumplir_estancado_no_se_declara_como_alejarse(self):
+        """Quien ya cumple y no se mueve tampoco «se aleja»: sigue cumpliendo, plano."""
+        v = evaluar(ind(metas={"2025": 10.0}), Binding(indicador="1.8", mejor="menor", **VERIF),
+                    [("2020", 8.0), ("2024", 8.0)], corte="2025")
+        assert v.veredicto == "alcanzada" and v.trayectoria == "plana"
