@@ -18,6 +18,21 @@ logger = logging.getLogger("sdq.social_dev.one_sync")
 
 # National health (WDI) → applied to every region (no by-region source yet).
 WDI_HEALTH = {"SP.DYN.LE00.IN": "life_expectancy", "SP.DYN.IMRT.IN": "child_mortality"}
+
+#: Series nacionales del WDI que NO alimentan el índice pero sí tienen consumidor propio.
+#:
+#: `internet_users` es «Individuals using the Internet (% of population)», el indicador
+#: 3.13 de la END. Se toma del Banco Mundial y no de la UIT —que es quien lo produce—
+#: porque el API de ITU DataHub dejó de ser alcanzable de forma anónima: el host viejo
+#: (`api.datahub.itu.int`) responde 403 en TODAS sus rutas, incluida la raíz, y el nuevo
+#: (`datahub.itu.int/api/v2`) está detrás de un desafío de CloudFront que devuelve 202 con
+#: cuerpo vacío. El WDI republica la misma serie con API abierta.
+#:
+#: No confundir con `internet_penetration` del eje telecom, que es banda ancha MÓVIL por
+#: 100 habitantes: son magnitudes distintas y la segunda puede pasar de 100.
+WDI_NACIONALES_FUERA_DEL_INDICE = {
+    "IT.NET.USER.ZS": ("internet_users", "% de la población"),
+}
 HEALTH_ENTITY = "nacional"
 _WDI_HEALTH_YEARS = 30
 
@@ -59,8 +74,11 @@ def _upsert_indicator(db: Session, *, theme, entity, period, value, source, disa
 
 
 def _sync_wdi_health(db: Session, set_phase: Callable[[str], None]) -> int:
-    """Fetch DO national life-expectancy + infant-mortality from WDI → sd_indicators
-    (entity ``nacional``). National, so applied to every region in the assembly."""
+    """Series nacionales del WDI → ``sd_indicators`` (entidad ``nacional``).
+
+    Dos grupos con el mismo cliente y distinta finalidad: las de SALUD alimentan el índice
+    y se aplican a las diez regiones; las de `WDI_NACIONALES_FUERA_DEL_INDICE` no lo
+    alimentan y existen para consumidores propios —hoy, el indicador 3.13 de la END."""
     from shared.data.wdi_client import fetch_wb_indicator
 
     set_phase("salud nacional (WDI)")
@@ -72,6 +90,23 @@ def _sync_wdi_health(db: Session, set_phase: Callable[[str], None]) -> int:
             logger.warning("[social] WDI %s falló: %s", code, e)
             continue
         unit = "años" if theme == "life_expectancy" else "por 1.000 nacidos vivos"
+        for r in rows:
+            yr, val = r.get("date"), r.get("value")
+            if not yr or val is None:
+                continue
+            _upsert_indicator(db, theme=theme, entity=HEALTH_ENTITY, period=str(yr),
+                              value=float(val), source="WDI", disagg="nacional", unit=unit)
+            synced += 1
+
+    # Series nacionales que no alimentan el índice. Van en el MISMO sub-sync porque
+    # comparten cliente, entidad y modo de fallo: separarlas sería una segunda ruta que
+    # mantener por una diferencia que no es de ingesta sino de uso.
+    for code, (theme, unit) in WDI_NACIONALES_FUERA_DEL_INDICE.items():
+        try:
+            rows, _ = fetch_wb_indicator(code, ["DOM"], mrv=_WDI_HEALTH_YEARS)
+        except Exception as e:  # noqa: BLE001 — best-effort per indicator
+            logger.warning("[social] WDI %s falló: %s", code, e)
+            continue
         for r in rows:
             yr, val = r.get("date"), r.get("value")
             if not yr or val is None:

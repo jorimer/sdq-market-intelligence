@@ -80,6 +80,7 @@ variable_scopes:
   secondary_coverage_pais: national      # MINERD SIIE, fila TOTAL PAIS
   primary_coverage_pais: national        # MINERD SIIE, fila TOTAL PAIS
   schooling_years_pais: national         # SISDOM 05 3 007, fila «Total»
+  internet_users: national               # WDI IT.NET.USER.ZS (republica UIT)
   # poverty_extreme queda en el default per_subject: la ONE la publica por las 10 regiones
   # y NO hay agregado nacional en el panel. Publicar la de una región como cifra del país
   # es exactamente el defecto que costó cinco bindings el 2026-08-16.

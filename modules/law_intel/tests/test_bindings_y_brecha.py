@@ -349,3 +349,42 @@ def test_ningun_binding_que_CUENTA_se_apoya_en_una_variable_por_region():
         "estos bindings CUENTAN pero su variable se mide por región, así que publican el "
         f"valor de una demarcación contra una meta nacional: {por_region}"
     )
+
+
+class TestUsuariosDeInternet:
+    """El 3.13 es la trampa de magnitudes más fina del expediente: hay TRES cifras de
+    internet en la plataforma y solo una mide lo que la ley pide."""
+
+    def test_apunta_a_usuarios_y_no_a_suscripciones(self):
+        b = cargar_bindings(EXPEDIENTE)["3.13"]
+        assert b.serie == "social_dev:internet_users"
+        nota = (b.nota or "").lower()
+        # La nota nombra las dos magnitudes que NO son, porque el error se comete al
+        # elegir, no al leer: las tres suenan igual.
+        assert "banda ancha" in nota and "indotel" in nota
+
+    def test_declara_que_la_linea_base_de_la_ley_no_coincide_con_la_edicion_vigente(self):
+        """26,8% dice la ley para 2009; 27,72% dice el WDI hoy. Es revisión estadística,
+        no desempeño — y medir la distancia a la meta sin decirlo atribuye a la política
+        una diferencia que puso el revisor."""
+        b = cargar_bindings(EXPEDIENTE)["3.13"]
+        assert "26,8" in (b.nota or "") and "27,72" in (b.nota or "")
+
+
+def test_ningun_binding_declara_una_fuente_que_no_sea_la_que_lo_produce():
+    """`2.21` decía `fuente: one` y su dato viene del WDI. Un rótulo de procedencia falso
+    es peor que uno ausente, porque se cita: el informe genera la prosa de fuentes desde
+    acá.
+
+    Se comprueba lo comprobable sin adivinar: los bindings cuya serie es del panel social
+    y cuyo dato ingiere el sync desde el WDI tienen que declararlo."""
+    from modules.social_dev.social_sync import WDI_HEALTH, WDI_NACIONALES_FUERA_DEL_INDICE
+
+    del_wdi = set(WDI_HEALTH.values()) | {t for t, _u in WDI_NACIONALES_FUERA_DEL_INDICE.values()}
+    mal = []
+    for b in cargar_bindings(EXPEDIENTE).values():
+        if not b.serie.startswith("social_dev:"):
+            continue
+        if b.serie.split(":", 1)[1] in del_wdi and b.fuente != "wdi":
+            mal.append(f"{b.indicador} → {b.serie} declara `{b.fuente}`")
+    assert not mal, f"la procedencia declarada no es la real: {mal}"
