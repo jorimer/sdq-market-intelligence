@@ -236,15 +236,18 @@ class TestLasSenalesQueYaEstabanExpuestas:
         assert b.transformacion == "complemento_100"
         assert b.mejor == "mayor", "más formalidad es mejor; la variable cruda diría lo opuesto"
 
-    def test_la_mortalidad_infantil_NO_es_la_de_menores_de_cinco(self):
+    def test_el_2_22_no_se_mide_con_mortalidad_INFANTIL(self):
         """`child_mortality` es `SP.DYN.IMRT.IN` (menores de 1 año) y el indicador legal es
         menores de 5. Ninguna transformación las convierte, y el valor es plausible para las
-        dos — que es justamente lo que vuelve peligrosa la confusión."""
+        dos — que es lo que vuelve peligrosa la confusión.
+
+        El descarte original era correcto y SIRVIÓ: llevó a buscar la magnitud verdadera,
+        que existía en otra serie (`SH.DYN.MORT`). Lo que el test protege es la REGLA —que
+        no se mida con la infantil— y no el estado en que quedó el binding."""
         b = cargar_bindings(EXPEDIENTE)["2.22"]
-        assert b.estado == "descartado" and not b.cuenta
-        m = b.motivo_descarte or ""
-        assert "SP.DYN.IMRT.IN" in m, "el motivo debe nombrar el código que lo prueba"
-        assert "1 año" in m and "5" in m, "el motivo nombra los dos tramos de edad"
+        assert b.serie != "social_dev:child_mortality"
+        assert "under5" in b.serie
+        assert "INFANTIL" in (b.nota or "").upper()
 
 
 class TestLaFrescuraDeclarada:
@@ -413,3 +416,17 @@ def test_los_otros_tres_cargos_electivos_NO_quedan_atados_a_la_serie_de_diputado
         b = bs.get(ind)
         assert b is None or b.serie != "social_dev:women_lower_house", (
             f"{ind} no es la Cámara de Diputados")
+
+
+def test_todo_descarte_prueba_su_motivo_con_una_CIFRA():
+    """Un descarte sin número es una opinión, y el informe la publica como hallazgo.
+
+    Los descartes de salud existen porque la serie internacional disponible NO mide lo que
+    la ley fijó, y lo que lo demuestra en cada caso es la distancia entre la línea base
+    legal y la de la serie en el mismo año. Sin esa cifra en el motivo, el próximo que mire
+    la lista vuelve a evaluar lo mismo — o peor, ata lo que no corresponde.
+    """
+    import re
+    sin_cifra = [b.indicador for b in cargar_bindings(EXPEDIENTE).values()
+                 if b.estado == "descartado" and not re.search(r"\d", b.motivo_descarte or "")]
+    assert not sin_cifra, f"descartes sin cifra que los sostenga: {sin_cifra}"
