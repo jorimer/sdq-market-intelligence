@@ -251,13 +251,91 @@ bindings:
       segundo indicador del expediente que supera su meta de horizonte completo — y a
       diferencia del primero que lo pareció, éste se mide contra una serie de PAÍS.
 
-  # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
-  # transformación declarable: son conceptos distintos.
-  - indicador: "2.22"
-    serie: "social_dev:child_mortality"
+  # ══ CINCO EVALUADOS Y DESCARTADOS ══
+  # Los cinco tienen serie internacional disponible y NINGUNO mide lo que la ley fijó. Se
+  # dejan registrados con la cifra que lo prueba: sin eso, el próximo que mire la lista
+  # vuelve a evaluarlos, y el informe no puede explicar por qué falta lo que falta.
+  #
+  # La regla que separa a estos del 2.22 y del 2.4: se ata cuando el CONCEPTO es el mismo y
+  # la salvedad es de método o revisión; no se ata cuando el concepto difiere. Un nivel que
+  # se parece no basta — el 2.25 tiene hoy 1,3 contra una base legal de 1,2, y esa
+  # coincidencia es del azar, no de la magnitud.
+
+  - indicador: "2.23"
+    serie: "wdi.SH.STA.MMRT"
     fuente: wdi
     mejor: menor
     estado: descartado
+    motivo_descarte: >-
+      Razón de mortalidad materna. La línea base de la ley es 159 (ENDESA 1997-2007, método
+      de hermandad) y la estimación modelada del MMEIG da 92 para 2010: una brecha del 70%
+      del valor. No es una revisión, son dos formas de estimar que no se pueden comparar
+      contra la misma meta. Medir el 124 de 2023 contra una meta derivada del 159 diría
+      cualquier cosa.
+
+  - indicador: "2.25"
+    serie: "wdi.SH.TBS.MORT"
+    fuente: wdi
+    mejor: menor
+    estado: descartado
+    motivo_descarte: >-
+      Tasa de mortalidad por tuberculosis. La ley fija 1,2 para 2009 y la serie del Banco
+      Mundial da 6 ese mismo año — cinco veces más. Y la trampa: el último valor de la serie
+      (1,3 en 2024) se parece a la línea base legal, así que atarlas produciría un
+      «prácticamente sin cambios» sobre dos magnitudes que nunca fueron la misma.
+
+  - indicador: "2.33"
+    serie: "wdi.SH.XPD.GHED.GD.ZS"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Gasto público en salud como % del PIB. La ley fija 1,4 para 2009 y la serie da 2,33 el
+      mismo año: el agregado del Banco Mundial incluye la seguridad social y el de la ley
+      parece ser sólo el gasto del gobierno central. La meta de 4,5% para 2025 se fijó sobre
+      el agregado estrecho, así que medirla contra el ancho la daría por más cerca de lo que
+      está.
+
+  - indicador: "2.34"
+    serie: "wdi.SH.STA.BASS.ZS"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Acceso a saneamiento. La ley dice «servicios sanitarios mejorados» (definición JMP
+      anterior a 2015) y la serie disponible es «al menos básicos», que es otro escalón de
+      la escala revisada. Los niveles quedan cerca —82,7 de la ley contra 80,77 de la serie
+      en 2007— y esa cercanía es justamente lo que haría pasar el cambio de definición por
+      un dato comparable.
+
+  - indicador: "2.35"
+    serie: "wdi.SH.H2O.BASW.ZS"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Acceso a agua. La ley pide «agua de la red pública» y la serie mide «al menos agua
+      potable básica», que incluye pozos protegidos y otras fuentes fuera de red. La brecha
+      lo confirma: 86,1 de la ley contra 93,68 de la serie en el mismo 2007. Son
+      poblaciones distintas y la diferencia crece con la meta, que es del 100%.
+
+  # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
+  # transformación declarable: son conceptos distintos.
+  # ══ RE-ABIERTO ══ El descarte era correcto para `child_mortality` (menores de 1) y
+  # llevó a buscar la magnitud correcta, que existía en otra serie.
+  - indicador: "2.22"
+    serie: "social_dev:under5_mortality"
+    fuente: wdi
+    mejor: menor
+    estado: propuesto
+    nota: >-
+      `SH.DYN.MORT` — mortalidad de menores de 5 años, la magnitud exacta del indicador. El
+      binding anterior apuntaba a `child_mortality`, que es `SP.DYN.IMRT.IN`, mortalidad
+      INFANTIL (menores de 1): el descarte era correcto y es lo que llevó a encontrar ésta.
+      SALVEDAD: la línea base de la ley (36,0) sale de las rondas ENDESA 2002-2007 y esta
+      serie es la estimación modelada del grupo interagencial de la ONU, que da 34,9 para
+      2009-2010. Mismo concepto y niveles cercanos, método distinto — se declara y se mide.
+    motivo_descarte: null
     motivo_descarte: >-
       La variable del panel viene del código `SP.DYN.IMRT.IN` del Banco Mundial, que es
       mortalidad INFANTIL (menores de 1 año), y el indicador legal es mortalidad de menores
