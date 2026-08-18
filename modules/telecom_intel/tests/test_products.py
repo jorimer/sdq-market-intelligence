@@ -147,3 +147,24 @@ def test_no_data_narratives_are_honest():
                            payload={"has_score": False}, entity_name="Sector Telecom · RD")
     narr = asyncio.run(TelecomProduct().narratives(ProductTier.insight, snap))
     assert all(v for v in narr.values())
+
+
+def test_mientras_la_fuente_este_en_revision_lo_dicen_las_DOS_superficies(db):
+    """El índice ya mide su propia frescura desde el período, así que envejecer se nota — en
+    dos años, cuando la cadencia anual lo marque rancio. Lo que no se notaba es POR QUÉ va a
+    envejecer.
+
+    El test se escribe condicionado a la constante, no a su contenido: cuando la UIT
+    conteste y alguien la ponga en `None`, la declaración desaparece de las dos superficies
+    y este test sigue pasando. Un test que exigiera el texto obligaría a borrarlo también, y
+    ahí es donde se olvida una de las dos.
+    """
+    from modules.telecom_intel import products as mod
+
+    if not mod.FUENTE_EN_REVISION:
+        pytest.skip("la fuente dejó de estar en revisión")
+    p = mod.TelecomProduct(db)
+    # Las dos superficies, incluso sin IDT persistido: es justo cuando más importa que el
+    # motivo esté a la vista.
+    assert mod.FUENTE_EN_REVISION in p.data_signals().detail
+    assert mod.FUENTE_EN_REVISION in p.validation_state().notes
