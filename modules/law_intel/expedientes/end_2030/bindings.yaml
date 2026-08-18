@@ -278,6 +278,37 @@ bindings:
       lo que vuelve accionable este dato.
 
   # ══ RE-ABIERTO ══ El descarte era correcto para `child_mortality` (menores de 1) y
+  # ══ DOS DE LOS TRES CARGOS ELECTIVOS QUE FALTABAN ══
+  # Los produce la JCE, que no publica API ni dataset abierto —verificado contra
+  # datos.gob.do—. La CEPAL los recoge del propio organismo electoral y los publica.
+  - indicador: "2.45"
+    serie: "social_dev:women_mayors"
+    fuente: cepal
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      «Mujeres alcaldesas electas» del Observatorio de Igualdad de Género. La
+      identificación es por VALOR y no por nombre —«alcaldesa» es el término regional de lo
+      que en RD se llama síndica—: la ley fija 7,7% para 2010 y la serie da EXACTAMENTE 7,7
+      ese año.
+      La serie es escalonada porque un cargo electivo no cambia hasta la próxima elección.
+      Trayectoria: 7,7 (2010) → 13,3 (2016) → 12,0 (2020) → 9,8 (2024), contra una meta de
+      41,5% para 2025. Subió, y volvió a bajar.
+
+  - indicador: "2.46"
+    serie: "social_dev:women_councillors"
+    fuente: cepal
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      «Mujeres concejalas electas» — regidoras en la terminología dominicana.
+      SALVEDAD: la ley fija la línea base en 35,0% para 2010 y la serie da 33,3 ese año,
+      1,7 puntos de diferencia. Probablemente sean universos distintos (titulares con o sin
+      suplentes); se declara antes de medir cualquier distancia a la meta.
+      Con esa salvedad, la lectura es dura: 33,3 (2010) → 30,2 (2020) → 25,8 (2024), contra
+      una meta de 41,5% para 2025. RETROCEDE, y el descenso se acentúa en las municipales
+      de 2024.
+
   # ══ CINCO EVALUADOS Y DESCARTADOS ══
   # Los cinco tienen serie internacional disponible y NINGUNO mide lo que la ley fijó. Se
   # dejan registrados con la cifra que lo prueba: sin eso, el próximo que mire la lista

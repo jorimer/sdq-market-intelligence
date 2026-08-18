@@ -190,6 +190,44 @@ def _sync_bcrd_mercado_laboral(db: Session, set_phase: Callable[[str], None]) ->
     return synced
 
 
+#: Participación política de las mujeres en gobiernos locales (CEPAL · OIG). Los produce
+#: la JCE y no hay fuente abierta nacional: se verificó contra `datos.gob.do` y no existe.
+#: La CEPAL los recoge del propio organismo electoral y los publica con API abierta.
+_CEPAL_POLITICA = {
+    "women_mayors": ("IND_ALCALDESAS", "síndicas (alcaldesas) electas"),
+    "women_councillors": ("IND_CONCEJALAS", "regidoras (concejalas) electas"),
+}
+
+
+def _sync_cepal_politica(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Síndicas y regidoras (CEPAL · Observatorio de Igualdad de Género) → indicadores
+    2.45 y 2.46 de la END.
+
+    Va en su propia sub-sync y no dentro de la del WDI: es otro emisor, con otro modo de
+    fallo, y juntarlas haría que una caída de la CEPAL se leyera como un problema del
+    Banco Mundial.
+
+    La serie es ESCALONADA —un cargo electivo no cambia hasta la próxima elección— así que
+    el valor se repite entre comicios. No es dato viejo: es la forma del fenómeno.
+    """
+    from shared.data import cepalstat_client as cep
+
+    set_phase("participación política local (CEPAL · OIG)")
+    synced = 0
+    for tema, (const, etiqueta) in _CEPAL_POLITICA.items():
+        try:
+            filas = cep.fetch_serie(getattr(cep, const))
+        except Exception as e:  # noqa: BLE001 — un indicador que falla no aborta el otro
+            logger.warning("[social] CEPAL %s falló: %s", etiqueta, e)
+            continue
+        for anio, valor in filas:
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(anio),
+                              value=float(valor), source=cep.SOURCE, disagg="nacional",
+                              unit="% de los cargos")
+            synced += 1
+    return synced
+
+
 def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
     """Ingreso per cápita POR REGIÓN (SISDOM del MEPyD) → ``sd_indicators``.
 
@@ -492,6 +530,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     mercado_laboral_synced = _best_effort(
         "mercado laboral (BCRD · ENCFT)",
         lambda: _sync_bcrd_mercado_laboral(db, set_phase), errors)
+    cepal_synced = _best_effort(
+        "participación política local (CEPAL · OIG)",
+        lambda: _sync_cepal_politica(db, set_phase), errors)
     income_synced = _best_effort(
         "ingreso per cápita (SISDOM · MEPyD)",
         lambda: _sync_sisdom_income(db, set_phase), errors)
@@ -515,6 +556,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "health_synced": health_synced,
         "informality_synced": informality_synced,
         "mercado_laboral_synced": mercado_laboral_synced,
+        "cepal_politica_synced": cepal_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,

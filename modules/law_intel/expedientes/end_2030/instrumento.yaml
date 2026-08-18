@@ -75,6 +75,13 @@ fuentes_admitidas:
       indicador 3.13 la ley dice 26,8% para 2009 y la edición vigente del WDI dice 27,72%.
       La diferencia es de revisión estadística, no de desempeño, y hay que declararla antes
       de medir la distancia a la meta.
+  - id: cepal
+    nombre: Observatorio de Igualdad de Género de la CEPAL
+    nota: >-
+      Externa y admisible por la misma lógica que la PEFA y el WDI: no es el órgano
+      evaluado. Además NO produce el dato sino que lo recoge del organismo electoral de
+      cada país — para RD, de la propia JCE. Es la vía abierta a una fuente nacional que no
+      publica API ni dataset (verificado contra datos.gob.do).
   - id: pefa
     nombre: Evaluación PEFA
     nota: >-
