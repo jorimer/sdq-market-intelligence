@@ -29,6 +29,8 @@ from modules.law_intel.ratificacion import estado as estado_ratificacion
 from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import ESCALAS, Expediente, cargar, expedientes
 from modules.law_intel.series import proveedor_registro
+from modules.law_intel.normativa import VEREDICTOS as VEREDICTOS_NORMATIVA
+from modules.law_intel.normativa import comprobar as comprobar_normativa
 from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo
 from modules.law_intel.scoring.coherencia_proceso import VEREDICTOS as VEREDICTOS_COHERENCIA
 from modules.law_intel.scoring.coherencia_proceso import resumen as resumen_coherencia
@@ -311,6 +313,47 @@ def verificacion_(expediente_id: str,
     # que no son de alcance NACIONAL y la preferencia del período de la señal sobre
     # el del eje. Y era ésta la que corría, porque es la que decide las promociones.
     return informe(expediente_id, proveedor_registro(db), corte)
+
+
+@router.get("/{expediente_id}/obligaciones/verificacion")
+def verificacion_normativa_(expediente_id: str,
+                            db: Session = Depends(get_db),
+                            _: User = Depends(require_role(UserRole.analyst))) -> Dict[str, Any]:
+    """Comprueba contra la base normativa las obligaciones que consisten en DICTAR una norma.
+
+    Devuelve el veredicto computado y su evidencia; NO cambia el estado del expediente. La
+    promoción sigue siendo un hecho comiteado y revisado, igual que la de los bindings: si
+    la cobertura pudiera cambiar en caliente, dejaría de ser auditable.
+
+    Un fallo de la fuente —sin clave, sin red, credencial rechazada— devuelve
+    `no_verificable` para cada obligación y deja intacto lo declarado. Nunca degrada a
+    incumplimiento.
+    """
+    from shared.data.jurisai_client import buscar as jurisai_buscar
+    from shared.settings.service import get_sector_api_base_url, get_sector_api_key
+
+    _expediente(expediente_id)
+    base = get_sector_api_base_url(db, "jurisai")
+    clave = get_sector_api_key(db, "jurisai")
+
+    def _buscar(**kw):
+        return jurisai_buscar(base, clave, **kw)
+
+    cs = comprobar_normativa(cargar_obligaciones(expediente_id), _buscar)
+    return {
+        "expediente": expediente_id,
+        "fuente": "JurisAI",
+        "comprobadas": len(cs),
+        "acusan_incumplimiento": sum(1 for c in cs if c.acusa),
+        "comprobaciones": [
+            {"obligacion": c.obligacion, "veredicto": c.veredicto, "evidencia": c.evidencia,
+             "norma": c.norma, "alcance": c.alcance}
+            for c in cs],
+        "veredictos": VEREDICTOS_NORMATIVA,
+        "regla": ("`incumplida` exige que el emisor declare su alcance CONCLUYENTE en el "
+                  "rango consultado. Sin eso el veredicto es `sin_registro_publico`, que no "
+                  "afirma nada contra nadie."),
+    }
 
 
 @router.get("/{expediente_id}/ratificacion")

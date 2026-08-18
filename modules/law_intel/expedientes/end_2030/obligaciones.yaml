@@ -100,6 +100,14 @@ obligaciones:
     deber: Dictar el Reglamento de aplicación dentro de los 180 días de la promulgación.
     deudor: {tipo: organo, nombre: Poder Ejecutivo}
     plazo: {tipo: fecha_cierta, vence: "2012-07-23", base: 180 días desde el 2012-01-25}
+    # Qué buscar para comprobarlo. El rango arranca en la promulgación de la ley y llega
+    # hasta hoy: si se cortara en el vencimiento, un cumplimiento TARDÍO —que es justo lo
+    # que pasó— se leería como incumplimiento.
+    verificacion_normativa:
+      cita_a: "ley:1-12"
+      tipo: decreto
+      desde: "2012-01-25"
+      hasta: "2026-12-31"
     consecuencia: null
     estado: cumplida_tarde
     evidencia: >-
