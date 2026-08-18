@@ -383,6 +383,14 @@ class SocialDevProduct:
             "toma de ahí porque el API de ITU DataHub dejó de ser alcanzable de forma "
             "anónima. No confundir con la penetración de banda ancha móvil del eje "
             "telecom, que es otra magnitud."),
+        # Mortalidad de menores de 5 — indicador 2.22. La etiqueta dice el tramo de edad
+        # porque es lo único que la distingue de `child_mortality` (menores de 1), y los
+        # dos valores son plausibles el uno por el otro.
+        "under5_mortality": (
+            "under5_mortality", HEALTH_ENTITY,
+            "Mortalidad de menores de 5 años (por 1.000 nacidos vivos)", "health",
+            "Estimación modelada del grupo interagencial de la ONU, vía Banco Mundial. "
+            "Distinta de `child_mortality`, que es mortalidad INFANTIL (menores de 1)."),
         # Escaños de mujeres en la cámara BAJA — indicador 2.44 de la END. La etiqueta
         # dice «Diputados» y no «parlamento» a propósito: la serie no cubre el Senado, que
         # es el indicador 2.43 y va por otro camino.

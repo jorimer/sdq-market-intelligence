@@ -39,6 +39,11 @@ WDI_NACIONALES_FUERA_DEL_INDICE = {
     # base de Diputados en 20,8% para 2010 y la serie da 20,77 ese año, mientras la del
     # Senado era 9,4 — no hay ambigüedad posible entre las dos.
     "SG.GEN.PARL.ZS": ("women_lower_house", "% de los escaños"),
+    # Mortalidad de menores de 5 años — indicador 2.22 de la END. NO es `child_mortality`,
+    # que en este panel es `SP.DYN.IMRT.IN`, mortalidad INFANTIL (menores de 1). La de
+    # menores de 5 incluye a la infantil más las muertes de 1 a 4 años, y ninguna
+    # transformación las convierte.
+    "SH.DYN.MORT": ("under5_mortality", "por 1.000 nacidos vivos"),
 }
 HEALTH_ENTITY = "nacional"
 _WDI_HEALTH_YEARS = 30
