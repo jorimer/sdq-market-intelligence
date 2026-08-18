@@ -490,8 +490,24 @@ class TestCargosElectivosLocales:
         bs = cargar_bindings(EXPEDIENTE)
         assert bs["2.45"].serie != bs["2.46"].serie
 
-    def test_el_senado_sigue_sin_fuente(self):
-        """De los cuatro cargos electivos, el Senado es el único que ninguna fuente abierta
-        publica. Se comprueba para que su ausencia sea deliberada y no un olvido: es una
-        brecha con destinatario —la JCE— y va al informe como recomendación."""
-        assert "2.43" not in cargar_bindings(EXPEDIENTE)
+    # El test `test_el_senado_sigue_sin_fuente` vivió acá y cumplió su función: obligó a
+    # que la ausencia del 2.43 fuera deliberada mientras no hubo fuente. La hubo —Parline,
+    # entidad DO-UC01— así que lo reemplaza
+    # `test_los_CUATRO_cargos_electivos_tienen_binding_y_ninguno_comparte_serie`, que cubre
+    # lo mismo y más: que los cuatro estén atados Y que ninguno comparta serie con otro.
+
+
+def test_los_CUATRO_cargos_electivos_tienen_binding_y_ninguno_comparte_serie():
+    """La ley fija cuatro cuerpos con la MISMA meta y niveles muy distintos: 9,4 · 20,8 ·
+    7,7 · 35,0 en 2010. Cruzar dos publicaría un cargo como si fuera otro, y las cuatro
+    series vienen de cuatro emisores distintos con etiquetas que se parecen —`DO-LC01` y
+    `DO-UC01`, «alcaldesas» y «concejalas»—.
+
+    Cada uno se identificó por su línea base, no por su nombre. El test fija el resultado:
+    los cuatro atados, ninguno repetido."""
+    bs = cargar_bindings(EXPEDIENTE)
+    cargos = {"2.43": "Senado", "2.44": "Diputados", "2.45": "Síndicas", "2.46": "Regidoras"}
+    faltan = [f"{k} ({v})" for k, v in cargos.items() if k not in bs]
+    assert not faltan, f"cargos electivos sin binding: {faltan}"
+    series = [bs[k].serie for k in cargos]
+    assert len(set(series)) == 4, f"dos cargos comparten serie: {series}"

@@ -293,6 +293,25 @@ bindings:
       lo que vuelve accionable este dato.
 
   # ══ RE-ABIERTO ══ El descarte era correcto para `child_mortality` (menores de 1) y
+  # ══ EL CUARTO Y ÚLTIMO CARGO ELECTIVO ══
+  - indicador: "2.43"
+    serie: "social_dev:women_senate"
+    fuente: uip
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      Composición del Senado (Unión Interparlamentaria, entidad DO-UC01). Es el único de los
+      cuatro cargos electivos que ninguna otra fuente cubre: el WDI da la cámara BAJA —20,77
+      en 2010, que es Diputados— y la CEPAL solo publica oradores de Cámara Alta, no
+      composición.
+      La identificación es por VALOR: la ley fija 9,4% para 2010 y la tabla da 9,4% en
+      2010-05. `DO-LC01` y `DO-UC01` se parecen demasiado para confiar en la etiqueta.
+      Trayectoria: 9,4 (2010) → 12,5 (2020) → 12,5 (2024), contra una meta de 41,5% para
+      2025. Tres puntos en catorce años, y sin moverse desde 2020. Es el más rezagado de los
+      cuatro.
+      SALVEDAD de fuente: Parline ofrece exportación CSV pero está tras un desafío de
+      Cloudflare, así que se lee la página pública. Es más frágil y se declara.
+
   # ══ DOS DE LOS TRES CARGOS ELECTIVOS QUE FALTABAN ══
   # Los produce la JCE, que no publica API ni dataset abierto —verificado contra
   # datos.gob.do—. La CEPAL los recoge del propio organismo electoral y los publica.

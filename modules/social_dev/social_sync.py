@@ -228,6 +228,25 @@ def _sync_cepal_politica(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_ipu_senado(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Mujeres en el Senado (UIP · Parline) → indicador 2.43 de la END.
+
+    Sub-sync propia: es el cuarto emisor distinto de los cuatro cargos electivos, y juntarla
+    con otra haría que su caída se leyera como problema del vecino.
+    """
+    from shared.data.ipu_parline_client import SOURCE, fetch_senado
+
+    set_phase("mujeres en el Senado (UIP · Parline)")
+    filas = fetch_senado()   # la excepción sube a _best_effort
+    synced = 0
+    for anio, valor in filas:
+        _upsert_indicator(db, theme="women_senate", entity=HEALTH_ENTITY, period=str(anio),
+                          value=float(valor), source=SOURCE, disagg="nacional",
+                          unit="% de los escaños")
+        synced += 1
+    return synced
+
+
 def _sync_sisdom_income(db: Session, set_phase: Callable[[str], None]) -> int:
     """Ingreso per cápita POR REGIÓN (SISDOM del MEPyD) → ``sd_indicators``.
 
@@ -533,6 +552,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     cepal_synced = _best_effort(
         "participación política local (CEPAL · OIG)",
         lambda: _sync_cepal_politica(db, set_phase), errors)
+    senado_synced = _best_effort(
+        "mujeres en el Senado (UIP · Parline)",
+        lambda: _sync_ipu_senado(db, set_phase), errors)
     income_synced = _best_effort(
         "ingreso per cápita (SISDOM · MEPyD)",
         lambda: _sync_sisdom_income(db, set_phase), errors)
@@ -557,6 +579,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "informality_synced": informality_synced,
         "mercado_laboral_synced": mercado_laboral_synced,
         "cepal_politica_synced": cepal_synced,
+        "senado_synced": senado_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,
