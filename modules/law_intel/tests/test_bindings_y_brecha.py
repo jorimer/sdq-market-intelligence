@@ -430,3 +430,37 @@ def test_todo_descarte_prueba_su_motivo_con_una_CIFRA():
     sin_cifra = [b.indicador for b in cargar_bindings(EXPEDIENTE).values()
                  if b.estado == "descartado" and not re.search(r"\d", b.motivo_descarte or "")]
     assert not sin_cifra, f"descartes sin cifra que los sostenga: {sin_cifra}"
+
+
+def test_toda_serie_del_panel_social_que_un_binding_cita_EXISTE():
+    """Un binding puede apuntar a una serie que nadie produce, y nada falla.
+
+    Pasó: el 2.22 quedó apuntando a `social_dev:under5_mortality` mientras las tres
+    ediciones que crean esa serie —el código WDI en la sync, la señal en el producto y el
+    alcance en la doctrina— se perdieron sin llegar al commit. Los tests pasaron, el PR
+    mergeó, prod desplegó, y la única señal fue que la verificación nunca encontraba el
+    dato. Once corridas de sync para descubrirlo.
+
+    El guard cruza lo que el expediente CITA contra lo que el panel social DECLARA producir.
+    Es barato y cierra una clase entera: un binding a una serie inexistente no es un dato
+    faltante, es una referencia rota que se lee como brecha del Estado.
+    """
+    from modules.social_dev.products import SocialDevProduct
+    from shared.doctrine.loader import load_doctrine
+
+    # Lo que el panel produce son las variables del ÍNDICE —declaradas por dimensión en la
+    # doctrina— más las que expone fuera de él. No sirve `variable_scopes`: ahí sólo están
+    # las que declaran alcance explícito, y las que quedan en el default no aparecen.
+    cfg = load_doctrine("social")
+    del_indice = {v for vs in cfg.dimension_variables.values() for v in vs}
+    declaradas = del_indice | set(SocialDevProduct._FUERA_DEL_INDICE)
+    assert len(declaradas) > 8, "no se pudo leer lo que el panel declara producir"
+
+    citadas = {b.serie.split(":", 1)[1] for b in cargar_bindings(EXPEDIENTE).values()
+               if b.serie.startswith("social_dev:")}
+    rotas = sorted(citadas - declaradas)
+    assert not rotas, (
+        f"estos bindings citan series que el panel social no produce: {rotas}. Un binding a "
+        "una serie inexistente no es un dato faltante — es una referencia rota, y el informe "
+        "la publica como brecha del Estado."
+    )
