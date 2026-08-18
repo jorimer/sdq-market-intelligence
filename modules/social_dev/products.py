@@ -383,6 +383,15 @@ class SocialDevProduct:
             "toma de ahí porque el API de ITU DataHub dejó de ser alcanzable de forma "
             "anónima. No confundir con la penetración de banda ancha móvil del eje "
             "telecom, que es otra magnitud."),
+        # Escaños de mujeres en la cámara BAJA — indicador 2.44 de la END. La etiqueta
+        # dice «Diputados» y no «parlamento» a propósito: la serie no cubre el Senado, que
+        # es el indicador 2.43 y va por otro camino.
+        "women_lower_house": (
+            "women_lower_house", HEALTH_ENTITY,
+            "Mujeres en la Cámara de Diputados (% de escaños)", "inclusion",
+            "Serie del Banco Mundial sobre el reporte de la Unión Interparlamentaria. Para "
+            "sistemas bicamerales la UIP reporta la cámara BAJA: esta serie NO cubre el "
+            "Senado."),
         # La fila «Total» del cuadro 05 3 007 del SISDOM, que el parser salteaba por no
         # resolver a ninguna región. Habilita el indicador 2.18 de la END.
         "schooling_years_pais": (
