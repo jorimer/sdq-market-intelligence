@@ -388,3 +388,28 @@ def test_ningun_binding_declara_una_fuente_que_no_sea_la_que_lo_produce():
         if b.serie.split(":", 1)[1] in del_wdi and b.fuente != "wdi":
             mal.append(f"{b.indicador} → {b.serie} declara `{b.fuente}`")
     assert not mal, f"la procedencia declarada no es la real: {mal}"
+
+
+def test_el_2_44_se_identifico_por_VALOR_y_no_por_etiqueta():
+    """La ley pide cuatro cuerpos electivos y la serie internacional cubre uno solo. Elegir
+    por el nombre («parlamento») habría sido adivinar entre Senado y Diputados.
+
+    La identificación es por la línea base: la ley fija Diputados en 20,8% para 2010 y la
+    serie da 20,77 ese año, mientras el Senado era 9,4%. La nota lo deja escrito porque es
+    la evidencia de que el binding no es una coincidencia de etiqueta."""
+    b = cargar_bindings(EXPEDIENTE)["2.44"]
+    assert b.serie == "social_dev:women_lower_house"
+    nota = b.nota or ""
+    assert "20,8" in nota and "20,77" in nota, "falta la coincidencia que identifica la serie"
+    assert "9,4" in nota, "falta el valor del Senado, que es lo que descarta la ambigüedad"
+
+
+def test_los_otros_tres_cargos_electivos_NO_quedan_atados_a_la_serie_de_diputados():
+    """Senado, Síndicas y Regidoras tienen la misma meta y líneas base muy distintas. Atar
+    cualquiera de los tres a la serie de la cámara baja publicaría la cifra de un cuerpo
+    como si fuera la de otro — el mismo error de sujeto que ya costó caro en este módulo."""
+    bs = cargar_bindings(EXPEDIENTE)
+    for ind in ("2.43", "2.45", "2.46"):
+        b = bs.get(ind)
+        assert b is None or b.serie != "social_dev:women_lower_house", (
+            f"{ind} no es la Cámara de Diputados")

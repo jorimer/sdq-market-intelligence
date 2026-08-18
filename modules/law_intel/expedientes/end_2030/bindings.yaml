@@ -245,6 +245,25 @@ bindings:
       dice 27,72%. Es revisión estadística, no desempeño, y va declarada antes de medir
       cualquier distancia a la meta.
 
+  # ══ UNO DE LOS CUATRO DE CARGOS ELECTIVOS ══
+  # La ley pide cuatro cuerpos —Senado, Diputados, Síndicas, Regidoras— con la MISMA meta
+  # (50% en 2030) y líneas base muy distintas. Solo el de Diputados tiene serie
+  # internacional; los otros tres los produce la JCE y quedan declarados como brecha con
+  # su destinatario, que es justamente lo que el cliente del informe puede accionar.
+  - indicador: "2.44"
+    serie: "social_dev:women_lower_house"
+    fuente: wdi
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      «Proportion of seats held by women in national parliaments» del Banco Mundial, sobre
+      el reporte de la Unión Interparlamentaria. Para sistemas bicamerales la UIP reporta la
+      cámara BAJA, que es exactamente lo que pide el 2.44.
+      La identificación no se hizo por el nombre sino por el VALOR: la ley fija la línea
+      base de Diputados en 20,8% para 2010 y la serie da 20,77 ese año, mientras la del
+      Senado era 9,4%. No hay ambigüedad posible entre las dos, y esa coincidencia es más
+      fuerte que cualquier coincidencia de etiqueta.
+
   # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
   # transformación declarable: son conceptos distintos.
   - indicador: "2.22"
