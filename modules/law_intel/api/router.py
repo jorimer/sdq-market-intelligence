@@ -28,6 +28,7 @@ from modules.law_intel.ratificacion import (ESTADOS as ESTADOS_RATIFICACION,
 from modules.law_intel.ratificacion import estado as estado_ratificacion
 from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import ESCALAS, Expediente, cargar, expedientes
+from modules.law_intel.series import proveedor_registro
 from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo
 from modules.law_intel.scoring.coherencia_proceso import VEREDICTOS as VEREDICTOS_COHERENCIA
 from modules.law_intel.scoring.coherencia_proceso import resumen as resumen_coherencia
@@ -292,36 +293,6 @@ def coherencia_(expediente_id: str,
     }
 
 
-def _proveedor_registro(db: Session) -> Callable[[str], List[tuple]]:
-    """Lee el DATA REGISTRY — no una tabla concreta.
-
-    La primera versión consultaba `mm_series`, y esa fue una decisión equivocada tomada sin
-    mirar: el dato de la plataforma no vive en una tabla única, vive repartido por módulo y
-    se expone por el registro. Con el proveedor viejo la verificación devolvía `vacia` para
-    los siete bindings aunque los códigos hubieran sido correctos.
-
-    El código de serie de un binding es `<eje>:<variable>` — p. ej. `social_dev:poverty_rate`.
-    El eje va adelante porque las claves no son únicas entre ejes y una colisión silenciosa
-    ataría un indicador a la variable de otro dominio.
-
-    El registro sirve UN punto por variable (su valor vigente y el período del eje), no una
-    serie. Alcanza para verificar existencia y frescura; no alcanza para trayectoria, y el
-    semáforo ya se niega a emitir un veredicto de tendencia con una sola observación.
-    """
-    reg = build_data_registry(db)
-    por_clave: Dict[str, List[tuple]] = {}
-    for eje in (reg.axes if hasattr(reg, "axes") else []):
-        periodo = getattr(eje, "period", None)
-        for sig in (getattr(eje, "signals", None) or []):
-            if sig.value is None or not periodo:
-                continue
-            por_clave[f"{eje.sector_key}:{sig.key}"] = [(str(periodo), float(sig.value))]
-
-    def leer(codigo: str) -> List[tuple]:
-        return por_clave.get(codigo, [])
-    return leer
-
-
 @router.get("/{expediente_id}/bindings/verificacion")
 def verificacion_(expediente_id: str,
                   corte: str = Query("2025", pattern=r"^\d{4}$"),
@@ -335,7 +306,11 @@ def verificacion_(expediente_id: str,
     dejaría de ser verificable contra el repositorio.
     """
     _expediente(expediente_id)
-    return informe(expediente_id, _proveedor_registro(db), corte)
+    # UNA sola implementación del proveedor, la de `series.py`. Había una copia acá
+    # que se quedó sin los dos guards que la otra fue ganando: el rechazo de señales
+    # que no son de alcance NACIONAL y la preferencia del período de la señal sobre
+    # el del eje. Y era ésta la que corría, porque es la que decide las promociones.
+    return informe(expediente_id, proveedor_registro(db), corte)
 
 
 @router.get("/{expediente_id}/ratificacion")
