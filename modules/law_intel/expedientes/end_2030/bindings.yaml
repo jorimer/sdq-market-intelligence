@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "10.0"
+version: "11.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -34,7 +34,8 @@ version: "10.0"
 # hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
 # caliente, la cifra de portada dejaría de ser verificable.
 #
-# Cobertura del expediente: 5 de 90 indicadores numerados, todos contra cifra de PAÍS:
+# Cobertura del expediente: 6 de 90 indicadores numerados, todos contra cifra de PAÍS:
+#   3.13  usuarios de internet (WDI, republica UIT) — verificado 2026-08-17
 #   2.18  escolaridad promedio (SISDOM, fila «Total») — recuperado 2026-08-17
 #   2.21  esperanza de vida (WDI, país)
 #   2.39  ocupados en sector formal (BCRD/ENCFT, país)
@@ -233,7 +234,8 @@ bindings:
     serie: "social_dev:internet_users"
     fuente: wdi
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       «Individuals using the Internet (% of population)» — la magnitud exacta del indicador.
       NO es `telecom:internet_penetration`, que es banda ancha MÓVIL por 100 habitantes y
@@ -244,6 +246,10 @@ bindings:
       SALVEDAD: la ley fija la línea base en 26,8% para 2009 y la edición vigente del WDI
       dice 27,72%. Es revisión estadística, no desempeño, y va declarada antes de medir
       cualquier distancia a la meta.
+      Verificado en prod 2026-08-17: **91,0% en 2024**, contra metas de 60% para 2025 y 70%
+      para 2030. Las dos superadas, y la de 2030 con seis años de anticipación. Es el
+      segundo indicador del expediente que supera su meta de horizonte completo — y a
+      diferencia del primero que lo pareció, éste se mide contra una serie de PAÍS.
 
   # ══ UNO DE LOS CUATRO DE CARGOS ELECTIVOS ══
   # La ley pide cuatro cuerpos —Senado, Diputados, Síndicas, Regidoras— con la MISMA meta
