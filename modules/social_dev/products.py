@@ -383,6 +383,20 @@ class SocialDevProduct:
             "toma de ahí porque el API de ITU DataHub dejó de ser alcanzable de forma "
             "anónima. No confundir con la penetración de banda ancha móvil del eje "
             "telecom, que es otra magnitud."),
+        # Síndicas y regidoras — indicadores 2.45 y 2.46. Las etiquetas llevan los DOS
+        # nombres porque la fuente regional usa «alcaldesas» y «concejalas», y sin eso
+        # nadie relaciona la señal con lo que la ley pide.
+        "women_mayors": (
+            "women_mayors", HEALTH_ENTITY,
+            "Síndicas (alcaldesas) electas (% de los cargos)", "inclusion",
+            "Observatorio de Igualdad de Género de la CEPAL, que recoge el dato del "
+            "organismo electoral. Serie ESCALONADA: un cargo electivo no cambia de "
+            "composición hasta la próxima elección."),
+        "women_councillors": (
+            "women_councillors", HEALTH_ENTITY,
+            "Regidoras (concejalas) electas (% de los cargos)", "inclusion",
+            "Observatorio de Igualdad de Género de la CEPAL. Serie ESCALONADA entre "
+            "elecciones, igual que la de síndicas."),
         # Mortalidad de menores de 5 — indicador 2.22. La etiqueta dice el tramo de edad
         # porque es lo único que la distingue de `child_mortality` (menores de 1), y los
         # dos valores son plausibles el uno por el otro.

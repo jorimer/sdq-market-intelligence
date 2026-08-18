@@ -464,3 +464,34 @@ def test_toda_serie_del_panel_social_que_un_binding_cita_EXISTE():
         "una serie inexistente no es un dato faltante — es una referencia rota, y el informe "
         "la publica como brecha del Estado."
     )
+
+
+class TestCargosElectivosLocales:
+    """2.45 y 2.46 llegan por una fuente REGIONAL que usa otra terminología. Ahí es donde
+    un binding se ata por parecido de nombre y publica el cargo equivocado."""
+
+    def test_la_identificacion_de_sindicas_es_por_valor_exacto(self):
+        """«Alcaldesa» es el término regional de «síndica»: el nombre no prueba nada. Lo
+        que lo prueba es que la ley fija 7,7% para 2010 y la serie da exactamente 7,7."""
+        b = cargar_bindings(EXPEDIENTE)["2.45"]
+        assert b.serie == "social_dev:women_mayors"
+        assert "7,7" in (b.nota or ""), "falta el valor que identifica la serie"
+
+    def test_regidoras_declara_que_su_linea_base_NO_coincide(self):
+        """35,0 dice la ley, 33,3 dice la serie para el mismo 2010. Probablemente universos
+        distintos. Medir la distancia a la meta sin decirlo mueve 1,7 puntos que no puso la
+        política."""
+        b = cargar_bindings(EXPEDIENTE)["2.46"]
+        assert "35,0" in (b.nota or "") and "33,3" in (b.nota or "")
+
+    def test_los_dos_cargos_locales_no_comparten_serie(self):
+        """Síndicas y regidoras tienen la MISMA meta y niveles muy distintos: cruzarlas
+        publicaría un cargo como si fuera el otro."""
+        bs = cargar_bindings(EXPEDIENTE)
+        assert bs["2.45"].serie != bs["2.46"].serie
+
+    def test_el_senado_sigue_sin_fuente(self):
+        """De los cuatro cargos electivos, el Senado es el único que ninguna fuente abierta
+        publica. Se comprueba para que su ausencia sea deliberada y no un olvido: es una
+        brecha con destinatario —la JCE— y va al informe como recomendación."""
+        assert "2.43" not in cargar_bindings(EXPEDIENTE)
