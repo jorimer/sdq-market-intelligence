@@ -82,3 +82,14 @@ def test_solo_se_comprueban_las_obligaciones_que_DECLARAN_su_consulta():
     declaran = [o.id for o in obs if o.verificacion_normativa]
     assert {c.obligacion for c in cs} == set(declaran)
     assert "art-51-comision-bicameral" not in {c.obligacion for c in cs}
+
+
+def test_la_fecha_de_gaceta_FALTA_a_menudo_y_no_se_interpola_cruda():
+    """El número de Gaceta y su fecha viajan por separado, y el corpus real devolvió el
+    134-14 con número y sin fecha. Interpolarla sin comprobar publicó «del None» dentro de
+    la evidencia que sostiene el veredicto — una frase que el informe cita tal cual."""
+    sin_fecha = dict(_DECRETO, gaceta={"numero": "10753", "fecha": None})
+    c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([sin_fecha], True))
+    assert "10753" in c.evidencia, "el número solo ya es respaldo: no se calla por la fecha"
+    assert "None" not in c.evidencia
+    assert c.evidencia.endswith("Gaceta 10753.")
