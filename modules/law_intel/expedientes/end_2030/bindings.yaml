@@ -34,7 +34,9 @@ version: "11.0"
 # hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
 # caliente, la cifra de portada dejaría de ser verificable.
 #
-# Cobertura del expediente: 6 de 90 indicadores numerados, todos contra cifra de PAÍS:
+# Cobertura del expediente: 8 de 90 indicadores numerados, todos contra cifra de PAÍS:
+#   2.22  mortalidad de menores de 5 (WDI · UN IGME) — verificado 2026-08-18
+#   2.44  mujeres en Diputados (WDI · UIP) — verificado 2026-08-17
 #   3.13  usuarios de internet (WDI, republica UIT) — verificado 2026-08-17
 #   2.18  escolaridad promedio (SISDOM, fila «Total») — recuperado 2026-08-17
 #   2.21  esperanza de vida (WDI, país)
@@ -349,7 +351,8 @@ bindings:
     serie: "social_dev:under5_mortality"
     fuente: wdi
     mejor: menor
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       `SH.DYN.MORT` — mortalidad de menores de 5 años, la magnitud exacta del indicador. El
       binding anterior apuntaba a `child_mortality`, que es `SP.DYN.IMRT.IN`, mortalidad
@@ -357,6 +360,11 @@ bindings:
       SALVEDAD: la línea base de la ley (36,0) sale de las rondas ENDESA 2002-2007 y esta
       serie es la estimación modelada del grupo interagencial de la ONU, que da 34,9 para
       2009-2010. Mismo concepto y niveles cercanos, método distinto — se declara y se mide.
+      Verificado en prod 2026-08-18: **30,6 por mil en 2024**, contra una línea base de 36,0
+      y metas de 14,5 para 2025 y 11,0 para 2030. La ley pedía más que partir la tasa a la
+      mitad; en diecisiete años bajó un 15%. Es de los incumplimientos más amplios del
+      expediente y no depende del método: aun tomando la base modelada de 34,9 en 2009, la
+      distancia a la meta de 2025 es la misma en lo esencial.
     motivo_descarte: null
     motivo_descarte: >-
       La variable del panel viene del código `SP.DYN.IMRT.IN` del Banco Mundial, que es
