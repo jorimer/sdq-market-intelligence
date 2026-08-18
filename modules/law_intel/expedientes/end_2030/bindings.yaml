@@ -34,7 +34,11 @@ version: "11.0"
 # hecho comiteado y auditable contra el repositorio. Si la cobertura pudiera subir en
 # caliente, la cifra de portada dejaría de ser verificable.
 #
-# Cobertura del expediente: 8 de 90 indicadores numerados, todos contra cifra de PAÍS:
+# Cobertura del expediente: 12 de 90 indicadores numerados, todos contra cifra de PAÍS:
+#   2.9   cobertura básica (MINERD, TOTAL PAIS) — verificado 2026-08-18
+#   2.10  cobertura secundaria (MINERD, TOTAL PAIS) — verificado 2026-08-18
+#   2.45  síndicas (CEPAL OIG) — verificado 2026-08-18
+#   2.46  regidoras (CEPAL OIG) — verificado 2026-08-18
 #   2.22  mortalidad de menores de 5 (WDI · UN IGME) — verificado 2026-08-18
 #   2.44  mujeres en Diputados (WDI · UIP) — verificado 2026-08-17
 #   3.13  usuarios de internet (WDI, republica UIT) — verificado 2026-08-17
@@ -138,19 +142,25 @@ bindings:
     serie: "social_dev:primary_coverage_pais"
     fuente: minerd
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2025"
+    estado: verificado
     nota: >-
       Cobertura neta del nivel básico, fila `TOTAL PAIS` del tablero del SIIE. La meta es
       100% para 2025 desde una base de 94,7% en 2010, así que el margen es estrecho y el
       veredicto va a depender de décimas — razón de más para medirlo contra la cifra del
       país y no contra la de una región.
+      Verificado en prod 2026-08-18: **92,81% en 2024**, contra una línea base de 94,7% en
+      2010 y una meta de 100% para 2025. RETROCEDE: la cobertura del nivel básico es hoy
+      casi dos puntos menor que cuando se fijó la meta, y era el indicador educativo que
+      más cerca estaba de cumplirse.
 
   # ══ REPUNTADO a la serie nacional; espera a que la fuente responda ══
   - indicador: "2.10"
     serie: "social_dev:secondary_coverage_pais"
     fuente: minerd
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2025"
+    estado: verificado
     nota: >-
       Repuntado de `social_dev:secondary_coverage` —que se mide POR REGIÓN y servía el
       valor de cibao_norte (71,3)— a la fila `TOTAL PAIS` del tablero del SIIE.
@@ -158,6 +168,11 @@ bindings:
       400 por límite de tasa, también desde producción, así que la señal nacional todavía
       no tiene dato. No es una duda sobre qué mide —eso está resuelto— sino que la fuente
       no contesta. La cura que el propio conector prescribe es una instantánea comiteada.
+      Verificado en prod 2026-08-18: **71,61% en 2024**, contra una meta de 86% para 2025 y
+      95% para 2030.
+      El detalle que valida todo el arreglo del total país: la cifra NACIONAL es 71,61 y la
+      de cibao_norte —que se venía publicando— era 71,3. Casi idénticas. Por eso el error
+      original no se detectaba mirando el número.
 
   # ══ SEÑAL YA EXPUESTA, PERO EL INDICADOR MIDE LO CONTRARIO ══
   # El indicador legal cuenta el sector FORMAL y la variable mide la INFORMALIDAD. Es el
@@ -285,7 +300,8 @@ bindings:
     serie: "social_dev:women_mayors"
     fuente: cepal
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       «Mujeres alcaldesas electas» del Observatorio de Igualdad de Género. La
       identificación es por VALOR y no por nombre —«alcaldesa» es el término regional de lo
@@ -294,12 +310,14 @@ bindings:
       La serie es escalonada porque un cargo electivo no cambia hasta la próxima elección.
       Trayectoria: 7,7 (2010) → 13,3 (2016) → 12,0 (2020) → 9,8 (2024), contra una meta de
       41,5% para 2025. Subió, y volvió a bajar.
+      Verificado en prod 2026-08-18: **9,8% en 2024**.
 
   - indicador: "2.46"
     serie: "social_dev:women_councillors"
     fuente: cepal
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       «Mujeres concejalas electas» — regidoras en la terminología dominicana.
       SALVEDAD: la ley fija la línea base en 35,0% para 2010 y la serie da 33,3 ese año,
@@ -308,6 +326,7 @@ bindings:
       Con esa salvedad, la lectura es dura: 33,3 (2010) → 30,2 (2020) → 25,8 (2024), contra
       una meta de 41,5% para 2025. RETROCEDE, y el descenso se acentúa en las municipales
       de 2024.
+      Verificado en prod 2026-08-18: **25,82% en 2024**.
 
   # ══ CINCO EVALUADOS Y DESCARTADOS ══
   # Los cinco tienen serie internacional disponible y NINGUNO mide lo que la ley fijó. Se
