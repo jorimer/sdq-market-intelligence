@@ -362,3 +362,42 @@ def test_needs_secondary_flag(db):
     by_provider = {a.provider: a for a in out.sectorApis}
     assert by_provider["sb_do"].needsSecondary is True
     assert by_provider["bcrd"].needsSecondary is False
+
+
+def test_jurisai_aparece_en_configuracion_para_que_el_dueno_coloque_su_clave():
+    """El eje de evaluación de leyes necesita la clave de JurisAI, y la pantalla de
+    Configuración se arma sola desde `KNOWN_PROVIDERS`: alcanza con declararlo ahí.
+
+    Se comprueba también que la URL base venga VACÍA. Una por defecto que estuviera mal
+    haría fallar la prueba de conexión culpando a la clave, que es el diagnóstico más caro
+    de perseguir.
+    """
+    from shared.settings.service import KNOWN_PROVIDERS
+
+    j = next((p for p in KNOWN_PROVIDERS if p["provider"] == "jurisai"), None)
+    assert j is not None, "JurisAI no aparecería en la pantalla de Configuración"
+    assert j["requires_key"] is True
+    assert j["baseUrl"] == "", "una URL base adivinada culpa a la clave cuando falla"
+    assert j["sector"] == "law"
+
+
+def test_la_clave_de_jurisai_se_guarda_CIFRADA_y_no_vuelve_en_claro(db):
+    """Es una credencial de un tercero: si la pantalla la devolviera en claro, quedaría en
+    el historial del navegador y en cualquier registro de red."""
+    import json
+
+    from shared.settings.models import SectorApiConfig
+    from shared.settings.service import _upsert_sector_api, get_sector_api_key, get_settings
+    from shared.settings.schemas import SectorApiIn
+
+    _upsert_sector_api(db, SectorApiIn(
+        provider="jurisai", baseUrl="https://api.jurisai.example", apiKey="SECRETO-123"))
+    db.commit()
+
+    fila = db.query(SectorApiConfig).filter_by(provider="jurisai").first()
+    assert fila is not None and fila.api_key_enc
+    assert "SECRETO-123" not in (fila.api_key_enc or ""), "la clave quedó en claro en la base"
+    assert get_sector_api_key(db, "jurisai") == "SECRETO-123", "el conector no la recupera"
+
+    servido = get_settings(db)
+    assert "SECRETO-123" not in json.dumps(servido, default=str), "la clave se devolvió al cliente"
