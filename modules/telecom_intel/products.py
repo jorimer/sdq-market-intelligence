@@ -194,6 +194,33 @@ def _period_year(period: str) -> Optional[int]:
         return None
 
 
+#: Estado declarado de la fuente viva. ``None`` = todo normal y esta declaración
+#: desaparece sola de las superficies; con texto, viaja al `detail` del readiness y a las
+#: notas de validación, que son los dos lugares donde alguien la va a leer.
+#:
+#: **Por qué existe.** El índice mide su propia frescura desde el período del dato, así que
+#: envejecer se nota… en dos años, cuando la cadencia anual lo marque rancio. Lo que no se
+#: notaba es POR QUÉ va a envejecer: el sync de la UIT lleva desde el 2026-07-19 sin correr
+#: con éxito y su última corrida quedó en `fase: error`. Un producto que envejece por una
+#: fuente caída y no lo dice se descubre cuando el cliente pregunta.
+#:
+#: Se quita cuando la UIT conteste: basta poner ``None``.
+FUENTE_EN_REVISION = (
+    "⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser "
+    "alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y "
+    "`datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización "
+    "exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo "
+    "real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso "
+    "enviada a indicators@itu.int."
+)
+
+
+def _con_revision(texto: str) -> str:
+    """Agrega la declaración de fuente en revisión, si la hay. Una sola vía para las dos
+    superficies: si se agregara a mano en cada una, quitarla dejaría la otra mintiendo."""
+    return f"{texto} {FUENTE_EN_REVISION}" if FUENTE_EN_REVISION else texto
+
+
 class TelecomProduct:
     sector_key = SECTOR_KEY
 
@@ -220,7 +247,8 @@ class TelecomProduct:
         s = self._latest()
         if s is None:
             return DataHealth(coverage=0.0, freshness_days=None, cadence="annual",
-                              sources=("ITU DataHub",), detail="Sin IDT persistido.")
+                              sources=("ITU DataHub",),
+                              detail=_con_revision("Sin IDT persistido."))
         coverage = s.coverage if s.coverage is not None else 0.0
         # La FUENTE se infiere del período: con "Q" = boletín INDOTEL (trimestral, congelado
         # en 2022-Q1, histórico); sin "Q" = ITU DataHub (anual, vigente hasta 2024). La
@@ -243,7 +271,8 @@ class TelecomProduct:
             freshness = (date.today() - end).days
         return DataHealth(coverage=coverage, freshness_days=freshness, cadence=cadence,
                           sources=(source,),
-                          detail=f"IDT {_fmt(s.telecom_score)} ({s.band}) en {s.period} · {source}")
+                          detail=_con_revision(
+                              f"IDT {_fmt(s.telecom_score)} ({s.band}) en {s.period} · {source}"))
 
     def has_engine(self) -> bool:
         return self._latest() is not None
@@ -272,8 +301,9 @@ class TelecomProduct:
         s = self._latest()
         src = "INDOTEL (2022-Q1)" if (s and "Q" in str(s.period)) else "ITU DataHub"
         return ValidationState(approved=True, score=0.55,
-                               notes=f"IDT sobre dato real de {src} (penetración móvil + banda "
-                                     "ancha); sin validación retrospectiva de resultados.")
+                               notes=_con_revision(
+                                   f"IDT sobre dato real de {src} (penetración móvil + banda "
+                                   "ancha); sin validación retrospectiva de resultados."))
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,
