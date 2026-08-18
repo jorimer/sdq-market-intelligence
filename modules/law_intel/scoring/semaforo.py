@@ -17,6 +17,11 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from modules.law_intel.bindings import Binding, aplicar_transformacion, direccion_de_metas
 from modules.law_intel.registro import Indicador
 
+#: Precisión publicada del valor observado y de su distancia a la meta. Cuatro decimales
+#: sostienen cualquier unidad del expediente —tasas por mil incluidas— sin arrastrar el
+#: residuo de una división.
+_DECIMALES = 4
+
 # Un veredicto por indicador. `no_evaluable` no es una falla: es la respuesta correcta cuando
 # la ley fija la meta en una escala que no se resta.
 VEREDICTOS = {
@@ -25,6 +30,7 @@ VEREDICTOS = {
     "en_trayectoria": "con dos o más observaciones, la pendiente llega antes del corte",
     "no_alcanzara": "con dos o más observaciones, la pendiente NO llega",
     "retrocede": "el indicador se aleja de la meta",
+    "estancada": "el indicador no se mueve, y la meta que lo espera sí",
     "sin_dato": "hay binding pero no hay observación utilizable",
     "sin_medicion": "no hay binding verificado que mida este indicador",
     "no_evaluable": "la meta no está en una escala que admita diferencia",
@@ -49,7 +55,7 @@ class Veredicto:
     def cumple(self) -> Optional[bool]:
         if self.veredicto in ("alcanzada", "en_trayectoria"):
             return True
-        if self.veredicto in ("no_alcanzada", "no_alcanzara", "retrocede"):
+        if self.veredicto in ("no_alcanzada", "no_alcanzara", "retrocede", "estancada"):
             return False
         return None
 
@@ -90,11 +96,16 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
                          motivo="el binding está verificado y la serie no devolvió valor")
 
     p_obs, valor = obs[-1]
+    # Se publica con la MISMA precisión que la distancia. El 2.44 salía como
+    # `37.3684210526316`: trece decimales que son el residuo de una división (71 escaños
+    # entre 190), no una medición. Esa cifra viaja al informe tal cual y la precisión
+    # espuria desacredita al resto de la tabla, donde las metas tienen un decimal.
+    valor = round(valor, _DECIMALES)
     mejor_menor = binding.mejor == "menor"
     cumple = valor <= meta if mejor_menor else valor >= meta
     # La distancia se firma SIEMPRE hacia «cuánto falta»: positiva es déficit, negativa es
     # holgura. Sin esa convención, el signo se lee al revés en la mitad de los indicadores.
-    distancia = round((valor - meta) if mejor_menor else (meta - valor), 4)
+    distancia = round((valor - meta) if mejor_menor else (meta - valor), _DECIMALES)
 
     if len(obs) < 2:
         return Veredicto(ind.id, "alcanzada" if cumple else "no_alcanzada",
@@ -108,8 +119,21 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
     if cumple:
         return Veredicto(ind.id, "alcanzada", meta_periodo=periodo_meta, meta=meta,
                          observado=valor, periodo_observado=p_obs, distancia=distancia,
-                         trayectoria="mejora" if avance > 0 else "se aleja")
-    if avance <= 0:
+                         trayectoria=_trayectoria(avance))
+    if avance == 0:
+        # Estancarse NO es retroceder, y decir que sí es una falsedad COMPROBABLE: el
+        # Senado lleva 12,5% desde 2020 y el motivo rezaba «el indicador se mueve en contra
+        # de la meta» sobre una serie que no se mueve. El lector que verifica esa frase deja
+        # de creerle al resto de la tabla.
+        #
+        # Tampoco es inocuo, y por eso no cuenta como cumplir: la meta sí avanza con los
+        # años, así que quedarse quieto ensancha la brecha. Son dos diagnósticos distintos
+        # que piden dos acciones distintas, y con una sola observación eran indistinguibles.
+        return Veredicto(ind.id, "estancada", meta_periodo=periodo_meta, meta=meta,
+                         observado=valor, periodo_observado=p_obs, distancia=distancia,
+                         trayectoria="plana",
+                         motivo=f"sin variación entre {p0} y {p1}; la meta no espera")
+    if avance < 0:
         return Veredicto(ind.id, "retrocede", meta_periodo=periodo_meta, meta=meta,
                          observado=valor, periodo_observado=p_obs, distancia=distancia,
                          trayectoria="se aleja",
@@ -122,6 +146,12 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
         periodo_observado=p_obs, distancia=distancia, trayectoria="mejora",
         motivo=(f"avanza {avance:.4g} por período y le faltan {falta:.4g} para la meta de "
                 f"{periodo_meta}" + (f"; el próximo corte es {siguiente}" if siguiente else "")))
+
+
+def _trayectoria(avance: float) -> str:
+    """Tres estados, no dos. «Plana» existe porque una serie que no se mueve no «se aleja»:
+    afirmar movimiento donde no lo hay es una falsedad que el lector puede comprobar."""
+    return "mejora" if avance > 0 else ("plana" if avance == 0 else "se aleja")
 
 
 def panel(indicadores: Sequence[Indicador], bindings: Dict[str, Binding],

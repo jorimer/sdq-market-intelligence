@@ -85,3 +85,52 @@ def test_hay_UNA_sola_implementacion_del_proveedor_de_series():
         "`modules.law_intel.series.proveedor_registro` — una copia hereda los guards del "
         "día que se copió y no los que vengan después."
     )
+
+
+def test_con_la_serie_completa_el_semaforo_por_fin_juzga_AVANCE(monkeypatch):
+    """La razón entera por la que el registro expone historia.
+
+    Sin ella los trece indicadores medidos salían `no_alcanzada` y `trayectoria: None`: el
+    producto sabía decir NIVEL y nada más, aunque la ley pide juzgar avance y el dato
+    estuviera en la tabla que ya leíamos. Con la serie, el mismo indicador se separa en
+    «mejora pero no llegará» y «retrocede», que es lo que el lector necesita.
+    """
+    from types import SimpleNamespace
+
+    import modules.law_intel.series as mod
+    import shared.registry.service as svc
+    from shared.registry.signals import NATIONAL, REAL, VariableSignal
+    from modules.law_intel.bindings import Binding
+    from modules.law_intel.registro import Indicador
+    from modules.law_intel.scoring.semaforo import evaluar
+
+    eje = SimpleNamespace(sector_key="social_dev", period="2024", signals=(
+        VariableSignal(key="women_senate", label="Senado", state=REAL, value=12.5,
+                       period="2024", scope=NATIONAL,
+                       history=(("2010", 9.4), ("2020", 12.5), ("2024", 12.5))),
+        VariableSignal(key="women_councillors", label="Regidoras", state=REAL, value=25.82,
+                       period="2024", scope=NATIONAL,
+                       history=(("2010", 33.3), ("2020", 30.2), ("2024", 25.82))),
+    ))
+    monkeypatch.setattr(svc, "build_data_registry", lambda db: SimpleNamespace(axes=(eje,)))
+    leer = mod.proveedor_registro(None)
+
+    ind = Indicador(id="2.46", eje=2, nombre="Mujeres regidoras", escala="numerica",
+                    metas={"2025": 41.5})
+    b = Binding(indicador="2.46", serie="social_dev:women_councillors", fuente="cepal",
+                mejor="mayor", estado="verificado")
+    v = evaluar(ind, b, leer("social_dev:women_councillors"), corte="2025")
+    assert v.veredicto == "retrocede", "33,3 → 30,2 → 25,8 con meta al alza es retroceso"
+    assert v.trayectoria == "se aleja" and v.cumple is False
+
+    # El Senado NO retrocede: está clavado. Con un solo punto los dos salían idénticos
+    # («no_alcanzada»), y son dos diagnósticos distintos que piden dos acciones distintas.
+    ind_s = Indicador(id="2.43", eje=2, nombre="Mujeres senadoras", escala="numerica",
+                     metas={"2025": 41.5})
+    b_s = Binding(indicador="2.43", serie="social_dev:women_senate", fuente="uip",
+                  mejor="mayor", estado="verificado")
+    vs = evaluar(ind_s, b_s, leer("social_dev:women_senate"), corte="2025")
+    assert vs.veredicto == "estancada" and vs.trayectoria == "plana"
+    assert "en contra" not in (vs.motivo or ""), (
+        "una serie que no se mueve NO se mueve en contra: es una falsedad comprobable")
+    assert vs.cumple is False, "estancarse no es cumplir: la meta sí avanza con los años"

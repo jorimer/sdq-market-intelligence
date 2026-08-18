@@ -32,6 +32,15 @@ from modules.law_intel.scoring.coherencia_proceso import revisar
 from modules.law_intel.scoring.semaforo import panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
 
+#: Glosa de `estancada` para el modelo. Es la distinción más fácil de perder al redactar:
+#: «estancada» y «retrocede» suenan igual de mal y significan cosas distintas, y el informe
+#: que llama retroceso a una serie plana es refutable con la fila de al lado.
+GLOSA_ESTANCADA = (
+    "El indicador NO se mueve. No escribas «retrocede» ni «se aleja»: la serie es plana y "
+    "el lector puede comprobarlo en la misma tabla. Tampoco lo suavices a «se mantiene» a "
+    "secas — la meta sí avanza con los años, así que quedarse quieto ensancha la brecha."
+)
+
 
 def law_ai_context(expediente_id: str, corte: str,
                    series: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -83,6 +92,7 @@ def law_ai_context(expediente_id: str, corte: str,
                              "exactamente el eufemismo que este producto existe para no "
                              "repetir."),
             "sin_medicion": "No es incumplimiento. Es que el informe no lo mide.",
+            "estancada": GLOSA_ESTANCADA,
         },
         # ── Coherencia proceso-resultado ──
         "contradicciones_proceso_vs_resultado_computadas": [

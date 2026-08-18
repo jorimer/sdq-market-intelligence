@@ -28,10 +28,11 @@ Proveedor = Callable[[str], Sequence[Observacion]]
 def proveedor_registro(db: Optional[Session]) -> Proveedor:
     """Lee el registro una vez y sirve `[(período, valor)]` por código de serie.
 
-    Un punto por variable, no una serie: el registro publica el valor vigente del eje y su
-    período. Alcanza para verificar existencia y para decir la distancia a la meta; NO
-    alcanza para trayectoria, y el semáforo ya se niega a emitir tendencia con una sola
-    observación en vez de inventar una pendiente.
+    Sirve la SERIE completa para las señales que la traen (``history``) y un punto suelto
+    para las que no. La distinción no se disimula: con una observación el semáforo se niega
+    a emitir tendencia en vez de inventar una pendiente, y ese sigue siendo el estado
+    verdadero de las variables que el registro publica como foto —hoy, las que vienen del
+    panel del IDM, que se arma con un solo período—.
     """
     from shared.registry.service import build_data_registry
 
@@ -60,6 +61,15 @@ def proveedor_registro(db: Optional[Session]) -> Proveedor:
             # inventar el dato que falta en lugar de declararlo.
             if getattr(sig, "scope", NATIONAL) != NATIONAL:
                 omitidas.append(f"{eje.sector_key}:{sig.key}")
+                continue
+            # La SERIE completa cuando el eje la sirve; el punto suelto si no. Con una
+            # sola observación el semáforo se niega —bien— a emitir tendencia, así que sin
+            # historia los veredictos «retrocede» y «no alcanzará» no existían para ningún
+            # indicador: solo sabíamos decir nivel, y la ley pide juzgar AVANCE.
+            historia = getattr(sig, "history", ()) or ()
+            if historia:
+                por_clave[f"{eje.sector_key}:{sig.key}"] = [
+                    (str(p), float(v)) for p, v in historia]
                 continue
             periodo = getattr(sig, "period", None) or periodo_eje
             if not periodo:
