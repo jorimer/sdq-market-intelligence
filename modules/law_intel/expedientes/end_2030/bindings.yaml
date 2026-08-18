@@ -251,6 +251,26 @@ bindings:
       segundo indicador del expediente que supera su meta de horizonte completo — y a
       diferencia del primero que lo pareció, éste se mide contra una serie de PAÍS.
 
+  # ══ UNO DE LOS CUATRO DE CARGOS ELECTIVOS ══
+  # La ley pide cuatro cuerpos —Senado, Diputados, Síndicas, Regidoras— con la MISMA meta
+  # (50% en 2030) y líneas base muy distintas. Solo el de Diputados tiene serie
+  # internacional; los otros tres los produce la JCE y quedan declarados como brecha con
+  # su destinatario, que es justamente lo que el cliente del informe puede accionar.
+  - indicador: "2.44"
+    serie: "social_dev:women_lower_house"
+    fuente: wdi
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      «Proportion of seats held by women in national parliaments» del Banco Mundial, sobre
+      el reporte de la Unión Interparlamentaria. Para sistemas bicamerales la UIP reporta la
+      cámara BAJA, que es exactamente lo que pide el 2.44.
+      La identificación no se hizo por el nombre sino por el VALOR: la ley fija la línea
+      base de Diputados en 20,8% para 2010 y la serie da 20,77 ese año, mientras la del
+      Senado era 9,4%. No hay ambigüedad posible entre las dos, y esa coincidencia es más
+      fuerte que cualquier coincidencia de etiqueta.
+
+  # ══ RE-ABIERTO ══ El descarte era correcto para `child_mortality` (menores de 1) y
   # ══ CINCO EVALUADOS Y DESCARTADOS ══
   # Los cinco tienen serie internacional disponible y NINGUNO mide lo que la ley fijó. Se
   # dejan registrados con la cifra que lo prueba: sin eso, el próximo que mire la lista
@@ -319,9 +339,6 @@ bindings:
       lo confirma: 86,1 de la ley contra 93,68 de la serie en el mismo 2007. Son
       poblaciones distintas y la diferencia crece con la meta, que es del 100%.
 
-  # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
-  # transformación declarable: son conceptos distintos.
-  # ══ RE-ABIERTO ══ El descarte era correcto para `child_mortality` (menores de 1) y
   # llevó a buscar la magnitud correcta, que existía en otra serie.
   - indicador: "2.22"
     serie: "social_dev:under5_mortality"
@@ -343,7 +360,6 @@ bindings:
       menores de 5 incluye a la infantil más las muertes entre 1 y 4 años. El nombre de la
       variable (`child_mortality`) invita al error y el valor (27,7) es plausible para las
       dos, que es exactamente lo que vuelve peligrosa la confusión.
-
 
   - indicador: "3.26"
     serie: "social_dev:income_per_capita"

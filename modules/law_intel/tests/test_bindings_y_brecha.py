@@ -241,13 +241,12 @@ class TestLasSenalesQueYaEstabanExpuestas:
         menores de 5. Ninguna transformación las convierte, y el valor es plausible para las
         dos — que es lo que vuelve peligrosa la confusión.
 
-        El descarte original era correcto y sirvió: llevó a buscar la magnitud verdadera,
+        El descarte original era correcto y SIRVIÓ: llevó a buscar la magnitud verdadera,
         que existía en otra serie (`SH.DYN.MORT`). Lo que el test protege es la REGLA —que
         no se mida con la infantil— y no el estado en que quedó el binding."""
         b = cargar_bindings(EXPEDIENTE)["2.22"]
         assert b.serie != "social_dev:child_mortality"
-        assert "under5" in b.serie or "menores de 5" in (b.nota or "").lower()
-        # Y la distinción sigue escrita, porque es la que evita repetir el error.
+        assert "under5" in b.serie
         assert "INFANTIL" in (b.nota or "").upper()
 
 
@@ -394,19 +393,40 @@ def test_ningun_binding_declara_una_fuente_que_no_sea_la_que_lo_produce():
     assert not mal, f"la procedencia declarada no es la real: {mal}"
 
 
+def test_el_2_44_se_identifico_por_VALOR_y_no_por_etiqueta():
+    """La ley pide cuatro cuerpos electivos y la serie internacional cubre uno solo. Elegir
+    por el nombre («parlamento») habría sido adivinar entre Senado y Diputados.
+
+    La identificación es por la línea base: la ley fija Diputados en 20,8% para 2010 y la
+    serie da 20,77 ese año, mientras el Senado era 9,4%. La nota lo deja escrito porque es
+    la evidencia de que el binding no es una coincidencia de etiqueta."""
+    b = cargar_bindings(EXPEDIENTE)["2.44"]
+    assert b.serie == "social_dev:women_lower_house"
+    nota = b.nota or ""
+    assert "20,8" in nota and "20,77" in nota, "falta la coincidencia que identifica la serie"
+    assert "9,4" in nota, "falta el valor del Senado, que es lo que descarta la ambigüedad"
+
+
+def test_los_otros_tres_cargos_electivos_NO_quedan_atados_a_la_serie_de_diputados():
+    """Senado, Síndicas y Regidoras tienen la misma meta y líneas base muy distintas. Atar
+    cualquiera de los tres a la serie de la cámara baja publicaría la cifra de un cuerpo
+    como si fuera la de otro — el mismo error de sujeto que ya costó caro en este módulo."""
+    bs = cargar_bindings(EXPEDIENTE)
+    for ind in ("2.43", "2.45", "2.46"):
+        b = bs.get(ind)
+        assert b is None or b.serie != "social_dev:women_lower_house", (
+            f"{ind} no es la Cámara de Diputados")
+
+
 def test_todo_descarte_prueba_su_motivo_con_una_CIFRA():
     """Un descarte sin número es una opinión, y el informe la publica como hallazgo.
 
-    Los cinco descartes de salud existen porque la serie internacional disponible NO mide lo
-    que la ley fijó, y en cada caso lo que lo demuestra es la distancia entre la línea base
+    Los descartes de salud existen porque la serie internacional disponible NO mide lo que
+    la ley fijó, y lo que lo demuestra en cada caso es la distancia entre la línea base
     legal y la de la serie en el mismo año. Sin esa cifra en el motivo, el próximo que mire
     la lista vuelve a evaluar lo mismo — o peor, ata lo que no corresponde.
     """
     import re
-    sin_cifra = []
-    for b in cargar_bindings(EXPEDIENTE).values():
-        if b.estado != "descartado":
-            continue
-        if not re.search(r"\d", b.motivo_descarte or ""):
-            sin_cifra.append(b.indicador)
+    sin_cifra = [b.indicador for b in cargar_bindings(EXPEDIENTE).values()
+                 if b.estado == "descartado" and not re.search(r"\d", b.motivo_descarte or "")]
     assert not sin_cifra, f"descartes sin cifra que los sostenga: {sin_cifra}"
