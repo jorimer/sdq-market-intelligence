@@ -28,7 +28,7 @@ from modules.law_intel.ratificacion import (ESTADOS as ESTADOS_RATIFICACION,
 from modules.law_intel.ratificacion import estado as estado_ratificacion
 from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import ESCALAS, Expediente, cargar, expedientes
-from modules.law_intel.series import proveedor_registro
+from modules.law_intel.series import proveedor_registro, series_de
 from modules.law_intel.normativa import VEREDICTOS as VEREDICTOS_NORMATIVA
 from modules.law_intel.normativa import comprobar as comprobar_normativa
 from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo
@@ -160,16 +160,24 @@ def cobertura_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[
 @router.get("/{expediente_id}/semaforo")
 def semaforo_(expediente_id: str,
               corte: str = Query(..., pattern=r"^\d{4}$"),
+              db: Session = Depends(get_db),
               _: User = Depends(get_current_user)) -> Dict[str, Any]:
     """Meta contra dato real al corte dado, sin eufemismo.
 
     Con cero bindings verificados el panel entero responde `sin_medicion`, y ese es el estado
     verdadero — no una falla del endpoint. Las observaciones entran cuando un binding pasa a
     verificado; hasta entonces el informe no puede afirmar cumplimiento de nada.
+
+    **Las series se PIDEN.** Esta ruta pasaba un diccionario vacío, y con cero verificados eso
+    era indistinguible de lo correcto: todo respondía `sin_medicion`, que era verdad. Al
+    llegar el primer binding verificado la mentira se volvió visible —«el binding está
+    verificado y la serie no devolvió valor» en los trece— y el semáforo, que es el veredicto
+    por indicador y el corazón del informe, contradecía a la cobertura de su propia portada.
+    El camino de informes ya lo hacía bien (``products.py``); esta superficie no.
     """
     e = _expediente(expediente_id)
     bs = cargar_bindings(expediente_id)
-    veredictos = panel(e.numerados, bs, {}, corte)
+    veredictos = panel(e.numerados, bs, series_de(bs, proveedor_registro(db)), corte)
     return {
         "instrumento": {"id": e.id, "norma": e.norma}, "corte": corte,
         "cobertura": cobertura(expediente_id),
