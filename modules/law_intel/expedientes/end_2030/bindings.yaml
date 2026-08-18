@@ -260,7 +260,8 @@ bindings:
     serie: "social_dev:women_lower_house"
     fuente: wdi
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2025"
+    estado: verificado
     nota: >-
       «Proportion of seats held by women in national parliaments» del Banco Mundial, sobre
       el reporte de la Unión Interparlamentaria. Para sistemas bicamerales la UIP reporta la
@@ -269,6 +270,10 @@ bindings:
       base de Diputados en 20,8% para 2010 y la serie da 20,77 ese año, mientras la del
       Senado era 9,4%. No hay ambigüedad posible entre las dos, y esa coincidencia es más
       fuerte que cualquier coincidencia de etiqueta.
+      Verificado en prod 2026-08-17: **37,4% en 2025**, contra una meta de 41,5% para ese
+      mismo año y 50% para 2030. No alcanzada, pero con avance real y sostenido desde el
+      20,8% de 2010 — es el contraste con los otros tres cuerpos electivos, que no se miden,
+      lo que vuelve accionable este dato.
 
   # ══ RE-ABIERTO ══ El descarte era correcto para `child_mortality` (menores de 1) y
   # ══ CINCO EVALUADOS Y DESCARTADOS ══
