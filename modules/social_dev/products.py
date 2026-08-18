@@ -372,6 +372,17 @@ class SocialDevProduct:
             "primary_coverage", MINERD_COUNTRY,
             "Cobertura neta básica — total país", "education",
             "Total nacional publicado por el MINERD (SIIE)."),
+        # «Individuals using the Internet (% of population)» del WDI — el indicador 3.13
+        # de la END. NO es `internet_penetration` del eje telecom, que es banda ancha
+        # MÓVIL por 100 habitantes y puede pasar de 100: son magnitudes distintas y la
+        # confusión entre ellas es la que hay que impedir con la etiqueta.
+        "internet_users": (
+            "internet_users", HEALTH_ENTITY,
+            "Usuarios de internet (% de la población)", "inclusion",
+            "Serie del Banco Mundial (republica a la UIT, que es quien la produce). Se "
+            "toma de ahí porque el API de ITU DataHub dejó de ser alcanzable de forma "
+            "anónima. No confundir con la penetración de banda ancha móvil del eje "
+            "telecom, que es otra magnitud."),
         # La fila «Total» del cuadro 05 3 007 del SISDOM, que el parser salteaba por no
         # resolver a ninguna región. Habilita el indicador 2.18 de la END.
         "schooling_years_pais": (

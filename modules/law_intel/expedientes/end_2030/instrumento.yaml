@@ -62,6 +62,19 @@ fuentes_admitidas:
     nombre: Consejo Económico y Social
   - id: tc
     nombre: Tribunal Constitucional
+  - id: wdi
+    nombre: Indicadores del Desarrollo Mundial (Banco Mundial)
+    nota: >-
+      Externa y ADMISIBLE por la misma lógica que la PEFA: no es el órgano evaluado. Que la
+      fuente sea de tercero REFUERZA la independencia del informe en vez de debilitarla —
+      lo que la lista blanca excluye es que el evaluado se califique a sí mismo, no que el
+      dato venga de afuera. Republica series que produce el sistema de Naciones Unidas
+      (UIT para conectividad, División de Población para demografía).
+      SALVEDAD que viaja con cada binding que la use: las series internacionales se
+      REVISAN, y las líneas base de la ley se fijaron sobre una edición concreta. En el
+      indicador 3.13 la ley dice 26,8% para 2009 y la edición vigente del WDI dice 27,72%.
+      La diferencia es de revisión estadística, no de desempeño, y hay que declararla antes
+      de medir la distancia a la meta.
   - id: pefa
     nombre: Evaluación PEFA
     nota: >-

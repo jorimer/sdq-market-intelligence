@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "9.0"
+version: "10.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -118,10 +118,14 @@ bindings:
 
   - indicador: "2.21"
     serie: "social_dev:life_expectancy"
-    fuente: one
+    fuente: wdi
     mejor: mayor
     periodo_verificado: "2024"
     estado: verificado
+    nota: >-
+      La fuente decía `one` y el dato viene del WDI (`SP.DYN.LE00.IN`), que es lo que el
+      sync ingiere. Corregido: un rótulo de procedencia falso es peor que uno ausente,
+      porque se cita.
 
   # ══ SEÑAL YA EXPUESTA QUE NINGÚN BINDING RECLAMABA ══
   # No hizo falta conectar nada: `secondary_coverage` (MINERD) estaba en el Data Registry
@@ -224,11 +228,28 @@ bindings:
       diferencia del 2.37 la lectura no se explica por el cambio de encuesta: una razón
       entre dos poblaciones medidas con la misma metodología es robusta a ese cambio.
 
+  # ══ LA FUENTE QUE LO PRODUCE DEJÓ DE SER ALCANZABLE; SE TOMA DE QUIEN LA REPUBLICA ══
+  - indicador: "3.13"
+    serie: "social_dev:internet_users"
+    fuente: wdi
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      «Individuals using the Internet (% of population)» — la magnitud exacta del indicador.
+      NO es `telecom:internet_penetration`, que es banda ancha MÓVIL por 100 habitantes y
+      puede pasar de 100; ni las suscripciones del boletín de INDOTEL, congelado en 2022-Q1.
+      Se toma del WDI y no de la UIT —que es quien la produce— porque su API dejó de ser
+      alcanzable de forma anónima: el host viejo responde 403 en todas sus rutas y el nuevo
+      está detrás de un desafío de CloudFront.
+      SALVEDAD: la ley fija la línea base en 26,8% para 2009 y la edición vigente del WDI
+      dice 27,72%. Es revisión estadística, no desempeño, y va declarada antes de medir
+      cualquier distancia a la meta.
+
   # ══ DESCARTADO ══ No es la misma magnitud, y la diferencia no la arregla ninguna
   # transformación declarable: son conceptos distintos.
   - indicador: "2.22"
     serie: "social_dev:child_mortality"
-    fuente: one
+    fuente: wdi
     mejor: menor
     estado: descartado
     motivo_descarte: >-
