@@ -52,3 +52,36 @@ def test_el_proveedor_RECHAZA_una_senal_que_no_sea_nacional(monkeypatch):
     leer = mod.proveedor_registro(None)
     assert leer("social_dev:pais") == [("2024", 1.0)]
     assert leer("social_dev:por_region") == [], "una variable por sujeto no mide al país"
+
+
+def test_hay_UNA_sola_implementacion_del_proveedor_de_series():
+    """Había dos: la de `series.py` y una copia dentro del router. La copia se quedó sin los
+    dos guards que la otra fue ganando —el rechazo de señales que no son de alcance
+    NACIONAL y la preferencia del período de la señal sobre el del eje— y era ÉSA la que
+    corría, porque es la que alimenta la ruta que decide las promociones.
+
+    Es el patrón que este repo ya sufrió cinco veces: un guard presente en un motor y
+    ausente en el gemelo. La lección escrita no alcanzó ninguna de las veces; lo que
+    funciona es leer el código y exigir la regla.
+    """
+    import ast
+    import pathlib
+
+    raiz = pathlib.Path(__file__).resolve().parents[1]
+    culpables = []
+    for archivo in raiz.rglob("*.py"):
+        if archivo.name == "series.py" or "/tests/" in str(archivo):
+            continue
+        arbol = ast.parse(archivo.read_text(encoding="utf-8"))
+        for n in ast.walk(arbol):
+            # Una función que construye un índice desde `build_data_registry` y devuelve un
+            # lector por código de serie es, por definición, otro proveedor.
+            if isinstance(n, ast.FunctionDef) and "proveedor" in n.name.lower():
+                cuerpo = ast.dump(n)
+                if "build_data_registry" in cuerpo:
+                    culpables.append(f"{archivo.name}:{n.name}")
+    assert not culpables, (
+        f"estas funciones duplican el proveedor de series: {culpables}. Usá "
+        "`modules.law_intel.series.proveedor_registro` — una copia hereda los guards del "
+        "día que se copió y no los que vengan después."
+    )
