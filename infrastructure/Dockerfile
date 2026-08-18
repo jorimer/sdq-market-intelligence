@@ -52,6 +52,19 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 # Create data directories
 RUN mkdir -p data/reports data/models data/charts
 
+# ── Sello del commit ───────────────────────────────────────────────────────────
+# Va AL FINAL a propósito: cambia en cada commit y solo debe invalidar esta capa.
+#
+# Se hornea en la imagen además de leerse del entorno porque las dos vías fallan de formas
+# distintas: la variable de ejecución depende de que la plataforma la inyecte, y la
+# horneada viaja con la imagen aunque se despliegue a mano o en otro proveedor. Sin sello,
+# `/health` responde `ok` con el proceso VIEJO cuando un despliegue falla — que fue el
+# defecto que motivó esto.
+ARG RAILWAY_GIT_COMMIT_SHA=""
+ARG RAILWAY_GIT_BRANCH=""
+ENV GIT_COMMIT=$RAILWAY_GIT_COMMIT_SHA \
+    GIT_BRANCH=$RAILWAY_GIT_BRANCH
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
