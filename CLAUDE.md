@@ -104,6 +104,31 @@ renderizada: son superficies distintas y arreglar una sola deja el documento con
 lo arma en otro lado, declaralo en `AI_CONTEXT_FILES` (ver `banking_score/products.py`) o
 quedará fuera de la regla del sujeto y de la huella de la caché de narrativas.
 
+**El estado de validación de un eje se COMPUTA y se declara; nunca se transcribe.** Es la
+regla que salió del plan de cierre (2026-08-19), y tiene tres piezas que hay que respetar:
+
+- **Qué puede afirmar cada eje** lo declara su producto en `ESTADO_BACKTEST` (clase, no el
+  `ValidationState` que devuelve el método: varios ejes tienen ramas de retorno distintas y el
+  hueco entra por la que alguien olvidó). Declara hechos de DISEÑO —si hay motor, contra qué
+  desenlace, qué lo impide— y **nunca el veredicto de la última corrida**, que envejece. Lo
+  exige `shared/products/tests/test_estado_de_validacion.py`, que además **cruza contra
+  `shared.validation.frescura.MOTORES`**: un producto no puede reclamar un motor que nadie
+  registró. Triaje completo en `docs/TRIAJE_VALIDACION_EJES.md`.
+- **El veredicto vigente** (Gini/IC/N, concluyente o no) vive en el reporte del motor y se lee
+  de ahí: `GET /api/v1/products/credenciales` arma la tabla comercial computándola.
+  **Ninguna cifra de validación se escribe a mano** — ni en un doc, ni en un deck, ni en una
+  memoria. Un número copiado es un número que se desincroniza.
+- **La frescura veta.** `stale=false` publica; `stale=true` no; y **`stale=null` tampoco** —
+  «no sé de cuándo es» y «está al día» son cosas distintas, y confundirlas fue lo que puso un
+  Gini de 0,44 en producción durante 19 días contra un deck que decía 0,16. Lo vetado se
+  LISTA, no desaparece: un veto silencioso se lee como que el eje no tiene validación.
+  Estado en vivo: `GET /api/v1/operations/validacion`.
+
+Un eje NUEVO entra al catálogo declarando su estado o el test estructural lo rechaza. Y si
+querés saber cómo está un eje hoy, **preguntale a la plataforma** — no busques una tabla en un
+documento, porque cualquier tabla escrita ya está vieja. Qué se puede decir en material de
+venta: `docs/CLAIMS_COMERCIALES.md`.
+
 **Qué invalida la caché de narrativas** (`ProductReportCache`, en Postgres, **sin TTL**): el
 dato, la receta (prompts/doctrina/modelo/guard) y el contexto declarado. Si tu arreglo no toca
 ninguno, los informes ya generados seguirán sirviendo el texto viejo indefinidamente.
