@@ -467,6 +467,24 @@ class SocialDevProduct:
                                  "INB per cápita (método Atlas)", "living_standards",
                                  "Tampoco es una variable de desarrollo social. No alimenta "
                                  "el índice."),
+        # ══ LOTE 2026-08-19 (b) · los tres DERIVADOS ══
+        # No vienen de un emisor: los computamos nosotros sobre datos que ya ingerimos. Por
+        # eso su `source` lo dice — un consumidor tiene que poder distinguir «lo publica la
+        # ONE» de «lo calculamos con el panel de la ONE».
+        "exports_per_capita": ("exports_per_capita", HEALTH_ENTITY,
+                               "Exportaciones per cápita", "living_standards",
+                               "Exportaciones de bienes Y servicios sobre población (WDI). "
+                               "No alimenta el índice de desarrollo."),
+        "regiones_pobreza_extrema_sobre_umbral": (
+            "regiones_pobreza_extrema_sobre_umbral", HEALTH_ENTITY,
+            "Regiones con pobreza extrema sobre 5%", "living_standards",
+            "CÓMPUTO SDQ sobre el panel regional de la ONE. Solo se publica el año con las "
+            "diez regiones presentes: con nueve, el conteo bajaría por un dato faltante y "
+            "se leería como progreso."),
+        "regiones_pobreza_moderada_sobre_umbral": (
+            "regiones_pobreza_moderada_sobre_umbral", HEALTH_ENTITY,
+            "Regiones con pobreza moderada sobre 20%", "living_standards",
+            "CÓMPUTO SDQ sobre el panel regional de la ONE. Mismo guard de completitud."),
     }
 
     def _senales_fuera_del_indice(self, period: str, dh) -> List[Any]:

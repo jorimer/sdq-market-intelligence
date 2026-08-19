@@ -100,7 +100,17 @@ variable_scopes:
   gini_index: national                   # WDI SI.POV.GINI — escala 0-100
   tax_revenue_gdp: national              # WDI GC.TAX.TOTL.GD.ZS
   gni_per_capita_atlas: national         # WDI NY.GNP.PCAP.CD
-  # poverty_extreme queda en el default per_subject: la ONE la publica por las 10 regiones
+  # ── Los tres DERIVADOS (cómputo propio, no series de un emisor) ──
+  # Los dos conteos son nacionales aunque su INSUMO sea por región: contar cuántas regiones
+  # cruzan un umbral es una cifra del país, no de una demarcación. Es el caso inverso al de
+  # `poverty_extreme`, que se queda en `per_subject` justamente porque su valor es de UNA.
+  exports_per_capita: national                        # WDI NE.EXP.GNFS.CD / SP.POP.TOTL
+  regiones_pobreza_extrema_sobre_umbral: national     # cómputo sobre el panel ONE
+  regiones_pobreza_moderada_sobre_umbral: national    # cómputo sobre el panel ONE
+  # DECLARADA aunque coincida con el default: una señal que se PUBLICA no puede descansar en
+  # una omisión, porque el lector no distingue «se decidió por sujeto» de «nadie lo pensó».
+  poverty_extreme: per_subject
+  # (motivo, que ya estaba escrito): la ONE la publica por las 10 regiones
   # y NO hay agregado nacional en el panel. Publicar la de una región como cifra del país
   # es exactamente el defecto que costó cinco bindings el 2026-08-16.
   # Con desagregación real por demarcación quedan en el default per_subject:

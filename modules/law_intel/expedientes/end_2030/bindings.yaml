@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "14.0"
+version: "15.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -659,3 +659,58 @@ bindings:
       contra la fuente primaria (Hacienda/DGII), NO cuenta como medición.
       Es exactamente la lección del 2.34 aplicada antes de tropezar: un nivel parecido es lo
       que vuelve invisible una diferencia de definición.
+
+  # ══════════════════════════════════════════════════════════════════════════════════════
+  # LOTE 2026-08-19 (b) — los tres DERIVADOS: no hacía falta conectar a nadie
+  #
+  # Los tres salen de datos que YA ingeríamos. El barrido de los 67 los había marcado «sin
+  # candidato internacional», que era cierto y engañoso a la vez: no hay emisor que los
+  # publique, pero el insumo estaba en casa.
+  #
+  # El 2.2 y el 2.5 son el caso más interesante del expediente: su insumo es el panel POR
+  # REGIÓN, el mismo que NO sirve para las metas nacionales de pobreza (2.1 y 2.4) porque el
+  # registro publicaría el valor de una sola demarcación. Acá es exactamente lo que hace
+  # falta — contar cuántas regiones cruzan un umbral ES una cifra del país.
+  # ══════════════════════════════════════════════════════════════════════════════════════
+
+  - indicador: "2.2"
+    serie: "social_dev:regiones_pobreza_extrema_sobre_umbral"
+    fuente: one
+    mejor: menor
+    estado: propuesto
+    nota: >-
+      Cuántas de las diez regiones superan el 5% de pobreza extrema — el umbral lo fija el
+      TEXTO del indicador, no lo elegimos nosotros, y se aplica ESTRICTO («mayor que 5%»).
+      Cómputo SDQ sobre el panel regional de la ONE, declarado como tal en la procedencia:
+      un consumidor tiene que poder distinguir «lo publica la ONE» de «lo calculamos con el
+      panel de la ONE».
+      GUARD: solo se publica el año con las DIEZ regiones presentes. Con nueve, el conteo
+      baja porque falta un dato y no porque una región haya cruzado el umbral — y baja en la
+      dirección de la meta, así que se leería como progreso.
+
+  - indicador: "2.5"
+    serie: "social_dev:regiones_pobreza_moderada_sobre_umbral"
+    fuente: one
+    mejor: menor
+    estado: propuesto
+    nota: >-
+      Cuántas de las diez regiones superan el 20% de pobreza moderada. Mismo cómputo y mismo
+      guard de completitud que el 2.2.
+      VALIDADO CONTRA EL ORÁCULO DE LA PROPIA LEY: en 2010 las diez regiones superaban el
+      20%, y la línea base legal de este indicador es exactamente 10. La derivación reproduce
+      la cifra que el legislador escribió, que es la comprobación más fuerte disponible.
+      Trayectoria observada en el panel: 10 (2010) → 9 (2016) → 10 (2020) → 5 (2024), contra
+      una meta de 4 para 2025 y de 0 para 2030.
+
+  - indicador: "3.21"
+    serie: "social_dev:exports_per_capita"
+    fuente: wdi
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      Exportaciones de bienes Y SERVICIOS sobre población. Cuál de las dos definiciones usar
+      no se adivinó: la ley fija 1.070 US$ para 2009, bienes+servicios da 1.049 ese año
+      (Δ 1,9%) y solo mercancías da 174. La sonda lo resolvió antes de escribir el conector.
+      Es un cociente entre dos series del mismo emisor, así que se ingiere como dato propio
+      con su procedencia; un binding ata UNA variable a un indicador y no puede llevar una
+      división.
