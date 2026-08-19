@@ -143,10 +143,20 @@ def sis_financials_sync(db: Session, set_phase: Optional[Callable[[str], None]] 
 
 
 def sis_financials_history_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None,
-                                since_year: int = 2018) -> Dict:
+                                since_year: int = 2013) -> Dict:
     """Ingest the HISTORY of audited statements (``since_year``..latest) → per-entity series
     with a multi-year trajectory, recomputing the ISF once at the end. Feeds the ISF backtest
-    (G5). Best-effort per year; idempotent. Defaults to 2018 (the .xlsx era, stable layout)."""
+    (G5). Best-effort per year; idempotent.
+
+    Arranca en 2013 y no en 2018. El 2018 venía de suponer que antes de la era .xlsx el
+    portal no servía o el parser no cuadraba; medido contra el portal real el 2026-08-19, la
+    SIS publica auditados desde **2013** y el extractor los reconcilia: la corrida ingirió
+    doce años (2013-2024) y 14.888 filas de serie. El efecto sobre la validación no fue
+    cosmético — el panel del backtest pasó de 164 a 272 observaciones y la señal de
+    underwriting pasó de NO concluyente (0,0927, IC cruzando cero) a **concluyente**
+    (Gini 0,2575, IC [0,124 · 0,395]).
+
+    Un año que falle no tumba la historia: es best-effort por archivo."""
     import requests
 
     set_phase = set_phase or (lambda _m: None)
