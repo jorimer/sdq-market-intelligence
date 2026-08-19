@@ -34,6 +34,44 @@ def _run_indotel_telecom_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_vigilancia_indotel(params, user_id, set_phase) -> Dict:
+    """¿Volvió INDOTEL a publicar? Si sí, lo propone; si no, deja constancia de que se miró.
+
+    El boletín se congeló en 2022-Q1 y el IDT pasó a ITU. Eso es una DECISIÓN, no una
+    brecha — pero una decisión que, sin vigilancia, hay que volver a tomar a mano cada vez
+    que alguien pregunta si INDOTEL volvió. La sonda contesta sola y, cuando aparece un
+    boletín más nuevo, lo sube al tablero de Inteligencia de Fuentes: el sistema propone y
+    el dueño dispone (no se re-cablea la fuente vigente por sorpresa).
+    """
+    from shared.data.indotel_client import LATEST_PERIOD, descubrir_boletin_mas_reciente
+    from shared.source_intel.models import KIND_SOURCE, ORIGIN_CATALOG
+    from shared.source_intel.service import create_suggestion
+
+    set_phase("buscando boletines trimestrales publicados por INDOTEL")
+    hallazgo = descubrir_boletin_mas_reciente()
+    if not hallazgo["hay_mas_nuevo"]:
+        return {**hallazgo, "sugerencia": None,
+                "lectura": ("sigue congelado en " + LATEST_PERIOD if hallazgo["paginas_ok"]
+                            else "no se pudo leer ninguna página oficial: NO es evidencia "
+                                 "de que siga congelado")}
+    db = SessionLocal()
+    try:
+        sug = create_suggestion(
+            db, kind=KIND_SOURCE, origin=ORIGIN_CATALOG, target_axis="telecom",
+            target_gate="g1",
+            title=f"INDOTEL volvió a publicar: boletín {hallazgo['periodo']}",
+            description=(
+                f"La sonda encontró un boletín trimestral más nuevo que el conocido "
+                f"({LATEST_PERIOD}): {hallazgo['periodo']} en {hallazgo['url']}. La fuente "
+                f"vigente del IDT es ITU DataHub (anual); INDOTEL daría cadencia TRIMESTRAL "
+                f"y el detalle por operador que ITU no tiene. Decidir si se re-apunta "
+                f"`LATEST_BULLETIN` y con qué fuente se calcula el índice."),
+        )
+        return {**hallazgo, "sugerencia": sug.get("id"), "lectura": "hay boletín más nuevo"}
+    finally:
+        db.close()
+
+
 def register() -> None:
     # Fuente VIGENTE: ITU DataHub (INDOTEL congelado en 2022-Q1). Anual, API abierta.
     register_operation(Operation(
@@ -51,6 +89,16 @@ def register() -> None:
         "persiste su IDT. Histórico: la fuente vigente es ITU (itu-telecom-sync). "
         "Correr cuando: necesites recargar el histórico congelado de INDOTEL (rara vez).",
         _run_indotel_telecom_sync, default_interval_hours=0,  # on-demand (histórico)
+    ))
+    register_operation(Operation(
+        "indotel-vigilancia", "Vigilar si INDOTEL volvió a publicar",
+        "Sonda las páginas oficiales de estadísticas de INDOTEL y compara el boletín "
+        "trimestral más nuevo publicado con el que el conector conoce (2022-Q1). Si "
+        "aparece uno posterior, lo propone en el tablero de Inteligencia de Fuentes para "
+        "que el dueño decida si se re-apunta la fuente del IDT. No ingiere ni promueve "
+        "nada. Convierte «telecom está congelado» de un hecho que hay que recordar en uno "
+        "que el sistema vigila. Mensual.",
+        _run_vigilancia_indotel, default_interval_hours=720,
     ))
 
 
