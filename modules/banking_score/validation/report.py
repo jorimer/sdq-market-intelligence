@@ -34,6 +34,63 @@ _CAVEAT_NO_ES_RUIDO = (
 )
 
 
+# Las FAMILIAS del desenlace. La unión de las tres se publicaba como un solo «distress
+# financiero» y medido en producción resultó 83 % pérdidas, 22 % crédito y 0 % solvencia: una
+# cifra que el lector atribuye al fenómeno que tiene en la cabeza, que no es el que domina.
+# Separarlas da señales que se pueden defender de a una, con su propio N y su propio IC.
+FAMILIAS_DESENLACE = (
+    ("resultados", ("roa_negativo_sostenido",),
+     "pérdidas sostenidas — ROA negativo en ≥2 trimestres del horizonte"),
+    ("credito", ("morosidad_x2",),
+     "deterioro de crédito — la morosidad al menos se duplica"),
+    ("capital", ("solvencia_breach",),
+     "solvencia por debajo del mínimo regulatorio de 10 %"),
+)
+
+
+def _senal(obs, reglas, tier_order, n_boot: int) -> Dict:
+    """Discriminación del score contra UNA familia de desenlace.
+
+    Tres estados que no son lo mismo y el reporte los distingue: **concluyente** (IC
+    enteramente positivo), **invertida** (IC enteramente negativo — el score ordena al revés,
+    que es un hallazgo, no una ausencia) y **no concluyente** (el IC cruza cero). Una familia
+    cuya regla no disparó nunca no es ninguna de las tres: es NO EVALUABLE, y decirlo es
+    distinto de decir que no discrimina.
+    """
+    y = [1 if set(o.triggers or ()) & set(reglas) else 0 for o in obs]
+    n_ev = sum(y)
+    if n_ev == 0:
+        return {"n_observations": len(obs), "n_events": 0, "evaluable": False,
+                "gini": None, "gini_ci": None, "conclusive": False, "invertida": False,
+                "nota": "la regla no disparó en toda la ventana: no hay evidencia, ni a "
+                        "favor ni en contra"}
+    g, lo, hi = gini_bootstrap_ci([o.score for o in obs], y, n_boot=n_boot)
+    by_tier, monotonic = deterioration_rate_by_tier([o.tier for o in obs], y, tier_order)
+    return {
+        "n_observations": len(obs), "n_events": n_ev, "evaluable": True,
+        "event_rate": n_ev / len(obs),
+        "gini": g, "gini_ci": [lo, hi] if g is not None else None,
+        "conclusive": bool(g is not None and lo is not None and lo > 0),
+        "invertida": bool(g is not None and hi is not None and hi < 0),
+        "by_tier": by_tier, "monotonic": monotonic,
+        "by_tier_ordena_riesgo": monotonic,
+        "monotonic_violations": monotonicity_violations(by_tier),
+    }
+
+
+def senales_por_familia(obs, tier_order, n_boot: int) -> Dict:
+    """Una señal por familia + cuál es la titular (la concluyente con más eventos).
+
+    Mismo contrato que seguros y pensiones (`signals` + `headline_signal`), a propósito: dos
+    ejes que se leen igual se comparan sin traducir.
+    """
+    señales = {clave: {**_senal(obs, reglas, tier_order, n_boot), "que_mide": glosa}
+               for clave, reglas, glosa in FAMILIAS_DESENLACE}
+    concluyentes = [(v["n_events"], k) for k, v in señales.items() if v.get("conclusive")]
+    titular = max(concluyentes)[1] if concluyentes else None
+    return {"signals": señales, "headline_signal": titular}
+
+
 def composicion_del_desenlace(obs) -> Dict:
     """Cuántos eventos aporta CADA regla del desenlace, y cuántos son exclusivos de ella.
 
@@ -138,6 +195,13 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
                           f"{dominante['eventos']} de los {composicion['n_eventos']} eventos "
                           f"({_pct(dominante['cuota'])}). La discriminación medida es sobre "
                           f"todo contra ese fenómeno, no contra los tres por igual.")
+    familias = senales_por_familia(obs, tier_order, n_boot)
+    invertidas = [k for k, v in familias["signals"].items() if v.get("invertida")]
+    if invertidas:
+        caveats.insert(0, "El score ordena AL REVÉS contra "
+                          + ", ".join(f"«{k}»" for k in invertidas)
+                          + " (IC del Gini enteramente negativo). Es un hallazgo, no una "
+                            "ausencia de señal, y no debe leerse como discriminación débil.")
     violaciones = monotonicity_violations(by_tier)
     if not monotonic:
         caveats.insert(0, _caveat_de_monotonia(violaciones))
@@ -157,6 +221,10 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
         # a un PDF o a una lámina.
         "by_tier_ordena_riesgo": monotonic,
         "composicion_del_desenlace": composicion,
+        # El agregado se conserva porque es la cifra que ya está publicada y citada, pero
+        # marcado por lo que es: la unión de tres fenómenos en proporciones muy desiguales.
+        "desenlace_agregado": True,
+        **familias,
         "monotonic_violations": violaciones,
         "caveats": caveats,
     }

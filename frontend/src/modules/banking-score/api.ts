@@ -432,6 +432,20 @@ export interface BacktestTierRow {
   rate: number | null;
 }
 
+export interface BacktestSignal {
+  n_observations: number;
+  n_events: number;
+  /** false = la regla no disparó nunca: NO evaluable, que no es lo mismo que no discrimina. */
+  evaluable: boolean;
+  gini?: number | null;
+  gini_ci?: [number, number] | null;
+  conclusive: boolean;
+  /** IC enteramente NEGATIVO: el score ordena al revés. Es un hallazgo, no una ausencia. */
+  invertida: boolean;
+  que_mide?: string;
+  nota?: string;
+}
+
 export interface BacktestReport {
   computed: boolean;
   message?: string;
@@ -452,6 +466,18 @@ export interface BacktestReport {
     mejor: string; mejor_n: number; mejor_rate: number;
     peor: string; peor_n: number; peor_rate: number; brecha: number;
   }[];
+  /** El agregado publicado es la UNIÓN de tres familias de desenlace en proporciones muy
+   *  desiguales (medido: 83 % pérdidas · 22 % crédito · 0 % solvencia). */
+  desenlace_agregado?: boolean;
+  composicion_del_desenlace?: {
+    n_eventos: number;
+    por_regla: { regla: string; eventos: number; exclusivos: number; cuota: number | null }[];
+    reglas_sin_disparar: string[];
+  };
+  /** Una señal por familia de desenlace, con su propio N e IC. */
+  signals?: Record<string, BacktestSignal>;
+  /** La señal concluyente con más eventos, o null si ninguna concluye. */
+  headline_signal?: string | null;
   caveats?: string[];
   generated_at?: string;
   /** Frescura respecto del insumo que produjo la cifra (ver shared/validation/frescura.py). */
