@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from modules.sector_intel.models.models import SectorScore, SectorVariable
-from shared.data.sector_crosswalk import ENCFT_BRANCHES
+from shared.data.sector_crosswalk import ENCFT_BRANCHES, IED_ACTIVITIES
 
 
 def _by_slug_period(db: Session, variable: str) -> Dict[tuple, float]:
@@ -61,5 +61,36 @@ def build_iai_panel(db: Session) -> List[Dict]:
                 "period": period,
                 "iai_score": round(score, 3),
                 "sector_growth": _weighted(branch.members, period, growth, size),
+            })
+    return panel
+
+
+def build_iai_panel_ied(db: Session) -> List[Dict]:
+    """Panel del IAI agregado a las NUEVE actividades de IED del BCRD.
+
+    Misma agregación ponderada por tamaño que el panel de empleo, contra otra resolución:
+    la del desenlace que el índice sí pretende anticipar. Se emite ``sector_size`` además
+    del score porque el desenlace primario es una INTENSIDAD (IED por unidad de tamaño) —
+    comparar niveles de IED ordenaría sectores por lo grandes que son, no por lo atractivos.
+    """
+    iai = {(str(s.sector_code), str(s.period)): s.iai_score
+           for s in db.query(SectorScore).all() if s.iai_score is not None}
+    size = _by_slug_period(db, "sector_size")
+    growth = _by_slug_period(db, "sector_growth")
+    periods = sorted({p for (_s, p) in iai})
+
+    panel: List[Dict] = []
+    for actividad in IED_ACTIVITIES:
+        for period in periods:
+            score = _weighted(actividad.members, period, iai, size)
+            if score is None:
+                continue
+            tamaño = sum(size.get((slug, period), 0.0) or 0.0 for slug in actividad.members)
+            panel.append({
+                "branch": actividad.key,
+                "period": period,
+                "iai_score": round(score, 3),
+                "sector_growth": _weighted(actividad.members, period, growth, size),
+                "sector_size": round(tamaño, 6) if tamaño else None,
             })
     return panel

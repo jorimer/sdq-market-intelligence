@@ -59,6 +59,15 @@ def _run_encft_empleo_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_bcrd_ied_sync(params, user_id, set_phase) -> Dict:
+    from modules.sector_intel.sectors_sync import bcrd_ied_sync
+    db = SessionLocal()
+    try:
+        return bcrd_ied_sync(db, set_phase=set_phase)
+    finally:
+        db.close()
+
+
 def _run_enae_sync(params, user_id, set_phase) -> Dict:
     from modules.sector_intel.sectors_sync import enae_sync
     db = SessionLocal()
@@ -168,6 +177,17 @@ def register() -> None:
         "disponibilidad laboral del IAI. Anual.",
         _run_encft_empleo_sync, default_interval_hours=8760,  # serie anual → anual
         triggers=["sector-snapshot"],
+    ))
+    register_operation(Operation(
+        "bcrd-ied-sync", "Sincronizar IED por actividad (BCRD · desenlace de inversión)",
+        "Trae los flujos de Inversión Extranjera Directa por actividad económica que "
+        "publica el BCRD (anual, 2010→, millones de US$) a su resolución real de 9 "
+        "actividades. Es el DESENLACE que el IAI sí pretende anticipar —inversión "
+        "realizada—, frente al empleo, contra el que el Gate E daba nulo/negativo porque "
+        "el índice no dice anticiparlo. No alimenta el índice: solo lo valida. Cuadra "
+        "contra el Total del propio cuadro del BCRD y falla cerrado si no. Anual.",
+        _run_bcrd_ied_sync, default_interval_hours=8760,
+        triggers=["sector-gate-e"],  # dato de desenlace nuevo → re-validar
     ))
     register_operation(Operation(
         "enae-sync", "Sincronizar actividad económica (ONE · ENAE estructural)",
