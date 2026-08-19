@@ -56,6 +56,41 @@ def _quintile_spread_by_year(by_year: Dict[str, List[Dict]], k: int = 5) -> Opti
             "n_years": len(spreads)}
 
 
+# La prosa vive en constantes; las CUENTAS del panel se computan. Escrito a mano decía
+# «10 ramas» en dos lugares: cierto hoy, y falso el día que el ENCFT publique una rama más o
+# que una se quede sin empleo comparable. Es la misma forma del defecto que el IRMP publicó
+# («5 países» contra un panel de 24) y que el eje social tenía latente.
+_METODO_TITULAR = (
+    "Validación DIRECCIONAL, no grado-Basilea. Mide si el IAI en T ordena el crecimiento del "
+    "empleo formal por rama en T+1 (IC de rango de Spearman). TITULAR: el IC MEDIO de las "
+    "cross-sections anuales, con CI de Student-t sobre la serie de IC por año (la inferencia "
+    "correcta para un panel sector-año, que respeta el clustering por año). El IC apilado "
+    "(pooled) se reporta como SECUNDARIO: su bootstrap remuestrea pares como si fueran "
+    "independientes y sobrestima la precisión. El outcome es un CAMBIO (Δ% empleo), no un "
+    "nivel; aun así se reporta el IC PARCIAL controlando por el crecimiento del sector en T "
+    "(sector_growth_T) para acotar la inercia serial."
+)
+_METODO_RESOLUCION = (
+    "manufactura local, zonas francas y minería colapsan en «Industrias» del lado del empleo"
+)
+_METODO_POTENCIA = (
+    "Un IC inconcluso por potencia es un resultado válido y se muestra tal cual."
+)
+
+
+def _resolucion(n_ramas: int) -> str:
+    return (f"{n_ramas} ramas de actividad (ENCFT); IAI agregado por tamaño del sector")
+
+
+def _disclaimer(n_ramas: int, n_years: int) -> str:
+    """Arma el disclaimer con el tamaño REAL del panel, no con el que tenía al escribirse."""
+    return (
+        f"{_METODO_TITULAR} Resolución: {n_ramas} ramas, NO 17 — {_METODO_RESOLUCION}. "
+        f"Panel chico ({n_ramas} ramas × {n_years} años); con n por año ≈{n_ramas} el IC "
+        f"mínimo detectable es alto. {_METODO_POTENCIA}"
+    )
+
+
 def gate_e_report(db: Session) -> Dict:
     """Run the Gate-E backtest from the persisted IAI + ENCFT employment."""
     panel = build_iai_panel(db)
@@ -97,12 +132,13 @@ def gate_e_report(db: Session) -> Dict:
                                     [r["sector_growth"] for r in g_rows])
         partial_n = len(g_rows)
 
+    n_ramas = len({r["branch"] for r in labeled})
     return {
         "has_data": True,
         "outcome": "crecimiento del empleo formal (Δ% T+1, ENCFT)",
-        "resolution": "10 ramas de actividad (ENCFT); IAI agregado por tamaño del sector",
+        "resolution": _resolucion(n_ramas),
         "n_observations": len(labeled),
-        "n_branches": len({r["branch"] for r in labeled}),
+        "n_branches": n_ramas,
         "years": [min(by_year), max(by_year)],
         # HEADLINE — mean yearly IC with a Student-t CI over the series of yearly ICs.
         "mean_yearly_ic": ic["mean_ic"] if ic else None,
@@ -120,19 +156,5 @@ def gate_e_report(db: Session) -> Dict:
         "spearman_partial_n": partial_n,
         "by_year": per_year,
         "quintile_spread": _quintile_spread_by_year(by_year),
-        "disclaimer": (
-            "Validación DIRECCIONAL, no grado-Basilea. Mide si el IAI en T ordena el "
-            "crecimiento del empleo formal por rama en T+1 (IC de rango de Spearman). "
-            "TITULAR: el IC MEDIO de las cross-sections anuales, con CI de Student-t "
-            "sobre la serie de IC por año (la inferencia correcta para un panel "
-            "sector-año, que respeta el clustering por año). El IC apilado (pooled) se "
-            "reporta como SECUNDARIO: su bootstrap remuestrea pares como si fueran "
-            "independientes y sobrestima la precisión. El outcome es un CAMBIO (Δ% "
-            "empleo), no un nivel; aun así se reporta el IC PARCIAL controlando por el "
-            "crecimiento del sector en T (sector_growth_T) para acotar la inercia "
-            "serial. Resolución: 10 ramas, NO 17 — manufactura local, zonas francas y "
-            "minería colapsan en «Industrias» del lado del empleo. Panel chico (~10 "
-            "ramas × ~6 años); con n por año ≈10 el IC mínimo detectable es alto. Un IC "
-            "inconcluso por potencia es un resultado válido y se muestra tal cual."
-        ),
+        "disclaimer": _disclaimer(n_ramas, ic["n_years"] if ic else len(yearly)),
     }

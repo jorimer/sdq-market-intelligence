@@ -116,6 +116,21 @@ def _run_backtest(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_diagnostico_recalibracion(params, user_id, set_phase) -> Dict:
+    """Compara el poder discriminante del score vigente contra el previo a `02fcdd2`.
+
+    Corre donde está el dato —producción— porque la pregunta es sobre el panel real de
+    1.693 observaciones, no sobre el de desarrollo. No persiste nada: es un diagnóstico.
+    """
+    from modules.banking_score.validation.recalibracion import comparar_recalibracion
+    db = SessionLocal()
+    try:
+        set_phase("reconstruyendo el score previo sobre el mismo panel y los mismos desenlaces")
+        return comparar_recalibracion(db)
+    finally:
+        db.close()
+
+
 def _run_sib_historical_load(params, user_id, set_phase) -> Dict:
     """Carga el ledger histórico de la SB (Cronología SB, 1947→) y deriva los financials.
 
@@ -257,6 +272,16 @@ def register() -> None:
         "por-entidad mensual (balance 1947→, resultados 1996→), luego deriva los financials. "
         "Bajo demanda (~518 MB): correr cuando la SB publique un snapshot nuevo.",
         _run_sib_historical_load, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "banca-diagnostico-recalibracion", "Diagnóstico: recalibración vs discriminación",
+        "Rehace el backtest cambiando UNA sola cosa —el score— para responder si la "
+        "recalibración de solidez del 7-ago degradó la discriminación o si el Gini de 0,44 "
+        "medía otra cosa. Mismo panel, mismos desenlaces; el score previo se reconstruye con "
+        "las curvas de `02fcdd2^`. Reporta además el Gini de cada dimensión por separado. No "
+        "persiste nada. On-demand. Correr cuando: haya que defender o revisar la credencial "
+        "de discriminación del rating.",
+        _run_diagnostico_recalibracion, default_interval_hours=0,
     ))
     registrar_motor(MotorValidacion(
         eje="banking_score", operacion="backtest", clave=BACKTEST_REPORT_KEY,

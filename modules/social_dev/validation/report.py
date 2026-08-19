@@ -27,6 +27,33 @@ def _desc_ranks(scores: Dict[str, float]) -> Dict[str, int]:
     return {k: i + 1 for i, k in enumerate(order)}
 
 
+# La prosa vive en constantes y el N se computa: escrito a mano decía «las mismas 10
+# regiones» y «N=10», que hoy es cierto y deja de serlo en cuanto una región se quede sin
+# score — el disclaimer seguiría afirmando 10 mientras la tabla muestra nueve.
+_CONVERGENTE_QUE_ES = (
+    "Validez CONVERGENTE (no backtest): un Gate E temporal no aplica al IDM —índice "
+    "relativo cross-región cuyas variables nacionales normalizan plano—, así que se valida "
+    "contra una medida INDEPENDIENTE de desarrollo: el IDH regional (IDHr) del PNUD"
+)
+_CONVERGENTE_LECTURA = (
+    "ρ de Spearman alto = el IDM ordena el desarrollo regional como el índice oficial"
+)
+_CONVERGENTE_LIMITE = (
+    "El IDHr es ~2010 (último regional oficial citable); los rankings regionales son "
+    "estructuralmente estables, por eso la correlación de rango es válida."
+)
+
+
+def _disclaimer(n: int, divergencia: str) -> str:
+    """Arma el disclaimer con el N real del cruce y la región que más se aparta."""
+    return (
+        f"{_CONVERGENTE_QUE_ES} para las mismas {n} regiones. {_CONVERGENTE_LECTURA}. "
+        f"N={n} (IC ancho, honesto). La divergencia mayor es {divergencia}: el IDHr suele "
+        f"encumbrar a Ozama por la dimensión de ingreso (área metropolitana), que el IDM no "
+        f"captura por región. {_CONVERGENTE_LIMITE}"
+    )
+
+
 def build_convergent_validity(db) -> Dict:
     """IDM regional ranking vs PNUD IDHr — Spearman ρ + bootstrap CI + pairs."""
     idm = _latest_idm_scores(db)
@@ -60,15 +87,5 @@ def build_convergent_validity(db) -> Dict:
         "pairs": pairs,
         "source": SOURCE,
         "top_divergence": {"region": top["region"], "rank_diff": top["rank_diff"]},
-        "disclaimer": (
-            "Validez CONVERGENTE (no backtest): un Gate E temporal no aplica al IDM "
-            "—índice relativo cross-región cuyas variables nacionales normalizan plano—, "
-            "así que se valida contra una medida INDEPENDIENTE de desarrollo: el IDH "
-            "regional (IDHr) del PNUD para las mismas 10 regiones. ρ de Spearman alto = "
-            "el IDM ordena el desarrollo regional como el índice oficial. N=10 (IC ancho, "
-            "honesto). La divergencia mayor suele ser Ozama: el IDHr la encumbra por la "
-            "dimensión de ingreso (área metropolitana), que el IDM no captura por región. "
-            "El IDHr es ~2010 (último regional oficial citable); los rankings regionales "
-            "son estructuralmente estables, por eso la correlación de rango es válida."
-        ),
+        "disclaimer": _disclaimer(len(common), str(top["region"])),
     }

@@ -294,6 +294,33 @@ async def entity_insight(
     return {"slug": slug, "audience": aud, "ai_insight": ai}
 
 
+@router.get("/validation", summary="Validación del ISA (backtest de resultado-proxy)")
+async def validation(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Backtest del ISA: ¿el índice ordena el desempeño futuro de las AFP?
+
+    El motor existía, estaba testeado y corría — y su resultado no era legible por ninguna
+    ruta: `GET /api/v1/pension-intel/validation` devolvía el HTML del SPA con 200. La señal
+    de rentabilidad es la de mayor N del catálogo después de banca (1.590 observaciones,
+    665 eventos) y era la única concluyente que nadie podía consultar.
+
+    Mismo contrato que seguros, a propósito: dos ejes que se leen igual se comparan sin
+    traducir. Va ANTES de `/{slug}/detail` en el archivo porque si no, «validation» entraría
+    por la ruta comodín como si fuera el slug de una AFP.
+    """
+    import json
+
+    from modules.pension_intel.operations import BACKTEST_KEY
+    from shared.settings.models import AppSetting
+    from shared.validation.frescura import con_frescura
+
+    row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_KEY).first()
+    rep = json.loads(str(row.value)) if row and row.value else None
+    return {"backtest": con_frescura(rep, "pension_intel", db) if rep else None}
+
+
 @router.get("/{slug}/detail")
 async def entity_detail(
     slug: str,
