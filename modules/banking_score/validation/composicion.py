@@ -72,6 +72,12 @@ _EVENTOS_FINOS = 30
 # son prudenciales. Se las nombra para poder medir CON y SIN ellas, no para esconderlas.
 _POBLACIONES_SIN_LIBRO_DE_CREDITO = ("cambiaria", "fiduciaria")
 
+# Cuánto de la inversión tiene que sobrevivir para llamarla intrínseca y no parcial. Es un
+# corte convencional y por eso está acá con nombre: si al estratificar queda menos de tres
+# cuartos de la magnitud, la composición explicaba una parte grande y decir «intrínseca» a
+# secas mandaría a arreglar la curva por un defecto que es mayormente de universo.
+_RESTO_TRAS_ESTRATIFICAR = 0.75
+
 # La prosa que el informe copia vive en constantes: incrustada en el dict se parte por ancho
 # de línea y la frase deja de existir en el fuente.
 VEREDICTO_COMPOSICIONAL = (
@@ -157,7 +163,7 @@ def _veredicto(agregado: Dict, dentro: Dict) -> Dict:
         return {"clave": "composicional", "texto": VEREDICTO_COMPOSICIONAL,
                 "gini_agregado": g_agg, "gini_dentro_del_estrato": g_dentro}
     # Sigue invertida dentro del estrato: ¿al menos se achicó?
-    clave = "parcial" if abs(g_dentro) < abs(g_agg) * 0.75 else "intrinseca"
+    clave = "parcial" if abs(g_dentro) < abs(g_agg) * _RESTO_TRAS_ESTRATIFICAR else "intrinseca"
     return {"clave": clave,
             "texto": VEREDICTO_PARCIAL if clave == "parcial" else VEREDICTO_INTRINSECO,
             "gini_agregado": g_agg, "gini_dentro_del_estrato": g_dentro}
