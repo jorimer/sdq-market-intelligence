@@ -51,11 +51,24 @@ class TestQueSeConsulta:
         ids = {c.indicador for c in consultas("end_2030")}
         assert not (medidos & ids), "ya tienen binding verificado"
 
-    def test_no_se_reabre_una_fuente_ya_descartada(self):
+    def test_no_se_reabre_un_indicador_descartado(self):
         """Su problema no es falta de fuente: es que la evaluada no mide lo que el eje
-        afirma. Volver a proponerle algo sería re-abrir una decisión documentada."""
+        afirma. Volver a proponerle algo sería re-abrir una decisión documentada.
+
+        El 3.9 lo sigue siendo: su emisor (WEF) dejó de publicar en 2020 y no hay serie que
+        proponer. El 3.26 salió de esta lista y NO por relajar el criterio — ver abajo."""
         ids = {c.indicador for c in consultas("end_2030")}
-        assert "3.26" not in ids and "3.9" not in ids
+        assert "3.9" not in ids
+
+    def test_rechazar_una_SERIE_no_agota_al_indicador(self):
+        """La distinción que costó entender: un descarte es sobre un CANDIDATO.
+
+        El 3.26 tenía rechazado el ingreso familiar mensual, y la serie que la ley nombra
+        —INB per cápita por método Atlas— existía todo el tiempo en otro emisor. Tratar al
+        indicador como agotado nos habría mantenido ciegos indefinidamente. Lo que no se
+        repite es proponer la MISMA serie ya rechazada, y eso viaja en `excluir`."""
+        c = next(c for c in consultas("end_2030") if c.indicador == "3.26")
+        assert "social_dev:income_per_capita" in c.excluir
 
     def test_todas_las_consultas_del_expediente_son_utiles(self):
         r = resumen(consultas("end_2030"))

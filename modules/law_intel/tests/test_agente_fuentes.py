@@ -70,9 +70,16 @@ class TestBarrido:
         assert medidos, "sin verificados el test no probaría nada"
         assert not (medidos & {i.id for i in sin_fuente(E)})
 
-    def test_no_reabre_un_descartado(self):
+    def test_no_reabre_un_indicador_descartado(self):
+        """El 3.9 sigue descartado: su emisor (WEF) dejó de publicar en 2020 y no hay serie
+        que proponer. Gastar una llamada del agente en él es gasto sin retorno.
+
+        El 3.26 salió de la lista y no por relajar el criterio: su descarte era sobre el
+        ingreso familiar mensual, y la serie que la ley nombra —INB per cápita por método
+        Atlas— existía todo el tiempo en otro emisor. Rechazar una SERIE no agota al
+        indicador, y tratarlo como agotado nos habría mantenido ciegos indefinidamente."""
         ids = {i.id for i in sin_fuente(E)}
-        assert "3.26" not in ids and "3.9" not in ids
+        assert "3.9" not in ids
 
     def test_el_indicador_viaja_en_la_descripcion(self):
         """La sugerencia vive en el tablero general, donde el único campo de eje es

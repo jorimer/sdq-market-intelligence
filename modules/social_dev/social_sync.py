@@ -44,6 +44,44 @@ WDI_NACIONALES_FUERA_DEL_INDICE = {
     # menores de 5 incluye a la infantil más las muertes de 1 a 4 años, y ninguna
     # transformación las convierte.
     "SH.DYN.MORT": ("under5_mortality", "por 1.000 nacidos vivos"),
+
+    # ══ LOTE 2026-08-19 · once series nacionales para el expediente de la END ══
+    #
+    # Cada una se comprobó ANTES de escribir este código, contra el oráculo que la propia
+    # ley provee: la END declara valor y año de línea base, y una serie candidata que no
+    # reproduce ese valor en ese año NO mide lo que el indicador dice medir. La sonda
+    # (`modules/law_intel/sonda.py`) hace esa comprobación contra la fuente viva, en
+    # segundos y sin desplegar. El Δ contra la base legal va anotado en cada una.
+    #
+    # SALVEDAD DE UBICACIÓN, declarada y no disimulada: `homicide_rate`, `tax_revenue_gdp`
+    # y `gni_per_capita_atlas` NO son variables de desarrollo social. Viven acá porque este
+    # es el eje que hoy ingiere series nacionales y las publica al registro con peso 0, que
+    # es lo que el eje de leyes consume. Ninguna entra al IDM. Cuando exista un eje de
+    # series nacionales de referencia, se mudan.
+    "VC.IHR.PSRC.P5": ("homicide_rate", "por 100.000 habitantes"),          # 1.8  Δ 0,8%
+    "SN.ITK.DEFC.ZS": ("undernourishment", "% de la población"),            # 2.27 Δ 1,4%
+    # ANALFABETISMO en la ley, ALFABETIZACIÓN en la fuente: el binding declara
+    # `complemento_100`. Comprobado: 100 − 89,54 = 10,46 contra una base legal de 10,5.
+    # Esta serie es NACIONAL y por eso destraba el 2.19, que estaba demotado desde que se
+    # descubrió que `literacy_rate` publicaba el valor de una sola región.
+    "SE.ADT.LITR.ZS": ("literacy_rate_pais", "% de 15 años y más"),         # 2.19 Δ 0,4%
+    # Las tres desnutriciones miden cosas DISTINTAS y ninguna transformación las convierte:
+    # peso/edad (global), peso/talla (aguda) y talla/edad (crónica). Se atan por separado
+    # porque la ley las fija por separado.
+    "SH.STA.MALN.ZS": ("malnutrition_weight_age", "% de menores de 5"),     # 2.28 Δ 9,7%
+    "SH.STA.WAST.ZS": ("malnutrition_weight_height", "% de menores de 5"),  # 2.29 Δ 4,5%
+    "SH.STA.STNT.ZS": ("malnutrition_height_age", "% de menores de 5"),     # 2.30 Δ 3,1%
+    # ⛔ NO se descargan `SH.STA.BASS.ZS` (2.34) ni `SH.H2O.BASW.ZS` (2.35). La sonda las
+    #    dio «cerca» (Δ 2,3% y 8,8%) y el expediente YA las tenía descartadas, con un
+    #    argumento que la sonda no puede ver: el JMP cambió su escala en 2015 —«mejorados»,
+    #    que es lo que la ley nombra, pasó a «al menos básicos»— y la cercanía de niveles es
+    #    JUSTAMENTE lo que haría pasar ese cambio de definición por un dato comparable.
+    #    Queda acá escrito para que el próximo barrido no las vuelva a proponer.
+    # El emisor publica 0-100 y la ley fija 0-1: el binding declara `centesimal`. NO se
+    # divide acá — guardaríamos un número que ya no es el que el Banco Mundial publica.
+    "SI.POV.GINI": ("gini_index", "índice 0-100"),                          # 2.7  Δ 3,5%
+    "GC.TAX.TOTL.GD.ZS": ("tax_revenue_gdp", "% del PIB"),                  # 3.25 Δ 6,0%
+    "NY.GNP.PCAP.CD": ("gni_per_capita_atlas", "US$ corrientes"),           # 3.26 Δ 5,4%
 }
 HEALTH_ENTITY = "nacional"
 _WDI_HEALTH_YEARS = 30

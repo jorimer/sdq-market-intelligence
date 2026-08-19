@@ -181,16 +181,34 @@ class TestLasCuatroDudasResueltas:
         assert "2022" in (b.nota or ""), "el corte metodológico no puede quedar sin declarar"
 
     def test_analfabetismo_lleva_su_transformacion(self):
+        """La transformación sigue siendo obligatoria: la ley pide ANALFABETISMO y el emisor
+        publica alfabetización. Sin declararla, el binding publica el valor invertido.
+
+        Lo que cambió (2026-08-19) es la FUENTE, no el concepto: estaba bloqueado por medir
+        una región contra una meta nacional, y la serie del Banco Mundial es el agregado del
+        país. El bloqueo se levanta porque su causa desapareció, no porque se haya
+        flexibilizado el criterio."""
         b = cargar_bindings(EXPEDIENTE)["2.19"]
         assert b.transformacion == "complemento_100"
-        # Su nota abierta es la del alcance regional, no la de la transformación: la
-        # dirección quedó resuelta y declarada.
-        assert "REGIÓN" in (b.nota_comparabilidad or "").upper()
+        assert b.serie.endswith("_pais"), "la serie tiene que ser el AGREGADO nacional"
+        assert not b.nota_comparabilidad, (
+            "resuelto el alcance, no queda duda abierta que justifique frenarlo")
+        assert "10,46" in (b.nota or ""), (
+            "la comprobación contra la línea base de la ley se declara, no se recuerda")
 
-    def test_el_ingreso_queda_descartado_con_su_motivo(self):
+    def test_el_ingreso_de_HOGARES_sigue_rechazado_aunque_el_indicador_ya_se_mida(self):
+        """El descarte era sobre un CANDIDATO, no sobre el indicador, y esa distinción no se
+        veía mientras hubo una sola serie evaluada.
+
+        Al aparecer la que la ley nombra —INB per cápita por método Atlas— el modelo viejo
+        obligaba a borrar el descarte para poder atarla, y con él se iba la constancia que
+        impide que alguien vuelva a proponer el ingreso de hogares. Ahora el registro es
+        ACUMULATIVO: el indicador se mide Y el candidato rechazado sigue rechazado."""
         b = cargar_bindings(EXPEDIENTE)["3.26"]
-        assert b.estado == "descartado"
-        m = b.motivo_descarte or ""
+        assert b.serie == "social_dev:gni_per_capita_atlas"
+        rechazados = {c["serie"]: c["motivo"] for c in b.candidatos_descartados}
+        assert "social_dev:income_per_capita" in rechazados
+        m = rechazados["social_dev:income_per_capita"]
         assert "MENSUAL" in m and "Atlas" in m, "el motivo nombra las dos magnitudes"
 
     def test_las_dudas_de_COMPARABILIDAD_originales_quedaron_resueltas(self):
@@ -204,10 +222,13 @@ class TestLasCuatroDudasResueltas:
         bs = cargar_bindings(EXPEDIENTE)
         assert not (bs["2.21"].nota_comparabilidad or "").strip()
         # 2.18 salió de la lista: se recuperó apuntando a la cifra nacional del SISDOM.
-        for i in ("2.4", "2.19"):
-            nota = (bs[i].nota_comparabilidad or "").upper()
-            assert "REGIÓN" in nota, f"{i} bloquea por un motivo que no es el de alcance"
+        nota = (bs["2.4"].nota_comparabilidad or "").upper()
+        assert "REGIÓN" in nota, "2.4 bloquea por un motivo que no es el de alcance"
+        # 2.18 y 2.19 se recuperaron por el MISMO camino en momentos distintos: dejar de
+        # leer una variable por-región y atarse al agregado nacional del país. Que 2.19 ya
+        # no aparezca acá no es que se haya relajado el criterio: es que su causa murió.
         assert bs["2.18"].cuenta, "2.18 se recuperó con la serie nacional"
+        assert not bs["2.19"].nota_comparabilidad, "2.19 se recuperó con la serie nacional"
 
 
 class TestLasSenalesQueYaEstabanExpuestas:
