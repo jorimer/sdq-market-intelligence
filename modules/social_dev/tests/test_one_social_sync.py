@@ -721,3 +721,38 @@ def test_todo_sub_sync_de_red_esta_sustituido_en_el_test_de_idempotencia():
         "estos sub-syncs no están sustituidos en el test de idempotencia y saldrán a la "
         f"red en CI: {sin_sustituir}"
     )
+
+
+def test_ninguna_escritura_queda_del_otro_lado_del_COMMIT():
+    """REGLA ESTRUCTURAL: ningún sub-sync corre después de `db.commit()`.
+
+    El modo de fallar es el peor que existe. Los conteos regionales (2.2 y 2.5 de la END)
+    quedaron un rato después del commit: los 50 upserts ocurrían, el contador devolvía 50,
+    ningún error se levantaba, y las filas se perdían al cerrar la sesión. La operación
+    reportaba éxito con un número correcto sobre datos que no existían.
+
+    **El test de idempotencia no puede detectarlo** y por eso hace falta este: consulta con
+    la MISMA sesión, donde lo no comiteado igual se ve. Solo apareció al pedirle el dato al
+    Data Registry en producción, que usa otra sesión.
+    """
+    import ast
+    import inspect
+
+    from modules.social_dev import social_sync
+
+    import textwrap
+
+    # `cleandoc` desangra el docstring y rompe la indentación del cuerpo; `dedent` respeta
+    # el bloque entero, que es lo que hay que parsear.
+    arbol = ast.parse(textwrap.dedent(inspect.getsource(social_sync.one_social_sync)))
+    commits = [n.lineno for n in ast.walk(arbol)
+               if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+               and n.func.attr == "commit"]
+    assert commits, "la sync tiene que comitear"
+    llamadas = [(n.lineno, n.func.id) for n in ast.walk(arbol)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id.startswith("_sync_")]
+    tardias = [(ln, nm) for ln, nm in llamadas if ln > max(commits)]
+    assert not tardias, (
+        f"estos sub-syncs corren DESPUÉS del último commit y sus escrituras se pierden sin "
+        f"error, con el contador devolviendo el número correcto: {tardias}")
