@@ -56,6 +56,8 @@ def test_el_reporte_declara_si_la_curva_ORDENA_el_riesgo(monkeypatch):
     class _Obs:
         def __init__(self, score, tier, det):
             self.score, self.tier, self.deteriorated = score, tier, det
+            # Una regla sola, la de ganancias: el panel real también la tiene dominando.
+            self.triggers = ("roa_negativo_sostenido",) if det else ()
 
     # Panel sintético con la MISMA forma de U que producción: la banda superior se deteriora
     # más que la siguiente.

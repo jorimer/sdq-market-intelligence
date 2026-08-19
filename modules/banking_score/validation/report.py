@@ -34,6 +34,41 @@ _CAVEAT_NO_ES_RUIDO = (
 )
 
 
+def composicion_del_desenlace(obs) -> Dict:
+    """Cuántos eventos aporta CADA regla del desenlace, y cuántos son exclusivos de ella.
+
+    El desenlace «distress» es la UNIÓN de tres reglas, y el reporte las nombraba a las tres
+    como si pesaran parecido. Medido en el panel de producción: la de ganancias (ROA<0
+    sostenido) aporta 250 de los 301 eventos, la de crédito 66, y la de SOLVENCIA **cero** —
+    nunca disparó en toda la ventana. Sin esta composición, «el score discrimina distress
+    financiero» se lee como si midiera deterioro de crédito o de capital, y mide sobre todo
+    persistencia de resultados.
+
+    Una regla que no dispara no es un criterio estricto: es un criterio que no está midiendo,
+    y hay que declararlo en vez de seguir listándolo.
+    """
+    reglas = ("morosidad_x2", "solvencia_breach", "roa_negativo_sostenido")
+    total = sum(1 for o in obs if o.deteriorated)
+    fuego = {r: 0 for r in reglas}
+    exclusivos = {r: 0 for r in reglas}
+    for o in obs:
+        disparadas = tuple(o.triggers or ())
+        for r in disparadas:
+            if r in fuego:
+                fuego[r] += 1
+        if len(disparadas) == 1 and disparadas[0] in exclusivos:
+            exclusivos[disparadas[0]] += 1
+    return {
+        "n_eventos": total,
+        "por_regla": [
+            {"regla": r, "eventos": fuego[r], "exclusivos": exclusivos[r],
+             "cuota": round(fuego[r] / total, 4) if total else None}
+            for r in reglas
+        ],
+        "reglas_sin_disparar": [r for r in reglas if fuego[r] == 0],
+    }
+
+
 def _pct(v: float) -> str:
     """Porcentaje con coma decimal: el reporte se lee en español y viaja a un PDF."""
     return f"{v * 100:.1f}".replace(".", ",") + " %"
@@ -90,6 +125,19 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
     ]
     if n_events < _THIN_EVENTS:
         caveats.insert(0, f"Pocos eventos ({n_events}): el Gini es indicativo, no concluyente.")
+    composicion = composicion_del_desenlace(obs)
+    # Una regla declarada que aporta CERO eventos no es un criterio estricto: es un criterio
+    # que no mide, y listarla como si midiera infla lo que el desenlace abarca.
+    if composicion["reglas_sin_disparar"]:
+        caveats.insert(0, "Reglas del desenlace que NUNCA dispararon en la ventana y por lo "
+                          "tanto no aportan evidencia: "
+                          + ", ".join(composicion["reglas_sin_disparar"]) + ".")
+    dominante = max(composicion["por_regla"], key=lambda r: r["eventos"])
+    if dominante["cuota"] and dominante["cuota"] >= 0.66:
+        caveats.insert(0, f"El desenlace lo domina UNA regla: «{dominante['regla']}» aporta "
+                          f"{dominante['eventos']} de los {composicion['n_eventos']} eventos "
+                          f"({_pct(dominante['cuota'])}). La discriminación medida es sobre "
+                          f"todo contra ese fenómeno, no contra los tres por igual.")
     violaciones = monotonicity_violations(by_tier)
     if not monotonic:
         caveats.insert(0, _caveat_de_monotonia(violaciones))
@@ -108,6 +156,7 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
         # superficie que la dibuja tiene que deducirlo, y la deducción se pierde en el camino
         # a un PDF o a una lámina.
         "by_tier_ordena_riesgo": monotonic,
+        "composicion_del_desenlace": composicion,
         "monotonic_violations": violaciones,
         "caveats": caveats,
     }
