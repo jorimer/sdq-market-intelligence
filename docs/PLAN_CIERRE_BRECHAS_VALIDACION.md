@@ -213,8 +213,18 @@ C1–C3 y C5.
       cero) a **concluyente: Gini 0,2575 · IC [0,124 · 0,395]**. El G5 del producto subió de
       0,60 a **0,68** solo (lo computa el propio estado de validación), y la nota del producto
       ya cita la cifra nueva. Seguros deja de ser «corrido y no concluyente».
-- [ ] **IAI: decisión tomada (validarlo contra el desenlace que sí targetea)**, pendiente de
-      ejecutar: exige evaluar una fuente de inversión por rama que hoy no está conectada.
+- [x] **IAI: decisión tomada (validarlo contra el desenlace que sí targetea), EJECUTADA.** El
+      BCRD publica IED por actividad (`inversion_ext_sector_6.xls`, anual 2010→); se conectó,
+      se cruzó a los 17 slugs por una tercera resolución declarada (9 actividades) y el Gate E
+      corre contra los dos desenlaces. **Resultado, medido en producción:**
+      · empleo: IC medio anual −0,03 [−0,267 · 0,208] — nulo, como ya se sabía;
+      · inversión (intensidad): IC **−0,321** [−0,500 · −0,142] … **pero el control que ordena
+      el mismo desenlace SOLO por tamaño da −0,323**: el signo es del deflactor, no del índice;
+      · inversión (nivel): IC +0,287 [0,163 · 0,412], y **el tamaño solo da +0,377** — mejor
+      que el índice.
+      **Veredicto: contra la inversión realizada el IAI no agrega poder por encima del tamaño
+      del sector.** Ningún desenlace lo sostiene como predictivo, y el producto lo declara
+      (dejó de decir «Gate E diferido», que ocultaba un resultado que existía).
 - [x] Ningún disclaimer con cifras escritas a mano: corregidos IRMP, `social_dev` y
       `sector_intel`, con un guard estructural (`ast`) que lo exige de acá en adelante.
 - [x] **Cero** motores de validación cuyo resultado no sea legible por API.

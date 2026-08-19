@@ -1,0 +1,691 @@
+{
+ "has_report": true,
+ "has_data": true,
+ "outcome": "crecimiento del empleo formal (Δ% T+1, ENCFT)",
+ "resolution": "10 ramas de actividad (ENCFT); IAI agregado por tamaño del sector",
+ "n_observations": 160,
+ "n_branches": 10,
+ "years": [
+  "2008",
+  "2023"
+ ],
+ "mean_yearly_ic": -0.03,
+ "n_years": 16,
+ "ic_t_stat": -0.265,
+ "ic_ci": [
+  -0.267,
+  0.208
+ ],
+ "spearman_pooled": -0.041,
+ "spearman_pooled_ci": [
+  -0.221,
+  0.142
+ ],
+ "spearman_partial_growth": -0.044,
+ "spearman_partial_n": 160,
+ "by_year": [
+  {
+   "year": "2008",
+   "n": 10,
+   "spearman": 0.006
+  },
+  {
+   "year": "2009",
+   "n": 10,
+   "spearman": -0.806
+  },
+  {
+   "year": "2010",
+   "n": 10,
+   "spearman": 0.479
+  },
+  {
+   "year": "2011",
+   "n": 10,
+   "spearman": -0.903
+  },
+  {
+   "year": "2012",
+   "n": 10,
+   "spearman": 0.479
+  },
+  {
+   "year": "2013",
+   "n": 10,
+   "spearman": 0.503
+  },
+  {
+   "year": "2014",
+   "n": 10,
+   "spearman": 0.03
+  },
+  {
+   "year": "2015",
+   "n": 10,
+   "spearman": 0.006
+  },
+  {
+   "year": "2016",
+   "n": 10,
+   "spearman": -0.127
+  },
+  {
+   "year": "2017",
+   "n": 10,
+   "spearman": -0.006
+  },
+  {
+   "year": "2018",
+   "n": 10,
+   "spearman": -0.115
+  },
+  {
+   "year": "2019",
+   "n": 10,
+   "spearman": -0.333
+  },
+  {
+   "year": "2020",
+   "n": 10,
+   "spearman": -0.467
+  },
+  {
+   "year": "2021",
+   "n": 10,
+   "spearman": 0.6
+  },
+  {
+   "year": "2022",
+   "n": 10,
+   "spearman": 0.285
+  },
+  {
+   "year": "2023",
+   "n": 10,
+   "spearman": -0.103
+  }
+ ],
+ "quintile_spread": {
+  "top_iai_mean_growth": 2.44,
+  "bottom_iai_mean_growth": 3.58,
+  "spread": -1.13,
+  "n_years": 16
+ },
+ "spearman_pooled_note": "pooled sobre los pares sector-año apilados (sin clustering año/sector) — sobrestima la precisión; el titular es el IC medio anual con t",
+ "outcomes": {
+  "empleo": {
+   "n_observations": 160,
+   "n_branches": 10,
+   "years": [
+    "2008",
+    "2023"
+   ],
+   "mean_yearly_ic": -0.03,
+   "n_years": 16,
+   "ic_t_stat": -0.265,
+   "ic_ci": [
+    -0.267,
+    0.208
+   ],
+   "spearman_pooled": -0.041,
+   "spearman_pooled_ci": [
+    -0.221,
+    0.142
+   ],
+   "spearman_partial_growth": -0.044,
+   "spearman_partial_n": 160,
+   "by_year": [
+    {
+     "year": "2008",
+     "n": 10,
+     "spearman": 0.006
+    },
+    {
+     "year": "2009",
+     "n": 10,
+     "spearman": -0.806
+    },
+    {
+     "year": "2010",
+     "n": 10,
+     "spearman": 0.479
+    },
+    {
+     "year": "2011",
+     "n": 10,
+     "spearman": -0.903
+    },
+    {
+     "year": "2012",
+     "n": 10,
+     "spearman": 0.479
+    },
+    {
+     "year": "2013",
+     "n": 10,
+     "spearman": 0.503
+    },
+    {
+     "year": "2014",
+     "n": 10,
+     "spearman": 0.03
+    },
+    {
+     "year": "2015",
+     "n": 10,
+     "spearman": 0.006
+    },
+    {
+     "year": "2016",
+     "n": 10,
+     "spearman": -0.127
+    },
+    {
+     "year": "2017",
+     "n": 10,
+     "spearman": -0.006
+    },
+    {
+     "year": "2018",
+     "n": 10,
+     "spearman": -0.115
+    },
+    {
+     "year": "2019",
+     "n": 10,
+     "spearman": -0.333
+    },
+    {
+     "year": "2020",
+     "n": 10,
+     "spearman": -0.467
+    },
+    {
+     "year": "2021",
+     "n": 10,
+     "spearman": 0.6
+    },
+    {
+     "year": "2022",
+     "n": 10,
+     "spearman": 0.285
+    },
+    {
+     "year": "2023",
+     "n": 10,
+     "spearman": -0.103
+    }
+   ],
+   "quintile_spread": {
+    "top_iai_mean_growth": 2.44,
+    "bottom_iai_mean_growth": 3.58,
+    "spread": -1.13,
+    "n_years": 16
+   },
+   "conclusive": false,
+   "invertido": false,
+   "que_mide": "crecimiento del empleo formal por rama (Δ% T+1, ENCFT) — NO es lo que el IAI dice anticipar"
+  },
+  "inversion": {
+   "n_observations": 144,
+   "n_branches": 9,
+   "years": [
+    "2009",
+    "2024"
+   ],
+   "mean_yearly_ic": -0.321,
+   "n_years": 16,
+   "ic_t_stat": -3.819,
+   "ic_ci": [
+    -0.5,
+    -0.142
+   ],
+   "spearman_pooled": -0.275,
+   "spearman_pooled_ci": [
+    -0.416,
+    -0.126
+   ],
+   "spearman_partial_growth": -0.271,
+   "spearman_partial_n": 144,
+   "by_year": [
+    {
+     "year": "2009",
+     "n": 9,
+     "spearman": -0.367
+    },
+    {
+     "year": "2010",
+     "n": 9,
+     "spearman": -0.7
+    },
+    {
+     "year": "2011",
+     "n": 9,
+     "spearman": -0.083
+    },
+    {
+     "year": "2012",
+     "n": 9,
+     "spearman": -0.817
+    },
+    {
+     "year": "2013",
+     "n": 9,
+     "spearman": -0.767
+    },
+    {
+     "year": "2014",
+     "n": 9,
+     "spearman": -0.133
+    },
+    {
+     "year": "2015",
+     "n": 9,
+     "spearman": 0.067
+    },
+    {
+     "year": "2016",
+     "n": 9,
+     "spearman": 0.367
+    },
+    {
+     "year": "2017",
+     "n": 9,
+     "spearman": -0.383
+    },
+    {
+     "year": "2018",
+     "n": 9,
+     "spearman": -0.5
+    },
+    {
+     "year": "2019",
+     "n": 9,
+     "spearman": 0.1
+    },
+    {
+     "year": "2020",
+     "n": 9,
+     "spearman": -0.583
+    },
+    {
+     "year": "2021",
+     "n": 9,
+     "spearman": -0.467
+    },
+    {
+     "year": "2022",
+     "n": 9,
+     "spearman": -0.267
+    },
+    {
+     "year": "2023",
+     "n": 9,
+     "spearman": -0.1
+    },
+    {
+     "year": "2024",
+     "n": 9,
+     "spearman": -0.5
+    }
+   ],
+   "quintile_spread": {
+    "top_iai_mean_growth": 52.01,
+    "bottom_iai_mean_growth": 223.46,
+    "spread": -171.45,
+    "n_years": 16
+   },
+   "conclusive": false,
+   "invertido": true,
+   "que_mide": "intensidad de inversión extranjera directa realizada en T+1 (IED por unidad de tamaño del sector) — el desenlace que el IAI targetea",
+   "fuente": "BCRD · Flujos de IED por actividad económica (anual)",
+   "resolucion": "9 actividades de IED del BCRD (cobertura parcial de los 17 sectores)",
+   "contraste_nivel": {
+    "n_observations": 144,
+    "n_branches": 9,
+    "years": [
+     "2009",
+     "2024"
+    ],
+    "mean_yearly_ic": 0.287,
+    "n_years": 16,
+    "ic_t_stat": 4.906,
+    "ic_ci": [
+     0.163,
+     0.412
+    ],
+    "spearman_pooled": 0.3,
+    "spearman_pooled_ci": [
+     0.142,
+     0.44
+    ],
+    "spearman_partial_growth": 0.305,
+    "spearman_partial_n": 144,
+    "by_year": [
+     {
+      "year": "2009",
+      "n": 9,
+      "spearman": 0.233
+     },
+     {
+      "year": "2010",
+      "n": 9,
+      "spearman": -0.167
+     },
+     {
+      "year": "2011",
+      "n": 9,
+      "spearman": 0.367
+     },
+     {
+      "year": "2012",
+      "n": 9,
+      "spearman": -0.1
+     },
+     {
+      "year": "2013",
+      "n": 9,
+      "spearman": 0.033
+     },
+     {
+      "year": "2014",
+      "n": 9,
+      "spearman": 0.45
+     },
+     {
+      "year": "2015",
+      "n": 9,
+      "spearman": 0.45
+     },
+     {
+      "year": "2016",
+      "n": 9,
+      "spearman": 0.633
+     },
+     {
+      "year": "2017",
+      "n": 9,
+      "spearman": 0.45
+     },
+     {
+      "year": "2018",
+      "n": 9,
+      "spearman": 0.45
+     },
+     {
+      "year": "2019",
+      "n": 9,
+      "spearman": 0.6
+     },
+     {
+      "year": "2020",
+      "n": 9,
+      "spearman": 0.05
+     },
+     {
+      "year": "2021",
+      "n": 9,
+      "spearman": 0.25
+     },
+     {
+      "year": "2022",
+      "n": 9,
+      "spearman": 0.283
+     },
+     {
+      "year": "2023",
+      "n": 9,
+      "spearman": 0.383
+     },
+     {
+      "year": "2024",
+      "n": 9,
+      "spearman": 0.233
+     }
+    ],
+    "quintile_spread": {
+     "top_iai_mean_growth": 472.26,
+     "bottom_iai_mean_growth": 427.76,
+     "spread": 44.5,
+     "n_years": 16
+    },
+    "conclusive": true,
+    "invertido": false
+   },
+   "nota_contraste": "el nivel de IED en millones lo domina el tamaño de la actividad; se muestra para acotar, no como titular",
+   "control_solo_tamano": {
+    "intensidad": {
+     "n_observations": 144,
+     "n_branches": 9,
+     "years": [
+      "2009",
+      "2024"
+     ],
+     "mean_yearly_ic": -0.323,
+     "n_years": 16,
+     "ic_t_stat": -3.464,
+     "ic_ci": [
+      -0.521,
+      -0.124
+     ],
+     "spearman_pooled": -0.36,
+     "spearman_pooled_ci": [
+      -0.516,
+      -0.18
+     ],
+     "spearman_partial_growth": -0.36,
+     "spearman_partial_n": 144,
+     "by_year": [
+      {
+       "year": "2009",
+       "n": 9,
+       "spearman": -0.533
+      },
+      {
+       "year": "2010",
+       "n": 9,
+       "spearman": -0.817
+      },
+      {
+       "year": "2011",
+       "n": 9,
+       "spearman": -0.35
+      },
+      {
+       "year": "2012",
+       "n": 9,
+       "spearman": -0.883
+      },
+      {
+       "year": "2013",
+       "n": 9,
+       "spearman": -0.483
+      },
+      {
+       "year": "2014",
+       "n": 9,
+       "spearman": -0.1
+      },
+      {
+       "year": "2015",
+       "n": 9,
+       "spearman": 0.183
+      },
+      {
+       "year": "2016",
+       "n": 9,
+       "spearman": 0.1
+      },
+      {
+       "year": "2017",
+       "n": 9,
+       "spearman": -0.1
+      },
+      {
+       "year": "2018",
+       "n": 9,
+       "spearman": -0.7
+      },
+      {
+       "year": "2019",
+       "n": 9,
+       "spearman": 0.25
+      },
+      {
+       "year": "2020",
+       "n": 9,
+       "spearman": -0.583
+      },
+      {
+       "year": "2021",
+       "n": 9,
+       "spearman": -0.683
+      },
+      {
+       "year": "2022",
+       "n": 9,
+       "spearman": -0.233
+      },
+      {
+       "year": "2023",
+       "n": 9,
+       "spearman": 0.167
+      },
+      {
+       "year": "2024",
+       "n": 9,
+       "spearman": -0.4
+      }
+     ],
+     "quintile_spread": {
+      "top_iai_mean_growth": 25.8,
+      "bottom_iai_mean_growth": 275.97,
+      "spread": -250.18,
+      "n_years": 16
+     },
+     "conclusive": false,
+     "invertido": true
+    },
+    "nivel": {
+     "n_observations": 144,
+     "n_branches": 9,
+     "years": [
+      "2009",
+      "2024"
+     ],
+     "mean_yearly_ic": 0.377,
+     "n_years": 16,
+     "ic_t_stat": 6.021,
+     "ic_ci": [
+      0.244,
+      0.511
+     ],
+     "spearman_pooled": 0.318,
+     "spearman_pooled_ci": [
+      0.159,
+      0.48
+     ],
+     "spearman_partial_growth": 0.318,
+     "spearman_partial_n": 144,
+     "by_year": [
+      {
+       "year": "2009",
+       "n": 9,
+       "spearman": 0.167
+      },
+      {
+       "year": "2010",
+       "n": 9,
+       "spearman": -0.183
+      },
+      {
+       "year": "2011",
+       "n": 9,
+       "spearman": 0.05
+      },
+      {
+       "year": "2012",
+       "n": 9,
+       "spearman": 0.283
+      },
+      {
+       "year": "2013",
+       "n": 9,
+       "spearman": 0.417
+      },
+      {
+       "year": "2014",
+       "n": 9,
+       "spearman": 0.5
+      },
+      {
+       "year": "2015",
+       "n": 9,
+       "spearman": 0.583
+      },
+      {
+       "year": "2016",
+       "n": 9,
+       "spearman": 0.65
+      },
+      {
+       "year": "2017",
+       "n": 9,
+       "spearman": 0.667
+      },
+      {
+       "year": "2018",
+       "n": 9,
+       "spearman": 0.367
+      },
+      {
+       "year": "2019",
+       "n": 9,
+       "spearman": 0.717
+      },
+      {
+       "year": "2020",
+       "n": 9,
+       "spearman": 0.25
+      },
+      {
+       "year": "2021",
+       "n": 9,
+       "spearman": 0.15
+      },
+      {
+       "year": "2022",
+       "n": 9,
+       "spearman": 0.367
+      },
+      {
+       "year": "2023",
+       "n": 9,
+       "spearman": 0.633
+      },
+      {
+       "year": "2024",
+       "n": 9,
+       "spearman": 0.417
+      }
+     ],
+     "quintile_spread": {
+      "top_iai_mean_growth": 581.84,
+      "bottom_iai_mean_growth": 197.65,
+      "spread": 384.2,
+      "n_years": 16
+     },
+     "conclusive": true,
+     "invertido": false
+    }
+   },
+   "nota_control": "`sector_size` es a la vez el deflactor de la intensidad y una variable del IAI. El control ordena el mismo desenlace usando solo el tamaño: compará su IC con el del índice antes de atribuirle el signo al índice."
+  }
+ },
+ "headline_outcome": null,
+ "disclaimer": "Validación DIRECCIONAL, no grado-Basilea. Mide si el IAI en T ordena el crecimiento del empleo formal por rama en T+1 (IC de rango de Spearman). TITULAR: el IC MEDIO de las cross-sections anuales, con CI de Student-t sobre la serie de IC por año (la inferencia correcta para un panel sector-año, que respeta el clustering por año). El IC apilado (pooled) se reporta como SECUNDARIO: su bootstrap remuestrea pares como si fueran independientes y sobrestima la precisión. El outcome es un CAMBIO (Δ% empleo), no un nivel; aun así se reporta el IC PARCIAL controlando por el crecimiento del sector en T (sector_growth_T) para acotar la inercia serial. Resolución: 10 ramas, NO 17 — manufactura local, zonas francas y minería colapsan en «Industrias» del lado del empleo. Panel chico (10 ramas × 16 años); con n por año ≈10 el IC mínimo detectable es alto. Un IC inconcluso por potencia es un resultado válido y se muestra tal cual. El eje se valida contra DOS desenlaces y no contra uno: el empleo formal (el que este bloque encabeza, por continuidad con lo ya publicado) y la INVERSIÓN realizada (IED del BCRD por actividad), que es la que el índice dice anticipar. `headline_outcome` nombra cuál de los dos sostiene una afirmación; si es `null`, ninguno la sostiene.",
+ "generated_at": "2026-08-19T18:34:01.324535+00:00",
+ "input_fingerprint": "304770827a7d1985",
+ "stale": false,
+ "stale_reason": null
+}
