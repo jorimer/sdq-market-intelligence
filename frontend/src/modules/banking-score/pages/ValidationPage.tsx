@@ -151,6 +151,46 @@ export function ValidationPage() {
         <StatTile label={t("banking.valStatEvents")} value={`${report.n_events} (${fmtPct(report.event_rate)})`} />
       </div>
 
+      {/* Las tres familias del desenlace, cada una con su N y su IC. El agregado de arriba
+          es su unión, y medido en producción resultó 83 % pérdidas · 22 % crédito · 0 %
+          solvencia: un solo número que el lector atribuye al fenómeno que tiene en la
+          cabeza, que no es el que domina. */}
+      {report.signals && (
+        <Card className="mb-5">
+          <CardHead
+            icon={ShieldCheck}
+            title={t("banking.valSignalsTitle")}
+            subtitle={t("banking.valSignalsSubtitle")}
+          />
+          <div className="space-y-3">
+            {Object.entries(report.signals).map(([clave, s]) => {
+              const estado = !s.evaluable
+                ? { tone: "muted" as const, label: t("banking.valSignalNotEvaluable") }
+                : s.invertida
+                  ? { tone: "alert" as const, label: t("banking.valSignalInverted") }
+                  : s.conclusive
+                    ? { tone: "ok" as const, label: t("banking.valSignalConclusive") }
+                    : { tone: "warn" as const, label: t("banking.valSignalInconclusive") };
+              return (
+                <div key={clave} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-slate-100 pb-2.5 last:border-0">
+                  <span className="font-medium text-sm text-ink">{clave}</span>
+                  <Chip tone={estado.tone}>{estado.label}</Chip>
+                  {report.headline_signal === clave && (
+                    <Chip tone="ok">{t("banking.valSignalHeadline")}</Chip>
+                  )}
+                  <span className="mono text-xs text-body tabular-nums">
+                    {s.gini == null ? "—" : `Gini ${fmtNum(s.gini, 3)}`}
+                    {s.gini_ci ? ` · IC [${fmtNum(s.gini_ci[0], 2)} · ${fmtNum(s.gini_ci[1], 2)}]` : ""}
+                    {` · ${s.n_events} ${t("banking.valSignalEvents")}`}
+                  </span>
+                  <span className="basis-full text-xs text-muted">{s.nota ?? s.que_mide}</span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Curva de distress por tier */}
         <Card className="lg:col-span-2">
