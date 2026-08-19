@@ -73,3 +73,58 @@ def test_el_reporte_declara_si_la_curva_ORDENA_el_riesgo(monkeypatch):
     assert rep["by_tier_ordena_riesgo"] is False
     assert rep["monotonic_violations"], "La U tiene que quedar declarada, no solo negada."
     assert "Sólida" in rep["caveats"][0]
+
+
+# ── El desenlace, separado por familia ────────────────────────────
+
+def _obs(score, tier, triggers):
+    class _O:
+        pass
+    o = _O()
+    o.score, o.tier, o.triggers = score, tier, tuple(triggers)
+    o.deteriorated = bool(triggers)
+    return o
+
+
+def test_cada_familia_de_desenlace_se_mide_por_separado(monkeypatch):
+    """La unión mezclaba 83 % pérdidas, 22 % crédito y 0 % solvencia bajo un solo Gini.
+
+    Acá el panel sintético invierte el sentido a propósito entre familias: el score ordena
+    bien las pérdidas y AL REVÉS el crédito. Un solo número no puede decir las dos cosas.
+    """
+    from modules.banking_score.validation import report as mod
+
+    obs = []
+    # Resultados: los scores BAJOS son los que pierden → discriminación positiva.
+    obs += [_obs(20.0, "Frágil", ["roa_negativo_sostenido"]) for _ in range(30)]
+    obs += [_obs(90.0, "Sólida", []) for _ in range(30)]
+    # Crédito: la mora se duplica en los scores ALTOS → discriminación invertida.
+    obs += [_obs(95.0, "Sólida", ["morosidad_x2"]) for _ in range(25)]
+    obs += [_obs(25.0, "Frágil", []) for _ in range(25)]
+    monkeypatch.setattr(mod, "derive_observations", lambda *_a, **_k: obs)
+
+    rep = mod.build_backtest_report(db=None, n_boot=200)
+    señales = rep["signals"]
+
+    assert señales["resultados"]["conclusive"] is True
+    assert señales["credito"]["invertida"] is True, (
+        "Un IC enteramente negativo es un hallazgo, no una ausencia de señal.")
+    assert señales["capital"]["evaluable"] is False, (
+        "La regla de solvencia no disparó: NO evaluable ≠ no discrimina.")
+    assert rep["headline_signal"] == "resultados"
+    assert any("AL REVÉS" in c for c in rep["caveats"])
+    assert rep["desenlace_agregado"] is True
+
+
+def test_una_regla_que_nunca_dispara_no_se_reporta_como_señal_debil(monkeypatch):
+    from modules.banking_score.validation import report as mod
+
+    obs = ([_obs(20.0, "Frágil", ["roa_negativo_sostenido"]) for _ in range(20)] +
+           [_obs(90.0, "Sólida", []) for _ in range(20)])
+    monkeypatch.setattr(mod, "derive_observations", lambda *_a, **_k: obs)
+    rep = mod.build_backtest_report(db=None, n_boot=100)
+
+    capital = rep["signals"]["capital"]
+    assert capital["evaluable"] is False and capital["gini"] is None
+    assert "no disparó" in capital["nota"]
+    assert any("NUNCA dispararon" in c for c in rep["caveats"])
