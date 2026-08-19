@@ -171,6 +171,29 @@ def comparar_recalibracion(db: Session, horizon_q: int = HORIZON_Q,
         score_previo.append(calculate_deterministic_score(subs, pesos))
 
     actual_curva, actual_monotona = _curva_por_banda(bandas, etiquetas)
+
+    # DESGLOSE POR REGLA. El desenlace «distress» es una UNIÓN de tres reglas —mora que se
+    # duplica, solvencia bajo el mínimo y ROA negativo sostenido— y no tienen por qué medir
+    # lo mismo. Si una domina el conteo, el Gini del score agregado está midiendo sobre todo
+    # esa: sin este desglose, «el score discrimina distress» es una frase sin sujeto.
+    reglas = ("morosidad_x2", "solvencia_breach", "roa_negativo_sostenido")
+    por_regla: Dict[str, Dict] = {}
+    for regla in reglas:
+        y = [1 if regla in (o.triggers or ()) else 0 for o in obs]
+        fila = {"eventos": sum(y),
+                **_gini([o.score for o in obs], y, n_boot)}
+        # Y contra cada dimensión, para ver QUÉ mide cada regla.
+        fila["por_dimension"] = {}
+        for dim in _DIMENSIONES:
+            xs, ys = [], []
+            for o, etiqueta_regla in zip(obs, y):
+                rr = ratings.get((str(o.bank_id), cast(date, o.period_end)))
+                v = None if rr is None else getattr(rr, f"{dim}_score", None)
+                if v is not None:
+                    xs.append(float(v))
+                    ys.append(etiqueta_regla)
+            fila["por_dimension"][dim] = _gini(xs, ys, n_boot)["gini"]
+        por_regla[regla] = fila
     dimensiones = {}
     for dim, (xs, ys) in por_dimension.items():
         dimensiones[dim] = {**_gini(xs, ys, n_boot), "n": len(xs), "eventos": sum(ys)}
@@ -192,6 +215,7 @@ def comparar_recalibracion(db: Session, horizon_q: int = HORIZON_Q,
         # diagnóstico sostiene es la del PODER DISCRIMINANTE, que no necesita bandas.
         "previo": _gini(score_previo, etiquetas, n_boot),
         "por_dimension": dimensiones,
+        "por_regla_de_desenlace": por_regla,
         "limite_declarado": (
             "La reconstrucción cambia SOLO las curvas de los cinco indicadores de solidez. "
             "El cambio de trato del dato ausente en `morosidad` (calidad) queda dentro del "
