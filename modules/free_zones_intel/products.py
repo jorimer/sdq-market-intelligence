@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -188,6 +189,16 @@ def _trend_series(db: Optional[Session]):
 
 
 class FreeZoneProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=False, obstaculo="sin_corte_transversal",
+        desenlace="exportaciones, empleo e inversión realizados en zonas francas (CNZFE)",
+        dato_que_falta=("panel por PARQUE o por sector de zona franca: el agregado nacional "
+                        "de CNZFE deja un solo sujeto y ningún corte que ordenar"),
+        motivo=("El IZF es un índice NACIONAL agregado: una observación por año. Y sus "
+                "dimensiones —dinamismo exportador, inversión, empleo, productividad— salen "
+                "de las mismas series que serían el desenlace, así que validarlo contra "
+                "ellas mediría autocorrelación."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):

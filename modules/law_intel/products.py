@@ -23,6 +23,7 @@ from modules.law_intel.ratificacion import exigir_servible
 from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import RAIZ, cargar, expedientes
 from modules.law_intel.series import proveedor_registro, series_de
+from shared.products.contract import EstadoBacktest
 from shared.products import (DataHealth, Granularity, ProductSnapshot, ProductTier,
                              SectorProductManifest, TierLevelSpec, ValidationState,
                              register_product)
@@ -156,6 +157,15 @@ def expediente_fingerprint(expediente_id: str) -> str:
 
 class LawProduct:
     """``SectorProduct`` de evaluación de leyes. El `scope` es el expediente."""
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=False, obstaculo="autoreferencial",
+        desenlace=None,
+        motivo=("El «desenlace» de una ley es el cumplimiento de las metas que ella misma se "
+                "fijó, y eso es exactamente lo que el eje mide: compararlos no valida nada. "
+                "Lo que sí se verifica —y bloquea el producto si falta— es que cada binding "
+                "esté contrastado contra la fuente oficial: sin bindings verificados el "
+                "informe no afirma cumplimiento."))
 
     sector_key = SECTOR_KEY
 
