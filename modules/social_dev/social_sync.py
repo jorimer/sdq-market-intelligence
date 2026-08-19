@@ -269,6 +269,13 @@ def _sync_cepal_politica(db: Session, set_phase: Callable[[str], None]) -> int:
 #: Umbrales que la propia ley fija en el TEXTO de los indicadores 2.2 y 2.5. No son
 #: parámetros nuestros: «número de regiones con pobreza extrema mayor que 5%» y «…moderada
 #: mayor que 20%». Cambiarlos sería medir otro indicador.
+#: Procedencia de los conteos derivados. Va en CONSTANTE y corta: `sd_indicators.source` es
+#: `varchar(40)` y la primera versión —«ONE (cómputo SDQ sobre el panel regional)»— medía 41.
+#: SQLite no valida el largo y Postgres sí, así que los tests pasaron en verde y producción
+#: devolvió `StringDataRightTruncation` al comitear. Es la misma lección que este repo ya
+#: pagó con `mm_series`.
+FUENTE_CONTEO = "ONE · cómputo SDQ"
+
 UMBRAL_EXTREMA = 5.0
 UMBRAL_MODERADA = 20.0
 
@@ -347,7 +354,7 @@ def _sync_conteos_regionales(db: Session, set_phase: Callable[[str], None]) -> i
             _upsert_indicator(
                 db, theme=destino, entity=HEALTH_ENTITY, period=periodo,
                 value=float(sum(1 for v in vals.values() if v > umbral)),
-                source="ONE (cómputo SDQ sobre el panel regional)", disagg="nacional",
+                source=FUENTE_CONTEO, disagg="nacional",
                 unit="número de regiones")
             synced += 1
         if incompletos:
