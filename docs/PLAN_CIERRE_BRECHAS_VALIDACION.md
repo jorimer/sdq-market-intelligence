@@ -155,13 +155,27 @@ o del score que lo produjo. Cierra A1–A8.
 4. **Test de regresión**: si la curva no es monótona, la superficie publicada no puede presentarla
    como ordenamiento de riesgo.
 
-### Status de avance — criterios de cierre
-- [ ] Informe escrito que explica la caída 0.44 → 0.16 con evidencia reproducible.
-- [ ] La curva por banda ordena el riesgo, **o** está retirada de las superficies publicadas
-      (API, frontend, PDF/Word, contexto de IA) — las cuatro verificadas una por una.
-- [ ] El caveat nombra la banda real y su N, computados.
-- [ ] Test que impide publicar una curva no monótona como ordenamiento.
-- [ ] **Cero** superficies de banca mostrando una tabla que se contradice con su propio caveat.
+### Status de avance — **CERRADA** en lo verificable; una decisión de scoring queda abierta
+- [x] Informe escrito con evidencia reproducible → [`docs/DIAGNOSTICO_DISCRIMINACION_BANCA.md`](DIAGNOSTICO_DISCRIMINACION_BANCA.md).
+      **La recalibración degradó la discriminación**: mismo panel, 0,3444 [0,275 · 0,409] con las
+      curvas previas contra 0,1615 [0,092 · 0,233] con las vigentes — los IC no se solapan. La
+      causa: `solidez` (40 % del peso) tiene Gini **−0,1944** con el IC entero bajo cero.
+- [x] La curva por banda NO ordena el riesgo y ninguna superficie la presenta como si lo
+      hiciera: API (`by_tier_ordena_riesgo` + `monotonic_violations`), frontend (título, aviso
+      con la inversión nombrada y barras en tono de advertencia) y PDF de criterios (hereda el
+      caveat computado). La cuarta superficie que el plan pedía revisar —el contexto de IA— no
+      consume el backtest: los `AI_CONTEXT_FILES` de banca no leen `by_tier`. Declarado.
+- [x] El caveat nombra la banda real y su N, computados del resultado.
+- [x] Test de regresión sobre la curva REAL de producción (Sólida → Adecuada, n=516).
+- [x] **Cero** superficies mostrando una tabla que se contradice con su propio caveat.
+- [ ] **DECISIÓN DEL DUEÑO** (§4 del informe): qué hacer con `solidez` invertida y con un
+      desenlace que es 83 % pérdidas sostenidas, 22 % crédito y 0 % solvencia. La recomendación
+      es re-especificar el desenlace primero y decidir sobre el score con ese resultado.
+
+> Hallazgo que la pregunta original no anticipaba: de los 301 eventos del desenlace, **250**
+> los aporta la regla de ROA<0 sostenido y **cero** la de solvencia, que nunca disparó. Contra
+> la regla de CRÉDITO el score discrimina **invertido** (−0,1437 [−0,235 · −0,050]). El
+> reporte ahora publica esa composición y la declara en sus caveats.
 
 ---
 

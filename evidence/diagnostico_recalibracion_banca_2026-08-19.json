@@ -1,0 +1,143 @@
+{
+ "ok": true,
+ "panel": {
+  "n_observaciones_backtest": 1693,
+  "n_eventos_backtest": 301,
+  "n_comparables": 1693,
+  "n_sin_reconstruir": 0,
+  "n_eventos_comparables": 301
+ },
+ "actual": {
+  "gini": 0.1615,
+  "gini_ci": [
+   0.0919,
+   0.2327
+  ],
+  "by_tier": [
+   {
+    "tier": "Sólida",
+    "n": 516,
+    "events": 119,
+    "rate": 0.23062015503875968
+   },
+   {
+    "tier": "Adecuada",
+    "n": 819,
+    "events": 112,
+    "rate": 0.13675213675213677
+   },
+   {
+    "tier": "En vigilancia",
+    "n": 162,
+    "events": 16,
+    "rate": 0.09876543209876543
+   },
+   {
+    "tier": "Frágil",
+    "n": 196,
+    "events": 54,
+    "rate": 0.2755102040816326
+   }
+  ],
+  "monotonic": false
+ },
+ "previo": {
+  "gini": 0.3444,
+  "gini_ci": [
+   0.275,
+   0.4089
+  ]
+ },
+ "por_dimension": {
+  "solidez": {
+   "gini": -0.1944,
+   "gini_ci": [
+    -0.2603,
+    -0.1215
+   ],
+   "n": 1693,
+   "eventos": 301
+  },
+  "calidad": {
+   "gini": -0.0182,
+   "gini_ci": [
+    -0.0979,
+    0.0625
+   ],
+   "n": 1693,
+   "eventos": 301
+  },
+  "eficiencia": {
+   "gini": 0.5985,
+   "gini_ci": [
+    0.5371,
+    0.6565
+   ],
+   "n": 1693,
+   "eventos": 301
+  },
+  "liquidez": {
+   "gini": -0.1026,
+   "gini_ci": [
+    -0.1858,
+    -0.0237
+   ],
+   "n": 1480,
+   "eventos": 244
+  },
+  "diversificacion": {
+   "gini": 0.128,
+   "gini_ci": [
+    0.0615,
+    0.1972
+   ],
+   "n": 1682,
+   "eventos": 301
+  }
+ },
+ "por_regla_de_desenlace": {
+  "morosidad_x2": {
+   "eventos": 66,
+   "gini": -0.1437,
+   "gini_ci": [
+    -0.2347,
+    -0.0498
+   ],
+   "por_dimension": {
+    "solidez": -0.0436,
+    "calidad": -0.0424,
+    "eficiencia": 0.0626,
+    "liquidez": -0.1803,
+    "diversificacion": -0.0778
+   }
+  },
+  "solvencia_breach": {
+   "eventos": 0,
+   "gini": null,
+   "gini_ci": null,
+   "por_dimension": {
+    "solidez": null,
+    "calidad": null,
+    "eficiencia": null,
+    "liquidez": null,
+    "diversificacion": null
+   }
+  },
+  "roa_negativo_sostenido": {
+   "eventos": 250,
+   "gini": 0.2287,
+   "gini_ci": [
+    0.1469,
+    0.3113
+   ],
+   "por_dimension": {
+    "solidez": -0.2419,
+    "calidad": 0.0107,
+    "eficiencia": 0.7112,
+    "liquidez": -0.0828,
+    "diversificacion": 0.1728
+   }
+  }
+ },
+ "limite_declarado": "La reconstrucción cambia SOLO las curvas de los cinco indicadores de solidez. El cambio de trato del dato ausente en `morosidad` (calidad) queda dentro del score persistido de esa dimensión y no se le atribuye a la curva."
+}
