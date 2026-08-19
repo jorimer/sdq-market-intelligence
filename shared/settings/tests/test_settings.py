@@ -377,11 +377,15 @@ def test_jurisai_aparece_en_configuracion_para_que_el_dueno_coloque_su_clave():
     j = next((p for p in KNOWN_PROVIDERS if p["provider"] == "jurisai"), None)
     assert j is not None, "JurisAI no aparecería en la pantalla de Configuración"
     assert j["requires_key"] is True
-    # La URL la confirmó el emisor. Sigue siendo EDITABLE a propósito: la generó Railway y
-    # no es un dominio propio de JurisAI, así que una mudanza rompe el conector y hay que
-    # poder arreglarlo desde la pantalla, sin desplegar.
-    assert j["baseUrl"].endswith("/api/v1")
-    assert "NO es un dominio" in j["notes"], "falta la advertencia de fragilidad del dominio"
+    # La advertencia de fragilidad del dominio DESAPARECIÓ porque su causa desapareció: el
+    # emisor migró a `api.jurisai.do`, un dominio propio, el 2026-08-19. Lo que se comprueba
+    # ahora es lo que la reemplaza — que el default apunte al dominio del emisor y que el
+    # host retirado quede DECLARADO, que es lo único que permite migrar las instalaciones
+    # que ya existen. Sigue siendo editable, para un proxy o un entorno de prueba.
+    assert j["baseUrl"] == "https://api.jurisai.do/api/v1"
+    assert j["obsoleteBaseUrls"], (
+        "sin declarar el host retirado, las instalaciones existentes se quedan apuntando "
+        "ahí para siempre: el host viejo responde 200 y nada avisa")
     assert j["sector"] == "law"
 
 
