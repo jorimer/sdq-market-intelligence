@@ -93,3 +93,40 @@ def test_la_fecha_de_gaceta_FALTA_a_menudo_y_no_se_interpola_cruda():
     assert "10753" in c.evidencia, "el número solo ya es respaldo: no se calla por la fecha"
     assert "None" not in c.evidencia
     assert c.evidencia.endswith("Gaceta 10753.")
+
+
+class TestLaGrietaQueElEmisorAvisa:
+    """Con `vence`, el API marca `veredicto_sensible_a_publicacion` cuando el dictado cae a
+    ≤30 días del plazo y no consta la fecha de Gaceta: el caso al filo, donde «dentro» y
+    «fuera» del plazo dependen de un dato que falta en dos tercios del corpus."""
+
+    def _resp_sensible(self, **kw):
+        base = _resp([dict(_DECRETO, fecha_promulgacion="2012-07-10")], True)
+        base.update({"veredicto_sensible_a_publicacion": True, "holgura_dias": 13})
+        base.update(kw)
+        return base
+
+    def test_un_veredicto_fragil_NO_se_publica_como_firme(self):
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: self._resp_sensible())
+        assert c.veredicto == "no_verificable", (
+            "«cumplida» absuelve: afirmarla sobre una diferencia no medida es el error caro")
+        assert "SENSIBLE A LA PUBLICACIÓN" in c.evidencia
+        assert "13 días" in c.evidencia
+
+    def test_con_holgura_amplia_el_veredicto_sigue_siendo_firme(self):
+        """Lo que vuelve sólido al art. 54 no es el método sino sus 625 días de holgura:
+        ninguna fecha de publicación imaginable mueve ese veredicto."""
+        r = _resp([_DECRETO], True)
+        r["holgura_dias"] = -625
+        r["veredicto_sensible_a_publicacion"] = False
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: r)
+        assert c.veredicto == "cumplida_tarde"
+        assert "625 días" in c.evidencia, "la holgura se publica: es lo que sostiene la firmeza"
+
+
+def test_un_vacio_sobre_REGLAMENTOS_nunca_acusa():
+    """El emisor mide su corpus por TIPO: leyes y decretos sí, reglamentos y resoluciones no.
+    Un `incumplida` sobre un universo que nadie midió es la peor salida posible de acá."""
+    consulta = dict(CONSULTA, tipo="reglamento")
+    c = comprobar_obligacion(consulta, VENCE, lambda **kw: _resp([], True))
+    assert c.veredicto == "sin_registro_publico"

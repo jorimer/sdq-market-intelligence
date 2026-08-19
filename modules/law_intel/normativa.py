@@ -53,6 +53,12 @@ class Comprobacion:
         return self.veredicto == "incumplida"
 
 
+#: Tipos cuyo corpus el emisor declara COMPLETO en algún rango, y por tanto los únicos
+#: sobre los que un vacío puede llegar a afirmar «no se dictó». Reglamentos y resoluciones
+#: están sin medir: toda respuesta vacía sobre ellos es «no se localizó registro».
+_TIPOS_MEDIDOS = frozenset({"ley", "decreto"})
+
+
 def _fecha(norma: Dict[str, Any]) -> str:
     return str(norma.get("fecha_promulgacion") or "")
 
@@ -78,7 +84,11 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
     halladas = normas(resp)
     alcance = resp.get("alcance") or {}
     if not halladas:
-        if vacio_es_concluyente(resp):
+        # El emisor mide su corpus POR TIPO: leyes y decretos sí, reglamentos y resoluciones
+        # NO. Nos apoyamos en su `vacio_es_concluyente`, que ya lo refleja — pero el segundo
+        # cinturón es barato y la consecuencia de que falle es acusar al Estado de un
+        # incumplimiento sobre un universo que nadie midió.
+        if vacio_es_concluyente(resp) and str(consulta.get("tipo") or "") in _TIPOS_MEDIDOS:
             return Comprobacion(
                 oid, "incumplida",
                 f"El corpus «{alcance.get('corpus', 'declarado')}» está completo entre "
@@ -112,10 +122,38 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
         return Comprobacion(oid, "cumplida",
                             f"{cita} del {fecha or 's/f'}.{respaldo}", norma, alcance)
     tarde = fecha > vence
+
+    # ── LA GRIETA QUE EL EMISOR AVISA Y NOSOTROS DEBEMOS RESPETAR ──────────────────────
+    # Cuando se le pasa `vence`, el API computa la holgura Y marca
+    # `veredicto_sensible_a_publicacion` si el dictado cae a ≤30 días del plazo y NO hay
+    # fecha de Gaceta. Ese es el caso al filo: una norma dictada días ANTES del vencimiento
+    # pero publicada después, donde «dentro del plazo» y «fuera del plazo» dependen de un
+    # dato que falta en dos tercios del corpus.
+    #
+    # Ignorarlo sería publicar un veredicto firme sobre una diferencia que no medimos —y en
+    # la dirección más cara, porque «cumplida» absuelve—. Cuando el emisor lo marca, el
+    # veredicto se degrada a `no_verificable`: el estado declarado a mano queda intacto y la
+    # evidencia dice exactamente qué dato falta para cerrarlo.
+    #
+    # Que el 134-14 tenga 625 días de holgura es lo que vuelve sólido ESE caso, no una
+    # propiedad del método: con 625 días ninguna fecha de publicación imaginable lo mueve.
+    holgura = resp.get("holgura_dias")
+    if resp.get("veredicto_sensible_a_publicacion"):
+        return Comprobacion(
+            oid, "no_verificable",
+            f"{cita} del {fecha}, contra un plazo que vencía el {vence}"
+            + (f" (holgura de {holgura} días)" if holgura is not None else "")
+            + ". El emisor marca el veredicto como SENSIBLE A LA PUBLICACIÓN: el dictado "
+              "cae al filo del plazo y no consta la fecha de Gaceta, así que el "
+              "cumplimiento depende de un dato que no está medido. No se afirma ni "
+              "cumplimiento ni incumplimiento." + respaldo,
+            norma, alcance)
+
+    detalle = f" (holgura de {holgura} días)" if holgura is not None else ""
     return Comprobacion(
         oid, "cumplida_tarde" if tarde else "cumplida",
         f"{cita} del {fecha}: {'DESPUÉS' if tarde else 'dentro'} del plazo, que vencía el "
-        f"{vence}.{respaldo}", norma, alcance)
+        f"{vence}{detalle}.{respaldo}", norma, alcance)
 
 
 def comprobar(obligaciones: List[Any], buscar) -> List[Comprobacion]:
