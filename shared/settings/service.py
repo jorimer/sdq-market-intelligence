@@ -6,8 +6,9 @@ existing secrets when the client sends the masked placeholder. Resolution helper
 back to env-based defaults so a fresh deployment still works.
 """
 import logging
+import urllib.parse
 from datetime import datetime, timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -77,14 +78,20 @@ KNOWN_PROVIDERS = [
         "apiName": "API de verificación normativa",
         "country": "DO",
         "sector": "law",
-        "baseUrl": "https://jurisai-production.up.railway.app/api/v1",
+        "baseUrl": "https://api.jurisai.do/api/v1",
+        # URLs que ESTE repo sirvió como default y que el emisor retiró. Se migran solas
+        # (ver `migrar_urls_obsoletas`) porque el modo de fallar es silencioso: el host
+        # viejo sigue respondiendo 200 con la misma credencial y las mismas rutas. No hay
+        # error, no hay aviso y no hay fecha de corte — una integración que se quede
+        # apuntando ahí funciona igual hasta el día que el dominio prestado desaparezca.
+        "obsoleteBaseUrls": ["https://jurisai-production.up.railway.app/api/v1"],
         "requires_key": True,
         "needs_proxy": False,
         "notes": ("Base normativa dominicana: existencia, fecha de promulgación, Gaceta y "
                   "vigencia. La clave tiene forma `jrs_<prefijo>_<secreto>` y viaja como "
-                  "`Authorization: Bearer`. ⚠️ La URL la generó Railway y NO es un dominio "
-                  "propio de JurisAI: si el servicio se muda hay que actualizarla acá — por "
-                  "eso es editable y no está incrustada en el conector."),
+                  "`Authorization: Bearer`. Desde 2026-08-19 el emisor tiene dominio propio "
+                  "(`api.jurisai.do`); el anterior lo generaba Railway y no estaba bajo su "
+                  "control. Sigue siendo editable y no está incrustada en el conector."),
     },
     {
         "provider": "comtrade",
@@ -125,6 +132,49 @@ def _provider_needs_secondary(provider: str) -> bool:
         if src["provider"] == provider:
             return bool(src.get("needs_secondary", False))
     return False
+
+
+def migrar_urls_obsoletas(db: Session) -> int:
+    """Reescribe las base_url guardadas que siguen apuntando a un default que RETIRAMOS.
+
+    **Solo toca lo que este repo sirvió como default y el emisor dio de baja.** Una URL que
+    el operador escribió a mano queda intacta: no sabemos por qué la puso y pisarla sería
+    peor que dejarla vieja.
+
+    Existe porque `ensure_known_sources` es idempotente por PROVEEDOR —salta si el proveedor
+    ya está— y nunca actualiza una fila existente. Sin esto, cambiar la constante arregla las
+    instalaciones nuevas y deja a las que ya funcionaban apuntando al host retirado.
+
+    Y el modo de fallar es el silencioso: el host viejo de JurisAI sigue devolviendo 200 con
+    la misma credencial y las mismas rutas. Nadie se entera hasta que el dominio prestado
+    deja de existir, y para entonces el entregable ya está con el cliente.
+    """
+    obsoletas: Dict[str, Tuple[Set[str], str]] = {}
+    for src in KNOWN_PROVIDERS:
+        viejas = src.get("obsoleteBaseUrls")
+        if not isinstance(viejas, (list, tuple, set)) or not viejas:
+            continue
+        obsoletas[str(src["provider"]).lower()] = ({str(u) for u in viejas},
+                                                   str(src.get("baseUrl") or ""))
+    if not obsoletas:
+        return 0
+    migradas = 0
+    for cfg in db.query(SectorApiConfig).all():
+        # Se compara en minúsculas: en producción convivían `jurisai`, sembrada por el
+        # catálogo, y `JurisAI`, creada a mano por el operador. La segunda queda inerte
+        # —la resolución es exacta— pero su URL vieja sigue a la vista y confunde a quien
+        # la edite, así que también se migra.
+        par = obsoletas.get(str(cfg.provider or "").lower())
+        if par is None:
+            continue
+        viejas_urls, nueva = par
+        if str(cfg.base_url or "").strip() in viejas_urls:
+            logger.info("settings: %s migra de %s a %s", cfg.provider, cfg.base_url, nueva)
+            cfg.base_url = nueva  # type: ignore[assignment]
+            migradas += 1
+    if migradas:
+        db.commit()
+    return migradas
 
 
 def ensure_known_sources(db: Session) -> int:
@@ -239,6 +289,7 @@ def _to_out(cfg: SectorApiConfig) -> SectorApiOut:
 
 def get_settings(db: Session) -> SettingsOut:
     ensure_known_sources(db)  # pre-populate discovered sources (idempotent)
+    migrar_urls_obsoletas(db)  # host retirado por el emisor → el vigente (idempotente)
     _migrate_proxy_to_global(db)  # one-time: SIB per-config proxy → global
     claude = _get_app_setting(db, _CLAUDE_KEY)
     lang = _get_app_setting(db, _LANG_KEY)
@@ -358,12 +409,23 @@ def _test_jurisai_connection(db, cfg, base: str, api_key: str) -> TestConnection
                              "La respuesta no trae el bloque `alcance` en JSON.",
                              resp.status_code)
     concluyente = bool(alcance.get("vacio_es_concluyente"))
+    # El HOST se nombra en el resultado. Parece redundante y es la única defensa contra el
+    # cambio silencioso de dominio: cuando el emisor migró a `api.jurisai.do` el host viejo
+    # siguió devolviendo 200 con la misma clave y las mismas rutas, así que una prueba que
+    # dijera solo «Conectado» habría dado verde apuntando al host retirado. Quien lea el
+    # resultado tiene que poder ver CONTRA QUÉ se conectó, sin ir a buscarlo a otra pantalla.
+    host = urllib.parse.urlsplit(base).netloc or base
+    # `medido_al` es el sello del corpus que el emisor publica desde 2026-08-19: sin él, un
+    # veredicto no se puede auditar contra el estado de la base que lo produjo.
+    sello = alcance.get("medido_al")
     return _persist_test(
         db, cfg, "success",
-        "Conectado. Con rango explícito el alcance es "
+        f"Conectado a {host}. Con rango explícito el alcance es "
         + ("concluyente: un resultado vacío SÍ autoriza a afirmar que la norma no se dictó."
            if concluyente else
-           "NO concluyente: un resultado vacío no autorizaría a afirmar incumplimiento."),
+           "NO concluyente: un resultado vacío no autorizaría a afirmar incumplimiento.")
+        + (f" Corpus medido al {sello}." if sello else
+           " El emisor no declara cuándo midió su corpus."),
         resp.status_code)
 
 
