@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -298,6 +299,13 @@ def _pulse_table(pulse: Dict[str, Any]) -> Optional[tuple]:
 
 class InsuranceProduct:
     """``SectorProduct`` de Seguros. ``db`` opcional (las muestras no tocan DB)."""
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="insurance_intel",
+        desenlace="subdesempeño técnico relativo a la mediana del panel de aseguradoras",
+        motivo=("Corte transversal de aseguradoras × años auditados. El panel se amplió a "
+                "2013 y la señal de underwriting pasó a concluyente; el veredicto vigente "
+                "se lee del reporte."))
 
     sector_key = SECTOR_KEY
 

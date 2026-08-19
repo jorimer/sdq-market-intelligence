@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -516,6 +517,12 @@ def _anon_pulse_context(payload: Dict[str, Any]) -> Dict[str, Any]:
 class PensionProduct:
     """``SectorProduct`` de Pensiones. ``db`` opcional: las muestras sintéticas usan
     solo ``narratives``/``render`` (sin DB)."""
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="pension_intel",
+        desenlace="subdesempeño relativo de rentabilidad y solvencia por AFP",
+        motivo=("Corte transversal de AFP × períodos. La señal de rentabilidad es la de "
+                "mayor N del catálogo después de banca."))
 
     sector_key = SECTOR_KEY
 

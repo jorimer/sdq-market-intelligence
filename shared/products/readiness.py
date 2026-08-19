@@ -20,6 +20,7 @@ y configurado", y el guard/render efectivos se validan en la producción del rep
 """
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any, Dict, Optional
 
 from shared.products.contract import SectorProduct
@@ -92,6 +93,10 @@ def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, An
     val = product.validation_state()
     g5 = _clamp01(val.score) if val.approved else 0.0
     g5_detail = f"approved={val.approved} · score={val.score:.2f} · {val.notes}"
+    # ESTADO ESTRUCTURAL de la validación retrospectiva, declarado por el producto. Se lee
+    # de la CLASE y no del `ValidationState` para que un eje con varias ramas de retorno no
+    # pueda declararlo en una y olvidarlo en otra — el hueco entra por la rama olvidada.
+    estado = getattr(type(product), "ESTADO_BACKTEST", None) or val.backtest
 
     gates = {"g1": _clamp01(g1), "g2": g2, "g3": g3, "g4": g4, "g5": _clamp01(g5)}
     readiness = sum(GATE_WEIGHTS[k] * v for k, v in gates.items())
@@ -106,6 +111,9 @@ def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, An
             "g1": g1_detail, "g2": "motor operativo" if has_engine else "sin motor",
             "g3": g3_detail, "g4": g4_detail, "g5": g5_detail,
         },
+        # Por qué el eje tiene o no validación retrospectiva. Un eje que calla su falta de
+        # validación es peor que uno que la declara: el silencio se lee como "sí la tiene".
+        "backtest": (asdict(estado) if estado is not None else None),
     }
 
 

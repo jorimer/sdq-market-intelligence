@@ -40,6 +40,41 @@ class DataHealth:
     cadence: str = "quarterly"            # "monthly" | "quarterly" | "annual"
 
 
+# Obstáculos por los que un eje NO puede tener backtest de discriminación. Son categorías
+# estructurales —no estados del dato de hoy—, así que no envejecen con una corrida.
+OBSTACULOS_BACKTEST = (
+    # El índice tiene UN solo sujeto (el país): no hay corte transversal que ordenar, y un
+    # Gini o un IC de rango necesitan algo que rankear. Es el caso de los índices nacionales
+    # de un sector (turismo, energía, telecom, construcción, zonas francas).
+    "sin_corte_transversal",
+    # El desenlace es lo que el propio eje mide, así que compararlos no valida nada.
+    "autoreferencial",
+    # Habría desenlace y habría corte, pero falta el dato. `dato_que_falta` lo nombra.
+    "dato_pendiente",
+)
+
+
+@dataclass(frozen=True)
+class EstadoBacktest:
+    """Qué puede afirmar el eje sobre su validación retrospectiva, y POR QUÉ.
+
+    Declara los hechos de DISEÑO, no el veredicto de la última corrida: si el eje tiene o no
+    motor, contra qué desenlace se mide (o se mediría) y, cuando no lo tiene, qué se lo
+    impide. El veredicto —concluyente, no concluyente, invertido— vive en el reporte y se
+    lee de ahí; ponerlo acá lo congelaría, que es el defecto que este plan vino a cerrar.
+
+    Un eje sin motor y sin obstáculo declarado no es «pendiente»: es un hueco, y el test
+    estructural lo rechaza.
+    """
+
+    tiene_motor: bool
+    motivo: str                              # por qué no lo tiene, o cómo se lee el que tiene
+    desenlace: Optional[str] = None          # contra qué se mide (o se mediría)
+    obstaculo: Optional[str] = None          # uno de OBSTACULOS_BACKTEST cuando no hay motor
+    dato_que_falta: Optional[str] = None     # obligatorio si obstaculo == "dato_pendiente"
+    eje_motor: Optional[str] = None          # clave en shared.validation.frescura.MOTORES
+
+
 @dataclass(frozen=True)
 class ValidationState:
     """Estado de validación/QA + doctrina del sector (alimenta G5 · Validación)."""
@@ -47,6 +82,10 @@ class ValidationState:
     approved: bool                # doctrina firmada / QA aprobado
     score: float = 0.0            # [0,1] — fuerza de la validación (backtest, outcomes)
     notes: str = ""
+    # Estado ESTRUCTURAL de la validación retrospectiva. Opcional en el tipo para no romper
+    # a quien construya un ValidationState suelto; obligatorio en los productos del catálogo,
+    # donde lo exige `shared/products/tests/test_estado_de_validacion.py`.
+    backtest: Optional[EstadoBacktest] = None
 
 
 @dataclass(frozen=True)

@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     CanonicalScore,
     DataHealth,
@@ -237,6 +238,12 @@ def _pct(share: Optional[float]) -> str:
 class ESGProduct:
     """``SectorProduct`` de ESG & Climate. ``db`` opcional: las muestras sintéticas
     usan solo ``narratives``/``render`` (sin DB)."""
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="esg_climate",
+        desenlace="mortalidad por desastres climáticos (OWID/EM-DAT)",
+        motivo=("Corte transversal de países. Validación transversal, no temporal: la "
+                "exposición a huracanes es en parte insumo del índice y se declara."))
 
     sector_key = SECTOR_KEY
 

@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -222,6 +223,15 @@ def _con_revision(texto: str) -> str:
 
 
 class TelecomProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=False, obstaculo="dato_pendiente",
+        desenlace="penetración móvil y de banda ancha realizada",
+        dato_que_falta=("el boletín INDOTEL está congelado en 2022-Q1; ITU sirve el nivel "
+                        "nacional pero no da corte transversal. Sin serie viva ni "
+                        "desagregación no hay panel que validar"),
+        motivo=("El IDT es un índice NACIONAL sobre una serie que dejó de actualizarse. Es "
+                "la brecha de dato declarada del eje, no una decisión de método."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):
