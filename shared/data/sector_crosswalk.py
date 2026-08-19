@@ -289,3 +289,79 @@ def enae_coverage() -> Dict[str, object]:
         "covered": covered,
         "uncovered": uncovered,
     }
+
+
+# ── IED del BCRD (Inversión Extranjera Directa por actividad) ────────────────────
+#
+# La tercera lente sobre los mismos 17 slugs, y la que le faltaba al Gate E sectorial.
+# El IAI es un índice de ATRACTIVO DE INVERSIÓN, y hasta ahora se validaba contra
+# crecimiento del EMPLEO — un desenlace que el índice no pretende anticipar, y contra el
+# que dio nulo/negativo (IC medio anual −0,03). La IED por actividad es el desenlace que
+# el índice sí targetea: inversión realizada.
+#
+# Fuente: BCRD, "Flujos de la Inversión Extranjera Directa por actividad económica"
+# (`inversion_ext_sector_6.xls`, hoja anual, 2010→). Nueve actividades, que NO son los 17
+# sectores ni las 10 ramas de la ENCFT: es una tercera resolución, y como las otras se
+# declara en vez de repartirse.
+#
+# COBERTURA PARCIAL, a diferencia de la ENCFT: la IED no llega a agropecuario,
+# construcción, administración pública, enseñanza, salud ni servicios profesionales. Esos
+# slugs quedan FUERA del panel de este desenlace — no se imputan con cero, que sería
+# afirmar que no recibieron inversión cuando lo que pasa es que la fuente no los publica.
+IED_ACTIVITIES: List[Branch] = [
+    Branch("turismo", "Turismo", ["turismo"], "direct", None),
+    Branch("comercio_industria", "Comercio / Industria",
+           ["comercio", "manufactura_local"], "bundle",
+           "El BCRD agrupa comercio e industria local en una sola actividad de IED."),
+    Branch("telecomunicaciones", "Telecomunicaciones", ["comunicaciones"], "direct", None),
+    Branch("energia", "Energía", ["energia"], "direct", None),
+    Branch("financiero", "Financiero", ["financiero"], "direct", None),
+    Branch("zonas_francas", "Zonas Francas", ["zonas_francas"], "direct", None),
+    Branch("minero", "Minero", ["mineria"], "direct", None),
+    Branch("inmobiliario", "Inmobiliario", ["inmobiliario"], "direct", None),
+    Branch("transporte", "Transporte", ["transporte"], "direct", None),
+]
+
+IED_KEYS: List[str] = [b.key for b in IED_ACTIVITIES]
+_IED_BY_KEY: Dict[str, Branch] = {b.key: b for b in IED_ACTIVITIES}
+_IED_LABEL_TO_KEY: Dict[str, str] = {norm(b.label): b.key for b in IED_ACTIVITIES}
+
+# Guard fail-closed al importar: todo miembro tiene que ser un slug real del BCRD-17. Es
+# un SUBCONJUNTO (la IED no cubre los 17), así que se valida pertenencia, no cobertura.
+_IED_MEMBER_SLUGS = {s for a in IED_ACTIVITIES for s in a.members}
+_IED_EXTRA = _IED_MEMBER_SLUGS - _CATALOG_SLUGS
+if _IED_EXTRA:
+    raise RuntimeError(
+        f"Crosswalk IED: slug(s) inexistente(s) en el catálogo BCRD-17: {sorted(_IED_EXTRA)}"
+    )
+
+
+def map_ied_label(raw_label: object) -> Optional[str]:
+    """Etiqueta de fila del cuadro de IED → clave de actividad (``None`` si no lo es).
+
+    Tolerante a acentos, mayúsculas y espacios. Las filas ``Otros``, ``Total`` y las notas
+    al pie devuelven ``None``: no son actividades, y tratarlas como tales metería un
+    agregado dentro del panel que se ordena.
+    """
+    return _IED_LABEL_TO_KEY.get(norm(raw_label))
+
+
+def ied_members(key: str) -> List[str]:
+    """Slugs BCRD-17 que alimenta la actividad de IED *key* (``[]`` si no existe)."""
+    a = _IED_BY_KEY.get(key)
+    return list(a.members) if a else []
+
+
+def ied_coverage() -> Dict[str, object]:
+    """Cobertura declarada de la IED sobre los 17 slugs.
+
+    ``uncovered`` no es una omisión: son los sectores que el BCRD no desagrega en su
+    cuadro de IED, y por eso quedan fuera del panel de este desenlace.
+    """
+    covered = sorted(_IED_MEMBER_SLUGS)
+    return {
+        "n_actividades": len(IED_ACTIVITIES),
+        "n_slugs_covered": len(covered),
+        "covered": covered,
+        "uncovered": sorted(_CATALOG_SLUGS - _IED_MEMBER_SLUGS),
+    }

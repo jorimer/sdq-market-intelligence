@@ -14,9 +14,66 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from modules.sector_intel.validation.historical import build_iai_panel
-from modules.sector_intel.validation.outcomes import employment_by_branch, label_panel
+from modules.sector_intel.validation.historical import build_iai_panel, build_iai_panel_ied
+from modules.sector_intel.validation.outcomes import (
+    employment_by_branch, ied_by_activity, label_panel, label_panel_ied,
+)
 from shared.validation.metrics import mean_ic_with_t, spearman, spearman_bootstrap_ci
+
+
+def _metricas_gate_e(labeled: List[Dict], clave: str) -> Dict:
+    """El bloque de métricas del Gate E contra CUALQUIER desenlace.
+
+    Existe porque el eje pasó a tener dos: el empleo (contra el que el IAI da nulo) y la
+    inversión realizada (la que el índice sí dice anticipar). Escribir el segundo copiando
+    el primero habría dejado dos cálculos que se desincronizan — la forma exacta del defecto
+    «un guard existe en un motor y falta en el otro» que este repo ya acumuló siete veces.
+    """
+    xs = [r["iai_score"] for r in labeled]
+    ys = [r[clave] for r in labeled]
+    pooled_rho, pooled_lo, pooled_hi = spearman_bootstrap_ci(xs, ys)
+
+    by_year: Dict[str, List[Dict]] = {}
+    for r in labeled:
+        by_year.setdefault(r["period"], []).append(r)
+    per_year: List[Dict] = []
+    yearly: List[float] = []
+    for yr in sorted(by_year):
+        rows = by_year[yr]
+        rr = spearman([x["iai_score"] for x in rows], [x[clave] for x in rows])
+        per_year.append({"year": yr, "n": len(rows),
+                         "spearman": None if rr is None else round(rr, 3)})
+        if rr is not None:
+            yearly.append(round(rr, 3))
+    ic = mean_ic_with_t(yearly)
+
+    g_rows = [r for r in labeled if r.get("sector_growth") is not None]
+    partial = partial_n = None
+    if len(g_rows) >= 4:
+        partial = _partial_spearman([r["iai_score"] for r in g_rows],
+                                    [r[clave] for r in g_rows],
+                                    [r["sector_growth"] for r in g_rows])
+        partial_n = len(g_rows)
+
+    return {
+        "n_observations": len(labeled),
+        "n_branches": len({r["branch"] for r in labeled}),
+        "years": [min(by_year), max(by_year)],
+        "mean_yearly_ic": ic["mean_ic"] if ic else None,
+        "n_years": ic["n_years"] if ic else len(yearly),
+        "ic_t_stat": ic["t_stat"] if ic else None,
+        "ic_ci": [ic["ci_lo"], ic["ci_hi"]] if ic else [None, None],
+        "spearman_pooled": None if pooled_rho is None else round(pooled_rho, 3),
+        "spearman_pooled_ci": [None if pooled_lo is None else round(pooled_lo, 3),
+                               None if pooled_hi is None else round(pooled_hi, 3)],
+        "spearman_partial_growth": partial,
+        "spearman_partial_n": partial_n,
+        "by_year": per_year,
+        "quintile_spread": _quintile_spread_by_year(by_year, clave=clave),
+        # Concluyente = el IC medio anual con su intervalo de Student-t no cruza cero.
+        "conclusive": bool(ic and ic["ci_lo"] is not None and ic["ci_lo"] > 0),
+        "invertido": bool(ic and ic["ci_hi"] is not None and ic["ci_hi"] < 0),
+    }
 
 
 def _partial_spearman(x: List[float], y: List[float], z: List[float]) -> Optional[float]:
@@ -28,7 +85,8 @@ def _partial_spearman(x: List[float], y: List[float], z: List[float]) -> Optiona
     return round((rxy - rxz * ryz) / denom, 3) if denom > 0 else None
 
 
-def _quintile_spread_by_year(by_year: Dict[str, List[Dict]], k: int = 5) -> Optional[Dict]:
+def _quintile_spread_by_year(by_year: Dict[str, List[Dict]], k: int = 5,
+                             clave: str = "emp_growth_next") -> Optional[Dict]:
     """Top-vs-bottom IAI k-tile outcome spread computed WITHIN each year, then averaged.
 
     Ranking the branches among themselves each year avoids the cross-year mixing of
@@ -41,7 +99,7 @@ def _quintile_spread_by_year(by_year: Dict[str, List[Dict]], k: int = 5) -> Opti
     for rows in by_year.values():
         if len(rows) < k:
             continue
-        pairs = sorted((r["iai_score"], r["emp_growth_next"]) for r in rows)
+        pairs = sorted((r["iai_score"], r[clave]) for r in rows)
         size = len(pairs) // k
         bottom = [o for _i, o in pairs[:size]]
         top = [o for _i, o in pairs[-size:]]
@@ -82,13 +140,63 @@ def _resolucion(n_ramas: int) -> str:
     return (f"{n_ramas} ramas de actividad (ENCFT); IAI agregado por tamaño del sector")
 
 
+_METODO_DOS_DESENLACES = (
+    "El eje se valida contra DOS desenlaces y no contra uno: el empleo formal (el que este "
+    "bloque encabeza, por continuidad con lo ya publicado) y la INVERSIÓN realizada (IED del "
+    "BCRD por actividad), que es la que el índice dice anticipar. `headline_outcome` nombra "
+    "cuál de los dos sostiene una afirmación; si es `null`, ninguno la sostiene"
+)
+
+
 def _disclaimer(n_ramas: int, n_years: int) -> str:
     """Arma el disclaimer con el tamaño REAL del panel, no con el que tenía al escribirse."""
     return (
         f"{_METODO_TITULAR} Resolución: {n_ramas} ramas, NO 17 — {_METODO_RESOLUCION}. "
         f"Panel chico ({n_ramas} ramas × {n_years} años); con n por año ≈{n_ramas} el IC "
-        f"mínimo detectable es alto. {_METODO_POTENCIA}"
+        f"mínimo detectable es alto. {_METODO_POTENCIA} {_METODO_DOS_DESENLACES}."
     )
+
+
+def _titular(empleo: Dict, inversion: Optional[Dict]) -> Optional[str]:
+    """Qué desenlace sostiene una afirmación: el concluyente; si ninguno, ninguno.
+
+    No se elige el «mejor»: se elige el que tiene el intervalo del lado correcto de cero.
+    Un titular por mayor magnitud convertiría un resultado no concluyente en una credencial.
+    """
+    if inversion and inversion.get("conclusive"):
+        return "inversion"
+    if empleo.get("conclusive"):
+        return "empleo"
+    return None
+
+
+def _gate_e_inversion(db: Session) -> Optional[Dict]:
+    """Gate E contra la IED realizada — el desenlace que el IAI sí pretende anticipar.
+
+    Primario: la INTENSIDAD (IED_{T+1} por unidad de tamaño del sector). El nivel en
+    millones lo domina cuán grande es la actividad, así que ordenar por nivel mediría
+    tamaño y no atractivo; se reporta igual, como contraste declarado.
+
+    Devuelve ``None`` —no un cero, no un bloque vacío— cuando todavía no hay panel: la
+    ausencia del dato es una brecha declarada, no un resultado nulo.
+    """
+    panel = build_iai_panel_ied(db)
+    etiquetado = label_panel_ied(panel, ied_by_activity(db))
+    con_intensidad = [r for r in etiquetado if r.get("ied_intensity_next") is not None]
+    if len(con_intensidad) < 3:
+        return None
+    primario = _metricas_gate_e(con_intensidad, "ied_intensity_next")
+    contraste = _metricas_gate_e(etiquetado, "ied_next") if len(etiquetado) >= 3 else None
+    return {
+        **primario,
+        "que_mide": ("intensidad de inversión extranjera directa realizada en T+1 (IED por "
+                     "unidad de tamaño del sector) — el desenlace que el IAI targetea"),
+        "fuente": "BCRD · Flujos de IED por actividad económica (anual)",
+        "resolucion": "9 actividades de IED del BCRD (cobertura parcial de los 17 sectores)",
+        "contraste_nivel": contraste,
+        "nota_contraste": ("el nivel de IED en millones lo domina el tamaño de la actividad; "
+                           "se muestra para acotar, no como titular"),
+    }
 
 
 def gate_e_report(db: Session) -> Dict:
@@ -133,28 +241,24 @@ def gate_e_report(db: Session) -> Dict:
         partial_n = len(g_rows)
 
     n_ramas = len({r["branch"] for r in labeled})
+    empleo = _metricas_gate_e(labeled, "emp_growth_next")
+    inversion = _gate_e_inversion(db)
+
     return {
         "has_data": True,
+        # El desenlace de EMPLEO se conserva arriba —es el que ya está publicado y citado—
+        # pero deja de ser el único: `outcomes` trae los dos y `headline_outcome` dice cuál
+        # sostiene una afirmación. Ver la nota del disclaimer.
         "outcome": "crecimiento del empleo formal (Δ% T+1, ENCFT)",
         "resolution": _resolucion(n_ramas),
-        "n_observations": len(labeled),
-        "n_branches": n_ramas,
-        "years": [min(by_year), max(by_year)],
-        # HEADLINE — mean yearly IC with a Student-t CI over the series of yearly ICs.
-        "mean_yearly_ic": ic["mean_ic"] if ic else None,
-        "n_years": ic["n_years"] if ic else len(yearly),
-        "ic_t_stat": ic["t_stat"] if ic else None,
-        "ic_ci": [ic["ci_lo"], ic["ci_hi"]] if ic else [None, None],
-        # SECONDARY — pooled stacked Spearman; kept visible but NOT the headline.
-        "spearman_pooled": None if pooled_rho is None else round(pooled_rho, 3),
-        "spearman_pooled_ci": [None if pooled_lo is None else round(pooled_lo, 3),
-                               None if pooled_hi is None else round(pooled_hi, 3)],
+        **{k: v for k, v in empleo.items() if k not in ("conclusive", "invertido")},
         "spearman_pooled_note": ("pooled sobre los pares sector-año apilados (sin "
                                  "clustering año/sector) — sobrestima la precisión; "
                                  "el titular es el IC medio anual con t"),
-        "spearman_partial_growth": partial,
-        "spearman_partial_n": partial_n,
-        "by_year": per_year,
-        "quintile_spread": _quintile_spread_by_year(by_year),
-        "disclaimer": _disclaimer(n_ramas, ic["n_years"] if ic else len(yearly)),
+        "outcomes": {"empleo": {**empleo,
+                                "que_mide": "crecimiento del empleo formal por rama (Δ% T+1, "
+                                            "ENCFT) — NO es lo que el IAI dice anticipar"},
+                     **({"inversion": inversion} if inversion else {})},
+        "headline_outcome": _titular(empleo, inversion),
+        "disclaimer": _disclaimer(n_ramas, empleo["n_years"] or 0),
     }

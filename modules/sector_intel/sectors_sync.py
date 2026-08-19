@@ -7,7 +7,7 @@ the 3-anchor fixture. Mirrors :mod:`modules.macro_political_risk.wdi_sync`.
 """
 import logging
 from datetime import date
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,11 @@ LABOR_ENCFT_DIMENSION = "labor_encft"
 # wiring them into the business/talent dimensions (de-rubricizing operating_cost +
 # a profitability signal) is a later phase. This sync only ingests the real panel.
 ENAE_DIMENSION = "enae"
+
+# IED del BCRD por actividad (9 actividades, tercera resolución del mismo mapa). Es el
+# DESENLACE del Gate E de inversión, no un insumo del IAI: el índice nunca lee esta
+# dimensión, así que el ranking de los 17 slugs queda intacto.
+IED_DIMENSION = "ied_bcrd"
 
 # TSS salary → operating_cost is a CROSS-SECTIONAL snapshot (per-slug, applied
 # uniformly across periods like the national WGI), so it lives as an AppSetting the
@@ -260,6 +265,55 @@ def encft_empleo_sync(db: Session, set_phase: Optional[Callable[[str], None]] = 
         "variables": sorted({r.series for r in records}),
         "errors": errors,
     }
+
+
+def bcrd_ied_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
+    """Ingiere la IED por actividad del BCRD (anual, 2010→) a ``si_variables``.
+
+    Es el desenlace que el IAI SÍ pretende anticipar. El Gate E lo validaba contra empleo
+    formal —que el índice no dice anticipar— y daba nulo/negativo; esta serie es inversión
+    REALIZADA por actividad, publicada por el propio BCRD.
+
+    Filas keyed por ACTIVIDAD de IED (no por los 17 slugs): repartir el bundle
+    «Comercio / Industria» entre comercio y manufactura sería fabricar. Idempotente por
+    (sector_code, dimension, period, variable); best-effort (reporta ``errors[]``).
+    """
+    set_phase = set_phase or (lambda _m: None)
+    from shared.data.ied_bcrd import SERIES as IED_SERIES, IedBcrdClient
+
+    set_phase("descargando IED por actividad económica (BCRD)")
+    try:
+        registros = list(IedBcrdClient(mode="live").fetch())
+    except Exception as e:  # noqa: BLE001 — best-effort: reportar, no tumbar la operación
+        logger.warning("IED BCRD sync falló, cayendo al fixture comiteado: %s", e)
+        try:
+            registros = list(IedBcrdClient(mode="fixture").fetch())
+        except Exception as e2:  # noqa: BLE001
+            return {"error": f"IED no disponible: {e2}", "synced": 0, "errors": [str(e), str(e2)]}
+
+    set_phase(f"persistiendo {len(registros)} valores de IED")
+    synced = 0
+    periodos = set()
+    for r in registros:
+        actividad, periodo = r.dimension, r.period
+        if not actividad or not periodo:
+            continue
+        periodos.add(periodo)
+        existente = (db.query(SectorVariable)
+                     .filter_by(sector_code=actividad, dimension=IED_DIMENSION,
+                                period=periodo, variable=IED_SERIES).first())
+        fila: Any = existente or SectorVariable(
+            sector_code=actividad, dimension=IED_DIMENSION,
+            variable=IED_SERIES, period=periodo)
+        fila.value = r.value
+        fila.source = r.lineage.source if r.lineage else "BCRD"
+        fila.license = r.lineage.license if r.lineage else None
+        if not existente:
+            db.add(fila)
+        synced += 1
+    db.commit()
+    return {"synced": synced, "periods": sorted(periodos),
+            "actividades": len({r.dimension for r in registros if r.dimension}), "errors": []}
 
 
 def enae_sync(db: Session, set_phase: Optional[Callable[[str], None]] = None) -> Dict:
