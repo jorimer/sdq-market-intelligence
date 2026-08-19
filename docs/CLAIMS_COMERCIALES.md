@@ -66,3 +66,66 @@ Deriva de la due-diligence 2026-07-13 (`docs/RUBRIC_AUDIT_AND_REMEDIATION.md`, r
 **Si un comprador pregunta "¿esto es dato o criterio?"** la respuesta correcta siempre existe a
 nivel de variable y está rotulada. Ese es el argumento de venta —transparencia auditable—, no una
 debilidad a esconder.
+
+---
+
+## Credenciales de validación — qué cifra se puede citar, y de dónde sale
+
+**Añadido 2026-08-19** (Fase 6 del [plan de cierre](PLAN_CIERRE_BRECHAS_VALIDACION.md)).
+
+**La fuente es una sola y se computa:** `GET /api/v1/products/credenciales`
+([`shared/products/credenciales.py`](../shared/products/credenciales.py)). Lee el reporte
+persistido de cada motor y arma la afirmación con sus cifras. **Ninguna cifra de validación se
+escribe a mano en material comercial.** Si hace falta un número para un deck, sale de ahí.
+
+### El gate
+
+Cada credencial trae `publicable`, y solo es `True` cuando la cifra existe **y** su reporte se
+verificó vigente contra el insumo que lo produjo. Es asimétrico a propósito:
+
+| Frescura | ¿Publica? |
+|---|---|
+| `stale: false` — verificada vigente | **sí** |
+| `stale: true` — el insumo cambió después del cálculo | no |
+| `stale: null` — **indeterminado** | **no** |
+
+El tercer caso es el que importa. «No sé de cuándo es» y «está al día» son cosas distintas:
+producción sirvió 19 días un Gini de 0,44 calculado con un score que ya no existía, mientras
+el deck decía 0,16. Las cifras vetadas se listan en `vetadas_por_frescura` en vez de
+desaparecer — un veto silencioso se lee como que el eje no tiene validación.
+
+### Los seis grupos, y por qué no se mezclan
+
+«Tiene validación» abarca cosas que no sostienen el mismo argumento de venta:
+
+| Grupo | Qué autoriza a decir |
+|---|---|
+| **A · evento real** | discriminación contra desenlaces reales de entidades |
+| **B · concluyente** | discriminación contra un desenlace realizado, con IC que no cruza cero |
+| **C · convergente** | coincide con una medida independiente del mismo período — **no** es backtest temporal y no se vende como tal |
+| **D · parcial** | metodología exigente con resultado acotado, declarado |
+| **E · corrido y no concluyente** | el Gate E se aplicó y **dio negativo**. Honesto; no es credencial |
+| **F · sin backtest** | descriptivo, con el obstáculo declarado (ver `docs/TRIAJE_VALIDACION_EJES.md`) |
+
+### Banca: las tres correcciones que el material tenía mal
+
+1. **Son TRES cohortes evaluables, no seis.** Los seis bancos están en el ledger, pero el
+   onset exige una regla de crédito y la morosidad no existe antes de 1993-12: tres no pueden
+   disparar por construcción. Citable: **3 evaluables, 2 detectados con anticipación
+   (Bancrédito 11 meses, Baninter 7) y 1 señal tardía (Mercantil)**. Decir «seis» infla el
+   denominador sin agregar evidencia.
+2. **El Gini NO es validación contra quiebras.** El desenlace del backtest es *distress
+   financiero*, y medido en producción es **83 % pérdidas sostenidas, 22 % deterioro de
+   crédito y 0 % solvencia** — esta última regla nunca disparó. Contra la regla de crédito el
+   score discrimina **invertido**. Citar el agregado sin decir de qué está hecho es la
+   afirmación más frágil del catálogo.
+3. **La credencial fuerte de banca es la cohorte, no la curva por banda.** La tabla de
+   distress por banda **no ordena el riesgo** (la banda «Sólida», con el N más grande, tiene
+   más deterioro que las dos siguientes) y ninguna superficie la presenta como ordenamiento.
+   No entra a material comercial.
+
+### Y el catálogo son 16 ejes
+
+Fuente canónica: `shared/products/registry.py::PRODUCT_CATALOG`. El «14» era correcto el
+13-jul-2026 (Catálogo v3); entraron `social_dev` (09-ago) y `law` (15-ago). Dimensionar sobre
+14 subdeclara el catálogo en dos.

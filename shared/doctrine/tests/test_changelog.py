@@ -12,7 +12,17 @@ from shared.doctrine.changelog import (
     CAMPOS_REQUERIDOS, atribuir, cambios, cargar, resumen_publicable,
 )
 
-_SECTORES_VALIDOS = {"banking", "insurance", "pension"}
+def _sectores_validos() -> set:
+    """Las claves del CATÁLOGO, leídas del registro — no una lista escrita a mano.
+
+    Estaba fijada en {banking, insurance, pension}, que era el conjunto de ejes con cambios
+    de metodología el día que se escribió. El catálogo creció a dieciséis y el registro no
+    podía documentar un cambio en ninguno de los otros trece sin que este test lo rechazara:
+    la regla decía «habla el idioma del catálogo» y el código hablaba el de 2026-07.
+    """
+    from shared.products.registry import PRODUCT_CATALOG
+
+    return {e.sector_key for e in PRODUCT_CATALOG}
 
 
 def _entradas():
@@ -45,7 +55,7 @@ class TestCadaEntrada:
 
     def test_los_sectores_son_claves_de_producto(self, c):
         """`insurance`, no `insurance_intel`: el registro habla el idioma del catálogo."""
-        assert set(c["sectores"]) <= _SECTORES_VALIDOS, c["sectores"]
+        assert set(c["sectores"]) <= _sectores_validos(), c["sectores"]
 
     def test_el_id_empieza_por_su_fecha(self, c):
         assert c["id"].startswith(str(c["fecha_efectiva"])), (

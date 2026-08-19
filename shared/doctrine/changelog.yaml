@@ -119,3 +119,90 @@ cambios:
         peso del último ejercicio en el promedio del ciclo va de 27% en la mediana a 58% en el
         libro de mayor crecimiento.
     pr: [701, 702]
+
+  - id: 2026-08-19-validacion-por-insumo
+    fecha_efectiva: "2026-08-19"
+    sectores: [banking, insurance, pension, macro, trade, esg, social_dev, agribusiness]
+    titulo: "La cifra de validación se invalida por su insumo, no por el reloj"
+    que_cambio: >-
+      Todo reporte de validación guarda ahora la huella del insumo que lo produjo y se compara
+      con la vigente al leerlo: si el dato o el score cambiaron después del cálculo, la
+      respuesta lo declara obsoleto en vez de servir la cifra como verdad. Además, cada motor
+      se recalcula por cascada cuando termina la operación que produce su insumo, y ninguna
+      cifra marcada obsoleta —ni una cuya frescura sea indeterminada— puede entrar a material
+      comercial.
+    por_que: >-
+      El reporte era un artefacto persistido que solo se recalculaba por cadencia fija. Una
+      recalibración del score dejaba la cifra publicada huérfana de su insumo sin que nada lo
+      señalara, y la plataforma sirvió durante semanas un índice de discriminación calculado
+      con un score que ya no existía, mientras el material de venta citaba el correcto.
+    impacto:
+      medido_al_publicar: >-
+        El índice de discriminación del rating bancario publicado pasó de 0,4436 a 0,1615
+        sobre el mismo panel de 1.693 observaciones y 301 eventos. Los ocho reportes de
+        validación del catálogo quedaron sellados y verificados vigentes el 2026-08-19.
+    pr: [806, 808]
+
+  - id: 2026-08-19-desenlace-de-banca-separado
+    fecha_efectiva: "2026-08-19"
+    sectores: [banking]
+    titulo: "El backtest de banca deja de publicar un solo número para tres fenómenos"
+    que_cambio: >-
+      El desenlace que el backtest llama distress financiero es la unión de tres reglas
+      —pérdidas sostenidas, deterioro de crédito y solvencia bajo el mínimo— y pasa a
+      reportarse por familia, cada una con su propio N, su intervalo y su curva por banda. Se
+      distinguen cuatro estados: concluyente, invertido (el score ordena al revés, que es un
+      hallazgo y no una ausencia de señal), no concluyente y no evaluable (la regla nunca
+      disparó). La curva por banda deja de presentarse como ordenamiento de riesgo mientras no
+      lo sea, y el caveat nombra la banda que rompe la monotonía con su tamaño de muestra.
+    por_que: >-
+      Un solo índice contra la unión hacía que cada lector lo atribuyera al fenómeno que tenía
+      en la cabeza, y el que domina el conteo no es el que se supone. En material de venta se
+      leía como discriminación de riesgo de crédito, que es justamente donde el score falla.
+    impacto:
+      medido_al_publicar: >-
+        De los 301 eventos del desenlace, 250 los aporta la regla de resultados, 66 la de
+        crédito y ninguno la de solvencia. Contra la regla de crédito el Gini es −0,1437 con
+        intervalo [−0,235 · −0,050].
+    pr: [810, 811]
+
+  - id: 2026-08-19-panel-auditado-desde-2013
+    fecha_efectiva: "2026-08-19"
+    sectores: [insurance]
+    titulo: "El panel de estados auditados arranca en 2013 y no en 2018"
+    que_cambio: >-
+      La ingesta del histórico de estados financieros auditados pasa a arrancar en el primer
+      año que la Superintendencia publica, comprobado contra el portal, en vez de en el año
+      que suponía el conector.
+    por_que: >-
+      El arranque anterior era una suposición sobre el formato de los archivos que nadie había
+      medido. Acotaba el panel del backtest y hacía que la validación del índice se declarara
+      no concluyente por falta de potencia.
+    impacto:
+      medido_al_publicar: >-
+        El panel pasó de 164 a 272 observaciones y la señal de underwriting pasó de no
+        concluyente a concluyente, con Gini 0,2575 e intervalo [0,124 · 0,395]. El estado de
+        validación del producto subió de 0,60 a 0,68.
+    pr: 813
+
+  - id: 2026-08-19-iai-contra-inversion
+    fecha_efectiva: "2026-08-19"
+    sectores: [agribusiness]
+    titulo: "El índice sectorial se valida contra inversión realizada, con control por tamaño"
+    que_cambio: >-
+      El Gate E sectorial pasa a medirse también contra la inversión extranjera directa
+      realizada por actividad, que es el desenlace que el índice dice anticipar, además del
+      empleo. El desenlace primario es la intensidad —inversión por unidad de tamaño del
+      sector— y se publica junto al mismo desenlace ordenado SOLO por tamaño: el deflactor es
+      una variable del propio índice, así que sin ese control el signo del resultado no se le
+      puede atribuir al índice.
+    por_que: >-
+      El índice se validaba contra crecimiento del empleo, que no es lo que dice anticipar, y
+      daba nulo. Al medirlo contra inversión apareció que el control por tamaño reproduce el
+      resultado casi exactamente, así que el índice no agrega poder por encima del tamaño del
+      sector y se ofrece como descriptivo, no como predictivo.
+    impacto:
+      medido_al_publicar: >-
+        Contra intensidad de inversión el índice da −0,321 y el tamaño solo −0,323; contra
+        nivel, el índice da 0,287 y el tamaño solo 0,377.
+    pr: [814, 815, 816]

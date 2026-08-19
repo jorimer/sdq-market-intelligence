@@ -109,6 +109,25 @@ async def get_readiness_audit(db: Session = Depends(get_db),
     return build_audit(db)
 
 
+@router.get("/credenciales", summary="Qué se puede afirmar de cada eje (material comercial)")
+async def get_credenciales(db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """La tabla de validación que va a catálogo, deck y propuestas — computada, no transcrita.
+
+    Cada fila trae su cifra COMPUTADA del reporte del motor, el grupo al que pertenece (un
+    backtest contra quiebras reales y un índice sin corte transversal no son el mismo
+    argumento) y el gate: `publicable` solo es True si la cifra existe y su reporte se
+    verificó vigente contra el insumo. Las que existen y no pasan el gate se listan en
+    `vetadas_por_frescura` en vez de desaparecer — un veto silencioso se lee como que el eje
+    no tiene validación.
+
+    Va ANTES de `/readiness/{sector}` en el archivo: si no, «credenciales» entraría por la
+    ruta comodín como si fuera el nombre de un sector.
+    """
+    from shared.products.credenciales import credenciales
+    return credenciales(db)
+
+
 @router.get("/readiness/{sector}", summary="Detalle de readiness de un sector")
 async def get_sector_readiness(sector: str, db: Session = Depends(get_db),
                                current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
