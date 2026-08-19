@@ -90,7 +90,7 @@ def _run_financials_history_sync(params, user_id, set_phase) -> Dict:
     from modules.insurance_intel.financials_sync import sis_financials_history_sync
     db = SessionLocal()
     try:
-        since = int((params or {}).get("since_year") or 2018)
+        since = int((params or {}).get("since_year") or 2013)
         return sis_financials_history_sync(db, set_phase=set_phase, since_year=since)
     finally:
         db.close()
@@ -174,8 +174,9 @@ def register() -> None:
     ))
     register_operation(Operation(
         "insurance-financials-history-sync", "Ingerir historia de estados AUDITADOS (SIS)",
-        "Ingiere la HISTORIA de estados financieros auditados por compañía desde 2018 (era "
-        ".xlsx, estructura estable): patrimonio, activos, primas, siniestros e ingresos/gastos "
+        "Ingiere la HISTORIA de estados financieros auditados por compañía desde 2013 "
+        "(medido contra el portal: la SIS publica auditados desde ese año y el extractor los "
+        "reconcilia): patrimonio, activos, primas, siniestros e ingresos/gastos "
         "por aseguradora y año → serie con trayectoria. Recalcula el ISF una vez al final. Es "
         "el insumo del backtest de validación (G5). Param opcional 'since_year'. Corre desde "
         "Railway; best-effort por año; idempotente. On-demand. Correr cuando: haga falta "

@@ -203,12 +203,21 @@ C1–C3 y C5.
    observaciones; el 5 son los pares de validez convergente contra S&P. Corregir para que el número
    se compute del reporte, no esté escrito a mano.
 
-### Status de avance — criterios de cierre
-- [ ] `GET /api/v1/pension-intel/validation` en producción, con cifra recalculada.
-- [ ] Seguros: decisión tomada, implementada y reflejada en el producto (readiness G5 incluido).
-- [ ] IAI: decisión tomada y propagada a `economic_structure` **y** `agribusiness`.
-- [ ] Ningún disclaimer con cifras escritas a mano: todas computadas del reporte.
-- [ ] **Cero** motores de validación cuyo resultado no sea legible por API.
+### Status de avance — tres de cinco cerrados
+- [x] `GET /api/v1/pension-intel/validation` en producción, con la cifra recalculada
+      (Gini 0,1594 · IC [0,099 · 0,217] · n=1.590 · 665 eventos).
+- [x] **Seguros: decisión tomada (ampliar el panel), ejecutada y con resultado.** La SIS
+      publica auditados desde **2013**, no desde 2018 como suponía el conector: la ingesta
+      trajo doce años y 14.888 filas de serie, el panel del backtest pasó de 164 a **272**
+      observaciones y la señal de *underwriting* pasó de NO concluyente (0,0927, IC cruzando
+      cero) a **concluyente: Gini 0,2575 · IC [0,124 · 0,395]**. El G5 del producto subió de
+      0,60 a **0,68** solo (lo computa el propio estado de validación), y la nota del producto
+      ya cita la cifra nueva. Seguros deja de ser «corrido y no concluyente».
+- [ ] **IAI: decisión tomada (validarlo contra el desenlace que sí targetea)**, pendiente de
+      ejecutar: exige evaluar una fuente de inversión por rama que hoy no está conectada.
+- [x] Ningún disclaimer con cifras escritas a mano: corregidos IRMP, `social_dev` y
+      `sector_intel`, con un guard estructural (`ast`) que lo exige de acá en adelante.
+- [x] **Cero** motores de validación cuyo resultado no sea legible por API.
 
 ---
 

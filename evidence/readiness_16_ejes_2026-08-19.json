@@ -1,0 +1,1209 @@
+{
+ "sectors": [
+  {
+   "sector_key": "banking",
+   "display_name": "SDQ Banking Intelligence",
+   "source": "SIB · fiduciaria · BCRD",
+   "module_hint": "banking_score",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9775,
+     "gates": {
+      "g1": 0.925,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 1.0
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=141d (quarterly) · 81 entidades calificadas en 2026-03-31.",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · base=sector_outlook",
+      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:39.702338"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9775,
+     "gates": {
+      "g1": 0.925,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 1.0
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=141d (quarterly) · 81 entidades calificadas en 2026-03-31.",
+      "g2": "motor operativo",
+      "g3": "3 templates declarados",
+      "g4": "7 secciones · base=full_rating",
+      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:39.710438"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9775,
+     "gates": {
+      "g1": 0.925,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 1.0
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=141d (quarterly) · 81 entidades calificadas en 2026-03-31.",
+      "g2": "motor operativo",
+      "g3": "5 templates declarados",
+      "g4": "13 secciones · base=full_rating",
+      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:39.718154"
+    }
+   ]
+  },
+  {
+   "sector_key": "macro",
+   "display_name": "SDQ Macro & Country Risk",
+   "source": "BCRD · DIGEPRES · WGI/WDI · GDELT",
+   "module_hint": "macro_monitor · macro_political_risk",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.8586,
+     "gates": {
+      "g1": 0.6035714285714285,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.85
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (quarterly) · 7 factores con dato · IRMP 2025-12-31",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.139295"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.8586,
+     "gates": {
+      "g1": 0.6035714285714285,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.85
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (quarterly) · 7 factores con dato · IRMP 2025-12-31",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "3 secciones · render genérico",
+      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.141432"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.8586,
+     "gates": {
+      "g1": 0.6035714285714285,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.85
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (quarterly) · 7 factores con dato · IRMP 2025-12-31",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "5 secciones · render genérico",
+      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.143482"
+    }
+   ]
+  },
+  {
+   "sector_key": "trade",
+   "display_name": "SDQ Trade & Logistics",
+   "source": "DGA · BCRD",
+   "module_hint": "trade_intel",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9625,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.75
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=50d (quarterly) · Resiliencia 67.0 en 2026-Q2 · 97 capítulos export",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo)."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.170368"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9625,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.75
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=50d (quarterly) · Resiliencia 67.0 en 2026-Q2 · 97 capítulos export",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.185267"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9625,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.75
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=50d (quarterly) · Resiliencia 67.0 en 2026-Q2 · 97 capítulos export",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.200298"
+    }
+   ]
+  },
+  {
+   "sector_key": "tourism",
+   "display_name": "SDQ Tourism Intelligence",
+   "source": "BCRD turismo · ASONAHORES · MITUR",
+   "module_hint": "sector_intel (o propio)",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · ITT 93.0 (Fuerte) en 2025 · 8860709 no residentes",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales)."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.211976"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · ITT 93.0 (Fuerte) en 2025 · 8860709 no residentes",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.214176"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · ITT 93.0 (Fuerte) en 2025 · 8860709 no residentes",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.216200"
+    }
+   ]
+  },
+  {
+   "sector_key": "free_zones",
+   "display_name": "SDQ Free Zones & Manufacturing",
+   "source": "CNZFE · ONE · datos.gob.do",
+   "module_hint": "sector_intel (o propio)",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · IZF 49.2 (Vigilancia) en 2025 · 858 empresas",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional)."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.231432"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · IZF 49.2 (Vigilancia) en 2025 · 858 empresas",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.233665"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · IZF 49.2 (Vigilancia) en 2025 · 858 empresas",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.235634"
+    }
+   ]
+  },
+  {
+   "sector_key": "energy",
+   "display_name": "SDQ Energy Intelligence",
+   "source": "SIE · CNE · Organismo Coordinador",
+   "module_hint": "propio (probable)",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=0d (annual) · IRSE 80.1 (Fuerte) en 2026 · transición = renovable 19.0%",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.250101"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=0d (annual) · IRSE 80.1 (Fuerte) en 2026 · transición = renovable 19.0%",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.252296"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=0d (annual) · IRSE 80.1 (Fuerte) en 2026 · transición = renovable 19.0%",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.254429"
+    }
+   ]
+  },
+  {
+   "sector_key": "telecom",
+   "display_name": "SDQ Telecom Intelligence",
+   "source": "INDOTEL",
+   "module_hint": "propio (probable)",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=596d (annual) · IDT 61.9 (Adecuado) en 2024 · ITU DataHub ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int.",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.270193"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=596d (annual) · IDT 61.9 (Adecuado) en 2024 · ITU DataHub ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int.",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.272307"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=596d (annual) · IDT 61.9 (Adecuado) en 2024 · ITU DataHub ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int.",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.274377"
+    }
+   ]
+  },
+  {
+   "sector_key": "construction",
+   "display_name": "SDQ Construction Intelligence",
+   "source": "MIVHED · BCRD",
+   "module_hint": "construction_intel",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · ICC 26.5 (Crítico) en 2025 · 951 licencias",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.289017"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · ICC 26.5 (Crítico) en 2025 · 951 licencias",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.290907"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9325,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.55
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · ICC 26.5 (Crítico) en 2025 · 951 licencias",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.292851"
+    }
+   ]
+  },
+  {
+   "sector_key": "agribusiness",
+   "display_name": "SDQ Agribusiness",
+   "source": "Min. Agricultura · BAGRÍCOLA · ONE",
+   "module_hint": "sector_intel (o propio)",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.8875,
+     "gates": {
+      "g1": 0.875,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.5
+     },
+     "detail": {
+      "g1": "cobertura=0.88 · frescura=231d (annual) · IAI 43.2 (Medio) en 2025 · 8/9 variables reales (6 per-sector + 2 nacional)",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.50 · Gate E sectorial diferido; IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.310237"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.8875,
+     "gates": {
+      "g1": 0.875,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.5
+     },
+     "detail": {
+      "g1": "cobertura=0.88 · frescura=231d (annual) · IAI 43.2 (Medio) en 2025 · 8/9 variables reales (6 per-sector + 2 nacional)",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.50 · Gate E sectorial diferido; IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.312233"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.8875,
+     "gates": {
+      "g1": 0.875,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.5
+     },
+     "detail": {
+      "g1": "cobertura=0.88 · frescura=231d (annual) · IAI 43.2 (Medio) en 2025 · 8/9 variables reales (6 per-sector + 2 nacional)",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.50 · Gate E sectorial diferido; IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.314324"
+    }
+   ]
+  },
+  {
+   "sector_key": "esg",
+   "display_name": "SDQ ESG & Climate",
+   "source": "ONE · Medio Ambiente · IPCC · SIE",
+   "module_hint": "esg_climate",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9223,
+     "gates": {
+      "g1": 0.8410958904109589,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.8
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=962d (annual) · IRC 35.65 (Baja) en 2023",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo)."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.334649"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9223,
+     "gates": {
+      "g1": 0.8410958904109589,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.8
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=962d (annual) · IRC 35.65 (Baja) en 2023",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.344991"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9223,
+     "gates": {
+      "g1": 0.8410958904109589,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.8
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=962d (annual) · IRC 35.65 (Baja) en 2023",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.354878"
+    }
+   ]
+  },
+  {
+   "sector_key": "pension",
+   "display_name": "SDQ Pensiones (SIPEN)",
+   "source": "SIPEN · ADAFP",
+   "module_hint": "pension_intel",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9475,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.65
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=32d (quarterly) · 7/7 AFP calificables · solvencia incorporada · 7 con banda absoluta",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP)."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:41.709074"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9475,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.65
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=32d (quarterly) · 7/7 AFP calificables · solvencia incorporada · 7 con banda absoluta",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:42.044183"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9475,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.65
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=32d (quarterly) · 7/7 AFP calificables · solvencia incorporada · 7 con banda absoluta",
+      "g2": "motor operativo",
+      "g3": "3 templates declarados",
+      "g4": "6 secciones · render genérico",
+      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:42.421816"
+    }
+   ]
+  },
+  {
+   "sector_key": "insurance",
+   "display_name": "SDQ Seguros (SIS)",
+   "source": "SIS · SISALRIL · datos.gob.do",
+   "module_hint": "insurance_intel",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.952,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.68
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=0d (quarterly) · Mercado (Pulse) con dato real de SIS; 31 aseguradoras con ISF",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:43.042839"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.952,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.68
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=0d (quarterly) · Mercado (Pulse) con dato real de SIS; 31 aseguradoras con ISF",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:43.606952"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.952,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.68
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=0d (quarterly) · Mercado (Pulse) con dato real de SIS; 31 aseguradoras con ISF",
+      "g2": "motor operativo",
+      "g3": "3 templates declarados",
+      "g4": "6 secciones · render genérico",
+      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.161614"
+    }
+   ]
+  },
+  {
+   "sector_key": "monetary_policy",
+   "display_name": "SDQ Política Monetaria",
+   "source": "BCRD — Comunicados de Política Monetaria · series macro",
+   "module_hint": "macro_monitor",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9348,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.5654160654160654
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=19d (monthly) · 191 decisiones de TPM 2008-02-29→2026-07-31",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.204122"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9348,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.5654160654160654
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=19d (monthly) · 191 decisiones de TPM 2008-02-29→2026-07-31",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.214774"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9348,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.5654160654160654
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=19d (monthly) · 191 decisiones de TPM 2008-02-29→2026-07-31",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "3 secciones · render genérico",
+      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.225713"
+    }
+   ]
+  },
+  {
+   "sector_key": "economic_structure",
+   "display_name": "SDQ Sectoral Structure · Estructura de la Economía",
+   "source": "BCRD · PIB por sectores de origen (Valor Agregado)",
+   "module_hint": "sector_intel",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9475,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.65
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · VAB +2.03% en 2025 · 17 sectores · motor: Intermediación Financiera",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.245120"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9475,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.65
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · VAB +2.03% en 2025 · 17 sectores · motor: Intermediación Financiera",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.247465"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9475,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.65
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=231d (annual) · VAB +2.03% en 2025 · 17 sectores · motor: Intermediación Financiera",
+      "g2": "motor operativo",
+      "g3": "3 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.249681"
+    }
+   ]
+  },
+  {
+   "sector_key": "social_dev",
+   "display_name": "SDQ Desarrollo Social",
+   "source": "MEPyD (SISDOM) · MINERD (SIIE) · SIUBEN · ONE · BCRD · Banco Mundial",
+   "module_hint": "social_dev",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.9625,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.75
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=596d (annual) · IDM 2024 sobre 10 regiones · cobertura real 100% · series provinciales SIUBEN + ONE",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891)."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.677091"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.9625,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.75
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=596d (annual) · IDM 2024 sobre 10 regiones · cobertura real 100% · series provinciales SIUBEN + ONE",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "2 secciones · render genérico",
+      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:44.782934"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.9625,
+     "gates": {
+      "g1": 1.0,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 0.75
+     },
+     "detail": {
+      "g1": "cobertura=1.00 · frescura=596d (annual) · IDM 2024 sobre 10 regiones · cobertura real 100% · series provinciales SIUBEN + ONE",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891)."
+     },
+     "threshold": 0.85,
+     "can_activate": true,
+     "is_active": true,
+     "computed_at": "2026-08-19T16:31:45.156134"
+    }
+   ]
+  },
+  {
+   "sector_key": "law",
+   "display_name": "SDQ Evaluación de Leyes",
+   "source": "Articulado de la norma · fuentes oficiales del propio Estado evaluado",
+   "module_hint": "law_intel",
+   "implemented": true,
+   "levels": [
+    {
+     "tier": "pulse",
+     "readiness": 0.7505,
+     "gates": {
+      "g1": 0.16821917808219178,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 1.0
+     },
+     "detail": {
+      "g1": "cobertura=0.20 · frescura=962d (annual) · 72 de 90 indicadores de Ley 1-12 sin fuente verificada: 1.1 Confianza en los partidos políticos; 1.2 Índice de percepción de la corrupción (IPC); 1.3 Índice de fortaleza institucional; 1.4 Índice de desarrollo burocrático; 1.5 Tasa de solución de casos Sistema Judicial; 1.6 Efectividad general de la acusación Sistema ; 1.7 Tiempo duración procesos judiciales; 2.1 Porcentaje de población bajo la línea de pob; 2.2 Número de regiones con porcentaje de poblaci; 2.3 Porcentaje de población rural bajo la línea ; 2.4 Porcentaje de población por debajo de la lín; 2.5 Número de regiones con porcentaje de poblaci; y 60 más",
+      "g2": "motor operativo",
+      "g3": "1 templates declarados",
+      "g4": "1 secciones · render genérico",
+      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion."
+     },
+     "threshold": 0.75,
+     "can_activate": true,
+     "is_active": false,
+     "computed_at": "2026-08-19T16:31:45.172487"
+    },
+    {
+     "tier": "insight",
+     "readiness": 0.7505,
+     "gates": {
+      "g1": 0.16821917808219178,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 1.0
+     },
+     "detail": {
+      "g1": "cobertura=0.20 · frescura=962d (annual) · 72 de 90 indicadores de Ley 1-12 sin fuente verificada: 1.1 Confianza en los partidos políticos; 1.2 Índice de percepción de la corrupción (IPC); 1.3 Índice de fortaleza institucional; 1.4 Índice de desarrollo burocrático; 1.5 Tasa de solución de casos Sistema Judicial; 1.6 Efectividad general de la acusación Sistema ; 1.7 Tiempo duración procesos judiciales; 2.1 Porcentaje de población bajo la línea de pob; 2.2 Número de regiones con porcentaje de poblaci; 2.3 Porcentaje de población rural bajo la línea ; 2.4 Porcentaje de población por debajo de la lín; 2.5 Número de regiones con porcentaje de poblaci; y 60 más",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "3 secciones · render genérico",
+      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion."
+     },
+     "threshold": 0.85,
+     "can_activate": false,
+     "is_active": false,
+     "computed_at": "2026-08-19T16:31:45.175150"
+    },
+    {
+     "tier": "deep_dive",
+     "readiness": 0.7505,
+     "gates": {
+      "g1": 0.16821917808219178,
+      "g2": 1.0,
+      "g3": 1.0,
+      "g4": 1.0,
+      "g5": 1.0
+     },
+     "detail": {
+      "g1": "cobertura=0.20 · frescura=962d (annual) · 72 de 90 indicadores de Ley 1-12 sin fuente verificada: 1.1 Confianza en los partidos políticos; 1.2 Índice de percepción de la corrupción (IPC); 1.3 Índice de fortaleza institucional; 1.4 Índice de desarrollo burocrático; 1.5 Tasa de solución de casos Sistema Judicial; 1.6 Efectividad general de la acusación Sistema ; 1.7 Tiempo duración procesos judiciales; 2.1 Porcentaje de población bajo la línea de pob; 2.2 Número de regiones con porcentaje de poblaci; 2.3 Porcentaje de población rural bajo la línea ; 2.4 Porcentaje de población por debajo de la lín; 2.5 Número de regiones con porcentaje de poblaci; y 60 más",
+      "g2": "motor operativo",
+      "g3": "2 templates declarados",
+      "g4": "4 secciones · render genérico",
+      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion."
+     },
+     "threshold": 0.85,
+     "can_activate": false,
+     "is_active": false,
+     "computed_at": "2026-08-19T16:31:45.177561"
+    }
+   ]
+  }
+ ],
+ "thresholds": {
+  "pulse": 0.75,
+  "insight": 0.85,
+  "deep_dive": 0.85
+ }
+}
