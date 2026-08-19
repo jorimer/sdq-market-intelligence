@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.config.settings import settings
 from shared.database.base import Base
+from shared.database.paths import ensure_sqlite_directory
 
 # Import all models so Alembic can detect them
 from shared.auth.models import User  # noqa: F401
@@ -91,6 +92,13 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    # Alembic construye su PROPIO engine, así que necesita el guard aparte: se comprobó
+    # que sin él `alembic upgrade head` sobre un árbol sin data/ muere con «unable to open
+    # database file». Hoy la cura de shared/database/session.py ya lo taparía —alguno de
+    # los modelos de arriba importa ese módulo y el import crea el directorio— pero eso es
+    # un accidente de la cadena de imports, no una garantía: quitá ese import y Alembic
+    # vuelve a romperse en silencio. Explícito.
+    ensure_sqlite_directory(config.get_main_option("sqlalchemy.url") or settings.DATABASE_URL)
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
