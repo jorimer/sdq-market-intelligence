@@ -105,3 +105,21 @@ def test_el_titular_se_elige_por_intervalo_no_por_magnitud():
     assert _titular(empleo, inversion) == "inversion"
     assert _titular(empleo, None) is None
     assert _titular({"conclusive": True}, {"conclusive": False}) == "empleo"
+
+
+# ── El control por tamaño ─────────────────────────────────────────
+
+def test_el_control_por_tamano_es_obligatorio_en_el_bloque_de_inversion():
+    """La intensidad se divide por el tamaño, y el tamaño es una variable del IAI.
+
+    Sin medir qué hace el tamaño SOLO contra el mismo desenlace, «el IAI ordena al revés la
+    inversión» y «el deflactor produce el signo» son indistinguibles — y son conclusiones
+    opuestas. El bloque tiene que traer el control siempre, no como un extra opcional.
+    """
+    import inspect
+
+    from modules.sector_intel.validation import report as mod
+
+    fuente = inspect.getsource(mod._gate_e_inversion)
+    assert "control_solo_tamano" in fuente
+    assert "nota_control" in fuente

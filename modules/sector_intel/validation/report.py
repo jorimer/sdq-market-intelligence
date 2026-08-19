@@ -187,6 +187,18 @@ def _gate_e_inversion(db: Session) -> Optional[Dict]:
         return None
     primario = _metricas_gate_e(con_intensidad, "ied_intensity_next")
     contraste = _metricas_gate_e(etiquetado, "ied_next") if len(etiquetado) >= 3 else None
+    # CONTROL OBLIGATORIO, no un extra. La intensidad se computa dividiendo por el tamaño, y
+    # el tamaño es una VARIABLE del propio IAI: un índice que premia a los sectores grandes
+    # queda mecánicamente anti-correlacionado con cualquier cosa dividida por tamaño. Sin
+    # medir qué hace el tamaño SOLO contra el mismo desenlace, «el IAI ordena al revés la
+    # inversión» y «el deflactor produce el signo» son indistinguibles — y son conclusiones
+    # opuestas. Se computa reemplazando el score por el tamaño sobre el MISMO panel.
+    solo_tamano = [{**r, "iai_score": r["sector_size"]} for r in con_intensidad]
+    control = _metricas_gate_e(solo_tamano, "ied_intensity_next")
+    solo_tamano_nivel = [{**r, "iai_score": r["sector_size"]}
+                         for r in etiquetado if r.get("sector_size") is not None]
+    control_nivel = (_metricas_gate_e(solo_tamano_nivel, "ied_next")
+                     if len(solo_tamano_nivel) >= 3 else None)
     return {
         **primario,
         "que_mide": ("intensidad de inversión extranjera directa realizada en T+1 (IED por "
@@ -196,6 +208,14 @@ def _gate_e_inversion(db: Session) -> Optional[Dict]:
         "contraste_nivel": contraste,
         "nota_contraste": ("el nivel de IED en millones lo domina el tamaño de la actividad; "
                            "se muestra para acotar, no como titular"),
+        # El mismo desenlace, ordenado SOLO por tamaño. Es la vara contra la que se lee el
+        # primario: si el tamaño solo produce el mismo signo y magnitud, el resultado es del
+        # deflactor y no del índice.
+        "control_solo_tamano": {"intensidad": control, "nivel": control_nivel},
+        "nota_control": ("`sector_size` es a la vez el deflactor de la intensidad y una "
+                         "variable del IAI. El control ordena el mismo desenlace usando solo "
+                         "el tamaño: compará su IC con el del índice antes de atribuirle el "
+                         "signo al índice."),
     }
 
 
