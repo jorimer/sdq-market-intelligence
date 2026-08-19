@@ -1,0 +1,1324 @@
+{
+ "capturado_at": "2026-08-19T14:12:32.579631+00:00",
+ "base_url": "https://sdq-market-intelligence-production.up.railway.app",
+ "commit_servido": "273ce5b",
+ "ejes": {
+  "banking_score": {
+   "path": "/api/v1/banking-score/validation/backtest",
+   "status": 200,
+   "servido": true,
+   "reporte": {
+    "computed": true,
+    "ok": true,
+    "horizon_quarters": 4,
+    "n_observations": 1693,
+    "n_events": 301,
+    "event_rate": 0.17779090372120496,
+    "gini": 0.16149234352923214,
+    "gini_ci": [
+     0.08291952523554924,
+     0.24182297895309923
+    ],
+    "by_tier": [
+     {
+      "tier": "Sólida",
+      "n": 516,
+      "events": 119,
+      "rate": 0.23062015503875968
+     },
+     {
+      "tier": "Adecuada",
+      "n": 819,
+      "events": 112,
+      "rate": 0.13675213675213677
+     },
+     {
+      "tier": "En vigilancia",
+      "n": 162,
+      "events": 16,
+      "rate": 0.09876543209876543
+     },
+     {
+      "tier": "Frágil",
+      "n": 196,
+      "events": 54,
+      "rate": 0.2755102040816326
+     }
+    ],
+    "monotonic": false,
+    "caveats": [
+     "La curva de distress por tier es positiva pero NO estrictamente monótona (ruido muestral en tiers intermedios): direccional, no validada.",
+     "Validación preliminar — NO es un rating grado-Basilea ni una PD calibrada.",
+     "Desenlace = distress financiero (mora que se duplica / solvencia <10% / ROA<0 sostenido), NO quiebras: el sistema bancario dominicano no registra defaults en la ventana, así que la discriminación es direccional.",
+     "Se excluye a propósito el 'downgrade ≥2 bandas' como desenlace: está sesgado por el piso/techo de la escala (una entidad ya en la banda más baja no puede caer dos bandas) y produce un Gini negativo artificial; no mide deterioro real.",
+     "Sin vintages de datos: la línea de tiempo usa period_end (fin de trimestre), no la fecha de publicación original. Se asume el rezago de publicación del SIB."
+    ],
+    "generated_at": "2026-08-19T14:07:06.204839+00:00"
+   }
+  },
+  "macro_political_risk": {
+   "path": "/api/v1/macro-political-risk/validation/backtest",
+   "status": 200,
+   "servido": true,
+   "reporte": {
+    "has_report": true,
+    "primary_outcome": "instability_spike",
+    "n_countries": 24,
+    "coverage": {
+     "panel_size": 24,
+     "countries_in_panel": [
+      "AR",
+      "BO",
+      "BR",
+      "BZ",
+      "CL",
+      "CO",
+      "CR",
+      "DO",
+      "EC",
+      "GT",
+      "GY",
+      "HN",
+      "HT",
+      "JM",
+      "MX",
+      "NI",
+      "PA",
+      "PE",
+      "PY",
+      "SR",
+      "SV",
+      "TT",
+      "UY",
+      "VE"
+     ],
+     "countries_with_events": [
+      "AR",
+      "BO",
+      "BR",
+      "BZ",
+      "CL",
+      "CO",
+      "CR",
+      "DO",
+      "EC",
+      "GT",
+      "GY",
+      "HN",
+      "HT",
+      "JM",
+      "MX",
+      "NI",
+      "PA",
+      "PE",
+      "PY",
+      "SR",
+      "SV",
+      "TT",
+      "UY",
+      "VE"
+     ],
+     "missing_events": []
+    },
+    "governance": {
+     "n_observations": 260,
+     "n_events": 82,
+     "event_rate": 0.315,
+     "years": [
+      2013,
+      2024
+     ],
+     "gini": 0.199,
+     "gini_ci": [
+      0.045,
+      0.355
+     ],
+     "distress_by_band": [
+      {
+       "tier": "Bajo",
+       "n": 2,
+       "events": 0,
+       "rate": 0.0
+      },
+      {
+       "tier": "Moderado",
+       "n": 64,
+       "events": 17,
+       "rate": 0.265625
+      },
+      {
+       "tier": "Elevado",
+       "n": 159,
+       "events": 50,
+       "rate": 0.31446540880503143
+      },
+      {
+       "tier": "Alto",
+       "n": 35,
+       "events": 15,
+       "rate": 0.42857142857142855
+      }
+     ],
+     "monotonic": true
+    },
+    "credit": {
+     "n_observations": 288,
+     "n_events": 129,
+     "event_rate": 0.448,
+     "years": [
+      2013,
+      2024
+     ],
+     "gini": 0.08,
+     "gini_ci": [
+      -0.052,
+      0.21
+     ],
+     "distress_by_band": [
+      {
+       "tier": "Bajo",
+       "n": 2,
+       "events": 2,
+       "rate": 1.0
+      },
+      {
+       "tier": "Moderado",
+       "n": 69,
+       "events": 26,
+       "rate": 0.37681159420289856
+      },
+      {
+       "tier": "Elevado",
+       "n": 179,
+       "events": 76,
+       "rate": 0.4245810055865922
+      },
+      {
+       "tier": "Alto",
+       "n": 38,
+       "events": 25,
+       "rate": 0.6578947368421053
+      }
+     ],
+     "monotonic": false
+    },
+    "convergent_validity": {
+     "spearman_irmp_vs_rating": -0.783,
+     "pairs": [
+      {
+       "iso": "DO",
+       "irmp": 60.36,
+       "rating": "BB",
+       "rating_score": 45.0
+      },
+      {
+       "iso": "CR",
+       "irmp": 73.08,
+       "rating": "BB",
+       "rating_score": 45.0
+      },
+      {
+       "iso": "PA",
+       "irmp": 56.39,
+       "rating": "BBB-",
+       "rating_score": 55.0
+      },
+      {
+       "iso": "GT",
+       "irmp": 46.36,
+       "rating": "BB+",
+       "rating_score": 50.0
+      },
+      {
+       "iso": "JM",
+       "irmp": 67.52,
+       "rating": "BB",
+       "rating_score": 45.0
+      }
+     ]
+    },
+    "disclaimer": "Validación PRELIMINAR y DIRECCIONAL, no grado-Basilea: 5 países (N pequeño). El outcome PRIMARIO es inestabilidad política realizada (spikes de eventos GDELT) — el constructo que el IRMP sí mide. Es independiente del IRMP histórico, cuya dimensión de eventos queda en valores declarados estáticos (no de GDELT), así el label no puede filtrarse del score. El outcome de crédito se muestra como contraste (solapa con inputs y mide otro riesgo).",
+    "generated_at": "2026-08-19T14:10:01.995798+00:00"
+   }
+  },
+  "trade_intel": {
+   "path": "/api/v1/trade-intel/validation/backtest",
+   "status": 200,
+   "servido": true,
+   "reporte": {
+    "has_report": true,
+    "primary_outcome": "export_collapse",
+    "n_countries": 24,
+    "coverage": {
+     "panel_size": 24,
+     "countries_in_panel": [
+      "AR",
+      "BO",
+      "BR",
+      "BZ",
+      "CL",
+      "CO",
+      "CR",
+      "DO",
+      "EC",
+      "GT",
+      "GY",
+      "HN",
+      "HT",
+      "JM",
+      "MX",
+      "NI",
+      "PA",
+      "PE",
+      "PY",
+      "SR",
+      "SV",
+      "TT",
+      "UY",
+      "VE"
+     ],
+     "missing": [],
+     "years": [
+      2009,
+      2023
+     ]
+    },
+    "export_collapse": {
+     "n_observations": 314,
+     "n_events": 87,
+     "event_rate": 0.277,
+     "years": [
+      2009,
+      2022
+     ],
+     "gini": 0.232,
+     "gini_ci": [
+      0.093,
+      0.373
+     ],
+     "distress_by_band": [
+      {
+       "tier": "Sólido",
+       "n": 111,
+       "events": 20,
+       "rate": 0.18018018018018017
+      },
+      {
+       "tier": "Vigilar",
+       "n": 171,
+       "events": 55,
+       "rate": 0.3216374269005848
+      },
+      {
+       "tier": "Débil",
+       "n": 32,
+       "events": 12,
+       "rate": 0.375
+      }
+     ],
+     "monotonic": true
+    },
+    "external_macro": {
+     "n_observations": 338,
+     "n_events": 177,
+     "event_rate": 0.524,
+     "years": [
+      2009,
+      2023
+     ],
+     "gini": 0.03,
+     "gini_ci": [
+      -0.094,
+      0.158
+     ],
+     "distress_by_band": [
+      {
+       "tier": "Sólido",
+       "n": 117,
+       "events": 60,
+       "rate": 0.5128205128205128
+      },
+      {
+       "tier": "Vigilar",
+       "n": 185,
+       "events": 91,
+       "rate": 0.4918918918918919
+      },
+      {
+       "tier": "Débil",
+       "n": 36,
+       "events": 26,
+       "rate": 0.7222222222222222
+      }
+     ],
+     "monotonic": false
+    },
+    "disclaimer": "Validación PRELIMINAR y DIRECCIONAL, no grado-Basilea. El outcome PRIMARIO es el colapso de ingresos de exportación (caída ≥10% interanual en T+1/T+2) — el constructo que la resiliencia apunta. Usa la misma fuente Comtrade que el índice, pero NO es circular: el índice lee la ESTRUCTURA comercial en T (concentración + dependencia importadora) y el outcome es un shock de NIVEL futuro. Como contraste se muestra un shock macro externo independiente (cuenta corriente / reservas / recesión, WDI): el índice NO lo discrimina, porque el distress macro amplio lo dominan shocks COMUNES globales (2009/2015/2020), no la estructura comercial de cada país. Convención: menor resiliencia = más vulnerable, por eso la tasa de shock debe subir de «Fuerte» a «Débil». Metodología validada en panel amplio LatAm+Caribe; el producto es RD.",
+    "generated_at": "2026-08-19T14:10:12.029107+00:00"
+   }
+  },
+  "esg_climate": {
+   "path": "/api/v1/esg-climate/backtest",
+   "status": 200,
+   "servido": true,
+   "reporte": {
+    "computed": true,
+    "n_countries": 24,
+    "window_from": 2000,
+    "outcome": "muertes por desastre climático / 100k hab/año (OWID/EM-DAT)",
+    "spearman": -0.509,
+    "spearman_ci": [
+     -0.782,
+     -0.084
+    ],
+    "by_band": [
+     {
+      "band": "Alta",
+      "n": 11,
+      "mean_climate_deaths_per_100k": 0.2021
+     },
+     {
+      "band": "Moderada",
+      "n": 10,
+      "mean_climate_deaths_per_100k": 0.4997
+     },
+     {
+      "band": "Baja",
+      "n": 3,
+      "mean_climate_deaths_per_100k": 1.3256
+     }
+    ],
+    "monotonic": true,
+    "note": "Validación direccional preliminar (transversal, panel pequeño); la exposición a huracanes es en parte insumo del IRC. No es afirmación causal.",
+    "generated_at": "2026-08-19T14:10:34.890357+00:00"
+   }
+  },
+  "social_dev": {
+   "path": "/api/v1/social-dev/validation/convergent",
+   "status": 200,
+   "servido": true,
+   "reporte": {
+    "has_report": true,
+    "has_data": true,
+    "n_regions": 10,
+    "spearman": 0.891,
+    "spearman_ci": [
+     0.51,
+     1.0
+    ],
+    "pairs": [
+     {
+      "region": "ozama",
+      "idm_score": 61.14,
+      "idm_rank": 3,
+      "idhr": 0.607,
+      "idhr_rank": 1,
+      "rank_diff": 2
+     },
+     {
+      "region": "cibao_norte",
+      "idm_score": 64.33,
+      "idm_rank": 1,
+      "idhr": 0.522,
+      "idhr_rank": 2,
+      "rank_diff": -1
+     },
+     {
+      "region": "cibao_sur",
+      "idm_score": 62.59,
+      "idm_rank": 2,
+      "idhr": 0.5,
+      "idhr_rank": 3,
+      "rank_diff": -1
+     },
+     {
+      "region": "cibao_nordeste",
+      "idm_score": 60.45,
+      "idm_rank": 5,
+      "idhr": 0.459,
+      "idhr_rank": 4,
+      "rank_diff": 1
+     },
+     {
+      "region": "yuma",
+      "idm_score": 59.96,
+      "idm_rank": 6,
+      "idhr": 0.429,
+      "idhr_rank": 5,
+      "rank_diff": 1
+     },
+     {
+      "region": "higuamo",
+      "idm_score": 56.25,
+      "idm_rank": 7,
+      "idhr": 0.413,
+      "idhr_rank": 6,
+      "rank_diff": 1
+     },
+     {
+      "region": "valdesia",
+      "idm_score": 60.51,
+      "idm_rank": 4,
+      "idhr": 0.408,
+      "idhr_rank": 7,
+      "rank_diff": -3
+     },
+     {
+      "region": "cibao_noroeste",
+      "idm_score": 44.75,
+      "idm_rank": 8,
+      "idhr": 0.379,
+      "idhr_rank": 8,
+      "rank_diff": 0
+     },
+     {
+      "region": "el_valle",
+      "idm_score": 37.63,
+      "idm_rank": 9,
+      "idhr": 0.293,
+      "idhr_rank": 9,
+      "rank_diff": 0
+     },
+     {
+      "region": "enriquillo",
+      "idm_score": 29.58,
+      "idm_rank": 10,
+      "idhr": 0.246,
+      "idhr_rank": 10,
+      "rank_diff": 0
+     }
+    ],
+    "source": "PNUD · Mapa de Desarrollo Humano RD (IDHr regional, ~2010)",
+    "top_divergence": {
+     "region": "valdesia",
+     "rank_diff": -3
+    },
+    "disclaimer": "Validez CONVERGENTE (no backtest): un Gate E temporal no aplica al IDM —índice relativo cross-región cuyas variables nacionales normalizan plano—, así que se valida contra una medida INDEPENDIENTE de desarrollo: el IDH regional (IDHr) del PNUD para las mismas 10 regiones. ρ de Spearman alto = el IDM ordena el desarrollo regional como el índice oficial. N=10 (IC ancho, honesto). La divergencia mayor suele ser Ozama: el IDHr la encumbra por la dimensión de ingreso (área metropolitana), que el IDM no captura por región. El IDHr es ~2010 (último regional oficial citable); los rankings regionales son estructuralmente estables, por eso la correlación de rango es válida.",
+    "generated_at": "2026-08-19T14:10:43.372952+00:00"
+   }
+  },
+  "sector_intel": {
+   "path": "/api/v1/sector-intel/validation",
+   "status": 200,
+   "servido": true,
+   "reporte": {
+    "has_report": true,
+    "has_data": true,
+    "outcome": "crecimiento del empleo formal (Δ% T+1, ENCFT)",
+    "resolution": "10 ramas de actividad (ENCFT); IAI agregado por tamaño del sector",
+    "n_observations": 160,
+    "n_branches": 10,
+    "years": [
+     "2008",
+     "2023"
+    ],
+    "mean_yearly_ic": -0.03,
+    "n_years": 16,
+    "ic_t_stat": -0.265,
+    "ic_ci": [
+     -0.267,
+     0.208
+    ],
+    "spearman_pooled": -0.041,
+    "spearman_pooled_ci": [
+     -0.221,
+     0.142
+    ],
+    "spearman_pooled_note": "pooled sobre los pares sector-año apilados (sin clustering año/sector) — sobrestima la precisión; el titular es el IC medio anual con t",
+    "spearman_partial_growth": -0.044,
+    "spearman_partial_n": 160,
+    "by_year": [
+     {
+      "year": "2008",
+      "n": 10,
+      "spearman": 0.006
+     },
+     {
+      "year": "2009",
+      "n": 10,
+      "spearman": -0.806
+     },
+     {
+      "year": "2010",
+      "n": 10,
+      "spearman": 0.479
+     },
+     {
+      "year": "2011",
+      "n": 10,
+      "spearman": -0.903
+     },
+     {
+      "year": "2012",
+      "n": 10,
+      "spearman": 0.479
+     },
+     {
+      "year": "2013",
+      "n": 10,
+      "spearman": 0.503
+     },
+     {
+      "year": "2014",
+      "n": 10,
+      "spearman": 0.03
+     },
+     {
+      "year": "2015",
+      "n": 10,
+      "spearman": 0.006
+     },
+     {
+      "year": "2016",
+      "n": 10,
+      "spearman": -0.127
+     },
+     {
+      "year": "2017",
+      "n": 10,
+      "spearman": -0.006
+     },
+     {
+      "year": "2018",
+      "n": 10,
+      "spearman": -0.115
+     },
+     {
+      "year": "2019",
+      "n": 10,
+      "spearman": -0.333
+     },
+     {
+      "year": "2020",
+      "n": 10,
+      "spearman": -0.467
+     },
+     {
+      "year": "2021",
+      "n": 10,
+      "spearman": 0.6
+     },
+     {
+      "year": "2022",
+      "n": 10,
+      "spearman": 0.285
+     },
+     {
+      "year": "2023",
+      "n": 10,
+      "spearman": -0.103
+     }
+    ],
+    "quintile_spread": {
+     "top_iai_mean_growth": 2.44,
+     "bottom_iai_mean_growth": 3.58,
+     "spread": -1.13,
+     "n_years": 16
+    },
+    "disclaimer": "Validación DIRECCIONAL, no grado-Basilea. Mide si el IAI en T ordena el crecimiento del empleo formal por rama en T+1 (IC de rango de Spearman). TITULAR: el IC MEDIO de las cross-sections anuales, con CI de Student-t sobre la serie de IC por año (la inferencia correcta para un panel sector-año, que respeta el clustering por año). El IC apilado (pooled) se reporta como SECUNDARIO: su bootstrap remuestrea pares como si fueran independientes y sobrestima la precisión. El outcome es un CAMBIO (Δ% empleo), no un nivel; aun así se reporta el IC PARCIAL controlando por el crecimiento del sector en T (sector_growth_T) para acotar la inercia serial. Resolución: 10 ramas, NO 17 — manufactura local, zonas francas y minería colapsan en «Industrias» del lado del empleo. Panel chico (~10 ramas × ~6 años); con n por año ≈10 el IC mínimo detectable es alto. Un IC inconcluso por potencia es un resultado válido y se muestra tal cual.",
+    "generated_at": "2026-08-19T14:10:55.727646+00:00"
+   }
+  },
+  "insurance_intel": {
+   "path": "/api/v1/insurance-intel/validation",
+   "status": 200,
+   "servido": true,
+   "reporte": {
+    "backtest": {
+     "computed": true,
+     "outcome": "subdesempeño_relativo",
+     "horizon_y": 3,
+     "signals": {
+      "solvency": {
+       "gini": 0.0927,
+       "gini_ci": [
+        -0.0751,
+        0.2817
+       ],
+       "n_obs": 164,
+       "n_events": 81,
+       "event_rate": 0.4939,
+       "conclusive": false,
+       "monotonic": false,
+       "by_quintile": [
+        {
+         "tier": "Q1 (score más bajo)",
+         "n": 33,
+         "events": 15,
+         "rate": 0.45454545454545453
+        },
+        {
+         "tier": "Q2",
+         "n": 33,
+         "events": 18,
+         "rate": 0.5454545454545454
+        },
+        {
+         "tier": "Q3",
+         "n": 33,
+         "events": 19,
+         "rate": 0.5757575757575758
+        },
+        {
+         "tier": "Q4",
+         "n": 33,
+         "events": 20,
+         "rate": 0.6060606060606061
+        },
+        {
+         "tier": "Q5 (score más alto)",
+         "n": 32,
+         "events": 9,
+         "rate": 0.28125
+        }
+       ]
+      },
+      "underwriting": {
+       "gini": 0.1563,
+       "gini_ci": [
+        -0.0148,
+        0.3382
+       ],
+       "n_obs": 163,
+       "n_events": 80,
+       "event_rate": 0.4908,
+       "conclusive": false,
+       "monotonic": false,
+       "by_quintile": [
+        {
+         "tier": "Q1 (score más bajo)",
+         "n": 33,
+         "events": 21,
+         "rate": 0.6363636363636364
+        },
+        {
+         "tier": "Q2",
+         "n": 33,
+         "events": 16,
+         "rate": 0.48484848484848486
+        },
+        {
+         "tier": "Q3",
+         "n": 32,
+         "events": 16,
+         "rate": 0.5
+        },
+        {
+         "tier": "Q4",
+         "n": 33,
+         "events": 15,
+         "rate": 0.45454545454545453
+        },
+        {
+         "tier": "Q5 (score más alto)",
+         "n": 32,
+         "events": 12,
+         "rate": 0.375
+        }
+       ]
+      }
+     },
+     "headline_gini": null,
+     "headline_signal": null,
+     "note": "Backtest de resultado-proxy (subdesempeño relativo vs. mediana del panel) sobre estados financieros auditados por compañía; persistencia a 3 años. N por señal = aseguradoras × años."
+    },
+    "coherencia_resultado": {
+     "hallazgos": [],
+     "explicados": [
+      {
+       "slug": "crecer",
+       "combined": 1.3012,
+       "margen_neto": 0.3926,
+       "patrimonio_cagr": 0.3019,
+       "detalle": "el combined de 130% afirma una pérdida de suscripción de 30 puntos, pero el estado de resultados da un margen neto de +39% sobre la prima devengada",
+       "motivo_declarado": "cede 77% de la prima: el combined ratio bruto mide el riesgo que origina, no el que absorbe"
+      },
+      {
+       "slug": "angloamericana",
+       "combined": 1.5499,
+       "margen_neto": 0.1033,
+       "patrimonio_cagr": 0.1671,
+       "detalle": "el combined de 155% afirma una pérdida de suscripción de 55 puntos, pero el estado de resultados da un margen neto de +10% sobre la prima devengada",
+       "motivo_declarado": "cede 83% de la prima: el combined ratio bruto mide el riesgo que origina, no el que absorbe"
+      }
+     ],
+     "total_evaluadas": 35
+    }
+   }
+  },
+  "monetary_policy": {
+   "path": "/api/v1/macro-monitor/comunicados/model/backtest",
+   "status": 200,
+   "servido": true,
+   "reporte": {
+    "has_backtest": true,
+    "caveats": [
+     "Análisis macro con incertidumbre; no constituye consejo de inversión.",
+     "Features point-in-time con el rezago típico de publicación, pero sin vintages: se usa el valor final de cada serie (que pudo revisarse), no el disponible exacto ese día.",
+     "No se incorporan la tasa de la Reserva Federal ni el riesgo país (EMBI): drivers externos relevantes ausentes del MVP.",
+     "Panel corto y desbalanceado (145 de 190 decisiones son 'mantener'): las clases de corte y alza tienen pocos ejemplos."
+    ],
+    "version": "20260807_121322",
+    "generated_at": "2026-08-07T12:13:22.573421+00:00",
+    "n_panel": 191,
+    "classifier": {
+     "ok": true,
+     "n_test": 88,
+     "accuracy": 0.6931818181818182,
+     "baseline_always_hold_accuracy": 0.6931818181818182,
+     "beats_baseline": false,
+     "macro_f1": 0.5654160654160654,
+     "per_class": {
+      "cut": {
+       "precision": 0.45454545454545453,
+       "recall": 0.29411764705882354,
+       "f1": 0.35714285714285715,
+       "support": 17
+      },
+      "hold": {
+       "precision": 0.7692307692307693,
+       "recall": 0.819672131147541,
+       "f1": 0.7936507936507936,
+       "support": 61
+      },
+      "hike": {
+       "precision": 0.5,
+       "recall": 0.6,
+       "f1": 0.5454545454545454,
+       "support": 10
+      }
+     },
+     "confusion_matrix": {
+      "labels": [
+       "cut",
+       "hold",
+       "hike"
+      ],
+      "matrix": [
+       [
+        5,
+        11,
+        1
+       ],
+       [
+        6,
+        50,
+        5
+       ],
+       [
+        0,
+        4,
+        6
+       ]
+      ]
+     },
+     "min_train": 90
+    },
+    "reaction_function": {
+     "ok": true,
+     "n_test": 86,
+     "mae_nivel": 0.18083473599183975,
+     "direccional": {
+      "horizonte_6m": {
+       "n": 85,
+       "n_con_senal": 45,
+       "sign_match": 0.6444444444444445,
+       "correlacion": 0.19574447472560236
+      },
+      "horizonte_12m": {
+       "n": 85,
+       "n_con_senal": 56,
+       "sign_match": 0.625,
+       "correlacion": 0.23909641604950674
+      }
+     },
+     "nota_direccional": "El sesgo (tasa implícita − vigente) anticipa la DIRECCIÓN de la TPM a 6-12 meses, no la decisión de la próxima reunión; esa la predice el clasificador.",
+     "min_train": 90
+    }
+   }
+  },
+  "pension_intel": {
+   "path": "/api/v1/pension-intel/validation",
+   "status": 200,
+   "servido": false,
+   "reporte": null
+  }
+ },
+ "operaciones": {
+  "rescore": {
+   "schedule": {
+    "operation": "rescore",
+    "enabled": true,
+    "interval_hours": 168,
+    "params": {},
+    "next_run_at": "2026-08-22T00:36:49.074887",
+    "last_run_at": "2026-08-15T00:36:49.074887"
+   },
+   "last_run": "2026-08-15T00:37:52.521180+00:00",
+   "last_result": {
+    "periods_scored": 22,
+    "ratings_written": 1785,
+    "ratings_total": 1789,
+    "per_period": [
+     {
+      "period_end": "2020-12-31",
+      "scored": 4,
+      "errors": 0
+     },
+     {
+      "period_end": "2021-03-31",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2021-06-30",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2021-09-30",
+      "scored": 85,
+      "errors": 0
+     },
+     {
+      "period_end": "2021-12-31",
+      "scored": 87,
+      "errors": 0
+     },
+     {
+      "period_end": "2022-03-31",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2022-06-30",
+      "scored": 85,
+      "errors": 0
+     },
+     {
+      "period_end": "2022-09-30",
+      "scored": 83,
+      "errors": 0
+     },
+     {
+      "period_end": "2022-12-31",
+      "scored": 89,
+      "errors": 0
+     },
+     {
+      "period_end": "2023-03-31",
+      "scored": 85,
+      "errors": 0
+     },
+     {
+      "period_end": "2023-06-30",
+      "scored": 85,
+      "errors": 0
+     },
+     {
+      "period_end": "2023-09-30",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2023-12-31",
+      "scored": 88,
+      "errors": 0
+     },
+     {
+      "period_end": "2024-03-31",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2024-06-30",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2024-09-30",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2024-12-31",
+      "scored": 88,
+      "errors": 0
+     },
+     {
+      "period_end": "2025-03-31",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2025-06-30",
+      "scored": 84,
+      "errors": 0
+     },
+     {
+      "period_end": "2025-09-30",
+      "scored": 83,
+      "errors": 0
+     },
+     {
+      "period_end": "2025-12-31",
+      "scored": 86,
+      "errors": 0
+     },
+     {
+      "period_end": "2026-03-31",
+      "scored": 81,
+      "errors": 0
+     }
+    ]
+   }
+  },
+  "backtest": {
+   "schedule": {
+    "operation": "backtest",
+    "enabled": true,
+    "interval_hours": 720,
+    "params": {},
+    "next_run_at": "2026-08-26T00:27:22.005479",
+    "last_run_at": "2026-07-27T00:27:22.005479"
+   },
+   "last_run": "2026-08-19T14:07:06.214748+00:00",
+   "last_result": {
+    "gini": 0.16149234352923214,
+    "n_observations": 1693,
+    "n_events": 301,
+    "monotonic": false
+   }
+  },
+  "tpm-model-train": {
+   "schedule": {
+    "operation": "tpm-model-train",
+    "enabled": true,
+    "interval_hours": 720,
+    "params": {},
+    "next_run_at": "2026-09-06T22:45:38.282589",
+    "last_run_at": "2026-08-07T22:45:38.282589"
+   },
+   "last_run": "2026-08-07T12:13:25.575045+00:00",
+   "last_result": {
+    "version": "20260807_121322",
+    "panel": {
+     "n_decisiones": 191,
+     "acciones": {
+      "hike": 20,
+      "hold": 146,
+      "cut": 25
+     },
+     "n_features_completas": 178,
+     "rango": [
+      "2008-02-29",
+      "2026-07-31"
+     ]
+    },
+    "reaction_function_r2": 0.9541933303762513,
+    "backtest": {
+     "classifier": {
+      "ok": true,
+      "n_test": 88,
+      "accuracy": 0.6931818181818182,
+      "baseline_always_hold_accuracy": 0.6931818181818182,
+      "beats_baseline": false,
+      "macro_f1": 0.5654160654160654,
+      "per_class": {
+       "cut": {
+        "precision": 0.45454545454545453,
+        "recall": 0.29411764705882354,
+        "f1": 0.35714285714285715,
+        "support": 17
+       },
+       "hold": {
+        "precision": 0.7692307692307693,
+        "recall": 0.819672131147541,
+        "f1": 0.7936507936507936,
+        "support": 61
+       },
+       "hike": {
+        "precision": 0.5,
+        "recall": 0.6,
+        "f1": 0.5454545454545454,
+        "support": 10
+       }
+      },
+      "confusion_matrix": {
+       "labels": [
+        "cut",
+        "hold",
+        "hike"
+       ],
+       "matrix": [
+        [
+         5,
+         11,
+         1
+        ],
+        [
+         6,
+         50,
+         5
+        ],
+        [
+         0,
+         4,
+         6
+        ]
+       ]
+      },
+      "min_train": 90
+     },
+     "reaction_function": {
+      "ok": true,
+      "n_test": 86,
+      "mae_nivel": 0.18083473599183975,
+      "direccional": {
+       "horizonte_6m": {
+        "n": 85,
+        "n_con_senal": 45,
+        "sign_match": 0.6444444444444445,
+        "correlacion": 0.19574447472560236
+       },
+       "horizonte_12m": {
+        "n": 85,
+        "n_con_senal": 56,
+        "sign_match": 0.625,
+        "correlacion": 0.23909641604950674
+       }
+      },
+      "nota_direccional": "El sesgo (tasa implícita − vigente) anticipa la DIRECCIÓN de la TPM a 6-12 meses, no la decisión de la próxima reunión; esa la predice el clasificador.",
+      "min_train": 90
+     }
+    },
+    "ledger": {
+     "scored": {
+      "scored": 1
+     },
+     "snapshot": {
+      "snapshotted": true,
+      "as_of": "2026-08-07",
+      "predicted_action": "hold",
+      "refreshed": false
+     }
+    }
+   }
+  },
+  "irmp-backtest": {
+   "schedule": {
+    "operation": "irmp-backtest",
+    "enabled": true,
+    "interval_hours": 720,
+    "params": {},
+    "next_run_at": "2026-08-26T00:45:22.650989",
+    "last_run_at": "2026-07-27T00:45:22.650989"
+   },
+   "last_run": "2026-08-19T14:10:02.007451+00:00",
+   "last_result": {
+    "gini_gobernanza": 0.199,
+    "n_obs": 260,
+    "n_eventos": 82,
+    "monotonic": true,
+    "spearman_vs_rating": -0.783
+   }
+  },
+  "sector-gate-e": {
+   "schedule": {
+    "operation": "sector-gate-e",
+    "enabled": false,
+    "interval_hours": 168,
+    "params": {},
+    "next_run_at": null,
+    "last_run_at": "2026-07-11T00:35:41.253568"
+   },
+   "last_run": "2026-08-19T14:10:55.736875+00:00",
+   "last_result": {
+    "has_data": true,
+    "mean_yearly_ic": -0.03,
+    "ic_ci": [
+     -0.267,
+     0.208
+    ],
+    "n_years": 16,
+    "n_obs": 160,
+    "spearman_partial_growth": -0.044,
+    "spearman_pooled": -0.041
+   }
+  },
+  "idm-convergent-validity": {
+   "schedule": {
+    "operation": "idm-convergent-validity",
+    "enabled": true,
+    "interval_hours": 2160,
+    "params": {},
+    "next_run_at": "2026-09-25T01:17:55.250713",
+    "last_run_at": "2026-06-27T01:17:55.250713"
+   },
+   "last_run": "2026-08-19T14:10:43.381033+00:00",
+   "last_result": {
+    "spearman": 0.891,
+    "n_regions": 10,
+    "spearman_ci": [
+     0.51,
+     1.0
+    ]
+   }
+  },
+  "trade-backtest": {
+   "schedule": {
+    "operation": "trade-backtest",
+    "enabled": true,
+    "interval_hours": 720,
+    "params": {},
+    "next_run_at": "2026-08-26T01:27:25.215913",
+    "last_run_at": "2026-07-27T01:27:25.215913"
+   },
+   "last_run": "2026-08-19T14:10:12.039527+00:00",
+   "last_result": {
+    "gini_colapso_export": 0.232,
+    "n_obs": 314,
+    "n_eventos": 87,
+    "monotonic": true,
+    "n_paises": 24
+   }
+  },
+  "esg-backtest": {
+   "schedule": {
+    "operation": "esg-backtest",
+    "enabled": true,
+    "interval_hours": 8760,
+    "params": {},
+    "next_run_at": "2027-06-27T01:32:55.419280",
+    "last_run_at": "2026-06-27T01:32:55.419280"
+   },
+   "last_run": "2026-08-19T14:10:34.898982+00:00",
+   "last_result": {
+    "spearman": -0.509,
+    "monotonic": true,
+    "n_countries": 24,
+    "errors": []
+   }
+  },
+  "pension-backtest": {
+   "schedule": {
+    "operation": "pension-backtest",
+    "enabled": false,
+    "interval_hours": 0,
+    "params": {},
+    "next_run_at": null,
+    "last_run_at": null
+   },
+   "last_run": "2026-08-19T14:11:19.436573+00:00",
+   "last_result": {
+    "computed": true,
+    "headline_gini": 0.1594,
+    "headline_signal": "return",
+    "solvency": {
+     "gini": -0.0044,
+     "gini_ci": [
+      -0.2296,
+      0.2445
+     ],
+     "n_obs": 96,
+     "n_events": 42,
+     "event_rate": 0.4375,
+     "conclusive": false,
+     "monotonic": false,
+     "by_quintile": [
+      {
+       "tier": "Q1 (score más bajo)",
+       "n": 20,
+       "events": 9,
+       "rate": 0.45
+      },
+      {
+       "tier": "Q2",
+       "n": 19,
+       "events": 11,
+       "rate": 0.5789473684210527
+      },
+      {
+       "tier": "Q3",
+       "n": 19,
+       "events": 5,
+       "rate": 0.2631578947368421
+      },
+      {
+       "tier": "Q4",
+       "n": 19,
+       "events": 7,
+       "rate": 0.3684210526315789
+      },
+      {
+       "tier": "Q5 (score más alto)",
+       "n": 19,
+       "events": 10,
+       "rate": 0.5263157894736842
+      }
+     ]
+    },
+    "return": {
+     "gini": 0.1594,
+     "gini_ci": [
+      0.0988,
+      0.2173
+     ],
+     "n_obs": 1590,
+     "n_events": 665,
+     "event_rate": 0.4182,
+     "conclusive": true,
+     "monotonic": false,
+     "by_quintile": [
+      {
+       "tier": "Q1 (score más bajo)",
+       "n": 318,
+       "events": 176,
+       "rate": 0.5534591194968553
+      },
+      {
+       "tier": "Q2",
+       "n": 318,
+       "events": 140,
+       "rate": 0.44025157232704404
+      },
+      {
+       "tier": "Q3",
+       "n": 318,
+       "events": 114,
+       "rate": 0.3584905660377358
+      },
+      {
+       "tier": "Q4",
+       "n": 318,
+       "events": 120,
+       "rate": 0.37735849056603776
+      },
+      {
+       "tier": "Q5 (score más alto)",
+       "n": 318,
+       "events": 115,
+       "rate": 0.36163522012578614
+      }
+     ]
+    }
+   }
+  },
+  "insurance-backtest": {
+   "schedule": {
+    "operation": "insurance-backtest",
+    "enabled": false,
+    "interval_hours": 24,
+    "params": {},
+    "next_run_at": null,
+    "last_run_at": null
+   },
+   "last_run": "2026-08-19T14:11:08.014095+00:00",
+   "last_result": {
+    "computed": true,
+    "headline_gini": null,
+    "headline_signal": null
+   }
+  }
+ }
+}
