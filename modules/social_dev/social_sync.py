@@ -266,6 +266,98 @@ def _sync_cepal_politica(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+#: Umbrales que la propia ley fija en el TEXTO de los indicadores 2.2 y 2.5. No son
+#: parámetros nuestros: «número de regiones con pobreza extrema mayor que 5%» y «…moderada
+#: mayor que 20%». Cambiarlos sería medir otro indicador.
+UMBRAL_EXTREMA = 5.0
+UMBRAL_MODERADA = 20.0
+
+
+def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Exportaciones per cápita (indicador 3.21 de la END) — cociente de dos series del WDI.
+
+    Es de BIENES Y SERVICIOS, no solo mercancías, y no se adivinó: la ley fija 1.070 US$ para
+    2009, la serie de bienes+servicios da 1.049 ese año (Δ 1,9%) y la de mercancías da 174.
+    Comprobado con la sonda antes de escribir esta función.
+
+    Se computa acá y no en el binding porque un binding ata UNA variable a un indicador; un
+    cociente entre dos series es un dato nuevo, y como tal se ingiere con su procedencia.
+    """
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    set_phase("exportaciones per cápita (WDI)")
+    exp, _ = fetch_wb_indicator("NE.EXP.GNFS.CD", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    pob, _ = fetch_wb_indicator("SP.POP.TOTL", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    e = {r["date"]: r["value"] for r in exp if r.get("value") is not None}
+    p = {r["date"]: r["value"] for r in pob if r.get("value") is not None}
+    synced = 0
+    # Solo los años con AMBAS: un cociente con un denominador ausente no es un dato parcial,
+    # es un número inventado.
+    for anio in sorted(set(e) & set(p)):
+        if not p[anio]:
+            continue
+        _upsert_indicator(db, theme="exports_per_capita", entity=HEALTH_ENTITY, period=str(anio),
+                          value=float(e[anio]) / float(p[anio]), source="WDI, Banco Mundial",
+                          disagg="nacional", unit="US$ corrientes por habitante")
+        synced += 1
+    return synced
+
+
+def _sync_conteos_regionales(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicadores 2.2 y 2.5: cuántas REGIONES superan el umbral que la ley fija.
+
+    El dato de entrada es el panel por región que ya ingerimos — el mismo que NO sirve para
+    las metas nacionales de pobreza (2.1 y 2.4), porque el registro publicaría el valor de
+    una sola demarcación. Acá es exactamente lo que hace falta: un conteo entre regiones ES
+    una cifra del país.
+
+    **El guard que importa: solo se cuenta un año con las DIEZ regiones presentes.** Con
+    nueve, el conteo baja porque falta un dato, no porque una región haya cruzado el umbral —
+    y baja en la dirección de la meta, así que se leería como progreso. Es la forma más
+    silenciosa de fabricar una mejora, y el único aviso sería que nadie la note.
+
+    Se valida contra el oráculo de la propia ley: en 2010 las diez regiones superaban el 20%
+    de pobreza moderada, y la línea base legal del 2.5 es exactamente 10.
+    """
+    from modules.social_dev.models.models import SocialIndicator
+    from shared.data.one_client import region_catalog
+
+    set_phase("conteos regionales de pobreza (2.2 y 2.5 de la END)")
+    regiones = {slug for slug, _ in region_catalog()}
+    synced = 0
+    for tema, umbral, destino in (
+        ("poverty_extreme", UMBRAL_EXTREMA, "regiones_pobreza_extrema_sobre_umbral"),
+        ("poverty_rate", UMBRAL_MODERADA, "regiones_pobreza_moderada_sobre_umbral"),
+    ):
+        filas = (db.query(SocialIndicator.period, SocialIndicator.entity_key,
+                          SocialIndicator.value)
+                 .filter(SocialIndicator.theme == tema,
+                         SocialIndicator.value.isnot(None),
+                         SocialIndicator.entity_key.in_(regiones))
+                 .all())
+        por_anio: Dict[str, Dict[str, float]] = {}
+        for periodo, entidad, valor in filas:
+            por_anio.setdefault(str(periodo), {})[entidad] = float(valor)
+        completos = incompletos = 0
+        for periodo, vals in sorted(por_anio.items()):
+            if len(vals) < len(regiones):
+                incompletos += 1
+                continue
+            completos += 1
+            _upsert_indicator(
+                db, theme=destino, entity=HEALTH_ENTITY, period=periodo,
+                value=float(sum(1 for v in vals.values() if v > umbral)),
+                source="ONE (cómputo SDQ sobre el panel regional)", disagg="nacional",
+                unit="número de regiones")
+            synced += 1
+        if incompletos:
+            # Se registra: un año descartado por panel incompleto es una brecha declarada,
+            # no un año sin dato del Estado.
+            logger.info("social: %s — %d años completos, %d descartados por panel incompleto",
+                        destino, completos, incompletos)
+    return synced
+
+
 def _sync_ipu_senado(db: Session, set_phase: Callable[[str], None]) -> int:
     """Mujeres en el Senado (UIP · Parline) → indicador 2.43 de la END.
 
@@ -593,6 +685,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     senado_synced = _best_effort(
         "mujeres en el Senado (UIP · Parline)",
         lambda: _sync_ipu_senado(db, set_phase), errors)
+    exportaciones_synced = _best_effort(
+        "exportaciones per cápita (WDI)",
+        lambda: _sync_exportaciones_per_capita(db, set_phase), errors)
     income_synced = _best_effort(
         "ingreso per cápita (SISDOM · MEPyD)",
         lambda: _sync_sisdom_income(db, set_phase), errors)
@@ -611,6 +706,12 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "indicadores provinciales (SIUBEN)",
         lambda: _sync_siuben_provincial(db, set_phase, provenance), errors)
     db.commit()
+    # VA AL FINAL: lee el panel regional que las sub-syncs anteriores acabaron de
+    # escribir. Adelantarlo contaría sobre los datos de la corrida PASADA.
+    conteos_synced = _best_effort(
+        "conteos regionales de pobreza (2.2 y 2.5)",
+        lambda: _sync_conteos_regionales(db, set_phase), errors)
+
     return {
         "synced": synced,
         "health_synced": health_synced,
@@ -618,6 +719,8 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "mercado_laboral_synced": mercado_laboral_synced,
         "cepal_politica_synced": cepal_synced,
         "senado_synced": senado_synced,
+        "exportaciones_synced": exportaciones_synced,
+        "conteos_regionales_synced": conteos_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,

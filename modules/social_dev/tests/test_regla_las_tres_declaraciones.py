@@ -43,14 +43,27 @@ def test_lo_que_se_descarga_se_PUBLICA(tema):
         f"guarda en la base y NADIE lo ve. No falla — desaparece.")
 
 
-@pytest.mark.parametrize("tema", sorted(t for t, _ in WDI_NACIONALES_FUERA_DEL_INDICE.values()))
-def test_lo_que_se_publica_DECLARA_su_alcance(tema):
+@pytest.mark.parametrize("tema", sorted(_publicadas()))
+def test_TODO_lo_que_se_publica_DECLARA_su_alcance(tema):
+    """Sobre `_FUERA_DEL_INDICE` entero y no solo sobre lo que baja del WDI.
+
+    El glob importa: la primera versión de este test recorría el catálogo de descargas, así
+    que las series DERIVADAS —las que computamos nosotros, como los conteos regionales— no
+    quedaban cubiertas. Justo las que más lo necesitan, porque nadie externo las valida."""
     alc = _alcances()
     assert tema in alc, (
         f"«{tema}» no declara alcance en la doctrina: cae al default `per_subject` y el "
-        f"proveedor del eje de leyes la rechaza. El indicador desaparece del informe.")
-    assert alc[tema] == "national", (
-        f"«{tema}» viene de una serie de PAÍS del Banco Mundial: su alcance es `national`.")
+        f"proveedor del eje de leyes la rechaza. El indicador desaparece del informe — y una "
+        f"señal PUBLICADA no puede descansar en una omisión, porque el lector no distingue "
+        f"«se decidió por sujeto» de «nadie lo pensó».")
+    assert alc[tema] in ("national", "per_subject")
+
+
+@pytest.mark.parametrize("tema", sorted(t for t, _ in WDI_NACIONALES_FUERA_DEL_INDICE.values()))
+def test_lo_que_baja_del_WDI_es_NACIONAL(tema):
+    """Son series de PAÍS del Banco Mundial: una que quedara en `per_subject` sería rechazada
+    por el proveedor del eje de leyes y el indicador desaparecería sin aviso."""
+    assert _alcances().get(tema) == "national"
 
 
 def test_ninguna_serie_nacional_pondera_en_el_indice():
