@@ -38,6 +38,21 @@ VEREDICTOS = {
 }
 
 
+def sello_del_corpus(alcance: Dict[str, Any]) -> Optional[str]:
+    """Cuándo se midió el corpus contra el que se emitió este veredicto.
+
+    Era el pedido número uno que se le hizo al emisor y lo entregó: su corpus pasó de 596 a
+    9.335 decretos en semanas, así que un veredicto calculado hoy podía no ser reproducible
+    mañana y no había forma de saberlo. Nuestra doctrina obliga a explicar por qué la cifra
+    de un informe viejo ya no coincide con la actual; sin este sello, esa explicación no
+    existía.
+
+    Devuelve `None` cuando el emisor no lo declara — un veredicto sin sello sigue siendo
+    válido, pero no se puede auditar contra el estado del corpus, y eso se dice.
+    """
+    return (alcance or {}).get("medido_al") or None
+
+
 @dataclass(frozen=True)
 class Comprobacion:
     obligacion: str
@@ -56,19 +71,43 @@ class Comprobacion:
 #: Tipos cuyo corpus el emisor declara COMPLETO en algún rango, y por tanto los únicos
 #: sobre los que un vacío puede llegar a afirmar «no se dictó».
 #:
-#: **Una obligación de REGLAMENTAR se consulta con `tipo: decreto`.** En la práctica
-#: dominicana el reglamento se dicta por decreto —el propio 134-14 lo prueba, su título
-#: empieza «QUE DICTA EL REGLAMENTO DE APLICACION DE LA LEY ORGANICA NO. 1-12»—. El emisor
-#: corrigió el 2026-08-19 un fallo por el que `tipo=decreto` NO devolvía los reglamentos que
-#: su corpus clasificaba aparte: eran 38, y 18 caían dentro del rango donde el alcance sale
-#: concluyente. Una consulta por uno de esos 18 devolvía vacío CONCLUYENTE sobre una norma
-#: que existía — es decir, autorizaba a publicar «no se dictó» sobre algo que sí se dictó.
+#: `reglamento` ENTRA (2026-08-19). Estuvo fuera mientras la pregunta seguía abierta —costaba
+#: un `sin_registro_publico` de más, y al revés habría costado una acusación falsa—. El
+#: emisor la respondió con evidencia contra producción, no con una deducción:
 #:
-#: `reglamento` NO entra a este conjunto por ahora: el emisor confirma que el tipo es válido
-#: y resuelve al mismo instrumento, pero no que una consulta POR ESE TIPO devuelva alcance
-#: concluyente. Mientras no esté confirmado, mantenerlo afuera solo cuesta un
-#: `sin_registro_publico` de más; meterlo de menos costaría una acusación falsa.
-_TIPOS_MEDIDOS = frozenset({"ley", "decreto"})
+#:     tipo=decreto     2012-2026 → concluyente=true · sin huecos · medido_al 2026-08-18
+#:     tipo=reglamento  2012-2026 → concluyente=true · sin huecos · medido_al 2026-08-18
+#:
+#: Los dos alcances son idénticos campo a campo: resuelven al mismo instrumento y se apoyan
+#: en las mismas celdas de cobertura. Fuera de ese rango los dos responden `false`, y de eso
+#: se encarga el propio `vacio_es_concluyente` — este conjunto no reemplaza esa comprobación,
+#: la acompaña.
+_TIPOS_MEDIDOS = frozenset({"ley", "decreto", "reglamento"})
+
+
+def _sin_duplicados(halladas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Una norma por id canónico, quedándose con la grada que dice MÁS.
+
+    El emisor devolvió un tiempo cinco normas por duplicado —el mismo id, una en grada
+    `texto` y otra `registral`— porque el enlace entre gradas se rehace por campañas y esas
+    cinco nunca se enlazaron. Ya lo corrigió de raíz.
+
+    Se deduplica igual acá, y no por desconfianza: dos días seguidos aparecieron propiedades
+    de esta fuente que eran ciertas por accidente hasta que dejaron de serlo. Un recuento que
+    depende de que el emisor nunca duplique es exactamente esa clase de acuerdo tácito.
+
+    Hoy no cambiaría ningún veredicto —se toma la PRIMERA norma en el tiempo y un duplicado
+    tiene la misma fecha—, pero sí protege a cualquier lectura futura que cuente normas.
+    Se prefiere `texto` sobre `registral` por la misma razón que el emisor: la leída dice
+    estrictamente más.
+    """
+    por_id: Dict[str, Dict[str, Any]] = {}
+    for n in halladas:
+        clave = str(n.get("id") or id(n))
+        previa = por_id.get(clave)
+        if previa is None or (n.get("grada") == "texto" and previa.get("grada") != "texto"):
+            por_id[clave] = n
+    return list(por_id.values())
 
 
 def _fecha(norma: Dict[str, Any]) -> str:
@@ -93,7 +132,7 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
         return Comprobacion(oid, "no_verificable",
                             f"No se pudo consultar la base normativa: {e}")
 
-    halladas = normas(resp)
+    halladas = _sin_duplicados(normas(resp))
     alcance = resp.get("alcance") or {}
     if not halladas:
         # El emisor mide su corpus POR TIPO: leyes y decretos sí, reglamentos y resoluciones
@@ -105,7 +144,11 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
                 oid, "incumplida",
                 f"El corpus «{alcance.get('corpus', 'declarado')}» está completo entre "
                 f"{alcance.get('completo_desde', '?')} y {alcance.get('completo_hasta', '?')} "
-                f"y no contiene ninguna norma que satisfaga la obligación.",
+                f"y no contiene ninguna norma que satisfaga la obligación."
+                + (f" Corpus medido al {sello_del_corpus(alcance)}."
+                   if sello_del_corpus(alcance) else
+                   " El emisor NO declara cuándo midió su corpus: el veredicto no se puede "
+                   "auditar contra su estado."),
                 alcance=alcance)
         huecos = alcance.get("huecos") or []
         return Comprobacion(
