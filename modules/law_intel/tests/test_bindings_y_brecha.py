@@ -307,14 +307,34 @@ class TestLaFrescuraDeclarada:
         # `meta_rd_2036` está cargado como segundo expediente y no tiene bindings.
         assert _antiguedad_del_dato("meta_rd_2036") is None
 
-    def test_la_frescura_declarada_le_devuelve_al_producto_el_factor_entero(self):
-        """El punto de todo esto: sin período el readiness multiplicaba la cobertura por
-        0,5, así que cada indicador medido rendía la mitad. Con 2024 declarado y cadencia
-        anual (pleno hasta dos años), el factor es 1,0 y `pulse` pasa a exigir 15 de 90 en
-        vez de 30."""
+    def test_declarar_el_periodo_vale_MUCHO_mas_que_no_declararlo(self):
+        """El punto de todo esto: sin período el readiness multiplica la cobertura por 0,5,
+        así que cada indicador medido rinde la mitad.
+
+        Se comprueba contra el 0,5 del «sin declarar» y NO contra un 1,0 literal: el factor
+        exacto depende del dato más viejo del expediente y baja legítimamente cuando entra
+        un indicador medido con datos de hace tres años. Fijar el 1,0 hacía fallar el test
+        por AVANZAR — pasó al atar homicidios (2023) y subalimentación (2023), que son
+        mediciones buenas y viejas a la vez."""
         from shared.products.readiness import _freshness_factor
         from modules.law_intel.products import _antiguedad_del_dato
-        assert _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual") == 1.0
+        factor = _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual")
+        assert factor > _freshness_factor(None, "annual"), (
+            "declarar el período tiene que rendir más que no declararlo")
+        assert 0.5 < factor <= 1.0
+
+    def test_un_indicador_VIEJO_arrastra_la_frescura_del_expediente_entero(self):
+        """Es la consecuencia buscada, no un efecto colateral: si el informe se apoya en un
+        dato de 2023, el readiness tiene que castigar eso aunque el resto sea de 2025."""
+        import datetime as dt
+        from shared.products.readiness import _freshness_factor
+        from modules.law_intel.products import _antiguedad_del_dato
+
+        anios = sorted(int((b.periodo_verificado or "0")[:4])
+                       for b in cargar_bindings(EXPEDIENTE).values() if b.cuenta)
+        mas_nuevo = (dt.date.today() - dt.date(anios[-1], 12, 31)).days
+        assert _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual") <= \
+            _freshness_factor(mas_nuevo, "annual")
 
 
 class TestMercadoLaboral:

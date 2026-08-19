@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "13.0"
+version: "14.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -94,7 +94,8 @@ bindings:
     fuente: wdi
     mejor: menor
     transformacion: complemento_100
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       ══ RE-ATADO 2026-08-19 ══ Cambia de FUENTE, no de concepto. Estaba demotado porque
       `social_dev:literacy_rate` se mide por región y el registro publicaba el valor de una
@@ -112,6 +113,7 @@ bindings:
       El agregado nacional llegó, y es esta serie.
       Y sigue valiendo lo que ya estaba escrito sobre cómo se juzga: la meta legal es un
       UMBRAL («< 4%»), así que el indicador no admite delta — se cumple o no se cumple.
+      Verificado en prod 2026-08-19: **5,97% de analfabetismo en 2024** tras el complemento, contra un umbral legal de «< 4%». Sigue sin cumplirse, pero ahora se mide con la cifra del país y no con la de una región.
 
   # ══ RECUPERADO ══ La cifra nacional estaba en el mismo cuadro que ya bajábamos.
   - indicador: "2.18"
@@ -456,7 +458,8 @@ bindings:
     serie: "social_dev:gni_per_capita_atlas"
     fuente: wdi
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2025"
+    estado: verificado
     # El descarte anterior NO se pierde al atar la serie buena: queda como candidato
     # rechazado, con su motivo, para que ningún barrido futuro lo vuelva a proponer.
     candidatos_descartados:
@@ -477,6 +480,7 @@ bindings:
       INB. Queda registrado el motivo por el que la serie de hogares no servía:
       «distinta unidad, distinta periodicidad y distinto concepto — ingreso de hogares contra
       ingreso nacional».
+      Verificado en prod 2026-08-19: **10.620 US$ de INB per cápita en 2025**, contra una base legal de 4.460 en 2008 y una meta de 12.454 para 2030.
 
   - indicador: "3.9"
     serie: "wef.indice_global_competitividad.rd"
@@ -554,21 +558,25 @@ bindings:
     serie: "social_dev:homicide_rate"
     fuente: wdi
     mejor: menor
-    estado: propuesto
+    periodo_verificado: "2023"
+    estado: verificado
     nota: >-
       Homicidios intencionales por 100.000 habitantes (Banco Mundial, a partir de UNODC).
       La ley fija 24,8 para 2008 y la fuente da 25,007 ese año — Δ 0,8%, la coincidencia más
       limpia del lote y el único indicador del eje 1 que llega a medirse.
+      Verificado en prod 2026-08-19: **10,92 homicidios por 100.000 en 2023**, contra una base legal de 24,8 en 2008 y metas de 15 (2020), 10 (2025) y 4 (2030). Es el indicador que más se acercó a su meta de todo el expediente.
 
   - indicador: "2.27"
     serie: "social_dev:undernourishment"
     fuente: wdi
     mejor: menor
-    estado: propuesto
+    periodo_verificado: "2023"
+    estado: verificado
     nota: >-
       Prevalencia de subalimentación (FAO vía Banco Mundial), que es el mismo concepto que
       la ley nombra: «proporción de la población que no alcanza el mínimo de energía
       alimentaria». La ley fija 21,0 para 2005 y la fuente da 21,3 — Δ 1,4%.
+      Verificado en prod 2026-08-19: **3,6% de subalimentación en 2023**, contra una base legal de 21,0 en 2005. La caída es de las más grandes del expediente.
 
   # Las TRES desnutriciones miden cosas distintas —peso/edad, peso/talla, talla/edad— y
   # ninguna transformación las convierte. La ley las fija por separado y se atan por
@@ -582,6 +590,13 @@ bindings:
       Desnutrición GLOBAL (peso para la edad) en menores de 5. La ley fija 3,1 para 2007 y
       la fuente da 3,4 — Δ 9,7%, el mayor del lote. SALVEDAD: compatible con una revisión de
       la encuesta base (ENDESA), y se declara antes de medir cualquier distancia a la meta.
+      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
+      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
+      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
+      afirmar cobertura sobre un dato de otra década.
+      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
+      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
+      módulos es la de 2019, y no hay reemplazo publicado.
 
   - indicador: "2.29"
     serie: "social_dev:malnutrition_weight_height"
@@ -591,6 +606,13 @@ bindings:
     nota: >-
       Desnutrición AGUDA (peso para la talla) en menores de 5. La ley fija 2,2 para 2007 y
       la fuente da 2,3 — Δ 4,5%.
+      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
+      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
+      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
+      afirmar cobertura sobre un dato de otra década.
+      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
+      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
+      módulos es la de 2019, y no hay reemplazo publicado.
 
   - indicador: "2.30"
     serie: "social_dev:malnutrition_height_age"
@@ -600,18 +622,27 @@ bindings:
     nota: >-
       Desnutrición CRÓNICA (talla para la edad) en menores de 5. La ley fija 9,8 para 2007 y
       la fuente da 10,1 — Δ 3,1%.
+      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
+      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
+      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
+      afirmar cobertura sobre un dato de otra década.
+      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
+      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
+      módulos es la de 2019, y no hay reemplazo publicado.
 
   - indicador: "2.7"
     serie: "social_dev:gini_index"
     fuente: wdi
     mejor: menor
     transformacion: centesimal
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       Índice de GINI. El emisor publica en 0-100 y la END lo fija en 0-1, así que el binding
       declara `centesimal`; sin eso se contrastaría 47,3 contra una meta de 0,45 y el
       semáforo erraría por un factor de cien. La ley fija 0,49 para 2010 y la fuente da 0,473
       tras la conversión — Δ 3,5%.
+      Verificado en prod 2026-08-19: **GINI 0,39 en 2024** tras la conversión centesimal, contra una base legal de 0,49 en 2010.
 
   - indicador: "3.25"
     serie: "social_dev:tax_revenue_gdp"
