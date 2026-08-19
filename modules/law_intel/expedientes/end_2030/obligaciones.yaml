@@ -107,7 +107,14 @@ obligaciones:
       cita_a: "ley:1-12"
       tipo: decreto
       desde: "2012-01-25"
+      # El rango llega hasta HOY y no hasta el vencimiento: cortarlo en el plazo haría leer
+      # como incumplimiento justamente el cumplimiento tardío que ocurrió.
       hasta: "2026-12-31"
+      # `vence` se le pasa al EMISOR además de usarse acá para juzgar. No es redundante: con
+      # él, el API computa la holgura y marca `veredicto_sensible_a_publicacion` cuando el
+      # dictado cae al filo del plazo y no consta fecha de Gaceta. Sin pasarlo, ese aviso no
+      # llega y publicaríamos un veredicto firme sobre una diferencia que no medimos.
+      vence: "2012-07-23"
     consecuencia: null
     estado: cumplida_tarde
     evidencia: >-
