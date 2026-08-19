@@ -109,3 +109,34 @@ export async function getLlmSpend(desde?: string, hasta?: string): Promise<Spend
   const { data } = await client.get<SpendSummary>("/operations/llm-spend", { params });
   return data;
 }
+
+// ── Frescura de la validación ───────────────────────────────────────────
+// Un reporte de validación es un artefacto persistido: sigue sirviendo su cifra aunque el
+// score que midió haya cambiado. Producción publicó así un Gini de 0,44 durante 19 días
+// contra un deck que decía 0,16. Esto responde la pregunta que la consola no hacía: ¿la
+// cifra de este eje sigue correspondiendo al insumo que la produjo?
+
+export interface FrescuraEje {
+  eje: string;
+  operacion: string;
+  tiene_reporte: boolean;
+  generated_at?: string | null;
+  /** false = vigente · true = obsoleto · null = INDETERMINADO (no es "está bien"). */
+  stale: boolean | null;
+  stale_reason: string | null;
+  /** Insumos que la huella no cubre: el `false` no afirma sobre ellos. */
+  stale_scope?: string[] | null;
+  disparado_por?: string[];
+  sin_cascada_motivo?: string | null;
+}
+
+export interface FrescuraValidacion {
+  ejes: FrescuraEje[];
+  obsoletos: string[];
+  indeterminados: string[];
+}
+
+export async function getValidacionFrescura(): Promise<FrescuraValidacion> {
+  const { data } = await client.get<FrescuraValidacion>("/operations/validacion");
+  return data;
+}

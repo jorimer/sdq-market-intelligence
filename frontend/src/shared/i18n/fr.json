@@ -1835,6 +1835,20 @@
     }
   },
   "ops": {
+    "frescura": {
+      "colEje": "Axe",
+      "colEstado": "État",
+      "colFecha": "Calculé",
+      "colMotivo": "Détail",
+      "empty": "Aucun axe ne déclare de moteur de validation.",
+      "indeterminado": "Indéterminé",
+      "noCubre": "L'empreinte ne couvre pas",
+      "obsoleto": "Obsolète",
+      "sinReporte": "Aucun rapport persisté",
+      "sub": "Si le chiffre de chaque axe correspond encore à la donnée qui l'a produit",
+      "title": "Fraîcheur de la validation",
+      "vigente": "À jour"
+    },
     "cadence": {
       "daily": "Quotidien",
       "weekly": "Hebdomadaire",

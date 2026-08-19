@@ -8,6 +8,29 @@ from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.frescura import (
+    MotorValidacion, huella_archivo, registrar_motor,
+)
+
+IRMP_BACKTEST_KEY = "irmp_backtest_report"
+
+
+def huella_backtest(_db) -> Dict:
+    """Estado del insumo del backtest del IRMP: la RECETA, que es lo único local.
+
+    El panel histórico se descarga entero en cada corrida (Banco Mundial, WGI, FMI) y no
+    queda persistido, así que no hay estado local que firmar salvo la doctrina y el peer
+    set. La huella detecta un cambio de rúbrica —que sí invalida el reporte— y declara en
+    ``insumo_no_cubierto`` lo que no puede ver. Sin esa declaración, un ``stale=False``
+    afirmaría frescura sobre unas series que nadie comprobó.
+    """
+    from pathlib import Path
+
+    from modules.macro_political_risk.validation.peers import VALIDATION_PEERS
+
+    doctrina = Path(__file__).resolve().parents[2] / "shared" / "doctrine" / "regulatory.yaml"
+    return {"doctrina_regulatory": huella_archivo(doctrina),
+            "peers": sorted(VALIDATION_PEERS)}
 
 
 def _run_wgi_sync(params, user_id, set_phase) -> Dict:
@@ -116,20 +139,20 @@ def _run_irmp_backtest(params, user_id, set_phase) -> Dict:
     """Rebuild the IRMP backtest (historical panel + GDELT instability outcome) and
     persist the report. Returns a compact summary for the console."""
     import json
-    from datetime import datetime, timezone
     from shared.settings.models import AppSetting
+    from shared.validation.frescura import sellar
     from modules.macro_political_risk.validation.report import build_backtest_report
     db = SessionLocal()
     try:
         set_phase("reconstruyendo panel histórico + outcomes de inestabilidad (GDELT/BQ)")
         rep = build_backtest_report()
-        rep["generated_at"] = datetime.now(timezone.utc).isoformat()
-        row = db.query(AppSetting).filter(AppSetting.key == "irmp_backtest_report").first()
+        sellar(rep, "macro_political_risk", db)
+        row = db.query(AppSetting).filter(AppSetting.key == IRMP_BACKTEST_KEY).first()
         payload = json.dumps(rep)
         if row:
             row.value = payload
         else:
-            db.add(AppSetting(key="irmp_backtest_report", value=payload, is_secret=False))
+            db.add(AppSetting(key=IRMP_BACKTEST_KEY, value=payload, is_secret=False))
         db.commit()
         gov = rep.get("governance", {})
         return {"gini_gobernanza": gov.get("gini"), "n_obs": gov.get("n_observations"),
@@ -286,6 +309,18 @@ def register() -> None:
         "Idempotente; on-demand. Correr cuando: detectes snapshots IRMP inválidos (tras una "
         "corrida parcial o un cambio de metodología).",
         _run_irmp_cleanup, default_interval_hours=0,
+    ))
+
+    registrar_motor(MotorValidacion(
+        eje="macro_political_risk", operacion="irmp-backtest", clave=IRMP_BACKTEST_KEY,
+        partes=huella_backtest,
+        sin_cascada_motivo=(
+            "el panel de validación no sale de ninguna operación: se descarga entero del "
+            "Banco Mundial/WGI/FMI en cada corrida. Lo que sí lo invalida —la doctrina— no "
+            "tiene operación que la produzca (entra por PR), así que la huella la cubre y "
+            "el reloj queda como red de seguridad."),
+        insumo_no_cubierto=("series WDI/WGI/FMI del panel histórico y outcomes GDELT, "
+                            "descargados en cada corrida y no persistidos",),
     ))
 
 
