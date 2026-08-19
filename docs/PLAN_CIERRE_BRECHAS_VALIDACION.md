@@ -291,12 +291,42 @@ Ejes: `tourism`, `free_zones`, `construction`, `energy`, `telecom`, `agribusines
    evidencia nueva.
 4. Verificar que ningún eje publique un nivel de producto por encima de su readiness real.
 
-### Status de avance — criterios de cierre
-- [ ] Auditoría de readiness fresca para los 16 ejes, comiteada en `evidence/`.
-- [ ] `energy` con datos en prod y su readiness recomputado.
-- [ ] `telecom` con decisión escrita.
-- [ ] Ningún eje publicando por encima de su readiness.
-- [ ] **Cero** cifras de madurez en circulación con más de una semana.
+### Status de avance — **CERRADA** (2026-08-19)
+- [x] Auditoría de readiness fresca para los **16** ejes, comiteada en
+      `evidence/readiness_16_ejes_2026-08-19.json` (el dato previo era del 24-jun y cubría 10).
+- [x] **`energy` ya tenía datos**: la brecha D1 estaba cerrada antes de que llegáramos.
+      Producción sirve IRSE **80,08** (período 2026, cobertura **1.0**) con las tres
+      dimensiones sobre dato real — capacidad 7.054 MW, servicio y transición renovable. La
+      cifra de 0,37 de la auditoría de junio describía un estado que ya no existe.
+- [x] **`telecom`: decisión tomada y escrita** (abajo).
+- [x] Ningún eje publica por encima de su readiness: **15 niveles desbloqueados, cero** por
+      debajo de su umbral de activación (pulse 0,75 · insight 0,85 · deep dive 0,85).
+- [x] **Cero** cifras de madurez con más de una semana.
+
+#### La decisión de telecom
+
+**Se queda ITU DataHub como fuente vigente del IDT, y el boletín de INDOTEL se declara
+congelado — con una sonda que vigila si vuelve.**
+
+Lo que había: el boletín público de INDOTEL congelado en 2022-Q1, y la auditoría de junio
+listándolo como brecha. Lo que hay en realidad: **la fuente alterna ya estaba conectada y
+funcionando**. Producción sirve el IDT con dato de **2024** (móvil 93,7 · internet 76,1 ·
+banda ancha fija 11,2), de la API abierta de ITU DataHub. La "brecha" era un estado heredado
+que nadie había vuelto a mirar.
+
+Comprobado hoy contra las dos páginas oficiales de estadísticas de INDOTEL (ambas responden
+200): **no hay ningún boletín trimestral publicado**, ni siquiera el de 2022-Q1 que el
+conector alcanza por URL fija. Sigue congelado.
+
+Lo que cambia para que la decisión no haya que volver a tomarla a mano: `indotel-vigilancia`,
+una sonda mensual que descubre el boletín más nuevo publicado y lo compara con el conocido.
+Si aparece uno posterior, **lo propone** en el tablero de Inteligencia de Fuentes —con la
+disyuntiva escrita: INDOTEL daría cadencia trimestral y detalle por operador que ITU no
+tiene— y el dueño decide. No re-cablea nada solo.
+
+La sonda distingue **«miré y no hay» de «no pude mirar»**: con cero páginas legibles reporta
+`paginas_ok: 0` y declara que su resultado NO es evidencia. Un fallo de red que se reportara
+como «sigue congelado» sería peor que no tener sonda — produciría una confirmación falsa.
 
 ---
 

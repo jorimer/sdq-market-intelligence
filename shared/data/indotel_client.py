@@ -104,3 +104,74 @@ class INDOTELClient:
 
 
 indotel_client = INDOTELClient()
+
+
+# ── Vigilancia del boletín congelado ────────────────────────────────────────────
+#
+# El boletín público de INDOTEL se congeló en 2022-Q1 y el IDT pasó a servirse de ITU
+# DataHub (ver ``itu_client``). Eso convirtió una brecha en una DECISIÓN — pero una decisión
+# que, sin vigilancia, hay que volver a tomar a mano cada vez que alguien se pregunta si
+# INDOTEL volvió. Esta sonda contesta esa pregunta sola: descubre el boletín más reciente
+# publicado y lo compara con el que el conector conoce.
+#
+# NO ingiere ni promueve: propone. Si aparece uno más nuevo, entra al tablero de
+# Inteligencia de Fuentes para que el dueño decida (el sistema propone, el dueño dispone).
+
+_PAGINAS_BOLETIN = (
+    "https://indotel.gob.do/estadisticas/indicadores-estadisticos-trimestrales/",
+    "https://indotel.gob.do/estadisticas/",
+)
+
+# Un boletín trimestral se nombra por el rango de meses que cubre.
+_TRIMESTRES = {
+    ("enero", "marzo"): "Q1", ("abril", "junio"): "Q2",
+    ("julio", "septiembre"): "Q3", ("octubre", "diciembre"): "Q4",
+}
+
+
+def _periodo_de_nombre(nombre: str) -> Optional[str]:
+    """``…enero-marzo-2024…`` → ``"2024-Q1"``. ``None`` si el nombre no lo declara."""
+    import re
+
+    bajo = nombre.lower()
+    for (desde, hasta), q in _TRIMESTRES.items():
+        m = re.search(rf"{desde}[\-_ ]+{hasta}[\-_ ]+(20\d\d)", bajo)
+        if m:
+            return f"{m.group(1)}-{q}"
+    return None
+
+
+def descubrir_boletin_mas_reciente(timeout: int = 45) -> Dict[str, Any]:
+    """Busca en las páginas oficiales el boletín trimestral más nuevo publicado.
+
+    Devuelve ``{"periodo", "url", "hay_mas_nuevo", "conocido", "paginas_ok"}``. Nunca
+    levanta: una sonda que rompe la operación deja de correr, y entonces no vigila nada.
+    """
+    import re
+
+    import httpx
+
+    encontrados: Dict[str, str] = {}
+    paginas_ok = 0
+    for pagina in _PAGINAS_BOLETIN:
+        try:
+            r = httpx.get(pagina, headers=_HEADERS, timeout=timeout, follow_redirects=True)
+            if r.status_code != 200:
+                continue
+            paginas_ok += 1
+            for url in re.findall(r'href="(https?://[^"]+\.xlsx?)"', r.text, re.I):
+                periodo = _periodo_de_nombre(url)
+                if periodo:
+                    encontrados.setdefault(periodo, url)
+        except Exception as e:  # noqa: BLE001 — la sonda informa, no rompe
+            logger.warning("[INDOTEL] sonda no pudo leer %s: %s", pagina, e)
+
+    mas_nuevo = max(encontrados) if encontrados else None
+    return {
+        "periodo": mas_nuevo,
+        "url": encontrados.get(mas_nuevo) if mas_nuevo else None,
+        "conocido": LATEST_PERIOD,
+        "hay_mas_nuevo": bool(mas_nuevo and mas_nuevo > LATEST_PERIOD),
+        "paginas_ok": paginas_ok,
+        "periodos_vistos": sorted(encontrados),
+    }
