@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "15.0"
+version: "16.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -677,7 +677,8 @@ bindings:
     serie: "social_dev:regiones_pobreza_extrema_sobre_umbral"
     fuente: one
     mejor: menor
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       Cuántas de las diez regiones superan el 5% de pobreza extrema — el umbral lo fija el
       TEXTO del indicador, no lo elegimos nosotros, y se aplica ESTRICTO («mayor que 5%»).
@@ -687,12 +688,14 @@ bindings:
       GUARD: solo se publica el año con las DIEZ regiones presentes. Con nueve, el conteo
       baja porque falta un dato y no porque una región haya cruzado el umbral — y baja en la
       dirección de la meta, así que se leería como progreso.
+      Verificado en prod 2026-08-19: **1 región** sobre el 5% de pobreza extrema en 2024, contra 10 en 2010. El oráculo cierra: el cómputo da EXACTAMENTE 10 para 2010, que es la línea base que el legislador escribió. Trayectoria 10 → 7 (2015) → 5 (2020) → 1 (2024): superó sus metas de 2015, 2020 y 2025 — el único del expediente que va por delante de lo que la ley le pidió.
 
   - indicador: "2.5"
     serie: "social_dev:regiones_pobreza_moderada_sobre_umbral"
     fuente: one
     mejor: menor
-    estado: propuesto
+    periodo_verificado: "2024"
+    estado: verificado
     nota: >-
       Cuántas de las diez regiones superan el 20% de pobreza moderada. Mismo cómputo y mismo
       guard de completitud que el 2.2.
@@ -701,12 +704,14 @@ bindings:
       la cifra que el legislador escribió, que es la comprobación más fuerte disponible.
       Trayectoria observada en el panel: 10 (2010) → 9 (2016) → 10 (2020) → 5 (2024), contra
       una meta de 4 para 2025 y de 0 para 2030.
+      Verificado en prod 2026-08-19: **5 regiones** sobre el 20% de pobreza moderada en 2024, contra 10 en 2010. El cómputo también da exactamente 10 para 2010. Pero la trayectoria es OPUESTA a la del 2.2: 10 → 10 (2015) → 10 (2020) → 5 (2024). Incumplió las metas de 2015 y 2020 sin moverse un punto, y recién cae después de 2020. Que dos indicadores del mismo panel se comporten al revés es el hallazgo.
 
   - indicador: "3.21"
     serie: "social_dev:exports_per_capita"
     fuente: wdi
     mejor: mayor
-    estado: propuesto
+    periodo_verificado: "2025"
+    estado: verificado
     nota: >-
       Exportaciones de bienes Y SERVICIOS sobre población. Cuál de las dos definiciones usar
       no se adivinó: la ley fija 1.070 US$ para 2009, bienes+servicios da 1.049 ese año
@@ -714,3 +719,4 @@ bindings:
       Es un cociente entre dos series del mismo emisor, así que se ingiere como dato propio
       con su procedencia; un binding ata UNA variable a un indicador y no puede llevar una
       división.
+      Verificado en prod 2026-08-19: **2.614 US$ per cápita en 2025**, contra una meta de 5.365 para ese mismo año: menos de la mitad. Desde 1.070 en 2009 — creció, y a un ritmo que no alcanza ni de lejos la trayectoria que la ley fijó.
