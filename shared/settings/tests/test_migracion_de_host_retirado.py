@@ -52,7 +52,8 @@ def test_el_host_retirado_queda_declarado_como_obsoleto():
 def test_una_url_RETIRADA_se_migra_sola(db):
     cfg = SectorApiConfig(provider="jurisai", sector="law",
                           base_url="https://jurisai-production.up.railway.app/api/v1")
-    db.add(cfg); db.commit()
+    db.add(cfg)
+    db.commit()
     assert migrar_urls_obsoletas(db) == 1
     db.refresh(cfg)
     assert cfg.base_url == "https://api.jurisai.do/api/v1"
@@ -64,7 +65,8 @@ def test_migra_aunque_el_proveedor_difiera_en_MAYUSCULAS(db):
     seguía a la vista y confundía a quien la editara."""
     cfg = SectorApiConfig(provider="JurisAI", sector="law",
                           base_url="https://jurisai-production.up.railway.app/api/v1")
-    db.add(cfg); db.commit()
+    db.add(cfg)
+    db.commit()
     assert migrar_urls_obsoletas(db) == 1
     db.refresh(cfg)
     assert cfg.base_url == "https://api.jurisai.do/api/v1"
@@ -75,7 +77,8 @@ def test_una_url_que_el_OPERADOR_escribió_no_se_toca(db):
     peor que dejarla vieja. Solo se migra lo que ESTE repo sirvió como default."""
     cfg = SectorApiConfig(provider="jurisai", sector="law",
                           base_url="https://mi-proxy.interno/api/v1")
-    db.add(cfg); db.commit()
+    db.add(cfg)
+    db.commit()
     assert migrar_urls_obsoletas(db) == 0
     db.refresh(cfg)
     assert cfg.base_url == "https://mi-proxy.interno/api/v1"
@@ -84,7 +87,8 @@ def test_una_url_que_el_OPERADOR_escribió_no_se_toca(db):
 def test_es_idempotente(db):
     cfg = SectorApiConfig(provider="jurisai", sector="law",
                           base_url="https://jurisai-production.up.railway.app/api/v1")
-    db.add(cfg); db.commit()
+    db.add(cfg)
+    db.commit()
     assert migrar_urls_obsoletas(db) == 1
     assert migrar_urls_obsoletas(db) == 0
 
