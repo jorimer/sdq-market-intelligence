@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "16.0"
+version: "17.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -720,3 +720,174 @@ bindings:
       con su procedencia; un binding ata UNA variable a un indicador y no puede llevar una
       división.
       Verificado en prod 2026-08-19: **2.614 US$ per cápita en 2025**, contra una meta de 5.365 para ese mismo año: menos de la mitad. Desde 1.070 en 2009 — creció, y a un ritmo que no alcanza ni de lejos la trayectoria que la ley fijó.
+
+  # ══════════════════════════════════════════════════════════════════════════════════════
+  # PEFA (3.1 a 3.8) — el instrumento que la ley eligió fue REEMPLAZADO
+  #
+  # No es una brecha nuestra ni una fuente que no encontramos. Es un hallazgo del informe, y
+  # el mejor documentado del expediente: lo dice el evaluador contratado por el propio Estado
+  # dominicano, en un anexo encargado EXACTAMENTE para responder esta pregunta.
+  #
+  # Los Términos de Referencia del PEFA República Dominicana 2016 pidieron «una recomendación
+  # sobre cómo continuar monitoreando los indicadores PEFA incluidos en la Estrategia Nacional
+  # de Desarrollo (END 2030)». El anexo nombra los ocho, que son exactamente estos.
+  #
+  # Su conclusión, textual:
+  #
+  #   «estas dos versiones de la metodología PEFA no son estrictamente comparables y, por lo
+  #    tanto, hacer el seguimiento de los progresos en los sistemas GFP utilizando ambas
+  #    versiones —una contra la otra— no es posible sin incorporar información adicional. Es
+  #    por esta razón que se aconseja utilizar la metodología PEFA 2016 SÓLO PARA ESTABLECER
+  #    UNA NUEVA LÍNEA DE BASE.»
+  #
+  #   «los puntajes de los indicadores a futuro no serán comparables con los que hasta ahora
+  #    se han estado utilizando.»
+  #
+  # De 94 dimensiones del marco 2016, solo 14 son «directamente comparables» con el anterior.
+  #
+  # ── LA TRAMPA QUE ESTO HABRÍA TENDIDO ──
+  # El marco 2016 REUTILIZA los mismos códigos `ID-n` con OTRO significado. Atar por código
+  # habría publicado un veredicto sobre el indicador equivocado, sin que nada avisara:
+  #
+  #     código   lo que pide la ley (2011)      lo que mide el informe 2016
+  #     ID-19    adquisiciones                  administración de ingresos
+  #     ID-21    auditoría interna              previsibilidad de recursos
+  #     ID-24    informes presupuestarios       adquisiciones
+  #     ID-27    escrutinio del presupuesto     integridad de datos financieros
+  #
+  # Y acá la sonda NO habría salvado: la línea base es ordinal (D, B, D+), no hay delta
+  # porcentual que computar. El filtro barato no aplica y la única defensa es leer la fuente.
+  #
+  # Evaluaciones PEFA de República Dominicana: 2007 (línea base de la ley), 2010, 2012 —marco
+  # anterior— y 2016 y 2022 —marco nuevo—. Las tres primeras son comparables con la ley y
+  # ninguna alcanza los cortes de 2020, 2025 ni 2030.
+  # ══════════════════════════════════════════════════════════════════════════════════════
+
+  - indicador: "3.1"
+    serie: "pefa:id_12"
+    fuente: pefa
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Perspectiva plurianual en materia de planificación fiscal (ID-12 del marco PEFA 2011). El marco fue reemplazado en
+      febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
+      la ley fija y con sus metas.
+      El anexo del PEFA RD 2016 —encargado para responder esta pregunta— propone cubrirlo con
+      ID-16 (Perspectiva de mediano plazo para la presupuestación del gasto), y para «completar la lógica del anterior indicador» también ID-14 y ID-11, y califica esa equivalencia: «se podría cubrir CON ALGUNAS DEFICIENCIAS» — la más débil de las siete.
+      Se DESCARTA para medir la meta de la ley, no porque falte la fuente: la fuente existe y
+      publica, pero mide en una escala que no se puede contrastar con la que el legislador
+      escribió. El propio evaluador recomienda usar el marco 2016 sólo para establecer una
+      NUEVA línea de base, que es decir empezar de cero.
+
+  - indicador: "3.2"
+    serie: "pefa:id_15"
+    fuente: pefa
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Eficacia en materia de recaudación de impuestos (ID-15 del marco PEFA 2011). El marco fue reemplazado en
+      febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
+      la ley fija y con sus metas.
+      El anexo del PEFA RD 2016 —encargado para responder esta pregunta— propone cubrirlo con
+      ID-20 (Contabilidad de los ingresos), «aunque podría ser necesario también» ID-19, y califica esa equivalencia: «se podría cubrir RAZONABLEMENTE».
+      Se DESCARTA para medir la meta de la ley, no porque falte la fuente: la fuente existe y
+      publica, pero mide en una escala que no se puede contrastar con la que el legislador
+      escribió. El propio evaluador recomienda usar el marco 2016 sólo para establecer una
+      NUEVA línea de base, que es decir empezar de cero.
+
+  - indicador: "3.3"
+    serie: "pefa:id_19"
+    fuente: pefa
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Competencia, precio razonable y controles en adquisiciones (ID-19 del marco PEFA 2011). El marco fue reemplazado en
+      febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
+      la ley fija y con sus metas.
+      El anexo del PEFA RD 2016 —encargado para responder esta pregunta— propone cubrirlo con
+      ID-24 (Adquisiciones), y califica esa equivalencia: «se podría cubrir de manera RAZONABLE».
+      Se DESCARTA para medir la meta de la ley, no porque falte la fuente: la fuente existe y
+      publica, pero mide en una escala que no se puede contrastar con la que el legislador
+      escribió. El propio evaluador recomienda usar el marco 2016 sólo para establecer una
+      NUEVA línea de base, que es decir empezar de cero.
+
+  - indicador: "3.4"
+    serie: "pefa:id_21"
+    fuente: pefa
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Eficacia de la auditoría interna (ID-21 del marco PEFA 2011). El marco fue reemplazado en
+      febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
+      la ley fija y con sus metas.
+      El anexo del PEFA RD 2016 —encargado para responder esta pregunta— propone cubrirlo con
+      ID-26 (Auditoría interna), y califica esa equivalencia: «se podría cubrir RAZONABLEMENTE».
+      Se DESCARTA para medir la meta de la ley, no porque falte la fuente: la fuente existe y
+      publica, pero mide en una escala que no se puede contrastar con la que el legislador
+      escribió. El propio evaluador recomienda usar el marco 2016 sólo para establecer una
+      NUEVA línea de base, que es decir empezar de cero.
+
+  - indicador: "3.5"
+    serie: "pefa:id_24"
+    fuente: pefa
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Calidad y puntualidad de los informes presupuestarios del ejercicio (ID-24 del marco PEFA 2011). El marco fue reemplazado en
+      febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
+      la ley fija y con sus metas.
+      El anexo del PEFA RD 2016 —encargado para responder esta pregunta— propone cubrirlo con
+      ID-28 (Informes presupuestarios durante el ejercicio en curso), y califica esa equivalencia: «se podría cubrir BIEN».
+      Se DESCARTA para medir la meta de la ley, no porque falte la fuente: la fuente existe y
+      publica, pero mide en una escala que no se puede contrastar con la que el legislador
+      escribió. El propio evaluador recomienda usar el marco 2016 sólo para establecer una
+      NUEVA línea de base, que es decir empezar de cero.
+
+  - indicador: "3.6"
+    serie: "pefa:id_27"
+    fuente: pefa
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Escrutinio legislativo de la ley de presupuesto anual (ID-27 del marco PEFA 2011). El marco fue reemplazado en
+      febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
+      la ley fija y con sus metas.
+      El anexo del PEFA RD 2016 —encargado para responder esta pregunta— propone cubrirlo con
+      ID-18 (Escrutinio legislativo del presupuesto), y califica esa equivalencia: «se podría cubrir BIEN».
+      Se DESCARTA para medir la meta de la ley, no porque falte la fuente: la fuente existe y
+      publica, pero mide en una escala que no se puede contrastar con la que el legislador
+      escribió. El propio evaluador recomienda usar el marco 2016 sólo para establecer una
+      NUEVA línea de base, que es decir empezar de cero.
+
+  - indicador: "3.7"
+    serie: "pefa:id_28"
+    fuente: pefa
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Escrutinio legislativo de los informes de los auditores externos (ID-28 del marco PEFA 2011). El marco fue reemplazado en
+      febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
+      la ley fija y con sus metas.
+      El anexo del PEFA RD 2016 —encargado para responder esta pregunta— propone cubrirlo con
+      ID-31 (Escrutinio legislativo de los informes de auditoría), y califica esa equivalencia: «se podría cubrir BIEN».
+      Se DESCARTA para medir la meta de la ley, no porque falte la fuente: la fuente existe y
+      publica, pero mide en una escala que no se puede contrastar con la que el legislador
+      escribió. El propio evaluador recomienda usar el marco 2016 sólo para establecer una
+      NUEVA línea de base, que es decir empezar de cero.
+
+  # El caso más nítido de los ocho, y el único donde ni siquiera hay equivalente propuesto.
+  - indicador: "3.8"
+    serie: "pefa:id_d1"
+    fuente: pefa
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Previsibilidad del apoyo presupuestario directo (ID-D1 del marco PEFA 2011). El anexo
+      del PEFA RD 2016 es terminante: «Previsibilidad del apoyo presupuestario directo es un
+      tema de evaluación que se ha DESCONTINUADO. No se puede seguir haciendo seguimiento
+      sobre esta temática con la metodología PEFA.»
+      Los indicadores de prácticas de donantes (D-1 a D-3) fueron excluidos por completo del
+      marco. A diferencia de los otros siete, acá no hay equivalencia siquiera indirecta que
+      proponer.
+      La ley le fija metas hasta 2030 —B+ en 2015, A en 2020 y 2025, A+ en 2030— sobre un
+      indicador que dejó de existir en 2016. Es el hallazgo, no la brecha.
