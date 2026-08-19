@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from modules.law_intel.bindings import cargar_bindings
 from modules.law_intel.registro import Indicador, cargar
@@ -44,6 +44,10 @@ class Consulta:
     nombre: str
     eje: int
     terminos: str
+    #: Series YA rechazadas para este indicador. No se vuelven a proponer: la decisión está
+    #: documentada y viaja con la consulta en vez de vivir solo en el YAML, para que quien
+    #: consuma la consulta no tenga que ir a buscarla.
+    excluir: Tuple[str, ...] = ()
 
     @property
     def util(self) -> bool:
@@ -67,6 +71,13 @@ def consultas(expediente_id: str) -> List[Consulta]:
     descartados, porque su problema no es falta de fuente sino que la fuente evaluada no mide
     lo que el eje afirma. Volver a proponerles algo del catálogo sería re-abrir una decisión
     ya tomada y documentada.
+
+    **Un indicador con candidatos rechazados SÍ se consulta**, y esa distinción costó
+    entenderla: rechazar una serie no agota al indicador. El 3.26 tenía descartado el ingreso
+    familiar mensual y la serie que la ley nombra —INB per cápita por método Atlas— existía
+    todo el tiempo en otro emisor. Lo que no se debe repetir es proponer la MISMA serie ya
+    rechazada, y para eso viaja `excluir`: la decisión documentada se respeta a nivel de
+    candidato, que es el nivel al que se tomó.
     """
     exp = cargar(expediente_id)
     bs = cargar_bindings(expediente_id)
@@ -75,7 +86,8 @@ def consultas(expediente_id: str) -> List[Consulta]:
         b = bs.get(ind.id)
         if b and (b.cuenta or b.estado == "descartado"):
             continue
-        out.append(Consulta(ind.id, ind.nombre, ind.eje, terminos_de(ind)))
+        excluir = tuple(c["serie"] for c in (b.candidatos_descartados if b else ()) if c.get("serie"))
+        out.append(Consulta(ind.id, ind.nombre, ind.eje, terminos_de(ind), excluir))
     return sorted(out, key=lambda c: (c.eje, c.indicador))
 
 

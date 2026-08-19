@@ -428,6 +428,45 @@ class SocialDevProduct:
             "Escolaridad promedio (15+) — total país", "education",
             "Fila «Total» del cuadro 05 3 007 del SISDOM (MEPyD). Distinta de la serie "
             "por región que alimenta el índice de desarrollo."),
+        # ══ LOTE 2026-08-19 · las once del expediente de la END ══
+        # Entidad `HEALTH_ENTITY` («nacional») en TODAS: son series de país con una fila por
+        # período. Dejar la entidad en None acá sería legítimo solo para temas de una sola
+        # fila, y no hay razón para arriesgarse — nombrarla es lo que impidió que la
+        # pobreza extrema de una región se publicara como cifra nacional.
+        "homicide_rate": ("homicide_rate", HEALTH_ENTITY, "Tasa de homicidios",
+                          "inclusion",
+                          "Homicidios intencionales por 100.000 habitantes (Banco Mundial, "
+                          "a partir de UNODC). No alimenta el índice de desarrollo."),
+        "undernourishment": ("undernourishment", HEALTH_ENTITY,
+                             "Prevalencia de subalimentación", "living_standards",
+                             "FAO vía Banco Mundial. No alimenta el índice de desarrollo."),
+        "literacy_rate_pais": ("literacy_rate_pais", HEALTH_ENTITY,
+                               "Tasa de alfabetización (15 años y más)", "education",
+                               "Serie NACIONAL del Banco Mundial. Distinta de "
+                               "`literacy_rate`, que este panel mide por región: el eje de "
+                               "leyes fija metas de país y necesita el agregado."),
+        "malnutrition_weight_age": ("malnutrition_weight_age", HEALTH_ENTITY,
+                                    "Desnutrición global (peso/edad)", "health",
+                                    "Menores de 5 años. Es una de TRES desnutriciones que "
+                                    "la ley fija por separado y que no se convierten entre "
+                                    "sí. No alimenta el índice de desarrollo."),
+        "malnutrition_weight_height": ("malnutrition_weight_height", HEALTH_ENTITY,
+                                       "Desnutrición aguda (peso/talla)", "health",
+                                       "Menores de 5 años. No alimenta el índice."),
+        "malnutrition_height_age": ("malnutrition_height_age", HEALTH_ENTITY,
+                                    "Desnutrición crónica (talla/edad)", "health",
+                                    "Menores de 5 años. No alimenta el índice."),
+        "gini_index": ("gini_index", HEALTH_ENTITY, "Índice de GINI", "inclusion",
+                       "Se publica en la escala del emisor (0-100). La END lo fija en 0-1 "
+                       "y esa conversión la declara el binding, no esta ingesta."),
+        "tax_revenue_gdp": ("tax_revenue_gdp", HEALTH_ENTITY,
+                            "Presión tributaria (% del PIB)", "inclusion",
+                            "No es una variable de desarrollo social: vive acá porque este "
+                            "es el eje que ingiere series nacionales. No alimenta el índice."),
+        "gni_per_capita_atlas": ("gni_per_capita_atlas", HEALTH_ENTITY,
+                                 "INB per cápita (método Atlas)", "living_standards",
+                                 "Tampoco es una variable de desarrollo social. No alimenta "
+                                 "el índice."),
     }
 
     def _senales_fuera_del_indice(self, period: str, dh) -> List[Any]:

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from modules.law_intel.registro import RAIZ, Expediente, ExpedienteInvalido, Indicador, cargar
 
@@ -38,6 +38,13 @@ DIRECCIONES = frozenset({"menor", "mayor"})
 TRANSFORMACIONES = {
     "complemento_100": (lambda v: 100.0 - v,
                         "el indicador es el complemento porcentual de la variable"),
+    # El GINI: el Banco Mundial lo publica en 0-100 y la END lo fija en 0-1 (línea base
+    # 0,49 para 2010). Sin declararlo, el binding contrastaría 47,3 contra una meta de
+    # 0,45 y el semáforo diría «no alcanzada» por un factor de cien. Se declara acá y no
+    # se divide al ingerir: dividir en la sync guardaría un número que ya no es el que el
+    # emisor publica, y el día que alguien coteje contra el Banco Mundial no cuadraría.
+    "centesimal": (lambda v: v / 100.0,
+                   "el emisor publica en 0-100 y el indicador se fija en 0-1"),
 }
 
 
@@ -73,6 +80,18 @@ class Binding:
     # Va como CAMPO y no en la prosa de `nota` porque un dato que hay que parsear de un texto
     # deja de ser un dato.
     periodo_verificado: Optional[str] = None
+    # SERIES YA EVALUADAS Y RECHAZADAS para ESTE indicador, cada una con su motivo.
+    #
+    # `motivo_descarte` cuelga del indicador, pero un descarte es siempre sobre un CANDIDATO
+    # concreto. Mientras un indicador tuvo una sola serie evaluada eso no se notaba; al
+    # aparecer una mejor, el modelo obligaba a BORRAR el descarte para poder atar la nueva —
+    # y con él se iba el registro que impide que alguien vuelva a proponer la mala. Pasó con
+    # el 3.26: se había rechazado el ingreso familiar mensual, y la serie que la ley nombra
+    # (INB por método Atlas) no podía entrar sin perder esa constancia.
+    #
+    # Importa más ahora que antes: un barrido automático propone candidatos por lotes, así
+    # que el registro de lo ya rechazado tiene que ser ACUMULATIVO, no excluyente.
+    candidatos_descartados: Tuple[Dict[str, str], ...] = ()
 
     @property
     def cuenta(self) -> bool:
@@ -110,7 +129,14 @@ def cargar_bindings(expediente_id: str) -> Dict[str, Binding]:
     if not ruta.exists():
         return {}
     doc = yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}
-    bs = [Binding(**b) for b in (doc.get("bindings") or [])]
+    # El YAML trae la lista de candidatos rechazados como lista de dicts; el dataclass la
+    # congela en tupla para que siga siendo inmutable como el resto del binding.
+    def _armar(d: Dict[str, Any]) -> Binding:
+        d = dict(d)
+        cd = d.pop("candidatos_descartados", None) or ()
+        return Binding(**d, candidatos_descartados=tuple(dict(c) for c in cd))
+
+    bs = [_armar(b) for b in (doc.get("bindings") or [])]
     _validar(cargar(expediente_id), bs)
     return {b.indicador: b for b in bs}
 
