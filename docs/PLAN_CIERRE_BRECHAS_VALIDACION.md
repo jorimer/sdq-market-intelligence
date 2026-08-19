@@ -347,12 +347,27 @@ como «sigue congelado» sería peor que no tener sonda — produciría una conf
 5. Registrar el cambio de metodología en `shared/doctrine/changelog.yaml`, que es lo que responde por
    qué la cifra de un informe viejo ya no coincide.
 
-### Status de avance — criterios de cierre
-- [ ] Catálogo v4 publicado sobre 16 ejes.
-- [ ] Deck corregido en cohorte (3, no 6) y en la naturaleza del desenlace.
-- [ ] Todo material comercial vigente trazable a una cifra certificada y no obsoleta.
-- [ ] Changelog de metodología actualizado.
-- [ ] **Cero** afirmaciones comerciales sin cifra certificada detrás.
+### Status de avance — **CERRADA** (2026-08-19)
+- [x] Catálogo v4 generado sobre **16 ejes leídos del registro** (`scripts/build_catalogo_v4.py`),
+      con la credencial de cada eje computada de su reporte. El «14» no vuelve a escribirse.
+- [x] Las tres correcciones de banca escritas en `docs/CLAIMS_COMERCIALES.md`: **tres** cohortes
+      evaluables y no seis · el Gini **no** es validación contra quiebras (83 % pérdidas, 22 %
+      crédito, 0 % solvencia) · la curva por banda no entra a material comercial. Y qué número
+      citar: la **señal** (Gini 0,2287 · IC [0,147 · 0,311] · n=1.693), no el agregado suelto.
+- [x] Todo material trazable: la tabla sale de `GET /api/v1/products/credenciales`, que
+      **computa** cada cifra del reporte del motor. Ninguna se transcribe.
+- [x] Changelog de metodología con cuatro entradas nuevas.
+- [x] **Cero** afirmaciones sin cifra certificada: corrido contra producción el 2026-08-19,
+      **8 credenciales publicables y 0 vetadas por frescura**.
+
+> **El gate es asimétrico a propósito**: `stale=false` publica; `stale=true` no; y
+> `stale=null` **tampoco**. «No sé de cuándo es» y «está al día» son cosas distintas — así se
+> publicó el 0,44. Lo vetado se lista, no desaparece: un veto silencioso se lee como que el
+> eje no tiene validación.
+
+> **Lo que queda fuera de este repo:** el deck comercial es un archivo del dueño y no vive
+> acá. Las correcciones que necesita están escritas y computables; aplicarlas al archivo es
+> el último paso, y las cifras salen del endpoint, no de una transcripción.
 
 ---
 

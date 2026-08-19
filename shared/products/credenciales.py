@@ -35,7 +35,10 @@ GRUPO_CONCLUYENTE = "B · discriminación concluyente contra desenlace realizado
 GRUPO_CONVERGENTE = "C · concluyente por validez convergente"
 GRUPO_PARCIAL = "D · validación parcial o acotada"
 GRUPO_NO_CONCLUYENTE = "E · validación corrida y NO concluyente"
-GRUPO_SIN_MOTOR = "F · sin backtest, con el obstáculo declarado"
+# «Sin backtest» a secas sería inexacto para política monetaria, que SÍ tiene backtest
+# —expanding-window out-of-sample sobre 190 decisiones— pero de CLASIFICACIÓN de una serie,
+# no de discriminación entre sujetos. El rótulo nombra lo que falta, no lo que no hay.
+GRUPO_SIN_MOTOR = "F · sin backtest de discriminación transversal (obstáculo declarado)"
 
 GRUPOS = (GRUPO_EVENTO_REAL, GRUPO_CONCLUYENTE, GRUPO_CONVERGENTE,
           GRUPO_PARCIAL, GRUPO_NO_CONCLUYENTE, GRUPO_SIN_MOTOR)

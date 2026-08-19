@@ -1,0 +1,444 @@
+{
+ "ejes": [
+  {
+   "eje": "banking",
+   "nombre": "SDQ Banking Intelligence",
+   "grupo": "A · validado contra evento real",
+   "metrica": "Gini",
+   "valor": 0.22874012474012484,
+   "ic": [
+    0.14694196148865957,
+    0.3113450312111967
+   ],
+   "n": 1693,
+   "eventos": 250,
+   "senal": "resultados",
+   "concluyente": true,
+   "generated_at": "2026-08-19T17:31:46.098804+00:00",
+   "stale": false,
+   "stale_reason": null,
+   "publicable": true,
+   "estado_backtest": {
+    "tiene_motor": true,
+    "motivo": "Corte transversal real: 1.693 observaciones de entidades. El veredicto por familia de desenlace se lee del reporte, no de acá. La credencial contra evento REAL es aparte: la cohorte de quiebras con lead time medido.",
+    "desenlace": "distress financiero por entidad-trimestre — la UNIÓN de tres reglas, que el reporte desagrega en `signals` porque pesan 83/22/0",
+    "obstaculo": null,
+    "dato_que_falta": null,
+    "eje_motor": "banking_score"
+   }
+  },
+  {
+   "eje": "macro",
+   "nombre": "SDQ Macro & Country Risk",
+   "grupo": "B · discriminación concluyente contra desenlace realizado",
+   "metrica": "Gini",
+   "valor": 0.199,
+   "ic": [
+    0.045,
+    0.355
+   ],
+   "n": 260,
+   "eventos": 82,
+   "senal": "governance",
+   "concluyente": true,
+   "generated_at": "2026-08-19T15:06:14.923019+00:00",
+   "stale": false,
+   "stale_reason": null,
+   "publicable": true,
+   "estado_backtest": {
+    "tiene_motor": true,
+    "motivo": "Corte transversal de 24 países. El outcome de crédito se publica como contraste declarado, no como titular: solapa con los insumos del índice.",
+    "desenlace": "inestabilidad política realizada (spikes de eventos GDELT)",
+    "obstaculo": null,
+    "dato_que_falta": null,
+    "eje_motor": "macro_political_risk"
+   }
+  },
+  {
+   "eje": "trade",
+   "nombre": "SDQ Trade & Logistics",
+   "grupo": "B · discriminación concluyente contra desenlace realizado",
+   "metrica": "Gini",
+   "valor": 0.232,
+   "ic": [
+    0.093,
+    0.373
+   ],
+   "n": 314,
+   "eventos": 87,
+   "senal": "export_collapse",
+   "concluyente": true,
+   "generated_at": "2026-08-19T15:06:19.963049+00:00",
+   "stale": false,
+   "stale_reason": null,
+   "publicable": true,
+   "estado_backtest": {
+    "tiene_motor": true,
+    "motivo": "Corte transversal de 24 países del panel LatAm+Caribe: el producto es RD, pero la metodología se valida donde hay poder estadístico.",
+    "desenlace": "colapso de ingresos de exportación (caída ≥10% interanual en T+1/T+2)",
+    "obstaculo": null,
+    "dato_que_falta": null,
+    "eje_motor": "trade_intel"
+   }
+  },
+  {
+   "eje": "tourism",
+   "nombre": "SDQ Tourism Intelligence",
+   "grupo": "F · sin backtest, con el obstáculo declarado",
+   "metrica": null,
+   "valor": null,
+   "ic": null,
+   "n": null,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": null,
+   "stale": null,
+   "stale_reason": "sin reporte persistido",
+   "publicable": false,
+   "estado_backtest": {
+    "tiene_motor": false,
+    "motivo": "El ITT es un índice NACIONAL: una observación por año. Un Gini o un IC de rango necesitan un corte transversal que rankear, y con un solo sujeto no existe. Además, sus cuatro dimensiones se computan de las propias llegadas, así que un test contra llegadas futuras mediría persistencia de la serie, no anticipación.",
+    "desenlace": "llegadas y gasto turístico realizados (BCRD/ONE)",
+    "obstaculo": "sin_corte_transversal",
+    "dato_que_falta": "llegadas y ocupación por PROVINCIA o por polo turístico: sin una desagregación, el índice tiene un solo sujeto (el país) y no hay nada que ordenar",
+    "eje_motor": null
+   }
+  },
+  {
+   "eje": "free_zones",
+   "nombre": "SDQ Free Zones & Manufacturing",
+   "grupo": "F · sin backtest, con el obstáculo declarado",
+   "metrica": null,
+   "valor": null,
+   "ic": null,
+   "n": null,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": null,
+   "stale": null,
+   "stale_reason": "sin reporte persistido",
+   "publicable": false,
+   "estado_backtest": {
+    "tiene_motor": false,
+    "motivo": "El IZF es un índice NACIONAL agregado: una observación por año. Y sus dimensiones —dinamismo exportador, inversión, empleo, productividad— salen de las mismas series que serían el desenlace, así que validarlo contra ellas mediría autocorrelación.",
+    "desenlace": "exportaciones, empleo e inversión realizados en zonas francas (CNZFE)",
+    "obstaculo": "sin_corte_transversal",
+    "dato_que_falta": "panel por PARQUE o por sector de zona franca: el agregado nacional de CNZFE deja un solo sujeto y ningún corte que ordenar",
+    "eje_motor": null
+   }
+  },
+  {
+   "eje": "energy",
+   "nombre": "SDQ Energy Intelligence",
+   "grupo": "F · sin backtest, con el obstáculo declarado",
+   "metrica": null,
+   "valor": null,
+   "ic": null,
+   "n": null,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": null,
+   "stale": null,
+   "stale_reason": "sin reporte persistido",
+   "publicable": false,
+   "estado_backtest": {
+    "tiene_motor": false,
+    "motivo": "El IRSE es un índice NACIONAL: una observación por año, sin nada que rankear. El desenlace natural —calidad de servicio— además ya entra como dimensión del índice, así que el corte por distribuidora tendría que venir con un desenlace distinto del insumo.",
+    "desenlace": "interrupciones y energía no servida realizadas (SIE/OC)",
+    "obstaculo": "sin_corte_transversal",
+    "dato_que_falta": "serie por DISTRIBUIDORA o por circuito: EDEs y circuitos darían el corte transversal que el agregado nacional no tiene",
+    "eje_motor": null
+   }
+  },
+  {
+   "eje": "telecom",
+   "nombre": "SDQ Telecom Intelligence",
+   "grupo": "F · sin backtest, con el obstáculo declarado",
+   "metrica": null,
+   "valor": null,
+   "ic": null,
+   "n": null,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": null,
+   "stale": null,
+   "stale_reason": "sin reporte persistido",
+   "publicable": false,
+   "estado_backtest": {
+    "tiene_motor": false,
+    "motivo": "El IDT es un índice NACIONAL sobre una serie que dejó de actualizarse. Es la brecha de dato declarada del eje, no una decisión de método.",
+    "desenlace": "penetración móvil y de banda ancha realizada",
+    "obstaculo": "dato_pendiente",
+    "dato_que_falta": "el boletín INDOTEL está congelado en 2022-Q1; ITU sirve el nivel nacional pero no da corte transversal. Sin serie viva ni desagregación no hay panel que validar",
+    "eje_motor": null
+   }
+  },
+  {
+   "eje": "construction",
+   "nombre": "SDQ Construction Intelligence",
+   "grupo": "F · sin backtest, con el obstáculo declarado",
+   "metrica": null,
+   "valor": null,
+   "ic": null,
+   "n": null,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": null,
+   "stale": null,
+   "stale_reason": "sin reporte persistido",
+   "publicable": false,
+   "estado_backtest": {
+    "tiene_motor": false,
+    "motivo": "El ICC es un índice NACIONAL con historia corta de permisos (2022+). Sin ejecución realizada no hay desenlace independiente del flujo que el índice ya mide.",
+    "desenlace": "permisos EJECUTADOS contra permisos iniciados, y producción realizada",
+    "obstaculo": "sin_corte_transversal",
+    "dato_que_falta": "ejecución de los permisos (MIVHED publica el flujo de emisión, no el de ejecución) y un corte por provincia con historia suficiente: los permisos empiezan en 2022",
+    "eje_motor": null
+   }
+  },
+  {
+   "eje": "agribusiness",
+   "nombre": "SDQ Agribusiness",
+   "grupo": "E · validación corrida y NO concluyente",
+   "metrica": "IC medio anual",
+   "valor": -0.03,
+   "ic": [
+    -0.267,
+    0.208
+   ],
+   "n": 160,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": "2026-08-19T18:34:01.324535+00:00",
+   "stale": false,
+   "stale_reason": null,
+   "publicable": true,
+   "estado_backtest": {
+    "tiene_motor": true,
+    "motivo": "Corte transversal de ramas × años. Ninguno de los dos desenlaces lo sostiene como predictivo: contra inversión no agrega poder por encima del tamaño del sector. El producto se ofrece como DESCRIPTIVO.",
+    "desenlace": "empleo formal por rama (T+1) e inversión extranjera directa realizada por actividad (BCRD), con el control que ordena por tamaño",
+    "obstaculo": null,
+    "dato_que_falta": null,
+    "eje_motor": "sector_intel"
+   }
+  },
+  {
+   "eje": "esg",
+   "nombre": "SDQ ESG & Climate",
+   "grupo": "B · discriminación concluyente contra desenlace realizado",
+   "metrica": "Spearman",
+   "valor": -0.509,
+   "ic": [
+    -0.782,
+    -0.084
+   ],
+   "n": 24,
+   "eventos": null,
+   "senal": null,
+   "concluyente": true,
+   "generated_at": "2026-08-19T15:06:26.739630+00:00",
+   "stale": false,
+   "stale_reason": null,
+   "publicable": true,
+   "estado_backtest": {
+    "tiene_motor": true,
+    "motivo": "Corte transversal de países. Validación transversal, no temporal: la exposición a huracanes es en parte insumo del índice y se declara.",
+    "desenlace": "mortalidad por desastres climáticos (OWID/EM-DAT)",
+    "obstaculo": null,
+    "dato_que_falta": null,
+    "eje_motor": "esg_climate"
+   }
+  },
+  {
+   "eje": "pension",
+   "nombre": "SDQ Pensiones (SIPEN)",
+   "grupo": "B · discriminación concluyente contra desenlace realizado",
+   "metrica": "Gini",
+   "valor": 0.1594,
+   "ic": [
+    0.0988,
+    0.2173
+   ],
+   "n": 1590,
+   "eventos": 665,
+   "senal": "return",
+   "concluyente": true,
+   "generated_at": "2026-08-19T15:07:02.401076+00:00",
+   "stale": false,
+   "stale_reason": null,
+   "publicable": true,
+   "estado_backtest": {
+    "tiene_motor": true,
+    "motivo": "Corte transversal de AFP × períodos. La señal de rentabilidad es la de mayor N del catálogo después de banca.",
+    "desenlace": "subdesempeño relativo de rentabilidad y solvencia por AFP",
+    "obstaculo": null,
+    "dato_que_falta": null,
+    "eje_motor": "pension_intel"
+   }
+  },
+  {
+   "eje": "insurance",
+   "nombre": "SDQ Seguros (SIS)",
+   "grupo": "B · discriminación concluyente contra desenlace realizado",
+   "metrica": "Gini",
+   "valor": 0.2575,
+   "ic": [
+    0.1237,
+    0.3946
+   ],
+   "n": 269,
+   "eventos": 132,
+   "senal": "underwriting",
+   "concluyente": true,
+   "generated_at": "2026-08-19T16:30:13.105964+00:00",
+   "stale": false,
+   "stale_reason": null,
+   "publicable": true,
+   "estado_backtest": {
+    "tiene_motor": true,
+    "motivo": "Corte transversal de aseguradoras × años auditados. El panel se amplió a 2013 y la señal de underwriting pasó a concluyente; el veredicto vigente se lee del reporte.",
+    "desenlace": "subdesempeño técnico relativo a la mediana del panel de aseguradoras",
+    "obstaculo": null,
+    "dato_que_falta": null,
+    "eje_motor": "insurance_intel"
+   }
+  },
+  {
+   "eje": "monetary_policy",
+   "nombre": "SDQ Política Monetaria",
+   "grupo": "F · sin backtest, con el obstáculo declarado",
+   "metrica": null,
+   "valor": null,
+   "ic": null,
+   "n": null,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": null,
+   "stale": null,
+   "stale_reason": "sin reporte persistido",
+   "publicable": false,
+   "estado_backtest": {
+    "tiene_motor": false,
+    "motivo": "Tiene backtest —expanding-window out-of-sample, point-in-time, sobre 190 decisiones— pero NO es un Gate E de discriminación transversal: no hay panel de sujetos que ordenar, hay una serie de decisiones que clasificar. Se lee por macro-F1 y por recall de las clases que el baseline nunca ve, y empata al baseline ingenuo en accuracy, que se declara.",
+    "desenlace": "la decisión de política monetaria del BCRD (subir/mantener/bajar)",
+    "obstaculo": "autoreferencial",
+    "dato_que_falta": null,
+    "eje_motor": null
+   }
+  },
+  {
+   "eje": "economic_structure",
+   "nombre": "SDQ Sectoral Structure · Estructura de la Economía",
+   "grupo": "F · sin backtest, con el obstáculo declarado",
+   "metrica": null,
+   "valor": null,
+   "ic": null,
+   "n": null,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": null,
+   "stale": null,
+   "stale_reason": "sin reporte persistido",
+   "publicable": false,
+   "estado_backtest": {
+    "tiene_motor": false,
+    "motivo": "No hay índice que validar: es una vista DESCRIPTIVA del PIB por sectores de origen, sin score sintético ni proyección. Su verificación es contable —la suma de contribuciones reconcilia con el crecimiento del VAB— y corre en el conector, no en un backtest de discriminación.",
+    "desenlace": null,
+    "obstaculo": "autoreferencial",
+    "dato_que_falta": null,
+    "eje_motor": null
+   }
+  },
+  {
+   "eje": "social_dev",
+   "nombre": "SDQ Desarrollo Social",
+   "grupo": "C · concluyente por validez convergente",
+   "metrica": "Spearman",
+   "valor": 0.891,
+   "ic": [
+    0.51,
+    1.0
+   ],
+   "n": 10,
+   "eventos": null,
+   "senal": null,
+   "concluyente": true,
+   "generated_at": "2026-08-19T15:06:39.605824+00:00",
+   "stale": false,
+   "stale_reason": null,
+   "publicable": true,
+   "estado_backtest": {
+    "tiene_motor": true,
+    "motivo": "Corte transversal de las 10 regiones de desarrollo. Un Gate E temporal no aplica: el IDM es un índice relativo cuyas variables nacionales normalizan plano, así que se valida contra una medida independiente del mismo período.",
+    "desenlace": "IDH regional del PNUD (validez CONVERGENTE, no backtest temporal)",
+    "obstaculo": null,
+    "dato_que_falta": null,
+    "eje_motor": "social_dev"
+   }
+  },
+  {
+   "eje": "law",
+   "nombre": "SDQ Evaluación de Leyes",
+   "grupo": "F · sin backtest, con el obstáculo declarado",
+   "metrica": null,
+   "valor": null,
+   "ic": null,
+   "n": null,
+   "eventos": null,
+   "senal": null,
+   "concluyente": false,
+   "generated_at": null,
+   "stale": null,
+   "stale_reason": "sin reporte persistido",
+   "publicable": false,
+   "estado_backtest": {
+    "tiene_motor": false,
+    "motivo": "El «desenlace» de una ley es el cumplimiento de las metas que ella misma se fijó, y eso es exactamente lo que el eje mide: compararlos no valida nada. Lo que sí se verifica —y bloquea el producto si falta— es que cada binding esté contrastado contra la fuente oficial: sin bindings verificados el informe no afirma cumplimiento.",
+    "desenlace": null,
+    "obstaculo": "autoreferencial",
+    "dato_que_falta": null,
+    "eje_motor": null
+   }
+  }
+ ],
+ "por_grupo": {
+  "A · validado contra evento real": [
+   "banking"
+  ],
+  "B · discriminación concluyente contra desenlace realizado": [
+   "macro",
+   "trade",
+   "esg",
+   "pension",
+   "insurance"
+  ],
+  "C · concluyente por validez convergente": [
+   "social_dev"
+  ],
+  "D · validación parcial o acotada": [],
+  "E · validación corrida y NO concluyente": [
+   "agribusiness"
+  ],
+  "F · sin backtest, con el obstáculo declarado": [
+   "tourism",
+   "free_zones",
+   "energy",
+   "telecom",
+   "construction",
+   "monetary_policy",
+   "economic_structure",
+   "law"
+  ]
+ },
+ "n_publicables": 8,
+ "vetadas_por_frescura": [],
+ "generado_at": "2026-08-19T21:51:26.537412+00:00"
+}
