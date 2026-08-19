@@ -110,10 +110,12 @@ def compute_readiness(product: SectorProduct, tier: ProductTier) -> Dict[str, An
         "detail": {
             "g1": g1_detail, "g2": "motor operativo" if has_engine else "sin motor",
             "g3": g3_detail, "g4": g4_detail, "g5": g5_detail,
+            # Por qué el eje tiene o no validación retrospectiva. Va DENTRO de `detail`
+            # porque es lo único del reporte que se persiste (`_upsert_readiness` guarda las
+            # cinco puertas y el detalle): una clave hermana se computaba y se tiraba, y la
+            # API —que sirve las filas guardadas— nunca la habría mostrado.
+            "backtest": (asdict(estado) if estado is not None else None),
         },
-        # Por qué el eje tiene o no validación retrospectiva. Un eje que calla su falta de
-        # validación es peor que uno que la declara: el silencio se lee como "sí la tiene".
-        "backtest": (asdict(estado) if estado is not None else None),
     }
 
 
