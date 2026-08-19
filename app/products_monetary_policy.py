@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -126,6 +127,15 @@ def _track_record(db: Session) -> Dict[str, Any]:
 
 
 class MonetaryPolicyProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=False, obstaculo="autoreferencial",
+        desenlace="la decisión de política monetaria del BCRD (subir/mantener/bajar)",
+        motivo=("Tiene backtest —expanding-window out-of-sample, point-in-time, sobre 190 "
+                "decisiones— pero NO es un Gate E de discriminación transversal: no hay "
+                "panel de sujetos que ordenar, hay una serie de decisiones que clasificar. "
+                "Se lee por macro-F1 y por recall de las clases que el baseline nunca ve, y "
+                "empata al baseline ingenuo en accuracy, que se declara."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):

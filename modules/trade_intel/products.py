@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -321,6 +322,12 @@ def _socios_por_capitulo(max_socios: int = 15, top_capitulos: int = 12) -> Dict[
 class TradeProduct:
     """``SectorProduct`` de Comercio. ``db`` opcional: las muestras sintéticas usan
     solo ``narratives``/``render`` (sin DB)."""
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="trade_intel",
+        desenlace="colapso de ingresos de exportación (caída ≥10% interanual en T+1/T+2)",
+        motivo=("Corte transversal de 24 países del panel LatAm+Caribe: el producto es RD, "
+                "pero la metodología se valida donde hay poder estadístico."))
 
     sector_key = SECTOR_KEY
 

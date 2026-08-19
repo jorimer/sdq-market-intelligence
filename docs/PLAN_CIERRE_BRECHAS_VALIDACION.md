@@ -254,13 +254,25 @@ Ejes: `tourism`, `free_zones`, `construction`, `energy`, `telecom`, `agribusines
    estándar que `construction` ya cumple. Un eje que calla su falta de validación es peor que uno que
    la declara.
 
-### Status de avance — criterios de cierre
-- [ ] Los 7 ejes con destino asignado y escrito.
-- [ ] Los validables ahora, con su Gate E corriendo y su cifra publicada.
-- [ ] Los demás, declarando su estado **en el producto**, no solo en un documento interno.
-- [ ] Test estructural que exige, para cada eje del catálogo, o un motor de validación o una
-      declaración explícita de por qué no lo tiene.
-- [ ] **Cero** ejes del catálogo sin estado de validación declarado.
+### Status de avance — **CERRADA** (2026-08-19) → [`docs/TRIAJE_VALIDACION_EJES.md`](TRIAJE_VALIDACION_EJES.md)
+- [x] Los 7 ejes con destino asignado y escrito — y el triaje reveló una pregunta anterior a
+      la del plan: **¿hay algo que ordenar?** Cinco de los siete son índices NACIONALES (un
+      score por año para el país): con un solo sujeto no hay corte transversal que rankear, y
+      ninguna cantidad de trabajo de datos lo arregla mientras el índice sea nacional.
+- [x] Validables ahora: **ninguno**, y es un resultado, no una omisión. Forzarles un Gate E
+      produciría un número sin contenido — el error que el eje sectorial ya cometió validando
+      un índice de inversión contra el empleo.
+- [x] Los siete declaran su estado **en el producto** (`ESTADO_BACKTEST` en la clase,
+      publicado en `detail.backtest` del readiness), con obstáculo de lista cerrada, motivo
+      explicado y —cuando aplica— el dato que falta, nombrado.
+- [x] Test estructural con dientes verificados: exige declaración en los 16, **cruza contra
+      `MOTORES`** (un producto no puede reclamar una validación que nadie registró), rechaza
+      obstáculos fuera de la lista y motivos que rotulan en vez de explicar.
+- [x] **Cero** ejes del catálogo sin estado de validación declarado.
+
+> El estado declara hechos de DISEÑO, no el veredicto de la última corrida: un
+> `EstadoBacktest` que dijera «concluyente» sería el mismo artefacto que abrió este plan, y
+> un test lo impide por construcción.
 
 ---
 

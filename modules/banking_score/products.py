@@ -22,6 +22,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from shared.contracts import load_macro_contract
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -527,6 +528,14 @@ def _named_peers(db: Session, bank: Bank, period_end: date) -> Optional[Dict[str
 class BankingProduct:
     """``SectorProduct`` de Banca. ``db`` es opcional: las muestras sintéticas usan
     solo ``narratives``/``render`` (sin DB)."""
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="banking_score",
+        desenlace=("distress financiero por entidad-trimestre — la UNIÓN de tres reglas, "
+                   "que el reporte desagrega en `signals` porque pesan 83/22/0"),
+        motivo=("Corte transversal real: 1.693 observaciones de entidades. El veredicto por "
+                "familia de desenlace se lee del reporte, no de acá. La credencial contra "
+                "evento REAL es aparte: la cohorte de quiebras con lead time medido."))
 
     sector_key = SECTOR_KEY
 

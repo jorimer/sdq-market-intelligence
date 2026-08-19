@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -326,6 +327,14 @@ def _nota_validacion_iai(db) -> str:
 class SectorIntelProduct:
     """``SectorProduct`` de un sector económico (parametrizado). ``db`` opcional: las
     muestras sintéticas usan solo ``narratives``/``render`` (sin DB)."""
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="sector_intel",
+        desenlace=("empleo formal por rama (T+1) e inversión extranjera directa realizada "
+                   "por actividad (BCRD), con el control que ordena por tamaño"),
+        motivo=("Corte transversal de ramas × años. Ninguno de los dos desenlaces lo "
+                "sostiene como predictivo: contra inversión no agrega poder por encima del "
+                "tamaño del sector. El producto se ofrece como DESCRIPTIVO."))
 
     def __init__(self, db: Optional[Session], product_key: str):
         if product_key not in SECTOR_PRODUCTS:

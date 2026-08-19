@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -189,6 +190,16 @@ def _trend_series(db: Optional[Session]):
 
 
 class EnergyProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=False, obstaculo="sin_corte_transversal",
+        desenlace="interrupciones y energía no servida realizadas (SIE/OC)",
+        dato_que_falta=("serie por DISTRIBUIDORA o por circuito: EDEs y circuitos darían el "
+                        "corte transversal que el agregado nacional no tiene"),
+        motivo=("El IRSE es un índice NACIONAL: una observación por año, sin nada que "
+                "rankear. El desenlace natural —calidad de servicio— además ya entra como "
+                "dimensión del índice, así que el corte por distribuidora tendría que venir "
+                "con un desenlace distinto del insumo."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):

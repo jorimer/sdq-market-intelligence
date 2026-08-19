@@ -41,6 +41,7 @@ from shared.data.minerd_coverage import COUNTRY_SLUG as MINERD_COUNTRY
 from shared.data.sisdom_schooling import COUNTRY_SLUG as SISDOM_COUNTRY
 from shared.registry.builders import axis_variable_scopes
 from shared.registry.signals import NATIONAL, PER_SUBJECT
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     CanonicalScore,
     CanonicalSeries,
@@ -205,6 +206,13 @@ def _safe(db: Optional[Session], fn, default):
 
 
 class SocialDevProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="social_dev",
+        desenlace="IDH regional del PNUD (validez CONVERGENTE, no backtest temporal)",
+        motivo=("Corte transversal de las 10 regiones de desarrollo. Un Gate E temporal no "
+                "aplica: el IDM es un índice relativo cuyas variables nacionales normalizan "
+                "plano, así que se valida contra una medida independiente del mismo período."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):

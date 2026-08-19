@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -165,6 +166,14 @@ def _fmt(v: Optional[float]) -> str:
 
 
 class EconomicStructureProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=False, obstaculo="autoreferencial",
+        desenlace=None,
+        motivo=("No hay índice que validar: es una vista DESCRIPTIVA del PIB por sectores de "
+                "origen, sin score sintético ni proyección. Su verificación es contable —la "
+                "suma de contribuciones reconcilia con el crecimiento del VAB— y corre en el "
+                "conector, no en un backtest de discriminación."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):

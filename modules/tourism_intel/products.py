@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -193,6 +194,18 @@ def _trend_series(db: Optional[Session]):
 
 
 class TourismProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=False, obstaculo="sin_corte_transversal",
+        desenlace="llegadas y gasto turístico realizados (BCRD/ONE)",
+        dato_que_falta=("llegadas y ocupación por PROVINCIA o por polo turístico: sin una "
+                        "desagregación, el índice tiene un solo sujeto (el país) y no hay "
+                        "nada que ordenar"),
+        motivo=("El ITT es un índice NACIONAL: una observación por año. Un Gini o un IC de "
+                "rango necesitan un corte transversal que rankear, y con un solo sujeto no "
+                "existe. Además, sus cuatro dimensiones se computan de las propias llegadas, "
+                "así que un test contra llegadas futuras mediría persistencia de la serie, "
+                "no anticipación."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):

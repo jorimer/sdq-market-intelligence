@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     DataHealth,
     Granularity,
@@ -189,6 +190,16 @@ def _fmt(v: Optional[float]) -> str:
 
 
 class ConstructionProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=False, obstaculo="sin_corte_transversal",
+        desenlace="permisos EJECUTADOS contra permisos iniciados, y producción realizada",
+        dato_que_falta=("ejecución de los permisos (MIVHED publica el flujo de emisión, no "
+                        "el de ejecución) y un corte por provincia con historia suficiente: "
+                        "los permisos empiezan en 2022"),
+        motivo=("El ICC es un índice NACIONAL con historia corta de permisos (2022+). Sin "
+                "ejecución realizada no hay desenlace independiente del flujo que el índice "
+                "ya mide."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):

@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared.products.contract import EstadoBacktest
 from shared.products import (
     CanonicalForecast,
     CanonicalScore,
@@ -247,6 +248,12 @@ def _snapshot_result(snap) -> Dict[str, Any]:
 
 
 class MacroProduct:
+
+    ESTADO_BACKTEST = EstadoBacktest(
+        tiene_motor=True, eje_motor="macro_political_risk",
+        desenlace="inestabilidad política realizada (spikes de eventos GDELT)",
+        motivo=("Corte transversal de 24 países. El outcome de crédito se publica como "
+                "contraste declarado, no como titular: solapa con los insumos del índice."))
     sector_key = SECTOR_KEY
 
     def __init__(self, db: Optional[Session] = None):
