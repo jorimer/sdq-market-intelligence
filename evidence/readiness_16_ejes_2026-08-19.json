@@ -22,12 +22,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · base=sector_outlook",
-      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada."
+      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal real: 1.693 observaciones de entidades. El veredicto por familia de desenlace se lee del reporte, no de acá. La credencial contra evento REAL es aparte: la cohorte de quiebras con lead time medido.",
+       "desenlace": "distress financiero por entidad-trimestre — la UNIÓN de tres reglas, que el reporte desagrega en `signals` porque pesan 83/22/0",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "banking_score"
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:39.702338"
+     "computed_at": "2026-08-19T20:05:17.868608"
     },
     {
      "tier": "insight",
@@ -44,12 +52,20 @@
       "g2": "motor operativo",
       "g3": "3 templates declarados",
       "g4": "7 secciones · base=full_rating",
-      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada."
+      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal real: 1.693 observaciones de entidades. El veredicto por familia de desenlace se lee del reporte, no de acá. La credencial contra evento REAL es aparte: la cohorte de quiebras con lead time medido.",
+       "desenlace": "distress financiero por entidad-trimestre — la UNIÓN de tres reglas, que el reporte desagrega en `signals` porque pesan 83/22/0",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "banking_score"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:39.710438"
+     "computed_at": "2026-08-19T20:05:17.876108"
     },
     {
      "tier": "deep_dive",
@@ -66,12 +82,20 @@
       "g2": "motor operativo",
       "g3": "5 templates declarados",
       "g4": "13 secciones · base=full_rating",
-      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada."
+      "g5": "approved=True · score=1.00 · Eje 1 en producción; metodología determinista validada.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal real: 1.693 observaciones de entidades. El veredicto por familia de desenlace se lee del reporte, no de acá. La credencial contra evento REAL es aparte: la cohorte de quiebras con lead time medido.",
+       "desenlace": "distress financiero por entidad-trimestre — la UNIÓN de tres reglas, que el reporte desagrega en `signals` porque pesan 83/22/0",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "banking_score"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:39.718154"
+     "computed_at": "2026-08-19T20:05:17.886198"
     }
    ]
   },
@@ -97,12 +121,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo."
+      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de 24 países. El outcome de crédito se publica como contraste declarado, no como titular: solapa con los insumos del índice.",
+       "desenlace": "inestabilidad política realizada (spikes de eventos GDELT)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "macro_political_risk"
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.139295"
+     "computed_at": "2026-08-19T20:05:19.346282"
     },
     {
      "tier": "insight",
@@ -119,12 +151,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "3 secciones · render genérico",
-      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo."
+      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de 24 países. El outcome de crédito se publica como contraste declarado, no como titular: solapa con los insumos del índice.",
+       "desenlace": "inestabilidad política realizada (spikes de eventos GDELT)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "macro_political_risk"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.141432"
+     "computed_at": "2026-08-19T20:05:19.348596"
     },
     {
      "tier": "deep_dive",
@@ -141,12 +181,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "5 secciones · render genérico",
-      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo."
+      "g5": "approved=True · score=0.85 · IRMP validado (Gate A-F); momentum macro operativo.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de 24 países. El outcome de crédito se publica como contraste declarado, no como titular: solapa con los insumos del índice.",
+       "desenlace": "inestabilidad política realizada (spikes de eventos GDELT)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "macro_political_risk"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.143482"
+     "computed_at": "2026-08-19T20:05:19.350278"
     }
    ]
   },
@@ -172,12 +220,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo)."
+      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de 24 países del panel LatAm+Caribe: el producto es RD, pero la metodología se valida donde hay poder estadístico.",
+       "desenlace": "colapso de ingresos de exportación (caída ≥10% interanual en T+1/T+2)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "trade_intel"
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.170368"
+     "computed_at": "2026-08-19T20:05:19.383703"
     },
     {
      "tier": "insight",
@@ -194,12 +250,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo)."
+      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de 24 países del panel LatAm+Caribe: el producto es RD, pero la metodología se valida donde hay poder estadístico.",
+       "desenlace": "colapso de ingresos de exportación (caída ≥10% interanual en T+1/T+2)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "trade_intel"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.185267"
+     "computed_at": "2026-08-19T20:05:19.399044"
     },
     {
      "tier": "deep_dive",
@@ -216,12 +280,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo)."
+      "g5": "approved=True · score=0.75 · Gate E: colapso-export Gini 0.232 IC[0.093, 0.373] (significativo).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de 24 países del panel LatAm+Caribe: el producto es RD, pero la metodología se valida donde hay poder estadístico.",
+       "desenlace": "colapso de ingresos de exportación (caída ≥10% interanual en T+1/T+2)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "trade_intel"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.200298"
+     "computed_at": "2026-08-19T20:05:19.414047"
     }
    ]
   },
@@ -247,12 +319,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales)."
+      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales).",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El ITT es un índice NACIONAL: una observación por año. Un Gini o un IC de rango necesitan un corte transversal que rankear, y con un solo sujeto no existe. Además, sus cuatro dimensiones se computan de las propias llegadas, así que un test contra llegadas futuras mediría persistencia de la serie, no anticipación.",
+       "desenlace": "llegadas y gasto turístico realizados (BCRD/ONE)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "llegadas y ocupación por PROVINCIA o por polo turístico: sin una desagregación, el índice tiene un solo sujeto (el país) y no hay nada que ordenar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.211976"
+     "computed_at": "2026-08-19T20:05:19.428318"
     },
     {
      "tier": "insight",
@@ -269,12 +349,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales)."
+      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales).",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El ITT es un índice NACIONAL: una observación por año. Un Gini o un IC de rango necesitan un corte transversal que rankear, y con un solo sujeto no existe. Además, sus cuatro dimensiones se computan de las propias llegadas, así que un test contra llegadas futuras mediría persistencia de la serie, no anticipación.",
+       "desenlace": "llegadas y gasto turístico realizados (BCRD/ONE)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "llegadas y ocupación por PROVINCIA o por polo turístico: sin una desagregación, el índice tiene un solo sujeto (el país) y no hay nada que ordenar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.214176"
+     "computed_at": "2026-08-19T20:05:19.430259"
     },
     {
      "tier": "deep_dive",
@@ -291,12 +379,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales)."
+      "g5": "approved=True · score=0.55 · ITT preliminar (sin validación retrospectiva de resultados). Demanda total, demanda extranjera, recuperación y diversificación de mercados sobre dato real ONE (llegadas agregadas nacionales).",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El ITT es un índice NACIONAL: una observación por año. Un Gini o un IC de rango necesitan un corte transversal que rankear, y con un solo sujeto no existe. Además, sus cuatro dimensiones se computan de las propias llegadas, así que un test contra llegadas futuras mediría persistencia de la serie, no anticipación.",
+       "desenlace": "llegadas y gasto turístico realizados (BCRD/ONE)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "llegadas y ocupación por PROVINCIA o por polo turístico: sin una desagregación, el índice tiene un solo sujeto (el país) y no hay nada que ordenar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.216200"
+     "computed_at": "2026-08-19T20:05:19.431810"
     }
    ]
   },
@@ -322,12 +418,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional)."
+      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional).",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IZF es un índice NACIONAL agregado: una observación por año. Y sus dimensiones —dinamismo exportador, inversión, empleo, productividad— salen de las mismas series que serían el desenlace, así que validarlo contra ellas mediría autocorrelación.",
+       "desenlace": "exportaciones, empleo e inversión realizados en zonas francas (CNZFE)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "panel por PARQUE o por sector de zona franca: el agregado nacional de CNZFE deja un solo sujeto y ningún corte que ordenar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.231432"
+     "computed_at": "2026-08-19T20:05:19.445549"
     },
     {
      "tier": "insight",
@@ -344,12 +448,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional)."
+      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional).",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IZF es un índice NACIONAL agregado: una observación por año. Y sus dimensiones —dinamismo exportador, inversión, empleo, productividad— salen de las mismas series que serían el desenlace, así que validarlo contra ellas mediría autocorrelación.",
+       "desenlace": "exportaciones, empleo e inversión realizados en zonas francas (CNZFE)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "panel por PARQUE o por sector de zona franca: el agregado nacional de CNZFE deja un solo sujeto y ningún corte que ordenar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.233665"
+     "computed_at": "2026-08-19T20:05:19.447286"
     },
     {
      "tier": "deep_dive",
@@ -366,12 +478,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional)."
+      "g5": "approved=True · score=0.55 · IZF preliminar (sin validación retrospectiva de resultados). Dinamismo exportador, inversión, empleo y productividad sobre dato real CNZFE (agregado nacional).",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IZF es un índice NACIONAL agregado: una observación por año. Y sus dimensiones —dinamismo exportador, inversión, empleo, productividad— salen de las mismas series que serían el desenlace, así que validarlo contra ellas mediría autocorrelación.",
+       "desenlace": "exportaciones, empleo e inversión realizados en zonas francas (CNZFE)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "panel por PARQUE o por sector de zona franca: el agregado nacional de CNZFE deja un solo sujeto y ningún corte que ordenar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.235634"
+     "computed_at": "2026-08-19T20:05:19.448916"
     }
    ]
   },
@@ -397,12 +517,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real."
+      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IRSE es un índice NACIONAL: una observación por año, sin nada que rankear. El desenlace natural —calidad de servicio— además ya entra como dimensión del índice, así que el corte por distribuidora tendría que venir con un desenlace distinto del insumo.",
+       "desenlace": "interrupciones y energía no servida realizadas (SIE/OC)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "serie por DISTRIBUIDORA o por circuito: EDEs y circuitos darían el corte transversal que el agregado nacional no tiene",
+       "eje_motor": null
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.250101"
+     "computed_at": "2026-08-19T20:05:19.468393"
     },
     {
      "tier": "insight",
@@ -419,12 +547,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real."
+      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IRSE es un índice NACIONAL: una observación por año, sin nada que rankear. El desenlace natural —calidad de servicio— además ya entra como dimensión del índice, así que el corte por distribuidora tendría que venir con un desenlace distinto del insumo.",
+       "desenlace": "interrupciones y energía no servida realizadas (SIE/OC)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "serie por DISTRIBUIDORA o por circuito: EDEs y circuitos darían el corte transversal que el agregado nacional no tiene",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.252296"
+     "computed_at": "2026-08-19T20:05:19.470496"
     },
     {
      "tier": "deep_dive",
@@ -441,12 +577,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real."
+      "g5": "approved=True · score=0.55 · IRSE preliminar (sin validación retrospectiva de resultados). Las 3 dimensiones —capacidad, servicio (SIE) y transición renovable (ONE)— sobre dato real.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IRSE es un índice NACIONAL: una observación por año, sin nada que rankear. El desenlace natural —calidad de servicio— además ya entra como dimensión del índice, así que el corte por distribuidora tendría que venir con un desenlace distinto del insumo.",
+       "desenlace": "interrupciones y energía no servida realizadas (SIE/OC)",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "serie por DISTRIBUIDORA o por circuito: EDEs y circuitos darían el corte transversal que el agregado nacional no tiene",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.254429"
+     "computed_at": "2026-08-19T20:05:19.474810"
     }
    ]
   },
@@ -472,12 +616,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int."
+      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IDT es un índice NACIONAL sobre una serie que dejó de actualizarse. Es la brecha de dato declarada del eje, no una decisión de método.",
+       "desenlace": "penetración móvil y de banda ancha realizada",
+       "obstaculo": "dato_pendiente",
+       "dato_que_falta": "el boletín INDOTEL está congelado en 2022-Q1; ITU sirve el nivel nacional pero no da corte transversal. Sin serie viva ni desagregación no hay panel que validar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.270193"
+     "computed_at": "2026-08-19T20:05:19.497587"
     },
     {
      "tier": "insight",
@@ -494,12 +646,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int."
+      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IDT es un índice NACIONAL sobre una serie que dejó de actualizarse. Es la brecha de dato declarada del eje, no una decisión de método.",
+       "desenlace": "penetración móvil y de banda ancha realizada",
+       "obstaculo": "dato_pendiente",
+       "dato_que_falta": "el boletín INDOTEL está congelado en 2022-Q1; ITU sirve el nivel nacional pero no da corte transversal. Sin serie viva ni desagregación no hay panel que validar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.272307"
+     "computed_at": "2026-08-19T20:05:19.500072"
     },
     {
      "tier": "deep_dive",
@@ -516,12 +676,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int."
+      "g5": "approved=True · score=0.55 · IDT sobre dato real de ITU DataHub (penetración móvil + banda ancha); sin validación retrospectiva de resultados. ⚠️ Fuente viva EN REVISIÓN desde 2026-08-17. El API de ITU DataHub dejó de ser alcanzable de forma anónima —`api.datahub.itu.int` responde 403 en todas sus rutas y `datahub.itu.int/api` devuelve un desafío de CloudFront—, y la última sincronización exitosa fue el 2026-07-19. El dato servido es el persistido de ese corte: sigue siendo real y citable, y no se actualizará hasta restablecer el acceso. Solicitud de acceso enviada a indicators@itu.int.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El IDT es un índice NACIONAL sobre una serie que dejó de actualizarse. Es la brecha de dato declarada del eje, no una decisión de método.",
+       "desenlace": "penetración móvil y de banda ancha realizada",
+       "obstaculo": "dato_pendiente",
+       "dato_que_falta": "el boletín INDOTEL está congelado en 2022-Q1; ITU sirve el nivel nacional pero no da corte transversal. Sin serie viva ni desagregación no hay panel que validar",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.274377"
+     "computed_at": "2026-08-19T20:05:19.503078"
     }
    ]
   },
@@ -547,12 +715,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real."
+      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El ICC es un índice NACIONAL con historia corta de permisos (2022+). Sin ejecución realizada no hay desenlace independiente del flujo que el índice ya mide.",
+       "desenlace": "permisos EJECUTADOS contra permisos iniciados, y producción realizada",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "ejecución de los permisos (MIVHED publica el flujo de emisión, no el de ejecución) y un corte por provincia con historia suficiente: los permisos empiezan en 2022",
+       "eje_motor": null
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.289017"
+     "computed_at": "2026-08-19T20:05:19.526827"
     },
     {
      "tier": "insight",
@@ -569,12 +745,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real."
+      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El ICC es un índice NACIONAL con historia corta de permisos (2022+). Sin ejecución realizada no hay desenlace independiente del flujo que el índice ya mide.",
+       "desenlace": "permisos EJECUTADOS contra permisos iniciados, y producción realizada",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "ejecución de los permisos (MIVHED publica el flujo de emisión, no el de ejecución) y un corte por provincia con historia suficiente: los permisos empiezan en 2022",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.290907"
+     "computed_at": "2026-08-19T20:05:19.530416"
     },
     {
      "tier": "deep_dive",
@@ -591,12 +775,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real."
+      "g5": "approved=True · score=0.55 · ICC preliminar (sin validación retrospectiva de resultados; permisos MIVHED desde 2022). Producción (PIB construcción BCRD), flujo de permisos, diversificación tipológica y amplitud geográfica sobre dato real.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El ICC es un índice NACIONAL con historia corta de permisos (2022+). Sin ejecución realizada no hay desenlace independiente del flujo que el índice ya mide.",
+       "desenlace": "permisos EJECUTADOS contra permisos iniciados, y producción realizada",
+       "obstaculo": "sin_corte_transversal",
+       "dato_que_falta": "ejecución de los permisos (MIVHED publica el flujo de emisión, no el de ejecución) y un corte por provincia con historia suficiente: los permisos empiezan en 2022",
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.292851"
+     "computed_at": "2026-08-19T20:05:19.534906"
     }
    ]
   },
@@ -622,12 +814,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.50 · Gate E sectorial diferido; IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD."
+      "g5": "approved=True · score=0.50 · IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD. Gate E vs empleo formal: IC medio anual -0.03 (IC95 [-0.267, 0.208], n=160) — no concluyente. Gate E vs inversión realizada (IED BCRD, intensidad): IC -0.321 (IC95 [-0.5, -0.142], n=144), y el CONTROL que ordena el mismo desenlace solo por tamaño da -0.323 — el índice no agrega poder por encima del tamaño del sector. Ningún desenlace sostiene una afirmación de poder predictivo: el índice se ofrece como DESCRIPTIVO de atractivo estructural.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de ramas × años. Ninguno de los dos desenlaces lo sostiene como predictivo: contra inversión no agrega poder por encima del tamaño del sector. El producto se ofrece como DESCRIPTIVO.",
+       "desenlace": "empleo formal por rama (T+1) e inversión extranjera directa realizada por actividad (BCRD), con el control que ordena por tamaño",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "sector_intel"
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.310237"
+     "computed_at": "2026-08-19T20:05:19.559451"
     },
     {
      "tier": "insight",
@@ -644,12 +844,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.50 · Gate E sectorial diferido; IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD."
+      "g5": "approved=True · score=0.50 · IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD. Gate E vs empleo formal: IC medio anual -0.03 (IC95 [-0.267, 0.208], n=160) — no concluyente. Gate E vs inversión realizada (IED BCRD, intensidad): IC -0.321 (IC95 [-0.5, -0.142], n=144), y el CONTROL que ordena el mismo desenlace solo por tamaño da -0.323 — el índice no agrega poder por encima del tamaño del sector. Ningún desenlace sostiene una afirmación de poder predictivo: el índice se ofrece como DESCRIPTIVO de atractivo estructural.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de ramas × años. Ninguno de los dos desenlaces lo sostiene como predictivo: contra inversión no agrega poder por encima del tamaño del sector. El producto se ofrece como DESCRIPTIVO.",
+       "desenlace": "empleo formal por rama (T+1) e inversión extranjera directa realizada por actividad (BCRD), con el control que ordena por tamaño",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "sector_intel"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.312233"
+     "computed_at": "2026-08-19T20:05:19.564420"
     },
     {
      "tier": "deep_dive",
@@ -666,12 +874,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.50 · Gate E sectorial diferido; IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD."
+      "g5": "approved=True · score=0.50 · IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS (momentum) sobre crecimiento real BCRD. Gate E vs empleo formal: IC medio anual -0.03 (IC95 [-0.267, 0.208], n=160) — no concluyente. Gate E vs inversión realizada (IED BCRD, intensidad): IC -0.321 (IC95 [-0.5, -0.142], n=144), y el CONTROL que ordena el mismo desenlace solo por tamaño da -0.323 — el índice no agrega poder por encima del tamaño del sector. Ningún desenlace sostiene una afirmación de poder predictivo: el índice se ofrece como DESCRIPTIVO de atractivo estructural.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de ramas × años. Ninguno de los dos desenlaces lo sostiene como predictivo: contra inversión no agrega poder por encima del tamaño del sector. El producto se ofrece como DESCRIPTIVO.",
+       "desenlace": "empleo formal por rama (T+1) e inversión extranjera directa realizada por actividad (BCRD), con el control que ordena por tamaño",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "sector_intel"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.314324"
+     "computed_at": "2026-08-19T20:05:19.569176"
     }
    ]
   },
@@ -697,12 +913,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo)."
+      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de países. Validación transversal, no temporal: la exposición a huracanes es en parte insumo del índice y se declara.",
+       "desenlace": "mortalidad por desastres climáticos (OWID/EM-DAT)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "esg_climate"
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.334649"
+     "computed_at": "2026-08-19T20:05:19.596686"
     },
     {
      "tier": "insight",
@@ -719,12 +943,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo)."
+      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de países. Validación transversal, no temporal: la exposición a huracanes es en parte insumo del índice y se declara.",
+       "desenlace": "mortalidad por desastres climáticos (OWID/EM-DAT)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "esg_climate"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.344991"
+     "computed_at": "2026-08-19T20:05:19.605498"
     },
     {
      "tier": "deep_dive",
@@ -741,12 +973,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo)."
+      "g5": "approved=True · score=0.80 · Gate E: Spearman -0.509 IC[-0.782, -0.084] (significativo).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de países. Validación transversal, no temporal: la exposición a huracanes es en parte insumo del índice y se declara.",
+       "desenlace": "mortalidad por desastres climáticos (OWID/EM-DAT)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "esg_climate"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.354878"
+     "computed_at": "2026-08-19T20:05:19.622535"
     }
    ]
   },
@@ -772,12 +1012,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP)."
+      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de AFP × períodos. La señal de rentabilidad es la de mayor N del catálogo después de banca.",
+       "desenlace": "subdesempeño relativo de rentabilidad y solvencia por AFP",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "pension_intel"
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:41.709074"
+     "computed_at": "2026-08-19T20:05:19.943397"
     },
     {
      "tier": "insight",
@@ -794,12 +1042,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP)."
+      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de AFP × períodos. La señal de rentabilidad es la de mayor N del catálogo después de banca.",
+       "desenlace": "subdesempeño relativo de rentabilidad y solvencia por AFP",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "pension_intel"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:42.044183"
+     "computed_at": "2026-08-19T20:05:20.271695"
     },
     {
      "tier": "deep_dive",
@@ -816,12 +1072,20 @@
       "g2": "motor operativo",
       "g3": "3 templates declarados",
       "g4": "6 secciones · render genérico",
-      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP)."
+      "g5": "approved=True · score=0.65 · ISA = índice de solidez con banda absoluta (solvencia incorporada de los estados financieros de SIPEN). Backtest de resultado-proxy (subdesempeño relativo): Gini 0.1594 (IC 0.0988–0.2173) en la señal 'return'. Validación soft; no es grado-regulador (N acotado por el número de AFP).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de AFP × períodos. La señal de rentabilidad es la de mayor N del catálogo después de banca.",
+       "desenlace": "subdesempeño relativo de rentabilidad y solvencia por AFP",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "pension_intel"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:42.421816"
+     "computed_at": "2026-08-19T20:05:20.584089"
     }
    ]
   },
@@ -847,12 +1111,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes."
+      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de aseguradoras × años auditados. El panel se amplió a 2013 y la señal de underwriting pasó a concluyente; el veredicto vigente se lee del reporte.",
+       "desenlace": "subdesempeño técnico relativo a la mediana del panel de aseguradoras",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "insurance_intel"
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:43.042839"
+     "computed_at": "2026-08-19T20:05:21.090959"
     },
     {
      "tier": "insight",
@@ -869,12 +1141,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes."
+      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de aseguradoras × años auditados. El panel se amplió a 2013 y la señal de underwriting pasó a concluyente; el veredicto vigente se lee del reporte.",
+       "desenlace": "subdesempeño técnico relativo a la mediana del panel de aseguradoras",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "insurance_intel"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:43.606952"
+     "computed_at": "2026-08-19T20:05:21.638058"
     },
     {
      "tier": "deep_dive",
@@ -891,12 +1171,20 @@
       "g2": "motor operativo",
       "g3": "3 templates declarados",
       "g4": "6 secciones · render genérico",
-      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes."
+      "g5": "approved=True · score=0.68 · ISF = índice de solidez con estados financieros auditados incorporados. Backtest de resultado-proxy (subdesempeño técnico relativo): Gini 0.2575 (IC 0.1237–0.3946, N=269) en la señal 'underwriting'. Concluyente; el N mayor del mercado asegurador estrecha el IC frente a otros ejes.",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de aseguradoras × años auditados. El panel se amplió a 2013 y la señal de underwriting pasó a concluyente; el veredicto vigente se lee del reporte.",
+       "desenlace": "subdesempeño técnico relativo a la mediana del panel de aseguradoras",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "insurance_intel"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.161614"
+     "computed_at": "2026-08-19T20:05:22.196093"
     }
    ]
   },
@@ -922,12 +1210,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación."
+      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "Tiene backtest —expanding-window out-of-sample, point-in-time, sobre 190 decisiones— pero NO es un Gate E de discriminación transversal: no hay panel de sujetos que ordenar, hay una serie de decisiones que clasificar. Se lee por macro-F1 y por recall de las clases que el baseline nunca ve, y empata al baseline ingenuo en accuracy, que se declara.",
+       "desenlace": "la decisión de política monetaria del BCRD (subir/mantener/bajar)",
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.204122"
+     "computed_at": "2026-08-19T20:05:22.249566"
     },
     {
      "tier": "insight",
@@ -944,12 +1240,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación."
+      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "Tiene backtest —expanding-window out-of-sample, point-in-time, sobre 190 decisiones— pero NO es un Gate E de discriminación transversal: no hay panel de sujetos que ordenar, hay una serie de decisiones que clasificar. Se lee por macro-F1 y por recall de las clases que el baseline nunca ve, y empata al baseline ingenuo en accuracy, que se declara.",
+       "desenlace": "la decisión de política monetaria del BCRD (subir/mantener/bajar)",
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.214774"
+     "computed_at": "2026-08-19T20:05:22.260359"
     },
     {
      "tier": "deep_dive",
@@ -966,12 +1270,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "3 secciones · render genérico",
-      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación."
+      "g5": "approved=True · score=0.57 · Modelo de TPM con backtest time-series (expanding-window, recall por clase vs baseline) + track record en vivo en acumulación.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "Tiene backtest —expanding-window out-of-sample, point-in-time, sobre 190 decisiones— pero NO es un Gate E de discriminación transversal: no hay panel de sujetos que ordenar, hay una serie de decisiones que clasificar. Se lee por macro-F1 y por recall de las clases que el baseline nunca ve, y empata al baseline ingenuo en accuracy, que se declara.",
+       "desenlace": "la decisión de política monetaria del BCRD (subir/mantener/bajar)",
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.225713"
+     "computed_at": "2026-08-19T20:05:22.272466"
     }
    ]
   },
@@ -997,12 +1309,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB."
+      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "No hay índice que validar: es una vista DESCRIPTIVA del PIB por sectores de origen, sin score sintético ni proyección. Su verificación es contable —la suma de contribuciones reconcilia con el crecimiento del VAB— y corre en el conector, no en un backtest de discriminación.",
+       "desenlace": null,
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.245120"
+     "computed_at": "2026-08-19T20:05:22.290405"
     },
     {
      "tier": "insight",
@@ -1019,12 +1339,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB."
+      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "No hay índice que validar: es una vista DESCRIPTIVA del PIB por sectores de origen, sin score sintético ni proyección. Su verificación es contable —la suma de contribuciones reconcilia con el crecimiento del VAB— y corre en el conector, no en un backtest de discriminación.",
+       "desenlace": null,
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.247465"
+     "computed_at": "2026-08-19T20:05:22.292023"
     },
     {
      "tier": "deep_dive",
@@ -1041,12 +1369,20 @@
       "g2": "motor operativo",
       "g3": "3 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB."
+      "g5": "approved=True · score=0.65 · Vista descriptiva sobre dato real BCRD (PIB por sectores de origen). Sin score sintético ni proyección; la suma de contribuciones reconcilia con el crecimiento del VAB.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "No hay índice que validar: es una vista DESCRIPTIVA del PIB por sectores de origen, sin score sintético ni proyección. Su verificación es contable —la suma de contribuciones reconcilia con el crecimiento del VAB— y corre en el conector, no en un backtest de discriminación.",
+       "desenlace": null,
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.249681"
+     "computed_at": "2026-08-19T20:05:22.293601"
     }
    ]
   },
@@ -1072,12 +1408,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891)."
+      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de las 10 regiones de desarrollo. Un Gate E temporal no aplica: el IDM es un índice relativo cuyas variables nacionales normalizan plano, así que se valida contra una medida independiente del mismo período.",
+       "desenlace": "IDH regional del PNUD (validez CONVERGENTE, no backtest temporal)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "social_dev"
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.677091"
+     "computed_at": "2026-08-19T20:05:22.632942"
     },
     {
      "tier": "insight",
@@ -1094,12 +1438,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "2 secciones · render genérico",
-      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891)."
+      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de las 10 regiones de desarrollo. Un Gate E temporal no aplica: el IDM es un índice relativo cuyas variables nacionales normalizan plano, así que se valida contra una medida independiente del mismo período.",
+       "desenlace": "IDH regional del PNUD (validez CONVERGENTE, no backtest temporal)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "social_dev"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:44.782934"
+     "computed_at": "2026-08-19T20:05:23.015249"
     },
     {
      "tier": "deep_dive",
@@ -1116,12 +1468,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891)."
+      "g5": "approved=True · score=0.75 · Validez convergente contra el IDH regional del PNUD (ρ=0.891).",
+      "backtest": {
+       "tiene_motor": true,
+       "motivo": "Corte transversal de las 10 regiones de desarrollo. Un Gate E temporal no aplica: el IDM es un índice relativo cuyas variables nacionales normalizan plano, así que se valida contra una medida independiente del mismo período.",
+       "desenlace": "IDH regional del PNUD (validez CONVERGENTE, no backtest temporal)",
+       "obstaculo": null,
+       "dato_que_falta": null,
+       "eje_motor": "social_dev"
+      }
      },
      "threshold": 0.85,
      "can_activate": true,
      "is_active": true,
-     "computed_at": "2026-08-19T16:31:45.156134"
+     "computed_at": "2026-08-19T20:05:23.316240"
     }
    ]
   },
@@ -1147,12 +1507,20 @@
       "g2": "motor operativo",
       "g3": "1 templates declarados",
       "g4": "1 secciones · render genérico",
-      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion."
+      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El «desenlace» de una ley es el cumplimiento de las metas que ella misma se fijó, y eso es exactamente lo que el eje mide: compararlos no valida nada. Lo que sí se verifica —y bloquea el producto si falta— es que cada binding esté contrastado contra la fuente oficial: sin bindings verificados el informe no afirma cumplimiento.",
+       "desenlace": null,
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.75,
      "can_activate": true,
      "is_active": false,
-     "computed_at": "2026-08-19T16:31:45.172487"
+     "computed_at": "2026-08-19T20:05:23.342536"
     },
     {
      "tier": "insight",
@@ -1169,12 +1537,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "3 secciones · render genérico",
-      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion."
+      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El «desenlace» de una ley es el cumplimiento de las metas que ella misma se fijó, y eso es exactamente lo que el eje mide: compararlos no valida nada. Lo que sí se verifica —y bloquea el producto si falta— es que cada binding esté contrastado contra la fuente oficial: sin bindings verificados el informe no afirma cumplimiento.",
+       "desenlace": null,
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": false,
      "is_active": false,
-     "computed_at": "2026-08-19T16:31:45.175150"
+     "computed_at": "2026-08-19T20:05:23.344654"
     },
     {
      "tier": "deep_dive",
@@ -1191,12 +1567,20 @@
       "g2": "motor operativo",
       "g3": "2 templates declarados",
       "g4": "4 secciones · render genérico",
-      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion."
+      "g5": "approved=True · score=1.00 · Registro contrastado contra el articulado. Sin bindings verificados el informe no mide cumplimiento: corré /bindings/verificacion.",
+      "backtest": {
+       "tiene_motor": false,
+       "motivo": "El «desenlace» de una ley es el cumplimiento de las metas que ella misma se fijó, y eso es exactamente lo que el eje mide: compararlos no valida nada. Lo que sí se verifica —y bloquea el producto si falta— es que cada binding esté contrastado contra la fuente oficial: sin bindings verificados el informe no afirma cumplimiento.",
+       "desenlace": null,
+       "obstaculo": "autoreferencial",
+       "dato_que_falta": null,
+       "eje_motor": null
+      }
      },
      "threshold": 0.85,
      "can_activate": false,
      "is_active": false,
-     "computed_at": "2026-08-19T16:31:45.177561"
+     "computed_at": "2026-08-19T20:05:23.346693"
     }
    ]
   }
