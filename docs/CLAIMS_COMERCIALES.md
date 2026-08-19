@@ -124,6 +124,17 @@ desaparecer — un veto silencioso se lee como que el eje no tiene validación.
    más deterioro que las dos siguientes) y ninguna superficie la presenta como ordenamiento.
    No entra a material comercial.
 
+### Qué número de banca se cita
+
+La tabla de credenciales lidera con la **señal**, no con el agregado, y hay que citarla así:
+
+- ✅ **Gini 0,2287 · IC [0,147 · 0,311] · n=1.693 · 250 eventos, señal «resultados»** — la
+  discriminación contra pérdidas sostenidas, que es la señal concluyente del eje.
+- ⚠️ El **agregado 0,1615** sigue siendo correcto y es el que citó el deck, pero **solo se
+  puede usar diciendo de qué está hecho** (83 % resultados · 22 % crédito · 0 % solvencia).
+  Solo, se lee como discriminación de riesgo de crédito, que es donde el score falla.
+- ❌ **Nunca** «Gini 0,16 contra quiebras». El desenlace es distress, no quiebra.
+
 ### Y el catálogo son 16 ejes
 
 Fuente canónica: `shared/products/registry.py::PRODUCT_CATALOG`. El «14» era correcto el
