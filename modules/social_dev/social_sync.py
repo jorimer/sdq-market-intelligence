@@ -668,6 +668,24 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         _upsert_indicator(db, theme=theme, entity=region, period=period,
                           value=r.value, source="ONE", disagg="region", unit=r.unit)
         synced += 1
+
+    # ── DERIVADO, y TEMPRANO a propósito ────────────────────────────────────────────────
+    # Los conteos de los indicadores 2.2 y 2.5 solo necesitan el panel regional que se acaba
+    # de persistir arriba. Nada de lo que viene después los alimenta.
+    #
+    # Estuvieron al final, que parecía lo natural —«que lean todo lo escrito»— y era el peor
+    # lugar posible: Railway REINICIA las tareas largas de este servicio, la sync muere
+    # durante SIUBEN (3.456 filas provinciales) y todo lo no comiteado se pierde. Tres
+    # corridas seguidas terminaron en «interrumpido por reinicio» sin llegar nunca acá.
+    #
+    # Con su propio commit, los conteos sobreviven a que el resto de la corrida se caiga. Es
+    # la diferencia entre depender de que la sync entera termine y depender solo de su
+    # primera fase.
+    conteos_synced = _best_effort(
+        "conteos regionales de pobreza (2.2 y 2.5)",
+        lambda: _sync_conteos_regionales(db, set_phase), errors)
+    db.commit()
+
     health_synced = _best_effort(
         "salud nacional (WDI)", lambda: _sync_wdi_health(db, set_phase), errors)
     informality_synced = _best_effort(
@@ -705,18 +723,6 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     provincial_synced = _best_effort(
         "indicadores provinciales (SIUBEN)",
         lambda: _sync_siuben_provincial(db, set_phase, provenance), errors)
-    # DERIVADO: lee el panel regional que las sub-syncs anteriores acaban de escribir y lo
-    # cuenta. Va después de ellas y ANTES del commit — dentro de la misma transacción ve lo
-    # recién escrito, y sale persistido junto con todo lo demás.
-    #
-    # Estuvo un rato del OTRO lado del commit, y el modo de fallar fue el peor: los 50
-    # upserts ocurrían, el contador devolvía 50, ningún error se levantaba, y las filas se
-    # perdían al cerrar la sesión. El test de idempotencia no lo vio porque consulta con la
-    # MISMA sesión, donde lo no comiteado igual se ve. Solo apareció al pedirle el dato al
-    # registro en producción, que usa otra sesión.
-    conteos_synced = _best_effort(
-        "conteos regionales de pobreza (2.2 y 2.5)",
-        lambda: _sync_conteos_regionales(db, set_phase), errors)
     db.commit()
 
     return {
