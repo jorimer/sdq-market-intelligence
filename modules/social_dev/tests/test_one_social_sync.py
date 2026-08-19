@@ -58,6 +58,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     for _fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_bcrd_mercado_laboral",
                 "_sync_cepal_politica",
                 "_sync_ipu_senado",
+                "_sync_exportaciones_per_capita",
                 "_sync_sisdom_income",
                 "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
                 "_sync_endesa_child_mortality",
@@ -69,8 +70,14 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
     assert first["synced"] > 0
     assert first["regions"] == 10
     assert "poverty_rate" in first["themes"]
+    # Las filas de la base son las del panel regional MÁS las derivadas: los conteos de los
+    # indicadores 2.2 y 2.5 se computan sobre ese mismo panel y se persisten como serie
+    # nacional propia. `synced` cuenta solo la ingesta de la ONE, así que sumarlas explícita
+    # es lo que vuelve al test capaz de detectar una escritura que nadie declaró.
+    assert first["conteos_regionales_synced"] > 0, (
+        "el panel del fixture está completo: los conteos derivados tienen que salir")
     n1 = db.query(SocialIndicator).count()
-    assert n1 == first["synced"]
+    assert n1 == first["synced"] + first["conteos_regionales_synced"]
 
     second = one_social_sync(db)          # upsert in place — no duplicates
     assert db.query(SocialIndicator).count() == n1
@@ -702,8 +709,12 @@ def test_todo_sub_sync_de_red_esta_sustituido_en_el_test_de_idempotencia():
     arbol = ast.parse(inspect.getsource(social_sync))
     definidos = {n.name for n in ast.walk(arbol)
                  if isinstance(n, ast.FunctionDef) and n.name.startswith("_sync_")}
-    # Los que este test SÍ deja correr: leen del fixture comiteado, no de la red.
-    locales = {"_sync_one_regional"}
+    # Los que este test SÍ deja correr: NO tocan la red.
+    #   `_sync_one_regional`          lee del fixture comiteado.
+    #   `_sync_conteos_regionales`    computa sobre las filas que las otras sub-syncs
+    #                                 dejaron en la base — es justamente lo que hay que
+    #                                 ejercitar de verdad para saber que el conteo cuadra.
+    locales = {"_sync_one_regional", "_sync_conteos_regionales"}
     fuente = inspect.getsource(test_sync_persists_and_is_idempotent)
     sin_sustituir = sorted(n for n in definidos - locales if f'"{n}"' not in fuente)
     assert not sin_sustituir, (
