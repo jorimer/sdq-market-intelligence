@@ -54,8 +54,20 @@ class Comprobacion:
 
 
 #: Tipos cuyo corpus el emisor declara COMPLETO en algún rango, y por tanto los únicos
-#: sobre los que un vacío puede llegar a afirmar «no se dictó». Reglamentos y resoluciones
-#: están sin medir: toda respuesta vacía sobre ellos es «no se localizó registro».
+#: sobre los que un vacío puede llegar a afirmar «no se dictó».
+#:
+#: **Una obligación de REGLAMENTAR se consulta con `tipo: decreto`.** En la práctica
+#: dominicana el reglamento se dicta por decreto —el propio 134-14 lo prueba, su título
+#: empieza «QUE DICTA EL REGLAMENTO DE APLICACION DE LA LEY ORGANICA NO. 1-12»—. El emisor
+#: corrigió el 2026-08-19 un fallo por el que `tipo=decreto` NO devolvía los reglamentos que
+#: su corpus clasificaba aparte: eran 38, y 18 caían dentro del rango donde el alcance sale
+#: concluyente. Una consulta por uno de esos 18 devolvía vacío CONCLUYENTE sobre una norma
+#: que existía — es decir, autorizaba a publicar «no se dictó» sobre algo que sí se dictó.
+#:
+#: `reglamento` NO entra a este conjunto por ahora: el emisor confirma que el tipo es válido
+#: y resuelve al mismo instrumento, pero no que una consulta POR ESE TIPO devuelva alcance
+#: concluyente. Mientras no esté confirmado, mantenerlo afuera solo cuesta un
+#: `sin_registro_publico` de más; meterlo de menos costaría una acusación falsa.
 _TIPOS_MEDIDOS = frozenset({"ley", "decreto"})
 
 
