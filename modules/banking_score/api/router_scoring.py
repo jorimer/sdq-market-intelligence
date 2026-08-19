@@ -1022,12 +1022,13 @@ async def get_backtest_report(
 ):
     import json
     from shared.settings.models import AppSetting
+    from shared.validation.frescura import con_frescura
     from modules.banking_score.operations import BACKTEST_REPORT_KEY
 
     row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_REPORT_KEY).first()
     if row and row.value:
         try:
-            return {"computed": True, **json.loads(row.value)}
+            return {"computed": True, **con_frescura(json.loads(row.value), "banking_score", db)}
         except (ValueError, TypeError):
             pass
     return {

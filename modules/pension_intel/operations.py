@@ -3,6 +3,43 @@ from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.frescura import MotorValidacion, registrar_motor
+
+BACKTEST_KEY = "pension_backtest_report"
+
+# Las tres series que el backtest del ISA consume (solvencia + rentabilidad).
+_SERIES_BACKTEST = ("patrimonio", "activos_totales", "rentabilidad_nominal_anual")
+
+
+def huella_backtest(db) -> Dict:
+    """Estado del insumo del backtest del ISA: las series por AFP que lo alimentan."""
+    from sqlalchemy import func
+
+    from modules.pension_intel.models.models import PensionSeries
+
+    r = (db.query(func.count(PensionSeries.id), func.max(PensionSeries.period),
+                  func.sum(PensionSeries.value))
+         .filter(PensionSeries.series_code.in_(_SERIES_BACKTEST),
+                 PensionSeries.entity_slug.isnot(None)).one())
+    return {"series_n": r[0], "series_hasta": r[1], "series_suma": r[2]}
+
+
+def persistir_backtest(db, rep: Dict) -> Dict:
+    """Sella y persiste el reporte del backtest del ISA. Una sola puerta de escritura."""
+    import json as _json
+
+    from shared.settings.models import AppSetting
+    from shared.validation.frescura import sellar
+
+    sellar(rep, "pension_intel", db)
+    row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_KEY).first()
+    payload = _json.dumps(rep, ensure_ascii=False)
+    if row:
+        row.value, row.is_secret = payload, False
+    else:
+        db.add(AppSetting(key=BACKTEST_KEY, value=payload, is_secret=False))
+    db.commit()
+    return rep
 
 
 def _run_sipen_sync(params, user_id, set_phase) -> Dict:
@@ -41,21 +78,11 @@ def _run_sipen_audited_probe(params, user_id, set_phase) -> Dict:
 
 
 def _run_pension_backtest(params, user_id, set_phase) -> Dict:
-    import json
-
     from modules.pension_intel.validation.backtest import build_backtest_report
-    from shared.settings.models import AppSetting
     db = SessionLocal()
     try:
         set_phase("Derivando observaciones y computando Gini (IC bootstrap)")
-        rep = build_backtest_report(db)
-        row = db.query(AppSetting).filter(AppSetting.key == "pension_backtest_report").first()
-        payload = json.dumps(rep, ensure_ascii=False)
-        if row:
-            row.value, row.is_secret = payload, False
-        else:
-            db.add(AppSetting(key="pension_backtest_report", value=payload, is_secret=False))
-        db.commit()
+        rep = persistir_backtest(db, build_backtest_report(db))
         sig = rep.get("signals") or {}
         return {"computed": rep.get("computed"), "headline_gini": rep.get("headline_gini"),
                 "headline_signal": rep.get("headline_signal"),
@@ -128,6 +155,7 @@ def register() -> None:
         "del sistema. Dato público real (muestra citada en F0; canales live "
         "—CKAN/XLSX/boletín— en fases siguientes). Trimestral.",
         _run_sipen_sync, default_interval_hours=2160,  # trimestral → cadencia larga
+        triggers=["pension-backtest"],  # rentabilidad nueva → re-validar el ISA
     ))
     register_operation(Operation(
         "sipen-financials-sync", "Sincronizar estados financieros AFP (SIPEN)",
@@ -137,6 +165,7 @@ def register() -> None:
         "SOLVENCIA del ISA y, con ella, la banda absoluta. Corre desde Railway (egress "
         "de IPs estáticas + UA de navegador). También hay carga manual en la sección Datos.",
         _run_financials_sync, default_interval_hours=2160,  # trimestral
+        triggers=["pension-backtest"],  # solvencia nueva → re-validar el ISA
     ))
     register_operation(Operation(
         "sipen-financials-history-sync", "Ingerir historia de estados AUDITADOS (SIPEN)",
@@ -148,6 +177,7 @@ def register() -> None:
         "Correr cuando: haga falta (re)ingerir el histórico de auditados de las AFP (backfill "
         "puntual con OCR+IA), típicamente antes de un pension-backtest.",
         _run_financials_history_sync, default_interval_hours=0,
+        triggers=["pension-backtest"],  # es el insumo del Gate E: re-validar al terminar
     ))
     register_operation(Operation(
         "pension-backtest", "Backtest de validación del ISA (resultado-proxy)",
@@ -159,6 +189,11 @@ def register() -> None:
         "Correr cuando: revalides el ISA (nuevos períodos o cambio de modelo); requiere el "
         "history-sync antes.",
         _run_pension_backtest, default_interval_hours=0,
+    ))
+    registrar_motor(MotorValidacion(
+        eje="pension_intel", operacion="pension-backtest", clave=BACKTEST_KEY,
+        partes=huella_backtest,
+        disparado_por=("sipen-sync", "sipen-financials-sync", "sipen-financials-history-sync"),
     ))
     register_operation(Operation(
         "sipen-cartera-sync", "Sincronizar cartera de inversiones (SIPEN)",

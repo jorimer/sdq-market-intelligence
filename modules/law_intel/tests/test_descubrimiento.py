@@ -51,11 +51,36 @@ class TestQueSeConsulta:
         ids = {c.indicador for c in consultas("end_2030")}
         assert not (medidos & ids), "ya tienen binding verificado"
 
-    def test_no_se_reabre_una_fuente_ya_descartada(self):
+    def test_no_se_reabre_un_indicador_descartado(self):
         """Su problema no es falta de fuente: es que la evaluada no mide lo que el eje
-        afirma. Volver a proponerle algo sería re-abrir una decisión documentada."""
+        afirma. Volver a proponerle algo sería re-abrir una decisión documentada.
+
+        El 3.9 lo sigue siendo: su emisor (WEF) dejó de publicar en 2020 y no hay serie que
+        proponer. El 3.26 salió de esta lista y NO por relajar el criterio — ver abajo."""
         ids = {c.indicador for c in consultas("end_2030")}
-        assert "3.26" not in ids and "3.9" not in ids
+        assert "3.9" not in ids
+
+    def test_rechazar_una_SERIE_no_agota_al_indicador(self):
+        """La distinción que costó entender: un descarte es sobre un CANDIDATO.
+
+        El 3.26 tenía rechazado el ingreso familiar mensual, y la serie que la ley nombra
+        —INB per cápita por método Atlas— existía todo el tiempo en otro emisor. Tratar al
+        indicador como agotado nos habría mantenido ciegos indefinidamente: hoy está
+        VERIFICADO, midiendo 10.620 US$ en 2025.
+
+        El test comprueba la propiedad y no el caso, porque el caso ya avanzó: la constancia
+        del candidato rechazado sobrevive a la promoción, y toda consulta lleva los suyos."""
+        from modules.law_intel.bindings import cargar_bindings
+        bs = cargar_bindings("end_2030")
+        assert any(b.candidatos_descartados for b in bs.values()), (
+            "el registro acumulativo de candidatos rechazados no puede quedar vacío")
+        assert "social_dev:income_per_capita" in {
+            c["serie"] for c in bs["3.26"].candidatos_descartados}, (
+            "promover el indicador no puede borrar el rechazo de la serie que no servía")
+        for c in consultas("end_2030"):
+            b = bs.get(c.indicador)
+            esperado = tuple(x["serie"] for x in (b.candidatos_descartados if b else ()))
+            assert c.excluir == esperado, f"{c.indicador} no arrastra sus rechazos"
 
     def test_todas_las_consultas_del_expediente_son_utiles(self):
         r = resumen(consultas("end_2030"))

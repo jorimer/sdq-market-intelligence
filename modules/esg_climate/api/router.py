@@ -65,11 +65,13 @@ async def backtest(
 ) -> Dict[str, Any]:
     import json
 
+    from modules.esg_climate.operations import ESG_BACKTEST_KEY
     from shared.settings.models import AppSetting
-    row = db.query(AppSetting).filter(AppSetting.key == "esg_backtest_report").first()
+    from shared.validation.frescura import con_frescura
+    row = db.query(AppSetting).filter(AppSetting.key == ESG_BACKTEST_KEY).first()
     if not row or not row.value:
         return {"computed": False, "message": "Aún no hay backtest. Corre la operación «Backtest del IRC climático»."}
-    return json.loads(row.value)
+    return con_frescura(json.loads(row.value), "esg_climate", db)
 
 
 @router.get("/indicators", summary="IRC por país (panel Caribe/LatAm, más resiliente primero)")

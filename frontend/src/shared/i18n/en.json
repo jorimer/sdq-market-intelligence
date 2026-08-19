@@ -1835,6 +1835,20 @@
     }
   },
   "ops": {
+    "frescura": {
+      "colEje": "Axis",
+      "colEstado": "State",
+      "colFecha": "Computed",
+      "colMotivo": "Detail",
+      "empty": "No axis declares a validation engine.",
+      "indeterminado": "Undetermined",
+      "noCubre": "Fingerprint does not cover",
+      "obsoleto": "Stale",
+      "sinReporte": "No persisted report",
+      "sub": "Whether each axis's figure still matches the input that produced it",
+      "title": "Validation freshness",
+      "vigente": "Current"
+    },
     "cadence": {
       "daily": "Daily",
       "weekly": "Weekly",

@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "12.0"
+version: "14.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -90,23 +90,30 @@ bindings:
   # ══ RESUELTO ══ El indicador es ANALFABETISMO y la variable es alfabetización.
   # La transformación se declara; sin ella el binding publicaría el complemento.
   - indicador: "2.19"
-    serie: "social_dev:literacy_rate"
-    fuente: one
+    serie: "social_dev:literacy_rate_pais"
+    fuente: wdi
     mejor: menor
     transformacion: complemento_100
     periodo_verificado: "2024"
-    estado: propuesto
-    nota_comparabilidad: >-
+    estado: verificado
+    nota: >-
+      ══ RE-ATADO 2026-08-19 ══ Cambia de FUENTE, no de concepto. Estaba demotado porque
+      `social_dev:literacy_rate` se mide por región y el registro publicaba el valor de una
+      sola demarcación contra una meta nacional; la serie del Banco Mundial es el AGREGADO
+      del país, que es exactamente lo que faltaba.
+      Comprobado contra la línea base de la propia ley ANTES de escribir el conector: la END
+      fija 10,5% de analfabetismo para 2010 y la fuente da 89,54% de alfabetización ese año
+      → complemento 10,46. Δ 0,4%.
+      La nota de la democión queda abajo, porque explica por qué la fuente anterior no servía:
       ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
       valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
       indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
       nada — y el número que se publicó era el de una demarcación. No se arregla
       promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
-      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
-    nota: >-
-      «Tasa de alfabetización» = 93,7% en 2024 → analfabetismo 6,3%. La meta legal es un
-      UMBRAL («< 4%»), así que el indicador no admite delta: se cumple o no se cumple, y con
-      6,3% no se cumple.
+      El agregado nacional llegó, y es esta serie.
+      Y sigue valiendo lo que ya estaba escrito sobre cómo se juzga: la meta legal es un
+      UMBRAL («< 4%»), así que el indicador no admite delta — se cumple o no se cumple.
+      Verificado en prod 2026-08-19: **5,97% de analfabetismo en 2024** tras el complemento, contra un umbral legal de «< 4%». Sigue sin cumplirse, pero ahora se mide con la cifra del país y no con la de una región.
 
   # ══ RECUPERADO ══ La cifra nacional estaba en el mismo cuadro que ya bajábamos.
   - indicador: "2.18"
@@ -448,16 +455,32 @@ bindings:
       dos, que es exactamente lo que vuelve peligrosa la confusión.
 
   - indicador: "3.26"
-    serie: "social_dev:income_per_capita"
-    fuente: one
+    serie: "social_dev:gni_per_capita_atlas"
+    fuente: wdi
     mejor: mayor
-    estado: descartado
-    motivo_descarte: >-
-      La variable del panel es «Ingreso familiar MENSUAL por persona» (SISDOM/MEPyD, en pesos,
-      19.607 en 2024). El indicador legal es Ingreso Nacional Bruto per cápita ANUAL en
-      dólares por método Atlas (línea base 4.460 en 2008, meta 2030 de 12.454). Distinta
-      unidad, distinta periodicidad y distinto concepto — ingreso de hogares contra ingreso
-      nacional. Atarlos produciría una comparación sin significado.
+    periodo_verificado: "2025"
+    estado: verificado
+    # El descarte anterior NO se pierde al atar la serie buena: queda como candidato
+    # rechazado, con su motivo, para que ningún barrido futuro lo vuelva a proponer.
+    candidatos_descartados:
+      - serie: "social_dev:income_per_capita"
+        motivo: >-
+          «Ingreso familiar MENSUAL por persona» (SISDOM/MEPyD, en pesos, 19.607 en 2024)
+          contra un indicador legal que es Ingreso Nacional Bruto per cápita ANUAL en
+          dólares por método Atlas. Distinta unidad, distinta periodicidad y distinto
+          concepto — ingreso de hogares contra ingreso nacional.
+    nota: >-
+      ══ RE-ATADO 2026-08-19 ══ El descarte anterior NO se revierte: sigue siendo cierto que
+      `social_dev:income_per_capita` (ingreso familiar mensual por persona, SISDOM, en pesos)
+      no mide este indicador. Lo que cambia es que ahora existe la serie que sí: INB per
+      cápita por método ATLAS en dólares corrientes, que es literalmente el método que la ley
+      nombra en el texto del indicador.
+      Comprobado contra la línea base: la ley fija 4.460 US$ para 2008 y la fuente da 4.700 —
+      Δ 5,4%, compatible con las revisiones que el emisor aplica a sus series históricas de
+      INB. Queda registrado el motivo por el que la serie de hogares no servía:
+      «distinta unidad, distinta periodicidad y distinto concepto — ingreso de hogares contra
+      ingreso nacional».
+      Verificado en prod 2026-08-19: **10.620 US$ de INB per cápita en 2025**, contra una base legal de 4.460 en 2008 y una meta de 12.454 para 2030.
 
   - indicador: "3.9"
     serie: "wef.indice_global_competitividad.rd"
@@ -500,3 +523,139 @@ bindings:
       La duda que quedaba abierta era si el sync trae filas —la ONE está tras Cloudflare y
       desde fuera no se podía afirmar—. Se respondió contra producción, no a mano:
       `/bindings/verificacion` devolvió `promueve: true` con período 2024.
+
+  # ══════════════════════════════════════════════════════════════════════════════════════
+  # LOTE 2026-08-19 — siete indicadores atados de una vez, y qué lo hizo posible
+  #
+  # Hasta acá cada fuente costaba un ciclo entero: escribir el conector, desplegar,
+  # sincronizar, y RECIÉN AHÍ descubrir si la serie medía lo que el indicador dice medir.
+  # El error se pagaba al final y completo.
+  #
+  # La ley trae su propio oráculo y no lo estábamos usando: declara VALOR y AÑO de línea
+  # base para 67 de los 77 indicadores sin verificar. Una serie candidata que no reproduce
+  # ese valor en ese año no mide lo que el indicador mide. La sonda hace esa comprobación
+  # contra la fuente viva en segundos, sin desplegar nada.
+  #
+  # El barrido de los 67 devolvió: 11 candidatos plausibles, 8 descartados por concepto —el
+  # 2.37 pide desocupación AMPLIADA y el emisor da la abierta de la OIT; el 2.48 pide
+  # jóvenes DESEMPLEADOS y el emisor da NEET, que incluye inactivos— y 39 sin serie
+  # internacional de ningún emisor.
+  #
+  # ── EL LÍMITE DE LA SONDA, APRENDIDO EN ESTE MISMO LOTE ──
+  # De los 11 plausibles, DOS (2.34 saneamiento y 2.35 agua) ya estaban descartados en este
+  # expediente, con un argumento que la sonda no puede ver: el JMP cambió su escala en 2015
+  # y la cercanía de niveles es JUSTAMENTE lo que haría pasar ese cambio de definición por
+  # un dato comparable. La sonda mide coincidencia de NIVEL; el descarte era de DEFINICIÓN.
+  # Se respetan los descartes. Si esto se automatizara, habría reintroducido dos bindings
+  # que alguien ya había rechazado con razón.
+  #
+  # Por eso los siete entran como `propuesto`: la sonda comprueba el CONCEPTO contra la
+  # línea base, no la plomería. Que producción sirva la serie es otra cosa — el 2.19 lo
+  # prueba, su serie existía y el registro publicaba una región.
+  # ══════════════════════════════════════════════════════════════════════════════════════
+
+  - indicador: "1.8"
+    serie: "social_dev:homicide_rate"
+    fuente: wdi
+    mejor: menor
+    periodo_verificado: "2023"
+    estado: verificado
+    nota: >-
+      Homicidios intencionales por 100.000 habitantes (Banco Mundial, a partir de UNODC).
+      La ley fija 24,8 para 2008 y la fuente da 25,007 ese año — Δ 0,8%, la coincidencia más
+      limpia del lote y el único indicador del eje 1 que llega a medirse.
+      Verificado en prod 2026-08-19: **10,92 homicidios por 100.000 en 2023**, contra una base legal de 24,8 en 2008 y metas de 15 (2020), 10 (2025) y 4 (2030). Es el indicador que más se acercó a su meta de todo el expediente.
+
+  - indicador: "2.27"
+    serie: "social_dev:undernourishment"
+    fuente: wdi
+    mejor: menor
+    periodo_verificado: "2023"
+    estado: verificado
+    nota: >-
+      Prevalencia de subalimentación (FAO vía Banco Mundial), que es el mismo concepto que
+      la ley nombra: «proporción de la población que no alcanza el mínimo de energía
+      alimentaria». La ley fija 21,0 para 2005 y la fuente da 21,3 — Δ 1,4%.
+      Verificado en prod 2026-08-19: **3,6% de subalimentación en 2023**, contra una base legal de 21,0 en 2005. La caída es de las más grandes del expediente.
+
+  # Las TRES desnutriciones miden cosas distintas —peso/edad, peso/talla, talla/edad— y
+  # ninguna transformación las convierte. La ley las fija por separado y se atan por
+  # separado. Las tres comparten año base 2007 y emisor.
+  - indicador: "2.28"
+    serie: "social_dev:malnutrition_weight_age"
+    fuente: wdi
+    mejor: menor
+    estado: propuesto
+    nota: >-
+      Desnutrición GLOBAL (peso para la edad) en menores de 5. La ley fija 3,1 para 2007 y
+      la fuente da 3,4 — Δ 9,7%, el mayor del lote. SALVEDAD: compatible con una revisión de
+      la encuesta base (ENDESA), y se declara antes de medir cualquier distancia a la meta.
+      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
+      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
+      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
+      afirmar cobertura sobre un dato de otra década.
+      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
+      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
+      módulos es la de 2019, y no hay reemplazo publicado.
+
+  - indicador: "2.29"
+    serie: "social_dev:malnutrition_weight_height"
+    fuente: wdi
+    mejor: menor
+    estado: propuesto
+    nota: >-
+      Desnutrición AGUDA (peso para la talla) en menores de 5. La ley fija 2,2 para 2007 y
+      la fuente da 2,3 — Δ 4,5%.
+      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
+      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
+      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
+      afirmar cobertura sobre un dato de otra década.
+      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
+      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
+      módulos es la de 2019, y no hay reemplazo publicado.
+
+  - indicador: "2.30"
+    serie: "social_dev:malnutrition_height_age"
+    fuente: wdi
+    mejor: menor
+    estado: propuesto
+    nota: >-
+      Desnutrición CRÓNICA (talla para la edad) en menores de 5. La ley fija 9,8 para 2007 y
+      la fuente da 10,1 — Δ 3,1%.
+      ⚠️ NO PROMUEVE — serie CONGELADA. Producción confirma que la serie existe y que su
+      último dato es de **2019**: la fuente dejó de publicar hace seis años y el motor se
+      niega —bien— a medir el corte de 2025 con eso. Publicarlo como medición vigente sería
+      afirmar cobertura sobre un dato de otra década.
+      Y el hecho es del informe, no un problema nuestro: la ley fija metas de desnutrición
+      infantil hasta 2030 y el Estado dejó de medirla en 2019. La última ENDESA con estos
+      módulos es la de 2019, y no hay reemplazo publicado.
+
+  - indicador: "2.7"
+    serie: "social_dev:gini_index"
+    fuente: wdi
+    mejor: menor
+    transformacion: centesimal
+    periodo_verificado: "2024"
+    estado: verificado
+    nota: >-
+      Índice de GINI. El emisor publica en 0-100 y la END lo fija en 0-1, así que el binding
+      declara `centesimal`; sin eso se contrastaría 47,3 contra una meta de 0,45 y el
+      semáforo erraría por un factor de cien. La ley fija 0,49 para 2010 y la fuente da 0,473
+      tras la conversión — Δ 3,5%.
+      Verificado en prod 2026-08-19: **GINI 0,39 en 2024** tras la conversión centesimal, contra una base legal de 0,49 en 2010.
+
+  - indicador: "3.25"
+    serie: "social_dev:tax_revenue_gdp"
+    fuente: wdi
+    mejor: mayor
+    estado: propuesto
+    nota: >-
+      Presión tributaria. La ley fija 13,0 para 2010 y la fuente da 12,22 — Δ 6,0%.
+    nota_comparabilidad: >-
+      DUDA ABIERTA, no resuelta: el Banco Mundial reporta ingresos tributarios del gobierno
+      CENTRAL y la cifra dominicana de presión tributaria a veces incluye la seguridad
+      social. Si el universo difiere, la brecha es estructural y no de revisión — y el
+      indicador mediría un agregado distinto del que la ley fijó. Mientras no se resuelva
+      contra la fuente primaria (Hacienda/DGII), NO cuenta como medición.
+      Es exactamente la lección del 2.34 aplicada antes de tropezar: un nivel parecido es lo
+      que vuelve invisible una diferencia de definición.

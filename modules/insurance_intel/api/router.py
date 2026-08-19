@@ -576,19 +576,9 @@ async def trigger_backtest(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ):
-    import json
-
+    from modules.insurance_intel.operations import persistir_backtest
     from modules.insurance_intel.validation.backtest import build_backtest_report
-    from shared.settings.models import AppSetting
-    rep = build_backtest_report(db)
-    row = db.query(AppSetting).filter(AppSetting.key == "insurance_backtest_report").first()
-    payload = json.dumps(rep, ensure_ascii=False)
-    if row:
-        row.value, row.is_secret = payload, False
-    else:
-        db.add(AppSetting(key="insurance_backtest_report", value=payload, is_secret=False))
-    db.commit()
-    return rep
+    return persistir_backtest(db, build_backtest_report(db))
 
 
 @router.get("/validation")
@@ -604,8 +594,11 @@ async def validation(
     """
     import json
 
+    from modules.insurance_intel.operations import BACKTEST_KEY
     from modules.insurance_intel.scoring.coherencia_resultado import revisar_panel
     from shared.settings.models import AppSetting
-    row = db.query(AppSetting).filter(AppSetting.key == "insurance_backtest_report").first()
-    return {"backtest": json.loads(row.value) if row and row.value else None,
+    from shared.validation.frescura import con_frescura
+    row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_KEY).first()
+    rep = json.loads(row.value) if row and row.value else None
+    return {"backtest": con_frescura(rep, "insurance_intel", db) if rep else None,
             "coherencia_resultado": revisar_panel(db)}

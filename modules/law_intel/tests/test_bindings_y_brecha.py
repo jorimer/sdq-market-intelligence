@@ -181,16 +181,34 @@ class TestLasCuatroDudasResueltas:
         assert "2022" in (b.nota or ""), "el corte metodológico no puede quedar sin declarar"
 
     def test_analfabetismo_lleva_su_transformacion(self):
+        """La transformación sigue siendo obligatoria: la ley pide ANALFABETISMO y el emisor
+        publica alfabetización. Sin declararla, el binding publica el valor invertido.
+
+        Lo que cambió (2026-08-19) es la FUENTE, no el concepto: estaba bloqueado por medir
+        una región contra una meta nacional, y la serie del Banco Mundial es el agregado del
+        país. El bloqueo se levanta porque su causa desapareció, no porque se haya
+        flexibilizado el criterio."""
         b = cargar_bindings(EXPEDIENTE)["2.19"]
         assert b.transformacion == "complemento_100"
-        # Su nota abierta es la del alcance regional, no la de la transformación: la
-        # dirección quedó resuelta y declarada.
-        assert "REGIÓN" in (b.nota_comparabilidad or "").upper()
+        assert b.serie.endswith("_pais"), "la serie tiene que ser el AGREGADO nacional"
+        assert not b.nota_comparabilidad, (
+            "resuelto el alcance, no queda duda abierta que justifique frenarlo")
+        assert "10,46" in (b.nota or ""), (
+            "la comprobación contra la línea base de la ley se declara, no se recuerda")
 
-    def test_el_ingreso_queda_descartado_con_su_motivo(self):
+    def test_el_ingreso_de_HOGARES_sigue_rechazado_aunque_el_indicador_ya_se_mida(self):
+        """El descarte era sobre un CANDIDATO, no sobre el indicador, y esa distinción no se
+        veía mientras hubo una sola serie evaluada.
+
+        Al aparecer la que la ley nombra —INB per cápita por método Atlas— el modelo viejo
+        obligaba a borrar el descarte para poder atarla, y con él se iba la constancia que
+        impide que alguien vuelva a proponer el ingreso de hogares. Ahora el registro es
+        ACUMULATIVO: el indicador se mide Y el candidato rechazado sigue rechazado."""
         b = cargar_bindings(EXPEDIENTE)["3.26"]
-        assert b.estado == "descartado"
-        m = b.motivo_descarte or ""
+        assert b.serie == "social_dev:gni_per_capita_atlas"
+        rechazados = {c["serie"]: c["motivo"] for c in b.candidatos_descartados}
+        assert "social_dev:income_per_capita" in rechazados
+        m = rechazados["social_dev:income_per_capita"]
         assert "MENSUAL" in m and "Atlas" in m, "el motivo nombra las dos magnitudes"
 
     def test_las_dudas_de_COMPARABILIDAD_originales_quedaron_resueltas(self):
@@ -204,10 +222,13 @@ class TestLasCuatroDudasResueltas:
         bs = cargar_bindings(EXPEDIENTE)
         assert not (bs["2.21"].nota_comparabilidad or "").strip()
         # 2.18 salió de la lista: se recuperó apuntando a la cifra nacional del SISDOM.
-        for i in ("2.4", "2.19"):
-            nota = (bs[i].nota_comparabilidad or "").upper()
-            assert "REGIÓN" in nota, f"{i} bloquea por un motivo que no es el de alcance"
+        nota = (bs["2.4"].nota_comparabilidad or "").upper()
+        assert "REGIÓN" in nota, "2.4 bloquea por un motivo que no es el de alcance"
+        # 2.18 y 2.19 se recuperaron por el MISMO camino en momentos distintos: dejar de
+        # leer una variable por-región y atarse al agregado nacional del país. Que 2.19 ya
+        # no aparezca acá no es que se haya relajado el criterio: es que su causa murió.
         assert bs["2.18"].cuenta, "2.18 se recuperó con la serie nacional"
+        assert not bs["2.19"].nota_comparabilidad, "2.19 se recuperó con la serie nacional"
 
 
 class TestLasSenalesQueYaEstabanExpuestas:
@@ -286,14 +307,34 @@ class TestLaFrescuraDeclarada:
         # `meta_rd_2036` está cargado como segundo expediente y no tiene bindings.
         assert _antiguedad_del_dato("meta_rd_2036") is None
 
-    def test_la_frescura_declarada_le_devuelve_al_producto_el_factor_entero(self):
-        """El punto de todo esto: sin período el readiness multiplicaba la cobertura por
-        0,5, así que cada indicador medido rendía la mitad. Con 2024 declarado y cadencia
-        anual (pleno hasta dos años), el factor es 1,0 y `pulse` pasa a exigir 15 de 90 en
-        vez de 30."""
+    def test_declarar_el_periodo_vale_MUCHO_mas_que_no_declararlo(self):
+        """El punto de todo esto: sin período el readiness multiplica la cobertura por 0,5,
+        así que cada indicador medido rinde la mitad.
+
+        Se comprueba contra el 0,5 del «sin declarar» y NO contra un 1,0 literal: el factor
+        exacto depende del dato más viejo del expediente y baja legítimamente cuando entra
+        un indicador medido con datos de hace tres años. Fijar el 1,0 hacía fallar el test
+        por AVANZAR — pasó al atar homicidios (2023) y subalimentación (2023), que son
+        mediciones buenas y viejas a la vez."""
         from shared.products.readiness import _freshness_factor
         from modules.law_intel.products import _antiguedad_del_dato
-        assert _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual") == 1.0
+        factor = _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual")
+        assert factor > _freshness_factor(None, "annual"), (
+            "declarar el período tiene que rendir más que no declararlo")
+        assert 0.5 < factor <= 1.0
+
+    def test_un_indicador_VIEJO_arrastra_la_frescura_del_expediente_entero(self):
+        """Es la consecuencia buscada, no un efecto colateral: si el informe se apoya en un
+        dato de 2023, el readiness tiene que castigar eso aunque el resto sea de 2025."""
+        import datetime as dt
+        from shared.products.readiness import _freshness_factor
+        from modules.law_intel.products import _antiguedad_del_dato
+
+        anios = sorted(int((b.periodo_verificado or "0")[:4])
+                       for b in cargar_bindings(EXPEDIENTE).values() if b.cuenta)
+        mas_nuevo = (dt.date.today() - dt.date(anios[-1], 12, 31)).days
+        assert _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual") <= \
+            _freshness_factor(mas_nuevo, "annual")
 
 
 class TestMercadoLaboral:

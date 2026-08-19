@@ -8,6 +8,27 @@ from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.frescura import MotorValidacion, registrar_motor
+
+IDM_VALIDITY_KEY = "idm_convergent_validity"
+
+
+def huella_convergent(db) -> Dict:
+    """Estado del insumo de la validez convergente: el IDM persistido y la referencia PNUD.
+
+    La referencia (IDHr) vive en código, no en la base, así que entra a la huella por su
+    contenido: si alguien corrige un valor del PNUD, el reporte queda obsoleto igual que si
+    hubiera cambiado el índice.
+    """
+    from sqlalchemy import func
+
+    from modules.social_dev.models.models import DevelopmentScore
+    from modules.social_dev.validation.idhr import IDHR
+
+    r = (db.query(func.count(DevelopmentScore.id), func.max(DevelopmentScore.period),
+                  func.sum(DevelopmentScore.development_score)).one())
+    return {"scores_n": r[0], "scores_hasta": r[1], "scores_suma": r[2],
+            "referencia_idhr": sorted(IDHR.items())}
 
 
 def _run_one_social_sync(params, user_id, set_phase) -> Dict:
@@ -63,22 +84,22 @@ def _run_idm_convergent_validity(params, user_id, set_phase) -> Dict:
     """Compute the IDM convergent-validity report (regional ranking vs PNUD IDHr)
     and persist it. Deterministic (reads persisted scores + committed reference)."""
     import json
-    from datetime import datetime, timezone
 
     from modules.social_dev.validation.report import build_convergent_validity
     from shared.settings.models import AppSetting
+    from shared.validation.frescura import sellar
 
     set_phase("validez convergente del IDM vs IDH regional del PNUD")
     db = SessionLocal()
     try:
         rep = build_convergent_validity(db)
-        rep["generated_at"] = datetime.now(timezone.utc).isoformat()
-        row = db.query(AppSetting).filter(AppSetting.key == "idm_convergent_validity").first()
+        sellar(rep, "social_dev", db)
+        row = db.query(AppSetting).filter(AppSetting.key == IDM_VALIDITY_KEY).first()
         payload = json.dumps(rep)
         if row:
             row.value = payload
         else:
-            db.add(AppSetting(key="idm_convergent_validity", value=payload, is_secret=False))
+            db.add(AppSetting(key=IDM_VALIDITY_KEY, value=payload, is_secret=False))
         db.commit()
         return {"spearman": rep.get("spearman"), "n_regions": rep.get("n_regions"),
                 "spearman_ci": rep.get("spearman_ci")}
@@ -100,6 +121,7 @@ def register() -> None:
         "real (pobreza ONE + salud WDI + rúbrica declarada), y purga cualquier score "
         "fuera del backfill (sin restos de fixture). Publica social.updated.",
         _run_idm_snapshot, default_interval_hours=2160,
+        triggers=["idm-convergent-validity"],  # re-puntuar el IDM → re-validar la convergencia
     ))
     register_operation(Operation(
         "one-education-extract", "Alfabetización por región (extracción IA del ENHOGAR)",
@@ -123,6 +145,11 @@ def register() -> None:
         "Pobreza, Estadísticas Vitales, Anuario Sociodemográfico), extrae el texto y "
         "genera un digest de IA, ruteado a Social/ESG. Patrón de publicaciones BCRD.",
         _run_one_publications_sync, default_interval_hours=2160,
+    ))
+
+    registrar_motor(MotorValidacion(
+        eje="social_dev", operacion="idm-convergent-validity", clave=IDM_VALIDITY_KEY,
+        partes=huella_convergent, disparado_por=("idm-snapshot",),
     ))
 
 

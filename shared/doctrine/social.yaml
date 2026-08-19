@@ -86,6 +86,20 @@ variable_scopes:
   women_mayors: national                 # CEPAL OIG 1617 (recoge de la JCE)
   women_councillors: national            # CEPAL OIG 1708 (recoge de la JCE)
   women_senate: national                 # UIP Parline DO-UC01 (cámara alta)
+  # ── LOTE 2026-08-19 · las once del expediente de la END ──────────────────────────────
+  # TODAS nacionales: son series de país del Banco Mundial con una fila por período. El
+  # alcance se declara ACÁ y en ningún otro lado — el proveedor del eje de leyes rechaza
+  # toda señal que no sea `national`, así que una omisión no publica un dato equivocado:
+  # hace desaparecer el indicador. Es el modo correcto de fallar.
+  homicide_rate: national                # WDI VC.IHR.PSRC.P5 (UNODC)
+  undernourishment: national             # WDI SN.ITK.DEFC.ZS (FAO)
+  literacy_rate_pais: national           # WDI SE.ADT.LITR.ZS — el AGREGADO, no `literacy_rate`
+  malnutrition_weight_age: national      # WDI SH.STA.MALN.ZS
+  malnutrition_weight_height: national   # WDI SH.STA.WAST.ZS
+  malnutrition_height_age: national      # WDI SH.STA.STNT.ZS
+  gini_index: national                   # WDI SI.POV.GINI — escala 0-100
+  tax_revenue_gdp: national              # WDI GC.TAX.TOTL.GD.ZS
+  gni_per_capita_atlas: national         # WDI NY.GNP.PCAP.CD
   # poverty_extreme queda en el default per_subject: la ONE la publica por las 10 regiones
   # y NO hay agregado nacional en el panel. Publicar la de una región como cifra del país
   # es exactamente el defecto que costó cinco bindings el 2026-08-16.

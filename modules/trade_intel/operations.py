@@ -5,8 +5,25 @@ from typing import Dict, Optional
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.frescura import (
+    MotorValidacion, huella_archivo, registrar_motor,
+)
 
 BACKTEST_KEY = "trade_backtest_report"
+
+
+def huella_backtest(_db) -> Dict:
+    """Estado del insumo del backtest de comercio: el panel Comtrade+WDI COMITEADO.
+
+    Es el único motor del catálogo cuyo insumo es enteramente determinístico —un fixture en
+    el árbol— así que la huella lo cubre entero: si el panel se regenera, el reporte queda
+    marcado obsoleto sin que haga falta recordar recalcularlo.
+    """
+    from shared.data import comtrade_client as cc
+    from modules.trade_intel.validation.peers import VALIDATION_PEERS
+
+    return {"panel_comtrade": huella_archivo(cc._FIXTURES_DIR / cc.FIXTURE_FILE),
+            "peers": sorted(VALIDATION_PEERS)}
 
 
 def _run_partner_chapters_sync(params, user_id, set_phase) -> Dict:
@@ -73,12 +90,14 @@ def _run_trade_backtest(params, user_id, set_phase) -> Dict:
     from modules.trade_intel.validation.report import build_backtest_report
     from shared.settings.models import AppSetting
 
+    from shared.validation.frescura import sellar
+
     set_phase("reconstruyendo panel regional de resiliencia + outcomes de shock externo")
     rep = build_backtest_report()
-    rep["generated_at"] = datetime.now(timezone.utc).isoformat()
 
     db = SessionLocal()
     try:
+        sellar(rep, "trade_intel", db)
         row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_KEY).first()
         payload = json.dumps(rep)
         if row:
@@ -126,6 +145,16 @@ def register() -> None:
         "exportaciones como contraste. Direccional. Recalcula desde el panel "
         "commiteado, sin red.",
         _run_trade_backtest, default_interval_hours=720,
+    ))
+
+    registrar_motor(MotorValidacion(
+        eje="trade_intel", operacion="trade-backtest", clave=BACKTEST_KEY,
+        partes=huella_backtest,
+        sin_cascada_motivo=(
+            "el panel de validación es un fixture comiteado que se regenera por script "
+            "(`scripts/build_comtrade_fixture.py`), no por una operación de consola. La "
+            "huella cubre el fixture entero, así que un panel nuevo marca el reporte "
+            "obsoleto en la propia respuesta."),
     ))
 
 

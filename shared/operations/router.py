@@ -34,6 +34,51 @@ async def operations_status(
     return ops.all_status(db)
 
 
+@router.get("/validacion", summary="Frescura de la validación de cada eje")
+async def validacion_frescura(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Por eje: si su cifra de validación sigue correspondiendo al insumo que la produjo.
+
+    La consola mostraba cuándo corrió cada operación, que es una pregunta distinta —y la que
+    no alcanzó—: el backtest de banca había corrido «hace tres semanas» sin nada anómalo a la
+    vista, mientras el score que medía ya no era el mismo. Acá la columna es el veredicto:
+    `vigente`, `obsoleto` u `obsolescencia indeterminada`.
+    """
+    import json
+
+    from shared.settings.models import AppSetting
+    from shared.validation.frescura import MOTORES, con_frescura
+
+    _require_admin(current_user)
+    filas = []
+    for eje, motor in sorted(MOTORES.items()):
+        row = db.query(AppSetting).filter(AppSetting.key == motor.clave).first()
+        reporte = None
+        if row and row.value:
+            try:
+                reporte = json.loads(str(row.value))
+            except (ValueError, TypeError):
+                reporte = None
+        if reporte is None:
+            filas.append({"eje": eje, "operacion": motor.operacion, "tiene_reporte": False,
+                          "stale": None, "stale_reason": "no hay reporte persistido"})
+            continue
+        f = con_frescura(reporte, eje, db)
+        filas.append({
+            "eje": eje, "operacion": motor.operacion, "tiene_reporte": True,
+            "generated_at": f.get("generated_at"),
+            "stale": f.get("stale"), "stale_reason": f.get("stale_reason"),
+            "stale_scope": f.get("stale_scope"),
+            "disparado_por": list(motor.disparado_por),
+            "sin_cascada_motivo": motor.sin_cascada_motivo,
+        })
+    return {"ejes": filas,
+            "obsoletos": [f["eje"] for f in filas if f.get("stale") is True],
+            "indeterminados": [f["eje"] for f in filas if f.get("stale") is None]}
+
+
 @router.post("/{name}/run", summary="Disparar una operación")
 async def run_operation(
     name: str,

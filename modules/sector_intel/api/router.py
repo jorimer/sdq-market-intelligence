@@ -170,11 +170,12 @@ async def validation(
 
     from modules.sector_intel.operations import GATE_E_KEY
     from shared.settings.models import AppSetting
+    from shared.validation.frescura import con_frescura
 
     row = db.query(AppSetting).filter(AppSetting.key == GATE_E_KEY).first()
     if not row:
         return {"has_report": False}
-    return {"has_report": True, **json.loads(row.value)}
+    return {"has_report": True, **con_frescura(json.loads(row.value), "sector_intel", db)}
 
 
 @router.get(

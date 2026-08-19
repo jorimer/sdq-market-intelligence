@@ -11,6 +11,7 @@ from typing import Dict
 from shared.database.session import SessionLocal
 from shared.settings.models import AppSetting
 from shared.operations import Operation, register_operation
+from shared.validation.frescura import MotorValidacion, registrar_motor
 
 
 def _run_rescore(params, user_id, set_phase) -> Dict:
@@ -67,14 +68,41 @@ def _run_recompute(params, user_id, set_phase) -> Dict:
 BACKTEST_REPORT_KEY = "backtest_report"
 
 
+def huella_backtest(db) -> Dict:
+    """Estado del insumo del backtest: los ratings que puntúa y los financieros que juzga.
+
+    La SUMA de los scores es la parte que importa. La recalibración del 2026-08-07 no agregó
+    una sola observación —1.693 filas y 301 eventos antes y después— y aun así dio vuelta el
+    Gini de 0,44 a 0,16: una huella de conteos y períodos la habría declarado "sin cambios"
+    y el reporte viejo habría seguido pasando por vigente.
+    """
+    from sqlalchemy import func
+
+    from modules.banking_score.models.models import BankingData, ModelType, RatingResult
+
+    r = (db.query(func.count(RatingResult.id), func.max(RatingResult.period_end),
+                  func.sum(RatingResult.overall_score))
+         .filter(RatingResult.model_type == ModelType.deterministic).one())
+    d = (db.query(func.count(BankingData.id), func.max(BankingData.period_end),
+                  func.sum(BankingData.morosidad_pct), func.sum(BankingData.solvencia_pct),
+                  func.sum(BankingData.utilidad_neta)).one())
+    return {
+        "ratings_n": r[0], "ratings_hasta": r[1], "ratings_suma_score": r[2],
+        "financials_n": d[0], "financials_hasta": d[1],
+        "financials_suma_morosidad": d[2], "financials_suma_solvencia": d[3],
+        "financials_suma_utilidad": d[4],
+    }
+
+
 def _run_backtest(params, user_id, set_phase) -> Dict:
     """Recompute the Eje-1 backtest and persist the report (AppSetting)."""
     from modules.banking_score.validation.report import build_backtest_report
+    from shared.validation.frescura import sellar
     db = SessionLocal()
     try:
         set_phase("derivando desenlaces y métricas de discriminación")
         rep = build_backtest_report(db)
-        rep["generated_at"] = datetime.now(timezone.utc).isoformat()
+        sellar(rep, "banking_score", db)
         row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_REPORT_KEY).first()
         payload = json.dumps(rep)
         if row:
@@ -174,6 +202,9 @@ def register() -> None:
         "Calcula Ejecución y Resiliencia para todos los períodos desde los sub-componentes "
         "ya guardados. No re-escorea indicadores ni genera acciones de rating.",
         _run_perfil_sdq, default_interval_hours=0,
+        # Reescribe `banda_resiliencia`, que es el eje de la curva de distress por banda:
+        # sin re-validar, el reporte publica una curva de bandas que ya no existen.
+        triggers=["backtest"],
     ))
     register_operation(Operation(
         "dedup-acciones", "Deduplicar acciones de rating",
@@ -191,6 +222,10 @@ def register() -> None:
         "rescore", "Recalcular ratings",
         "Recalcula los ratings desde los datos existentes, sin descargar del SIB.",
         _run_rescore, default_interval_hours=168,
+        # Re-puntuar → re-validar. Es la cascada que faltaba: la recalibración del 7-ago
+        # cambió el score y el backtest tenía su próxima corrida el 26-ago, así que
+        # producción sirvió 19 días un Gini calculado con el score anterior.
+        triggers=["backtest"],
     ))
     register_operation(Operation(
         "prune-future", "Eliminar trimestres futuros",
@@ -222,6 +257,10 @@ def register() -> None:
         "por-entidad mensual (balance 1947→, resultados 1996→), luego deriva los financials. "
         "Bajo demanda (~518 MB): correr cuando la SB publique un snapshot nuevo.",
         _run_sib_historical_load, default_interval_hours=0,
+    ))
+    registrar_motor(MotorValidacion(
+        eje="banking_score", operacion="backtest", clave=BACKTEST_REPORT_KEY,
+        partes=huella_backtest, disparado_por=("rescore", "perfil-sdq-backfill"),
     ))
 
 
