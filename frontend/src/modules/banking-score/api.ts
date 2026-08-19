@@ -444,8 +444,19 @@ export interface BacktestReport {
   gini_ci?: [number, number] | null;
   by_tier?: BacktestTierRow[];
   monotonic?: boolean;
+  /** ¿La curva por banda ORDENA el riesgo? Viaja explícito para que la pantalla no lo
+   *  deduzca: una deducción se pierde en el camino a un PDF o a una lámina. */
+  by_tier_ordena_riesgo?: boolean;
+  /** Inversiones concretas de la curva (qué bandas, con qué tasas y qué N), computadas. */
+  monotonic_violations?: {
+    mejor: string; mejor_n: number; mejor_rate: number;
+    peor: string; peor_n: number; peor_rate: number; brecha: number;
+  }[];
   caveats?: string[];
   generated_at?: string;
+  /** Frescura respecto del insumo que produjo la cifra (ver shared/validation/frescura.py). */
+  stale?: boolean | null;
+  stale_reason?: string | null;
 }
 
 export async function getBacktestReport(): Promise<BacktestReport> {

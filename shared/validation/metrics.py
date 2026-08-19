@@ -178,3 +178,25 @@ def deterioration_rate_by_tier(
     rates = [r["rate"] for r in rows if r["rate"] is not None]
     monotonic = all(rates[i] <= rates[i + 1] + 1e-9 for i in range(len(rates) - 1))
     return rows, monotonic
+
+
+def monotonicity_violations(rows: List[Dict]) -> List[Dict]:
+    """Pares consecutivos donde la tasa BAJA al empeorar el tier — la curva se da vuelta.
+
+    Existe para que el caveat pueda NOMBRAR el defecto en vez de describirlo de memoria. El
+    de banca decía «ruido muestral en tiers intermedios» y la anomalía estaba en la banda
+    SUPERIOR con el N más grande del panel (Sólida, n=516, 23,1% de deterioro, por encima de
+    Adecuada). Un Chief Economist lo ve en la primera lectura de la tabla; el caveat, no.
+
+    Ordenadas por magnitud de la inversión: la primera es la que hay que explicar.
+    """
+    presentes = [r for r in rows if r.get("rate") is not None]
+    fallos = []
+    for mejor, peor in zip(presentes, presentes[1:]):
+        if mejor["rate"] > peor["rate"] + 1e-9:
+            fallos.append({
+                "mejor": mejor["tier"], "mejor_n": mejor["n"], "mejor_rate": mejor["rate"],
+                "peor": peor["tier"], "peor_n": peor["n"], "peor_rate": peor["rate"],
+                "brecha": round(mejor["rate"] - peor["rate"], 4),
+            })
+    return sorted(fallos, key=lambda f: -f["brecha"])

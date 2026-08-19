@@ -112,6 +112,11 @@ export function ValidationPage() {
   }
 
   const giniWeak = (report.gini ?? 0) < 0.2;
+  // La tabla por banda NO se presenta como ordenamiento cuando no ordena. No se oculta —un
+  // parcial escondido desaparece sin aviso—: se muestra rotulada por lo que es, una tasa
+  // observada por banda, con la inversión concreta nombrada arriba.
+  const ordenaRiesgo = report.by_tier_ordena_riesgo ?? report.monotonic ?? true;
+  const inversion = (report.monotonic_violations ?? [])[0];
   const maxRate = Math.max(0.0001, ...(report.by_tier ?? []).map((r) => r.rate ?? 0));
 
   return (
@@ -151,21 +156,43 @@ export function ValidationPage() {
         <Card className="lg:col-span-2">
           <CardHead
             icon={ShieldCheck}
-            title={t("banking.valTierTitle")}
-            subtitle={t("banking.valTierSubtitle", { q: report.horizon_quarters })}
+            title={ordenaRiesgo ? t("banking.valTierTitle") : t("banking.valTierTitleNoOrder")}
+            subtitle={
+              ordenaRiesgo
+                ? t("banking.valTierSubtitle", { q: report.horizon_quarters })
+                : t("banking.valTierSubtitleNoOrder", { q: report.horizon_quarters })
+            }
             right={
               <Chip tone={report.monotonic ? "ok" : "warn"}>
                 {report.monotonic ? t("banking.valMonotonic") : t("banking.valNonMonotonic")}
               </Chip>
             }
           />
+          {!ordenaRiesgo && (
+            <div className="mb-3 flex items-start gap-2.5 rounded-[10px] bg-warn-soft p-3">
+              <AlertTriangle className="w-4 h-4 text-warn shrink-0 mt-0.5" />
+              <p className="text-xs text-body">
+                <span className="font-semibold text-ink">{t("banking.valTierNoOrderBold")}</span>{" "}
+                {inversion
+                  ? t("banking.valTierNoOrderDetail", {
+                      mejor: inversion.mejor,
+                      mejorN: inversion.mejor_n,
+                      mejorRate: fmtPct(inversion.mejor_rate),
+                      peor: inversion.peor,
+                      peorN: inversion.peor_n,
+                      peorRate: fmtPct(inversion.peor_rate),
+                    })
+                  : t("banking.valTierNoOrderPlain")}
+              </p>
+            </div>
+          )}
           <div className="space-y-2.5 mt-1">
             {(report.by_tier ?? []).map((r) => (
               <div key={r.tier} className="flex items-center gap-3">
                 <span className="w-20 shrink-0 mono text-xs text-ink">{r.tier}</span>
                 <div className="flex-1 h-3 rounded-full bg-surface2 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-accent"
+                    className={`h-full rounded-full ${ordenaRiesgo ? "bg-accent" : "bg-warn"}`}
                     style={{ width: `${((r.rate ?? 0) / maxRate) * 100}%` }}
                   />
                 </div>

@@ -14,9 +14,41 @@ from modules.banking_score.validation.metrics import (
 from modules.banking_score.validation.outcomes_derivation import (
     HORIZON_Q, derive_observations,
 )
+from shared.validation.metrics import monotonicity_violations
 
 # Below this many deterioration events the Gini is too thin to lean on.
 _THIN_EVENTS = 30
+
+# La prosa vive en constantes; la BANDA y su N se computan del propio resultado. El caveat
+# anterior era una frase fija —«ruido muestral en tiers intermedios»— y describía mal el
+# defecto: la anomalía está en la banda SUPERIOR y con el N más grande del panel. Es la
+# doctrina de que las relaciones se computan y el texto las copia, no al revés.
+_CAVEAT_NO_ORDENA = (
+    "La curva de deterioro por banda NO ordena el riesgo, así que la tabla por banda no se "
+    "publica como ordenamiento"
+)
+_CAVEAT_NO_ES_RUIDO = (
+    "no es ruido de un tier intermedio ni de una muestra chica: es una inversión con N "
+    "grande. El score continuo sí discrimina débilmente (ver Gini y su IC); la clasificación "
+    "en bandas, no"
+)
+
+
+def _pct(v: float) -> str:
+    """Porcentaje con coma decimal: el reporte se lee en español y viaja a un PDF."""
+    return f"{v * 100:.1f}".replace(".", ",") + " %"
+
+
+def _caveat_de_monotonia(violaciones) -> str:
+    """Nombra la inversión concreta —qué bandas, con qué tasas y qué N— o describe el hueco."""
+    if not violaciones:
+        return f"{_CAVEAT_NO_ORDENA}."
+    v = violaciones[0]
+    return (
+        f"{_CAVEAT_NO_ORDENA}: «{v['mejor']}» (n={v['mejor_n']}) registra "
+        f"{_pct(v['mejor_rate'])} de deterioro, por encima de «{v['peor']}» "
+        f"(n={v['peor_n']}, {_pct(v['peor_rate'])}) — {_CAVEAT_NO_ES_RUIDO}."
+    )
 
 
 def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
@@ -58,9 +90,9 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
     ]
     if n_events < _THIN_EVENTS:
         caveats.insert(0, f"Pocos eventos ({n_events}): el Gini es indicativo, no concluyente.")
-    if g is not None and not monotonic:
-        caveats.insert(0, "La curva de distress por tier es positiva pero NO estrictamente "
-                          "monótona (ruido muestral en tiers intermedios): direccional, no validada.")
+    violaciones = monotonicity_violations(by_tier)
+    if not monotonic:
+        caveats.insert(0, _caveat_de_monotonia(violaciones))
 
     return {
         "ok": True,
@@ -72,5 +104,10 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
         "gini_ci": [g_lo, g_hi] if g is not None else None,
         "by_tier": by_tier,
         "monotonic": monotonic,
+        # Que la curva ORDENE el riesgo es una afirmación aparte de que exista: sin esto, la
+        # superficie que la dibuja tiene que deducirlo, y la deducción se pierde en el camino
+        # a un PDF o a una lámina.
+        "by_tier_ordena_riesgo": monotonic,
+        "monotonic_violations": violaciones,
         "caveats": caveats,
     }
