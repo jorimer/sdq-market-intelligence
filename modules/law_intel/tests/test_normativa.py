@@ -124,9 +124,55 @@ class TestLaGrietaQueElEmisorAvisa:
         assert "625 días" in c.evidencia, "la holgura se publica: es lo que sostiene la firmeza"
 
 
-def test_un_vacio_sobre_REGLAMENTOS_nunca_acusa():
-    """El emisor mide su corpus por TIPO: leyes y decretos sí, reglamentos y resoluciones no.
-    Un `incumplida` sobre un universo que nadie midió es la peor salida posible de acá."""
-    consulta = dict(CONSULTA, tipo="reglamento")
-    c = comprobar_obligacion(consulta, VENCE, lambda **kw: _resp([], True))
-    assert c.veredicto == "sin_registro_publico"
+def test_un_vacio_sobre_un_tipo_SIN_MEDIR_nunca_acusa():
+    """El emisor mide su corpus por TIPO. Un `incumplida` sobre un universo que nadie midió
+    es la peor salida posible de este módulo.
+
+    La regla no cambió; cambió qué tipos están medidos. `reglamento` estuvo acá hasta que el
+    emisor confirmó, contra producción y campo a campo, que su alcance es idéntico al de
+    `decreto`. Se movió por EVIDENCIA, no porque estorbara — que es la única razón que vale
+    para aflojar un guard que protege de una acusación falsa."""
+    for tipo in ("resolucion", "constitucion"):
+        c = comprobar_obligacion(dict(CONSULTA, tipo=tipo), VENCE, lambda **kw: _resp([], True))
+        assert c.veredicto == "sin_registro_publico", tipo
+
+
+class TestLoQueElEmisorConfirmoElDiecinueve:
+    def test_un_vacio_sobre_REGLAMENTO_ya_puede_acusar(self):
+        """Estuvo vetado mientras la pregunta seguía abierta. El emisor la respondió con
+        evidencia contra producción: `tipo=reglamento` y `tipo=decreto` devuelven alcances
+        idénticos campo a campo en 2012-2026."""
+        c = comprobar_obligacion(dict(CONSULTA, tipo="reglamento"), VENCE,
+                                 lambda **kw: _resp([], True))
+        assert c.veredicto == "incumplida"
+
+    def test_una_RESOLUCION_sigue_sin_poder_acusar(self):
+        """Lo que se levantó es la cautela sobre reglamentos, no la regla entera."""
+        c = comprobar_obligacion(dict(CONSULTA, tipo="resolucion"), VENCE,
+                                 lambda **kw: _resp([], True))
+        assert c.veredicto == "sin_registro_publico"
+
+    def test_una_norma_DUPLICADA_se_cuenta_una_vez(self):
+        """El emisor devolvió un tiempo cinco normas dos veces —mismo id, gradas distintas—
+        porque el enlace entre gradas se rehace por campañas. Ya lo corrigió; deduplicamos
+        igual, porque un recuento que depende de que nadie duplique es un acuerdo tácito."""
+        from modules.law_intel.normativa import _sin_duplicados
+
+        dup = [dict(_DECRETO, grada="registral"), dict(_DECRETO, grada="texto")]
+        unicas = _sin_duplicados(dup)
+        assert len(unicas) == 1
+        assert unicas[0]["grada"] == "texto", "la leída dice estrictamente más"
+
+
+class TestElSelloDelCorpus:
+    def test_una_acusacion_declara_CUANDO_se_midio_el_corpus(self):
+        """El corpus del emisor pasó de 596 a 9.335 decretos en semanas. Sin el sello, un
+        veredicto de hoy no es reproducible mañana y nadie puede saberlo."""
+        r = _resp([], True, corpus="gaceta_oficial", medido_al="2026-08-18T03:40:48")
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: r)
+        assert c.veredicto == "incumplida"
+        assert "2026-08-18" in c.evidencia
+
+    def test_sin_sello_la_acusacion_DICE_que_no_se_puede_auditar(self):
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([], True))
+        assert "NO declara cuándo midió" in c.evidencia

@@ -756,3 +756,39 @@ def test_ninguna_escritura_queda_del_otro_lado_del_COMMIT():
     assert not tardias, (
         f"estos sub-syncs corren DESPUÉS del último commit y sus escrituras se pierden sin "
         f"error, con el contador devolviendo el número correcto: {tardias}")
+
+
+def test_los_conteos_derivados_se_comitean_ANTES_de_las_fases_largas():
+    """Railway REINICIA las tareas largas de este servicio: la sync muere durante SIUBEN
+    (3.456 filas provinciales) y todo lo no comiteado se pierde. Tres corridas seguidas
+    terminaron en «interrumpido por reinicio».
+
+    Los conteos de los indicadores 2.2 y 2.5 solo necesitan el panel regional de la primera
+    fase, así que ponerlos al final —que parecía lo natural, «que lean todo lo escrito»— los
+    dejaba en el punto de máxima exposición sin ninguna ganancia.
+
+    El test fija el orden y no el comentario: es la diferencia entre depender de que la sync
+    entera termine y depender solo de su primera fase.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    from modules.social_dev import social_sync
+
+    arbol = ast.parse(textwrap.dedent(inspect.getsource(social_sync.one_social_sync)))
+    llamadas = {n.func.id: n.lineno for n in ast.walk(arbol)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    commits = sorted(n.lineno for n in ast.walk(arbol)
+                     if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                     and n.func.attr == "commit")
+    conteos = llamadas["_sync_conteos_regionales"]
+    largas = [llamadas[n] for n in ("_sync_siuben_provincial", "_sync_minerd_coverage")
+              if n in llamadas]
+    assert largas, "el test tiene que conocer las fases largas o no prueba nada"
+    assert conteos < min(largas), (
+        "los conteos corren después de una fase larga: un reinicio de la plataforma se los "
+        "lleva sin dejar rastro")
+    assert any(c > conteos for c in commits), "los conteos necesitan un commit después"
+    assert min(c for c in commits if c > conteos) < min(largas), (
+        "el commit de los conteos tiene que ocurrir ANTES de las fases largas, no al final")
