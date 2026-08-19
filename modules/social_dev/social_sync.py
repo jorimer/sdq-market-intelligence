@@ -705,12 +705,19 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     provincial_synced = _best_effort(
         "indicadores provinciales (SIUBEN)",
         lambda: _sync_siuben_provincial(db, set_phase, provenance), errors)
-    db.commit()
-    # VA AL FINAL: lee el panel regional que las sub-syncs anteriores acabaron de
-    # escribir. Adelantarlo contaría sobre los datos de la corrida PASADA.
+    # DERIVADO: lee el panel regional que las sub-syncs anteriores acaban de escribir y lo
+    # cuenta. Va después de ellas y ANTES del commit — dentro de la misma transacción ve lo
+    # recién escrito, y sale persistido junto con todo lo demás.
+    #
+    # Estuvo un rato del OTRO lado del commit, y el modo de fallar fue el peor: los 50
+    # upserts ocurrían, el contador devolvía 50, ningún error se levantaba, y las filas se
+    # perdían al cerrar la sesión. El test de idempotencia no lo vio porque consulta con la
+    # MISMA sesión, donde lo no comiteado igual se ve. Solo apareció al pedirle el dato al
+    # registro en producción, que usa otra sesión.
     conteos_synced = _best_effort(
         "conteos regionales de pobreza (2.2 y 2.5)",
         lambda: _sync_conteos_regionales(db, set_phase), errors)
+    db.commit()
 
     return {
         "synced": synced,
