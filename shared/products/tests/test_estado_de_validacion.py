@@ -90,6 +90,33 @@ def test_dato_pendiente_nombra_el_dato_que_falta():
     assert not anonimas, f"Ejes con dato pendiente y sin nombrarlo: {anonimas}"
 
 
+def test_el_estado_declarado_llega_al_payload_que_se_PERSISTE():
+    """No alcanza con computarlo: tiene que sobrevivir al guardado.
+
+    La primera versión lo publicaba como clave hermana de `detail`, y `_upsert_readiness`
+    guarda exactamente las cinco puertas y `detail` — así que se computaba y se tiraba, y la
+    API (que sirve las filas guardadas) mostraba los 16 ejes sin declaración. Verificado
+    contra producción antes de darlo por cerrado.
+    """
+    import ast
+    import inspect
+
+    from shared.products import readiness as mod
+
+    arbol = ast.parse(inspect.getsource(mod))
+    detalles = [
+        v for nodo in ast.walk(arbol) if isinstance(nodo, ast.Dict)
+        for k, v in zip(nodo.keys, nodo.values)
+        if isinstance(k, ast.Constant) and k.value == "detail" and isinstance(v, ast.Dict)
+    ]
+    assert detalles, "no se encontró el dict `detail` del reporte de readiness"
+    claves = {k.value for d in detalles for k in d.keys
+              if isinstance(k, ast.Constant)}
+    assert "backtest" in claves, (
+        "El estado no viaja dentro de `detail`, que es lo ÚNICO que `_upsert_readiness` "
+        "persiste: como clave hermana se computa y se tira.")
+
+
 def test_el_estado_no_congela_el_veredicto_de_la_ultima_corrida():
     """El estado declara diseño; si concluye o no lo dice el reporte, que se recalcula.
 
