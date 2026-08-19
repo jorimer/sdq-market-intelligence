@@ -273,6 +273,56 @@ def _fmt(v: Optional[float]) -> str:
     return "—" if v is None else f"{v:.1f}"
 
 
+_IAI_BASE = (
+    "IAI sobre 6/9 variables reales (sector, macro, costo op. TSS, empleo ENCFT, WGI). "
+    "SGPS (momentum) sobre crecimiento real BCRD"
+)
+_IAI_SIN_REPORTE = (
+    "Gate E aún no corrido en este despliegue: corré `sector-gate-e` (y antes "
+    "`bcrd-ied-sync`) para tener el veredicto"
+)
+
+
+def _nota_validacion_iai(db) -> str:
+    """La nota del producto, computada del reporte del Gate E — nunca escrita a mano.
+
+    Declara los dos desenlaces contra los que el índice se midió y, en el de inversión, el
+    CONTROL por tamaño: sin él, el signo del IC no se le puede atribuir al índice, porque el
+    deflactor de la intensidad es una de sus variables.
+    """
+    import json
+
+    from shared.settings.models import AppSetting
+    from modules.sector_intel.operations import GATE_E_KEY
+
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == GATE_E_KEY).first()
+        rep = json.loads(str(row.value)) if row and row.value else None
+    except Exception:  # noqa: BLE001 — el producto nunca se rompe por leer su validación
+        rep = None
+    if not rep or not rep.get("has_data"):
+        return f"{_IAI_BASE}. {_IAI_SIN_REPORTE}."
+
+    partes = [_IAI_BASE]
+    empleo = (rep.get("outcomes") or {}).get("empleo") or {}
+    if empleo.get("mean_yearly_ic") is not None:
+        partes.append(
+            f"Gate E vs empleo formal: IC medio anual {empleo['mean_yearly_ic']} "
+            f"(IC95 {empleo['ic_ci']}, n={empleo['n_observations']}) — no concluyente")
+    inv = (rep.get("outcomes") or {}).get("inversion") or {}
+    if inv.get("mean_yearly_ic") is not None:
+        ctrl = ((inv.get("control_solo_tamano") or {}).get("intensidad") or {})
+        partes.append(
+            f"Gate E vs inversión realizada (IED BCRD, intensidad): IC {inv['mean_yearly_ic']} "
+            f"(IC95 {inv['ic_ci']}, n={inv['n_observations']}), y el CONTROL que ordena el "
+            f"mismo desenlace solo por tamaño da {ctrl.get('mean_yearly_ic')} — el índice no "
+            f"agrega poder por encima del tamaño del sector")
+    if rep.get("headline_outcome") is None:
+        partes.append("Ningún desenlace sostiene una afirmación de poder predictivo: el "
+                      "índice se ofrece como DESCRIPTIVO de atractivo estructural")
+    return ". ".join(partes) + "."
+
+
 class SectorIntelProduct:
     """``SectorProduct`` de un sector económico (parametrizado). ``db`` opcional: las
     muestras sintéticas usan solo ``narratives``/``render`` (sin DB)."""
@@ -346,12 +396,14 @@ class SectorIntelProduct:
                                 where=SectorScore.sector_code == self._sector_code)
 
     def validation_state(self) -> ValidationState:
-        # Gate E sectorial DEFERIDO (lo desbloquea dato por sector, no backtest); el IAI
-        # corre sobre 2/5 dims reales → validación parcial honesta, no veredicto pleno.
+        """G5 DIRIGIDO POR EL REPORTE: el Gate E ya corrió y su resultado se declara.
+
+        Decía «Gate E sectorial diferido» cuando el Gate E existía y había corrido contra
+        DOS desenlaces. Un producto que llama «diferido» a una validación que dio resultado
+        no está siendo prudente: está ocultando el resultado, que es lo contrario.
+        """
         return ValidationState(approved=True, score=0.5,
-                               notes="Gate E sectorial diferido; IAI sobre 6/9 variables reales "
-                                     "(sector, macro, costo op. TSS, empleo ENCFT, WGI). SGPS "
-                                     "(momentum) sobre crecimiento real BCRD.")
+                               notes=_nota_validacion_iai(self._require_db()))
 
     # ── Snapshot por nivel ──
     def snapshot(self, tier: ProductTier, period: str,

@@ -123,3 +123,60 @@ def test_el_control_por_tamano_es_obligatorio_en_el_bloque_de_inversion():
     fuente = inspect.getsource(mod._gate_e_inversion)
     assert "control_solo_tamano" in fuente
     assert "nota_control" in fuente
+
+
+# ── Lo que el producto declara ────────────────────────────────────
+
+class _DBConReporte:
+    """Sesión mínima que devuelve un reporte de Gate E persistido."""
+
+    def __init__(self, payload):
+        import json
+        self._valor = json.dumps(payload)
+
+    def query(self, *_a, **_k):
+        return self
+
+    def filter(self, *_a, **_k):
+        return self
+
+    def first(self):
+        return type("Row", (), {"value": self._valor})()
+
+
+def test_el_producto_declara_el_resultado_medido_no_lo_llama_diferido():
+    """Decía «Gate E sectorial diferido» cuando el Gate E había corrido y dado resultado.
+
+    Un producto que llama «diferido» a una validación con resultado no está siendo prudente:
+    está ocultando el resultado, que es lo contrario.
+    """
+    from modules.sector_intel.products import _nota_validacion_iai
+
+    nota = _nota_validacion_iai(_DBConReporte({
+        "has_data": True,
+        "headline_outcome": None,
+        "outcomes": {
+            "empleo": {"mean_yearly_ic": -0.03, "ic_ci": [-0.267, 0.208], "n_observations": 160},
+            "inversion": {"mean_yearly_ic": -0.321, "ic_ci": [-0.5, -0.142],
+                          "n_observations": 144,
+                          "control_solo_tamano": {"intensidad": {"mean_yearly_ic": -0.323}}},
+        },
+    }))
+    assert "diferido" not in nota
+    assert "-0.03" in nota and "-0.321" in nota
+    assert "-0.323" in nota, "El control por tamaño tiene que viajar con el número del índice."
+    assert "DESCRIPTIVO" in nota
+
+
+def test_sin_reporte_el_producto_lo_dice_en_vez_de_afirmar_algo():
+    from modules.sector_intel.products import _nota_validacion_iai
+
+    class _Vacia(_DBConReporte):
+        def __init__(self):
+            pass
+
+        def first(self):
+            return None
+
+    nota = _nota_validacion_iai(_Vacia())
+    assert "aún no corrido" in nota
