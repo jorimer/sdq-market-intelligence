@@ -65,10 +65,22 @@ class TestQueSeConsulta:
 
         El 3.26 tenía rechazado el ingreso familiar mensual, y la serie que la ley nombra
         —INB per cápita por método Atlas— existía todo el tiempo en otro emisor. Tratar al
-        indicador como agotado nos habría mantenido ciegos indefinidamente. Lo que no se
-        repite es proponer la MISMA serie ya rechazada, y eso viaja en `excluir`."""
-        c = next(c for c in consultas("end_2030") if c.indicador == "3.26")
-        assert "social_dev:income_per_capita" in c.excluir
+        indicador como agotado nos habría mantenido ciegos indefinidamente: hoy está
+        VERIFICADO, midiendo 10.620 US$ en 2025.
+
+        El test comprueba la propiedad y no el caso, porque el caso ya avanzó: la constancia
+        del candidato rechazado sobrevive a la promoción, y toda consulta lleva los suyos."""
+        from modules.law_intel.bindings import cargar_bindings
+        bs = cargar_bindings("end_2030")
+        assert any(b.candidatos_descartados for b in bs.values()), (
+            "el registro acumulativo de candidatos rechazados no puede quedar vacío")
+        assert "social_dev:income_per_capita" in {
+            c["serie"] for c in bs["3.26"].candidatos_descartados}, (
+            "promover el indicador no puede borrar el rechazo de la serie que no servía")
+        for c in consultas("end_2030"):
+            b = bs.get(c.indicador)
+            esperado = tuple(x["serie"] for x in (b.candidatos_descartados if b else ()))
+            assert c.excluir == esperado, f"{c.indicador} no arrastra sus rechazos"
 
     def test_todas_las_consultas_del_expediente_son_utiles(self):
         r = resumen(consultas("end_2030"))
