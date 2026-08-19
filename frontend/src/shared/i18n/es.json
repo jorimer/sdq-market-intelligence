@@ -1835,6 +1835,20 @@
     }
   },
   "ops": {
+    "frescura": {
+      "colEje": "Eje",
+      "colEstado": "Estado",
+      "colFecha": "Calculado",
+      "colMotivo": "Detalle",
+      "empty": "Ningún eje declara motor de validación.",
+      "indeterminado": "Indeterminado",
+      "noCubre": "La huella no cubre",
+      "obsoleto": "Obsoleto",
+      "sinReporte": "No hay reporte persistido",
+      "sub": "Si la cifra de cada eje sigue correspondiendo al insumo que la produjo",
+      "title": "Frescura de la validación",
+      "vigente": "Vigente"
+    },
     "cadence": {
       "daily": "Diario",
       "weekly": "Semanal",

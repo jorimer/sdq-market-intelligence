@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Wrench, RefreshCw, Play, Clock, History } from "lucide-react";
 import { PageHead, Card, CardHead, StateBlock, Chip } from "@/shared/ui/primitives";
+import { FrescuraPanel } from "@/shared/ops/FrescuraPanel";
 import { SpendPanel } from "@/shared/ops/SpendPanel";
 import {
   getOperationsStatus,
@@ -294,6 +295,13 @@ export function OperationsConsole({ eyebrow, title, sub, filter, emptyMessage, o
           que gasta— se toma con los interruptores que están justo debajo. */}
       <div className="mb-5">
         <SpendPanel />
+      </div>
+
+      {/* La frescura va junto al gasto y arriba de los interruptores: las dos son preguntas
+          sobre lo que las operaciones ya produjeron, y la acción que responden —re-correr la
+          validación de un eje obsoleto— está en las tarjetas de abajo. */}
+      <div className="mb-5">
+        <FrescuraPanel />
       </div>
 
       {status === "loading" && <StateBlock kind="loading" message={t("ops.loading")} />}

@@ -5,8 +5,26 @@ from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.frescura import MotorValidacion, registrar_motor
 
 ESG_BACKTEST_KEY = "esg_backtest_report"
+
+
+def huella_backtest(db) -> Dict:
+    """Estado del insumo LOCAL del backtest del IRC: los scores del panel.
+
+    La mortalidad por desastres (OWID/EM-DAT) se descarga en cada corrida y no queda
+    persistida, así que la huella no la cubre — se declara en ``insumo_no_cubierto`` y por eso
+    el reloj queda como red de seguridad. Afirmar frescura total acá sería la versión
+    elegante del mismo defecto.
+    """
+    from sqlalchemy import func
+
+    from modules.esg_climate.models.models import ESGScore
+
+    r = (db.query(func.count(ESGScore.id), func.max(ESGScore.period),
+                  func.sum(ESGScore.esg_score)).one())
+    return {"scores_n": r[0], "scores_hasta": r[1], "scores_suma": r[2]}
 
 
 def _run_esg_sync(params, user_id, set_phase) -> Dict:
@@ -25,6 +43,7 @@ def _run_esg_backtest(params, user_id, set_phase) -> Dict:
     from shared.data.owid_disasters_client import owid_disasters_client
     from modules.esg_climate.service import IRC_PANEL, get_scores
     from modules.esg_climate.validation.backtest import build_esg_backtest
+    from shared.validation.frescura import sellar
     db = SessionLocal()
     try:
         irc = {r.entity_key: float(r.esg_score) for r in get_scores(db) if r.esg_score is not None}
@@ -37,7 +56,7 @@ def _run_esg_backtest(params, user_id, set_phase) -> Dict:
             return {"error": f"OWID no disponible: {e}", "errors": [str(e)]}
         set_phase("calculando correlación IRC vs mortalidad climática")
         report = build_esg_backtest(irc, mortality)
-        report["generated_at"] = datetime.now(timezone.utc).isoformat()
+        sellar(report, "esg_climate", db)
         row = db.query(AppSetting).filter(AppSetting.key == ESG_BACKTEST_KEY).first()
         payload = json.dumps(report)
         if row:
@@ -58,13 +77,23 @@ def register() -> None:
         "Caribe/LatAm con dato real de ND-GAIN (físico/adaptativa/gobernanza); la "
         "transición queda rúbrica hasta cablear energía/PEN. Publica 'esg.updated'.",
         _run_esg_sync, default_interval_hours=8760,  # ND-GAIN es anual
+        triggers=["esg-backtest"],  # IRC nuevo → re-validar contra la mortalidad realizada
     ))
     register_operation(Operation(
         "esg-backtest", "Backtest del IRC climático",
         "Valida el IRC contra la mortalidad real por desastres climáticos (OWID/"
         "EM-DAT): correlación de Spearman (con IC bootstrap) y monotonía por banda. "
         "Validación direccional preliminar.",
-        _run_esg_backtest, default_interval_hours=8760,
+        # Trimestral y no anual: la cascada de `esg-sync` cubre el cambio del IRC, pero el
+        # otro insumo —la mortalidad OWID/EM-DAT— se descarga en cada corrida y se actualiza
+        # sin avisar. Con la cadencia anual, la próxima corrida caía en junio de 2027.
+        _run_esg_backtest, default_interval_hours=2160,
+    ))
+    registrar_motor(MotorValidacion(
+        eje="esg_climate", operacion="esg-backtest", clave=ESG_BACKTEST_KEY,
+        partes=huella_backtest, disparado_por=("esg-sync",),
+        insumo_no_cubierto=("mortalidad por desastres climáticos (OWID/EM-DAT), "
+                            "descargada en cada corrida y no persistida",),
     ))
 
 

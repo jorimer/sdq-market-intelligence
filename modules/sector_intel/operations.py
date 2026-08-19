@@ -10,8 +10,26 @@ from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.frescura import MotorValidacion, registrar_motor
 
 GATE_E_KEY = "sector_gate_e_report"
+
+
+def huella_gate_e(db) -> Dict:
+    """Estado del insumo del Gate E: los IAI que ordena y las variables sectoriales que juzga.
+
+    La suma de `iai_score` es la parte que detecta un re-cálculo del índice sin filas nuevas
+    —el equivalente sectorial de la recalibración que dejó a banca publicando el Gini viejo—.
+    """
+    from sqlalchemy import func
+
+    from modules.sector_intel.models.models import SectorScore, SectorVariable
+
+    sc = db.query(func.count(SectorScore.id), func.sum(SectorScore.iai_score)).one()
+    va = (db.query(func.count(SectorVariable.id), func.max(SectorVariable.period),
+                   func.sum(SectorVariable.value)).one())
+    return {"scores_n": sc[0], "scores_suma_iai": sc[1],
+            "variables_n": va[0], "variables_hasta": va[1], "variables_suma": va[2]}
 
 
 def _run_bcrd_sectores_sync(params, user_id, set_phase) -> Dict:
@@ -84,12 +102,13 @@ def _run_sector_gate_e(params, user_id, set_phase) -> Dict:
     Corre después de sector-snapshot + encft-empleo-sync (dependencia de orden)."""
     from modules.sector_intel.validation.report import gate_e_report
     from shared.settings.models import AppSetting
+    from shared.validation.frescura import sellar
 
     set_phase("agregando IAI a ramas + outcome de empleo + IC medio anual (t)")
     db = SessionLocal()
     try:
         rep = gate_e_report(db)
-        rep["generated_at"] = datetime.now(timezone.utc).isoformat()
+        sellar(rep, "sector_intel", db)
         row = db.query(AppSetting).filter(AppSetting.key == GATE_E_KEY).first()
         payload = json.dumps(rep)
         if row:
@@ -187,6 +206,11 @@ def register() -> None:
         "con su n e IC. Corre después de sector-snapshot y encft-empleo-sync. "
         "Correr cuando: revalides el índice sectorial (nuevo empleo ENCFT o cambio de modelo).",
         _run_sector_gate_e, default_interval_hours=0,  # on-demand
+    ))
+
+    registrar_motor(MotorValidacion(
+        eje="sector_intel", operacion="sector-gate-e", clave=GATE_E_KEY,
+        partes=huella_gate_e, disparado_por=("sector-snapshot",),
     ))
 
 

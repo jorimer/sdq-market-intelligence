@@ -252,11 +252,13 @@ async def get_backtest(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     from shared.settings.models import AppSetting
+    from shared.validation.frescura import con_frescura
     import json
     row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_KEY).first()
     if not row:
         return {"has_report": False}
-    return {"has_report": True, **json.loads(row.value)}
+    return {"has_report": True,
+            **con_frescura(json.loads(row.value), "macro_political_risk", db)}
 
 
 @router.get(

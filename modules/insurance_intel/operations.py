@@ -3,6 +3,57 @@ from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.frescura import MotorValidacion, registrar_motor
+
+BACKTEST_KEY = "insurance_backtest_report"
+
+# Las cinco series que el backtest del ISF consume (solvencia cruzada + underwriting).
+_SERIES_BACKTEST = ("patrimonio", "activos_totales", "siniestros_pagados",
+                    "gastos_operativos", "primas_suscritas")
+
+
+def huella_backtest(db) -> Dict:
+    """Estado del insumo del backtest del ISF: las series auditadas que lo alimentan.
+
+    Filtrada a las cinco series que el backtest usa y no al panel entero: una huella que se
+    mueve con cualquier ingesta no relacionada marca obsoleto lo que no lo está, y una
+    señal que grita de más se deja de mirar — que es la forma lenta de volver al problema.
+    """
+    from sqlalchemy import func
+
+    from modules.insurance_intel.models.models import InsuranceEntity, InsuranceSeries
+
+    r = (db.query(func.count(InsuranceSeries.id), func.max(InsuranceSeries.period),
+                  func.sum(InsuranceSeries.value))
+         .filter(InsuranceSeries.series_code.in_(_SERIES_BACKTEST)).one())
+    # El roster también manda: una aseguradora que entra o sale del panel autorizado cambia
+    # el universo del backtest sin tocar una sola serie.
+    roster = (db.query(func.count(InsuranceEntity.id))
+              .filter(InsuranceEntity.entity_type == "aseguradora").scalar())
+    return {"series_n": r[0], "series_hasta": r[1], "series_suma": r[2], "roster_n": roster}
+
+
+def persistir_backtest(db, rep: Dict) -> Dict:
+    """Sella y persiste el reporte del backtest. Una sola puerta de escritura.
+
+    Existe porque había DOS —la operación de consola y el POST de la API— y ninguna
+    estampaba fecha: el de seguros era el único reporte del catálogo del que no se podía
+    saber de cuándo era la cifra servida.
+    """
+    import json as _json
+
+    from shared.settings.models import AppSetting
+    from shared.validation.frescura import sellar
+
+    sellar(rep, "insurance_intel", db)
+    row = db.query(AppSetting).filter(AppSetting.key == BACKTEST_KEY).first()
+    payload = _json.dumps(rep, ensure_ascii=False)
+    if row:
+        row.value, row.is_secret = payload, False
+    else:
+        db.add(AppSetting(key=BACKTEST_KEY, value=payload, is_secret=False))
+    db.commit()
+    return rep
 
 
 def _run_sis_sync(params, user_id, set_phase) -> Dict:
@@ -66,22 +117,11 @@ def _run_ars_sync(params, user_id, set_phase) -> Dict:
 
 
 def _run_backtest(params, user_id, set_phase) -> Dict:
-    import json
-
     from modules.insurance_intel.validation.backtest import build_backtest_report
-    from shared.settings.models import AppSetting
     db = SessionLocal()
     try:
         set_phase("Derivando observaciones y computando Gini (IC bootstrap)")
-        rep = build_backtest_report(db)
-        row = (db.query(AppSetting)
-               .filter(AppSetting.key == "insurance_backtest_report").first())
-        payload = json.dumps(rep, ensure_ascii=False)
-        if row:
-            row.value, row.is_secret = payload, False
-        else:
-            db.add(AppSetting(key="insurance_backtest_report", value=payload, is_secret=False))
-        db.commit()
+        rep = persistir_backtest(db, build_backtest_report(db))
         return {"computed": rep.get("computed"), "headline_gini": rep.get("headline_gini"),
                 "headline_signal": rep.get("headline_signal")}
     finally:
@@ -109,6 +149,7 @@ def register() -> None:
         "recalcula el Índice de Solidez de Aseguradora (ISF) con banda absoluta. Param opcional "
         "'year'. Corre desde Railway. Anual (los auditados salen por año).",
         _run_financials_sync, default_interval_hours=8760,  # anual
+        triggers=["insurance-backtest"],  # dato auditado nuevo → re-validar el ISF
     ))
     register_operation(Operation(
         "sisalril-sfs-sync", "Sincronizar cobertura de salud SFS (SISALRIL/CNSS)",
@@ -141,6 +182,7 @@ def register() -> None:
         "(re)ingerir el histórico de auditados de aseguradoras (backfill puntual), típicamente "
         "antes de un insurance-backtest.",
         _run_financials_history_sync, default_interval_hours=0,
+        triggers=["insurance-backtest"],  # es el insumo del Gate E: re-validar al terminar
     ))
     register_operation(Operation(
         "insurance-solvency-sync", "Sincronizar índices de solvencia y liquidez (SIS · Art. 164)",
@@ -162,6 +204,11 @@ def register() -> None:
         "Correr cuando: revalides el ISF (nuevos períodos o cambio de modelo); requiere el "
         "history-sync antes.",
         _run_backtest, default_interval_hours=0,
+    ))
+    registrar_motor(MotorValidacion(
+        eje="insurance_intel", operacion="insurance-backtest", clave=BACKTEST_KEY,
+        partes=huella_backtest,
+        disparado_por=("insurance-financials-sync", "insurance-financials-history-sync"),
     ))
 
 
