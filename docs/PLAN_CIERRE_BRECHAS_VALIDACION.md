@@ -113,15 +113,24 @@ o del score que lo produjo. Cierra A1–A8.
 5. **Superficie de obsolescencia**: la consola de operaciones muestra, por eje, si su validación está
    al día respecto de su insumo.
 
-### Status de avance — criterios de cierre
-- [ ] Recalibrar un score en dev dispara su backtest **sin intervención**; probado end-to-end.
-- [ ] Los reportes exponen `input_fingerprint`; con fingerprint desfasado el endpoint responde
-      `stale: true`.
-- [ ] `insurance-backtest` y `pension-backtest` colgadas de su sync; ESG con cadencia de fuente.
-- [ ] El test estructural falla si se agrega un motor de validación sin evento ni fingerprint
-      (verificado revirtiendo un motor a propósito — *el test tiene dientes*).
-- [ ] Los tres gates de CI en verde (`pytest` · `ruff` · `mypy`+baseline).
-- [ ] **Cero** reportes de validación cuya invalidación dependa solo del reloj.
+### Status de avance — **CERRADA** (2026-08-19, verificada en producción)
+- [x] Re-puntuar dispara la validación **sin intervención**. Verificado en PRODUCCIÓN, no en dev:
+      `perfil-sdq-backfill` terminó 15:07:38 y el backtest corrió solo a las 15:07:39 con
+      `origin: cascade` en el historial de operaciones.
+- [x] Los 8 reportes exponen `input_fingerprint`. Antes de resellarlos, los 8 respondían
+      `stale: null` («reporte sin huella») — el estado indeterminado se comportó como se
+      diseñó; tras recalcularlos, los 8 responden `stale: false`.
+- [x] `insurance-backtest` y `pension-backtest` colgadas de sus syncs (son `on_demand`: no se
+      agendan, se disparan). `esg-backtest` pasó de 8.760 h a 2.160 h **en producción**
+      (próxima corrida: 2026-11-17, antes 2027-06-27).
+- [x] El test estructural tiene dientes, verificado revirtiendo un motor a propósito. Su primera
+      versión NO los tenía —comparaba la clave por substring y `backtest_report` está contenido
+      en `insurance_backtest_report`—; ahora resuelve el archivo escritor por AST.
+- [x] Los tres gates en verde (4.411 tests · ruff · mypy con el baseline sincronizado).
+- [x] **Cero** reportes de validación cuya invalidación dependa solo del reloj.
+
+> Hallazgo lateral: el reporte de seguros se escribía desde DOS puertas (la operación y el POST
+> de la API) y ninguna estampaba fecha. Hay una sola puerta y un test que la exige.
 
 ---
 

@@ -94,6 +94,35 @@ def _metrics_for(labeled: List[Dict]) -> Dict:
     }
 
 
+# La prosa del disclaimer vive en CONSTANTES y las CIFRAS se computan del propio reporte.
+# Escrita a mano decía "5 países (N pequeño)" mientras el mismo reporte declaraba 24 países
+# y 260 observaciones: el 5 eran los pares de validez convergente contra la calificación
+# soberana, otra cosa. Un lector que compare la frase con la tabla encuentra a la casa
+# contradiciéndose, y es el tipo de cifra que termina copiada en un documento comercial.
+_DISCLAIMER_NATURALEZA = (
+    "Validación PRELIMINAR y DIRECCIONAL, no grado-Basilea"
+)
+_DISCLAIMER_OUTCOME = (
+    "El outcome PRIMARIO es inestabilidad política realizada (spikes de eventos GDELT) — el "
+    "constructo que el IRMP sí mide. Es independiente del IRMP histórico, cuya dimensión de "
+    "eventos queda en valores declarados estáticos (no de GDELT), así el label no puede "
+    "filtrarse del score. El outcome de crédito se muestra como contraste (solapa con "
+    "inputs y mide otro riesgo)."
+)
+
+
+def _disclaimer(governance: Dict, n_countries: int, n_pairs: int) -> str:
+    """Arma el disclaimer con las cifras del reporte, no con las de memoria."""
+    n_obs = governance.get("n_observations") or 0
+    n_ev = governance.get("n_events") or 0
+    return (
+        f"{_DISCLAIMER_NATURALEZA}: panel de {n_countries} países, {n_obs} observaciones "
+        f"país-año y {n_ev} eventos. La validez convergente contra la calificación soberana "
+        f"se computa aparte, sobre {n_pairs} pares (N pequeño): es un contraste de ranking, "
+        f"no el panel del backtest. {_DISCLAIMER_OUTCOME}"
+    )
+
+
 def build_backtest_report(series: Optional[Dict] = None,
                           events: Optional[Dict] = None) -> Dict:  # pragma: no cover - network in build_panel/BQ
     """Run the IRMP backtest. PRIMARY outcome = political-instability spikes (GDELT
@@ -127,13 +156,5 @@ def build_backtest_report(series: Optional[Dict] = None,
         "governance": governance,     # IRMP vs realized political instability (fair)
         "credit": credit,             # IRMP vs macro-fiscal distress (contrast)
         "convergent_validity": {"spearman_irmp_vs_rating": rho, "pairs": pairs},
-        "disclaimer": (
-            "Validación PRELIMINAR y DIRECCIONAL, no grado-Basilea: 5 países "
-            "(N pequeño). El outcome PRIMARIO es inestabilidad política realizada "
-            "(spikes de eventos GDELT) — el constructo que el IRMP sí mide. Es "
-            "independiente del IRMP histórico, cuya dimensión de eventos queda en "
-            "valores declarados estáticos (no de GDELT), así el label no puede "
-            "filtrarse del score. El outcome de crédito se muestra como contraste "
-            "(solapa con inputs y mide otro riesgo)."
-        ),
+        "disclaimer": _disclaimer(governance, len(panel_countries), len(pairs)),
     }
