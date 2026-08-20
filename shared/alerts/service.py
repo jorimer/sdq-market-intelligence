@@ -24,10 +24,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from shared.alerts import reglas
-from shared.alerts.models import TODO_EL_EJE, AlertSubscription
+from shared.alerts.models import TODO_EL_EJE, AlertEventRow, AlertSubscription
 from shared.auth.models import User
 from shared.products.access import can_access
 from shared.products.registry import CATALOG_BY_KEY, get_product
@@ -35,13 +36,55 @@ from shared.products.tiers import ProductTier
 
 logger = logging.getLogger("sdq.alerts")
 
-# Canales con entrega REAL hoy. El buzón in-app existe y funciona
-# (``shared/notifications``); email y webhook llegan en las fases C y E.
+# Canales con entrega REAL. El buzón in-app siempre; el correo **solo si hay un servidor
+# configurado** (`shared/notifications/email.configurado`).
 #
-# Aceptar "email" ahora dejaría al cliente configurando un canal que nunca entrega, y un
-# canal mudo no falla: desaparece. Se rechaza con el motivo, que es lo honesto.
-CANALES_DISPONIBLES: Tuple[str, ...] = ("inapp",)
-CANALES_PLANIFICADOS: Tuple[str, ...] = ("email", "webhook")
+# Es una función y no una constante justamente por eso: si `email` fuera fijo, un despliegue
+# sin SMTP aceptaría vigilancias por correo y el cliente quedaría esperando avisos que nunca
+# salen. Un canal mudo no falla — desaparece. El webhook llega en la fase E.
+CANAL_INAPP = "inapp"
+CANAL_EMAIL = "email"
+CANAL_WEBHOOK = "webhook"
+CANALES_PLANIFICADOS: Tuple[str, ...] = ()
+
+
+def canales_disponibles(db: Optional[Session] = None,
+                        user_id: Optional[str] = None) -> Tuple[str, ...]:
+    """Canales que HOY entregan de verdad — y para quién.
+
+    Los tres gates son de naturaleza distinta y por eso la firma tiene dos parámetros:
+
+    - ``inapp`` siempre: el buzón existe para todo usuario autenticado.
+    - ``email`` si el DESPLIEGUE tiene SMTP (`shared/notifications/email.configurado`).
+    - ``webhook`` si el USUARIO registró un endpoint suscrito a `alert.raised`. Ofrecerlo a
+      quien no lo tiene lo deja esperando avisos que no tienen a dónde ir.
+
+    Sin ``db``/``user_id`` se resuelve solo lo del despliegue: es lo correcto para las
+    superficies que no conocen al usuario, y el canal por usuario se agrega donde sí.
+    """
+    from shared.notifications.email import configurado
+
+    canales = [CANAL_INAPP]
+    if configurado():
+        canales.append(CANAL_EMAIL)
+    if db is not None and user_id:
+        from shared.alerts.webhook import tiene_canal
+
+        if tiene_canal(db, user_id):
+            canales.append(CANAL_WEBHOOK)
+    return tuple(canales)
+
+
+def canales_no_configurados(db: Optional[Session] = None,
+                            user_id: Optional[str] = None) -> Tuple[str, ...]:
+    """Canales que existen en el código y que ESTE contexto no puede usar todavía.
+
+    Se declaran en vez de callarse: «no lo ofrecemos» y «no está configurado» piden acciones
+    distintas — el correo lo resuelve el dueño con tres variables de entorno; el webhook, el
+    cliente registrando un endpoint suscrito a `alert.raised` con su llave de Data API.
+    """
+    disponibles = set(canales_disponibles(db, user_id))
+    return tuple(c for c in (CANAL_EMAIL, CANAL_WEBHOOK) if c not in disponibles)
 
 DIGESTS: Tuple[str, ...] = ("inmediato", "diario", "semanal")
 
@@ -119,7 +162,9 @@ def _validar_sujeto(db: Session, sector_key: str, subject: str) -> None:
 
 
 def _validar_vocabularios(rule_codes: Optional[Sequence[str]], min_severity: str,
-                          channels: Sequence[str], digest: str) -> None:
+                          channels: Sequence[str], digest: str,
+                          db: Optional[Session] = None,
+                          user_id: Optional[str] = None) -> None:
     faltantes = reglas.desconocidos(list(rule_codes) if rule_codes else None)
     if faltantes:
         raise AlertValidationError(
@@ -131,19 +176,33 @@ def _validar_vocabularios(rule_codes: Optional[Sequence[str]], min_severity: str
             f"Use {' | '.join(reglas.SEVERIDADES)}.")
     if not channels:
         raise AlertValidationError("Elegí al menos un canal de entrega.")
-    invalidos = [c for c in channels if c not in CANALES_DISPONIBLES]
+    disponibles = canales_disponibles(db, user_id)
+    invalidos = [c for c in channels if c not in disponibles]
     if invalidos:
+        sin_configurar = [c for c in invalidos if c in canales_no_configurados(db, user_id)]
+        if sin_configurar:
+            raise AlertValidationError(
+                f"El canal {', '.join(sin_configurar)} no está configurado en esta "
+                f"instalación. Por ahora: {', '.join(disponibles)}.")
         planificados = [c for c in invalidos if c in CANALES_PLANIFICADOS]
         if planificados:
             raise AlertValidationError(
                 f"El canal {', '.join(planificados)} todavía no entrega; se habilita más "
-                f"adelante. Por ahora: {', '.join(CANALES_DISPONIBLES)}.")
+                f"adelante. Por ahora: {', '.join(disponibles)}.")
         raise AlertValidationError(
             f"Canal(es) inválido(s): {', '.join(invalidos)}. "
-            f"Disponibles: {', '.join(CANALES_DISPONIBLES)}.")
+            f"Disponibles: {', '.join(disponibles)}.")
     if digest not in DIGESTS:
         raise AlertValidationError(
             f"Ritmo de entrega inválido '{digest}'. Use {' | '.join(DIGESTS)}.")
+
+
+def _produce_alertas(sector_key: str) -> bool:
+    """¿Hay un productor registrado para este eje? Import local a propósito: `motor` importa
+    a este módulo, y a nivel de módulo el par se cerraría en ciclo."""
+    from shared.alerts.motor import registered_sectors
+
+    return sector_key in registered_sectors()
 
 
 def serializar(row: AlertSubscription) -> Dict[str, Any]:
@@ -163,6 +222,11 @@ def serializar(row: AlertSubscription) -> Dict[str, Any]:
         "active": bool(row.active),
         "suspended_reason": row.suspended_reason,
         "tier_requerido": tier_requerido(subject).value,
+        # ¿Este eje ya tiene un productor enchufado al barrido? Un eje del catálogo puede
+        # estar implementado como PRODUCTO y todavía no aportar señales. Se declara en vez
+        # de callarse: una vigilancia muda presentada como activa se lee como que no pasó
+        # nada, que es la lectura opuesta a la verdadera.
+        "sector_produce_alertas": _produce_alertas(str(row.sector_key)),
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
@@ -178,7 +242,7 @@ def crear(db: Session, user: User, *, sector_key: str, subject: Optional[str] = 
 
     _validar_eje(db, sector_key)
     _validar_sujeto(db, sector_key, subject_n)
-    _validar_vocabularios(rule_codes, min_severity, canales, digest)
+    _validar_vocabularios(rule_codes, min_severity, canales, digest, db, str(user.id))
 
     decision = can_access(db, user, sector_key, tier_requerido(subject_n))
     if not decision.allowed:
@@ -252,7 +316,7 @@ def actualizar(db: Session, row: AlertSubscription, *, rule_codes: Optional[List
         nuevos_codigos,
         min_severity or str(row.min_severity),
         channels if channels is not None else list(row.channels or []),
-        digest or str(row.digest))
+        digest or str(row.digest), db, str(row.user_id))
 
     if rule_codes is not None:
         row.rule_codes = list(rule_codes) or None
@@ -337,3 +401,66 @@ def para_sujeto(db: Session, sector_key: str, subject: str) -> List[AlertSubscri
                     AlertSubscription.active.is_(True),
                     AlertSubscription.subject.in_([_normalizar_subject(subject), TODO_EL_EJE]))
             .all())
+
+
+def serializar_evento(row: AlertEventRow) -> Dict[str, Any]:
+    entry = CATALOG_BY_KEY.get(str(row.sector_key))
+    return {
+        "id": row.id, "codigo": row.codigo,
+        "sector_key": row.sector_key,
+        "sector_label": entry.display_name if entry else row.sector_key,
+        "subject": str(row.subject or "") or None,
+        "periodo": row.periodo, "severidad": row.severidad,
+        "titulo": row.titulo, "cuerpo": row.cuerpo, "basis": row.basis,
+        "relaciones": dict(row.relaciones or {}),
+        "procedencia": dict(row.procedencia or {}),
+        "frescura": row.frescura,
+        "publicada": bool(row.publicada),
+        "veto_motivo": row.veto_motivo, "veto_detalle": row.veto_detalle,
+        "entregas": int(row.entregas or 0),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def eventos_para(db: Session, user_id: str, *, limit: int = 50) -> Dict[str, Any]:
+    """Historial de señales que TOCAN la watchlist del usuario, publicadas y vetadas.
+
+    **Las vetadas van con las publicadas, no en un cajón aparte que nadie abre.** Un veto
+    silencioso se lee como que el eje no tenía nada que avisar; el resumen por motivo es lo
+    que convierte «no recibí nada» en «hay tres señales retenidas porque el dato que las
+    sostiene no está vigente», que es información accionable y no ausencia de ella.
+    """
+    subs = (db.query(AlertSubscription)
+            .filter(AlertSubscription.user_id == user_id,
+                    AlertSubscription.active.is_(True))
+            .all())
+    if not subs:
+        return {"events": [], "vetadas": {}, "total": 0, "sin_vigilancias": True}
+
+    # Un eje vigilado entero alcanza a CUALQUIER sujeto suyo; uno vigilado por sujeto, solo
+    # a ese. Se arma en dos filtros en vez de uno para no traer el eje completo cuando el
+    # usuario solo pidió una entidad.
+    ejes_completos = [str(s.sector_key) for s in subs
+                      if str(s.subject or "") == TODO_EL_EJE]
+    pares = [(str(s.sector_key), str(s.subject)) for s in subs
+             if str(s.subject or "") != TODO_EL_EJE]
+
+    condiciones: List[Any] = []
+    if ejes_completos:
+        condiciones.append(AlertEventRow.sector_key.in_(ejes_completos))
+    for sector_key, subject in pares:
+        condiciones.append(and_(AlertEventRow.sector_key == sector_key,
+                                AlertEventRow.subject == subject))
+
+    rows = (db.query(AlertEventRow)
+            .filter(or_(*condiciones))
+            .order_by(AlertEventRow.created_at.desc(), AlertEventRow.id.desc())
+            .limit(limit).all())
+
+    vetadas: Dict[str, int] = {}
+    for r in rows:
+        if not bool(r.publicada) and r.veto_motivo:
+            vetadas[str(r.veto_motivo)] = vetadas.get(str(r.veto_motivo), 0) + 1
+
+    return {"events": [serializar_evento(r) for r in rows],
+            "vetadas": vetadas, "total": len(rows), "sin_vigilancias": False}

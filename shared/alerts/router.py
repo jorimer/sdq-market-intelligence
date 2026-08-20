@@ -48,17 +48,41 @@ def _422(e: AlertValidationError) -> HTTPException:
 
 
 @router.get("/rules", summary="Catálogo de disparadores")
-async def get_rules(_: User = Depends(get_current_user)) -> Dict[str, Any]:
-    """Qué puede hacer sonar una alerta. Cada entrada declara si **ya tiene motor detrás**
-    (``implementado``): un disparador mudo que se presenta como activo se lee como que no
-    pasó nada, y la superficie tiene que poder decir la diferencia."""
+async def get_rules(db: Session = Depends(get_db),
+                    current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Qué puede hacer sonar una alerta, y **qué aporta cada eje HOY**.
+
+    ``implementado`` dice si el disparador tiene motor; ``cobertura_por_eje`` dice cuáles de
+    esos disparadores alcanzan realmente a cada eje. Las dos cosas son distintas y las dos
+    hacen falta: una regla implementada sobre un eje que no la alimenta es una vigilancia
+    que nunca suena, y presentarla como activa se lee como que no pasó nada.
+    """
+    from shared.alerts.productores import cobertura
+
     return {
+        # Se computa contra el registro vivo, no se declara a mano: una tabla escrita a mano
+        # se desincroniza el día que un eje registra su motor.
+        "cobertura_por_eje": cobertura(db),
         "rules": [reglas.serializar(d) for d in reglas.CATALOGO],
         "severidades": list(reglas.SEVERIDADES),
-        "canales_disponibles": list(service.CANALES_DISPONIBLES),
+        # Con el usuario: `webhook` depende de que ÉL haya registrado un endpoint, no del
+        # despliegue. Los tres gates son de naturaleza distinta y la superficie los une.
+        "canales_disponibles": list(service.canales_disponibles(db, str(current_user.id))),
+        # Existen en el código pero este despliegue no los tiene configurados: no es lo
+        # mismo que "no lo ofrecemos", y la UI tiene que poder decirlo.
+        "canales_no_configurados": list(
+            service.canales_no_configurados(db, str(current_user.id))),
         "canales_planificados": list(service.CANALES_PLANIFICADOS),
         "digests": list(service.DIGESTS),
     }
+
+
+@router.get("/events", summary="Historial de señales de mis vigilancias")
+async def get_events(limit: int = 50, db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Publicadas Y vetadas, juntas. ``vetadas`` resume por motivo: es lo que convierte
+    «no recibí nada» en «hay tres señales retenidas porque el dato no está vigente»."""
+    return service.eventos_para(db, str(current_user.id), limit=max(1, min(limit, 200)))
 
 
 @router.get("/subscriptions", summary="Mis vigilancias")

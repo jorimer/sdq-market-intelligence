@@ -157,15 +157,52 @@ def test_eje_fuera_del_catalogo(db, productos):
     assert "no está en el catálogo" in r.json()["detail"]
 
 
-def test_canal_sin_entrega_se_rechaza_declarando_el_motivo(db, productos):
-    """Email llega en la fase C. Aceptarlo ahora dejaría al cliente esperando avisos que
+def test_email_SIN_SMTP_configurado_se_rechaza_declarando_el_motivo(db, productos,
+                                                                    monkeypatch):
+    """Sin servidor de correo no hay canal. Aceptarlo dejaría al cliente esperando avisos que
     nunca salen — y un canal mudo no falla, desaparece."""
+    import shared.notifications.email as mail
+    monkeypatch.setattr(mail, "configurado", lambda: False)
+
     _activar(db, EJE, ProductTier.pulse)
     u = _user(db)
     r = _client(db, u).post("/api/v1/alerts/subscriptions",
                             json={"sector_key": EJE, "channels": ["email"]})
     assert r.status_code == 422
-    assert "todavía no entrega" in r.json()["detail"]
+    assert "no está configurado" in r.json()["detail"]
+
+
+def test_email_CON_SMTP_configurado_se_acepta(db, productos, monkeypatch):
+    """La otra mitad: si el test solo probara el rechazo, un bug que rechazara SIEMPRE
+    pasaría inadvertido y el canal nunca se podría usar."""
+    import shared.notifications.email as mail
+    monkeypatch.setattr(mail, "configurado", lambda: True)
+
+    _activar(db, EJE, ProductTier.pulse)
+    u = _user(db)
+    r = _client(db, u).post("/api/v1/alerts/subscriptions",
+                            json={"sector_key": EJE, "channels": ["inapp", "email"]})
+    assert r.status_code == 201, r.text
+    assert r.json()["channels"] == ["inapp", "email"]
+
+
+def test_el_webhook_sin_endpoint_registrado_se_rechaza(db, productos):
+    """El gate del webhook es POR USUARIO, no del despliegue: sin un endpoint suscrito a
+    `alert.raised`, ofrecerle el canal lo deja esperando avisos que no tienen a dónde ir."""
+    _activar(db, EJE, ProductTier.pulse)
+    u = _user(db)
+    r = _client(db, u).post("/api/v1/alerts/subscriptions",
+                            json={"sector_key": EJE, "channels": ["webhook"]})
+    assert r.status_code == 422
+    assert "no está configurado" in r.json()["detail"]
+
+
+def test_ya_no_quedan_canales_PLANIFICADOS(db, productos):
+    """Los tres canales del spec están construidos. La lista vacía es una afirmación, no un
+    olvido: si mañana se planifica uno nuevo, este test recuerda declararlo."""
+    from shared.alerts import service as svc
+
+    assert svc.CANALES_PLANIFICADOS == ()
 
 
 def test_disparador_desconocido(db, productos):
@@ -363,13 +400,26 @@ def test_para_sujeto_ignora_las_inactivas(db, productos):
 
 # ── Catálogo de disparadores ─────────────────────────────────────────────────
 
-def test_el_catalogo_declara_que_ningun_disparador_tiene_motor_todavia(db, productos):
-    """En la fase A ninguno está implementado, y la API lo DICE. Un disparador mudo que se
-    presenta como activo se lee como que no pasó nada."""
+def test_el_catalogo_declara_CUALES_tienen_motor_y_cuales_no(db, productos):
+    """Un disparador mudo presentado como activo se lee como que no pasó nada; uno activo
+    presentado como mudo hace que nadie lo elija. La API tiene que decir cuál es cuál, y
+    este test se rompe a propósito cada vez que una fase enchufa un motor nuevo."""
     u = _user(db)
     body = _client(db, u).get("/api/v1/alerts/rules").json()
-    assert {r["codigo"] for r in body["rules"]} >= {"umbral", "banda", "brecha"}
-    assert all(r["implementado"] is False for r in body["rules"])
+    por_codigo = {r["codigo"]: r for r in body["rules"]}
+    assert set(por_codigo) >= {"umbral", "banda", "brecha", "posicion", "frescura"}
+
+    # Fase D: los seis tienen motor. Lo que ahora distingue un eje de otro no es la regla
+    # sino qué eje la ALIMENTA, y eso viaja aparte en `cobertura_por_eje`.
+    assert all(r["implementado"] is True for r in body["rules"])
+    assert isinstance(body["cobertura_por_eje"], dict)
+
     assert all(r["basis"] for r in body["rules"])      # ninguna regla suena "porque sí"
+    # Sin SMTP en el entorno de test, el correo se declara NO CONFIGURADO — que no es lo
+    # mismo que "no lo ofrecemos" (eso es `canales_planificados`, hoy el webhook).
+    # Sin SMTP en el entorno de test y sin webhook registrado por este usuario, los dos se
+    # declaran NO CONFIGURADOS — que no es «no lo ofrecemos», y cada uno lo resuelve alguien
+    # distinto: el correo el dueño (variables de entorno), el webhook el cliente (endpoint).
     assert body["canales_disponibles"] == ["inapp"]
-    assert "email" in body["canales_planificados"]
+    assert set(body["canales_no_configurados"]) == {"email", "webhook"}
+    assert body["canales_planificados"] == []

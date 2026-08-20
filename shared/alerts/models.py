@@ -12,14 +12,18 @@ ya carga ~1300 de esos). Código nuevo no debería sumar deuda que ya se está p
 """
 from __future__ import annotations
 
+import datetime as dt
 from typing import List, Optional
 
 from sqlalchemy import (
     Boolean,
+    DateTime,
     ForeignKey,
     Index,
+    Integer,
     JSON,
     String,
+    Text,
     UniqueConstraint,
     true,
 )
@@ -71,4 +75,85 @@ class AlertSubscription(UUIDMixin, Base):
                          name="uq_alert_subscription_user_sector_subject"),
         Index("ix_alert_subscriptions_user", "user_id"),
         Index("ix_alert_subscriptions_sector", "sector_key"),
+    )
+
+
+class AlertEventRow(UUIDMixin, Base):
+    """Un evento juzgado por el gate — **publicado o vetado**, los dos se guardan.
+
+    **Por qué se persiste lo vetado.** Un veto silencioso se lee como que el eje no tenía
+    nada que avisar, que es la lectura opuesta a la verdadera. Guardarlo con su motivo hace
+    que ``GET /alerts/events`` pueda decir «3 señales retenidas por frescura del dato» en vez
+    de no decir nada, y da la serie histórica para saber qué veto muerde más.
+
+    **Por qué el evento es GLOBAL y la entrega es por-usuario.** El hecho —«la cobertura de
+    este banco cayó»— es uno solo; a cuántas bandejas llega depende de quién lo vigilaba.
+    Duplicar la fila por suscriptor haría que la misma condición se contara N veces en
+    cualquier lectura agregada.
+    """
+
+    __tablename__ = "alert_events"
+
+    codigo: Mapped[str] = mapped_column(String(20), nullable=False)
+    sector_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    subject: Mapped[str] = mapped_column(String(120), nullable=False, default=TODO_EL_EJE)
+    periodo: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    severidad: Mapped[str] = mapped_column(String(10), nullable=False, default="media")
+    titulo: Mapped[str] = mapped_column(String(200), nullable=False)
+    cuerpo: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    basis: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    relaciones: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    valores: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    procedencia: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Tres estados, no dos: None = indeterminado, y no publica. Ver `gate.veto_frescura`.
+    frescura: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
+    publicada: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    veto_motivo: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    veto_detalle: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Identidad de la CONDICIÓN (sin período): es la clave con la que el dedup evita
+    # re-avisar lo mismo trimestre tras trimestre. Ver ``reglas.AlertEvent.clave_dedup``.
+    dedup_key: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    # A cuántas bandejas llegó. 0 con ``publicada=True`` es un dato, no un error: significa
+    # que el gate lo dejó pasar y nadie lo estaba vigilando.
+    entregas: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("ix_alert_events_sector_subject", "sector_key", "subject"),
+        Index("ix_alert_events_dedup", "dedup_key"),
+    )
+
+
+class AlertDelivery(UUIDMixin, Base):
+    """Una entrega pendiente o cumplida de un evento a un usuario por un canal.
+
+    **Por qué existe solo para el correo y no para el buzón in-app.** La notificación in-app
+    *es* su propio registro: se crea y ya está entregada. El correo tiene un estado
+    intermedio que el buzón no tiene —«le corresponde, todavía no salió»— y sin una fila que
+    lo represente no hay resumen diario ni reintento posible: un SMTP caído se comería el
+    aviso en silencio.
+
+    ``enviado_at IS NULL`` = pendiente. Es la cola del digest y también la del reintento, que
+    son la misma cosa: lo que no salió, sigue pendiente.
+    """
+
+    __tablename__ = "alert_deliveries"
+
+    event_id: Mapped[str] = mapped_column(String, ForeignKey("alert_events.id"),
+                                          nullable=False)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    canal: Mapped[str] = mapped_column(String(20), nullable=False, default="email")
+    # Cadencia elegida en la vigilancia al momento de generar la entrega. Se copia en vez de
+    # leerse después: si el cliente cambia de «inmediato» a «semanal», lo ya generado no
+    # debería cambiar de trato a mitad de camino.
+    digest: Mapped[str] = mapped_column(String(10), nullable=False, default="inmediato")
+    enviado_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
+    # Cuántas veces se intentó. Un destino que rebota siempre no puede reintentarse eterno.
+    intentos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ultimo_error: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", "canal",
+                         name="uq_alert_delivery_event_user_canal"),
+        Index("ix_alert_deliveries_pendientes", "user_id", "canal", "enviado_at"),
     )

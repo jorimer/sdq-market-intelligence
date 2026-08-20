@@ -171,6 +171,7 @@ def register_webhook(
     firma HMAC de cada aviso. Se devuelve en claro solo en el alta (después solo se
     consulta el resto del registro).
     """
+    from shared.alerts.webhook import EVENTO as ALERT_RAISED
     from shared.data_api.models import ApiKey, ApiWebhook
     from shared.data_api.webhooks import PUBLIC_EVENTS
 
@@ -184,11 +185,18 @@ def register_webhook(
         raise ApiKeyError("La URL del webhook debe ser https://.")
 
     wanted = [e.strip() for e in (events or "*").split(",") if e.strip()]
-    unknown = [e for e in wanted if e != "*" and e not in PUBLIC_EVENTS]
+    # `alert.raised` es suscribible pero NO está en PUBLIC_EVENTS, y la diferencia importa:
+    # aquellos avisan "hay dato nuevo" sin llevar el dato; este lleva la alerta completa. Un
+    # webhook viejo registrado con "*" NO debe empezar a recibir contenido de alertas que
+    # nadie pidió, así que hay que nombrarlo — el comodín no lo arrastra (ver
+    # `shared.alerts.webhook.suscrito`).
+    suscribibles = (*PUBLIC_EVENTS, ALERT_RAISED)
+    unknown = [e for e in wanted if e != "*" and e not in suscribibles]
     if unknown:
         raise ApiKeyError(
             f"Evento(s) desconocido(s): {', '.join(unknown)}. "
-            f"Disponibles: {', '.join(PUBLIC_EVENTS)} (o '*')."
+            f"Disponibles: {', '.join(suscribibles)} (o '*', que NO incluye "
+            f"'{ALERT_RAISED}')."
         )
 
     row = ApiWebhook(

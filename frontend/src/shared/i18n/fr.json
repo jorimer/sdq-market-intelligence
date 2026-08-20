@@ -2569,6 +2569,41 @@
     "watchSubjectHint": "Recevoir des alertes pour {{subject}}.",
     "watchError": "Impossible d'enregistrer la surveillance.",
     "suspended": "Suspendue : votre plan ne couvre plus ce produit.",
-    "pendingEngine": "Enregistrée. Les déclencheurs s'activent par axe ; nous vous préviendrons au premier."
+    "pendingEngine": "Enregistrée. Cet axe ne produit pas encore de signaux ; nous vous préviendrons.",
+    "page": {
+      "eyebrow": "ALERTES",
+      "title": "Mes surveillances",
+      "sub": "Ce que vous surveillez, par quel canal et à quelle fréquence. Les signaux sont évalués sur le panel, pas sur des documents."
+    },
+    "loadError": "Impossible de charger vos surveillances.",
+    "saveError": "Impossible d'enregistrer la modification.",
+    "empty": "Vous ne surveillez rien pour l'instant. Ouvrez un produit du catalogue et utilisez « Surveiller ».",
+    "needChannel": "Gardez au moins un canal, ou supprimez la surveillance.",
+    "subject": "Sujet : {{s}}",
+    "wholeAxis": "Tout l'axe",
+    "noProducer": "Pas encore de signaux",
+    "channels": "Canaux",
+    "channel": {
+      "inapp": "Plateforme",
+      "email": "Courriel",
+      "webhook": "Webhook"
+    },
+    "cadence": "Rythme",
+    "minSeverity": "À partir de la sévérité",
+    "remove": "Ne plus surveiller",
+    "digest": {
+      "inmediato": "Immédiat",
+      "diario": "Quotidien",
+      "semanal": "Hebdomadaire"
+    },
+    "severity": {
+      "alta": "Élevée",
+      "media": "Moyenne",
+      "baja": "Faible"
+    },
+    "unavailable": {
+      "email": "L'alerte par courriel n'est pas configurée sur cette installation ; ce canal n'est pas proposé.",
+      "webhook": "Pour recevoir des alertes par webhook, enregistrez un endpoint abonné à « alert.raised » avec votre clé Data API."
+    }
   }
 }

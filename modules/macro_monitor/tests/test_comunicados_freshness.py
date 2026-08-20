@@ -85,4 +85,4 @@ def test_dedups_then_clears_on_recovery(db):
     assert db.query(Notification).count() == 1
     _seed(db, (_now() - timedelta(days=1)).strftime("%Y-%m-%d"))  # decisión nueva y fresca
     fr.audit_comunicados_freshness(db, [uid], _now())          # limpia el marcador
-    assert db.query(AppSetting).filter_by(key=shared_fr._alert_key("comunicados_tpm")).count() == 0
+    assert db.query(AppSetting).filter_by(key=shared_fr._DEDUP._key("comunicados_tpm")).count() == 0

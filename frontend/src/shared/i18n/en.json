@@ -2569,6 +2569,41 @@
     "watchSubjectHint": "Get alerts for {{subject}}.",
     "watchError": "Could not save the watch.",
     "suspended": "Suspended: your plan no longer covers this product.",
-    "pendingEngine": "Saved. Triggers go live per axis; we'll notify you on the first one."
+    "pendingEngine": "Saved. This axis does not produce signals yet; we'll tell you when it does.",
+    "page": {
+      "eyebrow": "ALERTS",
+      "title": "My watches",
+      "sub": "What you watch, how we reach you and how often. Signals are evaluated on the panel, not on documents."
+    },
+    "loadError": "Could not load your watches.",
+    "saveError": "Could not save the change.",
+    "empty": "You are not watching anything yet. Open a catalog product and use “Watch”.",
+    "needChannel": "Keep at least one channel, or remove the watch.",
+    "subject": "Subject: {{s}}",
+    "wholeAxis": "Whole axis",
+    "noProducer": "No signals yet",
+    "channels": "Channels",
+    "channel": {
+      "inapp": "In-app",
+      "email": "Email",
+      "webhook": "Webhook"
+    },
+    "cadence": "Cadence",
+    "minSeverity": "From severity",
+    "remove": "Stop watching",
+    "digest": {
+      "inmediato": "Immediate",
+      "diario": "Daily",
+      "semanal": "Weekly"
+    },
+    "severity": {
+      "alta": "High",
+      "media": "Medium",
+      "baja": "Low"
+    },
+    "unavailable": {
+      "email": "Email alerts are not configured in this installation, so that channel is not offered.",
+      "webhook": "To receive alerts by webhook, register an endpoint subscribed to “alert.raised” with your Data API key."
+    }
   }
 }

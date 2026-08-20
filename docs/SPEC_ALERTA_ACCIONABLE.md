@@ -214,7 +214,7 @@ y cientos de sujetos, evaluar todo en cada barrido es gasto sin destinatario.
 |---|---|---|
 | **In-app** | existe | `shared/notifications/service.py` + `NotificationsBell.tsx`. Ya persiste y navega por `action_url`. Se reusa entero. |
 | **Email** | **a construir** | No hay emisor en `shared/`. Es la brecha real: hoy nadie se entera si no abre la plataforma. |
-| **Webhook** | reusar | `shared/data_api/webhooks.py` ya firma HMAC-SHA256, entrega en hilo aparte y se autodesactiva a los 10 fallos. |
+| **Webhook** | ✅ fase E | Reusa entero `shared/data_api/webhooks.py` (firma HMAC-SHA256, hilo aparte, autodesactivación a los 10 fallos). Evento propio `alert.raised`, entrega POR DUEÑO y **el comodín `"*"` no lo arrastra**. |
 | **WhatsApp** | **fuera de v1** | Exige proveedor (BSP), plantillas aprobadas por Meta y costo por mensaje. Es apuesta de Dapper; decidir con número en mano, no por paridad. |
 
 **Una divergencia deliberada que hay que declarar.** El webhook de la Data API decide que *«el
@@ -300,10 +300,10 @@ Además de los unitarios por regla (puras, sin DB):
 | Fase | Alcance | Deja utilizable |
 |---|---|---|
 | **A** ✅ | modelos + watchlist + API + botón «Vigilar» | el cliente declara qué le importa |
-| **B** | `reglas.py` (`umbral`, `banda`, `brecha`) sobre **banca** + gate + in-app | alerta real punta a punta en un eje |
-| **C** | emisor de email + digest + dedup promovido | el cliente se entera sin abrir la app |
-| **D** | `posicion` + `frescura` + `publicacion`; productores de los otros ejes | producto transversal |
-| **E** | webhook `alert.raised` | integrable por el cliente institucional |
+| **B** ✅ | `reglas.py` (`umbral`, `banda`, `brecha`) sobre **banca** + gate + in-app | alerta real punta a punta en un eje |
+| **C** ✅ | emisor de email + digest + dedup promovido | el cliente se entera sin abrir la app |
+| **D** ✅ | `posicion` + `frescura` + `publicacion`; productores de los otros ejes | producto transversal |
+| **E** ✅ | webhook `alert.raised` | integrable por el cliente institucional |
 
 La fase B es la que prueba la tesis: si la alerta de banca no se lee como algo que ningún
 monitor de documentos podría haber mandado, el producto no es lo que este spec dice que es.
@@ -333,6 +333,147 @@ Tres decisiones que se tomaron al implementar y no estaban en este spec:
 Y una honestidad que la UI declara en vez de callar: la vigilancia se guarda pero **todavía no
 suena** —ningún disparador tiene motor hasta la fase B— y tanto `GET /alerts/rules`
 (`implementado: false`) como el botón lo dicen.
+
+### Lo que la fase B dejó cerrado (2026-08-20)
+
+`gate.py` (los seis vetos) · `motor.py` (barrido + registro de productores + operación
+`alerts-sweep`) · `entrega.py` (in-app + dedup + tope) · las tres reglas puras ·
+`modules/banking_score/alerts_producer.py` · migración `a7c2e94b1f08` (`alert_events`) ·
+`GET /alerts/events`. 86 tests del módulo + 14 del productor + 9 de componente.
+
+**Verificado punta a punta contra el motor real de banca**, no contra un doble: sembrando una
+entidad cuya cobertura cae a 91%, el barrido produjo
+
+> «Brecha de provisiones de Banco de Prueba está en 91,00% al 2026-06-30, por debajo del
+> umbral de 100,00%. · Señal a monitorear — las reservas dejan de cubrir la cartera vencida»
+
+y llegó a la bandeja del cliente por la API. El segundo barrido con la condición todavía rota
+no re-avisó; al arreglarse y volver a romperse, avisó de nuevo — que es la mitad del dedup que
+se olvida.
+
+Tres cosas que se resolvieron distinto de lo que este spec decía:
+
+- **El productor devuelve también lo que EVALUÓ y no disparó** (`Produccion.evaluadas`), no
+  solo los eventos. Sin eso el dedup sabe callar una condición rota pero no reabrirla cuando
+  se arregla y recae. Y `signal_panel` ya distinguía las tres situaciones que hacían falta:
+  `activa`, `sin_activar` y `sin_dato` — la tercera **no** entra a `evaluadas`, porque dar por
+  resuelta una condición que nadie pudo mirar es cómo un guard sin su input desaparece.
+- **Banca no reimplementa ni un umbral.** `early_warning.py` ya evalúa los precursores de la
+  crisis RD 2003; el productor es un adaptador. Reescribirlos habría creado la sexta instancia
+  del mismo guard en dos motores.
+- **El vocabulario de la regla del sujeto se promovió** a `shared/narrative/sujeto.py`, y el
+  test que lo estrenó lo lee de ahí. El gate aplica la misma regla a las claves de las cifras
+  de una alerta: dos copias divergen, una sola no puede.
+
+El guard estructural que lo sostiene: **solo `reglas.py` instancia `AlertEvent`**
+(`test_nadie_construye_un_AlertEvent_a_mano`, con `ast`). Es lo que hace inevitable el gate —
+un productor que armara el evento a mano se saltearía las guardas de dato ausente y saldría
+bien formado con la cifra equivocada.
+
+### Lo que la fase C dejó cerrado (2026-08-20)
+
+`shared/notifications/email.py` (SMTP, sin dependencia nueva) · `shared/alerts/digest.py`
+(operación `alerts-digest`) · `AlertDelivery` + migración `b8d1f36c07a4` · pantalla
+**«Mis vigilancias»** (`/mis-vigilancias`). 146 tests del módulo + 9 del emisor.
+
+Cuatro decisiones que no estaban escritas acá:
+
+- **SMTP y no el SDK de un proveedor.** SendGrid, Resend, SES y Postmark exponen todos SMTP:
+  el emisor no queda casado con ninguno, no suma una dependencia al lock —que ya tiene su
+  problema en macOS— y el dueño cambia de proveedor moviendo tres variables de entorno.
+- **`canales_disponibles` es una FUNCIÓN, no una constante.** Sin `SMTP_HOST` el canal
+  `email` no se ofrece, y la API distingue *no configurado* (lo resuelve el dueño) de
+  *planificado* (lo resuelve una fase futura). Verificado en las dos direcciones en el
+  navegador: con SMTP aparece el botón «Correo»; sin SMTP desaparece y la pantalla dice
+  por qué.
+- **El correo se ENCOLA, no se manda en el barrido.** Una conexión SMTP dentro del barrido
+  lo vuelve tan lento como el servidor de correo, y un SMTP caído se comería el aviso sin
+  dejar rastro. `AlertDelivery` con `enviado_at IS NULL` es a la vez la cola del resumen y
+  la del reintento — que son la misma cosa: lo que no salió, sigue pendiente. Tras
+  `MAX_INTENTOS` se deja de reintentar pero **la fila no se borra**: queda con su
+  `ultimo_error`, porque un descarte silencioso se lee como que no pasó nada.
+- **Hacía falta una pantalla, y no estaba en el plan de la fase.** Sin «Mis vigilancias» el
+  correo quedaba implementado e inalcanzable: el botón «Vigilar» crea la vigilancia con lo
+  mínimo y no hay dónde cambiar canal ni cadencia. Un canal que el cliente no puede activar
+  es un canal que no existe.
+
+Y una trampa del CI que costó una corrida: **`mypy-baseline` sale con código no cero también
+cuando RESOLVÉS deuda**. La promoción del dedup resolvió tres violaciones, el reporte decía
+`new: 0` y el gate igual falló. Lo advierte `CLAUDE.md`: mirar el *exit code*, no el texto, y
+correr `mypy shared/ modules/ app/ | mypy-baseline sync`.
+
+### Lo que la fase D dejó cerrado (2026-08-20)
+
+Las tres reglas que faltaban (`posicion`, `frescura`, `publicacion`) ·
+`shared/alerts/observaciones.py` (el «antes» de toda regla de transición) ·
+`shared/alerts/productores.py` (productor transversal) · `cobertura_por_eje` en
+`GET /alerts/rules`. **Los 16 ejes tienen productor**; los seis disparadores tienen motor.
+
+Cobertura REAL medida, no prometida: `frescura` en 8 ejes, `posicion` en 3, `publicacion`
+en 2, y banca además con `umbral`/`banda`/`brecha` de su motor de precursores. Los ejes sin
+disparadores se listan vacíos en vez de omitirse.
+
+**Dos defectos silenciosos que aparecieron construyendo esto**, los dos del mismo tipo — no
+fallan, DESAPARECEN:
+
+1. **El registro corría antes que los productos.** `registered_sectors()` daba vacío, se
+   enganchaban cero ejes y el arranque no se quejaba. Y al moverlo, quedó *en medio* del
+   bloque: 14 de 16, con `macro` y `monetary_policy` afuera porque sus `products` se
+   importan al final. El primer test pedía `> 5` y pasó con los dos faltando — un umbral
+   flojo deja pasar justo el defecto que el test existe para atrapar. Ahora compara
+   **conjuntos completos** contra el registro de productos.
+2. **El motor de validación se buscaba por la clave del eje.** `MOTORES` se indexa por
+   MÓDULO (`banking_score`) y el catálogo por SECTOR (`banking`): de ocho motores, **una
+   sola clave coincidía por casualidad** (`social_dev`). El puente correcto ya existía y lo
+   declara el producto en `ESTADO_BACKTEST.eje_motor` — el mismo camino que usa
+   `shared/products/credenciales.py`.
+
+Y una excepción a la regla madre que hubo que declarar en vez de forzar: en `rule_frescura`,
+`None` **es un valor del dominio** (el tercer estado, indeterminado), no una ausencia. El
+barrido genérico de «ninguna entrada `None` dispara» la exceptúa con su razón escrita, y el
+guard exige que la declaración coincida con la firma — así una regla que se quede sin
+opcionales por accidente sigue fallando.
+
+**`rule_frescura` declara `frescura=True` y no es una trampa al veto**: el hecho que afirma
+—«la huella del reporte ya no coincide con su insumo»— se computó contra el estado de HOY.
+Lo que envejeció es el objeto del aviso, no el aviso. Si heredara el `stale` del reporte, la
+única alerta que existe para avisar que algo se venció quedaría vetada por estar vencida.
+
+### Lo que la fase E dejó cerrado (2026-08-20)
+
+`shared/alerts/webhook.py` — el canal máquina-a-máquina. Reusa entera la maquinaria de la
+Data API (firma HMAC-SHA256, entrega en hilo aparte, bitácora de intentos, autodesactivación
+a los 10 fallos): duplicarla habría sido un segundo lugar donde arreglar el mismo bug.
+
+**Tres diferencias con el webhook de «hay dato nuevo», y las tres deliberadas:**
+
+1. **Este aviso SÍ lleva su contenido.** El de la Data API decide que no —solo dice qué
+   cambió y el cliente vuelve con su llave— para no crear un segundo canal de datos con sus
+   propios permisos. Una alerta es otra cosa: un aviso que no dice qué pasó no es una
+   alerta, es una invitación a sondear. Va la afirmación completa con sus relaciones
+   computadas, sus cifras, su procedencia y su frescura; **no** va la narrativa del informe,
+   que es el producto y no se regala por un canal lateral.
+2. **`alert.raised` NUNCA lo matchea `"*"`.** Un webhook viejo registrado con «todos los
+   eventos» se suscribió a avisos que no llevan el dato; arrastrarlo a las alertas le
+   mandaría cifras y nombres de entidad que nunca pidió. Hay que nombrarlo, y el mensaje de
+   error del alta lo dice explícitamente.
+3. **Se entrega POR DUEÑO, no en difusión.** `dispatch` avisa a todos los webhooks
+   suscritos: correcto para «se recalculó el snapshot de macro», una fuga para una alerta,
+   que es de un cliente concreto. Y revocar la llave corta el canal sin que nadie tenga que
+   acordarse de borrar el webhook.
+
+**El gate del canal es POR USUARIO**, a diferencia del correo, que es del despliegue:
+`canales_disponibles(db, user_id)` ofrece `webhook` solo a quien registró un endpoint. Los
+tres gates son de naturaleza distinta y la pantalla los une, diciendo en cada caso **quién**
+lo resuelve — el correo el dueño de la instalación, el webhook el propio cliente.
+
+Y una asimetría con el correo: **el webhook sale en el momento**, no se encola. Quien integra
+por webhook lo hace para reaccionar, no para leer un resumen mañana; la entrega ya corre en
+hilo aparte, así que el barrido no queda atado a la red del cliente.
+
+Con esto **los tres canales del spec están construidos** y `CANALES_PLANIFICADOS` queda
+vacío — una afirmación, no un olvido: hay un test que lo comprueba para que un canal nuevo
+tenga que declararse.
 
 ---
 

@@ -92,7 +92,10 @@ def test_la_fecha_de_gaceta_FALTA_a_menudo_y_no_se_interpola_cruda():
     c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([sin_fecha], True))
     assert "10753" in c.evidencia, "el número solo ya es respaldo: no se calla por la fecha"
     assert "None" not in c.evidencia
-    assert c.evidencia.endswith("Gaceta 10753.")
+    # Se comprueba la FRASE, no el final de la cadena: desde que toda comprobación lleva la
+    # procedencia de su corpus, la evidencia sigue después. Fijar el `endswith` ataba el test
+    # a dónde terminaba el texto y no a lo que el texto tiene que decir.
+    assert "Gaceta 10753." in c.evidencia
 
 
 class TestLaGrietaQueElEmisorAvisa:
@@ -249,3 +252,62 @@ class TestLaCitaDeGacetaLaCOMPONEElEmisor:
         c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
         assert "Gaceta" not in c.evidencia
 
+
+
+class TestLaProcedenciaAcompanaATODOVeredicto:
+    """La procedencia acompañaba solo a las acusaciones, y la asimetría era defendible a
+    medias: `incumplida` es lo que alguien puede refutar, así que ahí pesa más.
+
+    Pero un `cumplida_tarde` también se publica en un informe que se vende, y también hay que
+    poder explicar después por qué su cifra ya no coincide con la de hoy — que es lo que la
+    doctrina exige de CUALQUIER dato publicado, no solo de los que acusan.
+    """
+
+    ALCANCE = {"corpus": "gaceta_oficial", "vacio_es_concluyente": True,
+               "medido_al": "2026-08-18T03:40:48",
+               "instantanea": {"normas_leidas": 10759}}
+
+    def test_un_CUMPLIMIENTO_tambien_lleva_la_huella(self):
+        c = comprobar_obligacion(CONSULTA, VENCE,
+                                 lambda **kw: {"alcance": self.ALCANCE,
+                                               "resultados": [_DECRETO]})
+        assert c.veredicto == "cumplida_tarde"
+        assert "10759" in c.evidencia, "sin la huella no se puede auditar después"
+
+    def test_un_SIN_REGISTRO_PUBLICO_tambien(self):
+        a = dict(self.ALCANCE, vacio_es_concluyente=False, huecos=["2011"])
+        c = comprobar_obligacion(CONSULTA, VENCE,
+                                 lambda **kw: {"alcance": a, "resultados": []})
+        assert c.veredicto == "sin_registro_publico"
+        assert "10759" in c.evidencia
+
+    def test_pero_un_fallo_del_API_no_INVENTA_procedencia(self):
+        """Sin alcance no hay corpus del que hablar: el emisor no llegó a responder, y
+        fabricar una frase sobre su cobertura sería inventar procedencia sin consulta."""
+        from shared.data.jurisai_client import JurisAIUnavailable
+
+        def _cae(**kw):
+            raise JurisAIUnavailable("timeout")
+
+        c = comprobar_obligacion(CONSULTA, VENCE, _cae)
+        assert c.veredicto == "no_verificable"
+        assert "huella" not in c.evidencia and "corpus" not in c.evidencia.lower()
+
+
+def test_REGLA_ninguna_comprobacion_se_arma_sin_el_constructor():
+    """ESTRUCTURAL: la asimetría existió porque la procedencia se agregaba en UN `return` de
+    cinco. Un constructor único la vuelve imposible de olvidar; este test lo vuelve imposible
+    de eludir."""
+    import ast
+    import inspect
+    import textwrap
+
+    from modules.law_intel import normativa
+
+    arbol = ast.parse(textwrap.dedent(inspect.getsource(normativa.comprobar_obligacion)))
+    crudos = [n.lineno for n in ast.walk(arbol)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+              and n.func.id == "Comprobacion"]
+    assert not crudos, (
+        f"se arma un `Comprobacion` a mano en las líneas {crudos}: se salta la procedencia "
+        f"del corpus y el veredicto queda sin poder auditarse. Usá `_comprobacion`.")

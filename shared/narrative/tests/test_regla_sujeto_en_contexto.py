@@ -24,24 +24,11 @@ import pytest
 
 RAIZ = pathlib.Path(__file__).resolve().parents[3]
 
-# Palabras que denotan una porción de un total. Una clave con alguna de ellas afirma
-# implícitamente «de qué», y ese «de qué» tiene que estar escrito.
-_PORCION = ("concentracion", "concentration", "cuota", "share", "participacion", "hhi", "cr5",
-            "cr10", "peso_")
-
-# Sujetos admitidos: la población sobre la que se computa la porción.
-_SUJETOS = ("ramo", "ramos", "compania", "companias", "empresa", "empresas", "entidad",
-            "entidades", "banco", "bancos", "aseguradora", "aseguradoras", "afp", "activos",
-            "provincia", "province", "typology", "tipologia", "export", "chapter", "sector",
-            "origin", "origen", "region", "generation", "generacion",
-            "producto", "product", "geography", "personas", "danos", "salud",
-            "sin_clasificar", "broadband", "sqm", "metric", "market", "mercado",
-            # La concentración de cartera se computa sobre DEUDORES — la población que la
-            # regla no conocía y que es justo la que el modelo reatribuía: publicó la
-            # concentración de los diez mayores deudores como si fuera de entidades.
-            "deudor", "deudores")
-
-_EXENCION = "sujeto-ok:"
+# El vocabulario NO vive acá. La misma regla la aplica el gate de alertas
+# (`shared/alerts/gate.py`), y dos copias divergen: se lee de `shared.narrative.sujeto`.
+from shared.narrative.sujeto import EXENCION as _EXENCION  # noqa: E402
+from shared.narrative.sujeto import PORCION as _PORCION  # noqa: E402
+from shared.narrative.sujeto import SUJETOS as _SUJETOS  # noqa: E402
 
 
 def _exento(lineas, lineno: int) -> bool:

@@ -22,6 +22,10 @@ export interface AlertSubscription {
   suspended_reason: string | null;
   /** Nivel que hace falta para vigilar esto: lo determina el sujeto, no una constante. */
   tier_requerido: string;
+  /** ¿El eje ya tiene un productor enchufado al barrido? Un eje del catálogo puede estar
+   *  implementado como producto y todavía no aportar señales. La UI tiene que decirlo:
+   *  una vigilancia muda presentada como activa se lee como que no pasó nada. */
+  sector_produce_alertas: boolean;
   created_at: string | null;
 }
 
@@ -39,7 +43,12 @@ export interface AlertRule {
 export interface AlertRulesCatalog {
   rules: AlertRule[];
   severidades: string[];
+  /** Canales que HOY entregan de verdad en este despliegue. */
   canales_disponibles: string[];
+  /** Existen en el código pero esta instalación no los tiene configurados (p. ej. correo
+   *  sin SMTP). NO es lo mismo que `canales_planificados`, y la UI debe decir cuál es cuál:
+   *  esto lo resuelve el dueño con tres variables de entorno; aquello, una fase futura. */
+  canales_no_configurados: string[];
   canales_planificados: string[];
   digests: string[];
 }
