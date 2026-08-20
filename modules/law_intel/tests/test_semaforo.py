@@ -225,3 +225,53 @@ class TestUnUmbralNoAdmiteDeltaPeroSIVeredicto:
                     Binding(indicador="1.8", mejor="mayor", **VERIF),
                     [("2024", 1820.0)], corte="2025")
         assert v.observado == 1820.0
+
+
+class TestUnEscalarROTULADOSeJuzgaConSuSujeto:
+    """«Matemáticas : 63.0» no es prosa: es un número con su sujeto pegado.
+
+    La ley lo escribe así porque el indicador 2.17 nombra TRES materias —lectura, matemáticas
+    y ciencias— y solo le fija meta a una. Quitar la etiqueta para dejar un 63.0 pelado
+    borraría justamente el dato que deja ver que se juzga una de tres, y violaría la regla que
+    este repo hace cumplir en todos lados: el sujeto viaja con el número.
+    """
+
+    def _rot(self, metas):
+        return ind(escala="redactada", metas=metas)
+
+    def test_se_juzga_y_el_SUJETO_viaja_al_veredicto(self):
+        v = evaluar(self._rot({"2025": "Matemáticas : 63.0"}),
+                    Binding(indicador="1.8", mejor="menor", **VERIF),
+                    [("2019", 97.84)], corte="2025")
+        assert v.veredicto == "no_alcanzada"
+        assert "Matemáticas" in (v.motivo or ""), "sin el sujeto no se ve que es una de tres"
+        assert "97.84" in (v.motivo or "") and "63" in (v.motivo or "")
+
+    def test_una_meta_rotulada_CUMPLIDA(self):
+        v = evaluar(self._rot({"2025": "Matemáticas : 63.0"}),
+                    Binding(indicador="1.8", mejor="menor", **VERIF),
+                    [("2019", 52.0)], corte="2025")
+        assert v.veredicto == "alcanzada" and v.cumple is True
+
+    def test_una_meta_REDACTADA_de_verdad_sigue_sin_juzgarse(self):
+        """«Pertenecer al nivel II» requiere juicio, no aritmética. La rama nueva no puede
+        volverse una excusa para juzgar lo que no se mide."""
+        v = evaluar(self._rot({"2025": "Pertenecer al nivel III"}),
+                    Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2019", 643.95)], corte="2025")
+        assert v.veredicto == "no_evaluable"
+
+    def test_una_meta_COMPUESTA_tampoco(self):
+        """«Pertenecer al nivel II Con un puntaje promedio > 484» mezcla nivel y puntaje: no se
+        puede juzgar media meta y callar la otra."""
+        v = evaluar(self._rot({"2025": "Pertenecer al nivel II Con un puntaje promedio > 484"}),
+                    Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2019", 643.95)], corte="2025")
+        assert v.veredicto == "no_evaluable"
+
+    def test_la_direccion_la_pone_el_BINDING_no_el_rotulo(self):
+        """El mismo 97,84 cumple o no según si el indicador mejora subiendo o bajando."""
+        arriba = evaluar(self._rot({"2025": "Cobertura : 63.0"}),
+                         Binding(indicador="1.8", mejor="mayor", **VERIF),
+                         [("2019", 97.84)], corte="2025")
+        assert arriba.veredicto == "alcanzada"
