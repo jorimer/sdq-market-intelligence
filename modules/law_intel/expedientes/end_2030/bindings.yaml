@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "17.0"
+version: "18.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -891,3 +891,147 @@ bindings:
       proponer.
       La ley le fija metas hasta 2030 —B+ en 2015, A en 2020 y 2025, A+ en 2030— sobre un
       indicador que dejó de existir en 2016. Es el hallazgo, no la brecha.
+
+  # ══════════════════════════════════════════════════════════════════════════════════════
+  # LLECE (2.12 a 2.17) — la ESCALA fue abandonada, no el instrumento
+  #
+  # Es la trampa inversa a la de PEFA, y por eso vale ponerlas juntas. En PEFA los códigos
+  # sobrevivieron y el SIGNIFICADO cambió: `ID-19` pasó de adquisiciones a administración de
+  # ingresos. Acá el significado sobrevive intacto —lectura de 6to grado sigue siendo lectura
+  # de 6to grado— y lo que cambió es la ESCALA en que se publica.
+  #
+  # La ley fija sus líneas base y sus metas de puntaje en SERCE 2006, cuya media regional es
+  # 500. Desde TERCE 2013 el LLECE publica con media 700. El resultado es que un puntaje
+  # moderno leído contra una meta de la ley la supera por unos doscientos puntos:
+  #
+  #     2.12  Lectura 6º   ERCE 2019 = 643,95   meta 2030 de la ley: «> 557»
+  #     2.16  Ciencias 6º  ERCE 2019 = 649,21   meta 2030 de la ley: «> 650»
+  #
+  # Es decir: atarlo sin más publicaría «meta de 2030 alcanzada en 2019» sobre un país cuyo
+  # desempeño real está lejísimos. Es exactamente la forma del defecto que ya nos costó la
+  # pobreza extrema de cibao_norte, con otra causa.
+  #
+  # ── POR QUÉ NO SE PUEDE CONVERTIR ──
+  # El equating SERCE↔TERCE existe (bloques de anclaje) pero expresa TERCE EN LA ESCALA DE
+  # 500. El de TERCE↔ERCE va en la de 700. No hay puente publicado de ERCE a la escala de la
+  # ley, y encadenar los dos por cuenta propia sería inventar la conversión.
+  #
+  # ── LO QUE SÍ SOBREVIVE: LOS NIVELES ──
+  # Está documentado en dos fuentes independientes: los niveles de desempeño de TERCE son
+  # «iguales a los de SERCE 2006» por diseño, y ERCE «mantiene sus puntos de corte fijados en
+  # el estudio anterior, TERCE». La cadena de niveles se sostiene entera de 2006 a 2019.
+  #
+  # Por eso un indicador expresado en PORCENTAJE DE ALUMNOS POR NIVEL sobrevive al cambio de
+  # escala, y uno expresado en puntaje no. De los seis, solo el 2.17 está escrito así — y es,
+  # por casualidad, el único legible.
+  #
+  # Fuente: tabla oficial del LLECE, legible por máquina, en github.com/llece/comparativo
+  # (`tercevserce.csv`, columnas ERCE_nivel_1..4 y TERCE_nivel_1..4; los cuatro niveles suman
+  # 1,0000, así que la partición es completa y «en o por debajo del nivel II» es I + II).
+  # ══════════════════════════════════════════════════════════════════════════════════════
+
+  - indicador: "2.12"
+    serie: "llece:lectura_6to"
+    fuente: llece
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Lectura de 6to grado. La ley fija su línea base en 421 para 2005 —escala de
+      SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (> 557 para 2030).
+      Desde TERCE 2013 el LLECE publica con media 700: el ERCE 2019 da 643,95 para República
+      Dominicana, que leído contra la meta de la ley la superaría por unos doscientos puntos
+      sin que el país haya cambiado de desempeño.
+      No hay puente publicado de la escala 700 a la de la ley, y construirlo por cuenta propia
+      sería inventar la conversión. Se descarta la MITAD DE PUNTAJE de las metas.
+      La mitad de NIVEL sí sería legible —los niveles son comparables de 2006 a 2019— pero las
+      metas de este indicador son compuestas («Pertenecer al nivel II Con un puntaje promedio
+      > 484»), así que no se puede juzgar media meta y callar la otra.
+
+  - indicador: "2.13"
+    serie: "llece:lectura_3er"
+    fuente: llece
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Lectura de 3er grado. La ley fija su línea base en 395 para 2006 —escala de
+      SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (> 600 para 2030).
+      Desde TERCE 2013 el LLECE publica con media 700: el ERCE 2019 da 623,93 para República
+      Dominicana, que leído contra la meta de la ley la superaría por unos doscientos puntos
+      sin que el país haya cambiado de desempeño.
+      No hay puente publicado de la escala 700 a la de la ley, y construirlo por cuenta propia
+      sería inventar la conversión. Se descarta la MITAD DE PUNTAJE de las metas.
+      La mitad de NIVEL sí sería legible —los niveles son comparables de 2006 a 2019— pero las
+      metas de este indicador son compuestas («Pertenecer al nivel II Con un puntaje promedio
+      > 484»), así que no se puede juzgar media meta y callar la otra.
+
+  - indicador: "2.14"
+    serie: "llece:matemática_6to"
+    fuente: llece
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Matemática de 6to grado. La ley fija su línea base en 415 para 2006 —escala de
+      SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (> 560 para 2030).
+      Desde TERCE 2013 el LLECE publica con media 700: el ERCE 2019 da 635,88 para República
+      Dominicana, que leído contra la meta de la ley la superaría por unos doscientos puntos
+      sin que el país haya cambiado de desempeño.
+      No hay puente publicado de la escala 700 a la de la ley, y construirlo por cuenta propia
+      sería inventar la conversión. Se descarta la MITAD DE PUNTAJE de las metas.
+      La mitad de NIVEL sí sería legible —los niveles son comparables de 2006 a 2019— pero las
+      metas de este indicador son compuestas («Pertenecer al nivel II Con un puntaje promedio
+      > 484»), así que no se puede juzgar media meta y callar la otra.
+
+  - indicador: "2.15"
+    serie: "llece:matemática_3er"
+    fuente: llece
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Matemática de 3er grado. La ley fija su línea base en 395 para 2006 —escala de
+      SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (nivel III para 2030).
+      Desde TERCE 2013 el LLECE publica con media 700: el ERCE 2019 da 623,90 para República
+      Dominicana, que leído contra la meta de la ley la superaría por unos doscientos puntos
+      sin que el país haya cambiado de desempeño.
+      No hay puente publicado de la escala 700 a la de la ley, y construirlo por cuenta propia
+      sería inventar la conversión. Se descarta la MITAD DE PUNTAJE de las metas.
+      La mitad de NIVEL sí sería legible —los niveles son comparables de 2006 a 2019— pero las
+      metas de este indicador son compuestas («Pertenecer al nivel II Con un puntaje promedio
+      > 484»), así que no se puede juzgar media meta y callar la otra.
+
+  - indicador: "2.16"
+    serie: "llece:ciencias_6to"
+    fuente: llece
+    mejor: mayor
+    estado: descartado
+    motivo_descarte: >-
+      Ciencias de 6to grado. La ley fija su línea base en 426 para 2006 —escala de
+      SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (> 650 para 2030).
+      Desde TERCE 2013 el LLECE publica con media 700: el ERCE 2019 da 649,21 para República
+      Dominicana, que leído contra la meta de la ley la superaría por unos doscientos puntos
+      sin que el país haya cambiado de desempeño.
+      No hay puente publicado de la escala 700 a la de la ley, y construirlo por cuenta propia
+      sería inventar la conversión. Se descarta la MITAD DE PUNTAJE de las metas.
+      La mitad de NIVEL sí sería legible —los niveles son comparables de 2006 a 2019— pero las
+      metas de este indicador son compuestas («Pertenecer al nivel II Con un puntaje promedio
+      > 484»), así que no se puede juzgar media meta y callar la otra.
+
+  # El único de los seis que la ley escribió en PORCENTAJE, y por eso el único legible.
+  - indicador: "2.17"
+    serie: "llece:matematica_6to_bajo_nivel_ii"
+    fuente: llece
+    mejor: menor
+    estado: propuesto
+    nota: >-
+      Porcentaje de alumnos en o por debajo del nivel II en matemáticas de 6to grado. Es el
+      ÚNICO de los seis indicadores LLECE expresado en porcentaje de alumnos por nivel, y por
+      eso el único que sobrevive al cambio de escala: los niveles son comparables de SERCE
+      2006 a ERCE 2019 y los puntajes no.
+      Serie observada (tabla oficial del LLECE, `nivel_1 + nivel_2` para República Dominicana):
+      92,9% en 2006 —la línea base que la propia ley declara—, 98,5% en TERCE 2013 y 97,8% en
+      ERCE 2019, contra metas de 85,8% para 2015, 73,0% para 2020, 63,0% para 2025 y 53,0%
+      para 2030.
+      EL PAÍS RETROCEDIÓ RESPECTO DE SU PROPIA LÍNEA BASE: cinco puntos peor trece años
+      después, contra una meta que pedía bajar treinta. No es que no llegue — va en dirección
+      contraria, y es el indicador que la ley eligió para vigilar exactamente esto.
+      Queda `propuesto` hasta que la serie se ingiera y producción la sirva: la comprobación
+      de concepto está hecha, la plomería no. Son cosas distintas y el 2.19 lo probó.
