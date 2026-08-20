@@ -29,6 +29,24 @@ def test_record_usage_acumula_en_memoria_sin_redis():
     assert budget.spent_today() == pytest.approx(0.9)
 
 
+def test_el_DEFAULT_del_techo_no_es_cero():
+    """Un entorno que nunca definió ``LLM_DAILY_BUDGET_USD`` NO queda sin techo.
+
+    El 2026-08-20 una tarea de pre-calentado generó informes que nadie pidió y gastó USD 127
+    en un día: el techo estaba en su default 0 —sin techo— así que no había nada que pudiera
+    cortarla. "Sin techo" no puede ser el estado en que se cae por omisión; apagarlo (=0) es
+    una decisión que se toma explícitamente por variable de entorno, no un olvido.
+
+    Este test NO fija el número (cada despliegue calibra el suyo mirando su propio gasto en
+    ``GET /api/v1/operations/llm-spend``): fija que exista.
+    """
+    from shared.config.settings import Settings
+
+    assert Settings.model_fields["LLM_DAILY_BUDGET_USD"].default > 0, (
+        "el default del presupuesto diario volvió a 0: cualquier entorno que no defina la "
+        "variable queda otra vez sin techo, que es como se fueron USD 127 en un día.")
+
+
 def test_sin_techo_configurado_siempre_permite(monkeypatch):
     monkeypatch.setattr(budget.settings, "LLM_DAILY_BUDGET_USD", 0.0, raising=False)
     budget.record_usage("claude-sonnet-4-6", 10_000_000, 10_000_000)  # $180
