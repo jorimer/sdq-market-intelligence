@@ -189,7 +189,8 @@ def _as_series(by: Dict[str, Dict[str, float]]) -> Dict[str, List[Tuple[str, flo
 # ── Orquestador ────────────────────────────────────────────────────────────────
 
 def control_por_tamano(obs: List[Obs], tamano_by: Dict[str, Dict[str, float]],
-                       gini_del_score: Optional[float]) -> Dict:
+                       gini_del_score: Optional[float],
+                       ic_del_score: Optional[List] = None) -> Dict:
     """El MISMO panel etiquetado, ordenado solo por el tamaño de la aseguradora.
 
     Las etiquetas no dependen del score —salen del desempeño prospectivo contra la mediana
@@ -200,7 +201,8 @@ def control_por_tamano(obs: List[Obs], tamano_by: Dict[str, Dict[str, float]],
     tamanos = [tamano_by.get(o.slug, {}).get(o.period) for o in obs]
     return medir_control_de_tamano(
         tamanos, [o.label for o in obs], gini_del_score, variable="primas_suscritas",
-        nota_extra="primas suscritas de la aseguradora en el año base")
+        nota_extra="primas suscritas de la aseguradora en el año base",
+        ic_del_score=ic_del_score)
 
 
 def build_backtest_report(db: Session, horizon: int = 3) -> Dict:
@@ -223,7 +225,7 @@ def build_backtest_report(db: Session, horizon: int = 3) -> Dict:
     for clave, señal in signals.items():
         if señal is not None:
             señal["control_solo_tamano"] = control_por_tamano(
-                obs_por_senal[clave], primas, señal.get("gini"))
+                obs_por_senal[clave], primas, señal.get("gini"), señal.get("gini_ci"))
     computed = any(v is not None for v in signals.values())
     ranked = sorted([(k, v) for k, v in signals.items() if v and v.get("conclusive")],
                     key=lambda kv: kv[1]["n_obs"], reverse=True)

@@ -11,7 +11,8 @@ import random
 from typing import Any, Dict, List, Optional, Tuple
 
 from shared.validation.control_tamano import (
-    VEREDICTO_CONTROL_NO_EVALUABLE, VEREDICTO_SCORE_SUPERA, VEREDICTO_TAMANO_ALCANZA,
+    VEREDICTO_CONTROL_NO_EVALUABLE, VEREDICTO_EMPATE, VEREDICTO_SCORE_SUPERA,
+    VEREDICTO_TAMANO_ALCANZA,
 )
 
 _BANDS = (("Alta", 60.0), ("Moderada", 40.0), ("Baja", 0.0))
@@ -74,7 +75,8 @@ def _band(score: float) -> str:
 
 def _control_por_tamano(common: List[str], mortality: Dict[str, float],
                         poblacion: Optional[Dict[str, float]],
-                        rho_del_score: Optional[float]) -> Dict[str, Any]:
+                        rho_del_score: Optional[float],
+                        ic_del_score: Optional[List] = None) -> Dict[str, Any]:
     """La misma mortalidad, ordenada solo por el tamaño del país.
 
     El desenlace ya viene por 100.000 habitantes, así que la población es su DEFLACTOR — la
@@ -103,13 +105,26 @@ def _control_por_tamano(common: List[str], mortality: Dict[str, float],
     lo, hi = _bootstrap_ci(pares)
     alcanza = (rho is not None and rho_del_score is not None
                and abs(rho) >= abs(rho_del_score))
+    # El EMPATE: si el ρ del control cae dentro del intervalo del score, la diferencia no se
+    # distingue del ruido y decir «el score supera» inventa una ventaja que el dato no da.
+    empata = bool(rho is not None and ic_del_score
+                  and ic_del_score[0] is not None and ic_del_score[1] is not None
+                  and ic_del_score[0] <= rho <= ic_del_score[1])
+    if rho is None or rho_del_score is None:
+        veredicto = VEREDICTO_CONTROL_NO_EVALUABLE
+    elif empata:
+        veredicto = VEREDICTO_EMPATE
+    elif alcanza:
+        veredicto = VEREDICTO_TAMANO_ALCANZA
+    else:
+        veredicto = VEREDICTO_SCORE_SUPERA
     return {
         **base, "spearman": rho, "spearman_ci": [lo, hi], "n": len(pares),
+        "n_del_score": len(common),
         "spearman_del_score": rho_del_score,
         "el_tamano_alcanza_al_score": bool(alcanza),
-        "veredicto": (VEREDICTO_CONTROL_NO_EVALUABLE
-                      if rho is None or rho_del_score is None
-                      else VEREDICTO_TAMANO_ALCANZA if alcanza else VEREDICTO_SCORE_SUPERA),
+        "empata_con_el_score": bool(empata),
+        "veredicto": veredicto,
     }
 
 
@@ -152,7 +167,8 @@ def build_esg_backtest(irc: Dict[str, float], mortality: Dict[str, float],
         "spearman": rho,
         "spearman_ci": [lo, hi],
         # El control viaja pegado a la cifra que acota, nunca en otro documento.
-        "control_solo_tamano": _control_por_tamano(common, mortality, poblacion, rho),
+        "control_solo_tamano": _control_por_tamano(common, mortality, poblacion, rho,
+                                                   [lo, hi]),
         "by_band": by_band,
         "monotonic": monotonic,
         "note": "Validación direccional preliminar (transversal, panel pequeño); la "

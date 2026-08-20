@@ -157,17 +157,34 @@ def _returns_by_afp(db: Session) -> Dict[str, List[Tuple[str, float]]]:
 
 # ── Orquestador ────────────────────────────────────────────────────────────────
 
+def _vigente(serie: Dict[str, float], periodo: str) -> Optional[float]:
+    """Último valor de *serie* en o antes de *periodo*. ``None`` si no hay ninguno.
+
+    Los períodos son ISO (``YYYY-MM``), así que el orden lexicográfico ES el cronológico.
+    """
+    anteriores = [p for p in serie if p <= periodo]
+    return serie[max(anteriores)] if anteriores else None
+
+
 def control_por_tamano(obs: List[Obs], tamano_by: Dict[str, Dict[str, float]],
-                       gini_del_score: Optional[float]) -> Dict:
+                       gini_del_score: Optional[float],
+                       ic_del_score: Optional[List] = None) -> Dict:
     """El MISMO panel etiquetado, ordenado solo por el tamaño del fondo administrado.
 
     Son siete AFP y las dos grandes concentran la mayor parte del patrimonio: si el tamaño
     solo ordena el subdesempeño igual que el score, la señal es de escala y no de gestión.
     """
-    tamanos = [tamano_by.get(o.slug, {}).get(o.period) for o in obs]
+    # Los activos son TRIMESTRALES y los retornos MENSUALES: pedir el período exacto dejaba
+    # el control con 96 de 1.590 observaciones —otro universo— y aun así producía veredicto.
+    # Se toma el último valor CONOCIDO en o antes del período. Es una regla declarada sobre
+    # una variable de stock, no una interpolación: ningún número se inventa.
+    tamanos = [_vigente(tamano_by.get(o.slug, {}), o.period) for o in obs]
     return medir_control_de_tamano(
         tamanos, [o.label for o in obs], gini_del_score, variable="activos_totales",
-        nota_extra="activos totales del fondo administrado por la AFP en el período base")
+        nota_extra="activos totales del fondo administrado por la AFP — último valor "
+                   "conocido en o antes del período base (los activos son trimestrales y "
+                   "los retornos mensuales)",
+        ic_del_score=ic_del_score)
 
 
 def build_backtest_report(db: Session, solvency_horizon: int = 24,
@@ -190,7 +207,7 @@ def build_backtest_report(db: Session, solvency_horizon: int = 24,
     for clave, señal in signals.items():
         if señal is not None:
             señal["control_solo_tamano"] = control_por_tamano(
-                obs_por_senal[clave], activos, señal.get("gini"))
+                obs_por_senal[clave], activos, señal.get("gini"), señal.get("gini_ci"))
     computed = any(v is not None for v in signals.values())
     # Gini "de referencia" para G5: la señal concluyente de mayor N; si ninguna concluye, None.
     ranked = sorted(

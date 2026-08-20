@@ -61,12 +61,13 @@ def _metrics_for(labeled: List[Dict]) -> Dict:
     }
 
 
-def _control(labeled: List[Dict], gini_del_score: Optional[float]) -> Dict:
+def _control(labeled: List[Dict], bloque: Dict) -> Dict:
     """El mismo panel etiquetado, ordenado solo por el tamaño exportador del país."""
     return medir_control_de_tamano(
         [r.get("total_exports") for r in labeled], [r["label"] for r in labeled],
-        gini_del_score, variable="total_exports",
-        nota_extra="valor total exportado del país en el año base (Comtrade)")
+        bloque.get("gini"), variable="total_exports",
+        nota_extra="valor total exportado del país en el año base (Comtrade)",
+        ic_del_score=bloque.get("gini_ci"))
 
 
 def build_backtest_report(dataset: Optional[Dict] = None) -> Dict:
@@ -84,10 +85,8 @@ def build_backtest_report(dataset: Optional[Dict] = None) -> Dict:
     # PORCENTUAL de exportaciones, y el país chico tiene más varianza porcentual por
     # construcción: sin medir qué hace el tamaño solo, «el índice ordena el colapso» y «los
     # chicos colapsan más seguido» son indistinguibles.
-    export_collapse["control_solo_tamano"] = _control(etiquetado_export,
-                                                      export_collapse.get("gini"))
-    external_macro["control_solo_tamano"] = _control(etiquetado_macro,
-                                                     external_macro.get("gini"))
+    export_collapse["control_solo_tamano"] = _control(etiquetado_export, export_collapse)
+    external_macro["control_solo_tamano"] = _control(etiquetado_macro, external_macro)
 
     panel_countries = sorted({r["iso"] for r in panel})
     meta = (dataset or {}).get("meta", {})

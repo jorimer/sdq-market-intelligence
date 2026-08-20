@@ -124,13 +124,13 @@ def _disclaimer(governance: Dict, n_countries: int, n_pairs: int) -> str:
     )
 
 
-def _control(labeled: List[Dict], pib: Dict[str, Dict[int, float]],
-             gini_del_score: Optional[float]) -> Dict:
+def _control(labeled: List[Dict], pib: Dict[str, Dict[int, float]], bloque: Dict) -> Dict:
     """El mismo panel etiquetado, ordenado solo por el PIB del país en ese año."""
     return medir_control_de_tamano(
         [pib.get(r["iso"], {}).get(r["year"]) for r in labeled],
-        [r["label"] for r in labeled], gini_del_score, variable=WDI_GDP_LEVEL,
-        nota_extra="PIB en dólares constantes del país en el año base (Banco Mundial)")
+        [r["label"] for r in labeled], bloque.get("gini"), variable=WDI_GDP_LEVEL,
+        nota_extra="PIB en dólares constantes del país en el año base (Banco Mundial)",
+        ic_del_score=bloque.get("gini_ci"))
 
 
 def build_backtest_report(series: Optional[Dict] = None,
@@ -157,9 +157,8 @@ def build_backtest_report(series: Optional[Dict] = None,
     # más eventos sin que cambie el riesgo. Sin medir qué hace el PIB solo, «el IRMP ordena la
     # inestabilidad» y «los países grandes generan más noticias» son indistinguibles.
     pib = series.get(WDI_GDP_LEVEL, {})
-    governance["control_solo_tamano"] = _control(etiquetado_gov, pib,
-                                                 governance.get("gini"))
-    credit["control_solo_tamano"] = _control(etiquetado_credit, pib, credit.get("gini"))
+    governance["control_solo_tamano"] = _control(etiquetado_gov, pib, governance)
+    credit["control_solo_tamano"] = _control(etiquetado_credit, pib, credit)
     rho, pairs = _convergent_validity(series, panel)
 
     panel_countries = sorted({r["iso"] for r in panel})
