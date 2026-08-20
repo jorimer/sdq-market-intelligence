@@ -4,6 +4,8 @@ El sistema PROPONE (notifica a admins «X ya es publicable»); el dueño DISPONE
 mano). Se prueba la detección de cruces en ``recompute_readiness`` y la lógica de aviso
 (agrupar por sector, deduplicar, limpiar al caer, no avisar en el primer cálculo).
 """
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -92,4 +94,27 @@ def test_recompute_no_alert_on_first_computation(db, monkeypatch):
         "sector_key": "banking", "tier": "pulse", "g1": 1, "g2": 1, "g3": 1, "g4": 1,
         "g5": 1, "readiness": 0.90, "detail": {}})
     svc.recompute_readiness(db, sector_key="banking")
+    assert db.query(Notification).count() == 0
+
+
+def test_dedup_respeta_los_marcadores_YA_persistidos(db):
+    """El anti-spam pasó a `shared/notifications/dedup.py`; el prefijo tiene que reproducir
+    el layout de clave anterior o los marcadores vivos en prod dejan de contar y cada admin
+    recibe de nuevo el «listo para publicar» de todo lo que ya estaba publicable."""
+    _admin(db)
+    db.add(AppSetting(key="readiness_cross:banking:insight",
+                      value=datetime.now(timezone.utc).isoformat(), is_secret=False))
+    db.commit()
+    svc._notify_publishable_transitions(db, up=[("banking", ProductTier.insight, 0.9)], down=[])
+    assert db.query(Notification).count() == 0
+
+
+def test_dedup_no_vence_por_tiempo(db):
+    """Este aviso calla mientras el nivel SIGA publicable, sin ventana horaria: lo único que
+    lo reabre es caer bajo el umbral. Un intervalo finito lo volvería un recordatorio."""
+    _admin(db)
+    viejo = (datetime.now(timezone.utc) - timedelta(days=400)).isoformat()
+    db.add(AppSetting(key="readiness_cross:banking:insight", value=viejo, is_secret=False))
+    db.commit()
+    svc._notify_publishable_transitions(db, up=[("banking", ProductTier.insight, 0.9)], down=[])
     assert db.query(Notification).count() == 0
