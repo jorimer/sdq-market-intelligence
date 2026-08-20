@@ -7,6 +7,6 @@ cliente) y su superficie HTTP. El motor de reglas, el gate y la entrega llegan e
 que no puede vivir en ninguno (sería un import cross-módulo). Y no es una operación de
 consola: es un producto que el cliente compra, no una tarea que el operador dispara.
 """
-from shared.alerts.models import AlertSubscription
+from shared.alerts.models import AlertEventRow, AlertSubscription
 
-__all__ = ["AlertSubscription"]
+__all__ = ["AlertEventRow", "AlertSubscription"]

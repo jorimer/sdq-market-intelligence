@@ -61,6 +61,14 @@ async def get_rules(_: User = Depends(get_current_user)) -> Dict[str, Any]:
     }
 
 
+@router.get("/events", summary="Historial de señales de mis vigilancias")
+async def get_events(limit: int = 50, db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Publicadas Y vetadas, juntas. ``vetadas`` resume por motivo: es lo que convierte
+    «no recibí nada» en «hay tres señales retenidas porque el dato no está vigente»."""
+    return service.eventos_para(db, str(current_user.id), limit=max(1, min(limit, 200)))
+
+
 @router.get("/subscriptions", summary="Mis vigilancias")
 async def get_subscriptions(db: Session = Depends(get_db),
                             current_user: User = Depends(get_current_user)

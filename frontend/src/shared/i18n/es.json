@@ -2569,6 +2569,6 @@
     "watchSubjectHint": "Recibir avisos de {{subject}}.",
     "watchError": "No se pudo guardar la vigilancia.",
     "suspended": "Suspendida: tu plan ya no cubre este producto.",
-    "pendingEngine": "Guardada. Los disparadores se activan por eje; te avisamos al primero."
+    "pendingEngine": "Guardada. Este eje todavía no produce señales; te avisamos cuando lo haga."
   }
 }

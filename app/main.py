@@ -226,6 +226,8 @@ import shared.products.operations  # noqa: F401 — registers products-readiness
 import shared.source_intel.operations  # noqa: F401 — registers source-research-agent (Capa 3)
 import shared.reference.operations  # noqa: F401 — registers dgii-contribuyentes-sync
 import shared.operations.freshness  # noqa: F401 — registers data-freshness-audit (alerta dato viejo)
+import shared.alerts.motor  # noqa: F401 — registers alerts-sweep (barrido de alertas)
+import modules.banking_score.alerts_producer  # noqa: F401 — banca aporta señales al barrido
 import modules.macro_monitor.comunicados.freshness  # noqa: F401 — registra frescura de decisiones TPM
 
 # Product catalog: each sector registers its SectorProduct into shared.products at

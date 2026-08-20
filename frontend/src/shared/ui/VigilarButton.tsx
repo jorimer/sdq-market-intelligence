@@ -91,9 +91,10 @@ export function VigilarButton({ sectorKey, subject }: Props) {
         <span className="text-[11px] text-warn">{t("alerts.suspended")}</span>
       )}
       {msg && <span className="text-[11px] text-alert max-w-[22rem]">{msg}</span>}
-      {vigilando && !suspendida && (
-        // La honestidad del estado: hoy la vigilancia se guarda y todavía no suena.
-        // Callarlo se leería como "ya te estoy avisando", que no es cierto en la fase A.
+      {vigilando && !suspendida && sub?.sector_produce_alertas === false && (
+        // La honestidad del estado, y SOLO donde corresponde: este eje todavía no tiene
+        // productor enchufado al barrido, así que la vigilancia se guarda y no suena.
+        // Decirlo en un eje que sí produce sería la mentira opuesta.
         <span className="text-[11px] text-faint">{t("alerts.pendingEngine")}</span>
       )}
     </div>

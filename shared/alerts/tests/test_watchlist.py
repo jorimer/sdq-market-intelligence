@@ -363,13 +363,21 @@ def test_para_sujeto_ignora_las_inactivas(db, productos):
 
 # ── Catálogo de disparadores ─────────────────────────────────────────────────
 
-def test_el_catalogo_declara_que_ningun_disparador_tiene_motor_todavia(db, productos):
-    """En la fase A ninguno está implementado, y la API lo DICE. Un disparador mudo que se
-    presenta como activo se lee como que no pasó nada."""
+def test_el_catalogo_declara_CUALES_tienen_motor_y_cuales_no(db, productos):
+    """Un disparador mudo presentado como activo se lee como que no pasó nada; uno activo
+    presentado como mudo hace que nadie lo elija. La API tiene que decir cuál es cuál, y
+    este test se rompe a propósito cada vez que una fase enchufa un motor nuevo."""
     u = _user(db)
     body = _client(db, u).get("/api/v1/alerts/rules").json()
-    assert {r["codigo"] for r in body["rules"]} >= {"umbral", "banda", "brecha"}
-    assert all(r["implementado"] is False for r in body["rules"])
+    por_codigo = {r["codigo"]: r for r in body["rules"]}
+    assert set(por_codigo) >= {"umbral", "banda", "brecha", "posicion", "frescura"}
+
+    # Fase B: umbral, banda y brecha ya tienen reglas puras y productor de banca.
+    assert all(por_codigo[c]["implementado"] is True for c in ("umbral", "banda", "brecha"))
+    # Y el resto sigue declarándose sin motor, en vez de insinuar que suena.
+    assert all(por_codigo[c]["implementado"] is False
+               for c in ("posicion", "frescura", "publicacion"))
+
     assert all(r["basis"] for r in body["rules"])      # ninguna regla suena "porque sí"
     assert body["canales_disponibles"] == ["inapp"]
     assert "email" in body["canales_planificados"]

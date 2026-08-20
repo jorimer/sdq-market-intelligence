@@ -18,8 +18,10 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     Index,
+    Integer,
     JSON,
     String,
+    Text,
     UniqueConstraint,
     true,
 )
@@ -71,4 +73,50 @@ class AlertSubscription(UUIDMixin, Base):
                          name="uq_alert_subscription_user_sector_subject"),
         Index("ix_alert_subscriptions_user", "user_id"),
         Index("ix_alert_subscriptions_sector", "sector_key"),
+    )
+
+
+class AlertEventRow(UUIDMixin, Base):
+    """Un evento juzgado por el gate — **publicado o vetado**, los dos se guardan.
+
+    **Por qué se persiste lo vetado.** Un veto silencioso se lee como que el eje no tenía
+    nada que avisar, que es la lectura opuesta a la verdadera. Guardarlo con su motivo hace
+    que ``GET /alerts/events`` pueda decir «3 señales retenidas por frescura del dato» en vez
+    de no decir nada, y da la serie histórica para saber qué veto muerde más.
+
+    **Por qué el evento es GLOBAL y la entrega es por-usuario.** El hecho —«la cobertura de
+    este banco cayó»— es uno solo; a cuántas bandejas llega depende de quién lo vigilaba.
+    Duplicar la fila por suscriptor haría que la misma condición se contara N veces en
+    cualquier lectura agregada.
+    """
+
+    __tablename__ = "alert_events"
+
+    codigo: Mapped[str] = mapped_column(String(20), nullable=False)
+    sector_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    subject: Mapped[str] = mapped_column(String(120), nullable=False, default=TODO_EL_EJE)
+    periodo: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    severidad: Mapped[str] = mapped_column(String(10), nullable=False, default="media")
+    titulo: Mapped[str] = mapped_column(String(200), nullable=False)
+    cuerpo: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    basis: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    relaciones: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    valores: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    procedencia: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Tres estados, no dos: None = indeterminado, y no publica. Ver `gate.veto_frescura`.
+    frescura: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
+    publicada: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    veto_motivo: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    veto_detalle: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Identidad de la CONDICIÓN (sin período): es la clave con la que el dedup evita
+    # re-avisar lo mismo trimestre tras trimestre. Ver ``reglas.AlertEvent.clave_dedup``.
+    dedup_key: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    # A cuántas bandejas llegó. 0 con ``publicada=True`` es un dato, no un error: significa
+    # que el gate lo dejó pasar y nadie lo estaba vigilando.
+    entregas: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("ix_alert_events_sector_subject", "sector_key", "subject"),
+        Index("ix_alert_events_dedup", "dedup_key"),
     )

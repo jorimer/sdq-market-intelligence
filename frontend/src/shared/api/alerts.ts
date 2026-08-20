@@ -22,6 +22,10 @@ export interface AlertSubscription {
   suspended_reason: string | null;
   /** Nivel que hace falta para vigilar esto: lo determina el sujeto, no una constante. */
   tier_requerido: string;
+  /** ¿El eje ya tiene un productor enchufado al barrido? Un eje del catálogo puede estar
+   *  implementado como producto y todavía no aportar señales. La UI tiene que decirlo:
+   *  una vigilancia muda presentada como activa se lee como que no pasó nada. */
+  sector_produce_alertas: boolean;
   created_at: string | null;
 }
 

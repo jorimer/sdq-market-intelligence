@@ -1,9 +1,14 @@
 """Catálogo de disparadores — QUÉ puede hacer sonar una alerta.
 
-**En la fase A esto es declarativo y nada más.** Las funciones de regla llegan en la fase B
-(`docs/SPEC_ALERTA_ACCIONABLE.md` §4). Existe ahora porque la watchlist necesita validar
-``rule_codes`` contra un vocabulario cerrado: aceptar códigos libres hoy deja filas que el
-motor de mañana no va a honrar, y esa vigilancia no falla — DESAPARECE.
+**Toda regla es una función PURA**: recibe valores ya resueltos, no toca la base y devuelve
+``Optional[AlertEvent]``. Es el patrón que `modules/banking_score/early_warning.py` ya usa en
+sus nueve ``rule_*``, y es lo que hace el motor testeable sin montar un panel entero.
+
+**`None` de entrada ⇒ `None` de salida, SIEMPRE.** Un dato ausente no dispara ni deja de
+disparar: no se evalúa. Es la doctrina de la brecha aplicada al canal de mayor frecuencia, y
+es donde más barato se viola — ``if valor > umbral`` con ``valor=None`` levanta y se nota,
+pero ``if (valor or 0) > umbral`` no levanta: publica un umbral que nadie cruzó. Lo vigila
+``tests/test_ninguna_entrada_none_dispara.py``, que barre el catálogo entero.
 
 **Por qué cada entrada declara ``implementado``.** Un código en catálogo sin motor detrás es
 una vigilancia que nunca suena. Se puede suscribir (el cliente declara su interés y no hay
@@ -16,8 +21,8 @@ decir por qué es una regla que sonó porque sí.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # Severidades, de mayor a menor. El orden es el dato: ``min_severity`` filtra por posición.
 SEVERIDADES: Tuple[str, ...] = ("alta", "media", "baja")
@@ -56,6 +61,7 @@ CATALOGO: Tuple[Disparador, ...] = (
                "a los precursores de la crisis RD 2003 "
                "(modules/banking_score/early_warning.py)."),
         requiere_sujeto=False,
+        implementado=True,
     ),
     Disparador(
         codigo="banda",
@@ -63,6 +69,7 @@ CATALOGO: Tuple[Disparador, ...] = (
         descripcion="El sujeto cambió de banda o tier entre dos períodos consecutivos.",
         basis="Bandas del motor de índices explicable (shared/indices).",
         requiere_sujeto=True,
+        implementado=True,
     ),
     Disparador(
         codigo="posicion",
@@ -80,6 +87,7 @@ CATALOGO: Tuple[Disparador, ...] = (
                      "haya perdido su dato es noticia para quien lo vigila."),
         basis="Doctrina de datos: la brecha se declara, nunca se rellena.",
         requiere_sujeto=False,
+        implementado=True,
     ),
     Disparador(
         codigo="frescura",
@@ -124,3 +132,170 @@ def desconocidos(codigos: Optional[List[str]]) -> List[str]:
     if not codigos:
         return []
     return [c for c in codigos if c not in POR_CODIGO]
+
+
+# ── El evento ────────────────────────────────────────────────────────────────
+
+# La prosa vive en CONSTANTES y no incrustada en el cuerpo de la regla: un literal largo se
+# parte por ancho de línea y la frase deja de existir en el fuente aunque el valor salga
+# bien, así que un test que la busque falla sin motivo (o pasa sin protegerte).
+TXT_UMBRAL = ("{metrica} de {sujeto} está en {valor} al {periodo}, "
+              "{direccion} del umbral de {umbral}.")
+TXT_BANDA = "{sujeto} pasó de banda «{previa}» a «{actual}» al {periodo}."
+TXT_BRECHA_PIERDE = "{dimension} dejó de tener dato para {sujeto} al {periodo}."
+TXT_BRECHA_RECUPERA = "{dimension} volvió a tener dato para {sujeto} al {periodo}."
+
+# Cómo se dice cada dirección. Se COMPUTA a partir de los números y el texto la copia —
+# nunca al revés. Este repo ya publicó una glosa que sobrevivió a corregir el número.
+DIRECCION_TXT = {"por_debajo": "por debajo", "por_encima": "por encima"}
+
+
+@dataclass(frozen=True)
+class AlertEvent:
+    """Una alerta lista para pasar por el gate. Inmutable: lo que el gate juzga es lo que se
+    entrega, sin que un paso intermedio pueda reescribir el texto después del veredicto."""
+
+    codigo: str
+    sector_key: str
+    subject: str
+    periodo: str
+    severidad: str
+    titulo: str
+    cuerpo: str
+    basis: str
+    # Direcciones, deltas, posiciones y referencias — COMPUTADAS en código. El texto las
+    # copia de acá. Si algún día lo redacta el modelo, copia de acá también.
+    relaciones: Dict[str, Any] = field(default_factory=dict)
+    # Las cifras que sostienen la afirmación. El gate mira sus CLAVES (regla del sujeto) y
+    # sus VALORES (ninguno puede ser None fuera de una alerta de brecha).
+    valores: Dict[str, Optional[float]] = field(default_factory=dict)
+    # {variable: "live"|"rubric"} — la misma procedencia que declara el resto de la casa.
+    procedencia: Dict[str, str] = field(default_factory=dict)
+    # ¿El dato que sostiene esto está vigente? True publica; False no; **None tampoco**.
+    # Ver `gate.veto_frescura`: el tercer estado es el que costó 19 días de producción.
+    frescura: Optional[bool] = None
+    # Universo sobre el que se ordenó, cuando la alerta afirma una posición.
+    universo: Optional[str] = None
+
+    @property
+    def clave_dedup(self) -> str:
+        """Identidad de la CONDICIÓN, sin el período: dos barridos sobre el mismo problema
+        son el mismo aviso. Incluir el período haría que cada trimestre re-avisara aunque
+        nada hubiera cambiado, que es exactamente el ruido que mata el producto."""
+        metrica = self.relaciones.get("metrica", "")
+        return f"{self.sector_key}:{self.subject}:{self.codigo}:{metrica}"
+
+
+# ── Reglas ───────────────────────────────────────────────────────────────────
+
+def rule_umbral(*, sector_key: str, subject: str, sujeto_label: str, periodo: str,
+                metrica: str, metrica_label: str, valor: Optional[float],
+                umbral: Optional[float], direccion: str, severidad: str, basis: str,
+                unidad: str = "%", procedencia: Optional[Dict[str, str]] = None,
+                frescura: Optional[bool] = None,
+                clave_valor: Optional[str] = None) -> Optional[AlertEvent]:
+    """Una métrica cruzó su umbral declarado.
+
+    ``clave_valor`` permite nombrar la cifra con el sujeto que le corresponde cuando es una
+    porción (``concentracion_top10_deudores_pct``): el gate exige esa regla sobre las claves
+    de ``valores``, y el nombre correcto lo sabe el productor, no esta función.
+    """
+    if valor is None or umbral is None:
+        return None
+    if direccion not in DIRECCION_TXT:
+        return None
+    cruzo = valor < umbral if direccion == "por_debajo" else valor > umbral
+    if not cruzo:
+        return None
+
+    # La dirección y la distancia se COMPUTAN acá; el texto las copia.
+    relaciones = {
+        "metrica": metrica,
+        "direccion": direccion,
+        "umbral": umbral,
+        "valor": valor,
+        "distancia": round(abs(valor - umbral), 4),
+    }
+    cuerpo = TXT_UMBRAL.format(
+        metrica=metrica_label, sujeto=sujeto_label, periodo=periodo,
+        valor=expresar(valor, unidad), umbral=expresar(umbral, unidad),
+        direccion=DIRECCION_TXT[direccion])
+    return AlertEvent(
+        codigo="umbral", sector_key=sector_key, subject=subject, periodo=periodo,
+        severidad=severidad, titulo=f"{metrica_label}: {sujeto_label}",
+        cuerpo=cuerpo, basis=basis, relaciones=relaciones,
+        valores={(clave_valor or metrica): valor},
+        procedencia=procedencia or {}, frescura=frescura)
+
+
+def rule_banda(*, sector_key: str, subject: str, sujeto_label: str, periodo: str,
+               banda_actual: Optional[str], banda_previa: Optional[str],
+               orden_bandas: Sequence[str], basis: str,
+               procedencia: Optional[Dict[str, str]] = None,
+               frescura: Optional[bool] = None) -> Optional[AlertEvent]:
+    """El sujeto cambió de banda entre dos períodos consecutivos.
+
+    ``orden_bandas`` va de MEJOR a PEOR y no es opcional: sin él se puede decir «cambió» pero
+    no «empeoró», y «cambió de banda» no es accionable. La dirección sale de las posiciones
+    en ese orden, nunca de comparar los rótulos entre sí.
+    """
+    if not banda_actual or not banda_previa or banda_actual == banda_previa:
+        return None
+    orden = list(orden_bandas)
+    if banda_actual not in orden or banda_previa not in orden:
+        # Una banda fuera del orden declarado no se puede juzgar. Callar es correcto:
+        # inventar la dirección es cómo se publica lo contrario de lo que pasó.
+        return None
+
+    empeora = orden.index(banda_actual) > orden.index(banda_previa)
+    saltos = abs(orden.index(banda_actual) - orden.index(banda_previa))
+    relaciones = {"metrica": "banda", "direccion": "deterioro" if empeora else "mejora",
+                  "saltos": saltos, "previa": banda_previa, "actual": banda_actual}
+    if empeora:
+        severidad = "alta" if saltos > 1 else "media"
+    else:
+        severidad = "baja"
+    return AlertEvent(
+        codigo="banda", sector_key=sector_key, subject=subject, periodo=periodo,
+        severidad=severidad, titulo=f"Cambio de banda: {sujeto_label}",
+        cuerpo=TXT_BANDA.format(sujeto=sujeto_label, previa=banda_previa,
+                                actual=banda_actual, periodo=periodo),
+        basis=basis, relaciones=relaciones, procedencia=procedencia or {},
+        frescura=frescura)
+
+
+def rule_brecha(*, sector_key: str, subject: str, sujeto_label: str, periodo: str,
+                dimension: str, dimension_label: str, tenia_dato: Optional[bool],
+                tiene_dato: Optional[bool], basis: str,
+                frescura: Optional[bool] = None) -> Optional[AlertEvent]:
+    """Una dimensión ganó o perdió su dato.
+
+    Es la única regla cuyo insumo legítimo es la AUSENCIA, y por eso el gate la exime del
+    veto de brecha. Pero necesita el estado ANTERIOR: sin él no hay transición que declarar,
+    solo una foto sin dato — que no es noticia, es el estado.
+    """
+    if tenia_dato is None or tiene_dato is None or tenia_dato == tiene_dato:
+        return None
+    perdio = bool(tenia_dato) and not bool(tiene_dato)
+    plantilla = TXT_BRECHA_PIERDE if perdio else TXT_BRECHA_RECUPERA
+    return AlertEvent(
+        codigo="brecha", sector_key=sector_key, subject=subject, periodo=periodo,
+        severidad="media" if perdio else "baja",
+        titulo=f"{'Brecha' if perdio else 'Brecha cerrada'}: {dimension_label}",
+        cuerpo=plantilla.format(dimension=dimension_label, sujeto=sujeto_label,
+                                periodo=periodo),
+        basis=basis,
+        relaciones={"metrica": dimension, "direccion": "pierde" if perdio else "recupera"},
+        procedencia={dimension: "live" if tiene_dato else "brecha"},
+        frescura=frescura)
+
+
+def expresar(valor: float, unidad: str) -> str:
+    """Cifra con su unidad, en notación de la casa (punto de miles, coma decimal).
+
+    La notación no es cosmética: los informes ya usan coma decimal y una alerta con punto
+    decimal se lee como de otro sistema. Ver docs/REPORT_STANDARD.md.
+    """
+    entero, _, decimal = f"{valor:,.2f}".partition(".")
+    txt = entero.replace(",", ".") + "," + decimal
+    return f"{txt}{unidad}" if unidad == "%" else f"{txt} {unidad}".strip()
