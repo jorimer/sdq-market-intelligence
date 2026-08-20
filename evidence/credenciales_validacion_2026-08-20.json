@@ -14,6 +14,8 @@
    "eventos": 250,
    "senal": "resultados",
    "concluyente": true,
+   "invertida": false,
+   "control_de_tamano": null,
    "poblacion": {
     "por_tipo_de_entidad": [
      {
@@ -103,6 +105,24 @@
    "eventos": 82,
    "senal": "governance",
    "concluyente": true,
+   "invertida": false,
+   "control_de_tamano": {
+    "variable": "NY.GDP.MKTP.KD",
+    "nota": "el MISMO desenlace sobre el MISMO panel, ordenado solo por el tamaño del sujeto. Es la vara contra la que se lee la cifra del score: si el tamaño solo alcanza el mismo poder, el score no está agregando nada por encima de cuán grande es el sujeto — PIB en dólares constantes del país en el año base (Banco Mundial)",
+    "gini": 0.121,
+    "gini_ci": [
+     -0.0415,
+     0.2707
+    ],
+    "n": 260,
+    "n_del_score": 260,
+    "cobertura_del_panel": 1.0,
+    "comparable": true,
+    "gini_del_score": 0.199,
+    "el_tamano_alcanza_al_score": false,
+    "empata_con_el_score": true,
+    "veredicto": "empate: el tamaño solo alcanza un poder estadísticamente indistinguible del score (su Gini cae dentro del intervalo del score). La credencial no se puede presentar como algo que el tamaño del sujeto no explique"
+   },
    "poblacion": null,
    "generated_at": "2026-08-20T02:06:26.396156+00:00",
    "stale": false,
@@ -131,6 +151,24 @@
    "eventos": 87,
    "senal": "export_collapse",
    "concluyente": true,
+   "invertida": false,
+   "control_de_tamano": {
+    "variable": "total_exports",
+    "nota": "el MISMO desenlace sobre el MISMO panel, ordenado solo por el tamaño del sujeto. Es la vara contra la que se lee la cifra del score: si el tamaño solo alcanza el mismo poder, el score no está agregando nada por encima de cuán grande es el sujeto — valor total exportado del país en el año base (Comtrade)",
+    "gini": 0.0699,
+    "gini_ci": [
+     -0.0756,
+     0.2142
+    ],
+    "n": 314,
+    "n_del_score": 314,
+    "cobertura_del_panel": 1.0,
+    "comparable": true,
+    "gini_del_score": 0.232,
+    "el_tamano_alcanza_al_score": false,
+    "empata_con_el_score": false,
+    "veredicto": "el score ordena mejor que el tamaño solo: la discriminación no se explica por cuán grande es el sujeto"
+   },
    "poblacion": null,
    "generated_at": "2026-08-20T02:05:54.583534+00:00",
    "stale": false,
@@ -275,17 +313,244 @@
    "nombre": "SDQ Agribusiness",
    "grupo": "E · validación corrida y NO concluyente",
    "metrica": "IC medio anual",
-   "valor": -0.03,
+   "valor": -0.321,
    "ic": [
-    -0.267,
-    0.208
+    -0.5,
+    -0.142
    ],
-   "n": 160,
+   "n": 144,
    "eventos": null,
-   "senal": null,
+   "senal": "inversion",
    "concluyente": false,
+   "invertida": true,
+   "control_de_tamano": {
+    "intensidad": {
+     "n_observations": 144,
+     "n_branches": 9,
+     "years": [
+      "2009",
+      "2024"
+     ],
+     "mean_yearly_ic": -0.323,
+     "n_years": 16,
+     "ic_t_stat": -3.464,
+     "ic_ci": [
+      -0.521,
+      -0.124
+     ],
+     "spearman_pooled": -0.36,
+     "spearman_pooled_ci": [
+      -0.516,
+      -0.18
+     ],
+     "spearman_partial_growth": -0.36,
+     "spearman_partial_n": 144,
+     "by_year": [
+      {
+       "year": "2009",
+       "n": 9,
+       "spearman": -0.533
+      },
+      {
+       "year": "2010",
+       "n": 9,
+       "spearman": -0.817
+      },
+      {
+       "year": "2011",
+       "n": 9,
+       "spearman": -0.35
+      },
+      {
+       "year": "2012",
+       "n": 9,
+       "spearman": -0.883
+      },
+      {
+       "year": "2013",
+       "n": 9,
+       "spearman": -0.483
+      },
+      {
+       "year": "2014",
+       "n": 9,
+       "spearman": -0.1
+      },
+      {
+       "year": "2015",
+       "n": 9,
+       "spearman": 0.183
+      },
+      {
+       "year": "2016",
+       "n": 9,
+       "spearman": 0.1
+      },
+      {
+       "year": "2017",
+       "n": 9,
+       "spearman": -0.1
+      },
+      {
+       "year": "2018",
+       "n": 9,
+       "spearman": -0.7
+      },
+      {
+       "year": "2019",
+       "n": 9,
+       "spearman": 0.25
+      },
+      {
+       "year": "2020",
+       "n": 9,
+       "spearman": -0.583
+      },
+      {
+       "year": "2021",
+       "n": 9,
+       "spearman": -0.683
+      },
+      {
+       "year": "2022",
+       "n": 9,
+       "spearman": -0.233
+      },
+      {
+       "year": "2023",
+       "n": 9,
+       "spearman": 0.167
+      },
+      {
+       "year": "2024",
+       "n": 9,
+       "spearman": -0.4
+      }
+     ],
+     "quintile_spread": {
+      "top_iai_mean_growth": 25.8,
+      "bottom_iai_mean_growth": 275.97,
+      "spread": -250.18,
+      "n_years": 16
+     },
+     "conclusive": false,
+     "invertido": true
+    },
+    "nivel": {
+     "n_observations": 144,
+     "n_branches": 9,
+     "years": [
+      "2009",
+      "2024"
+     ],
+     "mean_yearly_ic": 0.377,
+     "n_years": 16,
+     "ic_t_stat": 6.021,
+     "ic_ci": [
+      0.244,
+      0.511
+     ],
+     "spearman_pooled": 0.318,
+     "spearman_pooled_ci": [
+      0.159,
+      0.48
+     ],
+     "spearman_partial_growth": 0.318,
+     "spearman_partial_n": 144,
+     "by_year": [
+      {
+       "year": "2009",
+       "n": 9,
+       "spearman": 0.167
+      },
+      {
+       "year": "2010",
+       "n": 9,
+       "spearman": -0.183
+      },
+      {
+       "year": "2011",
+       "n": 9,
+       "spearman": 0.05
+      },
+      {
+       "year": "2012",
+       "n": 9,
+       "spearman": 0.283
+      },
+      {
+       "year": "2013",
+       "n": 9,
+       "spearman": 0.417
+      },
+      {
+       "year": "2014",
+       "n": 9,
+       "spearman": 0.5
+      },
+      {
+       "year": "2015",
+       "n": 9,
+       "spearman": 0.583
+      },
+      {
+       "year": "2016",
+       "n": 9,
+       "spearman": 0.65
+      },
+      {
+       "year": "2017",
+       "n": 9,
+       "spearman": 0.667
+      },
+      {
+       "year": "2018",
+       "n": 9,
+       "spearman": 0.367
+      },
+      {
+       "year": "2019",
+       "n": 9,
+       "spearman": 0.717
+      },
+      {
+       "year": "2020",
+       "n": 9,
+       "spearman": 0.25
+      },
+      {
+       "year": "2021",
+       "n": 9,
+       "spearman": 0.15
+      },
+      {
+       "year": "2022",
+       "n": 9,
+       "spearman": 0.367
+      },
+      {
+       "year": "2023",
+       "n": 9,
+       "spearman": 0.633
+      },
+      {
+       "year": "2024",
+       "n": 9,
+       "spearman": 0.417
+      }
+     ],
+     "quintile_spread": {
+      "top_iai_mean_growth": 581.84,
+      "bottom_iai_mean_growth": 197.65,
+      "spread": 384.2,
+      "n_years": 16
+     },
+     "conclusive": true,
+     "invertido": false
+    }
+   },
    "poblacion": null,
-   "generated_at": "2026-08-19T18:34:01.324535+00:00",
+   "generated_at": "2026-08-20T14:47:52.125339+00:00",
    "stale": false,
    "stale_reason": null,
    "publicable": true,
@@ -312,6 +577,23 @@
    "eventos": null,
    "senal": null,
    "concluyente": true,
+   "invertida": true,
+   "control_de_tamano": {
+    "variable": "SP.POP.TOTL",
+    "nota": "la misma mortalidad climática ordenada solo por la población del país. El desenlace está expresado POR 100.000 habitantes, así que la población es su deflactor: si ordena tan bien como el IRC, la correlación es del deflactor",
+    "metrica": "spearman",
+    "spearman": -0.226,
+    "spearman_ci": [
+     -0.601,
+     0.267
+    ],
+    "n": 24,
+    "n_del_score": 24,
+    "spearman_del_score": -0.509,
+    "el_tamano_alcanza_al_score": false,
+    "empata_con_el_score": true,
+    "veredicto": "empate: el tamaño solo alcanza un poder estadísticamente indistinguible del score (su Gini cae dentro del intervalo del score). La credencial no se puede presentar como algo que el tamaño del sujeto no explique"
+   },
    "poblacion": null,
    "generated_at": "2026-08-20T02:06:31.969329+00:00",
    "stale": false,
@@ -340,6 +622,24 @@
    "eventos": 665,
    "senal": "return",
    "concluyente": true,
+   "invertida": false,
+   "control_de_tamano": {
+    "variable": "activos_totales",
+    "nota": "el MISMO desenlace sobre el MISMO panel, ordenado solo por el tamaño del sujeto. Es la vara contra la que se lee la cifra del score: si el tamaño solo alcanza el mismo poder, el score no está agregando nada por encima de cuán grande es el sujeto — activos totales del fondo administrado por la AFP — último valor conocido en o antes del período base (los activos son trimestrales y los retornos mensuales)",
+    "gini": 0.0262,
+    "gini_ci": [
+     -0.0433,
+     0.0928
+    ],
+    "n": 1139,
+    "n_del_score": 1590,
+    "cobertura_del_panel": 0.7164,
+    "comparable": false,
+    "gini_del_score": 0.1594,
+    "el_tamano_alcanza_al_score": false,
+    "empata_con_el_score": false,
+    "veredicto": "no comparable: el control se computó sobre bastante menos observaciones que el score, así que las dos cifras no hablan del mismo universo y ponerlas una al lado de la otra engaña"
+   },
    "poblacion": null,
    "generated_at": "2026-08-20T02:05:48.635309+00:00",
    "stale": false,
@@ -368,6 +668,24 @@
    "eventos": 132,
    "senal": "underwriting",
    "concluyente": true,
+   "invertida": false,
+   "control_de_tamano": {
+    "variable": "primas_suscritas",
+    "nota": "el MISMO desenlace sobre el MISMO panel, ordenado solo por el tamaño del sujeto. Es la vara contra la que se lee la cifra del score: si el tamaño solo alcanza el mismo poder, el score no está agregando nada por encima de cuán grande es el sujeto — primas suscritas de la aseguradora en el año base",
+    "gini": 0.2404,
+    "gini_ci": [
+     0.1147,
+     0.3706
+    ],
+    "n": 269,
+    "n_del_score": 269,
+    "cobertura_del_panel": 1.0,
+    "comparable": true,
+    "gini_del_score": 0.2575,
+    "el_tamano_alcanza_al_score": false,
+    "empata_con_el_score": true,
+    "veredicto": "empate: el tamaño solo alcanza un poder estadísticamente indistinguible del score (su Gini cae dentro del intervalo del score). La credencial no se puede presentar como algo que el tamaño del sujeto no explique"
+   },
    "poblacion": null,
    "generated_at": "2026-08-20T02:05:40.541301+00:00",
    "stale": false,
@@ -446,6 +764,8 @@
    "eventos": null,
    "senal": null,
    "concluyente": true,
+   "invertida": false,
+   "control_de_tamano": null,
    "poblacion": null,
    "generated_at": "2026-08-19T15:06:39.605824+00:00",
    "stale": false,
@@ -517,5 +837,5 @@
  },
  "n_publicables": 8,
  "vetadas_por_frescura": [],
- "generado_at": "2026-08-20T13:57:25.621729+00:00"
+ "generado_at": "2026-08-20T14:48:20.275284+00:00"
 }

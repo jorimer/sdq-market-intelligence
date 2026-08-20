@@ -152,7 +152,7 @@ def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
             return {"metrica": "Gini", "valor": b.get("gini"), "ic": ic,
                     "n": b.get("n_observations"), "eventos": b.get("n_events"),
                     "senal": bloque, "concluyente": bool(ic[0] is not None and ic[0] > 0),
-                    "invertida": bool(ic[1] is not None and ic[1] < 0),
+                    "invertida": bool(b.get("invertida") or b.get("invertido")),
                     "control_de_tamano": b.get("control_solo_tamano")}
     if reporte.get("spearman") is not None:
         ic = reporte.get("spearman_ci") or [None, None]
@@ -160,21 +160,25 @@ def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
         return {"metrica": "Spearman", "valor": reporte.get("spearman"), "ic": ic,
                 "n": reporte.get("n_regions") or reporte.get("n_countries"),
                 "eventos": None, "senal": None, "concluyente": concluye,
-                "invertida": bool(ic[1] is not None and ic[1] < 0),
+                # NUNCA se deduce del signo: en ESG el desenlace es mortalidad y un Spearman
+                # NEGATIVO es la dirección CORRECTA (más resiliencia, menos muertes). Deducirlo
+                # acá marcó como «invertido» el resultado concluyente de ese eje, en el
+                # documento comercial. La dirección buena la sabe el motor, no el consumidor.
+                "invertida": bool(reporte.get("invertida") or reporte.get("invertido")),
                 "control_de_tamano": reporte.get("control_solo_tamano")}
     if reporte.get("gini") is not None:
         ic = reporte.get("gini_ci") or [None, None]
         return {"metrica": "Gini", "valor": reporte.get("gini"), "ic": ic,
                 "n": reporte.get("n_observations"), "eventos": reporte.get("n_events"),
                 "senal": None, "concluyente": bool(ic[0] is not None and ic[0] > 0),
-                "invertida": bool(ic[1] is not None and ic[1] < 0),
+                "invertida": bool(reporte.get("invertida") or reporte.get("invertido")),
                 "control_de_tamano": reporte.get("control_solo_tamano")}
     if reporte.get("mean_yearly_ic") is not None:
         ic = reporte.get("ic_ci") or [None, None]
         return {"metrica": "IC medio anual", "valor": reporte.get("mean_yearly_ic"), "ic": ic,
                 "n": reporte.get("n_observations"), "eventos": None, "senal": None,
                 "concluyente": bool(ic[0] is not None and ic[0] > 0),
-                "invertida": bool(ic[1] is not None and ic[1] < 0),
+                "invertida": bool(reporte.get("invertido") or reporte.get("invertida")),
                 "control_de_tamano": None}
     return {"metrica": None, "valor": None, "ic": None, "n": None, "eventos": None,
             "senal": None, "concluyente": False, "invertida": False,
