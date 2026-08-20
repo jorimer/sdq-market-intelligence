@@ -165,14 +165,87 @@ class TestLoQueElEmisorConfirmoElDiecinueve:
 
 
 class TestElSelloDelCorpus:
-    def test_una_acusacion_declara_CUANDO_se_midio_el_corpus(self):
-        """El corpus del emisor pasó de 596 a 9.335 decretos en semanas. Sin el sello, un
+    def test_una_acusacion_declara_la_antiguedad_de_su_evidencia(self):
+        """El corpus del emisor pasó de 596 a 9.335 decretos en semanas. Sin procedencia, un
         veredicto de hoy no es reproducible mañana y nadie puede saberlo."""
         r = _resp([], True, corpus="gaceta_oficial", medido_al="2026-08-18T03:40:48")
         c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: r)
         assert c.veredicto == "incumplida"
         assert "2026-08-18" in c.evidencia
 
-    def test_sin_sello_la_acusacion_DICE_que_no_se_puede_auditar(self):
+    def test_sin_HUELLA_la_acusacion_dice_que_no_se_podra_detectar_el_cambio(self):
+        """La frase cambió al corregir cuál de los dos campos detecta deriva: lo que no se
+        puede hacer sin `instantanea` no es «auditar» en abstracto, es saber si el corpus
+        cambió cuando este veredicto se reemita."""
         c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([], True))
-        assert "NO declara cuándo midió" in c.evidencia
+        assert "no se podrá detectar si cambió" in c.evidencia
+
+
+class TestCualDeLosDosCamposDetectaDERIVA:
+    """El campo intuitivo es el que NO sirve, y el error ya se cometió acá.
+
+    `medido_al` se leyó como «cuándo se comprobó por última vez». El emisor lo corrigió con
+    evidencia de producción: en unas horas su corpus creció 546 normas —de 9.983 a 10.529— y
+    `medido_al` no se movió ni un segundo. Es el piso de antigüedad de la evidencia, no una
+    marca de frescura: los años cerrados conservan su medición original porque el pasado no
+    cambia.
+
+    Una detección de deriva montada sobre `medido_al` nunca dispararía.
+    """
+
+    def _alcance(self, **kw):
+        base = {"corpus": "gaceta_oficial", "vacio_es_concluyente": True,
+                "medido_al": "2026-08-18T03:40:48",
+                "instantanea": {"normas_leidas": 10529, "constancias": 8739}}
+        base.update(kw)
+        return base
+
+    def test_la_HUELLA_es_lo_que_detecta_deriva(self):
+        from modules.law_intel.normativa import huella_del_corpus
+        h = huella_del_corpus(self._alcance())
+        assert h == {"normas_leidas": 10529, "constancias": 8739}
+
+    def test_medido_al_responde_OTRA_pregunta(self):
+        from modules.law_intel.normativa import antiguedad_de_la_evidencia
+        assert antiguedad_de_la_evidencia(self._alcance()) == "2026-08-18T03:40:48"
+
+    def test_una_acusacion_lleva_LOS_DOS(self):
+        """Guardar uno solo deja ciega a la mitad: la huella dice si el corpus cambió; el otro
+        dice cuán vieja es la evidencia más débil que sostiene la afirmación."""
+        c = comprobar_obligacion(CONSULTA, VENCE,
+                                 lambda **kw: {"alcance": self._alcance(), "resultados": []})
+        assert c.veredicto == "incumplida"
+        assert "10529" in c.evidencia and "2026-08-18" in c.evidencia
+
+    def test_sin_huella_se_DECLARA_que_no_se_podra_detectar_el_cambio(self):
+        a = self._alcance()
+        a.pop("instantanea")
+        c = comprobar_obligacion(CONSULTA, VENCE,
+                                 lambda **kw: {"alcance": a, "resultados": []})
+        assert "no se podrá detectar si cambió" in c.evidencia
+
+
+class TestLaCitaDeGacetaLaCOMPONEElEmisor:
+    """`texto_citable` lo entregó el emisor después de que publicáramos «Gaceta 10753 del
+    None». Usarlo no es comodidad: quien conoce el formato correcto de una cita oficial es
+    quien publica el corpus, y el día que cambie nos enteramos sin tocar nada."""
+
+    def test_se_prefiere_el_texto_del_EMISOR(self):
+        n = dict(_DECRETO, gaceta={"numero": "10753", "fecha": None,
+                                   "texto_citable": "Gaceta Oficial 10753"})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert "Publicada en Gaceta Oficial 10753." in c.evidencia
+        assert "None" not in c.evidencia
+
+    def test_sin_texto_citable_se_compone_acá_y_sigue_sin_muñón(self):
+        """El respaldo propio no se borra: hay respuestas viejas y puede haber otros emisores.
+        Lo que no puede volver es el «del None»."""
+        n = dict(_DECRETO, gaceta={"numero": "10753", "fecha": None})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert "Gaceta 10753." in c.evidencia and "None" not in c.evidencia
+
+    def test_sin_numero_no_se_inventa_respaldo(self):
+        n = dict(_DECRETO, gaceta={"numero": None, "fecha": None})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert "Gaceta" not in c.evidencia
+

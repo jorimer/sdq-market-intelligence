@@ -7,7 +7,7 @@ from typing import Dict
 
 from sqlalchemy.orm import Session
 
-from modules.banking_score.models.models import BankingData
+from modules.banking_score.models.models import Bank, BankingData
 from modules.banking_score.scoring.perfil_sdq import BANDAS_RESILIENCIA
 from modules.banking_score.validation.metrics import (
     deterioration_rate_by_tier, gini_bootstrap_ci,
@@ -141,6 +141,68 @@ def control_solo_tamano(db: Session, obs, n_boot: int) -> Dict:
     }
 
 
+# La POBLACIÓN sobre la que se midió, que hasta ahora no viajaba con la cifra. Medido el
+# 2026-08-19: 794 de las 1.693 observaciones (47 %) son entidades de intermediación cambiaria
+# —que no otorgan crédito— y aportan el 63 % de los eventos. No están por descuido: el producto
+# es un *Financial Entity Score* sobre todo el universo supervisado por la SIB
+# (`banking_score/SPEC.md` §1). Pero un Gini citado sin decir sobre quién se midió se lee como
+# discriminación entre bancos, y no es eso.
+NOTA_POBLACION = (
+    "el Gini se midió sobre TODO el universo supervisado por la SIB, no solo sobre bancos: el "
+    "panel incluye entidades de intermediación cambiaria y fiduciarias, que no otorgan crédito "
+    "y son órdenes de magnitud más chicas. Citar la cifra sin nombrar su población la hace leer "
+    "como discriminación entre bancos"
+)
+
+#: Tipos de entidad SIN libro de crédito. Se nombran para poder decir qué parte del panel son,
+#: no para excluirlos: están en el universo por diseño del producto.
+SIN_LIBRO_DE_CREDITO = ("cambiaria", "fiduciaria")
+
+
+def poblacion_del_panel(db: Session, obs) -> Dict:
+    """Quién está en el panel, con su N y sus eventos. El sujeto viaja con el número.
+
+    Se computa del propio panel —nunca se transcribe— porque la composición cambia con cada
+    trimestre ingerido y una cuota escrita a mano se desincroniza en la primera corrida.
+    """
+    if db is None:
+        return {"nota": NOTA_POBLACION,
+                "motivo": "sin sesión de base: la composición no se pudo computar"}
+    tipos = {str(b.id): (b.bank_type.value if hasattr(b.bank_type, "value") else str(b.bank_type))
+             for b in db.query(Bank).all()}
+    por_tipo: Dict[str, Dict[str, int]] = {}
+    for o in obs:
+        clave = tipos.get(str(o.bank_id)) or "desconocido"
+        fila = por_tipo.setdefault(clave, {"n": 0, "eventos": 0})
+        fila["n"] += 1
+        fila["eventos"] += 1 if o.deteriorated else 0
+    total = len(obs) or 1
+    eventos = sum(f["eventos"] for f in por_tipo.values()) or 1
+    orden = sorted(por_tipo.items(), key=lambda kv: -kv[1]["n"])
+    # Los conteos se agregan sobre `por_tipo` —que es Dict[str, int]— y no sobre las filas de
+    # salida, que mezclan el nombre del tipo con sus cifras. Sumar sobre un dict heterogéneo
+    # es cómo un error de suma se esconde detrás de un tipo `object`.
+    sin_credito_tipos = [t for t, _v in orden if t in SIN_LIBRO_DE_CREDITO]
+    n_sin_credito = sum(por_tipo[t]["n"] for t in sin_credito_tipos)
+    ev_sin_credito = sum(por_tipo[t]["eventos"] for t in sin_credito_tipos)
+    filas = [{"tipo_de_entidad": t, **v,
+              "cuota_de_observaciones": round(v["n"] / total, 4),
+              "cuota_de_eventos": round(v["eventos"] / eventos, 4),
+              "otorga_credito": t not in SIN_LIBRO_DE_CREDITO}
+             for t, v in orden]
+    return {
+        "n_observaciones": len(obs),
+        "por_tipo_de_entidad": filas,
+        "sin_libro_de_credito": {
+            "tipos": sin_credito_tipos,
+            "n": n_sin_credito,
+            "cuota_de_observaciones": round(n_sin_credito / total, 4),
+            "cuota_de_eventos": round(ev_sin_credito / eventos, 4),
+        },
+        "nota": NOTA_POBLACION,
+    }
+
+
 def composicion_del_desenlace(obs) -> Dict:
     """Cuántos eventos aporta CADA regla del desenlace, y cuántos son exclusivos de ella.
 
@@ -252,6 +314,17 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
                           + ", ".join(f"«{k}»" for k in invertidas)
                           + " (IC del Gini enteramente negativo). Es un hallazgo, no una "
                             "ausencia de señal, y no debe leerse como discriminación débil.")
+    poblacion = poblacion_del_panel(db, obs)
+    # Si buena parte del panel no otorga crédito, decirlo es parte de la cifra. Callarlo deja
+    # publicada una discriminación que el lector atribuye a bancos.
+    sin_credito = (poblacion.get("sin_libro_de_credito") or {})
+    if sin_credito.get("cuota_de_observaciones", 0) >= 0.10:
+        caveats.insert(0, (
+            f"El {_pct(sin_credito['cuota_de_observaciones'])} del panel son entidades que NO "
+            f"otorgan crédito ({', '.join(sin_credito['tipos'])}), y aportan el "
+            f"{_pct(sin_credito['cuota_de_eventos'])} de los eventos. Están en el universo por "
+            "diseño del producto, pero la cifra no se puede leer como discriminación entre "
+            "bancos."))
     control = control_solo_tamano(db, obs, n_boot)
     # Si el tamaño SOLO ordena igual o mejor que el score, decirlo es el hallazgo. Callarlo
     # deja publicada una cifra que el lector atribuye al score.
@@ -279,6 +352,9 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
         # a un PDF o a una lámina.
         "by_tier_ordena_riesgo": monotonic,
         "composicion_del_desenlace": composicion,
+        # La población viaja con la cifra, no en un documento aparte: un lector que ve el Gini
+        # tiene que ver ahí mismo sobre quién se midió.
+        "poblacion_del_panel": poblacion,
         # El control NO es un extra: viaja pegado a la cifra que acota, porque un número que
         # hay que ir a buscar a otro documento no acota nada.
         "control_solo_tamano": control,

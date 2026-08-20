@@ -128,8 +128,18 @@ desaparecer — un veto silencioso se lee como que el eje no tiene validación.
 
 La tabla de credenciales lidera con la **señal**, no con el agregado, y hay que citarla así:
 
-- ✅ **Gini 0,2287 · IC [0,147 · 0,311] · n=1.693 · 250 eventos, señal «resultados»** — la
-  discriminación contra pérdidas sostenidas, que es la señal concluyente del eje.
+- ✅ La **señal «resultados»** —discriminación contra pérdidas sostenidas, la concluyente del
+  eje— **con su población al lado**. Las cifras se leen de
+  `GET /api/v1/products/credenciales`, que ahora devuelve `poblacion` junto a cada credencial;
+  **no se copian de acá**, porque una cuota escrita a mano se desincroniza en la primera
+  recalibración.
+- ⚠️ **Y hay que decir sobre QUIÉN se midió.** El panel no es «bancos»: es todo el universo
+  supervisado por la SIB, y casi la mitad de las observaciones son entidades de intermediación
+  cambiaria y fiduciarias, que **no otorgan crédito** y aportan una parte aún mayor de los
+  eventos. Están por diseño del producto (`banking_score/SPEC.md` §1 lo define como un
+  *Financial Entity Score*), pero un «Gini · n» solo se lee como discriminación **entre
+  bancos**, que no es lo que se midió. El reporte lo declara en un caveat computado y la
+  credencial lo lleva en `poblacion.sin_libro_de_credito`.
 - ⚠️ El **agregado 0,1615** sigue siendo correcto y es el que citó el deck, pero **solo se
   puede usar diciendo de qué está hecho** (83 % resultados · 22 % crédito · 0 % solvencia).
   Solo, se lee como discriminación de riesgo de crédito, que es donde el score falla.
