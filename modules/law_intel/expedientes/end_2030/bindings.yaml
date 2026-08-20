@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "19.0"
+version: "21.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -1027,6 +1027,25 @@ bindings:
     cadencia_anios: 6
     periodo_verificado: "2019"
     estado: verificado
+    nota: >-
+      ══ RE-PROMOVIDO 2026-08-20 ══ Se había demotado por un error MÍO de lectura, y conviene
+      dejarlo escrito porque la conclusión equivocada era plausible.
+      El nombre del indicador cubre TRES materias —«para lectura, matemáticas y ciencias»— y
+      de ahí deduje que atar solo matemáticas medía un tercio. Pero la tabla del articulado
+      (pág. 53) fija meta para UNA SOLA: base «Matemáticas: 92,9» en 2006 y metas de 85,8 /
+      73,0 / 63,0 / 53,0, todas rotuladas «Matemáticas». La única columna con las tres es
+      «Promedio AL sin RD» —Matemáticas 57,86 · Lectura 56,33 · Ciencias 81,68—, que es la
+      referencia regional, no una meta. El registro no estaba incompleto: estaba bien.
+      Sobre la escala: la ficha técnica expresa el corte del nivel II como un puntaje SERCE
+      (≤ 514,41 para matemáticas). Eso NO impide la lectura, porque es el mismo límite
+      conceptual expresado en la escala de 2006 — los niveles son comparables de SERCE a ERCE
+      por diseño documentado, y el porcentaje de alumnos bajo el nivel II es el mismo
+      constructo. Lo que no se puede leer contra la ley son los PUNTAJES (2.12 a 2.16), y por
+      eso están descartados.
+      HALLAZGO PARA EL INFORME: la ley nombra tres materias y solo fija meta para una. No es
+      un defecto nuestro — es cómo está redactada, y el evaluador debe decirlo.
+      Verificado en prod: 97,84% en 2019 contra una meta de 63,0% para 2025 y una línea base
+      de 92,9% en 2006. El país está peor que su propia línea base.
     nota: >-
       Porcentaje de alumnos en o por debajo del nivel II en matemáticas de 6to grado. Es el
       ÚNICO de los seis indicadores LLECE expresado en porcentaje de alumnos por nivel, y por
