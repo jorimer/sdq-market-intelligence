@@ -242,6 +242,12 @@ def obligaciones_(expediente_id: str, _: User = Depends(get_current_user)) -> Di
             "exigible": o.exigible, "produce": o.produce,
             "habilita_exigir": o.habilita_exigir,
             "verificacion_pendiente": o.requiere_verificacion_antes_de_publicar,
+            # El ALCANCE de verificación viaja: o qué se consulta contra la base normativa, o
+            # por qué no se puede. Sin esto, el expediente declaraba los motivos y ningún
+            # consumidor los veía — el mismo defecto que tuvo `scope` en el registro: un campo
+            # que existe y no llega es indistinguible de uno que no existe.
+            "verificacion_normativa": o.verificacion_normativa,
+            "sin_consulta_normativa": o.sin_consulta_normativa,
             "frase_publicable": o.frase_publicable(),
         } for o in obs],
         "estados": ESTADOS_OBLIGACION,
