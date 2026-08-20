@@ -88,6 +88,22 @@ fuentes_admitidas:
       Externa y admisible por la misma lógica que la PEFA, el WDI y la CEPAL: no es el
       órgano evaluado. Publica la composición de cada cámara por separado, que es lo que
       ninguna fuente nacional abierta ofrece para el Senado.
+  - id: llece
+    nombre: LLECE / UNESCO (SERCE · TERCE · ERCE)
+    nota: >-
+      Externa y ADMISIBLE por la misma razón que la PEFA: la propia ley la incorpora — los
+      indicadores 2.12 a 2.17 son puntajes y niveles de las pruebas LLECE, con metas fijadas
+      en el articulado. Es evidencia interna al instrumento.
+      SALVEDAD DE ESCALA, que viaja con cada binding que la use: la ley fija sus líneas base
+      y sus metas de PUNTAJE en la escala de SERCE 2006 (media regional 500). Desde TERCE
+      2013 el LLECE publica en escala de media 700. El equating SERCE↔TERCE existe pero
+      expresa TERCE en la escala de 500; el de TERCE↔ERCE va en la de 700, y NO hay puente
+      publicado de ERCE a la escala de la ley. Encadenarlos por cuenta propia sería inventar
+      la conversión.
+      Los NIVELES de desempeño sí son comparables y está documentado: los de TERCE son
+      «iguales a los de SERCE 2006» por diseño, y ERCE mantiene los puntos de corte de TERCE.
+      Por eso un indicador expresado en PORCENTAJE de alumnos por nivel sobrevive al cambio
+      de escala y uno expresado en puntaje no.
   - id: pefa
     nombre: Evaluación PEFA
     nota: >-
