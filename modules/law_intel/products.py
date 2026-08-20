@@ -49,19 +49,36 @@ def _antiguedad_del_dato(eid: str) -> Optional[int]:
     """
     from modules.law_intel.bindings import cargar_bindings
 
-    anios = []
+    from modules.law_intel.verificacion import ANTIGUEDAD_MAXIMA_ANIOS, ventana_de_frescura
+
+    # La antigüedad se NORMALIZA a cadencia anual antes de comparar. Sin esto, un indicador
+    # medido por una prueba que se aplica cada seis años arrastraba la frescura del expediente
+    # entero a cero: el 2.17 (ERCE 2019) la llevó de 0,84 a 0,0 —peor que no declarar período,
+    # que vale 0,5— aunque su dato sea el más reciente que existe en el mundo.
+    #
+    # Es el mismo defecto que el motor de verificación ya tenía y que se corrigió declarando
+    # `cadencia_anios`: ahí se arregló y acá seguía. Un guard que existe en un motor y falta en
+    # el otro es el patrón que este repo ya pagó cinco veces en un solo módulo.
+    #
+    # Normalizar en vez de exceptuar: se expresa cuán viejo está CADA dato en términos de una
+    # cadencia anual, y se toma el peor. Así un dato de 2019 de una fuente hexenal pesa como
+    # uno de ~2 años de una anual —que es lo que significa— y una fuente anual detenida en 2019
+    # sigue pesando lo que pesa.
+    peor: Optional[int] = None
+    hoy = _dt.date.today()
     for b in cargar_bindings(eid).values():
         if not b.cuenta:
             continue
         crudo = (b.periodo_verificado or "")[:4]
-        if crudo.isdigit():
-            anios.append(int(crudo))
-    if not anios:
-        return None
-    # El período cierra el 31 de diciembre de su año: un dato anual de 2024 no está completo
-    # antes de eso, y fecharlo al 1 de enero lo haría parecer un año más viejo de lo que es.
-    cierre = _dt.date(min(anios), 12, 31)
-    return max(0, (_dt.date.today() - cierre).days)
+        if not crudo.isdigit():
+            continue
+        # El período cierra el 31 de diciembre de su año: un dato anual de 2024 no está
+        # completo antes de eso, y fecharlo al 1 de enero lo haría parecer un año más viejo.
+        dias = max(0, (hoy - _dt.date(int(crudo), 12, 31)).days)
+        escala = ANTIGUEDAD_MAXIMA_ANIOS / ventana_de_frescura(b)
+        normalizado = int(dias * escala)
+        peor = normalizado if peor is None else max(peor, normalizado)
+    return peor
 
 
 SECTOR_KEY = "law"
