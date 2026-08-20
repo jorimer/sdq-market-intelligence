@@ -9,6 +9,7 @@ from typing import Dict
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
 from shared.validation.frescura import MotorValidacion, registrar_motor
+from shared.validation.control_tamano import ControlDeTamano
 
 IDM_VALIDITY_KEY = "idm_convergent_validity"
 
@@ -150,6 +151,10 @@ def register() -> None:
     registrar_motor(MotorValidacion(
         eje="social_dev", operacion="idm-convergent-validity", clave=IDM_VALIDITY_KEY,
         partes=huella_convergent, disparado_por=("idm-snapshot",),
+        control_de_tamano=ControlDeTamano(
+            motivo="no_medido", variable="población de la provincia (ONE)",
+            nota="el motor es validez convergente entre índices provinciales; una provincia "
+                 "grande y una chica no tienen por qué ordenarse en la misma escala"),
     ))
 
 

@@ -36,6 +36,8 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from shared.validation.control_tamano import ControlDeTamano
+
 # Clave donde cada reporte guarda su firma de insumo.
 CAMPO_HUELLA = "input_fingerprint"
 
@@ -97,6 +99,10 @@ class MotorValidacion:
     # por ejemplo). Viaja en la respuesta como ``stale_scope``: sin esto, un ``stale=False``
     # afirmaría más de lo que se verificó, que es la forma elegante del mismo defecto.
     insumo_no_cubierto: Tuple[str, ...] = ()
+    # Contra qué CONTROL se lee la cifra de este motor. Obligatorio: un Gini sobre sujetos de
+    # tamaños distintos no distingue «el score ordena» de «el tamaño ordena y el score lo
+    # copia», y eso ya cambió el veredicto en dos motores (ver `control_tamano`).
+    control_de_tamano: Optional[ControlDeTamano] = None
 
 
 MOTORES: Dict[str, MotorValidacion] = {}

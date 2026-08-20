@@ -11,6 +11,7 @@ from typing import Dict
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
 from shared.validation.frescura import MotorValidacion, registrar_motor
+from shared.validation.control_tamano import ControlDeTamano
 
 GATE_E_KEY = "sector_gate_e_report"
 
@@ -231,6 +232,11 @@ def register() -> None:
     registrar_motor(MotorValidacion(
         eje="sector_intel", operacion="sector-gate-e", clave=GATE_E_KEY,
         partes=huella_gate_e, disparado_por=("sector-snapshot",),
+        # El primero que lo tuvo: `sector_size` es a la vez el deflactor de la intensidad y
+        # una variable del IAI, así que sin el control el signo era inatribuible.
+        control_de_tamano=ControlDeTamano(
+            clave="control_solo_tamano",
+            nota="`sector_size` del panel de IAI, en el bloque de inversión"),
     ))
 
 
