@@ -223,3 +223,29 @@ class TestCualDeLosDosCamposDetectaDERIVA:
         c = comprobar_obligacion(CONSULTA, VENCE,
                                  lambda **kw: {"alcance": a, "resultados": []})
         assert "no se podrá detectar si cambió" in c.evidencia
+
+
+class TestLaCitaDeGacetaLaCOMPONEElEmisor:
+    """`texto_citable` lo entregó el emisor después de que publicáramos «Gaceta 10753 del
+    None». Usarlo no es comodidad: quien conoce el formato correcto de una cita oficial es
+    quien publica el corpus, y el día que cambie nos enteramos sin tocar nada."""
+
+    def test_se_prefiere_el_texto_del_EMISOR(self):
+        n = dict(_DECRETO, gaceta={"numero": "10753", "fecha": None,
+                                   "texto_citable": "Gaceta Oficial 10753"})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert "Publicada en Gaceta Oficial 10753." in c.evidencia
+        assert "None" not in c.evidencia
+
+    def test_sin_texto_citable_se_compone_acá_y_sigue_sin_muñón(self):
+        """El respaldo propio no se borra: hay respuestas viejas y puede haber otros emisores.
+        Lo que no puede volver es el «del None»."""
+        n = dict(_DECRETO, gaceta={"numero": "10753", "fecha": None})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert "Gaceta 10753." in c.evidencia and "None" not in c.evidencia
+
+    def test_sin_numero_no_se_inventa_respaldo(self):
+        n = dict(_DECRETO, gaceta={"numero": None, "fecha": None})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert "Gaceta" not in c.evidencia
+
