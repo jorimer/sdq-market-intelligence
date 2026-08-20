@@ -23,6 +23,26 @@ sello:
     contrastadas una por una contra el texto legal; el resto por lectura de celdas del PDF
     oficial.
 
+verificaciones:
+  - fecha: "2026-08-20"
+    alcance: >-
+      Las 90 líneas base numeradas, contrastadas por extracción de TABLAS contra el PDF
+      oficial de la END 2030 (págs. 51-75). Resultado: CERO discrepancias. Las seis que la
+      primera pasada marcó eran del comparador y no del dato — la ley escribe «421 (Nivel I)»
+      y «2.24%», no números pelados.
+    motivo: >-
+      Se hizo al descubrir que SIETE nombres de indicador estaban truncados en 120 caracteres
+      exactos, y que el del 2.17 escondía que el indicador cubre TRES materias. La pregunta
+      obvia era si el mismo corte había tocado los campos sellados.
+      No los tocó, y la razón no es casualidad: los campos bajo el hash recibieron la
+      disciplina de la ratificación y el nombre nunca estuvo bajo ella. El sello protegió
+      exactamente lo que dice proteger.
+    hallazgo_lateral: >-
+      La fila del 2.12 en el articulado publica los cortes de nivel en escala SERCE —«Nivel I
+      > 299,59 · Nivel II > 424,54 · Nivel III > 513,66 · Nivel IV > 593,59»—. Es confirmación
+      INDEPENDIENTE de que la ley fijó sus niveles con puntajes de la escala de 2006, que es
+      lo que impide leer un puntaje de ERCE 2019 contra sus metas.
+
 # Cambios autorizados posteriores al sello. Vacío: las metas vigentes son las originales
 # de la ley.
 #
