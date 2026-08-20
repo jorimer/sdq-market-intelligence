@@ -245,3 +245,83 @@ def test_los_dos_motores_que_ya_lo_tienen_no_pueden_perderlo(eje):
         f"`{eje}` midió su control por tamaño y cambió su veredicto con él. Quitarlo es "
         "volver al estado que esta regla existe para impedir."
     )
+
+
+# ── 6. El control no puede desaparecer en NINGÚN motor que lo declare ──
+
+def test_siete_de_ocho_motores_publican_su_control():
+    """La cuenta, computada del registro. Si baja, alguien quitó un control.
+
+    Cuando esta regla se escribió eran DOS de ocho. Los seis restantes se computaron después:
+    seguros (primas), pensiones (AUM), comercio (exportado), IRMP (PIB) y ESG (población).
+    `social_dev` sigue afuera por DATO, no por diseño — su nota lo declara.
+    """
+    publican = sorted(eje for eje, m in _motores()
+                      if m.control_de_tamano and m.control_de_tamano.clave)
+    assert publican == ["banking_score", "esg_climate", "insurance_intel",
+                        "macro_political_risk", "pension_intel", "sector_intel",
+                        "trade_intel"], publican
+
+
+def test_el_unico_sin_control_declara_que_le_falta_el_DATO_y_cuál():
+    """«No medido» sin decir qué falta es «pendiente», y pendiente no es un motivo."""
+    sin_control = {eje: m.control_de_tamano for eje, m in _motores()
+                   if m.control_de_tamano and m.control_de_tamano.motivo}
+    assert list(sin_control) == ["social_dev"], sin_control
+    c = sin_control["social_dev"]
+    assert c.variable and "Censo" in c.variable
+    assert c.nota and "403" in c.nota, (
+        "El motivo tiene que nombrar el obstáculo real (el portal de la ONE detrás de "
+        "Cloudflare), no encogerse de hombros."
+    )
+
+
+def test_el_control_de_seguros_viaja_dentro_de_la_senal(monkeypatch):
+    """Pegado al Gini que acota, no en otra clave del reporte: si no, no se lee junto."""
+    from modules.insurance_intel.validation import backtest as mod
+
+    obs = [mod.Obs(slug=f"a{i}", period="2020", score=float(i), fwd=float(i), label=i % 2)
+           for i in range(12)]
+    control = mod.control_por_tamano(
+        obs, {f"a{i}": {"2020": float(100 - i)} for i in range(12)}, gini_del_score=0.2)
+    assert control["variable"] == "primas_suscritas"
+    assert control["n"] == 12
+    assert control["gini"] is not None
+    assert control["veredicto"]
+
+
+def test_un_panel_sin_tamano_declara_el_motivo_en_vez_de_devolver_cero():
+    """«No se pudo computar» y «el tamaño no ordena» son cosas distintas."""
+    from shared.validation.control_tamano import medir_control_de_tamano
+
+    salida = medir_control_de_tamano([None, None, None], [1, 0, 1], 0.3, variable="activos")
+    assert salida["gini"] is None
+    assert salida["motivo"]
+    assert salida["n"] == 0
+
+
+def test_el_veredicto_del_control_compara_magnitudes_no_signos():
+    """El caso del IAI: el deflactor producía −0,32 entero, con el signo del índice."""
+    from shared.validation.control_tamano import (
+        VEREDICTO_SCORE_SUPERA, VEREDICTO_TAMANO_ALCANZA, medir_control_de_tamano,
+    )
+
+    tamanos = [float(i) for i in range(20)]
+    # El tamaño ordena PERFECTO y con signo negativo (los chicos son los eventos).
+    fuerte = [1 if i < 10 else 0 for i in range(20)]
+    alcanza = medir_control_de_tamano(tamanos, fuerte, gini_del_score=0.10, variable="t",
+                                      n_boot=50)
+    assert alcanza["gini"] == 1.0
+    assert alcanza["el_tamano_alcanza_al_score"] is True, (
+        "Un control de |Gini| 1,0 contra un score de 0,10 tiene que alcanzarlo: si comparara "
+        "signos en vez de magnitudes, el +1,0 no 'alcanzaría' a un score positivo chico."
+    )
+    assert alcanza["veredicto"] == VEREDICTO_TAMANO_ALCANZA
+
+    # Ahora un tamaño que casi no ordena: el score sí agrega por encima de él.
+    debil = [i % 2 for i in range(20)]
+    supera = medir_control_de_tamano(tamanos, debil, gini_del_score=0.80, variable="t",
+                                     n_boot=50)
+    assert abs(supera["gini"]) < 0.8
+    assert supera["el_tamano_alcanza_al_score"] is False
+    assert supera["veredicto"] == VEREDICTO_SCORE_SUPERA
