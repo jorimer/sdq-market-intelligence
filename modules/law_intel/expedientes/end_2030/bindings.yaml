@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "19.0"
+version: "20.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -1025,8 +1025,21 @@ bindings:
     # congelado para siempre y el informe diría «no lo medimos» sobre la medición más reciente
     # que existe. Se declara acá y no se afloja el umbral para todos.
     cadencia_anios: 6
-    periodo_verificado: "2019"
-    estado: verificado
+    estado: propuesto
+    nota_comparabilidad: >-
+      ⚠️ DEMOTADO 2026-08-20, al recuperar el nombre oficial del indicador — que estaba
+      TRUNCADO en 120 caracteres y terminaba en «…de 6to grado par».
+      El texto de la ley dice «PARA LECTURA, MATEMÁTICAS Y CIENCIAS», y su ficha técnica (pág.
+      164 del Reglamento) define TRES fórmulas, una por materia, cada una con su propio corte
+      en escala SERCE: lectura ≤ 513,66 · matemáticas ≤ 514,41 · ciencias ≤ 590,29.
+      La serie atada mide UNA de las tres. Publicarla como el indicador afirmaría medir algo
+      que no se mide — y en la dirección más engañosa, porque el 97,84% de matemáticas es el
+      peor de los tres y arrastraría la lectura del conjunto.
+      Además, la ley fija el nivel II por un PUNTAJE en escala SERCE, y ERCE 2019 publica en
+      escala de media 700. Que los niveles sean comparables entre estudios no resuelve que la
+      ley haya pinchado el corte con un número de la escala vieja.
+      Vuelve a `verificado` cuando se atienda a las tres materias y se resuelva si el corte
+      del nivel II que aplica ERCE equivale al que la ley escribió.
     nota: >-
       Porcentaje de alumnos en o por debajo del nivel II en matemáticas de 6to grado. Es el
       ÚNICO de los seis indicadores LLECE expresado en porcentaje de alumnos por nivel, y por
