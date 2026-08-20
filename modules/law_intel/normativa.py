@@ -38,19 +38,59 @@ VEREDICTOS = {
 }
 
 
-def sello_del_corpus(alcance: Dict[str, Any]) -> Optional[str]:
-    """Cuándo se midió el corpus contra el que se emitió este veredicto.
+def antiguedad_de_la_evidencia(alcance: Dict[str, Any]) -> Optional[str]:
+    """`medido_al`: la medición MÁS VIEJA de las celdas que sostienen esta respuesta.
 
-    Era el pedido número uno que se le hizo al emisor y lo entregó: su corpus pasó de 596 a
-    9.335 decretos en semanas, así que un veredicto calculado hoy podía no ser reproducible
-    mañana y no había forma de saberlo. Nuestra doctrina obliga a explicar por qué la cifra
-    de un informe viejo ya no coincide con la actual; sin este sello, esa explicación no
-    existía.
+    ⚠️ NO es «cuándo se comprobó por última vez», y confundirlo cuesta caro. Se leyó así al
+    integrarlo y el emisor lo corrigió con evidencia de producción: en unas horas su corpus
+    creció 546 normas y `medido_al` no se movió ni un segundo.
 
-    Devuelve `None` cuando el emisor no lo declara — un veredicto sin sello sigue siendo
-    válido, pero no se puede auditar contra el estado del corpus, y eso se dice.
+        medido_al      2026-08-18T03:40:48 → 2026-08-18T03:40:48   (sin cambio)
+        normas_leidas  9.983 → 10.529                              (+546)
+
+    Se comporta así a propósito: la remedición automática cubre el año en curso y el anterior,
+    y los años cerrados conservan su medición original porque el pasado no cambia. En una
+    consulta amplia queda fijada por la celda más vieja del rango y puede no moverse en meses.
+
+    Sirve para responder «cuán vieja es la evidencia más débil que sostiene esto», que es una
+    pregunta legítima y distinta. Para DETECTAR DERIVA hay que usar `huella_del_corpus`.
     """
     return (alcance or {}).get("medido_al") or None
+
+
+def huella_del_corpus(alcance: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """`instantanea`: el estado del corpus, calculado EN VIVO al responder.
+
+    Es el campo que detecta deriva, y el que hay que guardar junto a un veredicto para poder
+    explicar después por qué la cifra de un informe viejo ya no coincide con la actual —
+    exactamente lo que la doctrina de este repo exige poder explicar.
+
+    El campo intuitivo (`medido_al`) es justamente el que NO sirve para esto: una detección de
+    deriva montada sobre él nunca dispararía. Se documenta acá porque el error ya se cometió.
+    """
+    inst = (alcance or {}).get("instantanea")
+    return dict(inst) if isinstance(inst, dict) and inst else None
+
+
+def _procedencia_del_corpus(alcance: Dict[str, Any]) -> str:
+    """La frase que acompaña a una acusación: qué sostiene el corpus y cómo auditarlo.
+
+    Lleva los DOS campos porque responden preguntas distintas y guardar uno solo deja ciega a
+    la mitad: la huella dice si el corpus cambió desde el informe anterior; `medido_al` dice
+    cuán vieja es la evidencia más débil que sostiene esta respuesta.
+    """
+    huella = huella_del_corpus(alcance)
+    viejo = antiguedad_de_la_evidencia(alcance)
+    partes = []
+    if huella:
+        detalle = ", ".join(f"{k}={v}" for k, v in sorted(huella.items()))
+        partes.append(f" Huella del corpus al responder: {detalle}.")
+    else:
+        partes.append(" El emisor no declara la huella del corpus: no se podrá detectar si "
+                      "cambió cuando este veredicto se reemita.")
+    if viejo:
+        partes.append(f" La evidencia más vieja que lo sostiene se midió el {viejo}.")
+    return "".join(partes)
 
 
 @dataclass(frozen=True)
@@ -145,10 +185,7 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
                 f"El corpus «{alcance.get('corpus', 'declarado')}» está completo entre "
                 f"{alcance.get('completo_desde', '?')} y {alcance.get('completo_hasta', '?')} "
                 f"y no contiene ninguna norma que satisfaga la obligación."
-                + (f" Corpus medido al {sello_del_corpus(alcance)}."
-                   if sello_del_corpus(alcance) else
-                   " El emisor NO declara cuándo midió su corpus: el veredicto no se puede "
-                   "auditar contra su estado."),
+                + _procedencia_del_corpus(alcance),
                 alcance=alcance)
         huecos = alcance.get("huecos") or []
         return Comprobacion(
