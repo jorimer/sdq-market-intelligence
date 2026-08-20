@@ -64,13 +64,15 @@ def _alcanza(sub: AlertSubscription, evento: AlertEvent) -> bool:
 
 def entregar(db: Session, evento: AlertEvent,
              subs: Sequence[AlertSubscription],
-             *, entregados_por_usuario: Dict[str, int] | None = None) -> Dict[str, Any]:
+             *, entregados_por_usuario: Dict[str, int] | None = None,
+             evento_id: str | None = None) -> Dict[str, Any]:
     """Entrega *evento* a las vigilancias que lo alcanzan. Devuelve el detalle de qué pasó
     con cada una — entregadas, calladas por dedup, filtradas y suspendidas — porque el
     barrido tiene que poder explicar por qué una vigilancia no recibió nada.
 
     ``entregados_por_usuario`` lleva la cuenta a través de varios eventos del mismo barrido
-    para que el tope sea por barrido y no por evento.
+    para que el tope sea por barrido y no por evento. ``evento_id`` es la fila persistida del
+    evento; sin ella no se puede encolar correo (la entrega apunta al evento, no lo copia).
     """
     cupo = entregados_por_usuario if entregados_por_usuario is not None else {}
     vivas, suspendidas = service.entregables(db, subs)
@@ -93,9 +95,17 @@ def entregar(db: Session, evento: AlertEvent,
             excedidas.append(uid)
             continue
         try:
-            notification_service.create(
-                db, user_id=uid, type=_tipo(evento.severidad), title=evento.titulo,
-                body=_cuerpo(evento), action_url=ACTION_URL)
+            canales = list(sub.channels or [])
+            if service.CANAL_INAPP in canales:
+                notification_service.create(
+                    db, user_id=uid, type=_tipo(evento.severidad), title=evento.titulo,
+                    body=_cuerpo(evento), action_url=ACTION_URL)
+            if service.CANAL_EMAIL in canales and evento_id:
+                # El correo no se manda desde acá aunque sea "inmediato": se ENCOLA. Una
+                # conexión SMTP dentro del barrido lo vuelve tan lento como el servidor de
+                # correo, y un SMTP caído se comería el aviso sin dejar rastro. La fila
+                # pendiente es a la vez la cola del digest y la del reintento.
+                _encolar_email(db, evento_id, uid, str(sub.digest))
             DEDUP.marcar(db, clave)
             cupo[uid] = cupo.get(uid, 0) + 1
             entregadas.append(uid)
@@ -137,3 +147,20 @@ def _cuerpo(evento: AlertEvent) -> str:
     if evento.basis:
         partes.append(f"Señal a monitorear · {evento.basis}")
     return "\n\n".join(partes)
+
+
+def _encolar_email(db: Session, evento_id: str, user_id: str, digest: str) -> None:
+    """Deja la entrega por correo PENDIENTE. Idempotente por (evento, usuario, canal)."""
+    from shared.alerts.models import AlertDelivery
+
+    ya = (db.query(AlertDelivery)
+          .filter(AlertDelivery.event_id == evento_id,
+                  AlertDelivery.user_id == user_id,
+                  AlertDelivery.canal == service.CANAL_EMAIL)
+          .one_or_none())
+    if ya is not None:
+        return
+    db.add(AlertDelivery(event_id=evento_id, user_id=user_id,
+                         canal=service.CANAL_EMAIL, digest=digest,
+                         enviado_at=None, intentos=0))
+    db.commit()

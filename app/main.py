@@ -227,6 +227,7 @@ import shared.source_intel.operations  # noqa: F401 — registers source-researc
 import shared.reference.operations  # noqa: F401 — registers dgii-contribuyentes-sync
 import shared.operations.freshness  # noqa: F401 — registers data-freshness-audit (alerta dato viejo)
 import shared.alerts.motor  # noqa: F401 — registers alerts-sweep (barrido de alertas)
+import shared.alerts.digest  # noqa: F401 — registers alerts-digest (resúmenes por correo)
 import modules.banking_score.alerts_producer  # noqa: F401 — banca aporta señales al barrido
 import modules.macro_monitor.comunicados.freshness  # noqa: F401 — registra frescura de decisiones TPM
 

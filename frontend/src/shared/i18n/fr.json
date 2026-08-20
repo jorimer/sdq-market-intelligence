@@ -2569,6 +2569,37 @@
     "watchSubjectHint": "Recevoir des alertes pour {{subject}}.",
     "watchError": "Impossible d'enregistrer la surveillance.",
     "suspended": "Suspendue : votre plan ne couvre plus ce produit.",
-    "pendingEngine": "Enregistrée. Cet axe ne produit pas encore de signaux ; nous vous préviendrons."
+    "pendingEngine": "Enregistrée. Cet axe ne produit pas encore de signaux ; nous vous préviendrons.",
+    "page": {
+      "eyebrow": "ALERTES",
+      "title": "Mes surveillances",
+      "sub": "Ce que vous surveillez, par quel canal et à quelle fréquence. Les signaux sont évalués sur le panel, pas sur des documents."
+    },
+    "loadError": "Impossible de charger vos surveillances.",
+    "saveError": "Impossible d'enregistrer la modification.",
+    "empty": "Vous ne surveillez rien pour l'instant. Ouvrez un produit du catalogue et utilisez « Surveiller ».",
+    "needChannel": "Gardez au moins un canal, ou supprimez la surveillance.",
+    "emailUnavailable": "L'alerte par courriel n'est pas configurée sur cette installation ; seule la boîte de la plateforme est proposée.",
+    "subject": "Sujet : {{s}}",
+    "wholeAxis": "Tout l'axe",
+    "noProducer": "Pas encore de signaux",
+    "channels": "Canaux",
+    "channel": {
+      "inapp": "Plateforme",
+      "email": "Courriel"
+    },
+    "cadence": "Rythme",
+    "minSeverity": "À partir de la sévérité",
+    "remove": "Ne plus surveiller",
+    "digest": {
+      "inmediato": "Immédiat",
+      "diario": "Quotidien",
+      "semanal": "Hebdomadaire"
+    },
+    "severity": {
+      "alta": "Élevée",
+      "media": "Moyenne",
+      "baja": "Faible"
+    }
   }
 }
