@@ -135,6 +135,35 @@ def _metrica_de_bloque(b: Dict[str, Any], senal: Optional[str]) -> Optional[Dict
     return None
 
 
+#: Bloques de desenlace que viven en la RAÍZ del reporte (no dentro de `signals`/`outcomes`).
+#: Cada motor eligió su forma antes de que hubiera un contrato; se enumeran para que «todas las
+#: señales» sea realmente todas y no solo las de los motores que usan la forma nueva.
+_BLOQUES_EN_RAIZ = ("governance", "credit", "export_collapse", "external_macro")
+
+
+def todas_las_senales(reporte: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """TODAS las señales que el motor publica, no solo la titular.
+
+    La tabla mostraba una cifra por eje —la titular— y las demás no aparecían en ninguna
+    superficie. En seguros eso escondía el resultado más incómodo del eje: la señal de
+    solvencia no concluye (0,0639, IC cruzando cero) mientras el TAMAÑO de la aseguradora sí
+    concluye sobre el mismo desenlace (0,2548 [0,121 · 0,390]). Un comprador exigente pregunta
+    justamente por eso, y el documento no lo tenía.
+    """
+    fuentes: List[tuple] = [(clave, bloque) for clave, bloque
+                            in (reporte.get("signals") or reporte.get("outcomes") or {}).items()]
+    fuentes += [(clave, reporte.get(clave)) for clave in _BLOQUES_EN_RAIZ
+                if isinstance(reporte.get(clave), dict)]
+    salida: List[Dict[str, Any]] = []
+    for clave, bloque in fuentes:
+        if not isinstance(bloque, dict):
+            continue
+        cifra = _metrica_de_bloque(bloque, clave)
+        if cifra and cifra.get("valor") is not None:
+            salida.append(cifra)
+    return salida
+
+
 def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
     """Métrica, valor, IC y N de la cifra que ese eje publica. Sin inventar formas."""
     senal = _mejor_senal(reporte)
@@ -238,6 +267,10 @@ def credenciales(db: Session) -> Dict[str, Any]:
             # La POBLACIÓN viaja con la cifra. Sin esto, «Gini 0,23 · n=1.693» se lee como
             # discriminación entre bancos, y el 47 % de ese panel no otorga crédito.
             "poblacion": _poblacion(reporte or {}),
+            # TODAS las señales del eje, no solo la titular. La titular decide el grupo; las
+            # demás se listan porque esconderlas deja fuera justo lo que un comprador
+            # exigente pregunta.
+            "senales": todas_las_senales(reporte or {}),
             "generated_at": (reporte or {}).get("generated_at"),
             "stale": frescura.get("stale"),
             "stale_reason": frescura.get("stale_reason"),
