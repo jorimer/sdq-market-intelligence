@@ -401,11 +401,10 @@ def test_el_catalogo_declara_CUALES_tienen_motor_y_cuales_no(db, productos):
     por_codigo = {r["codigo"]: r for r in body["rules"]}
     assert set(por_codigo) >= {"umbral", "banda", "brecha", "posicion", "frescura"}
 
-    # Fase B: umbral, banda y brecha ya tienen reglas puras y productor de banca.
-    assert all(por_codigo[c]["implementado"] is True for c in ("umbral", "banda", "brecha"))
-    # Y el resto sigue declarándose sin motor, en vez de insinuar que suena.
-    assert all(por_codigo[c]["implementado"] is False
-               for c in ("posicion", "frescura", "publicacion"))
+    # Fase D: los seis tienen motor. Lo que ahora distingue un eje de otro no es la regla
+    # sino qué eje la ALIMENTA, y eso viaja aparte en `cobertura_por_eje`.
+    assert all(r["implementado"] is True for r in body["rules"])
+    assert isinstance(body["cobertura_por_eje"], dict)
 
     assert all(r["basis"] for r in body["rules"])      # ninguna regla suena "porque sí"
     # Sin SMTP en el entorno de test, el correo se declara NO CONFIGURADO — que no es lo

@@ -24,6 +24,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+# Sentinela de «todo el eje»: las reglas cuyo sujeto es el eje entero
+# (frescura, publicación) la usan para que el motor las case con las
+# vigilancias de eje completo igual que cualquier otra.
+from shared.alerts.models import TODO_EL_EJE
+
 # Severidades, de mayor a menor. El orden es el dato: ``min_severity`` filtra por posición.
 SEVERIDADES: Tuple[str, ...] = ("alta", "media", "baja")
 
@@ -79,6 +84,7 @@ CATALOGO: Tuple[Disparador, ...] = (
                      "rankea contra uno de 5."),
         basis="shared.narrative.derived.universo_comparable — doctrina de comparabilidad.",
         requiere_sujeto=True,
+        implementado=True,
     ),
     Disparador(
         codigo="brecha",
@@ -97,6 +103,7 @@ CATALOGO: Tuple[Disparador, ...] = (
         basis=("shared.validation.frescura — huella del insumo. Sin esto, producción sirvió "
                "19 días un Gini calculado con un score que ya no existía."),
         requiere_sujeto=False,
+        implementado=True,
     ),
     Disparador(
         codigo="publicacion",
@@ -105,6 +112,7 @@ CATALOGO: Tuple[Disparador, ...] = (
         basis=("Detector ya existente en shared/operations/freshness.py::_audit_publications, "
                "hoy dirigido solo a administradores."),
         requiere_sujeto=False,
+        implementado=True,
     ),
 )
 
@@ -299,3 +307,120 @@ def expresar(valor: float, unidad: str) -> str:
     entero, _, decimal = f"{valor:,.2f}".partition(".")
     txt = entero.replace(",", ".") + "," + decimal
     return f"{txt}{unidad}" if unidad == "%" else f"{txt} {unidad}".strip()
+
+
+# ── Reglas de la fase D ──────────────────────────────────────────────────────
+
+TXT_POSICION = ("{sujeto} pasó del puesto {previo} al {actual} de {n} al {periodo}. "
+                "{criterio}.")
+TXT_FRESCURA = ("La validación de {eje} quedó huérfana de su insumo: {motivo}. "
+                "Sus cifras no se publican hasta recalcularla.")
+TXT_FRESCURA_INDET = ("No se puede establecer si la validación de {eje} sigue vigente: "
+                      "{motivo}. Sus cifras no se publican mientras siga así.")
+TXT_PUBLICACION = "Entró una edición nueva de «{publicacion}»: {edicion}."
+
+
+def rule_posicion(*, sector_key: str, subject: str, sujeto_label: str, periodo: str,
+                  rank_actual: Optional[int], rank_previo: Optional[int],
+                  n_comparables: Optional[int], criterio: str, basis: str,
+                  saltos_minimos: int = 1,
+                  procedencia: Optional[Dict[str, str]] = None,
+                  frescura: Optional[bool] = None) -> Optional[AlertEvent]:
+    """El sujeto se movió en el ranking de su universo COMPARABLE.
+
+    ``criterio`` describe ese universo y **no es opcional**: es lo que el gate exige para
+    dejar pasar una posición (``veto_comparabilidad``). Un score armado sobre 3 de 5
+    dimensiones no rankea contra uno de 5, y una alerta de ranking es exactamente la
+    superficie donde ese defecto se convierte en una afirmación falsa enviada por correo.
+    Lo produce ``shared.narrative.derived.rank_comparable``; acá no se reconstruye.
+
+    ``rank_actual=None`` significa que el sujeto NO es comparable este período (cobertura
+    parcial). No se publica un movimiento: no hay posición que afirmar, y eso es lo que hay
+    que decir — pero por la vía de una alerta de brecha, no torciendo esta.
+    """
+    if rank_actual is None or rank_previo is None or n_comparables is None:
+        return None
+    if not criterio:
+        return None
+    saltos = abs(rank_actual - rank_previo)
+    if saltos < max(1, saltos_minimos):
+        return None
+
+    # Menor número = mejor puesto. La dirección se COMPUTA de los enteros; el texto la copia.
+    empeora = rank_actual > rank_previo
+    relaciones = {
+        "metrica": "posicion", "direccion": "cae" if empeora else "sube",
+        "posicion": rank_actual, "posicion_previa": rank_previo,
+        "saltos": saltos, "de_n": n_comparables,
+    }
+    return AlertEvent(
+        codigo="posicion", sector_key=sector_key, subject=subject, periodo=periodo,
+        severidad="media" if empeora else "baja",
+        titulo=f"Cambio de posición: {sujeto_label}",
+        cuerpo=TXT_POSICION.format(sujeto=sujeto_label, previo=rank_previo,
+                                   actual=rank_actual, n=n_comparables,
+                                   periodo=periodo, criterio=criterio),
+        basis=basis, relaciones=relaciones, procedencia=procedencia or {},
+        frescura=frescura, universo=criterio)
+
+
+def rule_frescura(*, sector_key: str, eje_label: str, periodo: str,
+                  stale_actual: Optional[bool], stale_previo: Optional[bool],
+                  motivo: str, basis: str) -> Optional[AlertEvent]:
+    """La validación de un eje dejó de estar vigente.
+
+    **Por qué esta alerta declara ``frescura=True``.** Parece una trampa al veto de frescura
+    y no lo es: el hecho que afirma —«la huella del reporte ya no coincide con su insumo»— se
+    acaba de computar contra el estado de HOY. Lo que envejeció es el objeto del aviso, no el
+    aviso. Si esta regla heredara el ``stale`` del reporte, la única alerta que existe para
+    avisar que algo se venció quedaría vetada por estar vencida, que es exactamente el
+    silencio que la doctrina prohíbe.
+
+    Dispara solo en la TRANSICIÓN: un eje que ya estaba vencido no vuelve a avisar en cada
+    barrido. Y ``None`` (indeterminado) es su propio estado, distinto de ``True``: piden
+    acciones distintas —recalcular versus averiguar de cuándo es— y el texto lo dice.
+    """
+    if stale_actual is False or stale_actual == stale_previo:
+        return None
+    plantilla = TXT_FRESCURA if stale_actual is True else TXT_FRESCURA_INDET
+    estado = "vencida" if stale_actual is True else "indeterminada"
+    return AlertEvent(
+        codigo="frescura", sector_key=sector_key, subject=TODO_EL_EJE, periodo=periodo,
+        severidad="alta" if stale_actual is True else "media",
+        titulo=f"Validación {estado}: {eje_label}",
+        cuerpo=plantilla.format(eje=eje_label, motivo=motivo or "sin motivo declarado"),
+        basis=basis,
+        relaciones={"metrica": "validacion", "direccion": "pierde_vigencia",
+                    "estado": estado},
+        procedencia={"validacion": "live"},
+        # Ver el docstring: el hecho se computó contra el estado de hoy.
+        frescura=True)
+
+
+def rule_publicacion(*, sector_key: str, publicacion_label: str, periodo: str,
+                     edicion_actual: Optional[str], edicion_previa: Optional[str],
+                     basis: str) -> Optional[AlertEvent]:
+    """Entró una edición nueva de una fuente recurrente del eje.
+
+    Es el disparador más parecido a lo que hace un monitor de documentos, y por eso conviene
+    ser preciso sobre qué avisa: **no** que se publicó algo (eso lo sabe cualquiera con un
+    scraper), sino que la plataforma **ya lo ingirió** — o sea, que el dato del eje se movió
+    y los informes que salgan desde ahora dicen otra cosa.
+
+    Sin edición previa no hay novedad que declarar: la primera ingestión de una fuente es el
+    estado inicial, no una noticia.
+    """
+    if not edicion_actual or not edicion_previa or edicion_actual == edicion_previa:
+        return None
+    return AlertEvent(
+        codigo="publicacion", sector_key=sector_key, subject=TODO_EL_EJE, periodo=periodo,
+        severidad="baja",
+        titulo=f"Publicación nueva: {publicacion_label}",
+        cuerpo=TXT_PUBLICACION.format(publicacion=publicacion_label,
+                                      edicion=edicion_actual),
+        basis=basis,
+        relaciones={"metrica": "publicacion", "direccion": "entra",
+                    "edicion": edicion_actual, "edicion_previa": edicion_previa},
+        procedencia={"publicacion": "live"},
+        # La edición se acaba de ingerir: el hecho es de hoy por construcción.
+        frescura=True)

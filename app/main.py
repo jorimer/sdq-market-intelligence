@@ -247,10 +247,24 @@ import modules.pension_intel.products  # noqa: F401 — registers pension Sector
 import modules.insurance_intel.products  # noqa: F401 — registers insurance SectorProduct
 import modules.social_dev.products  # noqa: F401 — registers social_dev (panel SUB-NACIONAL)
 import modules.law_intel.products  # noqa: F401 — registers law (sujeto = instrumento normativo)
+
 # Macro abarca 2 módulos → su producto se ensambla a nivel app vía getters públicos.
 # (forma `from app import` para NO rebindear el nombre `app` = la instancia FastAPI.)
 from app import products_macro as _products_macro  # noqa: F401 — registers macro SectorProduct
 from app import products_monetary_policy as _products_mp  # noqa: F401 — registers monetary_policy SectorProduct
+
+# El productor TRANSVERSAL de alertas se engancha ACÁ, y el lugar es la mitad del
+# diseño. Dos precedencias que tienen que cumplirse las dos:
+#   1. DESPUÉS de TODOS los `products` — lee `registered_sectors()`. Puesto antes del
+#      bloque entero registraba CERO ejes; puesto en medio (después de law_intel pero
+#      antes de estos dos de `app/`) se saltaba `macro` y `monetary_policy` sin que
+#      nada fallara. Va al final del bloque, y el test compara conjuntos completos.
+#   2. DESPUÉS de los adaptadores propios (banca) y excluyéndolos — el registro es
+#      uno por eje, así que engancharlo encima reemplazaría las señales específicas
+#      por las genéricas.
+# Lo vigila `shared/alerts/tests/test_productores.py::test_el_barrido_alcanza_mas_que_banca`.
+from shared.alerts.productores import register as _register_alert_producers
+_register_alert_producers()
 
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":

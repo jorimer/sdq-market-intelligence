@@ -48,11 +48,21 @@ def _422(e: AlertValidationError) -> HTTPException:
 
 
 @router.get("/rules", summary="Catálogo de disparadores")
-async def get_rules(_: User = Depends(get_current_user)) -> Dict[str, Any]:
-    """Qué puede hacer sonar una alerta. Cada entrada declara si **ya tiene motor detrás**
-    (``implementado``): un disparador mudo que se presenta como activo se lee como que no
-    pasó nada, y la superficie tiene que poder decir la diferencia."""
+async def get_rules(db: Session = Depends(get_db),
+                    _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Qué puede hacer sonar una alerta, y **qué aporta cada eje HOY**.
+
+    ``implementado`` dice si el disparador tiene motor; ``cobertura_por_eje`` dice cuáles de
+    esos disparadores alcanzan realmente a cada eje. Las dos cosas son distintas y las dos
+    hacen falta: una regla implementada sobre un eje que no la alimenta es una vigilancia
+    que nunca suena, y presentarla como activa se lee como que no pasó nada.
+    """
+    from shared.alerts.productores import cobertura
+
     return {
+        # Se computa contra el registro vivo, no se declara a mano: una tabla escrita a mano
+        # se desincroniza el día que un eje registra su motor.
+        "cobertura_por_eje": cobertura(db),
         "rules": [reglas.serializar(d) for d in reglas.CATALOGO],
         "severidades": list(reglas.SEVERIDADES),
         "canales_disponibles": list(service.canales_disponibles()),
