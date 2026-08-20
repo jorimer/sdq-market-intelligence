@@ -178,14 +178,22 @@ La tabla de opciones del informe anterior (§4) queda revisada por esta evidenci
 | A | Revisar la dirección de `solidez` | **Desaconsejada como estaba planteada.** La inversión agregada es composicional; dentro de banca múltiple no existe. Tocar la curva movería un indicador sano por evidencia de otra población |
 | B | Re-especificar el desenlace | **Ya hecho** (señales por familia, en producción). Lo que este diagnóstico agrega es que además hay que **auditar el sesgo de cada regla**: las dos evaluables predicen su evento desde el nivel de partida |
 | C | Re-pesar las dimensiones | **Prematuro y probablemente mal dirigido.** El tamaño solo ordena mejor (+0,413) que el score entero. Re-pesar contra un desenlace que mide persistencia ajustaría el score a la autocorrelación |
-| **E** | **Definir el universo del backtest** | **La que sale de acá.** 47 % del panel son entidades sin libro de crédito que aportan 63 % de los eventos. Medir la credencial sobre el universo que el producto vende es un cambio de UNIVERSO, no de score |
+| **E** | **Aplicar el umbral de materialidad que YA estaba decidido** | **La que sale de acá, y no es nueva.** El universo del PRODUCTO está resuelto por diseño: `banking_score/SPEC.md` §1 lo define como un *Financial Entity Score* sobre todo el universo supervisado por la SIB, y las cambiarias entran como submodelo declarado. Lo que quedó a medias es otra cosa: `docs/PROPUESTA_CAMBIARIAS_FIDUCIARIAS.md` §0 recomendó construir para las **6 ARC** y las **AC por encima de un umbral de activos**, listando el resto como «sin rating significativo» porque «calificar las 35 AC completas añade ruido». La v1 salió con las 42 y la calibración del umbral sigue pendiente. Es exactamente la población que este diagnóstico encontró inflando el panel |
+| **G** | **Declarar la población donde se cita la credencial** | `CLAIMS_COMERCIALES.md` cita «n=1.693» sin decir que el 47 % son entidades sin libro de crédito. No es una decisión de alcance: es una brecha de declaración, del mismo tipo que ese documento ya cerró al pasar a citar la señal en vez del agregado |
 | **F** | **Exigir el control por tamaño con un test estructural** | El mismo control ya dio vuelta el veredicto en `sector_intel` (IAI) y ahora en banca. Dos motores es la condición doctrinal para un guard que lea el código con `ast`, en vez de confiar en que cada autor se acuerde |
 
-**Recomendación:** E primero — declarar y separar el universo—, y con la credencial medida
-sobre entidades comparables, revisar `solidez` **solo dentro de las poblaciones donde sigue
-invertida** (banco de ahorro y crédito, aap). Antes de eso, auditar `morosidad_x2`: una regla
-que dispara a favor de quien partía mejor no puede sostener la afirmación «el score no
-discrimina deterioro de crédito».
+**Recomendación:** G primero, porque es declaración y no cambia ninguna cifra. Después E —
+cerrar el umbral de materialidad de las AC, que estaba recomendado desde el 2026-06-08 y quedó
+pendiente— y recién con la credencial medida sobre entidades materiales, revisar `solidez`
+**solo dentro de las poblaciones donde sigue invertida** (banco de ahorro y crédito, aap).
+Antes de eso, auditar `morosidad_x2`: una regla que dispara a favor de quien partía mejor no
+puede sostener la afirmación «el score no discrimina deterioro de crédito».
+
+> **Corrección (2026-08-19).** Una versión anterior de esta sección planteaba «definir el
+> universo del backtest» como decisión abierta. No lo es: el universo del producto está
+> decidido en la SPEC y ejecutado. Lo que sigue abierto es el **umbral de materialidad dentro
+> de ese universo** —recomendado y diferido en la misma propuesta que incorporó a las
+> cambiarias— y la **declaración de la población** donde la credencial se cita.
 
 **Lo que no cambia:** la credencial fuerte de banca sigue siendo la cohorte de quiebras reales
 —Bancrédito 11 meses de anticipación, Baninter 7, señal tardía en Mercantil— sobre **tres**
