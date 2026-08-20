@@ -42,13 +42,14 @@ def _entidad(db, clave, activos_por_periodo, tipo=BankType.cambiaria):
 
 
 P1, P2 = date(2024, 3, 31), date(2024, 6, 30)
+P3, P4 = date(2024, 9, 30), date(2024, 12, 31)
 
 
-def test_el_perfil_encuentra_el_escalon_de_la_escalera(db):
+def test_el_perfil_encuentra_el_escalon_cuando_EXISTE(db):
     """Tres agentes con balance real y una cola de ventanillas casi vacías.
 
-    Es la forma que la propuesta afirmaba sin medir: si existe, el salto aparece solo y el
-    piso no lo elige nadie a ojo.
+    Es la forma que la propuesta afirmaba: si existe, el salto aparece solo y el piso no lo
+    elige nadie a ojo.
     """
     for i, monto in enumerate([5_000_000_000.0, 3_000_000_000.0, 1_000_000_000.0]):
         _entidad(db, f"ARC{i}", {P1: monto * 0.9, P2: monto})
@@ -59,14 +60,59 @@ def test_el_perfil_encuentra_el_escalon_de_la_escalera(db):
     perfil = perfil_de_materialidad(db)
     assert perfil["ok"] is True
     assert perfil["n_entidades"] == 9
-    # El escalón más grande separa a la tercera ARC de la primera ventanilla.
-    mayor = perfil["saltos_mas_grandes"][0]
-    assert mayor["posicion"] == 3
-    assert mayor["razon"] > 100
-    assert mayor["corte_sugerido"] == 1_000_000.0
+    escalon = perfil["escalon"]
+    assert escalon["hay_escalon"] is True
+    assert escalon["mayor_salto_limpio"]["posicion"] == 3
+    assert escalon["piso_sugerido"] == pytest.approx(950_000.0, rel=0.01)  # mediana, no último
     # Y las filas vienen ordenadas de mayor a menor, con su cuota del sistema.
     assert perfil["por_entidad"][0]["activos_ultimo"] == 5_000_000_000.0
     assert perfil["por_entidad"][0]["cuota_del_sistema_de_su_tipo"] > 0.5
+
+
+def test_una_escalera_CONTINUA_no_inventa_un_escalon(db):
+    """La forma que el panel real resultó tener: tamaños que bajan sin cortes.
+
+    Con la escalera continua, el veredicto tiene que decir que el piso lo elegiría una
+    persona y no el dato. Antes de este test, el salto más grande se leía como escalón
+    aunque fuera de 1,5×.
+    """
+    monto = 3_000_000_000.0
+    for i in range(12):
+        _entidad(db, f"E{i}", {P1: monto * 0.95, P2: monto})
+        monto /= 1.8  # baja parejo: ninguna vecina se separa un orden de magnitud
+    db.commit()
+
+    escalon = perfil_de_materialidad(db)["escalon"]
+    assert escalon["hay_escalon"] is False
+    assert escalon["piso_sugerido"] is None
+    assert "no hay escalón" in escalon["veredicto"]
+
+
+def test_una_serie_ROTA_no_puede_hacerse_pasar_por_escalon(db):
+    """El caso real: Placidoiv, mediana RD$8,3 MM y último RD$48,7 M — 170× contra sí misma.
+
+    En la primera corrida esa entidad ERA el único «escalón» del panel, y calibrar el piso
+    ahí habría sido calibrarlo sobre un artefacto.
+    """
+    monto = 3_000_000_000.0
+    for i in range(8):
+        _entidad(db, f"E{i}", {P1: monto * 0.95, P2: monto})
+        monto /= 1.8
+    # La última: opera normal toda su serie y colapsa SOLO en el último corte. Con una serie
+    # de dos puntos la mediana es el promedio y la anomalía se diluye — que es justamente por
+    # qué la mediana necesita historia para ser el tamaño estable.
+    _entidad(db, "ROTA", {P1: 8_300_000.0, P2: 8_400_000.0, P3: 8_200_000.0, P4: 48_709.0})
+    db.commit()
+
+    perfil = perfil_de_materialidad(db)
+    anomalas = perfil["anomalias_ultimo_vs_su_propia_mediana"]
+    assert [a["entidad"] for a in anomalas] == ["E ROTA"]
+    assert anomalas[0]["razon_contra_su_propia_mediana"] > 100
+    # Y el escalón NO se fija con ella.
+    assert perfil["escalon"]["hay_escalon"] is False
+    for salto in perfil["saltos_mas_grandes"]:
+        if salto["razon"] > 100:
+            assert salto["alguna_vecina_es_anomala"] is True
 
 
 def test_sin_piso_declarado_no_se_filtra_nada(db):
