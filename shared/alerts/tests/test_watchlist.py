@@ -186,15 +186,23 @@ def test_email_CON_SMTP_configurado_se_acepta(db, productos, monkeypatch):
     assert r.json()["channels"] == ["inapp", "email"]
 
 
-def test_un_canal_planificado_se_distingue_de_uno_no_configurado(db, productos):
-    """«No lo ofrecemos todavía» y «no está configurado acá» piden acciones distintas: la
-    segunda la resuelve el dueño con tres variables de entorno."""
+def test_el_webhook_sin_endpoint_registrado_se_rechaza(db, productos):
+    """El gate del webhook es POR USUARIO, no del despliegue: sin un endpoint suscrito a
+    `alert.raised`, ofrecerle el canal lo deja esperando avisos que no tienen a dónde ir."""
     _activar(db, EJE, ProductTier.pulse)
     u = _user(db)
     r = _client(db, u).post("/api/v1/alerts/subscriptions",
                             json={"sector_key": EJE, "channels": ["webhook"]})
     assert r.status_code == 422
-    assert "todavía no entrega" in r.json()["detail"]
+    assert "no está configurado" in r.json()["detail"]
+
+
+def test_ya_no_quedan_canales_PLANIFICADOS(db, productos):
+    """Los tres canales del spec están construidos. La lista vacía es una afirmación, no un
+    olvido: si mañana se planifica uno nuevo, este test recuerda declararlo."""
+    from shared.alerts import service as svc
+
+    assert svc.CANALES_PLANIFICADOS == ()
 
 
 def test_disparador_desconocido(db, productos):
@@ -409,6 +417,9 @@ def test_el_catalogo_declara_CUALES_tienen_motor_y_cuales_no(db, productos):
     assert all(r["basis"] for r in body["rules"])      # ninguna regla suena "porque sí"
     # Sin SMTP en el entorno de test, el correo se declara NO CONFIGURADO — que no es lo
     # mismo que "no lo ofrecemos" (eso es `canales_planificados`, hoy el webhook).
+    # Sin SMTP en el entorno de test y sin webhook registrado por este usuario, los dos se
+    # declaran NO CONFIGURADOS — que no es «no lo ofrecemos», y cada uno lo resuelve alguien
+    # distinto: el correo el dueño (variables de entorno), el webhook el cliente (endpoint).
     assert body["canales_disponibles"] == ["inapp"]
-    assert body["canales_no_configurados"] == ["email"]
-    assert "webhook" in body["canales_planificados"]
+    assert set(body["canales_no_configurados"]) == {"email", "webhook"}
+    assert body["canales_planificados"] == []

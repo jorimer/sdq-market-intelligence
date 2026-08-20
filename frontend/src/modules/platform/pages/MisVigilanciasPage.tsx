@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, BellOff, Mail, Inbox, Trash2, ShieldAlert } from "lucide-react";
+import { Bell, BellOff, Mail, Inbox, Webhook, Trash2, ShieldAlert } from "lucide-react";
 import { PageHead, Card, CardHead, Chip, StateBlock, Skeleton } from "@/shared/ui/primitives";
 import {
   getAlertRules,
@@ -24,6 +24,12 @@ import {
  * - una vigilancia suspendida muestra su motivo;
  * - un eje sin productor de señales lo dice, en vez de parecer activo.
  */
+const CANAL_ICONO: Record<string, typeof Inbox> = {
+  inapp: Inbox,
+  email: Mail,
+  webhook: Webhook,
+};
+
 export function MisVigilanciasPage() {
   const { t } = useTranslation();
   const tr = (k: string, d: string) => t(k, d) as string;
@@ -40,8 +46,11 @@ export function MisVigilanciasPage() {
   };
   useEffect(reload, []);
 
-  const emailDisponible = Boolean(cat?.canales_disponibles.includes("email"));
-  const emailSinConfigurar = Boolean(cat?.canales_no_configurados?.includes("email"));
+  // Los canales se leen del catálogo, no se listan a mano: cada uno tiene su propio gate
+  // —el correo es del despliegue, el webhook es del usuario— y hardcodearlos acá haría que
+  // la pantalla ofreciera algo que el backend rechaza, o escondiera algo que ya funciona.
+  const disponibles = cat?.canales_disponibles ?? [];
+  const sinConfigurar = cat?.canales_no_configurados ?? [];
 
   async function patch(sub: AlertSubscription, cambio: Parameters<typeof updateAlertSubscription>[1]) {
     setBusy(sub.id); setMsg(null);
@@ -97,15 +106,15 @@ export function MisVigilanciasPage() {
 
       {msg && <div className="text-xs text-alert">{msg}</div>}
 
-      {status === "ready" && emailSinConfigurar && subs.length > 0 && (
-        <div className="text-xs text-muted flex items-start gap-2">
+      {/* Cada canal ausente dice POR QUÉ, y quién lo resuelve: el correo lo habilita el
+          dueño de la instalación; el webhook, el propio cliente registrando un endpoint.
+          Un canal que falta sin explicación se lee como que no existe. */}
+      {status === "ready" && subs.length > 0 && sinConfigurar.map((canal) => (
+        <div key={canal} className="text-xs text-muted flex items-start gap-2">
           <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>
-            {tr("alerts.emailUnavailable",
-              "El aviso por correo no está configurado en esta instalación, así que solo se ofrece el buzón de la plataforma.")}
-          </span>
+          <span>{tr(`alerts.unavailable.${canal}`, canal)}</span>
         </div>
-      )}
+      ))}
 
       {status === "ready" && subs.map((sub) => (
         <Card key={sub.id}>
@@ -129,22 +138,19 @@ export function MisVigilanciasPage() {
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted">{tr("alerts.channels", "Canales")}</span>
-                <button
-                  onClick={() => toggleCanal(sub, "inapp")}
-                  disabled={busy === sub.id}
-                  className={`btn !py-1 !px-2 text-xs ${sub.channels.includes("inapp") ? "btn-soft" : "btn-ghost"}`}
-                >
-                  <Inbox className="w-3.5 h-3.5" /> {tr("alerts.channel.inapp", "Plataforma")}
-                </button>
-                {emailDisponible && (
-                  <button
-                    onClick={() => toggleCanal(sub, "email")}
-                    disabled={busy === sub.id}
-                    className={`btn !py-1 !px-2 text-xs ${sub.channels.includes("email") ? "btn-soft" : "btn-ghost"}`}
-                  >
-                    <Mail className="w-3.5 h-3.5" /> {tr("alerts.channel.email", "Correo")}
-                  </button>
-                )}
+                {disponibles.map((canal) => {
+                  const Icon = CANAL_ICONO[canal] ?? Inbox;
+                  return (
+                    <button
+                      key={canal}
+                      onClick={() => toggleCanal(sub, canal)}
+                      disabled={busy === sub.id}
+                      className={`btn !py-1 !px-2 text-xs ${sub.channels.includes(canal) ? "btn-soft" : "btn-ghost"}`}
+                    >
+                      <Icon className="w-3.5 h-3.5" /> {tr(`alerts.channel.${canal}`, canal)}
+                    </button>
+                  );
+                })}
               </div>
 
               <label className="flex items-center gap-2 text-xs text-muted">

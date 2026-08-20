@@ -2579,14 +2579,14 @@
     "saveError": "Impossible d'enregistrer la modification.",
     "empty": "Vous ne surveillez rien pour l'instant. Ouvrez un produit du catalogue et utilisez « Surveiller ».",
     "needChannel": "Gardez au moins un canal, ou supprimez la surveillance.",
-    "emailUnavailable": "L'alerte par courriel n'est pas configurée sur cette installation ; seule la boîte de la plateforme est proposée.",
     "subject": "Sujet : {{s}}",
     "wholeAxis": "Tout l'axe",
     "noProducer": "Pas encore de signaux",
     "channels": "Canaux",
     "channel": {
       "inapp": "Plateforme",
-      "email": "Courriel"
+      "email": "Courriel",
+      "webhook": "Webhook"
     },
     "cadence": "Rythme",
     "minSeverity": "À partir de la sévérité",
@@ -2600,6 +2600,10 @@
       "alta": "Élevée",
       "media": "Moyenne",
       "baja": "Faible"
+    },
+    "unavailable": {
+      "email": "L'alerte par courriel n'est pas configurée sur cette installation ; ce canal n'est pas proposé.",
+      "webhook": "Pour recevoir des alertes par webhook, enregistrez un endpoint abonné à « alert.raised » avec votre clé Data API."
     }
   }
 }
