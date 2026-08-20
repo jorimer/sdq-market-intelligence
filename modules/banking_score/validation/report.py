@@ -7,6 +7,7 @@ from typing import Dict
 
 from sqlalchemy.orm import Session
 
+from modules.banking_score.models.models import BankingData
 from modules.banking_score.scoring.perfil_sdq import BANDAS_RESILIENCIA
 from modules.banking_score.validation.metrics import (
     deterioration_rate_by_tier, gini_bootstrap_ci,
@@ -31,6 +32,19 @@ _CAVEAT_NO_ES_RUIDO = (
     "no es ruido de un tier intermedio ni de una muestra chica: es una inversión con N "
     "grande. El score continuo sí discrimina débilmente (ver Gini y su IC); la clasificación "
     "en bandas, no"
+)
+
+
+# El CONTROL POR TAMAÑO. Un score que ordena entidades de tamaños muy distintos queda
+# mecánicamente correlacionado con el tamaño, y el Gini no distingue «el score ordena» de «el
+# tamaño ordena y el score lo copia». Medido en producción (2026-08-19): el activo total SOLO
+# ordena el desenlace con +0,413, mejor que el score entero. Sin esta cifra al lado, la del
+# score afirma más de lo que muestra. Mismo control que `sector_intel` publica como
+# `control_solo_tamano` desde la Fase 3.
+NOTA_CONTROL_TAMANO = (
+    "el mismo desenlace ordenado SOLO por el activo total de la entidad, sobre el mismo "
+    "panel. Es la vara contra la que se lee el Gini del score: si el tamaño solo alcanza el "
+    "mismo poder, el score no está agregando nada por encima de cuán grande es la entidad"
 )
 
 
@@ -89,6 +103,42 @@ def senales_por_familia(obs, tier_order, n_boot: int) -> Dict:
     concluyentes = [(v["n_events"], k) for k, v in señales.items() if v.get("conclusive")]
     titular = max(concluyentes)[1] if concluyentes else None
     return {"signals": señales, "headline_signal": titular}
+
+
+def control_solo_tamano(db: Session, obs, n_boot: int) -> Dict:
+    """El MISMO desenlace, ordenado solo por el activo total. Con su N y su motivo si falta.
+
+    El tamaño entra con la misma convención que el score —más activo = menos riesgo— así que
+    su Gini se lee en la misma escala y se compara de frente. Las observaciones sin activo
+    quedan fuera y se declaran: un control computado sobre otro universo no acota nada.
+    """
+    # La clave se devuelve SIEMPRE, incluso sin base: un control que desaparece cuando falta
+    # su insumo deja publicada la cifra del score sin la vara que la acota, y ese silencio se
+    # lee como que el control se hizo. Lo vigila `test_control_de_tamano`.
+    if db is None:
+        return {"gini": None, "gini_ci": None, "n": 0,
+                "motivo": "sin sesión de base: el control no se pudo computar en esta corrida",
+                "nota": NOTA_CONTROL_TAMANO}
+    activos = {(str(d.bank_id), d.period_end): d.activos_totales
+               for d in db.query(BankingData).all()}
+    pares = [(float(a), 1 if o.deteriorated else 0) for o in obs
+             for a in [activos.get((str(o.bank_id), o.period_end))] if a]
+    if not pares:
+        return {"gini": None, "gini_ci": None, "n": 0,
+                "motivo": "ninguna observación del panel trae activo total: el control no se "
+                          "puede computar con lo que hay",
+                "nota": NOTA_CONTROL_TAMANO}
+    g, lo, hi = gini_bootstrap_ci([v for v, _e in pares], [e for _v, e in pares],
+                                  n_boot=n_boot)
+    return {
+        "gini": None if g is None else round(g, 4),
+        "gini_ci": None if g is None or lo is None or hi is None else [round(lo, 4),
+                                                                      round(hi, 4)],
+        "n": len(pares),
+        "n_sin_activo": len(obs) - len(pares),
+        "variable": "activos_totales",
+        "nota": NOTA_CONTROL_TAMANO,
+    }
 
 
 def composicion_del_desenlace(obs) -> Dict:
@@ -202,6 +252,14 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
                           + ", ".join(f"«{k}»" for k in invertidas)
                           + " (IC del Gini enteramente negativo). Es un hallazgo, no una "
                             "ausencia de señal, y no debe leerse como discriminación débil.")
+    control = control_solo_tamano(db, obs, n_boot)
+    # Si el tamaño SOLO ordena igual o mejor que el score, decirlo es el hallazgo. Callarlo
+    # deja publicada una cifra que el lector atribuye al score.
+    if control.get("gini") is not None and g is not None and control["gini"] >= g:
+        caveats.insert(0, "El activo total SOLO ordena este desenlace con Gini "
+                          f"{control['gini']}, contra {round(g, 4)} del score: sobre este "
+                          "panel el score no agrega poder discriminante por encima del "
+                          "tamaño de la entidad.")
     violaciones = monotonicity_violations(by_tier)
     if not monotonic:
         caveats.insert(0, _caveat_de_monotonia(violaciones))
@@ -221,6 +279,9 @@ def build_backtest_report(db: Session, horizon_q: int = HORIZON_Q,
         # a un PDF o a una lámina.
         "by_tier_ordena_riesgo": monotonic,
         "composicion_del_desenlace": composicion,
+        # El control NO es un extra: viaja pegado a la cifra que acota, porque un número que
+        # hay que ir a buscar a otro documento no acota nada.
+        "control_solo_tamano": control,
         # El agregado se conserva porque es la cifra que ya está publicada y citada, pero
         # marcado por lo que es: la unión de tres fenómenos en proporciones muy desiguales.
         "desenlace_agregado": True,

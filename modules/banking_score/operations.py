@@ -12,6 +12,7 @@ from shared.database.session import SessionLocal
 from shared.settings.models import AppSetting
 from shared.operations import Operation, register_operation
 from shared.validation.frescura import MotorValidacion, registrar_motor
+from shared.validation.control_tamano import ControlDeTamano
 
 
 def _run_rescore(params, user_id, set_phase) -> Dict:
@@ -315,6 +316,11 @@ def register() -> None:
     registrar_motor(MotorValidacion(
         eje="banking_score", operacion="backtest", clave=BACKTEST_REPORT_KEY,
         partes=huella_backtest, disparado_por=("rescore", "perfil-sdq-backfill"),
+        # El panel va de un agente de cambio de RD$22 MM a un banco múltiple de RD$30.890 MM.
+        # Medido: el activo total SOLO ordena el desenlace con +0,413, mejor que el score.
+        control_de_tamano=ControlDeTamano(
+            clave="control_solo_tamano",
+            nota="activo total de la entidad al corte, misma convención que el score"),
     ))
 
 

@@ -6,6 +6,7 @@ from typing import Dict
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
 from shared.validation.frescura import MotorValidacion, registrar_motor
+from shared.validation.control_tamano import ControlDeTamano
 
 ESG_BACKTEST_KEY = "esg_backtest_report"
 
@@ -92,6 +93,10 @@ def register() -> None:
     registrar_motor(MotorValidacion(
         eje="esg_climate", operacion="esg-backtest", clave=ESG_BACKTEST_KEY,
         partes=huella_backtest, disparado_por=("esg-sync",),
+        control_de_tamano=ControlDeTamano(
+            motivo="no_medido", variable="población del país (Banco Mundial)",
+            nota="el desenlace es mortalidad por desastres climáticos, un CONTEO: sin "
+                 "normalizar por población el país grande acumula más muertes por tamaño"),
         insumo_no_cubierto=("mortalidad por desastres climáticos (OWID/EM-DAT), "
                             "descargada en cada corrida y no persistida",),
     ))

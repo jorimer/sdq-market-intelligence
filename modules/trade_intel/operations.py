@@ -5,6 +5,7 @@ from typing import Dict, Optional
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.control_tamano import ControlDeTamano
 from shared.validation.frescura import (
     MotorValidacion, huella_archivo, registrar_motor,
 )
@@ -150,6 +151,10 @@ def register() -> None:
     registrar_motor(MotorValidacion(
         eje="trade_intel", operacion="trade-backtest", clave=BACKTEST_KEY,
         partes=huella_backtest,
+        control_de_tamano=ControlDeTamano(
+            motivo="no_medido", variable="valor exportado total del país (Comtrade)",
+            nota="el panel son países de tamaños exportadores muy distintos y el desenlace "
+                 "primario es una caída porcentual de exportaciones"),
         sin_cascada_motivo=(
             "el panel de validación es un fixture comiteado que se regenera por script "
             "(`scripts/build_comtrade_fixture.py`), no por una operación de consola. La "
