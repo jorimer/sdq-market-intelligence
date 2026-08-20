@@ -280,5 +280,12 @@ def gate_e_report(db: Session) -> Dict:
                                             "ENCFT) — NO es lo que el IAI dice anticipar"},
                      **({"inversion": inversion} if inversion else {})},
         "headline_outcome": _titular(empleo, inversion),
+        # QUÉ desenlace targetea el índice. Es un hecho de DISEÑO y no el veredicto de la
+        # última corrida: `headline_outcome` dice cuál sostiene una afirmación —y puede ser
+        # None— mientras que éste dice cuál hay que MIRAR aunque no concluya. Sin la
+        # distinción, un consumidor que no encuentra titular cae al primer bloque que haya,
+        # y acá el primero es el de empleo: el que este mismo reporte declara que «NO es lo
+        # que el IAI dice anticipar». Le pasó a la tabla comercial.
+        "outcome_primario": "inversion" if inversion else "empleo",
         "disclaimer": _disclaimer(n_ramas, empleo["n_years"] or 0),
     }

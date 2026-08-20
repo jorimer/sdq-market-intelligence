@@ -65,8 +65,12 @@ def _mejor_senal(reporte: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     Nunca elige «la de mayor Gini»: un titular por magnitud convierte un resultado no
     concluyente en credencial. Si el reporte no nombra titular, no hay titular.
     """
-    titular = reporte.get("headline_signal")
-    senales = reporte.get("signals") or {}
+    # Dos motores nombran lo mismo distinto: `signals`/`headline_signal` (banca, seguros,
+    # pensiones) y `outcomes`/`headline_outcome` (sector_intel). Leer solo uno hacía que el
+    # titular DECLARADO por el otro no se leyera nunca, y la credencial caía al primer bloque
+    # del reporte — que en sector_intel es el desenlace que el propio motor descarta.
+    titular = reporte.get("headline_signal") or reporte.get("headline_outcome")
+    senales = reporte.get("signals") or reporte.get("outcomes") or {}
     if titular and isinstance(senales.get(titular), dict):
         return {"senal": titular, **senales[titular]}
     return None
@@ -92,14 +96,54 @@ def _poblacion(reporte: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
+def _primario(reporte: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """El desenlace que el motor declara TARGETEAR, concluya o no.
+
+    `headline_outcome` responde «¿cuál sostiene una afirmación?» y puede ser None;
+    `outcome_primario` responde «¿cuál hay que mirar?», que es un hecho de diseño. Sin la
+    segunda, un eje sin titular caía al primer bloque del reporte — y en `sector_intel` ese es
+    el desenlace de empleo, que el propio motor declara que «NO es lo que el IAI dice
+    anticipar». La tabla comercial publicó eso.
+    """
+    clave = reporte.get("outcome_primario")
+    bloque = (reporte.get("outcomes") or {}).get(clave) if clave else None
+    return {"senal": clave, **bloque} if isinstance(bloque, dict) else None
+
+
+def _metrica_de_bloque(b: Dict[str, Any], senal: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Traduce un bloque de desenlace a la forma de la tabla, sea Gini o IC medio anual."""
+    if b.get("gini") is not None:
+        ic = b.get("gini_ci") or [None, None]
+        return {"metrica": "Gini", "valor": b.get("gini"), "ic": ic,
+                "n": b.get("n_obs") or b.get("n_observations"), "eventos": b.get("n_events"),
+                "senal": senal, "concluyente": bool(b.get("conclusive")),
+                "invertida": bool(b.get("invertida") or b.get("invertido")),
+                "control_de_tamano": b.get("control_solo_tamano")}
+    if b.get("mean_yearly_ic") is not None:
+        return {"metrica": "IC medio anual", "valor": b.get("mean_yearly_ic"),
+                "ic": b.get("ic_ci") or [None, None],
+                "n": b.get("n_observations"), "eventos": None, "senal": senal,
+                "concluyente": bool(b.get("conclusive")),
+                "invertida": bool(b.get("invertido") or b.get("invertida")),
+                "control_de_tamano": b.get("control_solo_tamano")}
+    return None
+
+
 def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
     """Métrica, valor, IC y N de la cifra que ese eje publica. Sin inventar formas."""
     senal = _mejor_senal(reporte)
     if senal:
-        return {"metrica": "Gini", "valor": senal.get("gini"), "ic": senal.get("gini_ci"),
-                "n": senal.get("n_obs") or senal.get("n_observations"),
-                "eventos": senal.get("n_events"), "senal": senal.get("senal"),
-                "concluyente": bool(senal.get("conclusive"))}
+        cifra = _metrica_de_bloque(senal, senal.get("senal"))
+        if cifra:
+            return cifra
+    # Ningún desenlace concluye: se muestra el que el motor declara PRIMARIO, no el primer
+    # bloque que aparezca. Una cifra no concluyente se publica igual —el grupo la acota— pero
+    # tiene que ser la del desenlace que el índice dice anticipar.
+    primario = _primario(reporte)
+    if primario:
+        cifra = _metrica_de_bloque(primario, primario.get("senal"))
+        if cifra:
+            return cifra
     # Formas propias de cada motor, leídas tal cual las publica.
     for bloque in ("governance", "export_collapse"):
         b = reporte.get(bloque)
@@ -107,25 +151,34 @@ def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
             ic = b.get("gini_ci") or [None, None]
             return {"metrica": "Gini", "valor": b.get("gini"), "ic": ic,
                     "n": b.get("n_observations"), "eventos": b.get("n_events"),
-                    "senal": bloque, "concluyente": bool(ic[0] is not None and ic[0] > 0)}
+                    "senal": bloque, "concluyente": bool(ic[0] is not None and ic[0] > 0),
+                    "invertida": bool(ic[1] is not None and ic[1] < 0),
+                    "control_de_tamano": b.get("control_solo_tamano")}
     if reporte.get("spearman") is not None:
         ic = reporte.get("spearman_ci") or [None, None]
         concluye = bool(ic[0] is not None and ic[1] is not None and (ic[0] > 0 or ic[1] < 0))
         return {"metrica": "Spearman", "valor": reporte.get("spearman"), "ic": ic,
                 "n": reporte.get("n_regions") or reporte.get("n_countries"),
-                "eventos": None, "senal": None, "concluyente": concluye}
+                "eventos": None, "senal": None, "concluyente": concluye,
+                "invertida": bool(ic[1] is not None and ic[1] < 0),
+                "control_de_tamano": reporte.get("control_solo_tamano")}
     if reporte.get("gini") is not None:
         ic = reporte.get("gini_ci") or [None, None]
         return {"metrica": "Gini", "valor": reporte.get("gini"), "ic": ic,
                 "n": reporte.get("n_observations"), "eventos": reporte.get("n_events"),
-                "senal": None, "concluyente": bool(ic[0] is not None and ic[0] > 0)}
+                "senal": None, "concluyente": bool(ic[0] is not None and ic[0] > 0),
+                "invertida": bool(ic[1] is not None and ic[1] < 0),
+                "control_de_tamano": reporte.get("control_solo_tamano")}
     if reporte.get("mean_yearly_ic") is not None:
         ic = reporte.get("ic_ci") or [None, None]
         return {"metrica": "IC medio anual", "valor": reporte.get("mean_yearly_ic"), "ic": ic,
                 "n": reporte.get("n_observations"), "eventos": None, "senal": None,
-                "concluyente": bool(ic[0] is not None and ic[0] > 0)}
+                "concluyente": bool(ic[0] is not None and ic[0] > 0),
+                "invertida": bool(ic[1] is not None and ic[1] < 0),
+                "control_de_tamano": None}
     return {"metrica": None, "valor": None, "ic": None, "n": None, "eventos": None,
-            "senal": None, "concluyente": False}
+            "senal": None, "concluyente": False, "invertida": False,
+            "control_de_tamano": None}
 
 
 def _grupo(eje: str, estado, cifra: Dict[str, Any], evento_real: bool) -> str:

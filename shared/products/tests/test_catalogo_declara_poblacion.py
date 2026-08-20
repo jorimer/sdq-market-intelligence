@@ -66,3 +66,73 @@ def test_lo_no_publicable_sigue_diciendose_en_vez_de_borrarse():
         "stale_reason": "el insumo cambió después del cálculo"})
     assert "no publicable" in fila[1]
     assert "vetada" in fila[-1]
+
+
+# ── El desenlace PRIMARIO, y no el primero que aparezca ───────────
+
+def test_la_credencial_lee_el_desenlace_que_el_motor_declara_TARGETEAR():
+    """El caso real de `sector_intel`, encontrado en el catálogo generado el 2026-08-20.
+
+    El motor mide dos desenlaces y declara que el de empleo «NO es lo que el IAI dice
+    anticipar». Ninguno concluye, así que `headline_outcome` es None — y la credencial caía al
+    primer bloque del reporte, que es justo el de empleo. El documento comercial publicaba el
+    desenlace que el propio motor descarta.
+    """
+    from shared.products.credenciales import _cifra_principal
+
+    reporte = {
+        # La raíz es una copia del bloque de empleo, conservada por compatibilidad.
+        "mean_yearly_ic": -0.03, "ic_ci": [-0.267, 0.208], "n_observations": 160,
+        "headline_outcome": None,
+        "outcome_primario": "inversion",
+        "outcomes": {
+            "empleo": {"mean_yearly_ic": -0.03, "ic_ci": [-0.267, 0.208],
+                       "n_observations": 160, "conclusive": False, "invertido": False},
+            "inversion": {"mean_yearly_ic": -0.321, "ic_ci": [-0.5, -0.142],
+                          "n_observations": 144, "conclusive": False, "invertido": True,
+                          "control_solo_tamano": {
+                              "intensidad": {"mean_yearly_ic": -0.323}}},
+        },
+    }
+    cifra = _cifra_principal("agribusiness", reporte)
+    assert cifra["valor"] == -0.321, "Publicó el desenlace secundario en vez del primario."
+    assert cifra["senal"] == "inversion"
+    assert cifra["invertida"] is True, "Un IC entero bajo cero es un hallazgo, no una ausencia."
+    assert cifra["control_de_tamano"]["intensidad"]["mean_yearly_ic"] == -0.323
+
+
+def test_el_titular_declarado_se_lee_bajo_CUALQUIERA_de_los_dos_nombres():
+    """Dos motores nombran lo mismo distinto: `headline_signal` y `headline_outcome`."""
+    from shared.products.credenciales import _mejor_senal
+
+    por_signal = {"headline_signal": "resultados",
+                  "signals": {"resultados": {"gini": 0.2287, "conclusive": True}}}
+    por_outcome = {"headline_outcome": "inversion",
+                   "outcomes": {"inversion": {"mean_yearly_ic": 0.3, "conclusive": True}}}
+    assert _mejor_senal(por_signal)["senal"] == "resultados"
+    assert _mejor_senal(por_outcome)["senal"] == "inversion"
+
+
+def test_una_señal_invertida_se_marca_en_la_fila_del_catalogo():
+    """«No concluyente» y «ordena al revés» no son lo mismo y la tabla los distingue."""
+    mod = _script()
+    fila = mod._fila_credencial({
+        "nombre": "SDQ Agribusiness", "publicable": True, "metrica": "IC medio anual",
+        "valor": -0.321, "ic": [-0.5, -0.142], "n": 144, "eventos": None,
+        "senal": "inversion", "invertida": True,
+        "control_de_tamano": {"intensidad": {"mean_yearly_ic": -0.323}}})
+    detalle = fila[-1]
+    assert detalle.startswith("ordena INVERTIDO")
+    assert "el TAMAÑO solo alcanza -0,323" in detalle, (
+        "Sin el control al lado, «ordena invertido» afirma lo que el dato no sostiene: el "
+        "signo lo produce el deflactor, no el índice."
+    )
+
+
+def test_sin_control_declarado_la_fila_no_lo_inventa():
+    mod = _script()
+    fila = mod._fila_credencial({
+        "nombre": "SDQ X", "publicable": True, "metrica": "Gini", "valor": 0.23,
+        "ic": [0.09, 0.37], "n": 314, "eventos": 87, "senal": None})
+    assert "TAMAÑO solo" not in fila[-1]
+    assert not fila[-1].startswith("ordena INVERTIDO")

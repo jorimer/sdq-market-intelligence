@@ -118,6 +118,35 @@ def _sufijo_poblacion(f: Dict[str, Any]) -> str:
     return texto.replace(".", ",")
 
 
+def _marca_inversion(f: Dict[str, Any]) -> str:
+    """Una señal INVERTIDA no es una señal ausente, y la tabla no puede confundirlas.
+
+    El IC entero del lado equivocado de cero es un hallazgo —el índice ordena al revés— y sin
+    marcarlo entra al grupo «no concluyente» leyéndose como que no se encontró nada.
+    """
+    return "ordena INVERTIDO · " if f.get("invertida") else ""
+
+
+def _sufijo_control(f: Dict[str, Any]) -> str:
+    """El control por tamaño, pegado a la cifra que acota.
+
+    Es la diferencia entre «el índice ordena al revés» y «el signo lo produce el deflactor»,
+    que son conclusiones opuestas. En `sector_intel` el índice da −0,321 y el tamaño SOLO
+    −0,323: sin el control al lado, la fila afirma lo que el dato no sostiene.
+    """
+    ctrl = f.get("control_de_tamano")
+    if not isinstance(ctrl, dict):
+        return ""
+    # El control puede venir por métrica (Gini) o por bloque (intensidad/nivel del IC).
+    valor = ctrl.get("gini") if ctrl.get("gini") is not None else ctrl.get("spearman")
+    if valor is None:
+        interno = ctrl.get("intensidad") if isinstance(ctrl.get("intensidad"), dict) else None
+        valor = (interno or {}).get("mean_yearly_ic")
+    if valor is None:
+        return ""
+    return f" · el TAMAÑO solo alcanza {_num(valor, 4)}".replace(".", ",")
+
+
 def _fila_credencial(f: Dict[str, Any]) -> List[str]:
     """Una fila de la tabla de validación. Lo NO publicable se dice, no se borra."""
     if not f["publicable"]:
@@ -134,7 +163,9 @@ def _fila_credencial(f: Dict[str, Any]) -> List[str]:
     if f.get("senal"):
         detalle += f" · señal «{f['senal']}»"
     detalle += _sufijo_poblacion(f)
-    return [f["nombre"], f["metrica"] or "—", _num(f["valor"], 4), _ic(f["ic"]), detalle]
+    detalle += _sufijo_control(f)
+    return [f["nombre"], f["metrica"] or "—", _num(f["valor"], 4), _ic(f["ic"]),
+            _marca_inversion(f) + detalle]
 
 
 def build_docx(cred: Dict[str, Any]) -> str:
