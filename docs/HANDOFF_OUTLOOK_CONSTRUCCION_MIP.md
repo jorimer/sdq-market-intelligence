@@ -5,11 +5,39 @@
 > por eso no aparecía en ninguna búsqueda del repo. **El documento va tal cual se escribió,
 > sin editar.**
 >
-> **No está verificado contra el estado de hoy.** Lo escribió el lado PMS el 2026-07-23 y
-> afirma cosas —endpoints desplegados, el contrato "gated hasta que MIP lo consuma"— que
-> hay que comprobar contra el servicio real antes de construir sobre ellas. La URL base que
-> cita la generó Railway; el repo ya pagó una vez el precio de apuntar a un dominio prestado
-> (ver la nota de `jurisai` en `shared/settings/service.py`).
+> **Validado parcialmente contra el servicio el 2026-08-20.** Lo que se comprobó y lo que
+> NO, porque la diferencia decide qué se puede construir encima:
+>
+> **Confirmado.** El host responde y es SDQ-PMS (`title: "SDQ-PMS API"`,
+> `description: "Backend del SDQ-PMS™ (proprietary)"`, release `2464f585`) — la URL de
+> Railway sigue apuntando a donde este documento dice. Las **cinco rutas existen** y las
+> cinco devuelven `503 · "El contrato de datos Outlook no está disponible."`, o sea el gate
+> descrito en §2, cerrado como corresponde. El **orden de los candados también coincide**:
+> con una API key inválida sigue dando 503 y no 401, así que el flag
+> `SDQ_OUTLOOK_CONTRACT_LIVE` se evalúa primero.
+>
+> El 503 significa algo porque se probó contra un CONTROL: `/v1/outlook/inventado` devuelve
+> `404 · Not Found`. Y este servicio responde JSON en `/`, no el HTML de un SPA — o sea que
+> acá los códigos de estado son confiables, a diferencia de lo que pasa en MIP
+> (en MIP una ruta inexistente devuelve 200 con el HTML del SPA, no 404, así que ahí un
+> código de estado por sí solo no prueba nada).
+>
+> **NO verificado: los payloads.** Con el flag apagado no hay respuesta que mirar, así que
+> todas las formas que describe §2 (`{time, ml_mode, universe_size, ...}`) siguen sin
+> comprobar.
+>
+> **Y hay poco contra qué comprobarlas.** El `openapi.json` del servicio declara los cinco
+> `200` como `object` **sin tipar**, no publica `security`, y solo lista `200` y `422` — el
+> 503/401/403 que de hecho gobiernan el acceso no están en el esquema. Consecuencias para
+> MIP: no se puede generar un cliente desde la spec, y si PMS renombra un campo no rompe
+> nada del lado de ellos — rompe dentro del informe de MIP. Es el patrón que este repo ya
+> pagó varias veces (un binding a algo inexistente no falla, DESAPARECE), ahora en la
+> frontera entre dos plataformas.
+>
+> **Antes de escribir una línea contra este contrato**, pedirle a PMS que (a) tipe las cinco
+> respuestas y (b) declare los códigos de la puerta en el OpenAPI. Sin eso la integración no
+> tiene contrato, tiene prosa. Y para que devuelva datos hacen falta los tres pasos de
+> activación que lista §2, que los ejecuta el owner del lado PMS.
 
 ---
 
