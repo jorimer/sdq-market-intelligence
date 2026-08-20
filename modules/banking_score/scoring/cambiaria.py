@@ -16,6 +16,10 @@ already treats utilidad_neta. Annualization is a future refinement.
 """
 from typing import Any, Dict
 
+from modules.banking_score.scoring.guards import (
+    no_interpretable, patrimonio_es_positivo, peor_estado_prudencial,
+)
+
 from modules.banking_score.scoring.engine import _clamp, _safe_div
 
 IndicatorResult = Dict[str, float]
@@ -54,7 +58,12 @@ def _apalancamiento(d) -> IndicatorResult:
     lo cumplían todas con enorme margen —una EIC casi no toma pasivos— así que 18 de 42
     marcaban 100 y el indicador no separaba a nadie.
     """
-    raw = _safe_div(_g(d, "pasivos_exigibles"), _g(d, "patrimonio_tecnico"))
+    patrimonio = _g(d, "patrimonio_tecnico")
+    raw = _safe_div(_g(d, "pasivos_exigibles"), patrimonio)
+    # Patrimonio no positivo: el ratio sale NEGATIVO y, como la escala es invertida, el clamp
+    # lo mandaba al techo — una entidad insolvente sacaba 100/100. Ver `guards`.
+    if not patrimonio_es_positivo(patrimonio):
+        return peor_estado_prudencial(raw)
     return {"raw": round(raw, 4), "score": round(_lin(raw, 1.13, 0.0), 2)}
 
 
@@ -102,7 +111,12 @@ def _roa(d) -> IndicatorResult:
 
 
 def _roe(d) -> IndicatorResult:
-    raw = _safe_div(_g(d, "utilidad_neta"), _g(d, "patrimonio_tecnico")) * 100
+    patrimonio = _g(d, "patrimonio_tecnico")
+    raw = _safe_div(_g(d, "utilidad_neta"), patrimonio) * 100
+    # Con patrimonio negativo el ROE cambia de SIGNO: una pérdida se lee como rentabilidad.
+    # No es el peor valor, es un número que miente → se declara no disponible.
+    if not patrimonio_es_positivo(patrimonio):
+        return no_interpretable(raw)
     return {"raw": round(raw, 4), "score": round(_lin(raw, -0.86, 13.60), 2)}
 
 

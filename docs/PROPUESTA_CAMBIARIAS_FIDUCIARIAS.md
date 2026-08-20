@@ -211,6 +211,37 @@ mitigado con matching por etiqueta + validación contra cifras conocidas + N/D a
 
 1. **Alcance de cambiarias** (ya implementado): histórico v1 con las 42; calibración de
    umbrales de remesas pendiente (float).
+
+> ### ⛔ CERRADO con evidencia el 2026-08-20 — el umbral de materialidad NO procede
+>
+> El §0 de esta propuesta recomendó calificar las **6 ARC** y las **AC por encima de un umbral
+> mínimo de activos**, listando el resto como «sin rating significativo» porque *«calificar las
+> 35 AC completas añade ruido: muchas ventanillas pequeñas, balances cercanos a cero»*. Ese
+> umbral quedó pendiente de calibración durante catorce semanas. Se midió contra el panel real
+> (`python scripts/ops_trigger.py banca-materialidad`, commit servido `39775e5`) y **la premisa
+> no se sostiene**:
+>
+> - **No hay dos clases.** La escalera de tamaños es continua: el mayor salto entre entidades
+>   vecinas —medido sobre la mediana de cada una, que es su tamaño estable— es de **2,52×**,
+>   contra el orden de magnitud que haría falta para separar poblaciones. El veredicto lo
+>   computa el instrumento: `escalon.hay_escalon = False`, `piso_sugerido = None`.
+> - **Los balances no están «cercanos a cero».** La cambiaria mediana tiene **RD$21,2 millones**
+>   de activos y la más chica de operación real, RD$5,7 millones.
+> - **La etiqueta ARC/AC no sigue al tamaño.** Dos agentes de cambio (Agc La Nacional,
+>   RD$972 MM; Quezada, RD$917 MM) están entre los cuatro más grandes del sistema, y dos
+>   agentes de remesas (GiroSol, RD$20 MM; Cibao Express, RD$8 MM) están por debajo de la mitad
+>   de los AC. La materialidad no se reparte por tipo de licencia.
+>
+> **Conclusión:** un piso fiel a la evidencia no excluye a nadie; uno que excluyera a alguien lo
+> estaría eligiendo una persona para conseguir un resultado. El pendiente se cierra por
+> **refutación de su premisa**, no por haberlo resuelto.
+>
+> **Y produjo un hallazgo aparte, que sí es un defecto:** la única entidad que el instrumento
+> marcó como anómala —Placidoiv, último activo RD$48.709 contra una mediana propia de
+> RD$8,3 MM, **170× contra sí misma**— resultó tener **patrimonio negativo** y estar puntuando
+> **100 sobre 100 en apalancamiento**, el mejor puntaje posible. Corregido en
+> `scoring/guards.py`, en los dos submodelos. El motor de bancos ya tenía esa cura desde
+> `d4c3806`; ninguno de los dos submodelos la había copiado.
 2. **Fiduciarias — fideicomisos públicos**: confirmado **transparencia, no rating**
    (§5.4). Si preferís calificarlos también, decirlo.
 3. **Set de indicadores fiduciaria** (§5.3): ¿se aprueba como v1 para arrancar el ETL?
