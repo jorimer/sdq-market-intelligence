@@ -145,13 +145,48 @@ def _sufijo_control(f: Dict[str, Any]) -> str:
     if valor is None:
         return ""
     texto = f" · el TAMAÑO solo alcanza {_num(valor, 4)}".replace(".", ",")
-    # Y la CONCLUSIÓN, cuando el motor la computa. Dos cifras al lado obligan al lector a
-    # sacarla, y un cliente no tiene por qué: «−0,321 contra −0,323» significa que el índice
-    # no agrega nada sobre el tamaño, y esa frase es el resultado, no una interpretación.
+    # Y la CONCLUSIÓN, en los TRES estados. La primera versión la imprimía solo cuando el
+    # tamaño ganaba, y el EMPATE quedaba mudo: la señal de underwriting de seguros salía con
+    # 0,2575 contra 0,2404 —indistinguibles— en el grupo de las concluyentes, y el lector la
+    # leía como «gana por poco». No gana por poco: no se distingue. Un veredicto computado que
+    # el documento no imprime es un veredicto que no existe para quien lo lee.
     interno = ctrl.get("intensidad") if isinstance(ctrl.get("intensidad"), dict) else ctrl
-    if (interno or {}).get("el_tamano_alcanza_al_score"):
-        texto += " — el índice NO agrega sobre el tamaño"
+    interno = interno or {}
+    if interno.get("el_tamano_alcanza_al_score"):
+        texto += " — NO agrega sobre el tamaño"
+    elif interno.get("empata_con_el_score"):
+        texto += " — INDISTINGUIBLE del tamaño"
+    elif interno.get("veredicto"):
+        texto += " — supera al tamaño"
     return texto
+
+
+def _filas_de_senales(f: Dict[str, Any]) -> List[List[str]]:
+    """Las señales NO titulares del eje, indentadas bajo su fila.
+
+    La titular decide el grupo y encabeza; las demás se listan debajo porque esconderlas deja
+    fuera lo que un comprador exigente pregunta. El caso: seguros publica `underwriting`
+    (0,2575, concluyente) y su otra señal, `solvency`, no concluye mientras el TAMAÑO de la
+    aseguradora sí concluye sobre el mismo desenlace. Eso no estaba en ninguna superficie.
+
+    Si el eje tiene una sola señal no se agrega nada: repetir la titular como subfila es ruido.
+    """
+    if not f.get("publicable"):
+        return []
+    senales = [s for s in (f.get("senales") or []) if s.get("senal") != f.get("senal")]
+    return [[f"     ↳ señal «{s['senal']}»", s.get("metrica") or "—", _num(s.get("valor"), 4),
+             _ic(s.get("ic")), _marca_inversion(s) + _detalle_de_senal(s)]
+            for s in senales]
+
+
+def _detalle_de_senal(s: Dict[str, Any]) -> str:
+    n = s.get("n")
+    partes = [f"n={n:,}".replace(",", ".")] if isinstance(n, int) else []
+    if s.get("eventos"):
+        partes.append(f"{s['eventos']:,} eventos".replace(",", "."))
+    if not s.get("concluyente"):
+        partes.append("no concluyente")
+    return " · ".join(partes) + _sufijo_control(s)
 
 
 def _fila_credencial(f: Dict[str, Any]) -> List[str]:
@@ -247,8 +282,11 @@ def build_docx(cred: Dict[str, Any]) -> str:
         if not claves:
             continue
         _h(grupo, size=11, before=8)
-        _tabla(["Eje", "Métrica", "Valor", "IC 95 %", "Detalle"],
-               [_fila_credencial(por_eje[k]) for k in claves])
+        filas: List[List[str]] = []
+        for k in claves:
+            filas.append(_fila_credencial(por_eje[k]))
+            filas.extend(_filas_de_senales(por_eje[k]))
+        _tabla(["Eje", "Métrica", "Valor", "IC 95 %", "Detalle"], filas)
 
     vetadas = cred.get("vetadas_por_frescura") or []
     _h("Cifras existentes que NO entran a este documento")

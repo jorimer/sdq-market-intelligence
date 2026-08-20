@@ -311,7 +311,7 @@
   {
    "eje": "agribusiness",
    "nombre": "SDQ Agribusiness",
-   "grupo": "E · validación corrida y NO concluyente",
+   "grupo": "E · corrida y sin credencial a favor (no concluyente o invertida)",
    "metrica": "IC medio anual",
    "valor": -0.321,
    "ic": [
@@ -434,7 +434,10 @@
       "n_years": 16
      },
      "conclusive": false,
-     "invertido": true
+     "invertido": true,
+     "veredicto": "empate: el tamaño solo alcanza un poder estadísticamente indistinguible del score (su Gini cae dentro del intervalo del score). La credencial no se puede presentar como algo que el tamaño del sujeto no explique",
+     "el_tamano_alcanza_al_score": true,
+     "empata_con_el_score": true
     },
     "nivel": {
      "n_observations": 144,
@@ -546,11 +549,14 @@
       "n_years": 16
      },
      "conclusive": true,
-     "invertido": false
+     "invertido": false,
+     "veredicto": "empate: el tamaño solo alcanza un poder estadísticamente indistinguible del score (su Gini cae dentro del intervalo del score). La credencial no se puede presentar como algo que el tamaño del sujeto no explique",
+     "el_tamano_alcanza_al_score": true,
+     "empata_con_el_score": true
     }
    },
    "poblacion": null,
-   "generated_at": "2026-08-20T14:47:52.125339+00:00",
+   "generated_at": "2026-08-20T17:48:11.846575+00:00",
    "stale": false,
    "stale_reason": null,
    "publicable": true,
@@ -821,7 +827,7 @@
    "social_dev"
   ],
   "D · validación parcial o acotada": [],
-  "E · validación corrida y NO concluyente": [
+  "E · corrida y sin credencial a favor (no concluyente o invertida)": [
    "agribusiness"
   ],
   "F · sin backtest de discriminación transversal (obstáculo declarado)": [
@@ -837,5 +843,5 @@
  },
  "n_publicables": 8,
  "vetadas_por_frescura": [],
- "generado_at": "2026-08-20T17:07:54.416095+00:00"
+ "generado_at": "2026-08-20T17:48:17.717777+00:00"
 }
