@@ -1017,7 +1017,7 @@ bindings:
 
   # El único de los seis que la ley escribió en PORCENTAJE, y por eso el único legible.
   - indicador: "2.17"
-    serie: "llece:matematica_6to_bajo_nivel_ii"
+    serie: "social_dev:llece_math6_bajo_nivel_ii"
     fuente: llece
     mejor: menor
     estado: propuesto
@@ -1033,5 +1033,8 @@ bindings:
       EL PAÍS RETROCEDIÓ RESPECTO DE SU PROPIA LÍNEA BASE: cinco puntos peor trece años
       después, contra una meta que pedía bajar treinta. No es que no llegue — va en dirección
       contraria, y es el indicador que la ley eligió para vigilar exactamente esto.
-      Queda `propuesto` hasta que la serie se ingiera y producción la sirva: la comprobación
-      de concepto está hecha, la plomería no. Son cosas distintas y el 2.19 lo probó.
+      La serie YA se ingiere: `shared/data/llece_client.py` sirve los niveles —y nunca los
+      puntajes, a propósito— y `social_dev` la persiste como serie nacional. Queda `propuesto`
+      hasta que producción la sirva y la comprobación lo confirme: concepto y plomería son
+      cosas distintas, y el 2.19 lo probó — su serie existía y el registro publicaba una
+      región.
