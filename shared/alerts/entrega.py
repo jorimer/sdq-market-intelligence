@@ -106,6 +106,13 @@ def entregar(db: Session, evento: AlertEvent,
                 # correo, y un SMTP caído se comería el aviso sin dejar rastro. La fila
                 # pendiente es a la vez la cola del digest y la del reintento.
                 _encolar_email(db, evento_id, uid, str(sub.digest))
+            if service.CANAL_WEBHOOK in canales and evento_id:
+                # El webhook SÍ sale en el momento, y la asimetría con el correo es
+                # deliberada: quien integra por webhook lo hace para reaccionar, no para
+                # leer un resumen mañana. La entrega ya corre en hilo aparte y la máquina de
+                # la Data API cuenta los fallos y desactiva sola un endpoint muerto, así que
+                # el barrido no queda atado a la red del cliente.
+                _despachar_webhook(db, evento_id, uid)
             DEDUP.marcar(db, clave)
             cupo[uid] = cupo.get(uid, 0) + 1
             entregadas.append(uid)
@@ -164,3 +171,20 @@ def _encolar_email(db: Session, evento_id: str, user_id: str, digest: str) -> No
                          canal=service.CANAL_EMAIL, digest=digest,
                          enviado_at=None, intentos=0))
     db.commit()
+
+
+def _despachar_webhook(db: Session, evento_id: str, user_id: str) -> int:
+    """Manda el evento a los webhooks de alerta del usuario. Best-effort y aislado: la red
+    del cliente no puede abortar la entrega a los demás destinatarios."""
+    from shared.alerts.models import AlertEventRow
+    from shared.alerts.webhook import entregar as entregar_webhook
+
+    try:
+        fila = (db.query(AlertEventRow)
+                .filter(AlertEventRow.id == evento_id).one_or_none())
+        if fila is None:
+            return 0
+        return entregar_webhook(db, fila, user_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("alerts: webhook de %s falló para %s: %s", user_id, evento_id, e)
+        return 0

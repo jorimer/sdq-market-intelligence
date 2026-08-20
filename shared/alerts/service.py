@@ -44,23 +44,47 @@ logger = logging.getLogger("sdq.alerts")
 # salen. Un canal mudo no falla — desaparece. El webhook llega en la fase E.
 CANAL_INAPP = "inapp"
 CANAL_EMAIL = "email"
-CANALES_PLANIFICADOS: Tuple[str, ...] = ("webhook",)
+CANAL_WEBHOOK = "webhook"
+CANALES_PLANIFICADOS: Tuple[str, ...] = ()
 
 
-def canales_disponibles() -> Tuple[str, ...]:
-    """Canales que HOY entregan de verdad, en este despliegue."""
+def canales_disponibles(db: Optional[Session] = None,
+                        user_id: Optional[str] = None) -> Tuple[str, ...]:
+    """Canales que HOY entregan de verdad — y para quién.
+
+    Los tres gates son de naturaleza distinta y por eso la firma tiene dos parámetros:
+
+    - ``inapp`` siempre: el buzón existe para todo usuario autenticado.
+    - ``email`` si el DESPLIEGUE tiene SMTP (`shared/notifications/email.configurado`).
+    - ``webhook`` si el USUARIO registró un endpoint suscrito a `alert.raised`. Ofrecerlo a
+      quien no lo tiene lo deja esperando avisos que no tienen a dónde ir.
+
+    Sin ``db``/``user_id`` se resuelve solo lo del despliegue: es lo correcto para las
+    superficies que no conocen al usuario, y el canal por usuario se agrega donde sí.
+    """
     from shared.notifications.email import configurado
 
-    return (CANAL_INAPP, CANAL_EMAIL) if configurado() else (CANAL_INAPP,)
+    canales = [CANAL_INAPP]
+    if configurado():
+        canales.append(CANAL_EMAIL)
+    if db is not None and user_id:
+        from shared.alerts.webhook import tiene_canal
+
+        if tiene_canal(db, user_id):
+            canales.append(CANAL_WEBHOOK)
+    return tuple(canales)
 
 
-def canales_no_configurados() -> Tuple[str, ...]:
-    """Canales que existen en el código pero que este despliegue no puede usar. Se declaran
-    en vez de callarse: «no lo ofrecemos» y «no está configurado» piden acciones distintas —
-    la segunda la resuelve el dueño con tres variables de entorno."""
-    from shared.notifications.email import configurado
+def canales_no_configurados(db: Optional[Session] = None,
+                            user_id: Optional[str] = None) -> Tuple[str, ...]:
+    """Canales que existen en el código y que ESTE contexto no puede usar todavía.
 
-    return () if configurado() else (CANAL_EMAIL,)
+    Se declaran en vez de callarse: «no lo ofrecemos» y «no está configurado» piden acciones
+    distintas — el correo lo resuelve el dueño con tres variables de entorno; el webhook, el
+    cliente registrando un endpoint suscrito a `alert.raised` con su llave de Data API.
+    """
+    disponibles = set(canales_disponibles(db, user_id))
+    return tuple(c for c in (CANAL_EMAIL, CANAL_WEBHOOK) if c not in disponibles)
 
 DIGESTS: Tuple[str, ...] = ("inmediato", "diario", "semanal")
 
@@ -138,7 +162,9 @@ def _validar_sujeto(db: Session, sector_key: str, subject: str) -> None:
 
 
 def _validar_vocabularios(rule_codes: Optional[Sequence[str]], min_severity: str,
-                          channels: Sequence[str], digest: str) -> None:
+                          channels: Sequence[str], digest: str,
+                          db: Optional[Session] = None,
+                          user_id: Optional[str] = None) -> None:
     faltantes = reglas.desconocidos(list(rule_codes) if rule_codes else None)
     if faltantes:
         raise AlertValidationError(
@@ -150,10 +176,10 @@ def _validar_vocabularios(rule_codes: Optional[Sequence[str]], min_severity: str
             f"Use {' | '.join(reglas.SEVERIDADES)}.")
     if not channels:
         raise AlertValidationError("Elegí al menos un canal de entrega.")
-    disponibles = canales_disponibles()
+    disponibles = canales_disponibles(db, user_id)
     invalidos = [c for c in channels if c not in disponibles]
     if invalidos:
-        sin_configurar = [c for c in invalidos if c in canales_no_configurados()]
+        sin_configurar = [c for c in invalidos if c in canales_no_configurados(db, user_id)]
         if sin_configurar:
             raise AlertValidationError(
                 f"El canal {', '.join(sin_configurar)} no está configurado en esta "
@@ -216,7 +242,7 @@ def crear(db: Session, user: User, *, sector_key: str, subject: Optional[str] = 
 
     _validar_eje(db, sector_key)
     _validar_sujeto(db, sector_key, subject_n)
-    _validar_vocabularios(rule_codes, min_severity, canales, digest)
+    _validar_vocabularios(rule_codes, min_severity, canales, digest, db, str(user.id))
 
     decision = can_access(db, user, sector_key, tier_requerido(subject_n))
     if not decision.allowed:
@@ -290,7 +316,7 @@ def actualizar(db: Session, row: AlertSubscription, *, rule_codes: Optional[List
         nuevos_codigos,
         min_severity or str(row.min_severity),
         channels if channels is not None else list(row.channels or []),
-        digest or str(row.digest))
+        digest or str(row.digest), db, str(row.user_id))
 
     if rule_codes is not None:
         row.rule_codes = list(rule_codes) or None

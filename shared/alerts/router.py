@@ -49,7 +49,7 @@ def _422(e: AlertValidationError) -> HTTPException:
 
 @router.get("/rules", summary="Catálogo de disparadores")
 async def get_rules(db: Session = Depends(get_db),
-                    _: User = Depends(get_current_user)) -> Dict[str, Any]:
+                    current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
     """Qué puede hacer sonar una alerta, y **qué aporta cada eje HOY**.
 
     ``implementado`` dice si el disparador tiene motor; ``cobertura_por_eje`` dice cuáles de
@@ -65,10 +65,13 @@ async def get_rules(db: Session = Depends(get_db),
         "cobertura_por_eje": cobertura(db),
         "rules": [reglas.serializar(d) for d in reglas.CATALOGO],
         "severidades": list(reglas.SEVERIDADES),
-        "canales_disponibles": list(service.canales_disponibles()),
+        # Con el usuario: `webhook` depende de que ÉL haya registrado un endpoint, no del
+        # despliegue. Los tres gates son de naturaleza distinta y la superficie los une.
+        "canales_disponibles": list(service.canales_disponibles(db, str(current_user.id))),
         # Existen en el código pero este despliegue no los tiene configurados: no es lo
         # mismo que "no lo ofrecemos", y la UI tiene que poder decirlo.
-        "canales_no_configurados": list(service.canales_no_configurados()),
+        "canales_no_configurados": list(
+            service.canales_no_configurados(db, str(current_user.id))),
         "canales_planificados": list(service.CANALES_PLANIFICADOS),
         "digests": list(service.DIGESTS),
     }

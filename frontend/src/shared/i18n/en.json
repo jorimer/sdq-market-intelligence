@@ -2579,14 +2579,14 @@
     "saveError": "Could not save the change.",
     "empty": "You are not watching anything yet. Open a catalog product and use “Watch”.",
     "needChannel": "Keep at least one channel, or remove the watch.",
-    "emailUnavailable": "Email alerts are not configured in this installation, so only the in-app inbox is offered.",
     "subject": "Subject: {{s}}",
     "wholeAxis": "Whole axis",
     "noProducer": "No signals yet",
     "channels": "Channels",
     "channel": {
       "inapp": "In-app",
-      "email": "Email"
+      "email": "Email",
+      "webhook": "Webhook"
     },
     "cadence": "Cadence",
     "minSeverity": "From severity",
@@ -2600,6 +2600,10 @@
       "alta": "High",
       "media": "Medium",
       "baja": "Low"
+    },
+    "unavailable": {
+      "email": "Email alerts are not configured in this installation, so that channel is not offered.",
+      "webhook": "To receive alerts by webhook, register an endpoint subscribed to “alert.raised” with your Data API key."
     }
   }
 }

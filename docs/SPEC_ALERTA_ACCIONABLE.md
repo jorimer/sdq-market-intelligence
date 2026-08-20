@@ -214,7 +214,7 @@ y cientos de sujetos, evaluar todo en cada barrido es gasto sin destinatario.
 |---|---|---|
 | **In-app** | existe | `shared/notifications/service.py` + `NotificationsBell.tsx`. Ya persiste y navega por `action_url`. Se reusa entero. |
 | **Email** | **a construir** | No hay emisor en `shared/`. Es la brecha real: hoy nadie se entera si no abre la plataforma. |
-| **Webhook** | reusar | `shared/data_api/webhooks.py` ya firma HMAC-SHA256, entrega en hilo aparte y se autodesactiva a los 10 fallos. |
+| **Webhook** | ✅ fase E | Reusa entero `shared/data_api/webhooks.py` (firma HMAC-SHA256, hilo aparte, autodesactivación a los 10 fallos). Evento propio `alert.raised`, entrega POR DUEÑO y **el comodín `"*"` no lo arrastra**. |
 | **WhatsApp** | **fuera de v1** | Exige proveedor (BSP), plantillas aprobadas por Meta y costo por mensaje. Es apuesta de Dapper; decidir con número en mano, no por paridad. |
 
 **Una divergencia deliberada que hay que declarar.** El webhook de la Data API decide que *«el
@@ -303,7 +303,7 @@ Además de los unitarios por regla (puras, sin DB):
 | **B** ✅ | `reglas.py` (`umbral`, `banda`, `brecha`) sobre **banca** + gate + in-app | alerta real punta a punta en un eje |
 | **C** ✅ | emisor de email + digest + dedup promovido | el cliente se entera sin abrir la app |
 | **D** ✅ | `posicion` + `frescura` + `publicacion`; productores de los otros ejes | producto transversal |
-| **E** | webhook `alert.raised` | integrable por el cliente institucional |
+| **E** ✅ | webhook `alert.raised` | integrable por el cliente institucional |
 
 La fase B es la que prueba la tesis: si la alerta de banca no se lee como algo que ningún
 monitor de documentos podría haber mandado, el producto no es lo que este spec dice que es.
@@ -438,6 +438,42 @@ opcionales por accidente sigue fallando.
 —«la huella del reporte ya no coincide con su insumo»— se computó contra el estado de HOY.
 Lo que envejeció es el objeto del aviso, no el aviso. Si heredara el `stale` del reporte, la
 única alerta que existe para avisar que algo se venció quedaría vetada por estar vencida.
+
+### Lo que la fase E dejó cerrado (2026-08-20)
+
+`shared/alerts/webhook.py` — el canal máquina-a-máquina. Reusa entera la maquinaria de la
+Data API (firma HMAC-SHA256, entrega en hilo aparte, bitácora de intentos, autodesactivación
+a los 10 fallos): duplicarla habría sido un segundo lugar donde arreglar el mismo bug.
+
+**Tres diferencias con el webhook de «hay dato nuevo», y las tres deliberadas:**
+
+1. **Este aviso SÍ lleva su contenido.** El de la Data API decide que no —solo dice qué
+   cambió y el cliente vuelve con su llave— para no crear un segundo canal de datos con sus
+   propios permisos. Una alerta es otra cosa: un aviso que no dice qué pasó no es una
+   alerta, es una invitación a sondear. Va la afirmación completa con sus relaciones
+   computadas, sus cifras, su procedencia y su frescura; **no** va la narrativa del informe,
+   que es el producto y no se regala por un canal lateral.
+2. **`alert.raised` NUNCA lo matchea `"*"`.** Un webhook viejo registrado con «todos los
+   eventos» se suscribió a avisos que no llevan el dato; arrastrarlo a las alertas le
+   mandaría cifras y nombres de entidad que nunca pidió. Hay que nombrarlo, y el mensaje de
+   error del alta lo dice explícitamente.
+3. **Se entrega POR DUEÑO, no en difusión.** `dispatch` avisa a todos los webhooks
+   suscritos: correcto para «se recalculó el snapshot de macro», una fuga para una alerta,
+   que es de un cliente concreto. Y revocar la llave corta el canal sin que nadie tenga que
+   acordarse de borrar el webhook.
+
+**El gate del canal es POR USUARIO**, a diferencia del correo, que es del despliegue:
+`canales_disponibles(db, user_id)` ofrece `webhook` solo a quien registró un endpoint. Los
+tres gates son de naturaleza distinta y la pantalla los une, diciendo en cada caso **quién**
+lo resuelve — el correo el dueño de la instalación, el webhook el propio cliente.
+
+Y una asimetría con el correo: **el webhook sale en el momento**, no se encola. Quien integra
+por webhook lo hace para reaccionar, no para leer un resumen mañana; la entrega ya corre en
+hilo aparte, así que el barrido no queda atado a la red del cliente.
+
+Con esto **los tres canales del spec están construidos** y `CANALES_PLANIFICADOS` queda
+vacío — una afirmación, no un olvido: hay un test que lo comprueba para que un canal nuevo
+tenga que declararse.
 
 ---
 

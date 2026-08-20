@@ -2579,14 +2579,14 @@
     "saveError": "No se pudo guardar el cambio.",
     "empty": "Todavía no vigilás nada. Abrí un producto del catálogo y usá «Vigilar».",
     "needChannel": "Dejá al menos un canal, o dá de baja la vigilancia.",
-    "emailUnavailable": "El aviso por correo no está configurado en esta instalación, así que solo se ofrece el buzón de la plataforma.",
     "subject": "Sujeto: {{s}}",
     "wholeAxis": "Todo el eje",
     "noProducer": "Sin señales todavía",
     "channels": "Canales",
     "channel": {
       "inapp": "Plataforma",
-      "email": "Correo"
+      "email": "Correo",
+      "webhook": "Webhook"
     },
     "cadence": "Ritmo",
     "minSeverity": "Desde severidad",
@@ -2600,6 +2600,10 @@
       "alta": "Alta",
       "media": "Media",
       "baja": "Baja"
+    },
+    "unavailable": {
+      "email": "El aviso por correo no está configurado en esta instalación, así que no se ofrece ese canal.",
+      "webhook": "Para recibir alertas por webhook, registrá un endpoint suscrito a «alert.raised» con tu llave de la Data API."
     }
   }
 }
