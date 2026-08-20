@@ -22,6 +22,24 @@ from modules.law_intel.bindings import Binding, aplicar_transformacion, cargar_b
 # es lo que produce un informe que afirma cobertura sobre datos de hace una década.
 ANTIGUEDAD_MAXIMA_ANIOS = 3
 
+#: Margen sobre la cadencia declarada. Un emisor que publica cada 6 años puede atrasarse un
+#: ciclo sin que eso sea «dejó de publicar»; dos ciclos ya lo es. El margen se aplica sobre la
+#: cadencia y no sobre el umbral anual, así que no afloja nada para las series anuales.
+MARGEN_SOBRE_CADENCIA = 1.5
+
+
+def ventana_de_frescura(b: Binding) -> int:
+    """Años de antigüedad tolerados para ESTE binding.
+
+    Sin cadencia declarada rige el umbral anual, que es el caso de casi todo. Con cadencia, la
+    ventana se estira lo suficiente para que un emisor de ciclo largo no aparezca congelado por
+    publicar a su ritmo — y no más: a los dos ciclos vuelve a marcarse, que es cuando dejar de
+    publicar deja de ser cadencia y pasa a ser abandono.
+    """
+    if not b.cadencia_anios or b.cadencia_anios <= 1:
+        return ANTIGUEDAD_MAXIMA_ANIOS
+    return max(ANTIGUEDAD_MAXIMA_ANIOS, int(b.cadencia_anios * MARGEN_SOBRE_CADENCIA))
+
 RESULTADOS = {
     "verificable": "la serie existe y devuelve dato reciente",
     "congelada": "la serie existe y su último dato es demasiado viejo para medir el corte",
@@ -92,7 +110,7 @@ def comprobar(bindings: Dict[str, Binding], proveedor: Proveedor,
             continue
         obs = [(p, aplicar_transformacion(b, v)) for p, v in obs]
         ultimo = max(p for p, _ in obs)
-        viva = int(ultimo[:4]) >= int(corte) - ANTIGUEDAD_MAXIMA_ANIOS
+        viva = int(ultimo[:4]) >= int(corte) - ventana_de_frescura(b)
         out.append(Comprobacion(b.indicador, b.serie, b.estado,
                                 "verificable" if viva else "congelada",
                                 ultimo_periodo=ultimo, n_observaciones=len(obs),
