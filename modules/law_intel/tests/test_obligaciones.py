@@ -109,3 +109,42 @@ class TestExpedienteReal:
         assert "estudios_independientes" in p
         arts = {o.articulo for o in p["estudios_independientes"]}
         assert {42, 44} <= arts, "los estudios independientes los mandan los arts. 42 y 44"
+
+
+class TestNingunaObligacionQUEDASinDeclararSuAlcance:
+    """O declara qué buscar en la base normativa, o declara POR QUÉ no se puede.
+
+    Sin esta regla, «no hay consulta» es indistinguible de «nadie lo pensó» — la misma
+    ambigüedad que el expediente existe para no producir. Es la doctrina de declarar la brecha
+    aplicada a las obligaciones: una ausencia sin motivo no es una decisión.
+    """
+
+    def test_cada_obligacion_declara_una_cosa_o_la_otra(self):
+        from modules.law_intel.obligaciones import cargar_obligaciones
+
+        mudas = [o.articulo for o in cargar_obligaciones("end_2030")
+                 if not o.verificacion_normativa and not (o.sin_consulta_normativa or "").strip()]
+        assert not mudas, (
+            f"los artículos {mudas} no declaran consulta ni motivo: quien lea el expediente no "
+            f"puede distinguir «no se puede verificar» de «nadie lo miró»")
+
+    def test_no_se_declaran_las_DOS(self):
+        """Declarar consulta y motivo a la vez sería una contradicción escrita: o se puede
+        comprobar contra la base normativa o no."""
+        from modules.law_intel.obligaciones import cargar_obligaciones
+
+        ambas = [o.articulo for o in cargar_obligaciones("end_2030")
+                 if o.verificacion_normativa and (o.sin_consulta_normativa or "").strip()]
+        assert not ambas, f"los artículos {ambas} declaran consulta Y motivo de ausencia"
+
+    def test_la_FUENTE_que_haria_falta_queda_nombrada_cuando_existe(self):
+        """El 50 y el 51 son actos del Congreso: constan, pero en expedientes de Cámara y
+        Senado. Nombrar la fuente que falta convierte una brecha en un pendiente accionable —
+        distinto de un informe, que NUNCA va a dejar rastro en la Gaceta."""
+        from modules.law_intel.obligaciones import cargar_obligaciones
+
+        por_art = {o.articulo: (o.sin_consulta_normativa or "") for o in
+                   cargar_obligaciones("end_2030")}
+        for art in (50, 51):
+            assert "Cámara y Senado" in por_art[art], (
+                f"el art-{art} no nombra la fuente que haría falta")

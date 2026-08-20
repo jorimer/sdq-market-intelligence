@@ -20,6 +20,8 @@ version: "1.0"
 obligaciones:
   - id: art-41-informe-anual
     articulo: 41
+    sin_consulta_normativa: >-
+      El cumplimiento es CONVOCAR una reunión y PUBLICAR un informe. Ninguno de los dos actos se dicta ni se publica en la Gaceta Oficial, así que la base normativa no puede verlos: una consulta sobre ellos devolvería vacío por construcción y ese vacío no significaría nada. Se verifica contra las publicaciones del órgano rector — hoy, a mano.
     deber: >-
       Convocar la Reunión Anual de Seguimiento y publicar el Informe Anual de Avance antes
       del 5 de abril.
@@ -33,6 +35,8 @@ obligaciones:
 
   - id: art-42-informe-mediano-plazo
     articulo: 42
+    sin_consulta_normativa: >-
+      Igual que el 41: el deber produce un INFORME, no una norma. Y acá la distinción importa más que en ningún otro, porque este es el único `incumplida` del expediente: se sostiene en que no existe ningún Informe de Mediano Plazo en catorce años, no en un vacío del corpus normativo. Atarlo a JurisAI daría un vacío concluyente sobre el universo equivocado y volvería refutable una acusación que hoy es sólida.
     deber: >-
       Elaborar el Informe de Mediano Plazo en julio del último año de cada período de
       gobierno, SOBRE LA BASE DE ESTUDIOS INDEPENDIENTES coordinados con el CES.
@@ -51,6 +55,8 @@ obligaciones:
 
   - id: art-44-revision-de-termino
     articulo: 44
+    sin_consulta_normativa: >-
+      CONVOCAR la Revisión de Término. No es una norma, y además no vence hasta el 2029-12-31: aunque hubiera fuente, no habría nada que juzgar todavía.
     deber: >-
       Convocar la Revisión de Término un año antes del vencimiento, sobre estudios
       independientes, para acordar el curso de acción hacia una nueva Estrategia.
@@ -67,6 +73,9 @@ obligaciones:
 
   - id: art-50-informe-de-vinculacion
     articulo: 50
+    sin_consulta_normativa: >-
+      REMITIR un informe junto al Proyecto de Presupuesto. El acto consta —si ocurrió— en el expediente presupuestario de cada año, no en la Gaceta. Es una obligación del Ejecutivo hacia el Congreso y su rastro vive del lado del Congreso.
+      FUENTE IDENTIFICADA Y NO CONECTADA: expedientes de Cámara y Senado. El emisor de la base normativa lo señaló explícitamente como fuera de su alcance y como lo que haría falta.
     deber: >-
       Remitir, con cada Proyecto de Presupuesto, un informe que sustente su vinculación con
       las metas de la END.
@@ -81,6 +90,10 @@ obligaciones:
 
   - id: art-51-comision-bicameral
     articulo: 51
+    sin_consulta_normativa: >-
+      CONSTITUIR la Comisión Bicameral. Un acto del propio Congreso, que consta en sus expedientes y no en la Gaceta.
+      Y acá el cuidado es doble: el destinatario del informe ES el Congreso. Una afirmación negativa sobre su propia conducta, sostenida en una fuente que no puede verla, es la forma más rápida de perder la discusión entera.
+      FUENTE IDENTIFICADA Y NO CONECTADA: expedientes de Cámara y Senado.
     deber: >-
       Constituir la Comisión Bicameral de Planificación y Presupuesto para verificar y
       efectuar seguimiento sistemático de la vinculación entre las metas de la END y el
@@ -124,6 +137,8 @@ obligaciones:
 
   - id: art-36-pacto-fiscal
     articulo: 36
+    sin_consulta_normativa: >-
+      El artículo consigna la NECESIDAD de concertar un Pacto Fiscal, no un deber con plazo, y por eso su estado es `no_exigible`. No es que falte la fuente: no hay obligación que verificar. Si el pacto se concertara y tomara forma normativa, eso sería un hecho NUEVO y no el cumplimiento de un deber que la ley no impuso.
     deber: >-
       Concertar un Pacto Fiscal. El artículo consigna la NECESIDAD de que las fuerzas
       políticas, económicas y sociales arriben al pacto.
