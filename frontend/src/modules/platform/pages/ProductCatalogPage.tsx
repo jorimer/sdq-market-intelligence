@@ -11,6 +11,7 @@ import {
   Skeleton,
 } from "@/shared/ui/primitives";
 import { InsightDrawerShell } from "@/shared/ui/InsightDrawerShell";
+import { VigilarButton } from "@/shared/ui/VigilarButton";
 import { Markdown } from "@/shared/ui/Markdown";
 import { useApp, periodToDate } from "@/shared/context/AppContext";
 import { DimensionBars } from "../components/DimensionBars";
@@ -515,6 +516,10 @@ function ProductReportDrawer({ sector, level, periodEnd, onClose, t }: {
             >
               <FileText className="w-4 h-4" /> {t("platform.catalog.downloadWord")}
             </button>
+            {/* Vigilar el MISMO sujeto que se está mirando (activeScope); sin sujeto, el
+                eje entero. Es el punto de entrada real a la watchlist: nadie configura
+                alertas en abstracto. */}
+            <VigilarButton sectorKey={sector.sector_key} subject={activeScope ?? null} />
           </div>
         </>
       )}
