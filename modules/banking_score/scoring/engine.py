@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from modules.banking_score.scoring.guards import patrimonio_es_positivo
 from modules.banking_score.scoring.weights import (
     CALIDAD_INDICATORS,
     DIVERSIFICACION_INDICATORS,
@@ -551,6 +552,13 @@ def _indicator_available(data, name: str) -> bool:
     # disponibles (decisión del dueño), nunca se cae al acumulado anualizado — un número
     # calculado sobre un supuesto refutado es peor que un hueco declarado.
     if name in ("roa", "roe") and _ttm_profit(data) is None:
+        return False
+    # ROE con patrimonio NO POSITIVO cambia de signo: una pérdida sobre patrimonio negativo da
+    # un ROE positivo y el banco insolvente aparece rentable. No es el peor valor, es un
+    # número que miente → se declara no disponible. Misma cura que en los submodelos de
+    # cambiaria y fiduciaria (`scoring/guards.py`); acá vive en la disponibilidad porque
+    # `calculate_all_indicators` sobrescribe el `available` que devuelva el indicador.
+    if name == "roe" and not patrimonio_es_positivo(getattr(data, "patrimonio_promedio", None)):
         return False
     pf = INDICATOR_PCT_FIELD.get(name)
     if pf is not None and getattr(data, pf, None) is not None:
