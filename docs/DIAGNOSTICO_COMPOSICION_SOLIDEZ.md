@@ -77,6 +77,20 @@ La entidad más capitalizada del panel es la más chica y la que más falla. Cor
 [+0,345 · +0,472] contra el desenlace agregado y **+0,556** [+0,496 · +0,617] contra pérdidas
 sostenidas — por encima de `eficiencia` (+0,5985), la mejor dimensión del score.
 
+> **Esto no es un control nuevo: ya existía en otro motor.** `sector_intel` lo tiene desde la
+> Fase 3 como `control_solo_tamano`
+> ([`validation/report.py`](../modules/sector_intel/validation/report.py)), con el razonamiento
+> escrito —«sin medir qué hace el tamaño SOLO contra el mismo desenlace, *el índice ordena al
+> revés* y *el deflactor produce el signo* son indistinguibles, y son conclusiones opuestas»— y
+> con un test que exige que el control viaje con la cifra. Ahí el veredicto fue que el IAI **no
+> agrega poder sobre el tamaño del sector**: contra intensidad de IED daba −0,321 y el tamaño
+> solo −0,323; contra nivel, +0,287 contra **+0,377** del tamaño solo.
+>
+> **Banca es la segunda vez que el control por tamaño cambia el veredicto de un motor.** Que se
+> repita entre motores es, por doctrina, la condición para dejar de escribirlo como lección y
+> exigirlo con un test estructural: hoy nada obliga a que un motor de validación que publica un
+> Gini traiga su control. `sector_intel` lo trae porque alguien se acordó.
+
 ---
 
 ## 3. El veredicto, por familia de desenlace
@@ -165,6 +179,7 @@ La tabla de opciones del informe anterior (§4) queda revisada por esta evidenci
 | B | Re-especificar el desenlace | **Ya hecho** (señales por familia, en producción). Lo que este diagnóstico agrega es que además hay que **auditar el sesgo de cada regla**: las dos evaluables predicen su evento desde el nivel de partida |
 | C | Re-pesar las dimensiones | **Prematuro y probablemente mal dirigido.** El tamaño solo ordena mejor (+0,413) que el score entero. Re-pesar contra un desenlace que mide persistencia ajustaría el score a la autocorrelación |
 | **E** | **Definir el universo del backtest** | **La que sale de acá.** 47 % del panel son entidades sin libro de crédito que aportan 63 % de los eventos. Medir la credencial sobre el universo que el producto vende es un cambio de UNIVERSO, no de score |
+| **F** | **Exigir el control por tamaño con un test estructural** | El mismo control ya dio vuelta el veredicto en `sector_intel` (IAI) y ahora en banca. Dos motores es la condición doctrinal para un guard que lea el código con `ast`, en vez de confiar en que cada autor se acuerde |
 
 **Recomendación:** E primero — declarar y separar el universo—, y con la credencial medida
 sobre entidades comparables, revisar `solidez` **solo dentro de las poblaciones donde sigue
