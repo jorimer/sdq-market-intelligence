@@ -10,7 +10,7 @@ los pidiera.
 
 **Lo que hace que esto sirva es el DISPARADOR, no el costo.** Registrar «se generó una
 narrativa de 1.200 tokens» no responde la pregunta; responderla exige saber que la
-disparó ``prewarm-report-cache`` y no una persona. Por eso hay un contexto explícito que
+disparó ``market-brief`` y no una persona. Por eso hay un contexto explícito que
 la operación o el endpoint declaran, y que viaja con la llamada.
 
 **Tres reglas.**
@@ -68,8 +68,8 @@ def attributed_to(kind: str, detail: str,
                   user_id: Optional[str] = None) -> Iterator[None]:
     """Marca todo lo que se llame dentro como disparado por ``kind``/``detail``.
 
-    Es un ``contextvar``, no una global: el prewarm calienta reportes en paralelo con
-    ``asyncio.gather`` y una global les mezclaría la atribución entre corrutinas.
+    Es un ``contextvar``, no una global: una operación que genera en paralelo con
+    ``asyncio.gather`` mezclaría la atribución entre corrutinas si fuera una global.
     """
     token = _CALLER.set(Caller(kind=kind, detail=detail, user_id=user_id))
     try:

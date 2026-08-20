@@ -4,6 +4,13 @@ Cuando cualquier fuente publica su ``*.updated`` (event_bus), recalculamos el re
 del catálogo completo — barato (un solo sector con producto real hoy; el resto retorna
 vacío al instante) y deja el monitor siempre fresco ante cualquier cambio de dato, sin
 acoplar este paquete a ningún módulo (escucha eventos, no importa sectores).
+
+Lo que este suscriptor NO hace (2026-08-20): disparar el pre-calentado de informes. Acá
+vivía el disparo de ``prewarm-report-cache`` tras cada evento, y era el camino por el que el
+pre-calentado seguía corriendo después de darlo por quitado: la cascada por evento no mira la
+agenda, así que apagar el toggle de la consola no apagaba nada y el primer sync del día
+volvía a generar informes que nadie pidió. El pre-calentado se eliminó entero; que no
+reaparezca lo vigila ``shared/products/tests/test_regla_sin_precalentado.py``.
 """
 import logging
 
@@ -21,23 +28,6 @@ _TRACKED = ("macro.updated", "irmp.updated", "trade.updated", "sector.updated",
             "tourism.updated", "construction.updated")
 
 
-def _trigger_prewarm() -> None:
-    """Re-calienta la caché de reportes tras un cambio de dato (op en background, deduped).
-
-    Cierra la ventana en que la 1ª descarga vuelve a ser lenta desde que un sync refresca el
-    dato hasta la corrida agendada (24h): un fingerprint nuevo invalida la caché de ese
-    producto y la próxima descarga regeneraría (~15-90s). El disparo NO bloquea al publicador
-    —``trigger`` lanza la op en su propio hilo— y el guard de "ya en curso" deduplica la
-    tormenta de eventos de un deploy. El warm es idempotente: solo regenera lo que cambió."""
-    try:
-        from shared.operations.service import trigger
-        res = trigger("prewarm-report-cache", origin="cascade", user_id=None)
-        if not res.get("started"):
-            logger.info("prewarm-report-cache no disparado tras evento: %s", res.get("reason"))
-    except Exception:  # noqa: BLE001 — un fallo al encolar el warm no debe romper al publicador
-        logger.exception("No se pudo disparar prewarm-report-cache tras evento de datos")
-
-
 def _on_data_updated(payload: dict) -> None:
     db = SessionLocal()
     try:
@@ -47,8 +37,6 @@ def _on_data_updated(payload: dict) -> None:
         db.rollback()
     finally:
         db.close()
-    # Con el dato ya refrescado, re-calentar la caché de reportes (background, idempotente).
-    _trigger_prewarm()
 
 
 def subscribe_product_events() -> None:

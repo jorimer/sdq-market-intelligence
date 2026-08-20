@@ -196,7 +196,6 @@ SIN_CASCADA: Dict[str, str] = {
     SWEEP_OP_NAME: "se dispararía a sí misma",
     "alerts-digest": "consume alertas, no produce dato",
     "data-freshness-audit": "audita frescura, no produce dato",
-    "prewarm-report-cache": "calienta la caché de informes",
     "market-brief": "genera un documento, no mueve el panel",
     "source-research-agent": "propone fuentes; el sistema propone y el dueño dispone",
     "catalog-discovery": "descubre publicaciones candidatas, no las ingiere",

@@ -1,6 +1,6 @@
 """Presupuesto diario de gasto LLM con corte SUAVE.
 
-El DD marcó como brecha que el gasto en Claude no tiene techo: un bucle de prewarm
+El DD marcó como brecha que el gasto en Claude no tiene techo: un bucle de generación
 o un pico de research pueden quemar presupuesto sin que nadie lo vea. Este módulo
 da (a) contabilidad central — cada llamada al API registra tokens y costo estimado —
 y (b) un techo diario configurable (``LLM_DAILY_BUDGET_USD``; 0 = deshabilitado).

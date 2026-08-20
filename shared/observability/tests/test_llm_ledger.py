@@ -32,12 +32,12 @@ def db(monkeypatch):
 def test_la_llamada_queda_a_nombre_de_quien_la_disparo(db):
     """Sin esto hay un total y ninguna forma de saber a quién cobrárselo: descubrir que
     una tarea diaria generaba 203 informes costó leer código y logs."""
-    with L.attributed_to("operacion", "prewarm-report-cache"):
+    with L.attributed_to("operacion", "informes-nocturnos"):
         L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=0.10,
                       module="banking_score", template="t")
     fila = db.query(LLMCall).one()
     assert fila.trigger_kind == "operacion"
-    assert fila.trigger_detail == "prewarm-report-cache"
+    assert fila.trigger_detail == "informes-nocturnos"
 
 
 def test_sin_contexto_la_llamada_se_marca_desconocida_no_se_pierde(db):
@@ -55,7 +55,7 @@ def test_la_atribucion_no_se_filtra_fuera_de_su_bloque(db):
 
 
 def test_la_atribucion_anidada_restaura_la_anterior(db):
-    """El prewarm calienta en paralelo; una global les mezclaría la atribución."""
+    """Una operación que genera en paralelo mezclaría la atribución con una global."""
     with L.attributed_to("operacion", "externa"):
         with L.attributed_to("endpoint", "interna"):
             assert L.current_caller().detail == "interna"
@@ -100,7 +100,7 @@ def test_el_hit_de_cache_se_registra_y_se_distingue(db):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_el_resumen_ordena_por_costo_y_separa_producir_de_verificar(db):
-    with L.attributed_to("operacion", "prewarm-report-cache"):
+    with L.attributed_to("operacion", "informes-nocturnos"):
         L.record_call(purpose=L.PURPOSE_NARRATIVE, model="m", cost_usd=8.0,
                       module="banking_score")
         L.record_call(purpose=L.PURPOSE_GUARD, model="m", cost_usd=4.0,
@@ -113,7 +113,7 @@ def test_el_resumen_ordena_por_costo_y_separa_producir_de_verificar(db):
     assert res["costo_total_usd"] == 13.0
     assert res["llamadas_totales"] == 3
     # El disparador más caro va primero: es la pregunta que se hace primero.
-    assert res["por_disparador"][0]["clave"] == "prewarm-report-cache"
+    assert res["por_disparador"][0]["clave"] == "informes-nocturnos"
     assert res["por_disparador"][0]["costo_usd"] == 12.0
     # Y el juez se ve APARTE de lo que produce, que es lo que lo hacía invisible.
     motivos = {f["clave"]: f["costo_usd"] for f in res["por_motivo"]}
@@ -308,10 +308,9 @@ def test_la_etiqueta_reusa_el_nombre_que_el_operador_ya_ve(monkeypatch):
     from shared.observability import etiquetas
     from shared.operations.service import OPERATIONS
 
-    falsa = type("Op", (), {"label": "Pre-calentar caché de reportes"})()
-    monkeypatch.setitem(OPERATIONS, "prewarm-report-cache", falsa)
-    assert etiquetas.etiqueta_disparador("prewarm-report-cache") == \
-        "Pre-calentar caché de reportes"
+    falsa = type("Op", (), {"label": "Brief de mercado"})()
+    monkeypatch.setitem(OPERATIONS, "market-brief", falsa)
+    assert etiquetas.etiqueta_disparador("market-brief") == "Brief de mercado"
 
 
 def test_la_etiqueta_de_una_ruta_nombra_el_producto():

@@ -159,7 +159,7 @@ def clear_orphaned_runs(db: Session) -> int:
     """Al ARRANCAR el proceso, toda op con ``is_running=True`` quedó HUÉRFANA: su hilo murió
     con el proceso anterior (p. ej. un deploy la cortó a media corrida). El flag stale bloquea
     (guard "ya en curso") que un nuevo disparo la re-arranque hasta que expire (``_STALE_SECONDS``,
-    30 min) — una op LARGA (como ``prewarm-report-cache``) cortada por un deploy quedaría muerta
+    30 min) — una op LARGA (como un backfill de historia) cortada por un deploy quedaría muerta
     y sin poder reintentar en ese lapso. Esto lo limpia de una: marca esas ops como no-corriendo
     y cierra sus filas ``OperationRun`` 'running'. Idempotente; best-effort (nunca rompe el boot)."""
     cleared = 0
