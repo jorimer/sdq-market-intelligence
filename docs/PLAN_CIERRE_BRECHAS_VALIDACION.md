@@ -168,9 +168,19 @@ o del score que lo produjo. Cierra A1–A8.
 - [x] El caveat nombra la banda real y su N, computados del resultado.
 - [x] Test de regresión sobre la curva REAL de producción (Sólida → Adecuada, n=516).
 - [x] **Cero** superficies mostrando una tabla que se contradice con su propio caveat.
-- [ ] **DECISIÓN DEL DUEÑO** (§4 del informe): qué hacer con `solidez` invertida y con un
-      desenlace que es 83 % pérdidas sostenidas, 22 % crédito y 0 % solvencia. La recomendación
-      es re-especificar el desenlace primero y decidir sobre el score con ese resultado.
+- [x] **Re-especificar el desenlace** (la recomendación anterior): hecho en `2d84956` — el
+      reporte publica `signals` por familia con su N y su IC.
+- [x] **Por qué `solidez` está invertida**, medido contra el panel real →
+      [`DIAGNOSTICO_COMPOSICION_SOLIDEZ.md`](DIAGNOSTICO_COMPOSICION_SOLIDEZ.md). Es
+      **composicional y el estrato es el TAMAÑO**: comparando dentro del mismo tramo, el Gini
+      pasa de −0,1944 a **−0,0055** [−0,080 · +0,071]. Dentro de banca múltiple no hay
+      inversión. Y las dos reglas evaluables del desenlace predicen su propio evento **desde el
+      nivel de partida** (ROA base +0,6674; mora base +0,4689, a favor de la entidad sana).
+- [ ] **DECISIÓN DEL DUEÑO, reformulada por esa evidencia:** el problema de fondo no es la
+      curva de `solidez` sino **el universo del backtest** — 47 % del panel son entidades sin
+      libro de crédito (agentes de cambio) que aportan 63 % de los eventos. Decidir sobre qué
+      universo se mide la credencial; después, revisar `solidez` solo donde su inversión
+      sobrevive a comparar lo comparable (banco de ahorro y crédito, aap).
 
 > Hallazgo que la pregunta original no anticipaba: de los 301 eventos del desenlace, **250**
 > los aporta la regla de ROA<0 sostenido y **cero** la de solvencia, que nunca disparó. Contra

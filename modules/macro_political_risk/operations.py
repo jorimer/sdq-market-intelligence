@@ -8,6 +8,7 @@ from typing import Dict
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
+from shared.validation.control_tamano import ControlDeTamano
 from shared.validation.frescura import (
     MotorValidacion, huella_archivo, registrar_motor,
 )
@@ -314,6 +315,10 @@ def register() -> None:
     registrar_motor(MotorValidacion(
         eje="macro_political_risk", operacion="irmp-backtest", clave=IRMP_BACKTEST_KEY,
         partes=huella_backtest,
+        control_de_tamano=ControlDeTamano(
+            motivo="no_medido", variable="PIB corriente del país (Banco Mundial)",
+            nota="el desenlace primario son picos de inestabilidad contados por GDELT, que "
+                 "escalan con el tamaño del país: el conteo de eventos favorece al grande"),
         sin_cascada_motivo=(
             "el panel de validación no sale de ninguna operación: se descarga entero del "
             "Banco Mundial/WGI/FMI en cada corrida. Lo que sí lo invalida —la doctrina— no "

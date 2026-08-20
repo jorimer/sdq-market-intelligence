@@ -4,6 +4,7 @@ from typing import Dict
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
 from shared.validation.frescura import MotorValidacion, registrar_motor
+from shared.validation.control_tamano import ControlDeTamano
 
 BACKTEST_KEY = "pension_backtest_report"
 
@@ -194,6 +195,10 @@ def register() -> None:
         eje="pension_intel", operacion="pension-backtest", clave=BACKTEST_KEY,
         partes=huella_backtest,
         disparado_por=("sipen-sync", "sipen-financials-sync", "sipen-financials-history-sync"),
+        control_de_tamano=ControlDeTamano(
+            motivo="no_medido", variable="patrimonio del fondo administrado (AUM)",
+            nota="son 7 AFP y el panel es chico, pero el tamaño del fondo es justamente lo "
+                 "que separa a las dos grandes del resto: el control corresponde"),
     ))
     register_operation(Operation(
         "sipen-cartera-sync", "Sincronizar cartera de inversiones (SIPEN)",

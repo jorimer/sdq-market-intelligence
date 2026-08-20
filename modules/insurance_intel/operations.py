@@ -4,6 +4,7 @@ from typing import Dict
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
 from shared.validation.frescura import MotorValidacion, registrar_motor
+from shared.validation.control_tamano import ControlDeTamano
 
 BACKTEST_KEY = "insurance_backtest_report"
 
@@ -210,6 +211,10 @@ def register() -> None:
         eje="insurance_intel", operacion="insurance-backtest", clave=BACKTEST_KEY,
         partes=huella_backtest,
         disparado_por=("insurance-financials-sync", "insurance-financials-history-sync"),
+        control_de_tamano=ControlDeTamano(
+            motivo="no_medido", variable="primas_suscritas",
+            nota="el panel son 33 aseguradoras de tamaños muy distintos y la señal vigente "
+                 "es de underwriting, que se computa sobre primas: el control corresponde"),
     ))
 
 

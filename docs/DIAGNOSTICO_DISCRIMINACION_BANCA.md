@@ -110,14 +110,17 @@ Y por dimensión, contra cada regla:
 
 | # | Opción | Qué implica |
 |---|---|---|
-| A | **Revisar la dirección de `solidez`** dentro del score | Un sub-componente con Gini −0,19 y 40 % de peso está restando. Puede ser un problema de dirección, de definición o de que mide otra cosa (capitalización alta ≈ entidad chica y joven, con resultados volátiles) |
-| B | **Re-especificar el desenlace** | Hoy es una unión desbalanceada: 83 % ganancias, 22 % crédito, 0 % solvencia. Separar «distress de resultados» de «deterioro de crédito» daría dos cifras defendibles en vez de una mezclada |
+| A | **Revisar la dirección de `solidez`** dentro del score | ⚠️ **Desaconsejada como estaba planteada**, por lo medido en [`DIAGNOSTICO_COMPOSICION_SOLIDEZ.md`](DIAGNOSTICO_COMPOSICION_SOLIDEZ.md): la inversión agregada es composicional y dentro de banca múltiple no existe. Sigue en pie, pero acotada a las poblaciones donde la inversión es intrínseca (banco de ahorro y crédito, aap) |
+| B | **Re-especificar el desenlace** | **HECHO** (`2d84956`): el reporte publica `signals` por familia —`resultados`, `credito`, `capital`— con su N y su IC, más `headline_signal`. El agregado se conserva marcado como `desenlace_agregado` |
 | C | **Re-pesar las dimensiones con evidencia** | El peso actual es doctrinal. La evidencia dice que la discriminación vive en `eficiencia`; re-pesar contra el desenlace sería ajustar a la muestra, así que exige método (validación fuera de muestra), no un tirón de perillas |
 | D | **No tocar el score y acotar la afirmación comercial** | Publicar el Gini declarando que el desenlace es mayoritariamente de resultados, y no presentarlo como discriminación de riesgo de crédito |
 
-**Recomendación:** B primero, y con su resultado decidir A. Re-pesar (C) sin haber separado el
-desenlace es ajustar a una mezcla. D es lo mínimo indispensable mientras tanto, y ya está
-parcialmente hecho por los caveats computados.
+**Recomendación (revisada el 2026-08-19):** B está hecho. Lo que sigue es **definir el
+universo del backtest** —47 % del panel son entidades sin libro de crédito que aportan 63 % de
+los eventos— y recién después revisar `solidez`, solo donde su inversión sobrevive a comparar
+lo comparable. Re-pesar (C) quedó prematuro: el **tamaño solo** ordena mejor (+0,413) que el
+score entero. Detalle y evidencia en
+[`DIAGNOSTICO_COMPOSICION_SOLIDEZ.md`](DIAGNOSTICO_COMPOSICION_SOLIDEZ.md).
 
 **Lo que NO cambia:** la credencial fuerte de banca sigue siendo la cohorte de quiebras reales
 —Bancrédito con 11 meses de anticipación, Baninter con 7, señal tardía en Mercantil— sobre
@@ -127,9 +130,14 @@ parcialmente hecho por los caveats computados.
 
 ## 5. Lo que este diagnóstico NO afirma
 
-1. **No afirma causalidad sobre por qué `solidez` está invertida.** La hipótesis plausible es
-   composicional (entidades muy capitalizadas que son chicas y con resultados volátiles), y no
-   se probó. Probarla es trabajo aparte: partir el panel por tipo de entidad y volver a medir.
+1. ~~**No afirma causalidad sobre por qué `solidez` está invertida.**~~ **CERRADO el
+   2026-08-19** → [`DIAGNOSTICO_COMPOSICION_SOLIDEZ.md`](DIAGNOSTICO_COMPOSICION_SOLIDEZ.md).
+   Se partió el panel y se volvió a medir: la hipótesis composicional **se confirma**, y el
+   estrato que la explica es el **tamaño**. Comparando solo entidades del mismo tramo, el Gini
+   de `solidez` pasa de −0,1944 a **−0,0055** [−0,080 · +0,071] — el intervalo cruza cero.
+   Dentro de banca múltiple no hay inversión (+0,1062). La causa: **47 % del panel son agentes
+   de cambio**, 1.390 veces más chicos, con `solidez` mediana 92,7/100 por diseño del negocio,
+   que aportan el **63 %** de los eventos.
 2. **No dice que la recalibración haya estado mal.** Corrigió una saturación real y medida
    (96 % del sistema en 100/100 en tres indicadores). Lo que muestra es que, al darle varianza
    al sub-componente de mayor peso, quedó a la vista que ese sub-componente no ordena el
