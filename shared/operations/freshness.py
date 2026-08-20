@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from shared.auth.models import User, UserRole
 from shared.contracts.sovereign_ratings import STALE_AFTER_MONTHS
 from shared.database.session import SessionLocal
+from shared.notifications.dedup import Dedup
 from shared.notifications.service import notification_service
 from shared.operations.models import OperationRun
 from shared.operations.service import (
@@ -28,7 +29,6 @@ from shared.operations.service import (
     get_schedules,
     register_operation,
 )
-from shared.settings.models import AppSetting
 
 logger = logging.getLogger("sdq.operations.freshness")
 
@@ -80,10 +80,6 @@ def _now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _alert_key(op: str) -> str:
-    return f"freshness_alert:{op}"
-
-
 def _last_success(db: Session, op_name: str) -> Optional[datetime]:
     """Fin de la última corrida EXITOSA de *op_name*, o None si nunca completó."""
     row = (
@@ -95,36 +91,24 @@ def _last_success(db: Session, op_name: str) -> Optional[datetime]:
     return row.finished_at if row else None
 
 
+# El dedup vive en `shared/notifications/dedup.py` desde que la entrega de alertas pasó a
+# ser su segundo consumidor. Estas tres funciones quedan como fachada para no tocar los
+# ~10 sitios que ya las llaman; la semántica (y el prefijo de las claves) es idéntica.
+_DEDUP = Dedup("freshness_alert")
+
+
 def _recently_notified(db: Session, op_name: str, interval_hours: int) -> bool:
     """¿Ya se avisó por esta fuente dentro de su última cadencia? (anti-spam)."""
-    row = db.query(AppSetting).filter(AppSetting.key == _alert_key(op_name)).first()
-    if not row or not row.value:
-        return False
-    try:
-        last = datetime.fromisoformat(row.value)
-    except (ValueError, TypeError):
-        return False
-    return (datetime.now(timezone.utc) - last).total_seconds() < interval_hours * 3600
+    return _DEDUP.avisado_recientemente(db, op_name, interval_hours)
 
 
 def _mark_notified(db: Session, op_name: str) -> None:
-    key = _alert_key(op_name)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    row = db.query(AppSetting).filter(AppSetting.key == key).first()
-    if row:
-        row.value = now_iso
-        row.is_secret = False
-    else:
-        db.add(AppSetting(key=key, value=now_iso, is_secret=False))
-    db.commit()
+    _DEDUP.marcar(db, op_name)
 
 
 def _clear_notified(db: Session, op_name: str) -> None:
     """La fuente volvió a estar al día → limpiar el marcador para re-avisar si recae."""
-    row = db.query(AppSetting).filter(AppSetting.key == _alert_key(op_name)).first()
-    if row:
-        db.delete(row)
-        db.commit()
+    _DEDUP.limpiar(db, op_name)
 
 
 def _admin_ids(db: Session) -> List[str]:

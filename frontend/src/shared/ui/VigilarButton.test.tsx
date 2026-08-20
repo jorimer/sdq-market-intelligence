@@ -22,7 +22,7 @@ const SUB = {
   id: "s1", sector_key: "banking", sector_label: "SDQ Banking Intelligence",
   subject: "banco-a", rule_codes: null, min_severity: "media", channels: ["inapp"],
   digest: "inmediato", active: true, suspended_reason: null,
-  tier_requerido: "insight", created_at: null,
+  tier_requerido: "insight", sector_produce_alertas: true, created_at: null,
 };
 
 beforeEach(() => {
@@ -104,9 +104,22 @@ describe("VigilarButton", () => {
     expect(await screen.findByText("alerts.suspended")).toBeInTheDocument();
   });
 
-  it("dice que todavía no suena — la honestidad del estado en la fase A", async () => {
-    getAlertSubscriptions.mockResolvedValue({ subscriptions: [SUB], total: 1, max: 100 });
+  it("avisa que el eje todavía no produce señales", async () => {
+    getAlertSubscriptions.mockResolvedValue({
+      subscriptions: [{ ...SUB, sector_produce_alertas: false }], total: 1, max: 100,
+    });
     render(<VigilarButton sectorKey="banking" subject="banco-a" />);
     expect(await screen.findByText("alerts.pendingEngine")).toBeInTheDocument();
+  });
+
+  it("NO lo dice cuando el eje sí produce — sería la mentira opuesta", async () => {
+    // Banca ya tiene productor enchufado al barrido. Decirle al cliente que su vigilancia
+    // no suena cuando sí suena es tan falso como lo contrario, y encima lo desalienta de
+    // usar la función que acaba de activar.
+    getAlertSubscriptions.mockResolvedValue({ subscriptions: [SUB], total: 1, max: 100 });
+    render(<VigilarButton sectorKey="banking" subject="banco-a" />);
+    await waitFor(() =>
+      expect(screen.getByRole("button")).toHaveTextContent("alerts.watching"));
+    expect(screen.queryByText("alerts.pendingEngine")).not.toBeInTheDocument();
   });
 });

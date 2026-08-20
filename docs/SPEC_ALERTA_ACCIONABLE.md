@@ -300,7 +300,7 @@ Además de los unitarios por regla (puras, sin DB):
 | Fase | Alcance | Deja utilizable |
 |---|---|---|
 | **A** ✅ | modelos + watchlist + API + botón «Vigilar» | el cliente declara qué le importa |
-| **B** | `reglas.py` (`umbral`, `banda`, `brecha`) sobre **banca** + gate + in-app | alerta real punta a punta en un eje |
+| **B** ✅ | `reglas.py` (`umbral`, `banda`, `brecha`) sobre **banca** + gate + in-app | alerta real punta a punta en un eje |
 | **C** | emisor de email + digest + dedup promovido | el cliente se entera sin abrir la app |
 | **D** | `posicion` + `frescura` + `publicacion`; productores de los otros ejes | producto transversal |
 | **E** | webhook `alert.raised` | integrable por el cliente institucional |
@@ -333,6 +333,42 @@ Tres decisiones que se tomaron al implementar y no estaban en este spec:
 Y una honestidad que la UI declara en vez de callar: la vigilancia se guarda pero **todavía no
 suena** —ningún disparador tiene motor hasta la fase B— y tanto `GET /alerts/rules`
 (`implementado: false`) como el botón lo dicen.
+
+### Lo que la fase B dejó cerrado (2026-08-20)
+
+`gate.py` (los seis vetos) · `motor.py` (barrido + registro de productores + operación
+`alerts-sweep`) · `entrega.py` (in-app + dedup + tope) · las tres reglas puras ·
+`modules/banking_score/alerts_producer.py` · migración `a7c2e94b1f08` (`alert_events`) ·
+`GET /alerts/events`. 86 tests del módulo + 14 del productor + 9 de componente.
+
+**Verificado punta a punta contra el motor real de banca**, no contra un doble: sembrando una
+entidad cuya cobertura cae a 91%, el barrido produjo
+
+> «Brecha de provisiones de Banco de Prueba está en 91,00% al 2026-06-30, por debajo del
+> umbral de 100,00%. · Señal a monitorear — las reservas dejan de cubrir la cartera vencida»
+
+y llegó a la bandeja del cliente por la API. El segundo barrido con la condición todavía rota
+no re-avisó; al arreglarse y volver a romperse, avisó de nuevo — que es la mitad del dedup que
+se olvida.
+
+Tres cosas que se resolvieron distinto de lo que este spec decía:
+
+- **El productor devuelve también lo que EVALUÓ y no disparó** (`Produccion.evaluadas`), no
+  solo los eventos. Sin eso el dedup sabe callar una condición rota pero no reabrirla cuando
+  se arregla y recae. Y `signal_panel` ya distinguía las tres situaciones que hacían falta:
+  `activa`, `sin_activar` y `sin_dato` — la tercera **no** entra a `evaluadas`, porque dar por
+  resuelta una condición que nadie pudo mirar es cómo un guard sin su input desaparece.
+- **Banca no reimplementa ni un umbral.** `early_warning.py` ya evalúa los precursores de la
+  crisis RD 2003; el productor es un adaptador. Reescribirlos habría creado la sexta instancia
+  del mismo guard en dos motores.
+- **El vocabulario de la regla del sujeto se promovió** a `shared/narrative/sujeto.py`, y el
+  test que lo estrenó lo lee de ahí. El gate aplica la misma regla a las claves de las cifras
+  de una alerta: dos copias divergen, una sola no puede.
+
+El guard estructural que lo sostiene: **solo `reglas.py` instancia `AlertEvent`**
+(`test_nadie_construye_un_AlertEvent_a_mano`, con `ast`). Es lo que hace inevitable el gate —
+un productor que armara el evento a mano se saltearía las guardas de dato ausente y saldría
+bien formado con la cifra equivocada.
 
 ---
 

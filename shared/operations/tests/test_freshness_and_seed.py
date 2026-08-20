@@ -188,7 +188,7 @@ def test_audit_dedups_then_renotifies_after_recovery(db, temp_ops):
                         started_at=_naive_now(), finished_at=_naive_now()))
     db.commit()
     fr.run_freshness_audit(db)                     # fresca → sin aviso, limpia marcador
-    assert db.query(AppSetting).filter_by(key=fr._alert_key("t-recurring")).count() == 0
+    assert db.query(AppSetting).filter_by(key=fr._DEDUP._key("t-recurring")).count() == 0
 
 
 def _uid(db, email):
@@ -251,7 +251,7 @@ def test_publication_dedups_then_clears_on_recovery(db):
     # aparece una edición nueva (fresca) → limpia el marcador para re-avisar si recae
     _seed_pub(db, "politica_monetaria", age_days=1)
     fr._audit_publications(db, [_uid(db, "a@x.com")], _naive_now())
-    assert db.query(AppSetting).filter_by(key=fr._alert_key("publication:politica_monetaria")).count() == 0
+    assert db.query(AppSetting).filter_by(key=fr._DEDUP._key("publication:politica_monetaria")).count() == 0
 
 
 def test_sovereign_audit_proposes_old_action(db, temp_ops):

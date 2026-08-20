@@ -24,10 +24,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from shared.alerts import reglas
-from shared.alerts.models import TODO_EL_EJE, AlertSubscription
+from shared.alerts.models import TODO_EL_EJE, AlertEventRow, AlertSubscription
 from shared.auth.models import User
 from shared.products.access import can_access
 from shared.products.registry import CATALOG_BY_KEY, get_product
@@ -146,6 +147,14 @@ def _validar_vocabularios(rule_codes: Optional[Sequence[str]], min_severity: str
             f"Ritmo de entrega inválido '{digest}'. Use {' | '.join(DIGESTS)}.")
 
 
+def _produce_alertas(sector_key: str) -> bool:
+    """¿Hay un productor registrado para este eje? Import local a propósito: `motor` importa
+    a este módulo, y a nivel de módulo el par se cerraría en ciclo."""
+    from shared.alerts.motor import registered_sectors
+
+    return sector_key in registered_sectors()
+
+
 def serializar(row: AlertSubscription) -> Dict[str, Any]:
     """Forma pública de una vigilancia. ``subject`` sale como ``null`` cuando es todo el eje
     — la sentinela de base no se filtra a la API."""
@@ -163,6 +172,11 @@ def serializar(row: AlertSubscription) -> Dict[str, Any]:
         "active": bool(row.active),
         "suspended_reason": row.suspended_reason,
         "tier_requerido": tier_requerido(subject).value,
+        # ¿Este eje ya tiene un productor enchufado al barrido? Un eje del catálogo puede
+        # estar implementado como PRODUCTO y todavía no aportar señales. Se declara en vez
+        # de callarse: una vigilancia muda presentada como activa se lee como que no pasó
+        # nada, que es la lectura opuesta a la verdadera.
+        "sector_produce_alertas": _produce_alertas(str(row.sector_key)),
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
@@ -337,3 +351,66 @@ def para_sujeto(db: Session, sector_key: str, subject: str) -> List[AlertSubscri
                     AlertSubscription.active.is_(True),
                     AlertSubscription.subject.in_([_normalizar_subject(subject), TODO_EL_EJE]))
             .all())
+
+
+def serializar_evento(row: AlertEventRow) -> Dict[str, Any]:
+    entry = CATALOG_BY_KEY.get(str(row.sector_key))
+    return {
+        "id": row.id, "codigo": row.codigo,
+        "sector_key": row.sector_key,
+        "sector_label": entry.display_name if entry else row.sector_key,
+        "subject": str(row.subject or "") or None,
+        "periodo": row.periodo, "severidad": row.severidad,
+        "titulo": row.titulo, "cuerpo": row.cuerpo, "basis": row.basis,
+        "relaciones": dict(row.relaciones or {}),
+        "procedencia": dict(row.procedencia or {}),
+        "frescura": row.frescura,
+        "publicada": bool(row.publicada),
+        "veto_motivo": row.veto_motivo, "veto_detalle": row.veto_detalle,
+        "entregas": int(row.entregas or 0),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def eventos_para(db: Session, user_id: str, *, limit: int = 50) -> Dict[str, Any]:
+    """Historial de señales que TOCAN la watchlist del usuario, publicadas y vetadas.
+
+    **Las vetadas van con las publicadas, no en un cajón aparte que nadie abre.** Un veto
+    silencioso se lee como que el eje no tenía nada que avisar; el resumen por motivo es lo
+    que convierte «no recibí nada» en «hay tres señales retenidas porque el dato que las
+    sostiene no está vigente», que es información accionable y no ausencia de ella.
+    """
+    subs = (db.query(AlertSubscription)
+            .filter(AlertSubscription.user_id == user_id,
+                    AlertSubscription.active.is_(True))
+            .all())
+    if not subs:
+        return {"events": [], "vetadas": {}, "total": 0, "sin_vigilancias": True}
+
+    # Un eje vigilado entero alcanza a CUALQUIER sujeto suyo; uno vigilado por sujeto, solo
+    # a ese. Se arma en dos filtros en vez de uno para no traer el eje completo cuando el
+    # usuario solo pidió una entidad.
+    ejes_completos = [str(s.sector_key) for s in subs
+                      if str(s.subject or "") == TODO_EL_EJE]
+    pares = [(str(s.sector_key), str(s.subject)) for s in subs
+             if str(s.subject or "") != TODO_EL_EJE]
+
+    condiciones: List[Any] = []
+    if ejes_completos:
+        condiciones.append(AlertEventRow.sector_key.in_(ejes_completos))
+    for sector_key, subject in pares:
+        condiciones.append(and_(AlertEventRow.sector_key == sector_key,
+                                AlertEventRow.subject == subject))
+
+    rows = (db.query(AlertEventRow)
+            .filter(or_(*condiciones))
+            .order_by(AlertEventRow.created_at.desc(), AlertEventRow.id.desc())
+            .limit(limit).all())
+
+    vetadas: Dict[str, int] = {}
+    for r in rows:
+        if not bool(r.publicada) and r.veto_motivo:
+            vetadas[str(r.veto_motivo)] = vetadas.get(str(r.veto_motivo), 0) + 1
+
+    return {"events": [serializar_evento(r) for r in rows],
+            "vetadas": vetadas, "total": len(rows), "sin_vigilancias": False}

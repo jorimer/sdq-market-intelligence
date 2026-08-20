@@ -275,7 +275,8 @@ def register() -> None:
         # Re-puntuar → re-validar. Es la cascada que faltaba: la recalibración del 7-ago
         # cambió el score y el backtest tenía su próxima corrida el 26-ago, así que
         # producción sirvió 19 días un Gini calculado con el score anterior.
-        triggers=["backtest"],
+        # Y → barrer alertas: el reloj del barrido es su respaldo, no su disparador.
+        triggers=["backtest", "alerts-sweep"],
     ))
     register_operation(Operation(
         "prune-future", "Eliminar trimestres futuros",
