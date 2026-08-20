@@ -176,11 +176,15 @@ o del score que lo produjo. Cierra A1–A8.
       pasa de −0,1944 a **−0,0055** [−0,080 · +0,071]. Dentro de banca múltiple no hay
       inversión. Y las dos reglas evaluables del desenlace predicen su propio evento **desde el
       nivel de partida** (ROA base +0,6674; mora base +0,4689, a favor de la entidad sana).
-- [ ] **DECISIÓN DEL DUEÑO, reformulada por esa evidencia:** el problema de fondo no es la
-      curva de `solidez` sino **el universo del backtest** — 47 % del panel son entidades sin
-      libro de crédito (agentes de cambio) que aportan 63 % de los eventos. Decidir sobre qué
-      universo se mide la credencial; después, revisar `solidez` solo donde su inversión
-      sobrevive a comparar lo comparable (banco de ahorro y crédito, aap).
+- [ ] **DECISIÓN DEL DUEÑO, reformulada por esa evidencia** — y más chica de lo que parecía:
+      el universo del PRODUCTO ya está decidido (`banking_score/SPEC.md` §1: *Financial Entity
+      Score* sobre todo el universo supervisado por la SIB, con las cambiarias como submodelo).
+      Lo que quedó a medias es el **umbral de materialidad** que `PROPUESTA_CAMBIARIAS_FIDUCIARIAS.md`
+      §0 recomendó —6 ARC + AC sobre un piso de activos, el resto listado como «sin rating
+      significativo»— y que la v1 no aplicó; y **declarar la población** donde se cita la
+      credencial (`CLAIMS_COMERCIALES.md` cita n=1.693 sin decir que 47 % no presta). Después,
+      revisar `solidez` solo donde su inversión sobrevive a comparar lo comparable (banco de
+      ahorro y crédito, aap).
 
 > Hallazgo que la pregunta original no anticipaba: de los 301 eventos del desenlace, **250**
 > los aporta la regla de ROA<0 sostenido y **cero** la de solvencia, que nunca disparó. Contra
