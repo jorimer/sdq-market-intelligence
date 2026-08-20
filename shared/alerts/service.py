@@ -36,13 +36,31 @@ from shared.products.tiers import ProductTier
 
 logger = logging.getLogger("sdq.alerts")
 
-# Canales con entrega REAL hoy. El buzón in-app existe y funciona
-# (``shared/notifications``); email y webhook llegan en las fases C y E.
+# Canales con entrega REAL. El buzón in-app siempre; el correo **solo si hay un servidor
+# configurado** (`shared/notifications/email.configurado`).
 #
-# Aceptar "email" ahora dejaría al cliente configurando un canal que nunca entrega, y un
-# canal mudo no falla: desaparece. Se rechaza con el motivo, que es lo honesto.
-CANALES_DISPONIBLES: Tuple[str, ...] = ("inapp",)
-CANALES_PLANIFICADOS: Tuple[str, ...] = ("email", "webhook")
+# Es una función y no una constante justamente por eso: si `email` fuera fijo, un despliegue
+# sin SMTP aceptaría vigilancias por correo y el cliente quedaría esperando avisos que nunca
+# salen. Un canal mudo no falla — desaparece. El webhook llega en la fase E.
+CANAL_INAPP = "inapp"
+CANAL_EMAIL = "email"
+CANALES_PLANIFICADOS: Tuple[str, ...] = ("webhook",)
+
+
+def canales_disponibles() -> Tuple[str, ...]:
+    """Canales que HOY entregan de verdad, en este despliegue."""
+    from shared.notifications.email import configurado
+
+    return (CANAL_INAPP, CANAL_EMAIL) if configurado() else (CANAL_INAPP,)
+
+
+def canales_no_configurados() -> Tuple[str, ...]:
+    """Canales que existen en el código pero que este despliegue no puede usar. Se declaran
+    en vez de callarse: «no lo ofrecemos» y «no está configurado» piden acciones distintas —
+    la segunda la resuelve el dueño con tres variables de entorno."""
+    from shared.notifications.email import configurado
+
+    return () if configurado() else (CANAL_EMAIL,)
 
 DIGESTS: Tuple[str, ...] = ("inmediato", "diario", "semanal")
 
@@ -132,16 +150,22 @@ def _validar_vocabularios(rule_codes: Optional[Sequence[str]], min_severity: str
             f"Use {' | '.join(reglas.SEVERIDADES)}.")
     if not channels:
         raise AlertValidationError("Elegí al menos un canal de entrega.")
-    invalidos = [c for c in channels if c not in CANALES_DISPONIBLES]
+    disponibles = canales_disponibles()
+    invalidos = [c for c in channels if c not in disponibles]
     if invalidos:
+        sin_configurar = [c for c in invalidos if c in canales_no_configurados()]
+        if sin_configurar:
+            raise AlertValidationError(
+                f"El canal {', '.join(sin_configurar)} no está configurado en esta "
+                f"instalación. Por ahora: {', '.join(disponibles)}.")
         planificados = [c for c in invalidos if c in CANALES_PLANIFICADOS]
         if planificados:
             raise AlertValidationError(
                 f"El canal {', '.join(planificados)} todavía no entrega; se habilita más "
-                f"adelante. Por ahora: {', '.join(CANALES_DISPONIBLES)}.")
+                f"adelante. Por ahora: {', '.join(disponibles)}.")
         raise AlertValidationError(
             f"Canal(es) inválido(s): {', '.join(invalidos)}. "
-            f"Disponibles: {', '.join(CANALES_DISPONIBLES)}.")
+            f"Disponibles: {', '.join(disponibles)}.")
     if digest not in DIGESTS:
         raise AlertValidationError(
             f"Ritmo de entrega inválido '{digest}'. Use {' | '.join(DIGESTS)}.")

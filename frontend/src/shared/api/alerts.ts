@@ -43,7 +43,12 @@ export interface AlertRule {
 export interface AlertRulesCatalog {
   rules: AlertRule[];
   severidades: string[];
+  /** Canales que HOY entregan de verdad en este despliegue. */
   canales_disponibles: string[];
+  /** Existen en el código pero esta instalación no los tiene configurados (p. ej. correo
+   *  sin SMTP). NO es lo mismo que `canales_planificados`, y la UI debe decir cuál es cuál:
+   *  esto lo resuelve el dueño con tres variables de entorno; aquello, una fase futura. */
+  canales_no_configurados: string[];
   canales_planificados: string[];
   digests: string[];
 }

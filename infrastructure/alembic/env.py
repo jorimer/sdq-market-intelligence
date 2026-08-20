@@ -19,7 +19,8 @@ from shared.settings.models import AppSetting, SectorApiConfig  # noqa: F401
 from shared.publications.models import Publication  # noqa: F401
 from shared.operations.models import OperationRun, OperationSchedule  # noqa: F401
 from shared.products.models import ProductActivation, ProductReadiness, Subscription  # noqa: F401
-from shared.alerts.models import AlertEventRow, AlertSubscription  # noqa: F401
+from shared.alerts.models import (  # noqa: F401
+    AlertDelivery, AlertEventRow, AlertSubscription)
 from shared.billing.models import Tariff  # noqa: F401
 from shared.observability.models import LLMCall  # noqa: F401
 from shared.data_api.models import (  # noqa: F401

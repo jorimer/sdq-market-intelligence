@@ -108,11 +108,17 @@ def run_alerts_sweep(db: Session) -> Dict[str, object]:
                 _persistir(db, ev, False, motivo, veredicto.detalle, 0)
                 continue
             publicadas += 1
+            # La fila del evento se crea ANTES de entregar: la entrega por correo apunta a
+            # ella (no copia el texto), así que sin id persistido no habría a qué apuntar.
+            # El contador de entregas se actualiza después, cuando se sabe.
+            fila = _persistir(db, ev, True, None, "", 0)
             subs = service.para_sujeto(db, ev.sector_key, ev.subject)
-            detalle = entrega.entregar(db, ev, subs, entregados_por_usuario=cupo)
+            detalle = entrega.entregar(db, ev, subs, entregados_por_usuario=cupo,
+                                       evento_id=str(fila.id))
             n = len(detalle["entregadas"])
             entregadas += n
-            _persistir(db, ev, True, None, "", n)
+            fila.entregas = n
+            db.commit()
 
         # Lo que se evaluó y NO disparó está resuelto: se limpia su marcador para que pueda
         # volver a avisar si recae. Solo a los suscriptos del eje — limpiar de más es

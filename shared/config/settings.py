@@ -77,6 +77,24 @@ class Settings(BaseSettings):
     # worker is running. Off by default → jobs run in an in-process thread.
     USE_CELERY: bool = False
 
+    # Correo saliente (entrega de alertas fuera de la app). SMTP y no un SDK de proveedor:
+    # SendGrid, Resend, SES y Postmark exponen todos SMTP, así que el emisor no queda casado
+    # con ninguno y no suma una dependencia al lock —que ya tiene su propio problema en macOS.
+    #
+    # **Sin host configurado, el canal `email` NO se ofrece.** No es un detalle de despliegue:
+    # aceptar una vigilancia por un canal que no entrega deja al cliente esperando avisos que
+    # nunca salen, y un canal mudo no falla — desaparece. Ver `shared/notifications/email.py`.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    # Remitente. Vacío ⇒ se usa SMTP_USER. Acepta "Nombre <casilla@dominio>".
+    SMTP_FROM: str = ""
+    SMTP_STARTTLS: bool = True
+    # Base pública de la app, para los enlaces del correo ("administrá tus vigilancias").
+    # Un correo sin salida es un correo que se marca como spam.
+    APP_PUBLIC_URL: str = "https://sdq-market-intelligence-production.up.railway.app"
+
     # App
     DEFAULT_LANGUAGE: str = "es"
     REPORTS_DIR: str = "./data/reports"
