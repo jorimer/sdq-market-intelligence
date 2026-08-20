@@ -11,8 +11,9 @@ inventar una pendiente, y es exactamente el error que vuelve refutable un inform
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from modules.law_intel.bindings import Binding, aplicar_transformacion, direccion_de_metas
 from modules.law_intel.registro import Indicador
@@ -60,14 +61,21 @@ class Veredicto:
         return None
 
 
-def _meta_vigente(ind: Indicador, corte: str) -> Tuple[Optional[str], Optional[float]]:
+def _meta_vigente(ind: Indicador, corte: str) -> Tuple[Optional[str], Any]:
     """La meta que ya venció al corte dado. Es contra ella que se juzga.
 
     Comparar el dato de hoy contra la meta de 2030 diría que casi todo está incumplido y no
     informa nada: la ley fija cortes quinquenales y cada uno se juzga cuando le toca.
+
+    Para los indicadores de UMBRAL la meta es una cadena («< 4»), así que el filtro no puede
+    exigir que sea numérica: exigirlo dejaba fuera justo a los que ahora sí se pueden juzgar,
+    y el veredicto salía «ninguna meta vence al corte» sobre un indicador con cuatro metas
+    escritas en la ley. Quién sabe leer cada forma es responsabilidad de quien juzga, no de
+    quien selecciona el período.
     """
-    vencidas = [(a, v) for a, v in sorted(ind.metas.items())
-                if a <= corte and isinstance(v, (int, float))]
+    admisible = (lambda v: v is not None) if ind.escala == "umbral" \
+        else (lambda v: isinstance(v, (int, float)))
+    vencidas = [(a, v) for a, v in sorted(ind.metas.items()) if a <= corte and admisible(v)]
     return vencidas[-1] if vencidas else (None, None)
 
 
@@ -78,7 +86,7 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
     `observaciones` va ordenada por período. Se exige el binding —y verificado— porque un
     dato sin binding declarado es una serie que alguien supuso que medía el indicador.
     """
-    if not ind.admite_delta:
+    if not ind.admite_delta and ind.escala != "umbral":
         return Veredicto(ind.id, "no_evaluable",
                          motivo=f"la meta es de escala '{ind.escala}': se cumple o no, no se resta")
     if binding is None or not binding.cuenta:
@@ -96,6 +104,8 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
                          motivo="el binding está verificado y la serie no devolvió valor")
 
     p_obs, valor = obs[-1]
+    if ind.escala == "umbral":
+        return _veredicto_de_umbral(ind, meta, periodo_meta, valor, p_obs)
     # Se publica con la MISMA precisión que la distancia. El 2.44 salía como
     # `37.3684210526316`: trece decimales que son el residuo de una división (71 escaños
     # entre 190), no una medición. Esa cifra viaja al informe tal cual y la precisión
@@ -146,6 +156,56 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
         periodo_observado=p_obs, distancia=distancia, trayectoria="mejora",
         motivo=(f"avanza {avance:.4g} por período y le faltan {falta:.4g} para la meta de "
                 f"{periodo_meta}" + (f"; el próximo corte es {siguiente}" if siguiente else "")))
+
+
+#: Gramática CERRADA de un umbral: un operador y un número decimal simple. Deliberadamente
+#: estrecha — cualquier otra cosa NO se interpreta, se declara `no_evaluable`.
+#:
+#: En particular NO se acepta el separador de miles: «>1,700» es ambiguo en notación española
+#: (¿1700 o 1,7?) y resolverlo por plausibilidad —«1,7 no tiene sentido para inversión
+#: extranjera»— es exactamente el tipo de inferencia que produce cifras inventadas. El único
+#: indicador con esa forma (3.23) no está medido hoy, así que rechazarlo no cuesta nada y
+#: adivinarlo costaría una cifra falsa el día que se mida.
+_UMBRAL = re.compile(r"^\s*(<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*$")
+
+
+def leer_umbral(meta: Any) -> Optional[Tuple[str, float]]:
+    """`(operador, valor)` de una meta de umbral, o `None` si la forma no es reconocible.
+
+    Devolver `None` es una respuesta legítima y frecuente: la ley escribe algunas metas en
+    prosa («Se cumple con tiempos establecidos legalmente») y esas no se juzgan.
+    """
+    m = _UMBRAL.match(str(meta))
+    return (m.group(1), float(m.group(2))) if m else None
+
+
+def _veredicto_de_umbral(ind: Indicador, meta: Any, periodo_meta: Optional[str],
+                         valor: float, p_obs: str) -> Veredicto:
+    """Una meta de umbral NO admite delta pero SÍ admite veredicto.
+
+    Es la distinción que faltaba. «< 4%» no dice cuánto falta —no hay un objetivo puntual del
+    que restar— pero sí dice si se cumple: 5,97 no es menor que 4. El motor conocía la
+    semántica («se cumple o no, no se resta») y aun así devolvía `no_evaluable`, así que el
+    informe callaba un incumplimiento que podía afirmar.
+
+    `distancia` queda en `None` a propósito: publicar 1,97 sugeriría que la meta es 4 y que
+    falta poco, cuando lo que la ley fijó es un techo.
+    """
+    leido = leer_umbral(meta)
+    if leido is None:
+        return Veredicto(ind.id, "no_evaluable", meta_periodo=periodo_meta, meta=meta,
+                         observado=round(valor, _DECIMALES), periodo_observado=p_obs,
+                         motivo=("la meta es un umbral escrito en una forma que no se "
+                                 "interpreta; se declara en vez de adivinarla"))
+    op, limite = leido
+    cumple = {"<": valor < limite, "<=": valor <= limite,
+              ">": valor > limite, ">=": valor >= limite}[op]
+    return Veredicto(
+        ind.id, "alcanzada" if cumple else "no_alcanzada",
+        meta_periodo=periodo_meta, meta=meta, observado=round(valor, _DECIMALES),
+        periodo_observado=p_obs, distancia=None,
+        motivo=(f"umbral «{op} {limite:g}»: {valor:g} {'lo cumple' if cumple else 'NO lo cumple'}. "
+                f"Un umbral no admite distancia — la ley fijó un techo, no un objetivo puntual."))
 
 
 def _trayectoria(avance: float) -> str:
