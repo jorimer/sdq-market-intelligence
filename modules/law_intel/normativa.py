@@ -79,6 +79,10 @@ def _procedencia_del_corpus(alcance: Dict[str, Any]) -> str:
     la mitad: la huella dice si el corpus cambió desde el informe anterior; `medido_al` dice
     cuán vieja es la evidencia más débil que sostiene esta respuesta.
     """
+    if not alcance:
+        # El emisor no llegó a responder: no hay corpus del que hablar, y fabricar una frase
+        # sobre su cobertura sería inventar procedencia donde no hubo consulta.
+        return ""
     huella = huella_del_corpus(alcance)
     viejo = antiguedad_de_la_evidencia(alcance)
     partes = []
@@ -91,6 +95,25 @@ def _procedencia_del_corpus(alcance: Dict[str, Any]) -> str:
     if viejo:
         partes.append(f" La evidencia más vieja que lo sostiene se midió el {viejo}.")
     return "".join(partes)
+
+
+def _comprobacion(oid: str, veredicto: str, evidencia: str,
+                  norma: Optional[Dict[str, Any]] = None,
+                  alcance: Optional[Dict[str, Any]] = None) -> "Comprobacion":
+    """TODA comprobación viaja con la procedencia de su corpus. Único constructor.
+
+    La procedencia acompañaba solo a las acusaciones, y la asimetría era defendible a medias:
+    `incumplida` es lo que alguien puede refutar, así que ahí pesa más. Pero un
+    `cumplida_tarde` también se publica en un informe que se vende, y también hay que poder
+    explicar después por qué su cifra ya no coincide con la de hoy — que es lo que la doctrina
+    de este repo exige de cualquier dato publicado, no solo de los que acusan.
+
+    Se hace con un constructor y no llamando a la procedencia en cada `return` porque eso ya
+    estaba desincronizado: cinco salidas, una sola con procedencia. Un test estructural exige
+    que ningún `return` de `comprobar_obligacion` arme un `Comprobacion` a mano.
+    """
+    return Comprobacion(oid, veredicto, evidencia + _procedencia_del_corpus(alcance or {}),
+                        norma, alcance)
 
 
 @dataclass(frozen=True)
@@ -191,7 +214,7 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
         resp = buscar(**{k: v for k, v in consulta.items() if k != "obligacion"})
     except JurisAIUnavailable as e:
         # No se degrada a «no existe». Es la regla entera de este módulo.
-        return Comprobacion(oid, "no_verificable",
+        return _comprobacion(oid, "no_verificable",
                             f"No se pudo consultar la base normativa: {e}")
 
     halladas = _sin_duplicados(normas(resp))
@@ -202,15 +225,14 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
         # cinturón es barato y la consecuencia de que falle es acusar al Estado de un
         # incumplimiento sobre un universo que nadie midió.
         if vacio_es_concluyente(resp) and str(consulta.get("tipo") or "") in _TIPOS_MEDIDOS:
-            return Comprobacion(
+            return _comprobacion(
                 oid, "incumplida",
                 f"El corpus «{alcance.get('corpus', 'declarado')}» está completo entre "
                 f"{alcance.get('completo_desde', '?')} y {alcance.get('completo_hasta', '?')} "
-                f"y no contiene ninguna norma que satisfaga la obligación."
-                + _procedencia_del_corpus(alcance),
+                f"y no contiene ninguna norma que satisfaga la obligación.",
                 alcance=alcance)
         huecos = alcance.get("huecos") or []
-        return Comprobacion(
+        return _comprobacion(
             oid, "sin_registro_publico",
             "No se localizó la norma, y el alcance NO es concluyente"
             + (f" (huecos declarados: {huecos})" if huecos else "")
@@ -225,7 +247,7 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
     respaldo = _respaldo_de_gaceta(norma.get("gaceta") or {})
 
     if not vence or not fecha:
-        return Comprobacion(oid, "cumplida",
+        return _comprobacion(oid, "cumplida",
                             f"{cita} del {fecha or 's/f'}.{respaldo}", norma, alcance)
     tarde = fecha > vence
 
@@ -245,7 +267,7 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
     # propiedad del método: con 625 días ninguna fecha de publicación imaginable lo mueve.
     holgura = resp.get("holgura_dias")
     if resp.get("veredicto_sensible_a_publicacion"):
-        return Comprobacion(
+        return _comprobacion(
             oid, "no_verificable",
             f"{cita} del {fecha}, contra un plazo que vencía el {vence}"
             + (f" (holgura de {holgura} días)" if holgura is not None else "")
@@ -256,7 +278,7 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
             norma, alcance)
 
     detalle = f" (holgura de {holgura} días)" if holgura is not None else ""
-    return Comprobacion(
+    return _comprobacion(
         oid, "cumplida_tarde" if tarde else "cumplida",
         f"{cita} del {fecha}: {'DESPUÉS' if tarde else 'dentro'} del plazo, que vencía el "
         f"{vence}{detalle}.{respaldo}", norma, alcance)
