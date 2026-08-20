@@ -266,6 +266,13 @@ from app import products_monetary_policy as _products_mp  # noqa: F401 — regis
 from shared.alerts.productores import register as _register_alert_producers
 _register_alert_producers()
 
+# Y la CASCADA: toda operación que produce dato despierta el barrido al terminar bien.
+# El reloj de `alerts-sweep` (24 h) es el respaldo, no el disparador — una alerta que
+# llega un día después de que el dato entró no es una alerta. Va acá por lo mismo que
+# el registro de productores: necesita que TODAS las operaciones estén registradas.
+from shared.alerts.motor import enganchar_cascada as _enganchar_cascada_alertas
+_enganchar_cascada_alertas()
+
 import os as _os
 if _os.getenv("SDQ_SCHEDULER") == "1":
     from shared.database.session import SessionLocal as _SessionLocal
