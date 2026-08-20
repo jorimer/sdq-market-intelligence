@@ -72,6 +72,26 @@ def _mejor_senal(reporte: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _poblacion(reporte: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Sobre QUIÉN se midió la cifra, si el motor lo declara.
+
+    Viaja pegada a la credencial y no en un documento aparte. El caso: el Gini de banca se
+    cita con su N desde siempre, y ese N incluye un 47 % de entidades que no otorgan crédito
+    —están en el universo por diseño del producto, pero un lector que ve «Gini 0,23 · n=1.693»
+    entiende «discriminación entre bancos», que no es lo que se midió. El sujeto viaja con el
+    número o el número se reatribuye solo.
+    """
+    pob = reporte.get("poblacion_del_panel")
+    if not isinstance(pob, dict):
+        return None
+    sin_credito = pob.get("sin_libro_de_credito") or {}
+    return {
+        "por_tipo_de_entidad": pob.get("por_tipo_de_entidad"),
+        "sin_libro_de_credito": sin_credito or None,
+        "nota": pob.get("nota") or pob.get("motivo"),
+    }
+
+
 def _cifra_principal(eje: str, reporte: Dict[str, Any]) -> Dict[str, Any]:
     """Métrica, valor, IC y N de la cifra que ese eje publica. Sin inventar formas."""
     senal = _mejor_senal(reporte)
@@ -152,6 +172,9 @@ def credenciales(db: Session) -> Dict[str, Any]:
             "nombre": entrada.display_name,
             "grupo": _grupo(entrada.sector_key, estado, cifra, evento_real),
             **cifra,
+            # La POBLACIÓN viaja con la cifra. Sin esto, «Gini 0,23 · n=1.693» se lee como
+            # discriminación entre bancos, y el 47 % de ese panel no otorga crédito.
+            "poblacion": _poblacion(reporte or {}),
             "generated_at": (reporte or {}).get("generated_at"),
             "stale": frescura.get("stale"),
             "stale_reason": frescura.get("stale_reason"),
