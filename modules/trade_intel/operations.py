@@ -152,9 +152,9 @@ def register() -> None:
         eje="trade_intel", operacion="trade-backtest", clave=BACKTEST_KEY,
         partes=huella_backtest,
         control_de_tamano=ControlDeTamano(
-            motivo="no_medido", variable="valor exportado total del país (Comtrade)",
-            nota="el panel son países de tamaños exportadores muy distintos y el desenlace "
-                 "primario es una caída porcentual de exportaciones"),
+            clave="control_solo_tamano",
+            nota="valor total exportado del país en el año base (Comtrade); viaja dentro de "
+                 "cada bloque de desenlace"),
         sin_cascada_motivo=(
             "el panel de validación es un fixture comiteado que se regenera por script "
             "(`scripts/build_comtrade_fixture.py`), no por una operación de consola. La "

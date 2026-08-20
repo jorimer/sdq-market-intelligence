@@ -10,6 +10,10 @@ and the panel is small; this is a directional check, not a causal claim.
 import random
 from typing import Any, Dict, List, Optional, Tuple
 
+from shared.validation.control_tamano import (
+    VEREDICTO_CONTROL_NO_EVALUABLE, VEREDICTO_SCORE_SUPERA, VEREDICTO_TAMANO_ALCANZA,
+)
+
 _BANDS = (("Alta", 60.0), ("Moderada", 40.0), ("Baja", 0.0))
 
 
@@ -68,15 +72,60 @@ def _band(score: float) -> str:
     return "Baja"
 
 
+def _control_por_tamano(common: List[str], mortality: Dict[str, float],
+                        poblacion: Optional[Dict[str, float]],
+                        rho_del_score: Optional[float]) -> Dict[str, Any]:
+    """La misma mortalidad, ordenada solo por el tamaño del país.
+
+    El desenlace ya viene por 100.000 habitantes, así que la población es su DEFLACTOR — la
+    misma situación que dio vuelta el veredicto del IAI, donde el signo lo producía dividir
+    por el tamaño y no el índice. Se mide con Spearman porque el motor es de correlación, no
+    de clasificación: comparar un ρ con un Gini sería comparar dos escalas distintas.
+    """
+    base: Dict[str, Any] = {
+        "variable": "SP.POP.TOTL",
+        "nota": ("la misma mortalidad climática ordenada solo por la población del país. El "
+                 "desenlace está expresado POR 100.000 habitantes, así que la población es su "
+                 "deflactor: si ordena tan bien como el IRC, la correlación es del deflactor"),
+        "metrica": "spearman",
+    }
+    if not poblacion:
+        return {**base, "spearman": None, "spearman_ci": None, "n": 0,
+                "motivo": "no se pudo obtener la población del panel (WDI `SP.POP.TOTL`): el "
+                          "control no se computó en esta corrida",
+                "veredicto": VEREDICTO_CONTROL_NO_EVALUABLE}
+    pares = [(poblacion[i], mortality[i]) for i in common if poblacion.get(i)]
+    if len(pares) < 3:
+        return {**base, "spearman": None, "spearman_ci": None, "n": len(pares),
+                "motivo": "menos de tres países con población: sin pares no hay correlación",
+                "veredicto": VEREDICTO_CONTROL_NO_EVALUABLE}
+    rho = _spearman(pares)
+    lo, hi = _bootstrap_ci(pares)
+    alcanza = (rho is not None and rho_del_score is not None
+               and abs(rho) >= abs(rho_del_score))
+    return {
+        **base, "spearman": rho, "spearman_ci": [lo, hi], "n": len(pares),
+        "spearman_del_score": rho_del_score,
+        "el_tamano_alcanza_al_score": bool(alcanza),
+        "veredicto": (VEREDICTO_CONTROL_NO_EVALUABLE
+                      if rho is None or rho_del_score is None
+                      else VEREDICTO_TAMANO_ALCANZA if alcanza else VEREDICTO_SCORE_SUPERA),
+    }
+
+
 def build_esg_backtest(irc: Dict[str, float], mortality: Dict[str, float],
-                       window_from: int = 2000) -> Dict[str, Any]:
+                       window_from: int = 2000,
+                       poblacion: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
     """Report: Spearman(IRC, climate mortality) + bootstrap CI + mortality by IRC
     band + monotonicity. *irc* and *mortality* are ``{iso3: value}``."""
     common = sorted(set(irc) & set(mortality))
     pairs = [(irc[i], mortality[i]) for i in common]
     if len(pairs) < 3:
         return {"computed": False, "message": "Datos insuficientes para el backtest.",
-                "n_countries": len(pairs)}
+                "n_countries": len(pairs),
+                # Aun sin backtest la clave viaja: un control que desaparece cuando falta su
+                # insumo se lee como que el control se hizo.
+                "control_solo_tamano": _control_por_tamano(common, mortality, poblacion, None)}
 
     rho = _spearman(pairs)
     lo, hi = _bootstrap_ci(pairs)
@@ -102,6 +151,8 @@ def build_esg_backtest(irc: Dict[str, float], mortality: Dict[str, float],
         "outcome": "muertes por desastre climático / 100k hab/año (OWID/EM-DAT)",
         "spearman": rho,
         "spearman_ci": [lo, hi],
+        # El control viaja pegado a la cifra que acota, nunca en otro documento.
+        "control_solo_tamano": _control_por_tamano(common, mortality, poblacion, rho),
         "by_band": by_band,
         "monotonic": monotonic,
         "note": "Validación direccional preliminar (transversal, panel pequeño); la "

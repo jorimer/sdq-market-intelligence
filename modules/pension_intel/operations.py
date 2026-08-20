@@ -196,9 +196,9 @@ def register() -> None:
         partes=huella_backtest,
         disparado_por=("sipen-sync", "sipen-financials-sync", "sipen-financials-history-sync"),
         control_de_tamano=ControlDeTamano(
-            motivo="no_medido", variable="patrimonio del fondo administrado (AUM)",
-            nota="son 7 AFP y el panel es chico, pero el tamaño del fondo es justamente lo "
-                 "que separa a las dos grandes del resto: el control corresponde"),
+            clave="control_solo_tamano",
+            nota="activos totales del fondo administrado por la AFP; viaja DENTRO de cada "
+                 "señal, pegado al Gini que acota"),
     ))
     register_operation(Operation(
         "sipen-cartera-sync", "Sincronizar cartera de inversiones (SIPEN)",

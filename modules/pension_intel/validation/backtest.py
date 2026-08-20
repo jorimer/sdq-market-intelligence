@@ -25,6 +25,7 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from shared.validation.control_tamano import medir_control_de_tamano
 from shared.validation.metrics import deterioration_rate_by_tier, gini_bootstrap_ci
 
 _QUINTILES = ["Q1 (score más bajo)", "Q2", "Q3", "Q4", "Q5 (score más alto)"]
@@ -156,6 +157,19 @@ def _returns_by_afp(db: Session) -> Dict[str, List[Tuple[str, float]]]:
 
 # ── Orquestador ────────────────────────────────────────────────────────────────
 
+def control_por_tamano(obs: List[Obs], tamano_by: Dict[str, Dict[str, float]],
+                       gini_del_score: Optional[float]) -> Dict:
+    """El MISMO panel etiquetado, ordenado solo por el tamaño del fondo administrado.
+
+    Son siete AFP y las dos grandes concentran la mayor parte del patrimonio: si el tamaño
+    solo ordena el subdesempeño igual que el score, la señal es de escala y no de gestión.
+    """
+    tamanos = [tamano_by.get(o.slug, {}).get(o.period) for o in obs]
+    return medir_control_de_tamano(
+        tamanos, [o.label for o in obs], gini_del_score, variable="activos_totales",
+        nota_extra="activos totales del fondo administrado por la AFP en el período base")
+
+
 def build_backtest_report(db: Session, solvency_horizon: int = 24,
                           return_horizon: int = 12) -> Dict:
     """Corre ambas señales y arma el reporte persistible. Nunca lanza por falta de dato:
@@ -166,10 +180,17 @@ def build_backtest_report(db: Session, solvency_horizon: int = 24,
     # misma serie hacia adelante (persistencia).
     return_scores = {slug: {p: v for p, v in lst} for slug, lst in returns.items()}
 
-    signals = {
-        "solvency": summarize_signal(derive_observations(solvency, returns, solvency_horizon)),
-        "return": summarize_signal(derive_observations(return_scores, returns, return_horizon)),
+    obs_por_senal = {
+        "solvency": derive_observations(solvency, returns, solvency_horizon),
+        "return": derive_observations(return_scores, returns, return_horizon),
     }
+    signals = {k: summarize_signal(v) for k, v in obs_por_senal.items()}
+    # El control viaja DENTRO de cada señal, pegado a la cifra que acota.
+    activos = _series_by_afp(db, "activos_totales")
+    for clave, señal in signals.items():
+        if señal is not None:
+            señal["control_solo_tamano"] = control_por_tamano(
+                obs_por_senal[clave], activos, señal.get("gini"))
     computed = any(v is not None for v in signals.values())
     # Gini "de referencia" para G5: la señal concluyente de mayor N; si ninguna concluye, None.
     ranked = sorted(
