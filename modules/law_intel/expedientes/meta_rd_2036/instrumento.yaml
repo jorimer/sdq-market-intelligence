@@ -35,5 +35,7 @@ registro:
 fuentes_admitidas:
   - id: bcrd
     nombre: Banco Central de la República Dominicana
+    del_evaluado: true
   - id: mhe
     nombre: Ministerio de Hacienda y Economía
+    del_evaluado: true

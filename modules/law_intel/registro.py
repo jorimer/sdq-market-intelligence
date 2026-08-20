@@ -155,6 +155,18 @@ def _validar(meta: Dict[str, Any], indicadores: List[Indicador]) -> None:
                       if i.subfila_de and i.subfila_de not in conocidos]):
         raise ExpedienteInvalido(f"sub-filas sin indicador padre: {huerfanas}")
 
+    # Cada fuente admitida declara si es un órgano del Estado EVALUADO. Es lo que permite
+    # contrastar emisor contra productor en la sección de verificabilidad, y se declara en
+    # vez de inferirse de la nota: la nota es prosa y el contraste es una cifra que se
+    # publica. Sin el campo, una fuente nueva entraría sin lado y el informe la contaría
+    # como externa por omisión — el sesgo que le conviene a quien vende el informe.
+    for f in (meta.get("fuentes_admitidas") or []):
+        if not isinstance(f.get("del_evaluado"), bool):
+            raise ExpedienteInvalido(
+                f"fuente '{f.get('id')}': falta `del_evaluado` (bool). Decí si es un órgano "
+                f"del Estado evaluado; de eso depende que el informe pueda distinguir un "
+                f"emisor ajeno de una medición ajena.")
+
     # Coherencia entre la escala declarada y lo que la fila realmente trae.
     for ind in indicadores:
         if ind.escala == "sin_meta" and ind.metas:
