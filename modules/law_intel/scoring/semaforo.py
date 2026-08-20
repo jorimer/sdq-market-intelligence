@@ -73,7 +73,14 @@ def _meta_vigente(ind: Indicador, corte: str) -> Tuple[Optional[str], Any]:
     escritas en la ley. Quién sabe leer cada forma es responsabilidad de quien juzga, no de
     quien selecciona el período.
     """
-    admisible = (lambda v: v is not None) if ind.escala == "umbral" \
+    # Las escalas cuya meta se escribe en TEXTO y aun así se puede leer: un umbral («< 4») y
+    # un escalar rotulado («Matemáticas : 63.0»). Exigir que la meta fuera numérica dejaba
+    # fuera justo a los indicadores que sí se juzgan, y el veredicto salía «ninguna meta vence
+    # al corte» sobre uno con cuatro metas escritas en la ley.
+    #
+    # Quién sabe leer cada forma es responsabilidad de quien JUZGA, no de quien selecciona el
+    # período: acá se admite la meta y más abajo se decide si es interpretable.
+    admisible = (lambda v: v is not None) if ind.escala in ("umbral", "redactada") \
         else (lambda v: isinstance(v, (int, float)))
     vencidas = [(a, v) for a, v in sorted(ind.metas.items()) if a <= corte and admisible(v)]
     return vencidas[-1] if vencidas else (None, None)
@@ -87,8 +94,12 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
     dato sin binding declarado es una serie que alguien supuso que medía el indicador.
     """
     if not ind.admite_delta and ind.escala != "umbral":
-        return Veredicto(ind.id, "no_evaluable",
-                         motivo=f"la meta es de escala '{ind.escala}': se cumple o no, no se resta")
+        # Una meta REDACTADA puede ser un escalar rotulado —«Matemáticas : 63.0»— y esas sí se
+        # juzgan. Se comprueba antes de rendirse; si no lo es, el veredicto no cambia.
+        if not (ind.escala == "redactada" and _tiene_meta_rotulada(ind, corte)):
+            return Veredicto(ind.id, "no_evaluable",
+                             motivo=f"la meta es de escala '{ind.escala}': se cumple o no, "
+                                    f"no se resta")
     if binding is None or not binding.cuenta:
         estado = binding.estado if binding else "sin binding"
         return Veredicto(ind.id, "sin_medicion",
@@ -106,6 +117,8 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
     p_obs, valor = obs[-1]
     if ind.escala == "umbral":
         return _veredicto_de_umbral(ind, meta, periodo_meta, valor, p_obs)
+    if ind.escala == "redactada":
+        return _veredicto_rotulado(ind, binding, meta, periodo_meta, valor, p_obs)
     # Se publica con la MISMA precisión que la distancia. El 2.44 salía como
     # `37.3684210526316`: trece decimales que son el residuo de una división (71 escaños
     # entre 190), no una medición. Esa cifra viaja al informe tal cual y la precisión
@@ -169,6 +182,30 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
 _UMBRAL = re.compile(r"^\s*(<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*$")
 
 
+#: Gramática CERRADA de un escalar ROTULADO: «<sujeto> : <número>». Tan estrecha como la del
+#: umbral y por la misma razón — cualquier otra cosa no se interpreta, se declara.
+#:
+#: El sujeto NO es ruido de formato: es el sujeto. La ley escribe «Matemáticas : 63.0» porque
+#: el indicador 2.17 nombra TRES materias —lectura, matemáticas y ciencias— y solo le fija
+#: meta a una. Quitar la etiqueta para dejar un 63.0 pelado borraría justamente el dato que
+#: deja ver que se está juzgando una de tres, y violaría la regla que este repo hace cumplir
+#: en todos lados: el sujeto viaja con el número.
+#:
+#: Por eso la etiqueta no se descarta al leer — viaja al veredicto.
+_ROTULADO = re.compile(r"^\s*([^:\d][^:]*?)\s*:\s*(\d+(?:\.\d+)?)\s*$")
+
+
+def leer_rotulado(meta: Any) -> Optional[Tuple[str, float]]:
+    """`(sujeto, valor)` de una meta rotulada, o `None` si la forma no es reconocible.
+
+    No es un parser de prosa: es un escalar con su sujeto pegado, que es como la ley escribe
+    los indicadores multi-materia. «Pertenecer al nivel II» devuelve `None` y se sigue
+    declarando `no_evaluable`, porque ahí sí hay que juzgar y no medir.
+    """
+    m = _ROTULADO.match(str(meta))
+    return (m.group(1).strip(), float(m.group(2))) if m else None
+
+
 def leer_umbral(meta: Any) -> Optional[Tuple[str, float]]:
     """`(operador, valor)` de una meta de umbral, o `None` si la forma no es reconocible.
 
@@ -206,6 +243,36 @@ def _veredicto_de_umbral(ind: Indicador, meta: Any, periodo_meta: Optional[str],
         periodo_observado=p_obs, distancia=None,
         motivo=(f"umbral «{op} {limite:g}»: {valor:g} {'lo cumple' if cumple else 'NO lo cumple'}. "
                 f"Un umbral no admite distancia — la ley fijó un techo, no un objetivo puntual."))
+
+
+def _tiene_meta_rotulada(ind: Indicador, corte: str) -> bool:
+    _, meta = _meta_vigente(ind, corte)
+    return meta is not None and leer_rotulado(meta) is not None
+
+
+def _veredicto_rotulado(ind: Indicador, binding: Binding, meta: Any,
+                        periodo_meta: Optional[str], valor: float, p_obs: str) -> Veredicto:
+    """Veredicto de una meta escrita como «<sujeto> : <número>».
+
+    El SUJETO viaja al motivo. No es decoración: el 2.17 nombra tres materias y la ley solo le
+    fija meta a matemáticas, así que un veredicto que dijera «97,84% contra 63,0%» a secas
+    escondería que se está juzgando una de tres. El rótulo es lo que deja verlo.
+    """
+    leido = leer_rotulado(meta)
+    if leido is None:
+        return Veredicto(ind.id, "no_evaluable", meta_periodo=periodo_meta, meta=meta,
+                         observado=round(valor, _DECIMALES), periodo_observado=p_obs,
+                         motivo=f"la meta es de escala '{ind.escala}': requiere juicio")
+    sujeto, objetivo = leido
+    mejor_menor = binding.mejor == "menor"
+    valor = round(valor, _DECIMALES)
+    cumple = valor <= objetivo if mejor_menor else valor >= objetivo
+    distancia = round((valor - objetivo) if mejor_menor else (objetivo - valor), _DECIMALES)
+    return Veredicto(
+        ind.id, "alcanzada" if cumple else "no_alcanzada", meta_periodo=periodo_meta,
+        meta=meta, observado=valor, periodo_observado=p_obs, distancia=distancia,
+        motivo=f"{sujeto}: {valor:g} contra una meta de {objetivo:g}. "
+               f"{'La cumple' if cumple else 'NO la cumple'}.")
 
 
 def _trayectoria(avance: float) -> str:
