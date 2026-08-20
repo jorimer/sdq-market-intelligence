@@ -61,6 +61,7 @@ const ConfiguracionPage = lazyPage(() => import("@/modules/platform/pages/Config
 const UsersAdminPage = lazyPage(() => import("@/modules/platform/pages/UsersAdminPage"), "UsersAdminPage");
 const TarifarioPage = lazyPage(() => import("@/modules/platform/pages/TarifarioPage"), "TarifarioPage");
 const MiPlanPage = lazyPage(() => import("@/modules/platform/pages/MiPlanPage"), "MiPlanPage");
+const MisVigilanciasPage = lazyPage(() => import("@/modules/platform/pages/MisVigilanciasPage"), "MisVigilanciasPage");
 const PagosPage = lazyPage(() => import("@/modules/platform/pages/PagosPage"), "PagosPage");
 const ComprobantesPage = lazyPage(() => import("@/modules/platform/pages/ComprobantesPage"), "ComprobantesPage");
 const CheckoutReturnPage = lazyPage(() => import("@/modules/platform/pages/CheckoutReturnPage"), "CheckoutReturnPage");
@@ -134,6 +135,7 @@ export default function App() {
             <Route path="/methodology" element={<MetodologiaPage />} />
             <Route path="/catalog" element={<ProductCatalogPage />} />
             <Route path="/mi-plan" element={<MiPlanPage />} />
+            <Route path="/mis-vigilancias" element={<MisVigilanciasPage />} />
             <Route path="/checkout/return" element={<CheckoutReturnPage />} />
             <Route
               path="/products"

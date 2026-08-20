@@ -301,7 +301,7 @@ Además de los unitarios por regla (puras, sin DB):
 |---|---|---|
 | **A** ✅ | modelos + watchlist + API + botón «Vigilar» | el cliente declara qué le importa |
 | **B** ✅ | `reglas.py` (`umbral`, `banda`, `brecha`) sobre **banca** + gate + in-app | alerta real punta a punta en un eje |
-| **C** | emisor de email + digest + dedup promovido | el cliente se entera sin abrir la app |
+| **C** ✅ | emisor de email + digest + dedup promovido | el cliente se entera sin abrir la app |
 | **D** | `posicion` + `frescura` + `publicacion`; productores de los otros ejes | producto transversal |
 | **E** | webhook `alert.raised` | integrable por el cliente institucional |
 
@@ -369,6 +369,38 @@ El guard estructural que lo sostiene: **solo `reglas.py` instancia `AlertEvent`*
 (`test_nadie_construye_un_AlertEvent_a_mano`, con `ast`). Es lo que hace inevitable el gate —
 un productor que armara el evento a mano se saltearía las guardas de dato ausente y saldría
 bien formado con la cifra equivocada.
+
+### Lo que la fase C dejó cerrado (2026-08-20)
+
+`shared/notifications/email.py` (SMTP, sin dependencia nueva) · `shared/alerts/digest.py`
+(operación `alerts-digest`) · `AlertDelivery` + migración `b8d1f36c07a4` · pantalla
+**«Mis vigilancias»** (`/mis-vigilancias`). 146 tests del módulo + 9 del emisor.
+
+Cuatro decisiones que no estaban escritas acá:
+
+- **SMTP y no el SDK de un proveedor.** SendGrid, Resend, SES y Postmark exponen todos SMTP:
+  el emisor no queda casado con ninguno, no suma una dependencia al lock —que ya tiene su
+  problema en macOS— y el dueño cambia de proveedor moviendo tres variables de entorno.
+- **`canales_disponibles` es una FUNCIÓN, no una constante.** Sin `SMTP_HOST` el canal
+  `email` no se ofrece, y la API distingue *no configurado* (lo resuelve el dueño) de
+  *planificado* (lo resuelve una fase futura). Verificado en las dos direcciones en el
+  navegador: con SMTP aparece el botón «Correo»; sin SMTP desaparece y la pantalla dice
+  por qué.
+- **El correo se ENCOLA, no se manda en el barrido.** Una conexión SMTP dentro del barrido
+  lo vuelve tan lento como el servidor de correo, y un SMTP caído se comería el aviso sin
+  dejar rastro. `AlertDelivery` con `enviado_at IS NULL` es a la vez la cola del resumen y
+  la del reintento — que son la misma cosa: lo que no salió, sigue pendiente. Tras
+  `MAX_INTENTOS` se deja de reintentar pero **la fila no se borra**: queda con su
+  `ultimo_error`, porque un descarte silencioso se lee como que no pasó nada.
+- **Hacía falta una pantalla, y no estaba en el plan de la fase.** Sin «Mis vigilancias» el
+  correo quedaba implementado e inalcanzable: el botón «Vigilar» crea la vigilancia con lo
+  mínimo y no hay dónde cambiar canal ni cadencia. Un canal que el cliente no puede activar
+  es un canal que no existe.
+
+Y una trampa del CI que costó una corrida: **`mypy-baseline` sale con código no cero también
+cuando RESOLVÉS deuda**. La promoción del dedup resolvió tres violaciones, el reporte decía
+`new: 0` y el gate igual falló. Lo advierte `CLAUDE.md`: mirar el *exit code*, no el texto, y
+correr `mypy shared/ modules/ app/ | mypy-baseline sync`.
 
 ---
 

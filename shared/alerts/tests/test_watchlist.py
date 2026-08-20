@@ -157,13 +157,42 @@ def test_eje_fuera_del_catalogo(db, productos):
     assert "no está en el catálogo" in r.json()["detail"]
 
 
-def test_canal_sin_entrega_se_rechaza_declarando_el_motivo(db, productos):
-    """Email llega en la fase C. Aceptarlo ahora dejaría al cliente esperando avisos que
+def test_email_SIN_SMTP_configurado_se_rechaza_declarando_el_motivo(db, productos,
+                                                                    monkeypatch):
+    """Sin servidor de correo no hay canal. Aceptarlo dejaría al cliente esperando avisos que
     nunca salen — y un canal mudo no falla, desaparece."""
+    import shared.notifications.email as mail
+    monkeypatch.setattr(mail, "configurado", lambda: False)
+
     _activar(db, EJE, ProductTier.pulse)
     u = _user(db)
     r = _client(db, u).post("/api/v1/alerts/subscriptions",
                             json={"sector_key": EJE, "channels": ["email"]})
+    assert r.status_code == 422
+    assert "no está configurado" in r.json()["detail"]
+
+
+def test_email_CON_SMTP_configurado_se_acepta(db, productos, monkeypatch):
+    """La otra mitad: si el test solo probara el rechazo, un bug que rechazara SIEMPRE
+    pasaría inadvertido y el canal nunca se podría usar."""
+    import shared.notifications.email as mail
+    monkeypatch.setattr(mail, "configurado", lambda: True)
+
+    _activar(db, EJE, ProductTier.pulse)
+    u = _user(db)
+    r = _client(db, u).post("/api/v1/alerts/subscriptions",
+                            json={"sector_key": EJE, "channels": ["inapp", "email"]})
+    assert r.status_code == 201, r.text
+    assert r.json()["channels"] == ["inapp", "email"]
+
+
+def test_un_canal_planificado_se_distingue_de_uno_no_configurado(db, productos):
+    """«No lo ofrecemos todavía» y «no está configurado acá» piden acciones distintas: la
+    segunda la resuelve el dueño con tres variables de entorno."""
+    _activar(db, EJE, ProductTier.pulse)
+    u = _user(db)
+    r = _client(db, u).post("/api/v1/alerts/subscriptions",
+                            json={"sector_key": EJE, "channels": ["webhook"]})
     assert r.status_code == 422
     assert "todavía no entrega" in r.json()["detail"]
 
@@ -379,5 +408,8 @@ def test_el_catalogo_declara_CUALES_tienen_motor_y_cuales_no(db, productos):
                for c in ("posicion", "frescura", "publicacion"))
 
     assert all(r["basis"] for r in body["rules"])      # ninguna regla suena "porque sí"
+    # Sin SMTP en el entorno de test, el correo se declara NO CONFIGURADO — que no es lo
+    # mismo que "no lo ofrecemos" (eso es `canales_planificados`, hoy el webhook).
     assert body["canales_disponibles"] == ["inapp"]
-    assert "email" in body["canales_planificados"]
+    assert body["canales_no_configurados"] == ["email"]
+    assert "webhook" in body["canales_planificados"]

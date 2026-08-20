@@ -55,7 +55,10 @@ async def get_rules(_: User = Depends(get_current_user)) -> Dict[str, Any]:
     return {
         "rules": [reglas.serializar(d) for d in reglas.CATALOGO],
         "severidades": list(reglas.SEVERIDADES),
-        "canales_disponibles": list(service.CANALES_DISPONIBLES),
+        "canales_disponibles": list(service.canales_disponibles()),
+        # Existen en el código pero este despliegue no los tiene configurados: no es lo
+        # mismo que "no lo ofrecemos", y la UI tiene que poder decirlo.
+        "canales_no_configurados": list(service.canales_no_configurados()),
         "canales_planificados": list(service.CANALES_PLANIFICADOS),
         "digests": list(service.DIGESTS),
     }
