@@ -78,11 +78,19 @@ class TestDireccion:
 
 
 class TestLoQueNoSeEvalua:
-    def test_umbral_no_se_resta(self):
+    def test_umbral_no_se_RESTA_pero_ahora_si_se_JUZGA(self):
+        """La mitad de este test seguía siendo cierta y la otra mitad era una limitación que
+        se leía como decisión.
+
+        «No se resta» es correcto: la ley fijó un techo, no un objetivo puntual, así que
+        publicar una distancia sugeriría que falta poco para una meta que no existe. Pero de
+        ahí no se sigue que no se pueda juzgar — 5,0 no es menor que 4, y el informe callaba
+        ese incumplimiento pudiendo afirmarlo."""
         i = ind(escala="umbral", metas={"2025": "< 4"})
         v = evaluar(i, Binding(indicador="1.8", mejor="menor", **VERIF),
                     [("2025", 5.0)], corte="2025")
-        assert v.veredicto == "no_evaluable" and v.cumple is None
+        assert v.veredicto == "no_alcanzada" and v.cumple is False
+        assert v.distancia is None, "un umbral sigue sin admitir distancia"
 
     def test_binding_propuesto_no_mide(self):
         """Un binding sin verificar es una hipótesis. Contarlo como medición afirma haber
@@ -152,3 +160,68 @@ class TestEstancarseNoEsRetroceder:
         v = evaluar(ind(metas={"2025": 10.0}), Binding(indicador="1.8", mejor="menor", **VERIF),
                     [("2020", 8.0), ("2024", 8.0)], corte="2025")
         assert v.veredicto == "alcanzada" and v.trayectoria == "plana"
+
+
+class TestUnUmbralNoAdmiteDeltaPeroSIVeredicto:
+    """La distinción que faltaba. «< 4%» no dice cuánto falta —no hay un objetivo puntual del
+    que restar— pero sí dice si se cumple.
+
+    El motor ya conocía la semántica: su propio motivo decía «se cumple o no, no se resta». Y
+    aun así devolvía `no_evaluable`, así que el informe callaba un incumplimiento que podía
+    afirmar. El 2.19 (analfabetismo) está medido en 5,97% contra un techo legal de 4%.
+    """
+
+    def _umbral(self, metas, **kw):
+        return ind(escala="umbral", metas=metas, **kw)
+
+    def test_un_umbral_INCUMPLIDO_ahora_se_declara(self):
+        v = evaluar(self._umbral({"2025": "< 4"}),
+                    Binding(indicador="1.8", mejor="menor", **VERIF),
+                    [("2024", 5.97)], corte="2025")
+        assert v.veredicto == "no_alcanzada"
+        assert v.cumple is False
+        assert "NO lo cumple" in (v.motivo or "")
+
+    def test_un_umbral_CUMPLIDO_tambien(self):
+        v = evaluar(self._umbral({"2025": "< 4"}),
+                    Binding(indicador="1.8", mejor="menor", **VERIF),
+                    [("2024", 3.1)], corte="2025")
+        assert v.veredicto == "alcanzada" and v.cumple is True
+
+    def test_la_DISTANCIA_queda_en_None_a_proposito(self):
+        """Publicar «faltan 1,97» sugeriría que la meta es 4 y que falta poco. Lo que la ley
+        fijó es un TECHO, no un objetivo puntual."""
+        v = evaluar(self._umbral({"2025": "< 4"}),
+                    Binding(indicador="1.8", mejor="menor", **VERIF),
+                    [("2024", 5.97)], corte="2025")
+        assert v.distancia is None
+
+    def test_el_operador_MAYOR_QUE_se_juzga_al_reves(self):
+        v = evaluar(self._umbral({"2025": ">2000"}),
+                    Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2024", 2614.0)], corte="2025")
+        assert v.veredicto == "alcanzada"
+
+    def test_una_forma_AMBIGUA_no_se_adivina(self):
+        """«>1,700» es ambiguo en notación española: ¿1700 o 1,7? Resolverlo por
+        plausibilidad —«1,7 no tiene sentido para inversión extranjera»— es la inferencia que
+        produce cifras inventadas. Se declara y no se juzga."""
+        v = evaluar(self._umbral({"2025": ">1,700"}),
+                    Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2024", 1820.0)], corte="2025")
+        assert v.veredicto == "no_evaluable"
+        assert "no se interpreta" in (v.motivo or "")
+
+    def test_una_meta_en_PROSA_sigue_sin_juzgarse(self):
+        v = evaluar(self._umbral({"2025": "Se cumple con tiempos establecidos legalmente"}),
+                    Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2024", 1.0)], corte="2025")
+        assert v.veredicto == "no_evaluable"
+
+    def test_el_valor_observado_VIAJA_aunque_no_se_pueda_juzgar(self):
+        """Que no se pueda emitir veredicto no es razón para ocultar la medición: el lector
+        necesita ver el dato aunque el motor no lo compare."""
+        v = evaluar(self._umbral({"2025": ">1,700"}),
+                    Binding(indicador="1.8", mejor="mayor", **VERIF),
+                    [("2024", 1820.0)], corte="2025")
+        assert v.observado == 1820.0
