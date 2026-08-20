@@ -2561,5 +2561,14 @@
       "syncOk": "{{ok}} up to date · {{created}} created",
       "syncSkipped": "{{n}} without a tariff price"
     }
+  },
+  "alerts": {
+    "watch": "Watch",
+    "watching": "Watching",
+    "watchSectorHint": "Get alerts for the whole axis (no named entities).",
+    "watchSubjectHint": "Get alerts for {{subject}}.",
+    "watchError": "Could not save the watch.",
+    "suspended": "Suspended: your plan no longer covers this product.",
+    "pendingEngine": "Saved. Triggers go live per axis; we'll notify you on the first one."
   }
 }

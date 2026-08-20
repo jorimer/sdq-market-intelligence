@@ -173,6 +173,11 @@ app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
 from shared.notifications.router import router as notifications_router
 app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["Notificaciones"])
 
+# Watchlist de alertas: qué vigila cada cliente (fase A de
+# docs/SPEC_ALERTA_ACCIONABLE.md). Transversal a los 16 ejes, por eso vive en shared/.
+from shared.alerts.router import router as alerts_router
+app.include_router(alerts_router, prefix="/api/v1/alerts", tags=["Alertas"])
+
 # Data API — contrato PÚBLICO máquina-a-máquina, namespace propio y versionado. Va
 # separado de /api/v1 a propósito: /api/v1 sirve a la SPA y cambia con ella; este
 # contrato lo consumen terceros y no puede romperse por un refactor del frontend.
