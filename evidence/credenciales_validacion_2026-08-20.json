@@ -577,7 +577,7 @@
    "eventos": null,
    "senal": null,
    "concluyente": true,
-   "invertida": true,
+   "invertida": false,
    "control_de_tamano": {
     "variable": "SP.POP.TOTL",
     "nota": "la misma mortalidad climática ordenada solo por la población del país. El desenlace está expresado POR 100.000 habitantes, así que la población es su deflactor: si ordena tan bien como el IRC, la correlación es del deflactor",
@@ -837,5 +837,5 @@
  },
  "n_publicables": 8,
  "vetadas_por_frescura": [],
- "generado_at": "2026-08-20T16:30:24.830371+00:00"
+ "generado_at": "2026-08-20T17:07:54.416095+00:00"
 }

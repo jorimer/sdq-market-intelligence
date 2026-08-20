@@ -180,3 +180,38 @@ def test_sin_reporte_el_producto_lo_dice_en_vez_de_afirmar_algo():
 
     nota = _nota_validacion_iai(_Vacia())
     assert "aún no corrido" in nota
+
+
+# ── El veredicto del control se COMPUTA, no lo infiere el lector ───
+
+def test_el_control_trae_su_veredicto_computado():
+    """Las dos cifras sueltas obligaban al cliente a sacar la conclusión.
+
+    El control existe desde la Fase 3 y publicaba −0,321 del índice contra −0,323 del tamaño
+    solo, sin decir qué significan juntas. Un lector de material comercial no tiene por qué
+    deducir de esos dos números que el índice no agrega nada sobre el tamaño: esa frase ES la
+    conclusión, y las conclusiones se computan.
+    """
+    from shared.validation.control_tamano import (
+        VEREDICTO_EMPATE, VEREDICTO_TAMANO_ALCANZA, veredicto_de_control,
+    )
+
+    # El caso real: el control alcanza al índice (misma magnitud, mismo signo).
+    juicio = veredicto_de_control(-0.321, [-0.5, -0.142], -0.323)
+    assert juicio["el_tamano_alcanza_al_score"] is True
+    assert juicio["veredicto"] in (VEREDICTO_TAMANO_ALCANZA, VEREDICTO_EMPATE)
+
+    # Y el contraste por NIVEL, donde el tamaño solo ordena MEJOR que el índice.
+    nivel = veredicto_de_control(0.287, [0.163, 0.412], 0.377)
+    assert nivel["el_tamano_alcanza_al_score"] is True
+
+
+def test_sin_una_de_las_dos_cifras_el_veredicto_no_se_inventa():
+    from shared.validation.control_tamano import (
+        VEREDICTO_CONTROL_NO_EVALUABLE, veredicto_de_control,
+    )
+
+    for juicio in (veredicto_de_control(None, [0.1, 0.2], -0.3),
+                   veredicto_de_control(-0.3, [-0.5, -0.1], None)):
+        assert juicio["veredicto"] == VEREDICTO_CONTROL_NO_EVALUABLE
+        assert juicio["el_tamano_alcanza_al_score"] is False

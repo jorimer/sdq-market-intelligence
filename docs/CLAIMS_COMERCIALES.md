@@ -104,7 +104,7 @@ desaparecer — un veto silencioso se lee como que el eje no tiene validación.
 | **B · concluyente** | discriminación contra un desenlace realizado, con IC que no cruza cero |
 | **C · convergente** | coincide con una medida independiente del mismo período — **no** es backtest temporal y no se vende como tal |
 | **D · parcial** | metodología exigente con resultado acotado, declarado |
-| **E · corrido y no concluyente** | el Gate E se aplicó y **dio negativo**. Honesto; no es credencial |
+| **E · corrida y sin credencial a favor** | el Gate E se aplicó y **no dejó una afirmación vendible**. Cubre dos cosas distintas que comparten esa consecuencia: que el intervalo cruce cero (no concluyente) y que **no lo cruce pero esté del lado equivocado** (la señal ordena INVERTIDO, que es un hallazgo, no una ausencia). Honesto; no es credencial |
 | **F · sin backtest** | descriptivo, con el obstáculo declarado (ver `docs/TRIAJE_VALIDACION_EJES.md`) |
 
 ### Banca: las tres correcciones que el material tenía mal

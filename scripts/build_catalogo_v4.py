@@ -144,7 +144,14 @@ def _sufijo_control(f: Dict[str, Any]) -> str:
         valor = (interno or {}).get("mean_yearly_ic")
     if valor is None:
         return ""
-    return f" · el TAMAÑO solo alcanza {_num(valor, 4)}".replace(".", ",")
+    texto = f" · el TAMAÑO solo alcanza {_num(valor, 4)}".replace(".", ",")
+    # Y la CONCLUSIÓN, cuando el motor la computa. Dos cifras al lado obligan al lector a
+    # sacarla, y un cliente no tiene por qué: «−0,321 contra −0,323» significa que el índice
+    # no agrega nada sobre el tamaño, y esa frase es el resultado, no una interpretación.
+    interno = ctrl.get("intensidad") if isinstance(ctrl.get("intensidad"), dict) else ctrl
+    if (interno or {}).get("el_tamano_alcanza_al_score"):
+        texto += " — el índice NO agrega sobre el tamaño"
+    return texto
 
 
 def _fila_credencial(f: Dict[str, Any]) -> List[str]:
