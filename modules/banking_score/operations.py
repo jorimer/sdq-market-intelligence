@@ -131,6 +131,23 @@ def _run_diagnostico_recalibracion(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_diagnostico_composicion(params, user_id, set_phase) -> Dict:
+    """¿`solidez` ordena al revés, o el panel mezcla poblaciones que no se comparan?
+
+    Repite la cuenta de pares del Gini contando SOLO los pares que comparten estrato —tipo
+    de entidad y tramo de tamaño— y compara con el agregado. Corre donde está el dato
+    —producción— porque la pregunta es sobre el panel real. No persiste nada.
+    """
+    from modules.banking_score.validation.composicion import diagnosticar_composicion
+    dimension = (params or {}).get("dimension") or "solidez"
+    db = SessionLocal()
+    try:
+        set_phase(f"midiendo `{dimension}` dentro de cada tipo de entidad y tramo de tamaño")
+        return diagnosticar_composicion(db, dimension=dimension)
+    finally:
+        db.close()
+
+
 def _run_sib_historical_load(params, user_id, set_phase) -> Dict:
     """Carga el ledger histórico de la SB (Cronología SB, 1947→) y deriva los financials.
 
@@ -282,6 +299,18 @@ def register() -> None:
         "persiste nada. On-demand. Correr cuando: haya que defender o revisar la credencial "
         "de discriminación del rating.",
         _run_diagnostico_recalibracion, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "banca-diagnostico-composicion", "Diagnóstico: ¿la inversión de solidez es del "
+        "indicador o del panel?",
+        "Mide una dimensión del score (por defecto `solidez`, la de 40 % de peso y Gini "
+        "−0,19) contando SOLO los pares comparables: dentro del mismo tipo de entidad y del "
+        "mismo tramo de tamaño. Si la inversión desaparece al estratificar, la produce "
+        "mezclar poblaciones (las cambiarias están sobrecapitalizadas por diseño) y el "
+        "arreglo NO es la curva del indicador. Devuelve además el Gini de cada indicador de "
+        "la dimensión. No persiste nada. On-demand. Correr cuando: haya que decidir dónde se "
+        "toca el score. Parámetro opcional: `dimension`.",
+        _run_diagnostico_composicion, default_interval_hours=0,
     ))
     registrar_motor(MotorValidacion(
         eje="banking_score", operacion="backtest", clave=BACKTEST_REPORT_KEY,
