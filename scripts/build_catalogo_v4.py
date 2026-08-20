@@ -92,6 +92,32 @@ def credenciales_locales() -> Dict[str, Any]:
         db.close()
 
 
+#: Qué parte del panel puede no otorgar crédito antes de que haya que decirlo AL LADO de la
+#: cifra. No es un umbral de calidad: por encima de esto, un lector que ve «Gini · n» atribuye
+#: la discriminación a una población que no es la que se midió.
+CUOTA_QUE_OBLIGA_A_DECLARAR = 0.10
+
+
+def _sufijo_poblacion(f: Dict[str, Any]) -> str:
+    """La población, pegada al N. Computada de la credencial; nunca escrita a mano.
+
+    El caso: banca publica «Gini · n=1.693» y casi la mitad de ese panel son entidades que no
+    otorgan crédito —están en el universo por diseño del producto— pero la cifra sola se lee
+    como discriminación ENTRE BANCOS. El sujeto viaja con el número o el número se reatribuye.
+    """
+    pob = f.get("poblacion") or {}
+    sin_credito = pob.get("sin_libro_de_credito") or {}
+    cuota = sin_credito.get("cuota_de_observaciones")
+    if not cuota or cuota < CUOTA_QUE_OBLIGA_A_DECLARAR:
+        return ""
+    cuota_ev = sin_credito.get("cuota_de_eventos")
+    tipos = ", ".join(sin_credito.get("tipos") or []) or "otras poblaciones"
+    texto = (f" · {cuota * 100:.0f} % del panel NO otorga crédito ({tipos})")
+    if cuota_ev:
+        texto += f" y aporta {cuota_ev * 100:.0f} % de los eventos"
+    return texto.replace(".", ",")
+
+
 def _fila_credencial(f: Dict[str, Any]) -> List[str]:
     """Una fila de la tabla de validación. Lo NO publicable se dice, no se borra."""
     if not f["publicable"]:
@@ -107,6 +133,7 @@ def _fila_credencial(f: Dict[str, Any]) -> List[str]:
         detalle += f" · {f['eventos']:,} eventos".replace(",", ".")
     if f.get("senal"):
         detalle += f" · señal «{f['senal']}»"
+    detalle += _sufijo_poblacion(f)
     return [f["nombre"], f["metrica"] or "—", _num(f["valor"], 4), _ic(f["ic"]), detalle]
 
 
@@ -170,6 +197,11 @@ def build_docx(cred: Dict[str, Any]) -> str:
     _p("Los grupos no son grados de una misma escala: separan afirmaciones que no se "
        "comparan. Un backtest contra desenlaces reales de entidades y un índice descriptivo "
        "sin corte transversal no sostienen el mismo argumento.", size=9, color=GRAY)
+    _p("El «Detalle» trae, además del N, la POBLACIÓN sobre la que se midió cuando una parte "
+       "relevante de ella no otorga crédito. Un eje puede cubrir por diseño todo un universo "
+       "supervisado —bancos, agentes de cambio, fiduciarias— y entonces su cifra no se puede "
+       "leer como discriminación entre bancos. Sale computada de la misma corrida que produjo "
+       "el Gini, no escrita a mano.", size=9, color=GRAY)
     por_grupo = cred.get("por_grupo") or {}
     por_eje = {f["eje"]: f for f in cred["ejes"]}
     for grupo in GRUPOS:
