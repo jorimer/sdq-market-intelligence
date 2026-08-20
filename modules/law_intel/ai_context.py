@@ -31,6 +31,7 @@ from modules.law_intel.scoring.brecha import resumen as resumen_brecha
 from modules.law_intel.scoring.coherencia_proceso import revisar
 from modules.law_intel.scoring.semaforo import panel
 from modules.law_intel.scoring.semaforo import resumen as resumen_semaforo
+from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
 
 #: Glosa de `estancada` para el modelo. Es la distinción más fácil de perder al redactar:
 #: «estancada» y «retrocede» suenan igual de mal y significan cosas distintas, y el informe
@@ -108,6 +109,18 @@ def law_ai_context(expediente_id: str, corte: str,
             "'sin_registro_publico'. Usá la frase publicable tal como viene: el destinatario "
             "del informe suele ser el órgano obligado y una afirmación negativa sin verificar "
             "es refutable con un solo documento."),
+        # ── Quién produce la evidencia. Va ANTES del cierre y no como apéndice ──
+        # Es lo que decide cuánto pesa cada veredicto de arriba: un incumplimiento sostenido
+        # en una cifra del propio obligado no se refuta por el número, se refuta por la
+        # fuente. Si esto no llega al modelo, la sección sale redactada de memoria y el
+        # informe cita «lo dice el Banco Mundial» sobre datos que produjo el evaluado.
+        "verificabilidad_de_la_evidencia_computada": verificabilidad_publicable(expediente_id),
+        "regla_del_emisor": (
+            "El emisor NO es el productor. Antes de escribir que una cifra «la mide» un "
+            "organismo internacional, mirá su `origen`: si dice `declarado_por_el_evaluado`, "
+            "ese organismo la retransmite y quien la produjo es el Estado evaluado. "
+            "Escribirlo al revés le da al informe una independencia que no tiene, y un "
+            "contradictor la desarma en una línea."),
         # ── Cierre del informe: brecha + recomendación ──
         "brechas_de_medicion": resumen_brecha(br, len(numerados)),
         "recomendaciones_ya_redactadas": [
@@ -126,4 +139,9 @@ def secciones_sin_dato(ctx: Dict[str, Any]) -> List[str]:
         faltan.append("cumplimiento")
     if not ctx["contradicciones_proceso_vs_resultado_computadas"]:
         faltan.append("coherencia_proceso")
+    # Sin nada medido ni ninguna obligación con algo que verificar, la sección no tiene
+    # cadena que mostrar. Se declara en vez de salir con los denominadores en cero, que se
+    # leerían como «no depende del evaluado» — la lectura exactamente opuesta.
+    if not ctx["verificabilidad_de_la_evidencia_computada"]["cadena_por_sujeto"]:
+        faltan.append("verificabilidad")
     return faltan

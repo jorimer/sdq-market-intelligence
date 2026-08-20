@@ -87,11 +87,13 @@ DISPLAY = "SDQ Evaluación de Leyes"
 # Declarado para la regla del sujeto y para la huella de la caché: el contexto de este
 # módulo NO vive solo en `ai_context.py` — la mitad de lo que el modelo lee sale de las
 # frases ya redactadas por el motor de scoring.
-AI_CONTEXT_FILES = ("ai_context.py", "scoring/accionabilidad.py", "scoring/semaforo.py")
+AI_CONTEXT_FILES = ("ai_context.py", "scoring/accionabilidad.py", "scoring/semaforo.py",
+                    "verificabilidad.py")
 
 _SECTION_TITLES = {
     "cumplimiento": "Cumplimiento de las metas",
     "coherencia_proceso": "Proceso declarado contra resultado medido",
+    "verificabilidad": "Quién produce la evidencia con la que se juzga",
     "brechas": "Lo que este informe no puede medir",
     "recomendaciones": "Qué se puede exigir, y con qué instrumento",
 }
@@ -118,6 +120,18 @@ _SAMPLE_NARRATIVES = {
         "actividad con el resultado quieto es el patrón que permite reportar éxito "
         "indefinidamente mientras el indicador se deteriora. En esta muestra no se detectan "
         "contradicciones de ese tipo."),
+    "verificabilidad": (
+        "De los 12 indicadores medidos, 1 se apoya en una medición que produce un tercero sin "
+        "que el evaluado la declare. Los otros 11 se apoyan, al final de la cadena, en cifras "
+        "que produce el propio órgano al que la ley le fija la meta.\n\n"
+        "El matiz que más cambia la lectura: 7 de esos 11 los publica un organismo "
+        "internacional. Eso no los vuelve independientes — el organismo retransmite, o estima "
+        "con método propio sobre insumos nacionales. Citar «lo dice el organismo» sobre una "
+        "cifra que produjo el evaluado le da al informe una independencia que no tiene, y un "
+        "contradictor la desarma en una línea.\n\n"
+        "El hallazgo no es que falten fuentes: la ley SÍ eligió instrumentos de tercero para "
+        "una parte de sus metas. Es que esa parte es justamente la que dejó de estar "
+        "disponible, y con ella se fue la única evidencia que no dependía del evaluado."),
     "brechas": (
         "De los 30 indicadores de la ley, 18 no se miden en este informe. La atribución "
         "importa: 14 son una brecha de la plataforma —falta conectar o verificar la fuente— y "
@@ -146,12 +160,13 @@ def law_manifest() -> SectorProductManifest:
                 watermark="Vista abierta · SDQMIP", price_band="abierto"),
             ProductTier.insight: TierLevelSpec(
                 tier=ProductTier.insight, granularity=Granularity.named_entity,
-                sections=("cumplimiento", "brechas", "recomendaciones"),
+                sections=("cumplimiento", "verificabilidad", "brechas", "recomendaciones"),
                 narrative_templates=("sector_decision", "sector_positioning"),
                 audience="cliente / comisión", cadence="recurring", price_band="suscripción"),
             ProductTier.deep_dive: TierLevelSpec(
                 tier=ProductTier.deep_dive, granularity=Granularity.named_entity,
-                sections=("cumplimiento", "coherencia_proceso", "brechas", "recomendaciones"),
+                sections=("cumplimiento", "coherencia_proceso", "verificabilidad",
+                          "brechas", "recomendaciones"),
                 narrative_templates=("sector_decision", "sector_positioning"),
                 audience="cliente / comisión", cadence="on_demand", price_band="a medida"),
         })

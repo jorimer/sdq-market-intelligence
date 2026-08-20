@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from modules.law_intel.agente_fuentes import MAX_POR_CORRIDA, barrer
 from modules.law_intel.bindings import cargar_bindings, cobertura
+from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
 from modules.law_intel.verificacion import informe
 from shared.registry.service import build_data_registry
 from modules.law_intel.obligaciones import ESTADOS as ESTADOS_OBLIGACION
@@ -218,6 +219,24 @@ def brechas_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[st
             "falta y a quién la ley se lo asigna; no opina sobre qué debería hacer el Estado "
             "con el indicador."),
     }
+
+
+@router.get("/{expediente_id}/verificabilidad")
+def verificabilidad_(expediente_id: str,
+                     _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Quién produce la evidencia con la que se juzga a la ley, y si es el mismo a quien se juzga.
+
+    Es la sección que le pone peso a todas las demás. El resto del motor dice qué marca el
+    dato; ésta dice de dónde salió, que es por donde se refuta un informe: un incumplimiento
+    sostenido en una cifra del propio obligado no se discute por el número.
+
+    La clave es el contraste `emisor` contra `origen`. Una serie del Banco Mundial parece
+    evidencia de tercero y casi siempre retransmite lo que produjo el Estado evaluado — el
+    logo cambia, la medición no. Con un solo campo ese hallazgo desaparece.
+    """
+    e = _expediente(expediente_id)
+    return {"instrumento": {"id": e.id, "norma": e.norma},
+            **verificabilidad_publicable(expediente_id)}
 
 
 @router.get("/{expediente_id}/obligaciones")
