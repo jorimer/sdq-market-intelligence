@@ -63,6 +63,15 @@ class Obligacion:
     #: `desde` y `hasta` son obligatorios para el emisor —sin rango, su alcance nunca es
     #: concluyente y un vacío no autoriza a acusar—, así que van en la declaración.
     verificacion_normativa: Optional[Dict[str, Any]] = None
+    #: Por qué esta obligación NO tiene consulta normativa. Obligatorio cuando falta la
+    #: consulta, y no es burocracia: sin él, «no hay consulta» es indistinguible de «nadie lo
+    #: pensó», que es exactamente la ambigüedad que este expediente existe para no producir.
+    #:
+    #: Las razones no son la misma, y separarlas importa porque se destraban distinto: un
+    #: informe o una convocatoria no dejan rastro en la Gaceta y NUNCA lo dejarán —hace falta
+    #: otra fuente—; un acto del Congreso sí consta, pero en expedientes de Cámara y Senado
+    #: que todavía no tenemos.
+    sin_consulta_normativa: Optional[str] = None
 
     @property
     def exigible(self) -> bool:
