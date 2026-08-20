@@ -148,3 +148,36 @@ class TestNingunaObligacionQUEDASinDeclararSuAlcance:
         for art in (50, 51):
             assert "Cámara y Senado" in por_art[art], (
                 f"el art-{art} no nombra la fuente que haría falta")
+
+
+def test_REGLA_todo_campo_de_una_obligacion_LLEGA_o_se_declara_interno():
+    """ESTRUCTURAL: un campo que existe y no se sirve es indistinguible de uno que no existe.
+
+    Pasó tres veces en un día: `scope` en el registro, y `verificacion_normativa` y
+    `sin_consulta_normativa` acá — declarados en el expediente, invisibles para cualquier
+    consumidor. El motivo de por qué una obligación no se puede verificar es exactamente el
+    tipo de cosa que el informe necesita y que se perdía en el serializador.
+
+    No exige servir todo: exige DECIDIR. Lo que no se sirve se nombra abajo con su razón.
+    """
+    import ast
+    import inspect
+    import textwrap
+    from dataclasses import fields
+
+    from modules.law_intel.api import router
+    from modules.law_intel.obligaciones import Obligacion
+
+    #: Campos que a propósito NO se sirven, con el motivo.
+    INTERNOS = {
+        "nota_de_diseño",  # comentario de mantenimiento del expediente, no del informe
+    }
+
+    fuente = textwrap.dedent(inspect.getsource(router.obligaciones_))
+    servidos = {n.value for n in ast.walk(ast.parse(fuente))
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    faltan = [f.name for f in fields(Obligacion)
+              if f.name not in servidos and f.name not in INTERNOS]
+    assert not faltan, (
+        f"estos campos de `Obligacion` no llegan al consumidor ni se declaran internos: "
+        f"{faltan}. Un campo que existe y no se sirve es indistinguible de uno que no existe.")
