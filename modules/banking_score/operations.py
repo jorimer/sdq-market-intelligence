@@ -149,6 +149,23 @@ def _run_diagnostico_composicion(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _run_materialidad(params, user_id, set_phase) -> Dict:
+    """Distribución del activo total por entidad cambiaria, para CALIBRAR el piso.
+
+    La propuesta de 2026-06-08 acotó el alcance de cambiarias a los agentes con balance
+    material y dejó el umbral «pendiente de calibración». Esto produce la evidencia con la que
+    se fija, contra el panel real. No filtra nada todavía: solo mide.
+    """
+    from modules.banking_score.scoring.materialidad import perfil_de_materialidad
+    tipo = (params or {}).get("tipo") or "cambiaria"
+    db = SessionLocal()
+    try:
+        set_phase(f"midiendo la distribución de activos de las entidades `{tipo}`")
+        return perfil_de_materialidad(db, tipo=tipo)
+    finally:
+        db.close()
+
+
 def _run_sib_historical_load(params, user_id, set_phase) -> Dict:
     """Carga el ledger histórico de la SB (Cronología SB, 1947→) y deriva los financials.
 
@@ -312,6 +329,15 @@ def register() -> None:
         "la dimensión. No persiste nada. On-demand. Correr cuando: haya que decidir dónde se "
         "toca el score. Parámetro opcional: `dimension`.",
         _run_diagnostico_composicion, default_interval_hours=0,
+    ))
+    register_operation(Operation(
+        "banca-materialidad", "Diagnóstico: ¿qué entidades sostienen una calificación?",
+        "Mide la distribución del activo total por entidad de un tipo (por defecto "
+        "`cambiaria`) y muestra dónde la escalera de tamaños tiene un escalón real. Existe "
+        "para CALIBRAR con evidencia el umbral de materialidad que "
+        "`docs/PROPUESTA_CAMBIARIAS_FIDUCIARIAS.md` §0 recomendó y dejó pendiente. No filtra "
+        "nada: solo mide. On-demand. Parámetro opcional: `tipo`.",
+        _run_materialidad, default_interval_hours=0,
     ))
     registrar_motor(MotorValidacion(
         eje="banking_score", operacion="backtest", clave=BACKTEST_REPORT_KEY,
