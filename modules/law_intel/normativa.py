@@ -85,6 +85,28 @@ class Comprobacion:
 _TIPOS_MEDIDOS = frozenset({"ley", "decreto", "reglamento"})
 
 
+def _respaldo_de_gaceta(gaceta: Dict[str, Any]) -> str:
+    """La frase de respaldo, preferiendo la que COMPONE EL EMISOR.
+
+    `texto_citable` lo entregó JurisAI después de que publicáramos «Gaceta 10753 del None»:
+    el número y la fecha viajan por separado y la fecha falta en dos tercios del corpus, así
+    que interpolarla sin comprobar metía un `None` dentro de la evidencia que sostiene el
+    veredicto — y el informe cita esa frase tal cual.
+
+    Usarlo en vez de componerla acá no es comodidad: **quien conoce el formato correcto de una
+    cita oficial es el emisor**, y el día que cambie —o que sepa distinguir «Gaceta Oficial»
+    de un suplemento— nos enteramos sin tocar nada. La composición propia queda como respaldo
+    para respuestas viejas y para cualquier otro emisor que no la traiga.
+    """
+    citable = gaceta.get("texto_citable")
+    if isinstance(citable, str) and citable.strip():
+        return f" Publicada en {citable.strip()}."
+    if not gaceta.get("numero"):
+        return ""
+    frase = f" Publicada en la Gaceta {gaceta['numero']}"
+    return frase + (f" del {gaceta['fecha']}." if gaceta.get("fecha") else ".")
+
+
 def _sin_duplicados(halladas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Una norma por id canónico, quedándose con la grada que dice MÁS.
 
@@ -163,15 +185,7 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
     norma = min(halladas, key=_fecha)
     fecha = _fecha(norma)
     cita = f"{norma.get('tipo', '')} {norma.get('numero', '')}".strip() or norma.get("id", "")
-    gaceta = norma.get("gaceta") or {}
-    # El número de Gaceta y su fecha viajan POR SEPARADO en el corpus, y la fecha falta a
-    # menudo —el propio Decreto 134-14 la trae vacía—. Interpolarla sin comprobar imprime
-    # «del None» dentro de la evidencia que sostiene el veredicto, y esa frase se cita en el
-    # informe tal cual. Se declara lo que hay: el número solo ya es respaldo suficiente.
-    respaldo = ""
-    if gaceta.get("numero"):
-        respaldo = f" Publicada en la Gaceta {gaceta['numero']}"
-        respaldo += f" del {gaceta['fecha']}." if gaceta.get("fecha") else "."
+    respaldo = _respaldo_de_gaceta(norma.get("gaceta") or {})
 
     if not vence or not fecha:
         return Comprobacion(oid, "cumplida",
