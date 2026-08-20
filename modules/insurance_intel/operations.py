@@ -212,9 +212,9 @@ def register() -> None:
         partes=huella_backtest,
         disparado_por=("insurance-financials-sync", "insurance-financials-history-sync"),
         control_de_tamano=ControlDeTamano(
-            motivo="no_medido", variable="primas_suscritas",
-            nota="el panel son 33 aseguradoras de tamaños muy distintos y la señal vigente "
-                 "es de underwriting, que se computa sobre primas: el control corresponde"),
+            clave="control_solo_tamano",
+            nota="primas suscritas de la aseguradora en el año base; viaja DENTRO de cada "
+                 "señal, pegado al Gini que acota"),
     ))
 
 

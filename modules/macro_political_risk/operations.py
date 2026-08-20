@@ -316,9 +316,9 @@ def register() -> None:
         eje="macro_political_risk", operacion="irmp-backtest", clave=IRMP_BACKTEST_KEY,
         partes=huella_backtest,
         control_de_tamano=ControlDeTamano(
-            motivo="no_medido", variable="PIB corriente del país (Banco Mundial)",
-            nota="el desenlace primario son picos de inestabilidad contados por GDELT, que "
-                 "escalan con el tamaño del país: el conteo de eventos favorece al grande"),
+            clave="control_solo_tamano",
+            nota="PIB en dólares constantes (`NY.GDP.MKTP.KD`), la misma serie que el motor "
+                 "ya descarga; viaja dentro de cada bloque de desenlace"),
         sin_cascada_motivo=(
             "el panel de validación no sale de ninguna operación: se descarga entero del "
             "Banco Mundial/WGI/FMI en cada corrida. Lo que sí lo invalida —la doctrina— no "

@@ -1,7 +1,7 @@
 """ESG-climate console operations — registers the IRC sync + backtest."""
 import json
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, Optional
 
 from shared.database.session import SessionLocal
 from shared.operations import Operation, register_operation
@@ -37,6 +37,27 @@ def _run_esg_sync(params, user_id, set_phase) -> Dict:
         db.close()
 
 
+def _poblacion_del_panel(iso3_codes) -> Optional[Dict[str, float]]:
+    """``{iso3: población}`` del WDI, o ``None`` si la descarga falla.
+
+    Devolver ``None`` y que el reporte lo DECLARE es distinto de devolver un dict vacío, que
+    se leería como «ningún país tiene población».
+    """
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    try:
+        filas, _actualizado = fetch_wb_indicator("SP.POP.TOTL", list(iso3_codes), mrv=1)
+    except Exception:  # noqa: BLE001 — el control es best-effort, no tumba el backtest
+        return None
+    out: Dict[str, float] = {}
+    for fila in filas or []:
+        iso3 = (fila.get("countryiso3code") or "").upper()
+        valor = fila.get("value")
+        if iso3 and valor is not None:
+            out[iso3] = float(valor)
+    return out or None
+
+
 def _run_esg_backtest(params, user_id, set_phase) -> Dict:
     """Validate the IRC against realized climate-disaster mortality (OWID/EM-DAT)
     and persist the report (AppSetting). Best-effort on the OWID download."""
@@ -55,8 +76,14 @@ def _run_esg_backtest(params, user_id, set_phase) -> Dict:
             mortality = owid_disasters_client.fetch_climate_mortality(list(IRC_PANEL))
         except Exception as e:  # noqa: BLE001 — report the failure, don't crash
             return {"error": f"OWID no disponible: {e}", "errors": [str(e)]}
+        # El CONTROL POR TAMAÑO necesita la población: el desenlace viene por 100.000
+        # habitantes, así que la población es su deflactor. Best-effort como la descarga de
+        # OWID — si el WDI no responde, el control se declara no computado en vez de
+        # desaparecer, y el reporte sigue saliendo.
+        set_phase("descargando población del panel (WDI) para el control por tamaño")
+        poblacion = _poblacion_del_panel(list(IRC_PANEL))
         set_phase("calculando correlación IRC vs mortalidad climática")
-        report = build_esg_backtest(irc, mortality)
+        report = build_esg_backtest(irc, mortality, poblacion=poblacion)
         sellar(report, "esg_climate", db)
         row = db.query(AppSetting).filter(AppSetting.key == ESG_BACKTEST_KEY).first()
         payload = json.dumps(report)
@@ -94,9 +121,10 @@ def register() -> None:
         eje="esg_climate", operacion="esg-backtest", clave=ESG_BACKTEST_KEY,
         partes=huella_backtest, disparado_por=("esg-sync",),
         control_de_tamano=ControlDeTamano(
-            motivo="no_medido", variable="población del país (Banco Mundial)",
-            nota="el desenlace es mortalidad por desastres climáticos, un CONTEO: sin "
-                 "normalizar por población el país grande acumula más muertes por tamaño"),
+            clave="control_solo_tamano",
+            nota="población del país (`SP.POP.TOTL`), que es el DEFLACTOR del desenlace: la "
+                 "mortalidad ya viene por 100.000 habitantes. Se mide con Spearman porque el "
+                 "motor es de correlación, no de clasificación"),
         insumo_no_cubierto=("mortalidad por desastres climáticos (OWID/EM-DAT), "
                             "descargada en cada corrida y no persistida",),
     ))

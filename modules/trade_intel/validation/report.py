@@ -32,6 +32,7 @@ from modules.trade_intel.validation.outcomes import (
 )
 from modules.trade_intel.validation.peers import VALIDATION_PEERS
 from shared.data import comtrade_client as cc
+from shared.validation.control_tamano import medir_control_de_tamano
 from shared.validation.metrics import (
     deterioration_rate_by_tier,
     gini_bootstrap_ci,
@@ -60,6 +61,14 @@ def _metrics_for(labeled: List[Dict]) -> Dict:
     }
 
 
+def _control(labeled: List[Dict], gini_del_score: Optional[float]) -> Dict:
+    """El mismo panel etiquetado, ordenado solo por el tamaño exportador del país."""
+    return medir_control_de_tamano(
+        [r.get("total_exports") for r in labeled], [r["label"] for r in labeled],
+        gini_del_score, variable="total_exports",
+        nota_extra="valor total exportado del país en el año base (Comtrade)")
+
+
 def build_backtest_report(dataset: Optional[Dict] = None) -> Dict:
     """Run the trade-resilience backtest from the committed Comtrade+WDI panel."""
     if dataset is None:
@@ -67,8 +76,18 @@ def build_backtest_report(dataset: Optional[Dict] = None) -> Dict:
     panel = build_panel(dataset)
     wdi = (dataset or {}).get("wdi", {})
 
-    export_collapse = _metrics_for(label_panel_export(panel, exports_by_year(panel)))
-    external_macro = _metrics_for(label_panel_external(panel, wdi))
+    etiquetado_export = label_panel_export(panel, exports_by_year(panel))
+    etiquetado_macro = label_panel_external(panel, wdi)
+    export_collapse = _metrics_for(etiquetado_export)
+    external_macro = _metrics_for(etiquetado_macro)
+    # CONTROL POR TAMAÑO, dentro de cada bloque. El desenlace primario es una caída
+    # PORCENTUAL de exportaciones, y el país chico tiene más varianza porcentual por
+    # construcción: sin medir qué hace el tamaño solo, «el índice ordena el colapso» y «los
+    # chicos colapsan más seguido» son indistinguibles.
+    export_collapse["control_solo_tamano"] = _control(etiquetado_export,
+                                                      export_collapse.get("gini"))
+    external_macro["control_solo_tamano"] = _control(etiquetado_macro,
+                                                     external_macro.get("gini"))
 
     panel_countries = sorted({r["iso"] for r in panel})
     meta = (dataset or {}).get("meta", {})

@@ -152,9 +152,12 @@ def register() -> None:
         eje="social_dev", operacion="idm-convergent-validity", clave=IDM_VALIDITY_KEY,
         partes=huella_convergent, disparado_por=("idm-snapshot",),
         control_de_tamano=ControlDeTamano(
-            motivo="no_medido", variable="población de la provincia (ONE)",
-            nota="el motor es validez convergente entre índices provinciales; una provincia "
-                 "grande y una chica no tienen por qué ordenarse en la misma escala"),
+            motivo="no_medido", variable="población de la región (Censo 2022, ONE)",
+            nota="ÚNICO motor del catálogo que sigue sin control, y el motivo es de DATO, no "
+                 "de diseño: la población por región de desarrollo no está conectada. La "
+                 "fuente existe (X Censo Nacional 2022) pero `www.one.gob.do` responde 403 "
+                 "detrás de Cloudflare, así que entra por instantánea comiteada o no entra. "
+                 "Las diez regiones sí se ordenarían por tamaño: el control corresponde"),
     ))
 
 

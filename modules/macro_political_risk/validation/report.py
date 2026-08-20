@@ -7,12 +7,13 @@ PRELIMINARY/DIRECTIONAL, not Basel-grade — the report says so (plan §6.5).
 """
 from typing import Dict, List, Optional, Tuple
 
-from modules.macro_political_risk.validation.historical import build_panel
+from modules.macro_political_risk.validation.historical import WDI_GDP_LEVEL, build_panel
 from modules.macro_political_risk.validation.outcomes import (
     label_panel,
     label_panel_governance,
 )
 from shared.doctrine import load_doctrine_raw
+from shared.validation.control_tamano import medir_control_de_tamano
 from shared.validation.metrics import (
     deterioration_rate_by_tier,
     gini_bootstrap_ci,
@@ -123,6 +124,15 @@ def _disclaimer(governance: Dict, n_countries: int, n_pairs: int) -> str:
     )
 
 
+def _control(labeled: List[Dict], pib: Dict[str, Dict[int, float]],
+             gini_del_score: Optional[float]) -> Dict:
+    """El mismo panel etiquetado, ordenado solo por el PIB del país en ese año."""
+    return medir_control_de_tamano(
+        [pib.get(r["iso"], {}).get(r["year"]) for r in labeled],
+        [r["label"] for r in labeled], gini_del_score, variable=WDI_GDP_LEVEL,
+        nota_extra="PIB en dólares constantes del país en el año base (Banco Mundial)")
+
+
 def build_backtest_report(series: Optional[Dict] = None,
                           events: Optional[Dict] = None) -> Dict:  # pragma: no cover - network in build_panel/BQ
     """Run the IRMP backtest. PRIMARY outcome = political-instability spikes (GDELT
@@ -138,8 +148,18 @@ def build_backtest_report(series: Optional[Dict] = None,
         events = fetch_instability_events(2012, fips_to_iso2(VALIDATION_PEERS))
     panel = build_panel(series, VALIDATION_PEERS)
 
-    governance = _metrics_for(label_panel_governance(panel, events))
-    credit = _metrics_for(label_panel(series, panel))
+    etiquetado_gov = label_panel_governance(panel, events)
+    etiquetado_credit = label_panel(series, panel)
+    governance = _metrics_for(etiquetado_gov)
+    credit = _metrics_for(etiquetado_credit)
+    # CONTROL POR TAMAÑO. El desenlace primario son picos de eventos CONTADOS por GDELT, y un
+    # conteo escala con el tamaño del país: más población y más cobertura mediática producen
+    # más eventos sin que cambie el riesgo. Sin medir qué hace el PIB solo, «el IRMP ordena la
+    # inestabilidad» y «los países grandes generan más noticias» son indistinguibles.
+    pib = series.get(WDI_GDP_LEVEL, {})
+    governance["control_solo_tamano"] = _control(etiquetado_gov, pib,
+                                                 governance.get("gini"))
+    credit["control_solo_tamano"] = _control(etiquetado_credit, pib, credit.get("gini"))
     rho, pairs = _convergent_validity(series, panel)
 
     panel_countries = sorted({r["iso"] for r in panel})

@@ -73,3 +73,66 @@ class ControlDeTamano:
     @property
     def publicado(self) -> bool:
         return bool(self.clave)
+
+
+# La prosa que los reportes copian vive acá, no incrustada en cada dict: un literal partido
+# por ancho de línea deja de existir en el fuente aunque el valor sea correcto.
+NOTA_CONTROL = (
+    "el MISMO desenlace sobre el MISMO panel, ordenado solo por el tamaño del sujeto. Es la "
+    "vara contra la que se lee la cifra del score: si el tamaño solo alcanza el mismo poder, "
+    "el score no está agregando nada por encima de cuán grande es el sujeto"
+)
+VEREDICTO_TAMANO_ALCANZA = (
+    "el tamaño SOLO ordena igual o mejor que el score: sobre este panel el score no agrega "
+    "poder discriminante por encima del tamaño del sujeto"
+)
+VEREDICTO_SCORE_SUPERA = (
+    "el score ordena mejor que el tamaño solo: la discriminación no se explica por cuán "
+    "grande es el sujeto"
+)
+VEREDICTO_CONTROL_NO_EVALUABLE = (
+    "no evaluable: falta el Gini del score o el del tamaño, así que no hay comparación que "
+    "hacer. No es «el control salió bien»"
+)
+
+
+def medir_control_de_tamano(
+    tamanos: "list", labels: "list", gini_del_score: Optional[float], variable: str,
+    n_boot: int = 1000, nota_extra: Optional[str] = None,
+) -> Dict[str, object]:
+    """El mismo desenlace ordenado SOLO por tamaño, con su veredicto computado.
+
+    *tamanos* entra con la MISMA convención que el score del motor (valor alto = sujeto
+    "mejor" o más grande), así que su Gini se lee en la misma escala y se compara de frente.
+    Los sujetos sin tamaño quedan fuera y se cuentan: un control computado sobre otro universo
+    no acota nada.
+
+    El veredicto compara MAGNITUDES (|Gini|), no signos: un control que ordena al revés con la
+    misma fuerza también explica la cifra del score — es lo que pasó con el IAI, donde el
+    deflactor producía el −0,32 entero.
+    """
+    from shared.validation.metrics import gini_bootstrap_ci
+
+    pares = [(float(t), int(lab)) for t, lab in zip(tamanos, labels) if t is not None]
+    base: Dict[str, object] = {"variable": variable,
+                               "nota": NOTA_CONTROL + (f" — {nota_extra}" if nota_extra else "")}
+    if not pares or len({lab for _t, lab in pares}) < 2:
+        return {**base, "gini": None, "gini_ci": None, "n": len(pares),
+                "veredicto": VEREDICTO_CONTROL_NO_EVALUABLE,
+                "motivo": "el panel no trae el tamaño de sus sujetos, o no tiene las dos "
+                          "clases del desenlace: el control no se puede computar"}
+    g, lo, hi = gini_bootstrap_ci([t for t, _l in pares], [lab for _t, lab in pares],
+                                  n_boot=n_boot)
+    alcanza = (g is not None and gini_del_score is not None
+               and abs(g) >= abs(gini_del_score))
+    return {
+        **base,
+        "gini": None if g is None else round(g, 4),
+        "gini_ci": None if g is None or lo is None or hi is None else [round(lo, 4),
+                                                                      round(hi, 4)],
+        "n": len(pares),
+        "gini_del_score": gini_del_score,
+        "el_tamano_alcanza_al_score": bool(alcanza),
+        "veredicto": (VEREDICTO_CONTROL_NO_EVALUABLE if g is None or gini_del_score is None
+                      else VEREDICTO_TAMANO_ALCANZA if alcanza else VEREDICTO_SCORE_SUPERA),
+    }
