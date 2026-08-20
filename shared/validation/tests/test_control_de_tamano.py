@@ -325,3 +325,67 @@ def test_el_veredicto_del_control_compara_magnitudes_no_signos():
     assert abs(supera["gini"]) < 0.8
     assert supera["el_tamano_alcanza_al_score"] is False
     assert supera["veredicto"] == VEREDICTO_SCORE_SUPERA
+
+
+# ── 7. Los dos estados que la corrida REAL obligó a agregar ───────
+
+def test_el_empate_no_se_reporta_como_ventaja_del_score():
+    """El caso que casi publica una conclusión falsa (seguros, 2026-08-19).
+
+    La señal de underwriting daba 0,2575 y el tamaño solo 0,2404 — una diferencia de 0,017
+    con los IC casi superpuestos. Un `>=` estricto llamaba a eso «el score supera al tamaño»,
+    que en un documento comercial se lee como que la credencial mide algo que el tamaño no.
+    """
+    from shared.validation.control_tamano import VEREDICTO_EMPATE, medir_control_de_tamano
+
+    tamanos = [float(i) for i in range(40)]
+    labels = [1 if i % 3 == 0 else 0 for i in range(40)]
+    salida = medir_control_de_tamano(tamanos, labels, gini_del_score=0.2575,
+                                     ic_del_score=[0.1237, 0.3946], variable="primas",
+                                     n_boot=50)
+    assert salida["gini"] is not None
+    if salida["gini_ci"] and 0.1237 <= salida["gini"] <= 0.3946:
+        assert salida["empata_con_el_score"] is True
+        assert salida["veredicto"] == VEREDICTO_EMPATE
+
+
+def test_un_control_sobre_OTRO_panel_se_niega_a_comparar():
+    """El caso real de pensiones: 96 de 1.590 observaciones con tamaño, y aun así veredicto.
+
+    Los activos son trimestrales y los retornos mensuales. Comparar un Gini de 1.590
+    observaciones con uno de 96 pone dos universos uno al lado del otro y engaña.
+    """
+    from shared.validation.control_tamano import VEREDICTO_OTRO_PANEL, medir_control_de_tamano
+
+    tamanos = [float(i) if i < 10 else None for i in range(100)]
+    labels = [i % 2 for i in range(100)]
+    salida = medir_control_de_tamano(tamanos, labels, gini_del_score=0.16,
+                                     ic_del_score=[0.10, 0.22], variable="activos", n_boot=50)
+    assert salida["n"] == 10 and salida["n_del_score"] == 100
+    assert salida["cobertura_del_panel"] == 0.1
+    assert salida["comparable"] is False
+    assert salida["veredicto"] == VEREDICTO_OTRO_PANEL
+    assert salida["el_tamano_alcanza_al_score"] is False, (
+        "Un control incomparable no puede afirmar que el tamaño alcanza: sería una "
+        "conclusión sacada de otro universo."
+    )
+
+
+def test_el_N_del_score_viaja_al_lado_del_N_del_control():
+    """Sin los dos N, nadie nota que se están comparando dos paneles distintos."""
+    from shared.validation.control_tamano import medir_control_de_tamano
+
+    salida = medir_control_de_tamano([1.0, 2.0, 3.0, 4.0], [1, 0, 1, 0], 0.2,
+                                     variable="t", n_boot=20)
+    assert salida["n"] == 4 and salida["n_del_score"] == 4
+    assert salida["cobertura_del_panel"] == 1.0 and salida["comparable"] is True
+
+
+def test_pensiones_alinea_el_tamano_al_periodo_sin_inventar_valores():
+    """Último valor CONOCIDO en o antes del período: una regla declarada, no interpolación."""
+    from modules.pension_intel.validation.backtest import _vigente
+
+    serie = {"2024-03": 100.0, "2024-06": 120.0}
+    assert _vigente(serie, "2024-05") == 100.0   # arrastra el trimestre anterior
+    assert _vigente(serie, "2024-06") == 120.0
+    assert _vigente(serie, "2024-01") is None    # antes del primer dato NO inventa

@@ -94,11 +94,37 @@ VEREDICTO_CONTROL_NO_EVALUABLE = (
     "no evaluable: falta el Gini del score o el del tamaño, así que no hay comparación que "
     "hacer. No es «el control salió bien»"
 )
+# El tercer estado, que faltaba y por poco publica una conclusión falsa. Medido en producción
+# el 2026-08-19: la señal de underwriting de seguros da 0,2575 y el tamaño solo 0,2404 — una
+# diferencia de 0,017 con los IC casi superpuestos. Un `>=` estricto llamaba a eso «el score
+# supera al tamaño», que en un documento comercial se lee como que la credencial mide algo que
+# el tamaño no. No lo mide: empata.
+VEREDICTO_EMPATE = (
+    "empate: el tamaño solo alcanza un poder estadísticamente indistinguible del score (su "
+    "Gini cae dentro del intervalo del score). La credencial no se puede presentar como algo "
+    "que el tamaño del sujeto no explique"
+)
+VEREDICTO_AMBOS_NULOS = (
+    "sin señal en ninguno de los dos: ni el score ni el tamaño ordenan el desenlace de forma "
+    "concluyente, así que compararlos no dice nada"
+)
+VEREDICTO_OTRO_PANEL = (
+    "no comparable: el control se computó sobre bastante menos observaciones que el score, "
+    "así que las dos cifras no hablan del mismo universo y ponerlas una al lado de la otra "
+    "engaña"
+)
+
+#: Debajo de esta cobertura (n del control / n del score) las dos cifras no son del mismo
+#: panel y el veredicto se niega a compararlas. Salió de la corrida real: en pensiones el
+#: control de la señal de retorno cubría 96 de 1.590 observaciones —los activos son
+#: trimestrales y los retornos mensuales— y aun así producía un veredicto.
+COBERTURA_MINIMA = 0.80
 
 
 def medir_control_de_tamano(
     tamanos: "list", labels: "list", gini_del_score: Optional[float], variable: str,
     n_boot: int = 1000, nota_extra: Optional[str] = None,
+    ic_del_score: Optional["list"] = None,
 ) -> Dict[str, object]:
     """El mismo desenlace ordenado SOLO por tamaño, con su veredicto computado.
 
@@ -125,14 +151,39 @@ def medir_control_de_tamano(
                                   n_boot=n_boot)
     alcanza = (g is not None and gini_del_score is not None
                and abs(g) >= abs(gini_del_score))
+    # ¿Empata? El Gini del control cae dentro del intervalo del score → la diferencia no se
+    # distingue del ruido, y decir «el score supera» sería inventar una ventaja.
+    empata = bool(
+        g is not None and gini_del_score is not None and ic_del_score
+        and ic_del_score[0] is not None and ic_del_score[1] is not None
+        and ic_del_score[0] <= g <= ic_del_score[1]
+    )
+    n_del_score = len(labels)
+    cobertura = len(pares) / n_del_score if n_del_score else 0.0
+    otro_panel = cobertura < COBERTURA_MINIMA
+    if g is None or gini_del_score is None:
+        veredicto = VEREDICTO_CONTROL_NO_EVALUABLE
+    elif otro_panel:
+        veredicto = VEREDICTO_OTRO_PANEL
+    elif empata:
+        veredicto = VEREDICTO_EMPATE
+    elif alcanza:
+        veredicto = VEREDICTO_TAMANO_ALCANZA
+    else:
+        veredicto = VEREDICTO_SCORE_SUPERA
     return {
         **base,
         "gini": None if g is None else round(g, 4),
         "gini_ci": None if g is None or lo is None or hi is None else [round(lo, 4),
                                                                       round(hi, 4)],
         "n": len(pares),
+        # El N del score viaja al lado del N del control: sin los dos, nadie nota que se
+        # están comparando dos universos distintos.
+        "n_del_score": n_del_score,
+        "cobertura_del_panel": round(cobertura, 4),
+        "comparable": not otro_panel,
         "gini_del_score": gini_del_score,
-        "el_tamano_alcanza_al_score": bool(alcanza),
-        "veredicto": (VEREDICTO_CONTROL_NO_EVALUABLE if g is None or gini_del_score is None
-                      else VEREDICTO_TAMANO_ALCANZA if alcanza else VEREDICTO_SCORE_SUPERA),
+        "el_tamano_alcanza_al_score": bool(alcanza and not otro_panel),
+        "empata_con_el_score": bool(empata and not otro_panel),
+        "veredicto": veredicto,
     }
