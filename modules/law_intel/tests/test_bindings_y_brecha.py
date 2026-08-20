@@ -71,7 +71,8 @@ class TestValidacionDeBindings:
     def test_descartado_puede_citar_fuente_no_admitida(self):
         """Su razón de ser es dejar registrado qué se evaluó y por qué no sirve."""
         _validar(self._exp_falso(),
-                 [Binding("1.8", "s", "wef", "menor", "descartado", motivo_descarte="x")])
+                 [Binding("1.8", "s", "wef", "menor", "descartado", motivo_descarte="x",
+                           origen="instrumento_de_tercero", productor="WEF")])
 
     def test_binding_a_indicador_inexistente(self):
         with pytest.raises(ExpedienteInvalido, match="inexistente"):
@@ -84,7 +85,8 @@ class TestValidacionDeBindings:
     def test_direccion_plana_no_bloquea(self):
         """Con metas planas la dirección no es deducible; el binding decide y no se contradice."""
         e = self._exp_falso(base_valor=24.4, metas={"2015": 24.4, "2030": 24.4})
-        _validar(e, [Binding("1.8", "s", "one", "mayor", "verificado", periodo_verificado="2024")])
+        _validar(e, [Binding("1.8", "s", "one", "mayor", "verificado", periodo_verificado="2024",
+                             origen="declarado_por_el_evaluado", productor="ONE")])
 
 
 class TestBrecha:

@@ -105,6 +105,19 @@ class Binding:
     # Se DECLARA por binding y nunca se infiere: aflojar el guard de frescura para todos sería
     # exactamente el error que el guard existe para evitar. Sin declarar, rige el umbral anual.
     cadencia_anios: Optional[int] = None
+    # QUIÉN produce la medición, y quién solo la publica. Son dos cosas distintas y el
+    # informe cita la primera: una serie del Banco Mundial parece evidencia de tercero y en
+    # la mayoría de los casos retransmite la cifra que produjo el Estado evaluado.
+    #
+    # Se declara POR BINDING y jamás se deduce del `id` de la fuente. El WDI publica a la vez
+    # estimaciones propias (mortalidad de menores, subalimentación) y retransmisiones
+    # (usuarios de internet, mujeres en Diputados); graduar por emisor le pondría la misma
+    # etiqueta a las dos e inflaría la independencia declarada del informe — en la dirección
+    # que le conviene a quien lo vende.
+    origen: Optional[str] = None
+    #: El productor, con nombre. Va aparte del origen porque el origen es una categoría y
+    #: esto es la cadena concreta que un lector puede ir a comprobar.
+    productor: Optional[str] = None
 
     @property
     def cuenta(self) -> bool:
@@ -155,6 +168,12 @@ def cargar_bindings(expediente_id: str) -> Dict[str, Binding]:
 
 
 def _validar(exp: Expediente, bindings: List[Binding]) -> None:
+    # El vocabulario de orígenes vive en `verificabilidad`, que es el módulo que razona
+    # sobre él, y ese módulo importa de éste. El import va acá adentro para que la
+    # dependencia sea en un solo sentido en tiempo de carga: cuando `_validar` corre,
+    # este módulo ya terminó de importarse y no hay ciclo.
+    from modules.law_intel.verificabilidad import ORIGENES_DE_INDICADOR
+
     por_id = {i.id: i for i in exp.indicadores}
 
     # El duplicado es una propiedad del CONJUNTO, no de un binding suelto, y por eso va en
@@ -203,6 +222,22 @@ def _validar(exp: Expediente, bindings: List[Binding]) -> None:
             raise ExpedienteInvalido(
                 f"{b.indicador}: verificado sin `periodo_verificado`. Poné el período del "
                 f"dato con el que se comprobó (lo devuelve /bindings/verificacion).")
+
+        # De dónde sale la evidencia. Se exige a TODOS los bindings y no solo a los
+        # verificados: la sección de verificabilidad cuenta también lo que la ley PERDIÓ, y
+        # un descarte sin origen declarado desaparece de esa cuenta en vez de sumar a ella.
+        if not (b.origen or "").strip():
+            raise ExpedienteInvalido(
+                f"{b.indicador}: sin `origen` declarado. Quién produce la medición decide "
+                f"cuánto pesa el veredicto y no se deduce del emisor.")
+        if b.origen not in ORIGENES_DE_INDICADOR:
+            raise ExpedienteInvalido(
+                f"{b.indicador}: origen '{b.origen}' fuera del conjunto admitido "
+                f"{sorted(ORIGENES_DE_INDICADOR)}.")
+        if not (b.productor or "").strip():
+            raise ExpedienteInvalido(
+                f"{b.indicador}: declara origen y no dice QUIÉN produce la medición. Una "
+                f"categoría sin cadena concreta no se puede ir a comprobar.")
 
 
 def cobertura(expediente_id: str) -> Dict[str, object]:

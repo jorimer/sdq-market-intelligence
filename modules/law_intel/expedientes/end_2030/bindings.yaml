@@ -74,6 +74,9 @@ bindings:
     mejor: menor
     periodo_verificado: "2024"
     estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      ONE — medición oficial de pobreza monetaria.
     nota_comparabilidad: >-
       ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
       valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
@@ -96,6 +99,10 @@ bindings:
     transformacion: complemento_100
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Estado dominicano (ONE): censo y encuestas de hogares. El Banco Mundial republica el
+      agregado; no mide.
     nota: >-
       ══ RE-ATADO 2026-08-19 ══ Cambia de FUENTE, no de concepto. Estaba demotado porque
       `social_dev:literacy_rate` se mide por región y el registro publicaba el valor de una
@@ -122,6 +129,9 @@ bindings:
     mejor: mayor
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      ONE — SISDOM, cuadro 05 3 007, fila «Total».
     nota: >-
       Repuntado de `social_dev:schooling_years` —que se mide POR REGIÓN y servía el valor
       de cibao_norte (9,63)— a `schooling_years_pais`, la fila «Total» del cuadro 05 3 007
@@ -136,6 +146,10 @@ bindings:
     mejor: mayor
     periodo_verificado: "2024"
     estado: verificado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      División de Población de la ONU: estimación demográfica modelada sobre censos y
+      estadísticas vitales dominicanas.
     nota: >-
       La fuente decía `one` y el dato viene del WDI (`SP.DYN.LE00.IN`), que es lo que el
       sync ingiere. Corregido: un rótulo de procedencia falso es peor que uno ausente,
@@ -151,6 +165,9 @@ bindings:
     mejor: mayor
     periodo_verificado: "2025"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      MINERD — tablero del SIIE. Es el mismo órgano al que la ley le fija la meta.
     nota: >-
       Cobertura neta del nivel básico, fila `TOTAL PAIS` del tablero del SIIE. La meta es
       100% para 2025 desde una base de 94,7% en 2010, así que el margen es estrecho y el
@@ -168,6 +185,9 @@ bindings:
     mejor: mayor
     periodo_verificado: "2025"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      MINERD — tablero del SIIE. Es el mismo órgano al que la ley le fija la meta.
     nota: >-
       Repuntado de `social_dev:secondary_coverage` —que se mide POR REGIÓN y servía el
       valor de cibao_norte (71,3)— a la fila `TOTAL PAIS` del tablero del SIIE.
@@ -192,6 +212,9 @@ bindings:
     transformacion: complemento_100
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — Encuesta Nacional Continua de Fuerza de Trabajo (ENCFT).
     nota: >-
       `informality_rate` es «% de población ocupada en el sector informal» (BCRD/ENCFT). El
       indicador legal es su complemento: «% de población ocupada en el sector FORMAL (15 años
@@ -213,6 +236,9 @@ bindings:
     fuente: bcrd
     mejor: menor
     estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — ENCFT.
     nota_comparabilidad: >-
       La serie mide bien la desocupación, pero NO la misma que la ley usó para fijar sus
       metas. La línea base legal (14,3% en 2010) viene de la ENFT; la ENCFT, que la
@@ -232,6 +258,10 @@ bindings:
     mejor: mayor
     periodo_verificado: "2025"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD/ENCFT. El promedio anual es cómputo SDQ sobre los trimestres del emisor; la
+      medición de base es del evaluado.
     nota: >-
       Razón entre la tasa de ocupación femenina y la masculina (1,0 = paridad). Computada
       sobre el promedio anual de cada sexo: el BCRD publica los trimestres, no el promedio,
@@ -245,6 +275,10 @@ bindings:
     mejor: menor
     periodo_verificado: "2025"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD/ENCFT. El promedio anual es cómputo SDQ sobre los trimestres del emisor; la
+      medición de base es del evaluado.
     nota: >-
       Razón entre la desocupación femenina y la masculina; la ley manda cerrarla hacia 1,0.
       Va en el sentido contrario: 2,18 en 2010 (base legal), 2,01 en 2015 y 2,70 en 2025,
@@ -260,6 +294,9 @@ bindings:
     mejor: mayor
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      INDOTEL, el regulador nacional, vía la UIT; el Banco Mundial republica.
     nota: >-
       «Individuals using the Internet (% of population)» — la magnitud exacta del indicador.
       NO es `telecom:internet_penetration`, que es banda ancha MÓVIL por 100 habitantes y
@@ -286,6 +323,10 @@ bindings:
     mejor: mayor
     periodo_verificado: "2025"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      La propia Cámara de Diputados, reportada a la Unión Interparlamentaria; el Banco
+      Mundial republica.
     nota: >-
       «Proportion of seats held by women in national parliaments» del Banco Mundial, sobre
       el reporte de la Unión Interparlamentaria. Para sistemas bicamerales la UIP reporta la
@@ -307,6 +348,9 @@ bindings:
     mejor: mayor
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      El propio Senado, reportado a la Unión Interparlamentaria (Parline).
     nota: >-
       Composición del Senado (Unión Interparlamentaria, entidad DO-UC01). Es el único de los
       cuatro cargos electivos que ninguna otra fuente cubre: el WDI da la cámara BAJA —20,77
@@ -332,6 +376,9 @@ bindings:
     mejor: mayor
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Junta Central Electoral. La CEPAL recoge y publica; no produce el dato.
     nota: >-
       «Mujeres alcaldesas electas» del Observatorio de Igualdad de Género. La
       identificación es por VALOR y no por nombre —«alcaldesa» es el término regional de lo
@@ -348,6 +395,9 @@ bindings:
     mejor: mayor
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Junta Central Electoral. La CEPAL recoge y publica; no produce el dato.
     nota: >-
       «Mujeres concejalas electas» — regidoras en la terminología dominicana.
       SALVEDAD: la ley fija la línea base en 35,0% para 2010 y la serie da 33,3 ese año,
@@ -373,6 +423,10 @@ bindings:
     fuente: wdi
     mejor: menor
     estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Grupo interagencial MMEIG (OMS/UNICEF/UNFPA/BM/DAES): estimación modelada. La ley fija
+      su línea base con el método de hermandad de la ENDESA.
     motivo_descarte: >-
       Razón de mortalidad materna. La línea base de la ley es 159 (ENDESA 1997-2007, método
       de hermandad) y la estimación modelada del MMEIG da 92 para 2010: una brecha del 70%
@@ -385,6 +439,9 @@ bindings:
     fuente: wdi
     mejor: menor
     estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      OMS — Programa Mundial de Tuberculosis: estimación sobre notificaciones nacionales.
     motivo_descarte: >-
       Tasa de mortalidad por tuberculosis. La ley fija 1,2 para 2009 y la serie del Banco
       Mundial da 6 ese mismo año — cinco veces más. Y la trampa: el último valor de la serie
@@ -396,6 +453,10 @@ bindings:
     fuente: wdi
     mejor: mayor
     estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Cuentas de salud dominicanas compiladas por la OMS (GHED). El emisor agrega; el gasto
+      lo reporta el Estado.
     motivo_descarte: >-
       Gasto público en salud como % del PIB. La ley fija 1,4 para 2009 y la serie da 2,33 el
       mismo año: el agregado del Banco Mundial incluye la seguridad social y el de la ley
@@ -408,6 +469,10 @@ bindings:
     fuente: wdi
     mejor: mayor
     estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Programa Conjunto OMS/UNICEF (JMP): estimación con definiciones propias sobre
+      encuestas de hogares dominicanas.
     motivo_descarte: >-
       Acceso a saneamiento. La ley dice «servicios sanitarios mejorados» (definición JMP
       anterior a 2015) y la serie disponible es «al menos básicos», que es otro escalón de
@@ -420,6 +485,10 @@ bindings:
     fuente: wdi
     mejor: mayor
     estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Programa Conjunto OMS/UNICEF (JMP): estimación con definiciones propias sobre
+      encuestas de hogares dominicanas.
     motivo_descarte: >-
       Acceso a agua. La ley pide «agua de la red pública» y la serie mide «al menos agua
       potable básica», que incluye pozos protegidos y otras fuentes fuera de red. La brecha
@@ -433,6 +502,10 @@ bindings:
     mejor: menor
     periodo_verificado: "2024"
     estado: verificado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Grupo Interagencial de la ONU (UN IGME): estimación modelada sobre las rondas ENDESA
+      dominicanas.
     nota: >-
       `SH.DYN.MORT` — mortalidad de menores de 5 años, la magnitud exacta del indicador. El
       binding anterior apuntaba a `child_mortality`, que es `SP.DYN.IMRT.IN`, mortalidad
@@ -460,6 +533,9 @@ bindings:
     mejor: mayor
     periodo_verificado: "2025"
     estado: verificado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Banco Mundial: método Atlas aplicado sobre las cuentas nacionales del BCRD.
     # El descarte anterior NO se pierde al atar la serie buena: queda como candidato
     # rechazado, con su motivo, para que ningún barrido futuro lo vuelva a proponer.
     candidatos_descartados:
@@ -487,6 +563,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Foro Económico Mundial: índice construido con encuesta propia a ejecutivos más
+      estadísticas. Discontinuado en su forma comparable tras 2019.
     motivo_descarte: >-
       El WEF discontinuó el Índice Global de Competitividad en su forma comparable tras 2019 y
       no es fuente oficial del Estado dominicano. Sin fuente admisible, el indicador queda
@@ -503,6 +583,9 @@ bindings:
     mejor: menor
     periodo_verificado: "2024"
     estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      ONE — medición oficial de pobreza monetaria extrema.
     nota_comparabilidad: >-
       ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
       valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
@@ -560,6 +643,10 @@ bindings:
     mejor: menor
     periodo_verificado: "2023"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Registros policiales y judiciales dominicanos, reportados a la UNODC; el Banco Mundial
+      republica.
     nota: >-
       Homicidios intencionales por 100.000 habitantes (Banco Mundial, a partir de UNODC).
       La ley fija 24,8 para 2008 y la fuente da 25,007 ese año — Δ 0,8%, la coincidencia más
@@ -572,6 +659,10 @@ bindings:
     mejor: menor
     periodo_verificado: "2023"
     estado: verificado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      FAO: prevalencia de subalimentación estimada con método propio sobre hojas de balance
+      y encuestas nacionales.
     nota: >-
       Prevalencia de subalimentación (FAO vía Banco Mundial), que es el mismo concepto que
       la ley nombra: «proporción de la población que no alcanza el mínimo de energía
@@ -586,6 +677,9 @@ bindings:
     fuente: wdi
     mejor: menor
     estado: propuesto
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Estimaciones conjuntas UNICEF/OMS/Banco Mundial sobre las rondas ENDESA dominicanas.
     nota: >-
       Desnutrición GLOBAL (peso para la edad) en menores de 5. La ley fija 3,1 para 2007 y
       la fuente da 3,4 — Δ 9,7%, el mayor del lote. SALVEDAD: compatible con una revisión de
@@ -603,6 +697,9 @@ bindings:
     fuente: wdi
     mejor: menor
     estado: propuesto
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Estimaciones conjuntas UNICEF/OMS/Banco Mundial sobre las rondas ENDESA dominicanas.
     nota: >-
       Desnutrición AGUDA (peso para la talla) en menores de 5. La ley fija 2,2 para 2007 y
       la fuente da 2,3 — Δ 4,5%.
@@ -619,6 +716,9 @@ bindings:
     fuente: wdi
     mejor: menor
     estado: propuesto
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Estimaciones conjuntas UNICEF/OMS/Banco Mundial sobre las rondas ENDESA dominicanas.
     nota: >-
       Desnutrición CRÓNICA (talla para la edad) en menores de 5. La ley fija 9,8 para 2007 y
       la fuente da 10,1 — Δ 3,1%.
@@ -637,6 +737,10 @@ bindings:
     transformacion: centesimal
     periodo_verificado: "2024"
     estado: verificado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Banco Mundial: GINI computado sobre los microdatos de la encuesta de hogares
+      dominicana.
     nota: >-
       Índice de GINI. El emisor publica en 0-100 y la END lo fija en 0-1, así que el binding
       declara `centesimal`; sin eso se contrastaría 47,3 contra una meta de 0,45 y el
@@ -649,6 +753,9 @@ bindings:
     fuente: wdi
     mejor: mayor
     estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Estadísticas fiscales dominicanas reportadas al FMI (GFS); el Banco Mundial republica.
     nota: >-
       Presión tributaria. La ley fija 13,0 para 2010 y la fuente da 12,22 — Δ 6,0%.
     nota_comparabilidad: >-
@@ -679,6 +786,10 @@ bindings:
     mejor: menor
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      ONE — panel regional de pobreza. El conteo de regiones sobre el umbral es cómputo SDQ;
+      la medición de pobreza es del evaluado.
     nota: >-
       Cuántas de las diez regiones superan el 5% de pobreza extrema — el umbral lo fija el
       TEXTO del indicador, no lo elegimos nosotros, y se aplica ESTRICTO («mayor que 5%»).
@@ -696,6 +807,10 @@ bindings:
     mejor: menor
     periodo_verificado: "2024"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      ONE — panel regional de pobreza. El conteo de regiones sobre el umbral es cómputo SDQ;
+      la medición de pobreza es del evaluado.
     nota: >-
       Cuántas de las diez regiones superan el 20% de pobreza moderada. Mismo cómputo y mismo
       guard de completitud que el 2.2.
@@ -712,6 +827,10 @@ bindings:
     mejor: mayor
     periodo_verificado: "2025"
     estado: verificado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — exportaciones de bienes y servicios de la balanza de pagos; el Banco Mundial
+      republica y el per cápita es cómputo SDQ.
     nota: >-
       Exportaciones de bienes Y SERVICIOS sobre población. Cuál de las dos definiciones usar
       no se adivinó: la ley fija 1.070 US$ para 2009, bienes+servicios da 1.049 ese año
@@ -768,6 +887,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Evaluadores PEFA: un equipo externo aplica el marco y puntúa contra criterios propios.
+      El Estado evaluado no declara su propia calificación.
     motivo_descarte: >-
       Perspectiva plurianual en materia de planificación fiscal (ID-12 del marco PEFA 2011). El marco fue reemplazado en
       febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
@@ -784,6 +907,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Evaluadores PEFA: un equipo externo aplica el marco y puntúa contra criterios propios.
+      El Estado evaluado no declara su propia calificación.
     motivo_descarte: >-
       Eficacia en materia de recaudación de impuestos (ID-15 del marco PEFA 2011). El marco fue reemplazado en
       febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
@@ -800,6 +927,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Evaluadores PEFA: un equipo externo aplica el marco y puntúa contra criterios propios.
+      El Estado evaluado no declara su propia calificación.
     motivo_descarte: >-
       Competencia, precio razonable y controles en adquisiciones (ID-19 del marco PEFA 2011). El marco fue reemplazado en
       febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
@@ -816,6 +947,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Evaluadores PEFA: un equipo externo aplica el marco y puntúa contra criterios propios.
+      El Estado evaluado no declara su propia calificación.
     motivo_descarte: >-
       Eficacia de la auditoría interna (ID-21 del marco PEFA 2011). El marco fue reemplazado en
       febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
@@ -832,6 +967,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Evaluadores PEFA: un equipo externo aplica el marco y puntúa contra criterios propios.
+      El Estado evaluado no declara su propia calificación.
     motivo_descarte: >-
       Calidad y puntualidad de los informes presupuestarios del ejercicio (ID-24 del marco PEFA 2011). El marco fue reemplazado en
       febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
@@ -848,6 +987,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Evaluadores PEFA: un equipo externo aplica el marco y puntúa contra criterios propios.
+      El Estado evaluado no declara su propia calificación.
     motivo_descarte: >-
       Escrutinio legislativo de la ley de presupuesto anual (ID-27 del marco PEFA 2011). El marco fue reemplazado en
       febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
@@ -864,6 +1007,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Evaluadores PEFA: un equipo externo aplica el marco y puntúa contra criterios propios.
+      El Estado evaluado no declara su propia calificación.
     motivo_descarte: >-
       Escrutinio legislativo de los informes de los auditores externos (ID-28 del marco PEFA 2011). El marco fue reemplazado en
       febrero de 2016 y los puntajes dejaron de ser comparables con la línea base de 2007 que
@@ -881,6 +1028,10 @@ bindings:
     fuente: pefa
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      Evaluadores PEFA: un equipo externo aplica el marco y puntúa contra criterios propios.
+      El Estado evaluado no declara su propia calificación.
     motivo_descarte: >-
       Previsibilidad del apoyo presupuestario directo (ID-D1 del marco PEFA 2011). El anexo
       del PEFA RD 2016 es terminante: «Previsibilidad del apoyo presupuestario directo es un
@@ -935,6 +1086,10 @@ bindings:
     fuente: llece
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      LLECE/UNESCO: el consorcio regional aplica y corrige la prueba. El desempeño existe
+      como hecho medido sin que el Estado lo declare.
     motivo_descarte: >-
       Lectura de 6to grado. La ley fija su línea base en 421 para 2005 —escala de
       SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (> 557 para 2030).
@@ -952,6 +1107,10 @@ bindings:
     fuente: llece
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      LLECE/UNESCO: el consorcio regional aplica y corrige la prueba. El desempeño existe
+      como hecho medido sin que el Estado lo declare.
     motivo_descarte: >-
       Lectura de 3er grado. La ley fija su línea base en 395 para 2006 —escala de
       SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (> 600 para 2030).
@@ -969,6 +1128,10 @@ bindings:
     fuente: llece
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      LLECE/UNESCO: el consorcio regional aplica y corrige la prueba. El desempeño existe
+      como hecho medido sin que el Estado lo declare.
     motivo_descarte: >-
       Matemática de 6to grado. La ley fija su línea base en 415 para 2006 —escala de
       SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (> 560 para 2030).
@@ -986,6 +1149,10 @@ bindings:
     fuente: llece
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      LLECE/UNESCO: el consorcio regional aplica y corrige la prueba. El desempeño existe
+      como hecho medido sin que el Estado lo declare.
     motivo_descarte: >-
       Matemática de 3er grado. La ley fija su línea base en 395 para 2006 —escala de
       SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (nivel III para 2030).
@@ -1003,6 +1170,10 @@ bindings:
     fuente: llece
     mejor: mayor
     estado: descartado
+    origen: instrumento_de_tercero
+    productor: >-
+      LLECE/UNESCO: el consorcio regional aplica y corrige la prueba. El desempeño existe
+      como hecho medido sin que el Estado lo declare.
     motivo_descarte: >-
       Ciencias de 6to grado. La ley fija su línea base en 426 para 2006 —escala de
       SERCE 2006, media regional 500— y sus metas de puntaje en esa misma escala (> 650 para 2030).
@@ -1027,6 +1198,10 @@ bindings:
     cadencia_anios: 6
     periodo_verificado: "2019"
     estado: verificado
+    origen: instrumento_de_tercero
+    productor: >-
+      LLECE/UNESCO: el consorcio regional aplica y corrige la prueba. El desempeño existe
+      como hecho medido sin que el Estado lo declare.
     nota: >-
       ══ RE-PROMOVIDO 2026-08-20 ══ Se había demotado por un error MÍO de lectura, y conviene
       dejarlo escrito porque la conclusión equivocada era plausible.
