@@ -2561,5 +2561,14 @@
       "syncOk": "{{ok}} al día · {{created}} creados",
       "syncSkipped": "{{n}} sin precio en el tarifario"
     }
+  },
+  "alerts": {
+    "watch": "Vigilar",
+    "watching": "Vigilando",
+    "watchSectorHint": "Recibir avisos de todo el eje (sin nombrar entidades).",
+    "watchSubjectHint": "Recibir avisos de {{subject}}.",
+    "watchError": "No se pudo guardar la vigilancia.",
+    "suspended": "Suspendida: tu plan ya no cubre este producto.",
+    "pendingEngine": "Guardada. Los disparadores se activan por eje; te avisamos al primero."
   }
 }

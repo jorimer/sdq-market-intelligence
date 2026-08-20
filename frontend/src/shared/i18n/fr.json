@@ -2561,5 +2561,14 @@
       "syncOk": "{{ok}} à jour · {{created}} créés",
       "syncSkipped": "{{n}} sans prix au tarif"
     }
+  },
+  "alerts": {
+    "watch": "Surveiller",
+    "watching": "Sous surveillance",
+    "watchSectorHint": "Recevoir des alertes pour tout l'axe (sans nommer d'entités).",
+    "watchSubjectHint": "Recevoir des alertes pour {{subject}}.",
+    "watchError": "Impossible d'enregistrer la surveillance.",
+    "suspended": "Suspendue : votre plan ne couvre plus ce produit.",
+    "pendingEngine": "Enregistrée. Les déclencheurs s'activent par axe ; nous vous préviendrons au premier."
   }
 }
