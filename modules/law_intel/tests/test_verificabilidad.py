@@ -171,7 +171,7 @@ def test_REGLA_todo_campo_de_una_evidencia_LLEGA_o_se_declara_interno():
     Se compara la CLASE entera contra lo que la sección publica, no una lista escrita a mano
     — una lista a mano envejece con el mismo silencio que el defecto que intenta atajar.
     """
-    INTERNOS: set = set()
+    INTERNOS = frozenset()   # nada interno: la cadena de evidencia se publica entera
     servidos = set(publicable(EXPEDIENTE)["cadena_por_sujeto"][0])
     # `independiente_del_evaluado` es la propiedad computada de `origen`; se sirve con otro
     # nombre porque en el informe se lee como afirmación, no como campo.
