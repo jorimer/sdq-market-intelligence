@@ -302,7 +302,7 @@ Además de los unitarios por regla (puras, sin DB):
 | **A** ✅ | modelos + watchlist + API + botón «Vigilar» | el cliente declara qué le importa |
 | **B** ✅ | `reglas.py` (`umbral`, `banda`, `brecha`) sobre **banca** + gate + in-app | alerta real punta a punta en un eje |
 | **C** ✅ | emisor de email + digest + dedup promovido | el cliente se entera sin abrir la app |
-| **D** | `posicion` + `frescura` + `publicacion`; productores de los otros ejes | producto transversal |
+| **D** ✅ | `posicion` + `frescura` + `publicacion`; productores de los otros ejes | producto transversal |
 | **E** | webhook `alert.raised` | integrable por el cliente institucional |
 
 La fase B es la que prueba la tesis: si la alerta de banca no se lee como algo que ningún
@@ -401,6 +401,43 @@ Y una trampa del CI que costó una corrida: **`mypy-baseline` sale con código n
 cuando RESOLVÉS deuda**. La promoción del dedup resolvió tres violaciones, el reporte decía
 `new: 0` y el gate igual falló. Lo advierte `CLAUDE.md`: mirar el *exit code*, no el texto, y
 correr `mypy shared/ modules/ app/ | mypy-baseline sync`.
+
+### Lo que la fase D dejó cerrado (2026-08-20)
+
+Las tres reglas que faltaban (`posicion`, `frescura`, `publicacion`) ·
+`shared/alerts/observaciones.py` (el «antes» de toda regla de transición) ·
+`shared/alerts/productores.py` (productor transversal) · `cobertura_por_eje` en
+`GET /alerts/rules`. **Los 16 ejes tienen productor**; los seis disparadores tienen motor.
+
+Cobertura REAL medida, no prometida: `frescura` en 8 ejes, `posicion` en 3, `publicacion`
+en 2, y banca además con `umbral`/`banda`/`brecha` de su motor de precursores. Los ejes sin
+disparadores se listan vacíos en vez de omitirse.
+
+**Dos defectos silenciosos que aparecieron construyendo esto**, los dos del mismo tipo — no
+fallan, DESAPARECEN:
+
+1. **El registro corría antes que los productos.** `registered_sectors()` daba vacío, se
+   enganchaban cero ejes y el arranque no se quejaba. Y al moverlo, quedó *en medio* del
+   bloque: 14 de 16, con `macro` y `monetary_policy` afuera porque sus `products` se
+   importan al final. El primer test pedía `> 5` y pasó con los dos faltando — un umbral
+   flojo deja pasar justo el defecto que el test existe para atrapar. Ahora compara
+   **conjuntos completos** contra el registro de productos.
+2. **El motor de validación se buscaba por la clave del eje.** `MOTORES` se indexa por
+   MÓDULO (`banking_score`) y el catálogo por SECTOR (`banking`): de ocho motores, **una
+   sola clave coincidía por casualidad** (`social_dev`). El puente correcto ya existía y lo
+   declara el producto en `ESTADO_BACKTEST.eje_motor` — el mismo camino que usa
+   `shared/products/credenciales.py`.
+
+Y una excepción a la regla madre que hubo que declarar en vez de forzar: en `rule_frescura`,
+`None` **es un valor del dominio** (el tercer estado, indeterminado), no una ausencia. El
+barrido genérico de «ninguna entrada `None` dispara» la exceptúa con su razón escrita, y el
+guard exige que la declaración coincida con la firma — así una regla que se quede sin
+opcionales por accidente sigue fallando.
+
+**`rule_frescura` declara `frescura=True` y no es una trampa al veto**: el hecho que afirma
+—«la huella del reporte ya no coincide con su insumo»— se computó contra el estado de HOY.
+Lo que envejeció es el objeto del aviso, no el aviso. Si heredara el `stale` del reporte, la
+única alerta que existe para avisar que algo se venció quedaría vetada por estar vencida.
 
 ---
 

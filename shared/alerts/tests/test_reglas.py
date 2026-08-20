@@ -11,7 +11,9 @@ import typing
 import pytest
 
 from shared.alerts import reglas
-from shared.alerts.reglas import AlertEvent, rule_banda, rule_brecha, rule_umbral
+from shared.alerts.reglas import (AlertEvent, rule_banda, rule_brecha,
+                                  rule_frescura, rule_posicion, rule_publicacion,
+                                  rule_umbral)
 
 # Un juego de argumentos VÁLIDO por regla: el que sí dispara. Cada test parte de acá y
 # rompe una cosa a la vez, para que el motivo del `None` no sea ambiguo.
@@ -28,6 +30,19 @@ VALIDOS = {
         sector_key="banking", subject="b1", sujeto_label="Banco A", periodo="2026-Q2",
         dimension="solvencia", dimension_label="Solvencia", tenia_dato=True,
         tiene_dato=False, basis="panel de precursores"),
+    rule_posicion: dict(
+        sector_key="esg", subject="DOM", sujeto_label="R. Dominicana", periodo="2025",
+        rank_actual=7, rank_previo=4, n_comparables=18,
+        criterio="posición entre las 18 entidades con las cinco dimensiones medidas",
+        basis="universo comparable"),
+    rule_frescura: dict(
+        sector_key="banking", eje_label="SDQ Banking Intelligence", periodo="2026-Q2",
+        stale_actual=True, stale_previo=False,
+        motivo="el insumo cambió después de calcular el reporte", basis="huella del insumo"),
+    rule_publicacion: dict(
+        sector_key="macro", publicacion_label="Informe de Política Monetaria",
+        periodo="2026-Q2", edicion_actual="2026-08", edicion_previa="2026-05",
+        basis="ingesta de ediciones"),
 }
 
 
@@ -42,6 +57,20 @@ VALIDOS = {
 # - ``procedencia`` y ``clave_valor`` son rótulos del productor; su ausencia degrada a un
 #   default honesto, no invalida la señal.
 PASO: frozenset = frozenset({"frescura", "procedencia", "clave_valor"})
+
+# Parámetros cuyo DOMINIO incluye `None` como valor legítimo, no como ausencia. Declarados
+# por regla y con su razón, porque son la única grieta por donde la regla madre no aplica:
+#
+# - `rule_frescura.stale_actual`: `None` es el TERCER ESTADO de la frescura —indeterminado—
+#   y es el que hay que avisar. Es «no sé de cuándo es», distinto de vencida y de vigente, y
+#   la doctrina exige tratarlo aparte, no callarlo.
+# - `rule_frescura.stale_previo`: `None` es «nunca se observó». Acá SÍ dispara, a diferencia
+#   de `rule_publicacion`, y la asimetría es deliberada: una validación vencida es un ESTADO
+#   PROBLEMÁTICO —al cliente que acaba de suscribirse hay que decírselo la primera vez—,
+#   mientras que la existencia de una publicación es la línea base y no es noticia.
+DOMINIO_CON_NONE = {
+    "rule_frescura": frozenset({"stale_actual", "stale_previo"}),
+}
 
 
 def _opcionales(fn):
@@ -61,6 +90,8 @@ def _opcionales(fn):
             continue
         if nombre in PASO:
             continue
+        if nombre in DOMINIO_CON_NONE.get(fn.__name__, frozenset()):
+            continue
         if typing.get_origin(anot) is typing.Union and type(None) in typing.get_args(anot):
             out.append(nombre)
     return out
@@ -76,8 +107,27 @@ def test_hay_reglas_que_revisar():
 def test_el_barrido_no_esta_vacio(fn):
     """Sin esto, un helper que devuelve `[]` deja el barrido en «skipped» y el suite en
     verde. Es la misma clase de defecto que un binding a una serie inexistente: no falla,
-    desaparece."""
-    assert _opcionales(fn), f"{fn.__name__}: el barrido de None no encontró ningún parámetro"
+    desaparece.
+
+    Un barrido vacío solo se acepta si la regla DECLARA que todos sus opcionales son de
+    dominio (``DOMINIO_CON_NONE``). Así la excepción es explícita y con razón escrita, y una
+    regla que se quedara sin opcionales por accidente —anotaciones borradas, firma
+    cambiada— sigue fallando acá.
+    """
+    if _opcionales(fn):
+        return
+    declarados = DOMINIO_CON_NONE.get(fn.__name__)
+    assert declarados, (
+        f"{fn.__name__}: el barrido de None no encontró ningún parámetro y la regla no "
+        f"declara ninguno de dominio")
+    hints = typing.get_type_hints(fn)
+    opcionales_reales = {
+        n for n in inspect.signature(fn).parameters
+        if n not in PASO and typing.get_origin(hints.get(n)) is typing.Union
+        and type(None) in typing.get_args(hints.get(n))}
+    assert opcionales_reales == set(declarados), (
+        f"{fn.__name__}: la declaración de dominio no coincide con la firma "
+        f"({sorted(opcionales_reales)} vs {sorted(declarados)})")
 
 
 @pytest.mark.parametrize("fn", list(VALIDOS), ids=lambda f: f.__name__)
@@ -199,3 +249,69 @@ def test_frescura_indeterminada_NO_calla_a_la_regla():
     v = juzgar(e)
     assert v.publica is False                  # el gate SÍ veta
     assert v.motivo == "frescura_indeterminada"
+
+
+# ── Las reglas de la fase D ──────────────────────────────────────────────────
+
+def test_posicion_SIN_universo_declarado_no_produce_evento():
+    """El gate veta una posición sin universo, pero la regla no debe ni construirla: un
+    evento que nace vetado deja al eje mudo sin que nadie entienda por qué."""
+    assert rule_posicion(**{**VALIDOS[rule_posicion], "criterio": ""}) is None
+
+
+def test_posicion_computa_la_direccion_del_ENTERO():
+    """Menor número = mejor puesto. Si la dirección saliera del texto, «pasó del 4 al 7» se
+    podría publicar como una mejora."""
+    e = rule_posicion(**VALIDOS[rule_posicion])          # 4 → 7
+    assert e.relaciones["direccion"] == "cae"
+    assert e.relaciones["saltos"] == 3
+    assert e.universo                                     # viaja para el gate
+    subida = rule_posicion(**{**VALIDOS[rule_posicion], "rank_actual": 2})
+    assert subida.relaciones["direccion"] == "sube"
+
+
+def test_posicion_ignora_los_movimientos_por_debajo_del_umbral():
+    """Un puesto de diferencia es ruido en un panel grande: el orden baila por decimales."""
+    assert rule_posicion(**{**VALIDOS[rule_posicion], "rank_actual": 5,
+                            "saltos_minimos": 2}) is None
+
+
+def test_frescura_distingue_VENCIDA_de_INDETERMINADA():
+    """Piden acciones distintas —recalcular versus averiguar de cuándo es— y el texto lo
+    tiene que decir."""
+    vencida = rule_frescura(**VALIDOS[rule_frescura])
+    assert vencida.severidad == "alta" and "huérfana" in vencida.cuerpo
+    indet = rule_frescura(**{**VALIDOS[rule_frescura], "stale_actual": None})
+    assert indet.severidad == "media"
+    assert "No se puede establecer" in indet.cuerpo
+
+
+def test_frescura_no_re_avisa_lo_ya_vencido():
+    assert rule_frescura(**{**VALIDOS[rule_frescura], "stale_previo": True}) is None
+
+
+def test_frescura_no_avisa_cuando_esta_VIGENTE():
+    assert rule_frescura(**{**VALIDOS[rule_frescura], "stale_actual": False}) is None
+
+
+def test_la_alerta_de_frescura_SE_PUBLICA():
+    """La única alerta que existe para avisar que algo se venció no puede quedar vetada por
+    el veto de frescura. El hecho que afirma se computó contra el estado de hoy."""
+    from shared.alerts.gate import juzgar
+
+    e = rule_frescura(**VALIDOS[rule_frescura])
+    assert e.frescura is True
+    assert juzgar(e).publica is True
+
+
+def test_publicacion_exige_una_edicion_PREVIA():
+    """La primera ingestión de una fuente es el estado inicial, no una noticia."""
+    assert rule_publicacion(**{**VALIDOS[rule_publicacion], "edicion_previa": None}) is None
+    assert rule_publicacion(**{**VALIDOS[rule_publicacion],
+                               "edicion_previa": "2026-08"}) is None   # misma edición
+
+
+def test_publicacion_nombra_la_edicion_que_entro():
+    e = rule_publicacion(**VALIDOS[rule_publicacion])
+    assert "2026-08" in e.cuerpo
+    assert e.relaciones["edicion_previa"] == "2026-05"
