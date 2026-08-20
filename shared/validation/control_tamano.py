@@ -121,6 +121,34 @@ VEREDICTO_OTRO_PANEL = (
 COBERTURA_MINIMA = 0.80
 
 
+def veredicto_de_control(valor_del_score: Optional[float], ic_del_score: Optional["list"],
+                         valor_del_control: Optional[float]) -> Dict[str, object]:
+    """Compara dos cifras YA computadas y devuelve el veredicto, sin recalcular nada.
+
+    Existe separado de `medir_control_de_tamano` porque hay motores que ya tienen las dos
+    cifras —`sector_intel` computa su control desde la Fase 3— y solo les falta la
+    comparación. Duplicar la regla del empate en cada motor es cómo un umbral termina
+    diciendo cosas distintas en dos superficies del mismo documento.
+
+    Compara MAGNITUDES, no signos: un control que ordena al revés con la misma fuerza también
+    explica la cifra del score — es lo que pasa con el IAI, donde el deflactor produce el
+    −0,32 entero.
+    """
+    if valor_del_score is None or valor_del_control is None:
+        return {"veredicto": VEREDICTO_CONTROL_NO_EVALUABLE,
+                "el_tamano_alcanza_al_score": False, "empata_con_el_score": False}
+    alcanza = abs(valor_del_control) >= abs(valor_del_score)
+    empata = bool(ic_del_score and len(ic_del_score) == 2
+                  and ic_del_score[0] is not None and ic_del_score[1] is not None
+                  and ic_del_score[0] <= valor_del_control <= ic_del_score[1])
+    return {
+        "veredicto": (VEREDICTO_EMPATE if empata
+                      else VEREDICTO_TAMANO_ALCANZA if alcanza else VEREDICTO_SCORE_SUPERA),
+        "el_tamano_alcanza_al_score": bool(alcanza),
+        "empata_con_el_score": bool(empata),
+    }
+
+
 def medir_control_de_tamano(
     tamanos: "list", labels: "list", gini_del_score: Optional[float], variable: str,
     n_boot: int = 1000, nota_extra: Optional[str] = None,
@@ -149,15 +177,11 @@ def medir_control_de_tamano(
                           "clases del desenlace: el control no se puede computar"}
     g, lo, hi = gini_bootstrap_ci([t for t, _l in pares], [lab for _t, lab in pares],
                                   n_boot=n_boot)
-    alcanza = (g is not None and gini_del_score is not None
-               and abs(g) >= abs(gini_del_score))
-    # ¿Empata? El Gini del control cae dentro del intervalo del score → la diferencia no se
-    # distingue del ruido, y decir «el score supera» sería inventar una ventaja.
-    empata = bool(
-        g is not None and gini_del_score is not None and ic_del_score
-        and ic_del_score[0] is not None and ic_del_score[1] is not None
-        and ic_del_score[0] <= g <= ic_del_score[1]
-    )
+    # La regla del empate vive en UN solo lugar: si se repitiera acá, dos motores podrían
+    # llamar «empate» a cosas distintas en el mismo documento.
+    juicio = veredicto_de_control(gini_del_score, ic_del_score, g)
+    alcanza = bool(juicio["el_tamano_alcanza_al_score"])
+    empata = bool(juicio["empata_con_el_score"])
     n_del_score = len(labels)
     cobertura = len(pares) / n_del_score if n_del_score else 0.0
     otro_panel = cobertura < COBERTURA_MINIMA

@@ -34,7 +34,13 @@ GRUPO_EVENTO_REAL = "A · validado contra evento real"
 GRUPO_CONCLUYENTE = "B · discriminación concluyente contra desenlace realizado"
 GRUPO_CONVERGENTE = "C · concluyente por validez convergente"
 GRUPO_PARCIAL = "D · validación parcial o acotada"
-GRUPO_NO_CONCLUYENTE = "E · validación corrida y NO concluyente"
+# «NO concluyente» era inexacto para una señal cuyo IC no cruza cero pero está del lado
+# equivocado: eso CONCLUYE —ordena al revés— y es un hallazgo, no una ausencia. El rótulo
+# viejo hacía que el encabezado del grupo negara lo que decía la fila debajo (el IAI, en el
+# catálogo del 2026-08-20: grupo «NO concluyente» sobre una fila que dice «ordena INVERTIDO»
+# con IC [−0,500 · −0,142]). El rótulo nuevo cubre las dos situaciones sin mentir en ninguna:
+# lo que ambas comparten es que NO hay credencial a favor.
+GRUPO_NO_CONCLUYENTE = "E · corrida y sin credencial a favor (no concluyente o invertida)"
 # «Sin backtest» a secas sería inexacto para política monetaria, que SÍ tiene backtest
 # —expanding-window out-of-sample sobre 190 decisiones— pero de CLASIFICACIÓN de una serie,
 # no de discriminación entre sujetos. El rótulo nombra lo que falta, no lo que no hay.

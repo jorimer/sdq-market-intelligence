@@ -160,3 +160,27 @@ def test_la_inversion_NUNCA_se_deduce_del_signo():
     )
     # Y cuando el motor SÍ la declara, se copia.
     assert _cifra_principal("x", {**esg, "invertido": True})["invertida"] is True
+
+
+def test_la_fila_imprime_la_CONCLUSION_del_control_no_solo_las_dos_cifras():
+    """«−0,321 contra −0,323» obliga al lector a concluir. El resultado se computa."""
+    mod = _script()
+    detalle = mod._fila_credencial({
+        "nombre": "SDQ Agribusiness", "publicable": True, "metrica": "IC medio anual",
+        "valor": -0.321, "ic": [-0.5, -0.142], "n": 144, "senal": "inversion",
+        "invertida": True,
+        "control_de_tamano": {"intensidad": {"mean_yearly_ic": -0.323,
+                                             "el_tamano_alcanza_al_score": True}}})[-1]
+    assert "el TAMAÑO solo alcanza -0,323" in detalle
+    assert "NO agrega sobre el tamaño" in detalle
+
+
+def test_cuando_el_score_SUPERA_al_tamano_la_fila_no_lo_desmiente():
+    """Trade gana limpio: la fila trae el control pero no la frase de «no agrega»."""
+    mod = _script()
+    detalle = mod._fila_credencial({
+        "nombre": "SDQ Trade", "publicable": True, "metrica": "Gini", "valor": 0.232,
+        "ic": [0.093, 0.373], "n": 314, "eventos": 87, "senal": "export_collapse",
+        "control_de_tamano": {"gini": 0.0699, "el_tamano_alcanza_al_score": False}})[-1]
+    assert "el TAMAÑO solo alcanza 0,0699" in detalle
+    assert "NO agrega" not in detalle

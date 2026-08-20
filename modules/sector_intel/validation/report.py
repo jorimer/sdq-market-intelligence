@@ -18,6 +18,7 @@ from modules.sector_intel.validation.historical import build_iai_panel, build_ia
 from modules.sector_intel.validation.outcomes import (
     employment_by_branch, ied_by_activity, label_panel, label_panel_ied,
 )
+from shared.validation.control_tamano import veredicto_de_control
 from shared.validation.metrics import mean_ic_with_t, spearman, spearman_bootstrap_ci
 
 
@@ -211,7 +212,22 @@ def _gate_e_inversion(db: Session) -> Optional[Dict]:
         # El mismo desenlace, ordenado SOLO por tamaño. Es la vara contra la que se lee el
         # primario: si el tamaño solo produce el mismo signo y magnitud, el resultado es del
         # deflactor y no del índice.
-        "control_solo_tamano": {"intensidad": control, "nivel": control_nivel},
+        # El veredicto se COMPUTA acá y no lo infiere el lector. Este control existe desde la
+        # Fase 3 y traía las dos cifras sueltas: −0,321 del índice contra −0,323 del tamaño
+        # solo. Un cliente que lee el catálogo no tiene por qué deducir de esos dos números
+        # que el índice no agrega nada — esa frase es la conclusión, y las conclusiones se
+        # computan. Misma regla del empate que los otros siete motores, importada.
+        "control_solo_tamano": {
+            "intensidad": {**control,
+                           **veredicto_de_control(primario.get("mean_yearly_ic"),
+                                                  primario.get("ic_ci"),
+                                                  (control or {}).get("mean_yearly_ic"))},
+            "nivel": ({**control_nivel,
+                       **veredicto_de_control((contraste or {}).get("mean_yearly_ic"),
+                                              (contraste or {}).get("ic_ci"),
+                                              (control_nivel or {}).get("mean_yearly_ic"))}
+                      if control_nivel else None),
+        },
         "nota_control": ("`sector_size` es a la vez el deflactor de la intensidad y una "
                          "variable del IAI. El control ordena el mismo desenlace usando solo "
                          "el tamaño: compará su IC con el del índice antes de atribuirle el "
