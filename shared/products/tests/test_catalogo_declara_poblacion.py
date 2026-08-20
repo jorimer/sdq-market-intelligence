@@ -136,3 +136,27 @@ def test_sin_control_declarado_la_fila_no_lo_inventa():
         "ic": [0.09, 0.37], "n": 314, "eventos": 87, "senal": None})
     assert "TAMAÑO solo" not in fila[-1]
     assert not fila[-1].startswith("ordena INVERTIDO")
+
+
+def test_la_inversion_NUNCA_se_deduce_del_signo():
+    """El error que llegó al deck generado: ESG marcado «ordena INVERTIDO» siendo correcto.
+
+    En ESG el desenlace es mortalidad por desastres climáticos: un Spearman NEGATIVO es la
+    dirección buena —más resiliencia, menos muertes— y el motor lo trata como concluyente. Al
+    deducir la inversión del signo desde el consumidor, el resultado concluyente de ese eje
+    salió marcado como invertido en el documento comercial.
+
+    La dirección buena de una métrica la sabe el MOTOR. El consumidor copia, no deduce.
+    """
+    from shared.products.credenciales import _cifra_principal
+
+    esg = {"spearman": -0.509, "spearman_ci": [-0.782, -0.084], "n_countries": 24}
+    cifra = _cifra_principal("esg_climate", esg)
+    assert cifra["valor"] == -0.509
+    assert cifra["concluyente"] is True, "El IC no cruza cero: concluye."
+    assert cifra["invertida"] is False, (
+        "Un Spearman negativo contra mortalidad es la dirección CORRECTA. Solo el motor puede "
+        "declarar una inversión."
+    )
+    # Y cuando el motor SÍ la declara, se copia.
+    assert _cifra_principal("x", {**esg, "invertido": True})["invertida"] is True
