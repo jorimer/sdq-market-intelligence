@@ -11,7 +11,8 @@ import random
 from typing import Any, Dict, List, Optional, Tuple
 
 from shared.validation.control_tamano import (
-    VEREDICTO_CONTROL_NO_EVALUABLE, VEREDICTO_EMPATE, VEREDICTO_SCORE_SUPERA,
+    COBERTURA_MINIMA, VEREDICTO_CONTROL_NO_EVALUABLE, VEREDICTO_EMPATE,
+    VEREDICTO_SCORE_SUPERA,
     VEREDICTO_TAMANO_ALCANZA,
 )
 
@@ -93,12 +94,14 @@ def _control_por_tamano(common: List[str], mortality: Dict[str, float],
     }
     if not poblacion:
         return {**base, "spearman": None, "spearman_ci": None, "n": 0,
+                "n_del_score": len(common), "cobertura_del_panel": 0.0, "comparable": False,
                 "motivo": "no se pudo obtener la población del panel (WDI `SP.POP.TOTL`): el "
                           "control no se computó en esta corrida",
                 "veredicto": VEREDICTO_CONTROL_NO_EVALUABLE}
     pares = [(poblacion[i], mortality[i]) for i in common if poblacion.get(i)]
     if len(pares) < 3:
         return {**base, "spearman": None, "spearman_ci": None, "n": len(pares),
+                "n_del_score": len(common), "comparable": False,
                 "motivo": "menos de tres países con población: sin pares no hay correlación",
                 "veredicto": VEREDICTO_CONTROL_NO_EVALUABLE}
     rho = _spearman(pares)
@@ -120,7 +123,12 @@ def _control_por_tamano(common: List[str], mortality: Dict[str, float],
         veredicto = VEREDICTO_SCORE_SUPERA
     return {
         **base, "spearman": rho, "spearman_ci": [lo, hi], "n": len(pares),
+        # `cobertura_del_panel` y `comparable` viajan también acá aunque este motor mida con
+        # Spearman: un consumidor que lea `comparable` en un motor y `None` en otro no puede
+        # distinguir «se comparó» de «no sé», que es el mismo defecto que `stale=null`.
         "n_del_score": len(common),
+        "cobertura_del_panel": round(len(pares) / len(common), 4) if common else 0.0,
+        "comparable": bool(common and len(pares) / len(common) >= COBERTURA_MINIMA),
         "spearman_del_score": rho_del_score,
         "el_tamano_alcanza_al_score": bool(alcanza),
         "empata_con_el_score": bool(empata),
