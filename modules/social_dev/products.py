@@ -493,6 +493,13 @@ class SocialDevProduct:
             "regiones_pobreza_moderada_sobre_umbral", HEALTH_ENTITY,
             "Regiones con pobreza moderada sobre 20%", "living_standards",
             "CÓMPUTO SDQ sobre el panel regional de la ONE. Mismo guard de completitud."),
+        # ══ Indicador 2.17 de la END ══
+        "llece_math6_bajo_nivel_ii": (
+            "llece_math6_bajo_nivel_ii", HEALTH_ENTITY,
+            "Alumnos en o por debajo del nivel II · matemáticas 6º", "education",
+            "Pruebas regionales del LLECE (TERCE 2013, ERCE 2019). Se publica el NIVEL y "
+            "nunca el puntaje: la ley fija sus metas en la escala de SERCE 2006 (media 500) "
+            "y el emisor publica desde 2013 con media 700. Los niveles sí son comparables."),
     }
 
     def _senales_fuera_del_indice(self, period: str, dh) -> List[Any]:

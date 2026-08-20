@@ -310,6 +310,35 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
     return synced
 
 
+#: Fuente de los niveles LLECE. Corta a propósito: `sd_indicators.source` es varchar(40).
+FUENTE_LLECE = "LLECE/UNESCO"
+#: Materia y grado del indicador 2.17 de la END: matemáticas de 6to grado.
+LLECE_2_17 = ("Matematicas", "6")
+
+
+def _sync_llece_niveles(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 2.17 de la END: % de alumnos en o por debajo del nivel II, matemáticas 6º.
+
+    Es el ÚNICO de los seis indicadores LLECE de la ley que sobrevive al cambio de escala,
+    porque es el único que el legislador escribió en PORCENTAJE DE ALUMNOS POR NIVEL. Los
+    otros cinco fijan puntajes en la escala de SERCE 2006 (media 500) y el LLECE publica desde
+    2013 con media 700: no hay puente y construirlo sería inventar la conversión.
+
+    El cliente sirve NIVELES y nunca puntajes, a propósito — ver su docstring.
+    """
+    from shared.data.llece_client import fetch_bajo_nivel_ii
+
+    set_phase("niveles LLECE (indicador 2.17 de la END)")
+    materia, grado = LLECE_2_17
+    synced = 0
+    for periodo, valor in fetch_bajo_nivel_ii(materia, grado):
+        _upsert_indicator(db, theme="llece_math6_bajo_nivel_ii", entity=HEALTH_ENTITY,
+                          period=periodo, value=float(valor), source=FUENTE_LLECE,
+                          disagg="nacional", unit="% de alumnos")
+        synced += 1
+    return synced
+
+
 def _sync_conteos_regionales(db: Session, set_phase: Callable[[str], None]) -> int:
     """Indicadores 2.2 y 2.5: cuántas REGIONES superan el umbral que la ley fija.
 
@@ -691,6 +720,10 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     conteos_synced = _best_effort(
         "conteos regionales de pobreza (2.2 y 2.5)",
         lambda: _sync_conteos_regionales(db, set_phase), errors)
+    # También temprano y con el mismo commit: no depende de nada posterior y así sobrevive a
+    # que la corrida se caiga en una fase larga.
+    llece_synced = _best_effort(
+        "niveles LLECE (2.17)", lambda: _sync_llece_niveles(db, set_phase), errors)
     db.commit()
 
     health_synced = _best_effort(
@@ -741,6 +774,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "senado_synced": senado_synced,
         "exportaciones_synced": exportaciones_synced,
         "conteos_regionales_synced": conteos_synced,
+        "llece_synced": llece_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,

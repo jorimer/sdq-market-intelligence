@@ -107,6 +107,7 @@ variable_scopes:
   exports_per_capita: national                        # WDI NE.EXP.GNFS.CD / SP.POP.TOTL
   regiones_pobreza_extrema_sobre_umbral: national     # cómputo sobre el panel ONE
   regiones_pobreza_moderada_sobre_umbral: national    # cómputo sobre el panel ONE
+  llece_math6_bajo_nivel_ii: national                  # LLECE/UNESCO — nivel, no puntaje
   # DECLARADA aunque coincida con el default: una señal que se PUBLICA no puede descansar en
   # una omisión, porque el lector no distingue «se decidió por sujeto» de «nadie lo pensó».
   poverty_extreme: per_subject
