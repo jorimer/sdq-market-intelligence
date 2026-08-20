@@ -415,17 +415,20 @@ def _test_jurisai_connection(db, cfg, base: str, api_key: str) -> TestConnection
     # dijera solo «Conectado» habría dado verde apuntando al host retirado. Quien lea el
     # resultado tiene que poder ver CONTRA QUÉ se conectó, sin ir a buscarlo a otra pantalla.
     host = urllib.parse.urlsplit(base).netloc or base
-    # `medido_al` es el sello del corpus que el emisor publica desde 2026-08-19: sin él, un
-    # veredicto no se puede auditar contra el estado de la base que lo produjo.
-    sello = alcance.get("medido_al")
+    # La HUELLA del corpus (`instantanea`), no `medido_al`. El emisor corrigió esta lectura
+    # con evidencia: en unas horas su corpus creció 546 normas y `medido_al` no se movió ni un
+    # segundo, porque no es una marca de frescura sino el piso de antigüedad de la evidencia.
+    # Para una prueba de conexión, lo informativo es el tamaño vivo del corpus.
+    inst = alcance.get("instantanea") or {}
+    leidas = inst.get("normas_leidas") if isinstance(inst, dict) else None
     return _persist_test(
         db, cfg, "success",
         f"Conectado a {host}. Con rango explícito el alcance es "
         + ("concluyente: un resultado vacío SÍ autoriza a afirmar que la norma no se dictó."
            if concluyente else
            "NO concluyente: un resultado vacío no autorizaría a afirmar incumplimiento.")
-        + (f" Corpus medido al {sello}." if sello else
-           " El emisor no declara cuándo midió su corpus."),
+        + (f" Corpus vivo: {leidas} normas leídas." if leidas is not None else
+           " El emisor no declara la huella del corpus."),
         resp.status_code)
 
 
