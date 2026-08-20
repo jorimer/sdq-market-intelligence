@@ -34,6 +34,32 @@ from modules.banking_score.models.models import Bank, BankingData
 #: Tipos cuyo alcance la propuesta acotó por materialidad. Los demás entran completos.
 TIPOS_CON_UMBRAL = ("cambiaria",)
 
+#: Cuánto puede despegarse el ÚLTIMO activo de la mediana de la propia entidad antes de que
+#: deje de ser un tamaño y pase a ser una anomalía de esa serie. El activo total es un STOCK:
+#: una entidad que opera no lo multiplica ni lo divide por cinco de un trimestre al otro. Si
+#: lo hace, su último estado es un cierre de operaciones o un defecto de parseo — y en los dos
+#: casos no puede definir una clase de tamaño.
+#: Salió de la corrida real (2026-08-20): Placidoiv tiene mediana RD$8,3 MM y último RD$48,7 M
+#: —170× contra sí misma— y era el ÚNICO «escalón» del panel. Calibrar el piso ahí habría sido
+#: calibrarlo sobre un artefacto.
+FACTOR_ANOMALIA = 5.0
+
+#: Cuánto tiene que valer un salto entre entidades consecutivas para llamarlo ESCALÓN y no
+#: simplemente la siguiente entidad más chica. Menos de un orden de magnitud entre vecinas es
+#: la misma población a otra escala; la propuesta afirmaba dos clases —un puñado con balance
+#: real y una cola de ventanillas vacías— y esa afirmación necesita un corte que se vea.
+RAZON_MINIMA_ESCALON = 10.0
+
+ESCALERA_CONTINUA = (
+    "no hay escalón: entre entidades vecinas no aparece ningún salto que separe dos clases, "
+    "así que el panel es una sola población a distintas escalas y cualquier piso lo elegiría "
+    "una persona, no el dato"
+)
+ESCALERA_CON_ESCALON = (
+    "hay escalón: un salto entre vecinas separa dos clases de tamaño, y el piso sale de ahí "
+    "sin que nadie lo elija"
+)
+
 
 def _percentiles(valores: List[float], cortes=(10, 25, 50, 75, 90)) -> Dict[str, float]:
     if not valores:
@@ -89,29 +115,68 @@ def perfil_de_materialidad(db: Session, tipo: str = "cambiaria") -> Dict:
          "periodos_con_activo": len(por_entidad[k])}
         for k in orden
     ]
-    # El SALTO: entre entidades consecutivas ordenadas por tamaño, dónde está el escalón más
-    # grande. Si la propuesta tenía razón —un puñado con balance real y una cola de ventanillas
-    # casi vacías— el salto aparece solo y el piso no lo elige nadie a ojo.
+    # ANOMALÍAS. Una entidad cuyo último estado se despega de su propia serie no informa un
+    # tamaño: informa un problema. Se computa ANTES de buscar el escalón porque, si no, la
+    # anomalía ES el escalón — que es exactamente lo que pasó en la primera corrida.
+    anomalas: Dict[str, Dict[str, object]] = {}
+    for k in orden:
+        med, ult = medianas[k], ultimo.get(k, 0.0)
+        if med <= 0 or ult <= 0:
+            continue
+        razon = max(med / ult, ult / med)
+        if razon >= FACTOR_ANOMALIA:
+            anomalas[k] = {
+                "entidad": ids.get(k, k),
+                "activos_mediana": round(med, 2),
+                "activos_ultimo": round(ult, 2),
+                "razon_contra_su_propia_mediana": round(razon, 2),
+                "lectura": ("el último estado se despega de la propia serie de la entidad: "
+                            "cierre de operaciones o defecto de dato, no una clase de tamaño"),
+            }
+
+    # La ESCALERA se recorre sobre la MEDIANA de cada entidad, no sobre su último valor: la
+    # mediana es el tamaño estable y no la mueve un trimestre raro. Los pares donde alguna de
+    # las dos vecinas es anómala se computan igual, pero marcados, para que no fijen el piso.
+    orden_estable = sorted(por_entidad, key=lambda k: -medianas[k])
     saltos: List[Dict[str, object]] = []
-    for i in range(len(orden) - 1):
-        arriba, abajo = tamanos[i], tamanos[i + 1]
-        if abajo > 0:
-            saltos.append({"posicion": i + 1,
-                           "entidad_arriba": ids.get(orden[i], orden[i]),
-                           "entidad_abajo": ids.get(orden[i + 1], orden[i + 1]),
-                           "razon": round(arriba / abajo, 2),
-                           "corte_sugerido": round(abajo, 2)})
+    for i in range(len(orden_estable) - 1):
+        arriba, abajo = medianas[orden_estable[i]], medianas[orden_estable[i + 1]]
+        if abajo <= 0:
+            continue
+        sospechoso = orden_estable[i] in anomalas or orden_estable[i + 1] in anomalas
+        saltos.append({"posicion": i + 1,
+                       "entidad_arriba": ids.get(orden_estable[i], orden_estable[i]),
+                       "entidad_abajo": ids.get(orden_estable[i + 1], orden_estable[i + 1]),
+                       "razon": round(arriba / abajo, 2),
+                       "corte_sugerido": round(abajo, 2),
+                       "alguna_vecina_es_anomala": sospechoso})
+    limpios = [s for s in saltos if not s["alguna_vecina_es_anomala"]]
     mayores = sorted(saltos, key=lambda s: -float(s["razon"]))[:5]  # type: ignore[arg-type]
+    mayor_limpio = max(limpios, key=lambda s: float(s["razon"])) if limpios else None  # type: ignore[arg-type]
+    hay_escalon = bool(mayor_limpio
+                       and float(mayor_limpio["razon"]) >= RAZON_MINIMA_ESCALON)  # type: ignore[arg-type]
     return {
         "ok": True,
         "tipo": tipo,
         "n_entidades": len(filas),
         "percentiles_activos_ultimo": _percentiles(tamanos),
+        "percentiles_activos_mediana": _percentiles(sorted(medianas.values(), reverse=True)),
         "por_entidad": filas,
+        "anomalias_ultimo_vs_su_propia_mediana": list(anomalas.values()),
         "saltos_mas_grandes": mayores,
+        # El veredicto se COMPUTA de la escalera limpia, no se lee de la tabla. Sin esto, el
+        # salto más grande se toma por escalón aunque lo produzca una sola serie rota.
+        "escalon": {
+            "hay_escalon": hay_escalon,
+            "razon_minima_exigida": RAZON_MINIMA_ESCALON,
+            "mayor_salto_limpio": mayor_limpio,
+            "piso_sugerido": (mayor_limpio or {}).get("corte_sugerido") if hay_escalon else None,
+            "veredicto": ESCALERA_CON_ESCALON if hay_escalon else ESCALERA_CONTINUA,
+        },
         "nota": (
-            "El piso se fija con esta evidencia, no a ojo: `saltos_mas_grandes` muestra dónde "
-            "la escalera de tamaños tiene un escalón real. Fuente de la decisión: "
+            "El piso se fija con esta evidencia, no a ojo. La escalera se recorre sobre la "
+            "MEDIANA de cada entidad —el tamaño estable— y los pares con una vecina anómala "
+            "no pueden fijarlo. Fuente de la decisión: "
             "docs/PROPUESTA_CAMBIARIAS_FIDUCIARIAS.md §0."
         ),
     }
