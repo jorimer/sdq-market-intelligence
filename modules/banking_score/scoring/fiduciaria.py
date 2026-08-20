@@ -13,6 +13,10 @@ explicitly calibratable. Data is ANNUAL (period_type=annual).
 """
 from typing import Any, Dict
 
+from modules.banking_score.scoring.guards import (
+    no_interpretable, patrimonio_es_positivo, peor_estado_prudencial,
+)
+
 from modules.banking_score.scoring.engine import _clamp, _safe_div
 
 IndicatorResult = Dict[str, float]
@@ -49,7 +53,12 @@ def _capitalizacion(d) -> IndicatorResult:
 
 def _apalancamiento(d) -> IndicatorResult:
     """Pasivos / Patrimonio — menos es más sólido. Serie 2020-2025: p10 0.14 · p90 0.72."""
-    raw = _safe_div(_g(d, "pasivos_exigibles"), _g(d, "patrimonio_tecnico"))
+    patrimonio = _g(d, "patrimonio_tecnico")
+    raw = _safe_div(_g(d, "pasivos_exigibles"), patrimonio)
+    # Mismo defecto que en cambiaria: escala invertida + patrimonio negativo = 100/100 para
+    # una entidad insolvente. Ver `guards`.
+    if not patrimonio_es_positivo(patrimonio):
+        return peor_estado_prudencial(raw)
     return {"raw": round(raw, 4), "score": round(_lin(raw, 0.72, 0.14), 2)}
 
 
@@ -82,7 +91,10 @@ def _roa(d) -> IndicatorResult:
 
 
 def _roe(d) -> IndicatorResult:
-    raw = _safe_div(_g(d, "utilidad_neta"), _g(d, "patrimonio_tecnico")) * 100
+    patrimonio = _g(d, "patrimonio_tecnico")
+    raw = _safe_div(_g(d, "utilidad_neta"), patrimonio) * 100
+    if not patrimonio_es_positivo(patrimonio):
+        return no_interpretable(raw)
     return {"raw": round(raw, 4), "score": round(_lin(raw, 0.0, 30.0), 2)}
 
 
