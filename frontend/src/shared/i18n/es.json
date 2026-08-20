@@ -2569,6 +2569,37 @@
     "watchSubjectHint": "Recibir avisos de {{subject}}.",
     "watchError": "No se pudo guardar la vigilancia.",
     "suspended": "Suspendida: tu plan ya no cubre este producto.",
-    "pendingEngine": "Guardada. Este eje todavía no produce señales; te avisamos cuando lo haga."
+    "pendingEngine": "Guardada. Este eje todavía no produce señales; te avisamos cuando lo haga.",
+    "page": {
+      "eyebrow": "ALERTAS",
+      "title": "Mis vigilancias",
+      "sub": "Qué vigilás, por dónde te avisamos y cada cuánto. Las señales se evalúan sobre el panel, no sobre documentos."
+    },
+    "loadError": "No se pudieron cargar tus vigilancias.",
+    "saveError": "No se pudo guardar el cambio.",
+    "empty": "Todavía no vigilás nada. Abrí un producto del catálogo y usá «Vigilar».",
+    "needChannel": "Dejá al menos un canal, o dá de baja la vigilancia.",
+    "emailUnavailable": "El aviso por correo no está configurado en esta instalación, así que solo se ofrece el buzón de la plataforma.",
+    "subject": "Sujeto: {{s}}",
+    "wholeAxis": "Todo el eje",
+    "noProducer": "Sin señales todavía",
+    "channels": "Canales",
+    "channel": {
+      "inapp": "Plataforma",
+      "email": "Correo"
+    },
+    "cadence": "Ritmo",
+    "minSeverity": "Desde severidad",
+    "remove": "Dejar de vigilar",
+    "digest": {
+      "inmediato": "Inmediato",
+      "diario": "Diario",
+      "semanal": "Semanal"
+    },
+    "severity": {
+      "alta": "Alta",
+      "media": "Media",
+      "baja": "Baja"
+    }
   }
 }
