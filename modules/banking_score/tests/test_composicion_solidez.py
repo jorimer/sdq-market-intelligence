@@ -258,3 +258,39 @@ def test_el_desglose_por_indicador_declara_que_su_poblacion_es_otra(panel_simpso
     solvencia = credito["por_indicador"]["solvencia"]
     assert solvencia["n"] == 40                 # no las 80 de la dimensión
     assert solvencia["eventos"] == 2
+
+
+def test_la_regla_relativa_delata_que_mide_el_nivel_de_partida(db):
+    """`morosidad_x2` es relativa: duplicar 0,5 % es fácil, duplicar 8 % es casi imposible.
+
+    Si el nivel de base predice el evento, la regla mide de DÓNDE salió la entidad, no a dónde
+    fue — y cualquier indicador correlacionado con ese nivel sale «invertido» sin tener nada
+    malo. `outcomes_derivation` ya descartó un desenlace por este motivo exacto.
+    """
+    # Mora de base BAJA → se duplica. Mora de base ALTA → no llega a duplicarse.
+    for i in range(20):
+        db.add(Bank(id=f"L{i}", name=f"Baja {i}", bank_type=BankType.banca_multiple))
+        for p in (P0, P1):
+            db.add(RatingResult(bank_id=f"L{i}", period_end=p, overall_score=70,
+                                solidez_score=70, model_type=ModelType.deterministic))
+        db.add(BankingData(bank_id=f"L{i}", period_end=P0, morosidad_pct=0.5,
+                           solvencia_pct=15.0, activos_totales=1000, utilidad_neta=10))
+        db.add(BankingData(bank_id=f"L{i}", period_end=P1, morosidad_pct=1.2,
+                           solvencia_pct=15.0, activos_totales=1000, utilidad_neta=10))
+    for i in range(20):
+        db.add(Bank(id=f"H{i}", name=f"Alta {i}", bank_type=BankType.banca_multiple))
+        for p in (P0, P1):
+            db.add(RatingResult(bank_id=f"H{i}", period_end=p, overall_score=70,
+                                solidez_score=70, model_type=ModelType.deterministic))
+        db.add(BankingData(bank_id=f"H{i}", period_end=P0, morosidad_pct=8.0,
+                           solvencia_pct=15.0, activos_totales=1000, utilidad_neta=10))
+        db.add(BankingData(bank_id=f"H{i}", period_end=P1, morosidad_pct=8.5,
+                           solvencia_pct=15.0, activos_totales=1000, utilidad_neta=10))
+    db.commit()
+
+    sesgo = diagnosticar_composicion(db, n_boot=100)[
+        "sesgo_de_cada_regla_contra_su_nivel_de_partida"]["morosidad_base_pct_como_score"]
+    assert sesgo["n"] == 40
+    assert sesgo["eventos"] == 20
+    # La regla disparó SOLO sobre las que partían mejor → el nivel de base las ordena perfecto.
+    assert sesgo["gini"] == 1.0

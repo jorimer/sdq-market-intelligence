@@ -110,6 +110,8 @@ class _Fila:
     tipo: str
     activos: Optional[float]
     indicadores: Dict[str, float]
+    base_morosidad_pct: Optional[float]
+    base_roa: Optional[float]
 
 
 def _gini(scores: Sequence[float], labels: Sequence[int], n_boot: int) -> Dict:
@@ -199,6 +201,47 @@ def _por_estrato(filas: List[_Fila], familia: str, clave_estrato, n_boot: int,
     return salida
 
 
+# Qué mide cada regla contra SU PROPIO nivel de partida. La prosa va en constantes porque el
+# informe la copia.
+LECTURA_REGLA_RELATIVA = (
+    "Gini > 0 significa que la regla dispara MÁS sobre las entidades que partían mejor: el "
+    "desenlace está definido contra el nivel de base y penaliza a la entidad sana"
+)
+LECTURA_REGLA_PERSISTENTE = (
+    "Gini > 0 significa que la regla dispara más sobre las entidades que ya estaban peor: el "
+    "desenlace mide persistencia del nivel de partida más que un cambio de estado"
+)
+
+
+def _sesgo_de_las_reglas(filas: List[_Fila], n_boot: int) -> Dict:
+    """¿Cada regla del desenlace mide un deterioro, o mide el NIVEL del que se partía?
+
+    `outcomes_derivation` ya descartó un desenlace por esta razón exacta: la caída de dos
+    escalones estaba «mecánicamente sesgada por el piso del rating» y daba Gini −0,66 por
+    construcción. `morosidad_x2` es relativa al mismo modo —duplicar una mora de 0,5 % es
+    fácil, duplicar una de 8 % es casi imposible— y nadie la había medido así. Si el nivel de
+    partida predice el evento, la regla está midiendo de dónde salió la entidad, no a dónde
+    fue, y cualquier indicador correlacionado con ese nivel va a salir «invertido» sin que le
+    pase nada al indicador.
+    """
+    def _uno(valores: List[Optional[float]], etiquetas: List[int], lectura: str) -> Dict:
+        pares = [(v, e) for v, e in zip(valores, etiquetas) if v is not None]
+        if not pares:
+            return {"n": 0, "eventos": 0, "gini": None, "gini_ci": None,
+                    "motivo": "ninguna observación tiene el nivel de base de esta regla"}
+        return {**_gini([v for v, _e in pares], [e for _v, e in pares], n_boot),
+                "n": len(pares), "eventos": sum(e for _v, e in pares), "lectura": lectura}
+
+    mora = [1 if f.etiquetas.get("credito") else 0 for f in filas]
+    roa = [1 if f.etiquetas.get("resultados") else 0 for f in filas]
+    return {
+        "morosidad_base_pct_como_score": _uno(
+            [f.base_morosidad_pct for f in filas], mora, LECTURA_REGLA_RELATIVA),
+        "roa_base_como_score": _uno(
+            [f.base_roa for f in filas], roa, LECTURA_REGLA_PERSISTENTE),
+    }
+
+
 def _terciles(valores: List[float]) -> Tuple[Optional[float], Optional[float]]:
     if len(valores) < 3:
         return None, None
@@ -260,6 +303,11 @@ def diagnosticar_composicion(db: Session, dimension: str = "solidez",
             tipo=tipo_por_banco.get(o.bank_id) or "desconocido",
             activos=activos,
             indicadores=indicadores,
+            base_morosidad_pct=(float(bd.morosidad_pct)
+                                if bd is not None and bd.morosidad_pct is not None else None),
+            base_roa=((float(bd.utilidad_neta) / activos)
+                      if bd is not None and bd.utilidad_neta is not None and activos
+                      else None),
         ))
 
     if not filas:
@@ -368,6 +416,7 @@ def diagnosticar_composicion(db: Session, dimension: str = "solidez",
                 "CHICAS, que es el mecanismo que la hipótesis composicional supone"
             ),
         },
+        "sesgo_de_cada_regla_contra_su_nivel_de_partida": _sesgo_de_las_reglas(filas, n_boot),
         "familias": familias_salida,
         "limite_declarado": (
             "Los estratos de tamaño son terciles del activo total al corte de cada "
