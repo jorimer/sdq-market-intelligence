@@ -8,11 +8,13 @@ event_bus (`*.updated`) y el botón manual del dashboard.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from shared.notifications.dedup import Dedup
 from shared.products.activation import ACTIVATION_THRESHOLD, can_activate
 from shared.products.models import ProductActivation, ProductReadiness
 from shared.products.readiness import compute_readiness, empty_readiness
@@ -89,8 +91,22 @@ def recompute_readiness(db: Session, sector_key: Optional[str] = None) -> Dict[s
     return {"recomputed": n, "scope": sector_key or "all"}
 
 
-def _cross_alert_key(sector: str, tier: str) -> str:
-    return f"readiness_cross:{sector}:{tier}"
+# Anti-spam de los avisos de cruce. Tercer consumidor del buzón de `shared/notifications/
+# dedup.py`: antes esto manipulaba `AppSetting` a mano, y un guard con tres copias es un
+# guard que diverge. El prefijo reproduce el layout de clave anterior
+# (``readiness_cross:{sector}:{tier}``), así los marcadores ya persistidos siguen valiendo.
+_DEDUP = Dedup("readiness_cross")
+
+#: Este aviso no re-notifica por tiempo: calla mientras el nivel SIGA publicable, sin
+#: vencimiento, y solo vuelve a hablar cuando cae bajo el umbral y recruza (`limpiar`).
+#: Un intervalo finito convertiría el dedup en un recordatorio periódico — que no es lo
+#: que se quiere: el hecho «ya es publicable» no gana información por repetirse.
+_SIN_VENCIMIENTO = math.inf
+
+
+def _dedup_key(sector: str, tier: str) -> str:
+    """Clave BAJO el prefijo de `_DEDUP` (no la clave completa de `AppSetting`)."""
+    return f"{sector}:{tier}"
 
 
 def _notify_publishable_transitions(
@@ -99,30 +115,23 @@ def _notify_publishable_transitions(
     down: List[Tuple[str, ProductTier]],
 ) -> None:
     """Avisa a los admins de los niveles que cruzaron a publicable y limpia el marcador
-    de los que cayeron (para re-avisar si vuelven a cruzar). Deduplica por (sector, nivel)
-    vía AppSetting, así un recompute repetido no re-spamea mientras siga publicable."""
+    de los que cayeron (para re-avisar si vuelven a cruzar). Deduplica por (sector, nivel),
+    así un recompute repetido no re-spamea mientras siga publicable."""
     from shared.auth.models import User, UserRole
     from shared.notifications.service import notification_service
-    from shared.settings.models import AppSetting
 
     # Reverse: limpiar marcador para que un futuro cruce vuelva a avisar.
     for sector, tier in down:
-        row = db.query(AppSetting).filter(
-            AppSetting.key == _cross_alert_key(sector, tier.value)).first()
-        if row:
-            db.delete(row)
-    db.commit()
+        _DEDUP.limpiar(db, _dedup_key(sector, tier.value))
 
     # Agrupar los cruces por sector (un aviso por producto, listando sus nuevos niveles).
     fresh: Dict[str, List[Tuple[ProductTier, float]]] = {}
     for sector, tier, score in up:
-        key = _cross_alert_key(sector, tier.value)
-        if db.query(AppSetting).filter(AppSetting.key == key).first():
+        clave = _dedup_key(sector, tier.value)
+        if _DEDUP.avisado_recientemente(db, clave, _SIN_VENCIMIENTO):
             continue  # ya avisado para este (sector, nivel)
         fresh.setdefault(sector, []).append((tier, score))
-        db.add(AppSetting(key=key, value=datetime.now(timezone.utc).isoformat(),
-                          is_secret=False))
-    db.commit()
+        _DEDUP.marcar(db, clave)
     if not fresh:
         return
 
