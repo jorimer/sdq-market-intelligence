@@ -409,3 +409,67 @@ def test_la_clave_de_jurisai_se_guarda_CIFRADA_y_no_vuelve_en_claro(db):
 
     servido = get_settings(db)
     assert "SECRETO-123" not in json.dumps(servido, default=str), "la clave se devolvió al cliente"
+
+
+# ── service: techo diario de gasto del modelo ─────────────────────
+# El 2026-08-20 una tarea generó informes que nadie pidió por USD 127 en un día. El techo
+# existía en código pero solo se podía mover por variable de entorno, o sea con un redeploy:
+# justo el tiempo que no se tiene cuando el gasto ya está corriendo.
+
+def test_sin_configurar_el_techo_es_el_del_entorno(db, monkeypatch):
+    from shared.config.settings import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "LLM_DAILY_BUDGET_USD", 25.0, raising=False)
+    assert service.get_llm_daily_budget(db) == 25.0
+    assert service.get_settings(db).llmDailyBudgetUsd == 25.0
+
+
+def test_el_techo_configurado_manda_sobre_el_entorno(db, monkeypatch):
+    from shared.config.settings import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "LLM_DAILY_BUDGET_USD", 25.0, raising=False)
+    service.update_settings(db, SettingsIn(llmDailyBudgetUsd=40))
+    assert service.get_llm_daily_budget(db) == 40.0
+    assert service.get_settings(db).llmDailyBudgetUsd == 40.0
+
+
+def test_cero_es_APAGADO_A_PROPOSITO_y_no_se_confunde_con_sin_configurar(db, monkeypatch):
+    """«El admin apagó el techo» y «nadie lo configuró» son estados distintos. Si un 0
+    guardado se leyera como "sin configurar", el entorno lo pisaría y el admin creería
+    haberlo apagado sin haberlo hecho; al revés, la plataforma queda sin techo creyendo
+    que lo tiene. Los dos errores se pagan en dinero."""
+    from shared.config.settings import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "LLM_DAILY_BUDGET_USD", 25.0, raising=False)
+    service.update_settings(db, SettingsIn(llmDailyBudgetUsd=0))
+    assert service.get_llm_daily_budget(db) == 0.0, "el 0 del admin no se respetó"
+
+
+def test_un_techo_guardado_ILEGIBLE_cae_al_entorno_y_nunca_a_sin_techo(db, monkeypatch):
+    """«No entiendo el techo» no es «no hay techo». Tratar la primera como la segunda deja
+    la plataforma sin corte justo cuando algo anda mal."""
+    from shared.config.settings import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "LLM_DAILY_BUDGET_USD", 25.0, raising=False)
+    db.add(AppSetting(key="llm_daily_budget_usd", value="ochenta", is_secret=False))
+    db.commit()
+    assert service.get_llm_daily_budget(db) == 25.0
+
+
+def test_un_techo_negativo_se_rechaza(db):
+    with pytest.raises(ValueError):
+        service.set_llm_daily_budget(db, -5)
+    with pytest.raises(ValueError):
+        service.update_settings(db, SettingsIn(llmDailyBudgetUsd=-1))
+
+
+def test_guardar_el_techo_INVALIDA_la_memoria_del_cobrador(db, monkeypatch):
+    """El techo se memoriza unos segundos en el proceso que cobra. Sin invalidarlo al
+    guardar, bajarlo desde Configuración tardaría ese TTL en morder — y se baja justo
+    cuando el gasto ya está corriendo."""
+    from shared.llm import budget
+
+    llamadas = []
+    monkeypatch.setattr(budget, "invalidate_limit_cache", lambda: llamadas.append(1))
+    service.update_settings(db, SettingsIn(llmDailyBudgetUsd=10))
+    assert llamadas, "guardar el techo no invalidó la caché del cobrador"

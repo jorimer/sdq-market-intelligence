@@ -10,7 +10,17 @@ def _reset_state(monkeypatch):
     monkeypatch.setattr(budget, "_mem_spent", 0.0)
     monkeypatch.setattr(budget, "_last_over_budget_log", 0.0)
     monkeypatch.setattr(budget.settings, "REDIS_URL", "")
+    budget.invalidate_limit_cache()  # el techo se memoriza: sin esto un test pisa al otro
+    # Estos tests miden el CONTADOR, no la configuración: sin cortar la lectura a la base,
+    # el resultado dependería de si el entorno donde corren tiene (o no) una fila guardada.
+    # Sin base, `current_limit` cae al valor de entorno, que es el que cada test fija.
+    monkeypatch.setattr("shared.database.session.SessionLocal", _sin_base)
     yield
+    budget.invalidate_limit_cache()
+
+
+def _sin_base():
+    raise RuntimeError("sin base en este test")
 
 
 def test_estimate_cost_por_modelo():
@@ -70,3 +80,58 @@ def test_contador_resetea_al_cambiar_de_dia(monkeypatch):
     assert budget.spent_today() > 0
     monkeypatch.setattr(budget, "_today", lambda: "2099-01-01")
     assert budget.spent_today() == 0.0
+
+
+# ── El techo vigente: Configuración manda, el entorno respalda ────────────────
+# El 2026-08-20 el gasto se fue de USD 127 en un día y bajar el techo requería un redeploy.
+# Ahora el admin lo mueve en caliente desde Configuración; estas pruebas fijan la precedencia
+# y, sobre todo, qué pasa cuando la lectura falla.
+
+def _techo_de_configuracion(monkeypatch, valor):
+    """Sustituye el resolutor que ``current_limit`` importa perezosamente."""
+    import shared.settings.service as svc
+    monkeypatch.setattr(svc, "get_llm_daily_budget", lambda db: valor, raising=False)
+    monkeypatch.setattr("shared.database.session.SessionLocal",
+                        lambda: type("S", (), {"close": lambda self: None})())
+
+
+def test_el_techo_de_configuracion_manda_sobre_el_del_entorno(monkeypatch):
+    monkeypatch.setattr(budget.settings, "LLM_DAILY_BUDGET_USD", 25.0, raising=False)
+    _techo_de_configuracion(monkeypatch, 5.0)
+    assert budget.current_limit() == 5.0
+    budget.record_usage("claude-sonnet-4-6", 1_000_000, 200_000)  # $6 > $5
+    assert budget.budget_allows() is False, "el techo de Configuración no cortó"
+
+
+def test_si_no_se_puede_leer_la_configuracion_manda_el_entorno_y_NUNCA_cero(monkeypatch):
+    """Quedarse sin techo porque falló una consulta es el peor momento para no tenerlo:
+    un corte de base durante una fuga de gasto dejaría correr la fuga."""
+    monkeypatch.setattr(budget.settings, "LLM_DAILY_BUDGET_USD", 25.0, raising=False)
+
+    def _explota():
+        raise RuntimeError("base caída")
+    monkeypatch.setattr("shared.database.session.SessionLocal", _explota)
+    assert budget.current_limit() == 25.0
+
+
+def test_el_techo_se_memoriza_y_la_invalidacion_lo_relee(monkeypatch):
+    """Se lee antes de CADA llamada al modelo: sin memo, cada generación abriría una
+    conexión para releer un número que cambia una vez al mes."""
+    lecturas = []
+
+    import shared.settings.service as svc
+
+    def _contar(db):
+        lecturas.append(1)
+        return 7.0
+    monkeypatch.setattr(svc, "get_llm_daily_budget", _contar, raising=False)
+    monkeypatch.setattr("shared.database.session.SessionLocal",
+                        lambda: type("S", (), {"close": lambda self: None})())
+
+    assert budget.current_limit() == 7.0
+    assert budget.current_limit() == 7.0
+    assert len(lecturas) == 1, "el techo se releyó de la base en cada llamada"
+
+    budget.invalidate_limit_cache()
+    assert budget.current_limit() == 7.0
+    assert len(lecturas) == 2, "invalidar no forzó la relectura"

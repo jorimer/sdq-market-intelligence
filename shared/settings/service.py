@@ -206,6 +206,13 @@ def ensure_known_sources(db: Session) -> int:
 
 _CLAUDE_KEY = "claude_api_key"
 _LANG_KEY = "default_language"
+# Techo DIARIO de gasto del modelo, administrable en caliente. Vive acá y no solo en la
+# variable de entorno porque el 2026-08-20 una tarea generó informes que nadie pidió por
+# USD 127 en un día: bajar el techo requería un redeploy, que es exactamente el tiempo que
+# no se tiene cuando el gasto está corriendo. Lo lee ``shared/llm/budget.py``.
+# "" / sin fila = no configurado (manda el entorno). "0" = APAGADO a propósito por el admin;
+# son estados distintos y confundirlos deja la plataforma sin techo creyendo que lo tiene.
+_LLM_BUDGET_KEY = "llm_daily_budget_usd"
 # Cloudflare WAF proxy — GLOBAL (one credential shared by every source behind the
 # WAF), like the Claude key. Replaces the per-provider proxy fields.
 _PROXY_URL_KEY = "cloudflare_proxy_url"
@@ -233,6 +240,46 @@ def get_claude_api_key(db: Session) -> str:
     if row and row.value:
         return decrypt(row.value)
     return app_settings.ANTHROPIC_API_KEY
+
+
+def get_llm_daily_budget(db: Session) -> float:
+    """Techo diario de gasto LLM en USD vigente: el de Configuración si el admin lo fijó,
+    si no el del entorno (``LLM_DAILY_BUDGET_USD``). 0 = sin techo, a sabiendas.
+
+    Un valor guardado ilegible NO se interpreta como 0: "no se entiende el techo" y "no hay
+    techo" son cosas distintas, y tratar la primera como la segunda es quedarse sin corte
+    justo cuando algo anda mal. Cae al valor del entorno.
+    """
+    row = _get_app_setting(db, _LLM_BUDGET_KEY)
+    if row is None or row.value in (None, ""):
+        return float(app_settings.LLM_DAILY_BUDGET_USD)
+    try:
+        return max(0.0, float(str(row.value)))
+    except (TypeError, ValueError):
+        logger.warning("Techo LLM guardado ilegible (%r): se usa el del entorno.", row.value)
+        return float(app_settings.LLM_DAILY_BUDGET_USD)
+
+
+def set_llm_daily_budget(db: Session, usd: float) -> float:
+    """Fija el techo diario (admin). Negativo se rechaza; 0 apaga el corte a propósito."""
+    valor = float(usd)
+    if valor < 0:
+        raise ValueError("El presupuesto diario no puede ser negativo. Use 0 para desactivarlo.")
+    _set_app_setting(db, _LLM_BUDGET_KEY, f"{valor:.2f}", is_secret=False)
+    db.commit()
+    _invalidar_cache_de_techo()
+    return get_llm_daily_budget(db)
+
+
+def _invalidar_cache_de_techo() -> None:
+    """El techo se memoriza unos segundos en el proceso que cobra (ver ``shared/llm/budget``).
+    Sin esta invalidación, bajarlo desde Configuración tardaría ese TTL en morder — y se baja
+    justo cuando el gasto ya está corriendo."""
+    try:
+        from shared.llm import budget
+        budget.invalidate_limit_cache()
+    except Exception:  # noqa: BLE001 — el guardado ya ocurrió; el TTL lo corrige solo
+        logger.warning("No se pudo invalidar la caché del techo LLM", exc_info=True)
 
 
 def get_proxy_config(db: Session) -> tuple:
@@ -300,6 +347,7 @@ def get_settings(db: Session) -> SettingsOut:
         defaultLanguage=(lang.value if lang and lang.value else app_settings.DEFAULT_LANGUAGE),
         cloudflareProxyUrl=proxy_url,
         cloudflareProxySecretSet=bool(proxy_secret),
+        llmDailyBudgetUsd=get_llm_daily_budget(db),
         sectorApis=[_to_out(c) for c in apis],
     )
 
@@ -350,6 +398,13 @@ def update_settings(db: Session, payload: SettingsIn) -> SettingsOut:
         _set_app_setting(db, _PROXY_URL_KEY, payload.cloudflareProxyUrl, is_secret=False)
     if payload.cloudflareProxySecret is not None and payload.cloudflareProxySecret != MASK:
         _set_app_setting(db, _PROXY_SECRET_KEY, payload.cloudflareProxySecret, is_secret=True)
+    if payload.llmDailyBudgetUsd is not None:
+        if payload.llmDailyBudgetUsd < 0:
+            raise ValueError(
+                "El presupuesto diario no puede ser negativo. Use 0 para desactivarlo.")
+        _set_app_setting(db, _LLM_BUDGET_KEY, f"{float(payload.llmDailyBudgetUsd):.2f}",
+                         is_secret=False)
+        _invalidar_cache_de_techo()
     if payload.sectorApis is not None:
         for api in payload.sectorApis:
             _upsert_sector_api(db, api)

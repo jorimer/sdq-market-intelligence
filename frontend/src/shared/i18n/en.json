@@ -1659,6 +1659,23 @@
       "testError": "✗ Error testing the connection.",
       "viaProxy": "via proxy"
     },
+    "llmBudget": {
+      "title": "AI budget",
+      "sub": "Daily ceiling on model spend, in USD",
+      "label": "USD per day",
+      "save": "Save",
+      "saved": "Saved",
+      "loadError": "Could not load the budget.",
+      "saveError": "Error saving",
+      "invalid": "Must be a number greater than or equal to zero.",
+      "stateOn": "Active ceiling: USD {{usd}} per day (UTC). It applies to every model call.",
+      "stateOff": "No ceiling: model spend has no daily limit. Use a value above zero to enable it.",
+      "whatHappens": "What happens when the ceiling is reached",
+      "effectPremium": "A premium delivery returns an error rather than a report with filler text.",
+      "effectNarrative": "Narrative falls back to its static version without caching it; the rest of the platform keeps responding.",
+      "effectReset": "The counter resets daily at 00:00 UTC and everything generates normally again.",
+      "calibrate": "To calibrate it, check your real spend by trigger in Operations → Model spend. A ceiling below normal usage saves nothing: it leaves clients without their report."
+    },
     "series": {
       "title": "Macro series maintenance",
       "sub": "Delete orphan series the parser stopped producing (BCRD)",
