@@ -179,3 +179,53 @@ def register_sweep_operation() -> None:
 
 
 register_sweep_operation()
+
+
+# ── La cascada ───────────────────────────────────────────────────────────────
+
+# Operaciones que NO despiertan el barrido, y por qué cada una. La lista es de EXCLUSIÓN a
+# propósito: el default es cascadear.
+#
+# La asimetría decide el diseño. Un barrido de más cuesta unas consultas y no produce nada
+# —todas las reglas son de transición, así que sin cambio no hay evento—. Un barrido de
+# menos cuesta que la alerta llegue un día tarde, que es justo lo que el producto promete no
+# hacer. Con una lista de INCLUSIÓN, cada sync nuevo nacería mudo hasta que alguien se
+# acordara de agregarlo; con una de exclusión, nace conectado y hay que justificar sacarlo.
+# Este repo ya pagó dos veces hoy el precio de una lista que se desactualiza en silencio.
+SIN_CASCADA: Dict[str, str] = {
+    SWEEP_OP_NAME: "se dispararía a sí misma",
+    "alerts-digest": "consume alertas, no produce dato",
+    "data-freshness-audit": "audita frescura, no produce dato",
+    "prewarm-report-cache": "calienta la caché de informes",
+    "market-brief": "genera un documento, no mueve el panel",
+    "source-research-agent": "propone fuentes; el sistema propone y el dueño dispone",
+    "catalog-discovery": "descubre publicaciones candidatas, no las ingiere",
+    "fiscal-sequence-watch": "vigila secuencias de NCF, ajeno al panel",
+}
+
+
+def enganchar_cascada() -> List[str]:
+    """Hace que toda operación que produce dato despierte el barrido al terminar bien.
+
+    **El reloj del barrido es el respaldo; esto es el disparador.** Una alerta que llega un
+    día después de que el dato entró no es una alerta.
+
+    Idempotente y sin tocar el framework de operaciones: `shared/operations` no debe conocer
+    a `shared/alerts` (dirección de dependencia), así que es este módulo el que se engancha,
+    igual que `register_freshness_audit` en la auditoría de frescura.
+
+    Se llama UNA vez al arrancar, después de que todos los módulos registraron sus
+    operaciones. Devuelve las enganchadas para que no haya que adivinar leyendo código.
+    """
+    from shared.operations.service import OPERATIONS
+
+    enganchadas: List[str] = []
+    for nombre, op in OPERATIONS.items():
+        if nombre in SIN_CASCADA:
+            continue
+        if SWEEP_OP_NAME not in op.triggers:
+            op.triggers.append(SWEEP_OP_NAME)
+        enganchadas.append(nombre)
+    logger.info("alerts: cascada enganchada en %d operación(es); %d excluidas",
+                len(enganchadas), len(SIN_CASCADA))
+    return sorted(enganchadas)

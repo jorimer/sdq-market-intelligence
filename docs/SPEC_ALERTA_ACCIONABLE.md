@@ -192,10 +192,17 @@ register_operation(Operation(
     runner=run_alerts_sweep, default_interval_hours=24, ...))
 ```
 
-**Pero el reloj es el respaldo, no el disparador.** El disparador es la **cascada**: cada
-operación que produce dato declara `alerts-sweep` en sus `Operation.triggers`, igual que hoy
-dispara el re-score y la re-validación. Una alerta que llega un día después de que el dato
-entró no es una alerta.
+**Pero el reloj es el respaldo, no el disparador.** El disparador es la **cascada**: toda
+operación que produce dato despierta el barrido al terminar bien. Una alerta que llega un día
+después de que el dato entró no es una alerta.
+
+La cascada se engancha **estructuralmente** (`shared/alerts/motor.enganchar_cascada`), no
+declarando `alerts-sweep` a mano en 74 archivos: la lista es de **EXCLUSIÓN** y hoy tiene ocho
+nombres, cada uno con su motivo escrito. La asimetría lo decide — un barrido de más cuesta
+unas consultas y no produce nada (todas las reglas son de transición, así que sin cambio no
+hay evento); uno de menos cuesta que la alerta llegue tarde. Con una lista de inclusión, cada
+sync nuevo nacería mudo hasta que alguien se acordara de agregarlo, y este repo ya pagó dos
+veces el precio de una lista que se desactualiza en silencio.
 
 Es la misma cura de dos mitades de `shared/validation/frescura.py` — cascada para que corra a
 tiempo, huella para que sepamos si corrió. Acá la huella es el `periodo` del evento: dos
