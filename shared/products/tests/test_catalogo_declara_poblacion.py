@@ -184,3 +184,70 @@ def test_cuando_el_score_SUPERA_al_tamano_la_fila_no_lo_desmiente():
         "control_de_tamano": {"gini": 0.0699, "el_tamano_alcanza_al_score": False}})[-1]
     assert "el TAMAÑO solo alcanza 0,0699" in detalle
     assert "NO agrega" not in detalle
+
+
+# ── Todas las señales, no solo la titular ─────────────────────────
+
+def test_el_empate_se_IMPRIME_y_no_solo_se_computa():
+    """El caso de seguros: 0,2575 contra 0,2404, indistinguibles, y la fila callaba.
+
+    En el grupo de las concluyentes, dos cifras al lado sin conclusión se leen como «gana por
+    poco». No gana por poco: no se distingue. Un veredicto computado que el documento no
+    imprime es un veredicto que no existe para quien lo lee.
+    """
+    mod = _script()
+    detalle = mod._fila_credencial({
+        "nombre": "SDQ Seguros", "publicable": True, "metrica": "Gini", "valor": 0.2575,
+        "ic": [0.1237, 0.3946], "n": 269, "eventos": 132, "senal": "underwriting",
+        "control_de_tamano": {"gini": 0.2404, "el_tamano_alcanza_al_score": False,
+                              "empata_con_el_score": True,
+                              "veredicto": "empate: …"}})[-1]
+    assert "INDISTINGUIBLE del tamaño" in detalle
+
+
+def test_cuando_el_score_supera_tambien_lo_dice():
+    mod = _script()
+    detalle = mod._fila_credencial({
+        "nombre": "SDQ Trade", "publicable": True, "metrica": "Gini", "valor": 0.232,
+        "ic": [0.093, 0.373], "n": 314, "senal": "export_collapse",
+        "control_de_tamano": {"gini": 0.0699, "el_tamano_alcanza_al_score": False,
+                              "empata_con_el_score": False,
+                              "veredicto": "el score ordena mejor…"}})[-1]
+    assert "supera al tamaño" in detalle
+    assert "INDISTINGUIBLE" not in detalle
+
+
+def test_las_senales_no_titulares_salen_como_subfilas():
+    """El resultado más incómodo de seguros no estaba en ninguna superficie."""
+    mod = _script()
+    filas = mod._filas_de_senales({
+        "publicable": True, "senal": "underwriting",
+        "senales": [
+            {"senal": "underwriting", "metrica": "Gini", "valor": 0.2575, "ic": [0.12, 0.39],
+             "n": 269, "concluyente": True},
+            {"senal": "solvency", "metrica": "Gini", "valor": 0.0639, "ic": [-0.068, 0.198],
+             "n": 272, "concluyente": False,
+             "control_de_tamano": {"gini": 0.2548, "el_tamano_alcanza_al_score": True}},
+        ]})
+    assert len(filas) == 1, "La titular no se repite como subfila."
+    fila = filas[0]
+    assert "solvency" in fila[0] and fila[0].strip().startswith("↳")
+    assert "no concluyente" in fila[-1]
+    assert "NO agrega sobre el tamaño" in fila[-1], (
+        "En solvency el TAMAÑO concluye donde el score no: es el dato que el documento "
+        "escondía."
+    )
+
+
+def test_un_eje_con_UNA_sola_senal_no_agrega_subfilas():
+    """Repetir la titular como subfila es ruido, y el ruido desactiva la señal."""
+    mod = _script()
+    assert mod._filas_de_senales({
+        "publicable": True, "senal": "governance",
+        "senales": [{"senal": "governance", "metrica": "Gini", "valor": 0.199,
+                     "ic": [0.045, 0.355], "n": 260, "concluyente": True}]}) == []
+
+
+def test_un_eje_no_publicable_no_arrastra_subfilas():
+    mod = _script()
+    assert mod._filas_de_senales({"publicable": False, "senales": [{"senal": "x"}]}) == []
