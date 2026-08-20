@@ -288,17 +288,40 @@ class TestLaFrescuraDeclarada:
             if b.cuenta:
                 assert (b.periodo_verificado or "").strip(), b.indicador
 
-    def test_la_antiguedad_es_la_del_dato_MAS_VIEJO(self):
-        """Tomar el más nuevo diría «datos de 2024» aunque medio panel fuera de 2019. Un
-        informe es tan actual como su componente más rancio."""
+    def test_la_antiguedad_es_la_del_PEOR_dato_normalizada_por_cadencia(self):
+        """Un informe es tan actual como su componente más rancio — pero «rancio» depende del
+        ritmo del emisor, y esa era la mitad que faltaba.
+
+        Sin normalizar, el 2.17 (ERCE 2019, prueba que se aplica cada seis años) arrastraba la
+        frescura del expediente entero de 0,84 a 0,0: peor que no declarar período, que vale
+        0,5 — y sobre un dato que es el más reciente que existe en el mundo.
+
+        Se normaliza a cadencia anual y se toma el peor: un dato de 2019 de una fuente hexenal
+        pesa como uno de ~2 años de una anual, que es lo que significa; una fuente ANUAL
+        detenida en 2019 sigue pesando lo que pesa.
+        """
         import datetime as dt
 
         from modules.law_intel.products import _antiguedad_del_dato
-        dias = _antiguedad_del_dato(EXPEDIENTE)
-        anios = sorted(int((b.periodo_verificado or "0")[:4])
-                       for b in cargar_bindings(EXPEDIENTE).values() if b.cuenta)
-        esperado = (dt.date.today() - dt.date(anios[0], 12, 31)).days
-        assert dias == max(0, esperado)
+        from modules.law_intel.verificacion import (ANTIGUEDAD_MAXIMA_ANIOS,
+                                                    ventana_de_frescura)
+
+        hoy = dt.date.today()
+        esperado = max(
+            int(max(0, (hoy - dt.date(int((b.periodo_verificado or "0")[:4]), 12, 31)).days)
+                * (ANTIGUEDAD_MAXIMA_ANIOS / ventana_de_frescura(b)))
+            for b in cargar_bindings(EXPEDIENTE).values() if b.cuenta)
+        assert _antiguedad_del_dato(EXPEDIENTE) == esperado
+
+    def test_un_indicador_de_cadencia_LARGA_no_hunde_la_frescura_del_expediente(self):
+        """La consecuencia buscada. Es el mismo defecto que el motor de verificación ya tenía
+        corregido: un guard que existe en un motor y falta en el otro."""
+        from shared.products.readiness import _freshness_factor
+        from modules.law_intel.products import _antiguedad_del_dato
+
+        f = _freshness_factor(_antiguedad_del_dato(EXPEDIENTE), "annual")
+        assert f > _freshness_factor(None, "annual"), (
+            "medir con una prueba hexenal no puede valer MENOS que no declarar período")
 
     def test_un_expediente_sin_verificados_no_inventa_frescura(self):
         """`None` y no 0: un 0 se leería como «dato de hoy», que es lo contrario de la

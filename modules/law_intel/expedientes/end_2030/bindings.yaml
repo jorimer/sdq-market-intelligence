@@ -13,7 +13,7 @@
 #
 # El código es `<eje>:<variable>` del Data Registry. Las claves no son únicas entre ejes.
 
-version: "18.0"
+version: "19.0"
 
 # ── PROMOCIÓN 2026-08-16 ──────────────────────────────────────────────────────────────────
 # Cuatro bindings pasan de `propuesto` a `verificado` porque la comprobación contra las
@@ -1025,7 +1025,8 @@ bindings:
     # congelado para siempre y el informe diría «no lo medimos» sobre la medición más reciente
     # que existe. Se declara acá y no se afloja el umbral para todos.
     cadencia_anios: 6
-    estado: propuesto
+    periodo_verificado: "2019"
+    estado: verificado
     nota: >-
       Porcentaje de alumnos en o por debajo del nivel II en matemáticas de 6to grado. Es el
       ÚNICO de los seis indicadores LLECE expresado en porcentaje de alumnos por nivel, y por
@@ -1043,3 +1044,4 @@ bindings:
       hasta que producción la sirva y la comprobación lo confirme: concepto y plomería son
       cosas distintas, y el 2.19 lo probó — su serie existía y el registro publicaba una
       región.
+      Verificado en prod 2026-08-20: **97,84% en 2019**, contra una meta de 63,0% para 2025 y una línea base legal de 92,9% en 2006. Promovió recién tras declarar `cadencia_anios: 6` — con el umbral anual de tres años, una prueba que se aplica cada seis NUNCA podía estar fresca, y el informe habría dicho «no lo medimos» sobre la medición más reciente que existe.
