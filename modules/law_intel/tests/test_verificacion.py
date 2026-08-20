@@ -83,3 +83,44 @@ class TestExistirNoEsMedir:
     def test_una_nota_en_blanco_no_cuenta_como_duda(self):
         bs = {"x": Binding("x", "s.viva", "one", "mayor", "propuesto", nota_comparabilidad="  ")}
         assert comprobar(bs, proveedor, "2025")[0].promueve
+
+
+class TestLaFrescuraRespetaLaCADENCIA:
+    """«El emisor dejó de publicar» y «el emisor publica cada seis años» son cosas opuestas, y
+    un umbral fijo de 3 años las confunde.
+
+    El caso real: las pruebas del LLECE se aplican cada ~6 años —2006, 2013, 2019, 2025 en
+    curso—. Su dato de 2019 ES el más reciente que existe en el mundo, y aun así el motor lo
+    marcaba `congelada` al corte de 2025, con lo que el informe habría dicho «no lo medimos»
+    sobre la única medición disponible. La desnutrición infantil, en cambio, está congelada de
+    verdad: la última ENDESA con esos módulos es de 2019 y NO hay reemplazo.
+    """
+
+    def _binding(self, **kw):
+        from modules.law_intel.bindings import Binding
+        base = dict(indicador="2.17", serie="s", fuente="llece", mejor="menor",
+                    estado="verificado", periodo_verificado="2019")
+        return Binding(**{**base, **kw})
+
+    def test_sin_declarar_cadencia_rige_el_umbral_anual(self):
+        """Aflojar el guard para todos sería exactamente el error que el guard evita."""
+        from modules.law_intel.verificacion import ANTIGUEDAD_MAXIMA_ANIOS, ventana_de_frescura
+        assert ventana_de_frescura(self._binding()) == ANTIGUEDAD_MAXIMA_ANIOS
+
+    def test_una_prueba_hexenal_no_aparece_congelada_por_publicar_a_su_ritmo(self):
+        from modules.law_intel.verificacion import ventana_de_frescura
+        v = ventana_de_frescura(self._binding(cadencia_anios=6))
+        assert v >= 6, "con ventana menor que la cadencia, NUNCA podría estar fresca"
+        assert 2019 >= 2025 - v, "ERCE 2019 tiene que seguir viva al corte de 2025"
+
+    def test_pero_DOS_ciclos_sin_publicar_sí_es_abandono(self):
+        """El margen alcanza para un ciclo de atraso y no para dos: ahí dejar de publicar deja
+        de ser cadencia y pasa a ser que el emisor abandonó la serie."""
+        from modules.law_intel.verificacion import ventana_de_frescura
+        v = ventana_de_frescura(self._binding(cadencia_anios=6))
+        assert not (2013 >= 2025 - v), "un dato de dos ciclos atrás SÍ está congelado"
+
+    def test_una_cadencia_anual_declarada_no_afloja_nada(self):
+        from modules.law_intel.verificacion import ANTIGUEDAD_MAXIMA_ANIOS, ventana_de_frescura
+        for c in (0, 1):
+            assert ventana_de_frescura(self._binding(cadencia_anios=c)) == ANTIGUEDAD_MAXIMA_ANIOS

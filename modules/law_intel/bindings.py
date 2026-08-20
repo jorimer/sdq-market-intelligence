@@ -92,6 +92,19 @@ class Binding:
     # Importa más ahora que antes: un barrido automático propone candidatos por lotes, así
     # que el registro de lo ya rechazado tiene que ser ACUMULATIVO, no excluyente.
     candidatos_descartados: Tuple[Dict[str, str], ...] = ()
+    # CADENCIA del emisor, en años. Solo se declara cuando NO es anual, y sirve para una cosa:
+    # que la regla de frescura no confunda «el emisor dejó de publicar» con «el emisor publica
+    # cada seis años».
+    #
+    # Son situaciones opuestas. La desnutrición infantil está congelada de verdad: la última
+    # ENDESA con esos módulos es de 2019 y no hay reemplazo. Las pruebas del LLECE se aplican
+    # cada ~6 años —2006, 2013, 2019— así que su dato de 2019 ES el más reciente que existe en
+    # el mundo. Con un umbral fijo de 3 años, una prueba hexenal NUNCA puede estar fresca y el
+    # informe diría «no lo medimos» sobre la única medición disponible.
+    #
+    # Se DECLARA por binding y nunca se infiere: aflojar el guard de frescura para todos sería
+    # exactamente el error que el guard existe para evitar. Sin declarar, rige el umbral anual.
+    cadencia_anios: Optional[int] = None
 
     @property
     def cuenta(self) -> bool:

@@ -1020,6 +1020,11 @@ bindings:
     serie: "social_dev:llece_math6_bajo_nivel_ii"
     fuente: llece
     mejor: menor
+    # Las pruebas regionales se aplican cada ~6 años: 2006 (SERCE), 2013 (TERCE), 2019 (ERCE)
+    # y 2025 en curso. Sin declararlo, el umbral anual de 3 años marca este indicador como
+    # congelado para siempre y el informe diría «no lo medimos» sobre la medición más reciente
+    # que existe. Se declara acá y no se afloja el umbral para todos.
+    cadencia_anios: 6
     estado: propuesto
     nota: >-
       Porcentaje de alumnos en o por debajo del nivel II en matemáticas de 6to grado. Es el
