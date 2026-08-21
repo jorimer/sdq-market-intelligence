@@ -19,6 +19,7 @@ export function PresupuestoLlmSection() {
   const { t } = useTranslation();
   const [valor, setValor] = useState("");
   const [guardado, setGuardado] = useState<number | null>(null);
+  const [compartido, setCompartido] = useState(true);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -31,6 +32,7 @@ export function PresupuestoLlmSection() {
       const s = await settingsApi.get();
       setGuardado(s.llmDailyBudgetUsd);
       setValor(String(s.llmDailyBudgetUsd));
+      setCompartido(s.llmBudgetCounterShared);
     } catch {
       setError(t("platform.llmBudget.loadError"));
     } finally {
@@ -55,6 +57,7 @@ export function PresupuestoLlmSection() {
     try {
       const s = await settingsApi.update({ llmDailyBudgetUsd: n });
       setGuardado(s.llmDailyBudgetUsd);
+      setCompartido(s.llmBudgetCounterShared);
       setValor(String(s.llmDailyBudgetUsd));
       setOk(true);
     } catch {
@@ -110,6 +113,14 @@ export function PresupuestoLlmSection() {
       <p className="mt-3 text-xs text-muted">
         {apagado ? t("platform.llmBudget.stateOff") : t("platform.llmBudget.stateOn", { usd: guardado })}
       </p>
+
+      {/* Si el conteo NO es compartido, el techo mostrado NO es el gasto máximo real. Se
+          declara acá y no en una nota de infraestructura: es una salvedad sobre ESTE número. */}
+      {!apagado && (
+        <p className={`mt-1 text-xs ${compartido ? "text-muted" : "text-warn"}`}>
+          {compartido ? t("platform.llmBudget.counterShared") : t("platform.llmBudget.counterPerWorker")}
+        </p>
+      )}
 
       <div className="mt-4 rounded-lg bg-surface2 p-3 space-y-1.5">
         <div className="text-xs font-medium text-ink">{t("platform.llmBudget.whatHappens")}</div>

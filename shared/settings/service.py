@@ -242,6 +242,19 @@ def get_claude_api_key(db: Session) -> str:
     return app_settings.ANTHROPIC_API_KEY
 
 
+def _contador_de_gasto_compartido() -> bool:
+    """¿El contador del gasto diario es compartido entre workers? (best-effort, nunca rompe
+    la pantalla de Configuración: ante la duda declara NO compartido, que es el caso en que
+    el techo hay que leerlo con cuidado)."""
+    try:
+        from shared.llm.budget import contador_compartido
+        return contador_compartido()
+    except Exception:  # noqa: BLE001
+        logger.warning("No se pudo determinar si el contador de gasto es compartido",
+                       exc_info=True)
+        return False
+
+
 def get_llm_daily_budget(db: Session) -> float:
     """Techo diario de gasto LLM en USD vigente: el de Configuración si el admin lo fijó,
     si no el del entorno (``LLM_DAILY_BUDGET_USD``). 0 = sin techo, a sabiendas.
@@ -348,6 +361,7 @@ def get_settings(db: Session) -> SettingsOut:
         cloudflareProxyUrl=proxy_url,
         cloudflareProxySecretSet=bool(proxy_secret),
         llmDailyBudgetUsd=get_llm_daily_budget(db),
+        llmBudgetCounterShared=_contador_de_gasto_compartido(),
         sectorApis=[_to_out(c) for c in apis],
     )
 

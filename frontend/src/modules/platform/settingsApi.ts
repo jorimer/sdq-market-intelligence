@@ -25,6 +25,8 @@ export interface AppSettings {
   defaultLanguage: string;
   /** Techo DIARIO de gasto del modelo en USD. 0 = sin techo. */
   llmDailyBudgetUsd: number;
+  /** ¿El contador del día es compartido entre workers (Redis) o uno por worker? */
+  llmBudgetCounterShared: boolean;
   cloudflareProxyUrl: string;
   cloudflareProxySecretSet: boolean;
   sectorApis: SectorApi[];
