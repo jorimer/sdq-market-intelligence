@@ -134,8 +134,8 @@ class TestObligaciones:
 
     def test_el_expediente_real_no_las_cuenta(self, pub):
         d = pub["obligaciones_verificables"]
-        assert d["contra_registro_publico"] + d["solo_por_declaracion_del_obligado"] == \
-            d["total_con_algo_que_verificar"]
+        assert (d["contra_registro_de_tercero"] + d["contra_registro_del_propio_obligado"]
+                + d["solo_por_declaracion_del_obligado"]) == d["total_con_algo_que_verificar"]
         ids = {e["sujeto"] for e in pub["cadena_por_sujeto"] if e["clase"] == "obligacion"}
         assert d["total_con_algo_que_verificar"] == len(ids)
 

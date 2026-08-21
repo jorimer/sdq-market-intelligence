@@ -39,6 +39,10 @@ ORIGENES = {
     "acto_en_registro_publico": (
         "el hecho es un ACTO que consta en un registro público —la Gaceta Oficial— y no una "
         "afirmación del obligado sobre su propio desempeño. Se dictó o no se dictó."),
+    "acto_en_registro_del_obligado": (
+        "el hecho es un ACTO y consta en un registro, pero el registro lo lleva el propio "
+        "obligado. Mejor que su palabra —un acto deja rastro y la conducta no se declara—, "
+        "peor que un registro ajeno: quien decide qué se asienta es el juzgado."),
     "estimacion_de_tercero_sobre_dato_del_evaluado": (
         "un tercero estima con MÉTODO PROPIO, pero sus insumos los produce el evaluado. El "
         "método es independiente; el insumo no."),
@@ -51,7 +55,8 @@ ORIGENES = {
 #: indicador se mide, no se dicta, y admitirlo dejaría que alguien declarara una serie
 #: estadística como si fuera un acto registral — la etiqueta más independiente del conjunto,
 #: puesta sobre la evidencia más débil.
-ORIGENES_DE_INDICADOR = frozenset(set(ORIGENES) - {"acto_en_registro_publico"})
+ORIGENES_DE_INDICADOR = frozenset(
+    set(ORIGENES) - {"acto_en_registro_publico", "acto_en_registro_del_obligado"})
 
 #: Los dos orígenes que NO dependen de que el evaluado declare nada. Es la frontera que la
 #: sección mide, y está deliberadamente alta: una estimación de tercero sobre insumos
@@ -135,10 +140,22 @@ def evidencia_de_indicadores(expediente_id: str,
 
 
 def _origen_de_obligacion(o: Obligacion) -> Optional[str]:
+    """De dónde saldría la evidencia de ESTA obligación, computado de lo ya declarado.
+
+    La comprobación congresual se gradúa por quién lleva el registro, no por qué registro es:
+    el expediente presupuestario de la Cámara es de TERCERO frente al Ejecutivo (art. 50) y es
+    del PROPIO OBLIGADO frente al Congreso (art. 51). Una sola fuente, dos grados — y
+    aplanarlos le daría al informe una independencia que en el segundo caso no tiene.
+    """
     if o.estado in _SIN_NADA_QUE_VERIFICAR:
         return None
     if o.verificacion_normativa:
         return "acto_en_registro_publico"
+    if o.verificacion_congresual:
+        lleva = str(o.verificacion_congresual.get("registro_de") or "").strip().casefold()
+        debe = str(o.deudor.get("nombre") or "").strip().casefold()
+        return ("acto_en_registro_del_obligado" if lleva and lleva == debe
+                else "acto_en_registro_publico")
     return "declarado_por_el_evaluado"
 
 
@@ -154,10 +171,14 @@ def evidencia_de_obligaciones(expediente_id: str) -> List[Evidencia]:
         origen = _origen_de_obligacion(o)
         if origen is None:
             continue
-        productor = ("Gaceta Oficial · consulta a la base normativa"
-                     if origen == "acto_en_registro_publico"
-                     else (o.sin_consulta_normativa or "").strip()
-                     or "el propio obligado, por sus publicaciones")
+        if o.verificacion_congresual:
+            productor = (f"Expedientes del Congreso · registro de "
+                         f"{o.verificacion_congresual.get('registro_de')}")
+        elif origen == "acto_en_registro_publico":
+            productor = "Gaceta Oficial · consulta a la base normativa"
+        else:
+            productor = ((o.sin_consulta_normativa or "").strip()
+                         or "el propio obligado, por sus publicaciones")
         out.append(Evidencia(sujeto=o.id, nombre=o.deber, clase="obligacion",
                              origen=origen, productor=productor))
     return out
@@ -197,6 +218,8 @@ def publicable(expediente_id: str) -> Dict[str, Any]:
     perdidos = [e for e in con_instrumento if e.sujeto not in vivos]
 
     obl_indep = [e for e in obligaciones if e.independiente]
+    obl_registro_propio = [e for e in obligaciones
+                           if e.origen == "acto_en_registro_del_obligado"]
 
     return {
         "pregunta": ("Quién produce la evidencia con la que se juzga el cumplimiento de la "
@@ -226,9 +249,15 @@ def publicable(expediente_id: str) -> Dict[str, Any]:
         },
         "obligaciones_verificables": {
             "total_con_algo_que_verificar": len(obligaciones),
-            "contra_registro_publico": len(obl_indep),
-            "ids_contra_registro_publico": [e.sujeto for e in obl_indep],
-            "solo_por_declaracion_del_obligado": len(obligaciones) - len(obl_indep),
+            "contra_registro_de_tercero": len(obl_indep),
+            "ids_contra_registro_de_tercero": [e.sujeto for e in obl_indep],
+            # El grado del medio se publica APARTE. Sumarlo a la declaración del obligado
+            # borraría lo único que distingue un acto asentado de una afirmación sobre la
+            # propia conducta, que es la diferencia que el artículo 51 pone en juego.
+            "contra_registro_del_propio_obligado": len(obl_registro_propio),
+            "ids_contra_registro_del_propio_obligado": [e.sujeto for e in obl_registro_propio],
+            "solo_por_declaracion_del_obligado": (
+                len(obligaciones) - len(obl_indep) - len(obl_registro_propio)),
             "nota": ("Las obligaciones sin deudor ni término quedan FUERA del denominador: "
                      "no hay nada que verificar y contarlas mejoraría la proporción sin "
                      "que nada sea más verificable."),

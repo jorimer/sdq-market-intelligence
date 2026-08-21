@@ -72,6 +72,16 @@ class Obligacion:
     #: otra fuente—; un acto del Congreso sí consta, pero en expedientes de Cámara y Senado
     #: que todavía no tenemos.
     sin_consulta_normativa: Optional[str] = None
+    #: Qué buscar en los EXPEDIENTES DEL CONGRESO cuando el cumplimiento es un acto
+    #: parlamentario —constituir una comisión, remitir un informe con el Presupuesto—, que no
+    #: llega a la Gaceta y por eso la base normativa lo declara fuera de su alcance.
+    #:
+    #: `registro_de` nombra a QUIÉN LLEVA el registro, y no es un adorno: decide si la
+    #: evidencia es de tercero. El expediente presupuestario de la Cámara es tercero respecto
+    #: del Ejecutivo (art. 50) y es el PROPIO OBLIGADO respecto del Congreso (art. 51). La
+    #: misma fuente, dos grados de independencia distintos, y sin el campo el informe los
+    #: publicaría iguales.
+    verificacion_congresual: Optional[Dict[str, Any]] = None
 
     @property
     def exigible(self) -> bool:
@@ -126,6 +136,12 @@ def _validar(obs: List[Obligacion]) -> None:
             raise ExpedienteInvalido(f"{o.id}: estado desconocido '{o.estado}'")
         if o.deudor.get("tipo") not in TIPOS_DEUDOR:
             raise ExpedienteInvalido(f"{o.id}: tipo de deudor inválido")
+        if o.verificacion_congresual is not None and not str(
+                o.verificacion_congresual.get("registro_de") or "").strip():
+            raise ExpedienteInvalido(
+                f"{o.id}: `verificacion_congresual` sin `registro_de`. Quién lleva el "
+                f"registro decide si la evidencia es de tercero o del propio obligado.")
+
         # El guard central: no se acusa sin evidencia.
         if o.afirma_incumplimiento and not (o.evidencia or "").strip():
             raise ExpedienteInvalido(

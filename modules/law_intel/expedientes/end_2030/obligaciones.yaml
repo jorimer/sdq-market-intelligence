@@ -74,8 +74,18 @@ obligaciones:
   - id: art-50-informe-de-vinculacion
     articulo: 50
     sin_consulta_normativa: >-
-      REMITIR un informe junto al Proyecto de Presupuesto. El acto consta —si ocurrió— en el expediente presupuestario de cada año, no en la Gaceta. Es una obligación del Ejecutivo hacia el Congreso y su rastro vive del lado del Congreso.
-      FUENTE IDENTIFICADA Y NO CONECTADA: expedientes de Cámara y Senado. El emisor de la base normativa lo señaló explícitamente como fuera de su alcance y como lo que haría falta.
+      REMITIR un informe junto al Proyecto de Presupuesto. El acto NO llega a la Gaceta —el emisor de la base normativa lo declaró fuera de su alcance— y por eso no hay consulta normativa.
+      Se comprueba contra el expediente presupuestario del Congreso: ver `verificacion_congresual`.
+    verificacion_congresual:
+      # Quién lleva el registro decide el grado de independencia. Acá es TERCERO: el obligado
+      # es el Ejecutivo y el expediente lo lleva la Cámara.
+      registro_de: Cámara de Diputados
+      buscar: proyectos de Presupuesto General del Estado remitidos por el Poder Ejecutivo
+      en: documentos del expediente de cada proyecto
+      nota: >-
+        El deber depende del CONTENIDO del informe y el contenido no se puede leer: los PDF
+        viven en un host con certificado autofirmado. El veredicto máximo por esta vía es
+        `solo_registral`.
     deber: >-
       Remitir, con cada Proyecto de Presupuesto, un informe que sustente su vinculación con
       las metas de la END.
@@ -84,16 +94,35 @@ obligaciones:
     consecuencia: null
     estado: sin_registro_publico
     evidencia: >-
-      No se localizó registro público de escrutinio de estos informes. NO se afirma que no se
-      hayan remitido: la verificación exige el expediente presupuestario de cada año.
+      ══ CORREGIDO 2026-08-20, contra el registro del Congreso ══ La redacción anterior decía
+      que «no se localizó registro público de escrutinio de estos informes», y eso ya es falso:
+      el escrutinio consta —cada Proyecto de Presupuesto trae el informe de una comisión
+      bicameral—. Lo que no consta es un documento cuyo TÍTULO nombre la vinculación con la
+      Estrategia, en ninguno de los dos ciclos que el registro sirve (PGE 2025 y PGE 2026).
+      Sigue sin afirmarse incumplimiento, y ahora por dos motivos concretos: el informe pudo
+      depositarse dentro del «INFORME EXPLICATIVO Y MARCO DE GASTO», cuyo contenido no se
+      puede leer, y el registro solo sirve el período legislativo vigente — no los años en que
+      esta obligación anual venció.
     habilita_exigir: [requerimiento_de_la_comision_bicameral]
 
   - id: art-51-comision-bicameral
     articulo: 51
     sin_consulta_normativa: >-
-      CONSTITUIR la Comisión Bicameral. Un acto del propio Congreso, que consta en sus expedientes y no en la Gaceta.
-      Y acá el cuidado es doble: el destinatario del informe ES el Congreso. Una afirmación negativa sobre su propia conducta, sostenida en una fuente que no puede verla, es la forma más rápida de perder la discusión entera.
-      FUENTE IDENTIFICADA Y NO CONECTADA: expedientes de Cámara y Senado.
+      CONSTITUIR la Comisión Bicameral. Un acto del propio Congreso, que consta en sus expedientes y no en la Gaceta, así que no hay consulta normativa que hacer.
+      Se comprueba contra el registro legislativo: ver `verificacion_congresual`.
+    verificacion_congresual:
+      # Acá el registro lo lleva el PROPIO OBLIGADO. Es mejor que su palabra —un acto deja
+      # rastro— y no es evidencia de tercero, y el informe tiene que decirlo.
+      registro_de: Congreso Nacional
+      buscar: comisiones bicamerales permanentes
+      control_positivo: comisiones bicamerales especiales
+      en: catálogo de comisiones y documentos del expediente presupuestario
+      nota: >-
+        El listado por tipo sirve SOLO el período legislativo vigente y el registro no declara
+        su cobertura, así que ningún vacío suyo autoriza a afirmar que la comisión nunca se
+        constituyó. La búsqueda por palabra clave del propio registro devuelve cero para
+        «bicameral» mientras el listado por tipo devuelve cinco: por eso toda consulta lleva
+        control positivo.
     deber: >-
       Constituir la Comisión Bicameral de Planificación y Presupuesto para verificar y
       efectuar seguimiento sistemático de la vinculación entre las metas de la END y el
@@ -102,10 +131,18 @@ obligaciones:
     consecuencia: null
     estado: sin_registro_publico
     evidencia: >-
-      No se localizó registro público de actividad de fiscalización. ⚠️ Verificación
-      BLOQUEANTE antes de publicar: el destinatario del informe es el propio Congreso y una
-      afirmación negativa sin comprobar es refutable con un solo documento. Hay que consultar
-      los sistemas de expedientes de Cámara y Senado.
+      ══ CORREGIDO 2026-08-20, contra el registro del Congreso ══ La afirmación anterior —«no
+      se localizó registro público de actividad de fiscalización»— era REFUTABLE con el propio
+      archivo del Congreso, que es exactamente lo que la nota advertía. Una comisión bicameral
+      SÍ examina el Presupuesto: los expedientes del PGE 2025 y del PGE 2026 registran siete
+      documentos suyos, entre ellos «INFORME COMISIÓN BICAMERAL» y «DESIGNACIÓN COMISIÓN
+      BICAMERAL DEL SENADO».
+      Lo que no consta es una comisión bicameral PERMANENTE: la categoría existe en el
+      catálogo del propio Congreso y está vacía, y las bicamerales que aparecen se designan
+      por proyecto. El artículo 51 pide permanencia y seguimiento sistemático, así que el
+      hallazgo es esa diferencia y no una ausencia de fiscalización.
+      Alcance que viaja con la afirmación: el registro sirve solo el período legislativo
+      vigente y no declara su cobertura.
     habilita_exigir: [citacion_de_funcionarios, requerimiento_del_informe_art_50]
 
   - id: art-54-reglamento
