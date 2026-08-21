@@ -34,6 +34,24 @@ async def operations_status(
     return ops.all_status(db)
 
 
+@router.get("/base-de-datos", summary="Huella de la base: tamaño por tabla y conexiones")
+async def huella_base_de_datos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict:
+    """Cuánto ocupa la base, qué tablas la ocupan y cuántas conexiones tiene este proceso.
+
+    Contesta con NÚMEROS la pregunta que dispara un aviso de memoria del motor. Marca además
+    las tablas que crecen sin retención por diseño (caché de narrativas, registro de gasto,
+    historial de operaciones): saber cuáles son las grandes es lo que convierte «hay que
+    purgar algo» en una decisión con datos.
+    """
+    from shared.database.huella import huella_de_la_base
+
+    _require_admin(current_user)
+    return huella_de_la_base(db)
+
+
 @router.get("/validacion", summary="Frescura de la validación de cada eje")
 async def validacion_frescura(
     db: Session = Depends(get_db),
