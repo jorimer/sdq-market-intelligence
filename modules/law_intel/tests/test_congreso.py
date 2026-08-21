@@ -180,3 +180,24 @@ def test_ESTRUCTURAL_ningun_veredicto_se_inventa_fuera_del_vocabulario():
             usados.add(nodo.args[1].value)
     assert usados, "el barrido no encontró ninguna Comprobacion: dejó de proteger algo"
     assert usados <= set(C.VEREDICTOS), f"veredictos fuera del vocabulario: {usados - set(C.VEREDICTOS)}"
+
+
+@pytest.mark.parametrize("comprobar", ["comision", "informe"])
+def test_el_alcance_nunca_queda_en_None_cuando_hubo_registros(comprobar):
+    """«No sé de qué período es» y «cubre todo» son cosas distintas.
+
+    La evidencia de las dos comprobaciones AFIRMA que el registro sirve un solo período
+    legislativo. Servir esa frase con el campo vacío al lado es la misma trampa que
+    `stale=null` en la frescura de validación: el hueco se lee como que no hay límite.
+
+    Pasó de verdad: el artículo 50 salía con `periodo_legislativo_servido: None` porque una
+    iniciativa se DEPOSITA y una comisión se DESIGNA, y solo se leía la segunda fecha.
+    """
+    if comprobar == "comision":
+        c = C.comprobar_comision_bicameral(
+            OID, _listado([], [{"comision": "x", "fechaDesignacion": "2025-05-27T00:00:00"}]))
+    else:
+        c = C.comprobar_informe_de_vinculacion(
+            OID50, [{"id": 1, "numero": "A", "fechaDeposito": "2025-09-26"}],
+            lambda _: [_doc("PROYECTO DEPOSITADO")])
+    assert c.alcance["periodo_legislativo_servido"] is not None
