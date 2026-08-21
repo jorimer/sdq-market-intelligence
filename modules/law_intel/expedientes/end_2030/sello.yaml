@@ -52,3 +52,59 @@ verificaciones:
 # `administrativa` que la registre — con su acta y su fecha. Hasta comprobarlo, NO se agrega:
 # una enmienda inventada sería peor que la ausencia, porque legitimaría el cambio.
 enmiendas: []
+
+# ── CORRECCIONES DE TRANSCRIPCIÓN ─────────────────────────────────────────────────────────
+# Categoría DISTINTA de una enmienda, y la distinción no es formal: una enmienda dice que la
+# LEY cambió y alimenta el hallazgo del artículo 20 —que el evaluado puede mover su propia
+# vara—; una corrección dice que NUESTRA COPIA estaba mal y la ley no se movió. Meterlas en la
+# misma lista metería ruido en el único registro que sostiene esa acusación.
+#
+# Por eso la evidencia es otra: no hay norma que citar, se cita el TEXTO OFICIAL — qué decía
+# nuestra copia, qué dice el documento, y la lectura que lo muestra.
+#
+# ⚠️ NO SURTE EFECTO SIN FIRMA. Con `aprobado_por` vacío el expediente queda en
+# `deriva_no_autorizada` y NO se sirve — a propósito: se deja preparada para revisar y aplica
+# recién cuando alguien la firma.
+correcciones:
+  - id: corr-2026-08-21-glifo-y-separador
+    fecha: "2026-08-21"
+    aprobado_por: ""            # ← FIRMA AQUÍ (nombre de quien aprueba)
+    indicadores: ["3.22", "3.23"]
+    detalle: >-
+      Dos celdas que nuestro extractor no transcribió como las escribe la ley. Ninguna meta
+      cambió: cambió nuestra lectura de ellas.
+    evidencia:
+      - indicador: "3.22"
+        campo: "meta_2025 y meta_2030"
+        anterior: "(cid:2)1.0"
+        corregido: ">=1.0"
+        por_que: >-
+          `(cid:2)` es la forma en que pdfplumber declara un glifo que no supo mapear: emite
+          el identificador crudo de la fuente. El glifo es «≥».
+        fuente: >-
+          PDF oficial de la END 2030, tabla de indicadores del Eje 3. La fila del 3.22 se lee
+          «Razón 2005-2010 0.75 0.85 1.0 ≥1.0 ≥1.0» — coincide celda por celda con nuestro
+          registro salvo en las dos corrompidas.
+        consecuencia: >-
+          No era cosmético. Con la celda ilegible el clasificador declaraba la escala del
+          indicador como `redactada` —«se juzga por criterio, no por aritmética»— y el
+          indicador salía `no_evaluable` por diseño. Corregida, la escala es `umbral` y el
+          indicador se puede juzgar: la ley pide llegar a la paridad en 2020 y SOSTENERSE en
+          o por encima de ella.
+      - indicador: "3.23"
+        campo: "meta_2015, meta_2020, meta_2025 y meta_2030"
+        anterior: ">1,700 · >2,000 · >2,250 · >2,500"
+        corregido: ">1700 · >2000 · >2250 · >2500"
+        por_que: >-
+          La coma es separador de MILES y no decimal. No es una inferencia por plausibilidad:
+          el propio documento escribe la línea base como «1,625.3» — coma de miles Y punto
+          decimal en el mismo número—, así que en esta tabla la coma no puede ser decimal.
+        fuente: >-
+          PDF oficial de la END 2030: «3.23 Flujo anual de inversión Millones de 2010 1,625.3
+          >1,700 >2,000 >2,250 >2,500».
+        consecuencia: >-
+          El lector del semáforo se niega —bien— a interpretar «>1,700», porque en notación
+          española esa forma es ambigua. Se corrige en el DATO y no aflojando el lector: la
+          ambigüedad es real en general y sólo este documento la resuelve.
+    hash_resultante: f62db731cb726df9527348bf4ab3267950e360cdffecfc929b15689717da1f96
+
