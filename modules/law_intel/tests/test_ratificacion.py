@@ -131,3 +131,128 @@ def test_la_lectura_publicable_no_tiene_texto_de_autor():
     campos = {f.name for f in dataclasses.fields(Enmienda)}
     assert campos == {"id", "origen", "norma", "fecha", "indicadores", "detalle",
                       "hash_resultante"}
+
+
+def _yaml():
+    import yaml  # type: ignore[import-untyped]
+
+    return yaml
+
+
+class TestLaCorreccionDeTranscripcion:
+    """Nuestra copia estaba mal — la ley no se movió. Es OTRA categoría que una enmienda.
+
+    Mezclarlas costaría el hallazgo central del expediente: los tres orígenes de `ORIGENES`
+    describen que la LEY cambió, y el informe usa esa lista para señalar que el evaluado puede
+    mover su propia vara por el artículo 20. Un registro de enmiendas con enmiendas inventadas
+    vale menos que uno vacío.
+    """
+
+    def _sello(self, tmp_path, correcciones):
+        import yaml  # type: ignore[import-untyped]
+
+        base = tmp_path / "corr"
+        base.mkdir()
+        (base / "sello.yaml").write_text(
+            yaml.safe_dump({"sello": {"hash_metas": "viejo", "fecha": "2026-01-01",
+                                      "aprobado_por": "X"},
+                            "correcciones": correcciones}, allow_unicode=True),
+            encoding="utf-8")
+        return base
+
+    def _corr(self, hash_resultante, aprobado_por=""):
+        return {"id": "c1", "fecha": "2026-08-21", "indicadores": ["3.22"],
+                "detalle": "el glifo ≥ salió como (cid:2)",
+                "evidencia": [{"indicador": "3.22", "campo": "meta_2025",
+                               "anterior": "(cid:2)1.0", "corregido": ">=1.0"}],
+                "hash_resultante": hash_resultante, "aprobado_por": aprobado_por}
+
+    def test_una_correccion_SIN_FIRMA_no_surte_efecto(self, monkeypatch, tmp_path):
+        """Se puede dejar preparada —con su hash y su evidencia— y el expediente sigue
+        derivado hasta que alguien la firma. Es lo que permite revisarla antes de que aplique.
+        """
+        from modules.law_intel import ratificacion as r
+
+        base = self._sello(tmp_path, [self._corr("nuevo")])
+        monkeypatch.setattr(r, "_cargar_sello", lambda e: _yaml().safe_load(
+            (base / "sello.yaml").read_text(encoding="utf-8")))
+        monkeypatch.setattr(r, "hash_de_metas", lambda i: "nuevo")
+        monkeypatch.setattr(r, "cargar", lambda e: type("E", (), {"indicadores": []})())
+        r.estado.cache_clear()
+        assert r.estado("corr").estado == "deriva_no_autorizada"
+        assert not r.estado("corr").servible
+
+    def test_firmada_y_con_el_hash_exacto_SI_surte_efecto(self, monkeypatch, tmp_path):
+        from modules.law_intel import ratificacion as r
+
+        base = self._sello(tmp_path, [self._corr("nuevo", aprobado_por="SDQ")])
+        monkeypatch.setattr(r, "_cargar_sello", lambda e: _yaml().safe_load(
+            (base / "sello.yaml").read_text(encoding="utf-8")))
+        monkeypatch.setattr(r, "hash_de_metas", lambda i: "nuevo")
+        monkeypatch.setattr(r, "cargar", lambda e: type("E", (), {"indicadores": []})())
+        r.estado.cache_clear()
+        st = r.estado("corr")
+        assert st.estado == "corregido" and st.servible
+        assert st.correccion_vigente.indicadores == ["3.22"]
+
+    def test_una_firma_NO_alcanza_si_el_hash_no_es_el_del_registro(self, monkeypatch, tmp_path):
+        """Mismo rigor que una enmienda: exigir el hash impide que una corrección real sirva
+        de paraguas a una edición distinta de la que se revisó."""
+        from modules.law_intel import ratificacion as r
+
+        base = self._sello(tmp_path, [self._corr("otro", aprobado_por="SDQ")])
+        monkeypatch.setattr(r, "_cargar_sello", lambda e: _yaml().safe_load(
+            (base / "sello.yaml").read_text(encoding="utf-8")))
+        monkeypatch.setattr(r, "hash_de_metas", lambda i: "nuevo")
+        monkeypatch.setattr(r, "cargar", lambda e: type("E", (), {"indicadores": []})())
+        r.estado.cache_clear()
+        assert r.estado("corr").estado == "deriva_no_autorizada"
+
+    def test_la_frase_publicable_NO_dice_que_la_ley_cambio(self, monkeypatch, tmp_path):
+        """El error más caro posible acá: leer una corrección nuestra como una modificación
+        del instrumento inventaría un cambio normativo que no ocurrió."""
+        from modules.law_intel import ratificacion as r
+
+        base = self._sello(tmp_path, [self._corr("nuevo", aprobado_por="SDQ")])
+        monkeypatch.setattr(r, "_cargar_sello", lambda e: _yaml().safe_load(
+            (base / "sello.yaml").read_text(encoding="utf-8")))
+        monkeypatch.setattr(r, "hash_de_metas", lambda i: "nuevo")
+        monkeypatch.setattr(r, "cargar", lambda e: type("E", (), {"indicadores": []})())
+        r.estado.cache_clear()
+        pub = r.publicable("corr")
+        assert "ORIGINALES de la ley" in pub["frase"]
+        assert pub["origen"] == "correccion_de_transcripcion"
+        assert "No hubo cambio normativo" in pub["origen_nota"]
+        assert pub["evidencia"], "la evidencia viaja: sin ella «corrección» es una edición"
+
+
+class TestLasDosNotacionesDelUmbral:
+    """Los dos extremos de la tubería tienen que entender lo mismo, y no lo entendían.
+
+    El clasificador del extractor reconocía `≥` —el glifo que trae el PDF— y el lector del
+    semáforo solo `>=`. Una meta quedaba clasificada como umbral y resultaba ilegible para
+    quien la juzga: `no_evaluable` sobre una meta que la ley escribió con toda claridad.
+    """
+
+    @pytest.mark.parametrize("texto,esperado", [
+        ("≥1.0", (">=", 1.0)), (">=1.0", (">=", 1.0)),
+        ("≤2", ("<=", 2.0)), ("<= 2", ("<=", 2.0)),
+        ("< 4", ("<", 4.0)), ("> 1.5", (">", 1.5)),
+    ])
+    def test_el_lector_entiende_las_dos_formas(self, texto, esperado):
+        from modules.law_intel.scoring.semaforo import leer_umbral
+
+        assert leer_umbral(texto) == esperado
+
+    @pytest.mark.parametrize("texto", ["≥1.0", ">=1.0", "≤2", "<= 2", "< 4"])
+    def test_y_el_clasificador_tambien(self, texto):
+        from modules.law_intel.corpus.extractor import _escala
+
+        assert _escala([0.85, 1.0, texto], {"2025": 1}) == "umbral"
+
+    def test_la_forma_AMBIGUA_sigue_sin_interpretarse(self):
+        """`>1,700` no se toca: la coma puede ser miles o decimal en notación española. Se
+        corrige en el DATO, no aflojando el lector."""
+        from modules.law_intel.scoring.semaforo import leer_umbral
+
+        assert leer_umbral(">1,700") is None

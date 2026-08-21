@@ -34,6 +34,8 @@ from modules.law_intel.registro import RAIZ, ExpedienteInvalido, Indicador, carg
 ESTADOS = {
     "ratificado": "las metas coinciden con el sello aprobado",
     "enmendado": "difieren, y una enmienda con base legal cubre exactamente la diferencia",
+    "corregido": ("difieren porque NUESTRA COPIA estaba mal y una corrección firmada, "
+                  "contrastada contra el texto oficial, cubre exactamente la diferencia"),
     "deriva_no_autorizada": "difieren sin norma que lo autorice — el expediente NO se sirve",
     "sin_ratificar": "el expediente todavía no fue aprobado por primera vez",
 }
@@ -65,6 +67,40 @@ class Enmienda:
 
 
 @dataclass(frozen=True)
+class Correccion:
+    """Nuestra TRANSCRIPCIÓN estaba mal. La ley no se movió.
+
+    Es una categoría distinta de una enmienda y mezclarlas costaría el hallazgo central del
+    expediente. Los tres orígenes de `ORIGENES` describen que la LEY cambió —por ley, por
+    decreto o por acto del órgano rector bajo el artículo 20— y el informe usa esa lista para
+    señalar que el evaluado puede mover su propia vara. Registrar acá «corregimos una coma»
+    metería ruido en el único registro que sostiene esa acusación: un registro de enmiendas
+    con enmiendas inventadas vale menos que uno vacío.
+
+    Por eso la evidencia es OTRA. Una enmienda cita la norma que autoriza el cambio; una
+    corrección no tiene norma que citar —no hubo cambio— y cita el TEXTO OFICIAL: qué decía
+    nuestra copia, qué dice el documento y dónde se lee. Sin esa cadena, «corrección» sería
+    la puerta por la que se edita una meta sin autorización, que es exactamente lo que el
+    sello existe para cerrar.
+
+    Y lleva firma. Una corrección sin `aprobado_por` NO surte efecto: el expediente sigue
+    derivado y no se sirve. Se puede dejar preparada —con su hash calculado y su evidencia
+    escrita— y no toma efecto hasta que alguien la firma.
+    """
+    id: str
+    fecha: str
+    indicadores: List[str]
+    detalle: str
+    evidencia: List[Dict[str, Any]]
+    hash_resultante: str
+    aprobado_por: str = ""
+
+    @property
+    def firmada(self) -> bool:
+        return bool((self.aprobado_por or "").strip())
+
+
+@dataclass(frozen=True)
 class EstadoRatificacion:
     expediente: str
     estado: str
@@ -73,11 +109,12 @@ class EstadoRatificacion:
     sellado_el: Optional[str] = None
     sellado_por: Optional[str] = None
     enmienda_vigente: Optional[Enmienda] = None
+    correccion_vigente: Optional["Correccion"] = None
     indicadores_que_difieren: Optional[List[str]] = None
 
     @property
     def servible(self) -> bool:
-        return self.estado in ("ratificado", "enmendado")
+        return self.estado in ("ratificado", "enmendado", "corregido")
 
 
 def hash_de_metas(indicadores: List[Indicador]) -> str:
@@ -128,6 +165,15 @@ def estado(expediente_id: str) -> EstadoRatificacion:
             return EstadoRatificacion(expediente_id, "enmendado", actual, sellado,
                                       sello.get("fecha"), sello.get("aprobado_por"),
                                       enmienda_vigente=enm)
+    # Corrección de transcripción: mismo rigor de hash que una enmienda —tiene que cubrir
+    # EXACTAMENTE el registro resultante— más la firma. Una preparada y sin firmar deja el
+    # expediente derivado a propósito: se puede dejar lista para revisar sin que tome efecto.
+    for c in reversed(doc.get("correcciones") or []):
+        corr = Correccion(**c)
+        if corr.hash_resultante == actual and corr.firmada:
+            return EstadoRatificacion(expediente_id, "corregido", actual, sellado,
+                                      sello.get("fecha"), sello.get("aprobado_por"),
+                                      correccion_vigente=corr)
     return EstadoRatificacion(expediente_id, "deriva_no_autorizada", actual, sellado,
                               sello.get("fecha"), sello.get("aprobado_por"))
 
@@ -165,6 +211,21 @@ def publicable(expediente_id: str) -> Dict[str, Any]:
                              "potestad delegada, no por ley. La comparación contra las metas "
                              "originales sigue siendo legítima y se ofrece.")
                             if e.origen == "administrativa" else None),
+        }
+    if st.estado == "corregido" and st.correccion_vigente:
+        c = st.correccion_vigente
+        return {
+            "estado": st.estado,
+            # La frase NO puede leerse como que la ley cambió. Lo que cambió es nuestra copia,
+            # y decirlo al revés inventaría una modificación del instrumento.
+            "frase": (f"Las metas vigentes son las ORIGINALES de la ley. Lo corregido es "
+                      f"nuestra transcripción del texto oficial: {c.detalle}"),
+            "origen": "correccion_de_transcripcion",
+            "origen_nota": ("No hubo cambio normativo. Se corrigió una diferencia entre el "
+                            "registro y el documento oficial, contrastada contra él."),
+            "indicadores_afectados": c.indicadores,
+            "evidencia": c.evidencia,
+            "advertencia": None,
         }
     return {"estado": st.estado, "frase": ESTADOS[st.estado], "origen": None,
             "origen_nota": None, "indicadores_afectados": [], "advertencia": None}

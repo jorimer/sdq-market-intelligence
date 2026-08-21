@@ -179,7 +179,13 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
 #: extranjera»— es exactamente el tipo de inferencia que produce cifras inventadas. El único
 #: indicador con esa forma (3.23) no está medido hoy, así que rechazarlo no cuesta nada y
 #: adivinarlo costaría una cifra falsa el día que se mida.
-_UMBRAL = re.compile(r"^\s*(<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*$")
+#: Los DOS extremos de la tubería tienen que entender la misma notación, y no la entendían:
+#: el clasificador del extractor reconoce `≥` (el glifo que trae el PDF) y este lector solo
+#: entendía `>=`. Una meta podía quedar clasificada como umbral y después resultar ilegible
+#: para quien la juzga — `no_evaluable` sobre una meta que la ley escribió con toda claridad.
+#: Se admiten las dos formas de cada lado y se normalizan a una.
+_UMBRAL = re.compile(r"^\s*(<=|>=|≤|≥|<|>)\s*(\d+(?:\.\d+)?)\s*%?\s*$")
+_EQUIVALE = {"≤": "<=", "≥": ">="}
 
 
 #: Gramática CERRADA de un escalar ROTULADO: «<sujeto> : <número>». Tan estrecha como la del
@@ -213,7 +219,10 @@ def leer_umbral(meta: Any) -> Optional[Tuple[str, float]]:
     prosa («Se cumple con tiempos establecidos legalmente») y esas no se juzgan.
     """
     m = _UMBRAL.match(str(meta))
-    return (m.group(1), float(m.group(2))) if m else None
+    if not m:
+        return None
+    op = m.group(1)
+    return (_EQUIVALE.get(op, op), float(m.group(2)))
 
 
 def _veredicto_de_umbral(ind: Indicador, meta: Any, periodo_meta: Optional[str],
