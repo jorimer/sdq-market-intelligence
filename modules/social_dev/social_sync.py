@@ -80,6 +80,24 @@ WDI_NACIONALES_FUERA_DEL_INDICE = {
     # El emisor publica 0-100 y la ley fija 0-1: el binding declara `centesimal`. NO se
     # divide acá — guardaríamos un número que ya no es el que el Banco Mundial publica.
     "SI.POV.GINI": ("gini_index", "índice 0-100"),                          # 2.7  Δ 3,5%
+
+    # ══ LOTE 2026-08-21 · dos que el barrido con la sonda dejó en pie ══
+    #
+    # De catorce candidatos del Banco Mundial barridos contra el oráculo de la ley, doce se
+    # cayeron por CONCEPTO y no por plomería: bruto contra neto (2.8, 3.10), incidencia
+    # contra mortalidad (2.24), universos distintos (2.31, 2.32, 2.47, 2.48), área de bosque
+    # contra tasa de deforestación (4.3). Quedan estas dos, y las dos van con salvedad
+    # porque el año de la línea base NO está en la serie — se dice acá y se repite en el
+    # binding, que es lo que llega al informe.
+    #
+    # `SE.XPD.TOTL.GD.ZS` es «gasto público en educación como % del PIB», literalmente el
+    # indicador 2.20. La serie no trae 2009 (la base legal) y da 1,89 en 2010 contra 2,2 —
+    # compatible con un año de diferencia en un indicador que se movía.
+    "SE.XPD.TOTL.GD.ZS": ("public_education_spending", "% del PIB"),        # 2.20 sin 2009
+    # `ER.LND.PTLD.ZS` son áreas protegidas TERRESTRES como % de la superficie. La serie
+    # empieza en 2013 (22,3) contra una base legal de 24,4 en 2009. La meta de la ley es
+    # PLANA —24,4 en los cuatro cortes—, así que el indicador pide sostener, no crecer.
+    "ER.LND.PTLD.ZS": ("protected_areas", "% de la superficie terrestre"),  # 4.2  desde 2013
     "GC.TAX.TOTL.GD.ZS": ("tax_revenue_gdp", "% del PIB"),                  # 3.25 Δ 6,0%
     "NY.GNP.PCAP.CD": ("gni_per_capita_atlas", "US$ corrientes"),           # 3.26 Δ 5,4%
 }
