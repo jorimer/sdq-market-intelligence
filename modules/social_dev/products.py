@@ -371,6 +371,19 @@ class SocialDevProduct:
         # cifras nacionales de cobertura educativa que existen en el panel: el IDM usa la
         # serie por región, y promediar diez regiones sin ponderar por matrícula no da la
         # cobertura del país. Habilitan los indicadores 2.9 y 2.10 de la END.
+        # Indicadores 2.20 y 4.2 de la END. Las dos llevan su salvedad en la nota: el año
+        # de la línea base legal NO está en la serie del emisor, así que el contraste con
+        # la ley se hace contra el año más cercano y eso se declara antes de medir.
+        "public_education_spending": (
+            "public_education_spending", HEALTH_ENTITY,
+            "Gasto público en educación (% del PIB)", "education",
+            "Banco Mundial (SE.XPD.TOTL.GD.ZS). La serie no trae 2009, que es el año de la "
+            "línea base de la ley. No alimenta el índice de desarrollo."),
+        "protected_areas": (
+            "protected_areas", HEALTH_ENTITY,
+            "Áreas protegidas terrestres (% de la superficie)", "living_standards",
+            "Banco Mundial (ER.LND.PTLD.ZS). Superficie TERRESTRE: la serie marina es otra "
+            "y da la mitad. La serie empieza en 2013 y la línea base de la ley es de 2009."),
         # Los tres índices comerciales del sector eléctrico (indicadores 3.27, 3.28 y 3.29
         # de la END). El SUJETO viaja en la etiqueta: son las tres distribuidoras estatales
         # agregadas, no el sector entero — que es exactamente el universo que la ley mide, y

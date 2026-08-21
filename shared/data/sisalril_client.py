@@ -27,9 +27,49 @@ from shared.data.lineage import Lineage
 
 logger = logging.getLogger("sdq.data.sisalril")
 
-_SFS_CSV = ("https://cnss.gob.do/wp-content/uploads/2023/06/"
-            "SFS_Afiliacion-por-Regimen_2007_MARZO-2026-.csv")
+#: Página de datos abiertos del emisor. Es la que se consulta para resolver el CSV vigente.
+_SFS_INDICE = "https://cnss.gob.do/transparencia/estadisticas-institucionales/data-abierta/"
+
+#: URL de respaldo, **congelada a propósito y declarada**. El CNSS renombra el archivo cada
+#: mes con el último período en el nombre (`…_2007_Mayo-2026.csv`) y **deja el anterior en
+#: pie**, así que una URL fija no falla: sigue respondiendo 200 y sirve una serie cada vez más
+#: vieja. Cuando se detectó, ésta devolvía hasta 2026-03 mientras el emisor publicaba 2026-05
+#: — dos meses de atraso que ningún error habría revelado. Es la falla más cara de este
+#: repositorio: la que no avisa.
+_SFS_CSV_RESPALDO = ("https://cnss.gob.do/wp-content/uploads/2023/06/"
+                     "SFS_Afiliacion-por-Regimen_2007_MARZO-2026-.csv")
+
+#: El nombre lleva el período final; el mes va en español y con mayúscula inicial variable
+#: («MARZO», «Mayo»), así que se compara sin distinguir caso.
+_RX_SFS = re.compile(
+    r'href="([^"]*SFS_Afiliacion-por-Regimen[^"]*\.csv)"', re.I)
+
 _UA = "Mozilla/5.0 (SDQMIP research; +https://sdqconsulting.com.do)"
+
+
+def resolver_csv_vigente(timeout: int = 45) -> tuple[str, str]:
+    """`(url, procedencia)` del CSV que el emisor publica HOY.
+
+    Se resuelve contra su índice en vez de fijarse, por la misma razón que el conector de la
+    SIE resuelve el suyo contra el catálogo: la ruta lleva el período y cambia cada mes.
+
+    La procedencia viaja con la URL y no es decorativa. Si hubo que caer al respaldo, quien
+    consuma esto tiene que poder decir que la serie puede estar vieja — un respaldo que se usa
+    en silencio es exactamente cómo un fallback se vuelve permanente, que en esta plataforma
+    ya ocurrió con los «promedios del sistema».
+    """
+    import requests
+
+    try:
+        r = requests.get(_SFS_INDICE, headers={"User-Agent": _UA}, timeout=timeout)
+        r.raise_for_status()
+        halladas = _RX_SFS.findall(r.text)
+    except Exception as e:                                   # red, DNS, 5xx
+        logger.warning("SISALRIL: no se pudo resolver el CSV vigente (%s)", e)
+        halladas = []
+    if halladas:
+        return halladas[0], "indice"
+    return _SFS_CSV_RESPALDO, "respaldo"
 
 
 def _num(s: str) -> Optional[float]:
@@ -50,7 +90,12 @@ class SISALRILClient(FixtureBackedClient):
         import pandas as pd
         import requests
 
-        r = requests.get(_SFS_CSV, headers={"User-Agent": _UA}, timeout=60)
+        url, procedencia = resolver_csv_vigente()
+        if procedencia == "respaldo":
+            # Se declara y no se calla: la serie puede venir meses atrasada y el consumidor
+            # tiene que poder decirlo.
+            logger.warning("SISALRIL: se usa la URL de RESPALDO; la serie puede estar vieja")
+        r = requests.get(url, headers={"User-Agent": _UA}, timeout=60)
         r.raise_for_status()
         raw = pd.read_csv(io.BytesIO(r.content), header=None, dtype=str, keep_default_na=False)
         lineage = Lineage(source=self.source, license=self.license, fetched_at=date.today())

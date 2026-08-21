@@ -1309,3 +1309,149 @@ bindings:
       Serie observada: 96,5 (2019) · 94,4 (2020) · 95,1 (2021) · 93,2 (2022) · 95,1 (2023) ·
       95,3 (2024), contra una línea base legal de 94,2 en 2008 y metas de 97 para 2025 y 98
       para 2030. Es el único de los tres que se mueve en la dirección de su meta, y apenas.
+
+# ── BARRIDO CON LA SONDA 2026-08-21 · catorce candidatos del Banco Mundial ────────────────
+# El oráculo de la ley decidió, no el parecido de etiqueta. DOCE se cayeron por CONCEPTO —no
+# por plomería—, y quedan registrados acá para que nadie los vuelva a proponer. Es la misma
+# lección del 2.25 y del 2.34: en este dominio la trampa no es que el número falte, es que
+# haya un número parecido midiendo otra cosa.
+  - indicador: "2.20"
+    serie: "social_dev:public_education_spending"
+    fuente: wdi
+    mejor: mayor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Estadísticas fiscales y educativas dominicanas, compiladas por el Instituto de
+      Estadística de la UNESCO y republicadas en el WDI. El gasto lo reporta el evaluado.
+    nota_comparabilidad: >-
+      La serie NO trae 2009, que es el año de la línea base legal (2,2). Da 1,89 en 2010,
+      compatible con un año de diferencia en un indicador que se movía, pero el contraste
+      exacto no se puede hacer y por eso no promueve.
+    nota: >-
+      «Gasto público en educación como % del PIB» es literalmente el nombre del indicador y
+      el de la serie. Observado 3,76% en 2023 contra metas de 5,0 (2015), 6,0 (2020) y 6,5
+      (2025): el 4% de la movilización educativa quedó por debajo de lo que la propia ley
+      había fijado para 2015.
+  - indicador: "4.2"
+    serie: "social_dev:protected_areas"
+    fuente: wdi
+    mejor: mayor
+    estado: propuesto
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Banco Mundial sobre el registro de áreas protegidas que declara el propio país a la
+      base mundial de la UICN/PNUMA.
+    nota_comparabilidad: >-
+      La serie empieza en 2013 (22,3) y la línea base legal es de 2009 (24,4): cuatro años
+      de distancia, fuera de la ventana de la sonda. Y hay una segunda duda que hay que
+      resolver antes de promover: la ley dice «áreas protegidas nacionales» sin decir si
+      incluye las marinas. La serie TERRESTRE da 26,3 en 2025 y la marina 15,3 — elegir mal
+      cambia el veredicto de cumplida a incumplida.
+    nota: >-
+      La meta de la ley es PLANA: 24,4 en los cuatro cortes. El indicador pide SOSTENER, no
+      crecer, y es de los pocos del expediente con esa forma.
+  # ── Los doce descartes del barrido ──────────────────────────────────────────────────────
+  - indicador: "2.8"
+    serie: "wdi.SE.PRE.ENRR"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: Sistema educativo dominicano vía UNESCO; el WDI republica.
+    motivo_descarte: >-
+      La serie es matrícula BRUTA de preescolar y el indicador pide la tasa NETA de cobertura
+      del nivel inicial. La bruta cuenta a todo el que asiste sin importar la edad, así que
+      supera a la neta por construcción: 40,5 contra una base legal de 32,6 en 2010, un 24%
+      de diferencia que no es desempeño sino definición.
+  - indicador: "2.24"
+    serie: "wdi.SH.STA.MALR"
+    fuente: wdi
+    mejor: menor
+    estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: OMS — estimación del programa mundial de malaria.
+    motivo_descarte: >-
+      Mide INCIDENCIA por 1.000 habitantes en riesgo (2.482 en 2010) y el indicador pide la
+      tasa de MORTALIDAD asociada a malaria (0,14). Son magnitudes distintas por cuatro
+      órdenes de tamaño; ninguna transformación las convierte.
+  - indicador: "2.31"
+    serie: "wdi.SH.HIV.INCD.14"
+    fuente: wdi
+    mejor: menor
+    estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: ONUSIDA vía Banco Mundial.
+    motivo_descarte: >-
+      Es el NÚMERO de nuevas infecciones en menores de 14 años (620 en 2010) y el indicador
+      pide el PORCENTAJE de hijos de madres VIH positivas que resultan positivos (10,0). Un
+      conteo no es una tasa y el denominador que haría falta no está en la serie.
+  - indicador: "2.32"
+    serie: "wdi.SH.HIV.ARTC.ZS"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: ONUSIDA vía Banco Mundial.
+    motivo_descarte: >-
+      La serie es cobertura de antirretrovirales sobre TODAS las personas con VIH (16% en
+      2009) y el indicador acota el universo a las de INFECCIÓN AVANZADA (71% en 2009). Son
+      dos denominadores distintos y el de la ley es el más chico, así que la serie subestima
+      por diseño: 77% de diferencia contra la base legal.
+  - indicador: "2.47"
+    serie: "wdi.SL.TLF.0714.ZS"
+    fuente: wdi
+    mejor: menor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: Encuestas de hogares dominicanas vía OIT/Banco Mundial.
+    motivo_descarte: >-
+      «Niños ocupados» de 7 a 14 en la serie contra «niños de 6 a 14 que trabajan» en la ley,
+      y con una diferencia de un orden de magnitud: 13,2 en 2014 contra una base legal de 1,5
+      en 2010. La serie tampoco trae el año de la base. Dos motivos independientes.
+  - indicador: "2.48"
+    serie: "wdi.SL.UEM.NEET.ZS"
+    fuente: wdi
+    mejor: menor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: ENCFT del BCRD vía OIT/Banco Mundial.
+    motivo_descarte: >-
+      La serie es NINI de 15 a 24 años (21,0 en 2010) y el indicador acota a 15-19 y además
+      exige estar DESEMPLEADO, no solo fuera del empleo (6,0 en 2010). Dos recortes distintos
+      del mismo fenómeno; 250% de diferencia contra la base legal.
+  - indicador: "3.10"
+    serie: "wdi.SE.TER.ENRR"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: MESCyT vía UNESCO; el WDI republica.
+    motivo_descarte: >-
+      Matrícula BRUTA de nivel superior contra la tasa NETA de 18-24 que pide la ley. La
+      bruta incluye a los mayores de 24, que en educación superior son muchos: 57,7 en 2024
+      contra una base legal de 24,8 en 2010. La serie tampoco trae 2010.
+  - indicador: "4.1"
+    serie: "wdi.EN.GHG.CO2.PC.CE.AR5"
+    fuente: wdi
+    mejor: menor
+    estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: Banco Mundial sobre inventarios de emisiones (metodología AR5).
+    motivo_descarte: >-
+      Da 2,13 toneladas por habitante en 2010 contra una base legal de 3,6 — un 41% de
+      diferencia. El Banco Mundial retiró la serie anterior (`EN.ATM.CO2E.PC`) y la reemplazó
+      con otra metodología; la línea base de la ley se fijó sobre la vieja. No es desempeño,
+      es un cambio de método, y sin puente publicado no se puede contrastar.
+  - indicador: "4.3"
+    serie: "wdi.AG.LND.FRST.ZS"
+    fuente: wdi
+    mejor: menor
+    estado: descartado
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: FAO vía Banco Mundial.
+    motivo_descarte: >-
+      Es el ÁREA de bosque como % del territorio (41,9) y el indicador pide la TASA anual de
+      deforestación (0,1). Un stock contra un flujo: para derivar el segundo del primero hay
+      que suponer que todo el cambio interanual es deforestación, y en un país que reforesta
+      eso es falso.
