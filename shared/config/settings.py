@@ -5,6 +5,19 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./data/sdq_market_intel.db"
 
+    # Pool de conexiones (solo PostgreSQL). Se declara en vez de heredar el default de
+    # SQLAlchemy (5 + 10) porque el número que importa no es el de un proceso: cada worker
+    # web y el worker de Celery abren SU pool, y cada conexión es un proceso más en el motor,
+    # con su propia memoria. Con 2 workers, el default permitía hasta 30 conexiones del web
+    # más las de Celery, y nadie lo había elegido — era el default de una biblioteca.
+    # `estado_del_pool()` (shared/database/huella.py) muestra el consumo real.
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 5
+    # Railway corta las conexiones ociosas por su lado: sin reciclado, la app se queda con
+    # conexiones muertas que fallan en la primera consulta. `pool_pre_ping` las detecta y
+    # `pool_recycle` las renueva antes de que pase.
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+
     # Claude AI. The model env var is ANTHROPIC_MODEL (the code previously read
     # CLAUDE_MODEL, so a configured ANTHROPIC_MODEL was silently ignored). Default
     # is a current model; override via the ANTHROPIC_MODEL env var.
