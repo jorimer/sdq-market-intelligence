@@ -98,6 +98,13 @@ variable_scopes:
   malnutrition_weight_height: national   # WDI SH.STA.WAST.ZS
   malnutrition_height_age: national      # WDI SH.STA.STNT.ZS
   gini_index: national                   # WDI SI.POV.GINI — escala 0-100
+  # ── LOTE 2026-08-21 · sector eléctrico (indicadores 3.27, 3.28 y 3.29 de la END) ──────
+  # Nacionales en el sentido que importa acá: el anexo del MEM las publica AGREGADAS para las
+  # tres distribuidoras estatales, que es una cifra de país y no la de una demarcación. El
+  # sujeto —«EDE agregadas»— viaja en la etiqueta de la señal, no en este alcance.
+  electric_cri_ede: national             # MEM, anexo del Informe de Desempeño, hoja EDE's
+  electric_perdidas_ede: national        # MEM — pérdidas TOTALES, no las comerciales
+  electric_cobranzas_ede: national       # MEM — cobro sobre facturación
   tax_revenue_gdp: national              # WDI GC.TAX.TOTL.GD.ZS
   gni_per_capita_atlas: national         # WDI NY.GNP.PCAP.CD
   # ── Los tres DERIVADOS (cómputo propio, no series de un emisor) ──

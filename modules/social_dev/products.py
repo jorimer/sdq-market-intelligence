@@ -371,6 +371,26 @@ class SocialDevProduct:
         # cifras nacionales de cobertura educativa que existen en el panel: el IDM usa la
         # serie por región, y promediar diez regiones sin ponderar por matrícula no da la
         # cobertura del país. Habilitan los indicadores 2.9 y 2.10 de la END.
+        # Los tres índices comerciales del sector eléctrico (indicadores 3.27, 3.28 y 3.29
+        # de la END). El SUJETO viaja en la etiqueta: son las tres distribuidoras estatales
+        # agregadas, no el sector entero — que es exactamente el universo que la ley mide, y
+        # el que un lector reatribuiría al «sector eléctrico» si la etiqueta callara.
+        "electric_cri_ede": (
+            "electric_cri_ede", HEALTH_ENTITY,
+            "Índice de recuperación de efectivo (CRI) — EDE agregadas", "inclusion",
+            "Anexo del Informe de Desempeño del MEM, año completo (enero-diciembre). No "
+            "alimenta el índice de desarrollo."),
+        "electric_perdidas_ede": (
+            "electric_perdidas_ede", HEALTH_ENTITY,
+            "Pérdidas de energía — EDE agregadas (% de la comprada)", "inclusion",
+            "Pérdidas TOTALES (técnicas y no técnicas). No confundir con las «pérdidas "
+            "comerciales» de los informes anteriores a 2020, que son un subconjunto y "
+            "corren unos quince puntos por debajo."),
+        "electric_cobranzas_ede": (
+            "electric_cobranzas_ede", HEALTH_ENTITY,
+            "Cobranzas — EDE agregadas (% de lo facturado)", "inclusion",
+            "Cobro sobre facturación, que es la definición que el propio indicador de la "
+            "ley trae entre paréntesis. No alimenta el índice de desarrollo."),
         "secondary_coverage_pais": (
             "secondary_coverage", MINERD_COUNTRY,
             "Cobertura neta secundaria — total país", "education",
