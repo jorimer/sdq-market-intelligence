@@ -1354,12 +1354,21 @@ bindings:
       Banco Mundial sobre el registro de áreas protegidas que declara el propio país a la
       base mundial de la UICN/PNUMA.
     nota_comparabilidad: >-
-      La serie empieza en 2013 (22,3) y la línea base legal es de 2009 (24,4): cuatro años
-      de distancia, fuera de la ventana de la sonda. Y hay una segunda duda que hay que
-      resolver antes de promover: la ley dice «áreas protegidas nacionales» sin decir si
-      incluye las marinas. La serie TERRESTRE da 26,3 en 2025 y la marina 15,3 — elegir mal
-      cambia el veredicto de cumplida a incumplida.
+      ══ ACTUALIZADO 2026-08-21, tras decidir el universo ══ La duda del universo está
+      RESUELTA (ver `nota`); lo que sigue abierto es que este indicador no tiene camino de
+      verificación. El oráculo no lo alcanza —serie desde 2013, línea base de 2009— y la
+      identidad de concepto TAMPOCO aplica, y conviene dejar escrito por qué: la ley dice
+      «áreas protegidas nacionales», sin calificar, y la serie del emisor es «áreas
+      protegidas TERRESTRES». El comprobador de identidad rechaza el término calificado
+      porque «terrestres» no está en el nombre que la ley le puso — y tiene razón: recortar
+      el calificativo para pasar el control sería fabricar la identidad, no comprobarla.
     nota: >-
+      DECISIÓN DEL DUEÑO (2026-08-21) sobre el universo: se mide contra la serie TERRESTRE.
+      La ley no califica —dice «áreas protegidas nacionales»— y la elección cambia el
+      veredicto, así que se declara en vez de resolverse en silencio: terrestre da 26,3% en
+      2025 y CUMPLE la meta plana de 24,4; la marina da 15,3% y no la cumple. El criterio es
+      que la meta se fijó en 24,4 y el registro nacional de áreas protegidas terrestres
+      estaba en ese orden en 2009.
       La meta de la ley es PLANA: 24,4 en los cuatro cortes. El indicador pide SOSTENER, no
       crecer, y es de los pocos del expediente con esa forma.
   # ── Los doce descartes del barrido ──────────────────────────────────────────────────────
