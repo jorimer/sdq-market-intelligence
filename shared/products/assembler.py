@@ -207,6 +207,19 @@ async def _narratives_cached(
             "no se cachea; la próxima descarga reintenta.",
             product.sector_key, tier.value, scope or "", snapshot.period or "")
         return narratives
+    # NI TEXTO CON CIFRAS SIN RESPALDO, por la misma razón y con más motivo: esta tabla vive
+    # en Postgres y NO tiene TTL, así que una cifra que nadie puede respaldar se serviría
+    # idéntica y en silencio en cada descarga posterior. Es lo que convirtió un hallazgo del
+    # guard en un número citado dentro de un PDF de rating real.
+    from shared.narrative.claude_engine import secciones_con_cifra_sin_respaldo
+    sin_respaldo = secciones_con_cifra_sin_respaldo(narratives, list(narratives),
+                                                    snapshot.payload or {})
+    if sin_respaldo:
+        logger.warning(
+            "Narrativa con cifras sin respaldo en %s/%s (scope=%s, período=%s): %s — "
+            "no se cachea.", product.sector_key, tier.value, scope or "",
+            snapshot.period or "", sin_respaldo)
+        return narratives
     try:
         if row is None:
             row = ProductReportCache(**key)
@@ -292,6 +305,30 @@ async def _content_from_snapshot(
             sections=degraded, blocked=blocked, scope=scope, period=snapshot.period)
         if blocked:
             raise NarrativeDegradedError(degraded)
+
+    # GATE DE CIFRA SIN RESPALDO — el gemelo del anterior, para el otro modo de entregar un
+    # informe malo. La degradación deja una sección HUECA y se nota; ésta la deja LLENA con un
+    # número que nadie puede respaldar, que se lee como hallazgo y viaja citado. Ya ocurrió:
+    # el guard marcó la cifra, el texto sobrevivió a la regeneración y el informe salió con
+    # `guard_flags=1` porque la marca no tenía ningún consumidor.
+    #
+    # Misma política que la degradación, por la misma razón: premium FALLA CERRADO, Pulse solo
+    # se registra. Y el veto se LISTA —qué sección y qué hallazgos—: un veto silencioso se lee
+    # como que el informe no existía.
+    from shared.narrative.claude_engine import (NarrativeSinRespaldoError,
+                                                secciones_con_cifra_sin_respaldo)
+    sin_respaldo = secciones_con_cifra_sin_respaldo(narratives, level.sections,
+                                                    snapshot.payload or {})
+    if sin_respaldo:
+        blocked = level.granularity is not Granularity.system
+        logger.warning(
+            "Reporte %s/%s (scope=%s, período=%s) afirma cifras sin respaldo en %d/%d "
+            "sección(es): %s — %s",
+            product.sector_key, tier.value, scope or "", snapshot.period or "",
+            len(sin_respaldo), len(level.sections), sin_respaldo,
+            "NO se entrega" if blocked else "abierto: solo se registra")
+        if blocked:
+            raise NarrativeSinRespaldoError(sin_respaldo)
     # Glosario automático (audiencia mixta): detecta las siglas/términos técnicos que la
     # narrativa YA REDACTADA usa y anexa su definición. Va ANTES del merge de las secciones
     # estándar (metodología/fuentes no llevan jerga propia del eje). Punto único: lo
