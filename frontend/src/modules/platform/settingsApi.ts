@@ -23,6 +23,8 @@ export interface SectorApi {
 export interface AppSettings {
   claudeApiKeySet: boolean;
   defaultLanguage: string;
+  /** Techo DIARIO de gasto del modelo en USD. 0 = sin techo. */
+  llmDailyBudgetUsd: number;
   cloudflareProxyUrl: string;
   cloudflareProxySecretSet: boolean;
   sectorApis: SectorApi[];
@@ -46,6 +48,8 @@ export interface SectorApiInput {
 export interface SettingsInput {
   claudeApiKey?: string;
   defaultLanguage?: string;
+  /** 0 apaga el corte a propósito; negativo lo rechaza el backend. */
+  llmDailyBudgetUsd?: number;
   cloudflareProxyUrl?: string;
   cloudflareProxySecret?: string;
   sectorApis?: SectorApiInput[];

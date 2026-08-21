@@ -5,6 +5,7 @@ import { useApp, SCOPES, Scope } from "@/shared/context/AppContext";
 import { useAuth } from "@/shared/auth/AuthContext";
 import { DataSourcesSection } from "../components/DataSourcesSection";
 import { SeriesMaintenanceSection } from "../components/SeriesMaintenanceSection";
+import { PresupuestoLlmSection } from "../components/PresupuestoLlmSection";
 
 export function ConfiguracionPage() {
   const { t } = useTranslation();
@@ -20,11 +21,12 @@ export function ConfiguracionPage() {
         sub={t("platform.config.sub")}
       />
 
-      {/* Fuentes de datos y claves de API — solo admin */}
+      {/* Fuentes de datos, claves de API y techo de gasto del modelo — solo admin */}
       <div className="mb-5 space-y-5">
         {isAdmin ? (
           <>
             <DataSourcesSection />
+            <PresupuestoLlmSection />
             <SeriesMaintenanceSection />
           </>
         ) : (

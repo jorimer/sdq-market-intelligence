@@ -1109,7 +1109,6 @@ shared/products/audit.py:0: error: Item "None" of "SectorProduct | None" has no 
 shared/products/audit.py:0: error: Item "None" of "SectorProduct | None" has no attribute "validation_state"  [union-attr]
 shared/products/audit.py:0: error: Need type annotation for "summary"  [var-annotated]
 shared/products/entitlements.py:0: error: Incompatible types in assignment (expression has type "bool", variable has type "Column[bool]")  [assignment]
-shared/products/prewarm.py:0: error: Argument 1 to "assemble_product_content" has incompatible type "SectorProduct | None"; expected "SectorProduct"  [arg-type]
 shared/products/router.py:0: error: Argument "granted_by" to "grant_entitlement" has incompatible type "Column[str]"; expected "str | None"  [arg-type]
 shared/products/router.py:0: error: Argument "user_id" to "activate" has incompatible type "Column[str]"; expected "str | None"  [arg-type]
 shared/products/router.py:0: error: Argument 2 to "active_subscription_tier" has incompatible type "Column[str]"; expected "str"  [arg-type]

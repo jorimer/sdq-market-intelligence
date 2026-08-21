@@ -1659,6 +1659,23 @@
       "testError": "✗ Error al probar la conexión.",
       "viaProxy": "vía proxy"
     },
+    "llmBudget": {
+      "title": "Presupuesto de IA",
+      "sub": "Techo diario de gasto del modelo, en USD",
+      "label": "USD por día",
+      "save": "Guardar",
+      "saved": "Guardado",
+      "loadError": "No se pudo cargar el presupuesto.",
+      "saveError": "Error al guardar",
+      "invalid": "Debe ser un número igual o mayor que cero.",
+      "stateOn": "Techo vigente: USD {{usd}} por día (UTC). Se aplica a toda llamada al modelo.",
+      "stateOff": "Sin techo: el gasto del modelo no tiene límite diario. Use un valor mayor que cero para activarlo.",
+      "whatHappens": "Qué pasa al llegar al techo",
+      "effectPremium": "Una entrega premium responde error, no un informe con texto de relleno.",
+      "effectNarrative": "La narrativa cae a su versión estática sin guardarla en caché; el resto de la plataforma sigue respondiendo.",
+      "effectReset": "El contador se reinicia cada día a las 00:00 UTC y todo vuelve a generarse normalmente.",
+      "calibrate": "Para calibrarlo, mire su gasto real por disparador en Operaciones → Gasto del modelo. Un techo por debajo del uso normal no ahorra: deja clientes sin su informe."
+    },
     "series": {
       "title": "Mantenimiento de series macro",
       "sub": "Elimina series huérfanas que el parser dejó de producir (BCRD)",

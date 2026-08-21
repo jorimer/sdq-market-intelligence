@@ -1,9 +1,10 @@
 """Presupuesto diario de gasto LLM con corte SUAVE.
 
-El DD marcó como brecha que el gasto en Claude no tiene techo: un bucle de prewarm
+El DD marcó como brecha que el gasto en Claude no tiene techo: un bucle de generación
 o un pico de research pueden quemar presupuesto sin que nadie lo vea. Este módulo
 da (a) contabilidad central — cada llamada al API registra tokens y costo estimado —
-y (b) un techo diario configurable (``LLM_DAILY_BUDGET_USD``; 0 = deshabilitado).
+y (b) un techo diario configurable EN CALIENTE desde Configuración (solo admin), con
+``LLM_DAILY_BUDGET_USD`` como valor de arranque cuando nadie lo fijó (0 = deshabilitado).
 
 Corte SUAVE, no duro: al superar el techo NADA lanza excepción ni devuelve 500.
 Cada consumidor degrada a su fallback ya existente (narrativa → caché/estático,
@@ -47,6 +48,16 @@ _mem_spent = 0.0
 
 # Anti-spam: un warning de presupuesto excedido por hora, no por request.
 _last_over_budget_log = 0.0
+
+# Techo vigente, memorizado unos segundos. `budget_allows()` corre ANTES de cada llamada al
+# modelo: sin memo, cada generación abriría una conexión a Postgres solo para releer un
+# número que cambia una vez al mes. El TTL es corto porque el momento en que se baja el techo
+# es el momento en que el gasto ya está corriendo; y un guardado desde Configuración invalida
+# el memo de una (`invalidate_limit_cache`), así que el TTL solo cubre a los OTROS workers.
+_LIMIT_TTL_SECONDS = 30
+_limit_lock = threading.Lock()
+_limit_value: float = 0.0
+_limit_expires_at: float = 0.0
 
 
 def _today() -> str:
@@ -96,13 +107,51 @@ def spent_today() -> float:
         return _mem_spent if _mem_day == day else 0.0
 
 
+def invalidate_limit_cache() -> None:
+    """Olvida el techo memorizado: la próxima consulta lo relee de Configuración."""
+    global _limit_expires_at
+    with _limit_lock:
+        _limit_expires_at = 0.0
+
+
+def current_limit() -> float:
+    """Techo diario vigente en USD (0 = sin techo).
+
+    Manda lo que el admin fijó en Configuración; si no fijó nada, el valor de entorno
+    ``LLM_DAILY_BUDGET_USD``. Si la base no responde, se usa el del entorno — NUNCA 0:
+    quedarse sin techo porque falló una consulta es el peor momento para no tenerlo.
+    """
+    global _limit_value, _limit_expires_at
+    ahora = time.time()
+    with _limit_lock:
+        if ahora < _limit_expires_at:
+            return _limit_value
+    del_entorno = float(getattr(settings, "LLM_DAILY_BUDGET_USD", 0.0) or 0.0)
+    try:
+        from shared.database.session import SessionLocal
+        from shared.settings.service import get_llm_daily_budget
+        db = SessionLocal()
+        try:
+            valor = get_llm_daily_budget(db)
+        finally:
+            db.close()
+    except Exception:  # noqa: BLE001 — sin base (tests, arranque, corte) manda el entorno
+        logger.debug("Techo LLM no legible desde Configuración; se usa el del entorno.",
+                     exc_info=True)
+        valor = del_entorno
+    with _limit_lock:
+        _limit_value = valor
+        _limit_expires_at = ahora + _LIMIT_TTL_SECONDS
+    return valor
+
+
 def budget_allows() -> bool:
     """¿Hay presupuesto para una llamada LLM nueva? (corte suave: el caller degrada).
 
-    True si no hay techo configurado (LLM_DAILY_BUDGET_USD <= 0) o si el gasto del
-    día está por debajo del techo."""
+    True si no hay techo vigente (<= 0, ver ``current_limit``) o si el gasto del día
+    está por debajo del techo."""
     global _last_over_budget_log
-    limit = getattr(settings, "LLM_DAILY_BUDGET_USD", 0.0) or 0.0
+    limit = current_limit()
     if limit <= 0:
         return True
     spent = spent_today()

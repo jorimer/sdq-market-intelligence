@@ -1,5 +1,10 @@
-"""Tras un evento de datos, el suscriptor de products dispara el re-calentado de la caché
-(op en background, deduped) además de recalcular readiness — sin romper si el disparo falla."""
+"""Tras un evento de datos, el suscriptor de products recalcula readiness y NADA MÁS.
+
+En particular NO dispara ``prewarm-report-cache``. Antes sí lo hacía, y ese disparo era el
+agujero: el pre-calentado se había apagado en la consola, pero la cascada por evento no mira
+la agenda, así que el primer sync del día lo resucitaba y volvía a gastar IA. Apagar el
+precalentado es también no dispararlo desde acá.
+"""
 import shared.operations.service as ops_service
 from shared.products import events
 
@@ -18,24 +23,11 @@ def _patch_common(monkeypatch, trigger_impl):
     monkeypatch.setattr(ops_service, "trigger", trigger_impl)
 
 
-def test_data_event_triggers_prewarm(monkeypatch):
+def test_data_event_triggers_no_operation(monkeypatch):
     calls = []
     _patch_common(monkeypatch, lambda name, **kw: calls.append((name, kw)) or {"started": True})
     events._on_data_updated({})
-    assert calls == [("prewarm-report-cache", {"origin": "cascade", "user_id": None})]
-
-
-def test_prewarm_dedup_is_logged_not_raised(monkeypatch):
-    # Si ya está en curso (dedup), trigger devuelve started=False → no revienta.
-    _patch_common(monkeypatch, lambda name, **kw: {"started": False, "reason": "ya en curso"})
-    events._on_data_updated({})  # no raise
-
-
-def test_prewarm_trigger_failure_does_not_break_publisher(monkeypatch):
-    def _boom(name, **kw):
-        raise RuntimeError("cola caída")
-    _patch_common(monkeypatch, _boom)
-    events._on_data_updated({})  # el fallo del warm se traga; el publicador no se rompe
+    assert calls == []
 
 
 def test_readiness_failure_still_allows_publisher(monkeypatch):

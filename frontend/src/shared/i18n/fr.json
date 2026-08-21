@@ -1659,6 +1659,23 @@
       "testError": "✗ Erreur lors du test de connexion.",
       "viaProxy": "via proxy"
     },
+    "llmBudget": {
+      "title": "Budget IA",
+      "sub": "Plafond quotidien de dépense du modèle, en USD",
+      "label": "USD par jour",
+      "save": "Enregistrer",
+      "saved": "Enregistré",
+      "loadError": "Impossible de charger le budget.",
+      "saveError": "Erreur lors de l'enregistrement",
+      "invalid": "Doit être un nombre supérieur ou égal à zéro.",
+      "stateOn": "Plafond en vigueur : USD {{usd}} par jour (UTC). Il s'applique à chaque appel au modèle.",
+      "stateOff": "Sans plafond : la dépense du modèle n'a aucune limite quotidienne. Utilisez une valeur supérieure à zéro pour l'activer.",
+      "whatHappens": "Ce qui se passe une fois le plafond atteint",
+      "effectPremium": "Une livraison premium renvoie une erreur, pas un rapport au texte de remplissage.",
+      "effectNarrative": "La narration bascule sur sa version statique sans la mettre en cache ; le reste de la plateforme continue de répondre.",
+      "effectReset": "Le compteur se réinitialise chaque jour à 00h00 UTC et tout se régénère normalement.",
+      "calibrate": "Pour le calibrer, consultez votre dépense réelle par déclencheur dans Opérations → Dépense du modèle. Un plafond sous l'usage normal n'économise rien : il prive des clients de leur rapport."
+    },
     "series": {
       "title": "Maintenance des séries macro",
       "sub": "Supprime les séries orphelines que le parser ne produit plus (BCRD)",

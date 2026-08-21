@@ -49,6 +49,9 @@ class SectorApiIn(BaseModel):
 class SettingsOut(BaseModel):
     claudeApiKeySet: bool = False
     defaultLanguage: str = "es"
+    # Techo DIARIO de gasto del modelo en USD (0 = sin techo). Se devuelve el VIGENTE:
+    # el configurado por el admin si lo hay, si no el del entorno.
+    llmDailyBudgetUsd: float = 0.0
     # Global Cloudflare WAF proxy (shared by all sources behind the WAF).
     cloudflareProxyUrl: str = ""
     cloudflareProxySecretSet: bool = False
@@ -58,6 +61,8 @@ class SettingsOut(BaseModel):
 class SettingsIn(BaseModel):
     claudeApiKey: Optional[str] = None
     defaultLanguage: Optional[str] = None
+    # 0 apaga el corte a propósito; negativo se rechaza. Omitido = sin cambios.
+    llmDailyBudgetUsd: Optional[float] = None
     cloudflareProxyUrl: Optional[str] = None
     cloudflareProxySecret: Optional[str] = None
     sectorApis: Optional[List[SectorApiIn]] = None

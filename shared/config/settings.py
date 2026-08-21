@@ -28,7 +28,19 @@ class Settings(BaseSettings):
     # semántico cae al contexto curado y el juez LLM del guardrail se omite (la capa
     # determinista sigue). Nada lanza error; se loguea un warning por hora. El
     # contador vive en Redis (compartido entre workers) — ver shared/llm/budget.py.
-    LLM_DAILY_BUDGET_USD: float = 0.0
+    #
+    # El default NO es 0. Un entorno que nunca definió la variable quedaba sin techo, y
+    # "sin techo" no es una decisión que nadie tomó: es la que se toma sola. El 2026-08-20
+    # una tarea de pre-calentado generó informes que nadie pidió y gastó USD 127 en un día
+    # sin que nada pudiera cortarla, porque para el contador el techo no existía. 25 es un
+    # valor de ARRANQUE deliberadamente holgado frente al uso legítimo y estrecho frente a
+    # una fuga; el número real se calibra mirando el gasto propio en
+    # ``GET /api/v1/operations/llm-spend`` y se fija por variable de entorno.
+    #
+    # Cuidado al bajarlo: sobre el techo, una entrega premium NO sirve texto degradado —
+    # devuelve 503 (ver ``shared/products/router.py``). Un techo por debajo del uso real
+    # convierte gasto en clientes sin su informe. Se apaga con 0, a sabiendas.
+    LLM_DAILY_BUDGET_USD: float = 25.0
 
     # Enrutador SEMÁNTICO de dominios del motor de research (el Cerebro decide qué motores
     # convoca la pregunta). OFF por defecto: su despliegue con cosecha concurrente en
