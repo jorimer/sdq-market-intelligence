@@ -343,12 +343,19 @@ def _sync_llece_niveles(db: Session, set_phase: Callable[[str], None]) -> int:
 #: una fuente de 41 caracteres tumba el commit entero en Postgres sin que SQLite lo note.
 FUENTE_MEM = "MEM · anexo Informe de Desempeño"   # 32
 
-#: Qué serie del anexo alimenta qué indicador de la END, y en qué unidad. El sujeto viaja con
-#: el número: son las tres distribuidoras estatales agregadas, no el sector entero.
+#: Qué serie del anexo alimenta qué indicador de la END, y en qué unidad.
+#:
+#: **Las unidades entran en `varchar(40)` y eso NO es un detalle de estilo.** La primera
+#: versión decía «% (índice de recuperación de efectivo, EDE agregadas)» —52 caracteres— y
+#: producción devolvió `StringDataRightTruncation` al comitear, tumbando la sync entera. Es
+#: la tercera vez que este repo paga el mismo peaje, y esta vez con el comentario sobre el
+#: largo escrito tres líneas más arriba: lo puse en `source` y lo rompí en `unit`.
+#:
+#: El SUJETO viaja igual, en la etiqueta de la señal —«EDE agregadas»—, que no tiene tope.
 MEM_TEMAS = {
-    "cri": ("electric_cri_ede", "% (índice de recuperación de efectivo, EDE agregadas)"),
-    "perdidas": ("electric_perdidas_ede", "% de la energía comprada (EDE agregadas)"),
-    "cobranzas": ("electric_cobranzas_ede", "% de lo facturado (EDE agregadas)"),
+    "cri": ("electric_cri_ede", "% de recuperación de efectivo"),
+    "perdidas": ("electric_perdidas_ede", "% de la energía comprada"),
+    "cobranzas": ("electric_cobranzas_ede", "% de lo facturado"),
 }
 
 #: Años de informe cuyo anexo de DICIEMBRE se pide. Cada uno trae tres años, así que la lista
