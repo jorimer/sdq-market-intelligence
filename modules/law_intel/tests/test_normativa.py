@@ -131,11 +131,11 @@ def test_un_vacio_sobre_un_tipo_SIN_MEDIR_nunca_acusa():
     """El emisor mide su corpus por TIPO. Un `incumplida` sobre un universo que nadie midió
     es la peor salida posible de este módulo.
 
-    La regla no cambió; cambió qué tipos están medidos. `reglamento` estuvo acá hasta que el
-    emisor confirmó, contra producción y campo a campo, que su alcance es idéntico al de
-    `decreto`. Se movió por EVIDENCIA, no porque estorbara — que es la única razón que vale
-    para aflojar un guard que protege de una acusación falsa."""
-    for tipo in ("resolucion", "constitucion"):
+    La regla no cambió; cambió qué tipos están medidos. Salieron de acá `reglamento`
+    (2026-08-19) y `resolucion` (2026-08-21), los dos porque el emisor cerró su barrido y lo
+    demostró contra producción. Se mueven por EVIDENCIA, no porque estorben — que es la única
+    razón que vale para aflojar un guard que protege de una acusación falsa."""
+    for tipo in ("constitucion", "circular"):
         c = comprobar_obligacion(dict(CONSULTA, tipo=tipo), VENCE, lambda **kw: _resp([], True))
         assert c.veredicto == "sin_registro_publico", tipo
 
@@ -149,10 +149,23 @@ class TestLoQueElEmisorConfirmoElDiecinueve:
                                  lambda **kw: _resp([], True))
         assert c.veredicto == "incumplida"
 
-    def test_una_RESOLUCION_sigue_sin_poder_acusar(self):
-        """Lo que se levantó es la cautela sobre reglamentos, no la regla entera."""
+    def test_una_RESOLUCION_ya_puede_acusar(self):
+        """2026-08-21: el emisor cerró el barrido de resoluciones —4.393 de 4.397, con 13 de
+        17 años completos— y su alcance ya responde `true` en los rangos completos.
+
+        Dejarla vetada dejó de proteger y empezó a estorbar: un `incumplida` legítimo salía
+        como `sin_registro_publico`. Un cinturón que veta de más no es prudente, es impreciso.
+        """
         c = comprobar_obligacion(dict(CONSULTA, tipo="resolucion"), VENCE,
                                  lambda **kw: _resp([], True))
+        assert c.veredicto == "incumplida"
+
+    def test_pero_el_ALCANCE_del_emisor_sigue_mandando(self):
+        """Los cuatro años con hueco (2011, 2014, 2015, 2019) los declara él: si la consulta
+        los abarca devuelve `vacio_es_concluyente: false` y no se acusa. Nuestro cinturón
+        acompaña esa comprobación, no la reemplaza."""
+        c = comprobar_obligacion(dict(CONSULTA, tipo="resolucion"), VENCE,
+                                 lambda **kw: _resp([], False))
         assert c.veredicto == "sin_registro_publico"
 
     def test_una_norma_DUPLICADA_se_cuenta_una_vez(self):
@@ -311,3 +324,55 @@ def test_REGLA_ninguna_comprobacion_se_arma_sin_el_constructor():
     assert not crudos, (
         f"se arma un `Comprobacion` a mano en las líneas {crudos}: se salta la procedencia "
         f"del corpus y el veredicto queda sin poder auditarse. Usá `_comprobacion`.")
+
+
+class TestLaFechaEnDisputa:
+    """El emisor marca `fecha_confiable: false` cuando la fecha guardada contradice al año que
+    declara el número de la norma. No la corrige, y con razón: la corrupción está en el portal
+    de origen —hay fichas con `FechaPromulgacion = '01 de January de 1900'`— y reconstruirla
+    exigiría inventar el día.
+
+    El día es justo lo que decide si se dictó en plazo, así que un veredicto de plazo sobre una
+    fecha en disputa es firmeza prestada. Antes de esto, `_fecha()` la leía sin mirar la
+    bandera y el veredicto salía firme igual.
+    """
+
+    def _norma(self, fecha, **extra):
+        return dict(_DECRETO, fecha_promulgacion=fecha, **extra)
+
+    def test_una_fecha_en_disputa_NO_produce_veredicto_de_plazo(self):
+        n = self._norma("2012-07-01", fecha_confiable=False,
+                        fecha_en_disputa={"anio_segun_numero": 2012,
+                                          "anio_publicacion_segun_fuente": 2012})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert c.veredicto == "no_verificable"
+        assert "EN DISPUTA" in c.evidencia
+        assert "el día es lo que decide" in c.evidencia
+
+    def test_las_DOS_mitades_viajan_para_que_el_lector_juzgue(self):
+        """El emisor las manda a propósito: coinciden en 50 de 54 casos, así que dan
+        corroboración sin que él elija por nosotros. Ocultarlas sería tirar esa corroboración."""
+        n = self._norma("2012-07-01", fecha_confiable=False,
+                        fecha_en_disputa={"anio_segun_numero": 2014,
+                                          "anio_publicacion_segun_fuente": 2013})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert "2014" in c.evidencia and "2013" in c.evidencia
+
+    def test_si_el_AÑO_decide_solo_el_veredicto_se_sostiene(self):
+        """Misma lógica que los 625 días de holgura del 134-14: lo que sostiene el veredicto no
+        es el método, es que el margen se come la incertidumbre. Si la norma es de un año
+        posterior al del vencimiento, ninguna fecha imaginable dentro de ese año la vuelve
+        puntual — y negarse a concluir ahí sería cautela decorativa."""
+        n = self._norma("2014-04-09", fecha_confiable=False,
+                        fecha_en_disputa={"anio_segun_numero": 2014,
+                                          "anio_publicacion_segun_fuente": 2014})
+        c = comprobar_obligacion(CONSULTA, VENCE, lambda **kw: _resp([n], True))
+        assert c.veredicto == "cumplida_tarde"
+        assert "en disputa" in c.evidencia, "la salvedad viaja igual"
+
+    def test_una_fecha_CONFIABLE_no_cambia_de_comportamiento(self):
+        """El contrapeso: los campos son aditivos y no deben mover lo que ya funcionaba."""
+        c = comprobar_obligacion(CONSULTA, VENCE,
+                                 lambda **kw: _resp([self._norma("2014-04-09")], True))
+        assert c.veredicto == "cumplida_tarde"
+        assert "disputa" not in c.evidencia

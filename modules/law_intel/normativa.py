@@ -145,7 +145,16 @@ class Comprobacion:
 #: en las mismas celdas de cobertura. Fuera de ese rango los dos responden `false`, y de eso
 #: se encarga el propio `vacio_es_concluyente` — este conjunto no reemplaza esa comprobación,
 #: la acompaña.
-_TIPOS_MEDIDOS = frozenset({"ley", "decreto", "reglamento"})
+#:
+#: `resolucion` ENTRA (2026-08-21). Estuvo fuera mientras el emisor no la medía. Cerró el
+#: barrido —4.393 de 4.397, con 13 de 17 años completos (2010-2026)— y ahora su alcance
+#: responde `true` en los rangos completos y `false` nombrando el hueco en 2011, 2014, 2015 y
+#: 2019, que son un documento por año que el portal sirve con error 500.
+#:
+#: Dejarla afuera dejó de proteger y empezó a estorbar: un `incumplida` legítimo sobre una
+#: resolución salía como `sin_registro_publico`. Un cinturón que veta de más no es prudente,
+#: es impreciso — y la imprecisión también se publica.
+_TIPOS_MEDIDOS = frozenset({"ley", "decreto", "reglamento", "resolucion"})
 
 
 def _respaldo_de_gaceta(gaceta: Dict[str, Any]) -> str:
@@ -193,6 +202,12 @@ def _sin_duplicados(halladas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if previa is None or (n.get("grada") == "texto" and previa.get("grada") != "texto"):
             por_id[clave] = n
     return list(por_id.values())
+
+
+def _anio(fecha: Any) -> Optional[int]:
+    """El año de una fecha `YYYY-...`, o `None` si no se puede leer. Nunca lanza."""
+    t = str(fecha or "")[:4]
+    return int(t) if t.isdigit() else None
 
 
 def _fecha(norma: Dict[str, Any]) -> str:
@@ -265,6 +280,45 @@ def comprobar_obligacion(consulta: Dict[str, Any], vence: Optional[str],
     #
     # Que el 134-14 tenga 625 días de holgura es lo que vuelve sólido ESE caso, no una
     # propiedad del método: con 625 días ninguna fecha de publicación imaginable lo mueve.
+    # ── LA SEGUNDA GRIETA: LA FECHA QUE EL EMISOR DECLARA EN DISPUTA ───────────────────
+    # Cuando la fecha guardada contradice al año que declara el número de la norma, el emisor
+    # marca `fecha_confiable: false` y adjunta las DOS mitades. No la corrige, y con razón: la
+    # corrupción está en el portal —hay fichas con `FechaPromulgacion = '01 de January de
+    # 1900'`— y reconstruirla exigiría inventar el día.
+    #
+    # El día es justo lo que decide si se dictó en plazo, así que un veredicto de plazo sobre
+    # una fecha en disputa es firmeza prestada. Se degrada a `no_verificable` con las dos
+    # mitades a la vista — MENOS cuando la duda no cambia nada: si el AÑO de la norma es
+    # posterior al año del vencimiento, ninguna fecha imaginable dentro de ese año la vuelve
+    # puntual. Es la misma lógica que los 625 días de holgura del 134-14: lo que sostiene el
+    # veredicto no es el método, es que el margen se come la incertidumbre.
+    if norma.get("fecha_confiable") is False:
+        disputa = norma.get("fecha_en_disputa") or {}
+        años = sorted({a for a in (disputa.get("anio_segun_numero"),
+                                   disputa.get("anio_publicacion_segun_fuente"),
+                                   _anio(fecha)) if a})
+        año_vence = _anio(vence)
+        decidible = bool(años) and año_vence is not None and (
+            min(años) > año_vence or max(años) < año_vence)
+        if not decidible:
+            mitades = (f"según el número {disputa.get('anio_segun_numero')}, según la "
+                       f"publicación {disputa.get('anio_publicacion_segun_fuente')}"
+                       ) if disputa else "el emisor no detalla las dos mitades"
+            return _comprobacion(
+                oid, "no_verificable",
+                f"{cita}: el emisor declara su fecha EN DISPUTA ({mitades}) y el plazo vencía "
+                f"el {vence}. No la corrige porque la corrupción está en el portal de origen; "
+                f"reconstruirla exigiría inventar el día, y el día es lo que decide si se "
+                f"dictó en plazo. No se afirma ni cumplimiento ni incumplimiento." + respaldo,
+                norma, alcance)
+        # `decidible` ya garantizó que `año_vence` no es None; se re-liga en una variable
+        # local para que eso sea evidente al leer y al tipar.
+        av = año_vence
+        assert av is not None
+        tarde = min(años) > av
+        respaldo += (" ⚠️ La fecha exacta está en disputa según el emisor; el veredicto se "
+                     "sostiene igual porque el año la decide sola.")
+
     holgura = resp.get("holgura_dias")
     if resp.get("veredicto_sensible_a_publicacion"):
         return _comprobacion(
