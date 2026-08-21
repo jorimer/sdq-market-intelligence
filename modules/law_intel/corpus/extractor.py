@@ -34,7 +34,10 @@ NUM = re.compile(r"^-?\d+(?:\.\d+)?$")
 # `421 (Nivel I)` es un valor con su banda al lado; `< 4%` es un UMBRAL, no un valor —
 # publicarlo como 4.0 afirma que la meta es llegar a 4 cuando es quedar por debajo.
 CON_ETIQUETA = re.compile(r"^(-?\d[\d,]*(?:\.\d+)?)\s*\(([^)]+)\)$")
-UMBRAL = re.compile(r"^[<>≤≥]\s*-?\d")
+# Las dos notaciones: el PDF trae `≥` y una transcripción a mano escribe `>=`. El lector del
+# semáforo entiende las dos, y este clasificador tiene que entender las mismas o una meta
+# queda clasificada de una forma y leída de otra.
+UMBRAL = re.compile(r"^(<=|>=|[<>≤≥])\s*-?\d")
 # Una celda con varias métricas apiladas (2.17: Matemáticas / Lectura / Ciencias) no tiene
 # UN valor. Elegir la primera publica una serie y esconde dos.
 COMPUESTA = re.compile(r"(Matem|Lectura|Ciencias)\s*:")
