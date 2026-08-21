@@ -1414,6 +1414,55 @@ def degraded_sections(narratives: dict, sections) -> list:
     return [s for s in sections if is_static_fallback_text(n.get(s))]
 
 
+def secciones_con_cifra_sin_respaldo(narratives: dict, sections, context: dict) -> dict:
+    """`{sección: [hallazgos]}` de las secciones cuyo texto AFIRMA cifras que el contexto no
+    sostiene.
+
+    Es el gemelo de `degraded_sections` para el otro modo de entregar un informe malo. Aquél
+    detecta una sección HUECA —fácil de ver—; éste detecta una sección LLENA con un número que
+    nadie puede respaldar, que es peor: se lee como un hallazgo y viaja citado.
+
+    **Solo corre los checks DETERMINISTAS**, y eso es una limitación que hay que declarar: son
+    gratis y mecánicos, así que pueden vivir en la ruta de entrega sin costo ni latencia ni
+    variabilidad. El juez semántico del motor ve cosas que éstos no —y por eso el motor además
+    se niega a propagar a la caché compartida lo que él marcó—. Los dos filtros se necesitan:
+    ninguno cubre al otro.
+    """
+    from shared.narrative.numeric_guard import (deterministic_uncited_figures,
+                                                deterministic_unsupported)
+
+    n, ctx = narratives or {}, context or {}
+    out = {}
+    for s in sections:
+        texto = n.get(s)
+        if not isinstance(texto, str) or not texto.strip():
+            continue
+        hallazgos = deterministic_unsupported(ctx, texto) + deterministic_uncited_figures(ctx, texto)
+        if hallazgos:
+            out[s] = hallazgos
+    return out
+
+
+class NarrativeSinRespaldoError(RuntimeError):
+    """La narrativa afirma cifras que el contexto NO sostiene, en secciones de análisis de un
+    producto premium.
+
+    No se entrega. El caso que la motiva llegó a un PDF de rating REAL: el guard marcó la
+    cifra, el texto sobrevivió a la regeneración y el informe se emitió igual con
+    `guard_flags=1`, porque la marca no tenía ningún consumidor — era una etiqueta en un log.
+
+    Es peor que la degradación, y por eso falla igual de cerrado: un informe hueco se nota; un
+    número inventado se cita.
+    """
+
+    def __init__(self, hallazgos: dict):
+        self.hallazgos = dict(hallazgos)
+        super().__init__(
+            "La narrativa afirma cifras que el contexto no sostiene en "
+            + ", ".join(f"{s} ({len(v)})" for s, v in sorted(self.hallazgos.items()))
+            + ". El informe no se entrega con una cifra que no se puede respaldar.")
+
+
 class NarrativeDegradedError(RuntimeError):
     """La narrativa IA cayó al fallback estático en secciones de ANÁLISIS de un producto
     premium (Insight/Deep Dive). Degradación transitoria (rate-limit/outage del API o corte
@@ -1585,6 +1634,16 @@ class NarrativeEngine:
 
     def _set_cache(self, key: str, result: NarrativeResult):
         self._cache[key] = (result, time.time())
+        if result.guard_unsupported:
+            # Lo que el guard marcó NO viaja a la caché compartida. Escribirlo ahí es cómo un
+            # texto con una cifra sin respaldo sobrevive a la corrida que lo produjo y se
+            # sirve —idéntico y en silencio— a todos los informes que vengan: la caché no
+            # tiene TTL. Queda en L1 por-worker para no re-pagar la generación dentro de la
+            # misma corrida, que de todos modos el gate del ensamblador va a frenar.
+            logger.warning("Narrativa con %d hallazgo(s) del guard: no se propaga a la caché "
+                           "compartida (%s)", len(result.guard_unsupported),
+                           "; ".join(map(str, result.guard_unsupported))[:200])
+            return
         if result.model_used == STATIC_FALLBACK_MODEL:
             # El fallback estático es un degradado transitorio (sin API key, error,
             # presupuesto): se cachea solo por-worker, no se propaga a los demás.
