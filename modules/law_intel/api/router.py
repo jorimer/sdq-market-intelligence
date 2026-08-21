@@ -31,6 +31,10 @@ from modules.law_intel.ratificacion import publicable as ratificacion_publicable
 from modules.law_intel.registro import ESCALAS, Expediente, cargar, expedientes
 from modules.law_intel.series import proveedor_registro, series_de
 from modules.law_intel.normativa import VEREDICTOS as VEREDICTOS_NORMATIVA
+from modules.law_intel.congreso import VEREDICTOS as VEREDICTOS_CONGRESO
+from modules.law_intel.congreso import (comprobar_comision_bicameral,
+                                        comprobar_informe_de_vinculacion,
+                                        presupuestos_anuales)
 from modules.law_intel.normativa import comprobar as comprobar_normativa
 from modules.law_intel.scoring.brecha import TIPOS, brechas, desbloqueo
 from modules.law_intel.scoring.coherencia_proceso import VEREDICTOS as VEREDICTOS_COHERENCIA
@@ -267,6 +271,7 @@ def obligaciones_(expediente_id: str, _: User = Depends(get_current_user)) -> Di
             # que existe y no llega es indistinguible de uno que no existe.
             "verificacion_normativa": o.verificacion_normativa,
             "sin_consulta_normativa": o.sin_consulta_normativa,
+            "verificacion_congresual": o.verificacion_congresual,
             "frase_publicable": o.frase_publicable(),
         } for o in obs],
         "estados": ESTADOS_OBLIGACION,
@@ -387,6 +392,62 @@ def verificacion_normativa_(expediente_id: str,
                   "rango consultado. Sin eso el veredicto es `sin_registro_publico`, que no "
                   "afirma nada contra nadie."),
     }
+
+
+@router.get("/{expediente_id}/obligaciones/verificacion-congresual")
+def verificacion_congresual_(expediente_id: str,
+                             _: User = Depends(require_role(UserRole.analyst))
+                             ) -> Dict[str, Any]:
+    """Comprueba contra los expedientes del Congreso los deberes que son ACTOS PARLAMENTARIOS.
+
+    Son los que la base normativa no puede ver porque no llegan a la Gaceta: constituir una
+    comisión (art. 51), remitir un informe con el Proyecto de Presupuesto (art. 50).
+
+    Como el resto de las verificaciones, **no muta nada**: devuelve el veredicto computado y
+    su evidencia, y la promoción del estado sigue siendo un hecho comiteado. Y como el
+    registro no declara su propia cobertura, cada respuesta viaja con el alcance que este
+    motor computó —incluido el control positivo— porque un vacío suyo no autoriza a afirmar
+    que un acto no ocurrió.
+    """
+    from shared.data import sil_client as sil
+
+    _expediente(expediente_id)
+    obs = [o for o in cargar_obligaciones(expediente_id) if o.verificacion_congresual]
+
+    def _docs(iniciativa_id: int) -> List[Dict[str, Any]]:
+        return sil.todas_las_paginas(lambda i, p: sil.documentos(i, p), iniciativa_id)
+
+    try:
+        crudas = sil.todas_las_paginas(lambda kw, p: sil.iniciativas(kw, p),
+                                       "presupuesto general del estado")
+        presupuestos = presupuestos_anuales(crudas)
+        docs_pge: List[Dict[str, Any]] = []
+        for p_ in presupuestos:
+            docs_pge += _docs(int(p_["id"]))
+    except sil.SILUnavailable as e:
+        # No se degrada a «el acto no consta». Es la regla entera del módulo.
+        return {"instrumento": {"id": expediente_id},
+                "comprobaciones": [{"obligacion": o.id, "veredicto": "no_verificable",
+                                    "evidencia": f"No se pudo consultar el registro: {e}"}
+                                   for o in obs],
+                "veredictos": VEREDICTOS_CONGRESO}
+
+    salida = []
+    for o in obs:
+        if "comision" in o.id:
+            c = comprobar_comision_bicameral(o.id, sil.comisiones, docs_pge)
+        else:
+            c = comprobar_informe_de_vinculacion(o.id, presupuestos, _docs)
+        salida.append({"obligacion": c.obligacion, "veredicto": c.veredicto,
+                       "evidencia": c.evidencia, "alcance": c.alcance,
+                       "estado_declarado": o.estado, "hallazgos": list(c.hallazgos)})
+    return {"instrumento": {"id": expediente_id},
+            "comprobaciones": salida,
+            "veredictos": VEREDICTOS_CONGRESO,
+            "nota": ("El veredicto NO cambia el expediente. La promoción de un estado es un "
+                     "hecho comiteado y revisado: entre el cómputo y el informe hay una "
+                     "persona, y el destinatario de este informe suele ser el órgano al que "
+                     "la obligación le corresponde.")}
 
 
 @router.get("/{expediente_id}/ratificacion")

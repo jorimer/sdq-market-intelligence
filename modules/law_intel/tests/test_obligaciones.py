@@ -89,12 +89,24 @@ class TestExpedienteReal:
         assert o.estado == "no_exigible" and not o.exigible
         assert "inexigible POR CONSTRUCCIÓN" in (o.nota_de_diseño or "")
 
-    def test_la_comision_bicameral_queda_marcada_para_verificar(self):
-        """Es el destinatario del informe: la afirmación negativa no puede salir sin comprobar."""
+    def test_la_comision_bicameral_declara_el_alcance_de_su_fuente(self):
+        """Era el caso marcado como BLOQUEANTE y la comprobación lo dio vuelta.
+
+        Se verificó contra el registro del Congreso y resultó que una comisión bicameral SÍ
+        examina el Presupuesto: la afirmación negativa que iba a publicarse era refutable con
+        el propio archivo del obligado, que es justo lo que la marca advertía.
+
+        La regla que queda no es la palabra «BLOQUEANTE» —eso era el recordatorio— sino la
+        durable: el destinatario del informe es el propio Congreso, así que **la evidencia
+        tiene que viajar con el alcance de la fuente que la sostiene**. Sin eso, un lector
+        entiende que la lectura cubre los catorce años de la ley y cubre un período
+        legislativo.
+        """
         o = next(x for x in cargar_obligaciones(EXPEDIENTE) if x.id == "art-51-comision-bicameral")
         assert o.estado == "sin_registro_publico"
         assert o.requiere_verificacion_antes_de_publicar
-        assert "BLOQUEANTE" in (o.evidencia or "")
+        assert "período legislativo vigente" in (o.evidencia or "")
+        assert (o.verificacion_congresual or {}).get("control_positivo")
 
     def test_el_contraste_reportar_vs_revisar(self):
         """13 cumplimientos de reportar (art. 41), cero de revisar (art. 42)."""
@@ -137,17 +149,25 @@ class TestNingunaObligacionQUEDASinDeclararSuAlcance:
                  if o.verificacion_normativa and (o.sin_consulta_normativa or "").strip()]
         assert not ambas, f"los artículos {ambas} declaran consulta Y motivo de ausencia"
 
-    def test_la_FUENTE_que_haria_falta_queda_nombrada_cuando_existe(self):
-        """El 50 y el 51 son actos del Congreso: constan, pero en expedientes de Cámara y
-        Senado. Nombrar la fuente que falta convierte una brecha en un pendiente accionable —
-        distinto de un informe, que NUNCA va a dejar rastro en la Gaceta."""
+    def test_la_FUENTE_que_haria_falta_queda_nombrada_O_conectada(self):
+        """El 50 y el 51 son actos del Congreso, que constan en sus expedientes.
+
+        La regla original pedía NOMBRAR la fuente faltante, porque nombrarla convierte una
+        brecha en un pendiente accionable. Los dos pendientes se cerraron: la fuente está
+        conectada. La regla sobrevive con la disyunción, que es lo que siempre quiso decir —
+        o se sabe qué falta, o se sabe contra qué se comprueba. Lo que nunca se admite es que
+        no diga ninguna de las dos.
+        """
         from modules.law_intel.obligaciones import cargar_obligaciones
 
-        por_art = {o.articulo: (o.sin_consulta_normativa or "") for o in
-                   cargar_obligaciones("end_2030")}
+        por_art = {o.articulo: o for o in cargar_obligaciones("end_2030")}
         for art in (50, 51):
-            assert "Cámara y Senado" in por_art[art], (
-                f"el art-{art} no nombra la fuente que haría falta")
+            o = por_art[art]
+            nombrada = "Cámara y Senado" in (o.sin_consulta_normativa or "")
+            conectada = bool(o.verificacion_congresual)
+            assert nombrada or conectada, (
+                f"el art-{art} no nombra la fuente que haría falta ni declara contra qué "
+                f"registro se comprueba")
 
 
 def test_REGLA_todo_campo_de_una_obligacion_LLEGA_o_se_declara_interno():
