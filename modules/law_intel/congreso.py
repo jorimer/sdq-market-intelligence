@@ -103,10 +103,19 @@ def _alcance(periodo: Optional[str], control: str, control_n: int,
     }
 
 
+#: Cómo fecha cada registro del SIL. Una comisión se DESIGNA y una iniciativa se DEPOSITA, y
+#: leer una sola de las dos deja el alcance en `None` justo del lado que más lo necesita: el
+#: artículo 50 afirma en su evidencia que el registro sirve un solo período y publicaba esa
+#: frase con el campo vacío. Un alcance nulo no es «sin límite», es «no sé» — y confundirlos
+#: es el defecto que esta plataforma ya pagó con la frescura de validación.
+_FECHAS = ("fechaDesignacion", "fechaDeposito")
+
+
 def _periodo_servido(registros: Sequence[Dict[str, Any]]) -> Optional[str]:
     """Qué período legislativo trae de verdad la respuesta, leído de los propios registros."""
-    fechas = [str(r.get("fechaDesignacion") or "")[:4] for r in registros]
-    años = sorted({f for f in fechas if f.isdigit()})
+    años = sorted({a for r in registros
+                   for k in _FECHAS
+                   if (a := str(r.get(k) or "")[:4]).isdigit()})
     if not años:
         return None
     return años[0] if len(años) == 1 else f"{años[0]}-{años[-1]}"
