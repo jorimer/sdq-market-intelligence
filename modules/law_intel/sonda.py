@@ -82,10 +82,22 @@ def sondear(ind: Indicador, obs: Sequence[Observacion],
     valores = {str(p): v for p, v in obs}
     v = valores.get(anio)
     if v is None:
+        # Tres situaciones distintas, y decirlas iguales manda al lector a la conclusión
+        # equivocada. «La serie no devolvió observaciones» sobre una serie de seis años se
+        # lee como que el conector está roto, cuando lo que pasa es que el legislador fijó
+        # la base en un año que la fuente no cubre — que no es un defecto de nadie y se
+        # resuelve distinto.
         cerca = sorted(p for p in valores if abs(int(p) - int(anio)) <= 3) if valores else []
+        if cerca:
+            motivo = f"la serie no tiene {anio}; sí tiene {cerca}"
+        elif valores:
+            rango = f"{min(valores)}-{max(valores)}"
+            motivo = (f"la serie devuelve {len(valores)} observaciones ({rango}) y ninguna "
+                      f"a menos de tres años de {anio}: el oráculo de la ley no la alcanza")
+        else:
+            motivo = "la serie no devolvió observaciones"
         return Sondeo(ind.id, "sin_dato_en_la_base", base_ley=base, anio_base=anio,
-                      motivo=(f"la serie no tiene {anio}; sí tiene {cerca}" if cerca
-                              else "la serie no devolvió observaciones"))
+                      motivo=motivo)
     v = float(transformar(v)) if transformar else float(v)
     # Una base de cero no admite delta porcentual y el indicador tampoco se juzga así: se
     # declara en vez de dividir por cero o inventar un 100%.

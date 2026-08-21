@@ -1239,3 +1239,73 @@ bindings:
       cosas distintas, y el 2.19 lo probó — su serie existía y el registro publicaba una
       región.
       Verificado en prod 2026-08-20: **97,84% en 2019**, contra una meta de 63,0% para 2025 y una línea base legal de 92,9% en 2006. Promovió recién tras declarar `cadencia_anios: 6` — con el umbral anual de tres años, una prueba que se aplica cada seis NUNCA podía estar fresca, y el informe habría dicho «no lo medimos» sobre la medición más reciente que existe.
+
+# ── SECTOR ELÉCTRICO 2026-08-21 ────────────────────────────────────────────────────────────
+# Los tres índices comerciales que la ley fija (3.27, 3.28 y 3.29) salen del anexo XLSX del
+# Informe de Desempeño del MEM, agregados para las tres distribuidoras estatales. El emisor
+# los publica con los nombres del legislador —el CRI viene literalmente como «Índice de
+# Recuperación de Efectivo»—, así que la identificación NO es por parecido de etiqueta.
+#
+# Los tres quedan `propuesto` y ninguno promueve, por una razón que conviene dejar escrita:
+# **el oráculo de la ley no los alcanza**. Las líneas base son de 2008 y la serie del anexo
+# empieza en 2019, así que la sonda devuelve `sin_dato_en_la_base` — no «coincide» ni «no
+# coincide», sino que no hay con qué contrastar. Promoverlos exigiría o extraer los informes
+# viejos (PDF, y con otro universo: hablan de «pérdidas COMERCIALES» y de «Zonas No-PRA») o
+# aceptar la identificación por nombre, que en este eje no alcanza.
+#
+# El 3.30 —monto de subsidios— NO se ata: está en la hoja de resultados financieros del mismo
+# anexo, que no tiene cabecera de años y cuya fila se mueve entre ediciones (f63 en 2021, f64
+# en 2024). Leerla por posición sería fabricar procedencia.
+  - indicador: "3.27"
+    serie: "social_dev:electric_cri_ede"
+    fuente: mem
+    mejor: mayor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      MEM — anexo del Informe de Desempeño de las Empresas Eléctricas Estatales. Lo produce el
+      propio Estado evaluado sobre las distribuidoras que son suyas.
+    nota_comparabilidad: >-
+      El oráculo de la ley no alcanza esta serie: la línea base es de 2008 y el anexo empieza
+      en 2019. La identificación es por NOMBRE —el emisor usa «Índice de Recuperación de
+      Efectivo (CRI)», el mismo término del indicador— y por magnitud compatible, pero este
+      eje no promueve por parecido de etiqueta.
+    nota: >-
+      Serie observada (año completo enero-diciembre, anexos de diciembre 2021 y 2024): 70,4
+      (2019) · 63,1 (2020) · 64,1 (2021) · 63,0 (2022) · 60,9 (2023) · 59,4 (2024), contra
+      una línea base legal de 64,0 en 2008 y metas de 85 para 2025 y 87 para 2030. Desde 2022
+      está POR DEBAJO de su propia línea base.
+  - indicador: "3.28"
+    serie: "social_dev:electric_perdidas_ede"
+    fuente: mem
+    mejor: menor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      MEM — anexo del Informe de Desempeño. Pérdidas TOTALES (técnicas y no técnicas) sobre la
+      energía comprada, agregadas para las tres distribuidoras estatales.
+    nota_comparabilidad: >-
+      Mismo motivo que el 3.27: base de 2008, serie desde 2019. Y una salvedad propia que
+      hace falta resolver antes de promover: los informes anteriores a 2020 publican
+      «pérdidas COMERCIALES» sobre «Zonas No-PRA» —22% en 2009—, que es un subconjunto y
+      corre unos quince puntos por debajo del total. Atar las dos series sería el defecto del
+      2.25 otra vez.
+    nota: >-
+      Serie observada: 27,0 (2019) · 33,1 (2020) · 32,6 (2021) · 32,4 (2022) · 36,0 (2023) ·
+      37,6 (2024), contra una línea base legal de 38,9 en 2008 y una meta de 8,5 para 2025.
+      Las pérdidas de 2024 están a 1,3 puntos de donde estaban cuando se fijó la meta.
+  - indicador: "3.29"
+    serie: "social_dev:electric_cobranzas_ede"
+    fuente: mem
+    mejor: mayor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      MEM — anexo del Informe de Desempeño. Cobro sobre facturación, que es la definición que
+      el propio indicador de la ley trae entre paréntesis.
+    nota_comparabilidad: >-
+      Mismo motivo que el 3.27: la línea base es de 2008 y la serie del anexo empieza en 2019.
+    nota: >-
+      Serie observada: 96,5 (2019) · 94,4 (2020) · 95,1 (2021) · 93,2 (2022) · 95,1 (2023) ·
+      95,3 (2024), contra una línea base legal de 94,2 en 2008 y metas de 97 para 2025 y 98
+      para 2030. Es el único de los tres que se mueve en la dirección de su meta, y apenas.

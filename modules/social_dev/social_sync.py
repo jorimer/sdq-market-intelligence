@@ -339,6 +339,50 @@ def _sync_llece_niveles(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+#: Procedencia del anexo del MEM. Corta a propósito: `sd_indicators.source` es varchar(40) y
+#: una fuente de 41 caracteres tumba el commit entero en Postgres sin que SQLite lo note.
+FUENTE_MEM = "MEM · anexo Informe de Desempeño"   # 32
+
+#: Qué serie del anexo alimenta qué indicador de la END, y en qué unidad. El sujeto viaja con
+#: el número: son las tres distribuidoras estatales agregadas, no el sector entero.
+MEM_TEMAS = {
+    "cri": ("electric_cri_ede", "% (índice de recuperación de efectivo, EDE agregadas)"),
+    "perdidas": ("electric_perdidas_ede", "% de la energía comprada (EDE agregadas)"),
+    "cobranzas": ("electric_cobranzas_ede", "% de lo facturado (EDE agregadas)"),
+}
+
+#: Años de informe cuyo anexo de DICIEMBRE se pide. Cada uno trae tres años, así que la lista
+#: se solapa a propósito: el solapamiento es lo que deja ver si el emisor revisó una cifra.
+MEM_INFORMES = [2021, 2022, 2023, 2024, 2025]
+
+
+def _sync_mem_electrico(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicadores 3.27, 3.28 y 3.29 de la END, del anexo del Informe de Desempeño del MEM.
+
+    El emisor publica las tres magnitudes con los nombres que usa el legislador —el CRI viene
+    literalmente como «Índice de Recuperación de Efectivo»— y agregadas para las tres
+    distribuidoras estatales. Ese ES el universo del indicador: la ley mide el desempeño
+    comercial de las EDE, no el del sector completo.
+
+    Solo se leen los anexos de DICIEMBRE. Las columnas de los otros meses son acumuladas del
+    año en curso, y publicar cuatro meses con el rótulo de doce no es una aproximación en un
+    indicador estacional: es otro número. El cliente lo hace cumplir y rechaza el anexo que no
+    declara un año completo.
+    """
+    from shared.data.mem_client import series_anuales
+
+    set_phase("sector eléctrico (MEM · anexo del Informe de Desempeño)")
+    series = series_anuales(MEM_INFORMES)
+    synced = 0
+    for clave, (tema, unidad) in MEM_TEMAS.items():
+        for periodo, valor in series.get(clave, []):
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=periodo,
+                              value=float(valor), source=FUENTE_MEM,
+                              disagg="nacional", unit=unidad)
+            synced += 1
+    return synced
+
+
 def _sync_conteos_regionales(db: Session, set_phase: Callable[[str], None]) -> int:
     """Indicadores 2.2 y 2.5: cuántas REGIONES superan el umbral que la ley fija.
 
@@ -724,6 +768,10 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     # que la corrida se caiga en una fase larga.
     llece_synced = _best_effort(
         "niveles LLECE (2.17)", lambda: _sync_llece_niveles(db, set_phase), errors)
+    # Mismo criterio: no depende de nada de esta corrida y entra antes del commit temprano.
+    mem_synced = _best_effort(
+        "sector eléctrico (MEM · 3.27, 3.28 y 3.29)",
+        lambda: _sync_mem_electrico(db, set_phase), errors)
     db.commit()
 
     health_synced = _best_effort(
@@ -775,6 +823,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "exportaciones_synced": exportaciones_synced,
         "conteos_regionales_synced": conteos_synced,
         "llece_synced": llece_synced,
+        "mem_electrico_synced": mem_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
         "schooling_synced": schooling_synced,

@@ -80,3 +80,24 @@ class TestLoQueNoSePuedeContrastar:
         s = sondear(_ind(24.4, "2009"), [])
         assert s.veredicto == "sin_dato_en_la_base"
         assert "no devolvió observaciones" in (s.motivo or "")
+
+
+def test_una_serie_lejos_de_la_base_no_dice_que_esta_vacia():
+    """Tres situaciones distintas dichas iguales mandan al lector a la conclusión errónea.
+
+    «La serie no devolvió observaciones» sobre una serie de seis años se lee como que el
+    conector está roto. Lo que pasa es otra cosa y se resuelve distinto: el legislador fijó
+    la línea base en un año que la fuente no cubre. Salió con el conector del MEM, cuyas
+    series arrancan en 2019 contra bases de 2008.
+    """
+    from modules.law_intel.registro import Indicador
+    from modules.law_intel.sonda import sondear
+
+    ind = Indicador(id="3.27", eje=3, nombre="CRI", escala="numerica",
+                    base_valor=64.0, base_anio=2008, metas={"2025": 85.0})
+    s = sondear(ind, [("2019", 70.4), ("2024", 59.4)])
+    assert s.veredicto == "sin_dato_en_la_base"
+    assert "2019-2024" in s.motivo
+    assert "no devolvió observaciones" not in s.motivo
+    # Y la serie realmente vacía sigue diciendo lo suyo.
+    assert "no devolvió observaciones" in sondear(ind, []).motivo
