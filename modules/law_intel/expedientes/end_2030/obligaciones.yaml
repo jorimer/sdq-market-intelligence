@@ -129,7 +129,10 @@ obligaciones:
       Presupuesto, con facultad de citar ministros.
     deudor: {tipo: organo, nombre: Congreso Nacional}
     consecuencia: null
-    estado: sin_registro_publico
+    # DECISIÓN DEL DUEÑO (2026-08-21): promovido de `sin_registro_publico` a `parcial` con la
+    # evidencia del propio archivo del Congreso. `parcial` es ACUSATORIO y el motor exige
+    # evidencia para admitirlo — la trae, y son siete documentos suyos.
+    estado: parcial
     evidencia: >-
       ══ CORREGIDO 2026-08-20, contra el registro del Congreso ══ La afirmación anterior —«no
       se localizó registro público de actividad de fiscalización»— era REFUTABLE con el propio

@@ -103,8 +103,11 @@ class TestExpedienteReal:
         legislativo.
         """
         o = next(x for x in cargar_obligaciones(EXPEDIENTE) if x.id == "art-51-comision-bicameral")
-        assert o.estado == "sin_registro_publico"
-        assert o.requiere_verificacion_antes_de_publicar
+        # Ya no es `sin_registro_publico`: se comprobó y pasó a `parcial`. Lo que NO cambia
+        # —y es lo que este test fija— es que la afirmación viaja con el alcance de la fuente
+        # que la sostiene, y que la consulta llevaba control positivo.
+        assert o.afirma_incumplimiento, "acusa: sin evidencia el motor no la habría admitido"
+        assert (o.evidencia or "").strip()
         assert "período legislativo vigente" in (o.evidencia or "")
         assert (o.verificacion_congresual or {}).get("control_positivo")
 
