@@ -159,7 +159,7 @@ def cobertura_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[
     comprobó, y esta cifra es la que el cliente usa para decidir si el informe le sirve.
     """
     _expediente(expediente_id)
-    return cobertura(expediente_id)
+    return cobertura(expediente_id)   # trae el desglose por camino de verificación
 
 
 @router.get("/{expediente_id}/semaforo")

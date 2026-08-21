@@ -43,6 +43,20 @@ GLOSA_ESTANCADA = (
 )
 
 
+def salvedades_obligatorias(expediente_id: str) -> List[Dict[str, str]]:
+    """Los indicadores medidos cuya verificación NO pasó por la línea base de la ley.
+
+    Se computa del estado de cada binding y no de una lista escrita a mano: una lista a mano
+    envejece en cuanto alguien promueve el siguiente, y el que falte es justo el que se
+    publicaría sin salvedad.
+    """
+    return [{"indicador": b.indicador, "camino": b.verificado_por,
+             "termino_del_emisor": b.termino_del_emisor or "",
+             "salvedad": (b.nota or "").strip()}
+            for b in sorted(cargar_bindings(expediente_id).values(), key=lambda x: x.indicador)
+            if b.cuenta and b.verificado_por != "oraculo"]
+
+
 def law_ai_context(expediente_id: str, corte: str,
                    series: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     exp = cargar(expediente_id)
@@ -74,9 +88,24 @@ def law_ai_context(expediente_id: str, corte: str,
         "cobertura_indicadores_medidos_sobre_total_de_la_ley": {
             "medidos": cob["medidos"], "total_indicadores_numerados": cob["total"],
             "pct": cob["pct"], "propuestos_sin_verificar": cob["propuestos_sin_verificar"],
+            # La cobertura se abre por CAMINO. Publicarla como una sola cifra sería publicar
+            # un número sobre dos poblaciones: unas reproducen la línea base que el
+            # legislador escribió y otras no pudieron ni intentarlo.
+            "medidos_por_camino_de_verificacion": cob["medidos_por_camino_de_verificacion"],
+            "que_significa_cada_camino": cob["que_significa_cada_camino"],
             "advertencia": ("Un binding propuesto NO es una medición. No escribas que el "
                             "informe mide los propuestos."),
         },
+        # ── Las salvedades que NO son opcionales ──────────────────────────────────────────
+        # Un indicador verificado por identidad de concepto NO se contrastó contra la línea
+        # base de la ley. Decir «lo medimos» sin decir eso le da al informe una firmeza que no
+        # tiene, y es la clase de afirmación que un contradictor desarma con el articulado en
+        # la mano.
+        "salvedades_obligatorias_por_indicador": salvedades_obligatorias(expediente_id),
+        "regla_de_la_salvedad": (
+            "Cada indicador que aparezca en `salvedades_obligatorias_por_indicador` se "
+            "publica CON su salvedad, en la misma sección donde se afirma su veredicto. No "
+            "la mandes a una nota al pie ni la resumas: dice contra qué NO se comprobó."),
         # Los dos denominadores, explícitos, para que ninguna cifra derivada elija en silencio.
         "denominadores_del_registro": {
             "indicadores_numerados_de_la_ley": len(numerados),

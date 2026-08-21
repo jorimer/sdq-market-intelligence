@@ -12,6 +12,7 @@ indicador mejoró cuando empeoró.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
@@ -27,6 +28,41 @@ ESTADOS = {
 CUENTA_COBERTURA = frozenset({"verificado"})
 
 DIRECCIONES = frozenset({"menor", "mayor"})
+
+# Los dos caminos por los que un binding llega a `verificado`. Conjunto CERRADO, y el que se
+# usó viaja hasta la portada: la cifra de cobertura no puede leerse como si todos hubieran
+# pasado por el mismo filtro.
+#
+# `oraculo` es el fuerte y sigue siendo el default: la serie reproduce la LÍNEA BASE que la
+# ley declara, en el año que la ley declara. Es una coincidencia de magnitud contra un valor
+# que el legislador escribió, y no se puede fabricar.
+#
+# `identidad_de_concepto` existe porque varias líneas base son de 2008-2010 y ninguna serie
+# viva llega tan atrás — el anexo del MEM empieza en 2019. Sin este camino esos indicadores no
+# son «dudosos»: son inverificables para siempre, y el informe diría «no lo medimos» sobre un
+# dato que el propio Estado publica con el nombre que el legislador le puso.
+#
+# Lo que NO es: aceptar un parecido de etiqueta. El término tiene que ser el que usa el
+# EMISOR en su publicación, y `_identidad_comprobada` lo contrasta contra el nombre del
+# indicador en la ley. La declaración no se cree: se comprueba.
+VERIFICADO_POR = {
+    "oraculo": "la serie reproduce la línea base de la ley en el año que la ley fija",
+    "identidad_de_concepto": ("el emisor publica la magnitud con el término del legislador, y "
+                              "la línea base de la ley cae fuera del alcance de la serie"),
+}
+
+# Palabras de MEDICIÓN, que nombran la forma y no el fenómeno. Un término que solo coincide
+# en éstas no identifica nada: «índice», «tasa» y «número» encabezan medio articulado.
+_GENERICAS = frozenset({
+    "indice", "indices", "tasa", "tasas", "numero", "porcentaje", "proporcion", "nivel",
+    "niveles", "monto", "montos", "razon", "cantidad", "promedio", "valor", "total",
+    "anual", "nacional", "general", "sector", "sectores", "electrico", "publico",
+})
+
+# Cuántos caracteres tiene que compartir un token del emisor con uno de la ley para contar.
+# Cinco deja pasar singular/plural —«cobranzas» contra «cobranza»— sin volver equivalentes a
+# dos palabras que solo comparten la raíz corta.
+_PREFIJO_MINIMO = 5
 
 # Transformaciones admitidas entre la variable de la plataforma y el indicador de la ley.
 # Es un conjunto CERRADO y con nombre, no una expresión libre: una fórmula arbitraria en un
@@ -114,6 +150,15 @@ class Binding:
     # (usuarios de internet, mujeres en Diputados); graduar por emisor le pondría la misma
     # etiqueta a las dos e inflaría la independencia declarada del informe — en la dirección
     # que le conviene a quien lo vende.
+    #: Cómo llegó este binding a `verificado`. Ver `VERIFICADO_POR`. Va como CAMPO y no en
+    #: la prosa de una nota porque la cifra de cobertura se desagrega por esto: publicar «22
+    #: medidos» sin decir cuántos pasaron por cada filtro es publicar una sola cifra sobre dos
+    #: poblaciones distintas.
+    verificado_por: str = "oraculo"
+    #: El término EXACTO con el que el emisor publica la magnitud. Obligatorio cuando se
+    #: verifica por identidad de concepto, y no se cree: se contrasta contra el nombre que la
+    #: ley le puso al indicador.
+    termino_del_emisor: Optional[str] = None
     origen: Optional[str] = None
     #: El productor, con nombre. Va aparte del origen porque el origen es una categoría y
     #: esto es la cadena concreta que un lector puede ir a comprobar.
@@ -122,6 +167,53 @@ class Binding:
     @property
     def cuenta(self) -> bool:
         return self.estado in CUENTA_COBERTURA
+
+
+def _sin_tildes(t: str) -> str:
+    import unicodedata
+
+    return "".join(c for c in unicodedata.normalize("NFD", t.lower())
+                   if unicodedata.category(c) != "Mn")
+
+
+def _tokens(texto: str) -> List[str]:
+    return [t for t in re.split(r"[^0-9a-záéíóúñü]+", _sin_tildes(texto)) if len(t) > 2]
+
+
+def identidad_comprobada(termino: str, nombre_del_indicador: str) -> Tuple[bool, str]:
+    """¿El término del emisor identifica al indicador que la ley escribió?
+
+    Dos condiciones, y las dos hacen falta:
+
+    1. **Todos** los tokens significativos del emisor aparecen en el nombre del indicador
+       (por prefijo, para tolerar singular/plural). Si el emisor dice algo que la ley no
+       dice, no está nombrando lo mismo.
+    2. Al menos uno de los que coinciden NO es una palabra de medición. «Índice», «tasa» y
+       «nivel» encabezan medio articulado: coincidir solo en ésas es coincidir en la forma,
+       no en el fenómeno.
+
+    Devuelve `(vale, motivo)` — el motivo se publica cuando no vale, porque un rechazo sin
+    razón manda a adivinar.
+    """
+    del_emisor = _tokens(termino)
+    if not del_emisor:
+        return False, "el término del emisor no tiene ninguna palabra significativa"
+    de_la_ley = _tokens(nombre_del_indicador)
+
+    def _esta(t: str) -> bool:
+        return any(t[:_PREFIJO_MINIMO] == otro[:_PREFIJO_MINIMO] and
+                   (t.startswith(otro[:_PREFIJO_MINIMO]) or
+                    otro.startswith(t[:_PREFIJO_MINIMO]))
+                   for otro in de_la_ley)
+
+    ausentes = [t for t in del_emisor if not _esta(t)]
+    if ausentes:
+        return False, (f"el término del emisor dice {ausentes}, que no está en el nombre que "
+                       f"la ley le puso al indicador")
+    if all(t in _GENERICAS for t in del_emisor):
+        return False, (f"el término solo coincide en palabras de medición ({del_emisor}): "
+                       f"eso identifica la forma, no el fenómeno")
+    return True, ""
 
 
 def direccion_de_metas(ind: Indicador) -> str:
@@ -223,6 +315,36 @@ def _validar(exp: Expediente, bindings: List[Binding]) -> None:
                 f"{b.indicador}: verificado sin `periodo_verificado`. Poné el período del "
                 f"dato con el que se comprobó (lo devuelve /bindings/verificacion).")
 
+        if b.verificado_por not in VERIFICADO_POR:
+            raise ExpedienteInvalido(
+                f"{b.indicador}: `verificado_por` desconocido '{b.verificado_por}'; "
+                f"admitidos {sorted(VERIFICADO_POR)}")
+
+        # El camino de identidad de concepto tiene tres candados, y los tres hacen falta.
+        # Sin ellos sería la puerta por la que entra «se parece»: exactamente lo que el
+        # oráculo existe para cerrar.
+        if b.cuenta and b.verificado_por == "identidad_de_concepto":
+            if not (b.termino_del_emisor or "").strip():
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: verifica por identidad de concepto y no declara el "
+                    f"término con el que el emisor publica la magnitud. Sin él no hay nada "
+                    f"que comprobar y la identidad sería una afirmación nuestra.")
+            vale, motivo = identidad_comprobada(b.termino_del_emisor or "",
+                                                por_id[b.indicador].nombre)
+            if not vale:
+                raise ExpedienteInvalido(f"{b.indicador}: {motivo}")
+            if (b.nota_comparabilidad or "").strip():
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: no se verifica por identidad de concepto con una duda de "
+                    f"comparabilidad ABIERTA. O la duda está resuelta y pasa a `nota`, o el "
+                    f"binding no promueve.")
+            if not (b.nota or "").strip():
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: verifica por identidad de concepto y no trae `nota`. La "
+                    f"salvedad —que el oráculo de la ley no alcanza la serie— tiene que "
+                    f"viajar impresa al informe; sin ella la cobertura se lee como si todos "
+                    f"hubieran pasado por el filtro fuerte.")
+
         # De dónde sale la evidencia. Se exige a TODOS los bindings y no solo a los
         # verificados: la sección de verificabilidad cuenta también lo que la ley PERDIÓ, y
         # un descarte sin origen declarado desaparece de esa cuenta en vez de sumar a ella.
@@ -252,10 +374,17 @@ def cobertura(expediente_id: str) -> Dict[str, object]:
     numerados = exp.numerados
     verificados = [i for i in numerados if (b := bs.get(i.id)) and b.cuenta]
     propuestos = [i for i in numerados if (b := bs.get(i.id)) and b.estado == "propuesto"]
+    # Desagregada por CAMINO. Una sola cifra de cobertura sobre dos filtros distintos es una
+    # cifra sobre dos poblaciones distintas, y la portada es justo donde eso no se puede
+    # hacer: el cliente decide con este número si el informe le sirve.
+    por_camino = {c: sum(1 for i in verificados if bs[i.id].verificado_por == c)
+                  for c in VERIFICADO_POR}
     return {
         "denominador": "indicadores numerados de la ley",
         "total": len(numerados),
         "medidos": len(verificados),
+        "medidos_por_camino_de_verificacion": por_camino,
+        "que_significa_cada_camino": VERIFICADO_POR,
         "pct": round(100.0 * len(verificados) / len(numerados), 1) if numerados else 0.0,
         "propuestos_sin_verificar": len(propuestos),
         "nota": ("Los bindings propuestos NO cuentan como cobertura: la serie parece medir el "
