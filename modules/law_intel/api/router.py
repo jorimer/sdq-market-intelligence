@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from modules.law_intel.agente_fuentes import MAX_POR_CORRIDA, barrer
 from modules.law_intel.bindings import cargar_bindings, cobertura
+from modules.law_intel.campo import campo as estado_del_campo
+from modules.law_intel.campo import resumen as resumen_del_campo
 from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
 from modules.law_intel.verificacion import informe
 from shared.registry.service import build_data_registry
@@ -194,6 +196,31 @@ def semaforo_(expediente_id: str,
             "trayectoria": v.trayectoria, "motivo": v.motivo,
         } for v in veredictos],
         "vocabulario": VEREDICTOS,
+    }
+
+
+@router.get("/{expediente_id}/campo")
+def campo_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Por qué cada indicador de la ley que no tiene veredicto no lo tiene.
+
+    Es una cifra distinta de la cobertura y responde otra pregunta. La cobertura dice cuántos
+    indicadores se miden; ésta dice cuántos están DECLARADOS, con veredicto o con motivo. Un
+    informe se vuelve publicable con la segunda mucho antes que con la primera.
+
+    La composición viaja al lado del total a propósito: «cerrado» significa que ninguno quedó
+    en silencio, no que todos tengan respuesta.
+    """
+    e = _expediente(expediente_id)
+    return {
+        "instrumento": {"id": e.id, "norma": e.norma},
+        **resumen_del_campo(expediente_id),
+        "casillas": [
+            {"indicador": c.indicador, "estado": c.estado, "detalle": c.detalle,
+             "evidencia": c.evidencia, "verificado_el": c.verificado_el,
+             "motivo_resuelto": c.resuelto}
+            for c in sorted(estado_del_campo(expediente_id).values(),
+                            key=lambda x: [int(t) if t.isdigit() else t
+                                           for t in x.indicador.split(".")])],
     }
 
 
