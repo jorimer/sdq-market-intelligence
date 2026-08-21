@@ -135,3 +135,17 @@ def test_el_techo_se_memoriza_y_la_invalidacion_lo_relee(monkeypatch):
     budget.invalidate_limit_cache()
     assert budget.current_limit() == 7.0
     assert len(lecturas) == 2, "invalidar no forzó la relectura"
+
+
+# ── ¿El techo es exacto, o se multiplica por la cantidad de workers? ─────────
+# Sin Redis, cada worker cuenta lo suyo: un techo de 25 con cuatro workers deja pasar hasta
+# 100. La plataforma lo COMPUTA y lo declara; no se le pregunta a una persona.
+
+def test_con_redis_el_contador_es_compartido(monkeypatch):
+    monkeypatch.setattr("shared.cache.redis_cache._get_client", lambda: object())
+    assert budget.contador_compartido() is True
+
+
+def test_sin_redis_el_contador_es_POR_WORKER(monkeypatch):
+    monkeypatch.setattr("shared.cache.redis_cache._get_client", lambda: None)
+    assert budget.contador_compartido() is False

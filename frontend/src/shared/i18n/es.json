@@ -1670,6 +1670,8 @@
       "invalid": "Debe ser un número igual o mayor que cero.",
       "stateOn": "Techo vigente: USD {{usd}} por día (UTC). Se aplica a toda llamada al modelo.",
       "stateOff": "Sin techo: el gasto del modelo no tiene límite diario. Use un valor mayor que cero para activarlo.",
+      "counterShared": "El conteo es compartido entre procesos: el techo vale exactamente lo que dice.",
+      "counterPerWorker": "Atención: el conteo NO es compartido (Redis no está disponible). Cada proceso lleva su propia cuenta, así que el gasto real puede llegar al techo multiplicado por la cantidad de procesos.",
       "whatHappens": "Qué pasa al llegar al techo",
       "effectPremium": "Una entrega premium responde error, no un informe con texto de relleno.",
       "effectNarrative": "La narrativa cae a su versión estática sin guardarla en caché; el resto de la plataforma sigue respondiendo.",

@@ -52,6 +52,10 @@ class SettingsOut(BaseModel):
     # Techo DIARIO de gasto del modelo en USD (0 = sin techo). Se devuelve el VIGENTE:
     # el configurado por el admin si lo hay, si no el del entorno.
     llmDailyBudgetUsd: float = 0.0
+    # ¿El contador del día es compartido entre workers (Redis) o uno por worker? Sin esto,
+    # el techo mostrado puede ser exacto o multiplicarse por la cantidad de workers, y quien
+    # lo mira no tiene forma de saber cuál de las dos cosas está viendo.
+    llmBudgetCounterShared: bool = False
     # Global Cloudflare WAF proxy (shared by all sources behind the WAF).
     cloudflareProxyUrl: str = ""
     cloudflareProxySecretSet: bool = False

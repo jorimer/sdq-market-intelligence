@@ -56,6 +56,20 @@ def _get_client():
             return None
 
 
+def cache_disponible() -> bool:
+    """¿Hay Redis vivo? Es decir: ¿lo que se cuente acá lo comparten TODOS los workers?
+
+    No es una curiosidad de infraestructura. El presupuesto diario de gasto del modelo se
+    acumula en esta capa: con Redis, el techo es el que dice ser; sin Redis, cada worker lleva
+    su propia cuenta y el gasto real puede llegar al techo MULTIPLICADO por la cantidad de
+    workers. Quien mira el número tiene derecho a saber cuál de las dos cosas está viendo, y
+    preguntárselo a una persona es exactamente lo que esta función existe para no hacer.
+
+    Barata: ``_get_client`` memoriza el cliente tras el primer ``ping`` y tiene breaker.
+    """
+    return _get_client() is not None
+
+
 def _drop_client():
     """Descarta el cliente tras un error de operación y abre el breaker."""
     global _client, _client_failed_at
