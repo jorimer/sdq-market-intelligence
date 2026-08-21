@@ -1670,6 +1670,8 @@
       "invalid": "Doit être un nombre supérieur ou égal à zéro.",
       "stateOn": "Plafond en vigueur : USD {{usd}} par jour (UTC). Il s'applique à chaque appel au modèle.",
       "stateOff": "Sans plafond : la dépense du modèle n'a aucune limite quotidienne. Utilisez une valeur supérieure à zéro pour l'activer.",
+      "counterShared": "Le compteur est partagé entre les processus : le plafond vaut exactement ce qu'il annonce.",
+      "counterPerWorker": "Attention : le compteur n'est PAS partagé (Redis indisponible). Chaque processus tient son propre compte, donc la dépense réelle peut atteindre le plafond multiplié par le nombre de processus.",
       "whatHappens": "Ce qui se passe une fois le plafond atteint",
       "effectPremium": "Une livraison premium renvoie une erreur, pas un rapport au texte de remplissage.",
       "effectNarrative": "La narration bascule sur sa version statique sans la mettre en cache ; le reste de la plateforme continue de répondre.",

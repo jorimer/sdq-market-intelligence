@@ -25,7 +25,7 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, Tuple
 
-from shared.cache import cache_get, cache_incr_float
+from shared.cache import cache_disponible, cache_get, cache_incr_float
 from shared.config.settings import settings
 
 logger = logging.getLogger("sdq.llm.budget")
@@ -143,6 +143,18 @@ def current_limit() -> float:
         _limit_value = valor
         _limit_expires_at = ahora + _LIMIT_TTL_SECONDS
     return valor
+
+
+def contador_compartido() -> bool:
+    """¿El gasto del día se cuenta UNA vez para toda la plataforma, o una vez por worker?
+
+    Con Redis el contador es compartido y el techo vale lo que dice. Sin Redis cada worker
+    lleva el suyo, así que el gasto real puede llegar al techo MULTIPLICADO por la cantidad de
+    workers — un techo de 25 con cuatro workers deja pasar hasta 100. La diferencia se DECLARA
+    en pantalla junto al número: un techo del que no se sabe si es exacto no es un techo, es
+    una expectativa.
+    """
+    return cache_disponible()
 
 
 def budget_allows() -> bool:

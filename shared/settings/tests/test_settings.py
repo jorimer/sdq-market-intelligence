@@ -473,3 +473,27 @@ def test_guardar_el_techo_INVALIDA_la_memoria_del_cobrador(db, monkeypatch):
     monkeypatch.setattr(budget, "invalidate_limit_cache", lambda: llamadas.append(1))
     service.update_settings(db, SettingsIn(llmDailyBudgetUsd=10))
     assert llamadas, "guardar el techo no invalidó la caché del cobrador"
+
+
+def test_la_pantalla_declara_si_el_techo_es_exacto_o_por_worker(db, monkeypatch):
+    """Sin Redis el techo mostrado NO es el gasto máximo real: cada worker cuenta lo suyo.
+    Que el número salga sin esa salvedad es peor que no mostrarlo, porque se lee como
+    garantía. Se COMPUTA acá; no se le pregunta a nadie."""
+    import shared.settings.service as svc
+
+    monkeypatch.setattr(svc, "_contador_de_gasto_compartido", lambda: True)
+    assert service.get_settings(db).llmBudgetCounterShared is True
+
+    monkeypatch.setattr(svc, "_contador_de_gasto_compartido", lambda: False)
+    assert service.get_settings(db).llmBudgetCounterShared is False
+
+
+def test_si_no_se_puede_determinar_se_declara_NO_compartido(monkeypatch):
+    """Ante la duda, la lectura conservadora: es el caso en que el techo hay que mirarlo con
+    cuidado. Y jamás rompe la pantalla de Configuración."""
+    import shared.settings.service as svc
+
+    def _explota():
+        raise RuntimeError("sin caché")
+    monkeypatch.setattr("shared.llm.budget.contador_compartido", _explota)
+    assert svc._contador_de_gasto_compartido() is False
