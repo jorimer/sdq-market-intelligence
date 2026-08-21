@@ -87,8 +87,19 @@ def test_sobre_el_expediente_real():
     r = resumen(recs)
     assert r["total"] > 0
     assert set(r["por_clase"]) <= {"publicacion", "dato", "interna"}
-    # El art. 51 es el destinatario del informe: su recomendación debe salir marcada.
-    assert "artículo 51" in (r["con_verificacion_pendiente"] or [])
+    # La regla durable, no la foto: TODA obligación cuyo estado no permita afirmar sale
+    # marcada para verificar antes de publicar. El art. 51 estaba acá y salió al promoverse a
+    # `parcial` con la evidencia del archivo del Congreso — que es el camino correcto: se sale
+    # de la lista COMPROBANDO, no borrando la marca.
+    from modules.law_intel.obligaciones import cargar_obligaciones as _obs
+
+    pendientes = {f"artículo {o.articulo}" for o in _obs(EXPEDIENTE)
+                  if o.requiere_verificacion_antes_de_publicar}
+    marcadas = set(r["con_verificacion_pendiente"] or [])
+    assert pendientes, "ninguna obligación pendiente: el test dejó de proteger algo"
+    assert pendientes <= marcadas, (
+        f"estas obligaciones no se pueden afirmar y su recomendación sale sin marcar: "
+        f"{sorted(pendientes - marcadas)}")
     assert "nunca la política" in str(r["alcance"])
 
 
