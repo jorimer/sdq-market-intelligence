@@ -93,14 +93,62 @@ Mínimos: nunca <12px en UI; cifras clave ≥24px.
 - **Teal** = acento secundario para data-viz / segundo índice.
 
 ### Bandas de índice (score 0–100)
-`Fuerte ≥85` (ok) · `Sólido 70–84` (accent) · `Vigilar 55–69` (warn) · `Débil <55` (alert).
-Para ejes de **riesgo** (IRMP/RRI) la escala se invierte semánticamente: **mayor = menor riesgo**; banda “Riesgo Moderado”, etc. Mantener una función `bandFor(score)` y `riskBandFor(score)`.
 
-### Escala de rating SDQ (financiero)
-`SDQ-AAA · SDQ-AA+ · SDQ-AA · SDQ-A+ · SDQ-A · SDQ-BBB … SDQ-D`. Badge con color por banda (verde → azul → ámbar → rojo).
+Dos escalas, y **sus cortes no son los mismos** — no se reusan entre sí. Ambas viven en
+`frontend/src/shared/lib/bands.ts` (`bandFor` / `riskBandFor`); la UI no las reimplementa.
 
-### Grado-potencial sectorial (SGPS)
-Letras `A…D` para sectorial. Badge tipo “grade”.
+| Escala | Bandas | Tono |
+|---|---|---|
+| **Estándar** (mayor = más fuerte) | `Fuerte ≥85` · `Sólido 70–84` · `Vigilar 55–69` · `Débil <55` | ok · accent · warn · alert |
+| **Riesgo** (IRMP, IRC — mayor score = MENOR riesgo) | `Riesgo bajo ≥80` · `Riesgo moderado 60–79` · `Riesgo elevado 40–59` · `Riesgo alto <40` | ok · accent · warn · alert |
+
+Y una quinta banda en las dos: **`Sin dato`**, en tono `muted`. No es un caso borde de
+implementación — es la doctrina de la brecha aplicada a la insignia: un eje sin dato lo dice,
+no muestra una banda. Nunca la reemplaces por un cero ni la escondas.
+
+### Perfil SDQ (financiero) — dos ejes, no un símbolo
+
+> ⚠️ **La notación de letras `SDQ-AAA … SDQ-D` está RETIRADA y no se publica.** Usaba la
+> gramática de una calificadora de riesgo regulada sin serlo, y `SDQ-D` —la etiqueta más grave
+> de ese vocabulario— cubría 45 puntos de rango, alcanzando entidades que operan con
+> normalidad. Si ves material con `SDQ-AA+` o similar, está desactualizado.
+
+La reemplaza el **Perfil SDQ**: dos ejes independientes, cada uno 0–100 con su propia banda,
+homologados en los cuatro sectores financieros (banca, seguros, pensiones, fiduciarias).
+Los dos ejes **no son simétricos, y es deliberado**:
+
+| Eje | Qué mide | Naturaleza | Bandas |
+|---|---|---|---|
+| **Resiliencia** | qué tan expuesta está | **ABSOLUTA** — cortes fijos 75/60/45, los mismos en los cuatro sectores | `Sólida ≥75` · `Adecuada 60–74` · `En vigilancia 45–59` · `Frágil <45` |
+| **Ejecución** | qué tan bien le va | **RELATIVA** al panel comparable — cuartiles (p75/p50/p25) calculados **por tipo de entidad** | `Sobresaliente` · `Competitiva` · `Rezagada` · `Deficiente` |
+
+Resiliencia es absoluta porque sus umbrales tienen significado propio: un 62 significa lo
+mismo este trimestre que el próximo. Ejecución es relativa porque no existe un “breakeven de
+eficiencia bancaria” análogo al índice regulatorio o al combined ratio 100% — inventarle un
+corte fijo sería fijar un rango teórico y descubrir después que el mercado entero cae de un
+lado. Y los cortes se calculan por tipo de entidad porque la distribución difiere demasiado
+entre familias (medido en producción: mediana de Ejecución **37.8** en intermediación
+cambiaria contra **73.5** en banca múltiple; con cortes únicos, casi toda una familia caería
+en “Deficiente” y la otra en “Sobresaliente”, describiendo la diferencia de tipo y no el
+desempeño).
+
+**Cinco reglas de UI, no negociables** (componente de referencia: `PerfilSDQ.tsx`):
+
+1. **Nunca se resumen en un símbolo único ni en un número.** Es exactamente lo que el sistema
+   de dos ejes existe para evitar: un banco puede ser sólido y poco eficiente a la vez.
+2. **Se muestran juntos y con el mismo peso visual.** Jerarquizar uno reintroduce el problema.
+3. **Sin cortes no hay banda.** Con un panel de menos de 4 entidades no se inventa: `Sin dato`.
+4. **Regla de N chico:** con un universo menor a 15, la banda sola engaña — “Sobresaliente”
+   entre 4 dice bastante menos que entre 42. Mostrar la posición relativa al lado.
+5. **Los cortes de Ejecución son auditables:** la respuesta los expone, y la UI debe poder
+   mostrarlos. Un corte relativo que no se puede inspeccionar es una caja negra.
+
+Un movimiento de banda se lee **dentro de su propio eje**: “Sobresaliente” y “Sólida” son de
+escalas distintas y no se comparan entre sí.
+
+### Índices sectoriales (IAI · SGPS)
+Numéricos 0–100 con la banda estándar. **No hay grado por letra**: la escala `A…D` y el badge
+tipo “grade” nunca llegaron a producción y no deben dibujarse.
 
 ### Paleta data-viz
 `--c1…--c6` (theme-aware). No usar más de 6 series; reusar en orden.
@@ -161,7 +209,7 @@ Construir como componentes React tipados en `frontend/src/shared/ui/`. Clases ba
 | **CardHead** | icono(30px, accent-soft) + columna(título h3 + subtítulo). **Ver §8 reglas críticas.** Slot `right` para acciones/badges. |
 | **PageHead** | eyebrow + h1 + sub (`max-w-2xl`) + slot `right`. |
 | **Chip / Tag** | píldora 12px, borde suave; variante con punto de estado. |
-| **Badge** | `RatingBadge` (escala SDQ), `BandBadge` (banda de índice), `GradeBadge` (A…D). Color por banda. |
+| **Badge** | `BandBadge` — único badge de banda; recibe `{label, tone}` de `bandFor`/`riskBandFor`. El Perfil SDQ financiero tiene su propio componente (`PerfilSDQ`), porque son dos ejes y no un badge. No existen `RatingBadge` ni `GradeBadge`: eran la notación de letras retirada y el grado A…D que nunca se construyó. |
 | **Input / Field** | borde `--border-strong`, foco con anillo `--accent-soft`. |
 | **Tabs** | subrayado activo en accent. |
 | **Segmented** | control de 2–3 opciones (ej. Base 100 / Valor). |
@@ -208,17 +256,33 @@ Construir como componentes React tipados en `frontend/src/shared/ui/`. Clases ba
 
 Logo = arco abierto (la aguja de un gauge 0–100) + punto (el dato/señal). Resume el producto.
 
+**Fuente de verdad: `shared/brand/mark.py`.** La geometría vive ahí y todo lo demás la copia
+(el componente `ArcMark`, el favicon de `index.html`, el PNG de los informes). Un test
+estructural —`shared/brand/tests/test_marca_unica.py`— compara las copias contra la canónica
+y falla si una deriva. Si cambia el símbolo, cambia ahí primero.
+
 Favicon / mark (SVG):
 ```html
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="9" fill="#1E6FFF"/>
-  <g transform="translate(16 16)">
-    <circle r="8" fill="none" stroke="white" stroke-width="3.4" stroke-linecap="round"
-            stroke-dasharray="50.2" stroke-dashoffset="13" transform="rotate(-90)"/>
-    <circle cy="-8" r="2.4" fill="white"/>
-  </g>
+  <path d="M20.95 11.05 A 7 7 0 1 1 11.05 11.05" fill="none"
+        stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="16" cy="6.6" r="2.6" fill="#FFFFFF"/>
 </svg>
 ```
+
+**El punto va SEPARADO del arco, y el arco es un `path`, no un círculo punteado.** La versión
+anterior lo dibujaba con `stroke-dasharray`/`stroke-dashoffset` sobre un círculo completo y el
+hueco quedaba tan corto que el punto se fundía contra el terminal: a tamaño de favicon se leía
+como una «C» con una mancha, no como un medidor con su lectura. Un `dashoffset` además codifica
+el hueco de forma indirecta, así que quien lo edite no tiene cómo saber que está moviendo el
+punto de contacto. Con dos extremos declarados, no. El hueco superior abarca 90° (−45° a +45°
+respecto del eje vertical) y el punto se apoya en su centro.
+
+En la app el contenedor usa `var(--accent)` (así el símbolo sigue el tema); en contextos
+estáticos —favicon, PNG de informes— es `#1E6FFF`. **Un solo azul en las tres superficies:**
+el `#2B6CB0` del PNG viejo se retiró.
+
 Wordmark: `SDQ·MIP` (Jakarta 800; `·MIP` en `--muted`). En la app el arco puede animarse como medidor.
 ⚠️ No hay logo oficial de SDQ: la identidad Arco es **propuesta de producto**. Hay 4 direcciones exploradas (Arco · Mira · Índice · Cuadrante); **Arco** es la recomendación.
 

@@ -1,6 +1,7 @@
 """Tests for the generic explainable-index engine."""
 import pytest
 
+from shared.brand import MUTED
 from shared.indices import Band, IndexConfig, run_index
 from shared.indices.bands import get_band_color, map_band
 from shared.indices.dimensions import compute_all_dimensions, compute_dimension
@@ -114,7 +115,9 @@ class TestBands:
     def test_band_color_and_fallback(self):
         bands = _config().bands
         assert get_band_color("Alto", bands) == "#0a0"
-        assert get_band_color("???", bands) == "#6B7280"
+        # El gris de reserva sale de la paleta de marca, no de un literal: escribirlo acá
+        # reintroduciría en el test la copia que `shared/brand` vino a eliminar.
+        assert get_band_color("???", bands) == MUTED
 
 
 # ── engine ────────────────────────────────────────────────────────

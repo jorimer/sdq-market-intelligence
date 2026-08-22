@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from shared import brand
+
 from modules.brand_intel import service as svc
 from modules.brand_intel.engines import category as cat_engine
 from modules.brand_intel.engines.metrics import label_for
@@ -874,23 +876,42 @@ def _limits(p: Dict[str, Any]) -> List[str]:
 
 # ── HTML rendering ────────────────────────────────────────────────────
 
-_CSS = """
-:root{--navy:#0B1F3A;--ink:#1A2433;--muted:#6B7A8F;--signal:#D7263D;--line:#DCE3EC;
---panel:#F6F8FB;--teal:#0F7E7E;--teal-soft:#E4F2F1;--signal-soft:#FBEAEC}
+# El bloque `:root` se ARMA desde `shared.brand`, no se escribe: este informe llegó a
+# tener su propia marca —un navy y un rojo que ninguna otra superficie usaba— justamente
+# por estar escrito a mano. Los NOMBRES de variable se conservan para no reescribir las
+# ~60 reglas de abajo; lo que cambia es de dónde sale el valor.
+#
+# Dos variables no salen de un token directo y por eso llevan nombre propio:
+# `--accent-on-dark` y `--on-dark-muted` pintan sobre el encabezado oscuro, donde el
+# acento y el apagado de tema claro no contrastan.
+_ROOT = (
+    ":root{"
+    f"--navy:{brand.INK};--ink:{brand.BODY};--muted:{brand.MUTED};--line:{brand.BORDER};"
+    f"--panel:{brand.CANVAS};--canvas:{brand.CANVAS};--surface-2:{brand.SURFACE_2};"
+    f"--accent:{brand.ACCENT};--accent-ink:{brand.ACCENT_INK};"
+    f"--accent-soft:{brand.ACCENT_SOFT};--accent-on-dark:{brand.ACCENT_ON_DARK};"
+    f"--on-dark-muted:{brand.BODY_ON_DARK};"
+    f"--teal:{brand.TEAL};--teal-soft:{brand.TEAL_SOFT};--teal-ink:{brand.TEAL_INK};"
+    f"--warn:{brand.WARN};--warn-soft:{brand.WARN_SOFT};"
+    f"--alert:{brand.ALERT};--alert-soft:{brand.ALERT_SOFT};--alert-ink:{brand.ALERT_INK}"
+    "}"
+)
+
+_CSS_RULES = """
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Inter","Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",
-Helvetica,Arial,sans-serif;color:var(--ink);line-height:1.5;background:#E9EDF2;padding:24px}
+Helvetica,Arial,sans-serif;color:var(--ink);line-height:1.5;background:var(--canvas);padding:24px}
 .doc{max-width:1080px;margin:0 auto;background:#fff;box-shadow:0 8px 40px rgba(11,31,58,.14)}
 header{background:var(--navy);color:#fff;padding:38px 48px 32px;position:relative}
 header::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:100%;
-background:linear-gradient(90deg,var(--signal) 0 22%,transparent 22%)}
+background:linear-gradient(90deg,var(--accent) 0 22%,transparent 22%)}
 .brand{font-size:11px;letter-spacing:.22em;font-weight:700;text-transform:uppercase}
-.brand span{color:var(--signal)}
+.brand span{color:var(--accent-on-dark)}
 h1{font-size:32px;font-weight:800;letter-spacing:-.02em;margin:16px 0 6px}
-.meta{font-size:12.5px;color:#B9CAE0}
+.meta{font-size:12.5px;color:var(--on-dark-muted)}
 section{padding:30px 48px;border-bottom:1px solid var(--line)}
 h2{font-size:20px;font-weight:750;color:var(--navy);margin-bottom:4px;letter-spacing:-.012em}
-.kicker{font-size:9.5px;letter-spacing:.19em;text-transform:uppercase;color:var(--signal);
+.kicker{font-size:9.5px;letter-spacing:.19em;text-transform:uppercase;color:var(--accent-ink);
 font-weight:700;margin-bottom:6px}
 .lede{font-size:13px;color:var(--muted);margin-bottom:16px;max-width:760px}
 table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
@@ -898,20 +919,20 @@ th{text-align:left;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase
 color:var(--muted);font-weight:700;padding:0 10px 7px 0;border-bottom:1.5px solid var(--navy)}
 td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;padding-right:16px}
-tr.focal td{background:#F4F8FD;font-weight:650}
+tr.focal td{background:var(--accent-soft);font-weight:650}
 .finding{display:flex;gap:18px;padding:14px 0;border-bottom:1px solid var(--line)}
 .finding:last-child{border-bottom:none}
 .figure{font-size:26px;font-weight:800;color:var(--navy);min-width:130px;letter-spacing:-.02em}
 .finding h3{font-size:14.5px;font-weight:700;margin-bottom:3px}
 .finding p{font-size:12.5px;color:var(--muted)}
 .note{border-left:3px solid var(--teal);background:var(--teal-soft);padding:11px 15px;
-font-size:12.5px;color:#0B4A4A;margin-top:14px;border-radius:0 3px 3px 0}
-.note.red{border-left-color:var(--signal);background:var(--signal-soft);color:#5B1420}
+font-size:12.5px;color:var(--teal-ink);margin-top:14px;border-radius:0 3px 3px 0}
+.note.red{border-left-color:var(--alert);background:var(--alert-soft);color:var(--alert-ink)}
 .tag{display:inline-block;font-size:10px;font-weight:750;padding:3px 9px;border-radius:99px}
 .t-ok{background:var(--teal-soft);color:var(--teal)}
-.t-no{background:var(--signal-soft);color:var(--signal)}
-.t-mid{background:#FDF3E0;color:#B7791F}
-.t-gray{background:#EEF2F7;color:var(--muted)}
+.t-no{background:var(--alert-soft);color:var(--alert)}
+.t-mid{background:var(--warn-soft);color:var(--warn)}
+.t-gray{background:var(--surface-2);color:var(--muted)}
 ul{margin:6px 0 0 18px;font-size:12.5px;color:var(--muted)}
 li{margin-bottom:5px}
 .empty{font-size:12.5px;color:var(--muted);font-style:italic;
@@ -922,6 +943,8 @@ section{page-break-inside:avoid}@page{margin:12mm}}
 @media(max-width:720px){section,header,footer{padding-left:20px;padding-right:20px}
 .finding{flex-direction:column;gap:4px}.figure{min-width:0}}
 """
+
+_CSS = _ROOT + "\n" + _CSS_RULES
 
 
 def _e(v: Any) -> str:
@@ -1309,7 +1332,7 @@ def _render_decisions(d: Dict[str, Any]) -> str:
         cls, lbl = _STATUS_TAG.get(r["status"], ("t-gray", r["status"]))
         out.append(
             f"<tr><td>{_e(r['title'])}"
-            + (f"<br><span style='color:#6B7A8F;font-size:11px'>{_e(r['note'])}</span>"
+            + (f"<br><span style='color:var(--muted);font-size:11px'>{_e(r['note'])}</span>"
                if r.get("note") else "")
             + f"</td><td>{_e(r['label'])}</td>"
             f"<td class='num'>{_fmt(r['observed_delta'], ' pp')}</td>"

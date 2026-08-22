@@ -15,11 +15,16 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-_NAVY = "#1A365D"
-_BLUE = "#2B6CB0"
-_SIGNAL = "#E11D48"
-_GRID = "#E2E8F0"
-_GRAY = "#718096"
+from shared import brand  # noqa: E402
+
+# Paleta: se LEE de `shared.brand`. Ver el comentario equivalente en `render.py`.
+# `_NEGATIVE` es el ÚNICO rojo que queda en los informes, y es semántico: marca un valor
+# negativo en un gráfico con signo. El signal-red decorativo de los pull-quotes se retiró.
+_NAVY = brand.INK
+_BLUE = brand.ACCENT
+_NEGATIVE = brand.ALERT
+_GRID = brand.GRID
+_GRAY = brand.MUTED
 
 
 def bar_chart_png(
@@ -33,7 +38,7 @@ def bar_chart_png(
     """Gráfico de barras horizontales de marca → PNG en *path*. Devuelve el path o None.
 
     *items* = ``[(label, value), …]`` en el orden a mostrar (se pinta de arriba a abajo).
-    ``signed`` colorea positivos (navy) vs negativos (signal-red) — para contribuciones/
+    ``signed`` colorea positivos (acento) vs negativos (alerta) — para contribuciones/
     crecimiento. ``unit`` se anexa a la etiqueta de valor. Valores None se omiten."""
     data = [(str(lbl), float(v)) for lbl, v in items if isinstance(v, (int, float))]
     if not data:
@@ -44,7 +49,7 @@ def bar_chart_png(
         n = len(data)
         fig, ax = plt.subplots(figsize=(6.4, max(1.4, 0.42 * n + 0.6)), dpi=150)
         y = list(range(n))[::-1]  # primero arriba
-        colors = [(_SIGNAL if (signed and v < 0) else _BLUE) for v in values]
+        colors = [(_NEGATIVE if (signed and v < 0) else _BLUE) for v in values]
         bars = ax.barh(y, values, color=colors, height=0.62, zorder=3)
         ax.set_yticks(y)
         ax.set_yticklabels(labels, fontsize=9, color=_NAVY)

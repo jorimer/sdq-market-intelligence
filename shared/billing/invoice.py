@@ -32,12 +32,17 @@ from reportlab.lib.styles import ParagraphStyle
 from sqlalchemy.orm import Session
 
 from shared.billing.skus import sku_label
-from shared.products.render import BLUE, GRAY, NAVY, SIGNAL, _draw_logo
+from shared import brand
+from shared.products.render import BLUE, GRAY, NAVY, _draw_logo
 
 _MARGIN = 0.7 * inch
-_LIGHT = HexColor("#F1F5F9")
-_LINE = HexColor("#CBD5E1")
-_INK = HexColor("#0F172A")
+# Paleta: se LEE de `shared.brand`. El comprobante es una superficie de marca más.
+_LIGHT = HexColor(brand.SURFACE_2)
+_LINE = HexColor(brand.BORDER_STRONG)
+_INK = HexColor(brand.INK)
+# La leyenda de exención de ITBIS tiene que saltar a la vista: es el rojo SEMÁNTICO de la
+# paleta, no el `signal red` decorativo que se retiró.
+_EXENTO = HexColor(brand.ALERT)
 
 # Prosa que el documento fiscal debe respetar → constantes con nombre. Un literal incrustado
 # en el layout se parte por ancho de línea y deja de existir como frase en el fuente.
@@ -72,7 +77,7 @@ def _styles() -> Dict[str, ParagraphStyle]:
         "small": ParagraphStyle("small", fontName="Helvetica", fontSize=7.8,
                                 textColor=GRAY, leading=10.5),
         "exempt": ParagraphStyle("exempt", fontName="Helvetica-Oblique", fontSize=8.5,
-                                 textColor=SIGNAL, leading=12),
+                                 textColor=_EXENTO, leading=12),
     }
 
 

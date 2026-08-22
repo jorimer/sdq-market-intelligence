@@ -31,16 +31,20 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from shared import brand
 from shared.config.settings import settings
 
-NAVY = HexColor("#1A365D")
-BLUE = HexColor("#2B6CB0")
-SIGNAL = HexColor("#E11D48")   # signal red — acento de marca (pull-quotes, barras)
-GRAY = HexColor("#718096")
-LIGHT_GRAY = HexColor("#F7FAFC")
-RULE = HexColor("#E2E8F0")
-SAMPLE_RED = HexColor("#991B1B")
-WHITE = HexColor("#FFFFFF")
+# Paleta: se LEE de `shared.brand`, no se declara. Antes cada renderizador tenía la suya
+# y los informes terminaron en un navy y un azul que la aplicación ya no usaba. Lo vigila
+# `shared/brand/tests/test_paleta_unica.py`.
+NAVY = HexColor(brand.INK)          # tinta: títulos y cabeceras de tabla
+BLUE = HexColor(brand.ACCENT_INK)   # texto en acento (subtítulos) — el que sí contrasta
+ACCENT = HexColor(brand.ACCENT)     # rellenos de acento: barra del pull-quote, filetes
+GRAY = HexColor(brand.MUTED)
+LIGHT_GRAY = HexColor(brand.CANVAS)
+RULE = HexColor(brand.BORDER)
+SAMPLE_RED = HexColor(brand.ALERT)  # estampa de MUESTRA
+WHITE = HexColor(brand.WHITE)
 MARGIN = 0.75 * inch
 CONTENT_W = A4[0] - 2 * MARGIN
 # Alto máximo de una imagen embebida: debe caber en el marco de página tras el furniture
@@ -110,11 +114,11 @@ def _inline(text: str) -> str:
 
 
 def _pull_quote(text: str, styles) -> Table:
-    """Pull-quote de marca: barra de acento signal-red + texto grande (cifra/insight clave)."""
+    """Pull-quote de marca: barra de acento + texto grande (la cifra o el insight clave)."""
     t = Table([["", Paragraph(_inline(text), styles["PullQuote"])]],
               colWidths=[0.06 * inch, CONTENT_W - 0.06 * inch])
     t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 0), SIGNAL),
+        ("BACKGROUND", (0, 0), (0, 0), ACCENT),
         ("LEFTPADDING", (1, 0), (1, 0), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 2),
         ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -226,20 +230,25 @@ def _data_table(heading: str, rows: Sequence[Sequence[str]], styles) -> List:
 
 
 def _draw_logo(canvas, x: float, y: float, s: float) -> None:
-    """Marca 'Arco' de SDQ·MIP: cuadrado redondeado de acento + arco blanco + punto.
-    Reproduce el logo del producto (frontend ArcMark) en el PDF. (x, y) = esquina inf-izq."""
+    """Símbolo Arco: cuadrado redondeado de acento + arco blanco + punto SEPARADO.
+
+    Las proporciones y los ángulos salen de ``shared.brand.arco_metrics`` — no se ajustan
+    acá. El punto tiene que quedar separado del terminal del arco: fundidos, el símbolo
+    deja de leerse como un medidor con su lectura. (x, y) = esquina inferior izquierda.
+    """
+    m = brand.arco_metrics(s)
     canvas.saveState()
-    canvas.setFillColor(BLUE)
-    canvas.roundRect(x, y, s, s, s * 0.28, fill=1, stroke=0)
-    cx, cy, r = x + s / 2, y + s / 2, s * 0.27
+    canvas.setFillColor(ACCENT)
+    canvas.roundRect(x, y, s, s, m["corner_radius"], fill=1, stroke=0)
+    cx, cy, r = x + s / 2, y + s / 2, m["arc_radius"]
     canvas.setStrokeColor(WHITE)
-    canvas.setLineWidth(max(1.0, s * 0.11))
+    canvas.setLineWidth(max(1.0, m["arc_width"]))
     canvas.setLineCap(1)
     p = canvas.beginPath()
-    p.arc(cx - r, cy - r, cx + r, cy + r, 130, 300)   # ~3/4 de anillo (hueco arriba)
+    p.arc(cx - r, cy - r, cx + r, cy + r, m["arc_start_deg"], m["arc_extent_deg"])
     canvas.drawPath(p, stroke=1, fill=0)
     canvas.setFillColor(WHITE)
-    canvas.circle(cx, cy + r, s * 0.085, fill=1, stroke=0)   # punto superior
+    canvas.circle(cx, cy + m["dot_offset"], m["dot_radius"], fill=1, stroke=0)
     canvas.restoreState()
 
 

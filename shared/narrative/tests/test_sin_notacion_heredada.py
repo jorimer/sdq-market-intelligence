@@ -155,3 +155,69 @@ def test_la_regla_ve_una_reintroduccion(tmp_path):
 ])
 def test_patron_no_muerde_identificadores(texto, esperado):
     assert bool(_NOTACION.search(texto)) is esperado
+
+
+# ── La misma regla, sobre los DOCUMENTOS-CONTRATO ──────────────────────────────
+#
+# El test de arriba lee Python. Y la notación sobrevivió meses en un Markdown:
+# `DESIGN_SYSTEM.md` §3 siguió documentando «Escala de rating SDQ: SDQ-AAA · SDQ-AA+ …»
+# después de que el reencuadre a dos ejes se implementara, se auditara dos veces y se
+# limpiara el código — porque nada miraba los documentos. Un diseñador que abre ese archivo
+# construye la insignia equivocada, y tiene razón: es el contrato que le dieron.
+#
+# Solo entran los documentos que dicen QUÉ CONSTRUIR o QUÉ PUBLICAR. Los registros de
+# planificación, los specs de la propia retirada y los artefactos fechados nombran la
+# notación con todo derecho: son historia, y borrarla ahí destruye el porqué.
+_CONTRATOS = (
+    "design_handoff_sdqmip/DESIGN_SYSTEM.md",
+    "frontend/DESIGN_SYSTEM.md",
+    "frontend/CLAUDE.md",
+    "CLAUDE.md",
+    "docs/REPORT_STANDARD.md",
+    "docs/CLAIMS_COMERCIALES.md",
+    "docs/comercial/README.md",
+)
+
+# En un contrato la notación SOLO puede aparecer para declarar que está retirada. Se exige
+# que la mención venga acompañada de esa palabra en la misma línea o en la anterior: nombrar
+# lo retirado es lo que evita que vuelva, describirlo como vigente es el defecto.
+_RETIRO = re.compile(r"retirad|no se publica|desactualizad", re.I)
+
+
+def _contratos_existentes():
+    for rel in _CONTRATOS:
+        path = RAIZ / rel
+        if path.exists():
+            yield rel, path
+    # Y los SPEC de módulo, que son contrato de construcción por definición.
+    for path in sorted(RAIZ.glob("modules/*/SPEC.md")):
+        yield str(path.relative_to(RAIZ)), path
+
+
+@pytest.mark.parametrize("rel", [r for r, _ in _contratos_existentes()])
+def test_los_contratos_no_documentan_la_notacion_como_vigente(rel):
+    lineas = (RAIZ / rel).read_text(encoding="utf-8").splitlines()
+    ofensas = []
+    for i, linea in enumerate(lineas):
+        if not _NOTACION.search(linea):
+            continue
+        contexto = "\n".join(lineas[max(0, i - 2):i + 2])
+        if not _RETIRO.search(contexto):
+            ofensas.append(f"{rel}:{i + 1}  {linea.strip()[:80]}")
+    assert not ofensas, (
+        "Estos documentos-contrato nombran la escala de letras sin declararla retirada:\n  "
+        + "\n  ".join(ofensas)
+        + "\n\nLo vigente es el Perfil SDQ (Ejecución + Resiliencia). Si la mención es "
+          "histórica, decí en la misma línea o en la anterior que está retirada."
+    )
+
+
+def test_la_regla_de_contratos_ve_una_reintroduccion(tmp_path):
+    """PRUEBA NEGATIVA: que la lista de contratos no esté vacía ni el patrón muerto."""
+    doc = tmp_path / "contrato.md"
+    doc.write_text("### Escala de rating SDQ\n`SDQ-AAA · SDQ-AA+ … SDQ-D`. Badge por banda.\n",
+                   encoding="utf-8")
+    lineas = doc.read_text(encoding="utf-8").splitlines()
+    sospechosas = [ln for ln in lineas if _NOTACION.search(ln) and not _RETIRO.search(ln)]
+    assert sospechosas, "el detector no reconoce una reintroducción evidente en un documento"
+    assert list(_contratos_existentes()), "la lista de contratos quedó vacía"

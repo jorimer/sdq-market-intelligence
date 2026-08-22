@@ -13,7 +13,11 @@ generaliza a un **Financial Entity Score** para todo el universo supervisado por
 
 ## 3. Índice — definición
 - 19–21 indicadores en **5 subcomponentes**: solidez 40% · calidad 30% · eficiencia 15% · liquidez 10% · diversificación 5%.
-- Escala **SDQ-AAA … SDQ-D** (10 niveles).
+- Lectura: **Perfil SDQ**, dos ejes independientes 0–100 —**Resiliencia** (solidez, calidad,
+  liquidez, diversificación; bandas ABSOLUTAS 75/60/45) y **Ejecución** (eficiencia; bandas
+  RELATIVAS por cuartil del panel de su tipo de entidad)—. No se resumen en un símbolo único.
+  La escala de letras `SDQ-AAA…SDQ-D` está RETIRADA (ver `docs/SPEC_PERFIL_SDQ_TAXONOMIA.md`);
+  la columna sobrevive en la base como linaje del dato, no como superficie publicable.
 - **Recalibración de pesos por `entity_type`** (las AAyP intensivas en hipoteca; corporaciones de crédito más pequeñas). Mismo marco, distinta calibración — no reconstruir.
 - Núcleo determinista; ML (XGBoost) como complemento **explicable** (contribuciones por variable), no oráculo.
 
