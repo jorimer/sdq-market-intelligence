@@ -1452,17 +1452,41 @@ bindings:
       bruta incluye a los mayores de 24, que en educación superior son muchos: 57,7 en 2024
       contra una base legal de 24,8 en 2010. La serie tampoco trae 2010.
   - indicador: "4.1"
-    serie: "wdi.EN.GHG.CO2.PC.CE.AR5"
+    serie: "social_dev:ghg_per_capita"
     fuente: wdi
     mejor: menor
-    estado: descartado
+    estado: verificado
+    periodo_verificado: "2023"
     origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: Banco Mundial sobre inventarios de emisiones (metodología AR5).
-    motivo_descarte: >-
-      Da 2,13 toneladas por habitante en 2010 contra una base legal de 3,6 — un 41% de
-      diferencia. El Banco Mundial retiró la serie anterior (`EN.ATM.CO2E.PC`) y la reemplazó
-      con otra metodología; la línea base de la ley se fijó sobre la vieja. No es desempeño,
-      es un cambio de método, y sin puente publicado no se puede contrastar.
+    productor: >-
+      Banco Mundial — total de gases de efecto invernadero incluyendo uso de la tierra
+      (AR5), en megatoneladas de CO2 equivalente, sobre población del mismo emisor. El
+      cociente per cápita es cómputo SDQ.
+    candidatos_descartados:
+      - serie: "wdi.EN.GHG.CO2.PC.CE.AR5"
+        motivo: >-
+          Dióxido de carbono SOLO, per cápita: 2,131 en 2010 contra una base legal de 3,6,
+          Δ 40,8%. Es la serie que el NOMBRE del indicador mandaba a atar, y no es la que la
+          ley midió.
+      - serie: "wdi.EN.GHG.ALL.PC.CE.AR5"
+        motivo: >-
+          Todos los gases pero SIN uso de la tierra: 3,415 en 2010, Δ 5,1%. Queda fuera de la
+          tolerancia del oráculo. Es la que separa las dos lecturas plausibles del total.
+    nota: >-
+      HALLAZGO SOBRE EL INSTRUMENTO, y viaja al informe: el nombre del indicador no describe
+      lo que la ley midió. La ley lo titula «Emisiones de dióxido de carbono» y fija 3,6 para
+      2010; el dióxido de carbono solo da 2,131. Contrastando las tres magnitudes candidatas
+      contra la cifra que el legislador escribió, sólo una cierra —el total de gases de
+      efecto invernadero INCLUYENDO uso de la tierra, 3,639, Δ 1,1%—. Es el mismo método con
+      el que la ventana promediada identificó el universo del 3.18: se prueban los candidatos
+      contra la base y el que la reproduce dice qué se quiso medir.
+      Lo que discrimina acá es el CONCEPTO y no el año: la serie es casi plana entre 2010 y
+      2014, así que 2013 y 2014 también rondan 3,6. La ley fija 2010 y 2010 cierra; decir que
+      la coincidencia es del año sería atribuirle a la prueba una fuerza que no tiene.
+      La consecuencia no es menor. Bajo el CO2 solo el indicador se leería como cumplido
+      —2,446 en 2020 contra una meta de 3,2—; bajo la magnitud que la ley usó está incumplido
+      y lejos: 4,062 en 2020 contra 3,2 y 4,589 en 2023 contra una meta de 3,0 para 2025. Las
+      emisiones per cápita SUBIERON de 3,64 a 4,59 mientras la ley pedía bajarlas a 2,8.
   - indicador: "4.3"
     serie: "wdi.AG.LND.FRST.ZS"
     fuente: wdi
