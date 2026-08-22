@@ -97,30 +97,6 @@ motivos:
 
   # ══ NO SE HA BUSCADO FUENTE ═══════════════════════════════════════════════════════════
   # Estado honesto y deliberado. Estos son trabajo nuestro pendiente, no hallazgos.
-  - indicador: "1.1"
-    estado: pendiente_de_derivacion
-    detalle: >-
-      Confianza en los partidos políticos. La admisibilidad la resolvió el dueño el
-      2026-08-22 —ver `encuesta_regional` en las fuentes admitidas del instrumento— y con la
-      puerta abierta el indicador se identificó en el mismo día, POR ORÁCULO y con una
-      coincidencia casi exacta.
-      EL EMISOR Y LA DEFINICIÓN, las dos comprobadas contra su propia herramienta de consulta:
-      es la pregunta «Confidence in the Political Parties» (variable P14ST.G) de la encuesta
-      regional, y la magnitud de la ley es «mucho» más «algo» sobre la base sin no-respuesta.
-      Para República Dominicana en 2010 eso da 3,8% + 18,5% = 22,3% contra los 22,2% que fija
-      la ley: Δ 0,45%. Ninguna otra combinación de categorías se acerca.
-      LO QUE YA SE PUEDE DECIR del veredicto, con los mismos cortes: 29,7% en 2015 contra una
-      meta de 24,7 —cumplida y con holgura—; 24,2% en 2020 contra 27,1 —no cumplida—; y 27,8%
-      en 2024 contra una meta de 33,6 para 2025, a la que le falta un 17%.
-      LO QUE FALTA es nuestro y es de conexión, no de análisis: el emisor sirve estos datos
-      desde una herramienta interactiva, sin descarga abierta. Detrás hay un servicio web
-      —`POST /ws/oda/question/{banco}/{pregunta}`, que devuelve frecuencias, porcentajes y
-      base sin missing— pero no está documentado y su contrato de entrada hay que deducirlo
-      del código de la página. Atar el indicador exige un conector sobre ese servicio, con el
-      guard de que un cambio silencioso de contrato falle en vez de devolver media serie.
-      SALVEDAD QUE VIAJARÁ AL INFORME: es una medición de PERCEPCIÓN. Y el enunciado de la
-      pregunta cambió entre rondas —«confidence» en 2010 y 2015, «trust» desde 2020—, lo que
-      el emisor no declara como quiebre pero conviene decir.
   - indicador: "1.2"
     estado: instrumento_discontinuado
     evidencia: >-

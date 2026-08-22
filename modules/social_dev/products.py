@@ -427,6 +427,15 @@ class SocialDevProduct:
             "Razón exportaciones/importaciones de bienes y servicios", "living_standards",
             "Cociente de dos series del Banco Mundial, computado por SDQ. 1,0 es equilibrio "
             "comercial. No alimenta el índice de desarrollo."),
+        # Indicador 1.1 de la END. La etiqueta dice PERCEPCIÓN porque eso es lo que mide:
+        # cuánta confianza declara la gente, no cuán confiables son los partidos. Sin decirlo,
+        # un lector toma la cifra por una medición del fenómeno.
+        "trust_political_parties": (
+            "trust_political_parties", HEALTH_ENTITY,
+            "Confianza declarada en los partidos políticos (%)", "living_standards",
+            "Encuesta regional de opinión (Latinobarómetro): porcentaje que declara mucha o "
+            "algo de confianza, sobre la base sin no-respuesta; la suma es cómputo SDQ. Es "
+            "una medición de PERCEPCIÓN. No alimenta el índice de desarrollo."),
         # Indicador 2.38 de la END. Es una dispersión ENTRE regiones, así que el sujeto es
         # el país y no una demarcación — y la etiqueta lo dice, porque «brecha regional» a
         # secas se lee como si fuera el dato de una región.
