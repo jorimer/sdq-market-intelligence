@@ -108,6 +108,7 @@ variable_scopes:
   # Indicadores 2.20 y 4.2 de la END. Series de país del Banco Mundial, una fila por año.
   public_education_spending: national    # WDI SE.XPD.TOTL.GD.ZS
   protected_areas: national              # WDI ER.LND.PTLD.ZS — TERRESTRE, no marina
+  exports_imports_ratio: national         # cociente WDI NE.EXP/NE.IMP — cómputo SDQ
   tax_revenue_gdp: national              # WDI GC.TAX.TOTL.GD.ZS
   gni_per_capita_atlas: national         # WDI NY.GNP.PCAP.CD
   # ── Los tres DERIVADOS (cómputo propio, no series de un emisor) ──

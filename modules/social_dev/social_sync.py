@@ -328,6 +328,42 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
     return synced
 
 
+def _sync_razon_exportaciones_importaciones(db: Session,
+                                            set_phase: Callable[[str], None]) -> int:
+    """Indicador 3.22 de la END: razón exportaciones sobre importaciones de bienes y servicios.
+
+    Se computa acá y no en el binding por la misma razón que las exportaciones per cápita: un
+    binding ata UNA variable a un indicador y no puede llevar una división. Un cociente entre
+    dos series es un dato nuevo y como tal se ingiere, con su procedencia.
+
+    **La ventana promediada fue lo que lo destrabó.** La ley fecha la línea base como
+    «2005-2010», sin un año, así que la sonda no tenía contra qué contrastar. Promediando la
+    ventana completa da 0,7429 contra los 0,75 que fija la ley —Δ 0,9%— y ningún año suelto
+    cae dentro de la tolerancia: la razón se mueve de 0,639 a 0,850 dentro de esos seis años.
+    La coincidencia discrimina porque la serie NO es plana.
+
+    Solo se publican los años con AMBAS series: un cociente con un denominador ausente no es
+    un dato parcial, es un número inventado.
+    """
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    set_phase("razón exportaciones/importaciones (indicador 3.22 de la END)")
+    exp, _ = fetch_wb_indicator("NE.EXP.GNFS.CD", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    imp, _ = fetch_wb_indicator("NE.IMP.GNFS.CD", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    e = {r["date"]: r["value"] for r in exp if r.get("value") is not None}
+    i = {r["date"]: r["value"] for r in imp if r.get("value") is not None}
+    synced = 0
+    for anio in sorted(set(e) & set(i)):
+        if not i[anio]:
+            continue
+        _upsert_indicator(db, theme="exports_imports_ratio", entity=HEALTH_ENTITY,
+                          period=str(anio), value=float(e[anio]) / float(i[anio]),
+                          source="WDI, Banco Mundial", disagg="nacional",
+                          unit="razón (1,0 = equilibrio)")
+        synced += 1
+    return synced
+
+
 #: Fuente de los niveles LLECE. Corta a propósito: `sd_indicators.source` es varchar(40).
 FUENTE_LLECE = "LLECE/UNESCO"
 #: Materia y grado del indicador 2.17 de la END: matemáticas de 6to grado.
@@ -793,6 +829,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     # que la corrida se caiga en una fase larga.
     llece_synced = _best_effort(
         "niveles LLECE (2.17)", lambda: _sync_llece_niveles(db, set_phase), errors)
+    razon_synced = _best_effort(
+        "razón exportaciones/importaciones (3.22)",
+        lambda: _sync_razon_exportaciones_importaciones(db, set_phase), errors)
     # Mismo criterio: no depende de nada de esta corrida y entra antes del commit temprano.
     mem_synced = _best_effort(
         "sector eléctrico (MEM · 3.27, 3.28 y 3.29)",
@@ -848,6 +887,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "exportaciones_synced": exportaciones_synced,
         "conteos_regionales_synced": conteos_synced,
         "llece_synced": llece_synced,
+        "razon_exp_imp_synced": razon_synced,
         "mem_electrico_synced": mem_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,

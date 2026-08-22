@@ -384,6 +384,13 @@ class SocialDevProduct:
             "Áreas protegidas terrestres (% de la superficie)", "living_standards",
             "Banco Mundial (ER.LND.PTLD.ZS). Superficie TERRESTRE: la serie marina es otra "
             "y da la mitad. La serie empieza en 2013 y la línea base de la ley es de 2009."),
+        # Indicador 3.22 de la END. Es una RAZÓN, no un porcentaje: la etiqueta lo dice
+        # porque «0,78» a secas se lee como 78% y significa otra cosa.
+        "exports_imports_ratio": (
+            "exports_imports_ratio", HEALTH_ENTITY,
+            "Razón exportaciones/importaciones de bienes y servicios", "living_standards",
+            "Cociente de dos series del Banco Mundial, computado por SDQ. 1,0 es equilibrio "
+            "comercial. No alimenta el índice de desarrollo."),
         # Los tres índices comerciales del sector eléctrico (indicadores 3.27, 3.28 y 3.29
         # de la END). El SUJETO viaja en la etiqueta: son las tres distribuidoras estatales
         # agregadas, no el sector entero — que es exactamente el universo que la ley mide, y
