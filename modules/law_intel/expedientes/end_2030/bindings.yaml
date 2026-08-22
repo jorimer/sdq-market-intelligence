@@ -445,7 +445,7 @@ bindings:
     motivo_descarte: >-
       Tasa de mortalidad por tuberculosis. La ley fija 1,2 para 2009 y la serie del Banco
       Mundial da 6 ese mismo año — cinco veces más. Y la trampa: el último valor de la serie
-      (1,3 en 2024) se parece a la línea base legal, así que atarlas produciría un
+      (1,3 en 2024) queda a un 8,3% de la línea base legal, así que atarlas produciría un
       «prácticamente sin cambios» sobre dos magnitudes que nunca fueron la misma.
 
   - indicador: "2.33"
@@ -453,17 +453,24 @@ bindings:
     fuente: wdi
     mejor: mayor
     estado: descartado
-    origen: declarado_por_el_evaluado
-    productor: >-
-      Cuentas de salud dominicanas compiladas por la OMS (GHED). El emisor agrega; el gasto
-      lo reporta el Estado.
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: OMS vía Banco Mundial — gasto público interno en salud, metodología SHA 2011.
     motivo_descarte: >-
       Gasto público en salud como % del PIB. La ley fija 1,4 para 2009 y la serie da 2,33 el
-      mismo año: el agregado del Banco Mundial incluye la seguridad social y el de la ley
-      parece ser sólo el gasto del gobierno central. La meta de 4,5% para 2025 se fijó sobre
-      el agregado estrecho, así que medirla contra el ancho la daría por más cerca de lo que
-      está.
-
+      mismo año, un 66,6% por encima. Se probaron el 2026-08-22 las SIETE variantes de gasto
+      en salud que publica el emisor y ninguna se acerca: la más próxima es el gasto externo
+      sobre el gasto corriente (0,93; Δ 33,3%), que mide otra cosa. El agregado del emisor es
+      el del gobierno general e incluye la seguridad social.
+      También se probó la vía nacional el mismo día: el portal de datos abiertos publica
+      ejecución presupuestaria desde 2016 y la línea base de la ley es de 2009, así que no
+      alcanza el año que habría que reproducir.
+    hipotesis_sin_comprobar: >-
+      Que el 1,4 de la ley sea el gasto del gobierno CENTRAL y no el del gobierno general.
+      Encaja en magnitud —1,4% del PIB de 2009 son unos RD$23,5 mil millones, del orden del
+      presupuesto del ministerio de salud de esos años— y explicaría la brecha entera. No está
+      comprobado: exige la ejecución presupuestaria de 2009, que el emisor no publica en el
+      portal abierto. Mientras no se compruebe, la meta de 4,5% para 2025 no se puede medir
+      contra el agregado ancho sin darla por más cerca de lo que está.
   - indicador: "2.34"
     serie: "wdi.SH.STA.BASS.ZS"
     fuente: wdi
@@ -1452,17 +1459,41 @@ bindings:
       bruta incluye a los mayores de 24, que en educación superior son muchos: 57,7 en 2024
       contra una base legal de 24,8 en 2010. La serie tampoco trae 2010.
   - indicador: "4.1"
-    serie: "wdi.EN.GHG.CO2.PC.CE.AR5"
+    serie: "social_dev:ghg_per_capita"
     fuente: wdi
     mejor: menor
-    estado: descartado
+    estado: verificado
+    periodo_verificado: "2023"
     origen: estimacion_de_tercero_sobre_dato_del_evaluado
-    productor: Banco Mundial sobre inventarios de emisiones (metodología AR5).
-    motivo_descarte: >-
-      Da 2,13 toneladas por habitante en 2010 contra una base legal de 3,6 — un 41% de
-      diferencia. El Banco Mundial retiró la serie anterior (`EN.ATM.CO2E.PC`) y la reemplazó
-      con otra metodología; la línea base de la ley se fijó sobre la vieja. No es desempeño,
-      es un cambio de método, y sin puente publicado no se puede contrastar.
+    productor: >-
+      Banco Mundial — total de gases de efecto invernadero incluyendo uso de la tierra
+      (AR5), en megatoneladas de CO2 equivalente, sobre población del mismo emisor. El
+      cociente per cápita es cómputo SDQ.
+    candidatos_descartados:
+      - serie: "wdi.EN.GHG.CO2.PC.CE.AR5"
+        motivo: >-
+          Dióxido de carbono SOLO, per cápita: 2,131 en 2010 contra una base legal de 3,6,
+          Δ 40,8%. Es la serie que el NOMBRE del indicador mandaba a atar, y no es la que la
+          ley midió.
+      - serie: "wdi.EN.GHG.ALL.PC.CE.AR5"
+        motivo: >-
+          Todos los gases pero SIN uso de la tierra: 3,415 en 2010, Δ 5,1%. Queda fuera de la
+          tolerancia del oráculo. Es la que separa las dos lecturas plausibles del total.
+    nota: >-
+      HALLAZGO SOBRE EL INSTRUMENTO, y viaja al informe: el nombre del indicador no describe
+      lo que la ley midió. La ley lo titula «Emisiones de dióxido de carbono» y fija 3,6 para
+      2010; el dióxido de carbono solo da 2,131. Contrastando las tres magnitudes candidatas
+      contra la cifra que el legislador escribió, sólo una cierra —el total de gases de
+      efecto invernadero INCLUYENDO uso de la tierra, 3,639, Δ 1,1%—. Es el mismo método con
+      el que la ventana promediada identificó el universo del 3.18: se prueban los candidatos
+      contra la base y el que la reproduce dice qué se quiso medir.
+      Lo que discrimina acá es el CONCEPTO y no el año: la serie es casi plana entre 2010 y
+      2014, así que 2013 y 2014 también rondan 3,6. La ley fija 2010 y 2010 cierra; decir que
+      la coincidencia es del año sería atribuirle a la prueba una fuerza que no tiene.
+      La consecuencia no es menor. Bajo el CO2 solo el indicador se leería como cumplido
+      —2,446 en 2020 contra una meta de 3,2—; bajo la magnitud que la ley usó está incumplido
+      y lejos: 4,062 en 2020 contra 3,2 y 4,589 en 2023 contra una meta de 3,0 para 2025. Las
+      emisiones per cápita SUBIERON de 3,64 a 4,59 mientras la ley pedía bajarlas a 2,8.
   - indicador: "4.3"
     serie: "wdi.AG.LND.FRST.ZS"
     fuente: wdi
@@ -1487,18 +1518,20 @@ bindings:
     serie: "social_dev:exports_imports_ratio"
     fuente: wdi
     mejor: mayor
-    estado: propuesto
+    estado: verificado
+    periodo_verificado: "2024"
     origen: declarado_por_el_evaluado
     productor: >-
       BCRD — exportaciones e importaciones de bienes y servicios de la balanza de pagos,
       republicadas por el Banco Mundial. El cociente es cómputo SDQ.
-    nota_comparabilidad: >-
-      El concepto está comprobado contra el oráculo (Δ 0,9% sobre la ventana promediada). Lo
-      que falta es del REGISTRO, no de la serie: las metas de 2025 y 2030 están corrompidas
-      en nuestra transcripción —dicen «(cid:2)1.0», el glifo «≥» que el extractor no
-      resolvió— y hasta que la corrección esté firmada el semáforo no puede leerlas. Promover
-      antes contaría el indicador como medido sobre una meta ilegible.
     nota: >-
+      Los DOS bloqueos que tenía están levantados. El del concepto lo cerró el oráculo sobre
+      la ventana que la ley promedia: Δ 0,9%, y ningún año suelto de la ventana cae dentro
+      del 2% de la línea base, así que la coincidencia la produce el promedio y no el azar.
+      El del registro lo cerró la corrección firmada del sello: las metas de 2025 y 2030
+      decían «(cid:2)1.0» —el glifo «≥» que el extractor no resolvió— y el semáforo no podía
+      leerlas. Con la corrección, la escala del indicador deja de ser `redactada` y pasa a
+      `umbral`.
       Serie observada 2005-2010, la ventana que la ley promedia: 0,850 · 0,794 · 0,776 ·
       0,639 · 0,714 · 0,684. Promedio 0,7429 contra una línea base legal de 0,75.
       La ley pide llegar a la paridad (1,0) en 2020 y sostenerse en o por encima; en 2024 la
@@ -1631,20 +1664,39 @@ bindings:
       El hallazgo es más duro que el incumplimiento: la participación de 2024 está POR DEBAJO
       de la línea base de 2006-2007. En manufacturas el país perdió peso mundial.
   - indicador: "3.20"
-    serie: "wdi.TX.VAL.AGRI+FOOD.ZS.UN"
+    serie: "social_dev:world_export_share_agri"
     fuente: wdi
     mejor: mayor
-    estado: descartado
-    origen: declarado_por_el_evaluado
-    productor: Composición de exportaciones de mercancías publicada por el Banco Mundial.
-    motivo_descarte: >-
-      Se probaron las dos composiciones que el emisor publica y ninguna reproduce la línea
-      base legal de 0,097 sobre la ventana 2006-2007: «materias primas agrícolas» da 0,0169%
-      (Δ 82,6%) y «alimentos» da 0,1183% (Δ 22,0%). Sumarlas tampoco cierra.
-      «Productos agropecuarios» en el articulado parece corresponder a una agrupación
-      arancelaria concreta y no a ninguna de las dos categorías agregadas de este emisor. El
-      candidato queda descartado; el indicador sigue abierto a una fuente que publique el
-      corte por capítulo arancelario.
+    estado: verificado
+    periodo_verificado: "2024"
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: >-
+      Banco Mundial sobre COMTRADE — exportaciones de alimentos y de materias primas
+      agrícolas, del país y del mundo. La unión de las dos categorías y el cociente son
+      cómputo SDQ.
+    candidatos_descartados:
+      - serie: "wdi.TX.VAL.AGRI.ZS.UN"
+        motivo: >-
+          Materias primas agrícolas SOLAS: 0,0169% sobre la ventana 2006-2007 contra una base
+          legal de 0,097, Δ 82,6%. Es una de las dos mitades del universo, no el universo.
+      - serie: "wdi.TX.VAL.FOOD.ZS.UN"
+        motivo: >-
+          Alimentos SOLOS: 0,1183%, Δ 22,0%. La otra mitad.
+    nota: >-
+      SALVEDAD QUE VIAJA AL INFORME: el promedio de la ventana 2006-2007 da 0,0994% contra una
+      línea base legal de 0,097 — Δ 2,4%. Está fuera del 2% del oráculo y muy dentro del 10%.
+      «Productos agropecuarios» no es una categoría que el emisor publique: es la UNIÓN de dos
+      que sí publica, alimentos y materias primas agrícolas, y por eso la coincidencia no es
+      exacta — el corte del legislador puede diferir en los márgenes de esa unión.
+      CÓMO SE UNEN, que es lo que estaba mal: cada cuota tiene su propio denominador mundial,
+      así que sumarlas no significa nada. Sumadas daban 0,1352% (Δ 39,4%) y ése fue el número
+      que mantuvo el indicador descartado. La unión correcta divide la suma de los numeradores
+      por la suma de los denominadores.
+      El veredicto se sostiene con holgura frente a esa incertidumbre. Serie observada:
+      0,1016% (2006) · 0,1358% (2015) · 0,1234% (2020) · 0,1390% (2024). La meta de 2015 se
+      cumplió —0,1358 contra 0,119, un 14% por encima—; la de 2020 no —0,1234 contra 0,132,
+      un 6,5% por debajo— y la de 2025 tampoco va camino de cumplirse: al último dato falta
+      un 6,7%. Los tres veredictos aguantan una corrección del 2,4% en el sentido adverso.
 
 # ── 3.24 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
   - indicador: "3.24"
@@ -1652,16 +1704,191 @@ bindings:
     fuente: wdi
     mejor: mayor
     estado: descartado
-    origen: declarado_por_el_evaluado
-    productor: Sistema financiero dominicano vía el Banco Mundial; el emisor lo republica.
+    origen: estimacion_de_tercero_sobre_dato_del_evaluado
+    productor: Banco Mundial sobre estadísticas monetarias del BCRD.
     motivo_descarte: >-
-      Ninguno de los tres agregados de crédito que publica el emisor mide «crédito a la
-      producción». Contra la ventana 2005-2010 que la ley promedia, y con la base legal en
+      Ninguno de los tres agregados de crédito del republicador mide «crédito a la
+      producción». Contra la ventana 2005-2010 que la ley promedia, con la base legal en
       2,24% del PIB: crédito interno al sector privado da 20,68% (Δ 823%), crédito de bancos
-      al sector privado 19,83% (Δ 785%) y crédito interno total 36,88% (Δ 1.546%). Están
-      entre ocho y quince veces por encima; no es una discrepancia de revisión, son universos
-      distintos.
-      Lo que sugiere la trayectoria de la ley —2,24 en la base y 30 para 2030— es que
-      «producción» nombra un subconjunto acotado del crédito, no el agregado. Identificarlo
-      exige el cuadro de crédito por destino económico del banco central, que no ingerimos.
-      El indicador sigue abierto a esa fuente.
+      al sector privado 19,83% (Δ 785%) y crédito interno total 36,88% (Δ 1.546%).
+      LA FUENTE QUE ESTE MOTIVO PEDÍA YA SE PROBÓ, el 2026-08-22, y tampoco cierra. Se trajo
+      el cuadro de préstamos por destino económico del banco central —mensual desde 1996, con
+      trece destinos— y se computó cada destino como stock de diciembre sobre el PIB nominal,
+      convención declarada antes de mirar el resultado y la misma del 2.36. Ningún
+      agrupamiento defendible se acerca: agricultura sola da 4,38%, agricultura más minas más
+      manufactura 4,97%, y los cinco sectores productivos juntos 11,23%. Todos los destinos
+      productivos por separado superan el 2,24% salvo minas (0,15%) y electricidad (0,55%).
+      Y hay un argumento que no depende de elegir bien el agrupamiento: si el universo de la
+      ley fuera cualquier agregado de crédito bancario a la producción, la meta de 8% para
+      2015 ya estaría cumplida en la línea base, lo que vuelve incoherente la trayectoria que
+      la propia ley fija (2,24 en la base y 30 para 2030).
+      NO se eligió por cercanía. Un barrido combinatorio sobre los trece destinos sí encuentra
+      coincidencias —minas más electricidad más servicios comunitarios da 2,31%, Δ 3,3%— y
+      ninguna significa nada: con trece sumandos siempre hay una combinación cerca de
+      cualquier número. Publicar una sería abrir exactamente la puerta que el oráculo cierra.
+    hipotesis_sin_comprobar: >-
+      Que «producción» nombre un universo mucho más angosto que el crédito bancario: crédito
+      de la banca pública de desarrollo, o crédito a tasa preferencial, o un programa
+      concreto. Lo sugiere que la base de la ley esté por debajo de CADA destino productivo
+      del sistema bancario menos dos. No está comprobado y exige identificar primero qué
+      institución publica ese universo.
+
+# ── 2.11 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
+  - indicador: "2.11"
+    serie: "infotep:participantes_ftp"
+    fuente: mhe
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: INFOTEP — participantes de formación técnico profesional, datos abiertos.
+    motivo_descarte: >-
+      El emisor publica el conteo mensual de participantes por sexo desde 2018, y ese conteo
+      no mide lo que el indicador pide, por tres motivos independientes.
+      PRIMERO: son PARTICIPACIONES, no personas. Quien toma tres cursos cuenta tres veces, y
+      el indicador es un porcentaje de la población económicamente activa, o sea de gente.
+      SEGUNDO: es UN proveedor. La ley dice «programas de capacitación» sin acotar al
+      instituto público, y la formación privada y la de otros organismos quedan fuera.
+      TERCERO: la serie empieza en 2018 y la línea base de la ley es de 2010, así que ni
+      siquiera se puede contrastar.
+      El indicador sigue abierto a una fuente que mida personas capacitadas sobre la PEA. La
+      encuesta de fuerza de trabajo sería el lugar natural si publica esa pregunta.
+
+# ── 3.23 · FUENTE NACIONAL, POR DECISIÓN — y el primer caso del tercer camino ──────────────
+# El dueño eligió la fuente nacional, y la elección permitió medir por qué el oráculo falla:
+# el mismo emisor ha publicado tres valores para el mismo año y el mismo concepto, y declara
+# al pie de su cuadro el cambio de manual que lo explica. Es el caso para el que se abrió
+# `revision_declarada`. Los cuatro candados están cerrados; el cuarto se computa contra la
+# serie real en `/bindings/verificacion` y da absorbe=true con factor 0,8031.
+  - indicador: "3.23"
+    serie: "ied_usd_mm"
+    fuente: bcrd
+    mejor: mayor
+    estado: verificado
+    periodo_verificado: "2025"
+    verificado_por: revision_declarada
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — Departamento Internacional, Subdirección de Balanza de Pagos, División de
+      Estadísticas y Registro de Inversión Extranjera. Cuadro «Flujos de la Inversión
+      Extranjera Directa por actividad económica», fila `Total Flujos IED`.
+    termino_del_emisor: "Flujos de la Inversión Extranjera Directa"
+    declaracion_del_emisor:
+      texto: "Estadísticas Conforme al Sexto Manual de Balanza de Pagos del FMI"
+      donde: >-
+        Pie del cuadro «IED por actividad anual» del libro `inversion_ext_sector_6.xls`
+        publicado por el BCRD. El libro ANTERIOR del mismo emisor —`inversion_ext_sector.xls`,
+        sin el sufijo del manual— está fechado «Mar-25-2014» y advierte al pie: «Cifras
+        revisadas parcialmente conforme a datos actualizados por las fuentes, sujetas a
+        rectificación».
+      verificado_el: "2026-08-22"
+    anadas:
+      - valor: 2023.7
+        fuente: "BCRD, añada vigente conforme al Sexto Manual de Balanza de Pagos"
+      - valor: 1896.3
+        fuente: "BCRD, añada fechada Mar-25-2014, anterior al Sexto Manual"
+      - valor: 1820.2
+        fuente: "Banco Mundial, republicando la serie del BCRD"
+    nota: >-
+      SALVEDAD QUE VIAJA AL INFORME: la cifra que la ley fija como línea base —1.625,3
+      millones para 2010— es de una añada anterior a todas las que el emisor publica hoy, y
+      ninguna la reproduce. La vigente da 2.023,7 (Δ 24,5%), la de 2014 da 1.896,3 (Δ 16,7%)
+      y el republicador internacional da 1.820,2 (Δ 12,0%). El emisor declara la causa al pie
+      de sus propios cuadros: sus estadísticas pasaron al Sexto Manual de Balanza de Pagos.
+      El veredicto se computó contra esa incertidumbre y la resiste. Aplicando a toda la
+      serie el factor de añada más adverso (1.625,3/2.023,7 = 0,8031), las tres metas con
+      observación se siguen cumpliendo: 2015 queda en 1.770,8 contra >1.700, 2020 en 2.055,7
+      contra >2.000 y 2025 en 4.042,0 contra >2.250. La meta de 2030 todavía no tiene año que
+      observar y por eso no se cuenta ni a favor ni en contra.
+      Lo que ese cálculo supone, y hay que decirlo: que la razón entre añadas se mantiene
+      constante entre años. No está medido, y es la razón por la que la salvedad se imprime
+      en vez de darse por saldada.
+
+# ── 3.14 · PATENTES: el nombre esconde el denominador ──────────────────────────────────────
+# El campo lo tenía como decisión pendiente —«solicitudes o concesiones»— y resultó que esa
+# decisión no se puede tomar con lo que publica el productor: ONAPI publica SOLICITUDES y
+# nada más. Antes de eso hay un hallazgo sobre la ley, del mismo tipo que el del 4.1.
+  - indicador: "3.14"
+    serie: "wdi.IP.PAT.RESD"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      ONAPI — Oficina Nacional de la Propiedad Industrial, Departamento de Invenciones,
+      republicada por el Banco Mundial. Cada solicitud es un acto asentado en un registro
+      público, pero la SERIE la produce y la declara la propia oficina del Estado evaluado, y
+      es la serie lo que se ata. El guard de orígenes lo rechazó bien cuando se intentó
+      declararla como acto registral: contar los actos de un registro propio no vuelve
+      independiente a la cifra.
+    motivo_descarte: >-
+      HALLAZGO SOBRE EL INSTRUMENTO: la ley titula el indicador «Número de patentes
+      registradas» y no es un número de patentes. La línea base es 1,3 para la ventana
+      2006-2008 y en esos mismos años el registro nacional recibió 295, 145 y 54 solicitudes
+      de patente. Un 1,3 no puede ser ese conteo: el indicador es una RAZÓN, y la ley nunca
+      dice contra qué. El denominador que reconstruye el orden de magnitud es la población en
+      millones, pero eso es reconstrucción nuestra, no lectura del texto.
+      Probadas el 2026-08-22 las cinco magnitudes que publican los dos productores, sobre la
+      ventana promediada y por millón de habitantes: solicitudes de residentes 2,009
+      (Δ 54,6%), solicitudes nacionales del registro 3,701 (Δ 184,7%), todas las solicitudes
+      de patente 17,413 (Δ 1.239%), diseños industriales 4,512 (Δ 247,1%).
+      LA COINCIDENCIA QUE NO SE USÓ, y queda escrita para que nadie la redescubra: los
+      modelos de utilidad dan 1,234 por millón, Δ 5,1%, la única dentro de cualquier banda.
+      Un modelo de utilidad NO es una patente —es otro derecho, con otro examen y otra
+      vigencia— y atarlo porque el número cuadra sería elegir por cercanía. Es la misma puerta
+      que se cerró en el 3.24.
+      Y la decisión que el campo daba por pendiente —solicitudes contra concesiones— no se
+      puede tomar hoy: el productor publica solicitudes por tipo y por procedencia, y no
+      publica concesiones. El registro internacional que sí las publica sirve su consulta como
+      aplicación de página única, sin ruta de datos que se pueda pedir.
+    hipotesis_sin_comprobar: >-
+      Que la magnitud de la ley sean las patentes CONCEDIDAS por millón de habitantes. Encaja
+      en orden de magnitud: para dar 1,3 harían falta unas 12 concesiones por año en la
+      ventana, y las concesiones siempre son menos que las 19 solicitudes de residentes que
+      registra el republicador. No está comprobado y exige la serie de concesiones del
+      registro internacional de propiedad industrial, que hoy no expone una ruta de datos.
+    candidatos_descartados:
+      - serie: "onapi:modelos_de_utilidad"
+        motivo: >-
+          Δ 5,1% por millón sobre la ventana, la única cerca. Descartado por CONCEPTO y no por
+          distancia: un modelo de utilidad no es una patente.
+      - serie: "onapi:solicitudes_nacionales"
+        motivo: "3,701 por millón, Δ 184,7%."
+
+# ── 2.38 · BRECHA REGIONAL DE DESOCUPACIÓN AMPLIADA ────────────────────────────────────────
+# El campo lo tenía como «no se ha buscado fuente» y había que resolver antes qué entiende la
+# ley por «brecha», porque la definición cambia la cifra. La resolvió el oráculo: de las tres
+# lecturas posibles, una sola se acerca a la línea base y las otras dos quedan fuera por un
+# factor. Es el método del 4.1 aplicado a una DEFINICIÓN en vez de a una magnitud.
+  - indicador: "2.38"
+    serie: "social_dev:regional_unemployment_gap"
+    fuente: bcrd
+    mejor: menor
+    estado: verificado
+    periodo_verificado: "2025"
+    verificado_por: identidad_de_concepto
+    termino_del_emisor: "Desocupación ampliada"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — Encuesta Nacional Continua de Fuerza de Trabajo, hoja de regiones, fila «SU2:
+      Desocupación ampliada». La resta entre la región peor y la mejor es cómputo SDQ.
+    nota: >-
+      SALVEDAD QUE VIAJA AL INFORME: la serie es de la ENCFT y arranca en 2015, así que NO
+      alcanza el año de la línea base que fija la ley (6,4 en 2010). El oráculo no puede
+      correr sobre ella y por eso la verificación va por identidad de concepto: el emisor
+      publica la magnitud con el término del legislador —«desocupación ampliada»— y es el
+      mismo organismo que produce la encuesta que la ley usó.
+      QUÉ SÍ SE PUDO COMPROBAR, y es lo que vuelve concluyente la definición: la ley dice
+      «brecha» sin decir cuál, y las tres lecturas posibles se contrastaron contra la ENFT,
+      la encuesta vigente en 2010. Máximo menos mínimo da 5,90 (Δ 7,8%); máximo menos el
+      promedio nacional da 2,43 (Δ 62,1%); la razón máximo/mínimo da 1,54 (Δ 76,0%). La
+      primera es la única que se acerca y las otras dos quedan fuera por un factor, así que la
+      definición no se eligió por conveniencia. La ENFT es otra encuesta: ese contraste
+      identifica la definición, no verifica la serie.
+      Y hay que declarar que SU2 no es SU1: la ley nombra la ampliada, que suma a los
+      desocupados abiertos la fuerza de trabajo potencial. Atar la abierta mediría otra
+      población y correría unos siete puntos por debajo.
+      Serie observada, en puntos: 11,05 (2015) · 3,20 (2020) · 3,76 (2025). La meta de 2015
+      era 5,7 y no se cumplió — la brecha era casi el doble—; desde 2020 la ley pide menos de
+      5 y se cumple. Los primeros tres años de la ENCFT (2015-2017) traen brechas de 11 a 14
+      puntos y después caen a la mitad, un salto que el emisor no explica en el cuadro y que
+      conviene mirar antes de leer la trayectoria como una mejora sostenida.

@@ -217,6 +217,9 @@ _MERCADO_LABORAL = {
     "unemployment_rate": ("tasa de desocupación (BCRD · ENCFT)", "%"),
     "employment_gender_ratio": ("razón de ocupación femenina/masculina", "razón"),
     "unemployment_gender_ratio": ("razón de desocupación femenina/masculina", "razón"),
+    # Indicador 2.38 de la END. La unidad dice PUNTOS y no por ciento: es la distancia
+    # entre dos tasas, y leerla como porcentaje la convierte en otra cosa.
+    "regional_unemployment_gap": ("brecha entre la región peor y la mejor", "puntos"),
 }
 
 
@@ -335,24 +338,40 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
 #: El 3.18 dice «exportaciones mundiales de BIENES», no de bienes y servicios. La diferencia
 #: no es de matiz: con bienes y servicios el promedio de la ventana da Δ 34,8% contra la línea
 #: base legal; con mercancías, Δ 0,4%.
+#: El 3.20 lleva DOS series de composición y no una, y ahí estaba el error que lo mantuvo
+#: descartado. «Productos agropecuarios» no es una categoría del emisor: es la unión de dos
+#: —alimentos y materias primas agrícolas— y unir cuotas NO es sumarlas. Cada cuota tiene su
+#: propio denominador mundial, así que sumar 0,1183% y 0,0169% da 0,1352%, un número que no
+#: significa nada. La unión se computa sobre los NIVELES: (DR_alim + DR_mat) / (mundo_alim +
+#: mundo_mat). Hecho así, la ventana 2006-2007 da 0,0994% contra una base legal de 0,097.
 PARTICIPACION_EXPORTADORA = {
-    "3.18": ("world_export_share_goods", None,
+    "3.18": ("world_export_share_goods", (),
              "% de las exportaciones mundiales de bienes"),
-    "3.19": ("world_export_share_manufactures", "TX.VAL.MANF.ZS.UN",
+    "3.19": ("world_export_share_manufactures", ("TX.VAL.MANF.ZS.UN",),
              "% de las exportaciones mundiales de manufacturas"),
+    "3.20": ("world_export_share_agri", ("TX.VAL.FOOD.ZS.UN", "TX.VAL.AGRI.ZS.UN"),
+             "% de las exportaciones mundiales agropecuarias"),
 }
 FUENTE_PARTICIPACION = "WDI · cómputo SDQ"     # 18
 
 
 def _sync_participacion_exportadora(db: Session,
                                     set_phase: Callable[[str], None]) -> int:
-    """Indicadores 3.18 y 3.19 de la END: participación dominicana en el comercio mundial.
+    """Indicadores 3.18, 3.19 y 3.20 de la END: participación dominicana en el comercio mundial.
 
     Es un cociente entre el país y el mundo, así que se ingiere como dato propio con su
     procedencia: un binding ata UNA variable y no puede llevar una división.
 
+    **Una composición puede necesitar VARIAS series, y entonces se unen por NIVELES.** Es lo
+    que destrabó el 3.20. Cada cuota que publica el emisor tiene su propio denominador
+    mundial, así que sumarlas produce un número sin significado: alimentos da 0,1183% del
+    mercado mundial de alimentos y materias primas agrícolas 0,0169% del suyo, y «0,1352%» no
+    es la cuota de nada. La unión correcta divide la suma de los numeradores por la suma de
+    los denominadores, y es lo que hace este bucle.
+
     Solo se publican los años con TODAS las series presentes. Un cociente al que le falta el
-    denominador —o el recorte de composición— no es un dato parcial, es un número inventado.
+    denominador —o una de las series de composición— no es un dato parcial, es un número
+    inventado.
     """
     from shared.data.wdi_client import fetch_wb_indicator
 
@@ -364,17 +383,18 @@ def _sync_participacion_exportadora(db: Session,
     pais = _serie("TX.VAL.MRCH.CD.WT", "DOM")
     mundo = _serie("TX.VAL.MRCH.CD.WT", "WLD")
     synced = 0
-    for _ind, (tema, composicion, unidad) in PARTICIPACION_EXPORTADORA.items():
-        cp = _serie(composicion, "DOM") if composicion else None
-        cm = _serie(composicion, "WLD") if composicion else None
+    for _ind, (tema, composiciones, unidad) in PARTICIPACION_EXPORTADORA.items():
+        cps = [_serie(c, "DOM") for c in composiciones]
+        cms = [_serie(c, "WLD") for c in composiciones]
         años = set(pais) & set(mundo)
-        if cp is not None and cm is not None:
-            años &= set(cp) & set(cm)
+        for d in cps + cms:
+            años &= set(d)
         for anio in sorted(años):
-            num, den = pais[anio], mundo[anio]
-            if cp is not None and cm is not None:
-                num *= cp[anio] / 100.0
-                den *= cm[anio] / 100.0
+            if composiciones:
+                num = sum(pais[anio] * c[anio] / 100.0 for c in cps)
+                den = sum(mundo[anio] * c[anio] / 100.0 for c in cms)
+            else:
+                num, den = pais[anio], mundo[anio]
             if not den:
                 continue
             _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(anio),
@@ -510,6 +530,50 @@ def _sync_razon_exportaciones_importaciones(db: Session,
                           period=str(anio), value=float(e[anio]) / float(i[anio]),
                           source="WDI, Banco Mundial", disagg="nacional",
                           unit="razón (1,0 = equilibrio)")
+        synced += 1
+    return synced
+
+
+def _sync_gei_per_capita(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 4.1 de la END: emisiones per cápita, en toneladas de CO2 equivalente.
+
+    **El oráculo identificó el CONCEPTO, que es lo que estaba mal.** La ley titula el
+    indicador «Emisiones de dióxido de carbono» y fija 3,6 para 2010, y ese nombre mandó a
+    atarlo al CO2 solo — que da 2,131 y se descartó por un 41% de diferencia. El nombre
+    miente: contrastando las tres magnitudes candidatas contra la línea base, sólo una cierra.
+
+        CO2 solo, per cápita                          2,131   Δ 40,8%   descartar
+        todos los GEI sin uso de la tierra            3,415   Δ  5,1%   con salvedad
+        todos los GEI INCLUYENDO uso de la tierra     3,639   Δ  1,1%   ← la que la ley usó
+
+    Es el mismo método con el que la ventana promediada identificó el universo del 3.18: se
+    prueban los candidatos contra la cifra que el legislador escribió y la que la reproduce
+    dice qué quiso medir. Lo que discrimina acá es el CONCEPTO y no el año — la serie es casi
+    plana entre 2010 y 2014, así que 2013 y 2014 también rondan 3,6. La ley fija 2010 y 2010
+    cierra; el resto es coincidencia de una meseta y así queda dicho.
+
+    Se computa acá y no en el binding por lo mismo que el 3.22: un binding ata UNA variable y
+    no puede llevar una división. El emisor publica el total en megatoneladas y la ley fija la
+    meta per cápita, así que el cociente es un dato nuevo y se ingiere con su procedencia.
+
+    Solo se publican los años con AMBAS series.
+    """
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    set_phase("emisiones per cápita (indicador 4.1 de la END)")
+    # Todos los GEI INCLUYENDO uso de la tierra (LULUCF), en Mt de CO2 equivalente, AR5.
+    gei, _ = fetch_wb_indicator("EN.GHG.ALL.LU.MT.CE.AR5", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    pob, _ = fetch_wb_indicator("SP.POP.TOTL", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    g = {r["date"]: r["value"] for r in gei if r.get("value") is not None}
+    p = {r["date"]: r["value"] for r in pob if r.get("value") is not None}
+    synced = 0
+    for anio in sorted(set(g) & set(p)):
+        if not p[anio]:
+            continue
+        _upsert_indicator(db, theme="ghg_per_capita", entity=HEALTH_ENTITY,
+                          period=str(anio), value=float(g[anio]) * 1e6 / float(p[anio]),
+                          source="WDI, Banco Mundial", disagg="nacional",
+                          unit="t CO2e per cápita")
         synced += 1
     return synced
 
@@ -985,6 +1049,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     rural_synced = _best_effort(
         "pobreza rural por zona (2.3 y 2.6)",
         lambda: _sync_pobreza_rural(db, set_phase), errors)
+    gei_synced = _best_effort(
+        "emisiones per cápita (4.1)",
+        lambda: _sync_gei_per_capita(db, set_phase), errors)
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
@@ -1048,6 +1115,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "llece_synced": llece_synced,
         "razon_exp_imp_synced": razon_synced,
         "pobreza_rural_synced": rural_synced,
+        "gei_per_capita_synced": gei_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,

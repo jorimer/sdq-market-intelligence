@@ -94,87 +94,142 @@ motivos:
   - indicador: "3.20"
     estado: pendiente_de_derivacion
     detalle: Igual que el 3.18, sobre exportaciones de productos agropecuarios.
-  - indicador: "3.22"
-    estado: pendiente_de_derivacion
-    detalle: >-
-      Razón entre exportaciones e importaciones de bienes y servicios. Las dos series son del
-      mismo emisor y una de ellas ya se ingiere; falta el cociente. Su línea base es un
-      promedio de años y por tanto no admite oráculo.
-  - indicador: "3.23"
-    estado: pendiente_de_derivacion
-    detalle: >-
-      Hay dos fuentes para el flujo de inversión extranjera directa y ninguna reproduce la
-      línea base legal de 1.625,3 millones para 2010: el emisor internacional da 1.820,2 y el
-      conector nacional del Banco Central da 2.023,7. La diferencia es compatible con las
-      revisiones que ambos aplican a sus series históricas, y hay que resolver cuál se cita
-      antes de publicar. Falta además declarar la transformación de unidad: el emisor
-      internacional publica en dólares y la ley fija la meta en millones.
-  - indicador: "3.14"
-    estado: pendiente_de_derivacion
-    detalle: >-
-      El conteo de patentes de residentes está disponible en el emisor internacional y da
-      valores del mismo orden que la línea base legal. Falta contrastar el concepto, porque la
-      ley dice «patentes registradas» sin precisar si son solicitudes o concesiones, y la línea
-      base es un promedio de años.
 
   # ══ NO SE HA BUSCADO FUENTE ═══════════════════════════════════════════════════════════
   # Estado honesto y deliberado. Estos son trabajo nuestro pendiente, no hallazgos.
   - indicador: "1.1"
     estado: pendiente_de_busqueda
     detalle: >-
-      Confianza en los partidos políticos. Lo miden encuestas regionales de opinión pública,
-      que hoy no están en la lista de fuentes admitidas del expediente. Habría que evaluar si
-      una encuesta de tercero califica como fuente para este eje antes de buscarla.
+      Confianza en los partidos políticos, base 22,2% en 2010 y meta 40,1% para 2030. Lo
+      miden encuestas regionales de opinión pública y la ley NO nombra ninguna, así que acá
+      la admisibilidad no se resuelve por la vía de los otros: el instrumento no incorpora a
+      la fuente, y la lista blanca del expediente admite terceros cuando republican dato
+      nacional o cuando la ley los nombra. Una encuesta de opinión de un tercero no es ni una
+      cosa ni la otra.
+      DECISIÓN PREVIA, del dueño y no de datos: si una encuesta regional de opinión califica
+      como fuente para este eje. Buscar el dato antes de responder eso sería trabajo que
+      puede terminar inadmisible.
   - indicador: "1.2"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      Descargado el archivo de resultados vigente del emisor —«CPI2024-Results-and-trends»—
+      y leídas sus dos hojas de serie. La que el propio emisor titula «CPI Historical»
+      EMPIEZA EN 2012 y llega a 2024; la otra se titula «CPI Timeseries 2012 - 2024». El
+      emisor no publica 2010 en ninguna escala, ni el tramo 0-10 sobre el que la ley fijó su
+      línea base de 3,0 y sus cuatro metas (3,9 · 4,8 · 5,9 · 7,0).
+      Serie que sí publica, en 0-100: 32 (2012) · 28 (2019) · 36 (2024).
+    verificado_el: "2026-08-22"
     detalle: >-
-      Índice de percepción de la corrupción. El emisor publica anualmente, y la línea base
-      legal de 3,0 para 2010 está en la escala 0-10 que ese emisor abandonó en 2012. Sospecha
-      de ruptura de escala del mismo tipo que la del LLECE, sin verificar.
+      Índice de percepción de la corrupción. La ley NOMBRA el índice, así que la fuente es
+      admisible por la misma lógica que la PEFA y el LLECE: la propia ley la incorpora. Lo
+      que no sobrevive es la ESCALA. El emisor cambió de metodología en 2012, pasó a 0-100 y
+      su publicación vigente arranca ahí; las metas de la ley están en el tramo anterior.
+      Es exactamente el caso de los puntajes LLECE (2.12 a 2.16) y se resuelve igual: sin
+      puente publicado del 0-100 al 0-10, construirlo por cuenta propia sería inventar la
+      conversión. Dividir por diez parece inocente y no lo es — el cambio de 2012 no fue de
+      notación sino de agregación, y el emisor declara que los tramos no son comparables.
+      QUÉ HARÍA FALTA para reabrirlo: que el emisor publique un puente entre las dos escalas,
+      o una decisión del dueño de aceptar una conversión lineal con la salvedad impresa. Bajo
+      cualquier conversión monótona el veredicto es el mismo —36 sobre 100 queda por debajo
+      de la meta de 2015— pero eso es un argumento de margen, no un puente.
   - indicador: "1.3"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      IDENTIFICADO POR ORÁCULO, exacto. El «índice de fortaleza institucional» que la ley no
+      nombra es el PRIMER PILAR —Institutions— del Índice Global de Competitividad del Foro
+      Económico Mundial. El informe 2010-2011 de ese emisor, página de perfil de República
+      Dominicana, publica «1st pillar: Institutions ... 3.2» en escala 1-7, y la ley fija
+      exactamente 3,2 para 2010. Δ 0%.
+      Y el instrumento ya no existe: la última edición regular con índice es la de 2019. La
+      de 2020 es una «Special Edition» —publicada el 16 de diciembre de 2020— dedicada a
+      prioridades de recuperación, que no produce el índice, y no hay ediciones posteriores
+      en la serie del emisor.
+    verificado_el: "2026-08-22"
     detalle: >-
-      Índice de fortaleza institucional. La ley no nombra al emisor y el nombre no coincide con
-      ningún índice publicado que se haya comprobado. Primer paso: identificar qué índice quiso
-      nombrar el legislador.
+      La consecuencia es sobre la LEY, no sobre nosotros: sus metas de 2020, 2025 y 2030
+      (4,0 · 4,5 · 5,0) están fijadas contra un instrumento que dejó de producirse el año
+      anterior al primero de esos cortes. No hay forma de medirlas y no la habrá.
+      Es el mismo desenlace que el 3.9, que es el índice GENERAL del mismo emisor y ya estaba
+      descartado por lo mismo. La diferencia es que ahora está probado que el 1.3 pertenece a
+      esa familia en vez de sospechado por la escala.
   - indicador: "1.4"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de desarrollo burocrático. Mismo problema de identificación del emisor que el 1.3,
-      con la sospecha adicional de que el índice se discontinuó.
+      Índice de desarrollo burocrático. Sin emisor nombrado, escala 0-1 (base 0,38 en 2006,
+      meta 0,9) y una particularidad que ninguno de los otros tiene: su línea base es cuatro
+      años ANTERIOR a la del resto del eje. Eso apunta a una medición puntual —un informe
+      regional sobre el servicio civil, no una serie anual— y si lo fuera, el indicador no
+      tendría con qué actualizarse aunque se identifique al emisor.
+      Antes de buscar el dato hay que decidir si una medición puntual de un tercero, repetida
+      una sola vez, califica como fuente para este eje. Es la misma decisión del 1.1.
   - indicador: "3.15"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      Mismo emisor y mismo informe que el 1.3, segundo pilar. El informe 2008-2009 del Foro
+      Económico Mundial publica para República Dominicana «2nd pillar: Infrastructure ...
+      3.1» en escala 1-7, contra los 3,0 que la ley fija para 2008: Δ 3,3%. No cierra al 2%
+      como el 1.3, pero la identificación se apoya en tres patas —la coincidencia exacta del
+      pilar hermano, la escala, y que la propia ley nombra a este emisor en los indicadores
+      3.16 y 3.17—.
+      El instrumento está discontinuado por la misma evidencia que el 1.3: última edición
+      regular en 2019, edición especial sin índice el 16 de diciembre de 2020, nada después.
+    verificado_el: "2026-08-22"
     detalle: >-
-      Índice de infraestructura. Sin emisor nombrado en la ley. Sospecha de que corresponde a
-      un pilar de un índice compuesto internacional, sin verificar.
+      Sus metas de 2020, 2025 y 2030 (4,5 · 5,3 · 6,0) no se pueden medir ni se podrán. El
+      residuo de 3,3% contra la línea base no cambia el desenlace: aunque la edición que usó
+      el legislador fuera otra, el instrumento igual dejó de existir.
   - indicador: "3.16"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      Lo declara el propio emisor, con fecha. El informe «Travel & Tourism Development Index
+      2021», publicado el 24 de mayo de 2022, abre diciendo que ese índice «is an evolution
+      of the 15-year-old Travel & Tourism Competitiveness Index (TTCI) series» y que
+      «important changes have been made between the TTCI and the TTDI», enumerando pilares
+      NUEVOS —Non-Leisure Resources, Socioeconomic Resilience and Conditions, y T&T Demand
+      Pressure and Impact—. La edición 2024, publicada el 21 de mayo de 2024, se compone de
+      «five dimensions, 17 pillars and 102 individual indicators».
+      El índice que la ley nombró —el de competitividad— dejó de publicarse; lo que hay es
+      otro índice, con otro marco. Corroborado en una segunda superficie del mismo emisor: su
+      página vigente de la iniciativa del sector ofrece, bajo «Tools and Resources», el
+      «Travel & Tourism Development Index 2024» como la herramienta de benchmarking del
+      sector, y no menciona al índice de competitividad en ninguna parte.
+    verificado_el: "2026-08-22"
     detalle: >-
-      Índice de Reporte de Viajes y Turismo. El emisor es el mismo que discontinuó el índice
-      del indicador 3.9, ya descartado por esa causa, y publica hoy un índice sucesor con otra
-      metodología. Corresponde comprobarlo antes de declarar el instrumento discontinuado.
+      LA TRAMPA DE ESTE CASO, y por eso conviene dejarla escrita: el sucesor conserva la
+      escala 1-7. Un lector puede tomar el puntaje de hoy y compararlo con la línea base de
+      4,0 que la ley fija para 2009 sin que nada se vea mal. Es peor que un cambio de escala
+      como el del LLECE o el del índice de corrupción, donde la incompatibilidad salta a la
+      vista: acá los números son del mismo rango y miden marcos distintos.
   - indicador: "3.17"
-    estado: pendiente_de_busqueda
-    detalle: Mismo caso que el 3.16, sobre el pilar de sostenibilidad del mismo reporte.
-  - indicador: "2.11"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      Mismo informe y misma evidencia que el 3.16, y con un agravante propio. El pilar que la
+      ley nombra —sostenibilidad ambiental— sobrevive por NOMBRE en el sucesor: la edición
+      2024 lo lista como «Environmental Sustainability», pero descompuesto en subpilares que
+      el índice original no tenía —«T&T Energy Sustainability, Pollution and Environmental
+      Conditions, and Preservation of Nature»— y dentro de una dimensión de sostenibilidad
+      que se creó en el rediseño.
+    verificado_el: "2026-08-22"
     detalle: >-
-      Porcentaje de la población económicamente activa en programas de capacitación. Emisor
-      probable entre el instituto de formación técnica y la encuesta de fuerza de trabajo, sin
-      comprobar cuál publica la magnitud.
+      Un pilar que conserva el nombre y cambia de composición es el caso más difícil de todo
+      el expediente: no hay ni cambio de escala ni cambio de rótulo que avise. Sus metas
+      —hasta 6,3 para 2030— quedan sin instrumento con el que medirse.
   - indicador: "2.26"
     estado: pendiente_de_busqueda
     detalle: >-
-      Tasa de letalidad asociada al dengue. La produce la autoridad sanitaria en sus boletines
-      epidemiológicos, cuyo formato no se ha evaluado.
-  - indicador: "2.38"
-    estado: pendiente_de_busqueda
-    detalle: >-
-      Brecha regional de la tasa de desocupación ampliada. Exige la desocupación ampliada por
-      región y la definición de «brecha» que usa la ley, ninguna de las dos comprobada.
+      Tasa de letalidad asociada al dengue. Probado el 2026-08-21 contra el catálogo nacional
+      de datos abiertos: «dengue», «letalidad» y «boletín epidemiológico» devuelven CERO
+      conjuntos. El portal de la autoridad sanitaria no respondió en esa consulta, así que
+      falta comprobar si publica sus boletines por fuera del catálogo. Un cero del catálogo es
+      evidencia sobre el catálogo, no sobre el emisor: el MESCyT publica y tampoco está ahí.
   - indicador: "2.40"
     estado: pendiente_de_busqueda
     detalle: >-
-      Brecha de género en ingreso laboral. El emisor de la encuesta de fuerza de trabajo
-      publica ocupación por sexo, que ya se ingiere; falta comprobar si publica ingreso por
-      sexo con el mismo corte.
+      Brecha de género en ingreso laboral. Probado el 2026-08-22 contra el portal del emisor,
+      que es donde se resolvió el 2.38: su libro de indicadores trae hojas «Masculino» y
+      «Femenino» —de ahí salen las dos razones de género que ya se ingieren— y NINGUNA de las
+      dos tiene fila de ingreso. Sus diez libros de ingresos abren por grupo ocupacional,
+      categoría, nivel, rama y tramos, y ninguno por sexo.
+      Queda una pista de la forma: esos libros publican «ingresos por hora», y una razón
+      HORARIA explicaría que la ley fije una línea base de 0,95 —casi paridad— cuando la
+      brecha mensual es mayor. Si el corte por sexo del ingreso horario existe, es ahí.

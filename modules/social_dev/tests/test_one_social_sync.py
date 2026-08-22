@@ -62,6 +62,7 @@ def test_sync_persists_and_is_idempotent(db, monkeypatch):
                 "_sync_llece_niveles",
                 "_sync_razon_exportaciones_importaciones",
                 "_sync_pobreza_rural",
+                "_sync_gei_per_capita",
                 "_sync_cobertura_salud",
                 "_sync_participacion_exportadora",
                 "_sync_mem_electrico",

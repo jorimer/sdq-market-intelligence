@@ -15,7 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from modules.law_intel.agente_fuentes import MAX_POR_CORRIDA, barrer
-from modules.law_intel.bindings import cargar_bindings, cobertura
+from modules.law_intel.bindings import (cargar_bindings, cobertura, hipotesis_abiertas,
+                                        motivos_con_hipotesis_sin_declarar)
 from modules.law_intel.campo import campo as estado_del_campo
 from modules.law_intel.campo import resumen as resumen_del_campo
 from modules.law_intel.verificabilidad import publicable as verificabilidad_publicable
@@ -162,6 +163,29 @@ def cobertura_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[
     """
     _expediente(expediente_id)
     return cobertura(expediente_id)   # trae el desglose por camino de verificación
+
+
+@router.get("/{expediente_id}/hipotesis")
+def hipotesis_(expediente_id: str, _: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Qué descartes descansan en una causa que nadie midió. Es la lista de qué REABRIR.
+
+    Existe porque leerla a mano ya costó caro: el 4.1 y el 3.20 estuvieron meses descartados
+    con motivos que EXPLICABAN la brecha —un reemplazo de serie, una agrupación arancelaria—
+    y las dos explicaciones eran falsas. Comprobarlas los volvió medibles. Un motivo que
+    explica sin medir es trabajo pendiente, y el trabajo pendiente se lista.
+    """
+    _expediente(expediente_id)
+    return {
+        "abiertas": hipotesis_abiertas(expediente_id),
+        "sin_declarar": motivos_con_hipotesis_sin_declarar(expediente_id),
+        "que_significa": {
+            "abiertas": ("el descarte declara la causa que supone y qué la comprobaría; es "
+                         "una hipótesis viva, no una conclusión"),
+            "sin_declarar": ("el motivo usa lengua de suposición y no declara nada: hay que "
+                             "medirlo o declararlo, porque ahí es donde se pierde un "
+                             "indicador medible"),
+        },
+    }
 
 
 @router.get("/{expediente_id}/semaforo")

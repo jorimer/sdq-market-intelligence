@@ -251,6 +251,78 @@ def parse_gender_ratio(content: bytes, label: str) -> List[Tuple[int, float]]:
     return out
 
 
+#: Hoja del corte por región y fila de la desocupación AMPLIADA. El libro publica cuatro
+#: medidas de subutilización (SU1 a SU4) y la ley nombra la ampliada, que es SU2: desocupados
+#: abiertos MÁS la fuerza de trabajo potencial. Atar SU1 —la abierta— mediría otra población
+#: y correría unos siete puntos por debajo.
+SHEET_REGIONS = "Regiones"
+BROAD_UNEMPLOYMENT_LABEL = "SU2"
+
+#: Las cuatro columnas de dominio, sin `Total País`. Meter el total dentro de lo que se
+#: ordena produciría una «brecha» contra un promedio, que es otra definición.
+_COLS_REGION = (2, 6)
+
+
+def parse_regional_gap(content: bytes) -> List[Tuple[int, float]]:
+    """`[(año, brecha entre la región peor y la mejor)]` en puntos porcentuales.
+
+    **Por qué máximo menos mínimo y no otra cosa.** La ley dice «brecha regional» sin
+    definirla, y las tres lecturas posibles dan resultados muy distintos contra la línea base
+    de 6,4 que fija para 2010. Contrastadas contra la encuesta vigente en ese año:
+
+        máximo − mínimo          5,90   Δ  7,8%
+        máximo − promedio        2,43   Δ 62,1%
+        razón máximo/mínimo      1,54   Δ 76,0%
+
+    La primera es la única que se acerca, y la distancia entre las tres es lo que vuelve
+    concluyente la elección: no se eligió por conveniencia sino porque las otras dos quedan
+    fuera por un factor.
+
+    **La serie que se devuelve es de la ENCFT y arranca en 2015**, así que NO alcanza el año
+    de la línea base. El contraste de arriba se hizo contra la ENFT, que es otra encuesta:
+    sirve para identificar la definición, no para verificar la serie. Esa salvedad viaja al
+    informe.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    try:
+        if SHEET_REGIONS not in wb.sheetnames:
+            raise BcrdLaborUnavailable(
+                f"el libro no trae la hoja '{SHEET_REGIONS}' (hojas: {wb.sheetnames})")
+        filas = [list(r) for r in wb[SHEET_REGIONS].iter_rows(max_col=6, values_only=True)]
+    finally:
+        wb.close()
+
+    out: List[Tuple[int, float]] = []
+    anio: Optional[int] = None
+    for fila in filas:
+        cabeza = fila[0]
+        if isinstance(cabeza, (int, float)) and 1990 < float(cabeza) < 2100:
+            anio = int(cabeza)
+            continue
+        if not isinstance(cabeza, str):
+            continue
+        etiqueta = cabeza.strip()
+        if re.fullmatch(r"(19|20)\d{2}", etiqueta):
+            anio = int(etiqueta)
+            continue
+        if anio is None or not etiqueta.upper().startswith(BROAD_UNEMPLOYMENT_LABEL):
+            continue
+        tasas = [v for v in fila[_COLS_REGION[0]:_COLS_REGION[1]]
+                 if isinstance(v, (int, float))]
+        # Una región ausente cambiaría el máximo o el mínimo sin avisar, y la brecha
+        # saldría más chica de lo que es. Se exige el panel completo.
+        if len(tasas) == _COLS_REGION[1] - _COLS_REGION[0]:
+            out.append((anio, round(max(tasas) - min(tasas), 2)))
+        anio = None
+    if not out:
+        raise BcrdLaborUnavailable(
+            f"no se encontró ninguna fila '{BROAD_UNEMPLOYMENT_LABEL}' con las cuatro "
+            f"regiones en la hoja '{SHEET_REGIONS}'")
+    return sorted(out)
+
+
 def fetch_bcrd_labor_market() -> dict:  # pragma: no cover - network I/O
     """Live: baja el libro UNA vez y devuelve las tres series que la END necesita.
 
@@ -271,4 +343,5 @@ def fetch_bcrd_labor_market() -> dict:  # pragma: no cover - network I/O
         "unemployment_rate": parse_informality(r.content, label=UNEMPLOYMENT_LABEL),
         "employment_gender_ratio": parse_gender_ratio(r.content, EMPLOYMENT_RATE_LABEL),
         "unemployment_gender_ratio": parse_gender_ratio(r.content, UNEMPLOYMENT_LABEL),
+        "regional_unemployment_gap": parse_regional_gap(r.content),
     }

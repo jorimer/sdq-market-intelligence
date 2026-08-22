@@ -427,6 +427,35 @@ class SocialDevProduct:
             "Razón exportaciones/importaciones de bienes y servicios", "living_standards",
             "Cociente de dos series del Banco Mundial, computado por SDQ. 1,0 es equilibrio "
             "comercial. No alimenta el índice de desarrollo."),
+        # Indicador 2.38 de la END. Es una dispersión ENTRE regiones, así que el sujeto es
+        # el país y no una demarcación — y la etiqueta lo dice, porque «brecha regional» a
+        # secas se lee como si fuera el dato de una región.
+        "regional_unemployment_gap": (
+            "regional_unemployment_gap", HEALTH_ENTITY,
+            "Brecha de desocupación ampliada entre regiones (puntos)", "living_standards",
+            "Distancia entre la región con mayor y con menor desocupación ampliada (SU2) de "
+            "la ENCFT del BCRD; la resta es cómputo SDQ. En PUNTOS porcentuales, no en por "
+            "ciento. No alimenta el índice de desarrollo."),
+        # Indicador 3.20 de la END. La etiqueta nombra las DOS categorías que se unen,
+        # porque «agropecuarias» no es una categoría del emisor y un lector que lo tome por
+        # una sola busca una serie que no existe.
+        "world_export_share_agri": (
+            "world_export_share_agri", HEALTH_ENTITY,
+            "Cuota mundial de exportaciones agropecuarias de RD (%)", "living_standards",
+            "Alimentos MÁS materias primas agrícolas, unidos por niveles y no por cuotas: "
+            "cada categoría tiene su propio denominador mundial. Cómputo SDQ sobre series "
+            "del Banco Mundial. No alimenta el índice de desarrollo."),
+        # Indicador 4.1 de la END. La etiqueta dice TODOS los gases y dice que incluye el
+        # uso de la tierra, porque la ley titula el indicador «dióxido de carbono» y no es
+        # eso: el CO2 solo da 2,13 contra una base legal de 3,6. Callar el alcance dejaría al
+        # lector con el nombre de la ley, que es justamente el que confunde.
+        "ghg_per_capita": (
+            "ghg_per_capita", HEALTH_ENTITY,
+            "Emisiones de GEI per cápita, con uso de la tierra (t CO2e)", "living_standards",
+            "Total de gases de efecto invernadero INCLUYENDO uso de la tierra (AR5), del "
+            "Banco Mundial, sobre población del mismo emisor; el cociente es cómputo SDQ. Es "
+            "la magnitud que reproduce la línea base de la ley — el CO2 solo no. No alimenta "
+            "el índice de desarrollo."),
         # Los tres índices comerciales del sector eléctrico (indicadores 3.27, 3.28 y 3.29
         # de la END). El SUJETO viaja en la etiqueta: son las tres distribuidoras estatales
         # agregadas, no el sector entero — que es exactamente el universo que la ley mide, y
