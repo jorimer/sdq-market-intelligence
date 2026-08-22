@@ -427,6 +427,15 @@ class SocialDevProduct:
             "Razón exportaciones/importaciones de bienes y servicios", "living_standards",
             "Cociente de dos series del Banco Mundial, computado por SDQ. 1,0 es equilibrio "
             "comercial. No alimenta el índice de desarrollo."),
+        # Indicador 2.38 de la END. Es una dispersión ENTRE regiones, así que el sujeto es
+        # el país y no una demarcación — y la etiqueta lo dice, porque «brecha regional» a
+        # secas se lee como si fuera el dato de una región.
+        "regional_unemployment_gap": (
+            "regional_unemployment_gap", HEALTH_ENTITY,
+            "Brecha de desocupación ampliada entre regiones (puntos)", "living_standards",
+            "Distancia entre la región con mayor y con menor desocupación ampliada (SU2) de "
+            "la ENCFT del BCRD; la resta es cómputo SDQ. En PUNTOS porcentuales, no en por "
+            "ciento. No alimenta el índice de desarrollo."),
         # Indicador 3.20 de la END. La etiqueta nombra las DOS categorías que se unen,
         # porque «agropecuarias» no es una categoría del emisor y un lector que lo tome por
         # una sola busca una serie que no existe.

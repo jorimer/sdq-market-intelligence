@@ -161,3 +161,79 @@ def test_la_desocupacion_se_lee_de_SU1_y_no_de_la_fila_parecida():
         ["SU1: Tasa de Desocupación", 7.88, 7.33, 7.20, 7.08],
     ])
     assert parse_informality(contenido, label=UNEMPLOYMENT_LABEL) == [(2015, 7.33), (2016, 7.08)]
+
+
+# ── Brecha regional (indicador 2.38 de la END) ─────────────────────────────────────────────
+
+def _libro_regiones(bloques, hoja="Regiones"):
+    """`bloques` = [(año, [Ozama, Cibao, Sur, Este], extras)] con la forma real del cuadro:
+    el año en una fila sola y las cuatro medidas SU debajo, con `Total País` primero."""
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    wb.active.title = "Indicadores"
+    ws = wb.create_sheet(hoja)
+    for anio, tasas, extras in bloques:
+        ws.append([anio])
+        ws.append(["Indicador", "Total País", "Región Ozama", "Región Norte",
+                   "Región Sur", "Región Este"])
+        ws.append(["SU1: Tasa de Desocupación", 7.3] + list(extras))
+        ws.append(["SU2: Desocupación ampliada", 13.3] + list(tasas))
+        ws.append(["Tasa de Inactividad", 38.1, 1, 2, 3, 4])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_la_brecha_es_maximo_menos_minimo_entre_las_cuatro_regiones():
+    from shared.data.bcrd_labor import parse_regional_gap
+
+    d = dict(parse_regional_gap(_libro_regiones(
+        [(2020, [8.44, 10.42, 11.57, 11.64], [1, 2, 3, 4])])))
+    assert d == {2020: round(11.64 - 8.44, 2)}
+
+
+def test_NO_mete_el_total_pais_en_la_brecha():
+    """`Total País` es un agregado, no una región. Contarlo produciría una brecha contra un
+    promedio, que es OTRA definición — y la que el oráculo descartó por un factor."""
+    from shared.data.bcrd_labor import parse_regional_gap
+
+    # El total (13.3) queda por encima del máximo regional: si entrara, la brecha crecería.
+    d = dict(parse_regional_gap(_libro_regiones([(2020, [8.0, 9.0, 10.0, 11.0], [1, 2, 3, 4])])))
+    assert d == {2020: 3.0}
+
+
+def test_lee_SU2_y_no_la_fila_de_al_lado():
+    """SU1 es la desocupación ABIERTA y corre unos siete puntos por debajo. La ley nombra la
+    ampliada: atar la fila vecina mediría otra población."""
+    from shared.data.bcrd_labor import parse_regional_gap
+
+    d = dict(parse_regional_gap(_libro_regiones(
+        [(2020, [8.0, 9.0, 10.0, 11.0], [1.0, 1.5, 2.0, 9.0])])))
+    assert d == {2020: 3.0}, "tomó la fila SU1, cuya brecha sería 8.0"
+
+
+def test_un_ano_con_una_region_ausente_se_descarta():
+    """Con tres regiones el máximo o el mínimo puede faltar, y la brecha saldría más chica
+    sin que nada avise. Es la misma regla que el cociente sin denominador."""
+    from shared.data.bcrd_labor import parse_regional_gap
+
+    with pytest.raises(BcrdLaborUnavailable):
+        parse_regional_gap(_libro_regiones([(2020, [8.0, 9.0, None, 11.0], [1, 2, 3, 4])]))
+
+
+def test_sin_la_hoja_de_regiones_falla_con_el_motivo():
+    from shared.data.bcrd_labor import parse_regional_gap
+
+    with pytest.raises(BcrdLaborUnavailable, match="Regiones"):
+        parse_regional_gap(_libro_regiones([(2020, [1, 2, 3, 4], [1, 2, 3, 4])], hoja="Otra"))
+
+
+def test_el_ano_puede_venir_como_texto_o_como_numero():
+    """El cuadro real usa las dos formas en el mismo libro."""
+    from shared.data.bcrd_labor import parse_regional_gap
+
+    d = dict(parse_regional_gap(_libro_regiones(
+        [("2019", [1.0, 2.0, 3.0, 4.0], [1, 2, 3, 4]),
+         (2020, [1.0, 2.0, 3.0, 5.0], [1, 2, 3, 4])])))
+    assert d == {2019: 3.0, 2020: 4.0}

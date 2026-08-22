@@ -1853,3 +1853,42 @@ bindings:
           distancia: un modelo de utilidad no es una patente.
       - serie: "onapi:solicitudes_nacionales"
         motivo: "3,701 por millón, Δ 184,7%."
+
+# ── 2.38 · BRECHA REGIONAL DE DESOCUPACIÓN AMPLIADA ────────────────────────────────────────
+# El campo lo tenía como «no se ha buscado fuente» y había que resolver antes qué entiende la
+# ley por «brecha», porque la definición cambia la cifra. La resolvió el oráculo: de las tres
+# lecturas posibles, una sola se acerca a la línea base y las otras dos quedan fuera por un
+# factor. Es el método del 4.1 aplicado a una DEFINICIÓN en vez de a una magnitud.
+  - indicador: "2.38"
+    serie: "social_dev:regional_unemployment_gap"
+    fuente: bcrd
+    mejor: menor
+    estado: verificado
+    periodo_verificado: "2025"
+    verificado_por: identidad_de_concepto
+    termino_del_emisor: "Desocupación ampliada"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — Encuesta Nacional Continua de Fuerza de Trabajo, hoja de regiones, fila «SU2:
+      Desocupación ampliada». La resta entre la región peor y la mejor es cómputo SDQ.
+    nota: >-
+      SALVEDAD QUE VIAJA AL INFORME: la serie es de la ENCFT y arranca en 2015, así que NO
+      alcanza el año de la línea base que fija la ley (6,4 en 2010). El oráculo no puede
+      correr sobre ella y por eso la verificación va por identidad de concepto: el emisor
+      publica la magnitud con el término del legislador —«desocupación ampliada»— y es el
+      mismo organismo que produce la encuesta que la ley usó.
+      QUÉ SÍ SE PUDO COMPROBAR, y es lo que vuelve concluyente la definición: la ley dice
+      «brecha» sin decir cuál, y las tres lecturas posibles se contrastaron contra la ENFT,
+      la encuesta vigente en 2010. Máximo menos mínimo da 5,90 (Δ 7,8%); máximo menos el
+      promedio nacional da 2,43 (Δ 62,1%); la razón máximo/mínimo da 1,54 (Δ 76,0%). La
+      primera es la única que se acerca y las otras dos quedan fuera por un factor, así que la
+      definición no se eligió por conveniencia. La ENFT es otra encuesta: ese contraste
+      identifica la definición, no verifica la serie.
+      Y hay que declarar que SU2 no es SU1: la ley nombra la ampliada, que suma a los
+      desocupados abiertos la fuerza de trabajo potencial. Atar la abierta mediría otra
+      población y correría unos siete puntos por debajo.
+      Serie observada, en puntos: 11,05 (2015) · 3,20 (2020) · 3,76 (2025). La meta de 2015
+      era 5,7 y no se cumplió — la brecha era casi el doble—; desde 2020 la ley pide menos de
+      5 y se cumple. Los primeros tres años de la ENCFT (2015-2017) traen brechas de 11 a 14
+      puntos y después caen a la mitad, un salto que el emisor no explica en el cuadro y que
+      conviene mirar antes de leer la trayectoria como una mejora sostenida.
