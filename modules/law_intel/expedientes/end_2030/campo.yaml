@@ -94,19 +94,6 @@ motivos:
   - indicador: "3.20"
     estado: pendiente_de_derivacion
     detalle: Igual que el 3.18, sobre exportaciones de productos agropecuarios.
-  - indicador: "3.23"
-    estado: pendiente_de_derivacion
-    detalle: >-
-      Hay dos fuentes para el flujo de inversión extranjera directa y ninguna reproduce la
-      línea base legal de 1.625,3 millones para 2010: el emisor internacional da 1.820,2 y el
-      conector nacional del Banco Central da 2.023,7. La diferencia es compatible con las
-      revisiones que ambos aplican a sus series históricas, y hay que resolver cuál se cita
-      antes de publicar. Falta además declarar la transformación de unidad: el emisor
-      internacional publica en dólares y la ley fija la meta en millones.
-      La corrección firmada del sello levantó el OTRO bloqueo que tenía —sus cuatro metas se
-      leían «>1,700 · >2,000 · >2,250 · >2,500», con la coma como si fuera decimal— pero la
-      elección de fuente no la resuelve una firma: es una decisión sobre qué cifra cita el
-      informe, y sigue abierta.
   - indicador: "3.14"
     estado: pendiente_de_derivacion
     detalle: >-
