@@ -178,6 +178,18 @@ class Binding:
     #: INSUMOS y no la conclusión: el factor de corrección y si el margen lo absorbe los
     #: computa `modules.law_intel.anadas`. Una conclusión copiada a mano se desincroniza.
     anadas: Tuple[Dict[str, Any], ...] = ()
+    #: Cuando el motivo de un descarte EXPLICA la brecha con una causa que nadie midió, la
+    #: hipótesis se declara acá en vez de quedar suelta en la prosa. No es documentación: es
+    #: la lista de qué reabrir. Tres descartes de este expediente resultaron mal explicados y
+    #: los tres se encontraron leyendo motivos a mano con una expresión regular — un método
+    #: que envejece con cada motivo nuevo.
+    #:
+    #: El 4.1 decía que el emisor había reemplazado la serie y que la ley se fijó sobre la
+    #: vieja: era el CONCEPTO, y el indicador entró por oráculo. El 3.20 decía que
+    #: «agropecuarios» nombraba una agrupación arancelaria: era una SUMA inválida, y también
+    #: entró. Una hipótesis en un motivo de descarte vale lo que valga su comprobación, y
+    #: mientras no exista hay que poder listarla.
+    hipotesis_sin_comprobar: Optional[str] = None
     origen: Optional[str] = None
     #: El productor, con nombre. Va aparte del origen porque el origen es una categoría y
     #: esto es la cadena concreta que un lector puede ir a comprobar.
@@ -453,6 +465,50 @@ def _validar(exp: Expediente, bindings: List[Binding]) -> None:
             raise ExpedienteInvalido(
                 f"{b.indicador}: declara origen y no dice QUIÉN produce la medición. Una "
                 f"categoría sin cadena concreta no se puede ir a comprobar.")
+
+
+#: Palabras con las que un motivo EXPLICA en vez de medir. No prueban nada por sí solas —el
+#: motivo puede estar citando la lengua del emisor, que es evidencia y no suposición— así que
+#: lo que hace el guard es exigir que la hipótesis se DECLARE, no prohibirla.
+_MARCAS_DE_HIPOTESIS = re.compile(
+    r"\bparece(?:n)?\b|\bpodría(?:n)?\b|\bsugiere(?:n)?\b|\bprobablemente\b|\bdebe ser\b",
+    re.IGNORECASE)
+
+#: Lo entrecomillado con guillemets es CITA: la lengua hedgeada del emisor es evidencia sobre
+#: qué dijo el emisor, no una suposición nuestra. El anexo del PEFA dice «se podría cubrir
+#: RAZONABLEMENTE» y transcribirlo es exactamente lo correcto.
+_CITAS = re.compile(r"«[^»]*»")
+
+
+def hipotesis_abiertas(expediente_id: str) -> List[Dict[str, str]]:
+    """Los descartes que declaran una hipótesis sin comprobar. Es la lista de QUÉ REABRIR.
+
+    Se computa del expediente y no de una lectura a mano. La lectura a mano fue lo que hubo
+    hasta ahora, y encontró tres motivos mal explicados de los cuales dos resultaron ser
+    indicadores medibles —el 4.1 y el 3.20—; pero una expresión regular corrida por quien se
+    acuerda no es un inventario, y envejece con cada motivo nuevo.
+    """
+    return [{"indicador": b.indicador,
+             "hipotesis": " ".join((b.hipotesis_sin_comprobar or "").split())}
+            for b in sorted(cargar_bindings(expediente_id).values(),
+                            key=lambda b: [int(p) for p in b.indicador.split(".")])
+            if (b.hipotesis_sin_comprobar or "").strip()]
+
+
+def motivos_con_hipotesis_sin_declarar(expediente_id: str) -> List[Dict[str, str]]:
+    """Descartes cuyo motivo EXPLICA la brecha con una causa que nadie midió, sin declararla.
+
+    Lo que persigue: que una suposición viaje escondida en la prosa de un motivo, donde nadie
+    la vuelve a mirar. Se excluye lo entrecomillado, porque citar al emisor no es suponer.
+    """
+    out: List[Dict[str, str]] = []
+    for b in cargar_bindings(expediente_id).values():
+        if b.estado != "descartado" or (b.hipotesis_sin_comprobar or "").strip():
+            continue
+        m = _MARCAS_DE_HIPOTESIS.search(_CITAS.sub(" ", b.motivo_descarte or ""))
+        if m:
+            out.append({"indicador": b.indicador, "marca": m.group(0)})
+    return sorted(out, key=lambda d: [int(p) for p in d["indicador"].split(".")])
 
 
 def cobertura(expediente_id: str) -> Dict[str, object]:
