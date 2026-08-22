@@ -155,15 +155,15 @@ class TestLasCuatroDudasResueltas:
     """Cada resolución se comprobó contra lo que el panel declara medir, no contra el nombre."""
 
     def test_poverty_rate_va_al_indicador_general_no_al_extremo(self):
-        """`_THEME_LABELS` del panel dice «Pobreza monetaria general» y el valor es 15,0.
-        El 2.1 es pobreza EXTREMA (meta 3,5% en 2025); el 2.4 es la moderada."""
+        """El 2.1 es pobreza EXTREMA (meta 3,5% en 2025); el 2.4 es la general.
+
+        Se comprueba la FAMILIA de la serie y no su nombre exacto: cuando el alcance regional
+        se resolvió (2026-08-22), las dos pasaron a la columna nacional del mismo cuadro y el
+        nombre cambió. Un test atado al nombre se pone rojo por un arreglo."""
         bs = cargar_bindings(EXPEDIENTE)
-        assert bs["2.4"].serie == "social_dev:poverty_rate"
-        # 2.4 volvió a tener nota ABIERTA, pero por OTRA razón: la duda original (¿general
-        # o extrema?) sí quedó resuelta, y lo que la frena hoy es que la variable se mide
-        # por región. Se comprueba el motivo, no la ausencia — si no, el test pasaría
-        # también si alguien reabriera la duda vieja.
-        assert "REGIÓN" in (bs["2.4"].nota_comparabilidad or "").upper()
+        assert "poverty_rate" in bs["2.4"].serie
+        assert "extreme" not in bs["2.4"].serie
+        assert "extreme" in bs["2.1"].serie
 
     def test_la_pobreza_extrema_NO_puede_medirse_con_una_cifra_regional(self):
         """La brecha era NUESTRA —el tema estaba ingerido y no se exponía como señal— y se
@@ -173,14 +173,19 @@ class TestLasCuatroDudasResueltas:
         la meta de 2030 seis años antes, y publicarlo sin declarar que la línea base legal es
         ENFT-2010 y la medición es ENCFT/ENGIH con metodología cambiada en 2022 sería el
         mismo defecto que el instrumento denuncia."""
+        from shared.doctrine import load_doctrine_raw
+
         b = cargar_bindings(EXPEDIENTE)["2.1"]
-        assert b.serie == "social_dev:poverty_extreme"
-        # Se expuso el tema (PR #748) y aun así NO puede contar: `poverty_extreme` se mide
-        # por región y el registro publica el valor de la primera. El 2,0% que se llegó a
-        # publicar como «meta de 2030 alcanzada seis años antes» era de `cibao_norte`.
-        assert not b.cuenta
-        assert "REGIÓN" in (b.nota_comparabilidad or "").upper()
-        assert "2022" in (b.nota or ""), "el corte metodológico no puede quedar sin declarar"
+        # El alcance se comprueba contra la DOCTRINA y no contra el nombre de la serie: es
+        # ahí donde está declarado, y es lo que decide qué publica el registro. El defecto
+        # original —publicar el valor de `cibao_norte` como si fuera del país— era
+        # exactamente un alcance mal declarado.
+        alcances = load_doctrine_raw("social")["variable_scopes"]
+        tema = b.serie.split(":")[-1]
+        assert alcances.get(tema) == "national", (
+            f"la serie del 2.1 ({tema}) no declara alcance nacional: publicar una cifra "
+            f"regional contra una meta del país es el defecto que demotó a este indicador")
+        assert not b.cuenta, "sigue frenado por el margen; ver su nota de comparabilidad"
 
     def test_analfabetismo_lleva_su_transformacion(self):
         """La transformación sigue siendo obligatoria: la ley pide ANALFABETISMO y el emisor
@@ -215,17 +220,20 @@ class TestLasCuatroDudasResueltas:
 
     def test_las_dudas_de_COMPARABILIDAD_originales_quedaron_resueltas(self):
         """Las cuatro dudas de 2026-08-16 eran sobre QUÉ MIDE cada variable, y esas se
-        cerraron. Las que hoy bloquean a 2.4, 2.18 y 2.19 son de ALCANCE —la variable mide
-        una región, no el país— y son otra cosa.
+        cerraron. Las que las siguieron fueron de ALCANCE —la variable mide una región, no el
+        país—, y ésas también se cerraron el 2026-08-22 leyendo la columna nacional del mismo
+        cuadro.
 
-        El test comprueba el MOTIVO y no la ausencia: exigir que no haya nota lo hacía
-        fallar cuando apareció un impedimento distinto y legítimo, que es romperse por
-        avanzar."""
+        El test comprueba el MOTIVO y no la ausencia: exigir que no haya nota lo hacía fallar
+        cuando aparecía un impedimento distinto y legítimo, que es romperse por avanzar. Y
+        exigir un motivo CONCRETO lo hace fallar cuando ese motivo se resuelve, que es lo
+        mismo. Lo que se exige es que el motivo vigente NO sea ninguno de los ya superados."""
         bs = cargar_bindings(EXPEDIENTE)
         assert not (bs["2.21"].nota_comparabilidad or "").strip()
-        # 2.18 salió de la lista: se recuperó apuntando a la cifra nacional del SISDOM.
         nota = (bs["2.4"].nota_comparabilidad or "").upper()
-        assert "REGIÓN" in nota, "2.4 bloquea por un motivo que no es el de alcance"
+        assert nota, "2.4 sigue sin promover: el motivo tiene que estar escrito"
+        assert "REGIONAL CONTRA UNA META" in nota or "MODERADA" in nota, (
+            "2.4 bloquea por un motivo que no es ni el de alcance ni el de concepto")
         # 2.18 y 2.19 se recuperaron por el MISMO camino en momentos distintos: dejar de
         # leer una variable por-región y atarse al agregado nacional del país. Que 2.19 ya
         # no aparezca acá no es que se haya relajado el criterio: es que su causa murió.

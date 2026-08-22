@@ -69,29 +69,23 @@ bindings:
   # ══ RESUELTO ══ `poverty_rate` es «Pobreza monetaria GENERAL» (15,0 en 2024), no extrema.
   # Corresponde al indicador 2.4 (pobreza moderada), no al 2.1.
   - indicador: "2.4"
-    serie: "social_dev:poverty_rate"
-    fuente: one
+    serie: "social_dev:poverty_rate_national"
+    fuente: mhe
     mejor: menor
-    periodo_verificado: "2024"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
-      ONE — medición oficial de pobreza monetaria.
+      SISDOM (MHE) — cuadro 03 3 003a, zona NACIONAL, línea de pobreza monetaria.
     nota_comparabilidad: >-
-      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
-      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
-      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
-      nada — y el número que se publicó era el de una demarcación. No se arregla
-      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
-      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
-    nota: >-
-      Comprobado contra `_THEME_LABELS` del panel social: «Pobreza monetaria general». La
-      línea base legal de 2010 (33,8%) viene de la ENFT y la medición actual de la
-      ENCFT/ENGIH, con metodología actualizada en 2022; las metas nunca se re-expresaron tras
-      el cambio. Es una salvedad a declarar en el informe, no un impedimento para medir.
-
-  # ══ RESUELTO ══ El indicador es ANALFABETISMO y la variable es alfabetización.
-  # La transformación se declara; sin ella el binding publicaría el complemento.
+      ══ MEDIDO 2026-08-22 ══ Resuelto el defecto que lo había demotado —se contrastaba una
+      serie regional contra una meta nacional— y sigue sin cerrar, por la MISMA razón que su
+      hermano rural, el 2.6: la ley dice «pobreza moderada» y el emisor publica «pobreza
+      monetaria», que es la línea TOTAL e incluye la indigencia.
+      Las dos lecturas contra la base legal de 33,8 para 2010: la total da 40,53 (Δ 19,9%) y
+      la total menos la indigencia da 29,74 (Δ 12,0%). Ninguna entra, y que las dos fallen en
+      direcciones opuestas confirma que el corte del legislador no es ninguna de ellas.
+      El quiebre de 2016 pesa más acá que en la línea de indigencia: el salto del año de
+      solape es de 20,5% para la pobreza nacional contra 1,8% para la indigencia.
   - indicador: "2.19"
     serie: "social_dev:literacy_rate_pais"
     fuente: wdi
@@ -585,65 +579,31 @@ bindings:
   # una brecha del Estado ni una duda sobre qué mide — era de superficie, nuestra, y se cerró
   # exponiendo el tema. Verificado en prod el 2026-08-16: 2,0% en 2024.
   - indicador: "2.1"
-    serie: "social_dev:poverty_extreme"
-    fuente: one
+    serie: "social_dev:poverty_extreme_national"
+    fuente: mhe
     mejor: menor
-    periodo_verificado: "2024"
     estado: propuesto
     origen: declarado_por_el_evaluado
     productor: >-
-      ONE — medición oficial de pobreza monetaria extrema.
+      SISDOM (MHE) — cuadro 03 3 003a, zona NACIONAL, línea de indigencia monetaria.
     nota_comparabilidad: >-
-      ⚠️ DEMOTADO 2026-08-16. La variable se mide POR REGIÓN y el registro publica el
-      valor de UNA de ellas (la primera del panel, `cibao_norte`), no el del país. El
-      indicador de la ley fija una meta NACIONAL, así que el contraste no significaba
-      nada — y el número que se publicó era el de una demarcación. No se arregla
-      promediando las diez: sin ponderar por población eso tampoco es la cifra del país.
-      Vuelve a `verificado` cuando el panel exponga el agregado nacional del tema.
+      ══ MEDIDO 2026-08-22, y no promueve por el margen ══ Resuelto el defecto que lo había
+      demotado: la serie que se contrastaba era regional y publicaba el valor de una sola
+      región. Ahora se lee la columna NACIONAL del mismo cuadro del que ya sale la rural.
+      El concepto está establecido —el emisor llama «indigencia monetaria» a la pobreza
+      extrema, y en la zona rural eso cierra a Δ 0,8%— pero en la zona nacional NO: da 10,79
+      para 2010 contra los 10,1 que fija la ley, Δ 6,8%. Mismo cuadro, misma línea, otra
+      zona. Eso apunta a que la línea base nacional de la ley salió de una añada o de un
+      cómputo distinto del de su propia línea base rural, y es un hallazgo sobre el
+      instrumento que hay que comprobar antes de publicar.
+      LO QUE IMPIDE PROMOVERLO es el margen, con el mismo criterio que dejó afuera al 2.6: la
+      meta de 2020 es 5,0 y el observado 4,93 — un margen de 1,4% contra una incertidumbre de
+      concepto de 6,8%. Publicar «cumplida» sobre eso sería publicar un veredicto que la
+      propia salvedad da vuelta. Las otras tres metas sí resisten: 6,35 en 2015 contra 7,6;
+      2,44 en 2024 contra 3,5 para 2025 y 2,0 para 2030.
     nota: >-
-      2,0% en 2024 contra una meta de 3,5% para 2025 y de 2,0% para 2030: el indicador alcanzó
-      la meta del horizonte completo seis años antes. Es el hallazgo más fuerte del expediente
-      y por eso mismo el que más exige declarar su salvedad: la línea base legal de 2010
-      (10,1%) viene de la ENFT y la medición actual de la ENCFT/ENGIH, con la metodología de
-      pobreza monetaria actualizada en 2022 y las metas nunca re-expresadas tras el cambio.
-      La magnitud de la mejora no se explica solo por el cambio de metodología, pero atribuirla
-      entera a la política sin declarar el corte sería exactamente el defecto que este
-      instrumento denuncia.
-
-      La duda que quedaba abierta era si el sync trae filas —la ONE está tras Cloudflare y
-      desde fuera no se podía afirmar—. Se respondió contra producción, no a mano:
-      `/bindings/verificacion` devolvió `promueve: true` con período 2024.
-
-  # ══════════════════════════════════════════════════════════════════════════════════════
-  # LOTE 2026-08-19 — siete indicadores atados de una vez, y qué lo hizo posible
-  #
-  # Hasta acá cada fuente costaba un ciclo entero: escribir el conector, desplegar,
-  # sincronizar, y RECIÉN AHÍ descubrir si la serie medía lo que el indicador dice medir.
-  # El error se pagaba al final y completo.
-  #
-  # La ley trae su propio oráculo y no lo estábamos usando: declara VALOR y AÑO de línea
-  # base para 67 de los 77 indicadores sin verificar. Una serie candidata que no reproduce
-  # ese valor en ese año no mide lo que el indicador mide. La sonda hace esa comprobación
-  # contra la fuente viva en segundos, sin desplegar nada.
-  #
-  # El barrido de los 67 devolvió: 11 candidatos plausibles, 8 descartados por concepto —el
-  # 2.37 pide desocupación AMPLIADA y el emisor da la abierta de la OIT; el 2.48 pide
-  # jóvenes DESEMPLEADOS y el emisor da NEET, que incluye inactivos— y 39 sin serie
-  # internacional de ningún emisor.
-  #
-  # ── EL LÍMITE DE LA SONDA, APRENDIDO EN ESTE MISMO LOTE ──
-  # De los 11 plausibles, DOS (2.34 saneamiento y 2.35 agua) ya estaban descartados en este
-  # expediente, con un argumento que la sonda no puede ver: el JMP cambió su escala en 2015
-  # y la cercanía de niveles es JUSTAMENTE lo que haría pasar ese cambio de definición por
-  # un dato comparable. La sonda mide coincidencia de NIVEL; el descarte era de DEFINICIÓN.
-  # Se respetan los descartes. Si esto se automatizara, habría reintroducido dos bindings
-  # que alguien ya había rechazado con razón.
-  #
-  # Por eso los siete entran como `propuesto`: la sonda comprueba el CONCEPTO contra la
-  # línea base, no la plomería. Que producción sirva la serie es otra cosa — el 2.19 lo
-  # prueba, su serie existía y el registro publicaba una región.
-  # ══════════════════════════════════════════════════════════════════════════════════════
-
+      La serie arrastra el quiebre de metodología de 2016 que el emisor declara publicando ese
+      año dos veces. En la zona nacional el salto del año de solape es de 1,8% para esta línea.
   - indicador: "1.8"
     serie: "social_dev:homicide_rate"
     fuente: wdi
@@ -759,34 +719,28 @@ bindings:
     serie: "social_dev:tax_revenue_gdp"
     fuente: wdi
     mejor: mayor
-    estado: propuesto
+    estado: verificado
+    periodo_verificado: "2023"
+    verificado_por: identidad_de_concepto
+    termino_del_emisor: "Ingresos tributarios"
     origen: declarado_por_el_evaluado
     productor: >-
-      Estadísticas fiscales dominicanas reportadas al FMI (GFS); el Banco Mundial republica.
+      Banco Mundial republicando las cuentas fiscales del gobierno central dominicano —
+      ingresos tributarios como porcentaje del PIB.
     nota: >-
-      Presión tributaria. La ley fija 13,0 para 2010 y la fuente da 12,22 — Δ 6,0%.
-    nota_comparabilidad: >-
-      DUDA ABIERTA, no resuelta: el Banco Mundial reporta ingresos tributarios del gobierno
-      CENTRAL y la cifra dominicana de presión tributaria a veces incluye la seguridad
-      social. Si el universo difiere, la brecha es estructural y no de revisión — y el
-      indicador mediría un agregado distinto del que la ley fijó. Mientras no se resuelva
-      contra la fuente primaria (Hacienda/DGII), NO cuenta como medición.
-      Es exactamente la lección del 2.34 aplicada antes de tropezar: un nivel parecido es lo
-      que vuelve invisible una diferencia de definición.
-
-  # ══════════════════════════════════════════════════════════════════════════════════════
-  # LOTE 2026-08-19 (b) — los tres DERIVADOS: no hacía falta conectar a nadie
-  #
-  # Los tres salen de datos que YA ingeríamos. El barrido de los 67 los había marcado «sin
-  # candidato internacional», que era cierto y engañoso a la vez: no hay emisor que los
-  # publique, pero el insumo estaba en casa.
-  #
-  # El 2.2 y el 2.5 son el caso más interesante del expediente: su insumo es el panel POR
-  # REGIÓN, el mismo que NO sirve para las metas nacionales de pobreza (2.1 y 2.4) porque el
-  # registro publicaría el valor de una sola demarcación. Acá es exactamente lo que hace
-  # falta — contar cuántas regiones cruzan un umbral ES una cifra del país.
-  # ══════════════════════════════════════════════════════════════════════════════════════
-
+      SALVEDAD QUE VIAJA AL INFORME: la serie da 12,22% para 2010 contra una línea base legal
+      de 13,0 — Δ 6,0%, fuera del 2% del oráculo y dentro del 10%. La duda que tenía abierta
+      era de universo y queda declarada en vez de resuelta: el republicador reporta ingresos
+      tributarios del gobierno CENTRAL, y la cifra dominicana de presión tributaria a veces
+      incluye las contribuciones a la seguridad social. Los 0,78 puntos de diferencia son
+      compatibles con eso.
+      El veredicto se sostiene con holgura frente a esa incertidumbre, y es lo que habilita
+      publicarlo: la ley pedía 16,0% para 2015 y la serie da 12,95%, un 19% por debajo;
+      pedía 19,0% para 2020 y da 12,51%, un 34% por debajo; y el último dato disponible, 14,51%
+      en 2023, queda un 33% por debajo de la meta de 21,5% para 2025. Corregir un 6% en el
+      sentido favorable no acerca ninguna de las tres.
+      La presión tributaria no subió: se movió entre 12,2 y 14,5 en catorce años, mientras la
+      ley trazaba una trayectoria de 13 a 24.
   - indicador: "2.2"
     serie: "social_dev:regiones_pobreza_extrema_sobre_umbral"
     fuente: one
@@ -1337,20 +1291,28 @@ bindings:
     serie: "social_dev:public_education_spending"
     fuente: wdi
     mejor: mayor
-    estado: propuesto
+    estado: verificado
+    periodo_verificado: "2023"
+    verificado_por: identidad_de_concepto
+    termino_del_emisor: "Gasto público en educación"
     origen: declarado_por_el_evaluado
     productor: >-
-      Estadísticas fiscales y educativas dominicanas, compiladas por el Instituto de
-      Estadística de la UNESCO y republicadas en el WDI. El gasto lo reporta el evaluado.
-    nota_comparabilidad: >-
-      La serie NO trae 2009, que es el año de la línea base legal (2,2). Da 1,89 en 2010,
-      compatible con un año de diferencia en un indicador que se movía, pero el contraste
-      exacto no se puede hacer y por eso no promueve.
+      Banco Mundial republicando el gasto público en educación que reporta el Estado
+      dominicano, como porcentaje del PIB.
     nota: >-
-      «Gasto público en educación como % del PIB» es literalmente el nombre del indicador y
-      el de la serie. Observado 3,76% en 2023 contra metas de 5,0 (2015), 6,0 (2020) y 6,5
-      (2025): el 4% de la movilización educativa quedó por debajo de lo que la propia ley
-      había fijado para 2015.
+      SALVEDAD QUE VIAJA AL INFORME: la serie NO alcanza 2009, que es el año de la línea base
+      legal (2,2%), así que el oráculo no puede correr y la verificación va por identidad de
+      concepto. Empieza en 2010 con 1,89%, y ese valor está un 14% por debajo de la base que
+      la ley fija para el año anterior. La diferencia puede ser de universo o de un año en un
+      indicador que se movía; no se puede decidir sin el 2009 y por eso se declara.
+      El veredicto no depende de resolverlo: la ley pedía 5,0% para 2015 y la serie da 3,60%;
+      pedía 6,0% para 2020 y da 4,52%; y en 2023, 3,76% queda un 42% por debajo de la meta de
+      6,5% para 2025. Una corrección del 14% en el sentido favorable deja las tres igual de
+      incumplidas.
+      Vale registrar la FORMA de la serie, porque el veredicto plano la esconde: el gasto sube
+      de 1,89% (2010) a 4,52% (2020) —más que se duplica, que es el efecto del movimiento por
+      el 4%— y después RETROCEDE a 3,76% en 2023. La ley no se incumplió por inmovilidad sino
+      por un avance que se dio vuelta.
   - indicador: "4.2"
     serie: "social_dev:protected_areas"
     fuente: wdi

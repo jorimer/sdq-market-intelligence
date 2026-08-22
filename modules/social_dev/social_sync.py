@@ -467,6 +467,14 @@ POBREZA_RURAL = {
 FUENTE_SISDOM_ZONA = "SISDOM · MEPyD"          # 17
 
 
+#: Indicadores 2.1 y 2.4 de la END, sobre el país entero. El sujeto va en la etiqueta por lo
+#: mismo que en las rurales: «pobreza» a secas no dice de quién.
+POBREZA_NACIONAL = {
+    "indigencia": ("poverty_extreme_national", "% de la población"),
+    "pobreza": ("poverty_rate_national", "% de la población"),
+}
+
+
 def _sync_pobreza_rural(db: Session, set_phase: Callable[[str], None]) -> int:
     """Indicadores 2.3 y 2.6 de la END: pobreza rural extrema y general.
 
@@ -481,7 +489,7 @@ def _sync_pobreza_rural(db: Session, set_phase: Callable[[str], None]) -> int:
     año dos veces. El cliente sirve la metodología vigente y expone el salto medido; el binding
     lo lleva escrito. Encadenar los tramos sin declararlo sería repetir lo de la informalidad.
     """
-    from shared.data.sisdom_pobreza_zona import fetch_zona_rural
+    from shared.data.sisdom_pobreza_zona import fetch_zona, fetch_zona_rural
 
     set_phase("pobreza rural por zona (SISDOM · indicadores 2.3 y 2.6)")
     series, quiebre = fetch_zona_rural()
@@ -491,6 +499,20 @@ def _sync_pobreza_rural(db: Session, set_phase: Callable[[str], None]) -> int:
     synced = 0
     for linea, (tema, unidad) in POBREZA_RURAL.items():
         for periodo, valor in series.get(linea, []):
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(periodo),
+                              value=float(valor), source=FUENTE_SISDOM_ZONA,
+                              disagg="nacional", unit=unidad)
+            synced += 1
+
+    # La zona NACIONAL sale del MISMO cuadro y en la misma descarga: son los indicadores
+    # 2.1 y 2.4, que la ley fija sobre el país entero. Se ingiere aparte de la rural porque
+    # son cuatro series distintas y confundir zonas fue lo que demotó a los dos.
+    series_nac, quiebre_nac = fetch_zona("nacional")
+    if quiebre_nac.get("anio_de_solape"):
+        logger.info("[social] pobreza nacional: quiebre declarado en %s (salto %s)",
+                    quiebre_nac["anio_de_solape"], quiebre_nac.get("salto_pct"))
+    for linea, (tema, unidad) in POBREZA_NACIONAL.items():
+        for periodo, valor in series_nac.get(linea, []):
             _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(periodo),
                               value=float(valor), source=FUENTE_SISDOM_ZONA,
                               disagg="nacional", unit=unidad)

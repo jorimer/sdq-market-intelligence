@@ -49,18 +49,25 @@ def _norm(v: object) -> str:
     return " ".join(str(v or "").split()).lower()
 
 
-def _columnas_rurales(ws) -> Dict[str, int]:
-    """`{linea: columna}` de la zona RURAL, leído de las etiquetas de la cabecera.
+#: Las zonas que rotula el cuadro. Se declaran para poder EXIGIR que la pedida esté entre
+#: ellas: pedir una zona que el emisor no publica tiene que fallar, no devolver la de al lado.
+ZONAS = ("nacional", "urbana", "rural")
+
+
+def _columnas_de_zona(ws, zona: str = "rural") -> Dict[str, int]:
+    """`{linea: columna}` de una zona, leído de las etiquetas de la cabecera.
 
     La fila de zonas rotula solo la primera columna de cada bloque, así que la pertenencia se
     arrastra hacia la derecha hasta la zona siguiente. Leerlo por posición fija devolvería la
     columna urbana el día que el emisor agregue un desglose, y las dos series se parecen lo
     suficiente como para que nadie lo note.
     """
+    if zona not in ZONAS:
+        raise SISDOMZonaError(f"zona '{zona}' desconocida; el cuadro publica {ZONAS}")
     fila_zona = fila_linea = None
     for f in _FILAS_CABECERA:
         vals = [_norm(ws.cell(f, c).value) for c in range(1, ws.max_column + 1)]
-        if any(v == "rural" for v in vals):
+        if any(v == zona for v in vals):
             fila_zona = f
         if any(v.startswith("indigencia") for v in vals):
             fila_linea = f
@@ -73,9 +80,9 @@ def _columnas_rurales(ws) -> Dict[str, int]:
     out: Dict[str, int] = {}
     for c in range(1, ws.max_column + 1):
         z = _norm(ws.cell(fila_zona, c).value)
-        if z in ("urbana", "rural", "nacional") or z.startswith("regiones"):
+        if z in ZONAS or z.startswith("regiones"):
             zona_actual = z
-        if zona_actual != "rural":
+        if zona_actual != zona:
             continue
         etiqueta = _norm(ws.cell(fila_linea, c).value)
         for clave in LINEAS:
@@ -83,12 +90,13 @@ def _columnas_rurales(ws) -> Dict[str, int]:
                 out.setdefault(clave, c)
     if set(out) != set(LINEAS):
         raise SISDOMZonaError(
-            f"no se ubicaron las dos líneas de la zona rural; se halló {sorted(out)}")
+            f"no se ubicaron las dos líneas de la zona {zona}; se halló {sorted(out)}")
     return out
 
 
-def parse_zona_rural(contenido: bytes) -> Tuple[Dict[str, List[Tuple[str, float]]], Dict]:
-    """`({linea: [(año, valor)]}, quiebre)` de la zona rural, solo filas anuales.
+def parse_zona(contenido: bytes,
+               zona: str = "rural") -> Tuple[Dict[str, List[Tuple[str, float]]], Dict]:
+    """`({linea: [(año, valor)]}, quiebre)` de una zona del cuadro, solo filas anuales.
 
     Las filas de marzo y septiembre son cortes de la encuesta, no el año. Publicar una de
     ellas como el año sería el mismo error que tomar un anexo mensual del sector eléctrico por
@@ -104,7 +112,7 @@ def parse_zona_rural(contenido: bytes) -> Tuple[Dict[str, List[Tuple[str, float]
     if not hojas:
         raise SISDOMZonaError(f"el libro no trae la hoja «{HOJA}»")
     ws = wb[hojas[0]]
-    cols = _columnas_rurales(ws)
+    cols = _columnas_de_zona(ws, zona)
 
     crudo: Dict[str, Dict[str, float]] = {k: {} for k in LINEAS}
     anio = ""
@@ -146,6 +154,20 @@ def parse_zona_rural(contenido: bytes) -> Tuple[Dict[str, List[Tuple[str, float]
                 limpio[base] = v
         series[linea] = sorted(limpio.items())
     return series, quiebre
+
+
+def parse_zona_rural(contenido: bytes) -> Tuple[Dict[str, List[Tuple[str, float]]], Dict]:
+    """Compatibilidad: la zona rural es la que ya se ingería cuando el cuadro tenía un solo
+    lector. Se conserva el nombre para no tocar a quien lo llama."""
+    return parse_zona(contenido, "rural")
+
+
+def fetch_zona(zona: str = "rural"
+               ) -> Tuple[Dict[str, List[Tuple[str, float]]], Dict]:  # pragma: no cover
+    """Live: baja el libro del emisor y devuelve la zona pedida."""
+    from shared.data.sisdom_common import fetch_book
+
+    return parse_zona(fetch_book("pobreza"), zona)
 
 
 def fetch_zona_rural() -> Tuple[Dict[str, List[Tuple[str, float]]], Dict]:  # pragma: no cover
