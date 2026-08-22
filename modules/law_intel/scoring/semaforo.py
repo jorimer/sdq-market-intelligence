@@ -96,7 +96,15 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
     if not ind.admite_delta and ind.escala != "umbral":
         # Una meta REDACTADA puede ser un escalar rotulado —«Matemáticas : 63.0»— y esas sí se
         # juzgan. Se comprueba antes de rendirse; si no lo es, el veredicto no cambia.
-        if not (ind.escala == "redactada" and _tiene_meta_rotulada(ind, corte)):
+        #
+        # Y puede ser DIRECTAMENTE UN NÚMERO. La escala describe el CONJUNTO de metas del
+        # indicador y el veredicto se emite contra UNA: el 2.36 tiene tres metas que son el
+        # número 100 y una sola escrita en prosa —«100 al 2016»—, y esa celda bastaba para
+        # que el motor se negara a juzgar las otras tres. La peor celda no decide por las
+        # demás; quien juzga mira la meta que vence.
+        if not (ind.escala == "redactada"
+                and (_tiene_meta_rotulada(ind, corte)
+                     or isinstance(_meta_vigente(ind, corte)[1], (int, float)))):
             return Veredicto(ind.id, "no_evaluable",
                              motivo=f"la meta es de escala '{ind.escala}': se cumple o no, "
                                     f"no se resta")
@@ -117,7 +125,9 @@ def evaluar(ind: Indicador, binding: Optional[Binding],
     p_obs, valor = obs[-1]
     if ind.escala == "umbral":
         return _veredicto_de_umbral(ind, meta, periodo_meta, valor, p_obs)
-    if ind.escala == "redactada":
+    # Una meta redactada que ES un número se juzga como número. Mandarla al lector de
+    # escalares rotulados devolvería `no_evaluable` sobre un 100 perfectamente legible.
+    if ind.escala == "redactada" and not isinstance(meta, (int, float)):
         return _veredicto_rotulado(ind, binding, meta, periodo_meta, valor, p_obs)
     # Se publica con la MISMA precisión que la distancia. El 2.44 salía como
     # `37.3684210526316`: trece decimales que son el residuo de una división (71 escaños

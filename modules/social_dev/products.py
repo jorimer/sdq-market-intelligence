@@ -384,6 +384,49 @@ class SocialDevProduct:
             "Áreas protegidas terrestres (% de la superficie)", "living_standards",
             "Banco Mundial (ER.LND.PTLD.ZS). Superficie TERRESTRE: la serie marina es otra "
             "y da la mitad. La serie empieza en 2013 y la línea base de la ley es de 2009."),
+        # Indicadores 3.18 y 3.19. La etiqueta nombra el UNIVERSO porque es lo que
+        # distingue una cifra de la otra: bienes y manufacturas dan participaciones
+        # distintas y las dos se llaman «participación exportadora».
+        "world_export_share_goods": (
+            "world_export_share_goods", HEALTH_ENTITY,
+            "Participación en exportaciones mundiales de bienes (%)", "living_standards",
+            "Mercancías dominicanas sobre mercancías mundiales, del Banco Mundial; el "
+            "cociente es cómputo SDQ. NO es bienes y servicios: con ese universo la cifra "
+            "sube un tercio."),
+        "world_export_share_manufactures": (
+            "world_export_share_manufactures", HEALTH_ENTITY,
+            "Participación en exportaciones mundiales de manufacturas (%)",
+            "living_standards",
+            "Mercancías recortadas por la composición de manufacturas que publica el mismo "
+            "emisor, para el país y para el mundo. Cómputo SDQ."),
+        # Indicador 2.36 de la END. La unidad dice «a diciembre» porque la convención
+        # de anualización es parte del dato: con el promedio anual la cifra de 2010 baja
+        # cinco puntos.
+        "health_insurance_coverage": (
+            "health_insurance_coverage", HEALTH_ENTITY,
+            "Población protegida por el Seguro de Salud (% a diciembre)", "health",
+            "Afiliación al Seguro Familiar de Salud publicada por el CNSS sobre población "
+            "del Banco Mundial; el cociente es cómputo SDQ. El emisor no publica el "
+            "porcentaje: el denominador es elección nuestra y está declarada."),
+        # Indicadores 2.3 y 2.6 de la END. El sujeto va en la etiqueta: son cifras de la
+        # ZONA RURAL, y sin decirlo un lector las toma por nacionales.
+        "rural_poverty_extreme": (
+            "rural_poverty_extreme", HEALTH_ENTITY,
+            "Pobreza extrema — zona rural (% de la población rural)", "living_standards",
+            "SISDOM, cuadro 03 3 003a. El emisor la llama «indigencia monetaria». La serie "
+            "tiene un quiebre de metodología en 2016 declarado por el emisor."),
+        "rural_poverty_total": (
+            "rural_poverty_total", HEALTH_ENTITY,
+            "Pobreza general — zona rural (% de la población rural)", "living_standards",
+            "SISDOM, cuadro 03 3 003a. Línea de pobreza TOTAL, que incluye la indigencia. "
+            "Mismo quiebre de metodología en 2016."),
+        # Indicador 3.22 de la END. Es una RAZÓN, no un porcentaje: la etiqueta lo dice
+        # porque «0,78» a secas se lee como 78% y significa otra cosa.
+        "exports_imports_ratio": (
+            "exports_imports_ratio", HEALTH_ENTITY,
+            "Razón exportaciones/importaciones de bienes y servicios", "living_standards",
+            "Cociente de dos series del Banco Mundial, computado por SDQ. 1,0 es equilibrio "
+            "comercial. No alimenta el índice de desarrollo."),
         # Los tres índices comerciales del sector eléctrico (indicadores 3.27, 3.28 y 3.29
         # de la END). El SUJETO viaja en la etiqueta: son las tres distribuidoras estatales
         # agregadas, no el sector entero — que es exactamente el universo que la ley mide, y

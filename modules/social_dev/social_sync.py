@@ -328,6 +328,192 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
     return synced
 
 
+#: Qué universo mundial usa cada indicador de participación exportadora, y con qué serie de
+#: composición se recorta. El universo NO se adivinó: se probó cada candidato contra la
+#: ventana que la ley promedia, que es el método que ya había resuelto el 3.21.
+#:
+#: El 3.18 dice «exportaciones mundiales de BIENES», no de bienes y servicios. La diferencia
+#: no es de matiz: con bienes y servicios el promedio de la ventana da Δ 34,8% contra la línea
+#: base legal; con mercancías, Δ 0,4%.
+PARTICIPACION_EXPORTADORA = {
+    "3.18": ("world_export_share_goods", None,
+             "% de las exportaciones mundiales de bienes"),
+    "3.19": ("world_export_share_manufactures", "TX.VAL.MANF.ZS.UN",
+             "% de las exportaciones mundiales de manufacturas"),
+}
+FUENTE_PARTICIPACION = "WDI · cómputo SDQ"     # 18
+
+
+def _sync_participacion_exportadora(db: Session,
+                                    set_phase: Callable[[str], None]) -> int:
+    """Indicadores 3.18 y 3.19 de la END: participación dominicana en el comercio mundial.
+
+    Es un cociente entre el país y el mundo, así que se ingiere como dato propio con su
+    procedencia: un binding ata UNA variable y no puede llevar una división.
+
+    Solo se publican los años con TODAS las series presentes. Un cociente al que le falta el
+    denominador —o el recorte de composición— no es un dato parcial, es un número inventado.
+    """
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    def _serie(code: str, pais: str) -> Dict[str, float]:
+        filas, _ = fetch_wb_indicator(code, [pais], mrv=_WDI_HEALTH_YEARS)
+        return {r["date"]: float(r["value"]) for r in filas if r.get("value") is not None}
+
+    set_phase("participación en el comercio mundial (indicadores 3.18 y 3.19)")
+    pais = _serie("TX.VAL.MRCH.CD.WT", "DOM")
+    mundo = _serie("TX.VAL.MRCH.CD.WT", "WLD")
+    synced = 0
+    for _ind, (tema, composicion, unidad) in PARTICIPACION_EXPORTADORA.items():
+        cp = _serie(composicion, "DOM") if composicion else None
+        cm = _serie(composicion, "WLD") if composicion else None
+        años = set(pais) & set(mundo)
+        if cp is not None and cm is not None:
+            años &= set(cp) & set(cm)
+        for anio in sorted(años):
+            num, den = pais[anio], mundo[anio]
+            if cp is not None and cm is not None:
+                num *= cp[anio] / 100.0
+                den *= cm[anio] / 100.0
+            if not den:
+                continue
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(anio),
+                              value=num / den * 100.0, source=FUENTE_PARTICIPACION,
+                              disagg="nacional", unit=unidad)
+            synced += 1
+    return synced
+
+
+#: Mes que representa el año para la cobertura del Seguro Familiar de Salud. Es un STOCK
+#: —personas protegidas a una fecha— y por eso el año se representa por su CIERRE, no por el
+#: promedio de sus doce meses, que es la convención de un flujo.
+#:
+#: La decisión se tomó POR PRINCIPIO y antes de mirar el resultado, y conviene que quede
+#: escrito: los doce valores de 2010 van de 36,2% a 44,9% de la población, así que existe un
+#: mes que reproduce la línea base legal casi exacto. Elegirlo habría sido ajustar el método
+#: al oráculo, que es la forma más limpia de fabricar una verificación.
+MES_DE_CIERRE = "12"
+
+FUENTE_SFS = "CNSS · cómputo SDQ"        # 22
+
+
+def _sync_cobertura_salud(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 2.36 de la END: porcentaje de población protegida por el Seguro de Salud.
+
+    El emisor publica el CONTEO de afiliados, mensual desde 2007, y no el porcentaje: se
+    comprobó contra su portal y contra el catálogo nacional de datos abiertos. El denominador
+    es decisión nuestra y por eso viaja declarado.
+
+    **Población del WDI y no el censo.** El censo de 2010 es un punto y el indicador necesita
+    una serie anual completa. La elección mueve la cifra —con el censo, la cobertura de 2010
+    sube de 44,9% a 46,6%— y por eso se declara en vez de resolverse en silencio.
+
+    Contra el oráculo: diciembre de 2010 da 44,86% frente a los 42,4% que fija la ley, Δ 5,8%.
+    """
+    import json
+    import urllib.request
+
+    from shared.data.sisalril_client import SISALRILClient
+
+    set_phase("cobertura del Seguro Familiar de Salud (indicador 2.36 de la END)")
+    recs = SISALRILClient(mode="live").fetch(series="sfs.afiliacion.total")
+    afiliados = {r.period[:4]: float(r.value) for r in recs
+                 if r.value is not None and r.period[5:7] == MES_DE_CIERRE}
+
+    u = ("https://api.worldbank.org/v2/country/DOM/indicator/SP.POP.TOTL"
+         "?format=json&per_page=100")
+    req = urllib.request.Request(u, headers={"User-Agent": "SDQ-MarketIntelligence/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as fh:
+        datos = json.load(fh)
+    poblacion = {x["date"]: x["value"] for x in (datos[1] or []) if x.get("value")}
+
+    synced = 0
+    # Solo los años con AMBAS. Un cociente con el denominador ausente no es un dato parcial.
+    for anio in sorted(set(afiliados) & set(poblacion)):
+        _upsert_indicator(db, theme="health_insurance_coverage", entity=HEALTH_ENTITY,
+                          period=anio, value=afiliados[anio] / poblacion[anio] * 100.0,
+                          source=FUENTE_SFS, disagg="nacional",
+                          unit="% de la población, a diciembre")
+        synced += 1
+    return synced
+
+
+#: Cómo nombra el emisor cada línea y qué indicador de la END alimenta. El SUJETO viaja en el
+#: tema: son cifras de la ZONA RURAL, no del país.
+POBREZA_RURAL = {
+    "indigencia": ("rural_poverty_extreme", "% de la población rural"),   # 2.3
+    "pobreza": ("rural_poverty_total", "% de la población rural"),        # 2.6
+}
+FUENTE_SISDOM_ZONA = "SISDOM · MEPyD"          # 17
+
+
+def _sync_pobreza_rural(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicadores 2.3 y 2.6 de la END: pobreza rural extrema y general.
+
+    El panel abierto que ya se ingiere está por REGIÓN y no por zona, así que ninguna
+    combinación de sus filas produce la cifra rural. El corte por zona vive en el cuadro
+    03 3 003a del SISDOM.
+
+    El emisor llama «indigencia» a la pobreza extrema. La correspondencia no se supuso: la
+    indigencia rural de 2010 da 16,76 contra los 16,9 que la ley fija para el 2.3, Δ 0,8%.
+
+    **La serie tiene un quiebre de metodología en 2016** y el emisor lo declara publicando ese
+    año dos veces. El cliente sirve la metodología vigente y expone el salto medido; el binding
+    lo lleva escrito. Encadenar los tramos sin declararlo sería repetir lo de la informalidad.
+    """
+    from shared.data.sisdom_pobreza_zona import fetch_zona_rural
+
+    set_phase("pobreza rural por zona (SISDOM · indicadores 2.3 y 2.6)")
+    series, quiebre = fetch_zona_rural()
+    if quiebre.get("anio_de_solape"):
+        logger.info("SISDOM pobreza rural: quiebre en %s, salto %s",
+                    quiebre["anio_de_solape"], quiebre.get("salto_pct"))
+    synced = 0
+    for linea, (tema, unidad) in POBREZA_RURAL.items():
+        for periodo, valor in series.get(linea, []):
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(periodo),
+                              value=float(valor), source=FUENTE_SISDOM_ZONA,
+                              disagg="nacional", unit=unidad)
+            synced += 1
+    return synced
+
+
+def _sync_razon_exportaciones_importaciones(db: Session,
+                                            set_phase: Callable[[str], None]) -> int:
+    """Indicador 3.22 de la END: razón exportaciones sobre importaciones de bienes y servicios.
+
+    Se computa acá y no en el binding por la misma razón que las exportaciones per cápita: un
+    binding ata UNA variable a un indicador y no puede llevar una división. Un cociente entre
+    dos series es un dato nuevo y como tal se ingiere, con su procedencia.
+
+    **La ventana promediada fue lo que lo destrabó.** La ley fecha la línea base como
+    «2005-2010», sin un año, así que la sonda no tenía contra qué contrastar. Promediando la
+    ventana completa da 0,7429 contra los 0,75 que fija la ley —Δ 0,9%— y ningún año suelto
+    cae dentro de la tolerancia: la razón se mueve de 0,639 a 0,850 dentro de esos seis años.
+    La coincidencia discrimina porque la serie NO es plana.
+
+    Solo se publican los años con AMBAS series: un cociente con un denominador ausente no es
+    un dato parcial, es un número inventado.
+    """
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    set_phase("razón exportaciones/importaciones (indicador 3.22 de la END)")
+    exp, _ = fetch_wb_indicator("NE.EXP.GNFS.CD", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    imp, _ = fetch_wb_indicator("NE.IMP.GNFS.CD", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    e = {r["date"]: r["value"] for r in exp if r.get("value") is not None}
+    i = {r["date"]: r["value"] for r in imp if r.get("value") is not None}
+    synced = 0
+    for anio in sorted(set(e) & set(i)):
+        if not i[anio]:
+            continue
+        _upsert_indicator(db, theme="exports_imports_ratio", entity=HEALTH_ENTITY,
+                          period=str(anio), value=float(e[anio]) / float(i[anio]),
+                          source="WDI, Banco Mundial", disagg="nacional",
+                          unit="razón (1,0 = equilibrio)")
+        synced += 1
+    return synced
+
+
 #: Fuente de los niveles LLECE. Corta a propósito: `sd_indicators.source` es varchar(40).
 FUENTE_LLECE = "LLECE/UNESCO"
 #: Materia y grado del indicador 2.17 de la END: matemáticas de 6to grado.
@@ -793,6 +979,18 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     # que la corrida se caiga en una fase larga.
     llece_synced = _best_effort(
         "niveles LLECE (2.17)", lambda: _sync_llece_niveles(db, set_phase), errors)
+    razon_synced = _best_effort(
+        "razón exportaciones/importaciones (3.22)",
+        lambda: _sync_razon_exportaciones_importaciones(db, set_phase), errors)
+    rural_synced = _best_effort(
+        "pobreza rural por zona (2.3 y 2.6)",
+        lambda: _sync_pobreza_rural(db, set_phase), errors)
+    salud_synced = _best_effort(
+        "cobertura del Seguro Familiar de Salud (2.36)",
+        lambda: _sync_cobertura_salud(db, set_phase), errors)
+    export_synced = _best_effort(
+        "participación en el comercio mundial (3.18 y 3.19)",
+        lambda: _sync_participacion_exportadora(db, set_phase), errors)
     # Mismo criterio: no depende de nada de esta corrida y entra antes del commit temprano.
     mem_synced = _best_effort(
         "sector eléctrico (MEM · 3.27, 3.28 y 3.29)",
@@ -848,6 +1046,10 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "exportaciones_synced": exportaciones_synced,
         "conteos_regionales_synced": conteos_synced,
         "llece_synced": llece_synced,
+        "razon_exp_imp_synced": razon_synced,
+        "pobreza_rural_synced": rural_synced,
+        "cobertura_salud_synced": salud_synced,
+        "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
