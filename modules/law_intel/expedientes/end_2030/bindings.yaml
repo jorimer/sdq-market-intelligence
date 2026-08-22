@@ -1802,3 +1802,54 @@ bindings:
       Lo que ese cálculo supone, y hay que decirlo: que la razón entre añadas se mantiene
       constante entre años. No está medido, y es la razón por la que la salvedad se imprime
       en vez de darse por saldada.
+
+# ── 3.14 · PATENTES: el nombre esconde el denominador ──────────────────────────────────────
+# El campo lo tenía como decisión pendiente —«solicitudes o concesiones»— y resultó que esa
+# decisión no se puede tomar con lo que publica el productor: ONAPI publica SOLICITUDES y
+# nada más. Antes de eso hay un hallazgo sobre la ley, del mismo tipo que el del 4.1.
+  - indicador: "3.14"
+    serie: "wdi.IP.PAT.RESD"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: >-
+      ONAPI — Oficina Nacional de la Propiedad Industrial, Departamento de Invenciones,
+      republicada por el Banco Mundial. Cada solicitud es un acto asentado en un registro
+      público, pero la SERIE la produce y la declara la propia oficina del Estado evaluado, y
+      es la serie lo que se ata. El guard de orígenes lo rechazó bien cuando se intentó
+      declararla como acto registral: contar los actos de un registro propio no vuelve
+      independiente a la cifra.
+    motivo_descarte: >-
+      HALLAZGO SOBRE EL INSTRUMENTO: la ley titula el indicador «Número de patentes
+      registradas» y no es un número de patentes. La línea base es 1,3 para la ventana
+      2006-2008 y en esos mismos años el registro nacional recibió 295, 145 y 54 solicitudes
+      de patente. Un 1,3 no puede ser ese conteo: el indicador es una RAZÓN, y la ley nunca
+      dice contra qué. El denominador que reconstruye el orden de magnitud es la población en
+      millones, pero eso es reconstrucción nuestra, no lectura del texto.
+      Probadas el 2026-08-22 las cinco magnitudes que publican los dos productores, sobre la
+      ventana promediada y por millón de habitantes: solicitudes de residentes 2,009
+      (Δ 54,6%), solicitudes nacionales del registro 3,701 (Δ 184,7%), todas las solicitudes
+      de patente 17,413 (Δ 1.239%), diseños industriales 4,512 (Δ 247,1%).
+      LA COINCIDENCIA QUE NO SE USÓ, y queda escrita para que nadie la redescubra: los
+      modelos de utilidad dan 1,234 por millón, Δ 5,1%, la única dentro de cualquier banda.
+      Un modelo de utilidad NO es una patente —es otro derecho, con otro examen y otra
+      vigencia— y atarlo porque el número cuadra sería elegir por cercanía. Es la misma puerta
+      que se cerró en el 3.24.
+      Y la decisión que el campo daba por pendiente —solicitudes contra concesiones— no se
+      puede tomar hoy: el productor publica solicitudes por tipo y por procedencia, y no
+      publica concesiones. El registro internacional que sí las publica sirve su consulta como
+      aplicación de página única, sin ruta de datos que se pueda pedir.
+    hipotesis_sin_comprobar: >-
+      Que la magnitud de la ley sean las patentes CONCEDIDAS por millón de habitantes. Encaja
+      en orden de magnitud: para dar 1,3 harían falta unas 12 concesiones por año en la
+      ventana, y las concesiones siempre son menos que las 19 solicitudes de residentes que
+      registra el republicador. No está comprobado y exige la serie de concesiones del
+      registro internacional de propiedad industrial, que hoy no expone una ruta de datos.
+    candidatos_descartados:
+      - serie: "onapi:modelos_de_utilidad"
+        motivo: >-
+          Δ 5,1% por millón sobre la ventana, la única cerca. Descartado por CONCEPTO y no por
+          distancia: un modelo de utilidad no es una patente.
+      - serie: "onapi:solicitudes_nacionales"
+        motivo: "3,701 por millón, Δ 184,7%."

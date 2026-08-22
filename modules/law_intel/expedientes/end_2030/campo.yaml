@@ -94,13 +94,6 @@ motivos:
   - indicador: "3.20"
     estado: pendiente_de_derivacion
     detalle: Igual que el 3.18, sobre exportaciones de productos agropecuarios.
-  - indicador: "3.14"
-    estado: pendiente_de_derivacion
-    detalle: >-
-      El conteo de patentes de residentes está disponible en el emisor internacional y da
-      valores del mismo orden que la línea base legal. Falta contrastar el concepto, porque la
-      ley dice «patentes registradas» sin precisar si son solicitudes o concesiones, y la línea
-      base es un promedio de años.
 
   # ══ NO SE HA BUSCADO FUENTE ═══════════════════════════════════════════════════════════
   # Estado honesto y deliberado. Estos son trabajo nuestro pendiente, no hallazgos.
