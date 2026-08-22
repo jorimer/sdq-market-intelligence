@@ -108,6 +108,13 @@ variable_scopes:
   # Indicadores 2.20 y 4.2 de la END. Series de país del Banco Mundial, una fila por año.
   public_education_spending: national    # WDI SE.XPD.TOTL.GD.ZS
   protected_areas: national              # WDI ER.LND.PTLD.ZS — TERRESTRE, no marina
+  exports_imports_ratio: national         # cociente WDI NE.EXP/NE.IMP — cómputo SDQ
+  # Cifras de la ZONA rural, no de una demarcación: son del país, desagregadas por zona.
+  rural_poverty_extreme: national         # SISDOM 03 3 003a — «indigencia», zona rural
+  rural_poverty_total: national           # SISDOM 03 3 003a — pobreza total, zona rural
+  health_insurance_coverage: national     # CNSS afiliación SFS / población WDI — cómputo SDQ
+  world_export_share_goods: national      # WDI TX.VAL.MRCH DO/mundo — cómputo SDQ
+  world_export_share_manufactures: national  # idem, recortado por TX.VAL.MANF.ZS.UN
   tax_revenue_gdp: national              # WDI GC.TAX.TOTL.GD.ZS
   gni_per_capita_atlas: national         # WDI NY.GNP.PCAP.CD
   # ── Los tres DERIVADOS (cómputo propio, no series de un emisor) ──

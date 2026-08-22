@@ -1475,3 +1475,193 @@ bindings:
       deforestación (0,1). Un stock contra un flujo: para derivar el segundo del primero hay
       que suponer que todo el cambio interanual es deforestación, y en un país que reforesta
       eso es falso.
+
+# ── 3.22 · LA VENTANA PROMEDIADA LO DESTRABÓ ──────────────────────────────────────────────
+# La ley fecha su línea base como «2005-2010», sin un año, así que la sonda no tenía contra
+# qué contrastar y el indicador quedaba sin la comprobación fuerte. Promediando la ventana
+# completa: 0,7429 contra 0,75 → Δ 0,9%.
+#
+# Y la coincidencia DISCRIMINA: la razón se mueve de 0,639 a 0,850 dentro de esos seis años y
+# ningún año suelto cae dentro del 2%. Con una serie plana el acierto no probaría nada.
+  - indicador: "3.22"
+    serie: "social_dev:exports_imports_ratio"
+    fuente: wdi
+    mejor: mayor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — exportaciones e importaciones de bienes y servicios de la balanza de pagos,
+      republicadas por el Banco Mundial. El cociente es cómputo SDQ.
+    nota_comparabilidad: >-
+      El concepto está comprobado contra el oráculo (Δ 0,9% sobre la ventana promediada). Lo
+      que falta es del REGISTRO, no de la serie: las metas de 2025 y 2030 están corrompidas
+      en nuestra transcripción —dicen «(cid:2)1.0», el glifo «≥» que el extractor no
+      resolvió— y hasta que la corrección esté firmada el semáforo no puede leerlas. Promover
+      antes contaría el indicador como medido sobre una meta ilegible.
+    nota: >-
+      Serie observada 2005-2010, la ventana que la ley promedia: 0,850 · 0,794 · 0,776 ·
+      0,639 · 0,714 · 0,684. Promedio 0,7429 contra una línea base legal de 0,75.
+      La ley pide llegar a la paridad (1,0) en 2020 y sostenerse en o por encima; en 2024 la
+      razón es 0,785, así que la meta de 2020 no se alcanzó y la brecha persiste.
+
+# ── POBREZA RURAL 2026-08-21 · 2.3 y 2.6 ──────────────────────────────────────────────────
+# El corte por zona no está en el panel abierto que ya ingeríamos —ése es por REGIÓN— y por
+# eso los dos indicadores estaban sin candidato. Vive en el cuadro 03 3 003a del SISDOM, que
+# publica la zona rural con las dos líneas de pobreza.
+#
+# Los dos salen del MISMO cuadro y terminan distinto, con el mismo criterio: si el margen
+# contra la meta se come la incertidumbre del concepto, se promueve; si no, no.
+  - indicador: "2.3"
+    serie: "social_dev:rural_poverty_extreme"
+    fuente: mhe
+    mejor: menor
+    estado: verificado
+    periodo_verificado: "2024"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM (MEPyD, hoy MHE) — cuadro 03 3 003a, zona rural, línea de indigencia monetaria.
+      Lo produce el propio Estado evaluado sobre su encuesta de hogares.
+    nota: >-
+      El emisor llama «indigencia monetaria» a lo que la ley llama pobreza extrema, y la
+      correspondencia no se supuso: la indigencia rural de 2010 da 16,76 contra los 16,9 que
+      fija la ley — Δ 0,8%.
+      SALVEDAD QUE VIAJA AL INFORME: la serie tiene un QUIEBRE de metodología en 2016, que el
+      emisor declara publicando ese año dos veces, una por cada encuesta. El salto medido en
+      el año de solape es de 2,0% para esta línea. El veredicto se sostiene igual porque el
+      margen se lo come: el observado de 2024 es 3,74 contra una meta de 7,0 para 2025, y
+      ninguna corrección de dos por ciento mueve esa conclusión. Es el mismo criterio con el
+      que se acepta una fecha en disputa cuando el año la decide sola.
+      Serie observada: 16,76 (2010) · 10,51 (2015) · 3,74 (2024). La ley pedía 7,0 para 2025
+      y 5,0 para 2030: los dos cortes ya se cumplen.
+  - indicador: "2.6"
+    serie: "social_dev:rural_poverty_total"
+    fuente: mhe
+    mejor: menor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM (MEPyD, hoy MHE) — cuadro 03 3 003a, zona rural, línea de pobreza monetaria.
+    nota_comparabilidad: >-
+      La ley dice «pobreza moderada» y el emisor publica «pobreza monetaria», que es la línea
+      TOTAL e incluye la indigencia. Las dos lecturas se probaron contra el oráculo y ninguna
+      cierra: la total da 50,20 en 2010 contra una base legal de 46,8 (Δ 7,3%) y la total
+      menos la indigencia da 33,44 (Δ 28,5%).
+      Y acá el margen NO se come la incertidumbre, que es lo que lo separa del 2.3: el
+      observado de 2024 es 22,78 contra una meta de 23,3 para 2025, o sea un margen de 2,2%
+      frente a una brecha de concepto de 7,3%. Promoverlo publicaría un «alcanzada» que la
+      propia salvedad puede dar vuelta.
+    nota: >-
+      La hipótesis a comprobar es que la diferencia venga de la revisión oficial de la
+      metodología de medición de pobreza posterior a la redacción de la ley, igual que pasó
+      con la informalidad laboral entre la ENFT y la ENCFT.
+
+# ── 2.36 · COBERTURA DE SALUD 2026-08-21 ──────────────────────────────────────────────────
+# El emisor publica el CONTEO de afiliados y no el porcentaje —comprobado contra su portal y
+# contra el catálogo nacional de datos abiertos—, así que el denominador es decisión nuestra
+# y va declarada.
+  - indicador: "2.36"
+    serie: "social_dev:health_insurance_coverage"
+    fuente: mhe
+    mejor: mayor
+    estado: verificado
+    periodo_verificado: "2025"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      CNSS — afiliación al Seguro Familiar de Salud, sobre población del Banco Mundial. El
+      cociente es cómputo SDQ; el numerador lo produce el propio Estado evaluado.
+    nota: >-
+      SALVEDAD QUE VIAJA AL INFORME, y son dos.
+      PRIMERA, la convención: el indicador es un STOCK —personas protegidas a una fecha— y el
+      año se representa por su cierre de diciembre, no por el promedio de sus doce meses. La
+      decisión se tomó por principio y ANTES de mirar el resultado, y eso importa: los doce
+      valores de 2010 van de 36,2% a 44,9%, así que existe un mes que reproduce la línea base
+      casi exacto. Elegirlo habría sido ajustar el método al oráculo.
+      SEGUNDA, el denominador: se usa la población del Banco Mundial y no el censo de 2010,
+      porque el indicador necesita una serie anual completa y el censo es un punto. La
+      elección mueve la cifra: con el censo, 2010 sube de 44,9% a 46,6%.
+      Con la convención declarada, el oráculo da Δ 5,8% contra la línea base legal de 42,4.
+      Está fuera del 2% y dentro del 10%, y el veredicto se sostiene igual porque el margen se
+      lo come: el observado de 2025 es 92,08% contra una meta de 100, y aun corrigiendo hacia
+      arriba por todo el 5,8% queda en 97,4%. La meta no se alcanza bajo ninguna lectura del
+      denominador.
+      Trayectoria: 44,9% (2010) · 64,1% (2015) · 91,4% (2020) · 92,1% (2025). El salto ocurrió
+      antes de 2020 y desde entonces la cobertura está prácticamente detenida a ocho puntos de
+      la meta.
+
+# ── PARTICIPACIÓN EXPORTADORA 2026-08-21 · 3.18, 3.19 y el descarte del 3.20 ──────────────
+# El universo NO se adivinó. Se probó cada candidato contra la ventana que la ley promedia,
+# que es el método que ya había resuelto el 3.21 —donde bienes+servicios daba Δ 1,9% y solo
+# mercancías daba 174 contra 1.070—.
+  - indicador: "3.18"
+    serie: "social_dev:world_export_share_goods"
+    fuente: wdi
+    mejor: mayor
+    estado: verificado
+    periodo_verificado: "2025"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      DGA y BCRD — comercio de mercancías, republicado por el Banco Mundial para el país y
+      para el agregado mundial. El cociente es cómputo SDQ.
+    nota: >-
+      El indicador dice «exportaciones mundiales de BIENES», no de bienes y servicios, y la
+      diferencia decide el resultado: con bienes y servicios el promedio de la ventana da Δ
+      34,8% contra la línea base legal; con mercancías, Δ 0,4%. El universo se identificó
+      probando ambos contra el oráculo, no por lectura del nombre.
+      Serie observada: 0,0507% (2007) · 0,0439% (2010) · 0,0567% (2015) · 0,0590% (2025),
+      contra una meta de 0,135% para 2025. La participación creció menos de dos centésimas en
+      dieciocho años y está a menos de la mitad de lo que la ley pidió.
+  - indicador: "3.19"
+    serie: "social_dev:world_export_share_manufactures"
+    fuente: wdi
+    mejor: mayor
+    estado: verificado
+    periodo_verificado: "2024"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Comercio de mercancías del país y del mundo, recortado por la composición de
+      manufacturas que publica el mismo emisor. Cómputo SDQ.
+    nota: >-
+      SALVEDAD QUE VIAJA AL INFORME: el promedio de la ventana 2006-2007 da 0,0602% contra una
+      línea base legal de 0,055 — Δ 9,4%. Está fuera del 2% y dentro del 10%, y la diferencia
+      es compatible con que el legislador usara otro corte de «manufacturas» que el de la
+      composición que publica este emisor.
+      El veredicto se sostiene igual porque el margen se come la incertidumbre: el observado
+      de 2024 es 0,0473% contra una meta de 0,113% para 2025, o sea 58% por debajo. Corregir
+      hacia arriba por todo el 9,4% lo deja en 0,0517%, que sigue a menos de la mitad.
+      El hallazgo es más duro que el incumplimiento: la participación de 2024 está POR DEBAJO
+      de la línea base de 2006-2007. En manufacturas el país perdió peso mundial.
+  - indicador: "3.20"
+    serie: "wdi.TX.VAL.AGRI+FOOD.ZS.UN"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: Composición de exportaciones de mercancías publicada por el Banco Mundial.
+    motivo_descarte: >-
+      Se probaron las dos composiciones que el emisor publica y ninguna reproduce la línea
+      base legal de 0,097 sobre la ventana 2006-2007: «materias primas agrícolas» da 0,0169%
+      (Δ 82,6%) y «alimentos» da 0,1183% (Δ 22,0%). Sumarlas tampoco cierra.
+      «Productos agropecuarios» en el articulado parece corresponder a una agrupación
+      arancelaria concreta y no a ninguna de las dos categorías agregadas de este emisor. El
+      candidato queda descartado; el indicador sigue abierto a una fuente que publique el
+      corte por capítulo arancelario.
+
+# ── 3.24 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
+  - indicador: "3.24"
+    serie: "wdi.FS.AST.PRVT.GD.ZS"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: Sistema financiero dominicano vía el Banco Mundial; el emisor lo republica.
+    motivo_descarte: >-
+      Ninguno de los tres agregados de crédito que publica el emisor mide «crédito a la
+      producción». Contra la ventana 2005-2010 que la ley promedia, y con la base legal en
+      2,24% del PIB: crédito interno al sector privado da 20,68% (Δ 823%), crédito de bancos
+      al sector privado 19,83% (Δ 785%) y crédito interno total 36,88% (Δ 1.546%). Están
+      entre ocho y quince veces por encima; no es una discrepancia de revisión, son universos
+      distintos.
+      Lo que sugiere la trayectoria de la ley —2,24 en la base y 30 para 2030— es que
+      «producción» nombra un subconjunto acotado del crédito, no el agregado. Identificarlo
+      exige el cuadro de crédito por destino económico del banco central, que no ingerimos.
+      El indicador sigue abierto a esa fuente.
