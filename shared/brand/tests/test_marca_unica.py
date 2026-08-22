@@ -1,9 +1,9 @@
 """REGLA ESTRUCTURAL: el símbolo Arco existe en UNA geometría, copiada verificadamente.
 
-**El caso que la motivó.** El símbolo estaba escrito a mano en cuatro lugares —el
-componente `ArcMark` del sidebar, el favicon de `frontend/index.html`, el snippet de
-`design_handoff_sdqmip/DESIGN_SYSTEM.md` y el PNG de los informes— y para cuando se
-auditó circulaban TRES construcciones distintas en DOS azules:
+**El caso que la motivó.** El símbolo estaba escrito a mano en varios lugares —el componente
+`ArcMark` del sidebar, el favicon de `frontend/index.html`, el snippet del sistema de diseño
+y el PNG de los informes— y para cuando se auditó circulaban TRES construcciones distintas
+en DOS azules:
 
 - app y favicon: círculo con `stroke-dasharray`, hueco corto, **el punto fusionado contra
   el terminal del arco** — a tamaño de favicon se leía como una «C» manchada;
@@ -11,6 +11,15 @@ auditó circulaban TRES construcciones distintas en DOS azules:
 - el dibujo con primitivas del PDF: un tercer conjunto de proporciones inventadas.
 
 Ninguna de las tres estaba «mal» en su archivo. El defecto era que había tres.
+
+**Por qué el test DESCUBRE las copias en vez de listarlas.** La primera versión de este
+archivo traía una lista escrita a mano de tres rutas, y se le escapó una cuarta:
+`frontend/DESIGN_SYSTEM.md`, el duplicado del sistema de diseño que vive dentro del
+frontend, que siguió sirviendo el SVG retirado después de que todo lo demás se corrigiera.
+Una lista a mano tiene exactamente el mismo defecto que el símbolo copiado: alguien la
+tiene que acordar de actualizar. Así que acá se barre el repo y se marca como copia todo
+archivo que dibuje un cuadrado redondeado de `rx="9"` en un `viewBox` de 32×32. Una quinta
+copia entra sola al test el día que alguien la escriba.
 
 **Por qué no basta con centralizar.** El frontend no puede importar Python y un favicon
 tiene que ir embebido en el HTML, así que las copias son inevitables. Lo que sí se puede
@@ -22,6 +31,7 @@ marca (`#1E6FFF`) o la variable de tema (`var(--accent)`), nunca otro hex.
 """
 import pathlib
 import re
+import urllib.parse
 
 import pytest
 
@@ -38,38 +48,88 @@ _PIEZAS = {
     "radio del contenedor": str(mark.ARCO_CORNER_RADIUS),
 }
 
-# Copias vivas del símbolo → cómo se lee el archivo y qué relleno acepta el contenedor.
-_COPIAS = {
-    "frontend/src/shared/layout/SidebarContent.tsx": ("var(--accent)",),
-    "frontend/index.html": (mark.ARCO_ACCENT,),
-    "design_handoff_sdqmip/DESIGN_SYSTEM.md": (mark.ARCO_ACCENT,),
-}
+# La huella del símbolo: un contenedor redondeado de rx=9 en un lienzo de 32×32. Tolera
+# comillas simples o dobles y espaciado libre, que es como varía entre JSX, HTML y Markdown.
+_HUELLA_LIENZO = re.compile(r"""viewBox=["']0 0 32 32["']""")
+_HUELLA_CONTENEDOR = re.compile(r"""<rect[^>]*\brx=["']9["']""")
+
+# Dónde buscar. Se excluye lo generado y lo que documenta la retirada a propósito.
+_RAICES = ("frontend", "design_handoff_sdqmip", "docs", "shared", "modules", "app")
+_EXTENSIONES = (".tsx", ".ts", ".jsx", ".js", ".html", ".md", ".svg", ".py", ".css")
+_EXCLUIDOS = ("node_modules", "/dist/", "/.vite/", "/__pycache__/", "/build/",
+              # Este archivo describe la huella y las variantes retiradas: si se leyera a
+              # sí mismo, la explicación fallaría el test que ella misma sostiene.
+              "shared/brand/tests/")
 
 
-def _texto(rel: str) -> str:
-    """El SÍMBOLO de cada copia, sin la prosa que lo rodea.
-
-    En el Markdown se extrae solo el bloque de código: la sección explica por qué se
-    retiró el azul viejo y por qué el arco dejó de dibujarse con `dashoffset`, y nombrar
-    lo retirado es justamente lo que evita que vuelva. Si se leyera el archivo entero, la
-    explicación fallaría el test que ella misma sostiene.
-    """
-    raw = (RAIZ / rel).read_text(encoding="utf-8")
-    if rel.endswith(".html"):
+def _leer(path: pathlib.Path) -> str:
+    raw = path.read_text(encoding="utf-8", errors="ignore")
+    if path.suffix == ".html":
         # El favicon va percent-encoded en un data-URI: se decodifica para comparar.
-        import urllib.parse
         raw = urllib.parse.unquote(raw)
-    if rel.endswith(".md"):
-        bloques = re.findall(r"```[a-z]*\n(.*?)```", raw, re.S)
-        svg = [b for b in bloques if "<svg" in b]
-        assert svg, f"{rel} ya no contiene el snippet del símbolo en un bloque de código."
-        raw = "\n".join(svg)
     return raw
 
 
-@pytest.mark.parametrize("rel", sorted(_COPIAS))
+# Un elemento `<svg>` completo. Es lo único que se compara: la prosa que lo rodea —el
+# comentario del componente, la sección del sistema de diseño— EXPLICA la construcción
+# retirada, y saber por qué se fue es lo que evita reintroducirla. Si el test leyera el
+# archivo entero, cada explicación fallaría la regla que ella misma sostiene.
+_SVG = re.compile(r"<svg\b.*?</svg>", re.S)
+
+
+def _fragmentos_de_simbolo(texto: str) -> list:
+    """Los elementos `<svg>` del archivo que dibujan el símbolo, sin su prosa."""
+    return [m for m in _SVG.findall(texto) if _HUELLA_CONTENEDOR.search(m)]
+
+
+def _copias() -> dict:
+    """Descubre todo archivo del repo que dibuje el símbolo. `rel → fragmentos`."""
+    encontradas = {}
+    for raiz in _RAICES:
+        base = RAIZ / raiz
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*")):
+            if not path.is_file() or path.suffix not in _EXTENSIONES:
+                continue
+            rel = path.relative_to(RAIZ).as_posix()
+            if any(x in f"/{rel}" for x in _EXCLUIDOS):
+                continue
+            texto = _leer(path)
+            if not (_HUELLA_LIENZO.search(texto) and _HUELLA_CONTENEDOR.search(texto)):
+                continue
+            frags = _fragmentos_de_simbolo(texto)
+            if frags:
+                encontradas[rel] = frags
+    return encontradas
+
+
+COPIAS = _copias()
+
+# Las copias que el repo tenía cuando se escribió la regla. Si el barrido devuelve MENOS,
+# es que una se renombró o dejó de detectarse — y una copia que el test ya no mira es
+# peor que una copia mal: pasa en verde. Que aparezcan más está bien; se verifican solas.
+_COPIAS_CONOCIDAS = {
+    "frontend/src/shared/layout/SidebarContent.tsx",
+    "frontend/index.html",
+    "frontend/DESIGN_SYSTEM.md",
+    "design_handoff_sdqmip/DESIGN_SYSTEM.md",
+    "docs/comercial/assets/arco.svg",
+}
+
+
+def test_el_barrido_sigue_encontrando_las_copias_conocidas():
+    perdidas = _COPIAS_CONOCIDAS - set(COPIAS)
+    assert not perdidas, (
+        f"El barrido dejó de ver estas copias del símbolo: {sorted(perdidas)}.\n"
+        "O se movieron —actualizá `_COPIAS_CONOCIDAS`— o la huella de detección se rompió, "
+        "que es peor: el test pasaría en verde sin mirar nada."
+    )
+
+
+@pytest.mark.parametrize("rel", sorted(COPIAS))
 def test_la_copia_reproduce_la_geometria_canonica(rel):
-    texto = _texto(rel)
+    texto = "\n".join(COPIAS[rel])
     faltan = [nombre for nombre, pieza in _PIEZAS.items() if pieza not in texto]
     assert not faltan, (
         f"{rel} no reproduce la geometría canónica del símbolo: falta {faltan}.\n"
@@ -78,33 +138,44 @@ def test_la_copia_reproduce_la_geometria_canonica(rel):
     )
 
 
-@pytest.mark.parametrize("rel", sorted(_COPIAS))
+@pytest.mark.parametrize("rel", sorted(COPIAS))
 def test_la_copia_usa_el_azul_de_marca(rel):
-    texto = _texto(rel)
-    aceptados = _COPIAS[rel]
-    # El relleno del contenedor: el `fill` que sigue al `<rect …>` del símbolo.
-    rects = re.findall(r'<rect[^>]*fill=["\']([^"\']+)["\']', texto)
-    del rects  # el orden de atributos varía entre JSX y HTML; se busca por presencia.
-    assert any(a in texto for a in aceptados), (
-        f"{rel} no usa el azul de marca del símbolo (se esperaba uno de {aceptados})."
+    texto = "\n".join(COPIAS[rel])
+    # El contenedor lleva el hex de marca, o la variable de tema si la copia es de la app.
+    assert mark.ARCO_ACCENT in texto or "var(--accent)" in texto, (
+        f"{rel} no usa el azul de marca del símbolo "
+        f"(se esperaba {mark.ARCO_ACCENT} o var(--accent))."
     )
-    # Y no puede quedar rastro del azul retirado.
-    assert "#2B6CB0" not in texto and "2b6cb0" not in texto.lower(), (
-        f"{rel} todavía usa el azul retirado #2B6CB0.")
+    assert "2B6CB0" not in texto.upper(), f"{rel} todavía usa el azul retirado #2B6CB0."
 
 
-def test_el_dashoffset_no_vuelve():
+@pytest.mark.parametrize("rel", sorted(COPIAS))
+def test_el_dashoffset_no_vuelve(rel):
     """La construcción punteada es la que fusionaba el punto: no puede reaparecer.
 
-    Se verifica sobre las copias del símbolo, no sobre todo el frontend: `stroke-dasharray`
-    es legítimo en un gráfico (una línea de referencia discontinua, por ejemplo).
+    Se verifica sobre los fragmentos del símbolo, no sobre el archivo entero:
+    `stroke-dasharray` es legítimo en un gráfico (una línea de referencia discontinua).
     """
-    culpables = [rel for rel in _COPIAS
-                 if "stroke-dashoffset" in _texto(rel) or "strokeDashoffset" in _texto(rel)]
-    assert not culpables, (
-        "Volvió el arco dibujado con dasharray/dashoffset en: "
-        f"{culpables}. Esa construcción fusiona el punto de señal con el terminal del "
-        "arco y borra la metáfora del medidor. Usá el `path` canónico."
+    texto = "\n".join(COPIAS[rel])
+    assert "dashoffset" not in texto.lower(), (
+        f"Volvió el arco dibujado con dasharray/dashoffset en {rel}. Esa construcción "
+        "fusiona el punto de señal con el terminal del arco y borra la metáfora del "
+        "medidor. Usá el `path` canónico."
+    )
+
+
+def test_el_sistema_de_diseno_no_se_bifurca():
+    """Los dos `DESIGN_SYSTEM.md` son el mismo archivo, y tienen que seguir siéndolo.
+
+    `design_handoff_sdqmip/` es el paquete de entrega y `frontend/` su copia instalada
+    (así lo declara el README del handoff). Ya divergieron una vez: el arreglo del símbolo
+    entró en uno y el otro siguió sirviendo el SVG retirado.
+    """
+    a = (RAIZ / "design_handoff_sdqmip/DESIGN_SYSTEM.md").read_text(encoding="utf-8")
+    b = (RAIZ / "frontend/DESIGN_SYSTEM.md").read_text(encoding="utf-8")
+    assert a == b, (
+        "Los dos DESIGN_SYSTEM.md divergieron. El de `design_handoff_sdqmip/` es el "
+        "original; copialo sobre `frontend/DESIGN_SYSTEM.md`."
     )
 
 

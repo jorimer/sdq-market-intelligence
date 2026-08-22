@@ -1124,17 +1124,22 @@ def seccion_2(doc: Doc):
         ["Escala", "Bandas, de mejor a peor", "Naturaleza"],
         [("Índice general", "Fuerte ≥85 · Sólido 70–84 · Vigilar 55–69 · Débil <55",
           "Absoluta"),
+         ("Ejes de riesgo (IRMP, IRC)",
+          "Riesgo bajo ≥80 · Riesgo moderado 60–79 · Riesgo elevado 40–59 · Riesgo alto <40",
+          "Invertida: mayor score = MENOR riesgo. Ojo, los cortes NO son los de la escala "
+          "general — no se reusan"),
          ("Resiliencia (financiero)",
           "Sólida ≥75 · Adecuada 60–74 · En vigilancia 45–59 · Frágil <45",
           "ABSOLUTA — cortes fijos, iguales en los cuatro sectores financieros"),
          ("Ejecución (financiero)",
           "Sobresaliente · Competitiva · Rezagada · Deficiente",
-          "RELATIVA al panel comparable — cuartiles, expuestos para ser auditables"),
-         ("Ejes de riesgo (IRMP, IRC)",
-          "Mayor score = menor riesgo; banda «Riesgo moderado», etc.",
-          "Semánticamente invertida"),
-         ("Grado sectorial (SGPS)", "A · B · C · D", "Grado por letra")],
-        widths=[1.3, 2.7, 1.8])
+          "RELATIVA al panel comparable — cuartiles por tipo de entidad, expuestos para "
+          "ser auditables"),
+         ("Índices sectoriales (IAI, SGPS)", "La banda general, sobre el score 0–100",
+          "No hay grado por letra: la escala A–D nunca llegó a producción"),
+         ("Cualquiera, sin dato", "Sin dato", "La brecha se declara en la insignia; nunca "
+          "se rellena con un cero ni se esconde")],
+        widths=[1.15, 2.5, 2.15])
     doc.callout(
         "Cambio de marca importante y reciente",
         "La notación por letras SDQ-AAA … SDQ-D fue RETIRADA y no se publica más. Usaba la "
@@ -1145,6 +1150,20 @@ def seccion_2(doc: Doc):
         "que NO se resumen en un símbolo único. Si encuentra material con SDQ-AA+ o "
         "similar, está desactualizado.",
         tone="alert")
+    doc.p()
+    doc.p("Cuatro reglas al maquetar el Perfil SDQ:", space_after=3)
+    doc.bullets([
+        ("Nunca se resumen en un símbolo ni en un número. ",
+         "Es lo que el sistema de dos ejes existe para evitar: una entidad puede ser "
+         "sólida y poco eficiente a la vez, y el lector tiene que ver las dos cosas."),
+        ("Van juntos y con el mismo peso visual. ",
+         "Jerarquizar uno reintroduce el problema por diseño."),
+        ("Con universo chico, la banda sola engaña. ",
+         "«Sobresaliente» entre 4 dice bastante menos que entre 42: por debajo de 15 "
+         "entidades la interfaz muestra la posición relativa al lado."),
+        ("Un movimiento se lee dentro de su propio eje. ",
+         "«Sobresaliente» y «Sólida» son de escalas distintas y no se comparan."),
+    ])
 
     # ── 2.7 dataviz
     doc.h2("2.7 Visualización de datos")
