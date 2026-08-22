@@ -100,49 +100,82 @@ motivos:
   - indicador: "1.1"
     estado: pendiente_de_busqueda
     detalle: >-
-      Confianza en los partidos políticos. Lo miden encuestas regionales de opinión pública,
-      que hoy no están en la lista de fuentes admitidas del expediente. Habría que evaluar si
-      una encuesta de tercero califica como fuente para este eje antes de buscarla.
+      Confianza en los partidos políticos, base 22,2% en 2010 y meta 40,1% para 2030. Lo
+      miden encuestas regionales de opinión pública y la ley NO nombra ninguna, así que acá
+      la admisibilidad no se resuelve por la vía de los otros: el instrumento no incorpora a
+      la fuente, y la lista blanca del expediente admite terceros cuando republican dato
+      nacional o cuando la ley los nombra. Una encuesta de opinión de un tercero no es ni una
+      cosa ni la otra.
+      DECISIÓN PREVIA, del dueño y no de datos: si una encuesta regional de opinión califica
+      como fuente para este eje. Buscar el dato antes de responder eso sería trabajo que
+      puede terminar inadmisible.
   - indicador: "1.2"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      Descargado el archivo de resultados vigente del emisor —«CPI2024-Results-and-trends»—
+      y leídas sus dos hojas de serie. La que el propio emisor titula «CPI Historical»
+      EMPIEZA EN 2012 y llega a 2024; la otra se titula «CPI Timeseries 2012 - 2024». El
+      emisor no publica 2010 en ninguna escala, ni el tramo 0-10 sobre el que la ley fijó su
+      línea base de 3,0 y sus cuatro metas (3,9 · 4,8 · 5,9 · 7,0).
+      Serie que sí publica, en 0-100: 32 (2012) · 28 (2019) · 36 (2024).
+    verificado_el: "2026-08-22"
     detalle: >-
-      Índice de percepción de la corrupción. La ESCALA de las metas lo confirma como sospecha
-      de ruptura: la ley fija 3,0 en 2010 y pide llegar a 7,0 en 2030, que es la escala 0-10
-      del emisor. Ese emisor pasó a una escala 0-100 en 2012 y declara que los valores de
-      ambos tramos no son comparables entre sí. Falta comprobar contra el emisor si publicó
-      un puente; sin él, es el caso del LLECE otra vez. La identidad de concepto es perfecta
-      —la ley nombra el índice— así que el camino de verificación sería ése y no el oráculo.
+      Índice de percepción de la corrupción. La ley NOMBRA el índice, así que la fuente es
+      admisible por la misma lógica que la PEFA y el LLECE: la propia ley la incorpora. Lo
+      que no sobrevive es la ESCALA. El emisor cambió de metodología en 2012, pasó a 0-100 y
+      su publicación vigente arranca ahí; las metas de la ley están en el tramo anterior.
+      Es exactamente el caso de los puntajes LLECE (2.12 a 2.16) y se resuelve igual: sin
+      puente publicado del 0-100 al 0-10, construirlo por cuenta propia sería inventar la
+      conversión. Dividir por diez parece inocente y no lo es — el cambio de 2012 no fue de
+      notación sino de agregación, y el emisor declara que los tramos no son comparables.
+      QUÉ HARÍA FALTA para reabrirlo: que el emisor publique un puente entre las dos escalas,
+      o una decisión del dueño de aceptar una conversión lineal con la salvedad impresa. Bajo
+      cualquier conversión monótona el veredicto es el mismo —36 sobre 100 queda por debajo
+      de la meta de 2015— pero eso es un argumento de margen, no un puente.
   - indicador: "1.3"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de fortaleza institucional. La ley no nombra al emisor. La escala de las metas da
-      la primera pista y hay que tratarla como pista: base 3,2 y meta 5,0 es el rango 1-7 de
-      los índices compuestos de competitividad, el mismo del indicador 3.9 que ya se descartó
-      porque su emisor lo discontinuó. Antes de declararlo hay que identificar el índice, no
-      deducirlo del rango.
+      Índice de fortaleza institucional. La ley no nombra al emisor y hay una hipótesis con
+      dos apoyos: la escala de las metas es el rango 1-7 de los índices de competitividad
+      (base 3,2 en 2010, meta 5,0), y el eje 3 de la misma ley SÍ nombra a ese emisor en los
+      indicadores 3.16 y 3.17. Si fuera su pilar de instituciones, el desenlace sería el del
+      3.9: instrumento discontinuado tras 2019.
+      Confirmarlo exige el puntaje del pilar para 2010, que vive en los informes del emisor.
+      No se pudo consultar el 2026-08-22: su portal devuelve 403.
   - indicador: "1.4"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de desarrollo burocrático. Sin emisor nombrado, y con una pista de escala
-      distinta a la del 1.3: base 0,38 y meta 0,9, o sea un índice 0-1. Su línea base es de
-      2006, cuatro años antes que la del resto del eje, lo que sugiere una medición puntual y
-      no una serie anual. Si fuera puntual, el indicador no tendría con qué actualizarse
-      aunque se identifique al emisor.
+      Índice de desarrollo burocrático. Sin emisor nombrado, escala 0-1 (base 0,38 en 2006,
+      meta 0,9) y una particularidad que ninguno de los otros tiene: su línea base es cuatro
+      años ANTERIOR a la del resto del eje. Eso apunta a una medición puntual —un informe
+      regional sobre el servicio civil, no una serie anual— y si lo fuera, el indicador no
+      tendría con qué actualizarse aunque se identifique al emisor.
+      Antes de buscar el dato hay que decidir si una medición puntual de un tercero, repetida
+      una sola vez, califica como fuente para este eje. Es la misma decisión del 1.1.
   - indicador: "3.15"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de infraestructura. Sin emisor nombrado. Misma pista de escala que el 1.3: base
-      3,0 y meta 6,0, el rango 1-7 de los índices compuestos de competitividad. Y la misma
-      cautela: la escala sugiere la familia, no identifica al emisor.
+      Índice de infraestructura. Misma hipótesis y mismo bloqueo que el 1.3, con el pilar de
+      infraestructura en vez del de instituciones: base 3,0 en 2008 y meta 6,0, en el rango
+      1-7. Los dos se confirman o se caen con la misma consulta.
   - indicador: "3.16"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de Reporte de Viajes y Turismo. El emisor es el mismo que discontinuó el índice
-      del indicador 3.9, ya descartado por esa causa, y publica hoy un índice sucesor con otra
-      metodología. Corresponde comprobarlo antes de declarar el instrumento discontinuado.
+      Índice general del Reporte de Viajes y Turismo. La ley NOMBRA al emisor, así que la
+      fuente es admisible por la misma lógica que la PEFA: el instrumento la incorpora. Base
+      4,0 en 2009 y metas de 4,2 a 4,5, la escala 1-7 de ese emisor.
+      Lo que falta es evidencia CON FECHA de qué publica hoy. El mismo emisor ya produjo un
+      descarte en este expediente —el 3.9, su índice de competitividad, discontinuado en su
+      forma comparable tras 2019— y la sospecha es que aquí pasó lo mismo: el reporte de
+      viajes y turismo habría sido reemplazado por un sucesor con otro nombre y otra
+      metodología. Es SOSPECHA: el portal del emisor devuelve 403 desde acá, así que no se
+      pudo comprobar el 2026-08-22.
   - indicador: "3.17"
     estado: pendiente_de_busqueda
-    detalle: Mismo caso que el 3.16, sobre el pilar de sostenibilidad del mismo reporte.
+    detalle: >-
+      Pilar de sostenibilidad ambiental del mismo reporte que el 3.16, con la misma base 4,0
+      en 2009 y metas más exigentes (hasta 6,3). Comparte emisor, escala y bloqueo: se cierra
+      con la misma consulta.
   - indicador: "2.26"
     estado: pendiente_de_busqueda
     detalle: >-
