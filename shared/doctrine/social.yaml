@@ -116,6 +116,7 @@ variable_scopes:
   health_insurance_coverage: national     # CNSS afiliación SFS / población WDI — cómputo SDQ
   world_export_share_goods: national      # WDI TX.VAL.MRCH DO/mundo — cómputo SDQ
   world_export_share_manufactures: national  # idem, recortado por TX.VAL.MANF.ZS.UN
+  world_export_share_agri: national       # idem, alimentos + materias primas agrícolas
   tax_revenue_gdp: national              # WDI GC.TAX.TOTL.GD.ZS
   gni_per_capita_atlas: national         # WDI NY.GNP.PCAP.CD
   # ── Los tres DERIVADOS (cómputo propio, no series de un emisor) ──

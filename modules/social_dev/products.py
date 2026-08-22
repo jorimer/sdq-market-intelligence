@@ -427,6 +427,15 @@ class SocialDevProduct:
             "Razón exportaciones/importaciones de bienes y servicios", "living_standards",
             "Cociente de dos series del Banco Mundial, computado por SDQ. 1,0 es equilibrio "
             "comercial. No alimenta el índice de desarrollo."),
+        # Indicador 3.20 de la END. La etiqueta nombra las DOS categorías que se unen,
+        # porque «agropecuarias» no es una categoría del emisor y un lector que lo tome por
+        # una sola busca una serie que no existe.
+        "world_export_share_agri": (
+            "world_export_share_agri", HEALTH_ENTITY,
+            "Cuota mundial de exportaciones agropecuarias de RD (%)", "living_standards",
+            "Alimentos MÁS materias primas agrícolas, unidos por niveles y no por cuotas: "
+            "cada categoría tiene su propio denominador mundial. Cómputo SDQ sobre series "
+            "del Banco Mundial. No alimenta el índice de desarrollo."),
         # Indicador 4.1 de la END. La etiqueta dice TODOS los gases y dice que incluye el
         # uso de la tierra, porque la ley titula el indicador «dióxido de carbono» y no es
         # eso: el CO2 solo da 2,13 contra una base legal de 3,6. Callar el alcance dejaría al

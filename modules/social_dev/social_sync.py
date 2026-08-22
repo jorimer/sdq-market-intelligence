@@ -335,24 +335,40 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
 #: El 3.18 dice «exportaciones mundiales de BIENES», no de bienes y servicios. La diferencia
 #: no es de matiz: con bienes y servicios el promedio de la ventana da Δ 34,8% contra la línea
 #: base legal; con mercancías, Δ 0,4%.
+#: El 3.20 lleva DOS series de composición y no una, y ahí estaba el error que lo mantuvo
+#: descartado. «Productos agropecuarios» no es una categoría del emisor: es la unión de dos
+#: —alimentos y materias primas agrícolas— y unir cuotas NO es sumarlas. Cada cuota tiene su
+#: propio denominador mundial, así que sumar 0,1183% y 0,0169% da 0,1352%, un número que no
+#: significa nada. La unión se computa sobre los NIVELES: (DR_alim + DR_mat) / (mundo_alim +
+#: mundo_mat). Hecho así, la ventana 2006-2007 da 0,0994% contra una base legal de 0,097.
 PARTICIPACION_EXPORTADORA = {
-    "3.18": ("world_export_share_goods", None,
+    "3.18": ("world_export_share_goods", (),
              "% de las exportaciones mundiales de bienes"),
-    "3.19": ("world_export_share_manufactures", "TX.VAL.MANF.ZS.UN",
+    "3.19": ("world_export_share_manufactures", ("TX.VAL.MANF.ZS.UN",),
              "% de las exportaciones mundiales de manufacturas"),
+    "3.20": ("world_export_share_agri", ("TX.VAL.FOOD.ZS.UN", "TX.VAL.AGRI.ZS.UN"),
+             "% de las exportaciones mundiales agropecuarias"),
 }
 FUENTE_PARTICIPACION = "WDI · cómputo SDQ"     # 18
 
 
 def _sync_participacion_exportadora(db: Session,
                                     set_phase: Callable[[str], None]) -> int:
-    """Indicadores 3.18 y 3.19 de la END: participación dominicana en el comercio mundial.
+    """Indicadores 3.18, 3.19 y 3.20 de la END: participación dominicana en el comercio mundial.
 
     Es un cociente entre el país y el mundo, así que se ingiere como dato propio con su
     procedencia: un binding ata UNA variable y no puede llevar una división.
 
+    **Una composición puede necesitar VARIAS series, y entonces se unen por NIVELES.** Es lo
+    que destrabó el 3.20. Cada cuota que publica el emisor tiene su propio denominador
+    mundial, así que sumarlas produce un número sin significado: alimentos da 0,1183% del
+    mercado mundial de alimentos y materias primas agrícolas 0,0169% del suyo, y «0,1352%» no
+    es la cuota de nada. La unión correcta divide la suma de los numeradores por la suma de
+    los denominadores, y es lo que hace este bucle.
+
     Solo se publican los años con TODAS las series presentes. Un cociente al que le falta el
-    denominador —o el recorte de composición— no es un dato parcial, es un número inventado.
+    denominador —o una de las series de composición— no es un dato parcial, es un número
+    inventado.
     """
     from shared.data.wdi_client import fetch_wb_indicator
 
@@ -364,17 +380,18 @@ def _sync_participacion_exportadora(db: Session,
     pais = _serie("TX.VAL.MRCH.CD.WT", "DOM")
     mundo = _serie("TX.VAL.MRCH.CD.WT", "WLD")
     synced = 0
-    for _ind, (tema, composicion, unidad) in PARTICIPACION_EXPORTADORA.items():
-        cp = _serie(composicion, "DOM") if composicion else None
-        cm = _serie(composicion, "WLD") if composicion else None
+    for _ind, (tema, composiciones, unidad) in PARTICIPACION_EXPORTADORA.items():
+        cps = [_serie(c, "DOM") for c in composiciones]
+        cms = [_serie(c, "WLD") for c in composiciones]
         años = set(pais) & set(mundo)
-        if cp is not None and cm is not None:
-            años &= set(cp) & set(cm)
+        for d in cps + cms:
+            años &= set(d)
         for anio in sorted(años):
-            num, den = pais[anio], mundo[anio]
-            if cp is not None and cm is not None:
-                num *= cp[anio] / 100.0
-                den *= cm[anio] / 100.0
+            if composiciones:
+                num = sum(pais[anio] * c[anio] / 100.0 for c in cps)
+                den = sum(mundo[anio] * c[anio] / 100.0 for c in cms)
+            else:
+                num, den = pais[anio], mundo[anio]
             if not den:
                 continue
             _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(anio),
