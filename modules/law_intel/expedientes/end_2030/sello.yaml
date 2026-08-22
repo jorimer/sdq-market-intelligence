@@ -68,7 +68,7 @@ enmiendas: []
 correcciones:
   - id: corr-2026-08-21-glifo-y-separador
     fecha: "2026-08-21"
-    aprobado_por: ""            # ← FIRMA AQUÍ (nombre de quien aprueba)
+    aprobado_por: SDQ Consulting Group
     indicadores: ["3.22", "3.23"]
     detalle: >-
       Dos celdas que nuestro extractor no transcribió como las escribe la ley. Ninguna meta
