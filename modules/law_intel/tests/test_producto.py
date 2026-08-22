@@ -187,8 +187,21 @@ class TestElDetalleDeLaBrechaNombraIndicadores:
     """
 
     def test_nombra_indicadores_concretos(self):
+        """Se comprueba contra el estado REAL del expediente y no contra un indicador
+        elegido a mano. La primera versión de este test fijaba el 1.1 como ejemplo, y el día
+        que el 1.1 se midió el test se puso rojo sin que nada estuviera mal: lo que probaba
+        era que ese indicador seguía sin medir, no que el detalle nombrara indicadores."""
+        from modules.law_intel.bindings import cargar_bindings
+        from modules.law_intel.registro import cargar
+
+        bs = cargar_bindings(E)
+        sin_medir = [i for i in cargar(E).numerados
+                     if not ((b := bs.get(i.id)) and b.cuenta)]
+        assert sin_medir, "no queda ninguno sin medir: el test dejó de probar algo"
+        primero = sin_medir[0]
         d = LawProduct().data_signals().detail
-        assert "1.1" in d and "Confianza" in d
+        assert primero.id in d, d
+        assert primero.nombre[:20] in d, d
         assert "()" not in d
 
     def test_dice_el_conteo_con_su_denominador(self):

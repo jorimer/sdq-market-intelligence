@@ -97,18 +97,6 @@ motivos:
 
   # ══ NO SE HA BUSCADO FUENTE ═══════════════════════════════════════════════════════════
   # Estado honesto y deliberado. Estos son trabajo nuestro pendiente, no hallazgos.
-  - indicador: "1.1"
-    estado: pendiente_de_busqueda
-    detalle: >-
-      Confianza en los partidos políticos, base 22,2% en 2010 y meta 40,1% para 2030. Lo
-      miden encuestas regionales de opinión pública y la ley NO nombra ninguna, así que acá
-      la admisibilidad no se resuelve por la vía de los otros: el instrumento no incorpora a
-      la fuente, y la lista blanca del expediente admite terceros cuando republican dato
-      nacional o cuando la ley los nombra. Una encuesta de opinión de un tercero no es ni una
-      cosa ni la otra.
-      DECISIÓN PREVIA, del dueño y no de datos: si una encuesta regional de opinión califica
-      como fuente para este eje. Buscar el dato antes de responder eso sería trabajo que
-      puede terminar inadmisible.
   - indicador: "1.2"
     estado: instrumento_discontinuado
     evidencia: >-
@@ -155,13 +143,14 @@ motivos:
   - indicador: "1.4"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de desarrollo burocrático. Sin emisor nombrado, escala 0-1 (base 0,38 en 2006,
-      meta 0,9) y una particularidad que ninguno de los otros tiene: su línea base es cuatro
-      años ANTERIOR a la del resto del eje. Eso apunta a una medición puntual —un informe
-      regional sobre el servicio civil, no una serie anual— y si lo fuera, el indicador no
-      tendría con qué actualizarse aunque se identifique al emisor.
-      Antes de buscar el dato hay que decidir si una medición puntual de un tercero, repetida
-      una sola vez, califica como fuente para este eje. Es la misma decisión del 1.1.
+      Índice de desarrollo burocrático. La decisión de admisibilidad del 2026-08-22 le abrió
+      la puerta junto con el 1.1, así que ya no está bloqueado por producto: ahora es
+      búsqueda.
+      Lo que se sabe: escala 0-1 (base 0,38 en 2006, meta 0,9) y una línea base cuatro años
+      ANTERIOR a la del resto del eje, lo que apunta a un informe regional sobre el servicio
+      civil y no a una serie anual. Si fuera una medición puntual, el indicador no tendría con
+      qué actualizarse aunque se identifique al emisor — y ése es el primer hecho a comprobar,
+      antes que el valor: si la medición se repitió.
   - indicador: "3.15"
     estado: instrumento_discontinuado
     evidencia: >-

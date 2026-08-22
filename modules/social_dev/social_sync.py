@@ -578,6 +578,33 @@ def _sync_gei_per_capita(db: Session, set_phase: Callable[[str], None]) -> int:
     return synced
 
 
+def _sync_confianza_partidos(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 1.1 de la END: confianza en los partidos políticos.
+
+    El emisor no publica descarga abierta; sirve las tabulaciones desde su herramienta de
+    consulta. El conector habla con el servicio web que hay detrás, cuyo contrato NO está
+    documentado — ver `shared.data.latinobarometro`, donde está escrito qué se comprueba y
+    por qué cada comprobación falla ruidosa.
+
+    La magnitud es «mucha» más «algo de confianza» sobre la base sin no-respuesta, que es la
+    combinación que reproduce la línea base de la ley (22,26% computado contra 22,2 legal
+    para 2010). La suma se hace en el conector y no acá: es una relación, y las relaciones se
+    computan una sola vez y en el lugar que las puede probar.
+    """
+    from shared.data.latinobarometro import LICENSE, SOURCE, fetch_confianza_partidos
+
+    set_phase("confianza en los partidos (indicador 1.1 de la END)")
+    serie = fetch_confianza_partidos()      # la excepción sube a _best_effort
+    synced = 0
+    for anio, valor in serie:
+        _upsert_indicator(db, theme="trust_political_parties", entity=HEALTH_ENTITY,
+                          period=str(anio), value=float(valor), source=SOURCE,
+                          disagg="nacional", unit="% de la población adulta")
+        synced += 1
+    logger.info("[social] confianza en partidos: %d años (%s)", synced, LICENSE[:38])
+    return synced
+
+
 #: Fuente de los niveles LLECE. Corta a propósito: `sd_indicators.source` es varchar(40).
 FUENTE_LLECE = "LLECE/UNESCO"
 #: Materia y grado del indicador 2.17 de la END: matemáticas de 6to grado.
@@ -1052,6 +1079,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     gei_synced = _best_effort(
         "emisiones per cápita (4.1)",
         lambda: _sync_gei_per_capita(db, set_phase), errors)
+    partidos_synced = _best_effort(
+        "confianza en los partidos (1.1)",
+        lambda: _sync_confianza_partidos(db, set_phase), errors)
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
@@ -1116,6 +1146,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "razon_exp_imp_synced": razon_synced,
         "pobreza_rural_synced": rural_synced,
         "gei_per_capita_synced": gei_synced,
+        "confianza_partidos_synced": partidos_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,

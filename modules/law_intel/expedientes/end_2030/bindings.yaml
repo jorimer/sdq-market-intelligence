@@ -1892,3 +1892,38 @@ bindings:
       5 y se cumple. Los primeros tres años de la ENCFT (2015-2017) traen brechas de 11 a 14
       puntos y después caen a la mitad, un salto que el emisor no explica en el cuadro y que
       conviene mirar antes de leer la trayectoria como una mejora sostenida.
+
+# ── 1.1 · CONFIANZA EN LOS PARTIDOS ────────────────────────────────────────────────────────
+# Admitida la fuente por decisión del dueño (ver `encuesta_regional` en el instrumento), el
+# oráculo cerró casi exacto y de paso identificó la DEFINICIÓN: de todas las combinaciones de
+# la escala, una sola reproduce la línea base.
+  - indicador: "1.1"
+    serie: "social_dev:trust_political_parties"
+    fuente: encuesta_regional
+    mejor: mayor
+    estado: verificado
+    periodo_verificado: "2024"
+    origen: instrumento_de_tercero
+    productor: >-
+      Latinobarómetro — pregunta «Confianza en los partidos políticos» (variable P14ST.G) de
+      su encuesta regional. La suma de «mucha» y «algo» sobre la base sin no-respuesta es
+      cómputo SDQ.
+    nota: >-
+      El oráculo cierra a Δ 0,3%: la serie da 22,26% para 2010 contra los 22,2 que fija la
+      ley. Y la coincidencia identificó la definición además del emisor — sobre el total de
+      casos daría 21,9% y sobre otras combinaciones de la escala se aleja; solo «mucha más
+      algo, sobre la base sin no-respuesta» reproduce la cifra del legislador.
+      SALVEDAD QUE VIAJA AL INFORME, y no es menor: esto mide PERCEPCIÓN. Dice cuánta
+      confianza declara la gente, no cuán confiables son los partidos, y su serie se mueve
+      con el ciclo político. Entre 2016 y 2017 cae de 28,1% a 15,3% y en 2020 vuelve a 24,2%:
+      son saltos que ninguna política explica por sí sola.
+      El enunciado de la pregunta cambió de «confidence» a «trust» entre 2018 y 2020. El
+      emisor no lo declara como quiebre y la serie no muestra un salto atribuible a eso, pero
+      queda dicho.
+      Serie observada: 22,26% (2010) · 29,72% (2015) · 24,21% (2020) · 27,84% (2024). La meta
+      de 2015 era 24,7 y se cumplió con holgura; la de 2020 era 27,1 y NO se cumplió; a la de
+      2025, que es 33,6, le falta un 17% desde el último dato.
+      CÓMO SE OBTIENE, porque decide cuánto dura: el emisor no publica descarga abierta y el
+      conector habla con el servicio web que hay detrás de su herramienta de consulta, cuyo
+      contrato no está documentado. Los guards están escritos para fallar ruidoso — sobre
+      todo el que detecta que un año sin el país cae al agregado de dieciocho países.

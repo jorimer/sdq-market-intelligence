@@ -111,6 +111,7 @@ variable_scopes:
   exports_imports_ratio: national         # cociente WDI NE.EXP/NE.IMP — cómputo SDQ
   ghg_per_capita: national                # GEI con uso de la tierra / población — SDQ
   regional_unemployment_gap: national     # dispersión ENTRE regiones: el sujeto es el país
+  trust_political_parties: national       # encuesta nacional del Latinobarómetro
   # Cifras de la ZONA rural, no de una demarcación: son del país, desagregadas por zona.
   rural_poverty_extreme: national         # SISDOM 03 3 003a — «indigencia», zona rural
   rural_poverty_total: national           # SISDOM 03 3 003a — pobreza total, zona rural
