@@ -115,6 +115,26 @@ fuentes_admitidas:
       «iguales a los de SERCE 2006» por diseño, y ERCE mantiene los puntos de corte de TERCE.
       Por eso un indicador expresado en PORCENTAJE de alumnos por nivel sobrevive al cambio
       de escala y uno expresado en puntaje no.
+  - id: encuesta_regional
+    nombre: Encuestas regionales de opinión pública
+    del_evaluado: false
+    nota: >-
+      ADMITIDA POR DECISIÓN DEL DUEÑO el 2026-08-22, y conviene registrar por qué hizo falta
+      una decisión en vez de aplicar la regla. Las otras fuentes externas entraron por dos
+      vías: la ley las incorpora —PEFA, LLECE— o republican dato que produce el sistema
+      nacional o el de Naciones Unidas —WDI, CEPAL, UIP—. Una encuesta regional de opinión no
+      es ninguna de las dos: produce su propia medición y la ley no la nombra.
+      Alcance: los indicadores 1.1 (confianza en los partidos políticos) y 1.4 (índice de
+      desarrollo burocrático), que son los dos que la ley fija sobre mediciones de percepción
+      y de evaluación experta sin nombrar emisor.
+      LO QUE LA DECISIÓN NO CAMBIA: sigue rigiendo el oráculo. Que la fuente sea admisible no
+      la vuelve verificada — la serie tiene que reproducir la línea base que el legislador
+      escribió, o entrar por uno de los caminos declarados con su salvedad impresa.
+      SALVEDAD que viaja con cada binding que la use: una medición de percepción no es una
+      medición del fenómeno. «Confianza en los partidos» mide lo que la gente declara sentir,
+      y su serie se mueve con el ciclo político y con el diseño del cuestionario. Publicarla
+      contra una meta legal sin decir eso convertiría una opinión en un hecho.
+
   - id: pefa
     nombre: Evaluación PEFA
     del_evaluado: false
