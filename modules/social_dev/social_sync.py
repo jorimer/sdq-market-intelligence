@@ -514,6 +514,50 @@ def _sync_razon_exportaciones_importaciones(db: Session,
     return synced
 
 
+def _sync_gei_per_capita(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 4.1 de la END: emisiones per cápita, en toneladas de CO2 equivalente.
+
+    **El oráculo identificó el CONCEPTO, que es lo que estaba mal.** La ley titula el
+    indicador «Emisiones de dióxido de carbono» y fija 3,6 para 2010, y ese nombre mandó a
+    atarlo al CO2 solo — que da 2,131 y se descartó por un 41% de diferencia. El nombre
+    miente: contrastando las tres magnitudes candidatas contra la línea base, sólo una cierra.
+
+        CO2 solo, per cápita                          2,131   Δ 40,8%   descartar
+        todos los GEI sin uso de la tierra            3,415   Δ  5,1%   con salvedad
+        todos los GEI INCLUYENDO uso de la tierra     3,639   Δ  1,1%   ← la que la ley usó
+
+    Es el mismo método con el que la ventana promediada identificó el universo del 3.18: se
+    prueban los candidatos contra la cifra que el legislador escribió y la que la reproduce
+    dice qué quiso medir. Lo que discrimina acá es el CONCEPTO y no el año — la serie es casi
+    plana entre 2010 y 2014, así que 2013 y 2014 también rondan 3,6. La ley fija 2010 y 2010
+    cierra; el resto es coincidencia de una meseta y así queda dicho.
+
+    Se computa acá y no en el binding por lo mismo que el 3.22: un binding ata UNA variable y
+    no puede llevar una división. El emisor publica el total en megatoneladas y la ley fija la
+    meta per cápita, así que el cociente es un dato nuevo y se ingiere con su procedencia.
+
+    Solo se publican los años con AMBAS series.
+    """
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    set_phase("emisiones per cápita (indicador 4.1 de la END)")
+    # Todos los GEI INCLUYENDO uso de la tierra (LULUCF), en Mt de CO2 equivalente, AR5.
+    gei, _ = fetch_wb_indicator("EN.GHG.ALL.LU.MT.CE.AR5", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    pob, _ = fetch_wb_indicator("SP.POP.TOTL", ["DOM"], mrv=_WDI_HEALTH_YEARS)
+    g = {r["date"]: r["value"] for r in gei if r.get("value") is not None}
+    p = {r["date"]: r["value"] for r in pob if r.get("value") is not None}
+    synced = 0
+    for anio in sorted(set(g) & set(p)):
+        if not p[anio]:
+            continue
+        _upsert_indicator(db, theme="ghg_per_capita", entity=HEALTH_ENTITY,
+                          period=str(anio), value=float(g[anio]) * 1e6 / float(p[anio]),
+                          source="WDI, Banco Mundial", disagg="nacional",
+                          unit="t CO2e per cápita")
+        synced += 1
+    return synced
+
+
 #: Fuente de los niveles LLECE. Corta a propósito: `sd_indicators.source` es varchar(40).
 FUENTE_LLECE = "LLECE/UNESCO"
 #: Materia y grado del indicador 2.17 de la END: matemáticas de 6to grado.
@@ -985,6 +1029,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     rural_synced = _best_effort(
         "pobreza rural por zona (2.3 y 2.6)",
         lambda: _sync_pobreza_rural(db, set_phase), errors)
+    gei_synced = _best_effort(
+        "emisiones per cápita (4.1)",
+        lambda: _sync_gei_per_capita(db, set_phase), errors)
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
@@ -1048,6 +1095,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "llece_synced": llece_synced,
         "razon_exp_imp_synced": razon_synced,
         "pobreza_rural_synced": rural_synced,
+        "gei_per_capita_synced": gei_synced,
         "cobertura_salud_synced": salud_synced,
         "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,
