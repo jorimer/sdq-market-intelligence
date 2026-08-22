@@ -32,18 +32,22 @@ from reportlab.platypus import (
 
 from modules.banking_score.scoring.amplitude import TRAJECTORY_WINDOW as TRAJECTORY_COLUMNS
 from modules.banking_score.scoring.weights import SUB_COMPONENT_WEIGHTS
+from shared import brand
 from shared.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# ── Brand constants ───────────────────────────────────────────────
-NAVY = HexColor("#1A365D")
-BLUE = HexColor("#2B6CB0")
-GREEN = HexColor("#38A169")
-LIGHT_GRAY = HexColor("#F7FAFC")
-GRAY = HexColor("#718096")
-WHITE = HexColor("#FFFFFF")
-SIGNAL = HexColor("#E11D48")   # signal red — acento de marca (pull-quotes)
+# ── Marca ─────────────────────────────────────────────────────────
+# La paleta se LEE de `shared.brand`, nunca se declara acá: este generador y el genérico
+# de `shared/products/render.py` tenían dos copias, y las dos quedaron en un azul que la
+# aplicación ya no usa. Lo vigila `shared/brand/tests/test_paleta_unica.py`.
+NAVY = HexColor(brand.INK)          # tinta: títulos y cabeceras de tabla
+BLUE = HexColor(brand.ACCENT_INK)   # texto en acento (subtítulos)
+ACCENT = HexColor(brand.ACCENT)     # rellenos de acento: barra del pull-quote
+GREEN = HexColor(brand.OK)
+LIGHT_GRAY = HexColor(brand.CANVAS)
+GRAY = HexColor(brand.MUTED)
+WHITE = HexColor(brand.WHITE)
 
 DISCLAIMER_ES = (
     "Las calificaciones y opiniones expresadas en este informe son las de "
@@ -180,7 +184,7 @@ def _get_styles():
 # el texto respeta el ancho de su columna y salta de línea. Centralizarlo garantiza
 # que ningún reporte (actual o futuro) pueda re-introducir el desborde.
 
-_BLACK = HexColor("#111111")
+_BLACK = HexColor(brand.BODY)   # texto de celda — tinta de cuerpo, no negro puro
 _ALIGN_ENUM = {"LEFT": TA_LEFT, "CENTER": TA_CENTER, "RIGHT": TA_RIGHT}
 
 
@@ -189,7 +193,7 @@ def _branded_table(rows: List[List], col_widths: List[float], styles, *,
                    padding: float = 4, repeat_header: bool = True) -> Table:
     """Construye una tabla de marca envolviendo CADA celda en un Paragraph.
 
-    - Fila 0 = encabezado (fondo navy, texto blanco); resto = cuerpo (texto negro,
+    - Fila 0 = encabezado (fondo navy, texto blanco); resto = cuerpo (texto de cuerpo,
       con bandas de fila alternas).
     - ``aligns[i]`` alinea la columna i (``LEFT``/``CENTER``/``RIGHT``). Default:
       1.ª columna a la izquierda, el resto centradas (el look actual de la reportería).
@@ -253,20 +257,20 @@ def generate_radar_chart(sub_scores: Dict[str, float], output_path: str) -> str:
     angles.append(angles[0])
 
     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
-    ax.fill(angles, values, color="#2B6CB0", alpha=0.25)
-    ax.plot(angles, values, color="#2B6CB0", linewidth=2)
-    ax.scatter(angles[:-1], values[:-1], color="#2B6CB0", s=80, zorder=5)
+    ax.fill(angles, values, color=brand.ACCENT, alpha=0.25)
+    ax.plot(angles, values, color=brand.ACCENT, linewidth=2)
+    ax.scatter(angles[:-1], values[:-1], color=brand.ACCENT, s=80, zorder=5)
 
     ax.set_ylim(0, 100)
     ax.set_yticks([20, 40, 60, 80, 100])
-    ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=8, color="#718096")
+    ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=8, color=brand.MUTED)
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(
         [labels.get(c, c) for c in categories], fontsize=11,
     )
     ax.set_title(
         "Perfil de Riesgo — Sub-componentes",
-        fontsize=14, pad=20, color="#1A365D",
+        fontsize=14, pad=20, color=brand.INK,
     )
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -473,7 +477,7 @@ def _pull_quote(text: str, styles) -> Table:
     t = Table([["", Paragraph(_md_inline(text), styles["SDQPullQuote"])]],
               colWidths=[0.09 * inch, 6.4 * inch])
     t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 0), SIGNAL),
+        ("BACKGROUND", (0, 0), (0, 0), ACCENT),
         ("LEFTPADDING", (1, 0), (1, 0), 10), ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))

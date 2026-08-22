@@ -47,7 +47,7 @@ y **de dónde sale el dato** (para auto-generación).
 | 10 | **Fuentes / Referencias** | Citas con procedencia (fuente · licencia · fecha · URL) | lineage |
 
 ### Reglas por sección
-- **Portada:** marca SDQ·MIP (logo, navy + signal red), título del producto, sector/entidad,
+- **Portada:** marca SDQ·MIP (símbolo Arco, tinta + acento), título del producto, sector/entidad,
   período, **banda/score headline** (p.ej. "ITT 93.0 · Fuerte"), fecha de generación,
   watermark por tier ("Vista abierta", "Suscripción", "On-demand"; muestra → "MUESTRA").
 - **Resumen ejecutivo:** abre con un **pull-quote** de la cifra/insight clave (barra de
@@ -89,7 +89,14 @@ SCQA donde aplique. Cifras tabulares. Español (UI), con i18n EN/FR para narrati
 adjetivos vacíos; cada párrafo mueve la decisión. Honestidad de procedencia siempre visible.
 
 ## 5. DNA visual / formato (marca SDQ·MIP)
-- **Paleta y tipografía:** navy (`#1A365D`) + signal red de acento; Plus Jakarta Sans
+- **Paleta y tipografía:** la MISMA de la app — dirección «Claro & Vivo», leída de
+  `shared/brand/tokens.py` (espejo de `frontend/src/index.css`): tinta `--ink` (`#0A1A3A`),
+  acento `--accent` (`#1E6FFF`) para rellenos y `--accent-ink` (`#1551C0`) para texto en
+  acento (el acento puro da 4,40:1 sobre blanco y no pasa AA). El navy `#1A365D` y el signal
+  red `#E11D48` de la paleta vieja se RETIRARON: el rojo sobrevive solo como `--alert`
+  (`#C8392E`) y solo con significado —valor negativo, estampa de muestra—, nunca como
+  decoración. Ningún renderizador declara un hex: lo vigila
+  `shared/brand/tests/test_paleta_unica.py`. Tipografía: Plus Jakarta Sans
   (display) · Inter (cuerpo) · JetBrains Mono (cifras). Tokens, no hex sueltos.
 - **Portada:** banda de marca + título + sujeto + período + banda/score + fecha + watermark.
 - **Encabezado corrido** en cada página ("SDQ·MIP — {Producto} · {Sector/Entidad}") + **paginación**.

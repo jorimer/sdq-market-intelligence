@@ -19,14 +19,27 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
+from shared import brand
 from shared.config.settings import settings
 
-_NAVY = RGBColor(0x1A, 0x36, 0x5D)
-_BLUE = RGBColor(0x2B, 0x6C, 0xB0)
-_SIGNAL = "E11D48"
-_GRAY = RGBColor(0x71, 0x80, 0x96)
-_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
-_NAVY_HEX = "1A365D"
+def _rgb(token: str) -> RGBColor:
+    """Token de marca (``#RRGGBB``) → color de python-docx."""
+    return RGBColor.from_string(token.lstrip("#").upper())
+
+
+def _hex(token: str) -> str:
+    """Token de marca → hex sin almohadilla, que es como lo quiere el sombreado OOXML."""
+    return token.lstrip("#").upper()
+
+
+# Paleta: se LEE de `shared.brand`. Ver el comentario equivalente en `render.py`.
+_NAVY = _rgb(brand.INK)            # tinta: títulos y cabeceras
+_BLUE = _rgb(brand.ACCENT_INK)     # texto en acento — el que contrasta sobre blanco
+_ACCENT = _hex(brand.ACCENT)       # rellenos de acento: barra del pull-quote
+_GRAY = _rgb(brand.MUTED)
+_ALERT = _rgb(brand.ALERT)         # estampa de MUESTRA
+_WHITE = _rgb(brand.WHITE)
+_NAVY_HEX = _hex(brand.INK)
 
 _LOGO = os.path.join(os.path.dirname(__file__), "assets", "sdq_mip_logo.png")
 _GLYPH_RE = re.compile("[▀-▟■-◿✀-➿☀-⛿\U0001f000-\U0001ffff️]")
@@ -128,7 +141,7 @@ def _furniture(doc, header_line: str, watermark: Optional[str], sample: bool) ->
     if wm:
         fr = fp.add_run(wm + "      ")
         fr.font.size = Pt(8)
-        fr.font.color.rgb = RGBColor(0x99, 0x1B, 0x1B) if sample else _GRAY
+        fr.font.color.rgb = _ALERT if sample else _GRAY
     _page_number_field(fp)
 
 
@@ -188,7 +201,7 @@ def _md_body(doc, text: str) -> None:
         h = re.match(r"^(#{1,3})\s+(.*)$", line)
         if q:
             p = doc.add_paragraph()
-            _left_accent(p, _SIGNAL)
+            _left_accent(p, _ACCENT)
             _add_runs(p, q.group(1), color=_NAVY, size=13)
         elif h:
             p = doc.add_paragraph()
@@ -247,7 +260,7 @@ def render_product_docx(
         _add_runs(doc.add_paragraph(), subtitle, color=_BLUE, size=12)
     if headline:
         hq = doc.add_paragraph()
-        _left_accent(hq, _SIGNAL)
+        _left_accent(hq, _ACCENT)
         _add_runs(hq, headline, color=_NAVY, size=13)
     _add_runs(doc.add_paragraph(), f"**Período:** {period}", color=_NAVY)
     _add_runs(doc.add_paragraph(), f"**Fecha:** {datetime.now().strftime('%d/%m/%Y')}", color=_NAVY)

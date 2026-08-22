@@ -3,23 +3,30 @@ import { useTranslation } from "react-i18next";
 import { NAV } from "./nav";
 import { useAuth } from "@/shared/auth/AuthContext";
 
+/**
+ * Símbolo Arco — geometría canónica (ver `shared/brand/mark.py`).
+ *
+ * El arco es un `path` con extremos explícitos, NO un círculo con `stroke-dasharray`:
+ * la versión punteada dejaba un hueco tan corto que el punto de señal se fundía contra
+ * el terminal del arco, y a tamaño de favicon el símbolo se leía como una «C» manchada
+ * en vez de un medidor con su lectura. Un `dashoffset` además codifica el hueco de forma
+ * indirecta, así que quien lo edite no tiene cómo saber que está moviendo el contacto.
+ *
+ * Si cambia acá, cambia también en `frontend/index.html` (favicon) y en
+ * `shared/brand/mark.py`; `shared/brand/tests/test_marca_unica.py` compara las tres.
+ */
 export function ArcMark() {
   return (
     <svg viewBox="0 0 32 32" width="28" height="28" className="shrink-0">
       <rect width="32" height="32" rx="9" fill="var(--accent)" />
-      <g transform="translate(16 16)">
-        <circle
-          r="8"
-          fill="none"
-          stroke="white"
-          strokeWidth="3.4"
-          strokeLinecap="round"
-          strokeDasharray="50.2"
-          strokeDashoffset="13"
-          transform="rotate(-90)"
-        />
-        <circle cy="-8" r="2.4" fill="white" />
-      </g>
+      <path
+        d="M20.95 11.05 A 7 7 0 1 1 11.05 11.05"
+        fill="none"
+        stroke="white"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <circle cx="16" cy="6.6" r="2.6" fill="white" />
     </svg>
   );
 }
