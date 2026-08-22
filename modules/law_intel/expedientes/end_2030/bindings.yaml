@@ -1645,3 +1645,23 @@ bindings:
       arancelaria concreta y no a ninguna de las dos categorías agregadas de este emisor. El
       candidato queda descartado; el indicador sigue abierto a una fuente que publique el
       corte por capítulo arancelario.
+
+# ── 3.24 · DESCARTE CON EVIDENCIA ─────────────────────────────────────────────────────────
+  - indicador: "3.24"
+    serie: "wdi.FS.AST.PRVT.GD.ZS"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: Sistema financiero dominicano vía el Banco Mundial; el emisor lo republica.
+    motivo_descarte: >-
+      Ninguno de los tres agregados de crédito que publica el emisor mide «crédito a la
+      producción». Contra la ventana 2005-2010 que la ley promedia, y con la base legal en
+      2,24% del PIB: crédito interno al sector privado da 20,68% (Δ 823%), crédito de bancos
+      al sector privado 19,83% (Δ 785%) y crédito interno total 36,88% (Δ 1.546%). Están
+      entre ocho y quince veces por encima; no es una discrepancia de revisión, son universos
+      distintos.
+      Lo que sugiere la trayectoria de la ley —2,24 en la base y 30 para 2030— es que
+      «producción» nombra un subconjunto acotado del crédito, no el agregado. Identificarlo
+      exige el cuadro de crédito por destino económico del banco central, que no ingerimos.
+      El indicador sigue abierto a esa fuente.
