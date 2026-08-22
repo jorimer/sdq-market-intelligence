@@ -128,25 +128,34 @@ motivos:
   - indicador: "1.2"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de percepción de la corrupción. El emisor publica anualmente, y la línea base
-      legal de 3,0 para 2010 está en la escala 0-10 que ese emisor abandonó en 2012. Sospecha
-      de ruptura de escala del mismo tipo que la del LLECE, sin verificar.
+      Índice de percepción de la corrupción. La ESCALA de las metas lo confirma como sospecha
+      de ruptura: la ley fija 3,0 en 2010 y pide llegar a 7,0 en 2030, que es la escala 0-10
+      del emisor. Ese emisor pasó a una escala 0-100 en 2012 y declara que los valores de
+      ambos tramos no son comparables entre sí. Falta comprobar contra el emisor si publicó
+      un puente; sin él, es el caso del LLECE otra vez. La identidad de concepto es perfecta
+      —la ley nombra el índice— así que el camino de verificación sería ése y no el oráculo.
   - indicador: "1.3"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de fortaleza institucional. La ley no nombra al emisor y el nombre no coincide con
-      ningún índice publicado que se haya comprobado. Primer paso: identificar qué índice quiso
-      nombrar el legislador.
+      Índice de fortaleza institucional. La ley no nombra al emisor. La escala de las metas da
+      la primera pista y hay que tratarla como pista: base 3,2 y meta 5,0 es el rango 1-7 de
+      los índices compuestos de competitividad, el mismo del indicador 3.9 que ya se descartó
+      porque su emisor lo discontinuó. Antes de declararlo hay que identificar el índice, no
+      deducirlo del rango.
   - indicador: "1.4"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de desarrollo burocrático. Mismo problema de identificación del emisor que el 1.3,
-      con la sospecha adicional de que el índice se discontinuó.
+      Índice de desarrollo burocrático. Sin emisor nombrado, y con una pista de escala
+      distinta a la del 1.3: base 0,38 y meta 0,9, o sea un índice 0-1. Su línea base es de
+      2006, cuatro años antes que la del resto del eje, lo que sugiere una medición puntual y
+      no una serie anual. Si fuera puntual, el indicador no tendría con qué actualizarse
+      aunque se identifique al emisor.
   - indicador: "3.15"
     estado: pendiente_de_busqueda
     detalle: >-
-      Índice de infraestructura. Sin emisor nombrado en la ley. Sospecha de que corresponde a
-      un pilar de un índice compuesto internacional, sin verificar.
+      Índice de infraestructura. Sin emisor nombrado. Misma pista de escala que el 1.3: base
+      3,0 y meta 6,0, el rango 1-7 de los índices compuestos de competitividad. Y la misma
+      cautela: la escala sugiere la familia, no identifica al emisor.
   - indicador: "3.16"
     estado: pendiente_de_busqueda
     detalle: >-
@@ -156,25 +165,28 @@ motivos:
   - indicador: "3.17"
     estado: pendiente_de_busqueda
     detalle: Mismo caso que el 3.16, sobre el pilar de sostenibilidad del mismo reporte.
-  - indicador: "2.11"
-    estado: pendiente_de_busqueda
-    detalle: >-
-      Porcentaje de la población económicamente activa en programas de capacitación. Emisor
-      probable entre el instituto de formación técnica y la encuesta de fuerza de trabajo, sin
-      comprobar cuál publica la magnitud.
   - indicador: "2.26"
     estado: pendiente_de_busqueda
     detalle: >-
-      Tasa de letalidad asociada al dengue. La produce la autoridad sanitaria en sus boletines
-      epidemiológicos, cuyo formato no se ha evaluado.
+      Tasa de letalidad asociada al dengue. Probado el 2026-08-21 contra el catálogo nacional
+      de datos abiertos: «dengue», «letalidad» y «boletín epidemiológico» devuelven CERO
+      conjuntos. El portal de la autoridad sanitaria no respondió en esa consulta, así que
+      falta comprobar si publica sus boletines por fuera del catálogo. Un cero del catálogo es
+      evidencia sobre el catálogo, no sobre el emisor: el MESCyT publica y tampoco está ahí.
   - indicador: "2.38"
     estado: pendiente_de_busqueda
     detalle: >-
-      Brecha regional de la tasa de desocupación ampliada. Exige la desocupación ampliada por
-      región y la definición de «brecha» que usa la ley, ninguna de las dos comprobada.
+      Brecha regional de la tasa de desocupación ampliada. Probado el 2026-08-21 contra el
+      catálogo nacional: «desocupación» y «desempleo región» devuelven cero. El emisor de la
+      encuesta de fuerza de trabajo publica por región y ya se le ingieren dos razones de
+      género, así que el camino más corto es su propio portal y no el catálogo. Falta además
+      fijar qué entiende la ley por «brecha»: entre la región peor y la mejor, o contra el
+      promedio nacional. La definición cambia la cifra.
   - indicador: "2.40"
     estado: pendiente_de_busqueda
     detalle: >-
-      Brecha de género en ingreso laboral. El emisor de la encuesta de fuerza de trabajo
-      publica ocupación por sexo, que ya se ingiere; falta comprobar si publica ingreso por
-      sexo con el mismo corte.
+      Brecha de género en ingreso laboral. Probado el 2026-08-21 contra el catálogo nacional
+      sin resultados útiles. El emisor de la encuesta de fuerza de trabajo publica ocupación
+      por sexo —dos razones ya se ingieren de ahí— así que el ingreso por sexo con el mismo
+      corte es la vía natural, por su portal. La meta es una RAZÓN que llega a 1,0, o sea
+      paridad, y eso acota qué forma debe tener la serie.
