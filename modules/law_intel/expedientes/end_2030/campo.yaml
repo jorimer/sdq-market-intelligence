@@ -94,12 +94,6 @@ motivos:
   - indicador: "3.20"
     estado: pendiente_de_derivacion
     detalle: Igual que el 3.18, sobre exportaciones de productos agropecuarios.
-  - indicador: "3.22"
-    estado: pendiente_de_derivacion
-    detalle: >-
-      Razón entre exportaciones e importaciones de bienes y servicios. Las dos series son del
-      mismo emisor y una de ellas ya se ingiere; falta el cociente. Su línea base es un
-      promedio de años y por tanto no admite oráculo.
   - indicador: "3.23"
     estado: pendiente_de_derivacion
     detalle: >-
@@ -109,6 +103,10 @@ motivos:
       revisiones que ambos aplican a sus series históricas, y hay que resolver cuál se cita
       antes de publicar. Falta además declarar la transformación de unidad: el emisor
       internacional publica en dólares y la ley fija la meta en millones.
+      La corrección firmada del sello levantó el OTRO bloqueo que tenía —sus cuatro metas se
+      leían «>1,700 · >2,000 · >2,250 · >2,500», con la coma como si fuera decimal— pero la
+      elección de fuente no la resuelve una firma: es una decisión sobre qué cifra cita el
+      informe, y sigue abierta.
   - indicador: "3.14"
     estado: pendiente_de_derivacion
     detalle: >-
