@@ -1687,3 +1687,43 @@ bindings:
       siquiera se puede contrastar.
       El indicador sigue abierto a una fuente que mida personas capacitadas sobre la PEA. La
       encuesta de fuerza de trabajo sería el lugar natural si publica esa pregunta.
+
+# ── 3.23 · FUENTE NACIONAL, POR DECISIÓN — y lo que la decisión destapó ────────────────────
+# El dueño eligió la fuente nacional. La elección se implementa acá y NO promueve el
+# indicador, por un motivo que la propia elección permitió medir: el oráculo corre y refuta
+# contra las TRES añadas disponibles del mismo emisor.
+  - indicador: "3.23"
+    serie: "ied_usd_mm"
+    fuente: bcrd
+    mejor: mayor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      BCRD — Departamento Internacional, Subdirección de Balanza de Pagos, División de
+      Estadísticas y Registro de Inversión Extranjera. Cuadro «Flujos de la Inversión
+      Extranjera Directa por actividad económica», fila `Total Flujos IED`.
+    termino_del_emisor: "Flujos de la Inversión Extranjera Directa"
+    nota_comparabilidad: >-
+      La IDENTIDAD DE CONCEPTO es casi literal: la ley llama al indicador «Flujo anual de
+      inversión extranjera directa» y el emisor titula su cuadro «Flujos de la Inversión
+      Extranjera Directa». Lo que no cierra es el ORÁCULO, y no cierra contra ninguna añada.
+      La ley fija 1.625,3 para 2010. Medido: la añada vigente del emisor da 2.023,7 (Δ 24,5%),
+      su añada anterior da 1.896,3 (Δ 16,7%) y el republicador internacional da 1.820,2
+      (Δ 12,0%). El propio emisor declara al pie del cuadro vigente que sus estadísticas van
+      «Conforme al Sexto Manual de Balanza de Pagos del FMI», y el cuadro anterior está
+      fechado en marzo de 2014 y advierte que son «cifras revisadas parcialmente». O sea: el
+      mismo emisor ha publicado al menos tres valores para el mismo año y el mismo concepto,
+      y el de la ley es un cuarto, anterior a todos ellos.
+      Por eso no se promueve por identidad de concepto: ese camino exige que la línea base
+      caiga FUERA del alcance de la serie, y acá cae dentro —la serie empieza justamente en
+      2010— y la refuta. Usarlo igual sería abrir la puerta del «se parece» que el oráculo
+      existe para cerrar.
+    nota: >-
+      Lo que sí se puede afirmar hoy, y viaja al informe aunque el indicador no cuente: bajo
+      la añada vigente los cuatro umbrales se superan —2.204,9 en 2015 contra >1.700, 2.559,6
+      en 2020 contra >2.000, y 5.032,8 en 2025 contra >2.250 y >2.500—. Y el veredicto
+      resiste la corrección: aplicando a toda la serie el peor factor de añada medido
+      (1.625,3/2.023,7 = 0,803), 2015 queda en 1.770,9 y 2020 en 2.055,6, que siguen por
+      encima de sus umbrales por 4,2% y 2,8%.
+      La salvedad de ese cálculo es real y hay que decirla: supone que la razón entre añadas
+      se mantiene constante entre años, y eso no está medido.
