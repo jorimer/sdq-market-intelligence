@@ -151,20 +151,14 @@ motivos:
       conjuntos. El portal de la autoridad sanitaria no respondió en esa consulta, así que
       falta comprobar si publica sus boletines por fuera del catálogo. Un cero del catálogo es
       evidencia sobre el catálogo, no sobre el emisor: el MESCyT publica y tampoco está ahí.
-  - indicador: "2.38"
-    estado: pendiente_de_busqueda
-    detalle: >-
-      Brecha regional de la tasa de desocupación ampliada. Probado el 2026-08-21 contra el
-      catálogo nacional: «desocupación» y «desempleo región» devuelven cero. El emisor de la
-      encuesta de fuerza de trabajo publica por región y ya se le ingieren dos razones de
-      género, así que el camino más corto es su propio portal y no el catálogo. Falta además
-      fijar qué entiende la ley por «brecha»: entre la región peor y la mejor, o contra el
-      promedio nacional. La definición cambia la cifra.
   - indicador: "2.40"
     estado: pendiente_de_busqueda
     detalle: >-
-      Brecha de género en ingreso laboral. Probado el 2026-08-21 contra el catálogo nacional
-      sin resultados útiles. El emisor de la encuesta de fuerza de trabajo publica ocupación
-      por sexo —dos razones ya se ingieren de ahí— así que el ingreso por sexo con el mismo
-      corte es la vía natural, por su portal. La meta es una RAZÓN que llega a 1,0, o sea
-      paridad, y eso acota qué forma debe tener la serie.
+      Brecha de género en ingreso laboral. Probado el 2026-08-22 contra el portal del emisor,
+      que es donde se resolvió el 2.38: su libro de indicadores trae hojas «Masculino» y
+      «Femenino» —de ahí salen las dos razones de género que ya se ingieren— y NINGUNA de las
+      dos tiene fila de ingreso. Sus diez libros de ingresos abren por grupo ocupacional,
+      categoría, nivel, rama y tramos, y ninguno por sexo.
+      Queda una pista de la forma: esos libros publican «ingresos por hora», y una razón
+      HORARIA explicaría que la ley fije una línea base de 0,95 —casi paridad— cuando la
+      brecha mensual es mayor. Si el corte por sexo del ingreso horario existe, es ahí.

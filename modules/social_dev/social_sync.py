@@ -217,6 +217,9 @@ _MERCADO_LABORAL = {
     "unemployment_rate": ("tasa de desocupación (BCRD · ENCFT)", "%"),
     "employment_gender_ratio": ("razón de ocupación femenina/masculina", "razón"),
     "unemployment_gender_ratio": ("razón de desocupación femenina/masculina", "razón"),
+    # Indicador 2.38 de la END. La unidad dice PUNTOS y no por ciento: es la distancia
+    # entre dos tasas, y leerla como porcentaje la convierte en otra cosa.
+    "regional_unemployment_gap": ("brecha entre la región peor y la mejor", "puntos"),
 }
 
 
