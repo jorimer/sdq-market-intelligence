@@ -29,9 +29,10 @@ CUENTA_COBERTURA = frozenset({"verificado"})
 
 DIRECCIONES = frozenset({"menor", "mayor"})
 
-# Los dos caminos por los que un binding llega a `verificado`. Conjunto CERRADO, y el que se
+# Los caminos por los que un binding llega a `verificado`. Conjunto CERRADO, y el que se
 # usó viaja hasta la portada: la cifra de cobertura no puede leerse como si todos hubieran
-# pasado por el mismo filtro.
+# pasado por el mismo filtro. Eran dos y son tres; abrir uno nuevo es decisión del dueño, no
+# una salida para un indicador que no cierra.
 #
 # `oraculo` es el fuerte y sigue siendo el default: la serie reproduce la LÍNEA BASE que la
 # ley declara, en el año que la ley declara. Es una coincidencia de magnitud contra un valor
@@ -45,10 +46,20 @@ DIRECCIONES = frozenset({"menor", "mayor"})
 # Lo que NO es: aceptar un parecido de etiqueta. El término tiene que ser el que usa el
 # EMISOR en su publicación, y `_identidad_comprobada` lo contrasta contra el nombre del
 # indicador en la ley. La declaración no se cree: se comprueba.
+#
+# `revision_declarada` cubre el caso que los otros dos dejaban afuera: el oráculo CORRE, falla,
+# y el emisor publica la causa —revisó su propia metodología—. Sin él, un indicador cuyo
+# emisor mejoró su compilación queda inverificable para siempre y el informe diría «no lo
+# medimos» sobre una serie que el Estado publica con el nombre exacto que el legislador le
+# puso: castigaría al emisor por revisar bien. Sus cuatro candados y por qué cada uno hace
+# falta están en `modules.law_intel.anadas`.
 VERIFICADO_POR = {
     "oraculo": "la serie reproduce la línea base de la ley en el año que la ley fija",
     "identidad_de_concepto": ("el emisor publica la magnitud con el término del legislador, y "
                               "la línea base de la ley cae fuera del alcance de la serie"),
+    "revision_declarada": ("el oráculo corre y falla, el emisor DECLARA la revisión de "
+                           "metodología que lo explica, y el margen contra las metas se come "
+                           "la corrección"),
 }
 
 # Palabras de MEDICIÓN, que nombran la forma y no el fenómeno. Un término que solo coincide
@@ -159,6 +170,14 @@ class Binding:
     #: verifica por identidad de concepto, y no se cree: se contrasta contra el nombre que la
     #: ley le puso al indicador.
     termino_del_emisor: Optional[str] = None
+    #: La declaración del emisor sobre su propia revisión, para el camino
+    #: `revision_declarada`. Lleva `texto`, `donde` y `verificado_el`: es una afirmación
+    #: sobre el mundo y por eso va con evidencia FECHADA, igual que en el campo.
+    declaracion_del_emisor: Optional[Dict[str, str]] = None
+    #: Los valores que distintas añadas publican para el AÑO BASE de la ley. Se declaran los
+    #: INSUMOS y no la conclusión: el factor de corrección y si el margen lo absorbe los
+    #: computa `modules.law_intel.anadas`. Una conclusión copiada a mano se desincroniza.
+    anadas: Tuple[Dict[str, Any], ...] = ()
     origen: Optional[str] = None
     #: El productor, con nombre. Va aparte del origen porque el origen es una categoría y
     #: esto es la cadena concreta que un lector puede ir a comprobar.
@@ -252,7 +271,9 @@ def cargar_bindings(expediente_id: str) -> Dict[str, Binding]:
     def _armar(d: Dict[str, Any]) -> Binding:
         d = dict(d)
         cd = d.pop("candidatos_descartados", None) or ()
-        return Binding(**d, candidatos_descartados=tuple(dict(c) for c in cd))
+        an = d.pop("anadas", None) or ()
+        return Binding(**d, candidatos_descartados=tuple(dict(c) for c in cd),
+                       anadas=tuple(dict(a) for a in an))
 
     bs = [_armar(b) for b in (doc.get("bindings") or [])]
     _validar(cargar(expediente_id), bs)
@@ -344,6 +365,78 @@ def _validar(exp: Expediente, bindings: List[Binding]) -> None:
                     f"salvedad —que el oráculo de la ley no alcanza la serie— tiene que "
                     f"viajar impresa al informe; sin ella la cobertura se lee como si todos "
                     f"hubieran pasado por el filtro fuerte.")
+
+        # El tercer camino: el oráculo corrió, falló, y el emisor declara por qué. Tiene los
+        # mismos candados que la identidad de concepto MÁS dos propios, y los dos propios son
+        # los que impiden que sea «el oráculo falló, igual lo promuevo».
+        if b.cuenta and b.verificado_por == "revision_declarada":
+            from modules.law_intel.anadas import Anada, alguna_reproduce_la_base
+
+            if not (b.termino_del_emisor or "").strip():
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: verifica por revisión declarada y no dice con qué término "
+                    f"publica el emisor. Sin identidad de término esto sería aceptar cualquier "
+                    f"serie cuya diferencia se pueda explicar con una historia.")
+            vale, motivo = identidad_comprobada(b.termino_del_emisor or "",
+                                                por_id[b.indicador].nombre)
+            if not vale:
+                raise ExpedienteInvalido(f"{b.indicador}: {motivo}")
+
+            dec = b.declaracion_del_emisor or {}
+            faltan = [k for k in ("texto", "donde", "verificado_el")
+                      if not str(dec.get(k, "")).strip()]
+            if faltan:
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: la revisión la tiene que declarar el EMISOR, y falta "
+                    f"{', '.join(faltan)} en `declaracion_del_emisor`. Sin texto, sin dónde "
+                    f"aparece y sin la fecha en que se comprobó, la revisión es una hipótesis "
+                    f"nuestra sobre por qué no cuadra — que es exactamente lo que este camino "
+                    f"no puede admitir.")
+
+            try:
+                anadas = [Anada.desde(a) for a in b.anadas]
+            except ValueError as e:
+                raise ExpedienteInvalido(f"{b.indicador}: {e}") from e
+            if len(anadas) < 2:
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: verifica por revisión declarada con {len(anadas)} añada(s). "
+                    f"Hacen falta al menos dos: una sola cifra que no cuadra no es una revisión, "
+                    f"es una discrepancia sin historia.")
+
+            base = por_id[b.indicador].base_valor
+            if base is None:
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: verifica por revisión declarada y la ley no le fija línea "
+                    f"base. Sin base no hubo oráculo que fallara, y este camino existe para "
+                    f"un oráculo que falló.")
+            reproduce = alguna_reproduce_la_base(float(base), anadas)
+            if reproduce is not None:
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: la añada «{reproduce.fuente}» SÍ reproduce la línea base "
+                    f"({reproduce.valor} contra {base}). Entonces el camino es el oráculo "
+                    f"contra esa añada, no la revisión declarada. Un camino de excepción que "
+                    f"se usa cuando el normal alcanza deja de ser una excepción.")
+
+            # El CUARTO candado —que el margen se coma la corrección— no se puede comprobar
+            # acá: necesita las observaciones, y las observaciones viven donde están los
+            # datos, no en el YAML. Transcribirlas al expediente sería peor que no tenerlas,
+            # porque son justamente las cifras que el emisor puede volver a revisar.
+            #
+            # Va donde va el oráculo, que tiene el mismo problema y la misma solución:
+            # `modules.law_intel.verificacion` lo computa contra la serie real y lo devuelve
+            # en `/bindings/verificacion`. Promover sin haberlo corrido es el mismo error que
+            # promover sin haber corrido la sonda.
+
+            if (b.nota_comparabilidad or "").strip():
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: no se verifica por revisión declarada con una duda de "
+                    f"comparabilidad ABIERTA. O la duda está resuelta y pasa a `nota`, o el "
+                    f"binding no promueve.")
+            if not (b.nota or "").strip():
+                raise ExpedienteInvalido(
+                    f"{b.indicador}: verifica por revisión declarada y no trae `nota`. La "
+                    f"salvedad —que la cifra de la ley es de otra añada— tiene que viajar "
+                    f"impresa al informe.")
 
         # De dónde sale la evidencia. Se exige a TODOS los bindings y no solo a los
         # verificados: la sección de verificabilidad cuenta también lo que la ley PERDIÓ, y
