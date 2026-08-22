@@ -420,6 +420,20 @@ class SocialDevProduct:
             "Pobreza general — zona rural (% de la población rural)", "living_standards",
             "SISDOM, cuadro 03 3 003a. Línea de pobreza TOTAL, que incluye la indigencia. "
             "Mismo quiebre de metodología en 2016."),
+        # Indicadores 2.1 y 2.4 de la END. El sufijo `_national` no es decorativo: las
+        # series homónimas sin él son REGIONALES, y confundirlas fue lo que hizo publicar el
+        # valor de una sola región contra una meta nacional.
+        "poverty_extreme_national": (
+            "poverty_extreme_national", HEALTH_ENTITY,
+            "Pobreza extrema — país (% de la población)", "living_standards",
+            "SISDOM, cuadro 03 3 003a, columna nacional. El emisor la llama «indigencia "
+            "monetaria». Quiebre de metodología declarado en 2016."),
+        "poverty_rate_national": (
+            "poverty_rate_national", HEALTH_ENTITY,
+            "Pobreza general — país (% de la población)", "living_standards",
+            "SISDOM, cuadro 03 3 003a, columna nacional. Línea de pobreza TOTAL, que incluye "
+            "la indigencia. Mismo quiebre de 2016, con un salto mucho mayor que el de la "
+            "línea de indigencia."),
         # Indicador 3.22 de la END. Es una RAZÓN, no un porcentaje: la etiqueta lo dice
         # porque «0,78» a secas se lee como 78% y significa otra cosa.
         "exports_imports_ratio": (

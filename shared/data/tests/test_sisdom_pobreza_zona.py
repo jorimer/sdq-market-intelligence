@@ -118,3 +118,40 @@ class TestElQuiebreNoSeDisimula:
 
 def test_las_dos_lineas_del_emisor_estan_declaradas():
     assert set(LINEAS) == {"indigencia", "pobreza"}
+
+
+# ── La zona es un PARÁMETRO, y elegir mal sirve la columna de al lado ──────────────────────
+
+_FILAS_DOS_ZONAS = [("2010", "Año", {3: 10.79, 4: 40.53, 7: 16.76, 8: 50.20})]
+
+
+def test_la_zona_nacional_y_la_rural_salen_del_mismo_cuadro_y_no_se_mezclan():
+    """Los indicadores 2.1 y 2.4 son del país y el 2.3 y el 2.6 de la zona rural. Las cuatro
+    columnas viven en el mismo cuadro y se parecen: leer la zona equivocada publica una cifra
+    plausible contra la meta de otra población. Es el defecto que demotó al 2.1 y al 2.4."""
+    from shared.data.sisdom_pobreza_zona import parse_zona
+
+    libro = _libro(ZONA, LINEA, _FILAS_DOS_ZONAS)
+    nac, _ = parse_zona(libro, "nacional")
+    rur, _ = parse_zona(libro, "rural")
+    assert dict(nac["indigencia"])["2010"] == 10.79
+    assert dict(rur["indigencia"])["2010"] == 16.76
+    assert dict(nac["pobreza"])["2010"] == 40.53
+    assert dict(rur["pobreza"])["2010"] == 50.20
+
+
+def test_una_zona_que_el_cuadro_no_publica_LEVANTA():
+    """Pedir una zona inexistente tiene que fallar y no caer en la de al lado."""
+    from shared.data.sisdom_pobreza_zona import parse_zona
+
+    with pytest.raises(SISDOMZonaError, match="desconocida"):
+        parse_zona(_libro(ZONA, LINEA, _FILAS_DOS_ZONAS), "regional")
+
+
+def test_la_zona_por_defecto_sigue_siendo_la_rural():
+    """`parse_zona_rural` existía antes de que la zona fuera parámetro; quien lo llamaba no
+    tiene que enterarse del cambio."""
+    from shared.data.sisdom_pobreza_zona import parse_zona
+
+    libro = _libro(ZONA, LINEA, _FILAS_DOS_ZONAS)
+    assert parse_zona_rural(libro)[0] == parse_zona(libro, "rural")[0]
