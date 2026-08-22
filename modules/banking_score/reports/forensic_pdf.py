@@ -39,15 +39,18 @@ from modules.banking_score.reports.forensic_common import (  # noqa: E402
     model_timeline,
     stat_cards,
 )
+from shared import brand  # noqa: E402
 from modules.banking_score.reports.pdf_generator import (  # noqa: E402
     _branded_table,
     _get_styles,
     _md_to_flowables,
 )
 
-_ALERT, _WARN, _OK, _MUTED = "#C8392E", "#B7791F", "#15875A", "#76829C"
-_PEER, _INK, _CARD_BG, _BORDER = "#76829C", "#0A1A3A", "#F1F5FB", "#E7ECF3"
-_TEAL = "#0F7E7E"
+# Paleta: se LEE de `shared.brand`. Estos valores ya eran los de «Claro & Vivo», pero
+# escritos a mano: una copia correcta hoy es una copia que se desincroniza mañana.
+_ALERT, _WARN, _OK, _MUTED = brand.ALERT, brand.WARN, brand.OK, brand.MUTED
+_PEER, _INK, _CARD_BG, _BORDER = brand.MUTED, brand.INK, brand.SURFACE_2, brand.BORDER
+_TEAL = brand.TEAL
 _TONE = {"alert": _ALERT, "warn": _WARN, "ok": _OK, "ink": _INK}
 
 
@@ -72,7 +75,7 @@ def _style_axis(ax, series: List[Dict]) -> None:
     ax.set_xticks(idxs)
     ax.set_xticklabels(labels, fontsize=8, color=_MUTED)
     ax.tick_params(axis="y", labelsize=8, colors=_MUTED)
-    ax.grid(True, color="#EAEFF6", lw=0.8)
+    ax.grid(True, color=brand.GRID, lw=0.8)
     ax.spines[["top", "right"]].set_visible(False)
 
 
@@ -109,7 +112,7 @@ def _chart_cobertura(series: List[Dict], marks: Dict, path: str, exit_txt: str =
     cob = [_nan(p.get("cobertura_pct")) for p in series]
     fig, ax = plt.subplots(figsize=(9, 2.6))
     ax.plot(xs, cob, color=_TEAL, lw=2.2)
-    ax.axhline(100, color="#D6DEEC", lw=1, ls=(0, (2, 2)))
+    ax.axhline(100, color=brand.BORDER_STRONG, lw=1, ls=(0, (2, 2)))
     ax.text(0, 100, " 100% (piso Fitch)", color=_MUTED, fontsize=7, va="bottom")
     ax.set_ylabel("Cobertura %", fontsize=8, color=_MUTED)
     _style_axis(ax, series)
@@ -125,7 +128,7 @@ def _chart_deposito(series: List[Dict], marks: Dict, path: str, exit_txt: str = 
     xs = [i for i, _ in vals]
     ys = [v for _, v in vals]
     ax.bar(xs, ys, color=[_ALERT if y < 0 else _OK for y in ys], width=0.7)
-    ax.axhline(0, color="#D6DEEC", lw=1)
+    ax.axhline(0, color=brand.BORDER_STRONG, lw=1)
     ax.set_ylabel("Δ depósitos %", fontsize=8, color=_MUTED)
     _style_axis(ax, series)
     _draw_marks(ax, series, marks, exit_txt)
@@ -170,7 +173,7 @@ def _timeline(rows: List[Dict], styles) -> List:
 
 def _legibility_box(leg: Dict, styles) -> Table:
     col = _OK if leg["legible"] else _WARN
-    bg = "#E5F3EC" if leg["legible"] else "#FBF1DD"
+    bg = brand.OK_SOFT if leg["legible"] else brand.WARN_SOFT
     inner = [Paragraph(f'<font color="{col}"><b>{leg["title"]}</b></font>', styles["SDQBodyBold"]),
              Spacer(1, 3), Paragraph(leg["text"], styles["SDQBody"])]
     t = Table([[inner]], colWidths=[6.5 * inch])

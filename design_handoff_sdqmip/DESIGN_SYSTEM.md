@@ -208,17 +208,33 @@ Construir como componentes React tipados en `frontend/src/shared/ui/`. Clases ba
 
 Logo = arco abierto (la aguja de un gauge 0–100) + punto (el dato/señal). Resume el producto.
 
+**Fuente de verdad: `shared/brand/mark.py`.** La geometría vive ahí y todo lo demás la copia
+(el componente `ArcMark`, el favicon de `index.html`, el PNG de los informes). Un test
+estructural —`shared/brand/tests/test_marca_unica.py`— compara las copias contra la canónica
+y falla si una deriva. Si cambia el símbolo, cambia ahí primero.
+
 Favicon / mark (SVG):
 ```html
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="9" fill="#1E6FFF"/>
-  <g transform="translate(16 16)">
-    <circle r="8" fill="none" stroke="white" stroke-width="3.4" stroke-linecap="round"
-            stroke-dasharray="50.2" stroke-dashoffset="13" transform="rotate(-90)"/>
-    <circle cy="-8" r="2.4" fill="white"/>
-  </g>
+  <path d="M20.95 11.05 A 7 7 0 1 1 11.05 11.05" fill="none"
+        stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="16" cy="6.6" r="2.6" fill="#FFFFFF"/>
 </svg>
 ```
+
+**El punto va SEPARADO del arco, y el arco es un `path`, no un círculo punteado.** La versión
+anterior lo dibujaba con `stroke-dasharray`/`stroke-dashoffset` sobre un círculo completo y el
+hueco quedaba tan corto que el punto se fundía contra el terminal: a tamaño de favicon se leía
+como una «C» con una mancha, no como un medidor con su lectura. Un `dashoffset` además codifica
+el hueco de forma indirecta, así que quien lo edite no tiene cómo saber que está moviendo el
+punto de contacto. Con dos extremos declarados, no. El hueco superior abarca 90° (−45° a +45°
+respecto del eje vertical) y el punto se apoya en su centro.
+
+En la app el contenedor usa `var(--accent)` (así el símbolo sigue el tema); en contextos
+estáticos —favicon, PNG de informes— es `#1E6FFF`. **Un solo azul en las tres superficies:**
+el `#2B6CB0` del PNG viejo se retiró.
+
 Wordmark: `SDQ·MIP` (Jakarta 800; `·MIP` en `--muted`). En la app el arco puede animarse como medidor.
 ⚠️ No hay logo oficial de SDQ: la identidad Arco es **propuesta de producto**. Hay 4 direcciones exploradas (Arco · Mira · Índice · Cuadrante); **Arco** es la recomendación.
 

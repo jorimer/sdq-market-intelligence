@@ -6,9 +6,10 @@ lower-bound scan is unambiguous.
 """
 from typing import Tuple
 
+from shared.brand import MUTED
 from shared.indices.config import Band
 
-_FALLBACK_COLOR = "#6B7280"
+_FALLBACK_COLOR = MUTED   # gris de reserva para una banda sin color declarado
 
 
 def map_band(score: float, bands: Tuple[Band, ...]) -> str:

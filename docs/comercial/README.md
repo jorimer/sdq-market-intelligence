@@ -38,11 +38,9 @@ orden de algún elemento se rompió (ver el comentario sobre `_insert_ordered`).
 
 | Archivo | Qué es |
 |---|---|
-| `arco.svg` | Símbolo Arco, variante recomendada, vectorial. |
-| `logo_arco_v2_1024.png` | La misma, rasterizada a 1024 px con fondo transparente. |
-| `logo_arco_favicon_1024.png` | El símbolo tal como se sirve hoy como favicon de la app. |
-| `logo_produccion_256.png` | El símbolo tal como va en los informes PDF y Word. |
-| `logo_variants.png` | Las tres variantes comparadas (figura 2 del dossier). |
+| `arco.svg` | Símbolo Arco canónico, vectorial. Generado desde `shared/brand/mark.py`. |
+| `logo_arco_1024.png` | El mismo, rasterizado a 1024 px con fondo transparente. |
+| `logo_variants.png` | Las dos variantes retiradas frente a la canónica (figura 2). |
 | `lockup_light.png` · `lockup_dark.png` | Bloque de marca en claro y en oscuro. |
 | `arch.png` | Diagrama de arquitectura de producto (figura 1). |
 | `ui_light.png` · `ui_dark.png` | Muestra de componentes en ambos temas (figura 4). |
@@ -52,7 +50,8 @@ orden de algún elemento se rompió (ver el comentario sobre `_insert_ordered`).
 
 Decisiones del dueño, no del diseñador (§8.5 del documento):
 
-- Geometría y color únicos del símbolo Arco — hoy circulan tres variantes.
-- Unificar la paleta de informes (`navy #1A365D` + `signal red #E11D48`) con la de la
-  aplicación (`#0A1A3A` + `#1E6FFF`).
+- Confirmar si Arco pasa de identidad de producto a identidad de la casa.
 - Cerrar el tarifario y encender la pasarela de pago.
+
+La geometría del símbolo y la unificación de la paleta ya se resolvieron: viven en
+`shared/brand/` y las vigilan los tests de `shared/brand/tests/`.

@@ -811,10 +811,10 @@ def seccion_0(doc: Doc):
          "Los tokens de §2.2 son literalmente los que consume la aplicación. Reprodúzcalos "
          "con exactitud: el objetivo no es reinventar la paleta, es que la presentación y "
          "el producto se lean como la misma cosa."),
-        ("Hay dos sistemas de color vigentes, no uno. ",
-         "La aplicación usa la dirección «Claro & Vivo» (azul eléctrico) y el motor de "
-         "informes PDF/Word usa un navy con acento rojo. §2.4 explica la divergencia y "
-         "cuál es la recomendación."),
+        ("Hay un solo sistema de color, y es el de §2.2. ",
+         "Hasta hace poco la aplicación y los informes tenían paletas distintas; se "
+         "unificaron, y ninguna superficie declara ya un color propio. §2.4 cuenta qué "
+         "cambió, por si aparece material viejo."),
         ("Las cifras de validación NO se copian de este documento. ",
          "No hay ninguna: son la única clase de dato que se lee en vivo de la plataforma. "
          "§7.4 dice exactamente de dónde y por qué."),
@@ -925,24 +925,24 @@ def seccion_2(doc: Doc):
           "el dato, la señal. Resume el producto, porque un medidor explicable es "
           "literalmente lo que la plataforma emite. En la aplicación el arco puede "
           "animarse como medidor.")
-    doc.image("logo_arco_v2_1024.png", 1.25)
-    doc.p("Existen tres marcas en circulación y no son idénticas. El diseñador tiene que "
-          "saberlo antes de maquetar:", space_after=4)
+    doc.image("logo_arco_1024.png", 1.25)
+    doc.p("Hasta hace poco circulaban tres marcas distintas. Ya no: quedó una, y el "
+          "diseñador debería saber cuáles se retiraron para reconocer material viejo.",
+          space_after=4)
     doc.image("logo_variants.png", 6.4,
-              "Figura 2 — Izquierda: el SVG del sistema de diseño, tal como se sirve hoy "
-              "como favicon de la aplicación (el punto y el terminal del arco quedan "
-              "fusionados). Centro: el logotipo de producción que va en los informes "
-              "PDF y Word, con el punto separado y en un azul distinto. Derecha: la "
-              "armonización propuesta —construcción del de producción, color del de "
-              "aplicación.")
+              "Figura 2 — Izquierda, las dos retiradas: el SVG que servía de favicon "
+              "dibujaba el arco con un círculo punteado y el hueco quedaba tan corto que "
+              "el punto se fundía contra el terminal; el logotipo de los informes tenía la "
+              "construcción correcta pero en otro azul. Derecha, la canónica: la "
+              "construcción del de informes en el azul acento de la aplicación.")
     doc.callout(
-        "Decisión pendiente · para el dueño, no para el diseñador",
-        "El símbolo tiene que quedar en UNA sola geometría y UN solo azul. La "
-        "recomendación es la variante de la derecha: la construcción del logotipo de "
-        "producción (punto separado, que es lo que hace legible la metáfora del medidor) "
-        "en el azul acento #1E6FFF de la aplicación. Hasta que se decida, use esa "
-        "variante en la presentación y no mezcle las tres.",
-        tone="warn")
+        "Resuelto — y protegido por un test",
+        "El símbolo quedó en UNA geometría y UN azul (#1E6FFF). La geometría vive en un "
+        "solo lugar del código y las copias inevitables —el componente de la aplicación, "
+        "el favicon, el PNG de los informes— se comparan contra ella en cada corrida de "
+        "integración continua: si una deriva, el build falla. Si encuentra material con el "
+        "azul #2B6CB0 o con el punto pegado al arco, está desactualizado.",
+        tone="ok")
     doc.p()
     doc.rich([("Nota de origen. ", {"bold": True, "color": INK}),
               ("SDQ no tiene un logotipo corporativo oficial. «Arco» es una propuesta de "
@@ -1030,28 +1030,38 @@ def seccion_2(doc: Doc):
     ], cols=6)
 
     # ── 2.4 divergencia
-    doc.h2("2.4 La divergencia que hay que resolver: informes vs. aplicación")
-    doc.p("El motor que genera los informes PDF y Word usa una paleta anterior, distinta "
-          "de la de la aplicación. Las dos están en producción hoy.")
+    doc.h2("2.4 Una sola paleta en pantalla y en papel")
+    doc.p("Durante un tiempo hubo dos marcas: la aplicación en «Claro & Vivo» y los "
+          "informes en un navy con acento rojo que la aplicación ya no usaba. El cliente "
+          "veía un producto azul eléctrico en pantalla y recibía un PDF en otra marca. "
+          "Ya está unificado, y la unificación es estructural: ninguna superficie declara "
+          "un color — todas leen los mismos tokens.")
     doc.table(
-        ["Superficie", "Tinta / primario", "Acento", "Dónde vive"],
-        [("Aplicación web", "#0A1A3A navy", "#1E6FFF azul eléctrico",
-          "frontend/src/index.css"),
-         ("Informe PDF", "#1A365D navy · #2B6CB0 azul", "#E11D48 signal red",
-          "shared/products/render.py"),
-         ("Informe Word", "#1A365D navy · #2B6CB0 azul", "— (sin acento rojo)",
-          "shared/products/render_docx.py"),
-         ("Logotipo de producción", "#2B6CB0 azul", "blanco",
-          "shared/products/assets/sdq_mip_logo.png")],
-        widths=[1.3, 1.6, 1.5, 1.7], mono_cols=(3,))
+        ["Superficie", "Antes", "Hoy"],
+        [("Aplicación web", "#0A1A3A · #1E6FFF", "sin cambios — era la referencia"),
+         ("Informe PDF", "#1A365D · #2B6CB0 · #E11D48", "#0A1A3A · #1E6FFF"),
+         ("Informe Word", "#1A365D · #2B6CB0", "#0A1A3A · #1E6FFF"),
+         ("PDF forense de banca", "hex propios, escritos a mano", "#0A1A3A · #1E6FFF"),
+         ("Informe de Contexto de Marca", "#0B1F3A · #D7263D", "#0A1A3A · #1E6FFF"),
+         ("Comprobante fiscal", "grises propios", "tokens de marca"),
+         ("Logotipo de los informes", "#2B6CB0", "#1E6FFF")],
+        widths=[1.7, 1.9, 1.9])
     doc.callout(
-        "Recomendación",
-        "Unificar sobre «Claro & Vivo»: navy #0A1A3A para tinta y #1E6FFF como acento en "
-        "las tres superficies, y retirar el signal red #E11D48 —que hoy solo aparece en "
-        "citas destacadas del PDF— o degradarlo a un uso puntual de énfasis crítico. Para "
-        "la presentación comercial, use «Claro & Vivo» sin excepción: es la superficie "
-        "que el cliente ve primero y la que está mejor resuelta.",
-        tone="warn")
+        "Qué pasó con el rojo",
+        "El «signal red» #E11D48 se RETIRÓ como acento decorativo: donde marcaba una cita "
+        "destacada, ahora va el azul de marca. El rojo sobrevive únicamente como color "
+        "SEMÁNTICO —#C8392E, el token de alerta— y solo con significado: un valor negativo "
+        "en un gráfico, la estampa de «MUESTRA», la leyenda de exención de ITBIS en un "
+        "comprobante. Si en la presentación aparece rojo, tiene que estar diciendo algo.",
+        tone="alert")
+    doc.p()
+    doc.rich([
+        ("Un detalle de accesibilidad que conviene respetar. ", {"bold": True, "color": INK}),
+        ("El acento puro #1E6FFF sobre blanco da 4,40:1 de contraste, por debajo del "
+         "4,5:1 que pide WCAG AA para texto normal. Por eso el acento pinta RELLENOS "
+         "—barras, filetes, fondos— y el texto en acento usa #1551C0 (7,07:1). No es una "
+         "sutileza de implementación: aplica igual en las láminas.", {}),
+    ])
 
     # ── 2.5 tipografía
     doc.h2("2.5 Tipografía")
@@ -1769,32 +1779,28 @@ def seccion_8(doc: Doc):
     doc.h2("8.4 Assets adjuntos")
     doc.table(
         ["Archivo", "Qué es"],
-        [("logo_arco_v2_1024.png", "Símbolo Arco recomendado, 1024 px, fondo transparente."),
-         ("logo_arco_favicon_1024.png", "Símbolo tal como se sirve hoy en la aplicación."),
-         ("logo_produccion_256.png", "Símbolo tal como va en los informes PDF y Word."),
-         ("logo_variants.png", "Las tres variantes comparadas (figura 2)."),
+        [("logo_arco_1024.png", "El símbolo canónico, 1024 px, fondo transparente."),
+         ("arco.svg", "El mismo, vectorial — generado desde el código, no dibujado."),
+         ("logo_variants.png", "Las dos variantes retiradas frente a la canónica (figura 2)."),
          ("lockup_light.png / lockup_dark.png", "Bloque de marca en claro y en oscuro."),
          ("arch.png", "Diagrama de arquitectura (figura 1)."),
          ("ui_light.png / ui_dark.png", "Muestra de componentes en ambos temas (figura 4)."),
-         ("tokens.css", "Los tokens completos, listos para pegar en una herramienta de diseño."),
-         ("arco.svg", "El símbolo recomendado en vectorial.")],
+         ("tokens.css", "Los tokens completos, listos para pegar en una herramienta de diseño.")],
         widths=[1.9, 3.9], mono_cols=(0,))
 
     doc.h2("8.5 Decisiones que el diseñador no puede tomar solo")
-    doc.p("Para Ricardo Mercado, antes de que la presentación se cierre:")
+    doc.p("Para Ricardo Mercado, antes de que la presentación se cierre. La geometría "
+      "del símbolo y la unificación de la paleta ya se resolvieron y salieron del "
+      "listado.")
     doc.table(
         ["#", "Decisión", "Recomendación de este documento"],
-        [("1", "Geometría y color únicos del símbolo Arco.",
-          "Construcción del logotipo de producción, color #1E6FFF de la aplicación."),
-         ("2", "Unificar la paleta de informes con la de la aplicación.",
-          "Sí; retirar o degradar el signal red #E11D48."),
-         ("3", "Confirmar si Arco pasa de identidad de producto a identidad de casa.",
+        [("1", "Confirmar si Arco pasa de identidad de producto a identidad de casa.",
           "Fuera del alcance de este encargo; decidir aparte."),
-         ("4", "Cerrar el tarifario.",
+         ("2", "Cerrar el tarifario.",
           "Sin precios publicados no hay venta; los de §6.2 son propuesta."),
-         ("5", "Encender la pasarela de pago.",
+         ("3", "Encender la pasarela de pago.",
           "Tres pasos pendientes del dueño, listados en §6.3."),
-         ("6", "Qué ejes se muestran como activos en la presentación.",
+         ("4", "Qué ejes se muestran como activos en la presentación.",
           "Solo los que el monitor tenga activados al momento de imprimir.")],
         widths=[0.3, 2.3, 3.2], size=8.0)
 
@@ -1804,7 +1810,8 @@ def anexos(doc: Doc, catalogo):
 
     doc.h2("A · Tokens completos")
     doc.p("Pegue esto en la herramienta de diseño. Es literalmente el archivo que consume "
-          "la aplicación.")
+          "la aplicación, y su espejo en el backend —`shared/brand/tokens.py`— es el que "
+          "pintan los informes. Un test compara los dos, así que no pueden divergir.")
     doc.code([
         ":root {",
         f"  --canvas:#{CANVAS};  --surface:#{SURFACE};  --surface-2:#{SURFACE2};",
@@ -1840,16 +1847,16 @@ def anexos(doc: Doc, catalogo):
     ])
 
     doc.h2("B · El símbolo en vectorial")
-    doc.p("Variante recomendada. El arco abre en la parte superior y el punto flota "
-          "separado: es lo que hace legible la metáfora del medidor.")
-    doc.code([
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">',
-        '  <rect width="32" height="32" rx="9" fill="#1E6FFF"/>',
-        '  <path d="M20.95 11.05 A 7 7 0 1 1 11.05 11.05" fill="none"',
-        '        stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>',
-        '  <circle cx="16" cy="6.6" r="2.6" fill="#FFFFFF"/>',
-        "</svg>",
-    ])
+    doc.p("El arco abre en la parte superior —un hueco de 90°— y el punto flota separado "
+          "sobre su centro: es lo que hace legible la metáfora del medidor. Se declara "
+          "como trazado con extremos explícitos y no como círculo punteado, porque un "
+          "desfase de guion mueve el punto de contacto sin que nadie lo note. Este bloque "
+          "se genera desde el código, no se dibuja a mano.")
+    from shared.brand import arco_svg
+    svg = arco_svg(size=32)
+    doc.code([svg[:svg.index("><rect") + 1]]
+             + [f"  {t}>" for t in svg[svg.index("<rect"):-len("</svg>")].split(">") if t]
+             + ["</svg>"])
 
     doc.h2("C · Mapa de navegación de la plataforma")
     doc.p("Cinco grupos en la barra lateral. Útil si la presentación incluye una lámina "

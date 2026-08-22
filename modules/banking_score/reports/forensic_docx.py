@@ -13,7 +13,7 @@ from io import BytesIO
 from typing import Dict
 
 from docx import Document
-from docx.shared import Inches, RGBColor
+from docx.shared import Inches
 
 from modules.banking_score.reports.forensic_common import (
     classify_exit,
@@ -30,6 +30,7 @@ from modules.banking_score.reports.forensic_pdf import (
     _chart_deposito,
     _chart_morosidad,
 )
+from shared import brand
 from shared.products.render_docx import (
     DISCLAIMER_ES,
     _BLUE,
@@ -37,9 +38,11 @@ from shared.products.render_docx import (
     _LOGO,
     _NAVY,
     _NAVY_HEX,
-    _SIGNAL,
+    _ACCENT,
     _WHITE,
     _add_runs,
+    _hex,
+    _rgb,
     _furniture,
     _left_accent,
     _md_body,
@@ -47,10 +50,11 @@ from shared.products.render_docx import (
     _shade,
 )
 
-_ALERT = RGBColor(0xC8, 0x39, 0x2E)
-_WARN = RGBColor(0xB7, 0x79, 0x1F)
-_OK = RGBColor(0x15, 0x87, 0x5A)
-_MUTED = RGBColor(0x76, 0x82, 0x9C)
+# Paleta: se LEE de `shared.brand`. Ver el comentario equivalente en `render.py`.
+_ALERT = _rgb(brand.ALERT)
+_WARN = _rgb(brand.WARN)
+_OK = _rgb(brand.OK)
+_MUTED = _rgb(brand.MUTED)
 _TONE = {"alert": _ALERT, "warn": _WARN, "ok": _OK, "ink": _NAVY}
 
 
@@ -82,7 +86,7 @@ def render_forensic_docx(pkg: Dict, narrative_md: str, *, degraded: bool = False
               f"**Período revisado:** {humanize_month(meta['primer'])} → {humanize_month(meta['ultimo'])}",
               color=_NAVY, size=10)
     vq = doc.add_paragraph()
-    _left_accent(vq, _SIGNAL)
+    _left_accent(vq, _ACCENT)
     _add_runs(vq, head["verdict"], color=_NAVY, size=13)
 
     # ── Stat cards (4 cifras) ──
@@ -119,7 +123,7 @@ def render_forensic_docx(pkg: Dict, narrative_md: str, *, degraded: bool = False
         leg = legibility(pkg, ctx, kind)
         lbox = doc.add_table(rows=1, cols=1)
         lcell = lbox.rows[0].cells[0]
-        _shade(lcell, "E5F3EC" if leg["legible"] else "FBF1DD")
+        _shade(lcell, _hex(brand.OK_SOFT if leg["legible"] else brand.WARN_SOFT))
         _add_runs(lcell.paragraphs[0], leg["title"], color=(_OK if leg["legible"] else _WARN),
                   size=12, bold_all=True)
         _add_runs(lcell.add_paragraph(), leg["text"], color=_NAVY, size=10)
