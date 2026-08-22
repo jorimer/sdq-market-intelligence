@@ -45,10 +45,16 @@ class TestElHash:
 
 
 class TestLaPuertaDeServicio:
-    def test_los_expedientes_reales_estan_ratificados(self):
+    def test_los_expedientes_reales_se_sirven_y_con_papel(self):
+        """`ratificado` dejó de ser el único estado sano: una corrección firmada también
+        sirve. Lo que no puede pasar es que un expediente se sirva SIN papel que lo autorice,
+        así que cuando el estado no es `ratificado` se exige el documento que lo respalda."""
         for e in (E, "meta_rd_2036"):
             st = estado(e)
-            assert st.estado == "ratificado" and st.servible, e
+            assert st.servible, f"{e}: {st.estado}"
+            if st.estado != "ratificado":
+                assert st.enmienda_vigente or st.correccion_vigente, (
+                    f"{e}: estado '{st.estado}' sin enmienda ni corrección que lo autorice")
 
     def test_una_deriva_sin_norma_bloquea(self, tmp_path, monkeypatch):
         """El test que le da valor a todo lo demás: no alcanza con avisar."""
