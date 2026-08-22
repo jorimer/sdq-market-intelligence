@@ -109,13 +109,6 @@ motivos:
       revisiones que ambos aplican a sus series históricas, y hay que resolver cuál se cita
       antes de publicar. Falta además declarar la transformación de unidad: el emisor
       internacional publica en dólares y la ley fija la meta en millones.
-  - indicador: "3.24"
-    estado: pendiente_de_derivacion
-    detalle: >-
-      Crédito a la producción como porcentaje del PIB. El agregado de crédito al sector
-      privado está disponible, y no es el mismo universo que «a la producción». Falta
-      determinar si el Banco Central publica el corte que la ley nombra. Línea base como
-      promedio de años, sin oráculo.
   - indicador: "3.14"
     estado: pendiente_de_derivacion
     detalle: >-
