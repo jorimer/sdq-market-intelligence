@@ -133,15 +133,25 @@ motivos:
       cualquier conversión monótona el veredicto es el mismo —36 sobre 100 queda por debajo
       de la meta de 2015— pero eso es un argumento de margen, no un puente.
   - indicador: "1.3"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      IDENTIFICADO POR ORÁCULO, exacto. El «índice de fortaleza institucional» que la ley no
+      nombra es el PRIMER PILAR —Institutions— del Índice Global de Competitividad del Foro
+      Económico Mundial. El informe 2010-2011 de ese emisor, página de perfil de República
+      Dominicana, publica «1st pillar: Institutions ... 3.2» en escala 1-7, y la ley fija
+      exactamente 3,2 para 2010. Δ 0%.
+      Y el instrumento ya no existe: la última edición regular con índice es la de 2019. La
+      de 2020 es una «Special Edition» —publicada el 16 de diciembre de 2020— dedicada a
+      prioridades de recuperación, que no produce el índice, y no hay ediciones posteriores
+      en la serie del emisor.
+    verificado_el: "2026-08-22"
     detalle: >-
-      Índice de fortaleza institucional. La ley no nombra al emisor y hay una hipótesis con
-      dos apoyos: la escala de las metas es el rango 1-7 de los índices de competitividad
-      (base 3,2 en 2010, meta 5,0), y el eje 3 de la misma ley SÍ nombra a ese emisor en los
-      indicadores 3.16 y 3.17. Si fuera su pilar de instituciones, el desenlace sería el del
-      3.9: instrumento discontinuado tras 2019.
-      Confirmarlo exige el puntaje del pilar para 2010, que vive en los informes del emisor.
-      No se pudo consultar el 2026-08-22: su portal devuelve 403.
+      La consecuencia es sobre la LEY, no sobre nosotros: sus metas de 2020, 2025 y 2030
+      (4,0 · 4,5 · 5,0) están fijadas contra un instrumento que dejó de producirse el año
+      anterior al primero de esos cortes. No hay forma de medirlas y no la habrá.
+      Es el mismo desenlace que el 3.9, que es el índice GENERAL del mismo emisor y ya estaba
+      descartado por lo mismo. La diferencia es que ahora está probado que el 1.3 pertenece a
+      esa familia en vez de sospechado por la escala.
   - indicador: "1.4"
     estado: pendiente_de_busqueda
     detalle: >-
@@ -153,29 +163,54 @@ motivos:
       Antes de buscar el dato hay que decidir si una medición puntual de un tercero, repetida
       una sola vez, califica como fuente para este eje. Es la misma decisión del 1.1.
   - indicador: "3.15"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      Mismo emisor y mismo informe que el 1.3, segundo pilar. El informe 2008-2009 del Foro
+      Económico Mundial publica para República Dominicana «2nd pillar: Infrastructure ...
+      3.1» en escala 1-7, contra los 3,0 que la ley fija para 2008: Δ 3,3%. No cierra al 2%
+      como el 1.3, pero la identificación se apoya en tres patas —la coincidencia exacta del
+      pilar hermano, la escala, y que la propia ley nombra a este emisor en los indicadores
+      3.16 y 3.17—.
+      El instrumento está discontinuado por la misma evidencia que el 1.3: última edición
+      regular en 2019, edición especial sin índice el 16 de diciembre de 2020, nada después.
+    verificado_el: "2026-08-22"
     detalle: >-
-      Índice de infraestructura. Misma hipótesis y mismo bloqueo que el 1.3, con el pilar de
-      infraestructura en vez del de instituciones: base 3,0 en 2008 y meta 6,0, en el rango
-      1-7. Los dos se confirman o se caen con la misma consulta.
+      Sus metas de 2020, 2025 y 2030 (4,5 · 5,3 · 6,0) no se pueden medir ni se podrán. El
+      residuo de 3,3% contra la línea base no cambia el desenlace: aunque la edición que usó
+      el legislador fuera otra, el instrumento igual dejó de existir.
   - indicador: "3.16"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      Lo declara el propio emisor, con fecha. El informe «Travel & Tourism Development Index
+      2021», publicado el 24 de mayo de 2022, abre diciendo que ese índice «is an evolution
+      of the 15-year-old Travel & Tourism Competitiveness Index (TTCI) series» y que
+      «important changes have been made between the TTCI and the TTDI», enumerando pilares
+      NUEVOS —Non-Leisure Resources, Socioeconomic Resilience and Conditions, y T&T Demand
+      Pressure and Impact—. La edición 2024, publicada el 21 de mayo de 2024, se compone de
+      «five dimensions, 17 pillars and 102 individual indicators».
+      El índice que la ley nombró —el de competitividad— dejó de publicarse; lo que hay es
+      otro índice, con otro marco.
+    verificado_el: "2026-08-22"
     detalle: >-
-      Índice general del Reporte de Viajes y Turismo. La ley NOMBRA al emisor, así que la
-      fuente es admisible por la misma lógica que la PEFA: el instrumento la incorpora. Base
-      4,0 en 2009 y metas de 4,2 a 4,5, la escala 1-7 de ese emisor.
-      Lo que falta es evidencia CON FECHA de qué publica hoy. El mismo emisor ya produjo un
-      descarte en este expediente —el 3.9, su índice de competitividad, discontinuado en su
-      forma comparable tras 2019— y la sospecha es que aquí pasó lo mismo: el reporte de
-      viajes y turismo habría sido reemplazado por un sucesor con otro nombre y otra
-      metodología. Es SOSPECHA: el portal del emisor devuelve 403 desde acá, así que no se
-      pudo comprobar el 2026-08-22.
+      LA TRAMPA DE ESTE CASO, y por eso conviene dejarla escrita: el sucesor conserva la
+      escala 1-7. Un lector puede tomar el puntaje de hoy y compararlo con la línea base de
+      4,0 que la ley fija para 2009 sin que nada se vea mal. Es peor que un cambio de escala
+      como el del LLECE o el del índice de corrupción, donde la incompatibilidad salta a la
+      vista: acá los números son del mismo rango y miden marcos distintos.
   - indicador: "3.17"
-    estado: pendiente_de_busqueda
+    estado: instrumento_discontinuado
+    evidencia: >-
+      Mismo informe y misma evidencia que el 3.16, y con un agravante propio. El pilar que la
+      ley nombra —sostenibilidad ambiental— sobrevive por NOMBRE en el sucesor: la edición
+      2024 lo lista como «Environmental Sustainability», pero descompuesto en subpilares que
+      el índice original no tenía —«T&T Energy Sustainability, Pollution and Environmental
+      Conditions, and Preservation of Nature»— y dentro de una dimensión de sostenibilidad
+      que se creó en el rediseño.
+    verificado_el: "2026-08-22"
     detalle: >-
-      Pilar de sostenibilidad ambiental del mismo reporte que el 3.16, con la misma base 4,0
-      en 2009 y metas más exigentes (hasta 6,3). Comparte emisor, escala y bloqueo: se cierra
-      con la misma consulta.
+      Un pilar que conserva el nombre y cambia de composición es el caso más difícil de todo
+      el expediente: no hay ni cambio de escala ni cambio de rótulo que avise. Sus metas
+      —hasta 6,3 para 2030— quedan sin instrumento con el que medirse.
   - indicador: "2.26"
     estado: pendiente_de_busqueda
     detalle: >-
