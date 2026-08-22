@@ -384,6 +384,18 @@ class SocialDevProduct:
             "Áreas protegidas terrestres (% de la superficie)", "living_standards",
             "Banco Mundial (ER.LND.PTLD.ZS). Superficie TERRESTRE: la serie marina es otra "
             "y da la mitad. La serie empieza en 2013 y la línea base de la ley es de 2009."),
+        # Indicadores 2.3 y 2.6 de la END. El sujeto va en la etiqueta: son cifras de la
+        # ZONA RURAL, y sin decirlo un lector las toma por nacionales.
+        "rural_poverty_extreme": (
+            "rural_poverty_extreme", HEALTH_ENTITY,
+            "Pobreza extrema — zona rural (% de la población rural)", "living_standards",
+            "SISDOM, cuadro 03 3 003a. El emisor la llama «indigencia monetaria». La serie "
+            "tiene un quiebre de metodología en 2016 declarado por el emisor."),
+        "rural_poverty_total": (
+            "rural_poverty_total", HEALTH_ENTITY,
+            "Pobreza general — zona rural (% de la población rural)", "living_standards",
+            "SISDOM, cuadro 03 3 003a. Línea de pobreza TOTAL, que incluye la indigencia. "
+            "Mismo quiebre de metodología en 2016."),
         # Indicador 3.22 de la END. Es una RAZÓN, no un porcentaje: la etiqueta lo dice
         # porque «0,78» a secas se lee como 78% y significa otra cosa.
         "exports_imports_ratio": (

@@ -328,6 +328,46 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
     return synced
 
 
+#: Cómo nombra el emisor cada línea y qué indicador de la END alimenta. El SUJETO viaja en el
+#: tema: son cifras de la ZONA RURAL, no del país.
+POBREZA_RURAL = {
+    "indigencia": ("rural_poverty_extreme", "% de la población rural"),   # 2.3
+    "pobreza": ("rural_poverty_total", "% de la población rural"),        # 2.6
+}
+FUENTE_SISDOM_ZONA = "SISDOM · MEPyD"          # 17
+
+
+def _sync_pobreza_rural(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicadores 2.3 y 2.6 de la END: pobreza rural extrema y general.
+
+    El panel abierto que ya se ingiere está por REGIÓN y no por zona, así que ninguna
+    combinación de sus filas produce la cifra rural. El corte por zona vive en el cuadro
+    03 3 003a del SISDOM.
+
+    El emisor llama «indigencia» a la pobreza extrema. La correspondencia no se supuso: la
+    indigencia rural de 2010 da 16,76 contra los 16,9 que la ley fija para el 2.3, Δ 0,8%.
+
+    **La serie tiene un quiebre de metodología en 2016** y el emisor lo declara publicando ese
+    año dos veces. El cliente sirve la metodología vigente y expone el salto medido; el binding
+    lo lleva escrito. Encadenar los tramos sin declararlo sería repetir lo de la informalidad.
+    """
+    from shared.data.sisdom_pobreza_zona import fetch_zona_rural
+
+    set_phase("pobreza rural por zona (SISDOM · indicadores 2.3 y 2.6)")
+    series, quiebre = fetch_zona_rural()
+    if quiebre.get("anio_de_solape"):
+        logger.info("SISDOM pobreza rural: quiebre en %s, salto %s",
+                    quiebre["anio_de_solape"], quiebre.get("salto_pct"))
+    synced = 0
+    for linea, (tema, unidad) in POBREZA_RURAL.items():
+        for periodo, valor in series.get(linea, []):
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(periodo),
+                              value=float(valor), source=FUENTE_SISDOM_ZONA,
+                              disagg="nacional", unit=unidad)
+            synced += 1
+    return synced
+
+
 def _sync_razon_exportaciones_importaciones(db: Session,
                                             set_phase: Callable[[str], None]) -> int:
     """Indicador 3.22 de la END: razón exportaciones sobre importaciones de bienes y servicios.
@@ -832,6 +872,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     razon_synced = _best_effort(
         "razón exportaciones/importaciones (3.22)",
         lambda: _sync_razon_exportaciones_importaciones(db, set_phase), errors)
+    rural_synced = _best_effort(
+        "pobreza rural por zona (2.3 y 2.6)",
+        lambda: _sync_pobreza_rural(db, set_phase), errors)
     # Mismo criterio: no depende de nada de esta corrida y entra antes del commit temprano.
     mem_synced = _best_effort(
         "sector eléctrico (MEM · 3.27, 3.28 y 3.29)",
@@ -888,6 +931,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "conteos_regionales_synced": conteos_synced,
         "llece_synced": llece_synced,
         "razon_exp_imp_synced": razon_synced,
+        "pobreza_rural_synced": rural_synced,
         "mem_electrico_synced": mem_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,

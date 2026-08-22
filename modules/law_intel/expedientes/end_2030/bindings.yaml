@@ -1503,3 +1503,54 @@ bindings:
       0,639 · 0,714 · 0,684. Promedio 0,7429 contra una línea base legal de 0,75.
       La ley pide llegar a la paridad (1,0) en 2020 y sostenerse en o por encima; en 2024 la
       razón es 0,785, así que la meta de 2020 no se alcanzó y la brecha persiste.
+
+# ── POBREZA RURAL 2026-08-21 · 2.3 y 2.6 ──────────────────────────────────────────────────
+# El corte por zona no está en el panel abierto que ya ingeríamos —ése es por REGIÓN— y por
+# eso los dos indicadores estaban sin candidato. Vive en el cuadro 03 3 003a del SISDOM, que
+# publica la zona rural con las dos líneas de pobreza.
+#
+# Los dos salen del MISMO cuadro y terminan distinto, con el mismo criterio: si el margen
+# contra la meta se come la incertidumbre del concepto, se promueve; si no, no.
+  - indicador: "2.3"
+    serie: "social_dev:rural_poverty_extreme"
+    fuente: mhe
+    mejor: menor
+    estado: verificado
+    periodo_verificado: "2024"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM (MEPyD, hoy MHE) — cuadro 03 3 003a, zona rural, línea de indigencia monetaria.
+      Lo produce el propio Estado evaluado sobre su encuesta de hogares.
+    nota: >-
+      El emisor llama «indigencia monetaria» a lo que la ley llama pobreza extrema, y la
+      correspondencia no se supuso: la indigencia rural de 2010 da 16,76 contra los 16,9 que
+      fija la ley — Δ 0,8%.
+      SALVEDAD QUE VIAJA AL INFORME: la serie tiene un QUIEBRE de metodología en 2016, que el
+      emisor declara publicando ese año dos veces, una por cada encuesta. El salto medido en
+      el año de solape es de 2,0% para esta línea. El veredicto se sostiene igual porque el
+      margen se lo come: el observado de 2024 es 3,74 contra una meta de 7,0 para 2025, y
+      ninguna corrección de dos por ciento mueve esa conclusión. Es el mismo criterio con el
+      que se acepta una fecha en disputa cuando el año la decide sola.
+      Serie observada: 16,76 (2010) · 10,51 (2015) · 3,74 (2024). La ley pedía 7,0 para 2025
+      y 5,0 para 2030: los dos cortes ya se cumplen.
+  - indicador: "2.6"
+    serie: "social_dev:rural_poverty_total"
+    fuente: mhe
+    mejor: menor
+    estado: propuesto
+    origen: declarado_por_el_evaluado
+    productor: >-
+      SISDOM (MEPyD, hoy MHE) — cuadro 03 3 003a, zona rural, línea de pobreza monetaria.
+    nota_comparabilidad: >-
+      La ley dice «pobreza moderada» y el emisor publica «pobreza monetaria», que es la línea
+      TOTAL e incluye la indigencia. Las dos lecturas se probaron contra el oráculo y ninguna
+      cierra: la total da 50,20 en 2010 contra una base legal de 46,8 (Δ 7,3%) y la total
+      menos la indigencia da 33,44 (Δ 28,5%).
+      Y acá el margen NO se come la incertidumbre, que es lo que lo separa del 2.3: el
+      observado de 2024 es 22,78 contra una meta de 23,3 para 2025, o sea un margen de 2,2%
+      frente a una brecha de concepto de 7,3%. Promoverlo publicaría un «alcanzada» que la
+      propia salvedad puede dar vuelta.
+    nota: >-
+      La hipótesis a comprobar es que la diferencia venga de la revisión oficial de la
+      metodología de medición de pobreza posterior a la redacción de la ley, igual que pasó
+      con la informalidad laboral entre la ENFT y la ENCFT.
