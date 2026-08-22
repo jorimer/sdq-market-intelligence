@@ -1487,18 +1487,20 @@ bindings:
     serie: "social_dev:exports_imports_ratio"
     fuente: wdi
     mejor: mayor
-    estado: propuesto
+    estado: verificado
+    periodo_verificado: "2024"
     origen: declarado_por_el_evaluado
     productor: >-
       BCRD — exportaciones e importaciones de bienes y servicios de la balanza de pagos,
       republicadas por el Banco Mundial. El cociente es cómputo SDQ.
-    nota_comparabilidad: >-
-      El concepto está comprobado contra el oráculo (Δ 0,9% sobre la ventana promediada). Lo
-      que falta es del REGISTRO, no de la serie: las metas de 2025 y 2030 están corrompidas
-      en nuestra transcripción —dicen «(cid:2)1.0», el glifo «≥» que el extractor no
-      resolvió— y hasta que la corrección esté firmada el semáforo no puede leerlas. Promover
-      antes contaría el indicador como medido sobre una meta ilegible.
     nota: >-
+      Los DOS bloqueos que tenía están levantados. El del concepto lo cerró el oráculo sobre
+      la ventana que la ley promedia: Δ 0,9%, y ningún año suelto de la ventana cae dentro
+      del 2% de la línea base, así que la coincidencia la produce el promedio y no el azar.
+      El del registro lo cerró la corrección firmada del sello: las metas de 2025 y 2030
+      decían «(cid:2)1.0» —el glifo «≥» que el extractor no resolvió— y el semáforo no podía
+      leerlas. Con la corrección, la escala del indicador deja de ser `redactada` y pasa a
+      `umbral`.
       Serie observada 2005-2010, la ventana que la ley promedia: 0,850 · 0,794 · 0,776 ·
       0,639 · 0,714 · 0,684. Promedio 0,7429 contra una línea base legal de 0,75.
       La ley pide llegar a la paridad (1,0) en 2020 y sostenerse en o por encima; en 2024 la
