@@ -328,6 +328,62 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
     return synced
 
 
+#: Qué universo mundial usa cada indicador de participación exportadora, y con qué serie de
+#: composición se recorta. El universo NO se adivinó: se probó cada candidato contra la
+#: ventana que la ley promedia, que es el método que ya había resuelto el 3.21.
+#:
+#: El 3.18 dice «exportaciones mundiales de BIENES», no de bienes y servicios. La diferencia
+#: no es de matiz: con bienes y servicios el promedio de la ventana da Δ 34,8% contra la línea
+#: base legal; con mercancías, Δ 0,4%.
+PARTICIPACION_EXPORTADORA = {
+    "3.18": ("world_export_share_goods", None,
+             "% de las exportaciones mundiales de bienes"),
+    "3.19": ("world_export_share_manufactures", "TX.VAL.MANF.ZS.UN",
+             "% de las exportaciones mundiales de manufacturas"),
+}
+FUENTE_PARTICIPACION = "WDI · cómputo SDQ"     # 18
+
+
+def _sync_participacion_exportadora(db: Session,
+                                    set_phase: Callable[[str], None]) -> int:
+    """Indicadores 3.18 y 3.19 de la END: participación dominicana en el comercio mundial.
+
+    Es un cociente entre el país y el mundo, así que se ingiere como dato propio con su
+    procedencia: un binding ata UNA variable y no puede llevar una división.
+
+    Solo se publican los años con TODAS las series presentes. Un cociente al que le falta el
+    denominador —o el recorte de composición— no es un dato parcial, es un número inventado.
+    """
+    from shared.data.wdi_client import fetch_wb_indicator
+
+    def _serie(code: str, pais: str) -> Dict[str, float]:
+        filas, _ = fetch_wb_indicator(code, [pais], mrv=_WDI_HEALTH_YEARS)
+        return {r["date"]: float(r["value"]) for r in filas if r.get("value") is not None}
+
+    set_phase("participación en el comercio mundial (indicadores 3.18 y 3.19)")
+    pais = _serie("TX.VAL.MRCH.CD.WT", "DOM")
+    mundo = _serie("TX.VAL.MRCH.CD.WT", "WLD")
+    synced = 0
+    for _ind, (tema, composicion, unidad) in PARTICIPACION_EXPORTADORA.items():
+        cp = _serie(composicion, "DOM") if composicion else None
+        cm = _serie(composicion, "WLD") if composicion else None
+        años = set(pais) & set(mundo)
+        if cp is not None and cm is not None:
+            años &= set(cp) & set(cm)
+        for anio in sorted(años):
+            num, den = pais[anio], mundo[anio]
+            if cp is not None and cm is not None:
+                num *= cp[anio] / 100.0
+                den *= cm[anio] / 100.0
+            if not den:
+                continue
+            _upsert_indicator(db, theme=tema, entity=HEALTH_ENTITY, period=str(anio),
+                              value=num / den * 100.0, source=FUENTE_PARTICIPACION,
+                              disagg="nacional", unit=unidad)
+            synced += 1
+    return synced
+
+
 #: Mes que representa el año para la cobertura del Seguro Familiar de Salud. Es un STOCK
 #: —personas protegidas a una fecha— y por eso el año se representa por su CIERRE, no por el
 #: promedio de sus doce meses, que es la convención de un flujo.
@@ -932,6 +988,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     salud_synced = _best_effort(
         "cobertura del Seguro Familiar de Salud (2.36)",
         lambda: _sync_cobertura_salud(db, set_phase), errors)
+    export_synced = _best_effort(
+        "participación en el comercio mundial (3.18 y 3.19)",
+        lambda: _sync_participacion_exportadora(db, set_phase), errors)
     # Mismo criterio: no depende de nada de esta corrida y entra antes del commit temprano.
     mem_synced = _best_effort(
         "sector eléctrico (MEM · 3.27, 3.28 y 3.29)",
@@ -990,6 +1049,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "razon_exp_imp_synced": razon_synced,
         "pobreza_rural_synced": rural_synced,
         "cobertura_salud_synced": salud_synced,
+        "participacion_export_synced": export_synced,
         "mem_electrico_synced": mem_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,

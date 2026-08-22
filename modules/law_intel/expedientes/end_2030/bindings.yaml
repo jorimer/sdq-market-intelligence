@@ -1587,3 +1587,61 @@ bindings:
       Trayectoria: 44,9% (2010) · 64,1% (2015) · 91,4% (2020) · 92,1% (2025). El salto ocurrió
       antes de 2020 y desde entonces la cobertura está prácticamente detenida a ocho puntos de
       la meta.
+
+# ── PARTICIPACIÓN EXPORTADORA 2026-08-21 · 3.18, 3.19 y el descarte del 3.20 ──────────────
+# El universo NO se adivinó. Se probó cada candidato contra la ventana que la ley promedia,
+# que es el método que ya había resuelto el 3.21 —donde bienes+servicios daba Δ 1,9% y solo
+# mercancías daba 174 contra 1.070—.
+  - indicador: "3.18"
+    serie: "social_dev:world_export_share_goods"
+    fuente: wdi
+    mejor: mayor
+    estado: verificado
+    periodo_verificado: "2025"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      DGA y BCRD — comercio de mercancías, republicado por el Banco Mundial para el país y
+      para el agregado mundial. El cociente es cómputo SDQ.
+    nota: >-
+      El indicador dice «exportaciones mundiales de BIENES», no de bienes y servicios, y la
+      diferencia decide el resultado: con bienes y servicios el promedio de la ventana da Δ
+      34,8% contra la línea base legal; con mercancías, Δ 0,4%. El universo se identificó
+      probando ambos contra el oráculo, no por lectura del nombre.
+      Serie observada: 0,0507% (2007) · 0,0439% (2010) · 0,0567% (2015) · 0,0590% (2025),
+      contra una meta de 0,135% para 2025. La participación creció menos de dos centésimas en
+      dieciocho años y está a menos de la mitad de lo que la ley pidió.
+  - indicador: "3.19"
+    serie: "social_dev:world_export_share_manufactures"
+    fuente: wdi
+    mejor: mayor
+    estado: verificado
+    periodo_verificado: "2024"
+    origen: declarado_por_el_evaluado
+    productor: >-
+      Comercio de mercancías del país y del mundo, recortado por la composición de
+      manufacturas que publica el mismo emisor. Cómputo SDQ.
+    nota: >-
+      SALVEDAD QUE VIAJA AL INFORME: el promedio de la ventana 2006-2007 da 0,0602% contra una
+      línea base legal de 0,055 — Δ 9,4%. Está fuera del 2% y dentro del 10%, y la diferencia
+      es compatible con que el legislador usara otro corte de «manufacturas» que el de la
+      composición que publica este emisor.
+      El veredicto se sostiene igual porque el margen se come la incertidumbre: el observado
+      de 2024 es 0,0473% contra una meta de 0,113% para 2025, o sea 58% por debajo. Corregir
+      hacia arriba por todo el 9,4% lo deja en 0,0517%, que sigue a menos de la mitad.
+      El hallazgo es más duro que el incumplimiento: la participación de 2024 está POR DEBAJO
+      de la línea base de 2006-2007. En manufacturas el país perdió peso mundial.
+  - indicador: "3.20"
+    serie: "wdi.TX.VAL.AGRI+FOOD.ZS.UN"
+    fuente: wdi
+    mejor: mayor
+    estado: descartado
+    origen: declarado_por_el_evaluado
+    productor: Composición de exportaciones de mercancías publicada por el Banco Mundial.
+    motivo_descarte: >-
+      Se probaron las dos composiciones que el emisor publica y ninguna reproduce la línea
+      base legal de 0,097 sobre la ventana 2006-2007: «materias primas agrícolas» da 0,0169%
+      (Δ 82,6%) y «alimentos» da 0,1183% (Δ 22,0%). Sumarlas tampoco cierra.
+      «Productos agropecuarios» en el articulado parece corresponder a una agrupación
+      arancelaria concreta y no a ninguna de las dos categorías agregadas de este emisor. El
+      candidato queda descartado; el indicador sigue abierto a una fuente que publique el
+      corte por capítulo arancelario.

@@ -384,6 +384,21 @@ class SocialDevProduct:
             "Áreas protegidas terrestres (% de la superficie)", "living_standards",
             "Banco Mundial (ER.LND.PTLD.ZS). Superficie TERRESTRE: la serie marina es otra "
             "y da la mitad. La serie empieza en 2013 y la línea base de la ley es de 2009."),
+        # Indicadores 3.18 y 3.19. La etiqueta nombra el UNIVERSO porque es lo que
+        # distingue una cifra de la otra: bienes y manufacturas dan participaciones
+        # distintas y las dos se llaman «participación exportadora».
+        "world_export_share_goods": (
+            "world_export_share_goods", HEALTH_ENTITY,
+            "Participación en exportaciones mundiales de bienes (%)", "living_standards",
+            "Mercancías dominicanas sobre mercancías mundiales, del Banco Mundial; el "
+            "cociente es cómputo SDQ. NO es bienes y servicios: con ese universo la cifra "
+            "sube un tercio."),
+        "world_export_share_manufactures": (
+            "world_export_share_manufactures", HEALTH_ENTITY,
+            "Participación en exportaciones mundiales de manufacturas (%)",
+            "living_standards",
+            "Mercancías recortadas por la composición de manufacturas que publica el mismo "
+            "emisor, para el país y para el mundo. Cómputo SDQ."),
         # Indicador 2.36 de la END. La unidad dice «a diciembre» porque la convención
         # de anualización es parte del dato: con el promedio anual la cifra de 2010 baja
         # cinco puntos.
