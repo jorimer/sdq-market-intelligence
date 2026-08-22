@@ -275,3 +275,38 @@ class TestUnEscalarROTULADOSeJuzgaConSuSujeto:
                          Binding(indicador="1.8", mejor="mayor", **VERIF),
                          [("2019", 97.84)], corte="2025")
         assert arriba.veredicto == "alcanzada"
+
+
+class TestUnaMetaREDACTADAQueEsUnNumero:
+    """La escala describe el CONJUNTO de metas; el veredicto se emite contra UNA.
+
+    El 2.36 tiene tres metas que son el número 100 y una sola escrita en prosa —«100 al
+    2016»—. Esa celda bastaba para clasificar el indicador como `redactada` y para que el
+    motor devolviera `no_evaluable` sobre las otras tres, perfectamente legibles. La peor
+    celda no decide por las demás.
+    """
+
+    def _ind(self, metas):
+        return ind(id="2.36", escala="redactada", base_valor=42.4, metas=metas)
+
+    def test_se_juzga_contra_la_meta_numerica_que_vence(self):
+        i = self._ind({"2015": "100 al 2016", "2020": 100.0, "2025": 100.0})
+        v = evaluar(i, Binding(indicador="2.36", mejor="mayor", **VERIF),
+                    [("2020", 91.36), ("2025", 92.08)], corte="2025")
+        assert v.veredicto == "no_alcanzara"
+        assert v.meta == 100.0 and v.observado == 92.08
+        assert v.distancia == pytest.approx(7.92, abs=0.01)
+
+    def test_si_la_meta_vigente_NO_es_numérica_sigue_sin_juzgarse(self):
+        """El contrapeso: no se afloja la regla, se afina quién decide."""
+        i = self._ind({"2025": "Se cumple con tiempos establecidos legalmente"})
+        v = evaluar(i, Binding(indicador="2.36", mejor="mayor", **VERIF),
+                    [("2025", 92.0)], corte="2025")
+        assert v.veredicto == "no_evaluable"
+
+    def test_el_escalar_ROTULADO_sigue_funcionando(self):
+        """La vía que ya existía no se rompe: «Matemáticas : 63.0» se juzga como antes."""
+        i = self._ind({"2025": "Matemáticas : 63.0"})
+        v = evaluar(i, Binding(indicador="2.36", mejor="menor", **VERIF),
+                    [("2019", 97.84)], corte="2025")
+        assert v.veredicto == "no_alcanzada"

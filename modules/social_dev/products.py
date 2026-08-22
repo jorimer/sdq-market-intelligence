@@ -384,6 +384,15 @@ class SocialDevProduct:
             "Áreas protegidas terrestres (% de la superficie)", "living_standards",
             "Banco Mundial (ER.LND.PTLD.ZS). Superficie TERRESTRE: la serie marina es otra "
             "y da la mitad. La serie empieza en 2013 y la línea base de la ley es de 2009."),
+        # Indicador 2.36 de la END. La unidad dice «a diciembre» porque la convención
+        # de anualización es parte del dato: con el promedio anual la cifra de 2010 baja
+        # cinco puntos.
+        "health_insurance_coverage": (
+            "health_insurance_coverage", HEALTH_ENTITY,
+            "Población protegida por el Seguro de Salud (% a diciembre)", "health",
+            "Afiliación al Seguro Familiar de Salud publicada por el CNSS sobre población "
+            "del Banco Mundial; el cociente es cómputo SDQ. El emisor no publica el "
+            "porcentaje: el denominador es elección nuestra y está declarada."),
         # Indicadores 2.3 y 2.6 de la END. El sujeto va en la etiqueta: son cifras de la
         # ZONA RURAL, y sin decirlo un lector las toma por nacionales.
         "rural_poverty_extreme": (

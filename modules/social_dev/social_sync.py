@@ -328,6 +328,60 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
     return synced
 
 
+#: Mes que representa el año para la cobertura del Seguro Familiar de Salud. Es un STOCK
+#: —personas protegidas a una fecha— y por eso el año se representa por su CIERRE, no por el
+#: promedio de sus doce meses, que es la convención de un flujo.
+#:
+#: La decisión se tomó POR PRINCIPIO y antes de mirar el resultado, y conviene que quede
+#: escrito: los doce valores de 2010 van de 36,2% a 44,9% de la población, así que existe un
+#: mes que reproduce la línea base legal casi exacto. Elegirlo habría sido ajustar el método
+#: al oráculo, que es la forma más limpia de fabricar una verificación.
+MES_DE_CIERRE = "12"
+
+FUENTE_SFS = "CNSS · cómputo SDQ"        # 22
+
+
+def _sync_cobertura_salud(db: Session, set_phase: Callable[[str], None]) -> int:
+    """Indicador 2.36 de la END: porcentaje de población protegida por el Seguro de Salud.
+
+    El emisor publica el CONTEO de afiliados, mensual desde 2007, y no el porcentaje: se
+    comprobó contra su portal y contra el catálogo nacional de datos abiertos. El denominador
+    es decisión nuestra y por eso viaja declarado.
+
+    **Población del WDI y no el censo.** El censo de 2010 es un punto y el indicador necesita
+    una serie anual completa. La elección mueve la cifra —con el censo, la cobertura de 2010
+    sube de 44,9% a 46,6%— y por eso se declara en vez de resolverse en silencio.
+
+    Contra el oráculo: diciembre de 2010 da 44,86% frente a los 42,4% que fija la ley, Δ 5,8%.
+    """
+    import json
+    import urllib.request
+
+    from shared.data.sisalril_client import SISALRILClient
+
+    set_phase("cobertura del Seguro Familiar de Salud (indicador 2.36 de la END)")
+    recs = SISALRILClient(mode="live").fetch(series="sfs.afiliacion.total")
+    afiliados = {r.period[:4]: float(r.value) for r in recs
+                 if r.value is not None and r.period[5:7] == MES_DE_CIERRE}
+
+    u = ("https://api.worldbank.org/v2/country/DOM/indicator/SP.POP.TOTL"
+         "?format=json&per_page=100")
+    req = urllib.request.Request(u, headers={"User-Agent": "SDQ-MarketIntelligence/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as fh:
+        datos = json.load(fh)
+    poblacion = {x["date"]: x["value"] for x in (datos[1] or []) if x.get("value")}
+
+    synced = 0
+    # Solo los años con AMBAS. Un cociente con el denominador ausente no es un dato parcial.
+    for anio in sorted(set(afiliados) & set(poblacion)):
+        _upsert_indicator(db, theme="health_insurance_coverage", entity=HEALTH_ENTITY,
+                          period=anio, value=afiliados[anio] / poblacion[anio] * 100.0,
+                          source=FUENTE_SFS, disagg="nacional",
+                          unit="% de la población, a diciembre")
+        synced += 1
+    return synced
+
+
 #: Cómo nombra el emisor cada línea y qué indicador de la END alimenta. El SUJETO viaja en el
 #: tema: son cifras de la ZONA RURAL, no del país.
 POBREZA_RURAL = {
@@ -875,6 +929,9 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
     rural_synced = _best_effort(
         "pobreza rural por zona (2.3 y 2.6)",
         lambda: _sync_pobreza_rural(db, set_phase), errors)
+    salud_synced = _best_effort(
+        "cobertura del Seguro Familiar de Salud (2.36)",
+        lambda: _sync_cobertura_salud(db, set_phase), errors)
     # Mismo criterio: no depende de nada de esta corrida y entra antes del commit temprano.
     mem_synced = _best_effort(
         "sector eléctrico (MEM · 3.27, 3.28 y 3.29)",
@@ -932,6 +989,7 @@ def one_social_sync(db: Session, set_phase: Optional[Callable[[str], None]] = No
         "llece_synced": llece_synced,
         "razon_exp_imp_synced": razon_synced,
         "pobreza_rural_synced": rural_synced,
+        "cobertura_salud_synced": salud_synced,
         "mem_electrico_synced": mem_synced,
         "income_synced": income_synced,
         "coverage_synced": coverage_synced,
