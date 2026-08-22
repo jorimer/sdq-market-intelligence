@@ -1,0 +1,187 @@
+# EL ESTADO DEL CAMPO — por qué cada indicador de la ley que NO tiene veredicto no lo tiene.
+#
+# Existe para que ninguno de los 90 quede en silencio. Un indicador sin veredicto y sin motivo
+# es indistinguible de uno que nadie miró, y esa ambigüedad es la que vuelve inauditable un
+# informe de cumplimiento.
+#
+# LO QUE ESTE ARCHIVO NO DECLARA. Los estados que se computan del registro o del binding no se
+# escriben acá: `sin_meta_legal`, `meta_no_interpretable`, `candidato_descartado` y
+# `candidato_sin_verificar` salen solos, y declararlos a mano sería tener dos verdades sobre el
+# mismo hecho. El motor rechaza la duplicación.
+#
+# LA DISTINCIÓN QUE SOSTIENE EL ARCHIVO. «Buscamos y no hay» y «no hemos buscado» son estados
+# distintos. Los cuatro estados que afirman algo sobre el mundo llevan evidencia CON FECHA;
+# sin ella el motor los rechaza y obliga a declararlos como pendientes. Decir que una fuente no
+# existe sin haberla buscado es publicar una conjetura.
+
+motivos:
+
+  # ══ MOTIVO DEFINITIVO, con evidencia ══════════════════════════════════════════════════
+  - indicador: "3.11"
+    estado: fuente_no_procesable
+    detalle: >-
+      El MESCyT es el emisor competente y publica su estadística de educación superior como
+      informe anual en PDF, sin Excel ni CSV. Extraer la serie exigiría leer cuadros de un
+      documento de cientos de páginas por año.
+    evidencia: >-
+      `mescyt.gob.do/publicaciones-estadisticas/` sirve los informes anuales 1989-2024 solo en
+      PDF (informe 2023: 434 páginas, 138 cuadros). El tablero de estadísticas no expone datos
+      extraíbles. En el catálogo nacional de datos abiertos el MESCyT publica cinco conjuntos,
+      todos operativos (becas, exequátur, nómina), ninguno con la estadística de acreditación.
+    verificado_el: "2026-08-20"
+  - indicador: "3.12"
+    estado: fuente_no_procesable
+    detalle: >-
+      Mismo emisor y mismo formato que el 3.11: el conteo de programas acreditados vive en el
+      mismo informe anual en PDF.
+    evidencia: >-
+      Ver la evidencia del indicador 3.11, verificada contra el portal del MESCyT y contra el
+      catálogo nacional de datos abiertos.
+    verificado_el: "2026-08-20"
+  - indicador: "4.4"
+    estado: magnitud_no_publicada
+    detalle: >-
+      El INAPA existe, publica datos abiertos y no publica esta magnitud. Sus conjuntos son
+      operativos: nómina, cloro residual, alcantarillados colocados y cobertura de potabilidad.
+      La eficiencia de uso del agua en redes de distribución no está entre ellos.
+    evidencia: >-
+      Búsqueda en el catálogo nacional de datos abiertos: «eficiencia agua» devuelve cero
+      conjuntos; «agua no contabilizada» devuelve uno, del INDRHI y sobre calidad del agua, no
+      sobre eficiencia de red. El INAPA publica seis conjuntos, todos operativos.
+    verificado_el: "2026-08-20"
+  - indicador: "3.30"
+    estado: fuente_no_procesable
+    detalle: >-
+      El monto está en el anexo del Informe de Desempeño del MEM, en la hoja de resultados
+      financieros. Esa hoja no tiene cabecera de años y su fila se mueve entre ediciones, así
+      que leerla por posición fabricaría procedencia. Las otras tres magnitudes eléctricas del
+      mismo anexo sí se leen, porque su hoja declara los años y las filas se buscan por
+      etiqueta.
+    evidencia: >-
+      Anexos de diciembre de 2021 y de 2024 del MEM: la fila «Aportes del gobierno / Cubrir
+      Déficit Operacional» está en f63 en la edición de 2021 y en f64 en la de 2024, y la
+      cabecera de la hoja es un título, no una fila de años.
+    verificado_el: "2026-08-21"
+
+  # ══ LA SERIE EXISTE; FALTA DEFINIR LA DERIVACIÓN ══════════════════════════════════════
+  # No es que falte fuente. Falta resolver un denominador, un cociente o una convención, y
+  # cada una de esas decisiones cambia la cifra que se publicaría.
+  - indicador: "2.36"
+    estado: pendiente_de_derivacion
+    detalle: >-
+      La serie de afiliación al Seguro Familiar de Salud está conectada y es mensual desde
+      2007. Falta la convención de anualización, y no es un detalle: los doce valores de 2010
+      van de 36,2% a 44,9% de la población, así que la elección mueve el resultado 8,6 puntos
+      contra una línea base legal de 42,4%. Antes de fijarla conviene comprobar si el propio
+      emisor publica el porcentaje, porque quien conoce el denominador correcto es él.
+  - indicador: "2.3"
+    estado: pendiente_de_derivacion
+    detalle: >-
+      La pobreza por zona urbana y rural la produce el mismo emisor cuyo panel regional ya se
+      ingiere. Falta identificar la serie rural y contrastarla contra la línea base legal.
+  - indicador: "2.6"
+    estado: pendiente_de_derivacion
+    detalle: Igual que el 2.3, sobre la línea de pobreza moderada.
+  - indicador: "3.18"
+    estado: pendiente_de_derivacion
+    detalle: >-
+      Participación de las exportaciones dominicanas en las exportaciones mundiales. El
+      numerador ya se ingiere; falta el agregado mundial del mismo emisor y el cociente. La
+      línea base de la ley es un promedio de años, así que este indicador no tiene oráculo.
+  - indicador: "3.19"
+    estado: pendiente_de_derivacion
+    detalle: Igual que el 3.18, sobre exportaciones de manufacturas.
+  - indicador: "3.20"
+    estado: pendiente_de_derivacion
+    detalle: Igual que el 3.18, sobre exportaciones de productos agropecuarios.
+  - indicador: "3.22"
+    estado: pendiente_de_derivacion
+    detalle: >-
+      Razón entre exportaciones e importaciones de bienes y servicios. Las dos series son del
+      mismo emisor y una de ellas ya se ingiere; falta el cociente. Su línea base es un
+      promedio de años y por tanto no admite oráculo.
+  - indicador: "3.23"
+    estado: pendiente_de_derivacion
+    detalle: >-
+      Hay dos fuentes para el flujo de inversión extranjera directa y ninguna reproduce la
+      línea base legal de 1.625,3 millones para 2010: el emisor internacional da 1.820,2 y el
+      conector nacional del Banco Central da 2.023,7. La diferencia es compatible con las
+      revisiones que ambos aplican a sus series históricas, y hay que resolver cuál se cita
+      antes de publicar. Falta además declarar la transformación de unidad: el emisor
+      internacional publica en dólares y la ley fija la meta en millones.
+  - indicador: "3.24"
+    estado: pendiente_de_derivacion
+    detalle: >-
+      Crédito a la producción como porcentaje del PIB. El agregado de crédito al sector
+      privado está disponible, y no es el mismo universo que «a la producción». Falta
+      determinar si el Banco Central publica el corte que la ley nombra. Línea base como
+      promedio de años, sin oráculo.
+  - indicador: "3.14"
+    estado: pendiente_de_derivacion
+    detalle: >-
+      El conteo de patentes de residentes está disponible en el emisor internacional y da
+      valores del mismo orden que la línea base legal. Falta contrastar el concepto, porque la
+      ley dice «patentes registradas» sin precisar si son solicitudes o concesiones, y la línea
+      base es un promedio de años.
+
+  # ══ NO SE HA BUSCADO FUENTE ═══════════════════════════════════════════════════════════
+  # Estado honesto y deliberado. Estos son trabajo nuestro pendiente, no hallazgos.
+  - indicador: "1.1"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Confianza en los partidos políticos. Lo miden encuestas regionales de opinión pública,
+      que hoy no están en la lista de fuentes admitidas del expediente. Habría que evaluar si
+      una encuesta de tercero califica como fuente para este eje antes de buscarla.
+  - indicador: "1.2"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Índice de percepción de la corrupción. El emisor publica anualmente, y la línea base
+      legal de 3,0 para 2010 está en la escala 0-10 que ese emisor abandonó en 2012. Sospecha
+      de ruptura de escala del mismo tipo que la del LLECE, sin verificar.
+  - indicador: "1.3"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Índice de fortaleza institucional. La ley no nombra al emisor y el nombre no coincide con
+      ningún índice publicado que se haya comprobado. Primer paso: identificar qué índice quiso
+      nombrar el legislador.
+  - indicador: "1.4"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Índice de desarrollo burocrático. Mismo problema de identificación del emisor que el 1.3,
+      con la sospecha adicional de que el índice se discontinuó.
+  - indicador: "3.15"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Índice de infraestructura. Sin emisor nombrado en la ley. Sospecha de que corresponde a
+      un pilar de un índice compuesto internacional, sin verificar.
+  - indicador: "3.16"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Índice de Reporte de Viajes y Turismo. El emisor es el mismo que discontinuó el índice
+      del indicador 3.9, ya descartado por esa causa, y publica hoy un índice sucesor con otra
+      metodología. Corresponde comprobarlo antes de declarar el instrumento discontinuado.
+  - indicador: "3.17"
+    estado: pendiente_de_busqueda
+    detalle: Mismo caso que el 3.16, sobre el pilar de sostenibilidad del mismo reporte.
+  - indicador: "2.11"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Porcentaje de la población económicamente activa en programas de capacitación. Emisor
+      probable entre el instituto de formación técnica y la encuesta de fuerza de trabajo, sin
+      comprobar cuál publica la magnitud.
+  - indicador: "2.26"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Tasa de letalidad asociada al dengue. La produce la autoridad sanitaria en sus boletines
+      epidemiológicos, cuyo formato no se ha evaluado.
+  - indicador: "2.38"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Brecha regional de la tasa de desocupación ampliada. Exige la desocupación ampliada por
+      región y la definición de «brecha» que usa la ley, ninguna de las dos comprobada.
+  - indicador: "2.40"
+    estado: pendiente_de_busqueda
+    detalle: >-
+      Brecha de género en ingreso laboral. El emisor de la encuesta de fuerza de trabajo
+      publica ocupación por sexo, que ya se ingiere; falta comprobar si publica ingreso por
+      sexo con el mismo corte.

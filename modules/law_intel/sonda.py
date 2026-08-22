@@ -22,6 +22,7 @@ Por eso el veredicto más fuerte que emite se llama `revisar_concepto` y no «ve
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Tuple
 
@@ -57,11 +58,54 @@ class Sondeo:
     valor_fuente: Optional[float] = None
     delta_pct: Optional[float] = None
     motivo: Optional[str] = None
+    #: CÓMO se comparó contra la ley. Viaja porque un acierto promediando una
+    #: ventana de seis años y uno contra un año exacto no son la misma evidencia,
+    #: y quien decide el binding tiene que poder distinguirlos.
+    lectura: Optional[str] = None
 
     @property
     def sobrevive(self) -> bool:
         """Si vale la pena gastar un conector en este candidato. NO es «está verificado»."""
         return self.veredicto.startswith("revisar_concepto")
+
+
+#: La ley fecha algunas líneas base con una VENTANA en vez de un año: «Promedio 2005- 2010»,
+#: «2006- 2008». Se acepta con y sin la palabra, porque el articulado usa las dos formas para
+#: lo mismo, y el espacio suelto tras el guion es como quedó en la transcripción del PDF.
+_RX_VENTANA = re.compile(r"^\s*(?:promedio\s+)?(\d{4})\s*-\s*(\d{4})\s*$", re.I)
+
+
+def ventana_de(base_anio_texto: Optional[str]) -> Optional[Tuple[int, int]]:
+    """`(desde, hasta)` de una línea base fechada con una ventana, o `None`.
+
+    Devuelve `None` para un rango truncado como «2005-», que en el registro es un defecto de
+    transcripción y no una ventana: adivinar el año que falta sería inventar el período sobre
+    el que se promedia.
+    """
+    m = _RX_VENTANA.match(str(base_anio_texto or ""))
+    if not m:
+        return None
+    desde, hasta = int(m.group(1)), int(m.group(2))
+    return (desde, hasta) if hasta > desde else None
+
+
+def _promedio_de_ventana(valores: Dict[str, float],
+                         ventana: Tuple[int, int]) -> Tuple[Optional[float], str]:
+    """Promedio de la ventana, o `None` con el motivo si no está COMPLETA.
+
+    La completitud no es formalismo. Un promedio de tres años sobre una ventana de seis es
+    otro número, y se parecería lo suficiente al de la ley como para pasar por bueno. Es la
+    misma regla que hace que los conteos regionales solo se publiquen con las diez regiones
+    presentes: promediar lo que hay produce una cifra que nadie pidió.
+    """
+    desde, hasta = ventana
+    esperados = [str(a) for a in range(desde, hasta + 1)]
+    faltan = [a for a in esperados if a not in valores]
+    if faltan:
+        return None, (f"la serie no cubre la ventana {desde}-{hasta} que declara la ley: "
+                      f"faltan {faltan}")
+    vals = [valores[a] for a in esperados]
+    return sum(vals) / len(vals), ""
 
 
 def sondear(ind: Indicador, obs: Sequence[Observacion],
@@ -74,12 +118,37 @@ def sondear(ind: Indicador, obs: Sequence[Observacion],
     0,4%. Un «no coincide» sin haber revisado la transformación no es un descarte: es una
     pregunta sin responder.
     """
-    if not isinstance(ind.base_valor, (int, float)) or not ind.base_anio:
+    if not isinstance(ind.base_valor, (int, float)):
         return Sondeo(ind.id, "sin_oraculo",
-                      motivo=f"línea base no numérica o sin año: {ind.base_valor!r}")
+                      motivo=f"línea base no numérica: {ind.base_valor!r}")
     base = float(ind.base_valor)
+    valores = {str(p): float(v) for p, v in obs}
+
+    # ── LA VENTANA ────────────────────────────────────────────────────────────────────
+    # Para nueve indicadores la ley no fechó la línea base con un año sino con una ventana.
+    # Rendirse ahí dejaba a esos indicadores SIN la comprobación fuerte, para siempre: no es
+    # que el oráculo fallara, es que nunca se le preguntaba.
+    #
+    # Que la lectura correcta sea el promedio no se supuso, se comprobó sobre el 3.22: la
+    # razón exportaciones/importaciones va de 0,639 a 0,850 dentro de la ventana y NINGÚN año
+    # suelto cae a menos del 2% de la base legal; solo el promedio, a 0,9%. Con una serie
+    # plana la coincidencia no diría nada, y por eso `lectura` viaja con el resultado.
+    if not ind.base_anio:
+        ventana = ventana_de(ind.base_anio_texto)
+        if ventana is None:
+            return Sondeo(ind.id, "sin_oraculo", base_ley=base,
+                          anio_base=ind.base_anio_texto,
+                          motivo=(f"la línea base no declara un año ni una ventana legible: "
+                                  f"{ind.base_anio_texto!r}"))
+        prom, falla = _promedio_de_ventana(valores, ventana)
+        if prom is None:
+            return Sondeo(ind.id, "sin_dato_en_la_base", base_ley=base,
+                          anio_base=f"{ventana[0]}-{ventana[1]}", motivo=falla)
+        return _veredicto(ind, base, f"{ventana[0]}-{ventana[1]}", prom, transformar,
+                          lectura=f"promedio de la ventana {ventana[0]}-{ventana[1]} "
+                                  f"({ventana[1] - ventana[0] + 1} años, completa)")
+
     anio = str(ind.base_anio)
-    valores = {str(p): v for p, v in obs}
     v = valores.get(anio)
     if v is None:
         # Tres situaciones distintas, y decirlas iguales manda al lector a la conclusión
@@ -98,12 +167,24 @@ def sondear(ind: Indicador, obs: Sequence[Observacion],
             motivo = "la serie no devolvió observaciones"
         return Sondeo(ind.id, "sin_dato_en_la_base", base_ley=base, anio_base=anio,
                       motivo=motivo)
+    return _veredicto(ind, base, anio, v, transformar, lectura=f"año exacto {anio}")
+
+
+def _veredicto(ind: Indicador, base: float, anio: str, v: float, transformar,
+               lectura: str) -> Sondeo:
+    """El contraste contra la línea base. Único lugar donde se decide el veredicto.
+
+    Va aparte para que el camino del año exacto y el de la ventana promediada no puedan
+    divergir: el umbral de tolerancia es el mismo y la ventana no lo afloja. Lo único que
+    cambia entre los dos es CÓMO se leyó la base, y eso se publica en `lectura`.
+    """
     v = float(transformar(v)) if transformar else float(v)
     # Una base de cero no admite delta porcentual y el indicador tampoco se juzga así: se
     # declara en vez de dividir por cero o inventar un 100%.
     if base == 0:
         return Sondeo(ind.id, "sin_oraculo", base_ley=base, anio_base=anio, valor_fuente=v,
-                      motivo="la línea base es 0: el contraste porcentual no significa nada")
+                      motivo="la línea base es 0: el contraste porcentual no significa nada",
+                      lectura=lectura)
     d = round(abs(v - base) / abs(base) * 100, 1)
     if d <= _TOLERANCIA_SOBREVIVE:
         ver = "revisar_concepto"
@@ -112,4 +193,4 @@ def sondear(ind: Indicador, obs: Sequence[Observacion],
     else:
         ver = "descartar"
     return Sondeo(ind.id, ver, base_ley=base, anio_base=anio, valor_fuente=round(v, 4),
-                  delta_pct=d, motivo=VEREDICTOS[ver])
+                  delta_pct=d, motivo=VEREDICTOS[ver], lectura=lectura)

@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from modules.law_intel.bindings import cargar_bindings, cobertura
+from modules.law_intel.campo import resumen as resumen_del_campo
 from modules.law_intel.obligaciones import cargar_obligaciones
 from modules.law_intel.obligaciones import resumen as resumen_obligaciones
 from modules.law_intel.ratificacion import publicable as ratificacion_publicable
@@ -150,6 +151,16 @@ def law_ai_context(expediente_id: str, corte: str,
             "ese organismo la retransmite y quien la produjo es el Estado evaluado. "
             "Escribirlo al revés le da al informe una independencia que no tiene, y un "
             "contradictor la desarma en una línea."),
+        # ── El estado del CAMPO, que es distinto de la cobertura ──────────────────────
+        # La cobertura dice cuántos indicadores se miden. Ésta dice cuántos están declarados,
+        # con veredicto o con motivo. Sin ella el informe se lee como si los 65 restantes no
+        # existieran, cuando de 45 de ellos se puede decir exactamente por qué no se miden.
+        "estado_del_campo_computado": resumen_del_campo(expediente_id),
+        "regla_del_campo_cerrado": (
+            "«Campo cerrado» significa que ningún indicador quedó en silencio, NO que todos "
+            "tengan respuesta. Si escribís que el campo está cerrado, escribí en la misma "
+            "frase cuántos tienen motivo definitivo y cuántos esperan trabajo de SDQ. La "
+            "cifra sola se lee como cobertura y no lo es."),
         # ── Cierre del informe: brecha + recomendación ──
         "brechas_de_medicion": resumen_brecha(br, len(numerados)),
         "recomendaciones_ya_redactadas": [
