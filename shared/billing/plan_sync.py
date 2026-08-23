@@ -24,7 +24,7 @@ Las compras puntuales (deep_dive:*) no usan planes: quedan fuera.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy.orm import Session
 
@@ -50,6 +50,35 @@ def _plan_matches(plan: Dict[str, Any], amount: str, currency: str) -> bool:
                 and str(plan.get("currency_code") or "").upper() == currency.upper())
     except (TypeError, ValueError):
         return False
+
+
+def missing_plan_cells(db: Session) -> List[Dict[str, str]]:
+    """Celdas (SKU, periodicidad) VENDIBLES hoy que no tienen billing plan mapeado.
+
+    Una suscripción solo se puede crear si existe ``plans[sku][interval]``. El chequeo de
+    alistamiento miraba ``bool(plans)``, que es verdadero en cuanto UNA celda está mapeada:
+    con `all_access/monthly` puesto, la consola daba verde mientras `all_access/annual`
+    faltaba, y el hueco lo descubrió un cliente en el checkout con un 503 (2026-07-13).
+    Vendible = tiene precio vigente en el tarifario; sin precio no se ofrece y no necesita
+    plan, así que no es una falta.
+
+    No llama a PayPal: es una comprobación de COMPLETITUD del mapa contra el tarifario, y
+    tiene que poder correr en el arranque y en un healthcheck sin depender de la red.
+    """
+    from shared.settings.service import get_paypal_config
+
+    # Mismo desempaque que ``sync_paypal_plans``: ``get_paypal_config`` devuelve
+    # ``Dict[str, object]`` y el mapa hay que reconstruirlo con su tipo real.
+    crudo = cast(Dict[str, Dict[str, str]], get_paypal_config(db).get("plans") or {})
+    plans: Dict[str, Dict[str, str]] = {k: dict(v) for k, v in crudo.items()}
+    faltan: List[Dict[str, str]] = []
+    for s in catalog_skus():
+        for interval in (iv for iv in s["intervals"] if iv in _SUB_INTERVALS):
+            if price_for(db, s["sku"], interval) is None:
+                continue  # no se vende: no es una falta
+            if not ((plans.get(s["sku"]) or {}).get(interval) or "").strip():
+                faltan.append({"sku": s["sku"], "interval": interval, "label": s["label"]})
+    return faltan
 
 
 def sync_paypal_plans(db: Session, provider=None) -> Dict[str, Any]:
