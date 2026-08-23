@@ -1809,16 +1809,29 @@ bindings:
       puede tomar hoy: el productor publica solicitudes por tipo y por procedencia, y no
       publica concesiones. El registro internacional que sí las publica sirve su consulta como
       aplicación de página única, sin ruta de datos que se pueda pedir.
-    hipotesis_sin_comprobar: >-
-      Que la magnitud sean las patentes CONCEDIDAS, en una de dos formas que hay que
-      distinguir: el CONTEO anual —1,3 concesiones al año, plausible en un país que otorga
-      muy pocas— o las concesiones POR MILLÓN, que exigiría unas 12 al año.
-      DÓNDE ESTÁ, comprobado el 2026-08-22: el registro internacional de propiedad industrial
-      SÍ publica «Total patent grants» por origen y por año en su centro de estadísticas, con
-      corte de mayo de 2026. No es una fuente hipotética: es una consulta que se puede hacer.
-      Lo que falta es sacarla de una herramienta interactiva que no expone ruta de datos —el
-      mismo problema que tuvo el 1.1 y que allí se resolvió con un conector sobre el servicio
-      que hay detrás—.
+    nota: >-
+      LA HIPOTESIS DE LAS CONCESIONES, MEDIDA Y CERRADA el 2026-08-22. Se consulto al registro
+      internacional de propiedad industrial —corte de mayo de 2026— por las patentes
+      CONCEDIDAS de origen dominicano, en sus tres cortes, sobre la ventana 2006-2008 que la
+      ley promedia:
+      concedidas en el exterior, 1 y 1 y 3, promedio 1,67, Delta 28,5% contra la base de 1,3;
+      concedidas a residentes, sin dato en 2006 y 2007 y 5 en 2008;
+      total de concesiones, sin dato en 2006 y 2007 y 8 en 2008.
+      El emisor no reporta concesiones a residentes ni totales para 2006 ni para 2007. Dos de
+      los tres anios que la ley promedia estan vacios, asi que el oraculo no puede correr
+      sobre la ventana: la regla exige la ventana COMPLETA, y rellenar los huecos con cero
+      seria afirmar que hubo cero concesiones cuando lo que hay es ausencia de reporte.
+      La unica lectura con ventana completa —las concedidas en el exterior— da Delta 28,5% y
+      no cierra. Con eso la hipotesis de las concesiones queda cerrada: ni el conteo ni la
+      variante por millon reproducen la linea base.
+      COMO SE CONSULTO, para que nadie tenga que volver a deducirlo: el centro de estadisticas
+      del emisor sirve sus tablas desde `GET /api/v1/public/ips-search/table-result` en
+      `api.ipstatsdc.deda.prd.web1.wipo.int`, con `selectedTab=patent`, `indicator=23` (total
+      de concesiones), `reportType=13` (por origen del solicitante), `ipsOriSelValues=DO` y
+      `ipsTechSelValues` en 910 total, 911 residentes, 912 exterior. La ruta se dedujo del
+      codigo de su aplicacion y responde desde el navegador; desde fuera devuelve 400.
+      NO se construyo conector, y es la conclusion de todo esto: no hay nada que conectar
+      mientras el indicador no tenga contra que verificarse.
     candidatos_descartados:
       - serie: "onapi:modelos_de_utilidad"
         motivo: >-
