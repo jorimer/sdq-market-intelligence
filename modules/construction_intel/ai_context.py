@@ -6,6 +6,18 @@ series — so prompts stay cheap and honest about provenance. Module-local, mirr
 :mod:`free_zones_intel.ai_context`.
 """
 from typing import Any, Dict, List
+from shared.data.bcrd_sectors import BCRDSectorsClient
+from shared.data.mivhed_client import MIVHEDClient
+from shared.narrative.atribucion import Fuente, bloque_de_atribucion
+
+
+#: Los DOS emisores del eje. Se construyen del conector: etiqueta y licencia salen del
+#: mismo objeto que trae el dato, así que cambiar de conector las cambia juntas.
+_MIVHED = Fuente.de_cliente(
+    MIVHEDClient, descripcion="MIVHED (licencias de construcción), datos abiertos")
+_BCRD = Fuente.de_cliente(
+    BCRDSectorsClient, descripcion="BCRD (PIB construcción), estadísticas oficiales")
+
 
 _DIM_LABELS = {
     "production": "Producción del sector (crec. real PIB construcción 3y, BCRD)",
@@ -86,7 +98,7 @@ def construction_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any
         "top_province": levels.get("top_province"),
         "top_province_share_pct": levels.get("top_province_share"),
         "score_global": index.get("icc_score"),
-        "source": "MIVHED (licencias de construcción) + BCRD (PIB construcción), datos abiertos",
+        **bloque_de_atribucion(_MIVHED, _BCRD),
         "note": ("Sobre dato real: PIPELINE de permisos (MIVHED, líder) + PRODUCCIÓN "
                  "efectiva (PIB construcción BCRD). Índice de coyuntura — distingue "
                  "actividad LÍDER (permisos) de PRODUCCIÓN realizada (PIB). Agregado "

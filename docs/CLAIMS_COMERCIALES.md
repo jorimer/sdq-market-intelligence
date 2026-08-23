@@ -150,3 +150,76 @@ La tabla de credenciales lidera con la **señal**, no con el agregado, y hay que
 Fuente canónica: `shared/products/registry.py::PRODUCT_CATALOG`. El «14» era correcto el
 13-jul-2026 (Catálogo v3); entraron `social_dev` (09-ago) y `law` (15-ago). Dimensionar sobre
 14 subdeclara el catálogo en dos.
+
+---
+
+## Licencias de fuente — lo que restringe qué se puede vender
+
+**Regla.** La licencia de una fuente es una condición de venta, no una nota al pie. Y no se
+lee de este documento: la declaración canónica de cada fuente vive en su conector y su
+verificación en **`shared/data/licenses.py`** (`LICENCIAS`, con `terminos_url` y
+`verificado_el`). Una licencia copiada a un doc es una licencia que se desincroniza — que es
+exactamente cómo empezó lo de abajo.
+
+**Lo que hay que saber para vender, al 2026-08-23:**
+
+- ⚠️ **UIP / Parline — CC BY-NC-SA 4.0** (Atribución + NoComercial + CompartirIgual). Alimenta
+  el indicador **2.43** de la END (mujeres en el Senado) en el eje `law`. El conector decía
+  «uso público con cita»: describía la licencia sin sus dos cláusulas restrictivas. La
+  atribución ya es obligatoria y **la computa la plataforma** —
+  `atribuciones_obligatorias_por_indicador` en el contexto del informe. **`NC` y `SA` siguen
+  abiertos**: lo que se publica es una cifra por año leída de la tabla pública, no la base de
+  Parline, pero los informes de este eje se venden. **La pregunta ya está hecha al emisor** —
+  correo a `postbox@ipu.org` del 2026-08-23, punto 3, sin respuesta todavía. Hasta que
+  conteste, no comprometer el 2.43 en material de venta nuevo sin decidirlo caso por caso.
+- ⚠️ **EM-DAT / CRED (UCLouvain)** — uso **no comercial**; el comercial exige acuerdo aparte y
+  cuota anual con CRED, y prohíbe construir bases sustitutas o derivadas. Llega vía OWID, cuya
+  CC-BY cubre **su procesamiento**, no el dato de abajo. Hoy solo alimenta el backtest interno
+  del IRC, que no se redistribuye — si ese insumo pasa a material de venta, hay que resolverlo
+  antes.
+- ⚠️ **CEPALSTAT (CEPAL) — la más estrecha de todas, y NO es Creative Commons.** Sus
+  términos —los que el propio servicio declara en el `termsOfService` de su OpenAPI—
+  conceden bajar y copiar «para su uso personal, sin fines comerciales, sin ningún derecho
+  a revender, redistribuir, o crear otros trabajos a partir de los mismos». Alimenta los
+  indicadores **2.45 y 2.46** de la END. El conector decía «uso público con cita».
+  **Atribuir no alcanza**: no hay cláusula BY que satisfacer, hay un permiso de uso personal.
+  Decisión abierta del dueño — y hay una salida limpia a mano: el dato lo produce la **JCE**
+  y la CEPAL solo lo recoge.
+- ⚠️ **UN Comtrade — no es dato libre.** Es propiedad intelectual de Naciones Unidas, cedida
+  para **uso interno**; re-diseminar el dato **original** exige permiso escrito de la UNSD, y
+  por encima de 100.000 registros una «license to distribute» paga sobre suscripción premium.
+  **El dato transformado no lo alcanza** y ahí está la vía legítima: lo que `trade_intel`
+  publica son cálculos propios, no la tabla de Comtrade. La regla práctica para material de
+  venta: **cifras derivadas sí, tablas de socio × capítulo tal cual no.**
+- ✅ **Banco Mundial (WDI/WGI) — CC-BY 4.0, confirmado.** Se puede redistribuir citando. Con
+  un matiz: CC-BY es el **default** del catálogo, no una garantía; hay datasets con ODbL,
+  microdatos y términos de terceros. Vale para lo que hoy se lee, no para cualquier serie del
+  Banco Mundial que se agregue mañana.
+- ✅ **UIT / ITU DataHub — permiso comercial POR ESCRITO.** La plataforma publica
+  CC BY-NC-SA 3.0 IGO, pero la División de Datos y Analítica de las TIC autorizó el
+  2026-08-18, por correo, el uso de los datos del DataHub «como insumo para productos
+  analíticos comerciales, siempre que la UIT sea citada adecuadamente como fuente», y avisó
+  que está actualizando sus términos porque **la licencia publicada aún no refleja ese
+  cambio**. Es el único caso del catálogo donde lo declarado era MÁS restrictivo que lo
+  permitido. **Dos límites que no se pueden soltar:** el permiso cubre el uso como insumo de
+  un índice, **no** redistribuir las series en bruto (la consulta lo dijo así y sobre eso se
+  concedió); y **citar a la UIT es condición del permiso**, no cortesía editorial. Un informe
+  del eje telecom que use estos datos sin nombrar a la UIT incumple — desde el 2026-08-23 la
+  atribución **la computa la plataforma** y entra sola en el contexto del informe.
+  **Dos puntos de alcance preguntados a la UIT el 2026-08-23 y aún sin respuesta**, que no se
+  pueden dar por concedidos mientras tanto: si mostrar cifras individuales de la UIT dentro de
+  un informe queda cubierto, y si el permiso alcanza a los informes ya entregados. No son una
+  negativa: es alcance sin confirmar. Estado vigente en `shared.data.licenses`.
+- ❌ **Nunca** describir una licencia restrictiva en prosa («uso público con cita») en un
+  contrato, un deck o un informe. El texto de la licencia es además una entrada de máquina:
+  `shared.data_api.manifest.license_restricts_redistribution` decide si el dato se reexporta
+  buscando las cláusulas (`NC`, `SA`, `ODbL`) **en esa cadena**. Prosa amable = restricción
+  invisible = activo publicable que no debía serlo.
+
+**Estado de la verificación:** `shared.data.licenses.deuda_de_verificacion()` lista las fuentes
+cuya licencia **nadie contrastó todavía** contra el emisor. La lista se computa; no se
+escribe. Una fuente que figure ahí no está autorizada por omisión — y tampoco se puede
+presumir que esté bien: de las **siete** resueltas hasta ahora, **cuatro estaban
+subdeclaradas** y **una sobre-declarada**. Antes de comprometer una fuente en una propuesta,
+mirá si está verificada — y en las dos direcciones: la subdeclarada te expone, la
+sobre-declarada te hace regalar un dato que sí podías usar.

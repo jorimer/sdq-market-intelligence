@@ -91,6 +91,24 @@ fuentes_admitidas:
       evaluado. Además NO produce el dato sino que lo recoge del organismo electoral de
       cada país — para RD, de la propia JCE. Es la vía abierta a una fuente nacional que no
       publica API ni dataset (verificado contra datos.gob.do).
+    nota_de_uso: >-
+      LICENCIA CORREGIDA EL 2026-08-23, y acá la corrección pesa MÁS que en la UIP. El
+      conector declaraba «uso público con cita». Los términos que el propio servicio
+      declara —el `termsOfService` del `apispec_1.json` de `api-cepalstat.cepal.org`, que
+      es el endpoint que leemos— conceden bajar y copiar el material «para su uso personal,
+      sin fines comerciales, sin ningún derecho a revender, redistribuir, o crear otros
+      trabajos a partir de los mismos». No hay licencia Creative Commons de por medio: la
+      CEPAL no concede una, concede un permiso de uso personal.
+      NO se declara `exige_atribucion`. Sería engañoso: la atribución arregla una cláusula
+      BY, y acá no hay BY que satisfacer — lo que los términos niegan es el uso comercial,
+      la redistribución y la obra derivada, y nombrar la fuente no levanta ninguna de las
+      tres. Poner el interruptor daría la sensación de que el asunto quedó resuelto.
+      DECISIÓN DEL DUEÑO, abierta: los indicadores 2.45 y 2.46 salen de acá y viajan en
+      informes que se venden. Lo que se publica es UNA cifra por año, no la base de
+      CEPALSTAT, y el dato lo produce la JCE —la CEPAL lo recoge—; si eso cae dentro o
+      fuera de «revender o crear otros trabajos», o si conviene pedirlo a la JCE
+      directamente, no lo resuelve este archivo. La declaración canónica vive en
+      `shared.data.cepalstat_client.LICENSE` y su verificación en `shared.data.licenses`.
   - id: uip
     nombre: Unión Interparlamentaria (Parline)
     del_evaluado: false
@@ -98,6 +116,34 @@ fuentes_admitidas:
       Externa y admisible por la misma lógica que la PEFA, el WDI y la CEPAL: no es el
       órgano evaluado. Publica la composición de cada cámara por separado, que es lo que
       ninguna fuente nacional abierta ofrece para el Senado.
+    exige_atribucion: true
+    atribucion: >-
+      Fuente: Unión Interparlamentaria (Parline), entidad DO-UC01, bajo licencia
+      CC BY-NC-SA 4.0.
+    nota_de_uso: >-
+      LICENCIA CORREGIDA EL 2026-08-22, y la corrección importa para este expediente. El
+      conector declaraba «uso público con cita». La licencia real de Parline es
+      CC BY-NC-SA 4.0 —Atribución + NoComercial + CompartirIgual—, verificada contra el pie
+      de `data.ipu.org` (snapshot de Wayback del 2025-12-07, con el `by-nc-sa.svg` y el
+      enlace a la 4.0). La declaración canónica vive en
+      `shared.data.ipu_parline_client.LICENSE` y su verificación en
+      `shared.data.licenses`; no se copia acá ninguna cifra ni ningún estado.
+      LO QUE LA CORRECCIÓN YA RESUELVE: la cláusula BY. La atribución deja de depender de
+      que el redactor se acuerde — `exige_atribucion` la vuelve obligatoria para todo
+      binding que use esta fuente y `modules.law_intel.ai_context.atribuciones_obligatorias`
+      la computa, igual que para el Latinobarómetro.
+      LO QUE NO RESUELVE, y está EN CURSO con el emisor: las cláusulas NC y SA. Los informes de
+      este eje se entregan en base comercial, y `NC` prohíbe el uso comercial mientras `SA`
+      obliga a compartir lo derivado en los mismos términos. Lo que se publica del 2.43 es
+      UNA cifra por año tomada de la tabla pública, no la base de Parline; si esa lectura
+      alcanza, o si hace falta pedir permiso a la UIP, o si el indicador sale del material
+      que se vende, es una decisión que no toma este archivo. Hasta que se tome, la
+      cláusula queda escrita donde se lee y no en la memoria de nadie.
+      ESTADO AL 2026-08-23: la pregunta ya se le hizo a la UIP por escrito —correo a
+      postbox@ipu.org, punto 3 del pedido de acceso, planteando la entrega comercial y
+      pidiendo guía sobre si el uso está permitido con atribución—. SIN RESPUESTA todavía.
+      La decisión del dueño puede esperar esa respuesta; lo que no puede esperar es que la
+      cláusula esté declarada, y lo está.
   - id: llece
     nombre: LLECE / UNESCO (SERCE · TERCE · ERCE)
     del_evaluado: false

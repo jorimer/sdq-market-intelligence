@@ -6,6 +6,21 @@ it interprets (numeric_guard). Mirrors ``pension_intel.ai_context``.
 """
 from typing import Any, Dict, List, Optional
 
+from shared.data.sis_client import SISClient
+from shared.data.sisalril_client import SISALRILClient
+from shared.narrative.atribucion import Fuente, bloque_de_atribucion
+
+#: Emisores del eje. Son dos, y el mismo emisor aparece con DOS datasets distintos: los
+#: estados financieros auditados por compañía y el portal de datos abiertos. Se distinguen
+#: porque el narrador debe saber cuál está leyendo; la licencia es la misma para ambos.
+_SIS_ESTADOS = Fuente.de_cliente(
+    SISClient, descripcion="SIS — estados financieros auditados por compañía (dato real)")
+_SIS_PORTAL = Fuente.de_cliente(
+    SISClient, descripcion="SIS — Superintendencia de Seguros (dato real, datos.gob.do)")
+_SISALRIL = Fuente.de_cliente(
+    SISALRILClient, descripcion="SISALRIL/CNSS — Seguro Familiar de Salud")
+
+
 
 def _dims(rating: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
@@ -98,7 +113,7 @@ def insurance_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]
         "posiciones_dimension": _posiciones(rating, peers),
         "comparaciones": _comparaciones(rating, peers),
         "direction": "mayor solvencia/liquidez/resultado y menor siniestralidad = más sólida",
-        "source": "SIS — estados financieros auditados por compañía (dato real)",
+        **bloque_de_atribucion(_SIS_ESTADOS),
         "note": ("El ISF integra cinco dimensiones sobre los estados financieros auditados que "
                  "publica la SIS: solvencia (patrimonio/activos), siniestralidad (loss ratio), "
                  "liquidez, escala y resultado técnico. Es una medida de solidez por bandas, no "
@@ -144,7 +159,7 @@ def insurance_peer_context(name: str, rating: Dict[str, Any],
         "promedio_isf": avg,
         "posiciones_dimension": _posiciones(rating, peers),
         "comparaciones": _comparaciones(rating, peers),
-        "source": "SIS — estados financieros auditados por compañía (dato real)",
+        **bloque_de_atribucion(_SIS_ESTADOS),
         "note": ("Posición relativa por bandas de solidez (0-100). No es un rating de crédito."
                  + _ANTI_SUPERLATIVO),
     }
@@ -175,7 +190,7 @@ def market_pulse_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
             "afiliados_subsidiado": hc.get("afiliados_subsidiado"),
             "crecimiento_5a_pct": hc.get("crecimiento_5a_pct"),
             "periodo": hc.get("period"),
-            "fuente": "SISALRIL/CNSS — Seguro Familiar de Salud",
+            "fuente": _SISALRIL.descripcion,
         } if hc else None,
         "anio": pulse.get("latest_year"),
         "primas_totales_rd": pulse.get("total_premiums_rd"),
@@ -207,7 +222,7 @@ def market_pulse_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
         ],
         "unit_primas": "RD$ (primas netas cobradas)",
         "direction": "mayor tamaño, crecimiento sostenido y mezcla diversificada = mercado más profundo",
-        "source": "SIS — Superintendencia de Seguros (dato real, datos.gob.do)",
+        **bloque_de_atribucion(_SIS_PORTAL),
         "note": (
             "Pulso del mercado asegurador (agregado, sin nombres de aseguradora). "
             "Primas netas cobradas; el crecimiento se lee como tasa compuesta entre años "

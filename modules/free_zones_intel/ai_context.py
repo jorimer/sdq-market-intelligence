@@ -6,6 +6,14 @@ series — so prompts stay cheap and honest about provenance. Module-local, mirr
 :mod:`energy_intel.ai_context`.
 """
 from typing import Any, Dict, List
+from shared.data.cnzfe_client import CNZFEClient
+from shared.narrative.atribucion import Fuente, bloque_de_atribucion
+
+
+#: Emisor único del eje, construido de su conector.
+_CNZFE = Fuente.de_cliente(
+    CNZFEClient, descripcion="CNZFE (Consejo Nacional de Zonas Francas), datos abiertos")
+
 
 _DIM_LABELS = {
     "export_dynamism": "Dinamismo exportador (CAGR exportaciones, CNZFE)",
@@ -50,7 +58,7 @@ def free_zones_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         "investment_musd": levels.get("investment_musd"),
         "parks": levels.get("parks"),
         "score_global": index.get("fz_score"),
-        "source": "CNZFE (Consejo Nacional de Zonas Francas), datos abiertos",
+        **bloque_de_atribucion(_CNZFE),
         "note": ("Sobre dato real CNZFE: fundamentos anuales del sector de zonas francas "
                  "(exportaciones, inversión acumulada, empleos, empresas). Índice de "
                  "dinamismo por CAGR vs objetivo. Agregado nacional, sin desglose por "

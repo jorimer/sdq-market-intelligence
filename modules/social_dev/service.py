@@ -11,6 +11,10 @@ from modules.social_dev.scoring.development import (
     compute_development,
     distribution_stats,
 )
+from shared.data.encft_employment import LICENSE as _ONE_LICENSE
+from shared.data.minerd_coverage import LICENSE as _MINERD_LICENSE
+from shared.data.sisdom_common import LICENSE as _MEPYD_LICENSE
+from shared.data.siuben_client import LICENSE as _SIUBEN_LICENSE
 
 logger = logging.getLogger("sdq.social_dev.service")
 
@@ -270,11 +274,17 @@ _SERIES_CAVEATS = {
 # Una serie servida sin licencia es una serie que el cliente no sabe si puede citar. El
 # emisor entra acá el mismo día que empieza a escribir filas sub-nacionales — si no, el
 # descriptor sale con ``license: null`` y nadie se entera.
+#
+# Se IMPORTAN del conector, no se copian. Estaban copiadas palabra por palabra, y una copia
+# es una licencia que deja de ser la del emisor en cuanto alguien corrige el original: la de
+# Parline decía «uso público con cita» cuando la real es CC BY-NC-SA 4.0, y una copia de esa
+# frase habría seguido diciéndolo después del arreglo. Acá el descriptor que se sirve por la
+# Data API queda atado a la única declaración que existe.
 _SOURCE_LICENSES = {
-    "ONE": "datos oficiales ONE — uso público con cita",
-    "SIUBEN": "datos abiertos del Estado dominicano (datos.gob.do) — uso público con cita",
-    "MINERD": "estadísticas públicas del Ministerio de Educación (SIIE) — uso con cita",
-    "MEPyD": "SISDOM (VAES/MEPyD) — indicadores sociales oficiales, uso público con cita",
+    "ONE": _ONE_LICENSE,
+    "SIUBEN": _SIUBEN_LICENSE,
+    "MINERD": _MINERD_LICENSE,
+    "MEPyD": _MEPYD_LICENSE,
 }
 
 

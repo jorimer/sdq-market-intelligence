@@ -7,6 +7,16 @@ flow set — so prompts stay cheap and focused (plan §5.2). Module-local, mirro
 """
 from typing import Any, Dict, List
 
+from shared.data.dga_client import DGAClient
+from shared.narrative.atribucion import Fuente, bloque_de_atribucion
+
+#: Emisor único de este contexto: los flujos por capítulo arancelario los publica la DGA.
+#: (El eje también lee UN Comtrade para el análisis por socio, que va por otra superficie y
+#: tiene su propia licencia — ver `partner_chapters_sync`.)
+_DGA = Fuente.de_cliente(
+    DGAClient, descripcion="DGA (Aduanas), por capítulo arancelario (HS)")
+
+
 
 def trade_ai_context(score: Dict[str, Any]) -> Dict[str, Any]:
     """Compact context for the national trade-resilience assessment.
@@ -33,7 +43,7 @@ def trade_ai_context(score: Dict[str, Any]) -> Dict[str, Any]:
         # canónico (cerebro): el score; sin sub-componentes ponderados, serie ni pares en
         # este eje → el detector determinista no aplica y el guard es el juez LLM.
         "score_global": score.get("resilience_score"),
-        "source": "DGA (Aduanas), por capítulo arancelario (HS)",
+        **bloque_de_atribucion(_DGA),
         "unit": "USD millones",
         "note": "Diversificación > volumen; medir dependencia, no solo apertura. "
                 "Sin detalle por país socio (no disponible de forma automatizable).",

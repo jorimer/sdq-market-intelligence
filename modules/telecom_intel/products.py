@@ -38,6 +38,7 @@ from shared.products import (
 )
 from shared.products.render import render_product_pdf
 from modules.telecom_intel.ai_context import telecom_ai_context
+from modules.telecom_intel.sources import INDOTEL, emisor_del_periodo
 from modules.telecom_intel.models.models import TelecomScore
 from modules.telecom_intel.service import get_latest, get_scores
 
@@ -55,8 +56,9 @@ _SECTION_TITLES = {
     "limitations": "Limitaciones",
 }
 _LIMITATIONS = (
-    "El Índice de Desarrollo Telecom (IDT) se construye sobre los datos abiertos de ITU "
-    "DataHub (API pública, licencia CC): penetración de telefonía móvil, banda ancha móvil "
+    "El Índice de Desarrollo Telecom (IDT) se construye sobre datos de ITU DataHub, de la "
+    "Unión Internacional de Telecomunicaciones (UIT), usados con su autorización expresa y "
+    "citándola como fuente: penetración de telefonía móvil, banda ancha móvil "
     "y banda ancha fija (por 100 habitantes / % de hogares), con serie anual actualizada "
     "hasta 2024. Reemplaza al boletín de INDOTEL, cuya serie pública quedó congelada en "
     "2022-Q1 y se conserva como histórico. Es un índice de alcance y penetración, no un "
@@ -260,12 +262,14 @@ class TelecomProduct:
                               sources=("ITU DataHub",),
                               detail=_con_revision("Sin IDT persistido."))
         coverage = s.coverage if s.coverage is not None else 0.0
-        # La FUENTE se infiere del período: con "Q" = boletín INDOTEL (trimestral, congelado
-        # en 2022-Q1, histórico); sin "Q" = ITU DataHub (anual, vigente hasta 2024). La
-        # cadencia correcta evita un falso-stale al medir dato anual con curva trimestral.
-        is_quarterly = "Q" in str(s.period)
-        cadence = "quarterly" if is_quarterly else "annual"
-        source = "INDOTEL" if is_quarterly else "ITU DataHub"
+        # La FUENTE y la cadencia salen de `sources.emisor_del_periodo`, que es el ÚNICO
+        # lugar donde vive esa regla. Estaban deducidas acá, en `validation_state` y —mal—
+        # en el contexto de IA: tres copias, y la del contexto se quedó atrás nombrando a
+        # INDOTEL para períodos que produce la UIT.
+        emisor = emisor_del_periodo(s.period)
+        is_quarterly = emisor is INDOTEL
+        cadence = emisor.cadence
+        source = emisor.label
         freshness = None
         yr = _period_year(s.period)
         if yr is not None:
@@ -309,7 +313,8 @@ class TelecomProduct:
         # Índice de alcance/calidad sobre dato real (ITU vigente o INDOTEL histórico); sin
         # backtest (no aplica un outcome de shock como en otros ejes) → validación parcial.
         s = self._latest()
-        src = "INDOTEL (2022-Q1)" if (s and "Q" in str(s.period)) else "ITU DataHub"
+        emisor = emisor_del_periodo(s.period if s else None)
+        src = "INDOTEL (2022-Q1)" if emisor is INDOTEL else emisor.label
         return ValidationState(approved=True, score=0.55,
                                notes=_con_revision(
                                    f"IDT sobre dato real de {src} (penetración móvil + banda "
