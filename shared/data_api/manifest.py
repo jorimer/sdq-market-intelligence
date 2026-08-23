@@ -56,8 +56,18 @@ SDQ_OWN_LICENSE = ("Cálculo propietario de SDQ Market Intelligence — uso seg�
 # Marcas de licencias que restringen redistribuir el dato tal cual. Se detectan por
 # patrón sobre lo que el conector declara: ITU es CC BY-NC-SA (no-comercial), y
 # SIS/SISALRIL declaran ODbL (share-alike sobre bases derivadas).
+#
+# El segundo grupo salió del barrido de licencias del 2026-08-23. Faltaba el caso más
+# directo de todos: una fuente que PROHÍBE redistribuir sin permiso, sin CC ni ODbL de por
+# medio. UN Comtrade es eso —propiedad de Naciones Unidas, uso interno, re-diseminación
+# solo con permiso escrito de la UNSD— y ninguna de las marcas de arriba lo veía, así que
+# una función llamada `license_restricts_redistribution` dejaba pasar la restricción de
+# redistribución más explícita del catálogo. Se agregan en las dos lenguas en que los
+# emisores del repo escriben sus términos.
 _RESTRICTIVE_MARKERS = ("nc-", "-nc", "non-commercial", "no comercial", "nocommercial",
-                        "sharealike", "share-alike", "-sa", "sa ", "odbl")
+                        "sharealike", "share-alike", "-sa", "sa ", "odbl",
+                        "prohibida la redistribu", "no redistribu", "sin redistribu",
+                        "not be re-disseminated", "no re-dissemination", "uso interno")
 
 
 # Un código cuya hoja final es puro número —o trae una corrida larga de dígitos— no es

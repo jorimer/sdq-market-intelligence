@@ -61,7 +61,24 @@ def parse_climate_mortality(
 
 class OWIDDisastersClient:
     source = "OWID / EM-DAT"
-    license = "CC-BY-4.0 (Our World in Data; EM-DAT/CRED)"
+    # La licencia CC-BY-4.0 es la de OWID sobre SU procesamiento; el dato de abajo es de
+    # EM-DAT y no es CC. La cadena decía "CC-BY-4.0 (Our World in Data; EM-DAT/CRED)", que
+    # es la licencia del redistribuidor con el nombre del productor pegado al lado — y así
+    # se perdía la cláusula que restringe. Verificado el 2026-08-22:
+    #   · doc.emdat.be/docs/legal/terms-of-use: acceso libre para uso NO COMERCIAL; el uso
+    #     comercial exige un acuerdo aparte con CRED/UCLouvain y una cuota anual, y prohíbe
+    #     construir bases sustitutas o derivadas;
+    #   · la propia página de OWID lo dice: el dato de terceros queda sujeto a los términos
+    #     del proveedor original.
+    # El texto nombra la cláusula porque `license_restricts_redistribution` la busca ACÁ.
+    license = ("OWID CC-BY-4.0 sobre su procesamiento; el dato base es de EM-DAT/CRED "
+               "(UCLouvain) y NO es CC: uso NO COMERCIAL, el comercial exige acuerdo "
+               "aparte con CRED — https://doc.emdat.be/docs/legal/terms-of-use/")
+    # Queda en True y NO se toca acá: hoy este dato solo alimenta el backtest interno del
+    # IRC (`modules.esg_climate.operations`), que no se redistribuye. Ponerlo en False
+    # apagaría ese backtest sin que nadie lo haya decidido. Lo que SÍ hace falta decidir
+    # —y es del dueño, no de este archivo— es si el uso comercial de la plataforma alcanza
+    # a este insumo; mientras tanto la cláusula está escrita donde se lee.
     license_ok = True
 
     def fetch_climate_mortality(

@@ -118,9 +118,79 @@ def parse_indicators_for_year(by_code: Dict[int, Dict[int, float]], year: int) -
     }
 
 
+#: Qué respuesta significa qué, al sondear el API. El 403 es la restricción que la UIT
+#: declaró por correo (ciberataques → acceso externo cortado); cualquier otra cosa que no
+#: sea 200 es "no sé", y decirlo importa: «no pude leer» NO es evidencia de que siga
+#: cerrado, igual que en la sonda de INDOTEL.
+RESTRINGIDO = "restringido"     # el emisor contesta y niega el acceso (403)
+ABIERTO = "abierto"             # volvió: el API responde con dato
+INDETERMINADO = "indeterminado"  # no se pudo llegar; no concluye nada
+
+
+def sonda_datahub(timeout: int = 30) -> Dict[str, Any]:
+    """¿Volvió a estar accesible el API del DataHub? Sonda barata, nunca levanta.
+
+    **Por qué hace falta.** El 2026-07-19 el API dejó de responder (403) y la UIT confirmó
+    por escrito el 2026-08-18 que restringió el acceso externo tras una serie de
+    ciberataques, sin fecha de restablecimiento. El sync del IDT quedó en `error`, y su
+    cadencia es ANUAL: el próximo intento programado es de 2027. O sea que si la UIT
+    reabre mañana, nadie se entera durante diez meses. La sonda cierra ese hueco.
+
+    Devuelve ``{"estado", "http", "detalle"}``. Distingue las tres cosas a propósito: que
+    el emisor niegue el acceso y que nosotros no podamos llegar son hechos distintos, y
+    confundirlos haría que un problema de red se leyera como «sigue cerrado».
+    """
+    import httpx
+
+    url = _BASE.format(code=CODE_POPULATION)
+    try:
+        r = httpx.get(url, headers=_HEADERS, timeout=timeout, follow_redirects=True)
+    except Exception as e:  # noqa: BLE001 — una sonda que rompe deja de vigilar
+        logger.warning("[ITU] la sonda no pudo llegar al DataHub: %s", e)
+        return {"estado": INDETERMINADO, "http": None,
+                "detalle": f"no se pudo llegar a {url} ({type(e).__name__})"}
+    if r.status_code == 200:
+        return {"estado": ABIERTO, "http": 200,
+                "detalle": f"{url} respondió 200: el acceso programático volvió"}
+    if r.status_code in (401, 403):
+        return {"estado": RESTRINGIDO, "http": r.status_code,
+                "detalle": ("el emisor sigue negando el acceso externo "
+                            f"(HTTP {r.status_code}), como declaró el 2026-08-18")}
+    return {"estado": INDETERMINADO, "http": r.status_code,
+            "detalle": f"respuesta inesperada HTTP {r.status_code}: no concluye nada"}
+
+
 class ITUClient:
     source = "ITU DataHub"
-    license = "CC BY-NC-SA 3.0 IGO (ITU)"
+    # El único caso del catálogo que va en la dirección CONTRARIA: lo declarado es MÁS
+    # restrictivo que lo que el emisor autoriza. La plataforma publica CC BY-NC-SA 3.0 IGO,
+    # y la UIT nos dio permiso ESCRITO por encima de eso.
+    #
+    # Respuesta de la División de Datos y Analítica de las TIC (Indicators@itu.int, con
+    # copia a thierry.geiger@ y viviana.umpierrez@), 2026-08-18, a la consulta enviada el
+    # mismo día desde Ricardo.mercado@sdqconsulting.com.do: los datos del DataHub se pueden
+    # usar «para el propósito que describe, incluido su uso como insumo para productos
+    # analíticos comerciales, siempre que la UIT (ITU) sea citada adecuadamente como
+    # fuente». Y añade que están actualizando sus términos para permitir explícitamente el
+    # uso comercial, y que **la licencia que hoy figura en la plataforma todavía no refleja
+    # ese cambio** — o sea que el BY-NC-SA publicado está vencido de hecho, no de derecho.
+    #
+    # QUÉ CUBRE Y QUÉ NO. La consulta describía el uso con precisión —insumo de un índice,
+    # con atribución, «no redistribuimos las series en bruto»— y el permiso se concedió
+    # sobre ESE uso. No es una licencia nueva ni alcanza a reexportar la serie tal cual.
+    # Por eso la cadena CONSERVA las marcas NC/SA: `license_restricts_redistribution` sigue
+    # reteniendo lo verbatim en la Data API, que es exactamente el límite del permiso,
+    # mientras el cálculo propio sobre ese insumo sale como siempre. El eje verbatim/derived
+    # del manifiesto y el alcance de lo que la UIT autorizó resultaron ser el mismo corte.
+    #
+    # PENDIENTE, y es una condición del permiso: la atribución a la UIT. Acá es obligación
+    # contractual, no cortesía, y el eje telecom NO tiene el mecanismo que sí tiene el eje
+    # de leyes (`exige_atribucion` computado desde el expediente). Hoy depende de que el
+    # redactor se acuerde, que es como se pierde.
+    license = ("ITU DataHub — la plataforma publica CC BY-NC-SA 3.0 IGO, pero la UIT "
+               "autorizó POR ESCRITO (2026-08-18) el uso como insumo de productos "
+               "analíticos comerciales citándola como fuente; el permiso NO cubre "
+               "redistribuir las series en bruto, y la UIT está actualizando sus términos")
     license_ok = True
     codes = (CODE_POPULATION, CODE_MOBILE, CODE_MOBILE_BROADBAND,
              CODE_FIXED_BROADBAND, CODE_HH_INTERNET)

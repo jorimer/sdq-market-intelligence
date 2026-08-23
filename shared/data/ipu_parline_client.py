@@ -33,7 +33,22 @@ from typing import List, Tuple
 logger = logging.getLogger("sdq.data.ipu_parline")
 
 SOURCE = "UIP"
-LICENSE = "Unión Interparlamentaria (Parline) — uso público con cita"
+
+#: La licencia REAL del emisor, con sus tres cláusulas. Verificado el 2026-08-22 contra el
+#: pie de `data.ipu.org` (snapshot de Wayback del 2025-12-07, que trae el `by-nc-sa.svg` y
+#: el enlace a `creativecommons.org/licenses/by-nc-sa/4.0`).
+#:
+#: **Por qué el texto tiene que nombrar las cláusulas y no decir «uso público con cita».**
+#: Decía eso, y era una descripción que sostiene una decisión de publicación que la
+#: licencia no permite: `NC` prohíbe el uso comercial y los informes del eje `law_intel`
+#: —donde vive el indicador 2.43— se entregan a clientes en base comercial. Además la
+#: cadena es una ENTRADA DE MÁQUINA, no un comentario:
+#: `shared.data_api.manifest.license_restricts_redistribution` decide si el dato se puede
+#: reexportar buscando marcas (`nc-`, `-sa`, `odbl`) en este mismo texto. Una restricción
+#: escrita en prosa es una restricción que el detector no ve.
+LICENSE = ("Unión Interparlamentaria (Parline) — CC BY-NC-SA 4.0: Atribución + "
+           "NoComercial + CompartirIgual "
+           "(https://creativecommons.org/licenses/by-nc-sa/4.0/)")
 
 #: Entidades de la UIP. `UC` = upper chamber, `LC` = lower chamber. Se dejan las dos
 #: nombradas aunque solo se use una: es lo que impide que alguien "arregle" un fallo

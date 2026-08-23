@@ -239,6 +239,22 @@ def test_odbl_share_alike_is_also_caught_verbatim(db, wire):
     assert Q_LICENSE_RESTRICTS in build_manifest(db).assets[0].quarantine
 
 
+def test_una_prohibicion_lisa_de_redistribuir_tambien_se_atrapa(db, wire):
+    """El caso sin CC ni ODbL: la fuente simplemente prohíbe redistribuir.
+
+    UN Comtrade es eso —propiedad de la ONU, uso interno, re-diseminación solo con permiso
+    escrito de la UNSD— y no lleva ninguna marca de cláusula CC. El filtro no lo veía: una
+    función llamada `license_restricts_redistribution` dejaba pasar justo la restricción de
+    redistribución más explícita que hay en el catálogo.
+    """
+    _publish(db)
+    wire(FakeProduct([_series("exports_hs", license_=(
+        "UN Comtrade: propiedad de Naciones Unidas, uso interno, PROHIBIDA LA "
+        "REDISTRIBUCIÓN del dato original sin permiso escrito de la UNSD"))]))
+    asset = build_manifest(db).assets[0]
+    assert not asset.exposed and Q_LICENSE_RESTRICTS in asset.quarantine
+
+
 def test_permissive_sources_stay_exposed_verbatim(db, wire):
     """El BCRD publica para uso público con cita: la serie sale, con su atribución."""
     _publish(db)
