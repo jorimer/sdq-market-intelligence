@@ -68,9 +68,15 @@ _METODOS_SUELTOS = {"generate_content", "generate_content_async", "acompletion"}
 _SDKS = {"anthropic", "openai", "google.generativeai", "google.genai", "litellm",
          "mistralai", "cohere", "groq"}
 
-#: Sitios que llaman y NO contabilizan, con el motivo. Vacío a propósito: si alguien
-#: agrega uno, tiene que escribir por qué.
-EXENTOS: dict = {}
+#: Sitios que llaman y NO contabilizan, con el motivo. Si alguien agrega uno, tiene que
+#: escribir por qué.
+EXENTOS: dict = {
+    # Importa el SDK sólo para CLASIFICAR una excepción ya ocurrida (¿es el saldo de la
+    # organización agotado, o un error del modelo?). No crea cliente ni llama al API, así
+    # que no hay gasto que contar: es la red de importación disparando sobre un módulo que
+    # mira fallos, no que los produce.
+    "shared/llm/failures.py": "clasifica excepciones del SDK; no llama al modelo ni gasta",
+}
 
 # `/.claude/` guarda los worktrees de las sesiones concurrentes: COPIAS del árbol, con los
 # mismos archivos bajo otro prefijo. Sin excluirlas, este test denuncia una decena de
