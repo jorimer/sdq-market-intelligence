@@ -120,7 +120,7 @@ _DECLARADAS = sorted(set(_declaraciones()))
 #: estaba, y la UIT salió de la deuda por una vía que no estaba prevista: una respuesta
 #: ESCRITA del emisor que ya estaba en el buzón. De 7 fuentes resueltas, 4 estaban
 #: subdeclaradas y 1 SOBRE-declarada; el resto de la deuda no es «probablemente está bien».
-DEUDA_AL_2026_08_23 = 26
+DEUDA_AL_2026_08_23 = 24
 
 
 def test_el_detector_encuentra_las_declaraciones():

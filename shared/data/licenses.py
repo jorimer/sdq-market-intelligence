@@ -162,6 +162,50 @@ LICENCIAS: Dict[str, Licencia] = {
               "que alguien lee."),
     ),
 
+    ("datos.gob.do — Open Database License (ODbL) v1.0, declarada POR DATASET en el "
+     "portal: exige el aviso de atribución, y el share-alike alcanza a las bases "
+     "DERIVADAS. Un informe o un gráfico es «Produced Work» y NO lo dispara "
+     "(§4.5) — https://opendatacommons.org/licenses/odbl/1-0/"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: datos.gob.do (Portal de Datos Abiertos del Estado "
+                    "dominicano). Contiene información disponible bajo la Open Database "
+                    "License (ODbL)."),
+        nota=("Verificado dataset POR dataset contra el CKAN del portal (`package_show` → "
+              "`license_id`), no contra el portal en general — declara licencia por "
+              "dataset y una sola cadena para cinco conectores era una suposición. Los "
+              "seis consultados dan `odc-odbl`: zonas francas (CNZFE), generación (ONE), "
+              "licencias de construcción (MIVHED), potencia instalada y PROTECOM (SIE), y "
+              "llegadas vía aérea (ONE). Decía «Datos Abiertos RD (datos.gob.do)», que no "
+              "nombra ninguna cláusula. "
+              "EL MATIZ QUE CAMBIA LA LECTURA COMERCIAL: la ODbL distingue «Derivative "
+              "Database» de «Produced Work» (§4.5). Nuestros informes son lo segundo — no "
+              "disparan share-alike, solo exigen el aviso de atribución, que es lo que "
+              "lleva el campo `atribucion` y que la propia licencia sugiere redactar así. "
+              "Servir la serie CRUDA por la Data API sí sería distribuir una base, y para "
+              "eso está la cuarentena verbatim del manifiesto."),
+    ),
+    ("SIUBEN vía datos.gob.do — Open Database License (ODbL) v1.0: exige el aviso "
+     "de atribución, y el share-alike alcanza a las bases DERIVADAS. Un informe o "
+     "un gráfico es «Produced Work» y NO lo dispara (§4.5) — "
+     "https://opendatacommons.org/licenses/odbl/1-0/"): Licencia(
+        terminos_url="https://opendatacommons.org/licenses/odbl/1-0/",
+        verificado_el="2026-08-23",
+        atribucion=("Fuente: SIUBEN (Sistema Único de Beneficiarios), vía datos.gob.do. "
+                    "Contiene información disponible bajo la Open Database License "
+                    "(ODbL)."),
+        nota=("Entrada propia y no compartida con el resto del portal, porque su "
+              "verificación es de SUS datasets: los cuatro de la organización "
+              "`sistema-unico-de-beneficiarios-siuben` dan `odc-odbl` (2026-08-23). "
+              "Decía «uso público con cita». "
+              "ES LA ÚNICA DE ESTE LOTE CON EFECTO EN PRODUCCIÓN: el padrón provincial del "
+              "SIUBEN se sirve por la Data API vía `social_dev`, y al nombrar la cláusula "
+              "esas series pasan a cuarentena en su forma VERBATIM. Es lo correcto — "
+              "servir la serie cruda a un tercero es distribuir una base— y lo derivado "
+              "sigue saliendo. Si se quisieran exponer igual, la palanca es una decisión "
+              "de licencia o servirlas como `derived`, nunca una cadena que diga menos."),
+    ),
+
     # ── Deuda: heredadas de quien escribió el conector, sin contrastar ────────────────
     # No están «bien»: están SIN LEER. Van listadas y no escondidas, que es la diferencia
     # entre una cola de trabajo y un basurero. El test cuenta cuántas son y no deja que
@@ -210,10 +254,6 @@ LICENCIAS: Dict[str, Licencia] = {
         terminos_url=None, verificado_el=None, nota="Sin contrastar contra Ember."),
     "Datos Abiertos RD (INDOTEL)": Licencia(
         terminos_url=None, verificado_el=None, nota="Sin contrastar."),
-    "Datos Abiertos RD (datos.gob.do)": Licencia(
-        terminos_url=None, verificado_el=None,
-        nota=("El portal declara licencia por dataset; esta cadena la comparten cinco "
-              "conectores, así que puede no ser la misma para los cinco.")),
     "Datos abiertos ONE (one.gob.do)": Licencia(
         terminos_url=None, verificado_el=None, nota="Sin contrastar."),
     "Datos públicos DGA — estadísticas de comercio exterior": Licencia(
@@ -241,8 +281,6 @@ LICENCIAS: Dict[str, Licencia] = {
               "lo que hoy se lee; no vale como salvoconducto para cualquier serie del "
               "Banco Mundial que se agregue mañana."),
     ),
-    "datos abiertos del Estado dominicano (datos.gob.do) — uso público con cita": Licencia(
-        terminos_url=None, verificado_el=None, nota="Sin contrastar."),
     "datos oficiales BCRD — uso público con cita": Licencia(
         terminos_url=None, verificado_el=None, nota="Sin contrastar."),
     "datos oficiales ONE — uso público con cita": Licencia(
@@ -271,8 +309,17 @@ LICENCIAS: Dict[str, Licencia] = {
               "pero nadie registró qué dicen, y contradice a `comtrade_client`.")),
     "https://opendatacommons.org/licenses/odbl/": Licencia(
         terminos_url="https://opendatacommons.org/licenses/odbl/", verificado_el=None,
-        nota=("ODbL: share-alike sobre bases derivadas. La cadena la nombra y el "
-              "manifiesto la retiene. Falta confirmar que el SIS la declare hoy.")),
+        nota=("SIS y SISALRIL. Nombra la cláusula y el manifiesto la retiene, así que no "
+              "es del tipo subdeclarado. NO se promueve a verificada, y el motivo importa: "
+              "el 2026-08-23 se comprobó que la organización `superintendencia-de-seguros` "
+              "sí declara `odc-odbl` en sus 5 datasets de datos.gob.do — pero NINGUNO de "
+              "estos conectores lee de ahí. `sis_client` baja de `sis.gob.do/wp-content`, "
+              "`sisalril_client` de `cnss.gob.do` y `sisalril_ars_client` de "
+              "`redatam.sisalril.gob.do`. Es la misma forma del defecto de EM-DAT: la "
+              "licencia de UN canal aplicada al dato que se obtiene por OTRO. Puede que "
+              "coincida —mismo publicador, mismo dato— pero nadie lo verificó para el "
+              "canal que se usa. Falta también SISALRIL, que no tiene organización en el "
+              "portal.")),
     "https://sis.gob.do (público)": Licencia(
         terminos_url=None, verificado_el=None,
         nota="«público» no es una licencia: es dónde está el archivo. Sin contrastar."),

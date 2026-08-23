@@ -210,6 +210,21 @@ exactamente cómo empezó lo de abajo.
   pueden dar por concedidos mientras tanto: si mostrar cifras individuales de la UIT dentro de
   un informe queda cubierto, y si el permiso alcanza a los informes ya entregados. No son una
   negativa: es alcance sin confirmar. Estado vigente en `shared.data.licenses`.
+- ✅ **datos.gob.do — ODbL, y el share-alike NO nos alcanza.** Los datasets del portal se
+  publican bajo **Open Database License v1.0**, verificado dataset por dataset contra su CKAN:
+  zonas francas (CNZFE), generación y llegadas aéreas (ONE), licencias de construcción
+  (MIVHED), potencia instalada y PROTECOM (SIE), y el padrón del SIUBEN. La cadena decía
+  «Datos Abiertos RD», que no nombra ninguna cláusula. **El matiz que decide:** la ODbL
+  distingue *Derivative Database* de *Produced Work* (§4.5). **Un informe o un gráfico es
+  Produced Work y no dispara share-alike** — solo exige el aviso de atribución, que la
+  plataforma ya computa e inserta sola. Lo que sí sería distribuir una base es servir la serie
+  cruda por la Data API, y para eso está la cuarentena verbatim.
+- ⚠️ **SIS y SISALRIL — su ODbL NO está verificada, y no por descuido.** La organización de la
+  Superintendencia de Seguros sí declara ODbL en datos.gob.do, pero **nuestros conectores no
+  leen de ahí**: bajan de `sis.gob.do`, `cnss.gob.do` y `redatam.sisalril.gob.do`. Es la
+  licencia de un canal aplicada al dato que se obtiene por otro — la misma forma del caso
+  EM-DAT. Puede coincidir, pero nadie lo comprobó para el canal que se usa. No comprometer
+  seguros ni salud en material nuevo sin resolverlo.
 - ❌ **Nunca** describir una licencia restrictiva en prosa («uso público con cita») en un
   contrato, un deck o un informe. El texto de la licencia es además una entrada de máquina:
   `shared.data_api.manifest.license_restricts_redistribution` decide si el dato se reexporta
@@ -219,7 +234,7 @@ exactamente cómo empezó lo de abajo.
 **Estado de la verificación:** `shared.data.licenses.deuda_de_verificacion()` lista las fuentes
 cuya licencia **nadie contrastó todavía** contra el emisor. La lista se computa; no se
 escribe. Una fuente que figure ahí no está autorizada por omisión — y tampoco se puede
-presumir que esté bien: de las **siete** resueltas hasta ahora, **cuatro estaban
+presumir que esté bien: de las **catorce** resueltas hasta ahora, **diez estaban
 subdeclaradas** y **una sobre-declarada**. Antes de comprometer una fuente en una propuesta,
 mirá si está verificada — y en las dos direcciones: la subdeclarada te expone, la
 sobre-declarada te hace regalar un dato que sí podías usar.

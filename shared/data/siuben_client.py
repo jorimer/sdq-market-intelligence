@@ -53,7 +53,19 @@ SIN_TOTAL_NACIONAL = (
 CKAN_SEARCH = "https://datos.gob.do/api/3/action/package_search"
 SIUBEN_ORG = "sistema-unico-de-beneficiarios-siuben"
 SOURCE = "SIUBEN"
-LICENSE = "datos abiertos del Estado dominicano (datos.gob.do) — uso público con cita"
+#: Verificado el 2026-08-23 contra el CKAN del portal: los CUATRO datasets de la
+#: organización `sistema-unico-de-beneficiarios-siuben` declaran `license_id: odc-odbl`.
+#: Decía «uso público con cita», que omitía las dos cláusulas de la ODbL.
+#:
+#: CONSECUENCIA que hay que conocer: esta cadena SÍ llega a la Data API —el padrón
+#: provincial del SIUBEN se sirve por `social_dev`— y `license_restricts_redistribution`
+#: reconoce «odbl», así que las series pasan a CUARENTENA en su forma verbatim. Es lo
+#: correcto: servir la serie cruda a un tercero ES distribuir una base, y ahí el
+#: share-alike aplica. Lo derivado sigue saliendo.
+LICENSE = ("SIUBEN vía datos.gob.do — Open Database License (ODbL) v1.0: exige el aviso "
+           "de atribución, y el share-alike alcanza a las bases DERIVADAS. Un informe o "
+           "un gráfico es «Produced Work» y NO lo dispara (§4.5) — "
+           "https://opendatacommons.org/licenses/odbl/1-0/")
 # Rótulo que viaja con cada observación: el universo, no una nota al pie.
 UNIVERSE = "padrón SIUBEN (hogares registrados)"
 
