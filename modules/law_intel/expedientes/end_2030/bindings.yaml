@@ -459,26 +459,28 @@ bindings:
       ejecución presupuestaria desde 2016 y la línea base de la ley es de 2009, así que no
       alcanza el año que habría que reproducir.
     hipotesis_sin_comprobar: >-
-      Que el 1,4 de la ley sea el gasto del gobierno CENTRAL y no el del gobierno general.
-      Sigue siendo la mejor explicacion de la brecha —1,4% del PIB de 2009 son unos RD$23,5
-      mil millones, del orden del presupuesto del ministerio de salud de esos anios— y sigue
-      SIN COMPROBAR, pero ya no por falta de buscar.
-      DONDE SE BUSCO, el 2026-08-22, y que devolvio cada sitio:
-      el organismo internacional de salud publica dos agregados para 2009 y ninguno es 1,4
-      —gasto publico general 2,332% y gasto corriente total 4,767%— y su catalogo no tiene
-      ninguna serie de gobierno CENTRAL;
-      el portal nacional de datos abiertos publica ejecucion presupuestaria desde 2016 y
-      estadisticas de ejecucion de gastos desde 2017, ninguna alcanza 2009;
-      la serie fiscal historica del banco central SI cubre 2000-2013 pero esta clasificada por
-      concepto economico —ingresos, gastos corrientes, de capital— y no trae una linea de
-      salud;
-      el sitio de la oficina de presupuesto no expone informes historicos, solo los del anio
-      en curso.
-      QUE LA CERRARIA: un documento de archivo con la ejecucion presupuestaria de 2009 por
-      clasificacion funcional. Existe —es un informe que ese organismo produjo en su momento—
-      pero no esta en linea. Es trabajo de archivo, no de conexion, y hasta que aparezca la
-      meta de 4,5% para 2025 no se puede medir contra el agregado ancho sin darla por mas
-      cerca de lo que esta.
+      CONFIRMADA el 2026-08-23, y por eso lo que queda no es comprobarla sino construir la
+      serie. El 1,4 de la ley ES el gasto del gobierno CENTRAL por clasificacion funcional,
+      no el del gobierno general que republica el organismo internacional.
+      LA EVIDENCIA: el «Informe de Ejecucion Presupuestaria del Gobierno Central 2009» de la
+      oficina de presupuesto, fechado en febrero de 2010, trae en su Cuadro 9 la clasificacion
+      funcional del gasto con la linea de Salud: presupuesto vigente RD$24.090,1 millones y
+      ejecutado RD$23.534,9 millones. Contra el PIB nominal de 2009:
+      vigente 1,389% del PIB, Delta 0,8% contra la base legal de 1,4 — dentro de la
+      tolerancia del oraculo;
+      ejecutado 1,357% del PIB, Delta 3,1% — en la banda de salvedad.
+      La lectura que reproduce la cifra del legislador es la del presupuesto VIGENTE. Conviene
+      decidirlo antes de armar la serie, porque «gasto publico en salud» sugiere lo ejecutado
+      y el oraculo apunta a lo presupuestado; las dos lecturas estan cerca y no son la misma.
+      LO QUE FALTA, y ya no es una hipotesis: una SERIE. Un ano no mide un indicador con metas
+      a 2015, 2020, 2025 y 2030. La oficina de presupuesto publica estos informes por ano
+      —su pagina los lista de 2008 a 2026— y el Cuadro 9 es el mismo en cada uno.
+      COMO SE LLEGA AL ARCHIVO, porque la pagina no lo entrega: el boton «Descargar» de las
+      tarjetas de 2008 a 2011 apunta a documentos equivocados —el de 2009 sirve la Ley de
+      Presupuesto de 2012, comprobado abriendo el PDF— y las tarjetas recientes son acordeones
+      que arma el navegador. El archivo real se encuentra por la biblioteca de medios del
+      sitio: `GET /wp-json/wp/v2/media?search=ejecucion+2009` devuelve
+      `Informe-de-Ejecucion-Presupuestaria-2009-DIGEPRES.pdf`.
   - indicador: "2.34"
     serie: "wdi.SH.STA.BASS.ZS"
     fuente: wdi
