@@ -137,11 +137,23 @@ def test_una_fuente_caida_queda_declarada_en_errors(db, monkeypatch):
 
 
 def test_sin_fallas_no_se_inventan_errores(db, monkeypatch):
-    """El contrapeso del test anterior: si todo trajo dato, ``errors`` queda vacío."""
+    """El contrapeso del test anterior: si todo trajo dato, ``errors`` queda vacio.
+
+    TODOS los sub-syncs de red se sustituyen, incluidos los que antes se dejaban pasar. El
+    2026-08-22 este test se puso rojo porque el portal de la Union Interparlamentaria empezo
+    a responder 403 y `_sync_ipu_senado` no estaba en la lista: el test afirmaba algo sobre
+    NUESTRO codigo y fallaba por un tercero. Un test que depende de la red no prueba lo que
+    dice probar."""
     monkeypatch.setattr(ONEClient, "_fetch_live", ONEClient._fetch_fixture)
     for fn in ("_sync_wdi_health", "_sync_bcrd_informality", "_sync_sisdom_income",
                "_sync_minerd_coverage", "_sync_sisdom_schooling", "_sync_wb_findex",
-                "_sync_endesa_child_mortality",
+               "_sync_endesa_child_mortality", "_sync_ipu_senado",
+               "_sync_bcrd_mercado_laboral", "_sync_cepal_politica",
+               "_sync_exportaciones_per_capita", "_sync_llece_niveles",
+               "_sync_razon_exportaciones_importaciones", "_sync_pobreza_rural",
+               "_sync_gei_per_capita", "_sync_confianza_partidos",
+               "_sync_cobertura_salud", "_sync_participacion_exportadora",
+               "_sync_mem_electrico",
                "_sync_siuben_provincial"):
         monkeypatch.setattr(f"modules.social_dev.social_sync.{fn}", lambda db, sp, *a: 3)
     assert one_social_sync(db)["errors"] == []

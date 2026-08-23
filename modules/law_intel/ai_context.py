@@ -58,6 +58,23 @@ def salvedades_obligatorias(expediente_id: str) -> List[Dict[str, str]]:
             if b.cuenta and b.verificado_por != "oraculo"]
 
 
+def atribuciones_obligatorias(expediente_id: str) -> List[Dict[str, str]]:
+    """Los indicadores medidos cuya FUENTE exige que se la nombre al publicar.
+
+    Se computa cruzando los bindings con la lista blanca del instrumento, no de una lista a
+    mano: la obligación es de la fuente y alcanza a todo indicador que la use, incluido el que
+    alguien ate mañana. Una atribución que depende de que el redactor se acuerde es una
+    atribución que se pierde en la primera reescritura.
+    """
+    exp = cargar(expediente_id)
+    exigen = {f["id"]: f for f in (exp.meta.get("fuentes_admitidas") or [])
+              if f.get("exige_atribucion")}
+    return [{"indicador": b.indicador, "fuente": b.fuente,
+             "atribucion": str(exigen[b.fuente].get("atribucion") or "").strip()}
+            for b in sorted(cargar_bindings(expediente_id).values(), key=lambda x: x.indicador)
+            if b.cuenta and b.fuente in exigen]
+
+
 def law_ai_context(expediente_id: str, corte: str,
                    series: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     exp = cargar(expediente_id)
@@ -103,6 +120,15 @@ def law_ai_context(expediente_id: str, corte: str,
         # tiene, y es la clase de afirmación que un contradictor desarma con el articulado en
         # la mano.
         "salvedades_obligatorias_por_indicador": salvedades_obligatorias(expediente_id),
+        # ── La atribución que la fuente EXIGE ────────────────────────────────────────────
+        # No es cortesía editorial: hay fuentes admitidas cuya condición de uso es que se las
+        # nombre. Va computada del expediente para que no dependa de que el redactor se
+        # acuerde, que es exactamente como se pierde en la primera reescritura.
+        "atribuciones_obligatorias_por_indicador": atribuciones_obligatorias(expediente_id),
+        "regla_de_la_atribucion": (
+            "Cada indicador que aparezca en `atribuciones_obligatorias_por_indicador` se "
+            "publica NOMBRANDO a su fuente con el texto de `atribucion`, en la misma sección "
+            "donde aparece su cifra. No la mandes al final del documento."),
         "regla_de_la_salvedad": (
             "Cada indicador que aparezca en `salvedades_obligatorias_por_indicador` se "
             "publica CON su salvedad, en la misma sección donde se afirma su veredicto. No "

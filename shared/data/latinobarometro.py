@@ -42,7 +42,12 @@ logger = logging.getLogger("sdq.data.latinobarometro")
 BASE = "https://www.latinobarometro.org/ws/oda"
 COLECCION = 2
 
-LICENSE = "consulta pública, uso a confirmar"
+#: Los términos: el emisor NO los declara en sus páginas públicas —ni permite ni prohíbe—.
+#: La decisión de publicar con atribución explícita es del dueño, tomada el 2026-08-22, y
+#: está registrada con su razonamiento en la lista blanca del expediente END 2030
+#: (`fuentes_admitidas`, entrada `encuesta_regional`). La atribución no es opcional: la
+#: computa `modules.law_intel.ai_context.atribuciones_obligatorias`.
+LICENSE = "cita con atribución · decidido 2026-08-22"
 SOURCE = "Latinobarómetro"
 
 #: Ámbito del país, en el código numérico ISO 3166 que usa el emisor.
