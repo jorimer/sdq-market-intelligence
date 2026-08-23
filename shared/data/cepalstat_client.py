@@ -32,8 +32,29 @@ _HEADERS = {"User-Agent": "Mozilla/5.0 (SDQ-MIP CEPALSTAT connector)",
             "Accept": "application/json"}
 
 SOURCE = "CEPAL"
-LICENSE = ("Observatorio de Igualdad de Género de la CEPAL — uso público con cita; "
-           "recoge el dato del organismo electoral de cada país")
+
+#: Los términos REALES, y son mucho más estrechos de lo que decía esta constante.
+#: Verificado el 2026-08-23 siguiendo la cadena desde el propio emisor: el `apispec_1.json`
+#: de `api-cepalstat.cepal.org` —el servicio que este conector consulta— declara su
+#: `termsOfService`, y apunta a los términos del sitio de la CEPAL, los mismos que enlaza
+#: el pie de CEPALSTAT. Ahí dice, textual, que se puede bajar y copiar el material «para su
+#: uso personal, sin fines comerciales, sin ningún derecho a revender, redistribuir, o
+#: crear otros trabajos a partir de los mismos».
+#:
+#: Decía «uso público con cita», que es la MISMA forma que tenía la de Parline antes de
+#: corregirla: nombre del emisor + una glosa amable, sin ninguna de las cláusulas. Y acá la
+#: distancia es mayor: no hay licencia Creative Commons de por medio, y lo que los términos
+#: niegan no es solo el uso comercial sino la redistribución y la obra derivada.
+#:
+#: ALCANCE de la restricción, que hay que decidir y no está decidido: los indicadores 2.45
+#: y 2.46 de la END salen de acá y viajan en informes que se venden. Lo que se publica es
+#: una cifra por año, no la base de CEPALSTAT — si eso cae dentro o fuera de «revender o
+#: crear otros trabajos» es una decisión del dueño, registrada en el expediente END 2030.
+LICENSE = ("Observatorio de Igualdad de Género de la CEPAL (CEPALSTAT) — NO es CC: los "
+           "términos del emisor conceden uso PERSONAL y NO COMERCIAL, sin derecho a "
+           "revender, redistribuir ni crear obras derivadas — "
+           "https://www.cepal.org/es/terminos-y-condiciones-sobre-el-uso-del-sitio-web-"
+           "entre-la-cepal-y-el-usuario")
 
 #: Indicadores del árbol temático de CEPALSTAT. El id es lo único estable: los nombres
 #: cambian de edición y el árbol es grande.

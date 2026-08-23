@@ -6,6 +6,17 @@ never raw series — so prompts stay cheap and honest about provenance. Module-l
 mirrors :mod:`trade_intel.ai_context`.
 """
 from typing import Any, Dict, List
+from shared.data.generation_client import GenerationMixClient
+from shared.data.sie_client import SIEClient
+from shared.narrative.atribucion import Fuente, bloque_de_atribucion
+
+
+#: Los DOS emisores del eje, construidos de su conector (etiqueta + licencia juntas).
+_SIE = Fuente.de_cliente(
+    SIEClient, descripcion="SIE (capacidad instalada y reclamaciones), datos abiertos")
+_ONE_GEN = Fuente.de_cliente(
+    GenerationMixClient, descripcion="ONE (generación por tecnología), datos abiertos")
+
 
 _DIM_LABELS = {
     "capacity_adequacy": "Adecuación de capacidad (parque instalado, SIE)",
@@ -53,7 +64,7 @@ def energy_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         # canónico (cerebro): el score global; el detector determinista no aplica
         # (cuando alguna dimensión es brecha) → el guard es el LLM.
         "score_global": index.get("energy_score"),
-        "source": "SIE (capacidad + reclamaciones) y ONE (generación por tecnología), datos abiertos",
+        **bloque_de_atribucion(_SIE, _ONE_GEN),
         "note": (
             "Sobre dato real: capacidad instalada + reclamaciones (SIE) y penetración "
             "renovable de la matriz (ONE, eólica+hidráulica+solar vs meta Ley 57-07 25 %). "

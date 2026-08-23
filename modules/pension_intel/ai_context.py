@@ -7,6 +7,18 @@ Mirrors :mod:`trade_intel.ai_context`. Source: SIPEN (dato real).
 """
 from typing import Any, Dict, List, Optional
 
+from shared.data.sipen_client import SIPENClient
+from shared.narrative.atribucion import Fuente, bloque_de_atribucion
+
+#: Emisor único del eje. Dos descripciones porque hay dos datasets suyos en juego —el
+#: boletín general y el Cuadro 6.1— y el narrador debe saber cuál está leyendo. Antes eran
+#: cuatro glosas distintas del mismo emisor, escritas a mano en siete lugares.
+_SIPEN = Fuente.de_cliente(
+    SIPENClient, descripcion="SIPEN — sistema dominicano de pensiones (dato real)")
+_SIPEN_CUADRO_61 = Fuente.de_cliente(
+    SIPENClient, descripcion="SIPEN — Cuadro 6.1 del boletín trimestral (dato real)")
+
+
 
 def _comparaciones(rating, peers) -> list:
     """Comparaciones dimensión↔panel con la DIRECCIÓN ya resuelta.
@@ -150,7 +162,7 @@ def pension_entity_context(rating: Dict[str, Any], peers: List[Dict[str, Any]]) 
                       "posición relativa entre AFP" if solv_present
                       else "mayor score = mejor POSICIÓN RELATIVA entre las AFP (no veredicto absoluto)"),
         "band": band,
-        "source": "SIPEN — dato público real",
+        **bloque_de_atribucion(_SIPEN),
         "note": _note,
     }
     # Retorno ajustado por riesgo (Diferido B): la dimensión riesgo puede traer el Sharpe
@@ -206,7 +218,7 @@ def pension_peer_context(
         "tabla_pares": table,
         "lider_isa": ranked[0]["name"] if ranked else None,
         "promedio_isa": round(sum(r["overall_score"] for r in ranked) / len(ranked), 2) if ranked else None,
-        "source": "SIPEN — dato real",
+        **bloque_de_atribucion(_SIPEN),
         "note": "Cada score de dimensión es POSICIÓN RELATIVA (peer min-max). Cita números de "
                 "la tabla (líder, promedio, brecha); no inventes valores de pares ausentes. "
                 + solv_note,
@@ -249,7 +261,7 @@ def pension_cartera_context(cartera: Dict[str, Any]) -> Dict[str, Any]:
         "n_emisores": summary.get("issuer_count"),
         "composicion_por_categoria": composicion,
         "top_bancos": bancos,
-        "source": "SIPEN — Cuadro 6.1 del boletín trimestral (dato real)",
+        **bloque_de_atribucion(_SIPEN_CUADRO_61),
         "unit": "RD$ corrientes y % del fondo",
         "note": "FOTO trimestral de la cartera; montos en RD$ corrientes. No es serie ni "
                 "juicio de riesgo crediticio de un emisor; lee concentración y rol institucional.",
@@ -268,7 +280,7 @@ def pension_indicator_context(
         "valor_actual": latest[1], "periodo": latest[0],
         "desde": first[0], "n_obs": len(points),
         "serie_reciente": [{"periodo": p, "valor": v} for p, v in points[-12:]],
-        "source": "SIPEN — sistema dominicano de pensiones (dato real)",
+        **bloque_de_atribucion(_SIPEN),
         "note": "Lee la TENDENCIA de la serie, no un solo mes. Si es rentabilidad, es NOMINAL.",
     }
 
@@ -299,7 +311,7 @@ def pension_dimension_context(
         "n_afp_con_dato": len(ranked),
         "pares": [{"afp": p["afp"], "valor_real": p["raw"], "score": p["score"]} for p in peers],
         "serie_reciente": [{"periodo": p, "valor": v} for p, v in trend[-12:]],
-        "source": "SIPEN — dato real",
+        **bloque_de_atribucion(_SIPEN),
         "note": ("Score = POSICIÓN RELATIVA (peer min-max). "
                  + ("Esta es la dimensión de solvencia, INCORPORADA de los estados financieros de "
                     "SIPEN (patrimonio/activos, con historia desde 2010); léela como dato real, no "
@@ -326,7 +338,7 @@ def pension_cartera_item_context(
         "pct_cartera": holding.get("pct"),
         "cartera_total_rd": total,
         "periodo": period,
-        "source": "SIPEN — Cuadro 6.1 del boletín trimestral (dato real)",
+        **bloque_de_atribucion(_SIPEN_CUADRO_61),
         "unit": "RD$ corrientes y % del fondo",
         "note": "FOTO trimestral; no juicio de riesgo crediticio del emisor. Lee concentración y rol.",
     }
@@ -359,7 +371,7 @@ def pension_ai_context(pulse: Dict[str, Any]) -> Dict[str, Any]:
         },
         "n_afp": pulse.get("entity_count"),
         "direction": "mayor cobertura/fondo y rentabilidad sostenible = sistema más sólido",
-        "source": "SIPEN — sistema dominicano de pensiones (dato real)",
+        **bloque_de_atribucion(_SIPEN),
         "unit_rentabilidad": "% anual nominal",
         "note": "Rentabilidad NOMINAL (no descontar inflación si no está en el contexto); "
                 "léela vs su promedio histórico y ajustada por riesgo, no como ranking mensual.",
