@@ -1736,7 +1736,7 @@ bindings:
 # `revision_declarada`. Los cuatro candados están cerrados; el cuarto se computa contra la
 # serie real en `/bindings/verificacion` y da absorbe=true con factor 0,8031.
   - indicador: "3.23"
-    serie: "ied_usd_mm"
+    serie: "social_dev:fdi_total_usd_mm"
     fuente: bcrd
     mejor: mayor
     estado: verificado
@@ -1746,7 +1746,9 @@ bindings:
     productor: >-
       BCRD — Departamento Internacional, Subdirección de Balanza de Pagos, División de
       Estadísticas y Registro de Inversión Extranjera. Cuadro «Flujos de la Inversión
-      Extranjera Directa por actividad económica», fila `Total Flujos IED`.
+      Extranjera Directa por actividad económica». El TOTAL anual es la suma de las nueve
+      actividades, y el conector la comprueba contra la fila `Total Flujos IED` del propio
+      cuadro antes de servirla.
     termino_del_emisor: "Flujos de la Inversión Extranjera Directa"
     declaracion_del_emisor:
       texto: "Estadísticas Conforme al Sexto Manual de Balanza de Pagos del FMI"
@@ -1778,6 +1780,14 @@ bindings:
       Lo que ese cálculo supone, y hay que decirlo: que la razón entre añadas se mantiene
       constante entre años. No está medido, y es la razón por la que la salvedad se imprime
       en vez de darse por saldada.
+      CORRECCIÓN DE UN DEFECTO PROPIO, 2026-08-23: este binding apuntaba a `ied_usd_mm`, sin
+      el prefijo de eje que el proveedor exige y —peor— a la serie que el emisor publica POR
+      ACTIVIDAD. El proveedor la rechazó, bien: una variable medida por sujeto contra una
+      meta del país es el defecto que ya publicó la pobreza de una región como cifra
+      nacional. Se detectó en producción, con el semáforo diciendo «sin dato» sobre un
+      binding verificado — que es exactamente para lo que sirve esa distinción. La cura es la
+      misma que ya se usó tres veces: el total anual se computa y se persiste como serie
+      NACIONAL propia.
 
 # ── 3.14 · PATENTES: el nombre esconde el denominador ──────────────────────────────────────
 # El campo lo tenía como decisión pendiente —«solicitudes o concesiones»— y resultó que esa
