@@ -6,6 +6,15 @@ series — so prompts stay cheap and honest about provenance. Module-local, mirr
 :mod:`free_zones_intel.ai_context`.
 """
 from typing import Any, Dict, List
+from shared.data.tourism_arrivals_client import TourismArrivalsClient
+from shared.narrative.atribucion import Fuente, bloque_de_atribucion
+
+
+#: Emisor único del eje, construido de su conector.
+_ONE = Fuente.de_cliente(
+    TourismArrivalsClient,
+    descripcion="ONE (Oficina Nacional de Estadística), llegadas vía aérea, datos abiertos")
+
 
 _DIM_LABELS = {
     "total_demand": "Demanda total (CAGR llegadas de no residentes, ONE)",
@@ -56,7 +65,7 @@ def tourism_ai_context(index: Dict[str, Any], period: str) -> Dict[str, Any]:
         "recovery_vs_prepandemic_pct": recovery.get("ratio"),
         "prepandemic_peak_year": recovery.get("peak_year"),
         "score_global": index.get("itt_score"),
-        "source": "ONE (Oficina Nacional de Estadística), llegadas vía aérea, datos abiertos",
+        **bloque_de_atribucion(_ONE),
         "note": ("Sobre dato real ONE: llegadas anuales de no residentes vía aérea por "
                  "mercado de origen. Índice de tracción de DEMANDA (volumen, recuperación, "
                  "diversificación de mercados). NO cubre oferta hotelera, ocupación, ni "
