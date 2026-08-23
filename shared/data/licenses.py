@@ -26,6 +26,33 @@ restrictiva tiene que NOMBRAR su cláusula, no describirla.
 
 Lo vigila ``shared/data/tests/test_regla_licencia_declarada.py``, que lee el código con
 ``ast`` y exige que toda licencia declarada esté acá.
+
+**REGLA PARA LAS FUENTES PÚBLICAS DOMINICANAS, y salió de equivocarme.** Declaré que los
+estados financieros y los índices de solvencia del SIS «no tienen licencia de reutilización»
+porque el pie de `sis.gob.do` dice «Todos los Derechos Reservados» y sus Términos de Uso
+reservan la propiedad intelectual. Es una lectura incorrecta: **un pie de página de WordPress
+no fija el régimen legal del dato público**, y menos cuando contradice normas que obligan a la
+propia institución.
+
+El marco dominicano va en el sentido opuesto:
+
+  · **Ley 200-04** — el acceso a la información pública es un derecho, y su finalidad incluye
+    facilitar la reutilización del dato del sector público.
+  · **Decreto 103-22** (Política Nacional de Datos Abiertos) — de aplicación OBLIGATORIA para
+    los organismos del Poder Ejecutivo, y su objeto es facilitar el «acceso, uso,
+    **reutilización y redistribución**» de los datos públicos. La SIS es uno de ellos.
+  · **NORTIC A3** — la norma que rige justamente los sub-portales de transparencia y datos
+    abiertos, que es de donde se raspa.
+  · **Ley 65-00, art. 41** — los actos administrativos y demás textos oficiales pueden
+    reproducirse indicando la fuente.
+  · Y con independencia de todo lo anterior: **una cifra es un hecho**, y los hechos no son
+    obra protegible. Lo que podría estarlo es la maquetación de un informe, no sus números.
+
+Así que la carga de la prueba se invierte para un emisor público dominicano: **se presume
+reutilizable con atribución**, y lo que hay que declarar es la excepción, no el permiso. El
+texto genérico de un portal no es esa excepción. (No somos abogados: si alguna vez hay un
+caso de borde, lo confirma la asesoría legal — pero el default correcto es el marco, no el
+boilerplate.)
 """
 from __future__ import annotations
 
@@ -346,27 +373,35 @@ LICENCIAS: Dict[str, Licencia] = {
               "nombre `_CKAN_PRIMAS_XLSX` lo decía. La objeción era razonable y resultó "
               "falsa: se resolvió mirando, no discutiendo."),
     ),
-    ("SIS — publicado en el portal de transparencia (Ley 200-04); el sitio RESERVA "
-     "derechos y no declara licencia de reutilización. No confundir con los datasets "
-     "`odc-odbl` que la SIS sí publica en datos.gob.do: estos no están ahí."): Licencia(
+    ("SIS — estados financieros auditados del portal de transparencia. Información "
+     "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22 "
+     "(datos abiertos, obligatorio para el Ejecutivo), NORTIC A3 y Ley 65-00 art. 41. El "
+     "«Todos los Derechos Reservados» del pie del portal es plantilla y no fija el "
+     "régimen del dato."): Licencia(
         terminos_url="https://sis.gob.do/terminos-de-uso/",
         verificado_el="2026-08-23",
-        nota=("Estados financieros auditados (`insurance_intel.financials_sync`). Decía ser "
-              "ODbL y NO lo es: los cinco datasets `odc-odbl` de la SIS en datos.gob.do no "
-              "incluyen los estados financieros. Los Términos de Uso de sis.gob.do reservan "
-              "la propiedad intelectual y el pie dice «Todos los Derechos Reservados». "
-              "VERIFICADA en el sentido de que se leyeron los términos y dicen que no hay "
-              "concesión — que es un hecho, no una deuda. Publicar por mandato de "
-              "transparencia NO es conceder permiso de reúso. Si hiciera falta usarlo en "
-              "material comercial, es una decisión o un pedido al SIS."),
+        atribucion=("Fuente: Superintendencia de Seguros (SIS), portal de transparencia. "
+                    "Información pública de la República Dominicana."),
+        nota=("`insurance_intel.financials_sync`. Decía ser ODbL, y no lo es: los cinco "
+              "datasets `odc-odbl` de la SIS en datos.gob.do no incluyen los estados "
+              "financieros. Pero la corrección que escribí primero —«el sitio reserva "
+              "derechos, no hay licencia de reutilización»— era PEOR que el error: tomaba "
+              "el pie de un WordPress como régimen legal del dato público. No lo es. Ver "
+              "la regla del encabezado de este módulo: para un emisor público dominicano "
+              "se presume reutilizable con atribución, y lo que se declara es la "
+              "excepción. Acá no hay excepción — hay una plantilla de portal que "
+              "contradice al Decreto 103-22, que obliga a esa misma institución."),
     ),
-    ("SIS — índices de solvencia del portal de transparencia (Ley 200-04); el "
-     "sitio RESERVA derechos y no declara licencia de reutilización."): Licencia(
+    ("SIS — índices de solvencia y liquidez del portal de transparencia. Información "
+     "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22, "
+     "NORTIC A3 y Ley 65-00 art. 41."): Licencia(
         terminos_url="https://sis.gob.do/terminos-de-uso/",
         verificado_el="2026-08-23",
+        atribucion=("Fuente: Superintendencia de Seguros (SIS), portal de transparencia. "
+                    "Información pública de la República Dominicana."),
         nota=("`sis_solvency_client`. Decía «https://sis.gob.do (público)», que es dónde "
-              "está el archivo y no una licencia. Misma situación que los estados "
-              "financieros: página de transparencia, no recurso del portal de datos."),
+              "está el archivo y no un régimen de uso. Ahora dice cuál es. Misma base "
+              "legal que los estados financieros auditados."),
     ),
     "open-data": Licencia(
         terminos_url=None, verificado_el=None,

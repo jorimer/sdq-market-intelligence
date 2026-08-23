@@ -229,13 +229,20 @@ exactamente cómo empezó lo de abajo.
   por carácter, los **recursos CKAN** de los datasets `odc-odbl` «Primas Netas Cobradas según
   Ramo» y «Ramos de Compañías de Seguros»; el `sis.gob.do/wp-content` es sólo dónde el portal
   aloja el recurso. Aviso de atribución sí, share-alike no sobre un informe.
-- ❌ **SIS (transparencia) — no hay licencia de reutilización, y decíamos que sí.** Los estados
-  financieros auditados y los índices de solvencia **no** están entre los cinco datasets ODbL
-  del portal: se raspan de `sis.gob.do/transparencia`, cuyos Términos de Uso reservan la
-  propiedad intelectual («Todos los Derechos Reservados»). **Publicar por mandato de
-  transparencia no es conceder permiso de reúso.** Si hace falta para material comercial, es
-  una decisión del dueño o un pedido formal al SIS. Afecta al ISF y a la solvencia por
-  compañía.
+- ✅ **SIS (transparencia) — información pública dominicana, reutilizable con atribución.** Los
+  estados financieros auditados y los índices de solvencia no están entre los cinco datasets
+  ODbL del portal, pero eso no los deja sin régimen: **Ley 200-04**, **Decreto 103-22**
+  (Política Nacional de Datos Abiertos, obligatoria para el Ejecutivo), **NORTIC A3** —que rige
+  los sub-portales de transparencia— y **Ley 65-00 art. 41** para los actos administrativos. Y
+  una cifra es un hecho: los hechos no son obra protegible. El «Todos los Derechos Reservados»
+  del pie de `sis.gob.do` es plantilla de portal y **no fija el régimen del dato público** —
+  contradice a un decreto que obliga a esa misma institución. Citar la fuente, sí; pedir
+  permiso, no. Vale para el ISF y la solvencia por compañía.
+
+> **Regla general para emisores públicos dominicanos.** La carga se invierte: **se presume
+> reutilizable con atribución**, y lo que hay que declarar es la excepción. Un texto genérico
+> de portal no es una excepción. No confundir con emisores extranjeros —UIT, CEPAL, Parline,
+> EM-DAT, Comtrade—, donde sí rige lo que su licencia diga.
 - ❌ **Nunca** describir una licencia restrictiva en prosa («uso público con cita») en un
   contrato, un deck o un informe. El texto de la licencia es además una entrada de máquina:
   `shared.data_api.manifest.license_restricts_redistribution` decide si el dato se reexporta

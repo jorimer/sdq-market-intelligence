@@ -25,15 +25,19 @@ logger = logging.getLogger("sdq.insurance_intel.financials_sync")
 _AUDITED_PAGE = "https://sis.gob.do/transparencia/estados-financieros-auditados/"
 _UA = "Mozilla/5.0 (SDQMIP research; +https://sdqconsulting.com.do)"
 _SOURCE = "SIS"
-#: NO es ODbL, y decía que sí. Verificado el 2026-08-23: los datasets `odc-odbl` del SIS en
-#: datos.gob.do son cinco y ninguno son los estados financieros auditados; esto se raspa de
-#: `sis.gob.do/transparencia`, cuyos Términos de Uso reservan la propiedad intelectual («Todos
-#: los Derechos Reservados») y no conceden licencia de reutilización. Publicar por mandato de
-#: transparencia no es conceder permiso de reúso: son cosas distintas y confundirlas fue el
-#: mismo error que con EM-DAT — la licencia de un canal aplicada al dato que llega por otro.
-_LICENSE = ("SIS — publicado en el portal de transparencia (Ley 200-04); el sitio RESERVA "
-            "derechos y no declara licencia de reutilización. No confundir con los datasets "
-            "`odc-odbl` que la SIS sí publica en datos.gob.do: estos no están ahí.")
+#: NO es ODbL —los cinco datasets `odc-odbl` de la SIS en datos.gob.do no incluyen los
+#: estados financieros— pero tampoco es «sin licencia», que fue la corrección equivocada que
+#: se escribió primero tomando el «Todos los Derechos Reservados» del pie del portal como si
+#: fijara el régimen del dato. No lo fija. Es información pública dominicana, y el marco la
+#: hace reutilizable con atribución: Ley 200-04, Decreto 103-22 (datos abiertos, obligatorio
+#: para el Ejecutivo, y la SIS lo es), NORTIC A3 —que rige justamente los sub-portales de
+#: transparencia— y Ley 65-00 art. 41 para los actos administrativos. Además una cifra es un
+#: hecho, y los hechos no son obra protegible. Ver la regla en `shared/data/licenses.py`.
+_LICENSE = ("SIS — estados financieros auditados del portal de transparencia. Información "
+            "pública dominicana: reutilizable con atribución por Ley 200-04, Decreto 103-22 "
+            "(datos abiertos, obligatorio para el Ejecutivo), NORTIC A3 y Ley 65-00 art. 41. "
+            "El «Todos los Derechos Reservados» del pie del portal es plantilla y no fija el "
+            "régimen del dato.")
 
 
 def discover_audited_urls() -> Dict[str, str]:
