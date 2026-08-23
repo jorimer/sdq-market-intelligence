@@ -93,9 +93,11 @@ async def snapshot(
 @router.delete(
     "/data",
     summary="Purgar el dato comercial persistido (admin)",
-    description="Borra todos los flujos y scores comerciales persistidos. Para "
-    "limpiar fixture ilustrativo: no hay fuente real (DGA sin licencia) hasta "
-    "habilitar aduanas.",
+    description="Borra todos los flujos y scores comerciales persistidos. Sirve para "
+    "limpiar un fixture ilustrativo antes de recargar. (La descripción anterior "
+    "decía «no hay fuente real (DGA sin licencia)»: quedó vieja por partida doble "
+    "— la DGA está cableada desde `dga_sync`, y su dato es información pública "
+    "dominicana, no una fuente sin licencia.)",
 )
 async def purge_data(
     db: Session = Depends(get_db),

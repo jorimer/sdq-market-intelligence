@@ -157,6 +157,9 @@ LICENCIAS: Dict[str, Licencia] = {
         terminos_url=("https://www.cepal.org/es/terminos-y-condiciones-sobre-el-uso-del-"
                       "sitio-web-entre-la-cepal-y-el-usuario"),
         verificado_el="2026-08-23",
+        atribucion=("Fuente: Junta Central Electoral (JCE) de la República Dominicana, "
+                    "productora del dato; recogido y publicado por el Observatorio de "
+                    "Igualdad de Género de la CEPAL."),
         nota=("La TERCERA instancia de la misma forma, y la más estrecha de las tres. "
               "Decía «uso público con cita». Los términos que el propio servicio declara "
               "en su `termsOfService` (apispec_1.json de api-cepalstat.cepal.org, que es "
@@ -164,10 +167,18 @@ LICENCIAS: Dict[str, Licencia] = {
               "fines comerciales, sin ningún derecho a revender, redistribuir, o crear "
               "otros trabajos a partir de los mismos». No hay CC de por medio. Alimenta "
               "los indicadores 2.45 y 2.46 de la END, que se venden. "
-              "`atribucion` queda VACÍA a propósito: acá nombrar la fuente no habilita "
-              "nada —no hay cláusula BY que satisfacer— y ponerle un texto daría a "
-              "entender que citándola el asunto queda resuelto. Lo que restringe es el "
-              "uso comercial, la redistribución y la obra derivada."),
+              "RESUELTO EL 2026-08-23, y no relajando los términos de la CEPAL —que siguen "
+              "diciendo lo mismo— sino mirando quién PRODUCE el dato. Los indicadores 2.45 "
+              "y 2.46 los produce la JCE; la CEPAL los recoge y los republica, y su propia "
+              "nota de admisibilidad en el expediente ya lo decía. Lo que estos términos "
+              "gobiernan es la COMPILACIÓN de la CEPAL, no los hechos que compila: una "
+              "cifra electoral oficial dominicana es información pública, y su régimen lo "
+              "fija el marco nacional (Ley 200-04, Decreto 103-22, Ley 65-00 art. 41), no "
+              "el portal que la reexpone. Lo que publicamos es UNA cifra por año atribuida "
+              "a su productor, no la base de CEPALSTAT. "
+              "Por eso ahora SÍ lleva `atribucion`, y nombra a la JCE primero: no es "
+              "cortesía, es lo que hace correcta la publicación. Lo que seguiría fuera de "
+              "alcance es reexportar la compilación de la CEPAL como tal."),
     ),
     ("World Bank Open Data CC-BY 4.0 (por defecto; el catálogo tiene datasets con "
      "otras licencias) + UN Comtrade, que NO es libre: propiedad de Naciones "

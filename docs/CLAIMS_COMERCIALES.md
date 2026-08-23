@@ -177,14 +177,13 @@ exactamente cómo empezó lo de abajo.
   CC-BY cubre **su procesamiento**, no el dato de abajo. Hoy solo alimenta el backtest interno
   del IRC, que no se redistribuye — si ese insumo pasa a material de venta, hay que resolverlo
   antes.
-- ⚠️ **CEPALSTAT (CEPAL) — la más estrecha de todas, y NO es Creative Commons.** Sus
-  términos —los que el propio servicio declara en el `termsOfService` de su OpenAPI—
-  conceden bajar y copiar «para su uso personal, sin fines comerciales, sin ningún derecho
-  a revender, redistribuir, o crear otros trabajos a partir de los mismos». Alimenta los
-  indicadores **2.45 y 2.46** de la END. El conector decía «uso público con cita».
-  **Atribuir no alcanza**: no hay cláusula BY que satisfacer, hay un permiso de uso personal.
-  Decisión abierta del dueño — y hay una salida limpia a mano: el dato lo produce la **JCE**
-  y la CEPAL solo lo recoge.
+- ✅ **CEPALSTAT — resuelto por el PRODUCTOR, no por sus términos.** Los términos de la CEPAL
+  son estrechos —uso personal, no comercial, sin reventa ni obra derivada— y siguen siéndolo.
+  Pero gobiernan **su compilación**, no los hechos que compila: los indicadores **2.45 y 2.46**
+  los produce la **JCE**, y una cifra electoral oficial dominicana es información pública cuyo
+  régimen fija el marco nacional, no el portal que la reexpone. **Se publican, atribuyendo a la
+  JCE como productora y a la CEPAL como vía** — la atribución la computa la plataforma.
+  Lo que sigue fuera de alcance: reexportar la compilación de la CEPAL como tal.
 - ⚠️ **UN Comtrade — no es dato libre.** Es propiedad intelectual de Naciones Unidas, cedida
   para **uso interno**; re-diseminar el dato **original** exige permiso escrito de la UNSD, y
   por encima de 100.000 registros una «license to distribute» paga sobre suscripción premium.
