@@ -103,3 +103,18 @@ def test_pasada_la_ventana_vuelve_a_alertar(log, caplog, monkeypatch):
         failures._last_credit_log[k] -= failures._CREDIT_LOG_WINDOW_SECONDS + 1
     report_api_failure(log, _error(_SIN_CREDITO), label="cerebro")
     assert _niveles(caplog).count(logging.ERROR) == 2
+
+
+def test_reporta_aunque_la_maquina_recien_arranque(log, caplog, monkeypatch):
+    """Regresión: el primer reporte no puede depender del UPTIME de la máquina.
+
+    La ventana usaba un centinela 0.0 y preguntaba ``ahora - 0.0 > 3600``. El origen de
+    ``time.monotonic()`` es arbitrario —en Linux cuenta desde el arranque—, así que en un
+    runner con menos de una hora encendido el PRIMER reporte caía a WARNING: ningún evento,
+    y el silencio se lee como que no hay problema. Pasaba en local (uptime largo) y fallaba
+    en CI. Se fija un monotonic chico para reproducir esa máquina.
+    """
+    monkeypatch.setattr(failures.time, "monotonic", lambda: 12.0)
+    report_api_failure(log, _error(_SIN_CREDITO), label="cerebro")
+    assert _niveles(caplog).count(logging.ERROR) == 1, (
+        "el primer saldo agotado no abrió evento: la ventana depende del uptime")

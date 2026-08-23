@@ -58,13 +58,22 @@ def is_credit_exhausted(exc: BaseException) -> bool:
 
 
 def _should_report_credit(clave: str, ahora: float) -> bool:
-    """¿Toca abrir evento para ``clave``, o ya se reportó dentro de la ventana?"""
+    """¿Toca abrir evento para ``clave``, o ya se reportó dentro de la ventana?
+
+    "Nunca se reportó" se pregunta con ``is None``, NO restando contra un centinela 0.0:
+    el origen de ``time.monotonic()`` es arbitrario —en Linux cuenta desde el arranque— así
+    que ``ahora - 0.0 > 3600`` exige que la máquina lleve más de una hora encendida. En un
+    runner recién arrancado eso es falso y el PRIMER reporte se degradaba a WARNING, o sea
+    ningún evento: el silencio se leía como que no había problema. Verde en local (uptime
+    largo) y rojo en CI, que es donde apareció.
+    """
     with _lock:
         # Poda: sin esto el mapa crece con cada operación distinta que falle.
         for k, t in list(_last_credit_log.items()):
             if ahora - t > _CREDIT_LOG_WINDOW_SECONDS:
                 del _last_credit_log[k]
-        if ahora - _last_credit_log.get(clave, 0.0) > _CREDIT_LOG_WINDOW_SECONDS:
+        anterior = _last_credit_log.get(clave)
+        if anterior is None or ahora - anterior > _CREDIT_LOG_WINDOW_SECONDS:
             _last_credit_log[clave] = ahora
             return True
     return False
