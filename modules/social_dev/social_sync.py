@@ -338,6 +338,11 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
 #: El 3.18 dice «exportaciones mundiales de BIENES», no de bienes y servicios. La diferencia
 #: no es de matiz: con bienes y servicios el promedio de la ventana da Δ 34,8% contra la línea
 #: base legal; con mercancías, Δ 0,4%.
+#: La UNIDAD es la misma para los tres y dice solo la unidad: qué composición se recorta es
+#: identidad de la serie —está en el tema y en la etiqueta del catálogo— y no unidad. Ponerla
+#: acá costó dos días de sync caída: «% de las exportaciones mundiales de manufacturas» son 48
+#: caracteres contra el `varchar(40)` de la columna, y Postgres se lleva la transacción ENTERA.
+#:
 #: El 3.20 lleva DOS series de composición y no una, y ahí estaba el error que lo mantuvo
 #: descartado. «Productos agropecuarios» no es una categoría del emisor: es la unión de dos
 #: —alimentos y materias primas agrícolas— y unir cuotas NO es sumarlas. Cada cuota tiene su
@@ -346,11 +351,11 @@ def _sync_exportaciones_per_capita(db: Session, set_phase: Callable[[str], None]
 #: mundo_mat). Hecho así, la ventana 2006-2007 da 0,0994% contra una base legal de 0,097.
 PARTICIPACION_EXPORTADORA = {
     "3.18": ("world_export_share_goods", (),
-             "% de las exportaciones mundiales de bienes"),
+             "% de las exportaciones mundiales"),
     "3.19": ("world_export_share_manufactures", ("TX.VAL.MANF.ZS.UN",),
-             "% de las exportaciones mundiales de manufacturas"),
+             "% de las exportaciones mundiales"),
     "3.20": ("world_export_share_agri", ("TX.VAL.FOOD.ZS.UN", "TX.VAL.AGRI.ZS.UN"),
-             "% de las exportaciones mundiales agropecuarias"),
+             "% de las exportaciones mundiales"),
 }
 FUENTE_PARTICIPACION = "WDI · cómputo SDQ"     # 18
 
